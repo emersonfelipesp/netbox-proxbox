@@ -5,6 +5,8 @@ import json
 
 from __init__ import NETBOX, NETBOX_TOKEN, PROXMOX, PROXMOX_PORT
 
+# Altera nome da Netbox caso tenha [] no nome (modo antigo)
+# Objetivo: fazer com que o nome no Proxmox e no Netbox sejam iguais
 # Atualiza campo "name" no Netbox
 def name():
     vms = nb.virtualization.virtual_machines.all()
@@ -17,55 +19,7 @@ def name():
         else:
             print('Doesn\'t need to change: {}'.format(vm.name))
 
-# Função que altera campo 'custom_field' da máquina virtual no Netbox
-# Utiliza HTTP request e não pynetbox (não consegui através do pynetbox)
-def http_update_custom_fields(url, token, vm_id, vm_name, vm_cluster, custom_fields):
-        # requisição http do tipo patch (atualização parcial)
-        url = '{}/api/virtualization/virtual-machines/{}/'.format(url, vm_id)
-        headers = {
-            "Authorization": "Token {}".format(token),
-            "Content-Type" : "application/json"
-        }    
-        body = {
-            "name": vm_name,
-            "cluster": vm_cluster,
-            "custom_fields": custom_fields
-        }
-
-        r = requests.patch(url, data = json.dumps(body), headers = headers)
-
-        # salva resposta da requisição em dict
-        json_dict = json.loads(r.text)
-
-        # Retorna HTTP Status Code
-        return r.status_code
-
-def custom_fields(netbox_vm, proxmox_vm):
-    # Cria novo custom_field com informações vinda do Proxmox
-    custom_fields_update = {'proxmox_id': proxmox_vm['vmid'], 'proxmox_node': proxmox_vm['node'], 'proxmox_type': proxmox_vm['type']}
-
-    # Verifica se valores do Proxmox e Netbox são iguais
-    if netbox_vm.custom_fields == custom_fields_update:
-        # VM existe no Netbox, mas não precisou ser atualizada
-        return False
-
-    # Caso sejam diferentes, pega valores do Proxmox e atualiza no Netbox
-    else:
-        # Função que atualiza campo 'custom_field' no Netbox
-        custom_field_update = http_update_custom_fields(NETBOX, NETBOX_TOKEN, netbox_vm.id, netbox_vm.name, netbox_vm.cluster.id, custom_fields_update)
-
-        # Analisa se resposta HTTP da API obteve sucesso
-        if custom_field_update != 200:
-            print('[ERROR] Ocorreu um erro na requisição -> {}'.format(netbox_vm.name))
-            return False
-
-        else:
-            # Caso nada tenha ocorrido, considera VM atualizada.
-            return True
-
-    return False
-
-# Atualiza status da VM no Netbox baseado no Proxmox
+# Atualiza campo "status" no Netbox baseado no Proxmox
 def status(netbox_vm, proxmox_vm):
     # False = status alterado no netbox
     # True  = status alterado no netbox
@@ -104,49 +58,56 @@ def status(netbox_vm, proxmox_vm):
     
     return status_updated
 
-# Atualiza informações de hardware
-def resources(netbox_vm, proxmox_vm):
-    resources_updated = False
+# Função que altera campo 'custom_field' da máquina virtual no Netbox
+# Utiliza HTTP request e não pynetbox (não consegui através do pynetbox)
+def http_update_custom_fields(url, token, vm_id, vm_name, vm_cluster, custom_fields):
+        # requisição http do tipo patch (atualização parcial)
+        url = '{}/api/virtualization/virtual-machines/{}/'.format(url, vm_id)
+        headers = {
+            "Authorization": "Token {}".format(token),
+            "Content-Type" : "application/json"
+        }    
+        body = {
+            "name": vm_name,
+            "cluster": vm_cluster,
+            "custom_fields": custom_fields
+        }
 
-    cr_json = {}
-    cr_json["vcpus"] = proxmox_vm["maxcpu"]
-    cr_json["memory"] = proxmox_vm["maxmem"]
-    cr_json["disk"] = proxmox_vm["maxdisk"]
+        r = requests.patch(url, data = json.dumps(body), headers = headers)
 
-    memory_mb = cr_json["memory"]
-    memory_mb = int(memory_mb / 1000000)       # Convert bytes to megabytes and then convert float to integer
+        # salva resposta da requisição em dict
+        json_dict = json.loads(r.text)
 
-    disk_gb = cr_json["disk"]
-    disk_gb = int(disk_gb / 1000000000)       # Convert bytes to gigabytes and then convert float to integer
+        # Retorna HTTP Status Code
+        return r.status_code
 
-    cr_json.update(memory = memory_mb)
-    cr_json.update(disk = disk_gb)
+# Atualiza campo "custom_fields" no Netbox baseado no Proxmox
+def custom_fields(netbox_vm, proxmox_vm):
+    # Cria novo custom_field com informações vinda do Proxmox
+    custom_fields_update = {'proxmox_id': proxmox_vm['vmid'], 'proxmox_node': proxmox_vm['node'], 'proxmox_type': proxmox_vm['type']}
 
-    # Analisa valores e conforme necessário
-    # Compara CPU do Proxmox com Netbox
-    if netbox_vm.vcpus == None or netbox_vm.vcpus != cr_json["vcpus"]:
-        netbox_vm.vcpus = cr_json["vcpus"]
-        netbox_vm.save()
+    # Verifica se valores do Proxmox e Netbox são iguais
+    if netbox_vm.custom_fields == custom_fields_update:
+        # VM existe no Netbox, mas não precisou ser atualizada
+        return False
 
-        resources_updated = True
+    # Caso sejam diferentes, pega valores do Proxmox e atualiza no Netbox
+    else:
+        # Função que atualiza campo 'custom_field' no Netbox
+        custom_field_update = http_update_custom_fields(NETBOX, NETBOX_TOKEN, netbox_vm.id, netbox_vm.name, netbox_vm.cluster.id, custom_fields_update)
 
-    # Compara Memory do Proxmox com Netbox
-    if netbox_vm.memory == None or netbox_vm.memory != cr_json["memory"]:
-        netbox_vm.memory = cr_json["memory"]
-        netbox_vm.save()
+        # Analisa se resposta HTTP da API obteve sucesso
+        if custom_field_update != 200:
+            print('[ERROR] Ocorreu um erro na requisição -> {}'.format(netbox_vm.name))
+            return False
 
-        resources_updated = True
+        else:
+            # Caso nada tenha ocorrido, considera VM atualizada.
+            return True
 
-    # Compara Disk do Proxmox com Netbox
-    if netbox_vm.disk == None or netbox_vm.disk != cr_json["disk"]:
-        netbox_vm.disk = cr_json["disk"]
-        netbox_vm.save()
+    return False
 
-        resources_updated = True
-    
-    return resources_updated
-
-# Atualiza json de local_context_data da VM/CT
+# Atualiza campo "local_context_data" no Netbox baseado no Proxmox
 def local_context_data(netbox_vm, proxmox_vm):
     local_context_updated = False
 
@@ -191,3 +152,45 @@ def local_context_data(netbox_vm, proxmox_vm):
         return False
 
     return False
+
+# Atualiza campos "vcpus", "memory", "disk" no Netbox baseado no Proxmox
+def resources(netbox_vm, proxmox_vm):
+    resources_updated = False
+
+    cr_json = {}
+    cr_json["vcpus"] = proxmox_vm["maxcpu"]
+    cr_json["memory"] = proxmox_vm["maxmem"]
+    cr_json["disk"] = proxmox_vm["maxdisk"]
+
+    memory_mb = cr_json["memory"]
+    memory_mb = int(memory_mb / 1000000)       # Convert bytes to megabytes and then convert float to integer
+
+    disk_gb = cr_json["disk"]
+    disk_gb = int(disk_gb / 1000000000)       # Convert bytes to gigabytes and then convert float to integer
+
+    cr_json.update(memory = memory_mb)
+    cr_json.update(disk = disk_gb)
+
+    # Analisa valores e conforme necessário
+    # Compara CPU do Proxmox com Netbox
+    if netbox_vm.vcpus == None or netbox_vm.vcpus != cr_json["vcpus"]:
+        netbox_vm.vcpus = cr_json["vcpus"]
+        netbox_vm.save()
+
+        resources_updated = True
+
+    # Compara Memory do Proxmox com Netbox
+    if netbox_vm.memory == None or netbox_vm.memory != cr_json["memory"]:
+        netbox_vm.memory = cr_json["memory"]
+        netbox_vm.save()
+
+        resources_updated = True
+
+    # Compara Disk do Proxmox com Netbox
+    if netbox_vm.disk == None or netbox_vm.disk != cr_json["disk"]:
+        netbox_vm.disk = cr_json["disk"]
+        netbox_vm.save()
+
+        resources_updated = True
+    
+    return resources_updated
