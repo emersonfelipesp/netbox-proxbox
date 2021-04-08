@@ -275,7 +275,7 @@ def all():
     
 # Runs if script executed directly
 if __name__ == "__main__":
-    
+
     print('#\n# COMPARA PROXMOX COM NETBOX\n#')
     all()
 

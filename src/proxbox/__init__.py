@@ -1,1 +1,1 @@
-from .main import all, virtual_machine
+from proxbox.main import virtual_machine
