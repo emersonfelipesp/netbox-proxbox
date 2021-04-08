@@ -8,10 +8,10 @@ load_dotenv(find_dotenv())
 from proxmoxer import ProxmoxAPI
 import pynetbox
 
-from .session import netbox as nb, proxmox, PROXMOX, PROXMOX_PORT
+from proxbox.session import netbox as nb, proxmox, PROXMOX, PROXMOX_PORT
 
-import .create
-import .remove
+import proxbox.create
+import proxbox.remove
 
 from update import *
 
