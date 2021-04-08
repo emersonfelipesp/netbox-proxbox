@@ -39,3 +39,5 @@ netbox = pynetbox.api(
     NETBOX,
     token=NETBOX_TOKEN
 )
+
+from main import all, virtual_machine

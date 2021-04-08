@@ -38,109 +38,163 @@ def is_vm_on_netbox(netbox_vm):
 
     return vm_on_netbox
 
-# Verifica se VM/CT existe no Proxmox
-def is_vm_on_proxmox(netbox_vm):
-    # Obtém o json de todas as máquinas virtuais do Proxmox
+def search_by_proxmox_id(proxmox_id):
     all_proxmox_vms = proxmox.cluster.resources.get(type='vm')
 
-    # Netbox name
-    netbox_name = netbox_vm.name
-
-    # Busca json local_context do Netbox
-    local_context = netbox_vm.local_context_data
-
-    if local_context == None:
-        print('[WARNING] "local_context_data" não preenchido -> {}'.format(netbox_name))
-
-    else:
-        # chave "proxmox" do "local_context_data"
-        proxmox_json = local_context.get("proxmox")
-    
-        # Se valor nulo, volta erro
-        if proxmox_json == None:
-            print('[WARNING] local_context_data não possui a chave "proxmox" -> {}'.format(netbox_name))   
-
-        else:
-            # Netbox VM/CT ID
-            netbox_id = proxmox_json.get("id")
-
-            # Se valor nulo, volta erro
-            if netbox_id == None:
-                print('[WARNING] chave "proxmox" não possui chave " -> {}'.format(netbox_name))
-
-
-    # Lista de nomes das VM/CTs do Proxmox
-    names = []
-
-    # Lista de IDs das VM/CTs do Proxmox
-    vmids = []
-
-    # Compara VM do Netbox com todas as VMs do Proxmox e verifica se existe no Proxmox
-    for i in range(len(all_proxmox_vms)):
-        name = all_proxmox_vms[i].get("name")
-        names.append(name)
-
-        vm_id = all_proxmox_vms[i].get("vmid")
-        vmids.append(vm_id)
-    
-
-    name_on_px = False
-    id_on_px = False
-
-    # Busca VM no Proxmox pelo nome
-    try:
-        name_index = names.index(netbox_name)      
-    except:
-        name_on_px = False
-    else:
-        # ID existe no Proxmox
-        name_on_px = True
+    for px_vm in all_proxmox_vms:
+        px_id = px_vm.get("vmid")
         
-        # Se local_context é nulo, tenta preenchê-lo para obter ID da VM
-        if local_context == None:
-            local_context_updated = local_context_data(netbox_vm, all_proxmox_vms[name_index])
-
-            if local_context_updated == True:
-                local_context = netbox_vm.local_context_data
-
-                if local_context != None:
-                    print("[OK] local_context atualizado -> {}".format(netbox_name))
-                    proxmox_json = local_context.get("proxmox")
-                    netbox_id = proxmox_json.get("id")
-
-                else:
-                    print("[ERROR] local_context está vazio -> {}".format(netbox_name))
-            else:
-                print("[WARNING] local_context não foi atualizado (erro ou já estava atualizado) -> {}".format(netbox_name))
-
-
-    # Busca VM no Proxmox pelo ID
-    try:
-        id_index = vmids.index(netbox_id)
-    except:
-        id_on_px = False
-    else:
-        # NAME existe no Proxmox
-        id_on_px = True
-
-    # Analisa se VM existe
-    if name_on_px == True:
-        if id_on_px == True:
-            return True
-        else:
-            print("[WARNING] NOME existe no Proxmox, mas ID não -> {}".format(netbox_name))
-        return True
+        if px_id == proxmox_id:
+            #print('\n\n#########\n| ID: {} \n| JSON: {}\n#########\n\n'.format(px_id, proxmox_vm))
+            proxmox_vm = px_vm
+            return proxmox_vm
     
-    # Comparação não deu certo, não possíve achar VM no Proxmox
-    return False
+    # Caso JSON não encontrado, volta nulo.
+    return None
+
+def search_by_proxmox_name(proxmox_name):
+    all_proxmox_vms = proxmox.cluster.resources.get(type='vm')
+
+    for px_vm in all_proxmox_vms:
+        px_name = px_vm.get("name")
+
+        if proxmox_name == px_name:
+            proxmox_vm = px_vm
+            return proxmox_vm
+
+    # Caso JSON não encontrado, volta nulo.
+    return None
+
+def search_by_netbox_id(netbox_id):
+    # Salva objeto da VM vindo do Netbox
+    netbox_obj = nb.virtualization.virtual_machines.get(netbox_id)
+
+    proxmox_name = netbox_obj.name
+
+    # Busca Proxmox ID do Netbox
+    local_context = netbox_obj.local_context_data
+    if local_context != None:
+        proxmox_json = local_context.get("proxmox")
+
+        if proxmox_json != None:
+            proxmox_id = proxmox_json.get("id")
+            
+            if proxmox_id != None:
+                return proxmox_id
+
+            #else:
+            #    print("[ERROR] Não foi possível obter ID da VM do Proxmox no Netbox -> {}".format(proxmox_name))
+
+    # Retorna NOME caso ID não seja encontrado
+    return proxmox_name
 
 # Faz todas as verificações necessárias para que a VM/CT exista no Netbox
-def vm(proxmox_vm):
-    proxmox_vm_name = proxmox_vm['name']
- 
+def virtual_machine(**kwargs):
+    # args:
+    # proxmox_json
+    # netbox_id
+    # proxmox_id
+    # name
     #
-    # NETBOX PART
+    # Salva argumentos e valida o tipo
     #
+    # Salva argumento
+    proxmox_id = kwargs.get('proxmox_id')
+
+    # Valida o tipo
+    if proxmox_id != None:
+        proxmox_id_type = type(proxmox_id)
+        if 'int' not in str(proxmox_id_type):
+            print('[ERROR] "proxmox_id" MUST be integer. Type used: {}'.format(proxmox_id_type))
+            return False
+
+    # Salva argumento
+    netbox_id = kwargs.get('netbox_id')
+
+    # Valida o tipo
+    if netbox_id != None:
+        netbox_id_type = type(netbox_id)
+        if 'int' not in str(netbox_id_type):
+            print('[ERROR] "netbox_id" MUST be integer. Type used: {}'.format(netbox_id_type))
+            return False
+    
+    # Salva argumento
+    name = kwargs.get('name')
+
+    # Valida o tipo
+    if name != None:
+        name_type = type(name)
+        if 'str' not in str(name_type):
+            print('[ERROR] "name" MUST be string. Type used: {}'.format(name_type))
+            return False
+
+    # Salva argumento
+    proxmox_json = kwargs.get('proxmox_json')
+
+    # Decide se utilizará proxmox_json ou outros argumentos passados (netbox_id, proxmox_id e proxmox_name)
+    if proxmox_json != None:
+        proxmox_vm_name = proxmox_json['name']
+
+    # Se 'proxmox_json' não foi passado como argumento, usa os outros argumentos
+    else:    
+        #
+        # Com os argumentos passado na função, busca pelo json da VM no Proxmox
+        # Prioridade de busca: 1° = netbox_id | 2° = proxmox_id | 3° = proxmox_name
+        #
+        # Busca JSON da VM do Proxmox pelo argumento "netbox_id"
+        if netbox_id != None:
+            # Search result returns Proxmox ID or Proxmox Name, if ID doesn't exist
+            search_result = search_by_netbox_id(netbox_id)
+
+            # Busca tipo do resultado. 'int' = Proxmox ID | 'str' = Proxmox Name
+            search_result_type = type(search_result)
+
+            # Busca pelo Proxmox ID
+            if 'int' in str(search_result_type):
+                proxmox_json = search_by_proxmox_id(search_result)
+
+                # Analisa retorno da busca e retorna erro, caso valor nulo
+                if proxmox_json == None:
+                    print("[ERROR] Erro ao buscar VM no Proxmox utilizando argumento 'proxmox_id'")
+                    return False                
+
+                proxmox_vm_name = proxmox_json['name']
+
+            # Busca pelo Proxmox NAME
+            elif 'str' in str(search_result_type):
+                proxmox_json = search_by_proxmox_name(search_result)
+
+                # Analisa retorno da busca e retorna erro, caso valor nulo
+                if proxmox_json == None:
+                    print("[ERROR] Erro ao buscar VM no Proxmox utilizando argumento 'proxmox_id'")
+                    return False
+                
+                proxmox_vm_name = proxmox_json['name']
+
+        else:
+            # Busca JSON do Proxmox pelo argumento 'proxmox_id'
+            if proxmox_id != None:
+                proxmox_json = search_by_proxmox_id(proxmox_id)
+
+                # Analisa retorno da busca e retorna erro, caso valor nulo
+                if proxmox_json == None:
+                    print("[ERROR] Erro ao buscar VM no Proxmox utilizando argumento 'proxmox_id'")
+                    return False                
+
+                proxmox_vm_name = proxmox_json['name']
+
+            else:
+                # Busca JSON do Proxmox pelo argumento 'name''
+                if name != None:
+                    proxmox_json = search_by_proxmox_name(name)
+
+                    # Analisa retorno da busca e retorna erro, caso valor nulo
+                    if proxmox_json == None:
+                        print("[ERROR] Erro ao buscar VM no Proxmox utilizando argumento 'proxmox_id'")
+                        return False
+                    
+                    proxmox_vm_name = proxmox_json['name']
+
     # Busca objeto no Netbox pelo nome vindo do Proxmox
     netbox_vm = nb.virtualization.virtual_machines.get(name = proxmox_vm_name)
 
@@ -150,7 +204,7 @@ def vm(proxmox_vm):
 
     if vm_on_netbox == True:
         # Atualiza informações no Netbox
-        full_update = vm_full_update(netbox_vm, proxmox_vm)  
+        full_update = vm_full_update(netbox_vm, proxmox_json)  
 
         # Analisa se a VM precisou ser atualizada no Netbox
         if True in full_update:
@@ -173,12 +227,12 @@ def vm(proxmox_vm):
         print('[OK] VM não existe no Netbox -> {}'.format(proxmox_vm_name))
 
         # Analisa se VM foi criada com sucesso
-        netbox_vm = create.virtual_machine(proxmox_vm)
+        netbox_vm = create.virtual_machine(proxmox_json)
 
         # VM criada com as informações básicas
         if netbox_vm != None:
             # Realiza resto da atualização das configurações
-            full_update = vm_full_update(netbox_vm, proxmox_vm)
+            full_update = vm_full_update(netbox_vm, proxmox_json)
 
             # Analisa se atualização das informações ocorreu com sucesso
             if True in full_update:
@@ -188,7 +242,6 @@ def vm(proxmox_vm):
                 return True
 
             else:
-                return False
                 print('[OK] VM criada, mas atualização completa ocorreu erro -> {}'.format(proxmox_vm_name))
 
                 # VM criada com informações básicas
@@ -205,20 +258,34 @@ def vm(proxmox_vm):
 
         # Erro inesperado
         return False
-    
+
+
+    '''
+    print('proxmox_id: {} | type: {}'.format(proxmox_id, type(proxmox_id)))
+    print(' netbox_id: {} | type: {}'.format(netbox_id, type(netbox_id)))
+    print('      name: {} | type: {}'.format(name, type(name)))
+    '''
+
+
 # Atualiza informações de status, 'custom_fields' e 'local_context'
-def update_all():
+def all():
     # Get all VM/CTs from Proxmox
     for px_vm_each in proxmox.cluster.resources.get(type='vm'):     
-        vm_updated = vm(px_vm_each)
-
-
-
+        vm_updated = virtual_machine(proxmox_json = px_vm_each)
+    
+# Runs if script executed directly
 if __name__ == "__main__":
+    
     print('#\n# COMPARA PROXMOX COM NETBOX\n#')
-    update_all()
+    all()
+
     print('____________________________________\n')
     print('#\n# COMPARA NETBOX COM PROXMOX\n#')
     remove.virtual_machine()
+
+
+
+
+
     
     
