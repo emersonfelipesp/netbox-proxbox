@@ -13,7 +13,7 @@ from proxbox.session import netbox as nb, proxmox, PROXMOX, PROXMOX_PORT
 import proxbox.create
 import proxbox.remove
 
-from update import *
+from proxbox.update import *
 
 
 # Chama todas as funções de atualização
