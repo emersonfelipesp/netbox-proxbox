@@ -40,4 +40,4 @@ netbox = pynetbox.api(
     token=NETBOX_TOKEN
 )
 
-from main import all, virtual_machine
+from .main import all, virtual_machine
