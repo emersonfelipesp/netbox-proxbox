@@ -1,11 +1,10 @@
+<p align="center">
+  <img width="532" src="https://github.com/N-Multifibra/proxbox/blob/main/etc/img/proxbox-full-logo.png" alt="Material Bread logo">
+</p>
 
 
 # proxbox
 Integration between Proxmox and Netbox
-
-<p align="center">
-    ![logo](https://github.com/N-Multifibra/proxbox/blob/main/etc/img/proxbox-full-logo.png)
-</p>
 
 
 ## Installation
