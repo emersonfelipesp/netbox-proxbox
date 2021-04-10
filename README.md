@@ -1,7 +1,12 @@
+
+<p align="center">
+    ![logo](https://github.com/N-Multifibra/proxbox/blob/main/etc/img/proxbox-full-logo.png)
+</p>
+
 # proxbox
 Integration between Proxmox and Netbox
 
-![logo](https://github.com/N-Multifibra/proxbox/blob/main/etc/img/proxbox-full-logo.png)
+
 
 ## Installation
 
