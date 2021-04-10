@@ -1,6 +1,8 @@
 # proxbox
 Integration between Proxmox and Netbox
 
+![logo](https://github.com/N-Multifibra/proxbox/blob/main/etc/img/proxbox-full-logo.png)
+
 ## Installation
 
 Use the package manager [pip](https://pip.pypa.io/en/stable/) to install **proxbox**.
