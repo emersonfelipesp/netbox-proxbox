@@ -8,15 +8,17 @@ load_dotenv(find_dotenv())
 from proxmoxer import ProxmoxAPI
 import pynetbox
 
+
+# ADICIONA PACKAGE AO PYTHONPATH PARA TESTAR LOCALMENTE (SEM PRECISAR BAIXAR O PACOTE TODA HROA)
 import sys
 import pathlib
 path = pathlib.Path(__file__).parent.absolute()
-print("PARENT PATH:")
-print(path)
+#print("PARENT PATH:")
+#print(path)
 path = str(path).replace('/proxbox/src/proxbox', '/proxbox/src')
-print(path)
+#print(path)
 sys.path.append(path)
-print('################')
+#print('################')
 print(sys.path)
 
 from proxbox.session import netbox as nb, proxmox, PROXMOX, PROXMOX_PORT
