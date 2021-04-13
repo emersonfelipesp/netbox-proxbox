@@ -3,7 +3,7 @@ import pynetbox
 import requests
 import json
 
-from proxbox.session import NETBOX, NETBOX_TOKEN, PROXMOX, PROXMOX_PORT
+from proxbox.session import NETBOX, NETBOX_TOKEN, PROXMOX, PROXMOX_PORT, netbox as nb, proxmox
 
 # Altera nome da Netbox caso tenha [] no nome (modo antigo)
 # Objetivo: fazer com que o nome no Proxmox e no Netbox sejam iguais

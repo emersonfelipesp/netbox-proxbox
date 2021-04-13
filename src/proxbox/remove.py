@@ -3,6 +3,8 @@ import pynetbox
 
 from proxbox.session import netbox as nb, proxmox
 
+import update
+
 # Verifica se VM/CT existe no Proxmox
 def is_vm_on_proxmox(netbox_vm):
     # Obtém o json de todas as máquinas virtuais do Proxmox
@@ -63,7 +65,7 @@ def is_vm_on_proxmox(netbox_vm):
         
         # Se local_context é nulo, tenta preenchê-lo para obter ID da VM
         if local_context == None:
-            local_context_updated = local_context_data(netbox_vm, all_proxmox_vms[name_index])
+            local_context_updated = update.local_context_data(netbox_vm, all_proxmox_vms[name_index])
 
             if local_context_updated == True:
                 local_context = netbox_vm.local_context_data
