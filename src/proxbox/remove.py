@@ -99,27 +99,52 @@ def is_vm_on_proxmox(netbox_vm):
     # Comparação não deu certo, não possíve achar VM no Proxmox
     return False
 
-def virtual_machine():
+def all():
+    json_vm_all = []
+    
     # Get all VM/CTs from Netbox
     netbox_all_vms = nb.virtualization.virtual_machines.all()
 
     for nb_vm_each in netbox_all_vms:
+        json_vm = {}
+        log = []
+
         netbox_obj = nb_vm_each
         netbox_name = netbox_obj.name
+        json_vm["name"] = netbox_name
 
         # Verifica se VM existe ou não no Proxmox
         vm_on_proxmox = is_vm_on_proxmox(nb_vm_each)
 
         if vm_on_proxmox == True:
-            print('[OK] VM existe em ambos sistemas -> {}'.format(netbox_name))
+            log_message = '[OK] VM existe em ambos sistemas -> {}'.format(netbox_name)
+            log.append(log_message)
+
+            json_vm["result"] = False
         
         # Se VM não existe no Proxmox, deleta a VM no Netbox
         elif vm_on_proxmox == False:
-            print("[WARNING] VM existe no Netbox, mas não no Proxmox. Deletar a VM! -> {}".format(netbox_name))
+            log_message = "[WARNING] VM existe no Netbox, mas não no Proxmox. Deletar a VM! -> {}".format(netbox_name)
+            log.append(log_message)
+
             delete_vm = netbox_obj.delete()
 
             if delete_vm == True:
-                print("[OK] VM removida do Netbox com sucesso")
+                log_message = "[OK] VM removida do Netbox com sucesso"
+                log.append(log_message)
+
+                json_vm["result"] = True
 
         else:
-            print('[ERROR] Erro inesperado ao verificar se VM existe no Proxmox')
+            log_message = '[ERROR] Erro inesperado ao verificar se VM existe no Proxmox'
+            log.append(log_message)
+
+            json_vm["result"] = False
+
+        json_vm["log"] = log
+        
+        json_vm_all.append(json_vm)
+    
+    return json_vm_all
+
+    

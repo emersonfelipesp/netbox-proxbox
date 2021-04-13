@@ -8,7 +8,7 @@ load_dotenv(find_dotenv())
 from proxmoxer import ProxmoxAPI
 import pynetbox
 
-
+"""
 # ADICIONA PACKAGE AO PYTHONPATH PARA TESTAR LOCALMENTE (SEM PRECISAR BAIXAR O PACOTE TODA HROA)
 import sys
 import pathlib
@@ -20,11 +20,12 @@ path = str(path).replace('/proxbox/src/proxbox', '/proxbox/src')
 sys.path.append(path)
 #print('################')
 print(sys.path)
+"""
 
 from proxbox.session import netbox as nb, proxmox, PROXMOX, PROXMOX_PORT
 
-import proxbox.create
-import proxbox.remove
+import create
+import remove
 
 from proxbox.update import *
 
@@ -67,7 +68,6 @@ def search_by_proxmox_id(proxmox_id):
         px_id = px_vm.get("vmid")
         
         if px_id == proxmox_id:
-            #print('\n\n#########\n| ID: {} \n| JSON: {}\n#########\n\n'.format(px_id, proxmox_vm))
             proxmox_vm = px_vm
             return proxmox_vm
     
@@ -87,9 +87,9 @@ def search_by_proxmox_name(proxmox_name):
     # Caso JSON não encontrado, volta nulo.
     return None
 
-def search_by_netbox_id(netbox_id):
+def search_by_id(id):
     # Salva objeto da VM vindo do Netbox
-    netbox_obj = nb.virtualization.virtual_machines.get(netbox_id)
+    netbox_obj = nb.virtualization.virtual_machines.get(id)
 
     proxmox_name = netbox_obj.name
 
@@ -117,7 +117,7 @@ def virtual_machine(**kwargs):
 
     # args:
     # proxmox_json
-    # netbox_id
+    # id
     # proxmox_id
     # name
     #
@@ -135,13 +135,13 @@ def virtual_machine(**kwargs):
             json_vm["result"] = False
 
     # Salva argumento
-    netbox_id = kwargs.get('netbox_id')
+    id = kwargs.get('id')
 
     # Valida o tipo
-    if netbox_id != None:
-        netbox_id_type = type(netbox_id)
-        if 'int' not in str(netbox_id_type):
-            print('[ERROR] "netbox_id" MUST be integer. Type used: {}'.format(netbox_id_type))
+    if id != None:
+        id_type = type(id)
+        if 'int' not in str(id_type):
+            print('[ERROR] "id" MUST be integer. Type used: {}'.format(id_type))
             #return False
             json_vm["result"] = False
             
@@ -160,20 +160,23 @@ def virtual_machine(**kwargs):
     # Salva argumento
     proxmox_json = kwargs.get('proxmox_json')
 
-    # Decide se utilizará proxmox_json ou outros argumentos passados (netbox_id, proxmox_id e proxmox_name)
+    proxmox_vm_name = None
+
+    # Decide se utilizará proxmox_json ou outros argumentos passados (id, proxmox_id e proxmox_name)
     if proxmox_json != None:
         proxmox_vm_name = proxmox_json['name']
+        json_vm["name"] = proxmox_json['name']
 
     # Se 'proxmox_json' não foi passado como argumento, usa os outros argumentos
     else:    
         #
         # Com os argumentos passado na função, busca pelo json da VM no Proxmox
-        # Prioridade de busca: 1° = netbox_id | 2° = proxmox_id | 3° = proxmox_name
+        # Prioridade de busca: 1° = id | 2° = proxmox_id | 3° = proxmox_name
         #
-        # Busca JSON da VM do Proxmox pelo argumento "netbox_id"
-        if netbox_id != None:
+        # Busca JSON da VM do Proxmox pelo argumento "id"
+        if id != None:
             # Search result returns Proxmox ID or Proxmox Name, if ID doesn't exist
-            search_result = search_by_netbox_id(netbox_id)
+            search_result = search_by_id(id)
 
             # Busca tipo do resultado. 'int' = Proxmox ID | 'str' = Proxmox Name
             search_result_type = type(search_result)
@@ -189,6 +192,7 @@ def virtual_machine(**kwargs):
                     json_vm["result"] = False            
 
                 proxmox_vm_name = proxmox_json['name']
+                json_vm["name"] = proxmox_json['name']
 
             # Busca pelo Proxmox NAME
             elif 'str' in str(search_result_type):
@@ -201,6 +205,7 @@ def virtual_machine(**kwargs):
                     json_vm["result"] = False
                 
                 proxmox_vm_name = proxmox_json['name']
+                json_vm["name"] = proxmox_json['name']
 
         else:
             # Busca JSON do Proxmox pelo argumento 'proxmox_id'
@@ -214,6 +219,7 @@ def virtual_machine(**kwargs):
                     json_vm["result"] = False      
 
                 proxmox_vm_name = proxmox_json['name']
+                json_vm["name"] = proxmox_json['name']
 
             else:
                 # Busca JSON do Proxmox pelo argumento 'name''
@@ -227,6 +233,10 @@ def virtual_machine(**kwargs):
                         json_vm["result"] = False
                     
                     proxmox_vm_name = proxmox_json['name']
+                    json_vm["name"] = proxmox_json['name']
+
+    if proxmox_vm_name == None:
+        return False
 
     # Busca objeto no Netbox pelo nome vindo do Proxmox
     netbox_vm = nb.virtualization.virtual_machines.get(name = proxmox_vm_name)
@@ -304,20 +314,19 @@ def virtual_machine(**kwargs):
         #return False
         json_vm["result"] = False
 
-
-    '''
-    print('proxmox_id: {} | type: {}'.format(proxmox_id, type(proxmox_id)))
-    print(' netbox_id: {} | type: {}'.format(netbox_id, type(netbox_id)))
-    print('      name: {} | type: {}'.format(name, type(name)))
-    '''
     return json_vm
 
 # Atualiza informações de status, 'custom_fields' e 'local_context'
 def all():
+    results = []
+
     # Get all VM/CTs from Proxmox
     for px_vm_each in proxmox.cluster.resources.get(type='vm'):     
         vm_updated = virtual_machine(proxmox_json = px_vm_each)
-        print(vm_updated, '\n')
+
+        results.append(vm_updated)
+
+    return results
 
 # Runs if script executed directly
 if __name__ == "__main__":
@@ -326,7 +335,7 @@ if __name__ == "__main__":
 
     print('____________________________________\n')
     print('#\n# COMPARA NETBOX COM PROXMOX\n#')
-    remove.virtual_machine()
+    remove.all()
 
 
 
