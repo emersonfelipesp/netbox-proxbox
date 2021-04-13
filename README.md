@@ -72,7 +72,7 @@ Compare Netbox and Proxmox information and update VM on Netbox, if any differenc
 {
   "name": "Netbox",
   "changes": {
-    "status": false,
+    "status": true,
     "custom_fiedls": false,
     "local_context": false,
     "resources": false
@@ -104,7 +104,7 @@ Updates all VM's at once on Netbox with the information gotten from Proxmox
     "status": false,
     "custom_fiedls": false,
     "local_context": false,
-    "resources": false
+    "resources": true
   },
   "result": true
 },
@@ -112,8 +112,8 @@ Updates all VM's at once on Netbox with the information gotten from Proxmox
   "name": "ZABBIX",
   "changes": {
     "status": false,
-    "custom_fiedls": false,
-    "local_context": false,
+    "custom_fiedls": true,
+    "local_context": true,
     "resources": false
   },
   "result": true
