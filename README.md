@@ -120,6 +120,39 @@ Updates all VM's at once on Netbox with the information gotten from Proxmox
 }
 ```
 
+Compare all VM's on Netbox with Proxmox and delete VM on Netbox if it doesn't exist on Proxmox.
+
+```python
+>>> import proxbox
+
+>>> json_result = proxbox.remove.all()
+>>> print(json_result)
+[
+  {
+    "name": "vm01",
+    "result": false,
+    "log": [
+      "[OK] VM existe em ambos sistemas -> nfsen-debian"
+    ]
+  },
+  {
+    "name": "vm02",
+    "result": false,
+    "log": [
+      "[OK] VM existe em ambos sistemas -> nmt-backend"
+    ]
+  },
+  {
+    "name": "vm03",
+    "result": true,
+    "log": [
+      "[WARNING] VM existe no Netbox, mas não no Proxmox. Deletar a VM! -> teste123",
+      "[OK] VM removida do Netbox com sucesso"
+    ]
+  }
+]
+```
+
 ---
 
 [Workflow do ProxBox](https://whimsical.com/proxbox-integracao-netbox-e-proxmox-XtrSijkFx2ZUKmkcAZqoUx)
