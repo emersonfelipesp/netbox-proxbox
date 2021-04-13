@@ -4,7 +4,7 @@
 
 
 # proxbox
-Integration between Proxmox and Netbox
+Integration between Proxmox and Netbox using proxmoxer and pynetbox.
 
 
 ## Installation
