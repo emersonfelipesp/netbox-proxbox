@@ -19,6 +19,8 @@ PROXMOX_SSL = os.getenv("PROXMOX_SSL")
 # Get Netbox credentials values from .env
 NETBOX = os.getenv("NETBOX")
 NETBOX_TOKEN = os.getenv("NETBOX_TOKEN")
+NETBOX_CLUSTER_ID = os.getenv("NETBOX_CLUSTER_ID")
+NETBOX_ROLE_ID = os.getenv("NETBOX_ROLE_ID")
 
 # Convert string to boolean
 if PROXMOX_SSL == 'False':
@@ -39,8 +41,6 @@ NETBOX_SESSION = pynetbox.api(
     NETBOX,
     token=NETBOX_TOKEN
 )
-
-
 
 import proxbox.main as update
 import proxbox.updates

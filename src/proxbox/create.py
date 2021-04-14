@@ -1,7 +1,7 @@
 from proxmoxer import ProxmoxAPI
 import pynetbox
 
-from proxbox import NETBOX_SESSION as nb
+from proxbox import NETBOX_SESSION as nb, NETBOX_CLUSTER_ID, NETBOX_ROLE_ID
 
 # Cria VM/CT
 def virtual_machine(proxmox_vm):
@@ -9,8 +9,8 @@ def virtual_machine(proxmox_vm):
     vm_json = {}
     vm_json["name"] = proxmox_vm['name']
     vm_json["status"] = 'active'
-    vm_json["cluster"] = 1      # Proxmox cluster
-    vm_json["role"] = 12        # Aplicacao
+    vm_json["cluster"] = NETBOX_CLUSTER_ID      # Proxmox cluster
+    vm_json["role"] = NETBOX_ROLE_ID        # Aplicacao
     
     # Cria VM/CT com json criado
     try:
