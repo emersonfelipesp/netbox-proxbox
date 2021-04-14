@@ -42,14 +42,13 @@ NETBOX_SESSION = pynetbox.api(
     token=NETBOX_TOKEN
 )
 
-import proxbox.main as update
-import proxbox.updates
-import proxbox.create
+import netbox_proxbox.main as update
+import netbox_proxbox.updates
+import netbox_proxbox.create
 
 # Verifica se VM existe no Proxmox e deleta no Netbox, caso não exista
-import proxbox.remove
+import netbox_proxbox.remove
 
-#import proxbox.session
 
 
 
