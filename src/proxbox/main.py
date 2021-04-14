@@ -11,15 +11,15 @@ import pynetbox
 import proxbox
 
 # Global variables
-proxmox = proxbox.session.proxmox
-nb = proxbox.session.netbox
-PROXMOX = proxbox.session.PROXMOX
-PROXMOX_PORT = proxbox.session.PROXMOX_PORT
-PROXMOX_USER = proxbox.session.PROXMOX_USER
-PROXMOX_PASSWORD = proxbox.session.PROXMOX_PASSWORD
-PROXMOX_SSL = proxbox.session.PROXMOX_SSL
-NETBOX = proxbox.session.NETBOX
-NETBOX_TOKEN = proxbox.session.NETBOX_TOKEN
+proxmox = proxbox.PROXMOX_SESSION
+nb = proxbox.NETBOX_SESSION
+PROXMOX = proxbox.PROXMOX
+PROXMOX_PORT = proxbox.PROXMOX_PORT
+PROXMOX_USER = proxbox.PROXMOX_USER
+PROXMOX_PASSWORD = proxbox.PROXMOX_PASSWORD
+PROXMOX_SSL = proxbox.PROXMOX_SSL
+NETBOX = proxbox.NETBOX
+NETBOX_TOKEN = proxbox.NETBOX_TOKEN
 
 # Chama todas as funções de atualização
 def vm_full_update(netbox_vm, proxmox_vm):
@@ -33,7 +33,7 @@ def vm_full_update(netbox_vm, proxmox_vm):
     #changes = [custom_fields_updated, status_updated, local_context_updated, resources_update]
     changes = {
         "status" : status_updated,
-        "custom_fiedls" : custom_fields_updated,
+        "custom_fields" : custom_fields_updated,
         "local_context" : local_context_updated,
         "resources" : resources_update  
     }

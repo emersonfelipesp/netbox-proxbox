@@ -1,9 +1,8 @@
 from proxmoxer import ProxmoxAPI
 import pynetbox
 
-import proxbox
-nb = proxbox.session.netbox
-proxmox = proxbox.session.proxmox
+from proxbox import NETBOX_SESSION as nb
+from proxbox import PROXMOX_SESSION as proxmox
 
 import proxbox.updates
 
