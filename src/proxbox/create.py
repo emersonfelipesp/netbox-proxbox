@@ -1,7 +1,8 @@
 from proxmoxer import ProxmoxAPI
 import pynetbox
 
-from proxbox.session import netbox as nb
+import proxbox
+nb = proxbox.session.netbox
 
 # Cria VM/CT
 def virtual_machine(proxmox_vm):
