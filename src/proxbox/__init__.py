@@ -6,7 +6,14 @@ from proxbox.main import virtual_machine
 from proxbox.main import all
 """
 
-import proxbox.main as update 
+import proxbox.create
+import proxbox.main as update
 
 # Verifica se VM existe no Proxmox e deleta no Netbox, caso não exista
 import proxbox.remove
+
+import proxbox.session
+
+import proxbox.updates
+
+

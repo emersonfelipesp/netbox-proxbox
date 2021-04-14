@@ -3,7 +3,7 @@ import pynetbox
 
 from proxbox.session import netbox as nb, proxmox
 
-import update
+import proxbox.updates
 
 # Verifica se VM/CT existe no Proxmox
 def is_vm_on_proxmox(netbox_vm):
