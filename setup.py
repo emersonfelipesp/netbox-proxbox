@@ -20,7 +20,7 @@ requires = [
 ]
 
 setup(
-    name="proxbox",
+    name="netbox-proxbox",
     version="0.0.1",
     author="Emerson Pereira",
     author_email="emerson.felipe@nmultifibra.com.br",

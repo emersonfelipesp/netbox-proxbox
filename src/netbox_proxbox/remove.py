@@ -1,10 +1,10 @@
 from proxmoxer import ProxmoxAPI
 import pynetbox
 
-from proxbox import NETBOX_SESSION as nb
-from proxbox import PROXMOX_SESSION as proxmox
+from netbox_proxbox import NETBOX_SESSION as nb
+from netbox_proxbox import PROXMOX_SESSION as proxmox
 
-import proxbox.updates
+import netbox_proxbox.updates
 
 # Verifica se VM/CT existe no Proxmox
 def is_vm_on_proxmox(netbox_vm):
