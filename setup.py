@@ -10,6 +10,8 @@ long_description = (here / 'README.md').read_text(encoding='utf-8')
 # Proxbox dependencies
 requires = [
     'python-dotenv',
+    'poetry',
+    'invoke',
     'numpy',
     'matplotlib',
     'requests>=2',
