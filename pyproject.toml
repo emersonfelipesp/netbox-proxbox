@@ -21,5 +21,14 @@ pydocstyle = "^6.0.0"
 yamllint = "^1.26.1"
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
+requires = [
+    "poetry-core>=1.0.0",
+    "python-dotenv",
+    "numpy",
+    "matplotlib",
+    "requests",
+    "pynetbox",
+    "paramiko",
+    "proxmoxer"
+]
 build-backend = "poetry.core.masonry.api"

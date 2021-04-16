@@ -17,8 +17,7 @@
       env_file:
         - ./dev.env
       volumes:
-        - ./base_configuration.py:/opt/netbox/netbox/netbox/base_configuration.py
-        - ./netbox_${NETBOX_VER}/configuration.py:/opt/netbox/netbox/netbox/configuration.py
+        - ./configuration.py:/opt/netbox/netbox/netbox/configuration.py
         - ../:/source
       tty: true
     worker:
@@ -32,15 +31,14 @@
       env_file:
         - ./dev.env
       volumes:
-        - ./base_configuration.py:/opt/netbox/netbox/netbox/base_configuration.py
-        - ./netbox_${NETBOX_VER}/configuration.py:/opt/netbox/netbox/netbox/configuration.py
-        - ../netbox_bgppeering:/source/netbox_bgppeering
+        - ./configuration.py:/opt/netbox/netbox/netbox/configuration.py
+        - ../netbox_proxbox:/source/netbox_proxbox
       tty: true
     postgres:
       image: postgres:10
       env_file: dev.env
       volumes:
-        - pgdata_netbox_bgppeering:/var/lib/postgresql/data
+        - pgdata_netbox_proxbox:/var/lib/postgresql/data
     redis:
       image: redis:5-alpine
       command:
@@ -49,4 +47,4 @@
         - redis-server --appendonly yes --requirepass $$REDIS_PASSWORD  ## $$ because of docker-compose
       env_file: ./dev.env
   volumes:
-    pgdata_netbox_bgppeering:
+    pgdata_netbox_proxbox:

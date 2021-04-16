@@ -55,7 +55,7 @@ import netbox_proxbox.remove
 
 
 class ProxboxConfig(PluginConfig):
-    name = "proxbox"
+    name = "netbox_proxbox"
     verbose_name = "Proxbox"
     description = "Integrates Proxmox and Netbox"
     version = "0.1"

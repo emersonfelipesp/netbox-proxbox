@@ -14,6 +14,7 @@ RUN pip install --upgrade pip\
 # -------------------------------------------------------------------------------------
 # Remove redis==3.4.1 from the requirements.txt file as a workaround to #4910
 # https://github.com/netbox-community/netbox/issues/4910, required for version 2.8.8 and earlier
+#
 RUN git clone --single-branch --branch ${netbox_ver} https://github.com/netbox-community/netbox.git /opt/netbox/ && \
     cd /opt/netbox/ && \
     sed -i '/^redis\=\=/d' /opt/netbox/requirements.txt && \
@@ -34,6 +35,9 @@ RUN pip install django-rq==2.3.2
 RUN mkdir -p /source
 WORKDIR /source
 COPY . /source
+
+RUN pip install -r /source/requirements.txt
+
 RUN poetry config virtualenvs.create false \
   && poetry install --no-interaction --no-ansi
 

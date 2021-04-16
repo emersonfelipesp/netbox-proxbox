@@ -33,8 +33,8 @@ setup(
         "Programming Language :: Python :: 3",
         "Operating System :: Linux",
     ],
-    package_dir={"": "src"},
-    packages=find_packages(where="src"),
+    #package_dir={"": "src"},
+    packages=['netbox_proxbox'],
     install_requires=requires,
     python_requires= '>=3.6'
 )
