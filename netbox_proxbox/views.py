@@ -9,7 +9,10 @@ from django.views.generic.edit import CreateView
 
 from .models import VmResources
 from .tables import VmResourcesTable
-from .forms import VmResourcesForm
+from .forms import VmResourcesForm, VmResourcesFilterForm
+from .filters import VmResourcesFilter
+from .icon_classes import icon_classes
+
 
 class VmResourcesView(View):
     """Display Virtual Machine details"""
@@ -41,17 +44,34 @@ class VmResourcesListView(View):
     # all of the objects should be given to the view
     queryset = VmResources.objects.all()
 
+    filterset = VmResourcesFilter
+
+    # form that will be rendered in list view template
+    filterset_form = VmResourcesFilterForm
+
     def get(self, request):
         """Get request."""
 
+        # where the filtering happens.
+        # the filterset is fed with form values contained in request.GET and queryset with VmResources objects.
+        # '.qs' = returns QuerySet like object what is assigned back to 'self.queryset'
+        # the 'self.queryset' is then fed to table constructor
+        self.queryset = self.filterset(request.GET, self.queryset).qs
+
         # table class
+        
         table = VmResourcesTable(self.queryset)
 
         # RequestConfig is used to configure pagination of 25 object per page
         RequestConfig(request, paginate={"per_page": 25}).configure(table)
 
         return render(
-            request, "netbox_proxbox/vm_resources_list.html", {"table": table}
+            request, "netbox_proxbox/vm_resources_list.html", 
+            {
+                "table": table,
+                "filter_form": self.filterset_form(request.GET),
+                "icon_classes": icon_classes,
+            }
         )
 
 # 'CreateView' is provided by Django

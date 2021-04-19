@@ -47,6 +47,11 @@ class VmResources(ChangeLoggedModel):
         max_length=64,
         blank=True
     )
+
+    description = models.CharField(
+        max_length=200, 
+        blank=True
+    )
     # Retrieve and filter 'VmResources' records
     objects = RestrictedQuerySet.as_manager()
 
