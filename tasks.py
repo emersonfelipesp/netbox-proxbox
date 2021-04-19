@@ -167,11 +167,12 @@ def create_user(context, user="admin", netbox_ver=NETBOX_VER, python_ver=PYTHON_
 
 
 @task
-def makemigrations(context, name="", netbox_ver=NETBOX_VER, python_ver=PYTHON_VER):
+def makemigrations(context, app_name=BUILD_NAME, name="", netbox_ver=NETBOX_VER, python_ver=PYTHON_VER):
     """Run Make Migration in Django.
 
     Args:
         context (obj): Used to run specific commands
+        app_name (str): Name of the app for which to run migration
         name (str): Name of the migration to be created
         netbox_ver (str): NetBox version to use to build the container
         python_ver (str): Will use the Python version docker image to build from
@@ -183,12 +184,12 @@ def makemigrations(context, name="", netbox_ver=NETBOX_VER, python_ver=PYTHON_VE
 
     if name:
         context.run(
-            f"docker-compose -f {COMPOSE_FILE} -p {BUILD_NAME} run netbox python manage.py makemigrations --name {name}",
+            f"docker-compose -f {COMPOSE_FILE} -p {BUILD_NAME} run netbox python manage.py makemigrations {app_name} --name {name}",
             env={"NETBOX_VER": netbox_ver, "PYTHON_VER": python_ver},
         )
     else:
         context.run(
-            f"docker-compose -f {COMPOSE_FILE} -p {BUILD_NAME} run netbox python manage.py makemigrations",
+            f"docker-compose -f {COMPOSE_FILE} -p {BUILD_NAME} run netbox python manage.py makemigrations {app_name}",
             env={"NETBOX_VER": netbox_ver, "PYTHON_VER": python_ver},
         )
 
