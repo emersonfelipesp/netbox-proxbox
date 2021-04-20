@@ -8,8 +8,7 @@ load_dotenv(find_dotenv())
 from proxmoxer import ProxmoxAPI
 import paramiko
 import pynetbox
-print(pynetbox)
-print(ProxmoxAPI)
+
 # Get Proxmox credentials values from .env
 PROXMOX = os.getenv("PROXMOX")
 PROXMOX_PORT = os.getenv("PROXMOX_PORT")

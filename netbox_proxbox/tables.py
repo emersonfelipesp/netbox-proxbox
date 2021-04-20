@@ -1,10 +1,10 @@
 # tables.py
 import django_tables2 as tables
 from utilities.tables import BaseTable
-from .models import VmResources
+from .models import ProxmoxVM
 
 
-class VmResourcesTable(BaseTable):
+class ProxmoxVMTable(BaseTable):
     """Table for displaying BGP Peering objects."""
 
     id = tables.LinkColumn()
@@ -13,7 +13,7 @@ class VmResourcesTable(BaseTable):
     proxmox_vm_id = tables.LinkColumn()
 
     class Meta(BaseTable.Meta):
-        model = VmResources
+        model = ProxmoxVM
         fields = (
             "id",
             "cluster",

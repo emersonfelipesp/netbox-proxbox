@@ -3,12 +3,12 @@ from utilities.choices import ButtonColorChoices
 
 menu_items = (
     PluginMenuItem(
-        link="plugins:netbox_proxbox:proxbox_list",
+        link="plugins:netbox_proxbox:proxmoxvm_list",
         link_text="Proxmox VM/CT",
         buttons=(
             PluginMenuButton(
                 # match the names of the path for create view defined in ./urls.py
-                link="plugins:netbox_proxbox:proxbox_add",
+                link="plugins:netbox_proxbox:proxmoxvm_add",
                 # text that appears when hovering the ubtton
                 title="Add",
                 # font-awesome icon to use

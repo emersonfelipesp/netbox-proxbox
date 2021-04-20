@@ -3,11 +3,11 @@ from django.db.models import Q
 
 from virtualization.models import VirtualMachine, Cluster
 
-from .models import VmResources
+from .models import ProxmoxVM
 
 
-class VmResourcesFilter(django_filters.FilterSet):
-    """Filter capabilities for VmResources instances."""
+class ProxmoxVMFilter(django_filters.FilterSet):
+    """Filter capabilities for ProxmoxVM instances."""
 
     q = django_filters.CharFilter(
         # method = the method it must call when the field is used
@@ -18,7 +18,7 @@ class VmResourcesFilter(django_filters.FilterSet):
 
     # django_filters.ModelMultipleChoiceFilter = drop down-menu with multiple choices
     cluster = django_filters.ModelMultipleChoiceFilter(
-        # field_name = specifies attribute on the model field that we will filter 'VmResources' objects on
+        # field_name = specifies attribute on the model field that we will filter 'ProxmoxVM' objects on
         # cluster = field   
         field_name="cluster__name",
         queryset=Cluster.objects.all(),
@@ -42,7 +42,7 @@ class VmResourcesFilter(django_filters.FilterSet):
 
     # define model this filter is based on
     class Meta:
-        model = VmResources
+        model = ProxmoxVM
 
         # list of fields for which filters will be auto-generated
         # any field that doesn't need special treatment goes here

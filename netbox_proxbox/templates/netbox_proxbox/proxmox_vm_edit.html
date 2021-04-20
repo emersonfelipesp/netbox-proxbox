@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<form action="" method="post" enctype="multipart/form-data" class="form form-horizontal">
+    {% csrf_token %}
+    <div class="row">
+        <div class="col-md-6 col-md-offset-3">
+            <h3>
+                {% block title %}
+                <!-- 
+                    Check if object.pk has value and display title for editing existing object
+                    (Edit view will automatically pass 'pk' value to the template)
+                -->
+                {% if object.pk %}
+                    Editing Proxmox VM - {{object}}
+                {% else %}
+                <!-- If there is no 'pk' value, display title for adding a new object -->
+                    Add a new Proxmox VM
+                {% endif %}
+                {% endblock %}
+            </h3>
+            <div class="panel panel-default">
+                <div class="panel-heading"><strong>Virtual Machine</strong></div>
+                <div class="panel-body">
+                    <!-- Loops over fields of the form -->
+                    {% for field in form %}
+                    <div class="form-group">
+                        <label class="col-md-3 control-label {% if field.field.required %} required{% endif %}" for="{ field.id_for_label }}">
+                            {{ field.label }}
+                        </label>
+                        <div class="col-md-9">
+                            {{ field }}
+                            {% if field.help_text %}
+                            <span class="help-block">{{ field.help_text|safe }}</span>
+                            {% endif %}
+                            <!-- 
+                            {% if field.errors %}
+                            <ul>
+                                {% for error in field.errors %}
+                                <li class="text-danger">{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                            {% endif %}
+                            -->
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-md-6 col-md-offset-3 text-right">
+            <!-- If editing existing object, presents 'Update' and 'Cancel' buttons-->
+            {% if object.pk %}
+                <!-- 'Update' will save changes made to the object -->
+                <button type="submit" name="_update" class="btn btn-primary">Update</button>
+                <!-- 'Cancel' will take us back to the object details view -->
+                <a href="{% url 'plugins:netbox_proxbox:proxmoxvm' pk=proxmoxvm.pk %}" class="btn btn-default">Cancel</a>
+
+            <!-- If adding new object, presents 'Create' and 'Cancel' buttons-->
+            {% else %}
+                <button type="submit" name="_create" class="btn btn-primary">Create</button>
+                <a href="{% url 'plugins:netbox_proxbox:proxmoxvm_list' %}" class="btn btn-default">Cancel</a>
+            {% endif %}
+
+        </div>
+    </div>
+</form>
+{% endblock %}

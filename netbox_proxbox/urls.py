@@ -2,20 +2,21 @@
 from django.http import HttpResponse
 from django.urls import path
 
-from .views import VmResourcesView, VmResourcesListView, VmResourcesCreateView
-
-'''
-def dummy_view(request):
-    html = "<html><body>Proxbox Plugin.</body></html>"
-    return HttpResponse(html)
-'''
+from .views import (
+    ProxmoxVMCreateView,
+    ProxmoxVMDeleteView,
+    ProxmoxVMEditView,
+    ProxmoxVMListView,
+    ProxmoxVMView,
+)
 
 urlpatterns = [
-    path("", VmResourcesListView.as_view(), name="proxbox_list"),
-    
-    # <int:pk> = plugins/netbox_proxbox/<pk> | example: plugins/netbox_proxbox/1/
-    # VmResourcesView.as_view() - as.view() is need so that our view class can process requests.
+    path("", ProxmoxVMListView.as_view(), name="proxmoxvm_list"),
+    # <int:pk> = plugins/netbox_proxmoxvm/<pk> | example: plugins/netbox_proxmoxvm/1/
+    # ProxmoxVMView.as_view() - as.view() is need so that our view class can process requests.
     # as_view() takes request and returns well-formed response, that is a class based view.
-    path("<int:pk>/", VmResourcesView.as_view(), name="proxbox"),
-    path("add/", VmResourcesCreateView.as_view(), name="proxbox_add")
+    path("<int:pk>/", ProxmoxVMView.as_view(), name="proxmoxvm"),
+    path("add/", ProxmoxVMCreateView.as_view(), name="proxmoxvm_add"),
+    path("<int:pk>/delete/", ProxmoxVMDeleteView.as_view(), name="proxmoxvm_delete"),
+    path("<int:pk>/edit/", ProxmoxVMEditView.as_view(), name="proxmoxvm_edit"),
 ]

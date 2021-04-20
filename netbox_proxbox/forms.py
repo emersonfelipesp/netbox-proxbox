@@ -2,17 +2,17 @@ from django import forms
 
 from utilities.forms import BootstrapMixin
 
-from .models import VmResources
+from .models import ProxmoxVM
 
 from virtualization.models import VirtualMachine, Cluster
 
 # 'forms.ModelForm' is a Django helper class  that allows building forms from models
 # 'BootstrapMixin' comes from Netbox and adds CSS classes
-class VmResourcesForm(BootstrapMixin, forms.ModelForm):
+class ProxmoxVMForm(BootstrapMixin, forms.ModelForm):
     """Form for creating a new BgpPeering object."""
 
     class Meta:
-        model = VmResources
+        model = ProxmoxVM
         fields = [
             "cluster",
             "node",
@@ -24,8 +24,8 @@ class VmResourcesForm(BootstrapMixin, forms.ModelForm):
             "disk",
         ]
  
-class VmResourcesFilterForm(BootstrapMixin, forms.ModelForm):
-    """Form for filtering VmResources instances."""
+class ProxmoxVMFilterForm(BootstrapMixin, forms.ModelForm):
+    """Form for filtering ProxmoxVM instances."""
 
     q = forms.CharField(required=False, label="Search")
 
@@ -45,19 +45,24 @@ class VmResourcesFilterForm(BootstrapMixin, forms.ModelForm):
         queryset=VirtualMachine.objects.all(),
         to_field_name="name",
         required=False,
+
+        # label = defines how field will appear in GUI
+        label="Virtual Machine"
     )
 
     node = forms.IntegerField(
         required=False,
+        label="Node (Server)"
     )
 
     proxmox_vm_id = forms.IntegerField(
         required=False,
+        label="Proxmox VM ID"
     )
 
     class Meta:
         # model that will be used in the form
-        model = VmResources
+        model = ProxmoxVM
 
         # fields that will be auto-generated,
         # in this case all form fields are specified manually

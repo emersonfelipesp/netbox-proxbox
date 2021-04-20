@@ -8,7 +8,7 @@ class ProxboxConfig(PluginConfig):
     version = "0.1"
     author = "Emerson Felipe (@emersonfelipesp)"
     author_email = "emerson.felipe@nmultifibra.com.br"
-    #base_url = "proxbox"
+    base_url = "proxbox"
     required_settings = []
     default_settings = {}
 
