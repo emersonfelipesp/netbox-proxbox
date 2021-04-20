@@ -34,7 +34,7 @@ class ProxmoxVM(ChangeLoggedModel):
     virtual_machine = models.ForeignKey(
         to="virtualization.VirtualMachine",
         on_delete=models.PROTECT,     # linked virtual_machine cannot be deleted as long as this object exists
-        verbose_name="Virtual Machine"
+        verbose_name="Proxmox VM/CT"
     )
     status = models.CharField(
         max_length=50,

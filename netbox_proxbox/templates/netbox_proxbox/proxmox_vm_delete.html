@@ -9,7 +9,7 @@
             <div class="panel panel-{{ panel_class|default:"danger" }}">
                 <div class="panel-heading">Delete Proxmox Virtual Machine?</div>
                 <div class="panel-body">
-                    <p>Are you sure you want to delete Proxmox <strong>{{ object }}</strong>VM?</p>
+                    <p>Are you sure you want to delete Proxmox <strong>{{ object }}</strong> VM?</p>
                     <div class="text-right">
                         <button type="submit" name="_confirm" class="btn btn-{{ button_class|default:"danger" }}">Confirm</button>
                         <a href="{% url 'plugins:netbox_proxbox:proxmoxvm' pk=proxmoxvm.pk %}" class="btn btn-default">Cancel</a>

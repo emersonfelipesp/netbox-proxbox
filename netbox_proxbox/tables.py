@@ -16,10 +16,10 @@ class ProxmoxVMTable(BaseTable):
         model = ProxmoxVM
         fields = (
             "id",
-            "cluster",
-            "node",
             "virtual_machine",
             "proxmox_vm_id",
             "status",
             "type",
+            "node",
+            "cluster",
         )

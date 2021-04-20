@@ -41,23 +41,23 @@ class ProxmoxVMFilterForm(BootstrapMixin, forms.ModelForm):
         to_field_name="name"
     )
 
+    node = forms.IntegerField(
+        required=False,
+        label="Node (Server)"
+    )
+
     virtual_machine = forms.ModelChoiceField(
         queryset=VirtualMachine.objects.all(),
         to_field_name="name",
         required=False,
 
         # label = defines how field will appear in GUI
-        label="Virtual Machine"
-    )
-
-    node = forms.IntegerField(
-        required=False,
-        label="Node (Server)"
+        label="Proxmox VM/CT"
     )
 
     proxmox_vm_id = forms.IntegerField(
         required=False,
-        label="Proxmox VM ID"
+        label="Proxmox VM/CT ID"
     )
 
     class Meta:

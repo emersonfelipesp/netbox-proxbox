@@ -15,6 +15,7 @@ menu_items = (
                 icon_class="mdi mdi-plus-thick", # 'fa fa-plus' didn't work
                 # defines color button to green
                 color=ButtonColorChoices.GREEN,
+                permissions=["netbox_proxbox.add_proxmoxvm"],
             ),
         ),
     ),

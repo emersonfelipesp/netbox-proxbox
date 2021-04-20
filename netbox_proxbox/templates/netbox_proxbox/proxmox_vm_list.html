@@ -3,9 +3,11 @@
 
 {% block content %}
 <div class="pull-right noprint">
+    {% if perms.netbox_proxbox.add_proxmoxvm %}
     <a href="{% url 'plugins:netbox_proxbox:proxmoxvm_add' %}" class="btn btn-primary">
         <span class="{{ icon_classes.plus }}" aria-hidden="true"></span> Add
     </a>
+    {% endif %}
 </div>
 <h1>{% block title %}All Virtual Machines{% endblock %}</h1>
 <div class="row">

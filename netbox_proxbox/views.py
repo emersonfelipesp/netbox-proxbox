@@ -4,6 +4,10 @@ from django.urls import reverse_lazy
 from django.views import View
 from django.views.generic.edit import CreateView, DeleteView, UpdateView
 from django_tables2 import RequestConfig
+# Enables permissions for views using Django authentication system.
+# PermissionRequiredMixin = will handle permission checks logic and will plug into the
+# Netbox's existing authorization system.
+from django.contrib.auth.mixins import PermissionRequiredMixin
 
 from .icon_classes import icon_classes
 from .filters import ProxmoxVMFilter
@@ -11,8 +15,11 @@ from .forms import ProxmoxVMForm, ProxmoxVMFilterForm
 from .models import ProxmoxVM
 from .tables import ProxmoxVMTable
 
-class ProxmoxVMView(View):
+class ProxmoxVMView(PermissionRequiredMixin, View):
     """Display Virtual Machine details"""
+
+    # specify permission required to access the view
+    permission_required = "netbox_proxbox.view_proxmoxvm"
 
     # retrieve and filter objects on ProxmoxVM
     queryset = ProxmoxVM.objects.all()
@@ -35,8 +42,10 @@ class ProxmoxVMView(View):
             },
         )
 
-class ProxmoxVMListView(View):
+class ProxmoxVMListView(PermissionRequiredMixin, View):
     """View for listing all existing Virtual Machines."""
+
+    permission_required = "netbox_proxbox.view_proxmoxvm"
 
     # all of the objects should be given to the view
     queryset = ProxmoxVM.objects.all()
@@ -72,14 +81,18 @@ class ProxmoxVMListView(View):
         )
 
 # 'CreateView' is provided by Django
-class ProxmoxVMCreateView(CreateView):
+class ProxmoxVMCreateView(PermissionRequiredMixin, CreateView):
     """View for creating a new ProxmoxVM instance."""
+
+    permission_required = "netbox_proxbox.add_proxmoxvm"
 
     form_class = ProxmoxVMForm
     template_name = "netbox_proxbox/proxmox_vm_edit.html"
 
-class ProxmoxVMDeleteView(DeleteView):
+class ProxmoxVMDeleteView(PermissionRequiredMixin, DeleteView):
     """View for deleting ProxmoxVM instance."""
+
+    permission_required = "netbox_proxbox.delete_proxmoxvm"
 
     model = ProxmoxVM
     # reverse_lazy = function used to return the page for the given namespace URL
@@ -89,8 +102,10 @@ class ProxmoxVMDeleteView(DeleteView):
     # template_name = points to the template that will be rendred when asked to confirm the deletion
     template_name = "netbox_proxbox/proxmox_vm_delete.html"
 
-class ProxmoxVMEditView(UpdateView):
+class ProxmoxVMEditView(PermissionRequiredMixin, UpdateView):
     """View for editing a ProxmoxVM instance."""
+
+    permission_required = "netbox_proxbox.change_proxmoxvm"
 
     model = ProxmoxVM
     form_class = ProxmoxVMForm
