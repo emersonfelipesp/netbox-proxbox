@@ -43,7 +43,21 @@ class ProxmoxVM(ChangeLoggedModel):
         verbose_name='Status'
     )    
     proxmox_vm_id = models.PositiveIntegerField(verbose_name="Proxmox VM ID")
+
     vcpus = models.PositiveIntegerField(verbose_name="VCPUs")
+
+    """
+    vcpus_VirtualMachine = models.ForeignKey(      # Field 'cluster' links to Netbox's 'virtualization.Cluster' model
+        to="virtualization.VirtualMachine",  # and is set to 'ForeignKey' because of it.
+        on_delete=models.SET_NULL,    # If Netbox linked object is deleted, set the field to NULL
+        blank=True, # Makes field optional
+        null=True,   # Allows corresponding database column to be NULL (contain no value)
+        verbose_name="Cluster"
+    )
+
+    vcpus = vcpus_VirtualMachine.vcpus
+    """
+
     memory = models.PositiveIntegerField(verbose_name="Memory (MB)")
     disk = models.PositiveIntegerField(verbose_name="Disk (GB)")
     type = models.CharField(
@@ -65,7 +79,22 @@ class ProxmoxVM(ChangeLoggedModel):
         return f"{self.virtual_machine}"
 
     def get_absolute_url(self):
-        """Provide absolute URL to a Bgp Peering object."""
+        """Provide absolute URL to a ProxmoxVM object."""
 
         # 'reverse' generate correct URL for given class record based on the provided pk.
         return reverse("plugins:netbox_proxbox:proxmoxvm", kwargs={"pk": self.pk})
+    
+    """
+    def validate_unique(self, exclude=None):
+        # Check for a duplicate name on a VM assigned to the same Cluster and no Tenant. This is necessary
+        # because Django does not consider two NULL fields to be equal, and thus will not trigger a violation
+        # of the uniqueness constraint without manual intervention.
+        if self.virtual_machine is None and VirtualMachine.objects.exclude(pk=self.pk).filter(
+                name=self.virtual_machine, cluster=self.cluster, tenant__isnull=True
+        ):
+            raise ValidationError({
+                'name': 'A virtual machine with this name already exists in the assigned cluster.'
+            })
+
+        super().validate_unique(exclude)
+    """

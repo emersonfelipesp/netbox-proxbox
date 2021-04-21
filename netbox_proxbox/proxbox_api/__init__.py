@@ -9,6 +9,10 @@ from proxmoxer import ProxmoxAPI
 import paramiko
 import pynetbox
 
+
+
+'''
+
 # Get Proxmox credentials values from .env
 PROXMOX = os.getenv("PROXMOX")
 PROXMOX_PORT = os.getenv("PROXMOX_PORT")
@@ -31,7 +35,26 @@ if PROXMOX_SSL == 'False':
 else:
     PROXMOX_SSL = True
 
-# Inicia sessão com PROXMOX
+
+
+
+
+
+# Inicia sessão com PROXMOX usando token (TESTE)
+PROXMOX_SESSION = ProxmoxAPI(
+    'pve01.nmultifibra.local',
+    user="root@pam",
+    token_name="root",
+    token_value='039ad154-23c2-4be0-8d20-b65bbb8c4686',
+    verify_ssl=False
+)
+
+
+
+
+
+
+# Inicia sessão com PROXMOX usando usuário e senha
 PROXMOX_SESSION = ProxmoxAPI(
     PROXMOX,
     user=PROXMOX_USER,
@@ -45,11 +68,15 @@ NETBOX_SESSION = pynetbox.api(
     token=NETBOX_TOKEN
 )
 
-'''
+
 import api.main as update
 import api.updates
 import api.create
 
 # Verifica se VM existe no Proxmox e deleta no Netbox, caso não exista
 import api.remove
+
+
+
+
 '''

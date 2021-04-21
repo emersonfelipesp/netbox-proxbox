@@ -7,7 +7,7 @@
 {% block header %}
 <!-- Div with breadcrumb with list of objects, followed by the name of the current object-->
 <div class="row noprint">
-    <div class="col-sm-8">
+    <div class="col-md-12">
         <ol class="breadcrumb">
             <li><a href="{% url 'plugins:netbox_proxbox:proxmoxvm_list' %}">Proxmox Virtual Machines</a></li>
             <li>{{ proxmoxvm }}</li>
@@ -19,7 +19,7 @@
     Div pointing to URL responsible for deleting the object.
     We pass this URLthe pk value identifying the current object
 -->
-<div class="col-sm-8">
+<div class="col-md-12">
     <div class="pull-right noprint">
         <!-- 
             Check permission before including the html element with "perms.<permission_name>" 'conditional.
