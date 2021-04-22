@@ -1,7 +1,7 @@
 from proxmoxer import ProxmoxAPI
 import pynetbox
 
-from netbox_proxbox import NETBOX_SESSION as nb, NETBOX_CLUSTER_ID, NETBOX_ROLE_ID
+from proxbox_api import NETBOX_SESSION as nb, NETBOX_CLUSTER_ID, NETBOX_ROLE_ID
 
 # Cria VM/CT
 def virtual_machine(proxmox_vm):
