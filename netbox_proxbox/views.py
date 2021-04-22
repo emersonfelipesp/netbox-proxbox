@@ -15,6 +15,7 @@ from .forms import ProxmoxVMForm, ProxmoxVMFilterForm
 from .models import ProxmoxVM
 from .tables import ProxmoxVMTable
 
+
 class ProxmoxVMView(PermissionRequiredMixin, View):
     """Display Virtual Machine details"""
 
@@ -80,6 +81,7 @@ class ProxmoxVMListView(PermissionRequiredMixin, View):
             }
         )
 
+  
 # 'CreateView' is provided by Django
 class ProxmoxVMCreateView(PermissionRequiredMixin, CreateView):
     """View for creating a new ProxmoxVM instance."""

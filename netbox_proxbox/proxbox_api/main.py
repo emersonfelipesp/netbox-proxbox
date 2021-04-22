@@ -8,7 +8,7 @@ load_dotenv(find_dotenv())
 from proxmoxer import ProxmoxAPI
 import pynetbox
 
-import proxbox_api
+from netbox_proxbox import proxbox_api
 
 # Global variables
 proxmox = proxbox_api.PROXMOX_SESSION

@@ -2,6 +2,7 @@
 {% load render_table from django_tables2 %}
 
 {% block content %}
+<!--
 <div class="pull-right noprint">
     {% if perms.netbox_proxbox.add_proxmoxvm %}
     <a href="{% url 'plugins:netbox_proxbox:proxmoxvm_add' %}" class="btn btn-primary">
@@ -9,7 +10,25 @@
     </a>
     {% endif %}
 </div>
-<h1>{% block title %}All Virtual Machines{% endblock %}</h1>
+ -->
+
+ <!--
+ <div class="pull-right noprint">
+    {% if perms.netbox_proxbox.add_proxmoxvm %}
+    <a href="{% url 'plugins:netbox_proxbox:proxmoxvm_full_update' %}" class="btn btn-primary">
+        <span class="{{ icon_classes.plus }}" aria-hidden="true"></span> Proxmox Full Update
+    </a>
+    {% endif %}
+</div>
+-->
+
+<div class="pull-right noprint">
+    {% if perms.netbox_proxbox.add_proxmoxvm %}
+    <a href="{% url 'plugins:netbox_proxbox:proxmoxvm_full_update' %}" target="_blank" class="btn btn-primary">Proxmox Full Update</a>
+    {% endif %}
+</div>
+
+<h1>{% block title %}All Proxmox Virtual Machines (in Development, Wait!){% endblock %}</h1>
 <div class="row">
     <div class="col-md-9">
         <!-- 'render_table' is a template tag that comes from django_tables2 and renders HTML tables among other things-->

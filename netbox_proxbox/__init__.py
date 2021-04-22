@@ -1,13 +1,13 @@
 # Netbox plugin related import
 from extras.plugins import PluginConfig
-from netbox.settings import PLUGINS_CONFIG
 
+'''
 #settings.PLUGINS_CONFIG.netbox_animal_sounds
 #from netbox.netbox.settings import PLUGIN_CONFIG
 import netbox
-'''
 from extras.plugins import PluginConfig
 '''
+
 class ProxboxConfig(PluginConfig):
     name = "netbox_proxbox"
     verbose_name = "Proxbox"
@@ -19,7 +19,7 @@ class ProxboxConfig(PluginConfig):
     required_settings = []
     default_settings = {
         'proxmox': {
-            'domain': 'proxbox.example.com',
+            'domain': 'proxbox.example.com',    # May also be IP address
             'http_port': 8006,
             'user': 'root@pam',
             'password': 'Strong@P4ssword',
@@ -30,12 +30,17 @@ class ProxboxConfig(PluginConfig):
             'ssl': False
         },
         'netbox': {
-            'domain': 'netbox.example.com',
+            'domain': 'netbox.example.com',     # May also be IP address
             'http_port': 80,
             'token': '0dd7cddfaee3b38bbffbd2937d44c4a03f9c9d38',
+            'extras': {
+                'netbox_cluster_id': 1,
+                'netbox_role_id': 1
+            },
             'ssl': False
         }
     }
+
 
 
 config = ProxboxConfig

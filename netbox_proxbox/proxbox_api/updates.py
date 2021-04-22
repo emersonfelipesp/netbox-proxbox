@@ -3,7 +3,7 @@ import pynetbox
 import requests
 import json
 
-import proxbox_api
+from netbox_proxbox import proxbox_api
 
 # Global variables
 proxmox = proxbox_api.PROXMOX_SESSION

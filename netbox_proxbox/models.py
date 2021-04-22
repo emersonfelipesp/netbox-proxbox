@@ -5,7 +5,8 @@ from django.db import models
 from django.urls import reverse
 
 # Model class 'ChangeLoggedModel' defined by Netbox
-from extras.models import ChangeLoggedModel
+#from extras.models import ChangeLoggedModel
+from extras.models.models import ChangeLoggedModel
 
 # Class defined by Netbox to handle IPv4/IPv6 address
 #from ipam.fields import IPAddressField
