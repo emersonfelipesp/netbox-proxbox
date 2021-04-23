@@ -157,6 +157,7 @@ Required values (must be equal)
 - [Custom Field] **Type:** Selection
 - [Custom Field] **Name:** proxmox_type
 - [Assignment] **Content-type:** Virtualization > virtual machine
+- [Choices] **Choices:** qemu,lxc
 
 Optional values (may be different)
 - [Custom Field] **Label:** [Proxmox] Type
