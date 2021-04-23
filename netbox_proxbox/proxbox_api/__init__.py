@@ -11,6 +11,13 @@ import pynetbox
 
 from netbox.settings import PLUGINS_CONFIG
 
+'''
+quit()
+python3
+import netbox_proxbox.proxbox_api
+print(netbox_proxbox.proxbox_api.update.all())
+'''
+
 # Get Proxmox credentials values from PLUGIN_CONFIG
 PLUGINS_CONFIG = PLUGINS_CONFIG.get("netbox_proxbox")
 PROXMOX_SETTING = PLUGINS_CONFIG.get("proxmox")
@@ -41,33 +48,6 @@ NETBOX_SSL = NETBOX_SETTING.get("ssl")
 
 # ACCESS
 NETBOX_TOKEN = NETBOX_SETTING.get("token")
-
-# ADDITIONAL CONFIG
-NETBOX_CLUSTER_ID = NETBOX_SETTING.get("extras").get("netbox_cluster_id")
-NETBOX_ROLE_ID = NETBOX_SETTING.get("extras").get("netbox_role_id")
-
-'''
-print('PLUGIN_CONFIG: ', PLUGINS_CONFIG)
-print('\n')
-print('PROXMOX_SETTING: ', PROXMOX_SETTING)
-print('PROXMOX_PORT: ', PROXMOX_PORT)
-print('PROXMOX_USER: ', PROXMOX_USER)
-print('PROXMOX_PASSWORD: ', PROXMOX_PASSWORD)
-print('PROXMOX_SSL: ', PROXMOX_SSL)
-print('PROXMOX_TOKEN_NAME: ', PROXMOX_TOKEN_NAME)
-print('PROXMOX_TOKEN_VALUE: ', PROXMOX_TOKEN_VALUE)
-print('\n')
-print("-------------------------------------")
-
-
-print('NETBOX_SETTING: ', NETBOX_SETTING)
-print('NETBOX: ', NETBOX)
-print('NETBOX_PORT: ', NETBOX_PORT)
-print('NETBOX_TOKEN: ', NETBOX_TOKEN)
-print('NETBOX_CLUSTER_ID: ', NETBOX_CLUSTER_ID)
-print('NETBOX_ROLE_ID: ', NETBOX_ROLE_ID)
-print('\n')
-'''
 
 #
 # PROXMOX SESSION 

@@ -1,13 +1,6 @@
 # Netbox plugin related import
 from extras.plugins import PluginConfig
 
-'''
-#settings.PLUGINS_CONFIG.netbox_animal_sounds
-#from netbox.netbox.settings import PLUGIN_CONFIG
-import netbox
-from extras.plugins import PluginConfig
-'''
-
 class ProxboxConfig(PluginConfig):
     name = "netbox_proxbox"
     verbose_name = "Proxbox"

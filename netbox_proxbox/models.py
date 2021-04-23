@@ -47,18 +47,6 @@ class ProxmoxVM(ChangeLoggedModel):
 
     vcpus = models.PositiveIntegerField(verbose_name="VCPUs")
 
-    """
-    vcpus_VirtualMachine = models.ForeignKey(      # Field 'cluster' links to Netbox's 'virtualization.Cluster' model
-        to="virtualization.VirtualMachine",  # and is set to 'ForeignKey' because of it.
-        on_delete=models.SET_NULL,    # If Netbox linked object is deleted, set the field to NULL
-        blank=True, # Makes field optional
-        null=True,   # Allows corresponding database column to be NULL (contain no value)
-        verbose_name="Cluster"
-    )
-
-    vcpus = vcpus_VirtualMachine.vcpus
-    """
-
     memory = models.PositiveIntegerField(verbose_name="Memory (MB)")
     disk = models.PositiveIntegerField(verbose_name="Disk (GB)")
     type = models.CharField(

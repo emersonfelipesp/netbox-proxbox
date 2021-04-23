@@ -1,32 +1,7 @@
 from proxmoxer import ProxmoxAPI
 import pynetbox
 
-from netbox_proxbox.proxbox_api import NETBOX_SESSION as nb, NETBOX_CLUSTER_ID, NETBOX_ROLE_ID, PROXMOX_SESSION as proxmox
-
-'''
-quit()
-python3
-
-import netbox_proxbox.proxbox_api
-print(netbox_proxbox.proxbox_api.create.cluster())
-'''
-
-'''
-quit()
-python3
-
-import netbox_proxbox.proxbox_api
-print(netbox_proxbox.proxbox_api.create.role())
-'''
-
-'''
-quit()
-python3
-
-import netbox_proxbox.proxbox_api
-print(netbox_proxbox.proxbox_api.update.all())
-'''
-
+from netbox_proxbox.proxbox_api import NETBOX_SESSION as nb, PROXMOX_SESSION as proxmox
 
 def role():
     role_count = nb.dcim.device_roles.count() 
