@@ -18,49 +18,44 @@ It is currently able to get the following information from Proxmox:
   - Memory
   - Node (Server)
 
+### Versions
+The following table shows the Netbox and Proxmox versions compatible (tested) with Proxbox plugin.
+
+| netbox version        | proxmox version          | proxbox version
+| ------------- |-------------|-------------|
+| = 2.11.1 | = v6.2.9 | v0.0.1
+
 ## Installation
 
-The plugin is available as a Python package in pypi and can be installed with pip
+The instructions below detail the process for installing and enabling Proxbox plugin.
+The plugin is available as a Python package in pypi and can be installed with pip.
 
+### Install Package
+
+Enter Netbox's virtual environment.
 ```
-pip install netbox-proxbox
+source /opt/netbox/venv/bin/activate
 ```
-Enable the plugin in /opt/netbox/netbox/netbox/configuration.py:
+
+Install the plugin package.
 ```
+(venv) $ pip install netbox-proxbox
+```
+
+### Enable the Plugin
+
+Enable the plugin in **/opt/netbox/netbox/netbox/configuration.py**:
+```python
 PLUGINS = ['netbox-proxbox']
 ```
-Restart NetBox and add `netbox-proxbox` to your local_requirements.txt
 
-## Configuration
+### Configure Plugin
 
-The following options are available:
+The plugin's configuration is also located in **/opt/netbox/netbox/netbox/configuration.py**:
 
-* `proxmox`: (Dict) Proxmox related configuration to use proxmoxer.
-* `proxmox.domain`: (String) Domain or IP address of Proxmox.
-* `proxmox.http_port`: (Integer) Proxmox HTTP port (default: 8006).
-* `proxmox.user`: (String) Proxmox Username.
-* `proxmox.password`: (String) Proxmox Password.
-* `proxmox.token`: (Dict) Contains Proxmox TokenID (name) and Token Value (value).
-* `proxmox.token.name`: (String) Proxmox TokenID.
-* `proxmox.token.value`: (String) Proxmox Token Value.
-* `proxmox.ssl`: (Bool) Defines the use of SSL (default: False).
-
-* `netbox`: (Dict) Netbox related configuration to use pynetbox.
-* `netbox.domain`: (String) Domain or IP address of Netbox.
-* `netbox.http_port`: (Integer) Netbox HTTP PORT (default: 80).
-* `netbox.token`: (String) Netbox Token Value.
-* `netbox.ssl`: (Bool) Defines the use of SSL (default: False). - Proxbox doesn't support SSL on Netbox yet.
-
-### Configuration Example
+Replace the values with your own following the [Configuration Parameters](#configuration-parameters) section.
 
 ```python
-# /opt/netbox/netbox/netbox/configuration.py
-
-# Enable installed plugins. Add the name of each plugin to the list.
-PLUGINS = ['netbox_proxbox']
-
-# Plugins configuration settings. These settings are used by various plugins that the user may have installed.
-# Each key in the dictionary is the name of an installed plugin and its value is a dictionary of settings.
 PLUGINS_CONFIG = {
     'netbox_proxbox': {
         'proxmox': {
@@ -84,12 +79,48 @@ PLUGINS_CONFIG = {
 }
 ```
 
+### Run Database Migrations
+
+```
+(venv) $ cd /opt/netbox/netbox/
+(venv) $ python3 manage.py migrate
+```
+
+### Restart WSGI Service
+
+Restart the WSGI service to load the new plugin:
+```
+# sudo systemctl restart netbox
+```
+
+### Configuration Parameters
+
+The following options are available:
+
+* `proxmox`: (Dict) Proxmox related configuration to use proxmoxer.
+* `proxmox.domain`: (String) Domain or IP address of Proxmox.
+* `proxmox.http_port`: (Integer) Proxmox HTTP port (default: 8006).
+* `proxmox.user`: (String) Proxmox Username.
+* `proxmox.password`: (String) Proxmox Password.
+* `proxmox.token`: (Dict) Contains Proxmox TokenID (name) and Token Value (value).
+* `proxmox.token.name`: (String) Proxmox TokenID.
+* `proxmox.token.value`: (String) Proxmox Token Value.
+* `proxmox.ssl`: (Bool) Defines the use of SSL (default: False).
+
+* `netbox`: (Dict) Netbox related configuration to use pynetbox.
+* `netbox.domain`: (String) Domain or IP address of Netbox.
+* `netbox.http_port`: (Integer) Netbox HTTP PORT (default: 80).
+* `netbox.token`: (String) Netbox Token Value.
+* `netbox.ssl`: (Bool) Defines the use of SSL (default: False). - Proxbox doesn't support SSL on Netbox yet.
+
+---
+
 ### Custom Fields
 
 To get Proxmox ID, Node and Type information, is necessary to configure Custom Fields.
 Below the parameters needed to make it work:
 
-**Proxmox ID**
+**1. Proxmox ID**
 
 Required values (must be equal)
 - [Custom Field] Type: Integer
@@ -100,8 +131,10 @@ Required values (must be equal)
 Optional values (may be different)
 - [Custom Field] Label: [Proxmox] ID
 - [Custom Field] Description: Proxmox VM/CT ID
-- 
-**Proxmox Node**
+
+---
+
+**2. Proxmox Node**
 
 Required values (must be equal)
 - [Custom Field] Type: Text
@@ -112,7 +145,9 @@ Optional values (may be different)
 - [Custom Field] Label: [Proxmox] Node
 - [Custom Field] Description: Proxmox Node (Server)
 
-**Proxmox Type (qemu or lxc)**
+---
+
+**3. Proxmox Type (qemu or lxc)**
 
 Required values (must be equal)
 - [Custom Field] Type: Selection
@@ -123,7 +158,10 @@ Optional values (may be different)
 - [Custom Field] Label: [Proxmox] Type
 - [Custom Field] Description: Proxmox type (VM or CT)
 
-**Custom Field example**
+---
+
+### Custom Field Example
+
 ![custom field image](etc/img/custom_field_example.png?raw=true "preview")
 ## Contributing
 Developing tools for this project based on [ntc-netbox-plugin-onboarding](https://github.com/networktocode/ntc-netbox-plugin-onboarding) repo.
