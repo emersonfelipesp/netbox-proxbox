@@ -3,6 +3,7 @@
 <!-- loads custom tags and filters defined in 'helpers'. It also comes from core Netbox and provides the 'placeholder' filter used in this template-->
 <!-- {% load helpers %} -->
 
+<!--
 {% block content %}
 <div class="panel panel-default">
     <div class="panel-heading">
@@ -13,32 +14,19 @@
             <td>Cluster</td>
             <td>
                 Cluster Value
-                <!--
-                {% if proxmoxvm.cluster %}
-                    <a href="{% url 'virtualization:cluster' pk=proxmoxvm.cluster.pk %}">{{ proxmoxvm.cluster }}</a>
-                {% else %}
-                    <span class="text-muted">None</span>
-                {% endif %}
-                -->
             </td>
         </tr>
         <tr>
             <td>Node</td>
-            <td>Node Value<!-- {{ proxmoxvm.node }} --></td>
+            <td>Node Value</td>
         </tr>
         <tr>
             <td>Virtual Machine</td>
             <td>
                 Virtual Machine Value
-                <!--
-                {% if proxmoxvm.virtual_machine %}
-                    <a href="{% url 'virtualization:virtualmachine' pk=proxmoxvm.virtual_machine.pk %}">{{ proxmoxvm.virtual_machine }}</a>
-                {% else %}
-                    <span class="text-muted">None</span>
-                {% endif %}
-                -->
             </td>
         </tr>
     </table>
 </div>
 {% endblock %}
+-->

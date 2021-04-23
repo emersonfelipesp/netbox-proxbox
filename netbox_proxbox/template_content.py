@@ -1,3 +1,5 @@
+"""Template contet temporarily disabled
+
 from extras.plugins import PluginTemplateExtension
 from .models import ProxmoxVM
 
@@ -11,3 +13,4 @@ class ProxmoxVMCustomFields(PluginTemplateExtension):
         )
 
 template_extensions = [ProxmoxVMCustomFields]
+"""
