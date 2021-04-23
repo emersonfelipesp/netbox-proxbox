@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "netbox-proxbox"
-version = "0.1.0"
+version = "0.0.1"
 description = "Netbox Plugin - Integrate Proxmox and Netbox"
 authors = ["Emerson Felipe <emerson.felipe@nmultifibra.com>"]
 license = "Apache-2.0"
