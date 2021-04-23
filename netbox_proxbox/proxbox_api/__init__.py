@@ -1,10 +1,3 @@
-import os
-from os.path import join, dirname
-from dotenv import load_dotenv, find_dotenv
-
-# take enviroment variables from .env
-load_dotenv(find_dotenv()) 
-
 from proxmoxer import ProxmoxAPI
 import paramiko
 import pynetbox
