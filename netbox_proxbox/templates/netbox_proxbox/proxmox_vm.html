@@ -1,0 +1,102 @@
+<!-- 'base.html' comes from Netbox and takes care of Netbox's look and feel for the page, giving menus, footer, etc. -->
+{% extends 'base.html' %}
+
+<!-- loads custom tags and filters defined in 'helpers'. It also comes from core Netbox and provides the 'placeholder' filter used in this template-->
+{% load helpers %}
+
+{% block header %}
+<!-- Div with breadcrumb with list of objects, followed by the name of the current object-->
+<div class="row noprint">
+    <div class="col-md-12">
+        <ol class="breadcrumb">
+            <li><a href="{% url 'plugins:netbox_proxbox:proxmoxvm_list' %}">Proxmox Virtual Machines</a></li>
+            <li>{{ proxmoxvm }}</li>
+        </ol>
+    </div>
+</div>
+
+<!-- 
+    Div pointing to URL responsible for deleting the object.
+    We pass this URLthe pk value identifying the current object
+-->
+<div class="col-md-12">
+    <div class="pull-right noprint">
+        <!-- 
+            Check permission before including the html element with "perms.<permission_name>" 'conditional.
+            It means that if the user doesn't have the permission, then the corresponding button will not show in Web GUI.
+        -->
+        {% if perms.netbox_proxbox.change_proxmoxvm %}
+        <!-- Button to edit the object -->
+        <a href="{% url 'plugins:netbox_proxbox:proxmoxvm_edit' pk=proxmoxvm.pk %}" class="btn btn-warning">
+            <span class="{{ icon_classes.pencil }}" aria-hidden="true"></span> Edit
+        </a>
+        {% endif %}
+
+        {% if perms.netbox_proxbox.delete_proxmoxvm %}
+        <!-- Button to delete the object -->
+        <a href="{% url 'plugins:netbox_proxbox:proxmoxvm_delete' pk=proxmoxvm.pk %}" class="btn btn-danger">
+            <span class="{{ icon_classes.trash }}" aria-hidden="true"></span> Delete
+        </a>
+        {% endif %}
+
+    </div>
+</div>
+
+<div class="col-sm-8">
+    <!-- Nmame of the object, as title -->
+    <h1>{% block title %}{{ proxmoxvm }}{% endblock %}</h1>
+    <p>
+        <!-- Object creation date & timesince this object was last updated -->
+        <small class="text-muted">Created {{ proxmoxvm.created }} &middot; Updated 
+            <span title="{{ proxmoxvm.last_updated }}">{{ proxmoxvm.last_updated|timesince }}</span> ago
+        </small>
+    </p>
+</div>
+
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-6 col-md-offset-3">
+        <div class="panel panel-default">
+            <div class="panel-heading">
+                <strong>Proxmox VM/CT</strong>
+            </div>
+            <table class="table table-hover panel-body attr-table">
+                <tr>
+                    <td>Cluster</td>
+                    <td>
+                        {% if proxmoxvm.cluster %}
+                            <a href="{% url 'virtualization:cluster' pk=proxmoxvm.cluster.pk %}">{{ proxmoxvm.cluster }}</a>
+                        {% else %}
+                            <span class="text-muted">None</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <td>Node</td>
+                    <td>{{ proxmoxvm.node }}</td>
+                </tr>
+                <tr>
+                    <td>Virtual Machine</td>
+                    <td>
+                        {% if proxmoxvm.virtual_machine %}
+                            <a href="{% url 'virtualization:virtualmachine' pk=proxmoxvm.virtual_machine.pk %}">{{ proxmoxvm.virtual_machine }}</a>
+                        {% else %}
+                            <span class="text-muted">None</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <td>Proxmox VM ID</td>
+                    <td>{{ proxmoxvm.proxmox_vm_id}}</td>
+                </tr>
+                <tr>
+                    <td>Status</td>
+                    <td>{{ proxmoxvm.status}}</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

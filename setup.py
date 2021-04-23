@@ -10,6 +10,8 @@ long_description = (here / 'README.md').read_text(encoding='utf-8')
 # Proxbox dependencies
 requires = [
     'python-dotenv',
+    'poetry',
+    'invoke',
     'numpy',
     'matplotlib',
     'requests>=2',
@@ -31,8 +33,8 @@ setup(
         "Programming Language :: Python :: 3",
         "Operating System :: Linux",
     ],
-    package_dir={"": "src"},
-    packages=find_packages(where="src"),
+    #package_dir={"": "src"},
+    packages=['netbox_proxbox'],
     install_requires=requires,
     python_requires= '>=3.6'
 )

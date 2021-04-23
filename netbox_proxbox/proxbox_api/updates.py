@@ -3,18 +3,18 @@ import pynetbox
 import requests
 import json
 
-import netbox_proxbox
+from netbox_proxbox import proxbox_api
 
 # Global variables
-proxmox = netbox_proxbox.PROXMOX_SESSION
-nb = netbox_proxbox.NETBOX_SESSION
-PROXMOX = netbox_proxbox.PROXMOX
-PROXMOX_PORT = netbox_proxbox.PROXMOX_PORT
-PROXMOX_USER = netbox_proxbox.PROXMOX_USER
-PROXMOX_PASSWORD = netbox_proxbox.PROXMOX_PASSWORD
-PROXMOX_SSL = netbox_proxbox.PROXMOX_SSL
-NETBOX = netbox_proxbox.NETBOX
-NETBOX_TOKEN = netbox_proxbox.NETBOX_TOKEN
+proxmox = proxbox_api.PROXMOX_SESSION
+nb = proxbox_api.NETBOX_SESSION
+PROXMOX = proxbox_api.PROXMOX
+PROXMOX_PORT = proxbox_api.PROXMOX_PORT
+PROXMOX_USER = proxbox_api.PROXMOX_USER
+PROXMOX_PASSWORD = proxbox_api.PROXMOX_PASSWORD
+PROXMOX_SSL = proxbox_api.PROXMOX_SSL
+NETBOX = proxbox_api.NETBOX
+NETBOX_TOKEN = proxbox_api.NETBOX_TOKEN
 
 # Altera nome da Netbox caso tenha [] no nome (modo antigo)
 # Objetivo: fazer com que o nome no Proxmox e no Netbox sejam iguais
