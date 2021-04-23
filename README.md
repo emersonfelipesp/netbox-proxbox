@@ -127,40 +127,40 @@ Below the parameters needed to make it work:
 **1. Proxmox ID**
 
 Required values (must be equal)
-- [Custom Field] Type: Integer
-- [Custom Field] Name: proxmox_id
-- [Assignment] Content-type: Virtualization > virtual machine
-- [Validation Rules] Minimum value: 0
+- [Custom Field] **Type:** Integer
+- [Custom Field] **Name:** proxmox_id
+- [Assignment] **Content-type:** Virtualization > virtual machine
+- [Validation Rules] **Minimum value:** 0
 
 Optional values (may be different)
-- [Custom Field] Label: [Proxmox] ID
-- [Custom Field] Description: Proxmox VM/CT ID
+- [Custom Field] **Label:** [Proxmox] ID
+- [Custom Field] **Description:** Proxmox VM/CT ID
 
 ---
 
 **2. Proxmox Node**
 
 Required values (must be equal)
-- [Custom Field] Type: Text
-- [Custom Field] Name: proxmox_node
-- [Assignment] Content-type: Virtualization > virtual machine
+- [Custom Field] **Type:** Text
+- [Custom Field] **Name:** proxmox_node
+- [Assignment] **Content-type:** Virtualization > virtual machine
 
 Optional values (may be different)
-- [Custom Field] Label: [Proxmox] Node
-- [Custom Field] Description: Proxmox Node (Server)
+- [Custom Field] **Label:** [Proxmox] Node
+- [Custom Field] **Description:** Proxmox Node (Server)
 
 ---
 
 **3. Proxmox Type (qemu or lxc)**
 
 Required values (must be equal)
-- [Custom Field] Type: Selection
-- [Custom Field] Name: proxmox_type
-- [Assignment] Content-type: Virtualization > virtual machine
+- [Custom Field] **Type:** Selection
+- [Custom Field] **Name:** proxmox_type
+- [Assignment] **Content-type:** Virtualization > virtual machine
 
 Optional values (may be different)
-- [Custom Field] Label: [Proxmox] Type
-- [Custom Field] Description: Proxmox type (VM or CT)
+- [Custom Field] **Label:** [Proxmox] Type
+- [Custom Field] **Description:** Proxmox type (VM or CT)
 
 ---
 
