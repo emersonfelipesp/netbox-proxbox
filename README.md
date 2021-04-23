@@ -1,5 +1,5 @@
 <p align="center">
-  <img width="532" src="https://github.com/N-Multifibra/proxbox/blob/main/etc/img/proxbox-full-logo.png" alt="Material Bread logo">
+  <img width="532" src="https://github.com/N-Multifibra/proxbox/blob/main/etc/img/proxbox-full-logo.png" alt="Proxbox logo">
 </p>
 
 
@@ -93,6 +93,8 @@ Restart the WSGI service to load the new plugin:
 # sudo systemctl restart netbox
 ```
 
+---
+
 ### Configuration Parameters
 
 The following options are available:
@@ -119,6 +121,8 @@ The following options are available:
 
 To get Proxmox ID, Node and Type information, is necessary to configure Custom Fields.
 Below the parameters needed to make it work:
+
+---
 
 **1. Proxmox ID**
 
@@ -163,6 +167,19 @@ Optional values (may be different)
 ### Custom Field Example
 
 ![custom field image](etc/img/custom_field_example.png?raw=true "preview")
+
+---
+
+### Usage
+
+If everything is working correctly, you should see in Netbox's navigation the **Proxmox VM/CT** button in **Plugins** dropdown list.
+
+On **Proxmox VM/CT** page, click button ![full update button](etc/img/proxbox_full_update_button.png?raw=true "preview")
+
+It will redirect you to a new page and you just have to wait until the plugin runs through all Proxmox Cluster and create the VMs and CTs in Netbox.
+
+---
+
 ## Contributing
 Developing tools for this project based on [ntc-netbox-plugin-onboarding](https://github.com/networktocode/ntc-netbox-plugin-onboarding) repo.
 
