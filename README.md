@@ -84,6 +84,47 @@ PLUGINS_CONFIG = {
 }
 ```
 
+### Custom Fields
+
+To get Proxmox ID, Node and Type information, is necessary to configure Custom Fields.
+Below the parameters needed to make it work:
+
+**Proxmox ID**
+
+Required values (must be equal)
+- [Custom Field] Type: Integer
+- [Custom Field] Name: proxmox_id
+- [Assignment] Content-type: Virtualization > virtual machine
+- [Validation Rules] Minimum value: 0
+
+Optional values (may be different)
+- [Custom Field] Label: [Proxmox] ID
+- [Custom Field] Description: Proxmox VM/CT ID
+- 
+**Proxmox Node**
+
+Required values (must be equal)
+- [Custom Field] Type: Text
+- [Custom Field] Name: proxmox_node
+- [Assignment] Content-type: Virtualization > virtual machine
+
+Optional values (may be different)
+- [Custom Field] Label: [Proxmox] Node
+- [Custom Field] Description: Proxmox Node (Server)
+
+**Proxmox Type (qemu or lxc)**
+
+Required values (must be equal)
+- [Custom Field] Type: Selection
+- [Custom Field] Name: proxmox_type
+- [Assignment] Content-type: Virtualization > virtual machine
+
+Optional values (may be different)
+- [Custom Field] Label: [Proxmox] Type
+- [Custom Field] Description: Proxmox type (VM or CT)
+
+**Custom Field example**
+![custom field image](etc/img/custom_field_example.png?raw=true "preview")
 ## Contributing
 Developing tools for this project based on [ntc-netbox-plugin-onboarding](https://github.com/networktocode/ntc-netbox-plugin-onboarding) repo.
 
@@ -91,139 +132,3 @@ Issues and pull requests are welcomed.
 
 ## Screenshots
 
-
-
-
-## Usage
-
-Compare Netbox and Proxmox information and update VM on Netbox, if any difference found using the **Netbox VM ID**
-
-```python
->>> import proxbox
-
->>> json_result = proxbox.update.virtual_machine(id = 1)
->>> print(json_result)
-{
-  "name": "Netbox",
-  "changes": {
-    "status": false,
-    "custom_fiedls": false,
-    "local_context": false,
-    "resources": false
-  },
-  "result": true
-}
-```
-Compare Netbox and Proxmox information and update VM on Netbox, if any difference found using the **Proxmox VM ID**
-
-```python
->>> import proxbox
-
->>> json_result = proxbox.update.virtual_machine(proxmox_id = 414)
->>> print(json_result)
-{
-  "name": "Netbox",
-  "changes": {
-    "status": false,
-    "custom_fiedls": false,
-    "local_context": false,
-    "resources": false
-  },
-  "result": true
-}
-```
-
-Compare Netbox and Proxmox information and update VM on Netbox, if any difference found using the **VM Name**
-
-```python
->>> import proxbox
-
->>> json_result = proxbox.update.virtual_machine(name = 'Netbox')
->>> print(json_result)
-{
-  "name": "Netbox",
-  "changes": {
-    "status": true,
-    "custom_fiedls": false,
-    "local_context": false,
-    "resources": false
-  },
-  "result": true
-}
-```
-
-Updates all VM's at once on Netbox with the information gotten from Proxmox
-
-```python
->>> import proxbox
-
->>> json_result = proxbox.update.all()
->>> print(json_result)
-{
-  "name": "Netbox",
-  "changes": {
-    "status": false,
-    "custom_fiedls": false,
-    "local_context": false,
-    "resources": false
-  },
-  "result": true
-},
-{
-  "name": "GRAYLOG",
-  "changes": {
-    "status": false,
-    "custom_fiedls": false,
-    "local_context": false,
-    "resources": true
-  },
-  "result": true
-},
-{
-  "name": "ZABBIX",
-  "changes": {
-    "status": false,
-    "custom_fiedls": true,
-    "local_context": true,
-    "resources": false
-  },
-  "result": true
-}
-```
-
-Compare all VM's on Netbox with Proxmox and delete VM on Netbox if it doesn't exist on Proxmox.
-
-```python
->>> import proxbox
-
->>> json_result = proxbox.remove.all()
->>> print(json_result)
-[
-  {
-    "name": "vm01",
-    "result": false,
-    "log": [
-      "[OK] VM existe em ambos sistemas -> nfsen-debian"
-    ]
-  },
-  {
-    "name": "vm02",
-    "result": false,
-    "log": [
-      "[OK] VM existe em ambos sistemas -> nmt-backend"
-    ]
-  },
-  {
-    "name": "vm03",
-    "result": true,
-    "log": [
-      "[WARNING] VM existe no Netbox, mas não no Proxmox. Deletar a VM! -> teste123",
-      "[OK] VM removida do Netbox com sucesso"
-    ]
-  }
-]
-```
-
----
-
-[Workflow do ProxBox](https://whimsical.com/proxbox-integracao-netbox-e-proxmox-XtrSijkFx2ZUKmkcAZqoUx)
