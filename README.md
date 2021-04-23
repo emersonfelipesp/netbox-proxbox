@@ -178,6 +178,8 @@ On **Proxmox VM/CT** page, click button ![full update button](etc/img/proxbox_fu
 
 It will redirect you to a new page and you just have to wait until the plugin runs through all Proxmox Cluster and create the VMs and CTs in Netbox.
 
+**OBS:** Due the time it takes to full update the information, your web brouse might show a timeout page (like HTTP Code 504) even though it actually worked.
+
 ---
 
 ## Contributing
