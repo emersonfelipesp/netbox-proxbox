@@ -232,32 +232,7 @@ PLUGINS = ["netbox_proxbox"]
 
 # Plugins configuration settings. These settings are used by various plugins that the user may have installed.
 # Each key in the dictionary is the name of an installed plugin and its value is a dictionary of settings.
-PLUGINS_CONFIG = {
-    "netbox_proxbox" : {
-        'proxmox': {
-            'domain': 'pve01.nmultifibra.local',
-            'http_port': 8006,
-            'user': 'root@pam',
-            'password': '@PVE288nm',
-            'token': {
-                'name': 'root',
-                'value': '039ad154-23c2-4be0-8d20-b65bbb8c4686'
-            },
-            'ssl': False
-        },
-        'netbox': {
-            'domain': '10.0.30.96',
-            'http_port': 8000,
-            'token': '0dd7cddfaee3b38bbffbd2937d44c4a03f9c9d38',
-            'ssl': False,
-            'extras': {
-                'netbox_cluster_id': 1,
-                'netbox_role_id': 1
-            }
-
-        }
-    }
-}
+# PLUGINS_CONFIG = {}
 
 # When determining the primary IP address for a device, IPv6 is preferred over IPv4 by default. Set this to True to
 # prefer IPv4 instead.
