@@ -53,7 +53,7 @@ The following options are available:
 
 ### Configuration Example
 
-```
+```python
 # /opt/netbox/netbox/netbox/configuration.py
 
 # Enable installed plugins. Add the name of each plugin to the list.
