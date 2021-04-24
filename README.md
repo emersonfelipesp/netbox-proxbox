@@ -3,7 +3,7 @@
 </p>
 
 
-# proxbox
+# proxbox (In Development!)
 Netbox plugin which integrates Proxmox and Netbox using proxmoxer and pynetbox.
 
 It is currently able to get the following information from Proxmox:
