@@ -46,7 +46,7 @@ Install the plugin package.
 
 Enable the plugin in **/opt/netbox/netbox/netbox/configuration.py**:
 ```python
-PLUGINS = ['netbox-proxbox']
+PLUGINS = ['netbox_proxbox']
 ```
 
 ### Configure Plugin
