@@ -2,11 +2,8 @@ invoke
 poetry
 wheel
 setuptools
-flask
-python-dotenv
 numpy
 matplotlib
 requests
 pynetbox
-paramiko
 proxmoxer

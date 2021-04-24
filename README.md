@@ -23,7 +23,7 @@ The following table shows the Netbox and Proxmox versions compatible (tested) wi
 
 | netbox version        | proxmox version          | proxbox version
 | ------------- |-------------|-------------|
-| = 2.11.1 | = v6.2.9 | v0.0.1
+| = 2.11.1 | = v6.2.9 | v0.0.2
 
 ## Installation
 

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "netbox-proxbox"
-version = "0.0.1"
+version = "0.0.2"
 description = "Netbox Plugin - Integrate Proxmox and Netbox"
 authors = ["Emerson Felipe <emerson.felipe@nmultifibra.com>"]
 license = "Apache-2.0"
@@ -23,12 +23,10 @@ yamllint = "^1.26.1"
 [build-system]
 requires = [
     "poetry-core>=1.0.0",
-    "python-dotenv",
     "numpy",
     "matplotlib",
     "requests",
     "pynetbox",
-    "paramiko",
     "proxmoxer"
 ]
 build-backend = "poetry.core.masonry.api"

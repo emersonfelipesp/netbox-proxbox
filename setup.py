@@ -9,7 +9,6 @@ long_description = (here / 'README.md').read_text(encoding='utf-8')
 
 # Proxbox dependencies
 requires = [
-    'python-dotenv',
     'poetry',
     'invoke',
     'numpy',
@@ -23,7 +22,7 @@ requires = [
 
 setup(
     name="netbox-proxbox",
-    version="0.0.1",
+    version="0.0.2",
     author="Emerson Pereira",
     author_email="emerson.felipe@nmultifibra.com.br",
     description="Integration between Proxmox and Netbox",
