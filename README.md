@@ -30,7 +30,7 @@ The following table shows the Netbox and Proxmox versions compatible (tested) wi
 The instructions below detail the process for installing and enabling Proxbox plugin.
 The plugin is available as a Python package in pypi and can be installed with pip.
 
-### Install Package
+### Install Package from pip
 
 Enter Netbox's virtual environment.
 ```
@@ -41,6 +41,26 @@ Install the plugin package.
 ```
 (venv) $ pip install netbox-proxbox
 ```
+
+### Install from git repository
+
+Move to netbox main folder
+```
+cd /opt/netbox/netbox
+```
+
+Clone netbox-proxbox repository
+```
+git clone https://github.com/N-Multifibra/netbox-proxbox.git
+```
+
+Install netbox-proxbox
+```
+cd netbox-proxbox
+source /opt/netbox/venv/bin/activate
+python3 setup.py develop
+```
+
 
 ### Enable the Plugin
 
