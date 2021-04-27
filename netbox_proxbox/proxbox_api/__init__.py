@@ -4,13 +4,6 @@ import pynetbox
 
 from netbox.settings import PLUGINS_CONFIG
 
-'''
-quit()
-python3
-import netbox_proxbox.proxbox_api
-print(netbox_proxbox.proxbox_api.update.all())
-'''
-
 # Get Proxmox credentials values from PLUGIN_CONFIG
 PLUGINS_CONFIG = PLUGINS_CONFIG.get("netbox_proxbox")
 PROXMOX_SETTING = PLUGINS_CONFIG.get("proxmox")
