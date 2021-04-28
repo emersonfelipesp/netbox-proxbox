@@ -68,8 +68,7 @@ free to add a comment with any additional justification for the feature.
 (However, note that comments with no substance other than a "+1" will be
 deleted. Please use GitHub's reactions feature to indicate your support.)
 
-* Before filing a new feature request, consider raising your idea on the
-mailing list first. Feedback you receive there will help validate and shape the
+* Before filing a new feature request, consider raising your idea on the community channels available, like Slack and Telegram (we don't have a mailing list yet). Feedback you receive there will help validate and shape the
 proposed feature before filing a formal issue.
 
 * Good feature requests are very narrowly defined. Be sure to thoroughly
@@ -82,7 +81,7 @@ information requested by the issue template, including:
 
     * A detailed description of the proposed functionality
     * A use case for the feature; who would use it and what value it would add
-      to NetBox
+      to Proxbox
     * A rough description of changes necessary to the database schema (if
       applicable)
     * Any third-party libraries or other resources which would be involved
@@ -91,12 +90,9 @@ information requested by the issue template, including:
 title. The issue will be reviewed by a moderator after submission and the
 appropriate labels will be applied for categorization.
 
-* For more information on how feature requests are handled, please see our
-[issue intake policy](https://github.com/netbox-community/netbox/wiki/Issue-Intake-Policy).
-
 ## Submitting Pull Requests
 
-* If you're interested in contributing to NetBox, I would suggest you to do it using [ntc-netbox-plugin-onboarding](https://github.com/networktocode/ntc-netbox-plugin-onboarding) to set up your development environment. You can also use your own way, but be sure to develop it using [Netbox's code](https://github.com/netbox-community/netbox) and the version supported.
+* If you're interested in contributing to Proxbox, I would suggest you to do it using [ntc-netbox-plugin-onboarding](https://github.com/networktocode/ntc-netbox-plugin-onboarding) to set up your development environment. You can also use your own way, but be sure to develop it using [Netbox's code](https://github.com/netbox-community/netbox) and not a forked one, as it may change the normal behavior of Netbox.
 
 ### Before starting your code, discuss it with the community and project's maintainers
 
