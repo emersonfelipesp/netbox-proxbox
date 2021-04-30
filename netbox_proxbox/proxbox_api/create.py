@@ -214,6 +214,35 @@ def site(**kwargs):
 
 
 
+#
+# dcim.devices (nodes)
+#
+def node(proxmox_node):
+    # Create json with basic NODE information
+    node_json = {}
+    node_json["name"] = proxmox_node['name']
+    node_json["device_role"] = role(role_id = NETBOX_NODE_ROLE_ID).id
+    node_json["device_type"] = device_type().id
+    node_json["site"] = site(site_id = NETBOX_SITE_ID).id
+    node_json["status"] = 'active'
+    node_json["tags"] = [tag().id]
+    node_json["cluster"] = cluster().id
+
+    # Create Node with json 'node_json'
+    try:
+        netbox_obj = nb.dcim.devices.create(node_json)
+
+    except:
+        print("[proxbox_api.create.node] Creation of NODE failed.")
+        netbox_obj = None
+    
+    else:
+        return netbox_obj
+    
+    # In case nothing works, returns error
+    netbox_obj = None
+    return netbox_obj
+
 
 #
 # virtualization.cluster_types
@@ -300,7 +329,7 @@ def cluster():
 # virtualization.virtual_machines
 #
 def virtual_machine(proxmox_vm):
-    # # Create VM/CT with basic information
+    # Create json with basic VM/CT information
     vm_json = {}
     vm_json["name"] = proxmox_vm['name']
     vm_json["status"] = 'active'
@@ -308,17 +337,17 @@ def virtual_machine(proxmox_vm):
     vm_json["role"] = role(role_id = NETBOX_VM_ROLE_ID)
     vm_json["tags"] = [tag().id]
 
-    # Cria VM/CT com json criado
+    # Create VM/CT with json 'vm_json'
     try:
         netbox_obj = nb.virtualization.virtual_machines.create(vm_json)
 
     except:
-        print("[proxbox.create.virtual_machine] Falha na criação da VM")
+        print("[proxbox.create.virtual_machine] Creation of VM/CT failed.")
         netbox_obj = None
 
     else:
         return netbox_obj
 
-    # Caso nada funcione, volte erro
+    # In case nothing works, returns error
     netbox_obj = None
     return netbox_obj

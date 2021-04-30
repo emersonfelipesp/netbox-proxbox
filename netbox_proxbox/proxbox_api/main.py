@@ -306,17 +306,82 @@ def virtual_machine(**kwargs):
 
     return json_vm
 
+
+def nodes(**kwargs):
+    proxmox_json = kwargs.get('proxmox_json')
+    proxmox_node_name = proxmox_json.get("name")
+    json_node = {}
+    
+    # Search node on Netbox with Proxmox node name gotten
+    if nb.dcim.devices.get(name = proxmox_node_name) == None:
+        # If node does not exist, create it.
+        netbox_node = create.node(proxmox_json)
+
+        # Node created
+        if netbox_node != None:
+            print("[OK] Node created! -> {}".format(proxmox_node_name))
+            json_node["result"] = True
+
+        # Error with node creation
+        else:
+            print('[ERROR] Something went wrong when creating the node.-> {}'.format(proxmox_node_name))
+            json_node["result"] = False
+    else:
+        # If node already exist, try updating it.
+        print('Node already exist, try updating it. -> {}'.format(proxmox_node_name))
+        #
+        #
+        #  NEEED TO DEVELOP THE UPDATE PART OF NODE
+        #
+        #
+        #
+
+    return json_node
+
+
 # Atualiza informações de status, 'custom_fields' e 'local_context'
 def all():
-    results = []
+    
+    cluster_all = proxmox.cluster.status.get()
+    #
+    # CLUSTER
+    #
+    cluster = cluster_all[0]
+
+    #
+    # NODES
+    #
+    print('\n\nNODES...\n')
+    nodes_list = []
+    proxmox_nodes = cluster_all[1:]
+    
+    # Get all NODES from Proxmox
+    for px_node_each in proxmox_nodes:
+        node_updated = nodes(proxmox_json = px_node_each)
+
+        nodes_list.append(node_updated)
+
+    #
+    # VIRTUAL MACHINES / CONTAINERS
+    #
+    print('\n\nVIRTUAL...\n')
+    virtualmachines_list = []
 
     # Get all VM/CTs from Proxmox
     for px_vm_each in proxmox.cluster.resources.get(type='vm'):     
         vm_updated = virtual_machine(proxmox_json = px_vm_each)
 
-        results.append(vm_updated)
+        virtualmachines_list.append(vm_updated)
 
-    return results
+
+    #
+    # BUILD JSON RESULT
+    #
+    result = {}
+    result["virtualmachines"] = virtualmachines_list
+    result["nodes"] = nodes_list
+
+    return result
 
 # Runs if script executed directly
 if __name__ == "__main__":
