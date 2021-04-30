@@ -1,8 +1,22 @@
-from proxmoxer import ProxmoxAPI
-import pynetbox
+#from proxmoxer import ProxmoxAPI
+#import pynetbox
+
+# PLUGIN_CONFIG variables
+from .plugins_config import (
+    PROXMOX,
+    PROXMOX_PORT,
+    PROXMOX_USER,
+    PROXMOX_PASSWORD,
+    PROXMOX_SSL,
+    NETBOX,
+    NETBOX_TOKEN,
+    PROXMOX_SESSION as proxmox,
+    NETBOX_SESSION as nb,
+)
 
 from netbox_proxbox import proxbox_api
 
+'''
 # Global variables
 proxmox = proxbox_api.PROXMOX_SESSION
 nb = proxbox_api.NETBOX_SESSION
@@ -13,6 +27,7 @@ PROXMOX_PASSWORD = proxbox_api.PROXMOX_PASSWORD
 PROXMOX_SSL = proxbox_api.PROXMOX_SSL
 NETBOX = proxbox_api.NETBOX
 NETBOX_TOKEN = proxbox_api.NETBOX_TOKEN
+'''
 
 # Chama todas as funções de atualização
 def vm_full_update(netbox_vm, proxmox_vm):

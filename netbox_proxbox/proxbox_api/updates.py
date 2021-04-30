@@ -1,10 +1,22 @@
-from proxmoxer import ProxmoxAPI
-import pynetbox
+#from proxmoxer import ProxmoxAPI
+#import pynetbox
 import requests
 import json
 
-from netbox_proxbox import proxbox_api
+# PLUGIN_CONFIG variables
+from .plugins_config import (
+    PROXMOX,
+    PROXMOX_PORT,
+    PROXMOX_USER,
+    PROXMOX_PASSWORD,
+    PROXMOX_SSL,
+    NETBOX,
+    NETBOX_TOKEN,
+    PROXMOX_SESSION as proxmox,
+    NETBOX_SESSION as nb,
+)
 
+'''
 # Global variables
 proxmox = proxbox_api.PROXMOX_SESSION
 nb = proxbox_api.NETBOX_SESSION
@@ -15,6 +27,7 @@ PROXMOX_PASSWORD = proxbox_api.PROXMOX_PASSWORD
 PROXMOX_SSL = proxbox_api.PROXMOX_SSL
 NETBOX = proxbox_api.NETBOX
 NETBOX_TOKEN = proxbox_api.NETBOX_TOKEN
+'''
 
 # Altera nome da Netbox caso tenha [] no nome (modo antigo)
 # Objetivo: fazer com que o nome no Proxmox e no Netbox sejam iguais
