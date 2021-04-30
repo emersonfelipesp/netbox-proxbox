@@ -14,6 +14,13 @@ from .plugins_config import (
     NETBOX_SESSION as nb,
 )
 
+from . import (
+    create,
+)
+
+
+
+
 # Altera nome da Netbox caso tenha [] no nome (modo antigo)
 # Objetivo: fazer com que o nome no Proxmox e no Netbox sejam iguais
 # Atualiza campo "name" no Netbox
@@ -27,6 +34,10 @@ def name():
             vm.save()
         else:
             print('Doesn\'t need to change: {}'.format(vm.name))
+
+
+
+
 
 # Atualiza campo "status" no Netbox baseado no Proxmox
 def status(netbox_vm, proxmox_vm):
@@ -67,6 +78,10 @@ def status(netbox_vm, proxmox_vm):
     
     return status_updated
 
+
+
+
+
 # Função que altera campo 'custom_field' da máquina virtual no Netbox
 # Utiliza HTTP request e não pynetbox (não consegui através do pynetbox)
 def http_update_custom_fields(url, token, vm_id, vm_name, vm_cluster, custom_fields):
@@ -85,10 +100,14 @@ def http_update_custom_fields(url, token, vm_id, vm_name, vm_cluster, custom_fie
         r = requests.patch(url, data = json.dumps(body), headers = headers)
 
         # salva resposta da requisição em dict
-        json_dict = json.loads(r.text)
+        #json_dict = json.loads(r.text)
 
         # Retorna HTTP Status Code
         return r.status_code
+
+
+
+
 
 # Atualiza campo "custom_fields" no Netbox baseado no Proxmox
 def custom_fields(netbox_vm, proxmox_vm):
@@ -116,10 +135,12 @@ def custom_fields(netbox_vm, proxmox_vm):
 
     return False
 
+
+
+
+
 # Atualiza campo "local_context_data" no Netbox baseado no Proxmox
 def local_context_data(netbox_vm, proxmox_vm):
-    local_context_updated = False
-
     current_local_context = netbox_vm.local_context_data
 
     proxmox_values = {}
@@ -162,6 +183,11 @@ def local_context_data(netbox_vm, proxmox_vm):
 
     return False
 
+
+
+
+
+
 # Atualiza campos "vcpus", "memory", "disk" no Netbox baseado no Proxmox
 def resources(netbox_vm, proxmox_vm):
     resources_updated = False
@@ -203,3 +229,22 @@ def resources(netbox_vm, proxmox_vm):
         resources_updated = True
     
     return resources_updated
+
+
+
+
+
+def tag(netbox_vm):
+    # Get current tags
+    tags = netbox_vm.tags
+
+    # Add 'Proxbox' tag to device/virtual machine
+    tags.append(create.tag().id)
+    
+    # Save new tag to object
+    if netbox_vm.save() == True:
+        return True
+    else:
+        return False
+
+    return False

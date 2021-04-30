@@ -24,14 +24,16 @@ def vm_full_update(netbox_vm, proxmox_vm):
     status_updated = updates.status(netbox_vm, proxmox_vm)                     # Função compara 'status' e retorna se precisou ser atualizado no Netbox ou não
     custom_fields_updated = updates.custom_fields(netbox_vm, proxmox_vm)           # Função compara 'custom_fields' e retorna se precisou ser atualizado no Netbox ou não
     local_context_updated = updates.local_context_data(netbox_vm, proxmox_vm)     # Função compara 'local_context_data' e retorna se precisou ser atualizado no Netbox ou não
-    resources_update = updates.resources(netbox_vm, proxmox_vm)                   # Função compara 'resources' e retorna se precisou ser atualizado no Netbox ou não
+    resources_update = updates.resources(netbox_vm, proxmox_vm)                # Função compara 'resources' e retorna se precisou ser atualizado no Netbox ou não
+    tag_update = updates.tag(netbox_vm)
 
     #changes = [custom_fields_updated, status_updated, local_context_updated, resources_update]
     changes = {
         "status" : status_updated,
         "custom_fields" : custom_fields_updated,
         "local_context" : local_context_updated,
-        "resources" : resources_update  
+        "resources" : resources_update,
+        "tag" : tag_update
     }
 
     return changes
