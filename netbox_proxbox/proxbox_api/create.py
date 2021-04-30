@@ -64,12 +64,51 @@ def manufacturer():
                 description = proxbox_manufacturer_desc
             )
         except:
-            return "Error creating the '{0}' tag. Possible errors: the name '{0}' or slug '{1}' is already used.".format(proxbox_manufacturer_name, proxbox_manufacturer_slug)
+            return "Error creating the '{0}' manufacturer. Possible errors: the name '{0}' or slug '{1}' is already used.".format(proxbox_manufacturer_name, proxbox_manufacturer_slug)
     
     else:
         manufacturer = proxbox_manufacturer
     
     return manufacturer
+
+
+
+
+#
+# dcim.device_types
+#
+def device_type():
+    proxbox_device_type_model = 'Proxbox Model'
+    proxbox_device_type_slug = 'proxbox-model'
+    proxbox_device_type_comments = "Device Type Proxbox will use when creating the Cluster's Nodes. When the Node is created, you can change the device type to the actual server model."
+
+    # Check if Proxbox manufacturer already exists.
+    proxbox_device_types = nb.dcim.device_types.get(
+        model = proxbox_device_type_model,
+        slug = proxbox_device_type_slug
+    )
+
+    if proxbox_device_types == None:
+        try:
+            # If Proxbox manufacturer does not exist, create one.
+            device_type = nb.dcim.device_types.create(
+                manufacturer = manufacturer().id,
+                model = proxbox_device_type_model,
+                slug = proxbox_device_type_slug,
+                comments = proxbox_device_type_comments,
+                tags = [tag().id]
+            )
+        except:
+            return "Error creating the '{0}' device type. Possible errors: the model '{0}' or slug '{1}' is already used.".format(proxbox_device_type_model, proxbox_device_type_slug)
+    
+    else:
+        device_type = proxbox_device_types
+    
+    return device_type
+
+
+
+
 
 #
 # dcim.device_roles
@@ -254,7 +293,15 @@ def cluster():
 
 
 
-
+#
+# dcim.devices (nodes)
+#
+def nodes(proxmox_node):
+    node_json = {}
+    node_json["name"] = proxmox_json['name']
+    node_json["status"] = 'active'
+    node_json["role"] = role(role_id = NETBOX_NODE_ROLE_ID)
+    node_json["tags"] = [tag().id]
 
 
 #
