@@ -293,15 +293,7 @@ def cluster():
 
 
 
-#
-# dcim.devices (nodes)
-#
-def nodes(proxmox_node):
-    node_json = {}
-    node_json["name"] = proxmox_json['name']
-    node_json["status"] = 'active'
-    node_json["role"] = role(role_id = NETBOX_NODE_ROLE_ID)
-    node_json["tags"] = [tag().id]
+
 
 
 #
