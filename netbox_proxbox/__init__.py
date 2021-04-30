@@ -26,10 +26,15 @@ class ProxboxConfig(PluginConfig):
             'domain': 'netbox.example.com',     # May also be IP address
             'http_port': 80,
             'token': '0dd7cddfaee3b38bbffbd2937d44c4a03f9c9d38',
-            'ssl': False
+            'ssl': False,
+            'settings': {
+                'virtualmachine_role_id' : 0,
+                'node_role_id' : 0,
+                'site_id': 0
+            }
         }
     }
 
-
-
 config = ProxboxConfig
+
+from . import proxbox_api
