@@ -1,6 +1,3 @@
-#from proxmoxer import ProxmoxAPI
-#import pynetbox
-
 # PLUGIN_CONFIG variables
 from .plugins_config import (
     PROXMOX,
@@ -14,29 +11,20 @@ from .plugins_config import (
     NETBOX_SESSION as nb,
 )
 
-from netbox_proxbox import proxbox_api
-
-'''
-# Global variables
-proxmox = proxbox_api.PROXMOX_SESSION
-nb = proxbox_api.NETBOX_SESSION
-PROXMOX = proxbox_api.PROXMOX
-PROXMOX_PORT = proxbox_api.PROXMOX_PORT
-PROXMOX_USER = proxbox_api.PROXMOX_USER
-PROXMOX_PASSWORD = proxbox_api.PROXMOX_PASSWORD
-PROXMOX_SSL = proxbox_api.PROXMOX_SSL
-NETBOX = proxbox_api.NETBOX
-NETBOX_TOKEN = proxbox_api.NETBOX_TOKEN
-'''
+from . import (
+    updates,
+    create,
+    remove,
+)
 
 # Chama todas as funções de atualização
 def vm_full_update(netbox_vm, proxmox_vm):
     changes = {}
 
-    status_updated = proxbox_api.updates.status(netbox_vm, proxmox_vm)                     # Função compara 'status' e retorna se precisou ser atualizado no Netbox ou não
-    custom_fields_updated = proxbox_api.updates.custom_fields(netbox_vm, proxmox_vm)           # Função compara 'custom_fields' e retorna se precisou ser atualizado no Netbox ou não
-    local_context_updated = proxbox_api.updates.local_context_data(netbox_vm, proxmox_vm)     # Função compara 'local_context_data' e retorna se precisou ser atualizado no Netbox ou não
-    resources_update = proxbox_api.updates.resources(netbox_vm, proxmox_vm)                   # Função compara 'resources' e retorna se precisou ser atualizado no Netbox ou não
+    status_updated = updates.status(netbox_vm, proxmox_vm)                     # Função compara 'status' e retorna se precisou ser atualizado no Netbox ou não
+    custom_fields_updated = updates.custom_fields(netbox_vm, proxmox_vm)           # Função compara 'custom_fields' e retorna se precisou ser atualizado no Netbox ou não
+    local_context_updated = updates.local_context_data(netbox_vm, proxmox_vm)     # Função compara 'local_context_data' e retorna se precisou ser atualizado no Netbox ou não
+    resources_update = updates.resources(netbox_vm, proxmox_vm)                   # Função compara 'resources' e retorna se precisou ser atualizado no Netbox ou não
 
     #changes = [custom_fields_updated, status_updated, local_context_updated, resources_update]
     changes = {
@@ -275,7 +263,7 @@ def virtual_machine(**kwargs):
         print('[OK] VM não existe no Netbox -> {}'.format(proxmox_vm_name))
 
         # Analisa se VM foi criada com sucesso
-        netbox_vm = proxbox_api.create.virtual_machine(proxmox_json)
+        netbox_vm = create.virtual_machine(proxmox_json)
 
         # VM criada com as informações básicas
         if netbox_vm != None:
@@ -335,7 +323,7 @@ if __name__ == "__main__":
 
     print('____________________________________\n')
     print('#\n# COMPARA NETBOX COM PROXMOX\n#')
-    proxbox_api.remove.all()
+    remove.all()
 
 
 

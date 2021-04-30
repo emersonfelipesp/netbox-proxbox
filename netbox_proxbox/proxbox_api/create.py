@@ -1,6 +1,3 @@
-#from proxmoxer import ProxmoxAPI
-#import pynetbox
-
 from .plugins_config import (
     NETBOX_VM_ROLE_ID,
     NETBOX_NODE_ROLE_ID,

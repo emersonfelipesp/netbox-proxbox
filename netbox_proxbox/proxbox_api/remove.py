@@ -1,7 +1,4 @@
-#from proxmoxer import ProxmoxAPI
-#import pynetbox
-
-#from netbox_proxbox.proxbox_api import NETBOX_SESSION as nb, PROXMOX_SESSION as proxmox, updates
+from . import updates
 
 # PLUGIN_CONFIG variables
 from .plugins_config import (
