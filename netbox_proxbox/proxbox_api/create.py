@@ -24,10 +24,10 @@ def tag():
 
     if proxbox_tag == None:
         try:
-            # If Proxbox tag doest not exist, create one.
+            # If Proxbox tag does not exist, create one.
             tag = nb.extras.tags.create(
-                name = 'Proxbox',
-                slug = 'proxbox',
+                name = proxbox_tag_name,
+                slug = proxbox_tag_slug,
                 color = 'ff5722',
                 description = "Proxbox Identifier (used to identify the items the plugin created)"
             )
@@ -41,6 +41,35 @@ def tag():
 
 
 
+#
+# dcim.manufacturers
+#
+def manufacturer():
+    proxbox_manufacturer_name = 'Proxbox Basic Manufacturer'
+    proxbox_manufacturer_slug = 'proxbox-manufacturer'
+    proxbox_manufacturer_desc = 'Manufacturer Proxbox will use if none is configured by user in PLUGINS_CONFIG'
+
+    # Check if Proxbox manufacturer already exists.
+    proxbox_manufacturer = nb.dcim.manufacturers.get(
+        name = proxbox_manufacturer_name,
+        slug = proxbox_manufacturer_slug,
+    )
+
+    if proxbox_manufacturer == None:
+        try:
+            # If Proxbox manufacturer does not exist, create one.
+            manufacturer = nb.dcim.manufacturers.create(
+                name = proxbox_manufacturer_name,
+                slug = proxbox_manufacturer_slug,
+                description = proxbox_manufacturer_desc
+            )
+        except:
+            return "Error creating the '{0}' tag. Possible errors: the name '{0}' or slug '{1}' is already used.".format(proxbox_manufacturer_name, proxbox_manufacturer_slug)
+    
+    else:
+        manufacturer = proxbox_manufacturer
+    
+    return manufacturer
 
 #
 # dcim.device_roles
@@ -220,6 +249,9 @@ def cluster():
 
 
     return cluster
+
+
+
 
 
 
