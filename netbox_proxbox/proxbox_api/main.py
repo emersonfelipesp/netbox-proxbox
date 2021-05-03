@@ -335,7 +335,8 @@ def nodes(**kwargs):
         #
         #
         #
-
+        json_node["result"] = False
+        
     return json_node
 
 

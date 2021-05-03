@@ -333,10 +333,10 @@ def virtual_machine(proxmox_vm):
     vm_json = {}
     vm_json["name"] = proxmox_vm['name']
     vm_json["status"] = 'active'
-    vm_json["cluster"] = cluster()
-    vm_json["role"] = role(role_id = NETBOX_VM_ROLE_ID)
+    vm_json["cluster"] = cluster().id
+    vm_json["role"] = role(role_id = NETBOX_VM_ROLE_ID).id
     vm_json["tags"] = [tag().id]
-
+    
     # Create VM/CT with json 'vm_json'
     try:
         netbox_obj = nb.virtualization.virtual_machines.create(vm_json)
