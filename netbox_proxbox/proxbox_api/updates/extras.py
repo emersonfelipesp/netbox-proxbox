@@ -14,7 +14,7 @@ def tag(netbox_vm):
     
     # If Proxbox not found int Netbox tag's list, update object with the tag.
     if create.extras.tag().name not in tags_name:
-        tags.append(create.tag().id)
+        tags.append(create.extras.tag().id)
 
         netbox_vm.tags = tags
 

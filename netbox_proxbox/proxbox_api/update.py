@@ -291,7 +291,7 @@ def virtual_machine(**kwargs):
         print('[OK] VM não existe no Netbox -> {}'.format(proxmox_vm_name))
 
         # Analisa se VM foi criada com sucesso
-        netbox_vm = create.virtual_machine(proxmox_json)
+        netbox_vm = create.virtualization.virtual_machine(proxmox_json)
 
         # VM criada com as informações básicas
         if netbox_vm != None:
@@ -348,7 +348,7 @@ def nodes(**kwargs):
     # Search node on Netbox with Proxmox node name gotten
     if nb.dcim.devices.get(name = proxmox_node_name) == None:
         # If node does not exist, create it.
-        netbox_node = create.node(proxmox_json)
+        netbox_node = create.dcim.node(proxmox_json)
 
         # Node created
         if netbox_node != None:

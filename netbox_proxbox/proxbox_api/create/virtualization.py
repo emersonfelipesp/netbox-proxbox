@@ -96,7 +96,6 @@ def cluster():
 # virtualization.virtual_machines
 #
 def virtual_machine(proxmox_vm):
-    print(proxmox_vm,'\n')
     # Create json with basic VM/CT information
     vm_json = {}
 

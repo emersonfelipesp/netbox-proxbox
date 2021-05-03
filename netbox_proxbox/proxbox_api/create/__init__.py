@@ -1,5 +1,5 @@
 from . import (
-    node,
+    dcim,
     virtualization,
     extras,
 )

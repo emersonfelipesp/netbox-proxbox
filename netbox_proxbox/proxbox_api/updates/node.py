@@ -67,7 +67,7 @@ def cluster(netbox_node, proxmox_node, proxmox_cluster):
     # If cluster is empty, update it.
     elif proxmox_cluster == None:
         # Search for Proxmox Cluster using create.cluster() function
-        cluster_id = create.cluster().id
+        cluster_id = create.virtualization.cluster().id
 
         # Use Cluster ID to update NODE information
         netbox_node.cluster.id = cluster_id
