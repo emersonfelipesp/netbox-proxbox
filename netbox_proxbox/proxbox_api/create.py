@@ -331,6 +331,13 @@ def cluster():
 def virtual_machine(proxmox_vm):
     # Create json with basic VM/CT information
     vm_json = {}
+
+    if proxmox_vm['online'] == 0:
+        vm_json["status"] = 'offline'
+    elif proxmox_vm == 1:
+        vm_json["status"] = 'active'
+
+    
     vm_json["name"] = proxmox_vm['name']
     vm_json["status"] = 'active'
     vm_json["cluster"] = cluster().id

@@ -21,22 +21,34 @@ from . import (
 def vm_full_update(netbox_vm, proxmox_vm):
     changes = {}
 
-    status_updated = updates.status(netbox_vm, proxmox_vm)                     # Função compara 'status' e retorna se precisou ser atualizado no Netbox ou não
-    custom_fields_updated = updates.custom_fields(netbox_vm, proxmox_vm)           # Função compara 'custom_fields' e retorna se precisou ser atualizado no Netbox ou não
-    local_context_updated = updates.local_context_data(netbox_vm, proxmox_vm)     # Função compara 'local_context_data' e retorna se precisou ser atualizado no Netbox ou não
-    resources_update = updates.resources(netbox_vm, proxmox_vm)                # Função compara 'resources' e retorna se precisou ser atualizado no Netbox ou não
-    tag_update = updates.tag(netbox_vm)
+    # Função compara 'status' e retorna se precisou ser atualizado no Netbox ou não
+    status_updated = updates.virtual_machine.status(netbox_vm, proxmox_vm)
+                
+    # Função compara 'custom_fields' e retorna se precisou ser atualizado no Netbox ou não
+    custom_fields_updated = updates.virtual_machine.custom_fields(netbox_vm, proxmox_vm)
 
-    #changes = [custom_fields_updated, status_updated, local_context_updated, resources_update]
+    # Função compara 'local_context_data' e retorna se precisou ser atualizado no Netbox ou não 
+    local_context_updated = updates.virtual_machine.local_context_data(netbox_vm, proxmox_vm)
+
+    # Função compara 'resources' e retorna se precisou ser atualizado no Netbox ou não
+    resources_updated = updates.virtual_machine.resources(netbox_vm, proxmox_vm)
+
+    tag_updated = updates.virtual_machine.tag(netbox_vm)
+
+    #changes = [custom_fields_updated, status_updated, local_context_updated, resources_updated]
     changes = {
         "status" : status_updated,
         "custom_fields" : custom_fields_updated,
         "local_context" : local_context_updated,
-        "resources" : resources_update,
-        "tag" : tag_update
+        "resources" : resources_updated,
+        "tag" : tag_updated
     }
 
     return changes
+
+def node_full_update(netbox_node, proxmox_node):
+    changes = {}
+
 
 # Verifica se VM/CT existe Netbox
 def is_vm_on_netbox(netbox_vm):
@@ -308,10 +320,16 @@ def virtual_machine(**kwargs):
 
 
 def nodes(**kwargs):
+    proxmox_cluster = kwargs.get('proxmox_cluster')
     proxmox_json = kwargs.get('proxmox_json')
+
     proxmox_node_name = proxmox_json.get("name")
+
     json_node = {}
-    
+
+    # Search netbox using VM name
+    netbox_search = nb.dcim.devices.get(name = proxmox_node_name)
+
     # Search node on Netbox with Proxmox node name gotten
     if nb.dcim.devices.get(name = proxmox_node_name) == None:
         # If node does not exist, create it.
@@ -326,16 +344,61 @@ def nodes(**kwargs):
         else:
             print('[ERROR] Something went wrong when creating the node.-> {}'.format(proxmox_node_name))
             json_node["result"] = False
+
     else:
         # If node already exist, try updating it.
-        print('Node already exist, try updating it. -> {}'.format(proxmox_node_name))
-        #
-        #
-        #  NEEED TO DEVELOP THE UPDATE PART OF NODE
-        #
-        #
-        #
-        json_node["result"] = False
+        print('[OK] Node already exist. -> {}'.format(proxmox_node_name))
+        netbox_node = netbox_search
+
+        # Update Netbox node information, if necessary.
+        full_update = node_full_update(netbox_node, proxmox_json)  
+        json_node["changes"] = full_update
+
+        # Netbox node object
+        
+
+        netbox_new_json = {}
+
+        print(proxmox_json)
+        print(proxmox_json['online'])
+
+        # Compare STATUS
+        if proxmox_json['online'] == 1:
+            print('netbox_node.status: ', netbox_node.status)
+            if netbox_node.status.value == 'offline':
+                netbox_new_json['status'] = 'active'
+        elif proxmox_json['online'] == 0:
+            if netbox_node.status.value == 'active':
+                netbox_new_json['status'] = 'offline'
+
+        # Compare CLUSTER
+        print('\n\n\nproxmox_cluster: ', proxmox_cluster)
+        if proxmox_cluster != None:
+            if netbox_node.cluster.name != proxmox_cluster['name']:
+                # Search for Proxmox Cluster using create.cluster() function
+                cluster_id = create.cluster().id
+
+                print('cluster_id: ', cluster_id)
+
+                # Use Cluster ID to update NODE information
+                netbox_new_json['cluster'] = cluster_id
+        
+        print('netbox_new_json: ', netbox_new_json)
+
+        if (len(netbox_new_json)) > 0:
+            # Update node information 
+            node_updated = netbox_node.update(netbox_new_json)
+
+            # Verify if Netbox succesfully updated node
+            if node_updated == True:
+                json_node["result"] = True
+            
+            elif node_updated == False:
+                print('[ERROR] NODE not updated. Some error occurred trying to apply json with updated information!')
+                json_node["result"] = False
+        
+        elif (len(netbox_new_json)) == 0:
+            json_node["result"] = False
         
     return json_node
 
@@ -348,7 +411,7 @@ def all():
     # CLUSTER
     #
     cluster = cluster_all[0]
-
+    print(cluster)
     #
     # NODES
     #
@@ -358,9 +421,10 @@ def all():
     
     # Get all NODES from Proxmox
     for px_node_each in proxmox_nodes:
-        node_updated = nodes(proxmox_json = px_node_each)
+        node_updated = nodes(proxmox_json = px_node_each, proxmox_cluster = cluster)
 
         nodes_list.append(node_updated)
+
 
     #
     # VIRTUAL MACHINES / CONTAINERS

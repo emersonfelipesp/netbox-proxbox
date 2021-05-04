@@ -234,17 +234,4 @@ def resources(netbox_vm, proxmox_vm):
 
 
 
-def tag(netbox_vm):
-    # Get current tags
-    tags = netbox_vm.tags
 
-    # Add 'Proxbox' tag to device/virtual machine
-    tags.append(create.tag().id)
-    
-    # Save new tag to object
-    if netbox_vm.save() == True:
-        return True
-    else:
-        return False
-
-    return False
