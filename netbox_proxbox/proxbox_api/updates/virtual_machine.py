@@ -83,6 +83,7 @@ def status(netbox_vm, proxmox_vm):
 def site(**kwargs):
     # If site_id equals to 0, consider it is not configured by user and must be created by Proxbox
     site_id = kwargs.get('site_id', 0)
+    
 
 # Função que altera campo 'custom_field' da máquina virtual no Netbox
 # Utiliza HTTP request e não pynetbox (não consegui através do pynetbox)
@@ -293,30 +294,3 @@ def resources(netbox_vm, proxmox_vm):
         else:
             return False
 
-    
-
-
-
-def tag(netbox_vm):
-    # Get current tags
-    tags = netbox_vm.tags
-
-    # Get tag names from tag objects
-    tags_name = []
-    for tag in tags:
-        tags_name.append(tag.name)
-
-    
-    # If Proxbox not found int Netbox tag's list, update object with the tag.
-    if create.tag().name not in tags_name:
-        tags.append(create.tag().id)
-
-        netbox_vm.tags = tags
-
-        # Save new tag to object
-        if netbox_vm.save() == True:
-            return True
-        else:
-            return False
-
-    return False

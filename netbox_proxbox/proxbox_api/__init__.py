@@ -1,5 +1,5 @@
 from . import (
-    main as update,
+    update,
     create,
     updates,
     remove,
