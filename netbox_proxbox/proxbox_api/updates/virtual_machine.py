@@ -236,8 +236,7 @@ def local_context_data(netbox_vm, proxmox_vm):
 # Updates following fields based on Proxmox: "vcpus", "memory", "disk", if necessary.
 def resources(netbox_vm, proxmox_vm):
     # Save values from Proxmox
-    # Converting it to string since Netbox is returning VCPU as string (I reported this mistake)
-    vcpus = str(proxmox_vm["maxcpu"])
+    vcpus = float(proxmox_vm["maxcpu"])
     
     # Convert bytes to megabytes and then convert float to integer
     memory_Mb = proxmox_vm["maxmem"]
@@ -250,10 +249,13 @@ def resources(netbox_vm, proxmox_vm):
     # JSON with new resources info
     new_resources_json = {}
 
-
-
+    
+    
     # Compare VCPU
     if netbox_vm.vcpus != None:
+        # Convert Netbox VCPUs to float, since it is coming as string from Netbox
+        netbox_vm.vcpus = float(netbox_vm.vcpus)
+
         if netbox_vm.vcpus != vcpus:
             new_resources_json["vcpus"] = vcpus
 
@@ -275,24 +277,16 @@ def resources(netbox_vm, proxmox_vm):
     # Compare Disk
     if netbox_vm.disk != None:
         if netbox_vm.disk != disk_Gb:
-            new_resources_json["memory"] = disk_Gb
+            new_resources_json["disk"] = disk_Gb
 
     elif netbox_vm.disk == None:
-        new_resources_json["memory"] = disk_Gb
+        new_resources_json["disk"] = disk_Gb
     
-
-    print(' netbox_vm: ', netbox_vm)
-    print('\n')
-    print('     vcpus: ', vcpus)
-    print(' memory_Mb: ', memory_Mb)
-    print('   disk_Gb: ', disk_Gb)
-    print('\n')
-    print('new_resources_json :', new_resources_json)
+    
 
     # If new information found, save it to Netbox object.
     if len(new_resources_json) > 0:
         resources_updated = netbox_vm.update(new_resources_json)
-        print('resources_updated: ', resources_updated)
 
         if resources_updated == True:
             return True

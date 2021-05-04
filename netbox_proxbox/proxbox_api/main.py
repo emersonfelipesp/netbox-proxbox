@@ -46,8 +46,6 @@ def vm_full_update(netbox_vm, proxmox_vm):
 
     return changes
 
-def node_full_update(netbox_node, proxmox_node):
-    changes = {}
 
 
 # Verifica se VM/CT existe Netbox
@@ -350,9 +348,12 @@ def nodes(**kwargs):
         print('[OK] Node already exist. -> {}'.format(proxmox_node_name))
         netbox_node = netbox_search
 
+        '''
         # Update Netbox node information, if necessary.
+        # Transform comparisons below into functions and pull it together into node_full_update() function
         full_update = node_full_update(netbox_node, proxmox_json)  
         json_node["changes"] = full_update
+        '''
 
         # Netbox node object
         
@@ -372,18 +373,14 @@ def nodes(**kwargs):
                 netbox_new_json['status'] = 'offline'
 
         # Compare CLUSTER
-        print('\n\n\nproxmox_cluster: ', proxmox_cluster)
         if proxmox_cluster != None:
             if netbox_node.cluster.name != proxmox_cluster['name']:
                 # Search for Proxmox Cluster using create.cluster() function
                 cluster_id = create.cluster().id
 
-                print('cluster_id: ', cluster_id)
-
                 # Use Cluster ID to update NODE information
                 netbox_new_json['cluster'] = cluster_id
         
-        print('netbox_new_json: ', netbox_new_json)
 
         if (len(netbox_new_json)) > 0:
             # Update node information 
