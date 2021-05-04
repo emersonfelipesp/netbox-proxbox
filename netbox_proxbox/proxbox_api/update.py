@@ -402,20 +402,19 @@ def nodes(**kwargs):
 
 # Atualiza informações de status, 'custom_fields' e 'local_context'
 def all():
-    
+    print("[Proxbox - Netbox plugin | Update All]")
     cluster_all = proxmox.cluster.status.get()
     #
     # CLUSTER
     #
     cluster = cluster_all[0]
-    print(cluster)
     #
     # NODES
     #
-    print('\n\nNODES...\n')
+    print('\n\n\nNODES...')
     nodes_list = []
     proxmox_nodes = cluster_all[1:]
-    
+
     # Get all NODES from Proxmox
     for px_node_each in proxmox_nodes:
         node_updated = nodes(proxmox_json = px_node_each, proxmox_cluster = cluster)
@@ -423,19 +422,10 @@ def all():
         nodes_list.append(node_updated)
 
 
-
-
-
-    return
-
-
-
-
-
     #
     # VIRTUAL MACHINES / CONTAINERS
     #
-    print('\n\nVIRTUAL MACHINES...\n')
+    print('\n\n\nVIRTUAL MACHINES...')
     virtualmachines_list = []
 
     # Get all VM/CTs from Proxmox

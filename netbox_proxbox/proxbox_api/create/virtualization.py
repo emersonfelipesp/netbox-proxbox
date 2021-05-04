@@ -1,8 +1,13 @@
-from . import (
-    nb,
-    extras,
+# PLUGIN_CONFIG variables
+from ..plugins_config import (
+    NETBOX_SESSION as nb,
+    PROXMOX_SESSION as proxmox,
+
 )
 
+from . import (
+    extras,
+)
 
 #
 # virtualization.cluster_types

@@ -51,7 +51,7 @@ def cluster(netbox_node, proxmox_node, proxmox_cluster):
         # If cluster is filled, but different from actual cluster, update it.
         if netbox_node.cluster.name != proxmox_cluster['name']:
             # Search for Proxmox Cluster using create.cluster() function
-            cluster_id = create.cluster().id
+            cluster_id = create.virtualization.cluster().id
 
             # Use Cluster ID to update NODE information
             netbox_node.cluster.id = cluster_id

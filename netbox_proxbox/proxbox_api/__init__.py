@@ -3,6 +3,7 @@ from . import (
     create,
     updates,
     remove,
+    plugins_config,
 )
 
 

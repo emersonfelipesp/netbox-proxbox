@@ -1,5 +1,6 @@
-from . import (
-    nb,
+# PLUGIN_CONFIG variables
+from ..plugins_config import (
+    NETBOX_SESSION as nb,
 )
 
 #

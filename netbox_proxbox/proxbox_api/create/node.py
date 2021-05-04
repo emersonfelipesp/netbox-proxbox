@@ -1,8 +1,13 @@
-from . import (
-    nb,
-    extras,
-    virtual_machine,
+# PLUGIN_CONFIG variables
+from ..plugins_config import (
+    NETBOX_SESSION as nb,
 )
+
+from . import (
+    extras,
+    virtualization,
+)
+
 
 
 #
