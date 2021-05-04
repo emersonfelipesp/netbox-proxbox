@@ -7,13 +7,6 @@ def status(netbox_node, proxmox_node):
     #
     # Compare STATUS
     #
-    '''
-    print("\n\nCOMPARE STATUS:")
-    print(netbox_node)
-    print(proxmox_node)
-    print(proxmox_node['online'])
-    '''
-
     if proxmox_node['online'] == 1:
         # If Proxmox is 'online' and Netbox is 'offline', update it.
         if netbox_node.status.value == 'offline':
