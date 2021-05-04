@@ -2,6 +2,7 @@
 from ..plugins_config import (
     NETBOX_SESSION as nb,
     PROXMOX_SESSION as proxmox,
+    NETBOX_VM_ROLE_ID,
 
 )
 
@@ -107,8 +108,8 @@ def virtual_machine(proxmox_vm):
     vm_json["name"] = proxmox_vm['name']
     vm_json["status"] = 'active'
     vm_json["cluster"] = cluster().id
-    vm_json["role"] = role(role_id = NETBOX_VM_ROLE_ID).id
-    vm_json["tags"] = [tag().id]
+    vm_json["role"] = extras.role(role_id = NETBOX_VM_ROLE_ID).id
+    vm_json["tags"] = [extras.tag().id]
     
     # Create VM/CT with json 'vm_json'
     try:

@@ -1,6 +1,8 @@
 # PLUGIN_CONFIG variables
 from ..plugins_config import (
     NETBOX_SESSION as nb,
+    NETBOX_NODE_ROLE_ID,
+    NETBOX_SITE_ID,
 )
 
 from . import (
@@ -145,7 +147,7 @@ def node(proxmox_node):
     node_json["site"] = site(site_id = NETBOX_SITE_ID).id
     node_json["status"] = 'active'
     node_json["tags"] = [extras.tag().id]
-    node_json["cluster"] = virtual_machine.cluster().id
+    node_json["cluster"] = virtualization.cluster().id
 
     # Create Node with json 'node_json'
     try:
