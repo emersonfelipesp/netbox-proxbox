@@ -96,13 +96,14 @@ def cluster():
 # virtualization.virtual_machines
 #
 def virtual_machine(proxmox_vm):
+    print(proxmox_vm,'\n')
     # Create json with basic VM/CT information
     vm_json = {}
 
-    if proxmox_vm['online'] == 0:
-        vm_json["status"] = 'offline'
-    elif proxmox_vm == 1:
+    if proxmox_vm['status'] == 'running':
         vm_json["status"] = 'active'
+    elif proxmox_vm == 'stopped':
+        vm_json["status"] = 'offline'
 
     
     vm_json["name"] = proxmox_vm['name']
