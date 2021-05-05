@@ -252,7 +252,7 @@ def virtual_machine(**kwargs):
 
                     # Analyze search result and returns error, if null value.
                     if proxmox_json == None:
-                    print("[ERROR] Error to get Proxmox Virtual Machine using 'proxmox_name'")
+                        print("[ERROR] Error to get Proxmox Virtual Machine using 'proxmox_name'")
                         json_vm["result"] = False
                     
                     proxmox_vm_name = proxmox_json['name']
@@ -399,10 +399,16 @@ def nodes(**kwargs):
 def all():
     print("[Proxbox - Netbox plugin | Update All]")
     cluster_all = proxmox.cluster.status.get()
+
+
     #
     # CLUSTER
     #
-    cluster = cluster_all[0]
+    cluster = create.virtualization.cluster()
+    print('\n\n\nCLUSTER...')
+    print('[OK] CLUSTER created. -> {}'.format(cluster.name))
+
+    proxmox_cluster = cluster_all[0]
     #
     # NODES
     #
@@ -412,7 +418,7 @@ def all():
 
     # Get all NODES from Proxmox
     for px_node_each in proxmox_nodes:
-        node_updated = nodes(proxmox_json = px_node_each, proxmox_cluster = cluster)
+        node_updated = nodes(proxmox_json = px_node_each, proxmox_cluster = proxmox_cluster)
 
         nodes_list.append(node_updated)
 
