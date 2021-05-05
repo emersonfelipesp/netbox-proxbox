@@ -22,7 +22,7 @@ requires = [
 
 setup(
     name="netbox-proxbox",
-    version="0.0.2",
+    version="0.0.3",
     author="Emerson Pereira",
     author_email="emerson.felipe@nmultifibra.com.br",
     description="Integration between Proxmox and Netbox",

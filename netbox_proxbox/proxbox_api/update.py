@@ -252,7 +252,7 @@ def virtual_machine(**kwargs):
 
                     # Analyze search result and returns error, if null value.
                     if proxmox_json == None:
-                    print("[ERROR] Error to get Proxmox Virtual Machine using 'proxmox_name'")
+                        print("[ERROR] Error to get Proxmox Virtual Machine using 'proxmox_name'")
                         json_vm["result"] = False
                     
                     proxmox_vm_name = proxmox_json['name']
