@@ -6,44 +6,44 @@ from .plugins_config import (
     NETBOX_SESSION as nb,
 )
 
-# Verifica se VM/CT existe no Proxmox
+# Verify if VM/CT exists on Proxmox
 def is_vm_on_proxmox(netbox_vm):
-    # Obtém o json de todas as máquinas virtuais do Proxmox
+    # Get json of all virtual machines from Proxmox
     all_proxmox_vms = proxmox.cluster.resources.get(type='vm')
 
     # Netbox name
     netbox_name = netbox_vm.name
 
-    # Busca json local_context do Netbox
+    # Search Netbox local_context
     local_context = netbox_vm.local_context_data
 
     if local_context == None:
-        print('[WARNING] "local_context_data" não preenchido -> {}'.format(netbox_name))
+        print('[WARNING] "local_context_data" not filled. -> {}'.format(netbox_name))
 
     else:
-        # chave "proxmox" do "local_context_data"
+        # "proxmox" key of "local_context_data"
         proxmox_json = local_context.get("proxmox")
     
-        # Se valor nulo, volta erro
+        # If null value, returns error
         if proxmox_json == None:
-            print('[WARNING] local_context_data não possui a chave "proxmox" -> {}'.format(netbox_name))   
+            print("[WARNING] 'local_context_data' does not have 'proxmox' json key -> {}".format(netbox_name))   
 
         else:
             # Netbox VM/CT ID
             netbox_id = proxmox_json.get("id")
 
-            # Se valor nulo, volta erro
+            # If null value, returns error
             if netbox_id == None:
-                print('[WARNING] chave "proxmox" não possui chave " -> {}'.format(netbox_name))
+                print("[WARNING] 'proxmox' doest not have 'id' key -> {}".format(netbox_name))
 
 
-    # Lista de nomes das VM/CTs do Proxmox
+    # List names of VM/CT's from Proxmox
     names = []
 
-    # Lista de IDs das VM/CTs do Proxmox
+    # List ID's of VM/CT's from Proxmox
     vmids = []
 
-    # Compara VM do Netbox com todas as VMs do Proxmox e verifica se existe no Proxmox
+    # Compare Netbox VM with all Proxmox VMs and verify if Netbox VM exist on Proxmox.
     for i in range(len(all_proxmox_vms)):
         name = all_proxmox_vms[i].get("name")
         names.append(name)
@@ -55,16 +55,16 @@ def is_vm_on_proxmox(netbox_vm):
     name_on_px = False
     id_on_px = False
 
-    # Busca VM no Proxmox pelo nome
+    # Search VM on Proxmox by using name
     try:
         name_index = names.index(netbox_name)      
     except:
         name_on_px = False
     else:
-        # ID existe no Proxmox
+        # ID exists on Proxmox
         name_on_px = True
         
-        # Se local_context é nulo, tenta preenchê-lo para obter ID da VM
+        # If 'local_context' is null, try updating it to be able to get ID from VM
         if local_context == None:
             local_context_updated = updates.local_context_data(netbox_vm, all_proxmox_vms[name_index])
 
@@ -72,34 +72,34 @@ def is_vm_on_proxmox(netbox_vm):
                 local_context = netbox_vm.local_context_data
 
                 if local_context != None:
-                    print("[OK] local_context atualizado -> {}".format(netbox_name))
+                    print("[OK] 'local_context' updated' -> {}".format(netbox_name))
                     proxmox_json = local_context.get("proxmox")
                     netbox_id = proxmox_json.get("id")
 
                 else:
-                    print("[ERROR] local_context está vazio -> {}".format(netbox_name))
+                    print("[ERROR] 'local_context' is empty -> {}".format(netbox_name))
             else:
-                print("[WARNING] local_context não foi atualizado (erro ou já estava atualizado) -> {}".format(netbox_name))
+                print("[WARNING] 'local_context' was not updated (error or already updated) -> {}".format(netbox_name))
 
 
-    # Busca VM no Proxmox pelo ID
+    # Search VM on Proxmox by using ID
     try:
         id_index = vmids.index(netbox_id)
     except:
         id_on_px = False
     else:
-        # NAME existe no Proxmox
+        # NAME exists on Proxmox
         id_on_px = True
 
-    # Analisa se VM existe
+    # Verify if VM exists
     if name_on_px == True:
         if id_on_px == True:
             return True
         else:
-            print("[WARNING] NOME existe no Proxmox, mas ID não -> {}".format(netbox_name))
+            print("[WARNING] NAME exists on Proxmox, but ID does not. -> {}".format(netbox_name))
         return True
     
-    # Comparação não deu certo, não possíve achar VM no Proxmox
+    # Comparison failed, not able to find VM on Proxmox
     return False
 
 def all():
@@ -116,30 +116,30 @@ def all():
         netbox_name = netbox_obj.name
         json_vm["name"] = netbox_name
 
-        # Verifica se VM existe ou não no Proxmox
+        # Verify if VM exists on Proxmox
         vm_on_proxmox = is_vm_on_proxmox(nb_vm_each)
 
         if vm_on_proxmox == True:
-            log_message = '[OK] VM existe em ambos sistemas -> {}'.format(netbox_name)
+            log_message = '[OK] VM exists on both systems (Netbox and Proxmox) -> {}'.format(netbox_name)
             log.append(log_message)
 
             json_vm["result"] = False
         
-        # Se VM não existe no Proxmox, deleta a VM no Netbox
+        # If VM does not exist on Proxmox, delete VM on Netbox.
         elif vm_on_proxmox == False:
-            log_message = "[WARNING] VM existe no Netbox, mas não no Proxmox. Deletar a VM! -> {}".format(netbox_name)
+            log_message = "[WARNING] VM exists on Netbox, but not on Proxmox. Delete it!  -> {}".format(netbox_name)
             log.append(log_message)
 
             delete_vm = netbox_obj.delete()
 
             if delete_vm == True:
-                log_message = "[OK] VM removida do Netbox com sucesso"
+                log_message = "[OK] VM successfully removed from Netbox."
                 log.append(log_message)
 
                 json_vm["result"] = True
 
         else:
-            log_message = '[ERROR] Erro inesperado ao verificar se VM existe no Proxmox'
+            log_message = '[ERROR] Unexpected error trying to verify if VM exist on Proxmox'
             log.append(log_message)
 
             json_vm["result"] = False

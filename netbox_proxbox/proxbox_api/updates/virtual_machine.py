@@ -21,28 +21,10 @@ from .. import (
 
 
 
-# Altera nome da Netbox caso tenha [] no nome (modo antigo)
-# Objetivo: fazer com que o nome no Proxmox e no Netbox sejam iguais
-# Atualiza campo "name" no Netbox
-def name():
-    vms = nb.virtualization.virtual_machines.all()
-    
-    for vm in vms:
-        if '[' in vm.name:
-            print('Change VM name: {}'.format(vm.name))
-            vm.name = vm.name[6:]
-            vm.save()
-        else:
-            print('Doesn\'t need to change: {}'.format(vm.name))
-
-
-
-
-
-# Atualiza campo "status" no Netbox baseado no Proxmox
+# Update "status" field on Netbox Virtual Machine based on Proxmox information
 def status(netbox_vm, proxmox_vm):
-    # False = status alterado no netbox
-    # True  = status alterado no netbox
+    # False = status not changed on Netbox
+    # True  = status changed on Netbox
     status_updated = False
 
     # [ running, stopped ]
@@ -52,7 +34,7 @@ def status(netbox_vm, proxmox_vm):
     netbox_status = netbox_vm.status.value
 
     if (proxmox_status == 'running' and netbox_status == 'active') or (proxmox_status == 'stopped' and netbox_status == 'offline'):
-        # Status não atualizado
+        # Status not updated
         status_updated = False
     
     # Change status to active on Netbox if it's offline
@@ -60,7 +42,7 @@ def status(netbox_vm, proxmox_vm):
         netbox_vm.status.value = 'offline'
         netbox_vm.save()
 
-        # Status atualizado
+        # Status updated
         status_updated = True
 
     # Change status to offline on Netbox if it's active
@@ -68,7 +50,7 @@ def status(netbox_vm, proxmox_vm):
         netbox_vm.status.value = 'active'
         netbox_vm.save()
         
-        # Status atualizado
+        # Status updated
         status_updated = True
 
     # Status not expected
@@ -85,9 +67,8 @@ def site(**kwargs):
     site_id = kwargs.get('site_id', 0)
     
 
-# Função que altera campo 'custom_field' da máquina virtual no Netbox
-# Utiliza HTTP request e não pynetbox (não consegui através do pynetbox)
-#def http_update_custom_fields(domain_with_http, token, vm_id, vm_name, vm_cluster, custom_fields):
+# Function that modifies 'custom_field' of Netbox Virtual Machine.
+# It uses HTTP Request and not Pynetbox (as I was not able to).
 def http_update_custom_fields(**kwargs):
     # Saves kwargs variables
     domain_with_http = kwargs.get('domain_with_http')
@@ -97,36 +78,45 @@ def http_update_custom_fields(**kwargs):
     vm_cluster = kwargs.get('vm_cluster')
     custom_fields = kwargs.get('custom_fields')
 
-    # requisição http do tipo patch (atualização parcial)
+    #
+    # HTTP PATCH Request (partially update)
+    #
+    # URL 
     url = '{}/api/virtualization/virtual-machines/{}/'.format(domain_with_http, vm_id)
+    
+    # HTTP Request Headers
     headers = {
         "Authorization": "Token {}".format(token),
         "Content-Type" : "application/json"
     }    
+    
+    # HTTP Request Body
     body = {
         "name": vm_name,
         "cluster": vm_cluster,
         "custom_fields": custom_fields
     }
 
-    # Makes HTTP REQUEST using PATCH method (partially update)
+    # Makes the request and saves it to var
     r = requests.patch(url, data = json.dumps(body), headers = headers)
 
-    # Retorna HTTP Status Code
+    # Return HTTP Status Code
     return r.status_code
 
 
 
-
-# Atualiza campo "custom_fields" no Netbox baseado no Proxmox
+# Update 'custom_fields' field on Netbox Virtual Machine based on Proxbox
 def custom_fields(netbox_vm, proxmox_vm):
-    # Cria novo custom_field com informações vinda do Proxmox
+    # Create the new 'custom_field' with info from Proxmox
     custom_fields_update = {}
-    
+
+    # Check if there is 'custom_field' configured on Netbox
     if len(netbox_vm.custom_fields) == 0:
         print("[ERROR] There's no 'Custom Fields' registered by the Netbox Plugin user")
 
+    # If any 'custom_field' configured, get it and update, if necessary.
     elif len(netbox_vm.custom_fields) > 0:
+
         # Get current configured custom_fields
         custom_fields_names = list(netbox_vm.custom_fields.keys())
 
@@ -184,13 +174,13 @@ def custom_fields(netbox_vm, proxmox_vm):
 
 
 
-# Atualiza campo "local_context_data" no Netbox baseado no Proxmox
+# Update 'local_context_data' field on Netbox Virtual Machine based on Proxbox
 def local_context_data(netbox_vm, proxmox_vm):
     current_local_context = netbox_vm.local_context_data
 
     proxmox_values = {}
 
-    # Adiciona e altera valores do Proxmox
+    # Add and change values from Proxmox
     proxmox_values["name"] = proxmox_vm["name"]
     proxmox_values["url"] = "https://{}:{}".format(PROXMOX, PROXMOX_PORT)      # URL
     proxmox_values["id"] = proxmox_vm["vmid"]      # VM ID
@@ -206,24 +196,23 @@ def local_context_data(netbox_vm, proxmox_vm):
     proxmox_values["vcpu"] = proxmox_vm["maxcpu"]       # Add the 'GB' unit of measurement
     
     
-    # Verifica se local_context está vazio e então cria os valores iniciais
+    # Verify if 'local_context' is empty and if true, creates initial values.
     if current_local_context == None:
         netbox_vm.local_context_data = {"proxmox" : proxmox_values}
         netbox_vm.save()
         return True
 
-    # Compara valores atuais com dados do Proxmox
+    # Compare current Netbox values with Porxmox values
     elif current_local_context.get('proxmox') != proxmox_values: 
-        # Atualiza valores do 'proxmox'
+        # Update 'proxmox' key on 'local_context_data'
         current_local_context.update(proxmox = proxmox_values)
 
         netbox_vm.local_context_data = current_local_context
         netbox_vm.save()   
         return True
 
-    # Se igual
+    # If 'local_context_data' already updated
     else:
-        # local_context_data já estava atualizado
         return False
 
     return False
