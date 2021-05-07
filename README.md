@@ -10,7 +10,10 @@ Netbox plugin which integrates Proxmox and Netbox using proxmoxer and pynetbox.
 It is currently able to get the following information from Proxmox:
 
 - Cluster name
-- VM/CTs:
+- Nodes:
+  - Status (online / offline)
+  - Name
+- Virtual Machines and Containers:
   - Status (online / offline)
   - Name
   - ID
@@ -73,7 +76,7 @@ Install the plugin package.
 ```
 
 #### 1.1.2. Using git (development use)
-*OBS:* This method is recommend for testing and development purposes and is not for production use.
+**OBS:** This method is recommend for testing and development purposes and is not for production use.
 
 Move to netbox main folder
 ```
@@ -95,38 +98,44 @@ python3 setup.py develop
 
 ### 1.2. Enable the Plugin
 
-Enable the plugin in */opt/netbox/netbox/netbox/configuration.py*:
+Enable the plugin in **/opt/netbox/netbox/netbox/configuration.py**:
 ```python
 PLUGINS = ['netbox_proxbox']
 ```
 
 ### 1.3. Configure Plugin
 
-The plugin's configuration is also located in */opt/netbox/netbox/netbox/configuration.py*:
+The plugin's configuration is also located in **/opt/netbox/netbox/netbox/configuration.py**:
 
 Replace the values with your own following the [Configuration Parameters](#configuration-parameters) section.
+
+**OBS:** You do not need to configure all the parameters, only the one's different from the default values. It means that if you have some value equal to the one below, you can skip its configuration.
 ```python
 PLUGINS_CONFIG = {
     'netbox_proxbox': {
         'proxmox': {
-            'domain': 'proxbox.example.com',
+            'domain': 'proxbox.example.com',    # May also be IP address
             'http_port': 8006,
             'user': 'root@pam',
             'password': 'Strong@P4ssword',
             'token': {
-                'name': 'tokenIDchosen',
+                'name': 'tokenID',	# Only type the token name and not the 'user@pam:tokenID' format
                 'value': '039az154-23b2-4be0-8d20-b66abc8c4686'
             },
             'ssl': False
         },
         'netbox': {
-            'domain': 'netbox.example.com',
+            'domain': 'netbox.example.com',     # May also be IP address
             'http_port': 80,
             'token': '0dd7cddfaee3b38bbffbd2937d44c4a03f9c9d38',
-            'ssl': False
+            'ssl': False,	# There is no support to SSL on Netbox yet, so let it always False.
+            'settings': {
+                'virtualmachine_role_id' : 0,
+                'node_role_id' : 0,
+                'site_id': 0
+            }
         }
     }
-}
 ```
 
 ### 1.4. Run Database Migrations
@@ -164,6 +173,12 @@ The following options are available:
 * `netbox.http_port`: (Integer) Netbox HTTP PORT (default: 80).
 * `netbox.token`: (String) Netbox Token Value.
 * `netbox.ssl`: (Bool) Defines the use of SSL (default: False). - Proxbox doesn't support SSL on Netbox yet.
+* `netbox.settings`: (Dict) Default items of Netbox to be used by Proxbox. 
+  - If not configured, Proxbox will automatically create a basic configuration to make it work.
+  - The ID of each item can be easily found on the URL of the item you want to use.
+* `netbox.settings.virtualmachine_role_id`: (Integer) Role ID to be used by Proxbox when creating Virtual Machines
+* `netbox.settings.node_role_id`: (Integer) Role ID to be used by Proxbox when creating Nodes (Devices)
+* `netbox.settings.site_id` (Integer) Site ID to be used by Proxbox when creating Nodes (Devices)
 
 ---
 
@@ -179,41 +194,41 @@ Below the parameters needed to make it work:
 #### 3.1.1. Proxmox ID
 
 Required values (must be equal)
-- [Custom Field] *Type:* Integer
-- [Custom Field] *Name:* proxmox_id
-- [Assignment] *Content-type:* Virtualization > virtual machine
-- [Validation Rules] *Minimum value:* 0
+- [Custom Field] **Type:** Integer
+- [Custom Field] **Name:** proxmox_id
+- [Assignment] **Content-type:** Virtualization > virtual machine
+- [Validation Rules] **Minimum value:** 0
 
 Optional values (may be different)
-- [Custom Field] *Label:* [Proxmox] ID
-- [Custom Field] *Description:* Proxmox VM/CT ID
+- [Custom Field] **Label:** [Proxmox] ID
+- [Custom Field] **Description:** Proxmox VM/CT ID
 
 ---
 
 #### 3.1.2. Proxmox Node
 
 Required values (must be equal)
-- [Custom Field] *Type:* Text
-- [Custom Field] *Name:* proxmox_node
-- [Assignment] *Content-type:* Virtualization > virtual machine
+- [Custom Field] **Type:** Text
+- [Custom Field] **Name:** proxmox_node
+- [Assignment] **Content-type:** Virtualization > virtual machine
 
 Optional values (may be different)
-- [Custom Field] *Label:* [Proxmox] Node
-- [Custom Field] *Description:* Proxmox Node (Server)
+- [Custom Field] **Label:** [Proxmox] Node
+- [Custom Field] **Description:** Proxmox Node (Server)
 
 ---
 
 #### 3.1.3. Proxmox Type (qemu or lxc)
 
 Required values (must be equal)
-- [Custom Field] *Type:* Selection
-- [Custom Field] *Name:* proxmox_type
-- [Assignment] *Content-type:* Virtualization > virtual machine
-- [Choices] *Choices:* qemu,lxc
+- [Custom Field] **Type:** Selection
+- [Custom Field] **Name:** proxmox_type
+- [Assignment] **Content-type:** Virtualization > virtual machine
+- [Choices] **Choices:** qemu,lxc
 
 Optional values (may be different)
-- [Custom Field] *Label:* [Proxmox] Type
-- [Custom Field] *Description:* Proxmox type (VM or CT)
+- [Custom Field] **Label:** [Proxmox] Type
+- [Custom Field] **Description:** Proxmox type (VM or CT)
 
 ---
 
@@ -225,13 +240,13 @@ Optional values (may be different)
 
 ## 4. Usage
 
-If everything is working correctly, you should see in Netbox's navigation the *Proxmox VM/CT* button in *Plugins* dropdown list.
+If everything is working correctly, you should see in Netbox's navigation the **Proxmox VM/CT** button in **Plugins** dropdown list.
 
-On *Proxmox VM/CT* page, click button ![full update button](etc/img/proxbox_full_update_button.png?raw=true "preview")
+On **Proxmox VM/CT** page, click button ![full update button](etc/img/proxbox_full_update_button.png?raw=true "preview")
 
 It will redirect you to a new page and you just have to wait until the plugin runs through all Proxmox Cluster and create the VMs and CTs in Netbox.
 
-*OBS:* Due the time it takes to full update the information, your web brouse might show a timeout page (like HTTP Code 504) even though it actually worked.
+**OBS:** Due the time it takes to full update the information, your web brouse might show a timeout page (like HTTP Code 504) even though it actually worked.
 
 ---
 
