@@ -4,6 +4,7 @@
 
 
 # proxbox (In Development!)
+
 Netbox plugin which integrates Proxmox and Netbox using proxmoxer and pynetbox.
 
 It is currently able to get the following information from Proxmox:
@@ -25,12 +26,41 @@ The following table shows the Netbox and Proxmox versions compatible (tested) wi
 | ------------- |-------------|-------------|
 | >= 2.10.9 | >= v6.2.0 | v0.0.3
 
-## Installation
+---
+
+### Summary
+[1. Installation](#1-installation)
+- [1.1. Install package](#11-install-package)
+  - [1.1.1. Using pip (production use)](#111-using-pip-production-use)
+  - [1.1.2. Using git (development use)](#112-using-git-development-use)
+- [1.2. Enable the Plugin](#12-enable-the-plugin)
+- [1.3. Configure Plugin](#13-configure-plugin)
+- [1.4. Run Database Migrations](#14-run-database-migrations)
+- [1.5 Restart WSGI Service](#15-restart-wsgi-service)
+
+[2. Configuration Parameters](#2-configuration-parameters)
+
+[3. Custom Fields](#3-custom-fields)
+- [3.1. Custom Field Configuration](#31-custom-field-configuration)
+	- [3.1.1. Proxmox ID](#311-proxmox-id)
+	- [3.1.2. Proxmox Node](#312-proxmox-node)
+	- [3.1.3. Proxmox Type](#313-proxmox-type-qemu-or-lxc)
+- [3.2. Custom Field Example](#32-custom-field-example)
+
+[4. Usage](#4-usage)
+
+[5. Contributing](#5-contributing)
+
+---
+
+## 1. Installation
 
 The instructions below detail the process for installing and enabling Proxbox plugin.
 The plugin is available as a Python package in pypi and can be installed with pip.
 
-### Install Package from pip (not working yet!)
+### 1.1. Install package
+
+#### 1.1.1. Using pip (production use)
 
 Enter Netbox's virtual environment.
 ```
@@ -42,7 +72,8 @@ Install the plugin package.
 (venv) $ pip install netbox-proxbox
 ```
 
-### Install from git repository
+#### 1.1.2. Using git (development use)
+*OBS:* This method is recommend for testing and development purposes and is not for production use.
 
 Move to netbox main folder
 ```
@@ -62,19 +93,18 @@ python3 setup.py develop
 ```
 
 
-### Enable the Plugin
+### 1.2. Enable the Plugin
 
-Enable the plugin in **/opt/netbox/netbox/netbox/configuration.py**:
+Enable the plugin in */opt/netbox/netbox/netbox/configuration.py*:
 ```python
 PLUGINS = ['netbox_proxbox']
 ```
 
-### Configure Plugin
+### 1.3. Configure Plugin
 
-The plugin's configuration is also located in **/opt/netbox/netbox/netbox/configuration.py**:
+The plugin's configuration is also located in */opt/netbox/netbox/netbox/configuration.py*:
 
 Replace the values with your own following the [Configuration Parameters](#configuration-parameters) section.
-
 ```python
 PLUGINS_CONFIG = {
     'netbox_proxbox': {
@@ -99,14 +129,14 @@ PLUGINS_CONFIG = {
 }
 ```
 
-### Run Database Migrations
+### 1.4. Run Database Migrations
 
 ```
 (venv) $ cd /opt/netbox/netbox/
 (venv) $ python3 manage.py migrate
 ```
 
-### Restart WSGI Service
+### 1.5. Restart WSGI Service
 
 Restart the WSGI service to load the new plugin:
 ```
@@ -115,7 +145,7 @@ Restart the WSGI service to load the new plugin:
 
 ---
 
-### Configuration Parameters
+## 2. Configuration Parameters
 
 The following options are available:
 
@@ -137,73 +167,75 @@ The following options are available:
 
 ---
 
-### Custom Fields
+## 3. Custom Fields
 
 To get Proxmox ID, Node and Type information, is necessary to configure Custom Fields.
 Below the parameters needed to make it work:
 
 ---
 
-**1. Proxmox ID**
+### 3.1. Custom Field Configuration
+
+#### 3.1.1. Proxmox ID
 
 Required values (must be equal)
-- [Custom Field] **Type:** Integer
-- [Custom Field] **Name:** proxmox_id
-- [Assignment] **Content-type:** Virtualization > virtual machine
-- [Validation Rules] **Minimum value:** 0
+- [Custom Field] *Type:* Integer
+- [Custom Field] *Name:* proxmox_id
+- [Assignment] *Content-type:* Virtualization > virtual machine
+- [Validation Rules] *Minimum value:* 0
 
 Optional values (may be different)
-- [Custom Field] **Label:** [Proxmox] ID
-- [Custom Field] **Description:** Proxmox VM/CT ID
+- [Custom Field] *Label:* [Proxmox] ID
+- [Custom Field] *Description:* Proxmox VM/CT ID
 
 ---
 
-**2. Proxmox Node**
+#### 3.1.2. Proxmox Node
 
 Required values (must be equal)
-- [Custom Field] **Type:** Text
-- [Custom Field] **Name:** proxmox_node
-- [Assignment] **Content-type:** Virtualization > virtual machine
+- [Custom Field] *Type:* Text
+- [Custom Field] *Name:* proxmox_node
+- [Assignment] *Content-type:* Virtualization > virtual machine
 
 Optional values (may be different)
-- [Custom Field] **Label:** [Proxmox] Node
-- [Custom Field] **Description:** Proxmox Node (Server)
+- [Custom Field] *Label:* [Proxmox] Node
+- [Custom Field] *Description:* Proxmox Node (Server)
 
 ---
 
-**3. Proxmox Type (qemu or lxc)**
+#### 3.1.3. Proxmox Type (qemu or lxc)
 
 Required values (must be equal)
-- [Custom Field] **Type:** Selection
-- [Custom Field] **Name:** proxmox_type
-- [Assignment] **Content-type:** Virtualization > virtual machine
-- [Choices] **Choices:** qemu,lxc
+- [Custom Field] *Type:* Selection
+- [Custom Field] *Name:* proxmox_type
+- [Assignment] *Content-type:* Virtualization > virtual machine
+- [Choices] *Choices:* qemu,lxc
 
 Optional values (may be different)
-- [Custom Field] **Label:** [Proxmox] Type
-- [Custom Field] **Description:** Proxmox type (VM or CT)
+- [Custom Field] *Label:* [Proxmox] Type
+- [Custom Field] *Description:* Proxmox type (VM or CT)
 
 ---
 
-### Custom Field Example
+### 3.2. Custom Field Example
 
 ![custom field image](etc/img/custom_field_example.png?raw=true "preview")
 
 ---
 
-### Usage
+## 4. Usage
 
-If everything is working correctly, you should see in Netbox's navigation the **Proxmox VM/CT** button in **Plugins** dropdown list.
+If everything is working correctly, you should see in Netbox's navigation the *Proxmox VM/CT* button in *Plugins* dropdown list.
 
-On **Proxmox VM/CT** page, click button ![full update button](etc/img/proxbox_full_update_button.png?raw=true "preview")
+On *Proxmox VM/CT* page, click button ![full update button](etc/img/proxbox_full_update_button.png?raw=true "preview")
 
 It will redirect you to a new page and you just have to wait until the plugin runs through all Proxmox Cluster and create the VMs and CTs in Netbox.
 
-**OBS:** Due the time it takes to full update the information, your web brouse might show a timeout page (like HTTP Code 504) even though it actually worked.
+*OBS:* Due the time it takes to full update the information, your web brouse might show a timeout page (like HTTP Code 504) even though it actually worked.
 
 ---
 
-## Contributing
+## 5. Contributing
 Developing tools for this project based on [ntc-netbox-plugin-onboarding](https://github.com/networktocode/ntc-netbox-plugin-onboarding) repo.
 
 Issues and pull requests are welcomed.
