@@ -4,6 +4,7 @@
 
 
 # proxbox (In Development!)
+**NOTE:** Although the Proxbox plugin is in development, it only use GET requests and there is no risk to harm your Proxmox environment by changing things incorrectly.
 
 Netbox plugin which integrates Proxmox and Netbox using proxmoxer and pynetbox.
 
@@ -53,6 +54,8 @@ The following table shows the Netbox and Proxmox versions compatible (tested) wi
 [4. Usage](#4-usage)
 
 [5. Contributing](#5-contributing)
+
+[6. Roadmap)(#6-roadmap)
 
 ---
 
@@ -254,3 +257,11 @@ It will redirect you to a new page and you just have to wait until the plugin ru
 Developing tools for this project based on [ntc-netbox-plugin-onboarding](https://github.com/networktocode/ntc-netbox-plugin-onboarding) repo.
 
 Issues and pull requests are welcomed.
+
+## 6. Roadmap
+- Start using custom models to optimize the use of the Plugin and stop using 'Custom Fields'
+- Automatically remove Nodes on Netbox when removed on Promox (as it already happens with Virutal Machines and Containers)
+- Add individual update of VM/CT's and Nodes (currently is only possible to update all at once)
+- Add periodic update of the whole environment so that the user does not need to manually click the update button.
+- Create virtual machines and containers directly on Netbox, having no need to access Proxmox.
+- Add 'Console' button to enable console access to virtual machines
