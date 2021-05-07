@@ -55,7 +55,7 @@ The following table shows the Netbox and Proxmox versions compatible (tested) wi
 
 [5. Contributing](#5-contributing)
 
-[6. Roadmap)(#6-roadmap)
+[6. Roadmap](#6-roadmap)
 
 ---
 
