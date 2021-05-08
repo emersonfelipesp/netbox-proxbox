@@ -7,6 +7,13 @@ here = pathlib.Path(__file__).parent.resolve()
 # long_description = README.md
 long_description = (here / 'README.md').read_text(encoding='utf-8')
 
+'''
+with open("README.md", "r") as fh:
+    long_description = fh.read()
+'''
+
+github = 'https://github.com/N-Multifibra/netbox-proxbox'
+
 # Proxbox dependencies
 requires = [
     'poetry',
@@ -36,14 +43,9 @@ setup(
     ],
     keywords="netbox netbox-plugin plugin proxmox proxmoxer pynetbox",
     project_urls={
-        'Source': 'https://github.com/N-Multifibra/netbox-proxbox',
+        'Source': github,
     },
     packages=find_packages(),
     install_requires=requires,
     python_requires= '>=3.6',
-    package_data={
-        '': ['*.html'],
-        'netbox_proxbox.api': ['*','*/*','*/*/*'],
-        'netbox_proxbox.templates': ['*','*/*','*/*/*'],
-    },
 )
