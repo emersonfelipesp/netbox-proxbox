@@ -1,3 +1,5 @@
+import sys
+
 # PLUGIN_CONFIG variables
 from ..plugins_config import (
     NETBOX_SESSION as nb,
@@ -18,12 +20,12 @@ def cluster_type():
     # Cluster Type
     #
     cluster_type_name = 'Proxmox'
-    cluster_type_slug = 'proxbox'
+    cluster_type_slug = 'proxmox'
     
     cluster_type_proxbox = nb.virtualization.cluster_types.get(
         name = cluster_type_name,
         slug = cluster_type_slug
-        )
+    )
 
     # If no 'cluster_type' found, create one
     if cluster_type_proxbox == None:
@@ -34,8 +36,8 @@ def cluster_type():
                 slug = cluster_type_slug,
                 description = 'Proxmox Virtual Environment. Open-source server management platform'
             )
-        except:
-            return "Error creating the '{0}' cluster type. Possible errors: the name '{0}' or slug '{1}' is already used.".format(cluster_type_name, cluster_type_slug)   
+        except Exception as request_error:
+            raise RuntimeError("Error creating the '{0}' cluster type.".format(cluster_type_name)) from request_error
 
     else:
         cluster_type = cluster_type_proxbox
