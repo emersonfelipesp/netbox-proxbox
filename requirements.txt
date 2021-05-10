@@ -1,9 +1,0 @@
-invoke
-poetry
-wheel
-setuptools
-numpy
-matplotlib
-requests
-pynetbox
-proxmoxer

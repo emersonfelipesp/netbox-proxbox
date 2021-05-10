@@ -27,10 +27,18 @@ requires = [
 
 ]
 
+dev_requires = [
+    'pytest>=3.7',
+    'check-manifest',
+    'twine',
+    'setuptools',
+    'wheel'
+]
+
 setup(
     name="netbox-proxbox",
-    version="0.0.3.dev1",
-    author="Emerson Pereira",
+    version="0.0.3.dev2",
+    author="Emerson Felipe",
     author_email="emerson.felipe@nmultifibra.com.br",
     description="Integration between Proxmox and Netbox",
     url='https://github.com/N-Multifibra/netbox-proxbox',
@@ -38,7 +46,6 @@ setup(
     long_description_content_type="text/markdown",
     classifiers=[
         "Programming Language :: Python :: 3",
-        "Operating System :: Linux",
         "License :: OSI Approved :: Apache Software License",
     ],
     keywords="netbox netbox-plugin plugin proxmox proxmoxer pynetbox",
@@ -46,6 +53,13 @@ setup(
         'Source': github,
     },
     packages=find_packages(),
+    include_package_data=True,
+    package_data={
+        "": ['*','*/*','*/*/*'],
+    },
     install_requires=requires,
+    extras_require={
+        "dev": dev_requires,
+    },
     python_requires= '>=3.6',
 )
