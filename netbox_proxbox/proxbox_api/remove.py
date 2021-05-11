@@ -17,6 +17,7 @@ def is_vm_on_proxmox(netbox_vm):
     # Search Netbox local_context
     local_context = netbox_vm.local_context_data
 
+    # Analyze local_context of VM
     if local_context == None:
         print('[WARNING] "local_context_data" not filled. -> {}'.format(netbox_name))
 
@@ -61,7 +62,7 @@ def is_vm_on_proxmox(netbox_vm):
     except:
         name_on_px = False
     else:
-        # ID exists on Proxmox
+        # NAME exists on Proxmox
         name_on_px = True
         
         # If 'local_context' is null, try updating it to be able to get ID from VM
@@ -121,6 +122,7 @@ def all():
 
         if vm_on_proxmox == True:
             log_message = '[OK] VM exists on both systems (Netbox and Proxmox) -> {}'.format(netbox_name)
+            print(log_message)
             log.append(log_message)
 
             json_vm["result"] = False
@@ -128,18 +130,43 @@ def all():
         # If VM does not exist on Proxmox, delete VM on Netbox.
         elif vm_on_proxmox == False:
             log_message = "[WARNING] VM exists on Netbox, but not on Proxmox. Delete it!  -> {}".format(netbox_name)
+            print(log_message)
             log.append(log_message)
 
-            delete_vm = netbox_obj.delete()
+            # Only delete VM that has proxbox tag registered
+            delete_vm = False
+
+            if len(netbox_obj.tags) > 0:
+                for tag in netbox_obj.tags:
+
+                    if tag.name == 'Proxbox' and tag.slug == 'proxbox':
+                        
+                        #
+                        # DELETE THE VM/CT
+                        #
+                        delete_vm = netbox_obj.delete()
+                    
+                    else:
+                        log_message = "[ERROR] VM will not be removed because the 'Proxbox' tag was not found. -> {}".format(netbox_name)
+                        print(log_message)
+                        log.append(log_message)
+
+            elif len(netbox_obj.tags) == 0:
+                log_message = "[ERROR] VM will not be removed because the 'Proxbox' tag was not found. There is no tag configured.-> {}".format(netbox_name)
+                print(log_message)
+                log.append(log_message)                
+
 
             if delete_vm == True:
                 log_message = "[OK] VM successfully removed from Netbox."
+                print(log_message)
                 log.append(log_message)
 
                 json_vm["result"] = True
 
         else:
             log_message = '[ERROR] Unexpected error trying to verify if VM exist on Proxmox'
+            print(log_message)
             log.append(log_message)
 
             json_vm["result"] = False

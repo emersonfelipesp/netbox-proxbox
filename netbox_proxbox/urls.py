@@ -16,13 +16,16 @@ import json
 # This function is located on the wrong place
 # Lately, it will have it's own template to display full update result
 def full_update_view(request):    
-    update_all_result = proxbox_api.update.all()
+    update_all_result = proxbox_api.update.all(remove_unused = True)
     update_all_json = json.dumps(update_all_result, indent = 4)
 
+    '''
     remove_all_result = proxbox_api.remove.all()
     remove_all_json = json.dumps(remove_all_result, indent= 4)
+    '''
 
-    html = "<html><body><h1>Update all Proxmox information</h1>{}<br><h1>Remove all useless information (like deleted VMs)</h1>{}</body></html>".format(update_all_json, remove_all_json)
+    # html = "<html><body><h1>Update all Proxmox information</h1>{}<br><h1>Remove all useless information (like deleted VMs)</h1>{}</body></html>".format(update_all_json, remove_all_json)
+    html = "<html><body><h1>Sync Netbox information based on Proxmox, updating and removing data.</h1>{}".format(update_all_json)
     return HttpResponse(html)
 
 

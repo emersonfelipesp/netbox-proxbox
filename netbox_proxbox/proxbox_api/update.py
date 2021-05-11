@@ -396,10 +396,9 @@ def nodes(**kwargs):
 
 
 # Makes everything needed so that VIRTUAL MACHINES / CONTAINERS, NODES and CLUSTER exists on Netbox
-def all():
+def all(**kwargs):
     print("[Proxbox - Netbox plugin | Update All]")
     cluster_all = proxmox.cluster.status.get()
-
 
     #
     # CLUSTER
@@ -429,19 +428,28 @@ def all():
     print('\n\n\nVIRTUAL MACHINES...')
     virtualmachines_list = []
 
+    print('\nUPDATE ALL...')
     # Get all VM/CTs from Proxmox
     for px_vm_each in proxmox.cluster.resources.get(type='vm'):     
         vm_updated = virtual_machine(proxmox_json = px_vm_each)
 
         virtualmachines_list.append(vm_updated)
 
+    # Get "remove_unused" passed on function call
+    remove_unused = kwargs.get("remove_unused", False)
 
+    # Remove Netbox's old data
+    if remove_unused == True:
+        print('\nREMOVE UNUSED DATA...')
+        remove_info = remove.all()
+    
     #
     # BUILD JSON RESULT
     #
     result = {}
     result["virtualmachines"] = virtualmachines_list
     result["nodes"] = nodes_list
+    result["remove_unused"] = remove_info
 
     return result
 
