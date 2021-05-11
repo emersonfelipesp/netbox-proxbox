@@ -37,7 +37,7 @@ dev_requires = [
 
 setup(
     name="netbox-proxbox",
-    version="0.0.3.dev2",
+    version="0.0.3.dev3",
     author="Emerson Felipe",
     author_email="emerson.felipe@nmultifibra.com.br",
     description="Integration between Proxmox and Netbox",
@@ -46,6 +46,8 @@ setup(
     long_description_content_type="text/markdown",
     classifiers=[
         "Programming Language :: Python :: 3",
+	"Framework :: Django",
+	"Operating System :: Unix",
         "License :: OSI Approved :: Apache Software License",
     ],
     keywords="netbox netbox-plugin plugin proxmox proxmoxer pynetbox",
@@ -61,5 +63,5 @@ setup(
     extras_require={
         "dev": dev_requires,
     },
-    python_requires= '>=3.6',
+    python_requires= '>=3.0',
 )
