@@ -63,5 +63,5 @@ setup(
     extras_require={
         "dev": dev_requires,
     },
-    python_requires= '>=3.0',
+    python_requires= '>=3.6',
 )
