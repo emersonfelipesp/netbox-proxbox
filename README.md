@@ -66,7 +66,7 @@ The plugin is available as a Python package in pypi and can be installed with pi
 
 ### 1.1. Install package
 
-#### 1.1.1. Using pip (production use)
+#### 1.1.1. Using pip (production use - not working yet!)
 
 Enter Netbox's virtual environment.
 ```
