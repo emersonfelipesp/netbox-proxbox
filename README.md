@@ -260,7 +260,7 @@ Issues and pull requests are welcomed.
 
 ## 6. Roadmap
 - Start using custom models to optimize the use of the Plugin and stop using 'Custom Fields'
-- Automatically remove Nodes on Netbox when removed on Promox (as it already happens with Virutal Machines and Containers)
+- Automatically remove Nodes on Netbox when removed on Promox (as it already happens with Virtual Machines and Containers)
 - Add individual update of VM/CT's and Nodes (currently is only possible to update all at once)
 - Add periodic update of the whole environment so that the user does not need to manually click the update button.
 - Create virtual machines and containers directly on Netbox, having no need to access Proxmox.
