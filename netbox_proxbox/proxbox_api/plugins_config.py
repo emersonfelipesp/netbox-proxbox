@@ -3,6 +3,7 @@ from proxmoxer import ProxmoxAPI
 
 # Netbox
 import pynetbox
+import requests
 
 # Default Plugins settings 
 from netbox_proxbox import ProxboxConfig
@@ -124,7 +125,7 @@ if PROXMOX_TOKEN_VALUE != None and len(PROXMOX_TOKEN_VALUE) > 0:
             verify_ssl=PROXMOX_SSL
         )
     except:
-        print('Error trying to initialize Proxmox Session using TOKEN provided')
+        raise RuntimeError(f'Error trying to initialize Proxmox Session using TOKEN (token_name: {token_name} and token_value: {token_value} provided')
 
 # If token not provided, start session using user and passwd
 else:
@@ -137,23 +138,26 @@ else:
             verify_ssl=PROXMOX_SSL
         )
     except:
-        print('Error trying to initialize Proxmox Session using USER and PASSWORD')
+        raise RuntimeError(f'Error trying to initialize Proxmox Session using USER {user} and PASSWORD')
 
 #
 # NETBOX SESSION 
 #
-if NETBOX_SSL == False:
-    try:
-        NETBOX = 'http://{}:{}'.format(NETBOX, NETBOX_PORT)
-        # Inicia sessão com NETBOX
-        NETBOX_SESSION = pynetbox.api(
-            NETBOX,
-            token=NETBOX_TOKEN
-        )
-    except:
-        print('Error trying to initialize Netbox Session using TOKEN provided')
-elif NETBOX_SSL == True:
-    print("Netbox using SSL not developed yet, try using HTTP without SSL.")
+# TODO: CREATES SSL VERIFICATION - Issue #32
+try:
+    # CHANGE SSL VERIFICATION TO FALSE
+    session = requests.Session()
+    session.verify = False
 
-else:
-    print('Unexpected Error ocurred')
+    NETBOX = 'http://{}:{}'.format(NETBOX, NETBOX_PORT)
+
+    # Start NETBOX session
+    NETBOX_SESSION = pynetbox.api(
+        NETBOX,
+        token=NETBOX_TOKEN
+    )
+    # DISABLES SSL VERIFICATION
+    NETBOX_SESSION.http_session = session
+
+except:
+    raise RuntimeError(f"Error trying to initialize Netbox Session using TOKEN {NETBOX_TOKEN} provided.")
