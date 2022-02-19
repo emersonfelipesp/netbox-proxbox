@@ -125,7 +125,7 @@ if PROXMOX_TOKEN_VALUE != None and len(PROXMOX_TOKEN_VALUE) > 0:
             verify_ssl=PROXMOX_SSL
         )
     except:
-        raise RuntimeError(f'Error trying to initialize Proxmox Session using TOKEN (token_name: {token_name} and token_value: {token_value} provided')
+        raise RuntimeError(f'Error trying to initialize Proxmox Session using TOKEN (token_name: {PROXMOX_TOKEN_NAME} and token_value: {PROXMOX_TOKEN_VALUE} provided')
 
 # If token not provided, start session using user and passwd
 else:
@@ -138,7 +138,7 @@ else:
             verify_ssl=PROXMOX_SSL
         )
     except:
-        raise RuntimeError(f'Error trying to initialize Proxmox Session using USER {user} and PASSWORD')
+        raise RuntimeError(f'Error trying to initialize Proxmox Session using USER {PROXMOX_USER} and PASSWORD')
 
 #
 # NETBOX SESSION 
