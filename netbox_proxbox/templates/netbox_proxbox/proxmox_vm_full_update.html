@@ -1,4 +1,4 @@
-<!--
+
 {% extends 'base/layout.html' %}
 
 {% load helpers %}
@@ -8,7 +8,74 @@
 {% endblock %}
 
 {% block content %}
-<p>{{ update_all }}</p>
-<p>{{ remove_all }}</p>
+    <h2>Nodes</h2>
+    <table class="table">
+        <thead>
+                <tr>
+                    <th>Node status changed</th>
+                    <th>Cluster changed</th>
+                    <th>Update result</th>
+
+                </tr>
+        </thead>
+        <tbody>
+            {% for node in proxmox.nodes %}
+            <tr>
+                <td>{{ node.changes.status }}</td>
+                <td>{{ node.changes.cluster }}</td>
+                <td>{{ node.result }}</td>
+
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <br><br>
+    <h2>Virtual Machines and Containers</h2>
+    
+    <table class="table">
+        <thead>
+                <tr>
+                    <th>VM/CT Name</th>
+                    <th>Status changed</th>
+                    <th>Custom Fields</th>
+                    <th>Local context</th>
+                    <th>Resources</th>
+                    <th>Tag</th>
+                    <th>Update result</th>
+                </tr>
+        </thead>
+        <tbody>
+            {% for virtualmachine in proxmox.virtualmachines %}
+            <tr>
+                <td><strong>{{ virtualmachine.name }}</strong></td>
+                <td>{{ virtualmachine.changes.status }}</td>
+                <td>{{ virtualmachine.changes.custom_fields }}</td>
+                <td>{{ virtualmachine.changes.local_context }}</td>
+                <td>{{ virtualmachine.changes.resources }}</td>
+                <td>{{ virtualmachine.changes.tag }}</td>
+                <td>{{ virtualmachine.result }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    
+
+    <br><br>
+    <h2>Remove unused VM/CT</h2>
+    <ul>
+    {% for deleted in proxmox.remove_unused %}
+        <li><strong>VM/CT Name: </strong>{{ deleted.name }}</li>
+        <li><strong>Logs:</strong>
+            <ul>
+                {% for log in deleted.log %}
+                    <li>{{ log }}</li>
+                {% endfor %}
+            </ul>
+        </li>
+        <li><strong>Updated: </strong>{{ deleted.result }}</li>
+        <br>
+    {% endfor %}
+    </ul>
 {% endblock %}
--->
+

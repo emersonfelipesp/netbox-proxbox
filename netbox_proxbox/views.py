@@ -15,6 +15,31 @@ from .forms import ProxmoxVMForm, ProxmoxVMFilterForm
 from .models import ProxmoxVM
 from .tables import ProxmoxVMTable
 
+from netbox_proxbox import proxbox_api
+import json
+
+class ProxmoxFullUpdate(PermissionRequiredMixin, View):
+    """Full Update of Proxmox information on Netbox."""
+
+    # Define permission
+    permission_required = "netbox_proxbox.view_proxmoxvm"
+
+    # service incoming GET HTTP requests
+    # 'pk' value is passed to get() via URL defined in urls.py
+    def get(self, request):
+        """Get request."""
+
+        update_all_result = proxbox_api.update.all(remove_unused = True)
+        update_all_json = json.dumps(update_all_result, indent = 4)
+
+        # render() renders provided template and uses it to create a well-formed web response
+        return render(
+            request,
+            "netbox_proxbox/proxmox_vm_full_update.html",
+            {
+                "proxmox": update_all_result,
+            },
+        )
 
 class ProxmoxVMView(PermissionRequiredMixin, View):
     """Display Virtual Machine details"""
