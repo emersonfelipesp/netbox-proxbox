@@ -3,18 +3,19 @@
 </p>
 
 
-# proxbox (In Development!)
-**NOTE:** Although the Proxbox plugin is in development, it only use GET requests and there is no risk to harm your Proxmox environment by changing things incorrectly.
+## Netbox Plugin which integrates [Proxmox](https://www.proxmox.com/) and [Netbox](https://netbox.readthedocs.io/)!
 
-Netbox plugin which integrates Proxmox and Netbox using proxmoxer and pynetbox.
+> **NOTE:** Although the Proxbox plugin is in development, it only use **GET requests** and there is **no risk to harm your Proxmox environment** by changing things incorrectly.
+
+<br>
 
 It is currently able to get the following information from Proxmox:
 
-- Cluster name
-- Nodes:
+- **Cluster name**
+- **Nodes:**
   - Status (online / offline)
   - Name
-- Virtual Machines and Containers:
+- **Virtual Machines and Containers:**
   - Status (online / offline)
   - Name
   - ID
@@ -23,22 +24,32 @@ It is currently able to get the following information from Proxmox:
   - Memory
   - Node (Server)
 
+---
+
+<div align="center">
+	
 ### Versions
+
+
 The following table shows the Netbox and Proxmox versions compatible (tested) with Proxbox plugin.
 
 | netbox version        | proxmox version          | proxbox version
 | ------------- |-------------|-------------|
-| >= 2.10.9 | >= v6.2.0 | v0.0.3
+| >= v3.0.0 | >= v6.2.0 | v0.0.3
+
+</div>
 
 ---
 
 ### Summary
 [1. Installation](#1-installation)
 - [1.1. Install package](#11-install-package)
-  - [1.1.1. Using pip (production use)](#111-using-pip-production-use)
+  - [1.1.1. Using pip (production use)](#111-using-pip-production-use---not-working-yet)
   - [1.1.2. Using git (development use)](#112-using-git-development-use)
 - [1.2. Enable the Plugin](#12-enable-the-plugin)
 - [1.3. Configure Plugin](#13-configure-plugin)
+  - [1.3.1. Change Netbox 'configuration.py' to add PLUGIN parameters](#131-change-netbox-configurationpy-to-add-plugin-parameters)
+  - [1.3.2. Change Netbox 'settings.py' to include Proxbox Template directory](#132-change-netbox-settingspy-to-include-proxbox-template-directory)
 - [1.4. Run Database Migrations](#14-run-database-migrations)
 - [1.5 Restart WSGI Service](#15-restart-wsgi-service)
 
@@ -66,7 +77,7 @@ The plugin is available as a Python package in pypi and can be installed with pi
 
 ### 1.1. Install package
 
-#### 1.1.1. Using pip (production use - not working yet!)
+#### 1.1.1. Using pip (production use - not working yet!){}
 
 Enter Netbox's virtual environment.
 ```
@@ -98,6 +109,7 @@ source /opt/netbox/venv/bin/activate
 python3 setup.py develop
 ```
 
+---
 
 ### 1.2. Enable the Plugin
 
@@ -106,8 +118,11 @@ Enable the plugin in **/opt/netbox/netbox/netbox/configuration.py**:
 PLUGINS = ['netbox_proxbox']
 ```
 
+---
+
 ### 1.3. Configure Plugin
 
+#### 1.3.1. Change Netbox '**[configuration.py](https://github.com/netbox-community/netbox/blob/develop/netbox/netbox/configuration.example.py)**' to add PLUGIN parameters
 The plugin's configuration is also located in **/opt/netbox/netbox/netbox/configuration.py**:
 
 Replace the values with your own following the [Configuration Parameters](#configuration-parameters) section.
@@ -141,12 +156,72 @@ PLUGINS_CONFIG = {
     }
 ```
 
+<br>
+
+#### 1.3.2. Change Netbox '**[settings.py](https://github.com/netbox-community/netbox/blob/develop/netbox/netbox/settings.py)**' to include Proxbox Template directory
+Edit **/opt/netbox/netbox/netbox** and find TEMPLATE_DIR section
+
+- How it is configured:
+```python
+TEMPLATES_DIR = BASE_DIR + '/templates'
+TEMPLATES = [
+    {
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'DIRS': [TEMPLATES_DIR],
+        'APP_DIRS': True,
+        'OPTIONS': {
+            'context_processors': [
+                'django.template.context_processors.debug',
+                'django.template.context_processors.request',
+                'django.template.context_processors.media',
+                'django.contrib.auth.context_processors.auth',
+                'django.contrib.messages.context_processors.messages',
+                'netbox.context_processors.settings_and_registry',
+            ],
+        },
+    },
+]
+```
+
+<br>
+
+- How it is must be:
+```python
+TEMPLATES_DIR = BASE_DIR + '/templates'
+
+# PROXBOX CUSTOM TEMPLATE
+PROXBOX_TEMPLATE_DIR = BASE_DIR + '/netbox-proxbox/netbox_proxbox/templates/netbox_proxbox'
+
+TEMPLATES = [
+    {
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'DIRS': [TEMPLATES_DIR, PROXBOX_TEMPLATE_DIR],
+        'APP_DIRS': True,
+        'OPTIONS': {
+            'context_processors': [
+                'django.template.context_processors.debug',
+                'django.template.context_processors.request',
+                'django.template.context_processors.media',
+                'django.contrib.auth.context_processors.auth',
+                'django.contrib.messages.context_processors.messages',
+                'netbox.context_processors.settings_and_registry',
+            ],
+        },
+    },
+]
+```
+I did it because I had to change the **base/layout.html** from Netbox, since there is no **Jinja2 block** to fill with custom information into the **footer HTML tag**
+
+---
+
 ### 1.4. Run Database Migrations
 
 ```
 (venv) $ cd /opt/netbox/netbox/
 (venv) $ python3 manage.py migrate
 ```
+
+---
 
 ### 1.5. Restart WSGI Service
 
@@ -190,7 +265,7 @@ The following options are available:
 To get Proxmox ID, Node and Type information, is necessary to configure Custom Fields.
 Below the parameters needed to make it work:
 
----
+<br>
 
 ### 3.1. Custom Field Configuration
 
@@ -206,7 +281,7 @@ Optional values (may be different)
 - [Custom Field] **Label:** [Proxmox] ID
 - [Custom Field] **Description:** Proxmox VM/CT ID
 
----
+<br>
 
 #### 3.1.2. Proxmox Node
 
@@ -219,7 +294,7 @@ Optional values (may be different)
 - [Custom Field] **Label:** [Proxmox] Node
 - [Custom Field] **Description:** Proxmox Node (Server)
 
----
+<br>
 
 #### 3.1.3. Proxmox Type (qemu or lxc)
 
@@ -233,7 +308,7 @@ Optional values (may be different)
 - [Custom Field] **Label:** [Proxmox] Type
 - [Custom Field] **Description:** Proxmox type (VM or CT)
 
----
+<br>
 
 ### 3.2. Custom Field Example
 
@@ -257,6 +332,8 @@ It will redirect you to a new page and you just have to wait until the plugin ru
 Developing tools for this project based on [ntc-netbox-plugin-onboarding](https://github.com/networktocode/ntc-netbox-plugin-onboarding) repo.
 
 Issues and pull requests are welcomed.
+
+---
 
 ## 6. Roadmap
 - Start using custom models to optimize the use of the Plugin and stop using 'Custom Fields'
