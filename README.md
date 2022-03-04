@@ -159,6 +159,9 @@ PLUGINS_CONFIG = {
 <br>
 
 #### 1.3.2. Change Netbox '**[settings.py](https://github.com/netbox-community/netbox/blob/develop/netbox/netbox/settings.py)**' to include Proxbox Template directory
+
+> Probably on the next release of Netbox, it will not be necessary to make the configuration below! As the [Pull Request #8733](https://github.com/netbox-community/netbox/pull/8734) got merged to develop branch
+
 Edit **/opt/netbox/netbox/netbox** and find TEMPLATE_DIR section
 
 - How it is configured:
