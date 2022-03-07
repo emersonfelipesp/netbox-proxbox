@@ -442,7 +442,8 @@ def all(**kwargs):
     if remove_unused == True:
         print('\nREMOVE UNUSED DATA...')
         remove_info = remove.all()
-    
+    else:
+        remove_info = False
     #
     # BUILD JSON RESULT
     #
@@ -454,7 +455,6 @@ def all(**kwargs):
     return result
 
 
-
 # Runs if script executed directly
 if __name__ == "__main__":
     print('#\n# COMPARE PROXMOX WITH NETBOX\n#')
@@ -463,10 +463,3 @@ if __name__ == "__main__":
     print('____________________________________\n')
     print('#\n# COMPARE PROXMOX WITH NETBOX\n#')
     remove.all()
-
-
-
-
-
-    
-    
