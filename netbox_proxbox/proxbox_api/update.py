@@ -442,7 +442,8 @@ def all(**kwargs):
     if remove_unused == True:
         print('\nREMOVE UNUSED DATA...')
         remove_info = remove.all()
-    
+    else:
+        remove_info = False
     #
     # BUILD JSON RESULT
     #
