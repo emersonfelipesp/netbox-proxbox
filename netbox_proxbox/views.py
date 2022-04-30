@@ -18,6 +18,20 @@ from .tables import ProxmoxVMTable
 from netbox_proxbox import proxbox_api
 import json
 
+
+class HomeView(View):
+    """Homepage"""
+    template_name = 'netbox_proxbox/home.html'
+
+    # service incoming GET HTTP requests
+    def get(self, request):
+        """Get request."""
+        return render(
+            request,
+            self.template_name,
+        )
+
+
 class ProxmoxFullUpdate(PermissionRequiredMixin, View):
     """Full Update of Proxmox information on Netbox."""
 
@@ -40,6 +54,7 @@ class ProxmoxFullUpdate(PermissionRequiredMixin, View):
                 "proxmox": update_all_result,
             },
         )
+
 
 class ProxmoxVMView(PermissionRequiredMixin, View):
     """Display Virtual Machine details"""
@@ -67,6 +82,7 @@ class ProxmoxVMView(PermissionRequiredMixin, View):
                 "proxmoxvm": proxmoxvm_obj,
             },
         )
+
 
 class ProxmoxVMListView(PermissionRequiredMixin, View):
     """View for listing all existing Virtual Machines."""
@@ -106,7 +122,7 @@ class ProxmoxVMListView(PermissionRequiredMixin, View):
             }
         )
 
-  
+
 # 'CreateView' is provided by Django
 class ProxmoxVMCreateView(PermissionRequiredMixin, CreateView):
     """View for creating a new ProxmoxVM instance."""
@@ -115,6 +131,7 @@ class ProxmoxVMCreateView(PermissionRequiredMixin, CreateView):
 
     form_class = ProxmoxVMForm
     template_name = "netbox_proxbox/proxmox_vm_edit.html"
+
 
 class ProxmoxVMDeleteView(PermissionRequiredMixin, DeleteView):
     """View for deleting ProxmoxVM instance."""
@@ -128,6 +145,7 @@ class ProxmoxVMDeleteView(PermissionRequiredMixin, DeleteView):
 
     # template_name = points to the template that will be rendred when asked to confirm the deletion
     template_name = "netbox_proxbox/proxmox_vm_delete.html"
+
 
 class ProxmoxVMEditView(PermissionRequiredMixin, UpdateView):
     """View for editing a ProxmoxVM instance."""

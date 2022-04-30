@@ -3,6 +3,7 @@ from django.http import HttpResponse
 from django.urls import path
 
 from .views import (
+    HomeView,
     ProxmoxVMCreateView,
     ProxmoxVMDeleteView,
     ProxmoxVMEditView,
@@ -15,7 +16,11 @@ from netbox_proxbox import proxbox_api
 import json
 
 urlpatterns = [
-    path("", ProxmoxVMListView.as_view(), name="proxmoxvm_list"),
+    # Home View
+    path('', HomeView.as_view(), name='home'),
+    
+    # Base Views
+    path("list/", ProxmoxVMListView.as_view(), name="proxmoxvm_list"),
     # <int:pk> = plugins/netbox_proxmoxvm/<pk> | example: plugins/netbox_proxmoxvm/1/
     # ProxmoxVMView.as_view() - as.view() is need so that our view class can process requests.
     # as_view() takes request and returns well-formed response, that is a class based view.
