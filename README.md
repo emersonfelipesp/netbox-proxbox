@@ -35,7 +35,9 @@ The following table shows the Netbox and Proxmox versions compatible (tested) wi
 
 | netbox version        | proxmox version          | proxbox version
 | ------------- |-------------|-------------|
-| >= v3.0.0 | >= v6.2.0 | v0.0.3
+| >= v3.2.0 | >= v6.2.0 | =v0.0.4
+| >= v3.0.0 < v3.2| >= v6.2.0 | =v0.0.3
+
 
 </div>
 
