@@ -164,7 +164,7 @@ PLUGINS_CONFIG = {
 
 Edit **/opt/netbox/netbox/netbox** and find TEMPLATE_DIR section
 
-- How it is configured:
+- How it is configured (Netbox >= v3.2.0):
 ```python
 TEMPLATES_DIR = BASE_DIR + '/templates'
 TEMPLATES = [
@@ -173,6 +173,10 @@ TEMPLATES = [
         'DIRS': [TEMPLATES_DIR],
         'APP_DIRS': True,
         'OPTIONS': {
+            'builtins': [
+                'utilities.templatetags.builtins.filters',
+                'utilities.templatetags.builtins.tags',
+            ],
             'context_processors': [
                 'django.template.context_processors.debug',
                 'django.template.context_processors.request',
@@ -201,6 +205,10 @@ TEMPLATES = [
         'DIRS': [TEMPLATES_DIR, PROXBOX_TEMPLATE_DIR],
         'APP_DIRS': True,
         'OPTIONS': {
+            'builtins': [
+                'utilities.templatetags.builtins.filters',
+                'utilities.templatetags.builtins.tags',
+            ],
             'context_processors': [
                 'django.template.context_processors.debug',
                 'django.template.context_processors.request',
