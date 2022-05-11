@@ -2,6 +2,7 @@
   <img width="532" src="https://github.com/N-Multifibra/proxbox/blob/main/etc/img/proxbox-full-logo.png" alt="Proxbox logo">
 </p>
 
+# proxbox
 
 ## Netbox Plugin which integrates [Proxmox](https://www.proxmox.com/) and [Netbox](https://netbox.readthedocs.io/)!
 
@@ -9,7 +10,7 @@
 
 <br>
 
-It is currently able to get the following information from Proxmox:
+Proxbox is currently able to get the following information from Proxmox:
 
 - **Cluster name**
 - **Nodes:**
