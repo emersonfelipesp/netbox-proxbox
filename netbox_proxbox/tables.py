@@ -1,10 +1,10 @@
 # tables.py
 import django_tables2 as tables
-from utilities.tables import BaseTable
+
+from netbox.tables import NetBoxTable, ChoiceFieldColumn
 from .models import ProxmoxVM
 
-
-class ProxmoxVMTable(BaseTable):
+class ProxmoxVMTable(NetBoxTable):
     """Table for displaying BGP Peering objects."""
 
     id = tables.LinkColumn()
@@ -12,7 +12,7 @@ class ProxmoxVMTable(BaseTable):
     virtual_machine = tables.LinkColumn()
     proxmox_vm_id = tables.LinkColumn()
 
-    class Meta(BaseTable.Meta):
+    class Meta(NetBoxTable.Meta):
         model = ProxmoxVM
         fields = (
             "id",

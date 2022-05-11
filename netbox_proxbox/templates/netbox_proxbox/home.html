@@ -1,0 +1,16 @@
+{% extends 'base/layout.html' %}
+
+{% block content %}
+    {# Full Update Button#}
+    <div class="pull-right noprint">
+        {% if perms.netbox_proxbox.add_proxmoxvm %}
+        <a href="{% url 'plugins:netbox_proxbox:proxmoxvm_full_update' %}" target="_blank" class="btn btn-primary">Proxmox Full Update</a>
+        {% endif %}
+    </div>
+{% endblock %}
+
+{% block footer_links %}
+    {{ block.super }}
+
+    {% include "footer.html" %}
+{% endblock %}

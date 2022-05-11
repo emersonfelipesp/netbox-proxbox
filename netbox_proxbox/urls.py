@@ -3,31 +3,24 @@ from django.http import HttpResponse
 from django.urls import path
 
 from .views import (
+    HomeView,
     ProxmoxVMCreateView,
     ProxmoxVMDeleteView,
     ProxmoxVMEditView,
     ProxmoxVMListView,
     ProxmoxVMView,
+    ProxmoxFullUpdate,
 )
 
 from netbox_proxbox import proxbox_api
 import json
 
-# This function is located on the wrong place
-# Lately, it will have it's own template to display full update result
-def full_update_view(request):    
-    update_all_result = proxbox_api.update.all()
-    update_all_json = json.dumps(update_all_result, indent = 4)
-
-    remove_all_result = proxbox_api.remove.all()
-    remove_all_json = json.dumps(remove_all_result, indent= 4)
-
-    html = "<html><body><h1>Update all Proxmox information</h1>{}<br><h1>Remove all useless information (like deleted VMs)</h1>{}</body></html>".format(update_all_json, remove_all_json)
-    return HttpResponse(html)
-
-
 urlpatterns = [
-    path("", ProxmoxVMListView.as_view(), name="proxmoxvm_list"),
+    # Home View
+    path('', HomeView.as_view(), name='home'),
+    
+    # Base Views
+    path("list/", ProxmoxVMListView.as_view(), name="proxmoxvm_list"),
     # <int:pk> = plugins/netbox_proxmoxvm/<pk> | example: plugins/netbox_proxmoxvm/1/
     # ProxmoxVMView.as_view() - as.view() is need so that our view class can process requests.
     # as_view() takes request and returns well-formed response, that is a class based view.
@@ -38,5 +31,5 @@ urlpatterns = [
 
     # Proxbox API full update
     #path("full_update/", ProxmoxVMFullUpdate.as_view(), name="proxmoxvm_full_update")
-    path("full_update/", full_update_view, name="proxmoxvm_full_update")
+    path("full_update/", ProxmoxFullUpdate.as_view(), name="proxmoxvm_full_update")
 ]
