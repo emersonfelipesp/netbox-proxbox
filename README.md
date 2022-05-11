@@ -224,6 +224,10 @@ TEMPLATES = [
     },
 ]
 ```
+
+### Example of error if not configuring the code above on `settings.py`
+![image](https://user-images.githubusercontent.com/24397251/167919319-00c67a81-0679-4114-a66d-3e294b3ae28c.png)
+
 I did it because I had to change the **base/layout.html** from Netbox, since there is no **Jinja2 block** to fill with custom information into the **footer HTML tag**
 
 ---
