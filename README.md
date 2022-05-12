@@ -1,8 +1,18 @@
-<p align="center">
-  <img width="532" src="https://github.com/N-Multifibra/proxbox/blob/main/etc/img/proxbox-full-logo.png" alt="Proxbox logo">
-</p>
+<div align="center">
+	<a href="https://docs.netbox.dev.br/en/netbox/plugins/netbox-proxbox">
+		<img width="532" src="https://github.com/N-Multifibra/proxbox/blob/main/etc/img/proxbox-full-logo.png" alt="Proxbox logo">
+	</a>
+	<br>
+	
+<div>
+	
+### [New Documentation available!](https://docs.netbox.dev.br/en/netbox/plugins/netbox-proxbox)
+</div>
+<br>
+</div>
 
-# proxbox
+
+
 
 ## Netbox Plugin which integrates [Proxmox](https://www.proxmox.com/) and [Netbox](https://netbox.readthedocs.io/)!
 
