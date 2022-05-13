@@ -90,7 +90,7 @@ The plugin is available as a Python package in pypi and can be installed with pi
 
 ### 1.1. Install package
 
-#### 1.1.1. Using pip (production use - not working yet!)
+#### 1.1.1. Using pip (production use - [not working yet!](https://github.com/netdevopsbr/netbox-proxbox/issues/37))
 
 Enter Netbox's virtual environment.
 ```
@@ -177,7 +177,11 @@ PLUGINS_CONFIG = {
 
 Edit **/opt/netbox/netbox/netbox** and find TEMPLATE_DIR section
 
-- How it is configured (Netbox >= v3.2.0):
+<div align=center>
+	
+### How it is configured by default (Netbox >= v3.2.0):
+</div>
+	
 ```python
 TEMPLATES_DIR = BASE_DIR + '/templates'
 TEMPLATES = [
@@ -205,7 +209,11 @@ TEMPLATES = [
 
 <br>
 
-- How it is must be:
+<div align=center>
+	
+### How it MUST be configured to Proxbox work:
+</div>
+	
 ```python
 TEMPLATES_DIR = BASE_DIR + '/templates'
 
@@ -215,7 +223,8 @@ PROXBOX_TEMPLATE_DIR = BASE_DIR + '/netbox-proxbox/netbox_proxbox/templates/netb
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [TEMPLATES_DIR, PROXBOX_TEMPLATE_DIR],
+        'DIRS': [TEMPLATES_DIR, PROXBOX_TEMPLATE_DIR],  # <--- IMPORTANT
+	# The Parameters below is equal to default Netbox config						       
         'APP_DIRS': True,
         'OPTIONS': {
             'builtins': [
