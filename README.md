@@ -90,7 +90,7 @@ The plugin is available as a Python package in pypi and can be installed with pi
 
 ### 1.1. Install package
 
-#### 1.1.1. Using pip (production use - [not working yet!](https://github.com/netdevopsbr/netbox-proxbox/issues/37))
+#### 1.1.1. Using pip (production use)
 
 Enter Netbox's virtual environment.
 ```
