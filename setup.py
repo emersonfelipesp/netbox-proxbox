@@ -18,8 +18,6 @@ github = 'https://github.com/N-Multifibra/netbox-proxbox'
 requires = [
     'poetry',
     'invoke',
-    'numpy',
-    'matplotlib',
     'requests>=2',
     'pynetbox>=5',
     'paramiko>=2',

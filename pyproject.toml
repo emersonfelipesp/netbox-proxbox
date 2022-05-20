@@ -23,8 +23,6 @@ yamllint = "^1.26.1"
 [build-system]
 requires = [
     "poetry-core>=1.0.0",
-    "numpy",
-    "matplotlib",
     "requests",
     "pynetbox",
     "proxmoxer"
