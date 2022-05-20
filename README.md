@@ -147,8 +147,8 @@ PLUGINS_CONFIG = {
         'proxmox': {
             'domain': 'proxbox.example.com',    # May also be IP address
             'http_port': 8006,
-            'user': 'root@pam',
-            'password': 'Strong@P4ssword',
+            'user': 'root@pam',   # always required
+            'password': 'Strong@P4ssword', # only required, if you don't want to use token based authentication
             'token': {
                 'name': 'tokenID',	# Only type the token name and not the 'user@pam:tokenID' format
                 'value': '039az154-23b2-4be0-8d20-b66abc8c4686'
