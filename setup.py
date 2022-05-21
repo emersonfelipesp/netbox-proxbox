@@ -44,8 +44,8 @@ setup(
     long_description_content_type="text/markdown",
     classifiers=[
         "Programming Language :: Python :: 3",
-	"Framework :: Django",
-	"Operating System :: Unix",
+        "Framework :: Django",
+        "Operating System :: Unix",
         "License :: OSI Approved :: Apache Software License",
     ],
     keywords="netbox netbox-plugin plugin proxmox proxmoxer pynetbox",

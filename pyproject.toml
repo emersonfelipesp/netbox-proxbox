@@ -2,6 +2,7 @@
 name = "netbox-proxbox"
 version = "0.0.4"
 description = "Netbox Plugin - Integrate Proxmox and Netbox"
+readme = "README.md"
 authors = ["Emerson Felipe <emerson.felipe@nmultifibra.com>"]
 license = "Apache-2.0"
 packages = [
