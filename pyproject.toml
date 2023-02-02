@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "netbox-proxbox"
-version = "0.0.4"
+version = "v0.0.5-beta1"
 description = "Netbox Plugin - Integrate Proxmox and Netbox"
 readme = "README.md"
 authors = ["Emerson Felipe <emerson.felipe@nmultifibra.com>"]
@@ -11,6 +11,8 @@ packages = [
 
 [tool.poetry.dependencies]
 python = "^3.8"
+pynetbox = "^7.0.1"
+proxmoxer = "^2.0.1"
 
 [tool.poetry.dev-dependencies]
 bandit = "^1.7.0"
