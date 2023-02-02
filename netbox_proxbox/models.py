@@ -12,7 +12,7 @@ from extras.models.models import ChangeLoggedModel
 #from ipam.fields import IPAddressField
 
 # Class defined by Netbox to define (choice) the VM operational status
-from virtualization.models import VirtualMachineStatusChoices
+from virtualization.choices import VirtualMachineStatusChoices
 
 # 'RestrictedQuerySet' will make it possible to filter out objects 
 # for which user doest nothave specific rights
