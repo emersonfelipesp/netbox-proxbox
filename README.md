@@ -138,9 +138,10 @@ PLUGINS = ['netbox_proxbox']
 #### 1.3.1. Change Netbox '**[configuration.py](https://github.com/netbox-community/netbox/blob/develop/netbox/netbox/configuration.example.py)**' to add PLUGIN parameters
 The plugin's configuration is also located in **/opt/netbox/netbox/netbox/configuration.py**:
 
-Replace the values with your own following the [Configuration Parameters](#configuration-parameters) section.
+Replace the values with your own following the [Configuration Parameters](#2-configuration-parameters) section.
 
-**OBS:** You do not need to configure all the parameters, only the one's different from the default values. It means that if you have some value equal to the one below, you can skip its configuration.
+**OBS:** You do not need to configure all the parameters, only the one's different from the default values. It means that if you have some value equal to the one below, you can skip its configuration. For netbox you should ensure the domain/port either targets gunicorn or a true http port that is not redirected to https.
+
 ```python
 PLUGINS_CONFIG = {
     'netbox_proxbox': {
@@ -156,8 +157,8 @@ PLUGINS_CONFIG = {
             'ssl': False
         },
         'netbox': {
-            'domain': 'netbox.example.com',     # May also be IP address
-            'http_port': 80,
+            'domain': 'localhost',     # Ensure localhost is added to ALLOWED_HOSTS
+            'http_port': 8001,     # Gunicorn port.
             'token': '0dd7cddfaee3b38bbffbd2937d44c4a03f9c9d38',
             'ssl': False,	# There is no support to SSL on Netbox yet, so let it always False.
             'settings': {
@@ -212,8 +213,8 @@ The following options are available:
 * `proxmox.ssl`: (Bool) Defines the use of SSL (default: False).
 
 * `netbox`: (Dict) Netbox related configuration to use pynetbox.
-* `netbox.domain`: (String) Domain or IP address of Netbox.
-* `netbox.http_port`: (Integer) Netbox HTTP PORT (default: 80).
+* `netbox.domain`: (String) Domain or IP address of Netbox. Ensure name or ip is added to `ALLOWED_HOSTS`
+* `netbox.http_port`: (Integer) Netbox HTTP PORT (default: 8001).  If you are not targeting gunicorn directly make sure the HTTP port is not redirected to HTTPS by your HTTP server.
 * `netbox.token`: (String) Netbox Token Value.
 * `netbox.ssl`: (Bool) Defines the use of SSL (default: False). - Proxbox doesn't support SSL on Netbox yet.
 * `netbox.settings`: (Dict) Default items of Netbox to be used by Proxbox. 
