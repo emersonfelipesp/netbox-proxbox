@@ -18,6 +18,10 @@ from .tables import ProxmoxVMTable
 from netbox_proxbox import proxbox_api
 import json
 
+from netbox import configuration
+
+from . import ProxboxConfig
+
 
 class HomeView(View):
     """Homepage"""
@@ -29,6 +33,10 @@ class HomeView(View):
         return render(
             request,
             self.template_name,
+            {
+                "configuration": configuration.PLUGINS_CONFIG,
+                "default_config": ProxboxConfig.default_settings
+            }
         )
 
 
