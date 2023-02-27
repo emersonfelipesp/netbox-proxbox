@@ -18,9 +18,6 @@ from .. import (
     create,
 )
 
-
-
-
 # Update "status" field on Netbox Virtual Machine based on Proxmox information
 def status(netbox_vm, proxmox_vm):
     # False = status not changed on Netbox
@@ -59,7 +56,6 @@ def status(netbox_vm, proxmox_vm):
         status_updated = False
     
     return status_updated
-
 
 
 def site(**kwargs):
@@ -102,7 +98,6 @@ def http_update_custom_fields(**kwargs):
 
     # Return HTTP Status Code
     return r.status_code
-
 
 
 # Update 'custom_fields' field on Netbox Virtual Machine based on Proxbox
@@ -218,11 +213,6 @@ def local_context_data(netbox_vm, proxmox_vm):
     return False
 
 
-
-
-
-
-
 # Updates following fields based on Proxmox: "vcpus", "memory", "disk", if necessary.
 def resources(netbox_vm, proxmox_vm):
     # Save values from Proxmox
@@ -238,8 +228,6 @@ def resources(netbox_vm, proxmox_vm):
 
     # JSON with new resources info
     new_resources_json = {}
-
-    
     
     # Compare VCPU
     if netbox_vm.vcpus != None:
@@ -252,8 +240,6 @@ def resources(netbox_vm, proxmox_vm):
     elif netbox_vm.vcpus == None:
         new_resources_json["vcpus"] = vcpus
 
-
-
     # Compare Memory
     if netbox_vm.memory != None:
         if netbox_vm.memory != memory_Mb:
@@ -262,8 +248,6 @@ def resources(netbox_vm, proxmox_vm):
     elif netbox_vm.memory == None:
         new_resources_json["memory"] = memory_Mb
 
-
-
     # Compare Disk
     if netbox_vm.disk != None:
         if netbox_vm.disk != disk_Gb:
@@ -271,8 +255,6 @@ def resources(netbox_vm, proxmox_vm):
 
     elif netbox_vm.disk == None:
         new_resources_json["disk"] = disk_Gb
-    
-    
 
     # If new information found, save it to Netbox object.
     if len(new_resources_json) > 0:
@@ -282,4 +264,64 @@ def resources(netbox_vm, proxmox_vm):
             return True
         else:
             return False
+
+def interfaces(netbox_vm, proxmox_vm):
+    vm_config = proxmox.nodes(proxmox_vm['node']).qemu(proxmox_vm['vmid']).config.get()
+    for interface in [{key:val} for key,val in proxmox.nodes(proxmox_vm['node']).qemu(proxmox_vm['vmid']).config.get().items() if re.search('^net*', key) is not None]:
+        for ifname in interface:
+            _mac_addr = ''
+            _mtu = 1500
+            _vlan = None
+            for _conf_str in interface[ifname].split(','):
+                _k_s =_conf_str.split('=')
+                if re.match("[0-9a-f]{2}([-:]?)[0-9a-f]{2}(\\1[0-9a-f]{2}){4}$", _k_s[1].lower()):
+                    _mac_addr =_k_s[1].lower()
+                elif _k_s[0] == 'mtu':
+                    if int(_k_s[1]) > 1:
+                        _mtu = int(_k_s[1])
+                elif _k_s[0] == 'tag':
+                    _vlan = int(_k_s[1])
+            netbox_interface = list(nb.virtualization.interfaces.filter(virtual_machine_id=netbox_vm.id, mac_address=_mac_addr))
+            if len(netbox_interface):
+                if len(netbox_interface) == 1:
+                    netbox_interface = netbox_interface[0]
+                    netbox_netif = {'name': netbox_interface.name, 'mac_address': netbox_interface.mac_address.lower(), 'mtu': netbox_interface.mtu}
+                    proxmox_netif = {'name': ifname, 'mac_address': _mac_addr, 'mtu': _mtu}
+                    if not netbox_netif == proxmox_netif:
+                        netbox_interface = nb.virtualization.interfaces.update([{'id':netbox_interface.id, 'mac_address': _mac_addr, 'mtu': _mtu}])
+                elif len(netbox_interface) > 1:
+                    print('[ERROR] too many results')
+            else:
+                netbox_interface = nb.virtualization.interfaces.create(name=ifname, virtual_machine=netbox_vm.id, mac_address=_mac_addr, mtu=_mtu)
+    return True
+
+def interfaces_ips(netbox_vm, proxmox_vm):
+    if proxmox_vm['status'] == 'running':
+        if int(proxmox.nodes(proxmox_vm['node']).qemu(proxmox_vm['vmid']).config.get()['agent']):
+            try:
+                for netif in proxmox.nodes(proxmox_vm['node']).qemu(proxmox_vm['vmid']).agent.get('network-get-interfaces')['result']:
+                    if netif['name'].lower() != 'lo':
+                        netbox_interface = list(nb.virtualization.interfaces.filter(virtual_machine_id=netbox_vm.id, mac_address=netif['hardware-address']))
+                        if len(netbox_interface):
+                            if len(netbox_interface) == 1:
+                                netbox_interface = netbox_interface[0]
+                                if 'ip-addresses' in netif:
+                                    for addr in netif['ip-addresses']:
+                                        proxmox_ipaddr = '%(address)s/%(netmask)s' % {'address': addr['ip-address'],'netmask': addr['prefix']}
+                                        netbox_ipaddr = list(nb.ipam.ip_addresses.filter(address=proxmox_ipaddr))
+                                        if len(netbox_ipaddr):
+                                            if len(netbox_ipaddr) == 1:
+                                                netbox_ipaddr = netbox_ipaddr[0]
+                                                netbox_ipaddr = nb.ipam.ip_addresses.update([{'id': netbox_ipaddr.id, 'assigned_object_id': netbox_interface.id, 'assigned_object_type': 'virtualization.vminterface'}])
+                                            elif len(netbox_ipaddr) > 1:
+                                                print('[ERROR] too many results')
+                                        else:
+                                            netbox_ipaddr = nb.ipam.ip_addresses.create(address=proxmox_ipaddr)
+                                            netbox_ipaddr = nb.ipam.ip_addresses.update([{'id': netbox_ipaddr.id, 'assigned_object_id': netbox_interface.id, 'assigned_object_type': 'virtualization.vminterface'}])
+                            elif len(netbox_interface) > 1:
+                                print('[ERROR] too many results')
+                        else:
+                            print('[ERROR] interface in proxmox is not defined in netbox')
+            except ResourceException as e:
+                print('[ERROR]' + str(e))
 
