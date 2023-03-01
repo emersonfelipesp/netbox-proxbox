@@ -264,20 +264,24 @@ def resources(netbox_vm, proxmox_vm):
             return True
         else:
             return False
+
 def interfaces(netbox_vm, proxmox_vm):
+    updated = False
     if proxmox_vm['type'] == 'qemu':
         vm_config = proxmox.nodes(proxmox_vm['node']).qemu(proxmox_vm['vmid']).config.get()
     elif proxmox_vm['type'] == 'lxc':
         vm_config = proxmox.nodes(proxmox_vm['node']).lxc(proxmox_vm['vmid']).config.get()
     else:
         return False
+    _pmx_if = []
+    _ntb_if = []
     for interface in [{key:val} for key,val in vm_config.items() if re.search('^net*', key) is not None]:
         for ifname in interface:
             _mac_addr = ''
             _mtu = 1500
             _vlan = None
             for _conf_str in interface[ifname].split(','):
-                _k_s =_conf_str.split('=') 
+                _k_s =_conf_str.split('=')
                 if re.match("[0-9a-f]{2}([-:]?)[0-9a-f]{2}(\\1[0-9a-f]{2}){4}$", _k_s[1].lower()):
                     _mac_addr =_k_s[1].lower()
                 elif _k_s[0] == 'mtu':
@@ -285,20 +289,41 @@ def interfaces(netbox_vm, proxmox_vm):
                         _mtu = int(_k_s[1])
                 elif _k_s[0] == 'tag':
                     _vlan = int(_k_s[1])
-            netbox_interface = list(nb.virtualization.interfaces.filter(virtual_machine_id=netbox_vm.id, mac_address=_mac_addr))
-            if len(netbox_interface):
-                if len(netbox_interface) == 1:
-                    netbox_interface = netbox_interface[0]
-                    netbox_netif = {'name': netbox_interface.name, 'mac_address': netbox_interface.mac_address.lower(), 'mtu': netbox_interface.mtu}
-                    proxmox_netif = {'name': ifname, 'mac_address': _mac_addr, 'mtu': _mtu}
-                    if not netbox_netif == proxmox_netif:
-                        netbox_interface = nb.virtualization.interfaces.update([{'id':netbox_interface.id, 'mac_address': _mac_addr, 'mtu': _mtu}])
-                elif len(netbox_interface) > 1:
-                    print('[ERROR] too many results')
-                    return False
+            _pmx_if.append({'name': ifname, 'mac_address': _mac_addr, 'mtu': _mtu})
+
+    for interface in nb.virtualization.interfaces.filter(virtual_machine_id=netbox_vm.id):
+        _ntb_if.append({'name': interface.name, 'mac_address': interface.mac_address.lower(), 'mtu': interface.mtu})
+
+    for pmx_if_mac in [_if['mac_address'] for _if in _pmx_if]:
+        pmx_if = next((_if for _if in _pmx_if if _if['mac_address'] == pmx_if_mac), None)
+        if pmx_if is not None:
+            if pmx_if_mac not in [_if['mac_address'] for _if in _ntb_if]:
+                netbox_interface = nb.virtualization.interfaces.create(virtual_machine=netbox_vm.id, name=pmx_if['name'], mac_address=pmx_if_mac, mtu=pmx_if['mtu'])
+                updated = True
             else:
-                netbox_interface = nb.virtualization.interfaces.create(name=ifname, virtual_machine=netbox_vm.id, mac_address=_mac_addr, mtu=_mtu)
-    return True
+                if pmx_if not in _ntb_if:
+                    netbox_interface = list(nb.virtualization.interfaces.filter(virtual_machine_id=netbox_vm.id, mac_address=pmx_if_mac))
+                    if len(netbox_interface) == 1:
+                        netbox_interface = netbox_interface[0]
+                        netbox_interface = nb.virtualization.interfaces.update([{'id': netbox_interface.id, 'name': pmx_if['name'], 'mac_address': pmx_if_mac, 'mtu': pmx_if['mtu']}])
+                        updated = True
+                    elif len(netbox_interface) > 1:
+                        print('[ERROR] too many results')
+                        return False
+        else:
+            print('[ERROR] something went wrong while getting interface config from proxmox')
+
+    for ntb_if_mac in [_if['mac_address'] for _if in _ntb_if]:
+        if ntb_if_mac not in [_if['mac_address'] for _if in _pmx_if]:
+            netbox_interface = list(nb.virtualization.interfaces.filter(virtual_machine_id=netbox_vm.id, mac_address=ntb_if_mac))
+            if len(netbox_interface) == 1:
+                netbox_interface = netbox_interface[0]
+                netbox_interface.delete()
+                updated = True
+            elif len(netbox_interface) > 1:
+                print('[ERROR] too many results')
+                return False
+    return updated
 
 def interfaces_ips(netbox_vm, proxmox_vm):
     if proxmox_vm['status'] == 'running':
