@@ -283,12 +283,20 @@ def interfaces(netbox_vm, proxmox_vm):
             _mac_addr = ''
             _mtu = 1500
             _vlan = None
+            _bridge = None
             for _conf_str in interface[ifname].split(','):
                 _k_s =_conf_str.split('=')
                 if re.match("[0-9a-f]{2}([-:]?)[0-9a-f]{2}(\\1[0-9a-f]{2}){4}$", _k_s[1].lower()):
                     _mac_addr =_k_s[1].lower()
+                elif _k_s[0] == 'bridge':
+                    _bridge = _k_s[1].lower()
                 elif _k_s[0] == 'mtu':
-                    if int(_k_s[1]) > 1:
+                    if int(_k_s[1]) == 1:
+                        if _bridge is not None:
+                            node = nb.dcim.devices.get(name=proxmox_vm['node'])
+                            brg = nb.dcim.interfaces.get(device_id=node.id, name=_bridge)
+                            _mtu = brg.mtu
+                    else:
                         _mtu = int(_k_s[1])
                 elif _k_s[0] == 'tag':
                     _vlan = int(_k_s[1])

@@ -62,9 +62,12 @@ def node_full_update(netbox_node, proxmox_json, proxmox_cluster):
     status_updated = updates.node.status(netbox_node, proxmox_json)
     cluster_updated = updates.node.cluster(netbox_node, proxmox_json, proxmox_cluster)
 
+    interfaces_updated = updates.node.interfaces(netbox_node, proxmox_json)
+
     changes = {
         "status" : status_updated,
-        "cluster" : cluster_updated
+        "cluster" : cluster_updated,
+        "interfaces": interfaces_updated
     }
 
     return changes
