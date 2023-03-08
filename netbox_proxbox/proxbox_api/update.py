@@ -17,8 +17,6 @@ from . import (
     remove,
 )
 
-
-
 # Call all functions to update Virtual Machine
 def vm_full_update(netbox_vm, proxmox_vm):
     changes = {}
@@ -34,9 +32,8 @@ def vm_full_update(netbox_vm, proxmox_vm):
 
     # Update 'resources', like CPU, Memory and Disk, if necessary.
     resources_updated = updates.virtual_machine.resources(netbox_vm, proxmox_vm)
-
+    
     interfaces_updated = updates.virtual_machine.interfaces(netbox_vm, proxmox_vm)
-
     ips_updated = updates.virtual_machine.interfaces_ips(netbox_vm, proxmox_vm)
 
     tag_updated = updates.extras.tag(netbox_vm)
@@ -47,9 +44,9 @@ def vm_full_update(netbox_vm, proxmox_vm):
         "custom_fields" : custom_fields_updated,
         "local_context" : local_context_updated,
         "resources" : resources_updated,
+        "tag" : tag_updated,
         "interfaces": interfaces_updated,
-        "ips": ips_updated,
-        "tag" : tag_updated
+        "ips": ips_updated
     }
 
     return changes
@@ -61,7 +58,6 @@ def node_full_update(netbox_node, proxmox_json, proxmox_cluster):
 
     status_updated = updates.node.status(netbox_node, proxmox_json)
     cluster_updated = updates.node.cluster(netbox_node, proxmox_json, proxmox_cluster)
-
     interfaces_updated = updates.node.interfaces(netbox_node, proxmox_json)
 
     changes = {

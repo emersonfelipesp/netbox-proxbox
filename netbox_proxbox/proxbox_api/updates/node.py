@@ -10,6 +10,10 @@ from ..plugins_config import (
     NETBOX_SESSION as nb,
 )
 
+from .. import (
+    create,
+)
+
 # Update STATUS field on /dcim/device/{id}
 def status(netbox_node, proxmox_node):
     #
@@ -90,7 +94,6 @@ def cluster(netbox_node, proxmox_node, proxmox_cluster):
         cluster_updated = False
 
     return cluster_updated
-
 
 def interfaces(netbox_node, proxmox_json):
     updated = False

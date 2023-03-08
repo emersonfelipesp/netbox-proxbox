@@ -1,5 +1,6 @@
 import requests
 import json
+import re
 
 # PLUGIN_CONFIG variables
 from ..plugins_config import (
@@ -17,6 +18,9 @@ from ..plugins_config import (
 from .. import (
     create,
 )
+
+from proxmoxer.core import ResourceException
+
 
 # Update "status" field on Netbox Virtual Machine based on Proxmox information
 def status(netbox_vm, proxmox_vm):
@@ -56,6 +60,7 @@ def status(netbox_vm, proxmox_vm):
         status_updated = False
     
     return status_updated
+
 
 
 def site(**kwargs):
@@ -98,6 +103,7 @@ def http_update_custom_fields(**kwargs):
 
     # Return HTTP Status Code
     return r.status_code
+
 
 
 # Update 'custom_fields' field on Netbox Virtual Machine based on Proxbox
@@ -213,6 +219,11 @@ def local_context_data(netbox_vm, proxmox_vm):
     return False
 
 
+
+
+
+
+
 # Updates following fields based on Proxmox: "vcpus", "memory", "disk", if necessary.
 def resources(netbox_vm, proxmox_vm):
     # Save values from Proxmox
@@ -228,6 +239,8 @@ def resources(netbox_vm, proxmox_vm):
 
     # JSON with new resources info
     new_resources_json = {}
+
+    
     
     # Compare VCPU
     if netbox_vm.vcpus != None:
@@ -240,6 +253,8 @@ def resources(netbox_vm, proxmox_vm):
     elif netbox_vm.vcpus == None:
         new_resources_json["vcpus"] = vcpus
 
+
+
     # Compare Memory
     if netbox_vm.memory != None:
         if netbox_vm.memory != memory_Mb:
@@ -248,6 +263,8 @@ def resources(netbox_vm, proxmox_vm):
     elif netbox_vm.memory == None:
         new_resources_json["memory"] = memory_Mb
 
+
+
     # Compare Disk
     if netbox_vm.disk != None:
         if netbox_vm.disk != disk_Gb:
@@ -255,6 +272,8 @@ def resources(netbox_vm, proxmox_vm):
 
     elif netbox_vm.disk == None:
         new_resources_json["disk"] = disk_Gb
+    
+    
 
     # If new information found, save it to Netbox object.
     if len(new_resources_json) > 0:
@@ -264,7 +283,6 @@ def resources(netbox_vm, proxmox_vm):
             return True
         else:
             return False
-
 
 def interfaces(netbox_vm, proxmox_vm):
     updated = False
@@ -340,7 +358,6 @@ def interfaces(netbox_vm, proxmox_vm):
                 print('[ERROR] something went wrong while getting interface config from netbox')
                 return False
     return updated
-
 
 def interfaces_ips(netbox_vm, proxmox_vm):
     updated = False
