@@ -1,5 +1,13 @@
-from .. import (
-    create,
+from ..plugins_config import (
+    PROXMOX,
+    PROXMOX_PORT,
+    PROXMOX_USER,
+    PROXMOX_PASSWORD,
+    PROXMOX_SSL,
+    NETBOX,
+    NETBOX_TOKEN,
+    PROXMOX_SESSION as proxmox,
+    NETBOX_SESSION as nb,
 )
 
 # Update STATUS field on /dcim/device/{id}
