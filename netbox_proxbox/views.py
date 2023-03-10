@@ -46,15 +46,12 @@ class ProxmoxFullUpdate(PermissionRequiredMixin, View):
     # Define permission
     permission_required = "netbox_proxbox.view_proxmoxvm"
 
-    from .example import example
     
-    data = [{
-        "name": 'teste',
-        "changes": 'changes-teste'
-    }]
+    update_all_result = proxbox_api.update.all(remove_unused = True)
+    print(update_all_result)
 
     vm_table = []
-    for row in example.get("virtualmachines"):
+    for row in update_all_result.get("virtualmachines"):
         json = {
             "name": row["name"],
             "status": row["changes"]["status"],
@@ -70,7 +67,7 @@ class ProxmoxFullUpdate(PermissionRequiredMixin, View):
     virtualmachines_table = VMUpdateResult(vm_table)
 
     node_table = []
-    for row in example.get("nodes"):
+    for row in update_all_result.get("nodes"):
         json = {
             "status": row["changes"]["status"],
             "cluster": row["changes"]["cluster"],
@@ -79,7 +76,6 @@ class ProxmoxFullUpdate(PermissionRequiredMixin, View):
         }
         node_table.append(json)
 
-    #'nodes': [{'changes': {'status': False, 'cluster': False, 'interfaces': False}, 'result': True}, {'changes': {'status': False, 'cluster': False, 'interfaces': False}, 'result': True}, {'changes': {'status': False, 'cluster': False, 'interfaces': False}, 'result': True}],
     nodes_table = NodeUpdateResult(node_table)
      
 
@@ -88,11 +84,6 @@ class ProxmoxFullUpdate(PermissionRequiredMixin, View):
     def get(self, request):
         """Get request."""
 
-        #update_all_result = proxbox_api.update.all(remove_unused = True)
-        #update_all_json = json.dumps(update_all_result, indent = 4)
-        #print(update_all_result)
-
-        # render() renders provided template and uses it to create a well-formed web response
         return render(
             request,
             "netbox_proxbox/proxmox_vm_full_update.html",

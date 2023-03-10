@@ -3,40 +3,22 @@
 
 {% block content %}
     <h2>Virtual Machines and Containers</h2>
-    {% render_table virtualmachines_table %}
+    <div class="card">
+        <div class="card-body" id="object-list">
+            <div class="table-responsive">
+                {% render_table virtualmachines_table %}
+            </div>
+        </div>
+    </div>
 
     <h2>Nodes</h2>
-    {% render_table nodes_table %}
-
-
-    {% if proxmox.remove_unused %}
-        <h2>Remove unused VM/CT</h2>
-        <h3>Logs:</h3>
-        <ul>
-        {% for deleted in proxmox.remove_unused %}
-            
-            {# Check amount of logs #}
-            {% if deleted.log|length > 1 %}
-                <li><strong>{{ deleted.name }}</strong>
-                    <ul>
-                        {% for log in deleted.log %}
-                            <li>{{ log }}</li>
-                        {% endfor %}
-                    </ul>
-                </li>
-                
-            {% else %}
-                {# If only 01 log #}
-                <li><strong>{{ deleted.name }}</strong> - {% for log in deleted.log %}{{ log }}{% endfor %}</li>
-            {% endif %}
-            
-
-            
-            <br>
-        {% endfor %}
-        </ul>
-    {% endif %}
-    
+    <div class="card">
+        <div class="card-body" id="object-list">
+            <div class="table-responsive">
+                {% render_table nodes_table %}
+            </div>
+        </div>
+    </div>
 {% endblock %}
 
 {% block footer_links %}

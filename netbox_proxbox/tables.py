@@ -29,27 +29,19 @@ class VMUpdateResult(table.Table):
 
     name = table.Column()
     status = table.Column()
-    custom_fields = table.Column()
-    local_context = table.Column()
+    custom_fields = table.Column(verbose_name = "Custom Fields")
+    local_context = table.Column(verbose_name = "Local Context")
     resources = table.Column()
     tag = table.Column()
     interfaces = table.Column()
-    ips = table.Column()
-
-    '''
-    status = tables.Column()
-    custom_fields = tables.Column()
-    local_context = tables.Column()
-    resources = tables.Column()
-    tag = tables.Column()
-    result = tables.Column()
-    '''
+    ips = table.Column(verbose_name = "IP Address")
 
     class Meta(NetBoxTable.Meta):
         fields = ('name', 'status', 'custom_fields', 'local_context', 'resources', 'tag', 'interfaces', 'ips')
         default_columns = ('name')
         #fields = ('name', 'status', 'custom_fields', 'local_context', 'resources', 'tag', 'result')
         #default_columns = ('name', 'status', 'custom_fields', 'local_context', 'resources', 'tag', 'result')
+
 
 class NodeUpdateResult(table.Table):
     """Table for displaying VM/CT update results"""
