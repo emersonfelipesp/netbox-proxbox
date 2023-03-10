@@ -28,7 +28,13 @@ class VMUpdateResult(table.Table):
     """Table for displaying VM/CT update results"""
 
     name = table.Column()
-    changes = table.Column()
+    status = table.Column()
+    custom_fields = table.Column()
+    local_context = table.Column()
+    resources = table.Column()
+    tag = table.Column()
+    interfaces = table.Column()
+    ips = table.Column()
 
     '''
     status = tables.Column()
@@ -40,7 +46,20 @@ class VMUpdateResult(table.Table):
     '''
 
     class Meta(NetBoxTable.Meta):
-        fields = ('name', 'changes')
-        default_columns = ('name', 'changes')
+        fields = ('name', 'status', 'custom_fields', 'local_context', 'resources', 'tag', 'interfaces', 'ips')
+        default_columns = ('name')
         #fields = ('name', 'status', 'custom_fields', 'local_context', 'resources', 'tag', 'result')
         #default_columns = ('name', 'status', 'custom_fields', 'local_context', 'resources', 'tag', 'result')
+
+class NodeUpdateResult(table.Table):
+    """Table for displaying VM/CT update results"""
+
+    status = table.Column()
+    cluster = table.Column()
+    interfaces = table.Column()
+    result = table.Column()
+
+
+    class Meta(NetBoxTable.Meta):
+        fields = ('status', 'cluster', 'interfaces', 'result')
+        default_columns = ('name')

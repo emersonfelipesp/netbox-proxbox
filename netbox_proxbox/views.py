@@ -13,7 +13,7 @@ from .icon_classes import icon_classes
 from .filters import ProxmoxVMFilter
 from .forms import ProxmoxVMForm, ProxmoxVMFilterForm
 from .models import ProxmoxVM
-from .tables import ProxmoxVMTable, VMUpdateResult
+from .tables import ProxmoxVMTable, VMUpdateResult, NodeUpdateResult
 
 from netbox_proxbox import proxbox_api
 import json
@@ -53,8 +53,35 @@ class ProxmoxFullUpdate(PermissionRequiredMixin, View):
         "changes": 'changes-teste'
     }]
 
-    table = VMUpdateResult(example.get("virtualmachines"))
-    
+    vm_table = []
+    for row in example.get("virtualmachines"):
+        json = {
+            "name": row["name"],
+            "status": row["changes"]["status"],
+            "custom_fields": row["changes"]["custom_fields"],
+            "local_context": row["changes"]["local_context"],
+            "resources": row["changes"]["resources"],
+            "tag": row["changes"]["tag"],
+            "interfaces": row["changes"]["interfaces"],
+            "ips": row["changes"]["ips"],
+        }
+        vm_table.append(json)
+
+    virtualmachines_table = VMUpdateResult(vm_table)
+
+    node_table = []
+    for row in example.get("nodes"):
+        json = {
+            "status": row["changes"]["status"],
+            "cluster": row["changes"]["cluster"],
+            "interfaces": row["changes"]["interfaces"],
+            "result": row["result"]
+        }
+        node_table.append(json)
+
+    #'nodes': [{'changes': {'status': False, 'cluster': False, 'interfaces': False}, 'result': True}, {'changes': {'status': False, 'cluster': False, 'interfaces': False}, 'result': True}, {'changes': {'status': False, 'cluster': False, 'interfaces': False}, 'result': True}],
+    nodes_table = NodeUpdateResult(node_table)
+     
 
     # service incoming GET HTTP requests
     # 'pk' value is passed to get() via URL defined in urls.py
@@ -70,8 +97,8 @@ class ProxmoxFullUpdate(PermissionRequiredMixin, View):
             request,
             "netbox_proxbox/proxmox_vm_full_update.html",
             {
-                "proxmox": self.example,
-                "table": self.table
+                "nodes_table": self.nodes_table,
+                "virtualmachines_table": self.virtualmachines_table
             },
         )
 
