@@ -13,7 +13,7 @@ from .icon_classes import icon_classes
 from .filters import ProxmoxVMFilter
 from .forms import ProxmoxVMForm, ProxmoxVMFilterForm
 from .models import ProxmoxVM
-from .tables import ProxmoxVMTable
+from .tables import ProxmoxVMTable, VMUpdateResult
 
 from netbox_proxbox import proxbox_api
 import json
@@ -46,20 +46,32 @@ class ProxmoxFullUpdate(PermissionRequiredMixin, View):
     # Define permission
     permission_required = "netbox_proxbox.view_proxmoxvm"
 
+    from .example import example
+    
+    data = [{
+        "name": 'teste',
+        "changes": 'changes-teste'
+    }]
+
+    table = VMUpdateResult(example.get("virtualmachines"))
+    
+
     # service incoming GET HTTP requests
     # 'pk' value is passed to get() via URL defined in urls.py
     def get(self, request):
         """Get request."""
 
-        update_all_result = proxbox_api.update.all(remove_unused = True)
-        update_all_json = json.dumps(update_all_result, indent = 4)
+        #update_all_result = proxbox_api.update.all(remove_unused = True)
+        #update_all_json = json.dumps(update_all_result, indent = 4)
+        #print(update_all_result)
 
         # render() renders provided template and uses it to create a well-formed web response
         return render(
             request,
             "netbox_proxbox/proxmox_vm_full_update.html",
             {
-                "proxmox": update_all_result,
+                "proxmox": self.example,
+                "table": self.table
             },
         )
 
