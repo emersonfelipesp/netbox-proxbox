@@ -481,3 +481,4 @@ def interfaces_ips(netbox_vm, proxmox_vm):
                         else:
                             print('[ERROR] something went wrong while getting ip object from netbox')
     return updated
+#
