@@ -335,12 +335,12 @@ def interfaces(netbox_vm, proxmox_vm):
                         print("Interface already exist.")
                     else:
                         # Create interface if does not exist.
-                        netbox_interface = nb.virtualization.interfaces.create(virtual_machine_id=netbox_vm.id, virtual_machine=netbox_vm.name, name=pmx_if['name'], mac_address=pmx_if_mac, mtu=pmx_if['mtu'])
+                        netbox_interface = nb.virtualization.interfaces.create(virtual_machine_id=netbox_vm.id, virtual_machine=netbox_vm.id, name=pmx_if['name'], mac_address=pmx_if_mac, mtu=pmx_if['mtu'])
                         updated = True
                 except Exception as error: print(error)
             else:
                 if pmx_if not in _ntb_if:
-                    netbox_interface = list(nb.virtualization.interfaces.filter(virtual_machine_id=netbox_vm.id, virtual_machine=netbox_vm.name, mac_address=pmx_if_mac))
+                    netbox_interface = list(nb.virtualization.interfaces.filter(virtual_machine_id=netbox_vm.id, virtual_machine=netbox_vm.id, mac_address=pmx_if_mac))
                     if len(netbox_interface) == 1:
                         netbox_interface = netbox_interface[0]
                         netbox_interface = nb.virtualization.interfaces.update([{'id': netbox_interface.id, 'name': pmx_if['name'], 'mac_address': pmx_if_mac, 'mtu': pmx_if['mtu']}])
@@ -481,4 +481,3 @@ def interfaces_ips(netbox_vm, proxmox_vm):
                         else:
                             print('[ERROR] something went wrong while getting ip object from netbox')
     return updated
-#
