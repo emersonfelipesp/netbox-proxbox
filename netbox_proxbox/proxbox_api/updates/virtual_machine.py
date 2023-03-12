@@ -331,11 +331,11 @@ def interfaces(netbox_vm, proxmox_vm):
         if pmx_if is not None:
             if pmx_if_mac not in [_if['mac_address'] for _if in _ntb_if]:
                 try:
-                    if nb.virtualization.interfaces.get(virtual_machine=netbox_vm.id, name=pmx_if['name']):
+                    if nb.virtualization.interfaces.get(virtual_machine_id=netbox_vm.id, name=pmx_if['name']):
                         print("Interface already exist.")
                     else:
                         # Create interface if does not exist.
-                        netbox_interface = nb.virtualization.interfaces.create(virtual_machine=netbox_vm.id, name=pmx_if['name'], mac_address=pmx_if_mac, mtu=pmx_if['mtu'])
+                        netbox_interface = nb.virtualization.interfaces.create(virtual_machine_id=netbox_vm.id, name=pmx_if['name'], mac_address=pmx_if_mac, mtu=pmx_if['mtu'])
                         updated = True
                 except Exception as error: print(error)
             else:
