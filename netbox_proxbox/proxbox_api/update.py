@@ -275,8 +275,10 @@ def virtual_machine(**kwargs):
 
     if vm_on_netbox == True:
         # Update Netbox information
-        full_update = vm_full_update(netbox_vm, proxmox_json)  
-        json_vm["changes"] = full_update
+        full_update = vm_full_update(netbox_vm, proxmox_json) 
+
+        # 'changes' json 
+        json_vm = full_update
 
         full_update_list = list(full_update.values())
 
@@ -301,7 +303,7 @@ def virtual_machine(**kwargs):
         if netbox_vm != None:
             # Update rest of configuration
             full_update = vm_full_update(netbox_vm, proxmox_json)  
-            json_vm["changes"] = full_update
+            json_vm = full_update
 
             full_update_list = list(full_update.values())
 
@@ -331,6 +333,7 @@ def virtual_machine(**kwargs):
         # Unexpected error
         json_vm["result"] = False
 
+    print('(update) json_vm:', json_vm)
     return json_vm
 
 
