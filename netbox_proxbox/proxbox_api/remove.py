@@ -175,6 +175,7 @@ def all():
         
         json_vm_all.append(json_vm)
     
+        print(f"json_vm: {json_vm}")
     return json_vm_all
 
     

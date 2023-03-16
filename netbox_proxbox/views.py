@@ -39,19 +39,12 @@ class HomeView(View):
             }
         )
 
-
-class ProxmoxFullUpdate(PermissionRequiredMixin, View):
-    """Full Update of Proxmox information on Netbox."""
-
-    # Define permission
-    permission_required = "netbox_proxbox.view_proxmoxvm"
-
-    
-    update_all_result = proxbox_api.update.all(remove_unused = True)
-    print(update_all_result)
+''' 
+def table_data():
+    json_result = proxbox_api.update.all(remove_unused = True)
 
     vm_table = []
-    for row in update_all_result.get("virtualmachines"):
+    for row in json_result.get("virtualmachines"):
         json = {
             "name": row["name"],
             "status": row["changes"]["status"],
@@ -67,7 +60,7 @@ class ProxmoxFullUpdate(PermissionRequiredMixin, View):
     virtualmachines_table = VMUpdateResult(vm_table)
 
     node_table = []
-    for row in update_all_result.get("nodes"):
+    for row in json_result.get("nodes"):
         json = {
             "status": row["changes"]["status"],
             "cluster": row["changes"]["cluster"],
@@ -77,7 +70,20 @@ class ProxmoxFullUpdate(PermissionRequiredMixin, View):
         node_table.append(json)
 
     nodes_table = NodeUpdateResult(node_table)
-     
+
+
+    return [virtualmachines_table, nodes_table]
+'''
+
+class ProxmoxFullUpdate(PermissionRequiredMixin, View):
+    """Full Update of Proxmox information on Netbox."""
+
+    # Define permission
+    permission_required = "netbox_proxbox.view_proxmoxvm"
+
+
+    data = proxbox_api.update.all(remove_unused = True)
+    print(data)
 
     # service incoming GET HTTP requests
     # 'pk' value is passed to get() via URL defined in urls.py
@@ -88,8 +94,8 @@ class ProxmoxFullUpdate(PermissionRequiredMixin, View):
             request,
             "netbox_proxbox/proxmox_vm_full_update.html",
             {
-                "nodes_table": self.nodes_table,
-                "virtualmachines_table": self.virtualmachines_table
+                "virtualmachines_table": VMUpdateResult(self.data["virtualmachines"]),
+                "nodes_table": NodeUpdateResult(self.data["nodes"])
             },
         )
 
