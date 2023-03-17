@@ -6,7 +6,6 @@ from .models import ProxmoxVM
 
 class ProxmoxVMTable(NetBoxTable):
     """Table for displaying BGP Peering objects."""
-    print(f"\n\n\ntable.Column: {dir(table.Column)}\n\n\n")
     id = table.LinkColumn()
     cluster = table.LinkColumn()
     virtual_machine = table.LinkColumn()

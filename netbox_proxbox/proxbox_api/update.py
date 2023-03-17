@@ -278,6 +278,7 @@ def virtual_machine(**kwargs):
         full_update = vm_full_update(netbox_vm, proxmox_json) 
 
         # I made this way since dict.update didn't work
+        json_vm["vm_id"] = netbox_vm.id
         json_vm["status"] = full_update["status"]
         json_vm["custom_fields"] = full_update["custom_fields"]
         json_vm["local_context"] = full_update["local_context"]
@@ -311,6 +312,7 @@ def virtual_machine(**kwargs):
             # Update rest of configuration
             full_update = vm_full_update(netbox_vm, proxmox_json)  
             json_vm = full_update
+            json_vm["vm_id"] = netbox_vm.id
 
             full_update_list = list(full_update.values())
 
@@ -377,6 +379,7 @@ def nodes(**kwargs):
                 print('[OK] NODE already updated. -> {}'.format(proxmox_node_name))
 
             # return True as the node was successfully created.
+            json_node["node_id"] = netbox_node.id
             json_node["name"] = proxmox_node_name
             json_node["result"] = True
 
@@ -402,6 +405,7 @@ def nodes(**kwargs):
             print('[OK] NODE already updated. -> {}'.format(proxmox_node_name))
 
         # return True as the node was successfully created.
+        json_node["node_id"] = netbox_node.id
         json_node["name"] = proxmox_node_name
         json_node["result"] = True
         
