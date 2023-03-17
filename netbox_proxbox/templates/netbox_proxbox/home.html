@@ -25,7 +25,7 @@
                 <div class="card-body">
                     <table class="table table-hover attr-table">
                         <tr>
-                        <th scope="row">Domain / IP</th>
+                        <th scope="row"><strong>Domain / IP</strong></th>
                             {% if configuration.netbox_proxbox.proxmox.domain %}
                                 <td>{{ configuration.netbox_proxbox.proxmox.domain }}</td>
                             {% else %}
@@ -33,7 +33,7 @@
                             {% endif %}
                         </tr>
                         <tr>
-                        <th scope="row">HTTP Port</th>
+                        <th scope="row"><strong>HTTP Port</strong></th>
                         {% if configuration.netbox_proxbox.proxmox.http_port %}
                                 <td>{{ configuration.netbox_proxbox.proxmox.http_port }}</td>
                             {% else %}
@@ -41,7 +41,7 @@
                             {% endif %}
                         </tr>
                         <tr>
-                            <th scope="row">Proxmox User</th>
+                            <th scope="row"><strong>Proxmox User</strong></th>
                             {% if configuration.netbox_proxbox.proxmox.user %}
                                 <td>{{ configuration.netbox_proxbox.proxmox.user }}</td>
                             {% else %}
@@ -49,21 +49,21 @@
                             {% endif %}
                         </tr>
                         <tr>
-                        <th scope="row">Proxmox Password</th>
+                        <th scope="row"><strong>Proxmox Password</strong></th>
                             {% if configuration.netbox_proxbox.proxmox.password %}
                                 <td>password defined in configuration.py</td>
                             {% else %}
                                 <td>{{ default_config.proxmox.password }} (default)</td>
                             {% endif %}
                         </tr>
-                            <th scope="row">Token Name</th>
+                            <th scope="row"><strong>Token Name</strong></th>
                             {% if configuration.netbox_proxbox.proxmox.token.name %}
                                 <td>{{ configuration.netbox_proxbox.proxmox.token.name }}</td>
                             {% else %}
                                 <td>{{ default_config.proxmox.token.name }} (default)</td>
                             {% endif %}
                         </tr>
-                            <th scope="row">Token Value</th>
+                            <th scope="row"><strong>Token Value</strong></th>
                             {% if configuration.netbox_proxbox.proxmox.token.value %}
                                 <td>{{ configuration.netbox_proxbox.proxmox.token.value }}</td>
                             {% else %}
@@ -71,7 +71,7 @@
                             {% endif %}
                         </tr>
                         </tr>
-                            <th scope="row">SSL</th>
+                            <th scope="row"><strong>SSL</strong></th>
                             {% if configuration.netbox_proxbox.proxmox.ssl %}
                                 <td>{{ configuration.netbox_proxbox.proxmox.ssl }}</td>
                             {% else %}
@@ -88,7 +88,7 @@
                 <div class="card-body">
                     <table class="table table-hover attr-table">
                         </tr>
-                            <th scope="row">Domain / IP</th>
+                            <th scope="row"><strong>Domain / IP</strong></th>
                             {% if configuration.netbox_proxbox.netbox.domain %}
                                 <td>{{ configuration.netbox_proxbox.netbox.domain }}</td>
                             {% else %}
@@ -96,7 +96,7 @@
                             {% endif %}
                         </tr>
                         </tr>
-                            <th scope="row">HTTP Port</th>
+                            <th scope="row"><strong>HTTP Port</strong></th>
                             {% if configuration.netbox_proxbox.netbox.http_port %}
                                 <td>{{ configuration.netbox_proxbox.netbox.http_port }}</td>
                             {% else %}
@@ -104,7 +104,7 @@
                             {% endif %}
                         </tr>
                         </tr>
-                            <th scope="row">Token</th>
+                            <th scope="row"><strong>Token</strong></th>
                             {% if configuration.netbox_proxbox.netbox.token %}
                                 <td>{{ configuration.netbox_proxbox.netbox.token }}</td>
                             {% else %}
@@ -112,7 +112,7 @@
                             {% endif %}
                         </tr>
                         </tr>
-                            <th scope="row">SSL</th>
+                            <th scope="row"><strong>SSL</strong></th>
                             {% if configuration.netbox_proxbox.netbox.ssl %}
                                 <td>{{ configuration.netbox_proxbox.netbox.ssl }}</td>
                             {% else %}

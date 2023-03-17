@@ -277,8 +277,15 @@ def virtual_machine(**kwargs):
         # Update Netbox information
         full_update = vm_full_update(netbox_vm, proxmox_json) 
 
-        # 'changes' json 
-        json_vm = full_update
+        # I made this way since dict.update didn't work
+        json_vm["status"] = full_update["status"]
+        json_vm["custom_fields"] = full_update["custom_fields"]
+        json_vm["local_context"] = full_update["local_context"]
+        json_vm["resources"] = full_update["resources"]
+        json_vm["tag"] = full_update["tag"]
+        json_vm["interfaces"] = full_update["interfaces"]
+        json_vm["ips"] = full_update["ips"]
+
 
         full_update_list = list(full_update.values())
 
@@ -333,7 +340,6 @@ def virtual_machine(**kwargs):
         # Unexpected error
         json_vm["result"] = False
 
-    print('(update) json_vm:', json_vm)
     return json_vm
 
 

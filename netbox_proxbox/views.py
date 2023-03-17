@@ -81,10 +81,6 @@ class ProxmoxFullUpdate(PermissionRequiredMixin, View):
     # Define permission
     permission_required = "netbox_proxbox.view_proxmoxvm"
 
-
-    data = proxbox_api.update.all(remove_unused = True)
-    print(data)
-
     # service incoming GET HTTP requests
     # 'pk' value is passed to get() via URL defined in urls.py
     def get(self, request):
@@ -94,8 +90,7 @@ class ProxmoxFullUpdate(PermissionRequiredMixin, View):
             request,
             "netbox_proxbox/proxmox_vm_full_update.html",
             {
-                "virtualmachines_table": VMUpdateResult(self.data["virtualmachines"]),
-                "nodes_table": NodeUpdateResult(self.data["nodes"])
+                "virtualmachines_table": VMUpdateResult(proxbox_api.update.all(remove_unused = True)["virtualmachines"]),
             },
         )
 

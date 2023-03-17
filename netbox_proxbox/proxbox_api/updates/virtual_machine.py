@@ -375,12 +375,10 @@ def interfaces_ips(netbox_vm, proxmox_vm):
         _ntb_ips = []
         if proxmox_vm['type'] == 'qemu':
             agent = proxmox.nodes(proxmox_vm['node']).qemu(proxmox_vm['vmid']).config.get().get("agent")
-            print(agent)
+
             if agent:
                 try:
                     for interface in proxmox.nodes(proxmox_vm['node']).qemu(proxmox_vm['vmid']).agent.get('network-get-interfaces')['result']:
-                        print(proxmox_vm['node'])
-                        print(interface, '\n')
 
                         if interface['name'].lower() != 'lo':
                             _mac = interface.get("hardware-address")
@@ -440,7 +438,6 @@ def interfaces_ips(netbox_vm, proxmox_vm):
                     if pmx_ip not in ntb_ips:
                         try:
                             netbox_ipaddr = list(nb.ipam.ip_addresses.filter(address=pmx_ip))
-                            print(f"netbox_ipaddr: {netbox_ipaddr}")
 
                             netbox_interface = list(nb.virtualization.interfaces.filter(virtual_machine_id=netbox_vm.id, mac_address=pmx_mac))
                             if len(netbox_interface):
