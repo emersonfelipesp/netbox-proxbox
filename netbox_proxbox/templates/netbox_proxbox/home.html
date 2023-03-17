@@ -1,5 +1,5 @@
 {% extends 'base/layout.html' %}
-
+{% load static %}
 
 {% block content %}
 
@@ -13,6 +13,8 @@
             {% endif %}
         </div>
         <hr>
+        
+        
         <div class="d-flex justify-content-center flex-nowrap" style="margin-bottom: 15px;">
             <h2>
                 Proxbox Configuration
@@ -21,7 +23,12 @@
 
         <div class="col col-md-6">
             <div class="card">
-                <h5 class="card-header">Proxmox</h5>
+                <div align=center>
+                    <br>
+                    <a href="https://{{ configuration.netbox_proxbox.proxmox.domain }}:{{ configuration.netbox_proxbox.proxmox.http_port }}" target="_blank">
+                        <img src="{% static 'netbox_proxbox/proxmox-logo.svg' %}" alt="Proxmox Logo" width="200px">
+                    </a>
+                </div>
                 <div class="card-body">
                     <table class="table table-hover attr-table">
                         <tr>
@@ -84,7 +91,12 @@
         </div>
         <div class="col col-md-6">
             <div class="card">
-                <h5 class="card-header">Netbox</h5>
+                <div align=center>
+                    <br>
+                    <a href="{% url 'home' %}">
+                        <img src="{% static 'netbox_logo.svg' %}" alt="Netbox Logo" width="200px">
+                    </a>
+                </div>  
                 <div class="card-body">
                     <table class="table table-hover attr-table">
                         </tr>
