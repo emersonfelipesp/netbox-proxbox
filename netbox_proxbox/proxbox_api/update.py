@@ -366,7 +366,7 @@ def nodes(**kwargs):
 
             # Update rest of configuration
             full_update = node_full_update(netbox_node, proxmox_json, proxmox_cluster)  
-            json_node["changes"] = full_update
+            json_node = full_update
 
             full_update_list = list(full_update.values())
 
@@ -377,6 +377,7 @@ def nodes(**kwargs):
                 print('[OK] NODE already updated. -> {}'.format(proxmox_node_name))
 
             # return True as the node was successfully created.
+            json_node["name"] = proxmox_node_name
             json_node["result"] = True
 
         # Error with node creation
@@ -390,7 +391,7 @@ def nodes(**kwargs):
 
         # Update Netbox node information, if necessary.
         full_update = node_full_update(netbox_node, proxmox_json, proxmox_cluster)  
-        json_node["changes"] = full_update
+        json_node = full_update
 
         full_update_list = list(full_update.values())
 
@@ -401,6 +402,7 @@ def nodes(**kwargs):
             print('[OK] NODE already updated. -> {}'.format(proxmox_node_name))
 
         # return True as the node was successfully created.
+        json_node["name"] = proxmox_node_name
         json_node["result"] = True
         
 

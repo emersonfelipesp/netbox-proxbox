@@ -90,7 +90,7 @@ class ProxmoxFullUpdate(PermissionRequiredMixin, View):
             request,
             "netbox_proxbox/proxmox_vm_full_update.html",
             {
-                "virtualmachines_table": VMUpdateResult(proxbox_api.update.all(remove_unused = True)["virtualmachines"]),
+                "proxmox": proxbox_api.update.all(remove_unused = True),
             },
         )
 

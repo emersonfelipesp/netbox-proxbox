@@ -6,7 +6,7 @@ from .models import ProxmoxVM
 
 class ProxmoxVMTable(NetBoxTable):
     """Table for displaying BGP Peering objects."""
-
+    print(f"\n\n\ntable.Column: {dir(table.Column)}\n\n\n")
     id = table.LinkColumn()
     cluster = table.LinkColumn()
     virtual_machine = table.LinkColumn()
@@ -28,11 +28,11 @@ class VMUpdateResult(table.Table):
     """Table for displaying VM/CT update results"""
 
     name = table.Column()
-    status = table.Column()
+    status = table.Column(attrs={"span": {"class": "badge bg-green"}})
     custom_fields = table.Column(verbose_name = "Custom Fields")
     local_context = table.Column(verbose_name = "Local Context")
     resources = table.Column()
-    tag = table.Column()
+    tag = table.Column(attrs={"span": {"class": "badge bg-green"}})
     interfaces = table.Column()
     ips = table.Column(verbose_name = "IP Address")
 
@@ -46,7 +46,7 @@ class VMUpdateResult(table.Table):
 class NodeUpdateResult(table.Table):
     """Table for displaying VM/CT update results"""
 
-    status = table.Column()
+    status = table.Column(attrs={"span": {"class": "badge bg-green"}})
     cluster = table.Column()
     interfaces = table.Column()
     result = table.Column()

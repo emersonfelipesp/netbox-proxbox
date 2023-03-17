@@ -6,7 +6,172 @@
     <div class="card">
         <div class="card-body" id="object-list">
             <div class="table-responsive">
-                {% render_table virtualmachines_table %}
+                {% if proxmox.nodes %}
+                    <h2>Nodes</h2>
+                    <table class="table">
+                        <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Node status changed</th>
+                                    <th>Cluster changed</th>
+                                    <th>Interface changed</th>
+                                    <th>Update result</th>
+                                </tr>
+                        </thead>
+                        <tbody>
+                            {% for node in proxmox.nodes %}
+                            <tr>
+                                <td>
+                                    <strong>
+                                        {{ node.name }}
+                                    </strong>
+                                </td>
+                                <td>
+                                    {% if node.status %}
+                                        <span class="badge bg-green">
+                                            {{ node.status }}
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-gray">
+                                            {{ node.status }}
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if node.cluster %}
+                                        <span class="badge bg-green">
+                                            {{ node.cluster }}
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-gray">
+                                            {{ node.cluster }}
+                                        </span>
+                                    {% endif %}
+                                <td>
+                                    {% if node.interfaces %}
+                                        <span class="badge bg-green">
+                                            {{ node.interfaces }}
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-gray">
+                                            {{ node.interfaces }}
+                                        </span>
+                                    {% endif %}                                    
+                                </td>
+                                <td>
+                                    {% if node.result %}
+                                        <span class="badge bg-green">
+                                            {{ node.result }}
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-gray">
+                                            {{ node.result }}
+                                        </span>
+                                    {% endif %}                                    
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+            
+                    <br><br>
+                {% endif %}
+                {% if proxmox.virtualmachines %}
+                    <h2>Virtual Machines and Containers</h2>
+            
+                    <table class="table">
+                        <thead>
+                                <tr>
+                                    <th>VM/CT Name</th>
+                                    <th>Status changed</th>
+                                    <th>Custom Fields</th>
+                                    <th>Local context</th>
+                                    <th>Resources</th>
+                                    <th>Tag</th>
+                                    <th>Update result</th>
+                                </tr>
+                        </thead>
+                        <tbody>
+                            {% for virtualmachine in proxmox.virtualmachines %}
+                            <tr>
+                                <td>
+                                    <strong>
+                                        {{ virtualmachine.name }}
+                                    </strong>
+                                </td>
+                                <td>
+                                    {% if virtualmachine.status %}
+                                        <span class="badge bg-green">
+                                            {{ virtualmachine.status }}
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-gray">
+                                            {{ virtualmachine.status }}
+                                        </span>
+                                    {% endif %}   
+                                </td>
+                                <td>
+                                    {% if virtualmachine.custom_fields %}
+                                        <span class="badge bg-green">
+                                            {{ virtualmachine.custom_fields }}
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-gray">
+                                            {{ virtualmachine.custom_fields }}
+                                        </span>
+                                    {% endif %}   
+                                </td>
+                                <td>
+                                    {% if virtualmachine.local_context %}
+                                        <span class="badge bg-green">
+                                            {{ virtualmachine.local_context }}
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-gray">
+                                            {{ virtualmachine.local_context }}
+                                        </span>
+                                    {% endif %}   
+                                </td>
+                                <td>
+                                    {% if virtualmachine.resources %}
+                                        <span class="badge bg-green">
+                                            {{ virtualmachine.resources }}
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-gray">
+                                            {{ virtualmachine.resources }}
+                                        </span>
+                                    {% endif %}   
+                                </td>
+                                <td>
+                                    {% if virtualmachine.tag %}
+                                        <span class="badge bg-green">
+                                            {{ virtualmachine.tag }}
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-gray">
+                                            {{ virtualmachine.tag }}
+                                        </span>
+                                    {% endif %}   
+                                </td>
+                                <td>
+                                    {% if virtualmachine.result %}
+                                        <span class="badge bg-green">
+                                            {{ virtualmachine.result }}
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-gray">
+                                            {{ virtualmachine.result }}
+                                        </span>
+                                    {% endif %}   
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+            
+                    <br><br>
+                {% endif %}
             </div>
         </div>
     </div>
