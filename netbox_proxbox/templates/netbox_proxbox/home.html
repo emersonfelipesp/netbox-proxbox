@@ -1,16 +1,134 @@
 {% extends 'base/layout.html' %}
 
+
 {% block content %}
-    {# Full Update Button#}
-    <div class="pull-right noprint">
-        {% if perms.netbox_proxbox.add_proxmoxvm %}
-        <a href="{% url 'plugins:netbox_proxbox:proxmoxvm_full_update' %}" target="_blank" class="btn btn-primary">Proxmox Full Update</a>
-        {% endif %}
+
+
+    <div class="row mb-3">
+        
+        {# Full Update Button#}
+        <div style="margin-bottom: 15px;" class="d-flex justify-content-center noprint">
+            {% if perms.netbox_proxbox.add_proxmoxvm %}
+            <a href="{% url 'plugins:netbox_proxbox:proxmoxvm_full_update' %}" target="_blank" class="btn btn-primary">Proxmox Full Update</a>
+            {% endif %}
+        </div>
+        <hr>
+        <div class="d-flex justify-content-center flex-nowrap" style="margin-bottom: 15px;">
+            <h2>
+                Proxbox Configuration
+            </h2>
+        </div>
+
+        <div class="col col-md-6">
+            <div class="card">
+                <h5 class="card-header">Proxmox</h5>
+                <div class="card-body">
+                    <table class="table table-hover attr-table">
+                        <tr>
+                        <th scope="row"><strong>Domain / IP</strong></th>
+                            {% if configuration.netbox_proxbox.proxmox.domain %}
+                                <td>{{ configuration.netbox_proxbox.proxmox.domain }}</td>
+                            {% else %}
+                                <td>{{ default_config.proxmox.domain }} (default)</td>
+                            {% endif %}
+                        </tr>
+                        <tr>
+                        <th scope="row"><strong>HTTP Port</strong></th>
+                        {% if configuration.netbox_proxbox.proxmox.http_port %}
+                                <td>{{ configuration.netbox_proxbox.proxmox.http_port }}</td>
+                            {% else %}
+                                <td>{{ default_config.proxmox.http_port }} (default)</td>
+                            {% endif %}
+                        </tr>
+                        <tr>
+                            <th scope="row"><strong>Proxmox User</strong></th>
+                            {% if configuration.netbox_proxbox.proxmox.user %}
+                                <td>{{ configuration.netbox_proxbox.proxmox.user }}</td>
+                            {% else %}
+                                <td>{{ default_config.proxmox.user }} (default)</td>
+                            {% endif %}
+                        </tr>
+                        <tr>
+                        <th scope="row"><strong>Proxmox Password</strong></th>
+                            {% if configuration.netbox_proxbox.proxmox.password %}
+                                <td>password defined in configuration.py</td>
+                            {% else %}
+                                <td>{{ default_config.proxmox.password }} (default)</td>
+                            {% endif %}
+                        </tr>
+                            <th scope="row"><strong>Token Name</strong></th>
+                            {% if configuration.netbox_proxbox.proxmox.token.name %}
+                                <td>{{ configuration.netbox_proxbox.proxmox.token.name }}</td>
+                            {% else %}
+                                <td>{{ default_config.proxmox.token.name }} (default)</td>
+                            {% endif %}
+                        </tr>
+                            <th scope="row"><strong>Token Value</strong></th>
+                            {% if configuration.netbox_proxbox.proxmox.token.value %}
+                                <td>{{ configuration.netbox_proxbox.proxmox.token.value }}</td>
+                            {% else %}
+                                <td>{{ default_config.proxmox.token.value }} (default)</td>
+                            {% endif %}
+                        </tr>
+                        </tr>
+                            <th scope="row"><strong>SSL</strong></th>
+                            {% if configuration.netbox_proxbox.proxmox.ssl %}
+                                <td>{{ configuration.netbox_proxbox.proxmox.ssl }}</td>
+                            {% else %}
+                                <td>{{ default_config.proxmox.ssl }} (default)</td>
+                            {% endif %}
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="col col-md-6">
+            <div class="card">
+                <h5 class="card-header">Netbox</h5>
+                <div class="card-body">
+                    <table class="table table-hover attr-table">
+                        </tr>
+                            <th scope="row"><strong>Domain / IP</strong></th>
+                            {% if configuration.netbox_proxbox.netbox.domain %}
+                                <td>{{ configuration.netbox_proxbox.netbox.domain }}</td>
+                            {% else %}
+                                <td>{{ default_config.netbox.domain }} (default)</td>
+                            {% endif %}
+                        </tr>
+                        </tr>
+                            <th scope="row"><strong>HTTP Port</strong></th>
+                            {% if configuration.netbox_proxbox.netbox.http_port %}
+                                <td>{{ configuration.netbox_proxbox.netbox.http_port }}</td>
+                            {% else %}
+                                <td>{{ default_config.netbox.http_port }} (default)</td>
+                            {% endif %}
+                        </tr>
+                        </tr>
+                            <th scope="row"><strong>Token</strong></th>
+                            {% if configuration.netbox_proxbox.netbox.token %}
+                                <td>{{ configuration.netbox_proxbox.netbox.token }}</td>
+                            {% else %}
+                                <td>{{ default_config.netbox.token }} (default)</td>
+                            {% endif %}
+                        </tr>
+                        </tr>
+                            <th scope="row"><strong>SSL</strong></th>
+                            {% if configuration.netbox_proxbox.netbox.ssl %}
+                                <td>{{ configuration.netbox_proxbox.netbox.ssl }}</td>
+                            {% else %}
+                                <td>{{ default_config.netbox.ssl }} (default)</td>
+                            {% endif %}
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
+    
 {% endblock %}
 
 {% block footer_links %}
     {{ block.super }}
 
-    {% include "footer.html" %}
+    {% include "netbox_proxbox/footer.html" %}
 {% endblock %}

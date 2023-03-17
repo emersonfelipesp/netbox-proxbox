@@ -116,9 +116,15 @@ if NETBOX_SETTINGS != None:
 # Check if token was provided
 if PROXMOX_TOKEN_VALUE != None and len(PROXMOX_TOKEN_VALUE) > 0:
     try:
+        if PROXMOX_SSL == False:
+            # DISABLE SSL WARNING
+            import urllib3
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
         # Start PROXMOX session using TOKEN
         PROXMOX_SESSION = ProxmoxAPI(
             PROXMOX,
+            port=PROXMOX_PORT,
             user=PROXMOX_USER,
             token_name=PROXMOX_TOKEN_NAME,
             token_value=PROXMOX_TOKEN_VALUE,
@@ -133,6 +139,7 @@ else:
         # Start PROXMOX session using USER CREDENTIALS
         PROXMOX_SESSION = ProxmoxAPI(
             PROXMOX,
+            port=PROXMOX_PORT,
             user=PROXMOX_USER,
             password=PROXMOX_PASSWORD,
             verify_ssl=PROXMOX_SSL

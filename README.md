@@ -1,8 +1,18 @@
-<p align="center">
-  <img width="532" src="https://github.com/N-Multifibra/proxbox/blob/main/etc/img/proxbox-full-logo.png" alt="Proxbox logo">
-</p>
+<div align="center">
+	<a href="https://docs.netbox.dev.br/en/netbox/plugins/netbox-proxbox">
+		<img width="532" src="https://github.com/N-Multifibra/proxbox/blob/main/etc/img/proxbox-full-logo.png" alt="Proxbox logo">
+	</a>
+	<br>
+	
+<div>
+	
+### [New Documentation available!](https://docs.netbox.dev.br/en/netbox/plugins/netbox-proxbox)
+</div>
+<br>
+</div>
 
-# proxbox
+
+
 
 ## Netbox Plugin which integrates [Proxmox](https://www.proxmox.com/) and [Netbox](https://netbox.readthedocs.io/)!
 
@@ -34,10 +44,11 @@ Proxbox is currently able to get the following information from Proxmox:
 
 The following table shows the Netbox and Proxmox versions compatible (tested) with Proxbox plugin.
 
-| netbox version        | proxmox version          | proxbox version
+| netbox version | proxmox version | proxbox version |
 | ------------- |-------------|-------------|
-| >= v3.2.0 | >= v6.2.0 | =v0.0.4
-| >= v3.0.0 < v3.2| >= v6.2.0 | =v0.0.3
+| >= v3.4.0 | >= v6.2.0  | =v0.0.5 |
+| >= v3.2.0 | >= v6.2.0 | =v0.0.4 |
+| >= v3.0.0 < v3.2 | >= v6.2.0 | =v0.0.3 |
 
 
 </div>
@@ -80,7 +91,7 @@ The plugin is available as a Python package in pypi and can be installed with pi
 
 ### 1.1. Install package
 
-#### 1.1.1. Using pip (production use - not working yet!)
+#### 1.1.1. Using pip (production use)
 
 Enter Netbox's virtual environment.
 ```
@@ -128,17 +139,18 @@ PLUGINS = ['netbox_proxbox']
 #### 1.3.1. Change Netbox '**[configuration.py](https://github.com/netbox-community/netbox/blob/develop/netbox/netbox/configuration.example.py)**' to add PLUGIN parameters
 The plugin's configuration is also located in **/opt/netbox/netbox/netbox/configuration.py**:
 
-Replace the values with your own following the [Configuration Parameters](#configuration-parameters) section.
+Replace the values with your own following the [Configuration Parameters](#2-configuration-parameters) section.
 
-**OBS:** You do not need to configure all the parameters, only the one's different from the default values. It means that if you have some value equal to the one below, you can skip its configuration.
+**OBS:** You do not need to configure all the parameters, only the one's different from the default values. It means that if you have some value equal to the one below, you can skip its configuration. For netbox you should ensure the domain/port either targets gunicorn or a true http port that is not redirected to https.
+
 ```python
 PLUGINS_CONFIG = {
     'netbox_proxbox': {
         'proxmox': {
             'domain': 'proxbox.example.com',    # May also be IP address
             'http_port': 8006,
-            'user': 'root@pam',
-            'password': 'Strong@P4ssword',
+            'user': 'root@pam',   # always required
+            'password': 'Strong@P4ssword', # only required, if you don't want to use token based authentication
             'token': {
                 'name': 'tokenID',	# Only type the token name and not the 'user@pam:tokenID' format
                 'value': '039az154-23b2-4be0-8d20-b66abc8c4686'
@@ -146,8 +158,8 @@ PLUGINS_CONFIG = {
             'ssl': False
         },
         'netbox': {
-            'domain': 'netbox.example.com',     # May also be IP address
-            'http_port': 80,
+            'domain': 'localhost',     # Ensure localhost is added to ALLOWED_HOSTS
+            'http_port': 8001,     # Gunicorn port.
             'token': '0dd7cddfaee3b38bbffbd2937d44c4a03f9c9d38',
             'ssl': False,	# There is no support to SSL on Netbox yet, so let it always False.
             'settings': {
@@ -165,66 +177,7 @@ PLUGINS_CONFIG = {
 
 > Probably on the next release of Netbox, it will not be necessary to make the configuration below! As the [Pull Request #8733](https://github.com/netbox-community/netbox/pull/8734) got merged to develop branch
 
-Edit **/opt/netbox/netbox/netbox** and find TEMPLATE_DIR section
-
-- How it is configured (Netbox >= v3.2.0):
-```python
-TEMPLATES_DIR = BASE_DIR + '/templates'
-TEMPLATES = [
-    {
-        'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [TEMPLATES_DIR],
-        'APP_DIRS': True,
-        'OPTIONS': {
-            'builtins': [
-                'utilities.templatetags.builtins.filters',
-                'utilities.templatetags.builtins.tags',
-            ],
-            'context_processors': [
-                'django.template.context_processors.debug',
-                'django.template.context_processors.request',
-                'django.template.context_processors.media',
-                'django.contrib.auth.context_processors.auth',
-                'django.contrib.messages.context_processors.messages',
-                'netbox.context_processors.settings_and_registry',
-            ],
-        },
-    },
-]
-```
-
-<br>
-
-- How it is must be:
-```python
-TEMPLATES_DIR = BASE_DIR + '/templates'
-
-# PROXBOX CUSTOM TEMPLATE
-PROXBOX_TEMPLATE_DIR = BASE_DIR + '/netbox-proxbox/netbox_proxbox/templates/netbox_proxbox'
-
-TEMPLATES = [
-    {
-        'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [TEMPLATES_DIR, PROXBOX_TEMPLATE_DIR],
-        'APP_DIRS': True,
-        'OPTIONS': {
-            'builtins': [
-                'utilities.templatetags.builtins.filters',
-                'utilities.templatetags.builtins.tags',
-            ],
-            'context_processors': [
-                'django.template.context_processors.debug',
-                'django.template.context_processors.request',
-                'django.template.context_processors.media',
-                'django.contrib.auth.context_processors.auth',
-                'django.contrib.messages.context_processors.messages',
-                'netbox.context_processors.settings_and_registry',
-            ],
-        },
-    },
-]
-```
-I did it because I had to change the **base/layout.html** from Netbox, since there is no **Jinja2 block** to fill with custom information into the **footer HTML tag**
+**It is no longer necessary to modify the templates section in `settings.py` and you may revert any changes.**
 
 ---
 
@@ -261,8 +214,8 @@ The following options are available:
 * `proxmox.ssl`: (Bool) Defines the use of SSL (default: False).
 
 * `netbox`: (Dict) Netbox related configuration to use pynetbox.
-* `netbox.domain`: (String) Domain or IP address of Netbox.
-* `netbox.http_port`: (Integer) Netbox HTTP PORT (default: 80).
+* `netbox.domain`: (String) Domain or IP address of Netbox. Ensure name or ip is added to `ALLOWED_HOSTS`
+* `netbox.http_port`: (Integer) Netbox HTTP PORT (default: 8001).  If you are not targeting gunicorn directly make sure the HTTP port is not redirected to HTTPS by your HTTP server.
 * `netbox.token`: (String) Netbox Token Value.
 * `netbox.ssl`: (Bool) Defines the use of SSL (default: False). - Proxbox doesn't support SSL on Netbox yet.
 * `netbox.settings`: (Dict) Default items of Netbox to be used by Proxbox. 

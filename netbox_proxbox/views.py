@@ -13,10 +13,14 @@ from .icon_classes import icon_classes
 from .filters import ProxmoxVMFilter
 from .forms import ProxmoxVMForm, ProxmoxVMFilterForm
 from .models import ProxmoxVM
-from .tables import ProxmoxVMTable
+from .tables import ProxmoxVMTable, VMUpdateResult, NodeUpdateResult
 
 from netbox_proxbox import proxbox_api
 import json
+
+from netbox import configuration
+
+from . import ProxboxConfig
 
 
 class HomeView(View):
@@ -29,8 +33,47 @@ class HomeView(View):
         return render(
             request,
             self.template_name,
+            {
+                "configuration": configuration.PLUGINS_CONFIG,
+                "default_config": ProxboxConfig.default_settings
+            }
         )
 
+''' 
+def table_data():
+    json_result = proxbox_api.update.all(remove_unused = True)
+
+    vm_table = []
+    for row in json_result.get("virtualmachines"):
+        json = {
+            "name": row["name"],
+            "status": row["changes"]["status"],
+            "custom_fields": row["changes"]["custom_fields"],
+            "local_context": row["changes"]["local_context"],
+            "resources": row["changes"]["resources"],
+            "tag": row["changes"]["tag"],
+            "interfaces": row["changes"]["interfaces"],
+            "ips": row["changes"]["ips"],
+        }
+        vm_table.append(json)
+
+    virtualmachines_table = VMUpdateResult(vm_table)
+
+    node_table = []
+    for row in json_result.get("nodes"):
+        json = {
+            "status": row["changes"]["status"],
+            "cluster": row["changes"]["cluster"],
+            "interfaces": row["changes"]["interfaces"],
+            "result": row["result"]
+        }
+        node_table.append(json)
+
+    nodes_table = NodeUpdateResult(node_table)
+
+
+    return [virtualmachines_table, nodes_table]
+'''
 
 class ProxmoxFullUpdate(PermissionRequiredMixin, View):
     """Full Update of Proxmox information on Netbox."""
@@ -43,15 +86,11 @@ class ProxmoxFullUpdate(PermissionRequiredMixin, View):
     def get(self, request):
         """Get request."""
 
-        update_all_result = proxbox_api.update.all(remove_unused = True)
-        update_all_json = json.dumps(update_all_result, indent = 4)
-
-        # render() renders provided template and uses it to create a well-formed web response
         return render(
             request,
             "netbox_proxbox/proxmox_vm_full_update.html",
             {
-                "proxmox": update_all_result,
+                "virtualmachines_table": VMUpdateResult(proxbox_api.update.all(remove_unused = True)["virtualmachines"]),
             },
         )
 

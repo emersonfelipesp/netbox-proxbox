@@ -18,8 +18,6 @@ github = 'https://github.com/N-Multifibra/netbox-proxbox'
 requires = [
     'poetry',
     'invoke',
-    'numpy',
-    'matplotlib',
     'requests>=2',
     'pynetbox>=5',
     'paramiko>=2',
@@ -37,7 +35,7 @@ dev_requires = [
 
 setup(
     name="netbox-proxbox",
-    version="0.0.4",
+    version="0.0.5",
     author="Emerson Felipe",
     author_email="emerson.felipe@nmultifibra.com.br",
     description="Integration between Proxmox and Netbox",
@@ -46,8 +44,8 @@ setup(
     long_description_content_type="text/markdown",
     classifiers=[
         "Programming Language :: Python :: 3",
-	"Framework :: Django",
-	"Operating System :: Unix",
+        "Framework :: Django",
+        "Operating System :: Unix",
         "License :: OSI Approved :: Apache Software License",
     ],
     keywords="netbox netbox-plugin plugin proxmox proxmoxer pynetbox",

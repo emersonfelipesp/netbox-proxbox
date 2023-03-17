@@ -1,95 +1,19 @@
 {% extends 'base/layout.html' %}
+{% load render_table from django_tables2 %}
 
 {% block content %}
-    {% if proxmox.nodes %}
-        <h2>Nodes</h2>
-        <table class="table">
-            <thead>
-                    <tr>
-                        <th>Node status changed</th>
-                        <th>Cluster changed</th>
-                        <th>Update result</th>
-
-                    </tr>
-            </thead>
-            <tbody>
-                {% for node in proxmox.nodes %}
-                <tr>
-                    <td>{{ node.changes.status }}</td>
-                    <td>{{ node.changes.cluster }}</td>
-                    <td>{{ node.result }}</td>
-
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-
-        <br><br>
-    {% endif %}
-    {% if proxmox.virtualmachines %}
-        <h2>Virtual Machines and Containers</h2>
-
-        <table class="table">
-            <thead>
-                    <tr>
-                        <th>VM/CT Name</th>
-                        <th>Status changed</th>
-                        <th>Custom Fields</th>
-                        <th>Local context</th>
-                        <th>Resources</th>
-                        <th>Tag</th>
-                        <th>Update result</th>
-                    </tr>
-            </thead>
-            <tbody>
-                {% for virtualmachine in proxmox.virtualmachines %}
-                <tr>
-                    <td><strong>{{ virtualmachine.name }}</strong></td>
-                    <td>{{ virtualmachine.changes.status }}</td>
-                    <td>{{ virtualmachine.changes.custom_fields }}</td>
-                    <td>{{ virtualmachine.changes.local_context }}</td>
-                    <td>{{ virtualmachine.changes.resources }}</td>
-                    <td>{{ virtualmachine.changes.tag }}</td>
-                    <td>{{ virtualmachine.result }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-
-        <br><br>
-    {% endif %}
-    {% if proxmox.remove_unused %}
-        <h2>Remove unused VM/CT</h2>
-        <h3>Logs:</h3>
-        <ul>
-        {% for deleted in proxmox.remove_unused %}
-            
-            {# Check amount of logs #}
-            {% if deleted.log|length > 1 %}
-                <li><strong>{{ deleted.name }}</strong>
-                    <ul>
-                        {% for log in deleted.log %}
-                            <li>{{ log }}</li>
-                        {% endfor %}
-                    </ul>
-                </li>
-                
-            {% else %}
-                {# If only 01 log #}
-                <li><strong>{{ deleted.name }}</strong> - {% for log in deleted.log %}{{ log }}{% endfor %}</li>
-            {% endif %}
-            
-
-            
-            <br>
-        {% endfor %}
-        </ul>
-    {% endif %}
-    
+    <h2>Virtual Machines and Containers</h2>
+    <div class="card">
+        <div class="card-body" id="object-list">
+            <div class="table-responsive">
+                {% render_table virtualmachines_table %}
+            </div>
+        </div>
+    </div>
 {% endblock %}
 
 {% block footer_links %}
     {{ block.super }}
 
-    {% include "footer.html" %}
+    {% include "netbox_proxbox/footer.html" %}
 {% endblock %}
