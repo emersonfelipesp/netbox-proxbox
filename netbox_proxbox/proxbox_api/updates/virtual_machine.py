@@ -308,7 +308,7 @@ def interfaces(netbox_vm, proxmox_vm):
             for _conf_str in interface[ifname].split(','):
                 _k_s =_conf_str.split('=')
                 if re.match("[0-9a-f]{2}([-:]?)[0-9a-f]{2}(\\1[0-9a-f]{2}){4}$", _k_s[1].lower()):
-                    _mac_addr =_k_s[1].lower()
+                    _mac_addr =_k_s[1].upper()
                 elif _k_s[0] == 'bridge':
                     _bridge = _k_s[1].lower()
                 elif _k_s[0] == 'mtu':
@@ -324,7 +324,7 @@ def interfaces(netbox_vm, proxmox_vm):
             _pmx_if.append({'name': ifname, 'mac_address': _mac_addr, 'mtu': _mtu})
 
     for interface in nb.virtualization.interfaces.filter(virtual_machine_id=netbox_vm.id):
-        _ntb_if.append({'name': interface.name, 'mac_address': interface.mac_address, 'mtu': interface.mtu})
+        _ntb_if.append({'name': interface.name, 'mac_address': interface.mac_address.upper(), 'mtu': interface.mtu})
 
     for pmx_if_mac in [_if['mac_address'] for _if in _pmx_if]:
         pmx_if = next((_if for _if in _pmx_if if _if['mac_address'] == pmx_if_mac), None)
