@@ -356,6 +356,7 @@ def nodes(**kwargs):
 
     # Search netbox using VM name
     netbox_search = nb.dcim.devices.get(name = proxmox_node_name)
+    print(f"(1) netbox_search: {netbox_search}")
 
     # Search node on Netbox with Proxmox node name gotten
     if nb.dcim.devices.get(name = proxmox_node_name) == None:
@@ -391,6 +392,7 @@ def nodes(**kwargs):
     else:
         # If node already exist, try updating it.
         netbox_node = netbox_search
+        print(f"(1) netbox_node: {netbox_node}")
 
         # Update Netbox node information, if necessary.
         full_update = node_full_update(netbox_node, proxmox_json, proxmox_cluster)  
