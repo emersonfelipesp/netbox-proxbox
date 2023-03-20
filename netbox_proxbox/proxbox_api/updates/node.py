@@ -59,9 +59,26 @@ def cluster(netbox_node, proxmox_node, proxmox_cluster):
     #
     # Compare CLUSTER
     #
-    if proxmox_cluster != None:
-        # If cluster is filled, but different from actual cluster, update it.
-        if netbox_node.cluster.name != proxmox_cluster['name']:
+    try:
+        if proxmox_cluster != None and netbox_node != None: 
+            # If cluster is not filled or even filled, but different from actual cluster, update it.
+            if netbox_node.cluster.name != proxmox_cluster['name'] or netbox_node.cluster.name == None:
+                # Search for Proxmox Cluster using create.cluster() function
+                cluster_id = create.virtualization.cluster().id
+
+                # Use Cluster ID to update NODE information
+                netbox_node.cluster.id = cluster_id
+
+                if netbox_node.save() == True:
+                    cluster_updated = True
+                else:
+                    cluster_updated = False
+
+            else:
+                cluster_updated = False
+
+        # If cluster is empty, update it.
+        elif proxmox_cluster == None:
             # Search for Proxmox Cluster using create.cluster() function
             cluster_id = create.virtualization.cluster().id
 
@@ -72,26 +89,15 @@ def cluster(netbox_node, proxmox_node, proxmox_cluster):
                 cluster_updated = True
             else:
                 cluster_updated = False
-
+        
+        # If cluster was not empty and also not different, do not make any change.
         else:
             cluster_updated = False
+            
+    except Exception as error:
+        print(f"[ERROR] {error}")
 
-    # If cluster is empty, update it.
-    elif proxmox_cluster == None:
-        # Search for Proxmox Cluster using create.cluster() function
-        cluster_id = create.virtualization.cluster().id
 
-        # Use Cluster ID to update NODE information
-        netbox_node.cluster.id = cluster_id
-
-        if netbox_node.save() == True:
-            cluster_updated = True
-        else:
-            cluster_updated = False
-    
-    # If cluster was not empty and also not different, do not make any change.
-    else:
-        cluster_updated = False
 
     return cluster_updated
 
