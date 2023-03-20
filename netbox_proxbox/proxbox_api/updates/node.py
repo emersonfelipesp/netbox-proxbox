@@ -63,7 +63,7 @@ def cluster(netbox_node, proxmox_node, proxmox_cluster):
 
     if netbox_node != None:
         try:
-            if proxmox_cluster != None and netbox_node != None: 
+            if proxmox_cluster != None: 
                 # If cluster is not filled or even filled, but different from actual cluster, update it.
                 if netbox_node.cluster.name != proxmox_cluster['name'] or netbox_node.cluster.name == None:
                     # Search for Proxmox Cluster using create.cluster() function
@@ -98,9 +98,8 @@ def cluster(netbox_node, proxmox_node, proxmox_cluster):
                 cluster_updated = False
 
         except Exception as error:
-            print(f"[ERROR] {error}\n netbox_node: {netbox_node}\n> netbox_node.cluster.id: {netbox_node.cluster.id}\n> proxmox_cluster: {proxmox_cluster}")
+            print(f"[ERROR] {error}")
     else:
-        print(f"netbox_node: {netbox_node}")
         cluster_updated = False
 
     return cluster_updated

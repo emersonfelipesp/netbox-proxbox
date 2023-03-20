@@ -148,6 +148,11 @@ def node(proxmox_node):
     node_json["status"] = 'active'
     node_json["tags"] = [extras.tag().id]
     node_json["cluster"] = virtualization.cluster().id
+    
+    # If device already exists, append (2) to final of the name
+    check_duplicate = proxmox_node.get("duplicate", False)
+    if check_duplicate:
+        node_json["name"] = f"{proxmox_node['name']} (2)"
 
     # Create Node with json 'node_json'
     try:

@@ -17,6 +17,8 @@ from . import (
     remove,
 )
 
+from .create import extras 
+
 # Call all functions to update Virtual Machine
 def vm_full_update(netbox_vm, proxmox_vm):
     changes = {}
@@ -54,6 +56,9 @@ def vm_full_update(netbox_vm, proxmox_vm):
 
 
 def node_full_update(netbox_node, proxmox_json, proxmox_cluster):
+    print(f"netbox_node: {netbox_node} | {type(netbox_node)}")
+    print(f"proxmox_json: {proxmox_json} | {type(proxmox_json)}")
+    print(f"proxmox_cluster: {proxmox_cluster} | {type(proxmox_cluster)}")
     changes = {}
 
     status_updated = updates.node.status(netbox_node, proxmox_json)
@@ -347,6 +352,7 @@ def virtual_machine(**kwargs):
 
 
 def nodes(**kwargs):
+    print("\n\nNODES TESTE\n\n")
     proxmox_cluster = kwargs.get('proxmox_cluster')
     proxmox_json = kwargs.get('proxmox_json')
 
@@ -356,9 +362,9 @@ def nodes(**kwargs):
 
     # Search netbox using VM name
     netbox_search = nb.dcim.devices.get(name = proxmox_node_name)
-
+    print(f"netbox_search: {netbox_search}")
     # Search node on Netbox with Proxmox node name gotten
-    if nb.dcim.devices.get(name = proxmox_node_name) == None:
+    if netbox_search == None:
         # If node does not exist, create it.
         netbox_node = create.dcim.node(proxmox_json)
 
@@ -389,25 +395,70 @@ def nodes(**kwargs):
             json_node["result"] = False
 
     else:
-        # If node already exist, try updating it.
-        netbox_node = netbox_search
+        print("device found")
+        try:
+            # Check if Proxbox tag exist.
+            print(netbox_search.tags)
 
-        # Update Netbox node information, if necessary.
-        full_update = node_full_update(netbox_node, proxmox_json, proxmox_cluster)  
-        json_node = full_update
+            search_tag = netbox_search.tags.index(extras.tag())
+            print(f"search_tag: {search_tag}")
 
-        full_update_list = list(full_update.values())
+            # If node already exist, try updating it.
+            netbox_node = netbox_search
 
-        # Analyze if update was successful
-        if True in full_update_list:
-            print('[OK] NODE updated. -> {}'.format(proxmox_node_name))
-        else:
-            print('[OK] NODE already updated. -> {}'.format(proxmox_node_name))
+            # Update Netbox node information, if necessary.
+            full_update = node_full_update(netbox_node, proxmox_json, proxmox_cluster)  
+            json_node = full_update
 
-        # return True as the node was successfully created.
-        json_node["node_id"] = netbox_node.id
-        json_node["name"] = proxmox_node_name
-        json_node["result"] = True
+            full_update_list = list(full_update.values())
+
+            # Analyze if update was successful
+            if True in full_update_list:
+                print('[OK] NODE updated. -> {}'.format(proxmox_node_name))
+            else:
+                print('[OK] NODE already updated. -> {}'.format(proxmox_node_name))
+
+            # return True as the node was successfully created.
+            json_node["node_id"] = netbox_node.id
+            json_node["name"] = proxmox_node_name
+            json_node["result"] = True
+                
+        except ValueError as error:
+            # Tag was not found within device, so there is already existing device.
+            print(f"[WARNING] Device with the same name as {netbox_search.name} already exists.\n> Proxbox will create another one with (2) in the name\n{error}")
+
+            proxmox_json["duplicate"] = True
+            
+            # If node does not exist, create it.
+            netbox_node = create.dcim.node(proxmox_json)
+
+            # Node created
+            if netbox_node != None:
+                print("[OK] Node created! -> {}".format(proxmox_node_name))
+
+                # Update rest of configuration
+                full_update = node_full_update(netbox_node, proxmox_json, proxmox_cluster)  
+                json_node = full_update
+
+                full_update_list = list(full_update.values())
+
+                # Analyze if update was successful
+                if True in full_update_list:
+                    print('[OK] NODE updated. -> {}'.format(proxmox_node_name))
+                else:
+                    print('[OK] NODE already updated. -> {}'.format(proxmox_node_name))
+
+                # return True as the node was successfully created.
+                json_node["node_id"] = netbox_node.id
+                json_node["name"] = proxmox_node_name
+                json_node["result"] = True
+
+            # Error with node creation
+            else:
+                print('[ERROR] Something went wrong when creating the node.-> {}'.format(proxmox_node_name))
+                json_node["result"] = False
+
+        
         
 
         
