@@ -59,6 +59,7 @@ def cluster(netbox_node, proxmox_node, proxmox_cluster):
     #
     # Compare CLUSTER
     #
+    cluster_updated = False
     try:
         if proxmox_cluster != None and netbox_node != None: 
             # If cluster is not filled or even filled, but different from actual cluster, update it.
@@ -93,7 +94,7 @@ def cluster(netbox_node, proxmox_node, proxmox_cluster):
         # If cluster was not empty and also not different, do not make any change.
         else:
             cluster_updated = False
-            
+
     except Exception as error:
         print(f"[ERROR] {error}")
 
