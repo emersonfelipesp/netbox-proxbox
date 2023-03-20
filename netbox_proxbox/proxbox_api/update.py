@@ -393,6 +393,9 @@ def nodes(**kwargs):
         # If node already exist, try updating it.
         netbox_node = netbox_search
         print(f"(1) netbox_node: {netbox_node}")
+        print(f"> netbox_node.id: {netbox_node.id}")
+        print(f"> netbox_node.cluster: {netbox_node.cluster}")
+        print(f"> netbox_node.cluster.id: {netbox_node.cluster.id}")
 
         # Update Netbox node information, if necessary.
         full_update = node_full_update(netbox_node, proxmox_json, proxmox_cluster)  
