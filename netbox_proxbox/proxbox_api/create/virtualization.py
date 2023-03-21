@@ -37,7 +37,7 @@ def cluster_type():
                 description = 'Proxmox Virtual Environment. Open-source server management platform'
             )
         except Exception as request_error:
-            raise RuntimeError("Error creating the '{0}' cluster type.".format(cluster_type_name)) from request_error
+            raise RuntimeError(f"Error creating the '{cluster_type_name}' cluster type.") from request_error
 
     else:
         cluster_type = cluster_type_proxbox
@@ -79,7 +79,7 @@ def cluster():
                 tags = [extras.tag().id]
             )
         except:
-            return "Error creating the '{0}' cluster. Possible errors: the name '{0}' is already used.".format(proxmox_cluster_name)
+            return f"Error creating the '{proxmox_cluster_name}' cluster. Possible errors: the name '{proxmox_cluster_name}' is already used."
 
     else:
         cluster = cluster_proxbox
@@ -97,17 +97,22 @@ def cluster():
 #
 # virtualization.virtual_machines
 #
-def virtual_machine(proxmox_vm):
+def virtual_machine(proxmox_vm, duplicate):
     # Create json with basic VM/CT information
     vm_json = {}
+    netbox_obj = None
 
     if proxmox_vm['status'] == 'running':
         vm_json["status"] = 'active'
     elif proxmox_vm == 'stopped':
         vm_json["status"] = 'offline'
 
+    if duplicate:
+        print("VM/CT is duplicated")
+        vm_json["name"] = f"{proxmox_vm['name']} + (2)"
+    else:
+        vm_json["name"] = proxmox_vm['name']
     
-    vm_json["name"] = proxmox_vm['name']
     vm_json["status"] = 'active'
     vm_json["cluster"] = cluster().id
     vm_json["role"] = extras.role(role_id = NETBOX_VM_ROLE_ID).id
@@ -115,15 +120,13 @@ def virtual_machine(proxmox_vm):
     
     # Create VM/CT with json 'vm_json'
     try:
+        print(f"vm_json: {vm_json}")
         netbox_obj = nb.virtualization.virtual_machines.create(vm_json)
+        return netbox_obj
 
     except:
         print("[proxbox.create.virtual_machine] Creation of VM/CT failed.")
         netbox_obj = None
 
-    else:
-        return netbox_obj
-
-    # In case nothing works, returns error
-    netbox_obj = None
+    
     return netbox_obj

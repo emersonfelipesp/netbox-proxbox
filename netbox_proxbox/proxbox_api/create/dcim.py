@@ -33,15 +33,12 @@ def manufacturer():
                 description = proxbox_manufacturer_desc
             )
         except:
-            return "Error creating the '{0}' manufacturer. Possible errors: the name '{0}' or slug '{1}' is already used.".format(proxbox_manufacturer_name, proxbox_manufacturer_slug)
+            return f"Error creating the '{proxbox_manufacturer_name}' manufacturer. Possible errors: the name '{proxbox_manufacturer_name}' or slug '{proxbox_manufacturer_slug}' is already used."
     
     else:
         manufacturer = proxbox_manufacturer
     
     return manufacturer
-
-
-
 
 
 #
@@ -69,15 +66,12 @@ def device_type():
                 tags = [extras.tag().id]
             )
         except:
-            return "Error creating the '{0}' device type. Possible errors: the model '{0}' or slug '{1}' is already used.".format(proxbox_device_type_model, proxbox_device_type_slug)
+            return f"Error creating the '{proxbox_device_type_model}' device type. Possible errors: the model '{proxbox_device_type_model}' or slug '{proxbox_device_type_slug}' is already used."
     
     else:
         device_type = proxbox_device_types
     
     return device_type
-
-
-
 
 
 #
@@ -117,7 +111,7 @@ def site(**kwargs):
                     tags = [extras.tag().id]
                 )
             except:
-                return "Error creating the '{0}' site. Possible errors: the name '{0}' or slug '{1}' is already used.".format(site_proxbox_name, site_proxbox_slug)
+                return f"Error creating the '{site_proxbox_name}' site. Possible errors: the name '{site_proxbox_name}' or slug '{site_proxbox_slug}' is already used."
 
         # If basic site already created, use it.
         else:
@@ -127,10 +121,6 @@ def site(**kwargs):
         return 'Site ID configured is invalid.'
 
     return site
-
-
-
-
 
 
 #

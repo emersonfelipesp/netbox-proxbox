@@ -103,16 +103,20 @@
                             <tr>
                                 <td>
                                     <strong>
-                                        <a href="{% url 'virtualization:virtualmachine' pk=virtualmachine.vm_id %}">
+                                        {% if virtualmachine.vm_id %}
+                                            <a href="{% url 'virtualization:virtualmachine' pk=virtualmachine.vm_id %}">
+                                                {{ virtualmachine.name }}
+                                            </a>
+                                        {% else %}
                                             {{ virtualmachine.name }}
-                                        </a>
+                                        {% endif %}
                                     </strong>
                                 </td>
                                 <td>
                                     {% if virtualmachine.status %}
                                         <span class="badge bg-green">
                                             {{ virtualmachine.status }}
-                                        </span>
+                                        </span> 
                                     {% else %}
                                         <span class="badge bg-gray">
                                             {{ virtualmachine.status }}
