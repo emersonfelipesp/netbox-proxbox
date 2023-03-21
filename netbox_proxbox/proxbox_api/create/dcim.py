@@ -10,9 +10,6 @@ from . import (
     virtualization,
 )
 
-from netbox.configuration import PLUGINS_CONFIG
-proxbox_user_cfg = PLUGINS_CONFIG
-
 #
 # dcim.manufacturers
 #
@@ -153,33 +150,52 @@ def node(proxmox_node):
     # If device already exists, append (2) to final of the name
     check_duplicate = proxmox_node.get("duplicate", False)
     if check_duplicate:
+        # Redefine name appending (2) to final
         node_json["name"] = f"{proxmox_node['name']} (2)"
 
 
         original_device = proxmox_node.get("netbox_original_device", None)
         if original_device:
-            print(f"proxbox_user_cfg: {proxbox_user_cfg}")
-            cfg = proxbox_user_cfg.get("netbox_proxbox").get("netbox")
-            domain = cfg.get("domain", 'netbox.example.com')
-            http_port = cfg.get("http_port", 80)
             node_json["comments"] = f"The original device has the following info:<br>**Device ID:** {original_device.id}<br>**Name:** {original_device.name}"
 
-        #"configuration": configuration.PLUGINS_CONFIG,
-        #"default_config": ProxboxConfig.default_settings
-        #https://{{ configuration.netbox_proxbox.proxmox.domain }}:{{ configuration.netbox_proxbox.proxmox.http_port }}" target="_blank"
 
-    print(f"(node) node_json: {node_json}")
-    # Create Node with json 'node_json'
-    try:
-        netbox_obj = nb.dcim.devices.create(node_json)
-        print(f"netbox_obj: {netbox_obj}")
-
-    except:
-        print("[proxbox_api.create.node] Creation of NODE failed.")
+        print(f"(node) node_json: {node_json}")
         netbox_obj = None
+        search_device = None
+
+        # Create Node with json 'node_json'
+        try:
+            # GET
+            search_device = nb.dcim.devices.get(
+                name = node_json["name"],
+                cluster = node_json["cluster"]
+            )
+            return search_device
+        except Exception as error:
+            print(error)
+        
+        try:
+            # CREATE
+            if search_device == None:
+                netbox_obj = nb.dcim.devices.create(node_json)
+                return netbox_obj
+        except Exception as error:
+            print(error)
+
+        finally:
+            print("[proxbox_api.create.node] Creation of NODE failed.")
+            netbox_obj = None
     
+    # If NODE is not DUPLICATED, then CREATE it.
     else:
-        return netbox_obj
+         # Create Node with json 'node_json'
+        try:
+            netbox_obj = nb.dcim.devices.create(node_json)
+
+        except:
+            print("[proxbox_api.create.node] Creation of NODE failed.")
+            netbox_obj = None
+            return netbox_obj
     
     # In case nothing works, returns error
     netbox_obj = None

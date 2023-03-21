@@ -356,6 +356,7 @@ def nodes(**kwargs):
 
     def create_node():
         # If node does not exist, create it.
+        print(f"proxmox_json: {proxmox_json}")
         netbox_node = create.dcim.node(proxmox_json)
 
         # Node created
@@ -380,7 +381,8 @@ def nodes(**kwargs):
         
         # Error with node creation
         else:
-            print('[ERROR] Something went wrong when creating the node.-> {}'.format(proxmox_node_name))
+            print('netbox_node: ', netbox_node)
+            print('[ERROR] Something went wrong when creating the node.-> {} (2)'.format(proxmox_node_name))
             json_node = {}
             json_node["result"] = False
 
@@ -389,11 +391,13 @@ def nodes(**kwargs):
     # Search netbox using VM name
     netbox_search = nb.dcim.devices.get(name = proxmox_node_name)
 
+    print(f"\nnetbox_search: {netbox_search}\n")
     # Search node on Netbox with Proxmox node name gotten
     if netbox_search == None:
         # If node does not exist, create it.
         json_node = create_node()
 
+        print(f"node created: {json_node}")
         # Node created
         if json_node != None:
             # return True as the node was successfully created.
