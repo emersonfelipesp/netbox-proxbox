@@ -3,7 +3,9 @@ from django.urls import reverse_lazy
 # 'View' is a django subclass. Basic type of class-based views
 from django.views import View
 from django.views.generic.edit import CreateView, DeleteView, UpdateView
-from django_tables2 import RequestConfig
+
+from django.views.decorators.cache import never_cache
+
 # Enables permissions for views using Django authentication system.
 # PermissionRequiredMixin = will handle permission checks logic and will plug into the
 # Netbox's existing authorization system.
@@ -21,6 +23,7 @@ import json
 from netbox import configuration
 
 from . import ProxboxConfig
+
 
 
 class HomeView(View):
@@ -75,22 +78,31 @@ def table_data():
     return [virtualmachines_table, nodes_table]
 '''
 
+
 class ProxmoxFullUpdate(PermissionRequiredMixin, View):
     """Full Update of Proxmox information on Netbox."""
 
     # Define permission
     permission_required = "netbox_proxbox.view_proxmoxvm"
 
+
+    
+
     # service incoming GET HTTP requests
     # 'pk' value is passed to get() via URL defined in urls.py
     def get(self, request):
         """Get request."""
 
+        json_result = proxbox_api.update.all(remove_unused = True)
+        
+        import json
+        
         return render(
             request,
             "netbox_proxbox/proxmox_vm_full_update.html",
             {
-                "proxmox": proxbox_api.update.all(remove_unused = True),
+                "proxmox": json_result,
+                "proxmox_json": json.dumps(json_result, indent=4)
             },
         )
 

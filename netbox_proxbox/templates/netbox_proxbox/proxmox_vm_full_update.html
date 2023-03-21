@@ -24,9 +24,13 @@
                             <tr>
                                 <td>
                                     <strong>
-                                        <a href="{% url 'dcim:device' pk=node.node_id %}">
+                                        {% if node.node_id %}
+                                            <a href="{% url 'dcim:device' pk=node.node_id %}">
+                                                {{ node.name }}
+                                            </a>
+                                        {% else %}
                                             {{ node.name }}
-                                        </a>
+                                        {% endif %}
                                     </strong>
                                 </td>
                                 <td>
@@ -180,6 +184,23 @@
             </div>
         </div>
     </div>
+
+    <p>
+        <button class="btn btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#collapseExample" aria-expanded="false" aria-controls="collapseExample">
+          Show JSON result
+        </button>
+    </p>
+    <div class="collapse" id="collapseExample">
+        <div class="card card-body">
+            <pre>{{ proxmox_json }}</pre>
+        </div>
+    </div>
+
+
+
+
+    
+    
 {% endblock %}
 
 {% block footer_links %}
