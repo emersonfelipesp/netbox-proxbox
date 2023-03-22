@@ -26,7 +26,7 @@ def tag():
                 description = "Proxbox Identifier (used to identify the items the plugin created)"
             )
         except:
-            return "Error creating the '{0}' tag. Possible errors: the name '{0}' or slug '{1}' is already used.".format(proxbox_tag_name, proxbox_tag_slug)
+            return f"Error creating the '{proxbox_tag_name}' tag. Possible errors: the name '{proxbox_tag_name}' or slug '{proxbox_tag_slug}' is already used."
     else:
         tag = proxbox_tag
 
@@ -75,7 +75,7 @@ def role(**kwargs):
                     vm_role = True
                 )
             except:
-                return "Error creating the '{0}' role. Possible errors: the name '{0}' or slug '{1}' is already used.".format(role_proxbox_name, role_proxbox_slug)
+                return f"Error creating the '{role_proxbox_name}' role. Possible errors: the name '{role_proxbox_name}' or slug '{role_proxbox_slug}' is already used."
         
         # If basic role already created, use it.
         else:

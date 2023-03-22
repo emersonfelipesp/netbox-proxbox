@@ -109,7 +109,7 @@ def virtual_machine(proxmox_vm, duplicate):
 
     if duplicate:
         print("VM/CT is duplicated")
-        vm_json["name"] = f"{proxmox_vm['name']} + (2)"
+        vm_json["name"] = f"{proxmox_vm['name']} (2)"
     else:
         vm_json["name"] = proxmox_vm['name']
     

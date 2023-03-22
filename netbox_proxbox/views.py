@@ -24,8 +24,6 @@ from netbox import configuration
 
 from . import ProxboxConfig
 
-
-
 class HomeView(View):
     """Homepage"""
     template_name = 'netbox_proxbox/home.html'
@@ -33,12 +31,18 @@ class HomeView(View):
     # service incoming GET HTTP requests
     def get(self, request):
         """Get request."""
+
+        plugin_configuration = configuration.PLUGINS_CONFIG
+        default_config = ProxboxConfig.default_settings
+
         return render(
             request,
             self.template_name,
             {
-                "configuration": configuration.PLUGINS_CONFIG,
-                "default_config": ProxboxConfig.default_settings
+                "configuration": plugin_configuration,
+                "default_config": default_config,
+                "configuration_json": json.dumps(plugin_configuration, indent=4),
+                "default_config_json": json.dumps(default_config, indent=4)
             }
         )
 
@@ -94,8 +98,6 @@ class ProxmoxFullUpdate(PermissionRequiredMixin, View):
         """Get request."""
 
         json_result = proxbox_api.update.all(remove_unused = True)
-        
-        import json
         
         return render(
             request,
