@@ -19,7 +19,7 @@ def is_vm_on_proxmox(netbox_vm):
 
     # Analyze local_context of VM
     if local_context == None:
-        print('[WARNING] "local_context_data" not filled. -> {}'.format(netbox_name))
+        print(f'[WARNING] "local_context_data" not filled. -> {netbox_name}')
 
     else:
         # "proxmox" key of "local_context_data"
@@ -27,7 +27,7 @@ def is_vm_on_proxmox(netbox_vm):
     
         # If null value, returns error
         if proxmox_json == None:
-            print("[WARNING] 'local_context_data' does not have 'proxmox' json key -> {}".format(netbox_name))   
+            print(f"[WARNING] 'local_context_data' does not have 'proxmox' json key -> {netbox_name}")   
 
         else:
             # Netbox VM/CT ID
@@ -35,7 +35,7 @@ def is_vm_on_proxmox(netbox_vm):
 
             # If null value, returns error
             if netbox_id == None:
-                print("[WARNING] 'proxmox' doest not have 'id' key -> {}".format(netbox_name))
+                print(f"[WARNING] 'proxmox' doest not have 'id' key -> {netbox_name}")
 
 
     # List names of VM/CT's from Proxmox
@@ -73,14 +73,14 @@ def is_vm_on_proxmox(netbox_vm):
                 local_context = netbox_vm.local_context_data
 
                 if local_context != None:
-                    print("[OK] 'local_context' updated' -> {}".format(netbox_name))
+                    print(f"[OK] 'local_context' updated' -> {netbox_name}")
                     proxmox_json = local_context.get("proxmox")
                     netbox_id = proxmox_json.get("id")
 
                 else:
-                    print("[ERROR] 'local_context' is empty -> {}".format(netbox_name))
+                    print(f"[ERROR] 'local_context' is empty -> {netbox_name}")
             else:
-                print("[WARNING] 'local_context' was not updated (error or already updated) -> {}".format(netbox_name))
+                print(f"[WARNING] 'local_context' was not updated (error or already updated) -> {netbox_name}")
 
 
     # Search VM on Proxmox by using ID
@@ -97,7 +97,7 @@ def is_vm_on_proxmox(netbox_vm):
         if id_on_px == True:
             return True
         else:
-            print("[WARNING] NAME exists on Proxmox, but ID does not. -> {}".format(netbox_name))
+            print(f"[WARNING] NAME exists on Proxmox, but ID does not. -> {netbox_name}")
         return True
     
     # Comparison failed, not able to find VM on Proxmox
@@ -121,7 +121,7 @@ def all():
         vm_on_proxmox = is_vm_on_proxmox(nb_vm_each)
 
         if vm_on_proxmox == True:
-            log_message = '[OK] VM exists on both systems (Netbox and Proxmox) -> {}'.format(netbox_name)
+            log_message = f'[OK] VM exists on both systems (Netbox and Proxmox) -> {netbox_name}'
             print(log_message)
             log.append(log_message)
 
@@ -129,7 +129,7 @@ def all():
         
         # If VM does not exist on Proxmox, delete VM on Netbox.
         elif vm_on_proxmox == False:
-            log_message = "[WARNING] VM exists on Netbox, but not on Proxmox. Delete it!  -> {}".format(netbox_name)
+            log_message = f"[WARNING] VM exists on Netbox, but not on Proxmox. Delete it!  -> {netbox_name}"
             print(log_message)
             log.append(log_message)
 
@@ -147,12 +147,12 @@ def all():
                         delete_vm = netbox_obj.delete()
                     
                     else:
-                        log_message = "[ERROR] VM will not be removed because the 'Proxbox' tag was not found. -> {}".format(netbox_name)
+                        log_message = f"[ERROR] VM will not be removed because the 'Proxbox' tag was not found. -> {netbox_name}"
                         print(log_message)
                         log.append(log_message)
 
             elif len(netbox_obj.tags) == 0:
-                log_message = "[ERROR] VM will not be removed because the 'Proxbox' tag was not found. There is no tag configured.-> {}".format(netbox_name)
+                log_message = f"[ERROR] VM will not be removed because the 'Proxbox' tag was not found. There is no tag configured.-> {netbox_name}"
                 print(log_message)
                 log.append(log_message)                
 
@@ -175,7 +175,6 @@ def all():
         
         json_vm_all.append(json_vm)
     
-        print(f"json_vm: {json_vm}")
     return json_vm_all
 
     

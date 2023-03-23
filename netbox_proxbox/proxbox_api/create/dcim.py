@@ -135,7 +135,11 @@ def node(proxmox_node):
     node_json["site"] = site(site_id = NETBOX_SITE_ID).id
     node_json["status"] = 'active'
     node_json["tags"] = [extras.tag().id]
-    node_json["cluster"] = virtualization.cluster().id
+
+    cluster = virtualization.cluster()
+    if cluster:
+        if cluster != None:
+            node_json["cluster"] = cluster.id
     
     # If device already exists, append (2) to final of the name
     check_duplicate = proxmox_node.get("duplicate", False)
@@ -148,8 +152,6 @@ def node(proxmox_node):
         if original_device:
             node_json["comments"] = f"The original device has the following info:<br>**Device ID:** {original_device.id}<br>**Name:** {original_device.name}"
 
-
-        print(f"(node) node_json: {node_json}")
         netbox_obj = None
         search_device = None
 

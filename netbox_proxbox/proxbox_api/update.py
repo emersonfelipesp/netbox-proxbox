@@ -258,8 +258,9 @@ def virtual_machine(**kwargs):
     duplicate = False
     try:
         # Check if Proxbox tag exist.
-        search_tag = netbox_vm.tags.index(extras.tag())
-    except Exception as error:
+        if netbox_vm != None:
+            search_tag = netbox_vm.tags.index(extras.tag())
+    except ValueError as error:
         print(f"[WARNING] Virtual Machine or Container with the same name as {netbox_vm.name} already exists.\n> Proxbox will create another one with (2) in the name\n{error}")
         netbox_vm = False
         duplicate = True
@@ -411,7 +412,7 @@ def nodes(**kwargs):
             json_node["name"] = proxmox_node_name
             json_node["result"] = True
                 
-        except ValueError as error:
+        except Exception as error:
             # Tag was not found within device, so there is already existing device.
             print(f"[WARNING] Device with the same name as {netbox_search.name} already exists.\n> Proxbox will create another one with (2) in the name\n{error}")
 
@@ -436,7 +437,11 @@ def all(**kwargs):
     #
     cluster = create.virtualization.cluster()
     print('\n\n\nCLUSTER...')
-    print(f'[OK] CLUSTER created. -> {cluster.name}')
+
+    try:
+        print(f'[OK] CLUSTER created. -> {cluster.name}')
+    except:
+        print(f"[OK] Cluster created. -> {cluster}")
 
     proxmox_cluster = cluster_all[0]
     #

@@ -63,13 +63,52 @@ def cluster():
     # Verify if there any cluster created with:
     # Name equal to Proxmox's Cluster name
     # Cluster type equal to 'proxmox'
-    cluster_proxbox = nb.virtualization.clusters.get(
-        name = proxmox_cluster_name,
-        type = cluster_type().slug
-    )
+    try:
+        cluster_proxbox = nb.virtualization.clusters.get(
+           name = proxmox_cluster_name,
+           type = cluster_type().slug
+        )
+    except ValueError as error:
+        print(f"[ERROR] More than one cluster is created with the name '{proxmox_cluster_name}', making proxbox to abort update.\n   > {error}")
+        return
+    
+    nb_cluster_name = None
+    try:
+        if cluster_proxbox != None:
+            nb_cluster_name = cluster_proxbox.name
+    except Exception as error:
+        print(f"[ERROR] {error}")
 
-    # If no 'cluster' found, create one using the name from Proxmox
-    if cluster_proxbox == None:
+    duplicate = False
+    try:
+        # Check if Proxbox tag exist.
+        if cluster_proxbox != None:
+            search_tag = cluster_proxbox.tags.index(extras.tag())
+    except ValueError as error:
+        print(f"[WARNING] Cluster with the same name as {nb_cluster_name} already exists.\n> Proxbox will create another one with (2) in the name\n{error}")
+        cluster_proxbox = False
+        duplicate = True
+
+    # If 'cluster' is found, check for duplicated and create another one, if necessary:
+    if cluster_proxbox != None:
+        # Check if it is duplicated:
+        if duplicate == True:
+            proxmox_cluster_name = f"{proxmox_cluster_name} (2)" 
+
+            # Check if duplicated device was already created.
+            try:
+                print(proxmox_cluster_name)
+                search_device = nb.virtualization.clusters.get(
+                    name = proxmox_cluster_name
+                )
+                
+                if search_device != None:
+                    return search_device
+                
+            except Exception as error:
+                print(f"[ERROR] {error}")
+        else:
+            return cluster_proxbox
 
         try:
             # Create the cluster with only name and cluster_type
@@ -78,14 +117,24 @@ def cluster():
                 type = cluster_type().id,
                 tags = [extras.tag().id]
             )
+            return cluster
+        except:
+            return f"Error creating the '{proxmox_cluster_name}' cluster. Possible errors: the name '{proxmox_cluster_name}' is already used."
+    
+    # If no Cluster is found, create one.
+    else:
+        try:
+            # Create the cluster with only name and cluster_type
+            cluster = nb.virtualization.clusters.create(
+                name = proxmox_cluster_name,
+                type = cluster_type().id,
+                tags = [extras.tag().id]
+            )
+            return cluster
         except:
             return f"Error creating the '{proxmox_cluster_name}' cluster. Possible errors: the name '{proxmox_cluster_name}' is already used."
 
-    else:
-        cluster = cluster_proxbox
 
-
-    return cluster
 
 
 
@@ -120,7 +169,6 @@ def virtual_machine(proxmox_vm, duplicate):
     
     # Create VM/CT with json 'vm_json'
     try:
-        print(f"vm_json: {vm_json}")
         netbox_obj = nb.virtualization.virtual_machines.create(vm_json)
         return netbox_obj
 
