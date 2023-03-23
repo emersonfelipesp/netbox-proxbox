@@ -14,6 +14,8 @@ from .. import (
     create,
 )
 
+import logging
+
 # Update STATUS field on /dcim/device/{id}
 def status(netbox_node, proxmox_node):
     #
@@ -98,7 +100,7 @@ def cluster(netbox_node, proxmox_node, proxmox_cluster):
                 cluster_updated = False
 
         except Exception as error:
-            print(f"[ERROR] {error}")
+            logging.error(f"[ERROR] {error}")
     else:
         cluster_updated = False
 

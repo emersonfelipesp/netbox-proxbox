@@ -10,6 +10,8 @@ from . import (
     virtualization,
 )
 
+import logging
+
 #
 # dcim.manufacturers
 #
@@ -66,7 +68,9 @@ def device_type():
                 tags = [extras.tag().id]
             )
         except:
-            return f"Error creating the '{proxbox_device_type_model}' device type. Possible errors: the model '{proxbox_device_type_model}' or slug '{proxbox_device_type_slug}' is already used."
+            log_message = f"Error creating the '{proxbox_device_type_model}' device type. Possible errors: the model '{proxbox_device_type_model}' or slug '{proxbox_device_type_slug}' is already used."
+            logging.error(log_message)
+            return log_message
     
     else:
         device_type = proxbox_device_types
@@ -164,7 +168,7 @@ def node(proxmox_node):
             )
             return search_device
         except Exception as error:
-            print(error)
+            logging.error(error)
         
         try:
             # CREATE
@@ -172,10 +176,10 @@ def node(proxmox_node):
                 netbox_obj = nb.dcim.devices.create(node_json)
                 return netbox_obj
         except Exception as error:
-            print(error)
+            logging.error(error)
 
         finally:
-            print("[proxbox_api.create.node] Creation of NODE failed.")
+            logging.error("[proxbox_api.create.node] Creation of NODE failed.")
             netbox_obj = None
     
     # If NODE is not DUPLICATED, then CREATE it.
@@ -185,7 +189,7 @@ def node(proxmox_node):
             netbox_obj = nb.dcim.devices.create(node_json)
 
         except:
-            print("[proxbox_api.create.node] Creation of NODE failed.")
+            logging.error("[proxbox_api.create.node] Creation of NODE failed.")
             netbox_obj = None
             return netbox_obj
     
