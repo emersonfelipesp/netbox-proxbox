@@ -6,6 +6,8 @@ from .plugins_config import (
     NETBOX_SESSION as nb,
 )
 
+import logging
+
 # Verify if VM/CT exists on Proxmox
 def is_vm_on_proxmox(netbox_vm):
     # Get json of all virtual machines from Proxmox
@@ -19,7 +21,7 @@ def is_vm_on_proxmox(netbox_vm):
 
     # Analyze local_context of VM
     if local_context == None:
-        print(f'[WARNING] "local_context_data" not filled. -> {netbox_name}')
+        logging.warning(f'[WARNING] "local_context_data" not filled. -> {netbox_name}')
 
     else:
         # "proxmox" key of "local_context_data"
@@ -27,7 +29,7 @@ def is_vm_on_proxmox(netbox_vm):
     
         # If null value, returns error
         if proxmox_json == None:
-            print(f"[WARNING] 'local_context_data' does not have 'proxmox' json key -> {netbox_name}")   
+            logging.warning(f"[WARNING] 'local_context_data' does not have 'proxmox' json key -> {netbox_name}")   
 
         else:
             # Netbox VM/CT ID
@@ -35,7 +37,7 @@ def is_vm_on_proxmox(netbox_vm):
 
             # If null value, returns error
             if netbox_id == None:
-                print(f"[WARNING] 'proxmox' doest not have 'id' key -> {netbox_name}")
+                logging.warning(f"[WARNING] 'proxmox' doest not have 'id' key -> {netbox_name}")
 
 
     # List names of VM/CT's from Proxmox
@@ -73,14 +75,14 @@ def is_vm_on_proxmox(netbox_vm):
                 local_context = netbox_vm.local_context_data
 
                 if local_context != None:
-                    print(f"[OK] 'local_context' updated' -> {netbox_name}")
+                    logging.info(f"[OK] 'local_context' updated' -> {netbox_name}")
                     proxmox_json = local_context.get("proxmox")
                     netbox_id = proxmox_json.get("id")
 
                 else:
-                    print(f"[ERROR] 'local_context' is empty -> {netbox_name}")
+                    logging.error(f"[ERROR] 'local_context' is empty -> {netbox_name}")
             else:
-                print(f"[WARNING] 'local_context' was not updated (error or already updated) -> {netbox_name}")
+                logging.warning(f"[WARNING] 'local_context' was not updated (error or already updated) -> {netbox_name}")
 
 
     # Search VM on Proxmox by using ID
@@ -97,7 +99,7 @@ def is_vm_on_proxmox(netbox_vm):
         if id_on_px == True:
             return True
         else:
-            print(f"[WARNING] NAME exists on Proxmox, but ID does not. -> {netbox_name}")
+            logging.warning(f"[WARNING] NAME exists on Proxmox, but ID does not. -> {netbox_name}")
         return True
     
     # Comparison failed, not able to find VM on Proxmox
@@ -122,7 +124,7 @@ def all():
 
         if vm_on_proxmox == True:
             log_message = f'[OK] VM exists on both systems (Netbox and Proxmox) -> {netbox_name}'
-            print(log_message)
+            logging.info(log_message)
             log.append(log_message)
 
             json_vm["result"] = False
@@ -130,7 +132,7 @@ def all():
         # If VM does not exist on Proxmox, delete VM on Netbox.
         elif vm_on_proxmox == False:
             log_message = f"[WARNING] VM exists on Netbox, but not on Proxmox. Delete it!  -> {netbox_name}"
-            print(log_message)
+            logging.info(log_message)
             log.append(log_message)
 
             # Only delete VM that has proxbox tag registered
@@ -148,25 +150,25 @@ def all():
                     
                     else:
                         log_message = f"[ERROR] VM will not be removed because the 'Proxbox' tag was not found. -> {netbox_name}"
-                        print(log_message)
+                        logging.info(log_message)
                         log.append(log_message)
 
             elif len(netbox_obj.tags) == 0:
                 log_message = f"[ERROR] VM will not be removed because the 'Proxbox' tag was not found. There is no tag configured.-> {netbox_name}"
-                print(log_message)
+                logging.info(log_message)
                 log.append(log_message)                
 
 
             if delete_vm == True:
                 log_message = "[OK] VM successfully removed from Netbox."
-                print(log_message)
+                logging.info(log_message)
                 log.append(log_message)
 
                 json_vm["result"] = True
 
         else:
             log_message = '[ERROR] Unexpected error trying to verify if VM exist on Proxmox'
-            print(log_message)
+            logging.error(log_message)
             log.append(log_message)
 
             json_vm["result"] = False

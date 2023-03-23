@@ -12,6 +12,8 @@ from . import (
     extras,
 )
 
+import logging
+
 #
 # virtualization.cluster_types
 #
@@ -69,7 +71,7 @@ def cluster():
            type = cluster_type().slug
         )
     except ValueError as error:
-        print(f"[ERROR] More than one cluster is created with the name '{proxmox_cluster_name}', making proxbox to abort update.\n   > {error}")
+        logging.error(f"[ERROR] More than one cluster is created with the name '{proxmox_cluster_name}', making proxbox to abort update.\n   > {error}")
         return
     
     nb_cluster_name = None
@@ -77,7 +79,7 @@ def cluster():
         if cluster_proxbox != None:
             nb_cluster_name = cluster_proxbox.name
     except Exception as error:
-        print(f"[ERROR] {error}")
+        logging.error(f"[ERROR] {error}")
 
     duplicate = False
     try:
@@ -85,7 +87,7 @@ def cluster():
         if cluster_proxbox != None:
             search_tag = cluster_proxbox.tags.index(extras.tag())
     except ValueError as error:
-        print(f"[WARNING] Cluster with the same name as {nb_cluster_name} already exists.\n> Proxbox will create another one with (2) in the name\n{error}")
+        logging.warning(f"[WARNING] Cluster with the same name as {nb_cluster_name} already exists.\n> Proxbox will create another one with (2) in the name\n{error}")
         cluster_proxbox = False
         duplicate = True
 
@@ -97,7 +99,6 @@ def cluster():
 
             # Check if duplicated device was already created.
             try:
-                print(proxmox_cluster_name)
                 search_device = nb.virtualization.clusters.get(
                     name = proxmox_cluster_name
                 )
@@ -106,7 +107,7 @@ def cluster():
                     return search_device
                 
             except Exception as error:
-                print(f"[ERROR] {error}")
+                logging.error(f"[ERROR] {error}")
         else:
             return cluster_proxbox
 
@@ -157,7 +158,7 @@ def virtual_machine(proxmox_vm, duplicate):
         vm_json["status"] = 'offline'
 
     if duplicate:
-        print("VM/CT is duplicated")
+        logging.warning("[WARNING] VM/CT is duplicated")
         vm_json["name"] = f"{proxmox_vm['name']} (2)"
     else:
         vm_json["name"] = proxmox_vm['name']
@@ -173,7 +174,7 @@ def virtual_machine(proxmox_vm, duplicate):
         return netbox_obj
 
     except:
-        print("[proxbox.create.virtual_machine] Creation of VM/CT failed.")
+        logging.error("[proxbox.create.virtual_machine] Creation of VM/CT failed.")
         netbox_obj = None
 
     

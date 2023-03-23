@@ -19,6 +19,8 @@ from . import (
 
 from .create import extras 
 
+import logging
+
 # Call all functions to update Virtual Machine
 def vm_full_update(netbox_vm, proxmox_vm):
     changes = {}
@@ -143,7 +145,7 @@ def virtual_machine(**kwargs):
     if proxmox_id != None:
         proxmox_id_type = type(proxmox_id)
         if 'int' not in str(proxmox_id_type):
-            print(f'[ERROR] "proxmox_id" MUST be integer. Type used: {proxmox_id_type}')
+            logging.error(f'[ERROR] "proxmox_id" MUST be integer. Type used: {proxmox_id_type}')
             #return False
             json_vm["result"] = False
 
@@ -154,7 +156,7 @@ def virtual_machine(**kwargs):
     if id != None:
         id_type = type(id)
         if 'int' not in str(id_type):
-            print(f'[ERROR] "id" MUST be integer. Type used: {id_type}')
+            logging.error(f'[ERROR] "id" MUST be integer. Type used: {id_type}')
             #return False
             json_vm["result"] = False
             
@@ -166,7 +168,7 @@ def virtual_machine(**kwargs):
     if name != None:
         name_type = type(name)
         if 'str' not in str(name_type):
-            print(f'[ERROR] "name" MUST be string. Type used: {name_type}')
+            logging.error(f'[ERROR] "name" MUST be string. Type used: {name_type}')
             #return False
             json_vm["result"] = False
 
@@ -205,7 +207,7 @@ def virtual_machine(**kwargs):
 
                 # Analyze search result and returns error, if null value.
                 if proxmox_json == None:
-                    print("[ERROR] Error to get Proxmox Virtual Machine using 'proxmox_id'")
+                    logging.error("[ERROR] Error to get Proxmox Virtual Machine using 'proxmox_id'")
                     json_vm["result"] = False            
 
                 proxmox_vm_name = proxmox_json['name']
@@ -217,7 +219,7 @@ def virtual_machine(**kwargs):
 
                 # Analyze search result and returns error, if null value.
                 if proxmox_json == None:
-                    print("[ERROR] Error to get Proxmox Virtual Machine using 'proxmox_name'")
+                    logging.error("[ERROR] Error to get Proxmox Virtual Machine using 'proxmox_name'")
                     json_vm["result"] = False
                 
                 proxmox_vm_name = proxmox_json['name']
@@ -230,7 +232,7 @@ def virtual_machine(**kwargs):
 
                 # Analyze search result and returns error, if null value.
                 if proxmox_json == None:
-                    print("[ERROR] Error to get Proxmox Virtual Machine using 'proxmox_id'")
+                    logging.error("[ERROR] Error to get Proxmox Virtual Machine using 'proxmox_id'")
                     json_vm["result"] = False      
 
                 proxmox_vm_name = proxmox_json['name']
@@ -243,7 +245,7 @@ def virtual_machine(**kwargs):
 
                     # Analyze search result and returns error, if null value.
                     if proxmox_json == None:
-                        print("[ERROR] Error to get Proxmox Virtual Machine using 'proxmox_name'")
+                        logging.error("[ERROR] Error to get Proxmox Virtual Machine using 'proxmox_name'")
                         json_vm["result"] = False
                     
                     proxmox_vm_name = proxmox_json['name']
@@ -261,7 +263,7 @@ def virtual_machine(**kwargs):
         if netbox_vm != None:
             search_tag = netbox_vm.tags.index(extras.tag())
     except ValueError as error:
-        print(f"[WARNING] Virtual Machine or Container with the same name as {netbox_vm.name} already exists.\n> Proxbox will create another one with (2) in the name\n{error}")
+        logging.warning(f"[WARNING] Virtual Machine or Container with the same name as {netbox_vm.name} already exists.\n> Proxbox will create another one with (2) in the name\n{error}")
         netbox_vm = False
         duplicate = True
     
@@ -284,16 +286,16 @@ def virtual_machine(**kwargs):
 
         # Analyze if VM needed to be updated on Netbox
         if True in full_update_list:
-            print(f'[OK] VM updated. -> {proxmox_vm_name}')
+            logging.info(f'[OK] VM updated. -> {proxmox_vm_name}')
         else:
-            print(f'[OK] VM already updated. -> {proxmox_vm_name}')
+            logging.info(f'[OK] VM already updated. -> {proxmox_vm_name}')
 
         # In case none of condition works, return True anyway, since VM already exist.
         json_vm["result"] = True
 
     # If VM does not exist, create it on Netbox
     else:
-        print(f'[OK] VM does not exist on Netbox -> {proxmox_vm_name}')
+        logging.info(f'[OK] VM does not exist on Netbox -> {proxmox_vm_name}')
 
         # Analyze if VM was sucessfully created.
         netbox_vm = create.virtualization.virtual_machine(proxmox_json, duplicate)
@@ -309,20 +311,20 @@ def virtual_machine(**kwargs):
 
             # Analyze if update was successful
             if True in full_update_list:
-                print(f'[OK] VM created -> {netbox_vm.name}')
+                logging.info(f'[OK] VM created -> {netbox_vm.name}')
 
 
                 # VM fully updated
                 json_vm["result"] = True
 
             else:
-                print(f'[OK] VM created, but full update failed -> {proxmox_vm_name}')               
+                logging.info(f'[OK] VM created, but full update failed -> {proxmox_vm_name}')               
 
                 # VM created with basic information
                 json_vm["result"] = True
         
         else:
-            print(f'[ERROR] VM not created. -> {proxmox_vm_name}')
+            logging.error(f'[ERROR] VM not created. -> {proxmox_vm_name}')
 
             # VM not created
             json_vm["result"] = False
@@ -343,7 +345,7 @@ def nodes(**kwargs):
 
         # Node created
         if netbox_node != None:
-            print(f"[OK] Node created! -> {proxmox_node_name}")
+            logging.info(f"[OK] Node created! -> {proxmox_node_name}")
 
             # Update rest of configuration
             full_update = node_full_update(netbox_node, proxmox_json, proxmox_cluster)  
@@ -355,15 +357,15 @@ def nodes(**kwargs):
 
             # Analyze if update was successful
             if True in full_update_list:
-                print(f'[OK] NODE updated. -> {proxmox_node_name}')
+                logging.info(f'[OK] NODE updated. -> {proxmox_node_name}')
             else:
-                print(f'[OK] NODE already updated. -> {proxmox_node_name}')
+                logging.info(f'[OK] NODE already updated. -> {proxmox_node_name}')
             
             return json_node
         
         # Error with node creation
         else:
-            print(f'[ERROR] Something went wrong when creating the node.-> {proxmox_node_name} (2)')
+            logging.error(f'[ERROR] Something went wrong when creating the node.-> {proxmox_node_name} (2)')
             json_node = {}
             json_node["result"] = False
 
@@ -384,7 +386,7 @@ def nodes(**kwargs):
            
         # Error with node creation
         else:
-            print(f'[ERROR] Something went wrong when creating the node.-> {proxmox_node_name}')
+            logging.error(f'[ERROR] Something went wrong when creating the node.-> {proxmox_node_name}')
             json_node["result"] = False
 
     else:
@@ -403,9 +405,9 @@ def nodes(**kwargs):
 
             # Analyze if update was successful
             if True in full_update_list:
-                print(f'[OK] NODE updated. -> {proxmox_node_name}')
+                logging.info(f'[OK] NODE updated. -> {proxmox_node_name}')
             else:
-                print(f'[OK] NODE already updated. -> {proxmox_node_name}')
+                logging.info(f'[OK] NODE already updated. -> {proxmox_node_name}')
 
             # return True as the node was successfully created.
             json_node["node_id"] = netbox_node.id
@@ -414,7 +416,7 @@ def nodes(**kwargs):
                 
         except Exception as error:
             # Tag was not found within device, so there is already existing device.
-            print(f"[WARNING] Device with the same name as {netbox_search.name} already exists.\n> Proxbox will create another one with (2) in the name\n{error}")
+            logging.warning(f"[WARNING] Device with the same name as {netbox_search.name} already exists.\n> Proxbox will create another one with (2) in the name\n{error}")
 
             proxmox_json["duplicate"] = True
             proxmox_json["netbox_original_device"] = netbox_search
@@ -439,9 +441,9 @@ def all(**kwargs):
     print('\n\n\nCLUSTER...')
 
     try:
-        print(f'[OK] CLUSTER created. -> {cluster.name}')
+        logging.info(f'[OK] CLUSTER created. -> {cluster.name}')
     except:
-        print(f"[OK] Cluster created. -> {cluster}")
+        logging.info(f"[OK] Cluster created. -> {cluster}")
 
     proxmox_cluster = cluster_all[0]
     #
