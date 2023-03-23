@@ -81,9 +81,9 @@ The following table shows the Netbox and Proxmox versions compatible (tested) wi
 
 [5. Enable Logs](#5-enable-logs)
 
-[6. Contributing](#5-contributing)
+[6. Contributing](#6-contributing)
 
-[7. Roadmap](#6-roadmap)
+[7. Roadmap](#7-roadmap)
 
 ---
 
