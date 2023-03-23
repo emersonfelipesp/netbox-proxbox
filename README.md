@@ -74,6 +74,7 @@ The following table shows the Netbox and Proxmox versions compatible (tested) wi
 	- [3.1.1. Proxmox ID](#311-proxmox-id)
 	- [3.1.2. Proxmox Node](#312-proxmox-node)
 	- [3.1.3. Proxmox Type](#313-proxmox-type-qemu-or-lxc)
+	- [3.1.4. Proxmox Keep Interface](#314-proxmox-keep-interface)
 - [3.2. Custom Field Example](#32-custom-field-example)
 
 [4. Usage](#4-usage)
@@ -274,6 +275,15 @@ Required values (must be equal)
 Optional values (may be different)
 - [Custom Field] **Label:** [Proxmox] Type
 - [Custom Field] **Description:** Proxmox type (VM or CT)
+
+<br>
+
+#### 3.1.4. Proxmox Keep Interface
+
+Required values (must be equal)
+- [Custom Field] **Type:** Boolean (true/false)
+- [Custom Field] **Name:** proxmox_keep_interface
+- [Assignment] **Content-type:** DCIM > Interface
 
 <br>
 

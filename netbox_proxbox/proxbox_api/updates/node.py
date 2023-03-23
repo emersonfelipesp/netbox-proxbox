@@ -110,7 +110,7 @@ def interfaces(netbox_node, proxmox_json):
     _lag_port = ['OVSBond']
     _brg_port = ['OVSBridge']
     _pmx_iface = []
-    _ntb_iface = [{'name': iface.name, 'mtu' : int(iface.mtu), 'tagged_vlans': [int(x['vid']) for x in iface.tagged_vlans]} for iface in nb.dcim.interfaces.filter(device_id=netbox_node.id)]
+    _ntb_iface = [{'name': iface.name, 'mtu' : int(iface.mtu) if iface.mtu else 1500, 'tagged_vlans': [int(x['vid']) for x in iface.tagged_vlans]} for iface in nb.dcim.interfaces.filter(device_id=netbox_node.id)]
     _eth =  [iface for iface in proxmox.nodes(proxmox_json['name']).network.get() if iface['type'] == 'eth']
     _virt = [iface for iface in proxmox.nodes(proxmox_json['name']).network.get() if iface['type'] in _int_port]
     _bond = [iface for iface in proxmox.nodes(proxmox_json['name']).network.get() if iface['type'] in _lag_port]
@@ -225,8 +225,9 @@ def interfaces(netbox_node, proxmox_json):
 
     for iface in [x.get('name') for x in _ntb_iface]:
         if iface not in [x.get('name') for x in _pmx_iface]:
-            ntb_iface = list(nb.dcim.interfaces.filter(device_id=netbox_node.id, name=iface['name']))
+            ntb_iface = list(nb.dcim.interfaces.filter(device_id=netbox_node.id, name=iface))
             if len(ntb_iface) == 1:
-                ntb_iface[0].delete()
+                if not ntb_iface[0].mgmt_only or not ntb_iface[0].custom_fields.get('proxmox_keep_interface', False):
+                    ntb_iface[0].delete()
 
     return updated
