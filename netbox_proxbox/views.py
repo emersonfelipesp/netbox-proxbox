@@ -164,7 +164,7 @@ class ProxmoxVMListView(PermissionRequiredMixin, View):
         table = ProxmoxVMTable(self.queryset)
 
         # RequestConfig is used to configure pagination of 25 object per page
-        RequestConfig(request, paginate={"per_page": 25}).configure(table)
+        #RequestConfig(request, paginate={"per_page": 25}).configure(table)
 
         return render(
             request, "netbox_proxbox/proxmox_vm_list.html", 
