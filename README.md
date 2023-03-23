@@ -79,9 +79,11 @@ The following table shows the Netbox and Proxmox versions compatible (tested) wi
 
 [4. Usage](#4-usage)
 
-[5. Contributing](#5-contributing)
+[5. Enable Logs][#5-enable-logs]
 
-[6. Roadmap](#6-roadmap)
+[6. Contributing](#5-contributing)
+
+[7. Roadmap](#6-roadmap)
 
 ---
 
@@ -305,14 +307,39 @@ It will redirect you to a new page and you just have to wait until the plugin ru
 
 ---
 
-## 5. Contributing
+## 5. Enable Logs
+
+So that Proxbox plugin logs what is happening to the terminal, copy the following code and paste to `configuration.py` Netbox configuration file:
+
+```python
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+}
+```
+
+You can customize this using the following link: [Django Docs - Logging](https://docs.djangoproject.com/en/4.1/topics/logging/).
+Although the above standard configuration should do the trick to things work.
+
+---
+
+## 6. Contributing
 Developing tools for this project based on [ntc-netbox-plugin-onboarding](https://github.com/networktocode/ntc-netbox-plugin-onboarding) repo.
 
 Issues and pull requests are welcomed.
 
 ---
 
-## 6. Roadmap
+## 7. Roadmap
 - Start using custom models to optimize the use of the Plugin and stop using 'Custom Fields'
 - Automatically remove Nodes on Netbox when removed on Promox (as it already happens with Virtual Machines and Containers)
 - Add individual update of VM/CT's and Nodes (currently is only possible to update all at once)
