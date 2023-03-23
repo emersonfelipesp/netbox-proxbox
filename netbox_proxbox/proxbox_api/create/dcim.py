@@ -10,8 +10,6 @@ from . import (
     virtualization,
 )
 
-
-
 #
 # dcim.manufacturers
 #
@@ -35,15 +33,12 @@ def manufacturer():
                 description = proxbox_manufacturer_desc
             )
         except:
-            return "Error creating the '{0}' manufacturer. Possible errors: the name '{0}' or slug '{1}' is already used.".format(proxbox_manufacturer_name, proxbox_manufacturer_slug)
+            return f"Error creating the '{proxbox_manufacturer_name}' manufacturer. Possible errors: the name '{proxbox_manufacturer_name}' or slug '{proxbox_manufacturer_slug}' is already used."
     
     else:
         manufacturer = proxbox_manufacturer
     
     return manufacturer
-
-
-
 
 
 #
@@ -71,15 +66,12 @@ def device_type():
                 tags = [extras.tag().id]
             )
         except:
-            return "Error creating the '{0}' device type. Possible errors: the model '{0}' or slug '{1}' is already used.".format(proxbox_device_type_model, proxbox_device_type_slug)
+            return f"Error creating the '{proxbox_device_type_model}' device type. Possible errors: the model '{proxbox_device_type_model}' or slug '{proxbox_device_type_slug}' is already used."
     
     else:
         device_type = proxbox_device_types
     
     return device_type
-
-
-
 
 
 #
@@ -119,7 +111,7 @@ def site(**kwargs):
                     tags = [extras.tag().id]
                 )
             except:
-                return "Error creating the '{0}' site. Possible errors: the name '{0}' or slug '{1}' is already used.".format(site_proxbox_name, site_proxbox_slug)
+                return f"Error creating the '{site_proxbox_name}' site. Possible errors: the name '{site_proxbox_name}' or slug '{site_proxbox_slug}' is already used."
 
         # If basic site already created, use it.
         else:
@@ -129,10 +121,6 @@ def site(**kwargs):
         return 'Site ID configured is invalid.'
 
     return site
-
-
-
-
 
 
 #
@@ -147,18 +135,59 @@ def node(proxmox_node):
     node_json["site"] = site(site_id = NETBOX_SITE_ID).id
     node_json["status"] = 'active'
     node_json["tags"] = [extras.tag().id]
-    node_json["cluster"] = virtualization.cluster().id
 
-    # Create Node with json 'node_json'
-    try:
-        netbox_obj = nb.dcim.devices.create(node_json)
-
-    except:
-        print("[proxbox_api.create.node] Creation of NODE failed.")
-        netbox_obj = None
+    cluster = virtualization.cluster()
+    if cluster:
+        if cluster != None:
+            node_json["cluster"] = cluster.id
     
+    # If device already exists, append (2) to final of the name
+    check_duplicate = proxmox_node.get("duplicate", False)
+    if check_duplicate:
+        # Redefine name appending (2) to final
+        node_json["name"] = f"{proxmox_node['name']} (2)"
+
+
+        original_device = proxmox_node.get("netbox_original_device", None)
+        if original_device:
+            node_json["comments"] = f"The original device has the following info:<br>**Device ID:** {original_device.id}<br>**Name:** {original_device.name}"
+
+        netbox_obj = None
+        search_device = None
+
+        # Create Node with json 'node_json'
+        try:
+            # GET
+            search_device = nb.dcim.devices.get(
+                name = node_json["name"],
+                cluster = node_json["cluster"]
+            )
+            return search_device
+        except Exception as error:
+            print(error)
+        
+        try:
+            # CREATE
+            if search_device == None:
+                netbox_obj = nb.dcim.devices.create(node_json)
+                return netbox_obj
+        except Exception as error:
+            print(error)
+
+        finally:
+            print("[proxbox_api.create.node] Creation of NODE failed.")
+            netbox_obj = None
+    
+    # If NODE is not DUPLICATED, then CREATE it.
     else:
-        return netbox_obj
+         # Create Node with json 'node_json'
+        try:
+            netbox_obj = nb.dcim.devices.create(node_json)
+
+        except:
+            print("[proxbox_api.create.node] Creation of NODE failed.")
+            netbox_obj = None
+            return netbox_obj
     
     # In case nothing works, returns error
     netbox_obj = None

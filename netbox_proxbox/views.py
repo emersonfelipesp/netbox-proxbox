@@ -3,7 +3,9 @@ from django.urls import reverse_lazy
 # 'View' is a django subclass. Basic type of class-based views
 from django.views import View
 from django.views.generic.edit import CreateView, DeleteView, UpdateView
-from django_tables2 import RequestConfig
+
+from django.views.decorators.cache import never_cache
+
 # Enables permissions for views using Django authentication system.
 # PermissionRequiredMixin = will handle permission checks logic and will plug into the
 # Netbox's existing authorization system.
@@ -22,7 +24,6 @@ from netbox import configuration
 
 from . import ProxboxConfig
 
-
 class HomeView(View):
     """Homepage"""
     template_name = 'netbox_proxbox/home.html'
@@ -30,12 +31,18 @@ class HomeView(View):
     # service incoming GET HTTP requests
     def get(self, request):
         """Get request."""
+
+        plugin_configuration = configuration.PLUGINS_CONFIG
+        default_config = ProxboxConfig.default_settings
+
         return render(
             request,
             self.template_name,
             {
-                "configuration": configuration.PLUGINS_CONFIG,
-                "default_config": ProxboxConfig.default_settings
+                "configuration": plugin_configuration,
+                "default_config": default_config,
+                "configuration_json": json.dumps(plugin_configuration, indent=4),
+                "default_config_json": json.dumps(default_config, indent=4)
             }
         )
 
@@ -75,22 +82,29 @@ def table_data():
     return [virtualmachines_table, nodes_table]
 '''
 
+
 class ProxmoxFullUpdate(PermissionRequiredMixin, View):
     """Full Update of Proxmox information on Netbox."""
 
     # Define permission
     permission_required = "netbox_proxbox.view_proxmoxvm"
 
+
+    
+
     # service incoming GET HTTP requests
     # 'pk' value is passed to get() via URL defined in urls.py
     def get(self, request):
         """Get request."""
 
+        json_result = proxbox_api.update.all(remove_unused = True)
+        
         return render(
             request,
             "netbox_proxbox/proxmox_vm_full_update.html",
             {
-                "proxmox": proxbox_api.update.all(remove_unused = True),
+                "proxmox": json_result,
+                "proxmox_json": json.dumps(json_result, indent=4)
             },
         )
 
@@ -150,7 +164,7 @@ class ProxmoxVMListView(PermissionRequiredMixin, View):
         table = ProxmoxVMTable(self.queryset)
 
         # RequestConfig is used to configure pagination of 25 object per page
-        RequestConfig(request, paginate={"per_page": 25}).configure(table)
+        #RequestConfig(request, paginate={"per_page": 25}).configure(table)
 
         return render(
             request, "netbox_proxbox/proxmox_vm_list.html", 

@@ -24,9 +24,13 @@
                             <tr>
                                 <td>
                                     <strong>
-                                        <a href="{% url 'dcim:device' pk=node.node_id %}">
+                                        {% if node.node_id %}
+                                            <a href="{% url 'dcim:device' pk=node.node_id %}">
+                                                {{ node.name }}
+                                            </a>
+                                        {% else %}
                                             {{ node.name }}
-                                        </a>
+                                        {% endif %}
                                     </strong>
                                 </td>
                                 <td>
@@ -99,16 +103,20 @@
                             <tr>
                                 <td>
                                     <strong>
-                                        <a href="{% url 'virtualization:virtualmachine' pk=virtualmachine.vm_id %}">
+                                        {% if virtualmachine.vm_id %}
+                                            <a href="{% url 'virtualization:virtualmachine' pk=virtualmachine.vm_id %}">
+                                                {{ virtualmachine.name }}
+                                            </a>
+                                        {% else %}
                                             {{ virtualmachine.name }}
-                                        </a>
+                                        {% endif %}
                                     </strong>
                                 </td>
                                 <td>
                                     {% if virtualmachine.status %}
                                         <span class="badge bg-green">
                                             {{ virtualmachine.status }}
-                                        </span>
+                                        </span> 
                                     {% else %}
                                         <span class="badge bg-gray">
                                             {{ virtualmachine.status }}
@@ -178,6 +186,17 @@
                     <br><br>
                 {% endif %}
             </div>
+        </div>
+    </div>
+    <!-- Button to show JSON result -->
+    <p>
+        <button class="btn btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#collapseExample" aria-expanded="false" aria-controls="collapseExample">
+          Show JSON result
+        </button>
+    </p>
+    <div class="collapse" id="collapseExample">
+        <div class="card card-body">
+            <pre>{{ proxmox_json }}</pre>
         </div>
     </div>
 {% endblock %}
