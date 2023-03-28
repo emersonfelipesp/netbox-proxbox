@@ -24,11 +24,32 @@ import json
 from netbox import configuration
 
 from . import ProxboxConfig
-
 import requests
 
-async def get_json_result():
-    return await proxbox_api.update.all(remove_unused = True)
+import logging
+
+
+# Deploy FastAPI with uvicorn instance
+try:
+    import subprocess
+
+    # Import config
+    fastapi_host = proxbox_api.plugins_config.FASTAPI_HOST
+    fastapi_port = proxbox_api.plugins_config.FASTAPI_PORT
+
+    # Check if there's already a process running with the same port
+    output = str(subprocess.run(["sudo", "netstat", "-tuln", "|", "grep", fastapi_port], capture_output=True).stdout)
+    if f"{fastapi_port}" in output:
+        raise Exception(f"Port '{fastapi_port}' is already being used.\nUnable to spawn uvicorn process, you'll have to change the port or kill the proccess running.\nTo do this, change 'PLUGINS_CONFIG' variable in 'configuration.py' Netbox")
+
+    # Spawn uvicorn process
+    uvicorn_spawn = ["uvicorn", "netbox-proxbox.netbox_proxbox.main:app", "--host", str(fastapi_host), "--port", str(fastapi_port)]
+    subprocess.Popen(uvicorn_spawn)
+except Exception as error:
+    log_message = f"[ERROR] {error}"
+    logging.error(log_message)
+    raise Exception(log_message)
+
 
 class HomeView(View):
     """Homepage"""

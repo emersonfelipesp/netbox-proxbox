@@ -1,7 +1,9 @@
+import uvicorn
 from fastapi import FastAPI
 from netbox_proxbox import proxbox_api
 
 app = FastAPI()
+
 
 
 @app.get("/full_update")
