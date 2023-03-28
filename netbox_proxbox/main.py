@@ -4,7 +4,9 @@ from netbox_proxbox import proxbox_api
 
 app = FastAPI()
 
-
+@app.get("/")
+async def root():
+    return {"message": "Hello World! dsdsasdad"}
 
 @app.get("/full_update")
 async def full_update():

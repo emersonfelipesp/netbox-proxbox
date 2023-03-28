@@ -38,13 +38,24 @@ try:
     fastapi_port = proxbox_api.plugins_config.FASTAPI_PORT
 
     # Check if there's already a process running with the same port
-    output = str(subprocess.run(["sudo", "netstat", "-tuln", "|", "grep", fastapi_port], capture_output=True).stdout)
+    output = str(subprocess.run(["sudo", "netstat", "-tuln"], capture_output=True).stdout)
     if f"{fastapi_port}" in output:
         raise Exception(f"Port '{fastapi_port}' is already being used.\nUnable to spawn uvicorn process, you'll have to change the port or kill the proccess running.\nTo do this, change 'PLUGINS_CONFIG' variable in 'configuration.py' Netbox")
 
-    # Spawn uvicorn process
-    uvicorn_spawn = ["uvicorn", "netbox-proxbox.netbox_proxbox.main:app", "--host", str(fastapi_host), "--port", str(fastapi_port)]
+    uvicorn_spawn = None
+    # Check if Netbox is running in development mode
+    psaux = str(subprocess.run(["sudo", "ps", "aux"], capture_output=True).stdout)
+    if "manage.py runserver" in psaux:
+        if ":8000" in psaux:
+            # Spawn uvicorn process with '--reload' option
+            print("Django Development (manage.py runserver) process was found, running uvicorn with '--reload' parameter.")
+            uvicorn_spawn = ["uvicorn", "netbox-proxbox.netbox_proxbox.main:app", "--host", str(fastapi_host), "--port", str(fastapi_port), "--reload"]   
+    else:
+        # Spawn uvicorn process
+        print("Only Django production process was found. Running uvicorn without '--reload' parameter.")
+        uvicorn_spawn = ["uvicorn", "netbox-proxbox.netbox_proxbox.main:app", "--host", str(fastapi_host), "--port", str(fastapi_port)]
     subprocess.Popen(uvicorn_spawn)
+    
 except Exception as error:
     log_message = f"[ERROR] {error}"
     logging.error(log_message)
