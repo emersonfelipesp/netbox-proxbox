@@ -17,7 +17,7 @@ from .. import (
 import logging
 
 # Update STATUS field on /dcim/device/{id}
-def status(netbox_node, proxmox_node):
+async def status(netbox_node, proxmox_node):
     #
     # Compare STATUS
     #
@@ -57,7 +57,7 @@ def status(netbox_node, proxmox_node):
 
 
 # Update CLUSTER field on /dcim/device/{id}
-def cluster(netbox_node, proxmox_node, proxmox_cluster):
+async def cluster(netbox_node, proxmox_node, proxmox_cluster):
     #
     # Compare CLUSTER
     #
@@ -69,7 +69,7 @@ def cluster(netbox_node, proxmox_node, proxmox_cluster):
                 # If cluster is not filled or even filled, but different from actual cluster, update it.
                 if netbox_node.cluster.name != proxmox_cluster['name'] or netbox_node.cluster.name == None:
                     # Search for Proxmox Cluster using create.cluster() function
-                    cluster_id = create.virtualization.cluster().id
+                    cluster_id = await create.virtualization.cluster().id
 
                     # Use Cluster ID to update NODE information
                     netbox_node.cluster.id = cluster_id
@@ -85,7 +85,7 @@ def cluster(netbox_node, proxmox_node, proxmox_cluster):
             # If cluster is empty, update it.
             elif proxmox_cluster == None:
                 # Search for Proxmox Cluster using create.cluster() function
-                cluster_id = create.virtualization.cluster().id
+                cluster_id = await create.virtualization.cluster().id
 
                 # Use Cluster ID to update NODE information
                 netbox_node.cluster.id = cluster_id
@@ -106,7 +106,7 @@ def cluster(netbox_node, proxmox_node, proxmox_cluster):
 
     return cluster_updated
 
-def interfaces(netbox_node, proxmox_json):
+async def interfaces(netbox_node, proxmox_json):
     updated = False
     _int_port = ['OVSIntPort']
     _lag_port = ['OVSBond']

@@ -1,5 +1,6 @@
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse_lazy
+
 # 'View' is a django subclass. Basic type of class-based views
 from django.views import View
 from django.views.generic.edit import CreateView, DeleteView, UpdateView
@@ -23,6 +24,11 @@ import json
 from netbox import configuration
 
 from . import ProxboxConfig
+
+import requests
+
+async def get_json_result():
+    return await proxbox_api.update.all(remove_unused = True)
 
 class HomeView(View):
     """Homepage"""
@@ -88,16 +94,16 @@ class ProxmoxFullUpdate(PermissionRequiredMixin, View):
 
     # Define permission
     permission_required = "netbox_proxbox.view_proxmoxvm"
-
-
     
-
     # service incoming GET HTTP requests
     # 'pk' value is passed to get() via URL defined in urls.py
     def get(self, request):
         """Get request."""
 
-        json_result = proxbox_api.update.all(remove_unused = True)
+        json_result = None
+        try:
+            json_result = requests.get('http://localhost:8004/full_update').json()
+        except Exception as error: print(error)
         
         return render(
             request,

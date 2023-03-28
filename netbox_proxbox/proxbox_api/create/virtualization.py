@@ -17,7 +17,7 @@ import logging
 #
 # virtualization.cluster_types
 #
-def cluster_type():
+async def cluster_type():
     #
     # Cluster Type
     #
@@ -54,7 +54,7 @@ def cluster_type():
 # 
 # virtualization.clusters
 #
-def cluster():
+async def cluster():
     #
     # Cluster
     #
@@ -66,9 +66,10 @@ def cluster():
     # Name equal to Proxmox's Cluster name
     # Cluster type equal to 'proxmox'
     try:
+        cluster_type_slug = await cluster_type()
         cluster_proxbox = nb.virtualization.clusters.get(
            name = proxmox_cluster_name,
-           type = cluster_type().slug
+           type = cluster_type_slug.slug
         )
     except ValueError as error:
         logging.error(f"[ERROR] More than one cluster is created with the name '{proxmox_cluster_name}', making proxbox to abort update.\n   > {error}")
@@ -85,7 +86,8 @@ def cluster():
     try:
         # Check if Proxbox tag exist.
         if cluster_proxbox != None:
-            search_tag = cluster_proxbox.tags.index(extras.tag())
+            tag = await extras.tag()
+            search_tag = cluster_proxbox.tags.index(tag)
     except ValueError as error:
         logging.warning(f"[WARNING] Cluster with the same name as {nb_cluster_name} already exists.\n> Proxbox will create another one with (2) in the name\n{error}")
         cluster_proxbox = False
@@ -113,10 +115,14 @@ def cluster():
 
         try:
             # Create the cluster with only name and cluster_type
+
+            cluster_type_id = await cluster_type()
+            tags_id = await extras.tag()
+
             cluster = nb.virtualization.clusters.create(
                 name = proxmox_cluster_name,
-                type = cluster_type().id,
-                tags = [extras.tag().id]
+                type = cluster_type_id.id,
+                tags = [tags_id.id]
             )
             return cluster
         except:
@@ -126,10 +132,13 @@ def cluster():
     else:
         try:
             # Create the cluster with only name and cluster_type
+            cluster_type_id = await cluster_type()
+            tags_id = await extras.tag()
+
             cluster = nb.virtualization.clusters.create(
                 name = proxmox_cluster_name,
-                type = cluster_type().id,
-                tags = [extras.tag().id]
+                type = cluster_type_id.id,
+                tags = [tags_id.id]
             )
             return cluster
         except:
@@ -147,7 +156,7 @@ def cluster():
 #
 # virtualization.virtual_machines
 #
-def virtual_machine(proxmox_vm, duplicate):
+async def virtual_machine(proxmox_vm, duplicate):
     # Create json with basic VM/CT information
     vm_json = {}
     netbox_obj = None
@@ -163,10 +172,15 @@ def virtual_machine(proxmox_vm, duplicate):
     else:
         vm_json["name"] = proxmox_vm['name']
     
+    cluster_obj = await cluster()
     vm_json["status"] = 'active'
-    vm_json["cluster"] = cluster().id
-    vm_json["role"] = extras.role(role_id = NETBOX_VM_ROLE_ID).id
-    vm_json["tags"] = [extras.tag().id]
+    vm_json["cluster"] = cluster_obj.id
+
+    role_id = await extras.role(role_id = NETBOX_VM_ROLE_ID)
+    vm_json["role"] = role_id.id
+
+    tags_id = await extras.tag()
+    vm_json["tags"] = [tags_id.id]
     
     # Create VM/CT with json 'vm_json'
     try:

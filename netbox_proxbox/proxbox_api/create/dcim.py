@@ -15,7 +15,7 @@ import logging
 #
 # dcim.manufacturers
 #
-def manufacturer():
+async def manufacturer():
     proxbox_manufacturer_name = 'Proxbox Basic Manufacturer'
     proxbox_manufacturer_slug = 'proxbox-manufacturer'
     proxbox_manufacturer_desc = 'Manufacturer Proxbox will use if none is configured by user in PLUGINS_CONFIG'
@@ -46,7 +46,7 @@ def manufacturer():
 #
 # dcim.device_types
 #
-def device_type():
+async def device_type():
     proxbox_device_type_model = 'Proxbox Model'
     proxbox_device_type_slug = 'proxbox-model'
     proxbox_device_type_comments = "Device Type Proxbox will use when creating the Cluster's Nodes. When the Node is created, you can change the device type to the actual server model."
@@ -61,11 +61,11 @@ def device_type():
         try:
             # If Proxbox manufacturer does not exist, create one.
             device_type = nb.dcim.device_types.create(
-                manufacturer = manufacturer().id,
+                manufacturer = await manufacturer().id,
                 model = proxbox_device_type_model,
                 slug = proxbox_device_type_slug,
                 comments = proxbox_device_type_comments,
-                tags = [extras.tag().id]
+                tags = await [extras.tag().id]
             )
         except:
             log_message = f"Error creating the '{proxbox_device_type_model}' device type. Possible errors: the model '{proxbox_device_type_model}' or slug '{proxbox_device_type_slug}' is already used."
@@ -81,7 +81,7 @@ def device_type():
 #
 # dcim.sites
 #
-def site(**kwargs):
+async def site(**kwargs):
     # If site_id equals to 0, consider it is not configured by user and must be created by Proxbox
     site_id = kwargs.get('site_id', 0)
 
@@ -130,20 +130,33 @@ def site(**kwargs):
 #
 # dcim.devices (nodes)
 #
-def node(proxmox_node):
+async def node(proxmox_node):
     # Create json with basic NODE information
     node_json = {}
     node_json["name"] = proxmox_node['name']
-    node_json["device_role"] = extras.role(role_id = NETBOX_NODE_ROLE_ID).id
-    node_json["device_type"] = device_type().id
-    node_json["site"] = site(site_id = NETBOX_SITE_ID).id
-    node_json["status"] = 'active'
-    node_json["tags"] = [extras.tag().id]
 
-    cluster = virtualization.cluster()
+    device_role = await extras.role(role_id = NETBOX_NODE_ROLE_ID)
+    node_json["device_role"] = device_role.id
+
+    device_type_id = await device_type()
+    node_json["device_type"] = device_type_id.id
+
+    site_id = await site(site_id = NETBOX_SITE_ID)
+    node_json["site"] = site_id.id
+
+    node_json["status"] = 'active'
+
+    tags_id = await extras.tag()
+    tags_id = tags_id.id
+    node_json["tags"] = [tags_id]
+
+    cluster = await virtualization.cluster()
     if cluster:
-        if cluster != None:
-            node_json["cluster"] = cluster.id
+        if isinstance(cluster, str):
+            print(cluster)
+            return
+        
+        node_json["cluster"] = cluster.id
     
     # If device already exists, append (2) to final of the name
     check_duplicate = proxmox_node.get("duplicate", False)

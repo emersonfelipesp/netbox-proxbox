@@ -9,7 +9,7 @@ from .plugins_config import (
 import logging
 
 # Verify if VM/CT exists on Proxmox
-def is_vm_on_proxmox(netbox_vm):
+async def is_vm_on_proxmox(netbox_vm):
     # Get json of all virtual machines from Proxmox
     all_proxmox_vms = proxmox.cluster.resources.get(type='vm')
 
@@ -69,7 +69,7 @@ def is_vm_on_proxmox(netbox_vm):
         
         # If 'local_context' is null, try updating it to be able to get ID from VM
         if local_context == None:
-            local_context_updated = updates.local_context_data(netbox_vm, all_proxmox_vms[name_index])
+            local_context_updated = await updates.local_context_data(netbox_vm, all_proxmox_vms[name_index])
 
             if local_context_updated == True:
                 local_context = netbox_vm.local_context_data
@@ -105,7 +105,7 @@ def is_vm_on_proxmox(netbox_vm):
     # Comparison failed, not able to find VM on Proxmox
     return False
 
-def all():
+async def all():
     json_vm_all = []
     
     # Get all VM/CTs from Netbox

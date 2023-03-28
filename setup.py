@@ -21,8 +21,9 @@ requires = [
     'requests>=2',
     'pynetbox>=5',
     'paramiko>=2',
-    'proxmoxer>=1'
-
+    'proxmoxer>=1',
+    'fastapi[all]',
+    'uvicorn[standard]',
 ]
 
 dev_requires = [
@@ -61,5 +62,5 @@ setup(
     extras_require={
         "dev": dev_requires,
     },
-    python_requires= '>=3.6',
+    python_requires= '>=3.9',
 )
