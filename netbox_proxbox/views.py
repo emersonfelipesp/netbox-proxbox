@@ -28,7 +28,9 @@ import requests
 
 import logging
 
+from . import deploy_uvicorn
 
+'''
 # Deploy FastAPI with uvicorn instance
 try:
     import subprocess
@@ -60,7 +62,7 @@ except Exception as error:
     log_message = f"[ERROR] {error}"
     logging.error(log_message)
     raise Exception(log_message)
-
+'''
 
 class HomeView(View):
     """Homepage"""
@@ -134,7 +136,7 @@ class ProxmoxFullUpdate(PermissionRequiredMixin, View):
 
         json_result = None
         try:
-            json_result = requests.get('http://localhost:8004/full_update').json()
+            json_result = requests.get(f'http://localhost:{fastapi_port}/full_update').json()
         except Exception as error: print(error)
         
         return render(
