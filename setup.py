@@ -23,7 +23,13 @@ requires = [
     'paramiko>=2',
     'proxmoxer>=1',
     'fastapi[all]',
+    'starlette',
     'uvicorn[standard]',
+    'websockets',
+    'jinja2',
+    'ujson>=5.7.0',
+    'orjson>=3.8.9',
+    'httpcore',
 ]
 
 dev_requires = [
