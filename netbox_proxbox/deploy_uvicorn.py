@@ -24,6 +24,21 @@ def deploy():
         if f"uvicorn netbox-proxbox.netbox_proxbox.main:app --host {str(fastapi_host)} --port {str(fastapi_port)}" in psaux:
             log_message = "[OK] FastAPI (uvicorn) is already running."
             logging.info(log_message)
+            
+            psaux = str(psaux)
+            psaux_array = psaux.split("\\n")
+            
+            # Find the PID and command used to deploy existing uvicorn
+            for line in psaux_array:
+                line_array = line.split()
+                try:
+                    command = f"{line_array[10]} {line_array[11]} {line_array[12]} {line_array[13]} {line_array[14]} {line_array[15]} {line_array[16]}"
+                    if "uvicorn" in command:
+                        pid_int = line_array[1]
+                        print(f"   > PID: {pid_int}\n   > Command: {command}\n   -> If it not intended to have this proccess running, issue the following command to kill the proccess: 'kill -9 {pid_int}'")
+                except Exception as error:
+                    pass
+            
             return {
                 'fastapi_host': fastapi_host,
                 'fastapi_port': fastapi_port,
