@@ -16,12 +16,18 @@ def deploy():
         fastapi_host = proxbox_api.plugins_config.FASTAPI_HOST
         fastapi_port = proxbox_api.plugins_config.FASTAPI_PORT
         
+        # Gunicorn proccess
+        gunicorn_proccess = "gunicorn netbox-proxbox.netbox_proxbox.main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8030"
+        gunicorn_proccess = gunicorn_proccess.split()
+        gunicorn_proccess[7] = f"{fastapi_host}:{fastapi_port}"
+            
         uvicorn_spawn = None
         # Check if Netbox is running in development mode
         psaux = str(subprocess.run(["sudo", "ps", "aux"], capture_output=True).stdout)
-
+        
+        worker_class = "uvicorn.workers.UvicornWorker"
         # Check Uvicorn is running
-        if f"uvicorn netbox-proxbox.netbox_proxbox.main:app --host {str(fastapi_host)} --port {str(fastapi_port)}" in psaux:
+        if f"gunicorn netbox-proxbox.netbox_proxbox.main:app --workers 4 --worker-class {worker_class} --bind {str(fastapi_host)}:{str(fastapi_port)}" in psaux:
             log_message = "[OK] FastAPI (uvicorn) is already running."
             logging.info(log_message)
             
@@ -33,9 +39,11 @@ def deploy():
                 line_array = line.split()
                 try:
                     command = f"{line_array[10]} {line_array[11]} {line_array[12]} {line_array[13]} {line_array[14]} {line_array[15]} {line_array[16]}"
-                    if "uvicorn" in command:
+                    if "gunicron netbox-proxbox.netbox_proxbox.main" in command:
                         pid_int = line_array[1]
-                        print(f"   > PID: {pid_int}\n   > Command: {command}\n   -> If it not intended to have this proccess running, issue the following command to kill the proccess: 'kill -9 {pid_int}'")
+                        print(f"   > PID: {pid_int}\n   > Command: {command}\n   -> Proxbox will kill t he proccess using the following command: 'kill $(pgrep -P {pid_int})' and 'kill -9 {pid_int}'")
+                        subproccess.run(["kill", "$(pgrep", "-P", f"{pid_int})"])
+                        subproccess.run(["kill", "-9", {pid_int}])
                 except Exception as error:
                     pass
             
@@ -63,22 +71,24 @@ def deploy():
                 logging.error(log_message)
 
                 # Increment Port by one.
-                fastapi_port = str(int(fastapi_port) + 1)
-                    
+                fastapi_port = str(int(fastapi_port) + 1)             
 
         # Check if Django is running
         if "manage.py runserver" in psaux:
             if ":8000" in psaux:
                 # Spawn uvicorn process with '--reload' option
                 print("Django Development (manage.py runserver) process was found, running uvicorn with '--reload' parameter.")
-                uvicorn_spawn = ["uvicorn", "netbox-proxbox.netbox_proxbox.main:app", "--host", str(fastapi_host), "--port", str(fastapi_port), "--reload"]   
+                uvicorn_spawn = gunicorn_proccess
         else:
             # Spawn uvicorn process
             print("Only Django production process was found. Running uvicorn without '--reload' parameter.")
-            uvicorn_spawn = ["uvicorn", "netbox-proxbox.netbox_proxbox.main:app", "--host", str(fastapi_host), "--port", str(fastapi_port)]
+
+            uvicorn_spawn = gunicorn_proccess
+            
         subprocess.Popen(uvicorn_spawn)
         
     except Exception as error:
+        
         log_message = f"[ERROR] {error}"
         logging.error(log_message)
         raise Exception(log_message)
