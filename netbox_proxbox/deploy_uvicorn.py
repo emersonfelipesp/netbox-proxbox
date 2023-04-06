@@ -31,8 +31,8 @@ def deploy():
 
         # Check if there's already a process running with the same port
         output = str(subprocess.run(["sudo", "netstat", "-tuln"], capture_output=True).stdout)
-        if f"{fastapi_port}" in output:
-            log_message = f"[ERROR] Port '{fastapi_port}' is already being used.\nUnable to spawn uvicorn process, you'll have to change the port or kill the proccess running.\nTo do this, change 'PLUGINS_CONFIG' variable in 'configuration.py' Netbox"
+        if f":{fastapi_port}" in output:
+            log_message = f"[ERROR] Port '{fastapi_port}' is already being used.\n   > Unable to spawn uvicorn process, you'll have to change the port or kill the proccess running.\nTo do this, change 'PLUGINS_CONFIG' variable in 'configuration.py' Netbox"
             logging.error(log_message)
             
             # Increment Port by one.
@@ -43,8 +43,8 @@ def deploy():
             # Check again if there's already a process running with the same port
             output_2 = str(subprocess.run(["sudo", "netstat", "-tuln"], capture_output=True).stdout)
             
-            if f"{fastapi_port}" in output:
-                log_message = f"[ERROR] Port '{fastapi_port}' is already being used."
+            if f":{fastapi_port}" in output:
+                log_message = f"[ERROR] Port '{fastapi_port}' is already being used. (2)\n   > Proxbox won't try running it to avoid unexpected troubles.\n   > Try using following shell commands:\n   -> 'ps aux | grep :{fastapi_port}'\n   -> 'netstat -tuln | grep :{fastapi_port}'"
                 logging.error(log_message)
 
                 # Increment Port by one.
