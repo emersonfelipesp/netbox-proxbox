@@ -229,7 +229,7 @@ async def interfaces(netbox_node, proxmox_json):
         if iface not in [x.get('name') for x in _pmx_iface]:
             ntb_iface = list(nb.dcim.interfaces.filter(device_id=netbox_node.id, name=iface))
             if len(ntb_iface) == 1:
-                if not ntb_iface[0].mgmt_only or not ntb_iface[0].custom_fields.get('proxmox_keep_interface', False):
+                if not ntb_iface[0].mgmt_only and not ntb_iface[0].custom_fields.get('proxmox_keep_interface', False):
                     ntb_iface[0].delete()
 
     return updated
