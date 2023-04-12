@@ -30,39 +30,6 @@ import logging
 
 from . import deploy_uvicorn
 
-'''
-# Deploy FastAPI with uvicorn instance
-try:
-    import subprocess
-
-    # Import config
-    fastapi_host = proxbox_api.plugins_config.FASTAPI_HOST
-    fastapi_port = proxbox_api.plugins_config.FASTAPI_PORT
-
-    # Check if there's already a process running with the same port
-    output = str(subprocess.run(["sudo", "netstat", "-tuln"], capture_output=True).stdout)
-    if f"{fastapi_port}" in output:
-        raise Exception(f"Port '{fastapi_port}' is already being used.\nUnable to spawn uvicorn process, you'll have to change the port or kill the proccess running.\nTo do this, change 'PLUGINS_CONFIG' variable in 'configuration.py' Netbox")
-
-    uvicorn_spawn = None
-    # Check if Netbox is running in development mode
-    psaux = str(subprocess.run(["sudo", "ps", "aux"], capture_output=True).stdout)
-    if "manage.py runserver" in psaux:
-        if ":8000" in psaux:
-            # Spawn uvicorn process with '--reload' option
-            print("Django Development (manage.py runserver) process was found, running uvicorn with '--reload' parameter.")
-            uvicorn_spawn = ["uvicorn", "netbox-proxbox.netbox_proxbox.main:app", "--host", str(fastapi_host), "--port", str(fastapi_port), "--reload"]   
-    else:
-        # Spawn uvicorn process
-        print("Only Django production process was found. Running uvicorn without '--reload' parameter.")
-        uvicorn_spawn = ["uvicorn", "netbox-proxbox.netbox_proxbox.main:app", "--host", str(fastapi_host), "--port", str(fastapi_port)]
-    subprocess.Popen(uvicorn_spawn)
-    
-except Exception as error:
-    log_message = f"[ERROR] {error}"
-    logging.error(log_message)
-    raise Exception(log_message)
-'''
 
 class HomeView(View):
     """Homepage"""
@@ -86,42 +53,6 @@ class HomeView(View):
             }
         )
 
-''' 
-def table_data():
-    json_result = proxbox_api.update.all(remove_unused = True)
-
-    vm_table = []
-    for row in json_result.get("virtualmachines"):
-        json = {
-            "name": row["name"],
-            "status": row["changes"]["status"],
-            "custom_fields": row["changes"]["custom_fields"],
-            "local_context": row["changes"]["local_context"],
-            "resources": row["changes"]["resources"],
-            "tag": row["changes"]["tag"],
-            "interfaces": row["changes"]["interfaces"],
-            "ips": row["changes"]["ips"],
-        }
-        vm_table.append(json)
-
-    virtualmachines_table = VMUpdateResult(vm_table)
-
-    node_table = []
-    for row in json_result.get("nodes"):
-        json = {
-            "status": row["changes"]["status"],
-            "cluster": row["changes"]["cluster"],
-            "interfaces": row["changes"]["interfaces"],
-            "result": row["result"]
-        }
-        node_table.append(json)
-
-    nodes_table = NodeUpdateResult(node_table)
-
-
-    return [virtualmachines_table, nodes_table]
-'''
-
 
 class ProxmoxFullUpdate(PermissionRequiredMixin, View):
     """Full Update of Proxmox information on Netbox."""
@@ -134,9 +65,11 @@ class ProxmoxFullUpdate(PermissionRequiredMixin, View):
     def get(self, request):
         """Get request."""
 
+
+        from .deploy_uvicorn import fastapi_port
         json_result = None
         try:
-            json_result = requests.get(f'http://localhost:{fastapi_port}/full_update').json()
+            json_result = requests.get(f'http://localhost:{fastapi_port}/').json()
         except Exception as error: print(error)
         
         return render(

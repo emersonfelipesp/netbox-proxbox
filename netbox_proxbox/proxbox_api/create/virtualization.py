@@ -1,3 +1,4 @@
+import logging
 import sys
 
 # PLUGIN_CONFIG variables
@@ -8,11 +9,10 @@ from ..plugins_config import (
 
 )
 
-from . import (
-    extras,
-)
+from . import extras
 
-import logging
+from typing import Annotated
+from fastapi import Depends, FastAPI
 
 #
 # virtualization.cluster_types
@@ -24,25 +24,29 @@ async def cluster_type():
     cluster_type_name = 'Proxmox'
     cluster_type_slug = 'proxmox'
     
-    cluster_type_proxbox = nb.virtualization.cluster_types.get(
-        name = cluster_type_name,
-        slug = cluster_type_slug
-    )
+    cluster_type_proxbox = None
+    try:
+        cluster_type_proxbox = nb.virtualization.cluster_types.get(
+            name = cluster_type_name,
+            slug = cluster_type_slug, 
+        )
+    except Exception as error: print(f"[ERROR] Trying to get existing cluster_type.\n    > {error}")
 
+    print(f"\n\n\ncluster_type_proxbox: {cluster_type_proxbox}\n\n\n")
     # If no 'cluster_type' found, create one
     if cluster_type_proxbox == None:
-
         try:
             cluster_type = nb.virtualization.cluster_types.create(
                 name = cluster_type_name,
                 slug = cluster_type_slug,
-                description = 'Proxmox Virtual Environment. Open-source server management platform'
+                description = 'Proxmox Virtual Environment. Open-source server management platform',
+                
             )
         except Exception as request_error:
-            raise RuntimeError(f"Error creating the '{cluster_type_name}' cluster type.") from request_error
+            raise RuntimeError(f"Error creating the '{cluster_type_name}' cluster type.\n   > {request_error}") from request_error
 
-    else:
-        cluster_type = cluster_type_proxbox
+
+    cluster_type = cluster_type_proxbox
     
     return cluster_type
 
@@ -54,7 +58,10 @@ async def cluster_type():
 # 
 # virtualization.clusters
 #
-async def cluster():
+async def cluster(
+        cluster_type_obj: str | None  = Depends(cluster_type, use_cache=False),
+        tag_obj = Annotated[any, Depends(extras.tag, use_cache=False)],
+    ):
     #
     # Cluster
     #
@@ -66,10 +73,9 @@ async def cluster():
     # Name equal to Proxmox's Cluster name
     # Cluster type equal to 'proxmox'
     try:
-        cluster_type_slug = await cluster_type()
         cluster_proxbox = nb.virtualization.clusters.get(
            name = proxmox_cluster_name,
-           type = cluster_type_slug.slug
+           type = cluster_type_obj.slug
         )
     except ValueError as error:
         logging.error(f"[ERROR] More than one cluster is created with the name '{proxmox_cluster_name}', making proxbox to abort update.\n   > {error}")
@@ -86,8 +92,7 @@ async def cluster():
     try:
         # Check if Proxbox tag exist.
         if cluster_proxbox != None:
-            tag = await extras.tag()
-            search_tag = cluster_proxbox.tags.index(tag)
+            search_tag = cluster_proxbox.tags.index(tag_obj)
     except ValueError as error:
         logging.warning(f"[WARNING] Cluster with the same name as {nb_cluster_name} already exists.\n> Proxbox will create another one with (2) in the name\n{error}")
         cluster_proxbox = False
@@ -109,20 +114,20 @@ async def cluster():
                     return search_device
                 
             except Exception as error:
-                logging.error(f"[ERROR] {error}")
+                logging.error(f"[ERROR] TESTE {error}")
         else:
             return cluster_proxbox
 
         try:
             # Create the cluster with only name and cluster_type
 
-            cluster_type_id = await cluster_type()
-            tags_id = await extras.tag()
+            #cluster_type_id = await cluster_type()
+            #tags_id = await extras.tag()
 
             cluster = nb.virtualization.clusters.create(
                 name = proxmox_cluster_name,
-                type = cluster_type_id.id,
-                tags = [tags_id.id]
+                type = cluster_type.id,
+                tags = [tag.id]
             )
             return cluster
         except:

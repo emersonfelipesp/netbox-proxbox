@@ -1,0 +1,76 @@
+USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+root         1  0.0  0.1 170104 10988 ?        Ss   14:28   0:00 /sbin/init
+root        53  0.0  0.6 100720 52408 ?        Ss   14:29   0:00 /lib/systemd/systemd-journald
+systemd+    94  0.0  0.0  27264  7700 ?        Ss   14:29   0:00 /lib/systemd/systemd-networkd
+systemd+   104  0.0  0.1  24472 11856 ?        Ss   14:29   0:00 /lib/systemd/systemd-resolved
+root       106  0.0  0.0 232600  7048 ?        Ssl  14:29   0:00 /usr/lib/accountsservice/accounts-daemon
+avahi      108  0.0  0.0   8532  4044 ?        Ss   14:29   0:01 avahi-daemon: running [netbox-proxbox-dev.local]
+root       110  0.0  0.0   3820  2456 ?        Ss   14:29   0:00 /usr/sbin/cron -f
+message+   111  0.0  0.0   7780  4740 ?        Ss   14:29   0:00 /usr/bin/dbus-daemon --system --address=systemd: --nofork --nopidfile --systemd-activation --syslog-only
+root       112  0.0  0.2 256052 18256 ?        Ssl  14:29   0:00 /usr/sbin/NetworkManager --no-daemon
+root       116  0.0  0.0 234056  8296 ?        Ssl  14:29   0:00 /usr/lib/policykit-1/polkitd --no-debug
+syslog     118  0.0  0.0 154708  4128 ?        Ssl  14:29   0:00 /usr/sbin/rsyslogd -n -iNONE
+root       120  0.0  0.0 230000  5568 ?        Ssl  14:29   0:00 /usr/libexec/switcheroo-control
+root       122  0.0  0.0  17348  7520 ?        Ss   14:29   0:00 /lib/systemd/systemd-logind
+root       124  0.0  0.0  13688  4960 ?        Ss   14:29   0:00 /sbin/wpa_supplicant -u -s -O /run/wpa_supplicant
+avahi      127  0.0  0.0   8340   320 ?        S    14:29   0:00 avahi-daemon: chroot helper
+root       143  0.0  0.1 241368 10884 ?        Ssl  14:29   0:00 /usr/sbin/ModemManager
+root       157  0.0  0.0   2632  1824 pts/7    Ss+  14:29   0:00 /sbin/agetty -o -p -- \u --noclear --keep-baud console 115200,38400,9600 linux
+root       158  0.0  0.0   2632  1832 pts/0    Ss+  14:29   0:00 /sbin/agetty -o -p -- \u --noclear --keep-baud tty1 115200,38400,9600 linux
+root       159  0.0  0.0   2632  1824 pts/1    Ss+  14:29   0:00 /sbin/agetty -o -p -- \u --noclear --keep-baud tty2 115200,38400,9600 linux
+root       167  0.0  0.0  12180  6836 ?        Ss   14:29   0:00 sshd: /usr/sbin/sshd -D [listener] 0 of 10-100 startups
+redis      172  0.0  0.0  47220  5004 ?        Ssl  14:29   0:02 /usr/bin/redis-server 127.0.0.1:6379
+netbox     174  0.0  0.2  27716 22804 ?        Ss   14:29   0:00 /opt/netbox/venv/bin/python3 /opt/netbox/venv/bin/gunicorn --pid /var/tmp/netbox.pid --pythonpath /opt/netbox/netbox --config /opt/netbox/gunicorn.py netbox.wsgi
+root       242  0.0  0.0  51208  1556 ?        Ss   14:29   0:00 nginx: master process /usr/sbin/nginx -g daemon on; master_process on;
+www-data   243  0.0  0.0  51764  5248 ?        S    14:29   0:00 nginx: worker process
+www-data   244  0.0  0.0  51764  5248 ?        S    14:29   0:00 nginx: worker process
+www-data   245  0.0  0.0  51764  5248 ?        S    14:29   0:00 nginx: worker process
+www-data   246  0.0  0.0  51764  5248 ?        S    14:29   0:00 nginx: worker process
+www-data   247  0.0  0.0  51764  5248 ?        S    14:29   0:00 nginx: worker process
+www-data   248  0.0  0.0  51764  5248 ?        S    14:29   0:00 nginx: worker process
+www-data   249  0.0  0.0  51764  5248 ?        S    14:29   0:00 nginx: worker process
+www-data   250  0.0  0.0  51764  5248 ?        S    14:29   0:00 nginx: worker process
+postgres   273  0.0  0.3 212704 28752 ?        Ss   14:29   0:00 /usr/lib/postgresql/12/bin/postgres -D /var/lib/postgresql/12/main -c config_file=/etc/postgresql/12/main/postgresql.conf
+root       360  0.0  0.0  38068  4624 ?        Ss   14:29   0:00 /usr/lib/postfix/sbin/master -w
+postfix    362  0.0  0.0  38384  6084 ?        S    14:29   0:00 qmgr -l -t unix -u
+postgres   364  0.0  0.0 212828  7900 ?        Ss   14:29   0:00 postgres: 12/main: checkpointer   
+postgres   365  0.0  0.0 212704  5868 ?        Ss   14:29   0:00 postgres: 12/main: background writer   
+postgres   366  0.0  0.1 212704 10052 ?        Ss   14:29   0:00 postgres: 12/main: walwriter   
+postgres   367  0.0  0.0 213376  8392 ?        Ss   14:29   0:00 postgres: 12/main: autovacuum launcher   
+postgres   368  0.0  0.0  67468  5480 ?        Ss   14:29   0:00 postgres: 12/main: stats collector   
+postgres   369  0.0  0.0 213132  6672 ?        Ss   14:29   0:00 postgres: 12/main: logical replication launcher   
+netbox     379  0.0  1.1 129124 96860 ?        S    14:29   0:01 /opt/netbox/venv/bin/python3 /opt/netbox/venv/bin/gunicorn --pid /var/tmp/netbox.pid --pythonpath /opt/netbox/netbox --config /opt/netbox/gunicorn.py netbox.wsgi
+netbox     380  0.0  1.1 129128 96876 ?        S    14:29   0:01 /opt/netbox/venv/bin/python3 /opt/netbox/venv/bin/gunicorn --pid /var/tmp/netbox.pid --pythonpath /opt/netbox/netbox --config /opt/netbox/gunicorn.py netbox.wsgi
+netbox     381  0.0  1.1 129128 96916 ?        S    14:29   0:01 /opt/netbox/venv/bin/python3 /opt/netbox/venv/bin/gunicorn --pid /var/tmp/netbox.pid --pythonpath /opt/netbox/netbox --config /opt/netbox/gunicorn.py netbox.wsgi
+netbox     382  0.0  1.1 129132 96924 ?        S    14:29   0:01 /opt/netbox/venv/bin/python3 /opt/netbox/venv/bin/gunicorn --pid /var/tmp/netbox.pid --pythonpath /opt/netbox/netbox --config /opt/netbox/gunicorn.py netbox.wsgi
+netbox     383  0.0  1.1 129132 96936 ?        S    14:29   0:01 /opt/netbox/venv/bin/python3 /opt/netbox/venv/bin/gunicorn --pid /var/tmp/netbox.pid --pythonpath /opt/netbox/netbox --config /opt/netbox/gunicorn.py netbox.wsgi
+postfix    404  0.0  0.0  38136  5868 ?        S    14:29   0:00 local -t unix
+postfix    405  0.0  0.0  38136  5860 ?        S    14:29   0:00 local -t unix
+root       408  0.0  0.0 233908  7932 ?        Ssl  14:29   0:00 /usr/sbin/gdm3
+root       443  0.0  0.1  13948  9020 ?        Ss   14:29   0:01 sshd: root@notty
+root       446  0.0  0.1  18836  9292 ?        Ss   14:30   0:00 /lib/systemd/systemd --user
+root       447  0.0  0.0 171512  3992 ?        S    14:30   0:00 (sd-pam)
+root       471  0.0  0.0   4028  3280 ?        Ss   14:30   0:00 bash
+root       516  0.0  0.0   2608   532 ?        S    14:30   0:00 sh /root/.vscode-server/bin/b7886d7461186a5eac768481578c1d7ca80e2d21/bin/code-server --start-server --host=127.0.0.1 --accept-server-license-terms --enable-remote-auto-shutdown --port=0 --telemetry-level all --connection-token-file /root/.vscode-server/.b7886d7461186a5eac768481578c1d7ca80e2d21.token
+root       526  0.0  1.0 950652 91376 ?        Sl   14:30   0:07 /root/.vscode-server/bin/b7886d7461186a5eac768481578c1d7ca80e2d21/node /root/.vscode-server/bin/b7886d7461186a5eac768481578c1d7ca80e2d21/out/server-main.js --start-server --host=127.0.0.1 --accept-server-license-terms --enable-remote-auto-shutdown --port=0 --telemetry-level all --connection-token-file /root/.vscode-server/.b7886d7461186a5eac768481578c1d7ca80e2d21.token
+root       767  0.0  0.7 689280 59920 ?        Sl   14:30   0:04 /root/.vscode-server/bin/b7886d7461186a5eac768481578c1d7ca80e2d21/node /root/.vscode-server/bin/b7886d7461186a5eac768481578c1d7ca80e2d21/out/bootstrap-fork --type=ptyHost --logsPath /root/.vscode-server/data/logs/20230406T143003
+root       793  0.0  3.4 1142872 292048 ?      Sl   14:30   1:44 /root/.vscode-server/bin/b7886d7461186a5eac768481578c1d7ca80e2d21/node /root/.vscode-server/bin/b7886d7461186a5eac768481578c1d7ca80e2d21/out/bootstrap-fork --type=extensionHost --transformURIs --useHostProxy=false
+root       837  0.0  0.0   4464  3992 pts/6    Ss   14:30   0:00 /bin/bash --init-file /root/.vscode-server/bin/b7886d7461186a5eac768481578c1d7ca80e2d21/out/vs/workbench/contrib/terminal/browser/media/shellIntegration-bash.sh
+root      1037  0.0  0.2 162984 23196 pts/6    Sl   14:30   0:00 /opt/netbox/venv/bin/python3 /opt/netbox/venv/bin/uvicorn netbox-proxbox.netbox_proxbox.main:app --host 0.0.0.0 --port 8021 --reload
+root      1038  0.0  0.1  14176 11076 pts/6    S    14:30   0:00 /opt/netbox/venv/bin/python3 -c from multiprocessing.resource_tracker import main;main(4)
+root      1130  0.0  1.3 11438788 111804 ?     Sl   14:31   0:01 /root/.vscode-server/bin/b7886d7461186a5eac768481578c1d7ca80e2d21/node /root/.vscode-server/extensions/visualstudioexptteam.intellicode-api-usage-examples-0.2.7/dist/server/server.js --node-ipc --clientProcessId=793
+root      1152  0.0  0.3 182108 30408 ?        Sl   14:31   0:01 /opt/netbox/venv/bin/python3 /root/.vscode-server/extensions/ms-python.isort-2022.8.0/bundled/tool/server.py
+root      1155  0.0  0.5 126216 47352 ?        Sl   14:31   0:03 /opt/netbox/venv/bin/python3 /root/.vscode-server/extensions/ms-python.flake8-2023.4.0/bundled/tool/lsp_server.py
+root      1156  0.0  1.4 270304 117640 ?       Sl   14:31   0:08 /opt/netbox/venv/bin/python3 /root/.vscode-server/extensions/ms-python.pylint-2023.4.0/bundled/tool/lsp_server.py
+root      1180  0.0 11.2 1695856 944820 ?      Rl   14:31  33:32 /root/.vscode-server/bin/b7886d7461186a5eac768481578c1d7ca80e2d21/node /root/.vscode-server/extensions/ms-python.vscode-pylance-2023.4.10/dist/server.bundle.js --cancellationReceive=file:b5b68ba6f40e61e3f6efd160afc9cefc1be324405c --node-ipc --clientProcessId=793
+root      1190  0.0  0.0   4488  3868 pts/7    Ss   14:31   0:00 /bin/bash --init-file /root/.vscode-server/bin/b7886d7461186a5eac768481578c1d7ca80e2d21/out/vs/workbench/contrib/terminal/browser/media/shellIntegration-bash.sh
+root      1661  0.0  1.3 835800 109432 ?       Sl   14:32   0:29 /root/.vscode-server/bin/b7886d7461186a5eac768481578c1d7ca80e2d21/node /root/.vscode-server/bin/b7886d7461186a5eac768481578c1d7ca80e2d21/out/bootstrap-fork --type=fileWatcher
+root      1950  0.0  0.7  90584 62328 pts/6    S    14:35   0:00 /opt/netbox/venv/bin/python3 -c from multiprocessing.spawn import spawn_main; spawn_main(tracker_fd=5, pipe_handle=10) --multiprocessing-fork
+root      2323  0.0  1.1 127388 96728 pts/6    S+   14:37   0:01 python3 manage.py runserver 0.0.0.0:8000 --insecure
+postfix   4164  0.0  0.0  38332  6108 ?        S    14:50   0:00 pickup -l -t unix -u -c
+postfix   4739  0.0  0.0  38436  6164 ?        S    14:56   0:00 cleanup -z -t unix -u -c
+postfix   4741  0.0  0.0  38340  6196 ?        S    14:56   0:00 trivial-rewrite -n rewrite -t unix -u -c
+root      5025  0.0  0.0   2508   512 ?        S    15:03   0:00 sleep 180
+root      5046  0.0  1.9 270400 165500 pts/6   Sl+  15:04   0:06 /opt/netbox/venv/bin/python3 manage.py runserver 0.0.0.0:8000 --insecure
+postgres  5092  0.0  0.2 214520 16920 ?        Ss   15:04   0:00 postgres: 12/main: netbox netbox ::1(53604) idle
+root      5143  0.0  0.0   5892  2832 pts/7    R+   15:04   0:00 ps aux
