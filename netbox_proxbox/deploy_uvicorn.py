@@ -101,3 +101,10 @@ def deploy():
 result = deploy()
 fastapi_host = result.get("fastapi_host", None)
 fastapi_port = result.get("fastapi_port", None)
+
+if fastapi_host == None and fastapi_port == None:
+    logging.error("[ERROR] FastAPI Host and FastAPI Port not configured by user at 'configuration.py'")
+if fastapi_host == None:
+    logging.error("[ERROR] FastAPI Host not configured by user at 'configuration.py'")
+if fastapi_error == None:
+    logging.error("[ERROR] FastAPI Port not configured by user at 'configuration.py'")
