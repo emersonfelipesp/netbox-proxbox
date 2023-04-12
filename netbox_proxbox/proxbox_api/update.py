@@ -375,7 +375,10 @@ async def nodes(**kwargs):
             return json_node
                 
     # Search netbox using VM name
-    netbox_search = nb.dcim.devices.get(name = proxmox_node_name)
+    try:
+        netbox_search = nb.dcim.devices.get(name = proxmox_node_name)
+    except Exception as error:
+        logging.error(f"[ERROR] Netbox returned more than one result for '{proxmox_node_name}'\n   > {error}")
 
     # Search node on Netbox with Proxmox node name gotten
     if netbox_search == None:
@@ -430,74 +433,6 @@ async def nodes(**kwargs):
             json_node["name"] = proxmox_node_name
         
     return json_node
-
-
-'''
-# Makes everything needed so that VIRTUAL MACHINES / CONTAINERS, NODES and CLUSTER exists on Netbox
-async def all(websocket, **kwargs):
-    
-    await websocket.send_text("teste websocket")
-    print("[Proxbox - Netbox plugin | Update All]")
-    cluster_all = proxmox.cluster.status.get()
-
-    #
-    # CLUSTER
-    #
-    cluster = await create.virtualization.cluster()
-    print('\n\n\nCLUSTER...')
-
-    try:
-        logging.info(f'[OK] CLUSTER created. -> {cluster.name}')
-    except:
-        logging.info(f"[OK] Cluster created. -> {cluster}")
-
-    proxmox_cluster = cluster_all[0]
-    #
-    # NODES
-    #
-    print('\n\n\nNODES...')
-    nodes_list = []
-    proxmox_nodes = cluster_all[1:]
-
-    # Get all NODES from Proxmox
-    for px_node_each in proxmox_nodes:
-        node_updated = await nodes(proxmox_json = px_node_each, proxmox_cluster = proxmox_cluster)
-        await websocket.send_json(node_updated)
-        nodes_list.append(node_updated)
-
-
-    #
-    # VIRTUAL MACHINES / CONTAINERS
-    #
-    print('\n\n\nVIRTUAL MACHINES...')
-    virtualmachines_list = []
-
-    print('\nUPDATE ALL...')
-    # Get all VM/CTs from Proxmox
-    for px_vm_each in proxmox.cluster.resources.get(type='vm'):     
-        vm_updated = await virtual_machine(proxmox_json = px_vm_each)
-        await websocket.send_json(vm_updated)
-        virtualmachines_list.append(vm_updated)
-
-    # Get "remove_unused" passed on function call
-    remove_unused = kwargs.get("remove_unused", False)
-
-    # Remove Netbox's old data
-    if remove_unused == True:
-        print('\nREMOVE UNUSED DATA...')
-        remove_info = await remove.all()
-    else:
-        remove_info = False
-    #
-    # BUILD JSON RESULT
-    #
-    result = {}
-    result["virtualmachines"] = virtualmachines_list
-    result["nodes"] = nodes_list
-    result["remove_unused"] = remove_info
-
-    return result
-'''
 
 # Runs if script executed directly
 if __name__ == "__main__":
