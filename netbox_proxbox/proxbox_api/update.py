@@ -20,6 +20,7 @@ from . import (
 from .create import extras 
 
 import logging
+import json
 
 # Call all functions to update Virtual Machine
 async def vm_full_update(netbox_vm, proxmox_vm):
@@ -431,9 +432,11 @@ async def nodes(**kwargs):
     return json_node
 
 
-
+'''
 # Makes everything needed so that VIRTUAL MACHINES / CONTAINERS, NODES and CLUSTER exists on Netbox
-async def all(**kwargs):
+async def all(websocket, **kwargs):
+    
+    await websocket.send_text("teste websocket")
     print("[Proxbox - Netbox plugin | Update All]")
     cluster_all = proxmox.cluster.status.get()
 
@@ -459,7 +462,7 @@ async def all(**kwargs):
     # Get all NODES from Proxmox
     for px_node_each in proxmox_nodes:
         node_updated = await nodes(proxmox_json = px_node_each, proxmox_cluster = proxmox_cluster)
-
+        await websocket.send_json(node_updated)
         nodes_list.append(node_updated)
 
 
@@ -473,7 +476,7 @@ async def all(**kwargs):
     # Get all VM/CTs from Proxmox
     for px_vm_each in proxmox.cluster.resources.get(type='vm'):     
         vm_updated = await virtual_machine(proxmox_json = px_vm_each)
-
+        await websocket.send_json(vm_updated)
         virtualmachines_list.append(vm_updated)
 
     # Get "remove_unused" passed on function call
@@ -494,7 +497,7 @@ async def all(**kwargs):
     result["remove_unused"] = remove_info
 
     return result
-
+'''
 
 # Runs if script executed directly
 if __name__ == "__main__":

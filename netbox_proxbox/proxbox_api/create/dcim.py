@@ -1,16 +1,14 @@
 # PLUGIN_CONFIG variables
-from ..plugins_config import (
-    NETBOX_SESSION as nb,
-    NETBOX_NODE_ROLE_ID,
-    NETBOX_SITE_ID,
-)
-
-from . import (
-    extras,
-    virtualization,
-)
-
 import logging
+
+from typing import Annotated
+from fastapi import Depends, FastAPI
+
+from ..plugins_config import NETBOX_NODE_ROLE_ID
+from ..plugins_config import NETBOX_SESSION as nb
+from ..plugins_config import NETBOX_SITE_ID
+from . import extras, virtualization
+
 
 #
 # dcim.manufacturers
@@ -46,7 +44,10 @@ async def manufacturer():
 #
 # dcim.device_types
 #
-async def device_type():
+async def device_type(
+        manufacturer = Annotated[any, Depends(manufacturer, use_cache=False)],
+        tags = Annotated[any, Depends(extras.tag, use_cache=False)]
+    ):
     proxbox_device_type_model = 'Proxbox Model'
     proxbox_device_type_slug = 'proxbox-model'
     proxbox_device_type_comments = "Device Type Proxbox will use when creating the Cluster's Nodes. When the Node is created, you can change the device type to the actual server model."
@@ -61,11 +62,11 @@ async def device_type():
         try:
             # If Proxbox manufacturer does not exist, create one.
             device_type = nb.dcim.device_types.create(
-                manufacturer = await manufacturer().id,
+                manufacturer = manufacturer.id,
                 model = proxbox_device_type_model,
                 slug = proxbox_device_type_slug,
                 comments = proxbox_device_type_comments,
-                tags = await [extras.tag().id]
+                tags = [tags.id]
             )
         except:
             log_message = f"Error creating the '{proxbox_device_type_model}' device type. Possible errors: the model '{proxbox_device_type_model}' or slug '{proxbox_device_type_slug}' is already used."
@@ -81,7 +82,10 @@ async def device_type():
 #
 # dcim.sites
 #
-async def site(**kwargs):
+async def site( 
+        tags = Annotated[any, Depends(extras.tag, use_cache=False)],
+        **kwargs,
+    ):
     # If site_id equals to 0, consider it is not configured by user and must be created by Proxbox
     site_id = kwargs.get('site_id', 0)
 
@@ -112,7 +116,7 @@ async def site(**kwargs):
                     name = site_proxbox_name,
                     slug = site_proxbox_slug,
                     status = 'active',
-                    tags = [extras.tag().id]
+                    tags = [tags.id]
                 )
             except:
                 return f"Error creating the '{site_proxbox_name}' site. Possible errors: the name '{site_proxbox_name}' or slug '{site_proxbox_slug}' is already used."
@@ -130,7 +134,10 @@ async def site(**kwargs):
 #
 # dcim.devices (nodes)
 #
-async def node(proxmox_node):
+async def node(
+        proxmox_node,
+        cluster = Annotated[any, Depends(virtualization.cluster, use_cache=False)],
+    ):
     # Create json with basic NODE information
     node_json = {}
     node_json["name"] = proxmox_node['name']
@@ -150,7 +157,6 @@ async def node(proxmox_node):
     tags_id = tags_id.id
     node_json["tags"] = [tags_id]
 
-    cluster = await virtualization.cluster()
     if cluster:
         if isinstance(cluster, str):
             print(cluster)
