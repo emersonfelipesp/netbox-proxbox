@@ -28,7 +28,7 @@ import requests
 
 import logging
 
-from . import deploy_uvicorn
+from . import deploy_fastapi
 
 
 class HomeView(View):
@@ -49,7 +49,7 @@ class HomeView(View):
                 "configuration": plugin_configuration,
                 "default_config": default_config,
                 "configuration_json": json.dumps(plugin_configuration, indent=4),
-                "default_config_json": json.dumps(default_config, indent=4)
+                "default_config_json": json.dumps(default_config, indent=4), 
             }
         )
 
@@ -66,7 +66,7 @@ class ProxmoxFullUpdate(PermissionRequiredMixin, View):
         """Get request."""
 
 
-        from .deploy_uvicorn import fastapi_port
+        from .deploy_fastapi import fastapi_port
         json_result = None
         try:
             json_result = requests.get(f'http://localhost:{fastapi_port}/').json()

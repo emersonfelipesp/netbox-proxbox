@@ -59,9 +59,10 @@ async def cluster_type():
 # virtualization.clusters
 #
 async def cluster(
-        cluster_type_obj: str | None  = Depends(cluster_type, use_cache=False),
-        tag_obj = Annotated[any, Depends(extras.tag, use_cache=False)],
+        cluster_type_obj: str | None = Depends(cluster_type, use_cache=False),
+        tag_obj: any = Depends(extras.tag),
     ):
+    print(f"tag_obj: {tag_obj}")
     #
     # Cluster
     #
@@ -92,9 +93,10 @@ async def cluster(
     try:
         # Check if Proxbox tag exist.
         if cluster_proxbox != None:
-            search_tag = cluster_proxbox.tags.index(tag_obj)
+            print(f"cluster_proxbox: {cluster_proxbox}\n{type(cluster_proxbox)}")
+            search_tag = cluster_proxbox.tags.index(tag_obj.id)           
     except ValueError as error:
-        logging.warning(f"[WARNING] Cluster with the same name as {nb_cluster_name} already exists.\n> Proxbox will create another one with (2) in the name\n{error}")
+        logging.warning(f"[WARNING] Cluster with the same name as {nb_cluster_name} already exists.\n> Proxbox will create another one with (2) in the name\n   > {error}")
         cluster_proxbox = False
         duplicate = True
 
@@ -127,7 +129,7 @@ async def cluster(
             cluster = nb.virtualization.clusters.create(
                 name = proxmox_cluster_name,
                 type = cluster_type.id,
-                tags = [tag.id]
+                tags = [tag_obj.id]
             )
             return cluster
         except:
@@ -148,8 +150,8 @@ async def cluster(
             return cluster
         except:
             return f"Error creating the '{proxmox_cluster_name}' cluster. Possible errors: the name '{proxmox_cluster_name}' is already used."
-
-
+    
+    return cluster
 
 
 

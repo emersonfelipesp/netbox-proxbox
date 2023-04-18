@@ -9,7 +9,7 @@ import requests
 from netbox_proxbox import proxbox_api
 
 # Import config
-from .deploy_uvicorn import (
+from .deploy_fastapi import (
     fastapi_host,
     fastapi_port,
 )
@@ -169,10 +169,12 @@ async def websocket_endpoint(websocket: WebSocket):
         #
         # CLUSTER
         #
-        print("pre-cluster...")
+        print("pre-cluster.....")
         cluster = requests.get(f'http://localhost:{fastapi_port}/cluster')
-        print('\n\n\nCLUSTER...')
-        print(f"cluster: {cluster}")
+        print(f"cluster_0: {cluster}")
+        return
+        print('\n\n\nCLUSTER.....')
+        print(f"cluster:: {cluster.text}")
         
         print(cluster)
         await websocket.send_text(cluster)
