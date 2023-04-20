@@ -85,6 +85,8 @@ The following table shows the Netbox and Proxmox versions compatible (tested) wi
 
 [7. Roadmap](#7-roadmap)
 
+[8. Get Help from Community!](#8-get-help-from-community)
+
 ---
 
 ## 1. Installation
@@ -346,3 +348,12 @@ Issues and pull requests are welcomed.
 - Add periodic update of the whole environment so that the user does not need to manually click the update button.
 - Create virtual machines and containers directly on Netbox, having no need to access Proxmox.
 - Add 'Console' button to enable console access to virtual machines
+
+---
+
+## 8. Get Help from Community!
+If you are struggling to get Proxbox working, feel free to contact someone from community (including me) to help you.
+Below some of the communities available:
+- **[Official - Slack Community (english)](https://netdev.chat/)**
+- **[Community Discord Channel - 🇧🇷 (pt-br)](https://discord.gg/X6FudvXW)**
+- **[Community Telegram Chat - 🇧🇷 (pt-br)](https://t.me/netboxbr)**
