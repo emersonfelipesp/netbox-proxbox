@@ -11,6 +11,14 @@ from netbox_proxbox import ProxboxConfig
 # PLUGIN_CONFIG variable defined by user in Netbox 'configuration.py' file
 from netbox.settings import PLUGINS_CONFIG
 
+# support for custom BASE_PATH
+
+try:
+    from netbox.settings import BASE_PATH
+    DEFAULT_BASE_PATH = '/' + BASE_PATH
+except ImportError:
+    DEFAULT_BASE_PATH = ''
+
 ####################################################################################################
 #                                                                                                  #
 #  DEFAULT VARIABLES DEFINED BY ProxboxConfig CLASS ON PROXBOX PLUGIN CONFIGURATION (__init__.py)  #
@@ -167,7 +175,7 @@ try:
     session = requests.Session()
     session.verify = False
 
-    NETBOX = 'http://{}:{}'.format(NETBOX, NETBOX_PORT)
+    NETBOX = 'http://{}:{}{}'.format(NETBOX, NETBOX_PORT, DEFAULT_BASE_PATH)
 
     # Start NETBOX session
     NETBOX_SESSION = pynetbox.api(
