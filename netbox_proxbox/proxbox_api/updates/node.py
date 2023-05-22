@@ -14,6 +14,8 @@ from .. import (
     create,
 )
 
+import logging
+
 # Update STATUS field on /dcim/device/{id}
 def status(netbox_node, proxmox_node):
     #
@@ -59,37 +61,46 @@ def cluster(netbox_node, proxmox_node, proxmox_cluster):
     #
     # Compare CLUSTER
     #
-    if proxmox_cluster != None:
-        # If cluster is filled, but different from actual cluster, update it.
-        if netbox_node.cluster.name != proxmox_cluster['name']:
-            # Search for Proxmox Cluster using create.cluster() function
-            cluster_id = create.virtualization.cluster().id
+    cluster_updated = False
 
-            # Use Cluster ID to update NODE information
-            netbox_node.cluster.id = cluster_id
+    if netbox_node != None:
+        try:
+            if proxmox_cluster != None: 
+                # If cluster is not filled or even filled, but different from actual cluster, update it.
+                if netbox_node.cluster.name != proxmox_cluster['name'] or netbox_node.cluster.name == None:
+                    # Search for Proxmox Cluster using create.cluster() function
+                    cluster_id = create.virtualization.cluster().id
 
-            if netbox_node.save() == True:
-                cluster_updated = True
+                    # Use Cluster ID to update NODE information
+                    netbox_node.cluster.id = cluster_id
+
+                    if netbox_node.save() == True:
+                        cluster_updated = True
+                    else:
+                        cluster_updated = False
+
+                else:
+                    cluster_updated = False
+
+            # If cluster is empty, update it.
+            elif proxmox_cluster == None:
+                # Search for Proxmox Cluster using create.cluster() function
+                cluster_id = create.virtualization.cluster().id
+
+                # Use Cluster ID to update NODE information
+                netbox_node.cluster.id = cluster_id
+
+                if netbox_node.save() == True:
+                    cluster_updated = True
+                else:
+                    cluster_updated = False
+            
+            # If cluster was not empty and also not different, do not make any change.
             else:
                 cluster_updated = False
 
-        else:
-            cluster_updated = False
-
-    # If cluster is empty, update it.
-    elif proxmox_cluster == None:
-        # Search for Proxmox Cluster using create.cluster() function
-        cluster_id = create.virtualization.cluster().id
-
-        # Use Cluster ID to update NODE information
-        netbox_node.cluster.id = cluster_id
-
-        if netbox_node.save() == True:
-            cluster_updated = True
-        else:
-            cluster_updated = False
-    
-    # If cluster was not empty and also not different, do not make any change.
+        except Exception as error:
+            logging.error(f"[ERROR] {error}")
     else:
         cluster_updated = False
 
@@ -101,7 +112,7 @@ def interfaces(netbox_node, proxmox_json):
     _lag_port = ['OVSBond']
     _brg_port = ['OVSBridge']
     _pmx_iface = []
-    _ntb_iface = [{'name': iface.name, 'mtu' : int(iface.mtu), 'tagged_vlans': [int(x['vid']) for x in iface.tagged_vlans]} for iface in nb.dcim.interfaces.filter(device_id=netbox_node.id)]
+    _ntb_iface = [{'name': iface.name, 'mtu' : int(iface.mtu) if iface.mtu else 1500, 'tagged_vlans': [int(x['vid']) for x in iface.tagged_vlans]} for iface in nb.dcim.interfaces.filter(device_id=netbox_node.id)]
     _eth =  [iface for iface in proxmox.nodes(proxmox_json['name']).network.get() if iface['type'] == 'eth']
     _virt = [iface for iface in proxmox.nodes(proxmox_json['name']).network.get() if iface['type'] in _int_port]
     _bond = [iface for iface in proxmox.nodes(proxmox_json['name']).network.get() if iface['type'] in _lag_port]
@@ -216,8 +227,9 @@ def interfaces(netbox_node, proxmox_json):
 
     for iface in [x.get('name') for x in _ntb_iface]:
         if iface not in [x.get('name') for x in _pmx_iface]:
-            ntb_iface = list(nb.dcim.interfaces.filter(device_id=netbox_node.id, name=iface['name']))
+            ntb_iface = list(nb.dcim.interfaces.filter(device_id=netbox_node.id, name=iface))
             if len(ntb_iface) == 1:
-                ntb_iface[0].delete()
+                if not ntb_iface[0].mgmt_only and not ntb_iface[0].custom_fields.get('proxmox_keep_interface', False):
+                    ntb_iface[0].delete()
 
     return updated

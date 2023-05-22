@@ -21,6 +21,7 @@ from .. import (
 
 from proxmoxer.core import ResourceException
 
+import logging
 
 # Update "status" field on Netbox Virtual Machine based on Proxmox information
 def status(netbox_vm, proxmox_vm):
@@ -113,7 +114,7 @@ def custom_fields(netbox_vm, proxmox_vm):
 
     # Check if there is 'custom_field' configured on Netbox
     if len(netbox_vm.custom_fields) == 0:
-        print("[ERROR] There's no 'Custom Fields' registered by the Netbox Plugin user")
+        logging.error("[ERROR] There's no 'Custom Fields' registered by the Netbox Plugin user")
 
     # If any 'custom_field' configured, get it and update, if necessary.
     elif len(netbox_vm.custom_fields) > 0:
@@ -129,21 +130,21 @@ def custom_fields(netbox_vm, proxmox_vm):
             if netbox_vm.custom_fields.get("proxmox_id") != proxmox_vm['vmid']:
                 custom_fields_update["proxmox_id"] = proxmox_vm['vmid']
         else:
-            print("[ERROR] 'proxmox_id' custom field not registered yet or configured incorrectly]")
+            logging.error("[ERROR] 'proxmox_id' custom field not registered yet or configured incorrectly]")
 
         # Custom Field 'proxmox_node'
         if 'proxmox_node' in custom_fields_names:
             if netbox_vm.custom_fields.get("proxmox_node") != proxmox_vm['node']:
                 custom_fields_update["proxmox_node"] = proxmox_vm['node']
         else:
-            print("[ERROR] 'proxmox_node' custom field not registered yet or configured incorrectly")
+            logging.error("[ERROR] 'proxmox_node' custom field not registered yet or configured incorrectly")
 
         # Custom Field 'proxmox_type'
         if 'proxmox_type' in custom_fields_names:
             if netbox_vm.custom_fields.get("proxmox_type") != proxmox_vm['type']:
                 custom_fields_update["proxmox_type"] = proxmox_vm['type']
         else:
-            print("[ERROR] 'proxmox_type' custom field not registered yet or configured incorrectly")
+            logging.error("[ERROR] 'proxmox_type' custom field not registered yet or configured incorrectly")
 
 
 
@@ -162,7 +163,7 @@ def custom_fields(netbox_vm, proxmox_vm):
 
             # Verify HTTP reply CODE
             if custom_field_updated != 200:
-                print("[ERROR] Some error occured trying to update 'custom_fields' through HTTP Request. HTTP Code: {}. -> {}".format(custom_field_updated, netbox_vm.name))
+                logging.error("[ERROR] Some error occured trying to update 'custom_fields' through HTTP Request. HTTP Code: {}. -> {}".format(custom_field_updated, netbox_vm.name))
                 return False
 
             else:
@@ -292,9 +293,9 @@ def interfaces(netbox_vm, proxmox_vm):
         elif proxmox_vm['type'] == 'lxc':
             vm_config = proxmox.nodes(proxmox_vm['node']).lxc(proxmox_vm['vmid']).config.get()
         else:
-            print('[ERROR] Unknown or unmanaged proxmox_vm_type')
+            logging.error('[ERROR] Unknown or unmanaged proxmox_vm_type')
     except Exception as error:
-        print(f"[ERROR] Unknown or unmanaged proxmox_vm_type\n   > {error}")
+        logging.error(f"[ERROR] Unknown or unmanaged proxmox_vm_type\n   > {error}")
         return
 
     _pmx_if = []
@@ -308,7 +309,7 @@ def interfaces(netbox_vm, proxmox_vm):
             for _conf_str in interface[ifname].split(','):
                 _k_s =_conf_str.split('=')
                 if re.match("[0-9a-f]{2}([-:]?)[0-9a-f]{2}(\\1[0-9a-f]{2}){4}$", _k_s[1].lower()):
-                    _mac_addr =_k_s[1].lower()
+                    _mac_addr =_k_s[1].upper()
                 elif _k_s[0] == 'bridge':
                     _bridge = _k_s[1].lower()
                 elif _k_s[0] == 'mtu':
@@ -324,7 +325,7 @@ def interfaces(netbox_vm, proxmox_vm):
             _pmx_if.append({'name': ifname, 'mac_address': _mac_addr, 'mtu': _mtu})
 
     for interface in nb.virtualization.interfaces.filter(virtual_machine_id=netbox_vm.id):
-        _ntb_if.append({'name': interface.name, 'mac_address': interface.mac_address, 'mtu': interface.mtu})
+        _ntb_if.append({'name': interface.name, 'mac_address': interface.mac_address.upper(), 'mtu': interface.mtu})
 
     for pmx_if_mac in [_if['mac_address'] for _if in _pmx_if]:
         pmx_if = next((_if for _if in _pmx_if if _if['mac_address'] == pmx_if_mac), None)
@@ -332,7 +333,7 @@ def interfaces(netbox_vm, proxmox_vm):
             if pmx_if_mac not in [_if['mac_address'] for _if in _ntb_if]:
                 try:
                     if nb.virtualization.interfaces.get(virtual_machine_id=netbox_vm.id, virtual_machine=netbox_vm.name, name=pmx_if['name']):
-                        print("Interface already exist.")
+                        logging.warning("[WARNING] Interface already exist.")
                     else:
                         # Create interface if does not exist.
                         netbox_interface = nb.virtualization.interfaces.create(virtual_machine_id=netbox_vm.id, virtual_machine=netbox_vm.id, name=pmx_if['name'], mac_address=pmx_if_mac, mtu=pmx_if['mtu'])
@@ -346,10 +347,10 @@ def interfaces(netbox_vm, proxmox_vm):
                         netbox_interface = nb.virtualization.interfaces.update([{'id': netbox_interface.id, 'name': pmx_if['name'], 'mac_address': pmx_if_mac, 'mtu': pmx_if['mtu']}])
                         updated = True
                     elif len(netbox_interface) > 1:
-                        print('[ERROR] too many results')
+                        logging.error('[ERROR] Too many results')
                         return False
         else:
-            print('[ERROR] something went wrong while getting interface config from proxmox')
+            logging.error('[ERROR] Something went wrong while getting interface config from proxmox')
             return False
 
     for ntb_if_mac in [_if['mac_address'] for _if in _ntb_if]:
@@ -361,10 +362,10 @@ def interfaces(netbox_vm, proxmox_vm):
                     netbox_interface.delete()
                     updated = True
                 elif len(netbox_interface) > 1:
-                    print('[ERROR] too many results')
+                    logging.error('[ERROR] Too many results')
                     return False
             else:
-                print('[ERROR] something went wrong while getting interface config from netbox')
+                logging.error('[ERROR] Something went wrong while getting interface config from netbox')
                 return False
     return updated
 
@@ -400,7 +401,7 @@ def interfaces_ips(netbox_vm, proxmox_vm):
                                 _if[_mac].append(ip.address.lower())
                         _ntb_ips.append(_if)
                 except ResourceException as e:
-                    print('[ERROR]' + str(e))
+                    logging.error('[ERROR]' + str(e))
                     return False
         elif proxmox_vm['type'] == 'lxc':
             vm_config = proxmox.nodes(proxmox_vm['node']).lxc(proxmox_vm['vmid']).config.get()
@@ -430,7 +431,7 @@ def interfaces_ips(netbox_vm, proxmox_vm):
 
         for pmx_mac in [list(x)[0] for x in _pmx_ips]:
             if pmx_mac not in [list(y)[0] for y in _ntb_ips]:
-                print('[ERROR] interface with mac_address %(pmx_mac)s from %(vm_name)s qemu-guest-agent is not defined in netbox' % {'pmx_mac': pmx_mac, 'vm_name': proxmox_vm['name']})
+                logging.error('[ERROR] interface with mac_address %(pmx_mac)s from %(vm_name)s qemu-guest-agent is not defined in netbox' % {'pmx_mac': pmx_mac, 'vm_name': proxmox_vm['name']})
             else:
                 ntb_ips = next((_ips[pmx_mac] for _ips in _ntb_ips if list(_ips)[0] == pmx_mac), None)
                 pmx_ips = next((_ips[pmx_mac] for _ips in _pmx_ips if list(_ips)[0] == pmx_mac), None)
@@ -445,10 +446,10 @@ def interfaces_ips(netbox_vm, proxmox_vm):
                                     netbox_interface = netbox_interface[0]
                                 elif len(netbox_interface) > 1:
                                     netbox_interface = None
-                                    print('[ERROR] too many results')
+                                    logging.error('[ERROR] Too many results')
                             else:
                                 netbox_interface = None
-                                print('[ERROR] something went wrong while getting interface object from netbox')
+                                logging.error('[ERROR] Something went wrong while getting interface object from netbox')
                             if netbox_interface is not None:
                                 if len(netbox_ipaddr):
                                     if len(netbox_ipaddr) == 1:
@@ -457,13 +458,13 @@ def interfaces_ips(netbox_vm, proxmox_vm):
                                             netbox_ipaddr = nb.ipam.ip_addresses.update([{'id': netbox_ipaddr.id, 'assigned_object_id': netbox_interface.id, 'assigned_object_type': 'virtualization.vminterface'}])
                                             updated = True
                                     elif len(netbox_ipaddr) > 1:
-                                        print('[ERROR] too many results')
+                                        logging.error('[ERROR] Too many results')
                                 else:
                                     netbox_ipaddr = nb.ipam.ip_addresses.create(address=pmx_ip)
                                     netbox_ipaddr = nb.ipam.ip_addresses.update([{'id': netbox_ipaddr.id, 'assigned_object_id': netbox_interface.id, 'assigned_object_type': 'virtualization.vminterface'}])
                                     updated = True
                                         
-                        except Exception as error: print(error)
+                        except Exception as error: logging.error(error)
 
 
                 for ntb_ip in ntb_ips:
@@ -474,7 +475,7 @@ def interfaces_ips(netbox_vm, proxmox_vm):
                                 netbox_ipaddr[0].delete()
                                 updated = True
                             elif len(netbox_ipaddr) > 1:
-                                print('[ERROR] too many results')
+                                logging.error('[ERROR] Too many results')
                         else:
-                            print('[ERROR] something went wrong while getting ip object from netbox')
+                            logging.error('[ERROR] Something went wrong while getting ip object from netbox')
     return updated

@@ -1,3 +1,5 @@
+> Although **Proxbox is under constant development**, I do it with **best effort** and **spare time**. I have no financial gain with this and hope you guys understand, as I know it is pretty useful to some people. If you want to **speed up its development**, solve the problem or create new features with your own code and create a **[Pull Request](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/about-pull-requests)** so that I can **review** it. **I also would like to appreciate the people who already contributed with code or/and bug reports.** Without this help, surely Proxbox would be much less useful as it is already today to several environments!
+
 <div align="center">
 	<a href="https://docs.netbox.dev.br/en/netbox/plugins/netbox-proxbox">
 		<img width="532" src="https://github.com/N-Multifibra/proxbox/blob/main/etc/img/proxbox-full-logo.png" alt="Proxbox logo">
@@ -74,13 +76,18 @@ The following table shows the Netbox and Proxmox versions compatible (tested) wi
 	- [3.1.1. Proxmox ID](#311-proxmox-id)
 	- [3.1.2. Proxmox Node](#312-proxmox-node)
 	- [3.1.3. Proxmox Type](#313-proxmox-type-qemu-or-lxc)
+	- [3.1.4. Proxmox Keep Interface](#314-proxmox-keep-interface)
 - [3.2. Custom Field Example](#32-custom-field-example)
 
 [4. Usage](#4-usage)
 
-[5. Contributing](#5-contributing)
+[5. Enable Logs](#5-enable-logs)
 
-[6. Roadmap](#6-roadmap)
+[6. Contributing](#6-contributing)
+
+[7. Roadmap](#7-roadmap)
+
+[8. Get Help from Community!](#8-get-help-from-community)
 
 ---
 
@@ -277,6 +284,15 @@ Optional values (may be different)
 
 <br>
 
+#### 3.1.4. Proxmox Keep Interface
+
+Required values (must be equal)
+- [Custom Field] **Type:** Boolean (true/false)
+- [Custom Field] **Name:** proxmox_keep_interface
+- [Assignment] **Content-type:** DCIM > Interface
+
+<br>
+
 ### 3.2. Custom Field Example
 
 ![custom field image](etc/img/custom_field_example.png?raw=true "preview")
@@ -295,17 +311,51 @@ It will redirect you to a new page and you just have to wait until the plugin ru
 
 ---
 
-## 5. Contributing
+## 5. Enable Logs
+
+So that Proxbox plugin logs what is happening to the terminal, copy the following code and paste to `configuration.py` Netbox configuration file:
+
+```python
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+}
+```
+
+You can customize this using the following link: [Django Docs - Logging](https://docs.djangoproject.com/en/4.1/topics/logging/).
+Although the above standard configuration should do the trick to things work.
+
+---
+
+## 6. Contributing
 Developing tools for this project based on [ntc-netbox-plugin-onboarding](https://github.com/networktocode/ntc-netbox-plugin-onboarding) repo.
 
 Issues and pull requests are welcomed.
 
 ---
 
-## 6. Roadmap
+## 7. Roadmap
 - Start using custom models to optimize the use of the Plugin and stop using 'Custom Fields'
 - Automatically remove Nodes on Netbox when removed on Promox (as it already happens with Virtual Machines and Containers)
 - Add individual update of VM/CT's and Nodes (currently is only possible to update all at once)
 - Add periodic update of the whole environment so that the user does not need to manually click the update button.
 - Create virtual machines and containers directly on Netbox, having no need to access Proxmox.
 - Add 'Console' button to enable console access to virtual machines
+
+---
+
+## 8. Get Help from Community!
+If you are struggling to get Proxbox working, feel free to contact someone from community (including me) to help you.
+Below some of the communities available:
+- **[Official - Slack Community (english)](https://netdev.chat/)**
+- **[Community Discord Channel - 🇧🇷 (pt-br)](https://discord.gg/X6FudvXW)**
+- **[Community Telegram Chat - 🇧🇷 (pt-br)](https://t.me/netboxbr)**
