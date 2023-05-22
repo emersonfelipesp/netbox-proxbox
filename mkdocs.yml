@@ -1,0 +1,109 @@
+site_name: ProxBox Documentation (NetBox Plugin)
+site_dir: ./site
+site_url: https://proxbox.netbox.dev.br/
+docs_dir: ./docs
+repo_name: netdevopsbr/netbox-proxbox
+repo_url: https://github.com/netdevopsbr/netbox-proxbox
+theme:
+  name: material
+  custom_dir: docs/_theme/
+  icon:
+    repo: fontawesome/brands/github
+  language: en
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/lightbulb-outline
+        name: Switch to Dark Mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/lightbulb
+        name: Switch to Light Mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - search.suggest
+    - search.highlight
+    - navigation.footer
+    - navigation.path
+    - navigation.top
+    - toc.follow
+    - toc.integrate
+plugins:
+  - search
+  - social
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/netdevopsbr/netbox-proxbox
+    - icon: fontawesome/brands/slack
+      link: https://netdev.chat/
+    - icon: fontawesome/brands/telegram
+      link: https://t.me/netboxbr
+    - icon: fontawesome/brands/discord
+      link: https://discord.gg/9N3V4mpMXU
+  homepage: https://netboxlabs.com
+extra_css:
+  - https://cdn.materialdesignicons.com/5.4.55/css/materialdesignicons.min.css
+  - extra.css
+markdown_extensions:
+  - attr_list
+  - def_list
+  - md_in_html
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - admonition
+  - abbr
+  - toc:
+      permalink: true
+      toc_depth: 4
+  - tables
+  - footnotes
+  - pymdownx.emoji:
+      emoji_index: !!python/name:materialx.emoji.twemoji
+      emoji_generator: !!python/name:materialx.emoji.to_svg
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+extra_javascript:
+  - 'https://cdn.jsdelivr.net/npm/@material-icons/iconfont/material-icons.min.js'
+nav:
+    - Introduction: 'introduction.md'
+    - Installing & Upgrade:
+      - Installing Proxbox: 'installation/index.md'
+      - Upgrading Proxbox: 'installation/upgrading.md'
+    - Features:
+      - Virtual Machine (VM): 'features/virtual-machine.md'
+      - Containers (LXC): 'features/containers.md'
+      - Network (IPAM): 'features/network.md'
+      - VLAN Management: 'features/vlan-management.md'
+      - Storage: 'features/storage.md'
+      - Backup: 'features/backup.md'
+      - Monitoring: 'features/monitoring.md'
+      - Synchronized Data: 'features/synchronized-data.md'
+      - Background Jobs: 'features/background-jobs.md'
+      - API & Integration: 'features/api-integration.md'
+    - Configuration:
+        - Configuring ProxBox: 'configuration/index.md'
+        - Required Parameters: 'configuration/required-parameters.md'
+    - Data Model:
+      - Virtual Machine (VM): 'models/virtual-machine.md'
+      - Containers (LXC): 'models/containers.md'
+      - Others: 'models/others.md'
+    - Release Notes:
+      - Summary: 'release-notes/index.md'
+      - Version 0.0.6: 'release-notes/version-0.0.1.md'
+      - Version 0.0.5: 'release-notes/version-0.0.1.md'
+      - Version 0.0.4: 'release-notes/version-0.0.1.md'
+      - Version 0.0.3: 'release-notes/version-0.0.1.md'
+      - Version 0.0.2: 'release-notes/version-0.0.1.md'
+      - Version 0.0.1: 'release-notes/version-0.0.1.md'

@@ -1,0 +1,49 @@
+name: docs
+on:
+  push:
+    branches:
+      - master 
+      - main
+permissions:
+  contents: write
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: 3.x
+      - uses: actions/cache@v2
+        with:
+          key: ${{ github.ref }}
+          path: .cache
+      - name: Install APT packages
+        run: |
+          sudo apt install python3-pip python3-apt python3-cffi python3-brotli -y
+          sudo apt install libharfbuzz0b libpangoft2-1.0-0 libgtk-3-dev gcc -y
+      - name: Install PIP packages
+        run: |
+          sudo pip3 install Markdown==3.3
+          sudo pip3 install mkdocs-material
+          sudo pip3 install mkdocs-minify-plugin
+          sudo pip3 install mkdocs-redirects
+          sudo pip3 install pillow cairosvg
+      - name: Deploy MkDocs Page
+        run: sudo mkdocs gh-deploy --force
+      - name: Git Commit staged
+        run: |
+          sudo git config --global --add user.name emersonfelipesp
+          sudo git config --global --add user.email emersonfelipe.2003@gmail.com
+          sudo git add .
+          sudo git commit -m "Saves 'site' html pages"
+      - name: Git checkout to 'gh-pages' branch
+        run: |
+          sudo git checkout gh-pages
+          sudo git push --set-upstream origin gh-pages
+      - name: Change custom domain
+        run: |
+          sudo echo 'docs.netbox.dev.br' > CNAME
+          sudo git add CNAME
+          sudo git commit -m "Change custom domain to 'proxbox.netbox.dev.br'"
+          sudo git push
