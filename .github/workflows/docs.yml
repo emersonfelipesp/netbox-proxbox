@@ -43,7 +43,7 @@ jobs:
           sudo git push --set-upstream origin gh-pages
       - name: Change custom domain
         run: |
-          sudo echo 'docs.netbox.dev.br' > CNAME
+          sudo echo 'proxbox.netbox.dev.br' > CNAME
           sudo git add CNAME
           sudo git commit -m "Change custom domain to 'proxbox.netbox.dev.br'"
           sudo git push
