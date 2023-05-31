@@ -176,6 +176,7 @@ PLUGINS_CONFIG = {
             }
         }
     }
+}
 ```
 
 <br>
