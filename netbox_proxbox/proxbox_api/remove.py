@@ -2,15 +2,18 @@ from . import updates
 
 # PLUGIN_CONFIG variables
 from .plugins_config import (
-    PROXMOX_SESSION as proxmox,
     NETBOX_SESSION as nb,
 )
 
 import logging
 
 # Verify if VM/CT exists on Proxmox
-def is_vm_on_proxmox(netbox_vm):
+def is_vm_on_proxmox(proxmox_session, netbox_vm):
     # Get json of all virtual machines from Proxmox
+    proxmox = proxmox_session.get('PROXMOX_SESSION')
+    PROXMOX = proxmox_session.get('PROXMOX')
+    PROXMOX_PORT = proxmox_session.get('PROXMOX_PORT')
+
     all_proxmox_vms = proxmox.cluster.resources.get(type='vm')
 
     # Netbox name
@@ -69,7 +72,7 @@ def is_vm_on_proxmox(netbox_vm):
         
         # If 'local_context' is null, try updating it to be able to get ID from VM
         if local_context == None:
-            local_context_updated = updates.local_context_data(netbox_vm, all_proxmox_vms[name_index])
+            local_context_updated = updates.local_context_data(netbox_vm, all_proxmox_vms[name_index], PROXMOX, PROXMOX_PORT)
 
             if local_context_updated == True:
                 local_context = netbox_vm.local_context_data
@@ -105,7 +108,7 @@ def is_vm_on_proxmox(netbox_vm):
     # Comparison failed, not able to find VM on Proxmox
     return False
 
-def all():
+def all(proxmox_session):
     json_vm_all = []
     
     # Get all VM/CTs from Netbox
@@ -120,7 +123,7 @@ def all():
         json_vm["name"] = netbox_name
 
         # Verify if VM exists on Proxmox
-        vm_on_proxmox = is_vm_on_proxmox(nb_vm_each)
+        vm_on_proxmox = is_vm_on_proxmox(proxmox_session, nb_vm_each)
 
         if vm_on_proxmox == True:
             log_message = f'[OK] VM exists on both systems (Netbox and Proxmox) -> {netbox_name}'

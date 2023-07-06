@@ -1,12 +1,6 @@
 from ..plugins_config import (
-    PROXMOX,
-    PROXMOX_PORT,
-    PROXMOX_USER,
-    PROXMOX_PASSWORD,
-    PROXMOX_SSL,
     NETBOX,
     NETBOX_TOKEN,
-    PROXMOX_SESSION as proxmox,
     NETBOX_SESSION as nb,
 )
 
@@ -57,7 +51,7 @@ def status(netbox_node, proxmox_node):
 
 
 # Update CLUSTER field on /dcim/device/{id}
-def cluster(netbox_node, proxmox_node, proxmox_cluster):
+def cluster(proxmox, netbox_node, proxmox_node, proxmox_cluster):
     #
     # Compare CLUSTER
     #
@@ -69,7 +63,7 @@ def cluster(netbox_node, proxmox_node, proxmox_cluster):
                 # If cluster is not filled or even filled, but different from actual cluster, update it.
                 if netbox_node.cluster.name != proxmox_cluster['name'] or netbox_node.cluster.name == None:
                     # Search for Proxmox Cluster using create.cluster() function
-                    cluster_id = create.virtualization.cluster().id
+                    cluster_id = create.virtualization.cluster(proxmox).id
 
                     # Use Cluster ID to update NODE information
                     netbox_node.cluster.id = cluster_id
@@ -106,7 +100,7 @@ def cluster(netbox_node, proxmox_node, proxmox_cluster):
 
     return cluster_updated
 
-def interfaces(netbox_node, proxmox_json):
+def interfaces(proxmox, netbox_node, proxmox_json):
     updated = False
     _int_port = ['OVSIntPort']
     _lag_port = ['OVSBond']

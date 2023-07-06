@@ -4,14 +4,8 @@ import re
 
 # PLUGIN_CONFIG variables
 from ..plugins_config import (
-    PROXMOX,
-    PROXMOX_PORT,
-    PROXMOX_USER,
-    PROXMOX_PASSWORD,
-    PROXMOX_SSL,
     NETBOX,
     NETBOX_TOKEN,
-    PROXMOX_SESSION as proxmox,
     NETBOX_SESSION as nb,
 )
 
@@ -177,7 +171,7 @@ def custom_fields(netbox_vm, proxmox_vm):
 
 
 # Update 'local_context_data' field on Netbox Virtual Machine based on Proxbox
-def local_context_data(netbox_vm, proxmox_vm):
+def local_context_data(netbox_vm, proxmox_vm, PROXMOX, PROXMOX_PORT):
     current_local_context = netbox_vm.local_context_data
 
     proxmox_values = {}
@@ -218,12 +212,6 @@ def local_context_data(netbox_vm, proxmox_vm):
         return False
 
     return False
-
-
-
-
-
-
 
 # Updates following fields based on Proxmox: "vcpus", "memory", "disk", if necessary.
 def resources(netbox_vm, proxmox_vm):
@@ -285,7 +273,7 @@ def resources(netbox_vm, proxmox_vm):
         else:
             return False
 
-def interfaces(netbox_vm, proxmox_vm):
+def interfaces(proxmox, netbox_vm, proxmox_vm):
     updated = False
     try:
         if proxmox_vm['type'] == 'qemu':
@@ -369,7 +357,7 @@ def interfaces(netbox_vm, proxmox_vm):
                 return False
     return updated
 
-def interfaces_ips(netbox_vm, proxmox_vm):
+def interfaces_ips(proxmox, netbox_vm, proxmox_vm):
     updated = False
     if proxmox_vm['status'] == 'running':
         _pmx_ips = []
