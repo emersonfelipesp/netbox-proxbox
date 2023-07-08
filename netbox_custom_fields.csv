@@ -1,0 +1,5 @@
+Name,Content types,Label,Group name,Type,Required,Description,ID,Default,Search weight,Filter logic,UI visibility,Cloneable,Display weight,Choices,Created,Last updated
+proxmox_id,virtualization.virtualmachine,[Proxmox] ID,,Integer,False,Proxmox VM/CT ID,1,,1000,Loose,Read/Write,False,100,[],2023-07-06 12:49,2023-07-06 12:50
+proxmox_keep_interface,dcim.interface,,,Boolean (true/false),False,,4,,1000,Loose,Read/Write,False,100,[],2023-07-06 12:53,2023-07-06 12:53
+proxmox_node,virtualization.virtualmachine,[Proxmox] Node,,Text,False,Proxmox Node (Server),2,,1000,Loose,Read/Write,False,100,[],2023-07-06 12:51,2023-07-06 12:51
+proxmox_type,virtualization.virtualmachine,[Proxmox] Type,,Selection,False,Proxmox type (VM or CT),3,,1000,Loose,Read/Write,False,100,"['qemu', 'lxc']",2023-07-06 12:52,2023-07-06 12:52
