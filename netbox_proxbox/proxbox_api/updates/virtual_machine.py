@@ -78,7 +78,7 @@ def http_update_custom_fields(**kwargs):
     # HTTP PATCH Request (partially update)
     #
     # URL 
-    url = '{}/api/virtualization/virtual-machines/{}/'.format(domain_with_http, vm_id)
+    url = '{}api/virtualization/virtual-machines/{}/'.format(domain_with_http, vm_id)
     
     # HTTP Request Headers
     headers = {

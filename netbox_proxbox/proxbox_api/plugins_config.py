@@ -33,15 +33,15 @@ DEFAULT_NETBOX_SETTING = DEFAULT_PLUGINS_CONFIG.get("netbox")
 # Proxmox related settings
 #
 # API URI
-DEFAULT_PROXMOX = DEFAULT_PROXMOX_SETTING.get("domain")
-DEFAULT_PROXMOX_PORT = DEFAULT_PROXMOX_SETTING.get("http_port")
-DEFAULT_PROXMOX_SSL = DEFAULT_PROXMOX_SETTING.get("ssl")
+DEFAULT_PROXMOX = DEFAULT_PROXMOX_SETTING[0].get("domain")
+DEFAULT_PROXMOX_PORT = DEFAULT_PROXMOX_SETTING[0].get("http_port")
+DEFAULT_PROXMOX_SSL = DEFAULT_PROXMOX_SETTING[0].get("ssl")
 
 # ACCESS
-DEFAULT_PROXMOX_USER = DEFAULT_PROXMOX_SETTING.get("user")
-DEFAULT_PROXMOX_PASSWORD = DEFAULT_PROXMOX_SETTING.get("password")
+DEFAULT_PROXMOX_USER = DEFAULT_PROXMOX_SETTING[0].get("user")
+DEFAULT_PROXMOX_PASSWORD = DEFAULT_PROXMOX_SETTING[0].get("password")
 
-DEFAULT_PROXMOX_TOKEN = DEFAULT_PROXMOX_SETTING.get("token")
+DEFAULT_PROXMOX_TOKEN = DEFAULT_PROXMOX_SETTING[0].get("token")
 DEFAULT_PROXMOX_TOKEN_NAME = DEFAULT_PROXMOX_TOKEN.get("name", None)
 DEFAULT_PROXMOX_TOKEN_VALUE = DEFAULT_PROXMOX_TOKEN.get("value", None)
 
@@ -152,7 +152,6 @@ def get_proxmox_session(PROXMOX_SETTING):
             return output
         except:
             raise RuntimeError(f'Error trying to initialize Proxmox Session using TOKEN (token_name: {PROXMOX_TOKEN_NAME} and token_value: {PROXMOX_TOKEN_VALUE} provided')
-            return None
 
     # If token not provided, start session using user and passwd
     else:
@@ -169,7 +168,6 @@ def get_proxmox_session(PROXMOX_SETTING):
             return output
         except:
             raise RuntimeError(f'Error trying to initialize Proxmox Session using USER {PROXMOX_USER} and PASSWORD')
-            return None
 
 for s in PROXMOX_SETTING:
     P_Setting = get_proxmox_session(s)

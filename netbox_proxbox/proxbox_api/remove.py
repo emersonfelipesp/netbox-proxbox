@@ -108,11 +108,11 @@ def is_vm_on_proxmox(proxmox_session, netbox_vm):
     # Comparison failed, not able to find VM on Proxmox
     return False
 
-def all(proxmox_session):
+def all(proxmox_session, cluster):
     json_vm_all = []
     
-    # Get all VM/CTs from Netbox
-    netbox_all_vms = nb.virtualization.virtual_machines.all()
+    # Get VM/CTs of the specific cluster from Netbox
+    netbox_all_vms = nb.virtualization.virtual_machines.filter(cluster=cluster.name)
 
     for nb_vm_each in netbox_all_vms:
         json_vm = {}

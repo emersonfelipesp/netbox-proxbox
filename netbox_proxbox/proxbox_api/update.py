@@ -37,7 +37,7 @@ def vm_full_update(proxmox_session, netbox_vm, proxmox_vm):
     # Update 'resources', like CPU, Memory and Disk, if necessary.
     resources_updated = updates.virtual_machine.resources(netbox_vm, proxmox_vm)
     
-    interfaces_updated = updates.virtual_machine.interfaces(proxmox,netbox_vm, proxmox_vm)
+    interfaces_updated = updates.virtual_machine.interfaces(proxmox, netbox_vm, proxmox_vm)
     ips_updated = updates.virtual_machine.interfaces_ips(proxmox, netbox_vm, proxmox_vm)
 
     tag_updated = updates.extras.tag(netbox_vm)
@@ -62,7 +62,7 @@ def node_full_update(proxmox, netbox_node, proxmox_json, proxmox_cluster):
 
     status_updated = updates.node.status(netbox_node, proxmox_json)
     cluster_updated = updates.node.cluster(proxmox, netbox_node, proxmox_json, proxmox_cluster)
-    interfaces_updated = updates.node.interfaces(netbox_node, proxmox_json)
+    interfaces_updated = updates.node.interfaces(proxmox, netbox_node, proxmox_json)
 
     changes = {
         "status" : status_updated,
@@ -394,6 +394,9 @@ def nodes(**kwargs):
         else:
             logging.error(f'[ERROR] Something went wrong when creating the node.-> {proxmox_node_name} (2)')
             json_node = {}
+            json_node["status"] = None
+            json_node["cluster"] = None
+            json_node["interfaces"] = None
             json_node["result"] = False
 
             return json_node
@@ -556,7 +559,7 @@ def process_all_in_session(proxmox_session, **kwargs):
     # Remove Netbox's old data
     if remove_unused == True:
         print('\nREMOVE UNUSED DATA...')
-        remove_info = remove.all(proxmox_session)
+        remove_info = remove.all(proxmox_session, cluster)
     else:
         remove_info = False
     #
