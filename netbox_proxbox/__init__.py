@@ -18,7 +18,7 @@ class ProxboxConfig(PluginConfig):
                 'user': 'root@pam',
                 'password': 'Strong@P4ssword',
                 'token': {
-                    'name': 'tokenID',
+                    'name': 'proxbox',
                     'value': '039az154-23b2-4be0-8d20-b66abc8c4686'
                 },
                 'ssl': False

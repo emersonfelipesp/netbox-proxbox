@@ -109,19 +109,26 @@ def get_proxmox_session(PROXMOX_SETTING):
     PROXMOX_USER = PROXMOX_SETTING.get("user", DEFAULT_PROXMOX_USER)
     PROXMOX_PASSWORD = PROXMOX_SETTING.get("password", DEFAULT_PROXMOX_PASSWORD)
 
-    PROXMOX_TOKEN = PROXMOX_SETTING.get("token", DEFAULT_PROXMOX_TOKEN)
-    if PROXMOX_TOKEN != None:
-        PROXMOX_TOKEN_NAME = PROXMOX_TOKEN.get("name", DEFAULT_PROXMOX_TOKEN_NAME)
-        PROXMOX_TOKEN_VALUE = PROXMOX_TOKEN.get("value", DEFAULT_PROXMOX_TOKEN_VALUE)
-
     output = {
         'PROXMOX': PROXMOX,
         'PROXMOX_PORT': PROXMOX_PORT,
         'PROXMOX_SSL': PROXMOX_SSL,
-        'PROXMOX_TOKEN': PROXMOX_TOKEN,
-        'PROXMOX_TOKEN_NAME': PROXMOX_TOKEN_NAME,
-        'PROXMOX_TOKEN_VALUE': PROXMOX_TOKEN_VALUE
+        'PROXMOX_TOKEN': None,
+        'PROXMOX_TOKEN_NAME': None,
+        'PROXMOX_TOKEN_VALUE': None
     }
+
+    PROXMOX_TOKEN = PROXMOX_SETTING.get("token", DEFAULT_PROXMOX_TOKEN)
+    if PROXMOX_PASSWORD is None and PROXMOX_TOKEN is not  None:
+        PROXMOX_TOKEN_NAME = PROXMOX_TOKEN.get("name", DEFAULT_PROXMOX_TOKEN_NAME)
+        PROXMOX_TOKEN_VALUE = PROXMOX_TOKEN.get("value", DEFAULT_PROXMOX_TOKEN_VALUE)
+        output["PROXMOX_TOKEN"] = PROXMOX_TOKEN
+        output["PROXMOX_TOKEN_NAME"] = PROXMOX_TOKEN_NAME
+        output["PROXMOX_TOKEN_VALUE"] = PROXMOX_TOKEN_VALUE
+    else:
+        PROXMOX_TOKEN_NAME = None
+        PROXMOX_TOKEN_VALUE = None
+
     ####################################################################################################
     #                                                                                                  #
     #                 WITH PLUGIN CONFIGURED, STARTS BOTH PROXMOX AND NETBOX SESSION                   #
@@ -132,7 +139,7 @@ def get_proxmox_session(PROXMOX_SETTING):
     # PROXMOX SESSION 
     #
     # Check if token was provided
-    if PROXMOX_TOKEN_VALUE != None and len(PROXMOX_TOKEN_VALUE) > 0:
+    if PROXMOX_TOKEN_VALUE is not None and len(PROXMOX_TOKEN_VALUE) > 0:
         try:
             if PROXMOX_SSL == False:
                 # DISABLE SSL WARNING
@@ -156,6 +163,11 @@ def get_proxmox_session(PROXMOX_SETTING):
     # If token not provided, start session using user and passwd
     else:
         try:
+            if PROXMOX_SSL == False:
+                # DISABLE SSL WARNING
+                import urllib3
+                urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
             # Start PROXMOX session using USER CREDENTIALS
             PROXMOX_SESSION = ProxmoxAPI(
                 PROXMOX,
