@@ -10,6 +10,7 @@ from .views import (
     ProxmoxVMListView,
     ProxmoxVMView,
     ProxmoxFullUpdate,
+    ProxmoxSingleUpdate,
 )
 
 from netbox_proxbox import proxbox_api
@@ -33,5 +34,6 @@ urlpatterns = [
 
     # Proxbox API full update
     #path("full_update/", ProxmoxVMFullUpdate.as_view(), name="proxmoxvm_full_update")
-    path("full_update/", ProxmoxFullUpdate.as_view(), name="proxmoxvm_full_update")
+    path("full_update/", ProxmoxFullUpdate.as_view(), name="proxmoxvm_full_update"),
+    path("single_update/", ProxmoxSingleUpdate.as_view(), name="proxmoxvm_single_update"),
 ]

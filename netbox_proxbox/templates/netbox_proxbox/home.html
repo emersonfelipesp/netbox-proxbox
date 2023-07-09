@@ -85,7 +85,24 @@
                             {% endif %}
                         </tr>
                     </table>
-                    <div align="right">
+                    <div class="d-flex justify-content-between">
+                        {% if px.domain %}
+                            <form action="single_update/" method="POST" target="_blank">
+                                <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+                                <input type="hidden" name="proxmox_domain" value="{{ px.domain }}" />
+                                <a 
+                                    class="btn btn-primary"
+                                    href="#"
+                                    onclick="event.preventDefault(); this.parentNode.submit()"
+                                >Proxmox Update</a>
+                            </form>
+                        {% else %}
+                            <a 
+                                target="_blank"
+                                class="btn btn-primary"
+                                href="{% url 'plugins:netbox_proxbox:proxmoxvm_single_update' domain=default_config.proxmox.domain %}" 
+                            >Proxmox Update</a>
+                        {% endif %}
                         <button class="btn btn-outline-primary" type="button">
                             <a
                                 style="text-decoration: none; color: inherit"

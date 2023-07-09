@@ -475,7 +475,7 @@ def run_process_in_thread(proxmox_session, key, result, index, **kwargs):
 def all(**kwargs):
     run_with_threads = kwargs.get("run_with_threads", True)
     start_time = time.time()
-    result = []
+    results = []
     if run_with_threads:
         print("Start process with threading")
         threads = [None] * len(proxmox_sessions)
@@ -498,14 +498,37 @@ def all(**kwargs):
                 session = proxmox_sessions[key]
                 print("Processing data for: {0}".format(key))
                 output = process_all_in_session(session, **kwargs)
-                result.append(output)
+                results.append(output)
             except Exception as e:
                 message = "OS error: {0}".format(e)
                 print(message)
                 output = {
                     'message': message
                 }
-                result.append(output)
+                results.append(output)
+
+    print("--- %s seconds ---" % (time.time() - start_time))
+    return results
+
+def single(**kwargs):
+    proxmox_domain = kwargs.get("proxmox_domain", False)
+    start_time = time.time()
+    results = []
+    for key in proxmox_sessions:
+        if key == proxmox_domain:
+            print("Start process Sequential")
+            try:
+                session = proxmox_sessions[key]
+                print("Processing data for: {0}".format(key))
+                output = process_all_in_session(session, **kwargs)
+                results.append(output)
+            except Exception as e:
+                message = "OS error: {0}".format(e)
+                print(message)
+                output = {
+                    'message': message
+                }
+                results.append(output)
 
     print("--- %s seconds ---" % (time.time() - start_time))
     return results
