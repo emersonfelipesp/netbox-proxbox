@@ -14,7 +14,7 @@ contributing_item = PluginMenuItem(
             "plugins:netbox_proxbox:discussions",
             "GitHub Discussions",
             "mdi mdi-github",
-            ButtonColorChoices.RED,
+            ButtonColorChoices.GRAY,
         ),
         PluginMenuButton(
             "plugins:netbox_proxbox:discord",
