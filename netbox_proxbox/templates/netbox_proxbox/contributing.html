@@ -1,0 +1,17 @@
+{% extends 'base/layout.html' %}
+{% block content %}
+    <div class="row">
+        <div class="card">
+            <h1 class="card-header">
+                {{ title }}
+            </h1>
+            <div class="card-body">
+                {% if html %}
+                    {{ html|markdown }}
+                {% else %}
+                    <span class="text-muted">None</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+{% endblock %}

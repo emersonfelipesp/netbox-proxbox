@@ -1,4 +1,4 @@
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse_lazy
 # 'View' is a django subclass. Basic type of class-based views
 from django.views import View
@@ -24,6 +24,9 @@ from netbox import configuration
 
 from . import ProxboxConfig
 
+import markdown
+from . import github
+
 class HomeView(View):
     """Homepage"""
     template_name = 'netbox_proxbox/home.html'
@@ -45,6 +48,38 @@ class HomeView(View):
                 "default_config_json": json.dumps(default_config, indent=4)
             }
         )
+        
+class ContributingView(View):
+    """Contributing"""
+    template_name = 'netbox_proxbox/contributing.html'
+
+    # service incoming GET HTTP requests
+    def get(self, request):
+        """Get request."""
+
+        title = "Contributing to Proxbox Project"
+        
+        return render(
+            request,
+            self.template_name,
+            {
+                "html": github.get(filename = "CONTRIBUTING.md"),
+                "title": title,
+            }
+        )
+
+def DiscussionsView(request):
+    external_url = "https://github.com/orgs/netdevopsbr/discussions"
+    return redirect(external_url)
+
+def DiscordView(request):
+    external_url = "https://discord.com/invite/9N3V4mpMXU"
+    return redirect(external_url)
+
+def TelegramView(request):
+    external_url = "https://t.me/netboxbr"
+    return redirect(external_url)
+
 
 ''' 
 def table_data():
