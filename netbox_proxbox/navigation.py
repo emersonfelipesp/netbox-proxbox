@@ -9,6 +9,11 @@ fullupdate_item = PluginMenuItem(
 contributing_item = PluginMenuItem(
     link='plugins:netbox_proxbox:contributing',
     link_text='Contributing!',
+)
+
+community_item = PluginMenuItem(
+    link='plugins:netbox_proxbox:community',
+    link_text='Community',
     buttons=[
         PluginMenuButton(
             "plugins:netbox_proxbox:discussions",
@@ -27,15 +32,15 @@ contributing_item = PluginMenuItem(
             "Telegram Community",
             "mdi mdi-send",
             ButtonColorChoices.BLUE,
-        )
+        ),
     ]
 )
-
 
 menu = PluginMenu(
     label='Proxbox',
     groups=(
-        ('Proxmox Plugin', (fullupdate_item, contributing_item)),
+        ('Proxmox Plugin', (fullupdate_item,)),
+        ('Join our community', (contributing_item, community_item,)),
     ),
     icon_class='mdi mdi-dns'
 )

@@ -11,6 +11,7 @@ urlpatterns = [
     # Home View
     path('', views.HomeView.as_view(), name='home'),
     path('contributing/', views.ContributingView.as_view(), name='contributing'),
+    path('community/', views.CommunityView.as_view(), name='community'),
     
     # Redirect to: "https://github.com/orgs/netdevopsbr/discussions"
     path('discussions/', views.DiscussionsView, name='discussions'),

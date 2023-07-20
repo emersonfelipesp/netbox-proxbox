@@ -68,6 +68,25 @@ class ContributingView(View):
             }
         )
 
+
+class CommunityView(View):
+    """Community"""
+    template_name = 'netbox_proxbox/community.html'
+
+    # service incoming GET HTTP requests
+    def get(self, request):
+        """Get request."""
+
+        title = "Join our Community!"
+        
+        return render(
+            request,
+            self.template_name,
+            {
+                "title": title,
+            }
+        )
+
 def DiscussionsView(request):
     external_url = "https://github.com/orgs/netdevopsbr/discussions"
     return redirect(external_url)
@@ -79,7 +98,6 @@ def DiscordView(request):
 def TelegramView(request):
     external_url = "https://t.me/netboxbr"
     return redirect(external_url)
-
 
 ''' 
 def table_data():
