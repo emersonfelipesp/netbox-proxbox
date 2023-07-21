@@ -135,15 +135,35 @@ def table_data():
     return [virtualmachines_table, nodes_table]
 '''
 
+class ProxmoxSingleUpdate(PermissionRequiredMixin, View):
+    """Update a single Proxmox information on Netbox."""
+
+    # Define permission
+    permission_required = "netbox_proxbox.view_proxmoxvm"
+
+    # service incoming POST HTTP requests
+    # 'proxmox_domain' value is passed to post()
+    def post(self, request):
+        """Post request."""
+
+        proxmox_domain = self.request.POST.get('proxmox_domain')
+        json_result = proxbox_api.update.single(remove_unused = True, proxmox_domain = proxmox_domain)
+        
+        return render(
+            request,
+            "netbox_proxbox/proxmox_vm_full_update.html",
+            {
+                "proxmox": json_result,
+                "proxmox_json": json.dumps(json_result, indent=4)
+            },
+        )
+
 
 class ProxmoxFullUpdate(PermissionRequiredMixin, View):
     """Full Update of Proxmox information on Netbox."""
 
     # Define permission
     permission_required = "netbox_proxbox.view_proxmoxvm"
-
-
-    
 
     # service incoming GET HTTP requests
     # 'pk' value is passed to get() via URL defined in urls.py

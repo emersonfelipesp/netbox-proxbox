@@ -1,12 +1,6 @@
 from ..plugins_config import (
-    PROXMOX,
-    PROXMOX_PORT,
-    PROXMOX_USER,
-    PROXMOX_PASSWORD,
-    PROXMOX_SSL,
     NETBOX,
     NETBOX_TOKEN,
-    PROXMOX_SESSION as proxmox,
     NETBOX_SESSION as nb,
 )
 
@@ -57,7 +51,7 @@ def status(netbox_node, proxmox_node):
 
 
 # Update CLUSTER field on /dcim/device/{id}
-def cluster(netbox_node, proxmox_node, proxmox_cluster):
+def cluster(proxmox, netbox_node, proxmox_node, proxmox_cluster):
     #
     # Compare CLUSTER
     #
@@ -69,7 +63,7 @@ def cluster(netbox_node, proxmox_node, proxmox_cluster):
                 # If cluster is not filled or even filled, but different from actual cluster, update it.
                 if netbox_node.cluster.name != proxmox_cluster['name'] or netbox_node.cluster.name == None:
                     # Search for Proxmox Cluster using create.cluster() function
-                    cluster_id = create.virtualization.cluster().id
+                    cluster_id = create.virtualization.cluster(proxmox).id
 
                     # Use Cluster ID to update NODE information
                     netbox_node.cluster.id = cluster_id
@@ -106,7 +100,7 @@ def cluster(netbox_node, proxmox_node, proxmox_cluster):
 
     return cluster_updated
 
-def interfaces(netbox_node, proxmox_json):
+def interfaces(proxmox, netbox_node, proxmox_json):
     updated = False
     _int_port = ['OVSIntPort']
     _lag_port = ['OVSBond']
@@ -118,6 +112,20 @@ def interfaces(netbox_node, proxmox_json):
     _bond = [iface for iface in proxmox.nodes(proxmox_json['name']).network.get() if iface['type'] in _lag_port]
     _bridge = [iface for iface in proxmox.nodes(proxmox_json['name']).network.get() if iface['type'] in _brg_port]
 
+    def get_or_create_vlan(vlan_id):
+        # FIXME: we may need to specify the datacenter
+        # since users may have same vlan id in multiple dc
+        vlan = nb.ipam.vlans.get(
+            vid=vlan_id,
+        )
+        if vlan is None:
+            vlan = nb.ipam.vlans.create(
+                name='VLAN {}'.format(vlan_id),
+                vid=vlan_id,
+                group=None,
+            )
+        return vlan
+
     for iface in _eth:
         ntb_iface = list(nb.dcim.interfaces.filter(device_id=netbox_node.id, name=iface['iface']))
         if iface.get('ovs_tag') is not None:
@@ -128,7 +136,8 @@ def interfaces(netbox_node, proxmox_json):
         pmx_if = next((_if for _if in _pmx_iface if _if['name'] == iface['iface']), None)
         if not len(ntb_iface):
             if len(_tagged_vlans):
-                ntb_iface = nb.dcim.interfaces.create(device=netbox_node.id, name=pmx_if['name'], type='other', mtu=pmx_if['mtu'], mode='tagged', tagged_vlans=[nb.ipam.vlans.get(vid=_tagged_vlans[0]).id])
+                _nb_vlan = get_or_create_vlan(_tagged_vlans[0])
+                ntb_iface = nb.dcim.interfaces.create(device=netbox_node.id, name=pmx_if['name'], type='other', mtu=pmx_if['mtu'], mode='tagged', tagged_vlans=[_nb_vlan.id])
             else:
                 ntb_iface = nb.dcim.interfaces.create(device=netbox_node.id, name=pmx_if['name'], type='other', mtu=pmx_if['mtu'])
             updated = True
@@ -138,7 +147,8 @@ def interfaces(netbox_node, proxmox_json):
                 ntb_if = next((_if for _if in _ntb_iface if _if['name'] == iface['iface']), None)
                 if pmx_if != ntb_if:
                     if len(pmx_if['tagged_vlans']):
-                        nb.dcim.interfaces.update([{'id': ntb_iface.id, 'mtu': pmx_if['mtu'], 'mode': 'tagged', 'tagged_vlans': [nb.ipam.vlans.get(vid=_tagged_vlans[0]).id]}])
+                        _nb_vlan = get_or_create_vlan(_tagged_vlans[0])
+                        nb.dcim.interfaces.update([{'id': ntb_iface.id, 'mtu': pmx_if['mtu'], 'mode': 'tagged', 'tagged_vlans': [_nb_vlan.id]}])
                     else:
                         nb.dcim.interfaces.update([{'id': ntb_iface.id, 'mtu': pmx_if['mtu']}])
                     updated = True
@@ -152,7 +162,8 @@ def interfaces(netbox_node, proxmox_json):
         _pmx_iface.append({'name': iface['iface'], 'mtu' : int(iface.get('mtu', 1500)), 'tagged_vlans': _tagged_vlans})
         if not len(ntb_iface):
             if len(_tagged_vlans):
-                ntb_iface = nb.dcim.interfaces.create(device=netbox_node.id, name=iface['iface'], type='lag', mtu=int(iface.get('mtu', 1500)), mode='tagged', tagged_vlans=[nb.ipam.vlans.get(vid=_tagged_vlans[0]).id])
+                _nb_vlan = get_or_create_vlan(_tagged_vlans[0])
+                ntb_iface = nb.dcim.interfaces.create(device=netbox_node.id, name=iface['iface'], type='lag', mtu=int(iface.get('mtu', 1500)), mode='tagged', tagged_vlans=[_nb_vlan.id])
             else:
                 ntb_iface = nb.dcim.interfaces.create(device=netbox_node.id, name=iface['iface'], type='lag', mtu=int(iface.get('mtu', 1500)))
         else:
@@ -162,7 +173,8 @@ def interfaces(netbox_node, proxmox_json):
                 ntb_if = next((_if for _if in _ntb_iface if _if['name'] == iface['iface']), None)
                 if pmx_if != ntb_if:
                     if len(pmx_if['tagged_vlans']):
-                        nb.dcim.interfaces.update([{'id': ntb_iface.id, 'mtu': pmx_if['mtu'], 'mode': 'tagged', 'tagged_vlans': [nb.ipam.vlans.get(vid=_tagged_vlans[0]).id]}])
+                        _nb_vlan = get_or_create_vlan(_tagged_vlans[0])
+                        nb.dcim.interfaces.update([{'id': ntb_iface.id, 'mtu': pmx_if['mtu'], 'mode': 'tagged', 'tagged_vlans': [_nb_vlan.id]}])
                     else:
                         nb.dcim.interfaces.update([{'id': ntb_iface.id, 'mtu': pmx_if['mtu']}])
                     updated = True
@@ -181,7 +193,8 @@ def interfaces(netbox_node, proxmox_json):
         _pmx_iface.append({'name': iface['iface'], 'mtu' : int(iface.get('mtu', 1500)), 'tagged_vlans': _tagged_vlans})
         if not len(ntb_iface):
             if len(_tagged_vlans):
-                ntb_iface = nb.dcim.interfaces.create(device=netbox_node.id, name=iface['iface'], type='virtual', mtu=int(iface.get('mtu', 1500)), mode='tagged', tagged_vlans=[nb.ipam.vlans.get(vid=_tagged_vlans[0]).id])
+                _nb_vlan = get_or_create_vlan(_tagged_vlans[0])
+                ntb_iface = nb.dcim.interfaces.create(device=netbox_node.id, name=iface['iface'], type='virtual', mtu=int(iface.get('mtu', 1500)), mode='tagged', tagged_vlans=[_nb_vlan.id])
             else:
                 ntb_iface = nb.dcim.interfaces.create(device=netbox_node.id, name=iface['iface'], type='virtual', mtu=int(iface.get('mtu', 1500)))
         else:
@@ -191,7 +204,8 @@ def interfaces(netbox_node, proxmox_json):
                 ntb_if = next((_if for _if in _ntb_iface if _if['name'] == iface['iface']), None)
                 if pmx_if != ntb_if:
                     if len(pmx_if['tagged_vlans']):
-                        nb.dcim.interfaces.update([{'id': ntb_iface.id, 'mtu': pmx_if['mtu'], 'mode': 'tagged', 'tagged_vlans': [nb.ipam.vlans.get(vid=_tagged_vlans[0]).id]}])
+                        _nb_vlan = get_or_create_vlan(_tagged_vlans[0])
+                        nb.dcim.interfaces.update([{'id': ntb_iface.id, 'mtu': pmx_if['mtu'], 'mode': 'tagged', 'tagged_vlans': [_nb_vlan.id]}])
                     else:
                         nb.dcim.interfaces.update([{'id': ntb_iface.id, 'mtu': pmx_if['mtu']}])
                     updated = True
@@ -205,7 +219,8 @@ def interfaces(netbox_node, proxmox_json):
         _pmx_iface.append({'name': iface['iface'], 'mtu' : int(iface.get('mtu', 1500)), 'tagged_vlans': _tagged_vlans})
         if not len(ntb_iface):
             if len(_tagged_vlans):
-                ntb_iface = nb.dcim.interfaces.create(device=netbox_node.id, name=iface['iface'], type='bridge', mtu=int(iface.get('mtu', 1500)), mode='tagged', tagged_vlans=[nb.ipam.vlans.get(vid=_tagged_vlans[0]).id])
+                _nb_vlan = get_or_create_vlan(_tagged_vlans[0])
+                ntb_iface = nb.dcim.interfaces.create(device=netbox_node.id, name=iface['iface'], type='bridge', mtu=int(iface.get('mtu', 1500)), mode='tagged', tagged_vlans=[_nb_vlan.id])
             else:
                 ntb_iface = nb.dcim.interfaces.create(device=netbox_node.id, name=iface['iface'], type='bridge', mtu=int(iface.get('mtu', 1500)))
         else:
@@ -215,7 +230,8 @@ def interfaces(netbox_node, proxmox_json):
                 ntb_if = next((_if for _if in _ntb_iface if _if['name'] == iface['iface']), None)
                 if pmx_if != ntb_if:
                     if len(pmx_if['tagged_vlans']):
-                        nb.dcim.interfaces.update([{'id': ntb_iface.id, 'mtu': pmx_if['mtu'], 'mode': 'tagged', 'tagged_vlans': [nb.ipam.vlans.get(vid=_tagged_vlans[0]).id]}])
+                        _nb_vlan = get_or_create_vlan(_tagged_vlans[0])
+                        nb.dcim.interfaces.update([{'id': ntb_iface.id, 'mtu': pmx_if['mtu'], 'mode': 'tagged', 'tagged_vlans': [_nb_vlan.id]}])
                     else:
                         nb.dcim.interfaces.update([{'id': ntb_iface.id, 'mtu': pmx_if['mtu']}])
                     updated = True

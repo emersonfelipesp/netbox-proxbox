@@ -28,9 +28,6 @@ urlpatterns = [
     path("<int:pk>/delete/", views.ProxmoxVMDeleteView.as_view(), name="proxmoxvm_delete"),
     path("<int:pk>/edit/", views.ProxmoxVMEditView.as_view(), name="proxmoxvm_edit"),
 
-    
-
     # Proxbox API full update
-    #path("full_update/", ProxmoxVMFullUpdate.as_view(), name="proxmoxvm_full_update")
-    path("full_update/", views.ProxmoxFullUpdate.as_view(), name="proxmoxvm_full_update")
-]
+    path("full_update/", views.ProxmoxFullUpdate.as_view(), name="proxmoxvm_full_update"),
+    path("single_update/", views.ProxmoxSingleUpdate.as_view(), name="proxmoxvm_single_update"),
