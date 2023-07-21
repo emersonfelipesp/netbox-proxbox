@@ -28,21 +28,20 @@ except ImportError:
 DEFAULT_PLUGINS_CONFIG = ProxboxConfig.default_settings
 DEFAULT_PROXMOX_SETTING = DEFAULT_PLUGINS_CONFIG.get("proxmox")
 DEFAULT_NETBOX_SETTING = DEFAULT_PLUGINS_CONFIG.get("netbox")
-DEFAULT_FASTAPI_SETTING = DEFAULT_PLUGINS_CONFIG.get("fastapi")
 
 #
 # Proxmox related settings
 #
 # API URI
-DEFAULT_PROXMOX = DEFAULT_PROXMOX_SETTING.get("domain")
-DEFAULT_PROXMOX_PORT = DEFAULT_PROXMOX_SETTING.get("http_port")
-DEFAULT_PROXMOX_SSL = DEFAULT_PROXMOX_SETTING.get("ssl")
+DEFAULT_PROXMOX = DEFAULT_PROXMOX_SETTING[0].get("domain")
+DEFAULT_PROXMOX_PORT = DEFAULT_PROXMOX_SETTING[0].get("http_port")
+DEFAULT_PROXMOX_SSL = DEFAULT_PROXMOX_SETTING[0].get("ssl")
 
 # ACCESS
-DEFAULT_PROXMOX_USER = DEFAULT_PROXMOX_SETTING.get("user")
-DEFAULT_PROXMOX_PASSWORD = DEFAULT_PROXMOX_SETTING.get("password")
+DEFAULT_PROXMOX_USER = DEFAULT_PROXMOX_SETTING[0].get("user")
+DEFAULT_PROXMOX_PASSWORD = DEFAULT_PROXMOX_SETTING[0].get("password")
 
-DEFAULT_PROXMOX_TOKEN = DEFAULT_PROXMOX_SETTING.get("token")
+DEFAULT_PROXMOX_TOKEN = DEFAULT_PROXMOX_SETTING[0].get("token")
 DEFAULT_PROXMOX_TOKEN_NAME = DEFAULT_PROXMOX_TOKEN.get("name", None)
 DEFAULT_PROXMOX_TOKEN_VALUE = DEFAULT_PROXMOX_TOKEN.get("value", None)
 
@@ -74,23 +73,6 @@ DEFAULT_NETBOX_SITE_ID = DEFAULT_NETBOX_SETTINGS.get("site_id", 0)
 USER_PLUGINS_CONFIG = PLUGINS_CONFIG.get("netbox_proxbox")
 PROXMOX_SETTING = USER_PLUGINS_CONFIG.get("proxmox", DEFAULT_PROXMOX_SETTING)
 NETBOX_SETTING = USER_PLUGINS_CONFIG.get("netbox", DEFAULT_NETBOX_SETTING)
-FASTAPI_SETTING = USER_PLUGINS_CONFIG.get("fastapi", DEFAULT_FASTAPI_SETTING)
-#
-# Proxmox related settings
-#
-# API URI
-PROXMOX = PROXMOX_SETTING.get("domain", DEFAULT_PROXMOX)
-PROXMOX_PORT = PROXMOX_SETTING.get("http_port", DEFAULT_PROXMOX_PORT)
-PROXMOX_SSL = PROXMOX_SETTING.get("ssl", DEFAULT_PROXMOX_SSL)
-
-# ACCESS
-PROXMOX_USER = PROXMOX_SETTING.get("user", DEFAULT_PROXMOX_USER)
-PROXMOX_PASSWORD = PROXMOX_SETTING.get("password", DEFAULT_PROXMOX_PASSWORD)
-
-PROXMOX_TOKEN = PROXMOX_SETTING.get("token", DEFAULT_PROXMOX_TOKEN)
-if PROXMOX_TOKEN != None:
-    PROXMOX_TOKEN_NAME = PROXMOX_TOKEN.get("name", DEFAULT_PROXMOX_TOKEN_NAME)
-    PROXMOX_TOKEN_VALUE = PROXMOX_TOKEN.get("value", DEFAULT_PROXMOX_TOKEN_VALUE)
 
 #
 # NETBOX RELATED SETTINGS
@@ -112,59 +94,98 @@ if NETBOX_SETTINGS != None:
     NETBOX_NODE_ROLE_ID = NETBOX_SETTINGS.get("node_role_id", DEFAULT_NETBOX_NODE_ROLE_ID)
     NETBOX_SITE_ID = NETBOX_SETTINGS.get("site_id", DEFAULT_NETBOX_SITE_ID)
 
-#
-# FastAPI (uvicorn) related settings
-#
-if FASTAPI_SETTING != None:
-    DEFAULT_FASTAPI_HOST = DEFAULT_FASTAPI_SETTING.get("uvicorn_host")
-    DEFAULT_FASTAPI_PORT = DEFAULT_FASTAPI_SETTING.get("uvicorn_port")
+PROXMOX_SESSIONS = {}
 
-    FASTAPI_HOST = FASTAPI_SETTING.get("uvicorn_host", DEFAULT_FASTAPI_HOST)
-    FASTAPI_PORT = FASTAPI_SETTING.get("uvicorn_port", DEFAULT_FASTAPI_PORT)
+def get_proxmox_session(PROXMOX_SETTING):
+    #
+    # Proxmox related settings
+    #
+    # API URI
+    PROXMOX = PROXMOX_SETTING.get("domain", DEFAULT_PROXMOX)
+    PROXMOX_PORT = PROXMOX_SETTING.get("http_port", DEFAULT_PROXMOX_PORT)
+    PROXMOX_SSL = PROXMOX_SETTING.get("ssl", DEFAULT_PROXMOX_SSL)
 
+    # ACCESS
+    PROXMOX_USER = PROXMOX_SETTING.get("user", DEFAULT_PROXMOX_USER)
+    PROXMOX_PASSWORD = PROXMOX_SETTING.get("password", DEFAULT_PROXMOX_PASSWORD)
 
-####################################################################################################
-#                                                                                                  #
-#                 WITH PLUGIN CONFIGURED, STARTS PROXMOX, NETBOX AND UVICORN SESSIONS              #
-#                                                                                                  #
-####################################################################################################
+    output = {
+        'PROXMOX': PROXMOX,
+        'PROXMOX_PORT': PROXMOX_PORT,
+        'PROXMOX_SSL': PROXMOX_SSL,
+        'PROXMOX_TOKEN': None,
+        'PROXMOX_TOKEN_NAME': None,
+        'PROXMOX_TOKEN_VALUE': None
+    }
 
-#
-# PROXMOX SESSION 
-#
-# Check if token was provided
-if PROXMOX_TOKEN_VALUE != None and len(PROXMOX_TOKEN_VALUE) > 0:
-    try:
-        if PROXMOX_SSL == False:
-            # DISABLE SSL WARNING
-            import urllib3
-            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    PROXMOX_TOKEN = PROXMOX_SETTING.get("token", DEFAULT_PROXMOX_TOKEN)
+    if PROXMOX_PASSWORD is None and PROXMOX_TOKEN is not  None:
+        PROXMOX_TOKEN_NAME = PROXMOX_TOKEN.get("name", DEFAULT_PROXMOX_TOKEN_NAME)
+        PROXMOX_TOKEN_VALUE = PROXMOX_TOKEN.get("value", DEFAULT_PROXMOX_TOKEN_VALUE)
+        output["PROXMOX_TOKEN"] = PROXMOX_TOKEN
+        output["PROXMOX_TOKEN_NAME"] = PROXMOX_TOKEN_NAME
+        output["PROXMOX_TOKEN_VALUE"] = PROXMOX_TOKEN_VALUE
+    else:
+        PROXMOX_TOKEN_NAME = None
+        PROXMOX_TOKEN_VALUE = None
 
-        # Start PROXMOX session using TOKEN
-        PROXMOX_SESSION = ProxmoxAPI(
-            PROXMOX,
-            port=PROXMOX_PORT,
-            user=PROXMOX_USER,
-            token_name=PROXMOX_TOKEN_NAME,
-            token_value=PROXMOX_TOKEN_VALUE,
-            verify_ssl=PROXMOX_SSL
-        )
-    except:
-        raise RuntimeError(f'Error trying to initialize Proxmox Session using TOKEN (token_name: {PROXMOX_TOKEN_NAME} and token_value: {PROXMOX_TOKEN_VALUE} provided')
+    ####################################################################################################
+    #                                                                                                  #
+    #                 WITH PLUGIN CONFIGURED, STARTS BOTH PROXMOX AND NETBOX SESSION                   #
+    #                                                                                                  #
+    ####################################################################################################
 
-# If token not provided, start session using user and passwd
-else:
-    try:
-        # Start PROXMOX session using USER CREDENTIALS
-        PROXMOX_SESSION = ProxmoxAPI(
-            PROXMOX,
-            port=PROXMOX_PORT,
-            user=PROXMOX_USER,
-            password=PROXMOX_PASSWORD,
-            verify_ssl=PROXMOX_SSL
-        )
-    except:
-        raise RuntimeError(f'Error trying to initialize Proxmox Session using USER {PROXMOX_USER} and PASSWORD')
+    #
+    # PROXMOX SESSION 
+    #
+    # Check if token was provided
+    if PROXMOX_TOKEN_VALUE is not None and len(PROXMOX_TOKEN_VALUE) > 0:
+        try:
+            if PROXMOX_SSL == False:
+                # DISABLE SSL WARNING
+                import urllib3
+                urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+            # Start PROXMOX session using TOKEN
+            PROXMOX_SESSION = ProxmoxAPI(
+                PROXMOX,
+                port=PROXMOX_PORT,
+                user=PROXMOX_USER,
+                token_name=PROXMOX_TOKEN_NAME,
+                token_value=PROXMOX_TOKEN_VALUE,
+                verify_ssl=PROXMOX_SSL
+            )
+            output['PROXMOX_SESSION'] = PROXMOX_SESSION
+            return output
+        except:
+            raise RuntimeError(f'Error trying to initialize Proxmox Session using TOKEN (token_name: {PROXMOX_TOKEN_NAME} and token_value: {PROXMOX_TOKEN_VALUE} provided')
+
+    # If token not provided, start session using user and passwd
+    else:
+        try:
+            if PROXMOX_SSL == False:
+                # DISABLE SSL WARNING
+                import urllib3
+                urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+            # Start PROXMOX session using USER CREDENTIALS
+            PROXMOX_SESSION = ProxmoxAPI(
+                PROXMOX,
+                port=PROXMOX_PORT,
+                user=PROXMOX_USER,
+                password=PROXMOX_PASSWORD,
+                verify_ssl=PROXMOX_SSL
+            )
+            output['PROXMOX_SESSION'] = PROXMOX_SESSION
+            return output
+        except:
+            raise RuntimeError(f'Error trying to initialize Proxmox Session using USER {PROXMOX_USER} and PASSWORD')
+
+for s in PROXMOX_SETTING:
+    P_Setting = get_proxmox_session(s)
+    if P_Setting is not None:
+        v = P_Setting['PROXMOX']
+        PROXMOX_SESSIONS[v] = P_Setting
 
 #
 # NETBOX SESSION 

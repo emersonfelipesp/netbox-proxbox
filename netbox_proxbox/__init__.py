@@ -11,17 +11,19 @@ class ProxboxConfig(PluginConfig):
     base_url = "proxbox"
     required_settings = []
     default_settings = {
-        'proxmox': {
-            'domain': 'proxbox.example.com',    # May also be IP address
-            'http_port': 8006,
-            'user': 'root@pam',
-            'password': 'Strong@P4ssword',
-            'token': {
-                'name': 'tokenID',
-                'value': '039az154-23b2-4be0-8d20-b66abc8c4686'
-            },
-            'ssl': False
-        },
+        'proxmox': [
+            {
+                'domain': 'proxbox.example.com',    # May also be IP address
+                'http_port': 8006,
+                'user': 'root@pam',
+                'password': 'Strong@P4ssword',
+                'token': {
+                    'name': 'proxbox',
+                    'value': '039az154-23b2-4be0-8d20-b66abc8c4686'
+                },
+                'ssl': False
+            }
+        ],
         'netbox': {
             'domain': 'netbox.example.com',     # May also be IP address
             'http_port': 80,

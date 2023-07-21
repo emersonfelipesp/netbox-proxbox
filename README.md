@@ -152,47 +152,43 @@ Replace the values with your own following the [Configuration Parameters](#2-con
 
 ```python
 PLUGINS_CONFIG = {
-  'netbox_proxbox': [
-    {
-      'proxmox': {
-        'domain': 'proxbox.example.com',    # May also be IP address
-        'http_port': 8006,
-        'user': 'root@pam',   # always required
-        'password': 'Strong@P4ssword', # only required, if you don't want to use token based authentication
-        'token': {
-          'name': 'tokenID',	# Only type the token name and not the 'user@pam:tokenID' format
-          'value': '039az154-23b2-4be0-8d20-b66abc8c4686'
-        },
-        'ssl': False
-       },
-       {
-        'domain': 'proxbox2.example.com',    # May also be IP address
-        'http_port': 8006,
-        'user': 'root@pam',   # always required
-        'password': 'Strong@P4ssword', # only required, if you don't want to use token based authentication
-        'token': {
-          'name': 'tokenID',	# Only type the token name and not the 'user@pam:tokenID' format
-          'value': '039ab154-23b2-4be0-8d40-b66abc8c4668'
-        },
-        'ssl': False
-       }
-      ]
-      'netbox': {
-        'domain': 'localhost',     # Ensure localhost is added to ALLOWED_HOSTS
-        'http_port': 8001,     # Gunicorn port.
-        'token': '0dd7cddfaee3b38bbffbd2937d44c4a03f9c9d38',
-        'ssl': False,	# There is no support to SSL on Netbox yet, so let it always False.
-        'settings': {
-          'virtualmachine_role_id' : 0,
-          'node_role_id' : 0,
-          'site_id': 0
-        }
-      },
-      'fastapi': {
-        'uvicorn_host' : '0.0.0.0', 
-        'uvicorn_port' : '8002',
+    'netbox_proxbox': {
+        'proxmox': [
+            {
+                'domain': 'proxbox.example.com',    # May also be IP address
+                'http_port': 8006,
+                'user': 'root@pam',   # always required
+                'password': 'Strong@P4ssword', # only required, if you don't want to use token based authentication
+                'token': {
+                    'name': 'tokenID',	# Only type the token name and not the 'user@pam:tokenID' format
+                    'value': '039az154-23b2-4be0-8d20-b66abc8c4686'
+                },
+                'ssl': False
+            },
+            # The following json is optional and applies only for multi-cluster use
+            {
+                'domain': 'proxbox2.example.com',    # May also be IP address
+                'http_port': 8006,
+                'user': 'root@pam',   # always required
+                'password': 'Strong@P4ssword', # only required, if you don't want to use token based authentication
+                'token': {
+                    'name': 'tokenID',	# Only type the token name and not the 'user@pam:tokenID' format
+                    'value': '039az154-23b2-4be0-8d20-b66abc8c4686'
+                },
+                'ssl': False
+            }
+        ],
+        'netbox': {
+            'domain': 'localhost',     # Ensure localhost is added to ALLOWED_HOSTS
+            'http_port': 8001,     # Gunicorn port.
+            'token': '0dd7cddfaee3b38bbffbd2937d44c4a03f9c9d38',
+            'ssl': False,	# There is no support to SSL on Netbox yet, so let it always False.
+            'settings': {
+                'virtualmachine_role_id' : 0,
+                'node_role_id' : 0,
+                'site_id': 0
+            }
       }
-    }
  }
 
 
@@ -211,6 +207,7 @@ PLUGINS_CONFIG = {
 ```
 (venv) $ cd /opt/netbox/netbox/
 (venv) $ python3 manage.py migrate
+(venv) $ python3 manage.py collectstatic --no-input
 ```
 
 ---
@@ -228,7 +225,7 @@ Restart the WSGI service to load the new plugin:
 
 The following options are available:
 
-* `proxmox`: (Dict) Proxmox related configuration to use proxmoxer.
+* `proxmox`: (List) Proxmox related configuration to use proxmoxer.
 * `proxmox.domain`: (String) Domain or IP address of Proxmox.
 * `proxmox.http_port`: (Integer) Proxmox HTTP port (default: 8006).
 * `proxmox.user`: (String) Proxmox Username.
