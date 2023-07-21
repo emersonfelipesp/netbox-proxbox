@@ -1,5 +1,6 @@
 from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse_lazy
+
 # 'View' is a django subclass. Basic type of class-based views
 from django.views import View
 from django.views.generic.edit import CreateView, DeleteView, UpdateView
@@ -23,6 +24,12 @@ import json
 from netbox import configuration
 
 from . import ProxboxConfig
+import requests
+
+import logging
+
+from . import deploy_fastapi
+
 
 import markdown
 from . import github
@@ -45,7 +52,7 @@ class HomeView(View):
                 "configuration": plugin_configuration,
                 "default_config": default_config,
                 "configuration_json": json.dumps(plugin_configuration, indent=4),
-                "default_config_json": json.dumps(default_config, indent=4)
+                "default_config_json": json.dumps(default_config, indent=4), 
             }
         )
         
@@ -99,58 +106,24 @@ def TelegramView(request):
     external_url = "https://t.me/netboxbr"
     return redirect(external_url)
 
-''' 
-def table_data():
-    json_result = proxbox_api.update.all(remove_unused = True)
-
-    vm_table = []
-    for row in json_result.get("virtualmachines"):
-        json = {
-            "name": row["name"],
-            "status": row["changes"]["status"],
-            "custom_fields": row["changes"]["custom_fields"],
-            "local_context": row["changes"]["local_context"],
-            "resources": row["changes"]["resources"],
-            "tag": row["changes"]["tag"],
-            "interfaces": row["changes"]["interfaces"],
-            "ips": row["changes"]["ips"],
-        }
-        vm_table.append(json)
-
-    virtualmachines_table = VMUpdateResult(vm_table)
-
-    node_table = []
-    for row in json_result.get("nodes"):
-        json = {
-            "status": row["changes"]["status"],
-            "cluster": row["changes"]["cluster"],
-            "interfaces": row["changes"]["interfaces"],
-            "result": row["result"]
-        }
-        node_table.append(json)
-
-    nodes_table = NodeUpdateResult(node_table)
-
-
-    return [virtualmachines_table, nodes_table]
-'''
-
 
 class ProxmoxFullUpdate(PermissionRequiredMixin, View):
     """Full Update of Proxmox information on Netbox."""
 
     # Define permission
     permission_required = "netbox_proxbox.view_proxmoxvm"
-
-
     
-
     # service incoming GET HTTP requests
     # 'pk' value is passed to get() via URL defined in urls.py
     def get(self, request):
         """Get request."""
 
-        json_result = proxbox_api.update.all(remove_unused = True)
+
+        from .deploy_fastapi import fastapi_port
+        json_result = None
+        try:
+            json_result = requests.get(f'http://localhost:{fastapi_port}/').json()
+        except Exception as error: print(error)
         
         return render(
             request,

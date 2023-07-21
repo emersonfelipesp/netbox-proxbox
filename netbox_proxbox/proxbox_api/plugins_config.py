@@ -28,6 +28,7 @@ except ImportError:
 DEFAULT_PLUGINS_CONFIG = ProxboxConfig.default_settings
 DEFAULT_PROXMOX_SETTING = DEFAULT_PLUGINS_CONFIG.get("proxmox")
 DEFAULT_NETBOX_SETTING = DEFAULT_PLUGINS_CONFIG.get("netbox")
+DEFAULT_FASTAPI_SETTING = DEFAULT_PLUGINS_CONFIG.get("fastapi")
 
 #
 # Proxmox related settings
@@ -73,7 +74,7 @@ DEFAULT_NETBOX_SITE_ID = DEFAULT_NETBOX_SETTINGS.get("site_id", 0)
 USER_PLUGINS_CONFIG = PLUGINS_CONFIG.get("netbox_proxbox")
 PROXMOX_SETTING = USER_PLUGINS_CONFIG.get("proxmox", DEFAULT_PROXMOX_SETTING)
 NETBOX_SETTING = USER_PLUGINS_CONFIG.get("netbox", DEFAULT_NETBOX_SETTING)
-
+FASTAPI_SETTING = USER_PLUGINS_CONFIG.get("fastapi", DEFAULT_FASTAPI_SETTING)
 #
 # Proxmox related settings
 #
@@ -111,10 +112,20 @@ if NETBOX_SETTINGS != None:
     NETBOX_NODE_ROLE_ID = NETBOX_SETTINGS.get("node_role_id", DEFAULT_NETBOX_NODE_ROLE_ID)
     NETBOX_SITE_ID = NETBOX_SETTINGS.get("site_id", DEFAULT_NETBOX_SITE_ID)
 
+#
+# FastAPI (uvicorn) related settings
+#
+if FASTAPI_SETTING != None:
+    DEFAULT_FASTAPI_HOST = DEFAULT_FASTAPI_SETTING.get("uvicorn_host")
+    DEFAULT_FASTAPI_PORT = DEFAULT_FASTAPI_SETTING.get("uvicorn_port")
+
+    FASTAPI_HOST = FASTAPI_SETTING.get("uvicorn_host", DEFAULT_FASTAPI_HOST)
+    FASTAPI_PORT = FASTAPI_SETTING.get("uvicorn_port", DEFAULT_FASTAPI_PORT)
+
 
 ####################################################################################################
 #                                                                                                  #
-#                 WITH PLUGIN CONFIGURED, STARTS BOTH PROXMOX AND NETBOX SESSION                   #
+#                 WITH PLUGIN CONFIGURED, STARTS PROXMOX, NETBOX AND UVICORN SESSIONS              #
 #                                                                                                  #
 ####################################################################################################
 

@@ -24,7 +24,7 @@ from proxmoxer.core import ResourceException
 import logging
 
 # Update "status" field on Netbox Virtual Machine based on Proxmox information
-def status(netbox_vm, proxmox_vm):
+async def status(netbox_vm, proxmox_vm):
     # False = status not changed on Netbox
     # True  = status changed on Netbox
     status_updated = False
@@ -64,14 +64,14 @@ def status(netbox_vm, proxmox_vm):
 
 
 
-def site(**kwargs):
+async def site(**kwargs):
     # If site_id equals to 0, consider it is not configured by user and must be created by Proxbox
     site_id = kwargs.get('site_id', 0)
     
 
 # Function that modifies 'custom_field' of Netbox Virtual Machine.
 # It uses HTTP Request and not Pynetbox (as I was not able to).
-def http_update_custom_fields(**kwargs):
+async def http_update_custom_fields(**kwargs):
     # Saves kwargs variables
     domain_with_http = kwargs.get('domain_with_http')
     token = kwargs.get('token')
@@ -108,7 +108,7 @@ def http_update_custom_fields(**kwargs):
 
 
 # Update 'custom_fields' field on Netbox Virtual Machine based on Proxbox
-def custom_fields(netbox_vm, proxmox_vm):
+async def custom_fields(netbox_vm, proxmox_vm):
     # Create the new 'custom_field' with info from Proxmox
     custom_fields_update = {}
 
@@ -177,7 +177,7 @@ def custom_fields(netbox_vm, proxmox_vm):
 
 
 # Update 'local_context_data' field on Netbox Virtual Machine based on Proxbox
-def local_context_data(netbox_vm, proxmox_vm):
+async def local_context_data(netbox_vm, proxmox_vm):
     current_local_context = netbox_vm.local_context_data
 
     proxmox_values = {}
@@ -226,7 +226,7 @@ def local_context_data(netbox_vm, proxmox_vm):
 
 
 # Updates following fields based on Proxmox: "vcpus", "memory", "disk", if necessary.
-def resources(netbox_vm, proxmox_vm):
+async def resources(netbox_vm, proxmox_vm):
     # Save values from Proxmox
     vcpus = float(proxmox_vm["maxcpu"])
     
@@ -285,7 +285,7 @@ def resources(netbox_vm, proxmox_vm):
         else:
             return False
 
-def interfaces(netbox_vm, proxmox_vm):
+async def interfaces(netbox_vm, proxmox_vm):
     updated = False
     try:
         if proxmox_vm['type'] == 'qemu':
@@ -369,7 +369,7 @@ def interfaces(netbox_vm, proxmox_vm):
                 return False
     return updated
 
-def interfaces_ips(netbox_vm, proxmox_vm):
+async def interfaces_ips(netbox_vm, proxmox_vm):
     updated = False
     if proxmox_vm['status'] == 'running':
         _pmx_ips = []

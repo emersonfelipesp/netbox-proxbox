@@ -20,27 +20,28 @@ from . import (
 from .create import extras 
 
 import logging
+import json
 
 # Call all functions to update Virtual Machine
-def vm_full_update(netbox_vm, proxmox_vm):
+async def vm_full_update(netbox_vm, proxmox_vm):
     changes = {}
 
     # Update 'status' field, if necessary.
-    status_updated = updates.virtual_machine.status(netbox_vm, proxmox_vm)
+    status_updated = await updates.virtual_machine.status(netbox_vm, proxmox_vm)
                 
     # Update 'custom_fields' field, if necessary.
-    custom_fields_updated = updates.virtual_machine.custom_fields(netbox_vm, proxmox_vm)
+    custom_fields_updated = await updates.virtual_machine.custom_fields(netbox_vm, proxmox_vm)
 
     # Update 'local_context_data' json, if necessary.
-    local_context_updated = updates.virtual_machine.local_context_data(netbox_vm, proxmox_vm)
+    local_context_updated = await updates.virtual_machine.local_context_data(netbox_vm, proxmox_vm)
 
     # Update 'resources', like CPU, Memory and Disk, if necessary.
-    resources_updated = updates.virtual_machine.resources(netbox_vm, proxmox_vm)
+    resources_updated = await updates.virtual_machine.resources(netbox_vm, proxmox_vm)
     
-    interfaces_updated = updates.virtual_machine.interfaces(netbox_vm, proxmox_vm)
-    ips_updated = updates.virtual_machine.interfaces_ips(netbox_vm, proxmox_vm)
+    interfaces_updated = await updates.virtual_machine.interfaces(netbox_vm, proxmox_vm)
+    ips_updated = await updates.virtual_machine.interfaces_ips(netbox_vm, proxmox_vm)
 
-    tag_updated = updates.extras.tag(netbox_vm)
+    tag_updated = await updates.extras.tag(netbox_vm)
 
     #changes = [custom_fields_updated, status_updated, local_context_updated, resources_updated]
     changes = {
@@ -57,12 +58,12 @@ def vm_full_update(netbox_vm, proxmox_vm):
 
 
 
-def node_full_update(netbox_node, proxmox_json, proxmox_cluster):
+async def node_full_update(netbox_node, proxmox_json, proxmox_cluster):
     changes = {}
 
-    status_updated = updates.node.status(netbox_node, proxmox_json)
-    cluster_updated = updates.node.cluster(netbox_node, proxmox_json, proxmox_cluster)
-    interfaces_updated = updates.node.interfaces(netbox_node, proxmox_json)
+    status_updated = await updates.node.status(netbox_node, proxmox_json)
+    cluster_updated = await updates.node.cluster(netbox_node, proxmox_json, proxmox_cluster)
+    interfaces_updated = await updates.node.interfaces(netbox_node, proxmox_json)
 
     changes = {
         "status" : status_updated,
@@ -126,7 +127,7 @@ def search_by_id(id):
 
 
 # Makes all necessary checks so that VM/CT exist on Netbox.
-def virtual_machine(**kwargs):
+async def virtual_machine(**kwargs):
     # JSON containing the result of the VM changes
     json_vm = {}
 
@@ -261,7 +262,9 @@ def virtual_machine(**kwargs):
     try:
         # Check if Proxbox tag exist.
         if netbox_vm != None:
-            search_tag = netbox_vm.tags.index(extras.tag())
+            tag = await extras.tag()
+            search_tag = netbox_vm.tags.index(tag)
+
     except ValueError as error:
         logging.warning(f"[WARNING] Virtual Machine or Container with the same name as {netbox_vm.name} already exists.\n> Proxbox will create another one with (2) in the name\n{error}")
         netbox_vm = False
@@ -270,7 +273,7 @@ def virtual_machine(**kwargs):
     # VM Found:
     if netbox_vm:
         # Update Netbox information
-        full_update = vm_full_update(netbox_vm, proxmox_json) 
+        full_update = await vm_full_update(netbox_vm, proxmox_json) 
 
         # I made this way since dict.update didn't work
         json_vm["vm_id"] = netbox_vm.id
@@ -298,12 +301,12 @@ def virtual_machine(**kwargs):
         logging.info(f'[OK] VM does not exist on Netbox -> {proxmox_vm_name}')
 
         # Analyze if VM was sucessfully created.
-        netbox_vm = create.virtualization.virtual_machine(proxmox_json, duplicate)
+        netbox_vm = await create.virtualization.virtual_machine(proxmox_json, duplicate)
 
         # VM created with basic information
         if netbox_vm != None:
             # Update rest of configuration
-            full_update = vm_full_update(netbox_vm, proxmox_json)  
+            full_update = await vm_full_update(netbox_vm, proxmox_json)  
             json_vm = full_update
             json_vm["vm_id"] = netbox_vm.id
 
@@ -333,22 +336,22 @@ def virtual_machine(**kwargs):
 
 
 
-def nodes(**kwargs):
+async def nodes(**kwargs):
     proxmox_cluster = kwargs.get('proxmox_cluster')
     proxmox_json = kwargs.get('proxmox_json')
 
     proxmox_node_name = proxmox_json.get("name")
 
-    def create_node():
+    async def create_node():
         # If node does not exist, create it.
-        netbox_node = create.dcim.node(proxmox_json)
+        netbox_node = await create.dcim.node(proxmox_json)
 
         # Node created
         if netbox_node != None:
             logging.info(f"[OK] Node created! -> {proxmox_node_name}")
 
             # Update rest of configuration
-            full_update = node_full_update(netbox_node, proxmox_json, proxmox_cluster)  
+            full_update = await node_full_update(netbox_node, proxmox_json, proxmox_cluster)  
             json_node = full_update
             json_node["result"] = True
             json_node["node_id"] = netbox_node.id
@@ -372,12 +375,15 @@ def nodes(**kwargs):
             return json_node
                 
     # Search netbox using VM name
-    netbox_search = nb.dcim.devices.get(name = proxmox_node_name)
+    try:
+        netbox_search = nb.dcim.devices.get(name = proxmox_node_name)
+    except Exception as error:
+        logging.error(f"[ERROR] Netbox returned more than one result for '{proxmox_node_name}'\n   > {error}")
 
     # Search node on Netbox with Proxmox node name gotten
     if netbox_search == None:
         # If node does not exist, create it.
-        json_node = create_node()
+        json_node = await create_node()
 
         # Node created
         if json_node != None:
@@ -392,13 +398,14 @@ def nodes(**kwargs):
     else:
         try:
             # Check if Proxbox tag exist.
-            search_tag = netbox_search.tags.index(extras.tag())
+            tag = await extras.tag()
+            search_tag = netbox_search.tags.index(tag)
 
             # If node already exist, try updating it.
             netbox_node = netbox_search
 
             # Update Netbox node information, if necessary.
-            full_update = node_full_update(netbox_node, proxmox_json, proxmox_cluster)  
+            full_update = await node_full_update(netbox_node, proxmox_json, proxmox_cluster)  
             json_node = full_update
 
             full_update_list = list(full_update.values())
@@ -421,77 +428,11 @@ def nodes(**kwargs):
             proxmox_json["duplicate"] = True
             proxmox_json["netbox_original_device"] = netbox_search
 
-            json_node = create_node()
+            json_node = await create_node()
             # return True as the node was successfully created.
             json_node["name"] = proxmox_node_name
         
     return json_node
-
-
-
-# Makes everything needed so that VIRTUAL MACHINES / CONTAINERS, NODES and CLUSTER exists on Netbox
-def all(**kwargs):
-    print("[Proxbox - Netbox plugin | Update All]")
-    cluster_all = proxmox.cluster.status.get()
-
-    #
-    # CLUSTER
-    #
-    cluster = create.virtualization.cluster()
-    print('\n\n\nCLUSTER...')
-
-    try:
-        logging.info(f'[OK] CLUSTER created. -> {cluster.name}')
-    except:
-        logging.info(f"[OK] Cluster created. -> {cluster}")
-
-    proxmox_cluster = cluster_all[0]
-    #
-    # NODES
-    #
-    print('\n\n\nNODES...')
-    nodes_list = []
-    proxmox_nodes = cluster_all[1:]
-
-    # Get all NODES from Proxmox
-    for px_node_each in proxmox_nodes:
-        node_updated = nodes(proxmox_json = px_node_each, proxmox_cluster = proxmox_cluster)
-
-        nodes_list.append(node_updated)
-
-
-    #
-    # VIRTUAL MACHINES / CONTAINERS
-    #
-    print('\n\n\nVIRTUAL MACHINES...')
-    virtualmachines_list = []
-
-    print('\nUPDATE ALL...')
-    # Get all VM/CTs from Proxmox
-    for px_vm_each in proxmox.cluster.resources.get(type='vm'):     
-        vm_updated = virtual_machine(proxmox_json = px_vm_each)
-
-        virtualmachines_list.append(vm_updated)
-
-    # Get "remove_unused" passed on function call
-    remove_unused = kwargs.get("remove_unused", False)
-
-    # Remove Netbox's old data
-    if remove_unused == True:
-        print('\nREMOVE UNUSED DATA...')
-        remove_info = remove.all()
-    else:
-        remove_info = False
-    #
-    # BUILD JSON RESULT
-    #
-    result = {}
-    result["virtualmachines"] = virtualmachines_list
-    result["nodes"] = nodes_list
-    result["remove_unused"] = remove_info
-
-    return result
-
 
 # Runs if script executed directly
 if __name__ == "__main__":

@@ -32,7 +32,11 @@ class ProxboxConfig(PluginConfig):
                 'node_role_id' : 0,
                 'site_id': 0
             }
-        }
+        },
+        'fastapi': {
+            'uvicorn_host' : '0.0.0.0',
+            'uvicorn_port' : '8002',
+        },
     }
 
 config = ProxboxConfig
