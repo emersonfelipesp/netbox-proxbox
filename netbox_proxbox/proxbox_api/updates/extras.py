@@ -2,7 +2,7 @@ from .. import (
     create,
 )
 
-def tag(netbox_vm):
+async def tag(netbox_vm):
     # Get current tags
     tags = netbox_vm.tags
 
@@ -12,9 +12,11 @@ def tag(netbox_vm):
         tags_name.append(tag.name)
 
     
+    tags = await create.extras.tag()
+
     # If Proxbox not found int Netbox tag's list, update object with the tag.
-    if create.extras.tag().name not in tags_name:
-        tags.append(create.extras.tag().id)
+    if tags.name not in tags_name:
+        tags.append(tags.id)
 
         netbox_vm.tags = tags
 

@@ -170,6 +170,45 @@
                 </div>
             </div>
         </div>
+        <div class="col col-md-6">
+            <div class="card">
+                <div align=center>
+                    <br>
+                    <a href="https://fastapi.tiangolo.com/" target="_blank">
+                        <img src="{% static 'netbox_proxbox/fastapi_logo.png' %}" alt="Netbox Logo" width="200px">
+                    </a>
+                </div>  
+                <div class="card-body">
+                    <table class="table table-hover attr-table">
+                        <tr>
+                            <th scope="row"><strong>Uvicorn Host</strong></th>
+                            {% if configuration.netbox_proxbox.fastapi.uvicorn_host %}
+                                <td>{{ configuration.netbox_proxbox.fastapi.uvicorn_host }}</td>
+                            {% else %}
+                                <td>{{ default_config.fastapi.uvicorn_host }} (default)</td>
+                            {% endif %}
+                        </tr>
+                        <tr>
+                            <th scope="row"><strong>Uvicorn Port</strong></th>
+                            {% if configuration.netbox_proxbox.fastapi.uvicorn_port %}
+                                <td>{{ configuration.netbox_proxbox.fastapi.uvicorn_port }}</td>
+                            {% else %}
+                                <td>{{ default_config.fastapi.uvicorn_port }} (default)</td>
+                            {% endif %}
+                        </tr>
+                    </table>
+                    <div align="right">
+                        <button class="btn btn-outline-primary" type="button">
+                            <a
+                                style="text-decoration: none; color: inherit"
+                                target="_blank"
+                                href="https://fastapi.tiangolo.com/deployment/manually/"
+                            >Show Example</a>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
     <!-- Button to show JSON result -->
     <p>

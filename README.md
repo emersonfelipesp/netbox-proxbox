@@ -164,6 +164,18 @@ PLUGINS_CONFIG = {
                     'value': '039az154-23b2-4be0-8d20-b66abc8c4686'
                 },
                 'ssl': False
+            },
+            # The following json is optional and applies only for multi-cluster use
+            {
+                'domain': 'proxbox2.example.com',    # May also be IP address
+                'http_port': 8006,
+                'user': 'root@pam',   # always required
+                'password': 'Strong@P4ssword', # only required, if you don't want to use token based authentication
+                'token': {
+                    'name': 'tokenID',	# Only type the token name and not the 'user@pam:tokenID' format
+                    'value': '039az154-23b2-4be0-8d20-b66abc8c4686'
+                },
+                'ssl': False
             }
         ],
         'netbox': {
@@ -176,10 +188,9 @@ PLUGINS_CONFIG = {
                 'node_role_id' : 0,
                 'site_id': 0
             }
-        }
-    }
-}
-```
+      }
+ }
+
 
 <br>
 
