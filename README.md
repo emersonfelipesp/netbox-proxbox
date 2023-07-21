@@ -363,3 +363,9 @@ Below some of the communities available:
 - **[Official - Slack Community (english)](https://netdev.chat/)**
 - **[Community Discord Channel - 🇧🇷 (pt-br)](https://discord.gg/X6FudvXW)**
 - **[Community Telegram Chat - 🇧🇷 (pt-br)](https://t.me/netboxbr)**
+
+---
+
+## Stars History 📈
+
+[![Star History Chart](https://api.star-history.com/svg?repos=netdevopsbr/netbox-proxbox&type=Timeline)](https://star-history.com/#netdevopsbr/netbox-proxbox&Timeline)

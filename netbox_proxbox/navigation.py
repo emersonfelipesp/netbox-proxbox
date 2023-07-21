@@ -1,25 +1,46 @@
-from extras.plugins import PluginMenuButton, PluginMenuItem
+from extras.plugins import PluginMenuButton, PluginMenuItem, PluginMenu
 from utilities.choices import ButtonColorChoices
 
-menu_items = (
-    PluginMenuItem(
-        link="plugins:netbox_proxbox:home",
-        link_text="Home",
-    ),
+fullupdate_item = PluginMenuItem(
+    link='plugins:netbox_proxbox:home',
+    link_text='Full Update',
 )
 
-'''
-buttons=(
-    PluginMenuButton(
-        # match the names of the path for create view defined in ./urls.py
-        link="plugins:netbox_proxbox:proxmoxvm_add",
-        # text that appears when hovering the ubtton
-        title="Add",
-        # font-awesome icon to use
-        icon_class="mdi mdi-plus-thick", # 'fa fa-plus' didn't work
-        # defines color button to green
-        color=ButtonColorChoices.GREEN,
-        permissions=["netbox_proxbox.add_proxmoxvm"],
+contributing_item = PluginMenuItem(
+    link='plugins:netbox_proxbox:contributing',
+    link_text='Contributing!',
+)
+
+community_item = PluginMenuItem(
+    link='plugins:netbox_proxbox:community',
+    link_text='Community',
+    buttons=[
+        PluginMenuButton(
+            "plugins:netbox_proxbox:discussions",
+            "GitHub Discussions",
+            "mdi mdi-github",
+            ButtonColorChoices.GRAY,
+        ),
+        PluginMenuButton(
+            "plugins:netbox_proxbox:discord",
+            "Discord Community",
+            "mdi mdi-forum",
+            ButtonColorChoices.BLACK,
+        ),
+        PluginMenuButton(
+            "plugins:netbox_proxbox:telegram",
+            "Telegram Community",
+            "mdi mdi-send",
+            ButtonColorChoices.BLUE,
+        ),
+    ]
+)
+
+menu = PluginMenu(
+    label='Proxbox',
+    groups=(
+        ('Proxmox Plugin', (fullupdate_item,)),
+        ('Join our community', (contributing_item, community_item,)),
     ),
-),
-'''
+    icon_class='mdi mdi-dns'
+)
