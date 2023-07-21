@@ -30,4 +30,5 @@ urlpatterns = [
 
     # Proxbox API full update
     path("full_update/", views.ProxmoxFullUpdate.as_view(), name="proxmoxvm_full_update"),
-    path("single_update/", views.ProxmoxSingleUpdate.as_view(), name="proxmoxvm_single_update"),
+    path("single_update/", views.ProxmoxSingleUpdate.as_view(), name="proxmoxvm_single_update")
+]
