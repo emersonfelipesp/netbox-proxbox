@@ -24,11 +24,11 @@ TOKEN_VALUE = "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
 VERIFY_SSL = "<BOOLEAN>"
 '''
 
-HOST = "10.0.30.9",
-port = 8006,
-USER = root@pam",
-TOKEN_NAME = "root",
-TOKEN_VALUE = "039ad154-23c2-4be0-8d20-b65bbb8c4686",
+HOST = "10.0.30.9"
+PORT = 8006
+USER = "root@pam"
+TOKEN_NAME = "root"
+TOKEN_VALUE = "039ad154-23c2-4be0-8d20-b65bbb8c4686"
 VERIFY_SSL = False
 
 try:
@@ -41,14 +41,66 @@ try:
         token_value=TOKEN_VALUE,
         verify_ssl=VERIFY_SSL
     )
-except:
-    raise RuntimeError(f'Error trying to initialize Proxmox Session using TOKEN (token_name: {PROXMOX_TOKEN_NAME} and token_value: {PROXMOX_TOKEN_VALUE} provided')
+except Exception as error:
+    raise RuntimeError(f'Error trying to initialize Proxmox Session using TOKEN (token_name: {TOKEN_NAME} and token_value: {TOKEN_VALUE} provided\n   > {error}')
 
-        
+'''
+api_hierarchy = {
+    "toplevel": ["access", "cluster", "nodes", "pools", "storage", "version"],
+    "secondlevel": { 
+        "access": ["domains", "groups", "openid", "roles", "tfa", "users", "acl", "password", "permissions", "ticket"],
+        "cluster": ["acme", "backup", "backup-info", "ceph", "config", "firewall", "ha", "jobs", "mapping", "metrics",
+                    "replication", "sdn", "log", "options", "resources", "status", "tasks"],
+        "nodes": "node_id",
+        "pools": "pool_id",
+        "storage": "storage_id",
+    },
+    "thirdlevel": {
+        "node": ["apt", "capabilities", "ceph", "certificates", "disks", "firewall", "lxc", "network", "qemu", "replication", "scan", "sdn", "services",
+                 "storage", "tasks", "vzdump", "aplinfo", "config", "dns", "execute", "hosts", "journal", "migrateall", "query-url-metadata", "report",
+                 "rrd", "rrddata", "spiceshell", "startall", "stopall", "subscription", "syslog", "subscription", "syslog", "termproxy",
+                "time", "version", "vncshell", "vncwebsocket", "wakeonlan"]
+    }
+}
+'''
+     
 app = FastAPI()
 
+@app.get("/proxmox")
+async def proxmox():
+    api_hierarchy = {
+        "access" : px.access.get(),
+        "cluster": px.cluster.get(),
+        "nodes": px.nodes.get(),
+        "pools": px.pools.get(),
+        "storage": px.storage.get(),
+        "version": px.version.get(),
+    }
 
-@app.get("/proxmox/cluster/resources")
-async def root(type: str | None = None):
+    return {
+        "message": "Proxmox API",
+        "api_viewer": "https://pve.proxmox.com/pve-docs/api-viewer/",
+        "github": {
+            "netbox": "https://github.com/netbox-community/netbox",
+            "pynetbox": "https://github.com/netbox-community/pynetbox",
+            "proxmoxer": "https://github.com/proxmoxer/proxmoxer",
+            "netbox-proxbox": "https://github.com/netdevopsbr/netbox-proxbox"
+        },
+        "api_base_results": api_hierarchy
+    }
+    return 
+
+@app.get("/proxmox/{top_level}")
+async def root(
+    top_level: str | None = None,
+):
+    return px.get()
+
+@app.get("/proxmox/{top_level}/{second_level}/{third_level}")
+async def root(
+    top_level: str | None = None,
+    second_level: str | None = None,
+    third_level: str | None = None,
+):
     return px.cluster.resources.get()
 
