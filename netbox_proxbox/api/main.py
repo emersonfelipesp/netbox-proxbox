@@ -13,17 +13,25 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 TOPLEVEL_ENDPOINTS = ["access", "cluster", "nodes", "pools", "storage", "version"]
 
-'''
-HOST = "X.X.X.X"
-PORT = "<PORT>"
-USER = "<USER>@pam"
-TOKEN_NAME = "<STRING>"
-TOKEN_VALUE = "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
-VERIFY_SSL = "<BOOLEAN>"
-'''
+# Proxbox
+from netbox_proxbox.proxbox_api.plugins_config import PROXMOX_SESSIONS, PROXMOX_SETTING
 
-from netbox_proxbox.proxbox_api.plugins_config import PROXMOX_SESSIONS
-print(PROXMOX_SESSIONS)
+sessions_list = []
+
+# Get SESSIONs from JSON
+for px_node in PROXMOX_SETTING:
+    domain = px_node.get("domain")
+    
+    px_json = PROXMOX_SESSIONS.get(domain)
+    px_session = px_json.get('PROXMOX_SESSION')
+    sessions_list.append(px_session)
+
+# Single Session
+px = None
+try:
+    px = sessions_list[0]
+except Exception as error:
+    print(f"Not able to establish session.\n   > {error}")
 
 # Init FastAPI
 app = FastAPI()
@@ -31,6 +39,7 @@ app = FastAPI()
 @app.get("/")
 async def root():
     return {
+        "proxmox_sessions": PROXMOX_SETTING,
         "message": "Proxbox Backend made in FastAPI framework",
         "proxbox": {
             "github": "https://github.com/netdevopsbr/netbox-proxbox",
