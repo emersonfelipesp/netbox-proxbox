@@ -15,12 +15,21 @@ from proxmoxer import ProxmoxAPI
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+'''
 HOST = "X.X.X.X"
 PORT = "<PORT>"
 USER = "<USER>@pam"
 TOKEN_NAME = "<STRING>"
 TOKEN_VALUE = "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
 VERIFY_SSL = "<BOOLEAN>"
+'''
+
+HOST = "10.0.30.9",
+port = 8006,
+USER = root@pam",
+TOKEN_NAME = "root",
+TOKEN_VALUE = "039ad154-23c2-4be0-8d20-b65bbb8c4686",
+VERIFY_SSL = False
 
 try:
     # Start PROXMOX session using TOKEN
