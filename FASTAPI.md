@@ -13,8 +13,8 @@ uvicorn netbox-proxbox.netbox_proxbox.api.main:app --reload --port 9000
 
 ## Testing FastAPI
 
-Access the following URL **http://host:port/proxmox/cluster/resources** to view all VMs/Nodes/Storages of your environment.
-Docs: **http://<host>:<port>/docs** or **http://<host>:<port>/redoc**
+Access the following URL **http://HOST:PORT/proxmox/cluster/resources** to view all VMs/Nodes/Storages of your environment.
+Docs: **http://HOST:PORT/docs** or **http://HOST:PORT/redoc**
 
 ## Security
 
