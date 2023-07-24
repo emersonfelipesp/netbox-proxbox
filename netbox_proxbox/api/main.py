@@ -1,5 +1,10 @@
 # Python Framework
-from fastapi import FastAPI
+from typing import Annotated
+
+from fastapi import Depends, FastAPI, Request
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
 # NP import to use 'copy' array method
 import numpy as np
@@ -8,6 +13,7 @@ import numpy as np
 from proxmoxer import ProxmoxAPI, ResourceException
 
 # HTTP SSL handling
+import requests
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -33,10 +39,25 @@ try:
 except Exception as error:
     print(f"Not able to establish session.\n   > {error}")
 
+FASTAPI_HOST = "127.0.0.1"
+FASTAPI_PORT = "9000"
+    
 # Init FastAPI
 app = FastAPI()
 
-@app.get("/")
+app.mount("/static", StaticFiles(directory="/opt/netbox/netbox/netbox-proxbox/netbox_proxbox/static"), name="static")
+
+templates = Jinja2Templates(directory="/opt/netbox/netbox/netbox-proxbox/netbox_proxbox/templates/netbox_proxbox")
+
+
+
+import time
+from typing import Callable
+
+from fastapi import APIRouter, FastAPI, Request, Response
+from fastapi.routing import APIRoute
+
+#@app.get("/")
 async def root():
     return {
         "proxmox_sessions": PROXMOX_SETTING,
@@ -51,6 +72,20 @@ async def root():
             "reason": "FastAPI was chosen because of performance and reliabilty."
         }
     }
+    
+@app.get("/netbox", response_class=HTMLResponse)
+async def netbox(
+    request: Request,
+    proxmox: Annotated[dict, Depends(root)]
+):
+    return templates.TemplateResponse("fastapi/home.html", {
+            "request": request,
+            "json_content": proxmox
+        }
+    )
+                                      
+
+
 
 @app.get("/proxmox")
 async def proxmox():
