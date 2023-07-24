@@ -124,6 +124,8 @@ async def top_level_endpoint(
 async def second_level_endpoint(
     top_level: str | None = None,
     second_level: str | None = None,
+    type: str | None = None,
+    id: str | None = None,
 ):
     if top_level not in TOPLEVEL_ENDPOINTS:
         return {
@@ -137,7 +139,10 @@ async def second_level_endpoint(
         path = f"{top_level}/{second_level}"
         
         # HTTP request through proxmoxer lib
-        result = px(path).get()
+        if path == "cluster/resources" and type != None:
+            result = px(path).get(type = type)
+        else:
+            result = px(path).get()
         
         # Feed JSON result
         json_obj[top_level][second_level] = result
