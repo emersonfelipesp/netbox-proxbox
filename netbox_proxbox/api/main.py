@@ -66,6 +66,21 @@ api_hierarchy = {
      
 app = FastAPI()
 
+@app.get("/")
+async def root():
+    return {
+        "message": "Proxbox Backend made in FastAPI framework",
+        "proxbox": {
+            "github": "https://github.com/netdevopsbr/netbox-proxbox",
+            "docs": "https://docs.netbox.dev.br",
+        },
+        "fastapi": {
+            "github": "https://github.com/tiangolo/fastapi",
+            "website": "https://fastapi.tiangolo.com/",
+            "reason": "FastAPI was chosen because of performance and reliabilty."
+        }
+    }
+
 @app.get("/proxmox")
 async def proxmox():
     api_hierarchy = {
