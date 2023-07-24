@@ -1,6 +1,6 @@
 # Deploy FastAPI
 
-Using **(uvicorn)[https://www.uvicorn.org/] to deploy Proxbox backend using [FastAPI](https://fastapi.tiangolo.com/) on port **9000** using development mode with --reload.
+Using **[uvicorn](https://www.uvicorn.org/)** to deploy Proxbox backend using **[FastAPI](https://fastapi.tiangolo.com/)** on port **9000** using development mode with --reload.
 
 ### It's not ready for PRODUCTION!
 
