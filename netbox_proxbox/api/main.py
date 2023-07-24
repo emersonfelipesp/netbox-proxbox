@@ -97,9 +97,8 @@ async def proxmox():
             "proxmoxer": "https://github.com/proxmoxer/proxmoxer",
             "netbox-proxbox": "https://github.com/netdevopsbr/netbox-proxbox"
         },
-        "api_base_results": api_hierarchy
+        "base_endpoints": api_hierarchy
     }
-    return 
 
 @app.get("/proxmox/{top_level}")
 async def top_level_endpoint(
