@@ -1,11 +1,17 @@
+# Python Framework
 from fastapi import FastAPI
 
+# NP import to use 'copy' array method
+import numpy as np
+
+# Proxmoxer lib (https://proxmoxer.github.io/)
 from proxmoxer import ProxmoxAPI, ResourceException
 
-import endpoint
-
+# HTTP SSL handling
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+TOPLEVEL_ENDPOINTS = ["access", "cluster", "nodes", "pools", "storage", "version"]
 
 '''
 HOST = "X.X.X.X"
@@ -15,8 +21,6 @@ TOKEN_NAME = "<STRING>"
 TOKEN_VALUE = "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
 VERIFY_SSL = "<BOOLEAN>"
 '''
-
-TOPLEVEL_ENDPOINTS = ["access", "cluster", "nodes", "pools", "storage", "version"]
 
 # Example of variables formmating/type
 HOST = "10.0.30.9"
@@ -39,9 +43,8 @@ try:
 except Exception as error:
     raise RuntimeError(f'Error trying to initialize Proxmox Session using TOKEN (token_name: {TOKEN_NAME} and token_value: {TOKEN_VALUE} provided\n   > {error}')
 
-
+# Init FastAPI
 app = FastAPI()
-
 
 @app.get("/")
 async def root():
@@ -60,9 +63,25 @@ async def root():
 
 @app.get("/proxmox")
 async def proxmox():
+    
+    def minimize_result(endpoint_name):
+        endpoint_list = []
+        result = px(endpoint_name).get()
+        
+        match endpoint_name:
+            case "access":
+                for obj in result:
+                    endpoint_list.append(obj.get("subdir"))
+            
+            case "cluster":
+                for obj in result:
+                    endpoint_list.append(obj.get("name"))
+                
+        return endpoint_list
+    
     api_hierarchy = {
-        "access" : px.access.get(),
-        "cluster": px.cluster.get(),
+        "access": minimize_result("access"),
+        "cluster": minimize_result("cluster"),
         "nodes": px.nodes.get(),
         "pools": px.pools.get(),
         "storage": px.storage.get(),
@@ -71,7 +90,7 @@ async def proxmox():
 
     return {
         "message": "Proxmox API",
-        "api_viewer": "https://pve.proxmox.com/pve-docs/api-viewer/",
+        "proxmox_api_viewer": "https://pve.proxmox.com/pve-docs/api-viewer/",
         "github": {
             "netbox": "https://github.com/netbox-community/netbox",
             "pynetbox": "https://github.com/netbox-community/pynetbox",
@@ -92,8 +111,6 @@ async def top_level_endpoint(
             "valid_names": TOPLEVEL_ENDPOINTS,
         }
     
-    import numpy as np
-    
     current_index = TOPLEVEL_ENDPOINTS.index(top_level)
     other_endpoints = TOPLEVEL_ENDPOINTS.copy()
     other_endpoints.pop(current_index)
@@ -102,27 +119,6 @@ async def top_level_endpoint(
         f"{top_level}": px(top_level).get(),
         "other_endpoints": other_endpoints,
     }
-    
-    '''
-    match top_level:
-        case "access": 
-            json_obj = {"access": {}}
-            second_level = endpoint.access(px.access.get())
-            print(second_level)
-            for endpoint_name in second_level:
-                try:
-                    path = f"{top_level}/{endpoint_name}"
-                    result = px(path).get()
-                    
-                    json_obj["access"][endpoint_name] = result
-                except ResourceException as error:
-                    print(f"Path {path} does not exist.\n   > {error}")
-                
-            return json_obj
-    '''
-
-
-
 
 
 @app.get("/proxmox/{top_level}/{second_level}")
@@ -130,10 +126,24 @@ async def second_level_endpoint(
     top_level: str | None = None,
     second_level: str | None = None,
 ):
-    match top_level:
-        case "access": return px.access.get()
-        case "cluster": return px.cluster.get()
-        case "nodes": return px.nodes.get()
-        case "pools": return px.pools.get()
-        case "storage": return px.storage.get()
-        case "version": return {f"{top_level}": px.version.get(), "secondlevel": second_level}
+    if top_level not in TOPLEVEL_ENDPOINTS:
+        return {
+            "message": f"'{top_level}' is not a valid endpoint/path name.",
+            "valid_names": TOPLEVEL_ENDPOINTS,
+        }
+
+    json_obj = {f"{top_level}": {}}
+    
+    try:
+        path = f"{top_level}/{second_level}"
+        
+        # HTTP request through proxmoxer lib
+        result = px(path).get()
+        
+        # Feed JSON result
+        json_obj[top_level][second_level] = result
+        
+    except ResourceException as error:
+        print(f"Path {path} does not exist.\n   > {error}")
+        
+    return json_obj
