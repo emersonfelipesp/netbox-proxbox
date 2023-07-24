@@ -143,6 +143,9 @@ async def second_level_endpoint(
         json_obj[top_level][second_level] = result
         
     except ResourceException as error:
-        print(f"Path {path} does not exist.\n   > {error}")
+        return {
+            "message": f"Path {path} does not exist.",
+            "error": error
+        }
         
     return json_obj
