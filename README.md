@@ -5,9 +5,9 @@
 		<img width="532" src="https://github.com/N-Multifibra/proxbox/blob/main/etc/img/proxbox-full-logo.png" alt="Proxbox logo">
 	</a>
 	<br>
-	
+
 <div>
-	
+
 ### [New Documentation available!](http://proxbox.netbox.dev.br/)
 </div>
 <br>
@@ -40,7 +40,7 @@ Proxbox is currently able to get the following information from Proxmox:
 ---
 
 <div align="center">
-	
+
 ### Versions
 
 
@@ -190,9 +190,8 @@ PLUGINS_CONFIG = {
             }
       }
  }
+```
 
-
-<br>
 
 #### 1.3.2. Change Netbox '**[settings.py](https://github.com/netbox-community/netbox/blob/develop/netbox/netbox/settings.py)**' to include Proxbox Template directory
 
@@ -240,7 +239,7 @@ The following options are available:
 * `netbox.http_port`: (Integer) Netbox HTTP PORT (default: 8001).  If you are not targeting gunicorn directly make sure the HTTP port is not redirected to HTTPS by your HTTP server.
 * `netbox.token`: (String) Netbox Token Value.
 * `netbox.ssl`: (Bool) Defines the use of SSL (default: False). - Proxbox doesn't support SSL on Netbox yet.
-* `netbox.settings`: (Dict) Default items of Netbox to be used by Proxbox. 
+* `netbox.settings`: (Dict) Default items of Netbox to be used by Proxbox.
   - If not configured, Proxbox will automatically create a basic configuration to make it work.
   - The ID of each item can be easily found on the URL of the item you want to use.
 * `netbox.settings.virtualmachine_role_id`: (Integer) Role ID to be used by Proxbox when creating Virtual Machines
