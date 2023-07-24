@@ -1,16 +1,8 @@
 from fastapi import FastAPI
 
-'''
-from plugins_config import (
-    NETBOX,
-    NETBOX_TOKEN,
-    PROXMOX_SESSIONS as proxmox_sessions,
-    NETBOX_SESSION as nb,
-)
-'''
+from proxmoxer import ProxmoxAPI, ResourceException
 
-from proxmoxer import ProxmoxAPI
-
+import endpoint
 
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -24,6 +16,9 @@ TOKEN_VALUE = "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
 VERIFY_SSL = "<BOOLEAN>"
 '''
 
+TOPLEVEL_ENDPOINTS = ["access", "cluster", "nodes", "pools", "storage", "version"]
+
+# Example of variables formmating/type
 HOST = "10.0.30.9"
 PORT = 8006
 USER = "root@pam"
@@ -44,27 +39,9 @@ try:
 except Exception as error:
     raise RuntimeError(f'Error trying to initialize Proxmox Session using TOKEN (token_name: {TOKEN_NAME} and token_value: {TOKEN_VALUE} provided\n   > {error}')
 
-'''
-api_hierarchy = {
-    "toplevel": ["access", "cluster", "nodes", "pools", "storage", "version"],
-    "secondlevel": { 
-        "access": ["domains", "groups", "openid", "roles", "tfa", "users", "acl", "password", "permissions", "ticket"],
-        "cluster": ["acme", "backup", "backup-info", "ceph", "config", "firewall", "ha", "jobs", "mapping", "metrics",
-                    "replication", "sdn", "log", "options", "resources", "status", "tasks"],
-        "nodes": "node_id",
-        "pools": "pool_id",
-        "storage": "storage_id",
-    },
-    "thirdlevel": {
-        "node": ["apt", "capabilities", "ceph", "certificates", "disks", "firewall", "lxc", "network", "qemu", "replication", "scan", "sdn", "services",
-                 "storage", "tasks", "vzdump", "aplinfo", "config", "dns", "execute", "hosts", "journal", "migrateall", "query-url-metadata", "report",
-                 "rrd", "rrddata", "spiceshell", "startall", "stopall", "subscription", "syslog", "subscription", "syslog", "termproxy",
-                "time", "version", "vncshell", "vncwebsocket", "wakeonlan"]
-    }
-}
-'''
-     
+
 app = FastAPI()
+
 
 @app.get("/")
 async def root():
@@ -106,8 +83,52 @@ async def proxmox():
     return 
 
 @app.get("/proxmox/{top_level}")
-async def root(
+async def top_level_endpoint(
     top_level: str | None = None,
+):
+    if top_level not in TOPLEVEL_ENDPOINTS:
+        return {
+            "message": f"'{top_level}' is not a valid endpoint/path name.",
+            "valid_names": TOPLEVEL_ENDPOINTS,
+        }
+    
+    import numpy as np
+    
+    current_index = TOPLEVEL_ENDPOINTS.index(top_level)
+    other_endpoints = TOPLEVEL_ENDPOINTS.copy()
+    other_endpoints.pop(current_index)
+    
+    return {
+        f"{top_level}": px(top_level).get(),
+        "other_endpoints": other_endpoints,
+    }
+    
+    '''
+    match top_level:
+        case "access": 
+            json_obj = {"access": {}}
+            second_level = endpoint.access(px.access.get())
+            print(second_level)
+            for endpoint_name in second_level:
+                try:
+                    path = f"{top_level}/{endpoint_name}"
+                    result = px(path).get()
+                    
+                    json_obj["access"][endpoint_name] = result
+                except ResourceException as error:
+                    print(f"Path {path} does not exist.\n   > {error}")
+                
+            return json_obj
+    '''
+
+
+
+
+
+@app.get("/proxmox/{top_level}/{second_level}")
+async def second_level_endpoint(
+    top_level: str | None = None,
+    second_level: str | None = None,
 ):
     match top_level:
         case "access": return px.access.get()
@@ -115,13 +136,4 @@ async def root(
         case "nodes": return px.nodes.get()
         case "pools": return px.pools.get()
         case "storage": return px.storage.get()
-        case "version": return px.version.get()
-
-@app.get("/proxmox/{top_level}/{second_level}/{third_level}")
-async def root(
-    top_level: str | None = None,
-    second_level: str | None = None,
-    third_level: str | None = None,
-):
-    return px.cluster.resources.get()
-
+        case "version": return {f"{top_level}": px.version.get(), "secondlevel": second_level}
