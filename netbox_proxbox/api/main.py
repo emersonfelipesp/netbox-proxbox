@@ -109,7 +109,13 @@ async def proxmox():
 async def root(
     top_level: str | None = None,
 ):
-    return px.get()
+    match top_level:
+        case "access": return px.access.get()
+        case "cluster": return px.cluster.get()
+        case "nodes": return px.nodes.get()
+        case "pools": return px.pools.get()
+        case "storage": return px.storage.get()
+        case "version": return px.version.get()
 
 @app.get("/proxmox/{top_level}/{second_level}/{third_level}")
 async def root(
