@@ -376,6 +376,9 @@ Below some of the communities available:
 
 ---
 
+## Installing and using Proxbox Plugin (pt-br video)
+[![Watch the video](https://img.youtube.com/vi/Op-4MQjDf6A/maxresdefault.jpg)](https://www.youtube.com/watch?v=Op-4MQjDf6A)
+
 ## Stars History 📈
 
 [![Star History Chart](https://api.star-history.com/svg?repos=netdevopsbr/netbox-proxbox&type=Timeline)](https://star-history.com/#netdevopsbr/netbox-proxbox&Timeline)
