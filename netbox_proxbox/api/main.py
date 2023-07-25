@@ -49,16 +49,13 @@ app.mount("/static", StaticFiles(directory="/opt/netbox/netbox/netbox-proxbox/ne
 
 templates = Jinja2Templates(directory="/opt/netbox/netbox/netbox-proxbox/netbox_proxbox/templates/netbox_proxbox")
 
-
-
 import time
 from typing import Callable
 
 from fastapi import APIRouter, FastAPI, Request, Response
 from fastapi.routing import APIRoute
 
-
-
+import json
 
 @app.get("/standalone-info")
 async def standalone_info():
@@ -74,29 +71,6 @@ async def standalone_info():
             "reason": "FastAPI was chosen because of performance and reliabilty."
         }
     }
-    
-@app.get("/", response_class=HTMLResponse)
-async def root(
-    request: Request,
-    json_content: Annotated[dict, Depends(standalone_info)]
-):
-    return templates.TemplateResponse("fastapi/home.html", {
-            "request": request,
-            "json_content": json_content
-        }
-    )
-
-@app.get("/netbox", response_class=HTMLResponse)
-async def netbox(
-    request: Request,
-    proxmox: Annotated[dict, Depends(root)]
-):
-    return templates.TemplateResponse("fastapi/home.html", {
-            "request": request,
-            "json_content": proxmox
-        }
-    )
-                        
 
 @app.get("/proxmox")
 async def proxmox():
@@ -132,10 +106,39 @@ async def proxmox():
             "netbox": "https://github.com/netbox-community/netbox",
             "pynetbox": "https://github.com/netbox-community/pynetbox",
             "proxmoxer": "https://github.com/proxmoxer/proxmoxer",
-            "netbox-proxbox": "https://github.com/netdevopsbr/netbox-proxbox"
+            "proxbox": "https://github.com/netdevopsbr/netbox-proxbox"
         },
         "base_endpoints": api_hierarchy
     }
+
+
+@app.get("/", response_class=HTMLResponse)
+async def root(
+    request: Request,
+    json_content: Annotated[dict, Depends(standalone_info)],
+    proxmox_output: Annotated[dict, Depends(proxmox)]
+):
+    return templates.TemplateResponse("fastapi/home.html", {
+            "request": request,
+            "json_content": json_content,
+            "proxmox": proxmox_output,
+            "proxmox_str": json.dumps(proxmox_output, indent=4),
+        }
+    )
+
+@app.get("/netbox", response_class=HTMLResponse)
+async def netbox(
+    request: Request,
+    proxmox: Annotated[dict, Depends(root)]
+):
+    return templates.TemplateResponse("fastapi/home.html", {
+            "request": request,
+            "json_content": proxmox
+        }
+    )
+                        
+
+
 
 
 @app.get("/proxmox/{top_level}")
