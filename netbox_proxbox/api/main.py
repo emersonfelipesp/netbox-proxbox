@@ -57,10 +57,12 @@ from typing import Callable
 from fastapi import APIRouter, FastAPI, Request, Response
 from fastapi.routing import APIRoute
 
-#@app.get("/")
-async def root():
+
+
+
+@app.get("/standalone-info")
+async def standalone_info():
     return {
-        "proxmox_sessions": PROXMOX_SETTING,
         "message": "Proxbox Backend made in FastAPI framework",
         "proxbox": {
             "github": "https://github.com/netdevopsbr/netbox-proxbox",
@@ -73,6 +75,17 @@ async def root():
         }
     }
     
+@app.get("/", response_class=HTMLResponse)
+async def root(
+    request: Request,
+    json_content: Annotated[dict, Depends(standalone_info)]
+):
+    return templates.TemplateResponse("fastapi/home.html", {
+            "request": request,
+            "json_content": json_content
+        }
+    )
+
 @app.get("/netbox", response_class=HTMLResponse)
 async def netbox(
     request: Request,
@@ -83,9 +96,7 @@ async def netbox(
             "json_content": proxmox
         }
     )
-                                      
-
-
+                        
 
 @app.get("/proxmox")
 async def proxmox():
@@ -125,6 +136,7 @@ async def proxmox():
         },
         "base_endpoints": api_hierarchy
     }
+
 
 @app.get("/proxmox/{top_level}")
 async def top_level_endpoint(

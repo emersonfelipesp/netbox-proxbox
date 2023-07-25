@@ -1,6 +1,75 @@
 <html>
+    <head>
+        <title>Home</title>
+         {# Static resources #}
+        <link
+            rel="stylesheet"
+            href="{{ url_for('static', path='/netbox_proxbox/styles/netbox-external.css') }}"
+        />
+        <link
+            rel="stylesheet"
+            href="{{ url_for('static', path='/netbox_proxbox/styles/netbox-light.css') }}"
+        />
+        <link
+            rel="stylesheet"
+            href="{{ url_for('static', path='/netbox_proxbox/styles/netbox-dark.css') }}"
+        />
+        <link
+            rel="stylesheet"
+            href="{{ url_for('static', path='/netbox_proxbox/styles/netbox-print.css') }}"
+        />
+
+
+        {# Additional <head> content #}
+        {% block head %}{% endblock %}
+        </head>
     <body>
-        <h1>Proxbox - FastAPI Standalone Version</h1>
-        {{ json_content }}
+        {% block layout %}
+            <div class="container-fluid px-0">
+                <div class="d-flex justify-content-center flex-nowrap" style="margin-bottom: 15px;">
+                    <h1>Proxbox - FastAPI Standalone Version</h1>
+                </div>
+                <div id="content" class="container-fluid content px-0 m-0">
+                    {% block content %}
+                        <div align="center">
+                            <div class="col col-md-6">
+                                <div class="card">
+                                    <div class="card-body">
+                                        <table class="table table-hover attr-table">
+                                            <tr>
+                                                <th scope="row"><strong>Message</strong></th>
+                                                <td>{{ json_content.message }}</td>
+                                            </tr>
+                                            <tr>
+                                                <th scope="row"><strong>Proxbox GitHub</strong></th>
+                                                <td><a target="_blank" href="{{ json_content.proxbox.github }}">{{ json_content.proxbox.github }}</a></td>
+                                            </tr>
+                                            <tr>
+                                                <th scope="row"><strong>Proxbox Docs</strong></th>
+                                                <td><a target="_blank" href="{{ json_content.proxbox.docs }}">{{ json_content.proxbox.docs }}</a></td>
+                                            </tr>
+                                            <tr>
+                                                <th scope="row"><strong>FastAPI GitHub</strong></th>
+                                                <td><a target="_blank" href="{{ json_content.fastapi.github }}">{{ json_content.fastapi.github }}</a></td>
+                                            </tr>
+                                            <tr>
+                                                <th scope="row"><strong>FastAPI Website</strong></th>
+                                                <td><a target="_blank" href="{{ json_content.fastapi.website }}">{{ json_content.fastapi.website }}</a></td>
+                                            </tr>
+                                            <tr>
+                                                <th scope="row"><strong>Why FastAPI?</strong></th>
+                                                <td>{{ json_content.fastapi.reason }}</td>
+                                            </tr>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                    {% endblock %}                   
+                </div>
+            </div>
+            
+        {% endblock %}
     </body>
 </html>
