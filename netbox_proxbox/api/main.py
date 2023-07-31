@@ -138,9 +138,6 @@ async def netbox(
     )
                         
 
-
-
-
 @app.get("/proxmox/{top_level}")
 async def top_level_endpoint(
     top_level: str | None = None,
