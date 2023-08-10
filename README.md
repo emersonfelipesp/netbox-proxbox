@@ -188,8 +188,9 @@ PLUGINS_CONFIG = {
                 'node_role_id' : 0,
                 'site_id': 0
             }
-      }
- }
+        }
+    }
+}
 ```
 
 
