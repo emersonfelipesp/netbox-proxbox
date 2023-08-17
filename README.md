@@ -8,7 +8,7 @@
 
 <div>
 
-### [New Documentation available!](http://proxbox.netbox.dev.br/)
+### [New Documentation available!](https://proxbox.netbox.dev.br/introduction/)
 </div>
 <br>
 </div>
@@ -188,8 +188,9 @@ PLUGINS_CONFIG = {
                 'node_role_id' : 0,
                 'site_id': 0
             }
-      }
- }
+        }
+    }
+}
 ```
 
 
