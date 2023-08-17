@@ -1,0 +1,120 @@
+<html>
+    <head>
+        <title>Home</title>
+         {# Static resources #}
+        <link
+            rel="stylesheet"
+            href="{{ url_for('static', path='/netbox_proxbox/styles/netbox-external.css') }}"
+        />
+        <link
+            rel="stylesheet"
+            href="{{ url_for('static', path='/netbox_proxbox/styles/netbox-light.css') }}"
+        />
+        <link
+            rel="stylesheet"
+            href="{{ url_for('static', path='/netbox_proxbox/styles/netbox-dark.css') }}"
+        />
+        <link
+            rel="stylesheet"
+            href="{{ url_for('static', path='/netbox_proxbox/styles/netbox-print.css') }}"
+        />
+
+
+        {# Additional <head> content #}
+        {% block head %}{% endblock %}
+        </head>
+    <body>
+        {% block layout %}
+            <div class="mx-auto p-2">
+                <div class="container-fluid px-0">
+                    <div class="d-flex justify-content-center flex-nowrap" style="margin-bottom: 15px;">
+                        <h1>Proxbox - FastAPI Standalone Version</h1>
+                    </div>
+                    <div a
+                        <div id="content" class="container-fluid content px-0 m-0">
+                            {% block content %}
+                                <div class="row justify-content-center">
+                                    <div class="col col-md-6">
+                                        <div class="card">
+                                            <div class="card-body">
+                                                <table class="table table-hover attr-table">
+                                                    <h5 class="card-title">Standalone Info</h5>
+                                                    <tr>
+                                                        <th scope="row"><strong>Message</strong></th>
+                                                        <td>{{ json_content.message }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <th scope="row"><strong>Proxbox GitHub</strong></th>
+                                                        <td><a target="_blank" href="{{ json_content.proxbox.github }}">{{ json_content.proxbox.github }}</a></td>
+                                                    </tr>
+                                                    <tr>
+                                                        <th scope="row"><strong>Proxbox Docs</strong></th>
+                                                        <td><a target="_blank" href="{{ json_content.proxbox.docs }}">{{ json_content.proxbox.docs }}</a></td>
+                                                    </tr>
+                                                    <tr>
+                                                        <th scope="row"><strong>FastAPI GitHub</strong></th>
+                                                        <td><a target="_blank" href="{{ json_content.fastapi.github }}">{{ json_content.fastapi.github }}</a></td>
+                                                    </tr>
+                                                    <tr>
+                                                        <th scope="row"><strong>FastAPI Website</strong></th>
+                                                        <td><a target="_blank" href="{{ json_content.fastapi.website }}">{{ json_content.fastapi.website }}</a></td>
+                                                    </tr>
+                                                    <tr>
+                                                        <th scope="row"><strong>Why FastAPI?</strong></th>
+                                                        <td>{{ json_content.fastapi.reason }}</td>
+                                                    </tr>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col col-md-6">
+                                        <div class="card">
+                                            <div class="card-body">
+                                                
+                                                <table class="table table-hover attr-table">
+                                                    <h5 class="card-title">Proxbox Useful URL's</h5>
+                                                    <tr>
+                                                        <th scope="row"><strong>Proxmox API Viewer</strong></th>
+                                                        <td><a target="_blank" href="{{ proxmox.proxmox_api_viewer }}">{{ proxmox.proxmox_api_viewer }}</a></td>
+                                                    </tr>
+                                                    <tr>
+                                                        <th scope="row"><strong>NetBox (GitHub)</strong></th>
+                                                        <td><a target="_blank" href="{{ proxmox.github.netbox }}">{{ proxmox.github.netbox }}</a></td>
+                                                    </tr>
+                                                    <br>
+                                                    <tr>
+                                                        <th scope="row"><strong>Pynetbox (NetBox Library)</strong></th>
+                                                        <td><a target="_blank" href="{{ proxmox.github.pynetbox }}">{{ proxmox.github.pynetbox }}</a></td>
+                                                    </tr>
+                                                    <tr>
+                                                        <th scope="row"><strong>Proxmoxer (Proxmox Library)</strong></th>
+                                                        <td><a target="_blank" href="{{ proxmox.github.proxmoxer }}">{{ proxmox.github.proxmoxer }}</a></td>
+                                                    </tr>
+                                                    <tr>
+                                                        <th scope="row"><strong>Proxbox Plugin (GitHub)</strong></th>
+                                                        <td><a target="_blank" href="{{ proxmox.github.proxbox }}">{{ proxmox.github.proxbox }}</a></td>
+                                                    </tr>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row justify-content-center" style>
+                                    <div class="col col-md-6">
+                                        <div class="card" style="background-color: #0f0f0f">
+                                            <div class="card-body" style="color: white;">
+                                                <h5 class="card-title">JSON Output</h5>
+                                                <pre>{{ proxmox_str }}</pre>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endblock %}                   
+                        </div>
+                    </div>
+                    
+                </div>
+            </div>
+        {% endblock %}
+    </body>
+</html>

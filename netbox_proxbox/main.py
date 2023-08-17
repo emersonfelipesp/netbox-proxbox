@@ -1,5 +1,10 @@
 # Python Framework
-from fastapi import FastAPI
+from typing import Annotated
+
+from fastapi import Depends, FastAPI, Request
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
 # NP import to use 'copy' array method
 import numpy as np
@@ -8,6 +13,7 @@ import numpy as np
 from proxmoxer import ProxmoxAPI, ResourceException
 
 # HTTP SSL handling
+import requests
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -33,13 +39,27 @@ try:
 except Exception as error:
     print(f"Not able to establish session.\n   > {error}")
 
+FASTAPI_HOST = "127.0.0.1"
+FASTAPI_PORT = "9000"
+    
 # Init FastAPI
 app = FastAPI()
 
-@app.get("/")
-async def root():
+app.mount("/static", StaticFiles(directory="/opt/netbox/netbox/netbox-proxbox/netbox_proxbox/static"), name="static")
+
+templates = Jinja2Templates(directory="/opt/netbox/netbox/netbox-proxbox/netbox_proxbox/templates/netbox_proxbox")
+
+import time
+from typing import Callable
+
+from fastapi import APIRouter, FastAPI, Request, Response
+from fastapi.routing import APIRoute
+
+import json
+
+@app.get("/standalone-info")
+async def standalone_info():
     return {
-        "proxmox_sessions": PROXMOX_SETTING,
         "message": "Proxbox Backend made in FastAPI framework",
         "proxbox": {
             "github": "https://github.com/netdevopsbr/netbox-proxbox",
@@ -86,10 +106,37 @@ async def proxmox():
             "netbox": "https://github.com/netbox-community/netbox",
             "pynetbox": "https://github.com/netbox-community/pynetbox",
             "proxmoxer": "https://github.com/proxmoxer/proxmoxer",
-            "netbox-proxbox": "https://github.com/netdevopsbr/netbox-proxbox"
+            "proxbox": "https://github.com/netdevopsbr/netbox-proxbox"
         },
         "base_endpoints": api_hierarchy
     }
+
+
+@app.get("/", response_class=HTMLResponse)
+async def root(
+    request: Request,
+    json_content: Annotated[dict, Depends(standalone_info)],
+    proxmox_output: Annotated[dict, Depends(proxmox)]
+):
+    return templates.TemplateResponse("fastapi/home.html", {
+            "request": request,
+            "json_content": json_content,
+            "proxmox": proxmox_output,
+            "proxmox_str": json.dumps(proxmox_output, indent=4),
+        }
+    )
+
+@app.get("/netbox", response_class=HTMLResponse)
+async def netbox(
+    request: Request,
+    proxmox: Annotated[dict, Depends(root)]
+):
+    return templates.TemplateResponse("fastapi/home.html", {
+            "request": request,
+            "json_content": proxmox
+        }
+    )
+                        
 
 @app.get("/proxmox/{top_level}")
 async def top_level_endpoint(

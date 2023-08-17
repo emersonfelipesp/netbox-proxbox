@@ -1,0 +1,22 @@
+[Unit]
+Description=Proxbox Service
+Documentation=https://docs.netbox.dev.br/
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+User=netbox
+Group=netbox
+#PIDFile=/var/tmp/netbox.pid
+WorkingDirectory=/opt/netbox
+
+ExecStart=/opt/netbox/venv/bin/uvicorn opt.netboxnetbox.netbox-proxbox.netbox_proxbox.main:app --reload --port 10000
+
+Restart=on-failure
+RestartSec=30
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
