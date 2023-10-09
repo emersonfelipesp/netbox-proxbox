@@ -21,9 +21,8 @@ from netbox_proxbox import proxbox_api
 import json
 
 from netbox import configuration
-
 from . import ProxboxConfig
-
+    
 import markdown
 from . import github
 
@@ -34,10 +33,13 @@ class HomeView(View):
     # service incoming GET HTTP requests
     def get(self, request):
         """Get request."""
-
+        
         plugin_configuration = configuration.PLUGINS_CONFIG
         default_config = ProxboxConfig.default_settings
-
+        
+        print("plugin_configuration: ", plugin_configuration, "\n\n")
+        print("default_config: ", default_config)
+        
         return render(
             request,
             self.template_name,

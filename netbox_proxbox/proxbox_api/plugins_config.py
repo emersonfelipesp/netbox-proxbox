@@ -19,6 +19,8 @@ try:
 except ImportError:
     DEFAULT_BASE_PATH = ''
 
+from utilities.exceptions import AbortRequest
+
 ####################################################################################################
 #                                                                                                  #
 #  DEFAULT VARIABLES DEFINED BY ProxboxConfig CLASS ON PROXBOX PLUGIN CONFIGURATION (__init__.py)  #
@@ -179,7 +181,8 @@ def get_proxmox_session(PROXMOX_SETTING):
             output['PROXMOX_SESSION'] = PROXMOX_SESSION
             return output
         except:
-            raise RuntimeError(f'Error trying to initialize Proxmox Session using USER {PROXMOX_USER} and PASSWORD')
+            
+            print(f'Error trying to initialize Proxmox Session using USER {PROXMOX_USER} and PASSWORD')
 
 for s in PROXMOX_SETTING:
     P_Setting = get_proxmox_session(s)
