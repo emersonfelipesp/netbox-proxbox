@@ -1,6 +1,6 @@
 # Python Framework
 """
-from typing import Annotated
+
 from typing import Callable
 
 
@@ -54,7 +54,9 @@ FASTAPI_HOST = "127.0.0.1"
 FASTAPI_PORT = "9000"
 """
 
-from fastapi import FastAPI
+from typing import Annotated
+
+from fastapi import Depends, FastAPI
 
 # Init FastAPI
 app = FastAPI()
@@ -69,7 +71,34 @@ async def root():
 
 # templates = Jinja2Templates(directory="/opt/netbox/netbox/netbox-proxbox/netbox_proxbox/templates/netbox_proxbox")
 
+@app.get("/netbox/plugins-config")
+async def netbox_plugins_config():
+    """
+    PLUGIN_CONFIG variable defined by user in Netbox 'configuration.py' file
+    """
 
+    from netbox.settings import PLUGINS_CONFIG
+    return PLUGINS_CONFIG
+
+@app.get("/proxbox/netbox/default-settings")
+async def proxbox_netbox_default():
+    """
+    Default Plugins settings 
+    """
+    
+    from netbox_proxbox import ProxboxConfig
+    return ProxboxConfig.default_settings
+
+@app.get("/proxbox/settings")
+async def proxbox_settings(
+    plugins_config: Annotated[dict, Depends(netbox_plugins_config)],
+    default_settings: Annotated[dict, Depends(proxbox_netbox_default)]
+):
+    return {
+        "plugins_config": plugins_config,
+        "default_settings": default_settings
+    }
+    
 
 @app.get("/standalone-info")
 async def standalone_info():
