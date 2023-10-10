@@ -56,7 +56,11 @@ FASTAPI_PORT = "9000"
 
 from typing import Annotated
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Query
+
+from pydantic import BaseModel
+
+PROXBOX_PLUGIN_NAME = "netbox_proxbox"
 
 # Init FastAPI
 app = FastAPI()
@@ -67,19 +71,65 @@ async def root():
     return {"message": "Hello World"}
 
 
+class ProxmoxToken(BaseModel):
+    name: str
+    value: str
+    
+class ProxmoxSession(BaseModel):
+    domain: str
+    http_port: int
+    user: str
+    password: str
+    token: ProxmoxToken
+
+class ProxmoxSessions(BaseModel):
+    sessions: list[ProxmoxSession]
+
+class NetboxSessionSettings(BaseModel):
+    virtualmachine_role_id: int
+    node_role_id: int
+    site_id: int
+    
+class NetboxSession(BaseModel):
+    domain: str
+    http_port: int
+    token: str
+    ssl: bool
+    settings: NetboxSessionSettings | None = None
+
 # app.mount("/static", StaticFiles(directory="/opt/netbox/netbox/netbox-proxbox/netbox_proxbox/static"), name="static")
 
 # templates = Jinja2Templates(directory="/opt/netbox/netbox/netbox-proxbox/netbox_proxbox/templates/netbox_proxbox")
 
 @app.get("/netbox/plugins-config")
-async def netbox_plugins_config():
+async def netbox_plugins_config(
+        plugin_name: str | None = PROXBOX_PLUGIN_NAME,
+        list_all: bool | None = None
+    ):
     """
     PLUGIN_CONFIG variable defined by user in Netbox 'configuration.py' file
     """
 
-    from netbox.settings import PLUGINS_CONFIG
-    return PLUGINS_CONFIG
-
+    try:
+        from netbox.settings import PLUGINS_CONFIG
+    except Exception as e:
+        return {
+            "error": {
+                "message": "Could not import PLUGINS CONFIG from configuration.py",
+                "python_exception": e
+            }
+        }
+        
+    if list_all:
+        return PLUGINS_CONFIG
+    
+    return PLUGINS_CONFIG.get(plugin_name, {
+            "error": {
+                "message": f"Could not get '{plugin_name}' plugin config from 'PLUGINS_CONFIG' variable located at Netbox 'configuration.py'"
+            }
+        }
+    )
+                            
 @app.get("/proxbox/netbox/default-settings")
 async def proxbox_netbox_default():
     """
