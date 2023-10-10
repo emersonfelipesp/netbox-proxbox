@@ -58,7 +58,7 @@ from typing import Annotated
 
 from fastapi import Depends, FastAPI, Query
 
-from pydantic import BaseModel
+from .backend.schemas import *
 
 PROXBOX_PLUGIN_NAME = "netbox_proxbox"
 
@@ -70,33 +70,6 @@ app = FastAPI()
 async def root():
     return {"message": "Hello World"}
 
-
-class ProxmoxToken(BaseModel):
-    name: str
-    value: str
-    
-class ProxmoxSession(BaseModel):
-    domain: str
-    http_port: int
-    user: str
-    password: str
-    token: ProxmoxToken
-
-class NetboxSessionSettings(BaseModel):
-    virtualmachine_role_id: int
-    node_role_id: int
-    site_id: int
-    
-class NetboxSession(BaseModel):
-    domain: str
-    http_port: int
-    token: str
-    ssl: bool
-    settings: NetboxSessionSettings | None = None
-
-class PluginConfig(BaseModel):
-    proxmox: list[ProxmoxSession]
-    netbox: NetboxSession
 
 # app.mount("/static", StaticFiles(directory="/opt/netbox/netbox/netbox-proxbox/netbox_proxbox/static"), name="static")
 
