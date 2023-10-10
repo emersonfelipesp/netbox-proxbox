@@ -1,24 +1,35 @@
 # Python Framework
+"""
 from typing import Annotated
+from typing import Callable
+
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from fastapi import APIRouter, FastAPI, Request, Response
+from fastapi.routing import APIRoute
 
 # NP import to use 'copy' array method
 import numpy as np
 
+import json
+import time
+"""
+
 # Proxmoxer lib (https://proxmoxer.github.io/)
-from proxmoxer import ProxmoxAPI, ResourceException
+# from proxmoxer import ProxmoxAPI, ResourceException
+
 
 # HTTP SSL handling
-import requests
-import urllib3
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+# import requests
+# import urllib3
+# urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-TOPLEVEL_ENDPOINTS = ["access", "cluster", "nodes", "pools", "storage", "version"]
+# TOPLEVEL_ENDPOINTS = ["access", "cluster", "nodes", "pools", "storage", "version"]
 
+"""
 # Proxbox
 from netbox_proxbox.proxbox_api.plugins_config import PROXMOX_SESSIONS, PROXMOX_SETTING
 
@@ -41,21 +52,24 @@ except Exception as error:
 
 FASTAPI_HOST = "127.0.0.1"
 FASTAPI_PORT = "9000"
-    
+"""
+
+from fastapi import FastAPI
+
 # Init FastAPI
 app = FastAPI()
 
-app.mount("/static", StaticFiles(directory="/opt/netbox/netbox/netbox-proxbox/netbox_proxbox/static"), name="static")
 
-templates = Jinja2Templates(directory="/opt/netbox/netbox/netbox-proxbox/netbox_proxbox/templates/netbox_proxbox")
+@app.get("/")
+async def root():
+    return {"message": "Hello World"}
 
-import time
-from typing import Callable
 
-from fastapi import APIRouter, FastAPI, Request, Response
-from fastapi.routing import APIRoute
+# app.mount("/static", StaticFiles(directory="/opt/netbox/netbox/netbox-proxbox/netbox_proxbox/static"), name="static")
 
-import json
+# templates = Jinja2Templates(directory="/opt/netbox/netbox/netbox-proxbox/netbox_proxbox/templates/netbox_proxbox")
+
+
 
 @app.get("/standalone-info")
 async def standalone_info():
@@ -72,6 +86,7 @@ async def standalone_info():
         }
     }
 
+"""
 @app.get("/proxmox")
 async def proxmox():
     
@@ -110,8 +125,9 @@ async def proxmox():
         },
         "base_endpoints": api_hierarchy
     }
+"""
 
-
+"""
 @app.get("/", response_class=HTMLResponse)
 async def root(
     request: Request,
@@ -125,7 +141,10 @@ async def root(
             "proxmox_str": json.dumps(proxmox_output, indent=4),
         }
     )
+"""
 
+
+"""
 @app.get("/netbox", response_class=HTMLResponse)
 async def netbox(
     request: Request,
@@ -136,8 +155,9 @@ async def netbox(
             "json_content": proxmox
         }
     )
-                        
+"""                     
 
+"""
 @app.get("/proxmox/{top_level}")
 async def top_level_endpoint(
     top_level: str | None = None,
@@ -156,8 +176,10 @@ async def top_level_endpoint(
         f"{top_level}": px(top_level).get(),
         "other_endpoints": other_endpoints,
     }
+"""
 
 
+"""
 @app.get("/proxmox/{top_level}/{second_level}")
 async def second_level_endpoint(
     top_level: str | None = None,
@@ -192,3 +214,4 @@ async def second_level_endpoint(
         }
         
     return json_obj
+"""

@@ -1,6 +1,6 @@
 [Unit]
-Description=Proxbox Service
-Documentation=https://docs.netbox.dev.br/
+Description=Proxbox Backend Service (FastAPI)
+Documentation=https://github.com/netdevopsbr/netbox-proxbox
 After=network-online.target
 Wants=network-online.target
 
@@ -9,10 +9,10 @@ Type=simple
 
 User=netbox
 Group=netbox
-#PIDFile=/var/tmp/netbox.pid
-WorkingDirectory=/opt/netbox
+PIDFile=/var/tmp/proxbox.pid
+WorkingDirectory=/opt/netbox/netbox/netbox-proxbox
 
-ExecStart=/opt/netbox/venv/bin/uvicorn opt.netboxnetbox.netbox-proxbox.netbox_proxbox.main:app --reload --port 10000
+ExecStart=/opt/netbox/venv/bin/uvicorn netbox-proxbox.netbox_proxbox.main:app --host 0.0.0.0 --port 8800 --app-dir /opt/netbox/netbox
 
 Restart=on-failure
 RestartSec=30
