@@ -98,18 +98,18 @@ if NETBOX_SETTINGS != None:
 
 PROXMOX_SESSIONS = {}
 
-def get_proxmox_session(PROXMOX_SETTING):
+def get_proxmox_session(proxmox_config):
     #
     # Proxmox related settings
     #
     # API URI
-    PROXMOX = PROXMOX_SETTING.get("domain", DEFAULT_PROXMOX)
-    PROXMOX_PORT = PROXMOX_SETTING.get("http_port", DEFAULT_PROXMOX_PORT)
-    PROXMOX_SSL = PROXMOX_SETTING.get("ssl", DEFAULT_PROXMOX_SSL)
+    PROXMOX = proxmox_config.get("domain", DEFAULT_PROXMOX)
+    PROXMOX_PORT = proxmox_config.get("http_port", DEFAULT_PROXMOX_PORT)
+    PROXMOX_SSL = proxmox_config.get("ssl", DEFAULT_PROXMOX_SSL)
 
     # ACCESS
-    PROXMOX_USER = PROXMOX_SETTING.get("user", DEFAULT_PROXMOX_USER)
-    PROXMOX_PASSWORD = PROXMOX_SETTING.get("password", DEFAULT_PROXMOX_PASSWORD)
+    PROXMOX_USER = proxmox_config.get("user", DEFAULT_PROXMOX_USER)
+    PROXMOX_PASSWORD = proxmox_config.get("password", DEFAULT_PROXMOX_PASSWORD)
 
     output = {
         'PROXMOX': PROXMOX,
@@ -120,7 +120,7 @@ def get_proxmox_session(PROXMOX_SETTING):
         'PROXMOX_TOKEN_VALUE': None
     }
 
-    PROXMOX_TOKEN = PROXMOX_SETTING.get("token", DEFAULT_PROXMOX_TOKEN)
+    PROXMOX_TOKEN = proxmox_config.get("token", DEFAULT_PROXMOX_TOKEN)
     if PROXMOX_PASSWORD is None and PROXMOX_TOKEN is not  None:
         PROXMOX_TOKEN_NAME = PROXMOX_TOKEN.get("name", DEFAULT_PROXMOX_TOKEN_NAME)
         PROXMOX_TOKEN_VALUE = PROXMOX_TOKEN.get("value", DEFAULT_PROXMOX_TOKEN_VALUE)
