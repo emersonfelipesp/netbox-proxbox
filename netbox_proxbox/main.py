@@ -105,7 +105,7 @@ async def proxbox_settings(
     return plugins_config
 
 @app.get("/proxbox/settings/{app}")
-async def proxbox_settings(
+async def app_settings(
     proxbox_config: Annotated[PluginConfig, Depends(proxbox_settings)],
     app: str
 ):
