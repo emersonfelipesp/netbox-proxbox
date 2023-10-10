@@ -98,7 +98,7 @@ if NETBOX_SETTINGS != None:
 
 PROXMOX_SESSIONS = {}
 
-def get_proxmox_session(proxmox_config):
+def get_proxmox_session(proxmox_config, raise_for_error=True):
     #
     # Proxmox related settings
     #
@@ -121,15 +121,14 @@ def get_proxmox_session(proxmox_config):
     }
 
     PROXMOX_TOKEN = proxmox_config.get("token", DEFAULT_PROXMOX_TOKEN)
-    if PROXMOX_PASSWORD is None and PROXMOX_TOKEN is not  None:
+    if PROXMOX_TOKEN is not None:
         PROXMOX_TOKEN_NAME = PROXMOX_TOKEN.get("name", DEFAULT_PROXMOX_TOKEN_NAME)
         PROXMOX_TOKEN_VALUE = PROXMOX_TOKEN.get("value", DEFAULT_PROXMOX_TOKEN_VALUE)
         output["PROXMOX_TOKEN"] = PROXMOX_TOKEN
         output["PROXMOX_TOKEN_NAME"] = PROXMOX_TOKEN_NAME
         output["PROXMOX_TOKEN_VALUE"] = PROXMOX_TOKEN_VALUE
-    else:
-        PROXMOX_TOKEN_NAME = None
-        PROXMOX_TOKEN_VALUE = None
+
+    _auth_id = f"{PROXMOX}:{PROXMOX_PORT}/{PROXMOX_USER}"
 
     ####################################################################################################
     #                                                                                                  #
@@ -157,13 +156,14 @@ def get_proxmox_session(proxmox_config):
                 token_value=PROXMOX_TOKEN_VALUE,
                 verify_ssl=PROXMOX_SSL
             )
+        except:
+            print(f'Error trying to initialize Proxmox ({_auth_id}) Session using TOKEN')
+        else:
             output['PROXMOX_SESSION'] = PROXMOX_SESSION
             return output
-        except:
-            raise RuntimeError(f'Error trying to initialize Proxmox Session using TOKEN (token_name: {PROXMOX_TOKEN_NAME} and token_value: {PROXMOX_TOKEN_VALUE} provided')
 
-    # If token not provided, start session using user and passwd
-    else:
+    # start session using user and passwd
+    if PROXMOX_PASSWORD is not None and len(PROXMOX_PASSWORD) > 0:
         try:
             if PROXMOX_SSL == False:
                 # DISABLE SSL WARNING
@@ -178,11 +178,14 @@ def get_proxmox_session(proxmox_config):
                 password=PROXMOX_PASSWORD,
                 verify_ssl=PROXMOX_SSL
             )
+        except:
+            print(f'Error trying to initialize Proxmox ({_auth_id}) Session using PASSWORD')
+        else:
             output['PROXMOX_SESSION'] = PROXMOX_SESSION
             return output
-        except:
-            
-            print(f'Error trying to initialize Proxmox Session using USER {PROXMOX_USER} and PASSWORD')
+
+    if raise_for_error:
+        raise RuntimeError(f'Error establishing connection with Proxmox ({_auth_id}) instance')
 
 for s in PROXMOX_SETTING:
     P_Setting = get_proxmox_session(s)
