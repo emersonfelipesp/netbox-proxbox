@@ -93,13 +93,30 @@ async def proxbox_netbox_default():
 @app.get("/proxbox/settings")
 async def proxbox_settings(
     plugins_config: Annotated[PluginConfig, Depends(netbox_plugins_config)],
-    default_settings: Annotated[PluginConfig, Depends(proxbox_netbox_default)]
+    default_settings: Annotated[PluginConfig, Depends(proxbox_netbox_default)],
+    list_all: bool | None = False
 ):
-    return {
-        "plugins_config": plugins_config,
-        "default_settings": default_settings
-    }
-    
+    if list_all:
+        return {
+            "plugins_config": plugins_config,
+            "default_settings": default_settings
+        }
+    print(plugins_config)
+    return plugins_config
+
+@app.get("/proxbox/settings/{app}")
+async def proxbox_settings(
+    proxbox_config: Annotated[PluginConfig, Depends(proxbox_settings)],
+    app: str
+):
+    """
+    Get user configuration for each application (Netbox or Proxmox)
+    """
+
+    if app == "netbox": return proxbox_config.netbox
+    elif app == "proxmox": return proxbox_config.proxmox
+    else: return {"error": {"message": f"Query parameter '{app}' is invalid. Must be string 'proxmox' or 'netbox'. e.g. /proxbox/settings/netbox"}}
+
 
 @app.get("/standalone-info")
 async def standalone_info():

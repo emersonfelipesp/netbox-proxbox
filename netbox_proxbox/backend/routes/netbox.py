@@ -10,7 +10,7 @@ PROXBOX_PLUGIN_NAME = "netbox_proxbox"
 @router.get("/plugins-config")
 async def netbox_plugins_config(
         plugin_name: str | None = PROXBOX_PLUGIN_NAME,
-        list_all: bool | None = None
+        list_all: bool | None = False
     ):
     """
     PLUGIN_CONFIG variable defined by user in Netbox 'configuration.py' file
