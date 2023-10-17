@@ -1,13 +1,13 @@
 from pydantic import BaseModel
 
-class NetboxSessionSettings(BaseModel):
+class NetboxSessionSettingsSchema(BaseModel):
     virtualmachine_role_id: int
     node_role_id: int
     site_id: int
     
-class NetboxSession(BaseModel):
+class NetboxSessionSchema(BaseModel):
     domain: str
     http_port: int
     token: str
     ssl: bool
-    settings: NetboxSessionSettings | None = None
+    settings: NetboxSessionSettingsSchema | None = None

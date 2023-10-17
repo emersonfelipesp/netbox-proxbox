@@ -1,70 +1,35 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+
+from typing import Annotated, Any
 
 from netbox_proxbox.backend.schemas import PluginConfig
-from netbox_proxbox.backend.schemas.netbox import *
+from netbox_proxbox.backend.schemas.netbox import NetboxSessionSchema
+from netbox_proxbox.backend.session.netbox import NetboxSession
+from netbox_proxbox.backend.routes.proxbox import netbox_settings
 
 router = APIRouter()
 
-PROXBOX_PLUGIN_NAME = "netbox_proxbox"
-
-@router.get("/plugins-config")
-async def netbox_plugins_config(
-        plugin_name: str | None = PROXBOX_PLUGIN_NAME,
-        list_all: bool | None = False
-    ):
-    """
-    PLUGIN_CONFIG variable defined by user in Netbox 'configuration.py' file
-    """
-
-    try:
-        from netbox.settings import PLUGINS_CONFIG
-    except Exception as e:
-        return {
-            "error": {
-                "message": "Could not import PLUGINS CONFIG from configuration.py",
-                "python_exception": f"{e}"
-            }
-        }
-
-    # If ?list=all=True
-    # Return complete PLUGINS_CONFIG (including other plugins)
-    if list_all:
-        return PLUGINS_CONFIG
+@router.get("/")
+async def netbox(
+    netbox_settings: Annotated[NetboxSessionSchema, Depends(netbox_settings)],
+):
     
-    # Message error to not found plugins.
-    plugin_not_found = f"Could not get '{plugin_name}' plugin config from 'PLUGINS_CONFIG' variable located at Netbox 'configuration.py'"
-    
-    # Search for configuration of another plugin. This feature is not recommended and may cause security issues, use at your own risk.
-    if plugin_name != PROXBOX_PLUGIN_NAME:
-        return PLUGINS_CONFIG.get(plugin_name, {
-                    "error": {
-                        "message": plugin_not_found
-                    }
-                }
-            )       
-        
-    try:
-        return PluginConfig(**PLUGINS_CONFIG.get(plugin_name, {
-                    "error": {
-                        "message": plugin_not_found
-                    }
-                }
-            )
-        )
-        
-    except Exception as e:
-        return {
-                "error": {
-                    "message": "Plugin configuration at PLUGINS_CONFIG (configuration.py) is probably incorrect.",
-                    "detail": "Could not feed 'PluginConfig' pydantic model with config provided from 'PLUGINS_CONFIG'.",
-                    "python_exception": f"{e}",
-            }
-        }
-        
+    return NetboxSession(netbox_settings)
 
-    return PLUGINS_CONFIG.get(plugin_name, {
-            "error": {
-                "message": f"Could not get '{plugin_name}' plugin config from 'PLUGINS_CONFIG' variable located at Netbox 'configuration.py'"
-            }
-        }
-    )
+@router.get("/status")
+async def netbox_status(
+    nb: Annotated[Any, Depends(netbox)]
+):
+    return nb.nb_session.status()
+
+@router.get("/devices")
+async def netbox_devices(nb: Annotated[Any, Depends(netbox)]):
+    "Return a list of all devices registered on Netbox."
+    raw_list = []
+    
+    device_list = nb.nb_session.dcim.device_roles.all()
+    for device in device_list:
+        raw_list.append(device)
+    
+    return raw_list
+    

@@ -1,7 +1,7 @@
 from pydantic import BaseModel
-from .netbox import *
-from .proxmox import *
+from .netbox import NetboxSessionSchema
+from .proxmox import ProxmoxSessionSchema
 
 class PluginConfig(BaseModel):
-    proxmox: list[ProxmoxSession]
-    netbox: NetboxSession
+    proxmox: list[ProxmoxSessionSchema]
+    netbox: NetboxSessionSchema
