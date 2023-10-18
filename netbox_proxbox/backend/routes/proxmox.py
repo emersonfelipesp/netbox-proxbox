@@ -2,9 +2,7 @@
 from fastapi import APIRouter, Depends
 
 
-
-#from netbox_proxbox.backend.schemas import PluginConfig
-#from netbox_proxbox.backend.schemas.netbox import *
+from netbox_proxbox.backend.session.netbox import ProxmoxSession
 
 router = APIRouter()
 
