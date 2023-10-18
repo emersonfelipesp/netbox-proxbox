@@ -9,21 +9,24 @@ from netbox_proxbox.backend.routes.proxbox import netbox_settings
 
 router = APIRouter()
 
-@router.get("/")
-async def netbox(
+
+
+async def netbox_session(
     netbox_settings: Annotated[NetboxSessionSchema, Depends(netbox_settings)],
 ):
-    
-    return NetboxSession(netbox_settings)
+    """Instantiate 'NetboxSession' class with user parameters and return Netbox  HTTP connection to make API calls"""
+    return NetboxSession(netbox_settings).session
+
+NetboxSessionDep = Annotated[Any, Depends(netbox_session)]
 
 @router.get("/status")
 async def netbox_status(
-    nb: Annotated[Any, Depends(netbox)]
+    nb: NetboxSessionDep
 ):
-    return nb.nb_session.status()
+    return nb.status()
 
 @router.get("/devices")
-async def netbox_devices(nb: Annotated[Any, Depends(netbox)]):
+async def netbox_devices(nb: NetboxSessionDep):
     "Return a list of all devices registered on Netbox."
     raw_list = []
     
@@ -32,4 +35,17 @@ async def netbox_devices(nb: Annotated[Any, Depends(netbox)]):
         raw_list.append(device)
     
     return raw_list
-    
+
+@router.get("/openapi")
+async def netbox_devices(nb: NetboxSessionDep):
+    return nb.openapi()
+
+@router.get("/")
+async def netbox(
+    status: Annotated[Any, Depends(netbox_status)],
+    config: Annotated[Any, Depends(netbox_settings)]
+):
+    return {
+        "config": config,
+        "status": status
+    }

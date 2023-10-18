@@ -20,7 +20,7 @@ class NetboxSession:
         self.ssl = netbox_settings.ssl
         self.settings = netbox_settings.settings
         
-        self.nb_session = self.connection()
+        self.session = self.connection()
         
     def connection(self):
         print("Establish Netbox connection...")
@@ -37,11 +37,6 @@ class NetboxSession:
             # DISABLES SSL VERIFICATION
             netbox_session.http_session = session
             
-            devices = netbox_session.dcim.devices.all()
-            for device in devices:
-                print(device)
-
-            print(netbox_session)
             return netbox_session
         
         except Exception as error:
