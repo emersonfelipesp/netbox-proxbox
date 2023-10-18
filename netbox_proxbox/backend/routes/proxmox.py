@@ -24,7 +24,7 @@ async def proxmox():
                 for obj in result:
                     endpoint_list.append(obj.get("name"))
                 
-        return endpoint_list
+        return endpoint_listp
     
     api_hierarchy = {
         "access": minimize_result("access"),

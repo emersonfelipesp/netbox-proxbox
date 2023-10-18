@@ -15,7 +15,7 @@ async def netbox_session(
     netbox_settings: Annotated[NetboxSessionSchema, Depends(netbox_settings)],
 ):
     """Instantiate 'NetboxSession' class with user parameters and return Netbox  HTTP connection to make API calls"""
-    return NetboxSession(netbox_settings).session
+    return await NetboxSession(netbox_settings).pynetbox()
 
 NetboxSessionDep = Annotated[Any, Depends(netbox_session)]
 

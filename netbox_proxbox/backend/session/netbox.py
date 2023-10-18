@@ -1,4 +1,6 @@
+import aiohttp
 import requests
+
 # Netbox
 import pynetbox
 
@@ -20,9 +22,7 @@ class NetboxSession:
         self.ssl = netbox_settings.ssl
         self.settings = netbox_settings.settings
         
-        self.session = self.connection()
-        
-    def connection(self):
+    async def pynetbox(self):
         print("Establish Netbox connection...")
         try:
             # CHANGE SSL VERIFICATION TO FALSE
@@ -42,4 +42,7 @@ class NetboxSession:
         except Exception as error:
             raise RuntimeError(f"Error trying to initialize Netbox Session using TOKEN {self.token} provided.\nPython Error: {error}")
         
-        
+    async def aiohttp(self):
+        # Future Development. We're currently use pynetbox.
+        pass
+    
