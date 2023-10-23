@@ -56,7 +56,11 @@ FASTAPI_PORT = "9000"
 
 from typing import Annotated
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+
+from netbox_proxbox.backend.exception import ProxboxException
+
 from .backend.routes.netbox import (
     router as netbox_router
 )
@@ -74,6 +78,17 @@ PROXBOX_PLUGIN_NAME = "netbox_proxbox"
 # Init FastAPI
 app = FastAPI()
 
+@app.exception_handler(ProxboxException)
+async def proxmoxer_exception_handler(request: Request, exc: ProxboxException):
+    return JSONResponse(
+        status_code=400,
+        content={
+            "message": exc.message,
+            "detail": exc.detail,
+            "python_exception": exc.python_exception,
+        }
+    )
+    
 # Routes (Endpoints)
 app.include_router(netbox_router, prefix="/netbox", tags=["netbox"])
 app.include_router(proxbox_router, prefix="/proxbox", tags=["proxbox"])

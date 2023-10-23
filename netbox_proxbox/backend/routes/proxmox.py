@@ -1,10 +1,52 @@
 
 from fastapi import APIRouter, Depends
 
+from typing import Annotated, Any
 
-from netbox_proxbox.backend.session.netbox import ProxmoxSession
+from netbox_proxbox.backend.schemas.proxmox import ProxmoxSessionSchema
+from netbox_proxbox.backend.routes.proxbox import proxmox_settings
+from netbox_proxbox.backend.session.proxmox import ProxmoxSession
+from netbox_proxbox.backend.exception import ProxboxException
 
 router = APIRouter()
+
+async def proxmox_session(
+    proxmox_settings: Annotated[ProxmoxSessionSchema, Depends(proxmox_settings)],
+):
+    proxmox_session_obj = []
+    
+    try:
+        for cluster in proxmox_settings:
+            proxmox_session_obj.append(
+                await ProxmoxSession(cluster).proxmoxer()
+            )
+        
+        return proxmox_session_obj
+    except Exception as error:
+        print(f"Exception error: {error}")
+        raise ProxboxException(
+            message = "Could not return Proxmox Sessions connections based on user-provided parameters",
+            python_exception = f"{error}"
+        )
+
+# Make Session reusable
+ProxmoxSessionDep = Annotated[Any, Depends(proxmox_session)]
+    
+@router.get("/version")
+async def proxmox_version(
+    px_sessions: ProxmoxSessionDep
+):
+    response = []
+    
+    print(f"{px_sessions}")
+    return f"{px_sessions}"
+
+    for px in px_sessions:
+        print("PX type equal to: ", type(px))
+        response.append(px.version.get())
+    
+    return response
+    
 
 @router.get("/")
 async def proxmox():
@@ -22,7 +64,7 @@ async def proxmox():
                 for obj in result:
                     endpoint_list.append(obj.get("name"))
                 
-        return endpoint_listp
+        return endpoint_list
     
     api_hierarchy = {
         "access": minimize_result("access"),

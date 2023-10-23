@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 
 from netbox_proxbox.backend.schemas import PluginConfig
 from netbox_proxbox.backend.schemas.netbox import NetboxSessionSchema
+from netbox_proxbox.backend.schemas.proxmox import ProxmoxSessionSchema
 router = APIRouter()
 
 PROXBOX_PLUGIN_NAME = "netbox_proxbox"
