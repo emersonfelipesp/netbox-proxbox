@@ -97,10 +97,20 @@ async def proxmox(
 
 TOPLEVEL_ENDPOINTS = ["access", "cluster", "nodes", "pools", "storage", "version"]
 
+from enum import Enum
+
+class ProxmoxUpperPaths(str, Enum):
+    access = "access"
+    cluster = "cluster"
+    nodes = "nodes"
+    storage = "storage"
+    version = "version"
+
+
 @router.get("/{top_level}")
 async def top_level_endpoint(
     px_sessions: ProxmoxSessionDep,
-    top_level: str | None = None,
+    top_level: ProxmoxUpperPaths,
 ):
     # Get only a Proxmox Cluster
     px = px_sessions[0]
@@ -126,6 +136,7 @@ async def second_level_endpoint(
     top_level: str,
     second_level: str,
     mode: str = "multi",
+    type: str | None = None,
 ):
     if top_level not in TOPLEVEL_ENDPOINTS:
         return {
