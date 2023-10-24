@@ -27,6 +27,8 @@ class ProxmoxSession:
         print(self.token_name)
         print(self.token_value)
 
+    def __repr__(self):
+        return f"Proxmox Connection Object. URL: {domain}:{http_port}"
 
     async def token_auth(self):
         error_message = f"Error trying to initialize Proxmox API connection using TOKEN NAME '{self.token_name}' and TOKEN_VALUE provided",
@@ -37,12 +39,25 @@ class ProxmoxSession:
             proxmox_session = ProxmoxAPI(
                 self.domain,
                 port=self.http_port,
+                user=self.user,
                 token_name=self.token_name,
                 token_value=self.token_value,
                 verify_ssl=self.ssl
             )
             
+            try:
+                print(f"Testing Proxmox session 123:")
+                print(f"{proxmox_session}\n{proxmox_session.version.get()}")
+                
+            except Exception as error:
+                ProxboxException(
+                    message = "Testing Proxmox connection failed.",
+                    detail = "Unkown error.",
+                    python_exception = f"{error}",
+                )
+            
             return proxmox_session
+        
         except ResourceException as error:
             raise ProxboxException(
                 message = error_message,
@@ -59,6 +74,8 @@ class ProxmoxSession:
 
 
     async def password_auth(self):
+        error_message = f'Error trying to initialize Proxmox API connection using USER {self.user} and PASSWORD provided',
+        
         try:
             # Start PROXMOX session using USER CREDENTIALS
             print("Using password authenticate with Proxmox")
@@ -70,16 +87,21 @@ class ProxmoxSession:
                 verify_ssl=self.ssl
             )
             
+            return proxmox_session
+            
+        except ResourceException as error:
+            raise ProxboxException(
+                message = error_message,
+                detail = "'ResourceException' from proxmoxer lib raised.",
+                python_exception = f"{error}"
+            )
+
         except Exception as error:
-            raise RuntimeError()
-        except Exception as error:
-            return {
-                "error": {
-                    "message": f'Error trying to initialize Proxmox Session using USER {self.user} and PASSWORD provided',
-                    "detail": "Not able to establish Proxmox API connection using password provided by the user.",
-                    "python_exception": f"{error}",
-                }
-            }
+            raise ProxboxException(
+                message = error_message,
+                detail = "Unknown error.",
+                python_exception = f"{error}"
+            )
 
     async def proxmoxer(self):
         print("Establish Proxmox connection...")
@@ -95,25 +117,7 @@ class ProxmoxSession:
         
         else:
             px = await self.password_auth()
-        
-        try:
-            px.version.get()
-        except ResourceException as error:
-            raise ProxboxException(
-                message = "Testing Proxmox connection failed. Proxmoxer 'ResourceException' raised.",
-                detail = "After instianting connection from 'ProxmoxAPI', testing the communication failed.",
-                python_exception = f"{error}",
-            )
 
-        except Exception as error:
-            return {
-                "error": {
-                    "message": "Testing Proxmox connection failed.",
-                    "detail": "Unkown error.",
-                    "python_exception": f"{error}",
-            }
-        }
-        
         return px
             
         

@@ -1,7 +1,9 @@
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from typing import Annotated, Any
+
+from proxmoxer.core import ResourceException
 
 from netbox_proxbox.backend.schemas.proxmox import ProxmoxSessionSchema
 from netbox_proxbox.backend.routes.proxbox import proxmox_settings
@@ -49,7 +51,10 @@ async def proxmox_version(
     
 
 @router.get("/")
-async def proxmox():
+async def proxmox(
+    px_sessions: ProxmoxSessionDep
+):
+    return_list = []
     
     def minimize_result(endpoint_name):
         endpoint_list = []
@@ -66,14 +71,17 @@ async def proxmox():
                 
         return endpoint_list
     
-    api_hierarchy = {
-        "access": minimize_result("access"),
-        "cluster": minimize_result("cluster"),
-        "nodes": px.nodes.get(),
-        "pools": px.pools.get(),
-        "storage": px.storage.get(),
-        "version": px.version.get(),
-    }
+    for px in px_sessions:  
+        api_hierarchy = {
+            "access": minimize_result("access"),
+            "cluster": minimize_result("cluster"),
+            "nodes": px.nodes.get(),
+            "pools": px.pools.get(),
+            "storage": px.storage.get(),
+            "version": px.version.get(),
+        }
+        
+        return_list.append(api_hierarchy)
 
     return {
         "message": "Proxmox API",
@@ -84,30 +92,19 @@ async def proxmox():
             "proxmoxer": "https://github.com/proxmoxer/proxmoxer",
             "proxbox": "https://github.com/netdevopsbr/netbox-proxbox"
         },
-        "base_endpoints": api_hierarchy
+        "clusters": return_list
     }
 
-"""
-# Import Proxmox Session Config
-from .proxbox import app_settings
+TOPLEVEL_ENDPOINTS = ["access", "cluster", "nodes", "pools", "storage", "version"]
 
-@router.get("/session")
-async def proxmox_session(
-    app: str = "proxmox",
-    PROXMOX_CONFIG =  Depends(app_settings),
-):
-    print(app)
-    # Import lib to run Proxmox communication
-    from proxmoxer import ProxmoxAPI
-
-    return PROXMOX_CONFIG
-"""
-
-"""
 @router.get("/{top_level}")
 async def top_level_endpoint(
+    px_sessions: ProxmoxSessionDep,
     top_level: str | None = None,
 ):
+    # Get only a Proxmox Cluster
+    px = px_sessions[0]
+    
     if top_level not in TOPLEVEL_ENDPOINTS:
         return {
             "message": f"'{top_level}' is not a valid endpoint/path name.",
@@ -123,69 +120,61 @@ async def top_level_endpoint(
         "other_endpoints": other_endpoints,
     }
 
-
 @router.get("/{top_level}/{second_level}")
 async def second_level_endpoint(
-    top_level: str | None = None,
-    second_level: str | None = None,
-    type: str | None = None,
-    id: str | None = None,
+    px_sessions: ProxmoxSessionDep,
+    top_level: str,
+    second_level: str,
+    mode: str = "multi",
 ):
     if top_level not in TOPLEVEL_ENDPOINTS:
         return {
             "message": f"'{top_level}' is not a valid endpoint/path name.",
             "valid_names": TOPLEVEL_ENDPOINTS,
         }
-
-    json_obj = {f"{top_level}": {}}
+        
+        
+    async def single_cluster(px):
+        json_obj = {f"{top_level}": {}}
     
-    try:
-        path = f"{top_level}/{second_level}"
+        try:
+            path = f"{top_level}/{second_level}"
+            
+            # HTTP request through proxmoxer lib
+            if path == "cluster/resources" and type != None:
+                result = px(path).get(type = type)
+            else:
+                result = px(path).get()
+            
+            # Feed JSON result
+            json_obj[top_level][second_level] = result
+            
+            return json_obj
+            
+        except ResourceException as error:
+            raise ProxboxException(
+                message =  f"Path {path} does not exist.",
+                python_exception = f"{error}"
+            )
+
+
+    async def multi_cluster(px_sessions):
+        clusters_response = []
         
-        # HTTP request through proxmoxer lib
-        if path == "cluster/resources" and type != None:
-            result = px(path).get(type = type)
-        else:
-            result = px(path).get()
+        for px in px_sessions:
+            clusters_response.append(await single_cluster(px))
         
-        # Feed JSON result
-        json_obj[top_level][second_level] = result
+        return clusters_response
+
+
+    if mode == "multi":
+        return await multi_cluster(px_sessions) 
+    
+    if mode == "single":
+        raise HTTPException(
+                status_code=501,
+                detail="Single-cluster API call not implemented yet."
+            )
         
-    except ResourceException as error:
-        return {
-            "message": f"Path {path} does not exist.",
-            "error": error
-        }
-        
+    
     return json_obj
-"""
-
-"""
-@app.get("/netbox", response_class=HTMLResponse)
-async def netbox(
-    request: Request,
-    proxmox: Annotated[dict, Depends(root)]
-):
-    return templates.TemplateResponse("fastapi/home.html", {
-            "request": request,
-            "json_content": proxmox
-        }
-    )
-"""
-
-
-"""
-@app.get("/", response_class=HTMLResponse)
-async def root(
-    request: Request,
-    json_content: Annotated[dict, Depends(standalone_info)],
-    proxmox_output: Annotated[dict, Depends(proxmox)]
-):
-    return templates.TemplateResponse("fastapi/home.html", {
-            "request": request,
-            "json_content": json_content,
-            "proxmox": proxmox_output,
-            "proxmox_str": json.dumps(proxmox_output, indent=4),
-        }
-    )
-"""
