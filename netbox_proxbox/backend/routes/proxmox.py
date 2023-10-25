@@ -138,9 +138,16 @@ async def cluster_resources(
         ClusterResourcesType, 
         Query(
             title="Proxmox Resource Type",
-            description="Type of Proxmox resource to return (ex. 'vm' return QEMU Virtual Machines).",)
-        ],
-    mode: ProxmoxModeOptions = "multi",
+            description="Type of Proxmox resource to return (ex. 'vm' return QEMU Virtual Machines).",
+        )
+    ],
+    mode: Annotated[
+        ProxmoxModeOptions,
+        Query(
+            title="Proxmox Cluster Mode",
+            description="Defines if the API call will be made to a single cluster or to all clusters.",
+        )
+    ] = "multi"
 ):
     json_response = {}
     if mode == "multi":
@@ -161,6 +168,12 @@ async def cluster_resources(
                     python_exception = f"{error}"
                 )
                 
+    if mode == "single":
+        raise HTTPException(
+                status_code=501,
+                detail="Single-cluster API call not implemented yet."
+            )
+
     return json_response
 
 '''
