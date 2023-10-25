@@ -1,14 +1,16 @@
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from fastapi.exceptions import ResponseValidationError, ValidationException
 
 from typing import Annotated, Any
 
 from proxmoxer.core import ResourceException
 
-from netbox_proxbox.backend.schemas.proxmox import ProxmoxSessionSchema
+from netbox_proxbox.backend.schemas.proxmox import *
 from netbox_proxbox.backend.routes.proxbox import proxmox_settings
 from netbox_proxbox.backend.session.proxmox import ProxmoxSession
 from netbox_proxbox.backend.exception import ProxboxException
+from netbox_proxbox.backend.enum.proxmox import *
 
 router = APIRouter()
 
@@ -95,16 +97,7 @@ async def proxmox(
         "clusters": return_list
     }
 
-TOPLEVEL_ENDPOINTS = ["access", "cluster", "nodes", "pools", "storage", "version"]
 
-from enum import Enum
-
-class ProxmoxUpperPaths(str, Enum):
-    access = "access"
-    cluster = "cluster"
-    nodes = "nodes"
-    storage = "storage"
-    version = "version"
 
 
 @router.get("/{top_level}")
@@ -130,19 +123,64 @@ async def top_level_endpoint(
         "other_endpoints": other_endpoints,
     }
 
+async def get_cluster_name(px):
+    cluster_status_list = px("cluster/status").get()
+    
+    for item in cluster_status_list:
+        if item.get("type") == "cluster":
+            return item.get("name")
+    
+
+@router.get("/cluster/resources", response_model=ClusterResourcesList)
+async def cluster_resources(
+    px_sessions: ProxmoxSessionDep,
+    type: Annotated[
+        ClusterResourcesType, 
+        Query(
+            title="Proxmox Resource Type",
+            description="Type of Proxmox resource to return (ex. 'vm' return QEMU Virtual Machines).",)
+        ],
+    mode: ProxmoxModeOptions = "multi",
+):
+    json_response = {}
+    if mode == "multi":
+        
+        for px in px_sessions:
+            
+            try:
+                print("Testing Resources/Cluster")
+                cluster_name = await get_cluster_name(px)
+                print(cluster_name)
+
+                cluster_resources_response = px("cluster/resources").get(type = "vm")
+                json_response[cluster_name] = cluster_resources_response
+ 
+            except ResponseValidationException as error:
+                raise ProxboxException(
+                    message = f"Could not validate data returned by Proxmox API (path: cluster/resources)",
+                    python_exception = f"{error}"
+                )
+                
+    return json_response
+
+'''
+@router.get("/cluster/{cluster_paths}")
+async def cluster_paths(
+    px_sessions: ProxmoxSessionDep,
+    cluster_paths: ProxmoxClusterPaths,
+    mode: ProxmoxModeOptions = "multi",
+):
+    pass
+'''
+
 @router.get("/{top_level}/{second_level}")
 async def second_level_endpoint(
     px_sessions: ProxmoxSessionDep,
-    top_level: str,
+    top_level: ProxmoxUpperPaths,
     second_level: str,
-    mode: str = "multi",
+    mode: ProxmoxModeOptions = "multi",
     type: str | None = None,
 ):
-    if top_level not in TOPLEVEL_ENDPOINTS:
-        return {
-            "message": f"'{top_level}' is not a valid endpoint/path name.",
-            "valid_names": TOPLEVEL_ENDPOINTS,
-        }
         
         
     async def single_cluster(px):

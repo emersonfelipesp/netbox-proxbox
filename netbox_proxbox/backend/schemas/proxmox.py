@@ -1,4 +1,8 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, RootModel
+
+from typing import List, Dict
+
+from netbox_proxbox.backend.enum.proxmox import ResourceType
 
 class ProxmoxTokenSchema(BaseModel):
     name: str
@@ -12,22 +16,27 @@ class ProxmoxSessionSchema(BaseModel):
     token: ProxmoxTokenSchema
     ssl: bool
     
-    """
-    model_config = {
-        "json_schema_extra": {
-            "examples": [
-                {
-                    'domain': 'proxbox2.example.com',
-                    'http_port': 8006,
-                    'user': 'root@pam',
-                    'password': 'Strong@P4ssword',
-                    'token': {
-                        'name': 'tokenID',
-                        'value': '039az154-23b2-4be0-8d20-b66abc8c4686'
-                    },
-                    'ssl': False
-                }
-            ]
-        }
-    }
-    """
+class Resources(BaseModel):
+    cgroup_mode: int = None
+    content: str = None
+    cpu: float = None
+    disk: int = None
+    hastate: str = None
+    id: str
+    level: str = None
+    maxcpu: float = None
+    maxdisk: int = None
+    maxmem: int = None
+    mem: int = None
+    name: str = None
+    node: str = None
+    plugintype: str = None
+    pool: str = None
+    status: str = None
+    storage: str = None
+    type: ResourceType
+    uptime: int = None
+    vmid: int = None
+
+ResourcesList = RootModel[List[Resources]]
+ClusterResourcesList = RootModel[Dict[str, ResourcesList]]
