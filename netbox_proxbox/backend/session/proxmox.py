@@ -1,7 +1,12 @@
+from fastapi import Depends
+from typing import Annotated
+
 # Proxmox
 from proxmoxer import ProxmoxAPI
 from proxmoxer.core import ResourceException
 
+from netbox_proxbox.backend.routes.proxbox import proxmox_settings
+from netbox_proxbox.backend.schemas.proxmox import ProxmoxSessionSchema
 from netbox_proxbox.backend.exception import ProxboxException
 
 #from netbox_proxbox.backend.schemas.proxmox import ProxmoxSessionSchema
@@ -10,19 +15,22 @@ from netbox_proxbox.backend.exception import ProxboxException
 # PROXMOX SESSION
 #
 class ProxmoxSession:
-    def __init__(self, proxmox_settings):
+    def __init__(
+        self,
+        cluster_config
+    ):
         #proxmox_settings = proxmox_settings.json()
         
-        proxmox_settings = proxmox_settings.dict()
-        print(proxmox_settings, type(proxmox_settings))
+        cluster_config = cluster_config.dict()
+        print(cluster_config, type(cluster_config))
     
-        self.domain = proxmox_settings["domain"]
-        self.http_port = proxmox_settings["http_port"]
-        self.user = proxmox_settings["user"]
-        self.password = proxmox_settings["password"]
-        self.token_name = proxmox_settings["token"]["name"]
-        self.token_value = proxmox_settings["token"]["value"]
-        self.ssl = proxmox_settings["ssl"]
+        self.domain = cluster_config["domain"]
+        self.http_port = cluster_config["http_port"]
+        self.user = cluster_config["user"]
+        self.password = cluster_config["password"]
+        self.token_name = cluster_config["token"]["name"]
+        self.token_value = cluster_config["token"]["value"]
+        self.ssl = cluster_config["ssl"]
         
         print(self.token_name)
         print(self.token_value)
@@ -46,8 +54,8 @@ class ProxmoxSession:
             )
             
             try:
-                print(f"Testing Proxmox session 123:")
-                print(f"{proxmox_session}\n{proxmox_session.version.get()}")
+                
+                proxmox_session.version.get()
                 
             except Exception as error:
                 ProxboxException(
@@ -121,4 +129,61 @@ class ProxmoxSession:
         return px
             
         
+class ProxmoxSessions:
+    def __init__(
+        self,
+        proxmox_settings: Annotated[ProxmoxSessionSchema, Depends(proxmox_settings)],
+    ):
+        self.proxmox_settings = proxmox_settings
+    
+        
+    async def sessions(self):
+        proxmox_sessions = []
+        
+        for cluster in self.proxmox_settings:
+            session = await ProxmoxSession(cluster).proxmoxer()
+            cluster_info = await self.get_cluster(session)
+            print(cluster_info)
+            proxmox_sessions.append(
+                {
+                    "session": session,
+                    "cluster_name": cluster_info.get("name"),
+                    "fingerprints": cluster_info.get("fingerprints"),
+                }   
+            )
+            #self.cluster_info = await self.get_cluster(self.session)
             
+            """
+            proxmox_sessions.append(
+                {   
+                    "session": self.session,
+                }.update(self.cluster_info)
+            )
+            """
+        
+        return proxmox_sessions
+        
+    
+    async def fingerprints(self, px):
+        """Get Nodes Fingerprints. It is the way I better found to differentiate clusters."""
+        join_info = px("cluster/config/join").get()
+    
+        fingerprints = []        
+        for node in join_info.get("nodelist"):
+            fingerprints.append(node.get("pve_fp"))
+        
+        return fingerprints
+    
+    async def get_cluster(self, px):
+        """Get Proxmox Cluster Name"""
+        cluster_status_list = px("cluster/status").get()
+        
+        for item in cluster_status_list:
+            if item.get("type") == "cluster":
+                return {
+                    "name": item.get("name"),
+                    "fingerprints": await self.fingerprints(px)
+                }
+    
+        
+       

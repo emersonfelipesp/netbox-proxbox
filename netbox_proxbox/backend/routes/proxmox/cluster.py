@@ -1,24 +1,26 @@
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 
-from typing import Annotated, Any
+from typing import Annotated
 
 from netbox_proxbox.backend.schemas.proxmox import *
-from netbox_proxbox.backend.routes.proxmox import ProxmoxSessionDep, get_cluster_name
+from netbox_proxbox.backend.routes.proxmox import ProxmoxSessionsDep
 from netbox_proxbox.backend.exception import ProxboxException
 from netbox_proxbox.backend.enum.proxmox import *
 
 router = APIRouter()
 
+# /proxmox/cluster/ API Endpoints
+
 @router.get("/resources", response_model=ClusterResourcesList)
 async def cluster_resources(
-    px_sessions: ProxmoxSessionDep,
+    pxs: ProxmoxSessionsDep,
     type: Annotated[
         ClusterResourcesType, 
         Query(
             title="Proxmox Resource Type",
             description="Type of Proxmox resource to return (ex. 'vm' return QEMU Virtual Machines).",
         )
-    ],
+    ] = None,
     mode: Annotated[
         ProxmoxModeOptions,
         Query(
@@ -30,14 +32,13 @@ async def cluster_resources(
     json_response = {}
     if mode == "multi":
         
-        for px in px_sessions:
+        for px in pxs:
             
             try:
-                print("Testing Resources/Cluster...")
                 cluster_name = await get_cluster_name(px)
                 print(cluster_name)
 
-                cluster_resources_response = px("cluster/resources").get(type = "vm")
+                cluster_resources_response = px("cluster/resources").get(type = type) if type else px("cluster/resources").get()
                 json_response[cluster_name] = cluster_resources_response
  
             except Exception as error:

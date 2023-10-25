@@ -6,14 +6,15 @@ from proxmoxer.core import ResourceException
 
 from netbox_proxbox.backend.schemas.proxmox import *
 from netbox_proxbox.backend.routes.proxbox import proxmox_settings
-from netbox_proxbox.backend.session.proxmox import ProxmoxSession
+from netbox_proxbox.backend.session.proxmox import ProxmoxSessions
 from netbox_proxbox.backend.exception import ProxboxException
 from netbox_proxbox.backend.enum.proxmox import *
 
 router = APIRouter()
 
+"""
 async def proxmox_session(
-    proxmox_settings: Annotated[ProxmoxSessionSchema, Depends(proxmox_settings)],
+    ,
 ):
     proxmox_session_obj = []
     
@@ -30,20 +31,21 @@ async def proxmox_session(
             message = "Could not return Proxmox Sessions connections based on user-provided parameters",
             python_exception = f"{error}"
         )
+"""
 
 # Make Session reusable
-ProxmoxSessionDep = Annotated[Any, Depends(proxmox_session)]
+ProxmoxSessionsDep = Annotated[ProxmoxSessions, Depends()]
     
 @router.get("/version")
 async def proxmox_version(
-    px_sessions: ProxmoxSessionDep
+    pxs: ProxmoxSessionsDep
 ):
     response = []
     
-    print(f"{px_sessions}")
-    return f"{px_sessions}"
+    print(f"{await pxs.sessions()}")
+    return f"{await pxs.sessions()}"
 
-    for px in px_sessions:
+    for px in pxs:
         print("PX type equal to: ", type(px))
         response.append(px.version.get())
     
@@ -52,7 +54,7 @@ async def proxmox_version(
 
 @router.get("/")
 async def proxmox(
-    px_sessions: ProxmoxSessionDep
+    pxs: ProxmoxSessionsDep
 ):
     return_list = []
     
@@ -71,7 +73,7 @@ async def proxmox(
                 
         return endpoint_list
     
-    for px in px_sessions:  
+    for px in pxs:  
         api_hierarchy = {
             "access": minimize_result("access"),
             "cluster": minimize_result("cluster"),
@@ -100,11 +102,11 @@ async def proxmox(
 
 @router.get("/{top_level}")
 async def top_level_endpoint(
-    px_sessions: ProxmoxSessionDep,
+    pxs: ProxmoxSessionsDep,
     top_level: ProxmoxUpperPaths,
 ):
     # Get only a Proxmox Cluster
-    px = px_sessions[0]
+    px = pxs[0]
     
     if top_level not in TOPLEVEL_ENDPOINTS:
         return {
@@ -121,18 +123,11 @@ async def top_level_endpoint(
         "other_endpoints": other_endpoints,
     }
 
-async def get_cluster_name(px):
-    cluster_status_list = px("cluster/status").get()
-    
-    for item in cluster_status_list:
-        if item.get("type") == "cluster":
-            return item.get("name")
-
 
 '''
 @router.get("/cluster/{cluster_paths}")
 async def cluster_paths(
-    px_sessions: ProxmoxSessionDep,
+    pxs: ProxmoxSessionsDep,
     cluster_paths: ProxmoxClusterPaths,
     mode: ProxmoxModeOptions = "multi",
 ):
@@ -141,7 +136,7 @@ async def cluster_paths(
 
 @router.get("/{top_level}/{second_level}")
 async def second_level_endpoint(
-    px_sessions: ProxmoxSessionDep,
+    pxs: ProxmoxSessionsDep,
     top_level: ProxmoxUpperPaths,
     second_level: str,
     mode: ProxmoxModeOptions = "multi",
@@ -173,17 +168,17 @@ async def second_level_endpoint(
             )
 
 
-    async def multi_cluster(px_sessions):
+    async def multi_cluster(pxs):
         clusters_response = []
         
-        for px in px_sessions:
+        for px in pxs:
             clusters_response.append(await single_cluster(px))
         
         return clusters_response
 
 
     if mode == "multi":
-        return await multi_cluster(px_sessions) 
+        return await multi_cluster(pxs) 
     
     if mode == "single":
         raise HTTPException(
