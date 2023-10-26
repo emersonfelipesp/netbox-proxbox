@@ -1,14 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException, Path, Query
 
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
+"""
 from typing import Annotated
 
 from netbox_proxbox.backend.schemas.proxmox import *
 from netbox_proxbox.backend.routes.proxmox import ProxmoxSessionsDep
 from netbox_proxbox.backend.exception import ProxboxException
 from netbox_proxbox.backend.enum.proxmox import *
-
+"""
 router = APIRouter()
-
+"""
 # /proxmox/cluster/ API Endpoints
 
 @router.get("/resources", response_model=ClusterResourcesList)
@@ -29,16 +30,19 @@ async def cluster_resources(
         )
     ] = "multi"
 ):
+    pxs = await pxs.sessions()
     json_response = {}
+    
+    print(pxs)
     if mode == "multi":
         
         for px in pxs:
             
             try:
-                cluster_name = await get_cluster_name(px)
+                cluster_name = px.get("cluster_name")
                 print(cluster_name)
 
-                cluster_resources_response = px("cluster/resources").get(type = type) if type else px("cluster/resources").get()
+                cluster_resources_response = px[session]("cluster/resources").get(type = type) if type else px("cluster/resources").get()
                 json_response[cluster_name] = cluster_resources_response
  
             except Exception as error:
@@ -54,3 +58,4 @@ async def cluster_resources(
             )
 
     return json_response
+"""

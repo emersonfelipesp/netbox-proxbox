@@ -15,7 +15,9 @@ class ProxmoxSessionSchema(BaseModel):
     password: str
     token: ProxmoxTokenSchema
     ssl: bool
-    
+
+ProxmoxMultiClusterConfig = RootModel[List[ProxmoxSessionSchema]]
+  
 class Resources(BaseModel):
     cgroup_mode: int = None
     content: str = None

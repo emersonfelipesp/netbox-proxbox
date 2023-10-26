@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 
-from typing import Annotated, Any
+from typing import Annotated, Any, List
 
 from proxmoxer.core import ResourceException
 
 from netbox_proxbox.backend.schemas.proxmox import *
 from netbox_proxbox.backend.routes.proxbox import proxmox_settings
-from netbox_proxbox.backend.session.proxmox import ProxmoxSessions
+from netbox_proxbox.backend.session.proxmox import ProxmoxSingleSession
 from netbox_proxbox.backend.exception import ProxboxException
 from netbox_proxbox.backend.enum.proxmox import *
 
@@ -46,19 +46,75 @@ async def proxmox_sessions(
 ProxmoxSessionsDep = Annotated[Any, Depends(proxmox_sessions)]
 '''
 
-ProxmoxSessionsDep = Annotated[ProxmoxSessions, Depends()]
+from netbox_proxbox.backend.routes.proxbox import ProxmoxConfigDep
 
+async def proxmox_sessions(
+    pxc: ProxmoxConfigDep
+):
+    """Instantiate Proxmox Sessions and return a list of Proxmox Sessions objects."""
+    
+    proxmox_objects = []
+    
+    for px in pxc:
+        px_obj = ProxmoxSingleSession(px)
+        
+        proxmox_objects.append(
+            {
+                "domain": px_obj.domain,
+                "session": px_obj.proxmoxer,
+                "cluster": px_obj.cluster,
+                "fingerprints": px_obj.cluster,
+            }
+        )
+    
+    return proxmox_objects
+
+ProxmoxSessionsDep = Annotated[list, Depends(proxmox_sessions)]
+
+@router.get("/session")
+async def proxmox_test(
+    pxs: ProxmoxSessionsDep
+):
+    print("\n\n\nPXS:", pxs, type(pxs[0]))
+    px = ProxmoxSingleSession(
+        {
+            'domain': '10.0.30.9',
+            'http_port': 8006,
+            'user': 'root@pam',
+            'password': '@PVE288nm',
+            'token': {
+                'name': 'teste',
+                'value': 'e7fb5ecb-30dd-49ab-8a58-ed1059e5772f'
+            },
+            'ssl': False
+        }
+    )
+    print(f"Proxmox Test: {px.token_name}")
+    return "Teste"
+    
+
+
+
+
+"""
 @router.get("/version", response_model=None)
 async def proxmox_version(
     pxs: Annotated[ProxmoxSessions, Depends()]
 ):
     return pxs
 
-    for px.session in pxs:
-        print("PX type equal to: ", type(px))
-        response.append(px.version.get())
-    
-    return response
+    ProxmoxSession(
+            {
+                "domain": "proxmox.domain.com",
+                "http_port": 8006,
+                "user": "user@pam",
+                "password": "password",
+                "token": {
+                    "name": "token_name",
+                    "value": "token_value"
+                },
+            }
+        ).proxmoxer()
     
 
 @router.get("/")
@@ -197,3 +253,4 @@ async def second_level_endpoint(
         
     
     return json_obj
+"""

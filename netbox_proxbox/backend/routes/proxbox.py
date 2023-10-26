@@ -4,7 +4,9 @@ from fastapi import APIRouter, Depends
 
 from netbox_proxbox.backend.schemas import PluginConfig
 from netbox_proxbox.backend.schemas.netbox import NetboxSessionSchema
-from netbox_proxbox.backend.schemas.proxmox import ProxmoxSessionSchema
+from netbox_proxbox.backend.schemas.proxmox import ProxmoxMultiClusterConfig
+from netbox_proxbox.backend.exception import ProxboxException
+
 router = APIRouter()
 
 PROXBOX_PLUGIN_NAME = "netbox_proxbox"
@@ -21,12 +23,10 @@ async def netbox_plugins_config(
     try:
         from netbox.settings import PLUGINS_CONFIG
     except Exception as e:
-        return {
-            "error": {
-                "message": "Could not import PLUGINS CONFIG from configuration.py",
-                "python_exception": f"{e}"
-            }
-        }
+        raise ProxboxException(
+            message = "Could not import PLUGINS CONFIG from configuration.py",
+            python_exception = f"{e}"
+        )
 
     # If ?list=all=True
     # Return complete PLUGINS_CONFIG (including other plugins)
@@ -55,13 +55,11 @@ async def netbox_plugins_config(
         )
         
     except Exception as e:
-        return {
-                "error": {
-                    "message": "Plugin configuration at PLUGINS_CONFIG (configuration.py) is probably incorrect.",
-                    "detail": "Could not feed 'PluginConfig' pydantic model with config provided from 'PLUGINS_CONFIG'.",
-                    "python_exception": f"{e}",
-            }
-        }
+        raise ProxboxException(
+            message = "Plugin configuration at PLUGINS_CONFIG (configuration.py) is probably incorrect.",
+            detail = "Could not feed 'PluginConfig' pydantic model with config provided from 'PLUGINS_CONFIG'.",
+            python_exception = f"{e}",
+        )
 
 
 @router.get("/netbox/default-settings")
@@ -107,3 +105,9 @@ async def proxmox_settings(
     Get user configuration for Proxmox from PLUGINS_CONFIG
     """
     return proxbox_config.proxmox
+
+
+
+NetboxConfigDep = Annotated[NetboxSessionSchema, Depends(netbox_settings)]
+ProxmoxConfigDep = Annotated[ProxmoxMultiClusterConfig, Depends(proxmox_settings)]
+ 
