@@ -15,25 +15,75 @@ from netbox_proxbox.backend.exception import ProxboxException
 # PROXMOX SESSION
 #
 class ProxmoxSession:
+    """
+        (Single-cluster) This class takes user-defined parameters to establish Proxmox connection and returns ProxmoxAPI object (with no further details)
+        
+        NOTE: As `__init__()` does not support ASYNC methods, I had to create a method to establish Proxmox connection and return ProxmoxAPI object, which is `proxmoxer()` method.
+        Which means that only calling ProxmoxSession() will not establish Proxmox connection. You must call `proxmoxer()` method to do so.
+        
+        INPUT must be:
+        - dict
+        - pydantic model - will be converted to dict
+        - json (string) - will be converted to dict
+        
+        Example of class instantiation:
+        ```python
+        ProxmoxSession(
+            {
+                "domain": "proxmox.domain.com",
+                "http_port": 8006,
+                "user": "user@pam",
+                "password": "password",
+                "token": {
+                    "name": "token_name",
+                    "value": "token_value"
+                },
+            }
+        ).proxmoxer()
+        ```
+        
+        OUTPUT: ProxmoxAPI object (from proxmoxer lib)
+    """
     def __init__(
         self,
         cluster_config
     ):
-        #proxmox_settings = proxmox_settings.json()
-        
-        cluster_config = cluster_config.dict()
-        print(cluster_config, type(cluster_config))
-    
-        self.domain = cluster_config["domain"]
-        self.http_port = cluster_config["http_port"]
-        self.user = cluster_config["user"]
-        self.password = cluster_config["password"]
-        self.token_name = cluster_config["token"]["name"]
-        self.token_value = cluster_config["token"]["value"]
-        self.ssl = cluster_config["ssl"]
-        
-        print(self.token_name)
-        print(self.token_value)
+        # Validate cluster_config type
+        if isinstance(cluster_config, ProxmoxSessionSchema):
+            cluster_config = cluster_config.model_dump(mode="python")
+            
+        elif isinstance(cluster_config, str):
+            try:
+                import json
+                cluster_config = json.loads(cluster_config)
+                
+            except Exception as error:
+                raise ProxboxException(
+                    message = f"Could not proccess the input provided, check if it is correct. Input type provided: {type(cluster_config)}",
+                    detail = "ProxmoxSession class tried to convert INPUT to dict, but failed.",
+                    python_exception = f"{error}",
+                )
+        elif isinstance(cluster_config, dict):
+            pass
+        else:
+            raise ProxboxException(
+                message = f"INPUT of ProxmoxSession() must be a pydantic model or dict (either one will work). Input type provided: {type(cluster_config)}",
+            )       
+                
+        try:
+            # Save cluster_config as class attributes
+            self.domain = cluster_config["domain"]
+            self.http_port = cluster_config["http_port"]
+            self.user = cluster_config["user"]
+            self.password = cluster_config["password"]
+            self.token_name = cluster_config["token"]["name"]
+            self.token_value = cluster_config["token"]["value"]
+            self.ssl = cluster_config["ssl"]
+        except KeyError:
+            raise ProxboxException(
+                message = "ProxmoxSession class wasn't able to find all required parameters to establish Proxmox connection. Check if you provided all required parameters.",
+                detail = "Python KeyError raised"
+            )
 
     def __repr__(self):
         return f"Proxmox Connection Object. URL: {domain}:{http_port}"
@@ -128,20 +178,72 @@ class ProxmoxSession:
 
         return px
             
+async def sessions(
+    proxmox_settings: Annotated[ProxmoxSessionSchema, Depends(proxmox_settings)]
+):
+    proxmox_sessions = []
+    
+    for cluster in proxmox_settings:
+        # Convert pydantic mdoel to dict
+        cluster = cluster.model_dump()
         
+        cluster["object"] = await ProxmoxSession(cluster).proxmoxer()
+        
+        print(f"CLUSTER: {cluster}")
+        proxmox_sessions.append(cluster)
+        
+    print(proxmox_sessions)
+       
 class ProxmoxSessions:
+    """
+    (Multi-cluster) This class takes user-defined parameters to establish Proxmox connection and returns ProxmoxAPI object alongside with cluster details (name and fingerprints)
+    
+    INPUT must be a list of dicts with the following structure:
+    
+    ProxmoxSessions(
+        [
+            {
+                'domain': '10.0.30.9',
+                'http_port': 8006,
+                'user': 'root@pam',
+                'password': '@YourStrongProxmoxPassword',
+                'token': {
+                    'name': 'token_name', # 'proxbox',
+                    'value': 'e7fb5ecb-XXXX-YYYY-ZZZZ-ed1059e5772f' #
+                },
+                'ssl': False
+            },
+            {
+                'domain': '10.0.30.140',
+                'http_port': 8006,
+                'user': 'root@pam',
+                'password': '@YourStrongProxmoxPassword',
+                'token': {
+                    'name': 'token_name',
+                    'value': '2a00665d-XXXX-YYYY-ZZZZ-67852c50c706'
+                },
+                'ssl': False
+            }
+        ]
+    )
+
+    OUTPUT: [
+        {}
+    ]ProxmoxAPI object (from proxmoxer lib)
+    """
+        
     def __init__(
         self,
         proxmox_settings: Annotated[ProxmoxSessionSchema, Depends(proxmox_settings)],
+        sessions: Annotated[list, Depends(sessions)]
     ):
         self.proxmox_settings = proxmox_settings
+        self.teste = "Teste"
+        self.sessions = sessions
+        
     
-        
-    async def sessions(self):
-        proxmox_sessions = []
-        
-        for cluster in self.proxmox_settings:
-            session = await ProxmoxSession(cluster).proxmoxer()
+    
+        """
             cluster_info = await self.get_cluster(session)
             print(cluster_info)
             proxmox_sessions.append(
@@ -152,18 +254,8 @@ class ProxmoxSessions:
                 }   
             )
             #self.cluster_info = await self.get_cluster(self.session)
-            
-            """
-            proxmox_sessions.append(
-                {   
-                    "session": self.session,
-                }.update(self.cluster_info)
-            )
-            """
+        """
         
-        return proxmox_sessions
-        
-    
     async def fingerprints(self, px):
         """Get Nodes Fingerprints. It is the way I better found to differentiate clusters."""
         join_info = px("cluster/config/join").get()
@@ -174,6 +266,7 @@ class ProxmoxSessions:
         
         return fingerprints
     
+
     async def get_cluster(self, px):
         """Get Proxmox Cluster Name"""
         cluster_status_list = px("cluster/status").get()

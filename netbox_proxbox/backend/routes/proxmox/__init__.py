@@ -34,18 +34,27 @@ async def proxmox_session(
 """
 
 # Make Session reusable
-ProxmoxSessionsDep = Annotated[ProxmoxSessions, Depends()]
-    
-@router.get("/version")
-async def proxmox_version(
-    pxs: ProxmoxSessionsDep
-):
-    response = []
-    
-    print(f"{await pxs.sessions()}")
-    return f"{await pxs.sessions()}"
 
-    for px in pxs:
+'''
+@router.get("/version")
+async def proxmox_sessions(
+    pxs: Annotated[ProxmoxSessions, Depends()]
+):
+    """Instantiate Proxmox Sessions and return a list of Proxmox Sessions objects."""
+    return await pxs.sessions()
+
+ProxmoxSessionsDep = Annotated[Any, Depends(proxmox_sessions)]
+'''
+
+ProxmoxSessionsDep = Annotated[ProxmoxSessions, Depends()]
+
+@router.get("/version", response_model=None)
+async def proxmox_version(
+    pxs: Annotated[ProxmoxSessions, Depends()]
+):
+    return pxs
+
+    for px.session in pxs:
         print("PX type equal to: ", type(px))
         response.append(px.version.get())
     
@@ -54,7 +63,7 @@ async def proxmox_version(
 
 @router.get("/")
 async def proxmox(
-    pxs: ProxmoxSessionsDep
+    pxs: Annotated[ProxmoxSessions, Depends()]
 ):
     return_list = []
     
