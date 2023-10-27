@@ -1,4 +1,4 @@
-from fastapi import Depends
+from fastapi import Depends, Query
 from typing import Annotated, Any
 
 # Proxmox
@@ -15,9 +15,6 @@ from netbox_proxbox.backend.routes.proxbox import ProxmoxConfigDep
 class ProxmoxSession:
     """
         (Single-cluster) This class takes user-defined parameters to establish Proxmox connection and returns ProxmoxAPI object (with no further details)
-        
-        NOTE: As `__init__()` does not support ASYNC methods, I had to create a method to establish Proxmox connection and return ProxmoxAPI object, which is `proxmoxer()` method.
-        Which means that only calling ProxmoxSession() will not establish Proxmox connection. You must call `proxmoxer()` method to do so.
         
         INPUT must be:
         - dict
@@ -273,8 +270,20 @@ class ProxmoxSession:
 async def proxmox_sessions(
     pxc: ProxmoxConfigDep,
     source: str = "netbox",
-    name: str = None,
-    domain: str = None,
+    name: Annotated[
+        str,
+        Query(
+            title="Proxmox Name",
+            description="Name of Proxmox Cluster or Proxmox Node (if standalone)."
+        )
+    ] = None,
+    domain: Annotated[
+        str,
+        Query(
+            title="Proxmox Domain",
+            description="Domain of Proxmox Cluster or Proxmox Node (if standalone)."
+        )
+    ] = None,
 ):
     """
         Default Behavior: Instantiate Proxmox Sessions and return a list of Proxmox Sessions objects.
