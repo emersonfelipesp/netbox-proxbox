@@ -2,7 +2,8 @@ from pydantic import BaseModel, RootModel
 
 from typing import List, Dict
 
-from netbox_proxbox.backend.enum.proxmox import ResourceType
+from netbox_proxbox.backend.enum.proxmox import ResourceType, NodeStatus
+
 
 class ProxmoxTokenSchema(BaseModel):
     name: str
@@ -18,6 +19,10 @@ class ProxmoxSessionSchema(BaseModel):
 
 ProxmoxMultiClusterConfig = RootModel[List[ProxmoxSessionSchema]]
   
+
+#
+# /cluster
+#
 class Resources(BaseModel):
     cgroup_mode: int = None
     content: str = None
@@ -42,3 +47,24 @@ class Resources(BaseModel):
 
 ResourcesList = RootModel[List[Resources]]
 ClusterResourcesList = RootModel[List[Dict[str, ResourcesList]]]
+
+
+#
+# /nodes
+#
+
+class Node(BaseModel):
+    node: str
+    status: NodeStatus
+    cpu: float = None
+    level: str = None
+    maxcpu: int = None
+    maxmem: int = None
+    mem: int = None
+    ssl_fingerprint: str = None
+    uptime: int = None
+
+NodeList = RootModel[List[Node]]
+ResponseNodeList = RootModel[List[Dict[str, ResourcesList]]]
+
+

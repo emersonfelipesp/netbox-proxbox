@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from netbox_proxbox.backend.schemas import PluginConfig
 from netbox_proxbox.backend.schemas.netbox import NetboxSessionSchema
@@ -13,8 +13,20 @@ PROXBOX_PLUGIN_NAME = "netbox_proxbox"
 
 @router.get("/netbox/plugins-config")
 async def netbox_plugins_config(
-        plugin_name: str | None = PROXBOX_PLUGIN_NAME,
-        list_all: bool | None = False
+        plugin_name: Annotated[
+            str,
+            Query(
+                title="Netbox Plugin Name",
+                description="Netbox plugin name to get configuration from PLUGINS_CONFIG variable located at Netbox 'configuration.py' file."
+            )
+        ] | None = PROXBOX_PLUGIN_NAME,
+        list_all: Annotated[
+            bool,
+            Query(
+                title="List All Plugins",
+                description="Return all plugins configuration from PLUGINS_CONFIG variable located at Netbox 'configuration.py' file.",
+            )
+        ] | None = False
     ):
     """
     PLUGIN_CONFIG variable defined by user in Netbox 'configuration.py' file
@@ -76,19 +88,24 @@ async def proxbox_netbox_default():
 async def proxbox_settings(
     plugins_config: Annotated[PluginConfig, Depends(netbox_plugins_config)],
     default_settings: Annotated[PluginConfig, Depends(proxbox_netbox_default)],
-    list_all: bool | None = False
+    list_all: Annotated[
+        bool,
+        Query(
+            title="List All Plugins",
+            description="Return all plugins configuration from PLUGINS_CONFIG variable located at Netbox 'configuration.py' file.",
+        )
+    ] | None = False
 ):
-    if list_all:
-        return {
-            "plugins_config": plugins_config,
-            "default_settings": default_settings
-        }
+    """
+    TODO: Compare PLUGINS_CONFIG defined by user with default settings from ProxboxConfig.default_settings
+    """
     return plugins_config
 
+ProxboxConfigDep = Annotated[PluginConfig, Depends(proxbox_settings)]
 
 @router.get("/settings/netbox")
 async def netbox_settings(
-    proxbox_config: Annotated[PluginConfig, Depends(proxbox_settings)],
+    proxbox_config: ProxboxConfigDep
 ):
     """
     Get user configuration for Netbox from PLUGINS_CONFIG
@@ -99,13 +116,12 @@ async def netbox_settings(
     
 @router.get("/settings/proxmox")
 async def proxmox_settings(
-    proxbox_config: Annotated[PluginConfig, Depends(proxbox_settings)],
+    proxbox_config: ProxboxConfigDep
 ):
     """
     Get user configuration for Proxmox from PLUGINS_CONFIG
     """
     return proxbox_config.proxmox
-
 
 
 NetboxConfigDep = Annotated[NetboxSessionSchema, Depends(netbox_settings)]

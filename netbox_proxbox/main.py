@@ -9,6 +9,8 @@ from .backend.routes.netbox import router as netbox_router
 from .backend.routes.proxbox import router as proxbox_router
 from .backend.routes.proxmox import router as proxmox_router
 from .backend.routes.proxmox.cluster import router as px_cluster_router
+from .backend.routes.proxmox.nodes import router as px_nodes_router
+
 
 from .backend.schemas import *
 
@@ -32,6 +34,7 @@ async def proxmoxer_exception_handler(request: Request, exc: ProxboxException):
 # Routes (Endpoints)
 app.include_router(netbox_router, prefix="/netbox", tags=["netbox"])
 app.include_router(proxbox_router, prefix="/proxbox", tags=["proxbox"])
+app.include_router(px_nodes_router, prefix="/proxmox/nodes", tags=["proxmox / nodes"])
 app.include_router(px_cluster_router, prefix="/proxmox/cluster", tags=["proxmox / cluster"])
 app.include_router(proxmox_router, prefix="/proxmox", tags=["proxmox"])
 

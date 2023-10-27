@@ -71,3 +71,8 @@ class ResourceType(Enum):
     lxc = "lxc"
     openvz = "openvz"
     sdn = "sdn"
+    
+class NodeStatus(Enum):
+    unknown = "unknown"
+    online = "online"
+    offline = "offline"
