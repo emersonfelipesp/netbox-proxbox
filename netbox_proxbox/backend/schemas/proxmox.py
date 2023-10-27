@@ -41,4 +41,4 @@ class Resources(BaseModel):
     vmid: int = None
 
 ResourcesList = RootModel[List[Resources]]
-ClusterResourcesList = RootModel[Dict[str, ResourcesList]]
+ClusterResourcesList = RootModel[List[Dict[str, ResourcesList]]]

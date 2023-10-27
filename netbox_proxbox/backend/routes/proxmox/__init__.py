@@ -5,127 +5,79 @@ from typing import Annotated, Any, List
 from proxmoxer.core import ResourceException
 
 from netbox_proxbox.backend.schemas.proxmox import *
-from netbox_proxbox.backend.routes.proxbox import proxmox_settings
-from netbox_proxbox.backend.session.proxmox import ProxmoxSingleSession
+from netbox_proxbox.backend.session.proxmox import ProxmoxSessionsDep
 from netbox_proxbox.backend.exception import ProxboxException
 from netbox_proxbox.backend.enum.proxmox import *
 
 router = APIRouter()
 
-"""
-async def proxmox_session(
-    ,
-):
-    proxmox_session_obj = []
-    
-    try:
-        for cluster in proxmox_settings:
-            proxmox_session_obj.append(
-                await ProxmoxSession(cluster).proxmoxer()
-            )
-        
-        return proxmox_session_obj
-    except Exception as error:
-        print(f"Exception error: {error}")
-        raise ProxboxException(
-            message = "Could not return Proxmox Sessions connections based on user-provided parameters",
-            python_exception = f"{error}"
-        )
-"""
+#
+# /proxmox/* API Endpoints
+#
 
-# Make Session reusable
-
-'''
-@router.get("/version")
+@router.get("/sessions")
 async def proxmox_sessions(
-    pxs: Annotated[ProxmoxSessions, Depends()]
-):
-    """Instantiate Proxmox Sessions and return a list of Proxmox Sessions objects."""
-    return await pxs.sessions()
-
-ProxmoxSessionsDep = Annotated[Any, Depends(proxmox_sessions)]
-'''
-
-from netbox_proxbox.backend.routes.proxbox import ProxmoxConfigDep
-
-async def proxmox_sessions(
-    pxc: ProxmoxConfigDep
-):
-    """Instantiate Proxmox Sessions and return a list of Proxmox Sessions objects."""
-    
-    proxmox_objects = []
-    
-    for px in pxc:
-        px_obj = ProxmoxSingleSession(px)
-        
-        proxmox_objects.append(
-            {
-                "domain": px_obj.domain,
-                "session": px_obj.proxmoxer,
-                "cluster": px_obj.cluster,
-                "fingerprints": px_obj.cluster,
-            }
-        )
-    
-    return proxmox_objects
-
-ProxmoxSessionsDep = Annotated[list, Depends(proxmox_sessions)]
-
-@router.get("/session")
-async def proxmox_test(
     pxs: ProxmoxSessionsDep
 ):
-    print("\n\n\nPXS:", pxs, type(pxs[0]))
-    px = ProxmoxSingleSession(
-        {
-            'domain': '10.0.30.9',
-            'http_port': 8006,
-            'user': 'root@pam',
-            'password': '@PVE288nm',
-            'token': {
-                'name': 'teste',
-                'value': 'e7fb5ecb-30dd-49ab-8a58-ed1059e5772f'
-            },
-            'ssl': False
-        }
-    )
-    print(f"Proxmox Test: {px.token_name}")
-    return "Teste"
+    json_response = []
     
-
-
-
-
-"""
-@router.get("/version", response_model=None)
-async def proxmox_version(
-    pxs: Annotated[ProxmoxSessions, Depends()]
-):
-    return pxs
-
-    ProxmoxSession(
+    for px in pxs:
+        json_response.append(
             {
-                "domain": "proxmox.domain.com",
-                "http_port": 8006,
-                "user": "user@pam",
-                "password": "password",
-                "token": {
-                    "name": "token_name",
-                    "value": "token_value"
-                },
+                "domain": px.domain,
+                "http_port": px.http_port,
+                "user": px.user,
+                "name": px.name,
+                "mode": px.mode,
             }
-        ).proxmoxer()
+        )
     
+    return json_response
+
+
+
+@router.get("/version", )
+async def proxmox_version(
+    pxs: ProxmoxSessionsDep
+):
+    json_response = []
+    
+    for px in pxs:
+        json_response.append(
+            {
+                px.name: px.session.version.get()
+            }
+        )
+            
+    return json_response
+
+
+@router.get("/{top_level}")
+async def top_level_endpoint(
+    pxs: ProxmoxSessionsDep,
+    top_level: ProxmoxUpperPaths,
+):
+    json_response = []
+    
+    for px in pxs:
+        json_response.append(
+            {  
+                px.name: px.session(top_level).get()
+            }
+        )
+    
+    return json_response
+
 
 @router.get("/")
 async def proxmox(
-    pxs: Annotated[ProxmoxSessions, Depends()]
+    pxs: ProxmoxSessionsDep
 ):
-    return_list = []
+    json_response = []
     
     def minimize_result(endpoint_name):
         endpoint_list = []
-        result = px(endpoint_name).get()
+        result = px.session(endpoint_name).get()
         
         match endpoint_name:
             case "access":
@@ -139,16 +91,18 @@ async def proxmox(
         return endpoint_list
     
     for px in pxs:  
-        api_hierarchy = {
-            "access": minimize_result("access"),
-            "cluster": minimize_result("cluster"),
-            "nodes": px.nodes.get(),
-            "pools": px.pools.get(),
-            "storage": px.storage.get(),
-            "version": px.version.get(),
-        }
-        
-        return_list.append(api_hierarchy)
+        json_response.append(
+            {
+                f"{px.name}": {
+                    "access": minimize_result("access"),
+                    "cluster": minimize_result("cluster"),
+                    "nodes": px.session.nodes.get(),
+                    "pools": px.session.pools.get(),
+                    "storage": px.session.storage.get(),
+                    "version": px.session.version.get(),
+                }
+            } 
+        )
 
     return {
         "message": "Proxmox API",
@@ -159,98 +113,5 @@ async def proxmox(
             "proxmoxer": "https://github.com/proxmoxer/proxmoxer",
             "proxbox": "https://github.com/netdevopsbr/netbox-proxbox"
         },
-        "clusters": return_list
+        "clusters": json_response
     }
-
-
-
-
-@router.get("/{top_level}")
-async def top_level_endpoint(
-    pxs: ProxmoxSessionsDep,
-    top_level: ProxmoxUpperPaths,
-):
-    # Get only a Proxmox Cluster
-    px = pxs[0]
-    
-    if top_level not in TOPLEVEL_ENDPOINTS:
-        return {
-            "message": f"'{top_level}' is not a valid endpoint/path name.",
-            "valid_names": TOPLEVEL_ENDPOINTS,
-        }
-    
-    current_index = TOPLEVEL_ENDPOINTS.index(top_level)
-    other_endpoints = TOPLEVEL_ENDPOINTS.copy()
-    other_endpoints.pop(current_index)
-    
-    return {
-        f"{top_level}": px(top_level).get(),
-        "other_endpoints": other_endpoints,
-    }
-
-
-'''
-@router.get("/cluster/{cluster_paths}")
-async def cluster_paths(
-    pxs: ProxmoxSessionsDep,
-    cluster_paths: ProxmoxClusterPaths,
-    mode: ProxmoxModeOptions = "multi",
-):
-    pass
-'''
-
-@router.get("/{top_level}/{second_level}")
-async def second_level_endpoint(
-    pxs: ProxmoxSessionsDep,
-    top_level: ProxmoxUpperPaths,
-    second_level: str,
-    mode: ProxmoxModeOptions = "multi",
-    type: str | None = None,
-):
-        
-        
-    async def single_cluster(px):
-        json_obj = {f"{top_level}": {}}
-    
-        try:
-            path = f"{top_level}/{second_level}"
-            
-            # HTTP request through proxmoxer lib
-            if path == "cluster/resources" and type != None:
-                result = px(path).get(type = type)
-            else:
-                result = px(path).get()
-            
-            # Feed JSON result
-            json_obj[top_level][second_level] = result
-            
-            return json_obj
-            
-        except ResourceException as error:
-            raise ProxboxException(
-                message =  f"Path {path} does not exist.",
-                python_exception = f"{error}"
-            )
-
-
-    async def multi_cluster(pxs):
-        clusters_response = []
-        
-        for px in pxs:
-            clusters_response.append(await single_cluster(px))
-        
-        return clusters_response
-
-
-    if mode == "multi":
-        return await multi_cluster(pxs) 
-    
-    if mode == "single":
-        raise HTTPException(
-                status_code=501,
-                detail="Single-cluster API call not implemented yet."
-            )
-        
-    
-    return json_obj
-"""

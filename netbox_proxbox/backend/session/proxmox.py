@@ -7,11 +7,12 @@ from proxmoxer.core import ResourceException
 
 from netbox_proxbox.backend.schemas.proxmox import ProxmoxSessionSchema
 from netbox_proxbox.backend.exception import ProxboxException
+from netbox_proxbox.backend.routes.proxbox import ProxmoxConfigDep
 
 #
 # PROXMOX SESSION
 #
-class ProxmoxSingleSession:
+class ProxmoxSession:
     """
         (Single-cluster) This class takes user-defined parameters to establish Proxmox connection and returns ProxmoxAPI object (with no further details)
         
@@ -43,13 +44,14 @@ class ProxmoxSingleSession:
         self,
         cluster_config: Any
     ):
-        print(f"INPUT: {cluster_config}, type: {type(cluster_config)}")
-        
+        #
         # Validate cluster_config type
+        #
         if isinstance(cluster_config, ProxmoxSessionSchema):
             print("INPUT is Pydantic Model ProxmoxSessionSchema")
             cluster_config = cluster_config.model_dump(mode="python")
-            
+          
+        # FIXME: This is not working  
         elif isinstance(cluster_config, str):
             print("INPUT is string")
             import json
@@ -88,9 +90,11 @@ class ProxmoxSingleSession:
                 message = "ProxmoxSession class wasn't able to find all required parameters to establish Proxmox connection. Check if you provided all required parameters.",
                 detail = "Python KeyError raised"
             )
-        
-        print(f"\n\n{cluster_config}, {type(cluster_config)}\n\n")
-        
+
+
+        #
+        # Establish Proxmox Session
+        #
         try:
             # DISABLE SSL WARNING
             if self.ssl == False:
@@ -103,6 +107,8 @@ class ProxmoxSingleSession:
             
             else:
                 self.proxmoxer = self.password_auth()
+                
+            self.session = self.proxmoxer
 
         except Exception as error:
             raise ProxboxException(
@@ -111,25 +117,47 @@ class ProxmoxSingleSession:
                 python_exception = f"{error}"
             )
          
-         
+        #
+        # Test Connection and Return Cluster Status if succeeded.
+        # 
         try:
-            """Test Proxmox Connection"""
-            print(f"\n{self.proxmoxer.version.get()}\n")
+            """Test Proxmox Connection and return Cluster Status API response as class attribute"""
+            self.cluster_status = self.proxmoxer("cluster/status").get()
         except Exception as error:
             raise ProxboxException(
                 message = f"After instatiating object connection, could not make API call to Proxmox '{self.domain}:{self.http_port}' using token name '{self.token_name}'.",
                 detail = "Unknown error.",
-                python_exception = f"{error}"
+                python_exception = f"{__name__}: {error}"
             )   
         
-        self.cluster = self.get_cluster(self.proxmoxer)
-        self.fingerprints = self.get_fingerprints(self.proxmoxer)
+        #
+        # Add more attributes to class about Proxmox Session
+        #
+        self.mode = self.get_cluster_mode()
+        if self.mode == "cluster":
+            cluster_name: str = self.get_cluster_name()
+            
+            self.cluster_name = cluster_name
+            self.name = cluster_name
+            self.fingerprints: list = self.get_node_fingerprints(self.proxmoxer)
+        
+        elif self.mode == "standalone":
+            standalone_node_name: str = self.get_standalone_name()
+            
+            self.node_name = standalone_node_name
+            self.name = standalone_node_name
+            self.fingerprints = None
+        
         
 
-    #def __repr__(self):
-    #    return f"Proxmox Connection Object. URL: {self.domain}:{self.http_port}"
+    def __repr__(self):
+        return f"Proxmox Connection Object. URL: {self.domain}:{self.http_port}"
 
 
+    #
+    # Proxmox Authentication Modes: TOKEN-BASED & PASSWORD-BASED
+    #
+    
     def token_auth(self):
         error_message = f"Error trying to initialize Proxmox API connection using TOKEN NAME '{self.token_name}' and TOKEN_VALUE provided",
         
@@ -145,26 +173,8 @@ class ProxmoxSingleSession:
                 verify_ssl=self.ssl
             )
             
-            try:
-                
-                proxmox_session.version.get()
-                
-            except Exception as error:
-                ProxboxException(
-                    message = "Testing Proxmox connection failed.",
-                    detail = "Unkown error.",
-                    python_exception = f"{error}",
-                )
-            
-            print(f"proxmox_session: {proxmox_session}")
             return proxmox_session
-        
-        except ResourceException as error:
-            raise ProxboxException(
-                message = error_message,
-                detail = "'ResourceException' from proxmoxer lib raised.",
-                python_exception = f"{error}"
-            )
+            
         except Exception as error:
             raise ProxboxException(
                 message = error_message,
@@ -188,13 +198,6 @@ class ProxmoxSingleSession:
             )
             
             return proxmox_session
-            
-        except ResourceException as error:
-            raise ProxboxException(
-                message = error_message,
-                detail = "'ResourceException' from proxmoxer lib raised.",
-                python_exception = f"{error}"
-            )
 
         except Exception as error:
             raise ProxboxException(
@@ -202,8 +205,12 @@ class ProxmoxSingleSession:
                 detail = "Unknown error.",
                 python_exception = f"{error}"
             )
-            
-    def get_fingerprints(self, px):
+
+
+    #
+    # Get Proxmox Details about Cluster and Nodes
+    #
+    def get_node_fingerprints(self, px):
         """Get Nodes Fingerprints. It is the way I better found to differentiate clusters."""
         try:
             join_info = px("cluster/config/join").get()
@@ -220,12 +227,26 @@ class ProxmoxSingleSession:
                 python_exception = f"{error}"
             )
 
-    def get_cluster(self, px):
-        """Get Proxmox Cluster Name"""
+
+    def get_cluster_mode(self):
+        """Get Proxmox Cluster Mode (Standalone or Cluster)"""
         try:
-            cluster_status_list = px("cluster/status").get()
+            if len(self.cluster_status) == 1 and self.cluster_status[0].get("type") == "node":
+                return "standalone"
+            else:
+                return "cluster"
             
-            for item in cluster_status_list:
+        except Exception as error:
+            raise ProxboxException(
+                message = "Could not get Proxmox Cluster Mode (Standalone or Cluster)",
+                python_exception = f"{error}"
+            )
+        
+    
+    def get_cluster_name(self):
+        """Get Proxmox Cluster Name"""
+        try:      
+            for item in self.cluster_status:
                 if item.get("type") == "cluster":
                     return item.get("name")
 
@@ -234,22 +255,48 @@ class ProxmoxSingleSession:
                 message = "Could not get Proxmox Cluster Name and Nodes Fingerprints",
                 python_exception = f"{error}"
             )
-"""
-async def sessions(
-    proxmox_settings: Annotated[ProxmoxSessionSchema, Depends(proxmox_settings)]
-):
-    proxmox_sessions = []
-    
-    for cluster in proxmox_settings:
-        # Convert pydantic mdoel to dict
-        cluster = cluster.model_dump()
-        
-        cluster["object"] = await ProxmoxSession(cluster).proxmoxer()
-        
-        print(f"CLUSTER: {cluster}")
-        proxmox_sessions.append(cluster)
-        
-    print(proxmox_sessions)
-"""
 
-#class ProxmoxMultiSessions:
+
+    def get_standalone_name(self):
+        """Get Proxmox Standalone Node Name"""
+        try:
+            if len(self.cluster_status) == 1 and self.cluster_status[0].get("type") == "node":
+                return self.cluster_status[0].get("name")
+            
+        except Exception as error:
+            raise ProxboxException(
+                message = "Could not get Proxmox Standalone Node Name",
+                python_exception = f"{error}"
+            )
+
+
+async def proxmox_sessions(
+    pxc: ProxmoxConfigDep,
+    source: str = "netbox",
+    name: str = None,
+    domain: str = None,
+):
+    """
+        Default Behavior: Instantiate Proxmox Sessions and return a list of Proxmox Sessions objects.
+        If 'name' is provided, return only the Proxmox Session with that name.
+    """
+
+    if source == "netbox":
+        proxmox_objects = []
+        
+        for px in pxc:
+            # Instantiate Proxmox Session object from ProxmoxSession class
+            px_obj = ProxmoxSession(px)
+            
+            # If name is provided, return only the Proxmox Session with that name
+            if px_obj.name == name:
+                return [px_obj]
+            elif px_obj.domain == domain:
+                return [px_obj]
+            
+            proxmox_objects.append(px_obj)
+        
+        # Return all Proxmox Sessions based on User-Provided Config
+        return proxmox_objects
+
+ProxmoxSessionsDep = Annotated[list, Depends(proxmox_sessions)]
