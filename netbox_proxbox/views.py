@@ -26,6 +26,8 @@ from . import ProxboxConfig
 import markdown
 from . import github
 
+import requests
+
 class HomeView(View):
     """Homepage"""
     template_name = 'netbox_proxbox/home.html'
@@ -283,3 +285,31 @@ class ProxmoxVMEditView(PermissionRequiredMixin, UpdateView):
     model = ProxmoxVM
     form_class = ProxmoxVMForm
     template_name = "netbox_proxbox/proxmox_vm_edit.html"
+    
+class ProxmoxCluster(View):
+    """Homepage"""
+    template_name = 'netbox_proxbox/proxmox/cluster.html'
+
+    domain = "http://localhost:8800"
+    path = "/proxmox/cluster/status"
+    
+    
+    response = requests.get(f"{domain}{path}").json()
+    """
+    try:
+        response = requests.get(f"{domain}{path}").json()
+    except Exception as error:
+        response_error = error
+    """
+        
+    # service incoming GET HTTP requests
+    def get(self, request):
+        """Get request."""
+        
+        return render(
+            request,
+            self.template_name,
+            {
+                "response": self.response,
+            }
+        )
