@@ -286,6 +286,24 @@ class ProxmoxVMEditView(PermissionRequiredMixin, UpdateView):
     form_class = ProxmoxVMForm
     template_name = "netbox_proxbox/proxmox_vm_edit.html"
     
+    
+
+import django_tables2 as tables
+
+class ClusterStatus(tables.Table):
+    id = tables.Column(verbose_name="ID")
+    name = tables.Column(verbose_name="Name")
+    type = tables.Column(verbose_name="Type")
+    ip = tables.Column(verbose_name="IP")
+    level = tables.Column(verbose_name="Level")
+    local = tables.Column(verbose_name="Local")
+    nodeid = tables.Column(verbose_name="Node ID")
+    nodes = tables.Column(verbose_name="Nodes")
+    online = tables.Column(verbose_name="Online")
+    quorate = tables.Column(verbose_name="Quorate")
+    version = tables.Column(verbose_name="Version")
+
+
 class ProxmoxCluster(View):
     """Homepage"""
     template_name = 'netbox_proxbox/proxmox/cluster.html'
@@ -294,7 +312,9 @@ class ProxmoxCluster(View):
     path = "/proxmox/cluster/status"
     
     
+    
     response = requests.get(f"{domain}{path}").json()
+    table_cluster_01 = ClusterStatus(response[0].get("PVE-CLUSTER-02"))
     """
     try:
         response = requests.get(f"{domain}{path}").json()
@@ -311,5 +331,6 @@ class ProxmoxCluster(View):
             self.template_name,
             {
                 "response": self.response,
+                "table": self.table_cluster_01
             }
         )

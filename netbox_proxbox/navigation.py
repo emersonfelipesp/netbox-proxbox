@@ -1,6 +1,5 @@
 from extras.plugins import PluginMenuButton, PluginMenuItem, PluginMenu
 from utilities.choices import ButtonColorChoices
-import requests
 
 fullupdate_item = PluginMenuItem(
     link='plugins:netbox_proxbox:home',
