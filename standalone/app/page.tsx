@@ -3,25 +3,34 @@ import Link from 'next/link'
 
 export default function Home() {
   return (
-    <div className="mx-auto max-w-xs">
-      <div >
-        <h1 className="text-3x1 font-bold underline">Welcome to Proxmox Standalone Version!</h1>
-      </div>
-      
-      <ul>
-        <li><Link href="/cluster">Clusters</Link></li>
-        <li><Link href="/proxmox/sessions">Proxmox Sessions</Link></li>
-      </ul>
-
-      <a href="#" className="group block max-w-xs mx-auto rounded-lg p-6 bg-white ring-1 ring-slate-900/5 shadow-lg space-y-3 hover:bg-sky-500 hover:ring-sky-500">
-        <div className="flex items-center space-x-3">
-          <svg className="h-6 w-6 stroke-sky-500 group-hover:stroke-white" fill="none" viewBox="0 0 24 24"></svg>
-          <h3 className="text-slate-900 group-hover:text-white text-sm font-semibold">Proxmox Sessions</h3>
+    <>
+    <div className="container mx-auto">
+      <h1>Proxbox</h1>
+      <div className="grid grid-flow-col grid-col-3 grid-rows-2 gap-4 bg-slate-400 rounded-lg justifiy-around">
+        
+        <div className="col-span-2 self-center pl-4 pt-3">
+          <div className="flex justify-start">
+            <span>Status</span>
+            <span className="inline-block ml-4">Domain</span>
+            <span className="inline-block ml-4">IP</span>
+          </div>
         </div>
-        <p className="text-slate-500 group-hover:text-white text-sm">View all Proxmox </p>
-      </a>
+        <div className="col-span-2 self-center pl-4 pb-3">Linha 01</div>
+        <div className="grid-start-2 row-span-2 self-center mx-auto">Cluster</div>
+      </div>
     </div>
-      
+      <div className="lg:container mx-auto">
+        <h1>Proxbox</h1>
+        <div className="grid grid-flow-col grid-rows-2 gap-4 bg-slate-400 rounded-lg justifiy-around">
+          
+          <div>Col 2</div>
+          <div>Col 3</div>
+          <div>Col 4</div>
+          <div>Col 5</div>
+          <div className="row-span-2 self-center mx-auto">Standalone</div>
+        </div>
+      </div>
+    </>
   )
 
 }
