@@ -1,5 +1,3 @@
-
-
 async function getData() {
     const res = await fetch('http://localhost:8800/proxmox/sessions', {
         'headers': {
