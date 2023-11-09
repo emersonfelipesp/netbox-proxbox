@@ -8,6 +8,8 @@
   --background-end-rgb: 255, 255, 255;
 }
 
+/* Dark mode */
+/*
 @media (prefers-color-scheme: dark) {
   :root {
     --foreground-rgb: 255, 255, 255;
@@ -15,7 +17,10 @@
     --background-end-rgb: 0, 0, 0;
   }
 }
+*/
 
+/* Set the background to a linear gradient. */
+/*
 body {
   color: rgb(var(--foreground-rgb));
   background: linear-gradient(
@@ -25,3 +30,4 @@ body {
     )
     rgb(var(--background-start-rgb));
 }
+*/
