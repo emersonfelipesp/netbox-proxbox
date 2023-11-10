@@ -2,22 +2,22 @@ import Image from 'next/image'
 import Link from 'next/link'
 
 
-const clusters = [
-  {
-    "domain": "10.0.30.9",
-    "http_port": 8006,
-    "user": "root@pam",
-    "name": "PVE-CLUSTER-02",
-    "mode": "cluster"
-  },
-  {
-    "domain": "10.0.30.139",
-    "http_port": 8006,
-    "user": "root@pam",
-    "name": "pve01proxbox",
-    "mode": "standalone"
-  }
-]
+// const clusters = [
+//   {
+//     "domain": "10.0.30.9",
+//     "http_port": 8006,
+//     "user": "root@pam",
+//     "name": "PVE-CLUSTER-02",
+//     "mode": "cluster"
+//   },
+//   {
+//     "domain": "10.0.30.139",
+//     "http_port": 8006,
+//     "user": "root@pam",
+//     "name": "pve01proxbox",
+//     "mode": "standalone"
+//   }
+// ]
 
 function ClusterCard({ cluster }) {
 
@@ -36,14 +36,22 @@ function ClusterCard({ cluster }) {
   )
 }
 
-export default function Home() {
+export default async function Home() {
+  const response = await fetch('http://localhost:8800/proxmox/sessions', {
+    next: {
+      revalidate: 30,
+    }
+  })
+  const proxmox_sessions = await response.json()
+
   return (
     <>
       {
-        clusters.map(( cluster ) => (
+        proxmox_sessions.map(( cluster ) => (
           <ClusterCard cluster={cluster} />
         ))
       }
+      <pre>{JSON.stringify(proxmox_sessions, null, 2)}</pre>
     </>
   )
 }
