@@ -22,7 +22,7 @@ function LogoNavbar() {
 
 function Navbar() {
   return (
-    <nav className="bg-white border-gray-200 dark:bg-gray-900">
+    <nav className="bg-white border-gray-200 dark:bg-gray-900 border-y-[1px]">
       <div className="max-w-screen-xl flex flex-wrap items-center justify-between mx-auto p-4 ">
         <LogoNavbar />
         <button data-collapse-toggle="navbar-default" type="button" className="inline-flex items-center p-2 w-10 h-10 justify-center text-sm text-gray-500 rounded-lg md:hidden hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:text-gray-400 dark:hover:bg-gray-700 dark:focus:ring-gray-600" aria-controls="navbar-default" aria-expanded="false">
@@ -49,8 +49,10 @@ function Navbar() {
 function Sidebar() {
   return (
     <>
-      <div className="h-screen w-64 bg-black text-white">
-        <ul><li key="something">teste</li></ul>
+      <div className="h-screen w-64 bg-slate-50 border-x-[1px] ">
+        <ul className="mt-10">
+          <li key="something" className="hover:bg-slate-200 pl-4 py-2">teste</li>
+        </ul>
       </div>
     </>
   )

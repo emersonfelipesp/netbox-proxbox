@@ -12,6 +12,7 @@
   "dependencies": {
     "@headlessui/react": "^1.7.17",
     "@heroicons/react": "^2.0.18",
+    "clsx": "^2.0.0",
     "lucide-react": "^0.292.0",
     "next": "14.0.1",
     "react": "^18",
