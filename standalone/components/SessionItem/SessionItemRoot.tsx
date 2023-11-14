@@ -8,14 +8,14 @@ export default function SessionItemRoot({ cluster, children }) {
           
             <div className="flex-auto flex-col py-4">
               {/* Row 1 */}
-              <div class="flex gap-x-4 pl-4 mb-3 items-center">
+              <div class="flex gap-x-4 pl-4 mb-3 items-center font-bold">
 
                   {/* Status Placeholder */}
                   { children }
 
                   <div className="">{cluster.name}</div>
                   <div>/</div>
-                  <div className="">{cluster.domain}:{cluster.http_port}</div>
+                  <div className="">{cluster.domain} : {cluster.http_port}</div>
               </div>
               {/* Row 2 */}
               <div className="flex gap-x-4 pl-4">
@@ -24,7 +24,7 @@ export default function SessionItemRoot({ cluster, children }) {
       
             </div>
             {/* Cluster Mode Badge */}
-            <div className= "flex-none mx-2 my-5 rounded-3xl p-3 mr-3 order-last bg-amber-400 text-white text-lg "><span>{cluster.mode}</span></div>
+            <div className= "flex-none mx-2 my-5 rounded-3xl self-center p-2 mr-3 order-last bg-amber-400 text-white text-lg "><span>{cluster.mode}</span></div>
           
         </div>
         </Link >

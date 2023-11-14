@@ -1,6 +1,5 @@
 
 import Image from 'next/image';
-import Link from 'next/link';
 
 import { SessionItem } from '@/components/SessionItem';
 
@@ -30,16 +29,17 @@ export async function SessionList ({ children, target }: SessionListProps) {
             <div className="divide-y">
                 {
                     response_json.map(( item ) => (
-                            <>
-                                {/* <Link href={`/proxmox/${item.name}`}> */}
-                                    <SessionItem.Root cluster={item}>
-                                        <SessionItem.Icon status="running" />
-                                    </SessionItem.Root>
-                                {/* </Link> */}
+                            <> 
+                                <SessionItem.Root cluster={item}>
+                                    <SessionItem.StatusIcon status="running" />
+                                </SessionItem.Root>
                             </>
                         )
                     )
                 }
+            <div className="flex justify-end">
+                <button className="border border-green-400 hover:bg-green-500 duration-00 p-2 mt-3 rounded-lg hover:bg-green-600 hover:text-white font-medium">Add New Proxmox Cluster</button>
+            </div>
                 
             </div>
         </>

@@ -1,7 +1,7 @@
 import SessionItemRoot from "./SessionItemRoot";
-import SessionItemIcon from "./SessionItemIcon";
+import SessionItemStatusIcon from "./SessionItemStatusIcon";
 
 export const SessionItem = {
     Root: SessionItemRoot,
-    Icon: SessionItemIcon,
+    StatusIcon: SessionItemStatusIcon,
 }

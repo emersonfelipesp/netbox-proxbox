@@ -2,11 +2,11 @@ import clsx from 'clsx';
 
 type SessionStatus = "running" | "stopped" | "error" | "unknown"
 
-interface SessionItemIconProps {
+interface SessionItemStatusIconProps {
     status: SessionStatus
 }
 
-export default function SessionItemIcon({ status }: SessionItemIconProps) {
+export default function SessionItemStatusIcon({ status }: SessionItemStatusIconProps) {
     return (
         <div>
             <span className="relative flex h-3 w-3">
