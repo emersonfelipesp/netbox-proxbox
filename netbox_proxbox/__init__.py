@@ -19,7 +19,7 @@ class ProxboxConfig(PluginConfig):
                 'password': 'Strong@P4ssword',
                 'token': {
                     'name': 'proxbox',
-                    'value': '039az154-23b2-4be0-8d20-b66abc8c4686'
+                    'value': 'PASTE_YOUR_TOKEN_HERE'
                 },
                 'ssl': False
             }
@@ -27,18 +27,14 @@ class ProxboxConfig(PluginConfig):
         'netbox': {
             'domain': 'netbox.example.com',     # May also be IP address
             'http_port': 80,
-            'token': '0dd7cddfaee3b38bbffbd2937d44c4a03f9c9d38',
+            'token': 'PASTE_YOUR_TOKEN_HERE',
             'ssl': False,
             'settings': {
                 'virtualmachine_role_id' : 0,
                 'node_role_id' : 0,
                 'site_id': 0
             }
-        },
-        'fastapi': {
-            'uvicorn_host' : '0.0.0.0',
-            'uvicorn_port' : '8002',
-        },
+        }
     }
 
 config = ProxboxConfig

@@ -1,0 +1,70 @@
+{% extends 'base/layout.html' %}
+{% load django_tables2 %}
+{% load static %}
+
+{% block content %}
+
+    <h2>
+        Proxmox Clusters
+    </h2>
+
+
+    
+    {% for cluster in response %}
+
+
+        <div class="row">
+            <h3>{{ cluster_name }}</h3>
+            <div class="col">
+                {% for cluster_name, cluster_data in cluster.items %}
+                    <div class="card">
+                        <h5 class="card-header" align=center>{{ cluster_name }}</h5>
+                        <div class="card-body">  
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th class="orderable">ID</th>
+                                        <th class="orderable">Name</th>
+                                        <th class="orderable">Type</th>
+                                        <th class="orderable">IP</th>
+                                        <th class="orderable">Level</th>
+                                        <th class="orderable">Local</th>
+                                        <th class="orderable">Node ID</th>
+                                        <th class="orderable">Nodes</th>
+                                        <th class="orderable">Online</th>
+                                        <th class="orderable">Quorate</th>
+                                        <th class="orderable">Version</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for dict in cluster_data %}
+                                        <tr>
+                                            <td>{% if dict.id %}{{ dict.id }}{% endif %}</td>
+                                            <td>{% if dict.name %}{{ dict.name }}{% endif %}</td>
+                                            <td>{% if dict.type %}{{ dict.type }}{% endif %}</td>
+                                            <td>{% if dict.ip %}{{ dict.ip }}{% endif %}</td>
+                                            <td>{% if dict.level %}{{ dict.level }}{% endif %}</td>
+                                            <td>{% if dict.local %}{{ dict.local }}{% endif %}</td>
+                                            <td>{% if dict.nodeid %}{{ dict.nodeid }}{% endif %}</td>
+                                            <td>{% if dict.nodes %}{{ dict.nodes }}{% endif %}</td>
+                                            <td>{% if dict.nodeid %}{{ dict.online }}{% endif %}</td>
+                                            <td>{% if dict.nodeid %}{{ dict.quorate }}{% endif %}</td>
+                                            <td>{% if dict.nodeid %}{{ dict.version }}{% endif %}</td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>           
+                        </div>   
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    {% endfor %}
+
+{% endblock %}
+
+{% block footer_links %}
+    {{ block.super }}
+
+    {% include "netbox_proxbox/footer.html" %}
+{% endblock %}

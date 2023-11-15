@@ -5,8 +5,11 @@ pynetbox>=5
 paramiko>=2
 proxmoxer>=1
 fastapi[all]
+typing
 starlette
 uvicorn[standard]
+pydantic
+anyio
 websockets
 jinja2
 ujson>=5.7.0

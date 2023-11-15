@@ -36,10 +36,16 @@ community_item = PluginMenuItem(
     ]
 )
 
+proxmox_cluster_item = PluginMenuItem(
+    link='plugins:netbox_proxbox:proxmox_cluster',
+    link_text='Clusters',
+)
+
 menu = PluginMenu(
     label='Proxbox',
     groups=(
         ('Proxmox Plugin', (fullupdate_item,)),
+        ('Proxmox', (proxmox_cluster_item,)),
         ('Join our community', (contributing_item, community_item,)),
     ),
     icon_class='mdi mdi-dns'
