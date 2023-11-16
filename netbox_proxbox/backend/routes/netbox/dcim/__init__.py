@@ -1,22 +1,13 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
-from netbox_proxbox.backend.session.netbox import NetboxSessionDep
+from .sites import Sites
 
 # FastAPI Router
 router = APIRouter()
 
 @router.get("/sites")
-async def get_sites(
-    nb: NetboxSessionDep
-):
-    response = nb.dcim.sites.all()
-    print(response)
-    return response 
+async def get_sites( site: Sites = Depends() ): return await site.get()
+    
 
 @router.post("/sites")
-async def create_sites(
-    nb: NetboxSessionDep
-):
-    response = nb.dcim.sites.create(name="Teste")
-    print(response)
-    return response
+async def create_sites( site: Sites = Depends() ): return await site.post()
