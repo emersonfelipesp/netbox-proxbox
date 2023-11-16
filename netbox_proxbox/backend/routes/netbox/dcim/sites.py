@@ -131,7 +131,6 @@ class Sites:
             try: 
                 data_dict = data.model_dump(exclude_unset=True)
         
-                print(data_dict)
                 response = self.nb.session.dcim.sites.create(data_dict)
                 return response
 
