@@ -5,6 +5,9 @@ from typing import Annotated
 from netbox_proxbox.backend.session.netbox import NetboxSessionDep
 from netbox_proxbox.backend.exception import ProxboxException
 
+from netbox_proxbox.backend.schemas.netbox import CreateDefaultBool
+from netbox_proxbox.backend.schemas.netbox.dcim import SitesSchema
+
 class Sites:
     """
     Class to handle Netbox Sites.
@@ -26,16 +29,20 @@ class Sites:
         site_id: Annotated[
             int,
             Query(
-                title="Site ID",
-                description="Netbox Site ID of Nodes and/or Clusters.")
-        ] = None
+                title="Site ID", description="Netbox Site ID of Nodes and/or Clusters.")
+        ] = None,
+        all: Annotated[
+            bool,
+            Query(title="List All Sites", description="List all Sites registered on Netbox.")
+        ] = False
+
     ):
         self.nb = nb
         self.site_id = site_id
         self.default_name = "Proxbox Basic Site"
         self.default_slug = "proxbox-basic-site"
         self.default_description = "Proxbox Basic Site (used to identify the items the plugin created)"
-        
+        self.all = all
         
     async def get(self):
         # 1. If 'site_id' provided, use it to get the Site from Netbox.
@@ -72,17 +79,29 @@ class Sites:
                     return default_site_obj
 
                 else:
+                    # If Query param 'all' is True, return all Sites registered on Netbox.
+                    if self.all:
+                        response_list = []
+                        
+                        for site in response:
+                            response_list.append(site)
+                            
+                        return response_list
+                
                     # 2.2. If there's any Site registered on Netbox, check if is Proxbox one by checking tag and name.
-                    for site in response:
-                        # 2.2.1. If it's Proxbox one, return it.
-                        if site.tags == [self.nb.tag.id] and site.name == self.default_name and site.slug == self.default_slug:
-                            return site
+                    get_proxbox_site = self.nb.session.dcim.sites.get(
+                        name=self.default_name,
+                        slug=self.default_slug,
+                        tags=[self.nb.tag.id]
+                    )
                     
+                    if get_proxbox_site != None:
+                        return get_proxbox_site
+
                     # 2.2.2. If it's not Proxbox one, create a default one.
                     default_site_obj = await self.post(default=True)
                     
                     return default_site_obj
-
 
             except Exception as error:
                 raise ProxboxException(
@@ -90,7 +109,7 @@ class Sites:
                     python_exception=f"{error}"
                 )
     
-    async def post(self, default: bool = False):
+    async def post(self, default: bool = False, data: SitesSchema = None):
         if default:
             try: 
                 response = self.nb.session.dcim.sites.create(
@@ -107,5 +126,20 @@ class Sites:
                     python_exception=f"{error}"
                 )
 
+        if data:
+            try: 
+                data_dict = data.model_dump(exclude_unset=True)
+        
+                print(data_dict)
+                response = self.nb.session.dcim.sites.create(data_dict)
+                return response
+
+            except Exception as error:
+                raise ProxboxException(
+                    message=f"Error trying to create the Proxbox Site on Netbox.",
+                    detail=f"Payload provided: {data_dict}",
+                    python_exception=f"{error}"
+                )
+    
     async def put(self):
         pass
