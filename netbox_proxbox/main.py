@@ -5,8 +5,14 @@ from fastapi.responses import JSONResponse
 
 from netbox_proxbox.backend.exception import ProxboxException
 
+# Netbox Routes
 from .backend.routes.netbox import router as netbox_router
+from .backend.routes.netbox.dcim import router as nb_dcim_router
+
+# Proxbox Routes
 from .backend.routes.proxbox import router as proxbox_router
+
+# Proxmox Routes
 from .backend.routes.proxmox import router as proxmox_router
 from .backend.routes.proxmox.cluster import router as px_cluster_router
 from .backend.routes.proxmox.nodes import router as px_nodes_router
@@ -31,8 +37,12 @@ async def proxmoxer_exception_handler(request: Request, exc: ProxboxException):
     )
 
 
+#
 # Routes (Endpoints)
+#
 app.include_router(netbox_router, prefix="/netbox", tags=["netbox"])
+app.include_router(nb_dcim_router, prefix="/netbox/dcim", tags=["netbox / dcim"])
+
 app.include_router(proxbox_router, prefix="/proxbox", tags=["proxbox"])
 app.include_router(px_nodes_router, prefix="/proxmox/nodes", tags=["proxmox / nodes"])
 app.include_router(px_cluster_router, prefix="/proxmox/cluster", tags=["proxmox / cluster"])
