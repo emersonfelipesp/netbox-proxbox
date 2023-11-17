@@ -10,18 +10,18 @@ from netbox_proxbox.backend.schemas.netbox.virtualization import ClusterTypeSche
 
 class NetboxBase:
     """
-    Class to handle Netbox Clyster Types.
+    Class to handle Netbox 'Objects'.
     
     Logic: 
-        1. it will use 'id' to get the 'Cluster Type' from Netbox if provided.
+        1. it will use 'id' to get the 'Objects' from Netbox if provided.
             1.1. if object is returned, it will return it.
             1.2. if object is not returned, it will raise an `ProxboxException`.
         2. if 'site_id' is not provided, it will check if there's any Site registered on Netbox.
-            2.1. if there's no `Cluster Type` registered on Netbox, it will create a default one.
-            2.2. if there's any `Cluster Type` registered on Netbox, it will check if is Proxbox one by checking tag and name.
+            2.1. if there's no 'Objects' registered on Netbox, it will create a default one.
+            2.2. if there's any 'Objects' registered on Netbox, it will check if is Proxbox one by checking tag and name.
                 2.2.1. if it's Proxbox one, it will return it.
                 2.2.2. if it's not Proxbox one, it will create a default one.
-        3. if 'all' is True, it will return all `Cluster Type` registered on Netbox.
+        3. if 'all' is True, it will return all 'Objects' registered on Netbox.
     """
 
     def __init__(
