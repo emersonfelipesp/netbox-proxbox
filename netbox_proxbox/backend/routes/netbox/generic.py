@@ -5,9 +5,6 @@ from typing import Annotated
 from netbox_proxbox.backend.session.netbox import NetboxSessionDep
 from netbox_proxbox.backend.exception import ProxboxException
 
-from netbox_proxbox.backend.schemas.netbox.virtualization import ClusterTypeSchema
-
-
 class NetboxBase:
     """
     Class to handle Netbox 'Objects'.
@@ -30,12 +27,12 @@ class NetboxBase:
         id: Annotated[
             int,
             Query(
-                title="Cluster Type ID", description="Netbox Cluster Type ID of Nodes and/or Clusters."
+                title="Object ID"
             )
         ] = None,
         all: Annotated[
             bool,
-            Query(title="List All Cluster Types", description="List all Cluster Types registered on Netbox.")
+            Query(title="List All Objects", description="List all Objects registered on Netbox.")
         ] = False,
         
     ):
@@ -43,6 +40,7 @@ class NetboxBase:
         self.id = id
         self.all = all
         self.pynetbox_path = getattr(getattr(self.nb.session, self.app), self.endpoint)
+        self.extra_dict_fields = None
         
     # Default Cluster Type Params
     default_name = None
@@ -52,11 +50,13 @@ class NetboxBase:
     # Parameters to be used as Pynetbox class attributes
     app = None
     endpoint = None
+    object_name = None
     
-
     
-    
-    async def get(self):
+    async def get(
+        self,
+        default_extra_fields: dict = None
+    ):
         # 1. If 'id' provided, use it to get the Cluster Type from Netbox using it.
         if self.id:
             response = None
@@ -66,7 +66,7 @@ class NetboxBase:
             
             except Exception as error:
                 raise ProxboxException(
-                    message="Error trying to get Cluster Type from Netbox using the specified ID '{self.id}'.",
+                    message=f"Error trying to get {self.object_name} from Netbox using the specified ID '{self.id}'.",
                     error=f"{error}"
                 )
             
@@ -77,17 +77,19 @@ class NetboxBase:
             # 1.2. Raise ProxboxException if object is not found.
             else:
                 raise ProxboxException(
-                    message=f"Cluster Type with ID '{self.id}' not found on Netbox."
+                    message=f"{self.object_name} with ID '{self.id}' not found on Netbox."
                 )
         
         # 2. Check if there's any Cluster Type registered on Netbox.
         else:
             try:
                 response = self.pynetbox_path.all()
+                print(response, len)
                 
                 # 2.1. If there's no Cluster Type registered on Netbox, create a default one.
                 if len(response) == 0:
-                    default_cluster_type_obj = await self.post(default=True)
+                    print("2.1. If there's no Cluster Type registered on Netbox, create a default one.")
+                    default_cluster_type_obj = await self.post(default=True, default_extra_fields=default_extra_fields)
                     
                     return default_cluster_type_obj
                 
@@ -113,30 +115,43 @@ class NetboxBase:
                         return get_proxbox_cluster_type
                     
                     # 2.2.2. If it's not Proxbox one, create a default one.
+                    print("2.2.2. If it's not Proxbox one, create a default one.")
                     default_cluster_type_obj = await self.post(default=True)
                     return default_cluster_type_obj
                 
             except Exception as error:
                 raise ProxboxException(
-                    message="Error trying to get 'Cluster Types' from Netbox.",
+                    message=f"Error trying to get '{self.object_name}' from Netbox.",
                     python_exception=f"{error}"
                 )
                 
-    async def post(self, default: bool = False, data: ClusterTypeSchema = None):
+    async def post(
+        self,
+        default: bool = False,
+        default_extra_fields: dict = None,
+        data: dict = None,
+    ):
+        base_dict_fields = {
+            "name": self.default_name,
+            "slug": self.default_slug,
+            "description": self.default_description,
+            "tags": [self.nb.tag.id]
+        }
+    
         if default:
             try:
+                if default_extra_fields:
+                    base_dict_fields.update(default_extra_fields)
+                
                 response = self.pynetbox_path.create(
-                    name = self.default_name,
-                    slug = self.default_slug,
-                    description = self.default_description,
-                    tags = [self.nb.tag.id]
+                    base_dict_fields
                 )
                 
                 return response
             
             except Exception as error:
                 raise ProxboxException(
-                    message="Error trying to create default Cluster Type on Netbox.",
+                    message=f"Error trying to create default {self.object_name} on Netbox.",
                     python_exception=f"{error}"
                 )
         
@@ -149,7 +164,7 @@ class NetboxBase:
             
             except Exception as error:
                 raise ProxboxException(
-                    message="Error trying to create Cluster Type on Netbox.",
+                    message=f"Error trying to create {self.object_name} on Netbox.",
                     detail=f"Payload provided: {data_dict}",
                     python_exception=f"{error}"
                 )

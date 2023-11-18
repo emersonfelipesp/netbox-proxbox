@@ -8,3 +8,4 @@ class ClusterType(NetboxBase):
     
     app = "virtualization"
     endpoint = "cluster_types"
+    object_name = "Cluster Type"

@@ -7,3 +7,4 @@ class Sites(NetboxBase):
     
     app = "dcim"
     endpoint = "sites"
+    object_name = "Site"
