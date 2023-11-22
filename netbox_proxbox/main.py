@@ -12,6 +12,7 @@ from .backend.routes.netbox.virtualization import router as nb_virtualization_ro
 
 # Proxbox Routes
 from .backend.routes.proxbox import router as proxbox_router
+from .backend.routes.proxbox.clusters import router as pb_cluster_router
 
 # Proxmox Routes
 from .backend.routes.proxmox import router as proxmox_router
@@ -41,14 +42,21 @@ async def proxmoxer_exception_handler(request: Request, exc: ProxboxException):
 #
 # Routes (Endpoints)
 #
+# Netbox Routes
 app.include_router(netbox_router, prefix="/netbox", tags=["netbox"])
 app.include_router(nb_dcim_router, prefix="/netbox/dcim", tags=["netbox / dcim"])
 app.include_router(nb_virtualization_router, prefix="/netbox/virtualization", tags=["netbox / virtualization"])
 
-app.include_router(proxbox_router, prefix="/proxbox", tags=["proxbox"])
+# Proxmox Routes
 app.include_router(px_nodes_router, prefix="/proxmox/nodes", tags=["proxmox / nodes"])
 app.include_router(px_cluster_router, prefix="/proxmox/cluster", tags=["proxmox / cluster"])
 app.include_router(proxmox_router, prefix="/proxmox", tags=["proxmox"])
+
+# Proxbox Routes
+app.include_router(proxbox_router, prefix="/proxbox", tags=["proxbox"])
+app.include_router(pb_cluster_router, prefix="/proxbox/clusters", tags=["proxbox / clusters"])
+
+
 
 
 

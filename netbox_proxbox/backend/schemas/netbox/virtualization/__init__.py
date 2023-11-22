@@ -20,6 +20,6 @@ class ClusterSchema(BaseModel):
     tenant: int | None = None
     description: str | None = None
     comments: str | None = None
-    tags: list[TagSchema] | None = None
+    tags: list[int] | None = None
     custom_fields: dict | None = None
     
