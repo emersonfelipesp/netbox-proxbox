@@ -5,6 +5,8 @@ from typing import Annotated
 from netbox_proxbox.backend.session.netbox import NetboxSessionDep
 from netbox_proxbox.backend.exception import ProxboxException
 
+from netbox_proxbox import logger
+
 class NetboxBase:
     """
     Class to handle Netbox 'Objects'.
@@ -56,7 +58,12 @@ class NetboxBase:
             "description": self.default_description,
             "tags": [self.nb.tag.id]
         }
-    
+        logger.info(f"Teste: {self.__class__.__name__}")
+        logger.warning(f"Teste: {self.__class__.__name__}")
+        logger.critical(f"Teste: {self.__class__.__name__}")
+        logger.error(f"Teste: {self.__class__.__name__}")
+        logger.debug(f"Teste: {self.__class__.__name__}")
+
     # Default Cluster Type Params
     default_name = None
     default_slug = None

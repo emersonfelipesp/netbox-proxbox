@@ -25,7 +25,11 @@ from .backend.schemas import *
 PROXBOX_PLUGIN_NAME = "netbox_proxbox"
 
 # Init FastAPI
-app = FastAPI()
+app = FastAPI(
+    title="Proxbox Backend",
+    description="## Proxbox Backend made in FastAPI framework",
+    version="0.0.1"
+)
 
 @app.exception_handler(ProxboxException)
 async def proxmoxer_exception_handler(request: Request, exc: ProxboxException):
