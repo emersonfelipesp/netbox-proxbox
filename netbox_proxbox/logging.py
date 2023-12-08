@@ -1,7 +1,4 @@
 import logging
-from logging.handlers import TimedRotatingFileHandler
-
-import logging
 
 # ANSI escape sequences for colors
 class AnsiColorCodes:
@@ -28,41 +25,49 @@ class ColorizedFormatter(logging.Formatter):
     def format(self, record):
         color = self.LEVEL_COLORS.get(record.levelno, AnsiColorCodes.WHITE)
         
-        #record.asctime = f"{AnsiColorCodes.CYAN}{record.asctime}{AnsiColorCodes.RESET}"
         record.module = f"{AnsiColorCodes.DARK_GRAY}{record.module}{AnsiColorCodes.RESET}"
 
         record.levelname = f"{color}{record.levelname}{AnsiColorCodes.RESET}"
         return super().format(record)
 
+def setup_logger():
+    # Path to log file
+    log_path = '/var/log/proxbox.log'
 
-# Path to log file
-log_path = '/var/log/proxbox.log'
+    # Create a logger
+    logger = logging.getLogger('proxbox')
 
-# Create a logger
-logger = logging.getLogger('proxbox')
-logger.setLevel(logging.DEBUG)
+    logger.propagate = False
 
-# Create a console handler
-console_handler = logging.StreamHandler()
+    logger.setLevel(logging.DEBUG)
 
-# Log all messages in the console
-console_handler.setLevel(logging.DEBUG)
+    # # Create a console handler
+    console_handler = logging.StreamHandler()
 
-# Create a formatter with colors
-formatter = ColorizedFormatter('[%(asctime)s] [%(levelname)s] %(module)s: %(message)s')
+    # # Log all messages in the console
+    # console_handler.setLevel(logging.DEBUG)
 
-# Set the formatter for the console handler and file handler
-console_handler.setFormatter(formatter)
+    # # Create a formatter with colors
+    # formatter = ColorizedFormatter('%(name)s [%(asctime)s] [%(levelname)-8s] %(module)s: %(message)s')
+    # #formatter = logging.Formatter('[%(asctime)s] [%(levelname)s] %(module)s: %(message)s')
+    # # Set the formatter for the console handler and file handler
+    # console_handler.setFormatter(formatter)
 
-# Create a file handler
-file_handler = TimedRotatingFileHandler(log_path, when='midnight', interval=1, backupCount=7)
+    # # Create a file handler
+    # file_handler = TimedRotatingFileHandler(log_path, when='midnight', interval=1, backupCount=7)
 
-# Log only WARNINGS and above in the file
-file_handler.setLevel(logging.WARNING)
+    # # Log only WARNINGS and above in the file
+    # file_handler.setLevel(logging.WARNING)
 
-# Set the formatter for the file handler
-file_handler.setFormatter(formatter)
+    # # Set the formatter for the file handler
+    # file_handler.setFormatter(formatter)
 
-# Add the handlers to the logger
-logger.addHandler(console_handler)
-logger.addHandler(file_handler)
+    # # Add the handlers to the logger
+    logger.addHandler(console_handler)
+    # logger.addHandler(file_handler)
+    
+    
+    return logger
+
+
+logger = setup_logger()

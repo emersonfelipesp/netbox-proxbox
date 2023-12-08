@@ -14,6 +14,7 @@ router = APIRouter()
 @router.get("/cluster-types")
 async def get_cluster_types( all = None, cluster_type: ClusterType = Depends() ):
     print(f"1 - all: {all}")
+    
     return await cluster_type.get()
 
 @router.post("/cluster-types")

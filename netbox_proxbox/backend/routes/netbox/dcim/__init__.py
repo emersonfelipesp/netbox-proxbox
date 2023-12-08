@@ -7,6 +7,7 @@ from .sites import Sites
 from netbox_proxbox.backend.schemas.netbox import CreateDefaultBool
 from netbox_proxbox.backend.schemas.netbox.dcim import SitesSchema
 
+from netbox_proxbox import logger
 
 # FastAPI Router
 router = APIRouter()
@@ -15,7 +16,12 @@ router = APIRouter()
 # /sites routes
 #
 @router.get("/sites")
-async def get_sites( site: Sites = Depends() ): return await site.get()
+async def get_sites(
+    site: Sites = Depends() 
+):
+    print("sites")
+    logger.info("sites")
+    #return await site.get()
     
 @router.post("/sites")
 async def create_sites(
