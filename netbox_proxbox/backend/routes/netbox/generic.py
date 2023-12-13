@@ -242,7 +242,6 @@ class NetboxBase:
         self,
         data = None,
     ):
-        #logger.info(f"Creating '{self.object_name}' object on Netbox.")
         if self.default:
  
             logger.info(f"[POST] Creating DEFAULT '{self.object_name}' object on Netbox.")
@@ -273,20 +272,21 @@ class NetboxBase:
             try:
                 logger.info(f"[POST] Creating '{self.object_name}' object on Netbox.")
                 
-                # Convert Pydantic model to Dict through 'model_dump' Pydantic method.
-                data_dict = data.model_dump(exclude_unset=True)
+                if isinstance(data, dict) == False:
+                    # Convert Pydantic model to Dict through 'model_dump' Pydantic method.
+                    data = data.model_dump(exclude_unset=True)
                 
-                check_duplicate_result = await self._check_duplicate(object = data_dict)
+                check_duplicate_result = await self._check_duplicate(object = data)
                 
                 if check_duplicate_result == None:
                     
                     # Check if tags field exists on the payload and if true, append the Proxbox tag. If not, create it.
-                    if data_dict.get("tags") == None:
-                        data_dict["tags"] = [self.nb.tag.id]
+                    if data.get("tags") == None:
+                        data["tags"] = [self.nb.tag.id]
                     else:
-                        data_dict["tags"].append(self.nb.tag.id)
+                        data["tags"].append(self.nb.tag.id)
                         
-                    response = self.pynetbox_path.create(data_dict)
+                    response = self.pynetbox_path.create(data)
                     
                     if response:
                         logger.info(f"[POST] '{self.object_name}' object created successfully. {self.object_name} ID: {response.id}")
@@ -303,7 +303,7 @@ class NetboxBase:
             except Exception as error:
                 raise ProxboxException(
                     message=f"Error trying to create {self.object_name} on Netbox.",
-                    detail=f"Payload provided: {data_dict}",
+                    detail=f"Payload provided: {data}",
                     python_exception=f"{error}"
                 )
         
@@ -311,6 +311,11 @@ class NetboxBase:
             message=f"[POST] No data provided to create '{self.object_name}' on Netbox.",
             detail=f"Please provide a JSON payload to create the '{self.object_name}' on Netbox or set 'default' to 'Trsue' on Query Parameter to create a default one."
         )
+
+
+
+
+
 
     async def _check_duplicate(self, search_params: dict = None, object: dict = None):
         
