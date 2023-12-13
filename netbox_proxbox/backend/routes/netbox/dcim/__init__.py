@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Body
 
 from typing import Annotated
 
@@ -24,11 +24,20 @@ async def get_sites(
 @router.post("/sites")
 async def create_sites(
     site: Sites = Depends(),
-    default: CreateDefaultBool = False,
-    data: SitesSchema = None
+    data: Annotated[SitesSchema, Body()] = None
 ):
     """
     **default:** Boolean to define if Proxbox should create a default Site if there's no Site registered on Netbox.\n
     **data:** JSON to create the Site on Netbox. You can create any Site you want, like a proxy to Netbox API.
     """
-    return await site.post(default, data)
+
+
+    # if default:
+    #     print(type(default))
+    #     print(default)
+    #     return await site(default=True).post()
+
+    if data:
+        return await site.post(data)
+    
+    return await site.post()
