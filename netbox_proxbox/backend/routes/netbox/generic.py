@@ -6,14 +6,11 @@ from typing_extensions import Doc
 from netbox_proxbox.backend.session.netbox import NetboxSessionDep
 from netbox_proxbox.backend.exception import ProxboxException
 
-from netbox_proxbox import logger
+from netbox_proxbox.backend.logging import logger
 
 class NetboxBase:
     """
     ## Class to handle Netbox Objects.
-    
-    Warning: Deprecated
-        Stop using this class
     
     !!! Logic
         - it will use `id` to get the `Objects` from Netbox if provided.\n
@@ -64,8 +61,6 @@ class NetboxBase:
         
         ] = False,
     ):
-        print("Inside NetboxBase.__init__")
-        print(f"hasHandlers: {logger.hasHandlers()}")
         self.nb = nb
         self.id = id
         self.all = all
@@ -99,65 +94,65 @@ class NetboxBase:
     async def get(
         self,
     ):
+        logger.info(f"[GET] Getting '{self.object_name}' from Netbox.")
+        
         if self.id: return await self._get_by_id()
         if self.all: return await self._get_all()
         
-        
-        
-        
-        # 2.1. If there's no Object registered on Netbox, create a default one.
+
         if self.pynetbox_path.count() == 0:
-            print(f"2.1. If there's no {self.object_name} registered on Netbox, create a default one.")
-                
+            
+            logger.info(f"[GET] There's no '{self.object_name}' registered on Netbox. Creating a DEFAULT ONE.")
+            
+            self.default = True
             create_default_object = await self.post()
-                
+             
             if create_default_object != None:
-                logger.info(f"No objects found. Default '{self.object_name}' created successfully. {self.object_name} ID: {create_default_object.id}")
+                logger.info(f"[GET] Default '{self.object_name}' created successfully. {self.object_name} ID: {create_default_object.id}")
                 return create_default_object
                 
             else:
-                print('teste')
-                logger.info("teste")
                 raise ProxboxException(
-                    message=f"Error trying to create default {self.object_name} on Netbox.",
+                    message=f"[GET] Error trying to create default '{self.object_name}' on Netbox.",
                     detail=f"No objects found. Default '{self.object_name}' could not be created."
                 )
             
         
                     
-
-        
-        
-
-        
-        
         # 2. Check if there's any 'Object' registered on Netbox.
         try:
             
             # 2.2
-            # 2.2.1 If there's any Cluster Type registered on Netbox, check if is Proxbox one by checking tag and name.
+            # 2.2.1 If there's any 'Object' registered on Netbox, check if is Proxbox one by checking tag and name.
             try:
+                logger.info(f"[GET] '{self.object_name}' found on Netbox. Checking if it's 'Proxbox' one...")
                 get_object = self.pynetbox_path.get(
                     name=self.default_name,
                     slug=self.default_slug,
-                    tags=[self.nb.tag.id]
+                    tag=[self.nb.tag.slug]
                 )
+                
             except ValueError as error:
+                logger.warning(f"Mutiple objects by get() returned. Proxbox will use filter(), delete duplicate objects and return only the first one.\n   > {error}")
                 get_object = await self._check_duplicate(
                     search_params = {
                         "name": self.default_name,
                         "slug": self.default_slug,
-                        "tags": [self.nb.tag.id],
+                        "tag": [self.nb.tag.slug],
                     }
                 )
 
             if get_object != None:
+                logger.info(f"[GET] The '{self.object_name}' found is from 'Proxbox' (because it has the tag). Returning it.")
                 return get_object
             
             # 2.2.2. If it's not Proxbox one, create a default one.
-            print("2.2.2. If it's not Proxbox one, create a default one.")
+            logger.info(f"[GET] The '{self.object_name}' object found IS NOT from 'Proxbox'. Creating a default one.")
+            self.default = True
             default_object = await self.post()
             return default_object
+        
+        except ProxboxException as error: raise error
             
         except Exception as error:
             raise ProxboxException(
@@ -235,11 +230,14 @@ class NetboxBase:
         self,
         data = None,
     ):
+        #logger.info(f"Creating '{self.object_name}' object on Netbox.")
         if self.default:
+ 
+            logger.info(f"[POST] Creating DEFAULT '{self.object_name}' object on Netbox.")
             try:
                 
                 # If default object doesn't exist, create it.
-                check_duplicate_result = await self._check_duplicate(object = self.default_dict)
+                check_duplicate_result = await self._check_duplicate()
                 if check_duplicate_result == None:
                     
                     # Create default object
@@ -251,10 +249,11 @@ class NetboxBase:
                     return check_duplicate_result
                 
                     
-                
+            except ProxboxException as error: raise error
+            
             except Exception as error:
                 raise ProxboxException(
-                    message=f"Error trying to create default {self.object_name} on Netbox.",
+                    message=f"[POST] Error trying to create DEFAULT '{self.object_name}' on Netbox.",
                     python_exception=f"{error}"
                 )
         
@@ -272,6 +271,8 @@ class NetboxBase:
                 else:
                     return check_duplicate_result
             
+            except ProxboxException as error: raise error
+            
             except Exception as error:
                 raise ProxboxException(
                     message=f"Error trying to create {self.object_name} on Netbox.",
@@ -279,7 +280,66 @@ class NetboxBase:
                     python_exception=f"{error}"
                 )
 
-    async def _check_duplicate(self, search_params: dict = None):
+    async def _check_duplicate(self, search_params: dict = None, object: dict = None):
+        
+        logger.info(f"[CHECK DUPLICATE] Checking if '{self.object_name}' exists on Netbox before creating it.")
+        
+        
+        if self.default:
+            logger.info("[CHECK DUPLICATE] Checking default object.")
+            try:
+                result = self.pynetbox_path.get(
+                    name=self.default_name,
+                    slug=self.default_slug,
+                    tag=[self.nb.tag.slug]
+                )
+                
+                
+                if result:
+                    return result
+                
+                else:
+                    # If no object found searching using tag, try to find without it, using just name and slug.
+                    result = self.pynetbox_path.get(
+                        name=self.default_name,
+                        slug=self.default_slug,
+                    )
+                    
+                    
+                    if result:
+                        raise ProxboxException(
+                            message=f"Default '{self.object_name}' with ID '{result.id}' found on Netbox, but without Proxbox tag. Please delete it (or add the tag) and try again.",
+                            detail="Netbox does not allow duplicated names and/or slugs."
+                        )
+                    
+                
+                create = self.pynetbox_path.create(self.default_dict)
+                return create
+            
+            except ProxboxException as error: raise error
+            
+            except Exception as error:
+                raise ProxboxException(
+                    message=f"[POST] Error trying to create default {self.object_name} on Netbox.",
+                    python_exception=f"{error}"
+                )
+                
+        if object:
+            try:
+                result = self.pynetbox_path.get(object)
+                if result:
+                    return result
+                else:
+                    create = self.pynetbox_path.create(object)
+                    return create
+            except:
+                raise ProxboxException(
+                    message=f"Error trying to create {self.object_name} on Netbox.",
+                    detail=f"Payload provided: {object}",
+                    python_exception=f"{error}"
+                )
+
+
         name = search_params.get("name")
         slug = search_params.get("slug")
         
@@ -320,6 +380,8 @@ class NetboxBase:
                 # Returns first element of the list.
                 print(f"[get] search_result: {search_result}")
                 return single_default
+            
+            except ProxboxException as error: raise error
             
             except Exception as error:
                 raise ProxboxException(

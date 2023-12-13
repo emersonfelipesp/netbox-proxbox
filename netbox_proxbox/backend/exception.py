@@ -1,4 +1,4 @@
-from netbox_proxbox import logger
+from netbox_proxbox.backend.logging import logger
 
 class ProxboxException(Exception):
     def __init__(
@@ -11,6 +11,15 @@ class ProxboxException(Exception):
         self.detail = detail
         self.python_exception = python_exception
         
-        logger.error(f"ProxboxException: {self.message} | Detail: {self.detail}")
+        log_message=f"ProxboxException: {self.message}"
+        
+        if self.detail:
+            log_message+=f"\n > Detail: {self.detail}"
+        
+        if self.python_exception:
+            log_message+=f"\n > Python Exception: {self.python_exception}"
+            
+        
+        logger.error(log_message)
         
         

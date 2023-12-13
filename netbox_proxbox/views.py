@@ -39,8 +39,8 @@ class HomeView(View):
         plugin_configuration = configuration.PLUGINS_CONFIG
         default_config = ProxboxConfig.default_settings
         
-        print("plugin_configuration: ", plugin_configuration, "\n\n")
-        print("default_config: ", default_config)
+        # print("plugin_configuration: ", plugin_configuration, "\n\n")
+        # print("default_config: ", default_config)
         
         return render(
             request,
@@ -52,7 +52,8 @@ class HomeView(View):
                 "default_config_json": json.dumps(default_config, indent=4)
             }
         )
-        
+
+
 class ContributingView(View):
     """Contributing"""
     template_name = 'netbox_proxbox/contributing.html'
@@ -288,20 +289,20 @@ class ProxmoxVMEditView(PermissionRequiredMixin, UpdateView):
     
     
 
-import django_tables2 as tables
+# import django_tables2 as tables
 
-class ClusterStatus(tables.Table):
-    id = tables.Column(verbose_name="ID")
-    name = tables.Column(verbose_name="Name")
-    type = tables.Column(verbose_name="Type")
-    ip = tables.Column(verbose_name="IP")
-    level = tables.Column(verbose_name="Level")
-    local = tables.Column(verbose_name="Local")
-    nodeid = tables.Column(verbose_name="Node ID")
-    nodes = tables.Column(verbose_name="Nodes")
-    online = tables.Column(verbose_name="Online")
-    quorate = tables.Column(verbose_name="Quorate")
-    version = tables.Column(verbose_name="Version")
+# class ClusterStatus(tables.Table):
+#     id = tables.Column(verbose_name="ID")
+#     name = tables.Column(verbose_name="Name")
+#     type = tables.Column(verbose_name="Type")
+#     ip = tables.Column(verbose_name="IP")
+#     level = tables.Column(verbose_name="Level")
+#     local = tables.Column(verbose_name="Local")
+#     nodeid = tables.Column(verbose_name="Node ID")
+#     nodes = tables.Column(verbose_name="Nodes")
+#     online = tables.Column(verbose_name="Online")
+#     quorate = tables.Column(verbose_name="Quorate")
+#     version = tables.Column(verbose_name="Version")
 
 
 class ProxmoxCluster(View):
@@ -311,10 +312,15 @@ class ProxmoxCluster(View):
     domain = "http://localhost:8800"
     path = "/proxmox/cluster/status"
     
+    response = None
+    response_error = None
     
+    try:
+        response = requests.get(f"{domain}{path}").json()
+    except Exception as error:
+        response_error = error
     
-    response = requests.get(f"{domain}{path}").json()
-    table_cluster_01 = ClusterStatus(response[0].get("PVE-CLUSTER-02"))
+    #table_cluster_01 = ClusterStatus(response[0].get("PVE-CLUSTER-02"))
     """
     try:
         response = requests.get(f"{domain}{path}").json()
@@ -331,6 +337,7 @@ class ProxmoxCluster(View):
             self.template_name,
             {
                 "response": self.response,
-                "table": self.table_cluster_01
+                #"table": self.table_cluster_01
+                "response_error": self.response_error
             }
         )

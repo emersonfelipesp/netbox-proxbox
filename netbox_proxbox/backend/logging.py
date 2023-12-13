@@ -1,4 +1,5 @@
 import logging
+from logging.handlers import TimedRotatingFileHandler
 
 # ANSI escape sequences for colors
 class AnsiColorCodes:
@@ -37,35 +38,34 @@ def setup_logger():
     # Create a logger
     logger = logging.getLogger('proxbox')
 
-    logger.propagate = False
-
     logger.setLevel(logging.DEBUG)
 
     # # Create a console handler
     console_handler = logging.StreamHandler()
 
-    # # Log all messages in the console
-    # console_handler.setLevel(logging.DEBUG)
+    # Log all messages in the console
+    console_handler.setLevel(logging.DEBUG)
 
-    # # Create a formatter with colors
-    # formatter = ColorizedFormatter('%(name)s [%(asctime)s] [%(levelname)-8s] %(module)s: %(message)s')
-    # #formatter = logging.Formatter('[%(asctime)s] [%(levelname)s] %(module)s: %(message)s')
-    # # Set the formatter for the console handler and file handler
-    # console_handler.setFormatter(formatter)
+    # Create a formatter with colors
+    formatter = ColorizedFormatter('%(name)s [%(asctime)s] [%(levelname)-8s] %(module)s: %(message)s')
+    #formatter = logging.Formatter('[%(asctime)s] [%(levelname)s] %(module)s: %(message)s')
+    # Set the formatter for the console handler and file handler
+    console_handler.setFormatter(formatter)
 
-    # # Create a file handler
-    # file_handler = TimedRotatingFileHandler(log_path, when='midnight', interval=1, backupCount=7)
+    # Create a file handler
+    file_handler = TimedRotatingFileHandler(log_path, when='midnight', interval=1, backupCount=7)
 
-    # # Log only WARNINGS and above in the file
-    # file_handler.setLevel(logging.WARNING)
+    # Log only WARNINGS and above in the file
+    file_handler.setLevel(logging.WARNING)
 
-    # # Set the formatter for the file handler
-    # file_handler.setFormatter(formatter)
+    # Set the formatter for the file handler
+    file_handler.setFormatter(formatter)
 
-    # # Add the handlers to the logger
+    # Add the handlers to the logger
     logger.addHandler(console_handler)
     # logger.addHandler(file_handler)
     
+    logger.propagate = False
     
     return logger
 
