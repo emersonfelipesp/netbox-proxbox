@@ -1,6 +1,6 @@
 from netbox_proxbox.backend.routes.netbox.generic import NetboxBase
 
-class Sites(NetboxBase):
+class Site(NetboxBase):
     default_name = "Proxbox Basic Site"
     default_slug = "proxbox-basic-site"
     default_description = "Proxbox Basic Site (used to identify the items the plugin created)"

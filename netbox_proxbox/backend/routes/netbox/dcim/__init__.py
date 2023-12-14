@@ -2,7 +2,11 @@ from fastapi import APIRouter, Depends, Body
 
 from typing import Annotated
 
-from .sites import Sites
+from .sites import Site
+from .devices import Device
+from .device_types import DeviceType
+from .device_roles import DeviceRole
+from .manufacturers import Manufacturer
 
 from netbox_proxbox.backend.schemas.netbox import CreateDefaultBool
 from netbox_proxbox.backend.schemas.netbox.dcim import SitesSchema
@@ -17,13 +21,13 @@ router = APIRouter()
 #
 @router.get("/sites")
 async def get_sites(
-    site: Sites = Depends() 
+    site: Site = Depends() 
 ):
     return await site.get()
     
 @router.post("/sites")
 async def create_sites(
-    site: Sites = Depends(),
+    site: Site = Depends(),
     data: Annotated[SitesSchema, Body()] = None
 ):
     """
@@ -41,3 +45,30 @@ async def create_sites(
         return await site.post(data)
     
     return await site.post()
+
+#
+# /devices routes
+#
+@router.get("/devices")
+async def get_devices(
+    device: Device = Depends() 
+):
+    return await device.get()
+
+@router.get("/manufacturers")
+async def get_manufacturers(
+    manufacturer: Manufacturer = Depends() 
+):
+    return await manufacturer.get()
+
+@router.get("/device-types")
+async def get_device_types(
+    device_type: DeviceType = Depends()
+):
+    return await device_type.get()
+
+@router.get("/device-roles")
+async def get_device_roles(
+    device_role: DeviceRole = Depends()
+):
+    return await device_role.get()

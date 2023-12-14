@@ -24,7 +24,6 @@ requires = [
     'invoke',
     'requests>=2',
     'pynetbox>=5',
-    'paramiko>=2',
     'proxmoxer>=1',
     'fastapi[all]',
     'starlette',
@@ -34,6 +33,7 @@ requires = [
     'ujson>=5.7.0',
     'orjson>=3.8.9',
     'httpcore',
+    'pydantic',
 ]
 
 dev_requires = [

@@ -45,6 +45,8 @@ async def proxbox_get_clusters(
             }
         )
         
+        print(px.cluster_status)
+        
         result.append(cluster_obj)
     
     return result

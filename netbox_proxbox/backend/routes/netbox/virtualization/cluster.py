@@ -4,8 +4,7 @@ from .cluster_type import ClusterType
 from typing import Any
 
 class Cluster(NetboxBase):
-    # Extends NetboxBase.get() 
-    
+ 
     async def extra_fields(self):
         type = await ClusterType(nb = self.nb).get()
             
