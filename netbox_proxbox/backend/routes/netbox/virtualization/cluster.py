@@ -15,11 +15,11 @@ class Cluster(NetboxBase):
             }
         )
         
-    async def get(self):
+    async def get(self, **kwargs):
         if self.default:
             await self.extra_fields()
                     
-        return await super().get()
+        return await super().get(**kwargs)
     
     async def post(self, data: Any = None):
         if self.default:

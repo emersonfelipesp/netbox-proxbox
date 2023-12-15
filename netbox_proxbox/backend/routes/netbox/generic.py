@@ -69,6 +69,7 @@ class NetboxBase:
         self.default_extra_fields = default_extra_fields
         
         self.pynetbox_path = getattr(getattr(self.nb.session, self.app), self.endpoint)
+        
         self.default_dict = {
             "name": self.default_name,
             "slug": self.default_slug,
@@ -77,6 +78,8 @@ class NetboxBase:
         }
         
         
+    # New Implementantion of "default_dict" amd "default_extra_fields".
+    base_dict = None
     
     # Default Object Parameters.
     # It should be overwritten by the child class.
@@ -93,11 +96,15 @@ class NetboxBase:
         
     async def get(
         self,
+        **kwargs
     ):
+        print(kwargs)
         logger.info(f"[GET] Getting '{self.object_name}' from Netbox.")
         
         if self.id: return await self._get_by_id()
         if self.all: return await self._get_all()
+        
+        if kwargs: return await self._get_by_kwargs(**kwargs)
         
 
         if self.pynetbox_path.count() == 0:
@@ -160,7 +167,23 @@ class NetboxBase:
                 python_exception=f"{error}"
             )
     
-    
+    async def _get_by_kwargs(self, **kwargs):
+        
+        logger.info(f"[GET] Searching '{self.object_name}' by kwargs {kwargs}.")
+        try:
+            response = self.pynetbox_path.get(**kwargs)
+            return response
+            
+        except ProxboxException as error: raise error
+        
+        except Exception as error:
+            raise ProxboxException(
+                message=f"[GET] Error trying to get '{self.object_name}' from Netbox using the specified kwargs '{kwargs}'.",
+                python_exception=f"{error}"
+            )
+        
+        
+        
     
     async def _get_by_id(self):
         """
@@ -241,7 +264,7 @@ class NetboxBase:
     async def post(
         self,
         data = None,
-    ):
+    ): 
         if self.default:
  
             logger.info(f"[POST] Creating DEFAULT '{self.object_name}' object on Netbox.")
@@ -275,6 +298,11 @@ class NetboxBase:
                 if isinstance(data, dict) == False:
                     # Convert Pydantic model to Dict through 'model_dump' Pydantic method.
                     data = data.model_dump(exclude_unset=True)
+                
+                if self.base_dict:
+                
+                    # Merge base_dict and data dict.
+                    data = self.base_dict | data
                 
                 check_duplicate_result = await self._check_duplicate(object = data)
                 

@@ -33,3 +33,12 @@ class DeviceRole(NetboxBase):
     app = "dcim"
     endpoint = "device_roles"
     object_name = "Device Types"
+    
+    base_dict = {
+        "name": default_name,
+        "slug": default_slug,
+        "color": "ff5722",
+        "vm_role": False,
+        "description": default_description,
+        "tags": [self.nb.tag.id]
+    }

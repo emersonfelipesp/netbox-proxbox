@@ -61,6 +61,21 @@ async def get_manufacturers(
 ):
     return await manufacturer.get()
 
+@router.post("/manufacturers")
+async def create_manufacturers(
+    manufacturer: Manufacturer = Depends(),
+    data: Annotated[dict, Body()] = None
+):
+    """
+    **default:** Boolean to define if Proxbox should create a default Manufacturer if there's no Manufacturer registered on Netbox.\n
+    **data:** JSON to create the Manufacturer on Netbox. You can create any Manufacturer you want, like a proxy to Netbox API.
+    """
+
+    if data:
+        return await manufacturer.post(data)
+    
+    return await manufacturer.post()
+
 @router.get("/device-types")
 async def get_device_types(
     device_type: DeviceType = Depends()
