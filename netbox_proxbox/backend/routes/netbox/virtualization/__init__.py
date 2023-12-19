@@ -3,6 +3,7 @@ from typing import Annotated
 
 from .cluster_type import ClusterType
 from .cluster import Cluster
+from .virtual_machines import VirtualMachine
 
 from netbox_proxbox.backend.schemas.netbox import CreateDefaultBool
 from netbox_proxbox.backend.schemas.netbox.virtualization import ClusterTypeSchema, ClusterSchema
@@ -75,3 +76,17 @@ async def create_cluster(
     #     return await cluster.post(data = data)
     return await cluster.post(data)
     
+
+@router.get("/virtual-machines")
+async def get_virtual_machines(
+    virtual_machine: VirtualMachine = Depends(),
+):
+    return await virtual_machine.get()
+
+
+@router.post("/virtual-machines")
+async def create_virtual_machines(
+    virtual_machine: VirtualMachine = Depends(),
+    data: Annotated[dict, Body()] = None
+):
+    return await virtual_machine.post(data)
