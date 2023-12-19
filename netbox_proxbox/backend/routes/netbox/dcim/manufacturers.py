@@ -10,8 +10,10 @@ class Manufacturer(NetboxBase):
     endpoint = "manufacturers"
     object_name = "Manufacturer"
     
-    base_dict = {
-        "name": default_name,
-        "slug": default_slug,
-        "description": default_description,
-    }
+    
+    async def get_base_dict(self):
+        return {
+            "name": self.default_name,
+            "slug": self.default_slug,
+            "description": self.default_description,
+        }

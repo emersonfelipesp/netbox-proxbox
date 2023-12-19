@@ -6,7 +6,7 @@ from netbox_proxbox.backend.enum.netbox.virtualization import ClusterStatusOptio
 
 class ClusterTypeSchema(BaseModel):
     name: str
-    slug: str
+    slug: str | None = None
     description: str | None = None
     tags: list[TagSchema] | None = None
     custom_fields: dict | None = None

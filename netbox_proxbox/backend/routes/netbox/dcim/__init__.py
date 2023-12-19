@@ -35,12 +35,6 @@ async def create_sites(
     **data:** JSON to create the Site on Netbox. You can create any Site you want, like a proxy to Netbox API.
     """
 
-
-    # if default:
-    #     print(type(default))
-    #     print(default)
-    #     return await site(default=True).post()
-
     if data:
         return await site.post(data)
     
@@ -54,6 +48,18 @@ async def get_devices(
     device: Device = Depends() 
 ):
     return await device.get()
+
+@router.post("/devices")
+async def create_devices(
+    device: Device = Depends(),
+    data: Annotated[dict, Body()] = None
+):
+    """
+    **default:** Boolean to define if Proxbox should create a default Device if there's no Device registered on Netbox.\n
+    **data:** JSON to create the Device on Netbox. You can create any Device you want, like a proxy to Netbox API.
+    """
+
+    return await device.post(data)
 
 @router.get("/manufacturers")
 async def get_manufacturers(
@@ -71,10 +77,13 @@ async def create_manufacturers(
     **data:** JSON to create the Manufacturer on Netbox. You can create any Manufacturer you want, like a proxy to Netbox API.
     """
 
-    if data:
-        return await manufacturer.post(data)
-    
-    return await manufacturer.post()
+    return await manufacturer.post(data)
+
+
+
+"""
+DEVICE TYPES 
+"""
 
 @router.get("/device-types")
 async def get_device_types(
@@ -82,8 +91,28 @@ async def get_device_types(
 ):
     return await device_type.get()
 
+@router.post("/device-types")
+async def create_device_types(
+    device_type: DeviceType = Depends(),
+    data: Annotated[dict, Body()] = None
+):
+    return await device_type.post(data)
+
+
+"""
+DEVICE ROLES
+"""
+
 @router.get("/device-roles")
 async def get_device_roles(
     device_role: DeviceRole = Depends()
 ):
     return await device_role.get()
+
+
+@router.post("/device-roles")
+async def create_device_roles(
+    device_role: DeviceRole = Depends(),
+    data: Annotated[dict, Body()] = None
+):
+    return await device_role.post(data)

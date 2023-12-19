@@ -17,16 +17,15 @@ from netbox_proxbox.backend import (
     Device
 )
 
-# from netbox_proxbox.backend.routes.netbox.virtualization.cluster_type import ClusterType
-# from netbox_proxbox.backend.routes.netbox.virtualization.cluster import Cluster
-
-# from netbox_proxbox.backend.routes.netbox.dcim.sites import Site
-# from netbox_proxbox.backend.routes.netbox.dcim.device_roles import DeviceRole
-# from netbox_proxbox.backend.routes.netbox.dcim.device_types import DeviceType
-# from netbox_proxbox.backend.routes.netbox.dcim.devices import Device
-
-
 router = APIRouter()
+
+
+async def proxmox_session_with_cluster(
+    pxs: ProxmoxSessionsDep,
+    nb: NetboxSessionDep
+):
+    """Get Proxmox Session with Cluster"""
+
 
 @router.get("/")
 async def proxbox_get_clusters(
@@ -41,15 +40,29 @@ async def proxbox_get_clusters(
     
     for px in pxs:
         
+        """
+        Before creating the Cluster, we need to create the Cluster Type.
+        """
         cluster_type_name = f"Proxmox {px.mode.capitalize()}"
         cluster_type_slug = f"proxmox-{px.mode}"
+        
+        
+        standalone_description = "Proxmox Standalone. This Proxmox has only one node and thus is not part of a Cluster."
+        cluster_description = "Proxmox Cluster. This Proxmox has more than one node and thus is part of a Cluster."
+        
+        
+        description = ""
+        if px.mode == "standalone":
+            description = standalone_description
+        elif px.mode == "cluster":
+            description = cluster_description
         
         # Create Cluster Type object before the Cluster itself
         cluster_type_obj = await ClusterType(nb = nb).post(
             data = {
                 "name": cluster_type_name,
                 "slug": cluster_type_slug,
-                "description": f"Proxmox Cluster '{px.name}'"
+                "description": description
             }
         )
         
@@ -62,24 +75,32 @@ async def proxbox_get_clusters(
                 "status": "active",
             }
         )
-        
-        print(px.cluster_status)
-        
-        result.append(cluster_obj)
+         
+        result.append(
+            {
+                "name": px.name,
+                "netbox": {
+                    "cluster": cluster_obj,
+                }
+            }
+        )
     
     return result
 
 @router.get("/nodes")
 async def get_nodes(
-    pxs: ProxmoxSessionsDep,
+    #pxs: ProxmoxSessionsDep,
     nb: NetboxSessionDep,
+    pxs: ProxmoxSessionsDep,
 ):
     
     """Get Proxmox Nodes from a Cluster"""
+
     
     result = []
     
     for px in pxs:
+        
         
         get_cluster_from_netbox = await Cluster(nb = nb).get(name = px.name)
     
@@ -94,7 +115,7 @@ async def get_nodes(
         nodes = [
             await Device(nb=nb).post(data = {
                 "name": node.get("node"),
-                "cluster": get_cluster_from_netbox["id"],
+                "cluster": px.get("netbox").get("cluster").get("id"),
                 "role": device_role.id,
                 "site": site.id,
                 "status": "active",

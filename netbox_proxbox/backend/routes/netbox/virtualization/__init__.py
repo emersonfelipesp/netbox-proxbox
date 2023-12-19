@@ -20,13 +20,13 @@ async def get_cluster_types( all = None, cluster_type: ClusterType = Depends() )
 @router.post("/cluster-types")
 async def create_cluster_types(
     cluster_type: ClusterType = Depends(),
-    default: Annotated[
-        bool, 
-        Body(
-            title="Create default object.",
-            description="Create a default object if there's no object registered on Netbox."
-        )
-    ] = False,
+    # default: Annotated[
+    #     bool, 
+    #     Body(
+    #         title="Create default object.",
+    #         description="Create a default object if there's no object registered on Netbox."
+    #     )
+    # ] = False,
     data: Annotated[
         ClusterTypeSchema,
         Body(
@@ -52,24 +52,26 @@ async def get_clusters(
 @router.post("/clusters")
 async def create_cluster(
     cluster: Cluster = Depends(),
-    default: Annotated[
-        bool, 
-        Body(
-            title="Create default object.",
-            description="Create a default object if there's no object registered on Netbox."
-        ),
-    ] = False,
-    data: ClusterSchema = None,
+    # default: Annotated[
+    #     bool, 
+    #     Body(
+    #         title="Create default object.",
+    #         description="Create a default object if there's no object registered on Netbox."
+    #     ),
+    # ] = False,
+    data: dict = None,
 ):
+    print(data, type(data))
     """
     **default:** Boolean to define if Proxbox should create a default Cluster Type if there's no Cluster Type registered on Netbox.\n
     **data:** JSON to create the Cluster Type on Netbox. You can create any Cluster Type you want, like a proxy to Netbox API.
     """
 
-    if default:
-        return await cluster.post()
+    # if default:
+    #     return await cluster.post()
 
-    if data:
-        print(f"create_cluster: {data}")
-        return await cluster.post(data = data)
+    # if data:
+    #     print(f"create_cluster: {data}")
+    #     return await cluster.post(data = data)
+    return await cluster.post(data)
     

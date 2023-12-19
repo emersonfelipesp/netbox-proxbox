@@ -45,10 +45,10 @@ class NetboxBase:
             bool,
             Query(title="Create Default Object", description="Create a default Object if there's no Object registered on Netbox."),
         ] = False,
-        default_extra_fields: Annotated[
-            dict,
-            Body(title="Extra Fields", description="Extra fields to be added to the default Object.")
-        ] = None,
+        # default_extra_fields: Annotated[
+        #     dict,
+        #     Body(title="Extra Fields", description="Extra fields to be added to the default Object.")
+        # ] = None,
         ignore_tag: Annotated[
             bool,
             Query(
@@ -66,26 +66,29 @@ class NetboxBase:
         self.all = all
         self.default = default
         self.ignore_tag = ignore_tag
-        self.default_extra_fields = default_extra_fields
+        #self.default_extra_fields = default_extra_fields
         
         self.pynetbox_path = getattr(getattr(self.nb.session, self.app), self.endpoint)
         
-        self.default_dict = {
-            "name": self.default_name,
-            "slug": self.default_slug,
-            "description": self.default_description,
-            "tags": [self.nb.tag.id]
-        }
+        # self.default_dict = {
+        #     "name": self.default_name,
+        #     "slug": self.default_slug,
+        #     "description": self.default_description,
+        #     "tags": [self.nb.tag.id]
+        # }
         
         
-    # New Implementantion of "default_dict" amd "default_extra_fields".
+    # New Implementantion of "default_dict" and "default_extra_fields".
     base_dict = None
+    async def get_base_dict(self):
+        "This method MUST be overwritten by the child class."
+        pass
     
     # Default Object Parameters.
     # It should be overwritten by the child class.
-    default_name = None
-    default_slug = None
-    default_description = None
+    # default_name = None
+    # default_slug = None
+    # default_description = None
     
     # Parameters to be used as Pynetbox class attributes. 
     # It should be overwritten by the child class.
@@ -98,6 +101,8 @@ class NetboxBase:
         self,
         **kwargs
     ):
+        self.base_dict = await self.get_base_dict()
+        
         print(kwargs)
         logger.info(f"[GET] Getting '{self.object_name}' from Netbox.")
         
@@ -263,82 +268,86 @@ class NetboxBase:
               
     async def post(
         self,
-        data = None,
+        data: dict = None,
     ): 
-        if self.default:
- 
-            logger.info(f"[POST] Creating DEFAULT '{self.object_name}' object on Netbox.")
-            try:
-                
-                # If default object doesn't exist, create it.
-                check_duplicate_result = await self._check_duplicate()
-                if check_duplicate_result == None:
-                    
-                    # Create default object
-                    response = self.pynetbox_path.create(self.default_dict)
-                    return response
-                
-                # If duplicate object found, return it.
-                else:
-                    return check_duplicate_result
-                
-                    
-            except ProxboxException as error: raise error
-            
-            except Exception as error:
-                raise ProxboxException(
-                    message=f"[POST] Error trying to create DEFAULT '{self.object_name}' on Netbox.",
-                    python_exception=f"{error}"
-                )
-        
+        self.base_dict = await self.get_base_dict()
+        print(self.base_dict)
+        print(data)
+
         if data:
-            try:
-                logger.info(f"[POST] Creating '{self.object_name}' object on Netbox.")
-                
-                if isinstance(data, dict) == False:
+            logger.info(f"[POST] Creating '{self.object_name}' object on Netbox.")
+        
+            if isinstance(data, dict) == False:
+                try:
                     # Convert Pydantic model to Dict through 'model_dump' Pydantic method.
                     data = data.model_dump(exclude_unset=True)
+                except Exception as error:
+                    raise ProxboxException(
+                        message=f"[POST] Error parsing Pydantic model to Dict.",
+                        python_exception=f"{error}",
+                    )
                 
-                if self.base_dict:
-                
-                    # Merge base_dict and data dict.
-                    data = self.base_dict | data
-                
-                check_duplicate_result = await self._check_duplicate(object = data)
-                
-                if check_duplicate_result == None:
+            # If no explicit slug was provided by the payload, create one based on the name.
+            if data.get("slug") == None:
+                logger.info("[POST] SLUG field not provided on the payload. Creating one based on the NAME or MODEL field.")
+                try:
+                    data["slug"] = data.get("name").replace(" ", "-").lower()
+                except AttributeError:
                     
-                    # Check if tags field exists on the payload and if true, append the Proxbox tag. If not, create it.
-                    if data.get("tags") == None:
-                        data["tags"] = [self.nb.tag.id]
-                    else:
-                        data["tags"].append(self.nb.tag.id)
-                        
-                    response = self.pynetbox_path.create(data)
-                    
-                    if response:
-                        logger.info(f"[POST] '{self.object_name}' object created successfully. {self.object_name} ID: {response.id}")
-                        return response
-                    
-                    else:
-                        logger.error(f"[POST] '{self.object_name}' object could not be created.")
+                    try:
+                        data["slug"] = data.get("model").replace(" ", "-").lower()
+                    except AttributeError:
+                        raise ProxboxException(
+                            message=f"[POST] No 'name' or 'model' field provided on the payload. Please provide one of them.",
+                        )
+                
+        if self.default or data == None:
+            logger.info(f"[POST] Creating DEFAULT '{self.object_name}' object on Netbox.")
+            data = self.base_dict
+            
+        try:
+
+            """
+            Merge base_dict and data dict.
+            The fields not specificied on data dict will be filled with the base_dict values.
+            """
+            data = self.base_dict | data
+            
+            check_duplicate_result = await self._check_duplicate(object = data)
+            
+            if check_duplicate_result == None:
+                
+                # Check if tags field exists on the payload and if true, append the Proxbox tag. If not, create it.
+                if data.get("tags") == None:
+                    data["tags"] = [self.nb.tag.id]
                 else:
-                    logger.info(f"[POST] '{self.object_name}' object already exists on Netbox. Returning it.")
-                    return check_duplicate_result
-            
-            except ProxboxException as error: raise error
-            
-            except Exception as error:
-                raise ProxboxException(
-                    message=f"Error trying to create {self.object_name} on Netbox.",
-                    detail=f"Payload provided: {data}",
-                    python_exception=f"{error}"
-                )
+                    data["tags"].append(self.nb.tag.id)
+                    
+                response = self.pynetbox_path.create(data)
+                
+                if response:
+                    logger.info(f"[POST] '{self.object_name}' object created successfully. {self.object_name} ID: {response.id}")
+                    return response
+                
+                else:
+                    logger.error(f"[POST] '{self.object_name}' object could not be created.")
+            else:
+                logger.info(f"[POST] '{self.object_name}' object already exists on Netbox. Returning it.")
+                return check_duplicate_result
         
-        raise ProxboxException(
-            message=f"[POST] No data provided to create '{self.object_name}' on Netbox.",
-            detail=f"Please provide a JSON payload to create the '{self.object_name}' on Netbox or set 'default' to 'Trsue' on Query Parameter to create a default one."
-        )
+        except ProxboxException as error: raise error
+        
+        except Exception as error:
+            raise ProxboxException(
+                message=f"Error trying to create {self.object_name} on Netbox.",
+                detail=f"Payload provided: {data}",
+                python_exception=f"{error}"
+            )
+    
+        # raise ProxboxException(
+        #     message=f"[POST] No data provided to create '{self.object_name}' on Netbox.",
+        #     detail=f"Please provide a JSON payload to create the '{self.object_name}' on Netbox or set 'default' to 'True' on Query Parameter to create a default one."
+        # )
 
 
 
