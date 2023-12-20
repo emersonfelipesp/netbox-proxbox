@@ -8,6 +8,8 @@ from netbox_proxbox.backend.exception import ProxboxException
 
 from netbox_proxbox.backend.logging import logger
 
+import asyncio
+
 class NetboxBase:
     """
     ## Class to handle Netbox Objects.
@@ -138,7 +140,7 @@ class NetboxBase:
             # 2.2.1 If there's any 'Object' registered on Netbox, check if is Proxbox one by checking tag and name.
             try:
                 logger.info(f"[GET] '{self.object_name}' found on Netbox. Checking if it's 'Proxbox' one...")
-                get_object = self.pynetbox_path.get(
+                get_object = await asyncio.to_thread(self.pynetbox_path.get,
                     name=self.default_name,
                     slug=self.default_slug,
                     tag=[self.nb.tag.slug]
@@ -176,7 +178,7 @@ class NetboxBase:
         
         logger.info(f"[GET] Searching '{self.object_name}' by kwargs {kwargs}.")
         try:
-            response = self.pynetbox_path.get(**kwargs)
+            response = await asyncio.to_thread(self.pynetbox_path.get, **kwargs)
             return response
             
         except ProxboxException as error: raise error
@@ -201,10 +203,10 @@ class NetboxBase:
         
         try:
             if self.ignore_tag:
-                response = self.pynetbox_path.get(self.id)
+                response = await asyncio.to_thread(self.pynetbox_path.get, self.id)
             
             else:
-                response = self.pynetbox_path.get(
+                response = await asyncio.to_thread(self.pynetbox_path.get,
                     id=self.id,
                     tag=[self.nb.tag.slug]
                 )
@@ -244,7 +246,7 @@ class NetboxBase:
         if self.ignore_tag:
             try:
                 # If ignore_tag is True, return all objects from Netbox.
-                return [item for item in self.pynetbox_path.all()]
+                return [item for item in await asyncio.to_thread(self.pynetbox_path.all())]
             except Exception as error:
                 raise ProxboxException(
                     message=f"Error trying to get all '{self.object_name}' from Netbox.",
@@ -253,7 +255,7 @@ class NetboxBase:
             
         try:       
             # If ignore_tag is False, return only objects with Proxbox tag.
-            return [item for item in self.pynetbox_path.filter(tag = [self.nb.tag.slug])]
+            return [item for item in asyncio.to_thread(self.pynetbox_path.filter, tag = [self.nb.tag.slug])]
         
         except Exception as error:
             raise ProxboxException(
@@ -323,7 +325,7 @@ class NetboxBase:
                 else:
                     data["tags"].append(self.nb.tag.id)
                     
-                response = self.pynetbox_path.create(data)
+                response = await asyncio.to_thread(self.pynetbox_path.create, data)
                 
                 if response:
                     logger.info(f"[POST] '{self.object_name}' object created successfully. {self.object_name} ID: {response.id}")
@@ -361,7 +363,7 @@ class NetboxBase:
         if self.default:
             logger.info("[CHECK DUPLICATE] Checking default object.")
             try:
-                result = self.pynetbox_path.get(
+                result = await asyncio.to_thread(self.pynetbox_path.get,
                     name=self.default_name,
                     slug=self.default_slug,
                     tag=[self.nb.tag.slug]
@@ -373,7 +375,7 @@ class NetboxBase:
                 
                 else:
                     # If no object found searching using tag, try to find without it, using just name and slug.
-                    result = self.pynetbox_path.get(
+                    result = await asyncio.to_thread(self.pynetbox_path.get,
                         name=self.default_name,
                         slug=self.default_slug,
                     )
@@ -401,7 +403,7 @@ class NetboxBase:
         if object:
             try:
                 logger.info("[CHECK DUPLICATE] (1) First attempt: Checking object making EXACT MATCH with the Payload provided...")
-                result = self.pynetbox_path.get(object)
+                result = await asyncio.to_thread(self.pynetbox_path.get, object)
                 
                 if result:
                     logger.info(f"[CHECK DUPLICATE] Object found on Netbox. Returning it.")
@@ -409,7 +411,7 @@ class NetboxBase:
                 
                 else:
                     logger.info("[CHECK DUPLICATE] (2) Checking object using only NAME and SLUG provided by the Payload and also the PROXBOX TAG). If found, return it.")
-                    result_by_tag = self.pynetbox_path.get(
+                    result_by_tag = await asyncio.to_thread(self.pynetbox_path.get,
                         name=object.get("name"),
                         slug=object.get("slug"),
                         tag=[self.nb.tag.slug]
@@ -420,7 +422,7 @@ class NetboxBase:
                         return result_by_tag
                     
                     else:
-                        result_by_name_and_slug = self.pynetbox_path.get(
+                        result_by_name_and_slug = await asyncio.to_thread(self.pynetbox_path.get,
                             name=object.get("name"),
                             slug=object.get("slug"),
                         )
