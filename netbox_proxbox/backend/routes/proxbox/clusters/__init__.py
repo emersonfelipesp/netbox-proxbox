@@ -151,7 +151,9 @@ async def get_virtual_machines(
     
     containers = []
     
+    from netbox_proxbox.backend.cache import cache
     
+    print("CACHE start:", cache.cache)
     
     for px in pxs:
         virtual_machines = px.session.cluster.resources.get(type="vm")
@@ -198,12 +200,5 @@ async def get_virtual_machines(
             }
         })
     
-    return result
-
-        
-            
-
-
-    
-    
+    print("CACHE end:", cache.cache)
     return result

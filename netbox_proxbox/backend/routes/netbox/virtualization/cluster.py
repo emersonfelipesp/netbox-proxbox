@@ -12,7 +12,7 @@ class Cluster(NetboxBase):
     app: str = "virtualization"
     endpoint: str = "clusters"
     object_name: str = "Cluster"
-    
+
 
     async def get_base_dict(self):
         type = await ClusterType(nb = self.nb).get()

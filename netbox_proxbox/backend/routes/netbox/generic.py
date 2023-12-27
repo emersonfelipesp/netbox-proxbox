@@ -8,6 +8,8 @@ from netbox_proxbox.backend.exception import ProxboxException
 
 from netbox_proxbox.backend.logging import logger
 
+from netbox_proxbox.backend.cache import cache
+
 import asyncio
 
 class NetboxBase:
@@ -81,7 +83,6 @@ class NetboxBase:
         
         
     # New Implementantion of "default_dict" and "default_extra_fields".
-    base_dict = None
     async def get_base_dict(self):
         "This method MUST be overwritten by the child class."
         pass
@@ -103,7 +104,16 @@ class NetboxBase:
         self,
         **kwargs
     ):
-        self.base_dict = await self.get_base_dict()
+        self.base_dict = cache.get(self.endpoint)
+        if self.base_dict is None:
+            self.base_dict = await self.get_base_dict()
+            cache.set(self.endpoint, self.base_dict)
+
+            
+        # if self.base_dict is None:
+        #     await self.get_base_dict()
+            
+        #base_dict = await self.get_base_dict()
         
         print(kwargs)
         logger.info(f"[GET] Getting '{self.object_name}' from Netbox.")
@@ -272,9 +282,10 @@ class NetboxBase:
         self,
         data: dict = None,
     ): 
-        self.base_dict = await self.get_base_dict()
-        print(self.base_dict)
-        print(data)
+        self.base_dict = cache.get(self.endpoint)
+        if self.base_dict is None:
+            self.base_dict = await self.get_base_dict()
+            cache.set(self.endpoint, self.base_dict)
 
         if data:
             logger.info(f"[POST] Creating '{self.object_name}' object on Netbox.")
