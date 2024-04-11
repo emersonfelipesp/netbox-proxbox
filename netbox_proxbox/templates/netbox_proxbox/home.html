@@ -59,7 +59,7 @@
                             {% if px.password %}
                                 <td>password defined in configuration.py</td>
                             {% else %}
-                                <td>{{ default_config.proxmox.password }} (default)</td>
+                                <td>(secret) (default)</td>
                             {% endif %}
                         </tr>
                             <th scope="row"><strong>Token Name</strong></th>
@@ -70,11 +70,7 @@
                             {% endif %}
                         <tr>
                             <th scope="row"><strong>Token Value</strong></th>
-                            {% if px.token.value %}
-                                <td>{{ px.token.value }}</td>
-                            {% else %}
-                                <td>{{ default_config.proxmox.token.value }} (default)</td>
-                            {% endif %}
+                            <td>(secret)</td>
                         </tr>
                         <tr>
                             <th scope="row"><strong>SSL</strong></th>
