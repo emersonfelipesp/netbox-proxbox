@@ -1,5 +1,5 @@
-from extras.plugins import PluginMenuButton, PluginMenuItem, PluginMenu
-from utilities.choices import ButtonColorChoices
+from netbox.plugins import PluginMenuButton, PluginMenuItem, PluginMenu
+#from utilities.choices import ButtonColorChoices
 
 fullupdate_item = PluginMenuItem(
     link='plugins:netbox_proxbox:home',
@@ -19,19 +19,19 @@ community_item = PluginMenuItem(
             "plugins:netbox_proxbox:discussions",
             "GitHub Discussions",
             "mdi mdi-github",
-            ButtonColorChoices.GRAY,
+            #ButtonColorChoices.GRAY,
         ),
         PluginMenuButton(
             "plugins:netbox_proxbox:discord",
             "Discord Community",
             "mdi mdi-forum",
-            ButtonColorChoices.BLACK,
+            #ButtonColorChoices.BLACK,
         ),
         PluginMenuButton(
             "plugins:netbox_proxbox:telegram",
             "Telegram Community",
             "mdi mdi-send",
-            ButtonColorChoices.BLUE,
+            #ButtonColorChoices.BLUE,
         ),
     ]
 )

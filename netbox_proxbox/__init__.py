@@ -1,5 +1,5 @@
 # Netbox plugin related import
-from extras.plugins import PluginConfig
+from netbox.plugins import PluginConfig
 
 class ProxboxConfig(PluginConfig):
     name = "netbox_proxbox"
