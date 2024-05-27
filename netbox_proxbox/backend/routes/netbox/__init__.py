@@ -2,27 +2,20 @@ from fastapi import APIRouter, Depends
 
 from typing import Annotated, Any
 
-from netbox_proxbox.backend.schemas import PluginConfig
-from netbox_proxbox.backend.schemas.netbox import NetboxSessionSchema
-from netbox_proxbox.backend.session.netbox import NetboxSession
 from netbox_proxbox.backend.routes.proxbox import netbox_settings
+from netbox_proxbox.backend.session.netbox import NetboxSessionDep
 
+# FastAPI Router
 router = APIRouter()
 
-async def netbox_session(
-    netbox_settings: Annotated[NetboxSessionSchema, Depends(netbox_settings)],
-):
-    """Instantiate 'NetboxSession' class with user parameters and return Netbox  HTTP connection to make API calls"""
-    return await NetboxSession(netbox_settings).pynetbox()
-
-# Make Session reusable
-NetboxSessionDep = Annotated[Any, Depends(netbox_session)]
-
+#
+# Endpoints: /netbox/<endpoint>
+#
 @router.get("/status")
 async def netbox_status(
     nb: NetboxSessionDep
 ):
-    return nb.status()
+    return nb.session.status()
 
 @router.get("/devices")
 async def netbox_devices(nb: NetboxSessionDep):
@@ -42,9 +35,14 @@ async def netbox_devices(nb: NetboxSessionDep):
 @router.get("/")
 async def netbox(
     status: Annotated[Any, Depends(netbox_status)],
-    config: Annotated[Any, Depends(netbox_settings)]
+    config: Annotated[Any, Depends(netbox_settings)],
+    nb: NetboxSessionDep,
 ):
     return {
         "config": config,
-        "status": status
+        "status": status,
+        "proxbox_tag": nb.tag
     }
+
+
+

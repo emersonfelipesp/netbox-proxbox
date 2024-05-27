@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "fastapi-dev": "/opt/netbox/venv/bin/uvicorn netbox-proxbox.netbox_proxbox.main:app --host 0.0.0.0 --port 8800 --app-dir /opt/netbox/netbox --reload"
+    "fastapi-dev": "/opt/netbox/venv/bin/uvicorn netbox-proxbox.netbox_proxbox.main:app --host 0.0.0.0 --port 8800 --app-dir /opt/netbox/netbox --reload",
+    "netbox-dev": "/opt/netbox/venv/bin/python3 /opt/netbox/netbox/manage.py runserver 0.0.0.0:8000"
   },
   "dependencies": {
     "@headlessui/react": "^1.7.17",

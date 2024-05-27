@@ -5,12 +5,6 @@
 		<img width="532" src="https://github.com/N-Multifibra/proxbox/blob/main/etc/img/proxbox-full-logo.png" alt="Proxbox logo">
 	</a>
 	<br>
-	
-<div>
-	
-### [New Documentation available!](https://proxbox.netbox.dev.br/)
-</div>
-<br>
 </div>
 
 
@@ -39,9 +33,8 @@ Proxbox is currently able to get the following information from Proxmox:
 
 ---
 
-<div align="center">
-	
-### Versions
+
+### Version
 
 
 The following table shows the Netbox and Proxmox versions compatible (tested) with Proxbox plugin.
@@ -52,44 +45,6 @@ The following table shows the Netbox and Proxmox versions compatible (tested) wi
 | >= v3.2.0 | >= v6.2.0 | =v0.0.4 |
 | >= v3.0.0 < v3.2 | >= v6.2.0 | =v0.0.3 |
 
-
-</div>
-
----
-
-### Summary
-[1. Installation](#1-installation)
-- [1.1. Install package](#11-install-package)
-  - [1.1.1. Using pip (production use)](#111-using-pip-production-use---not-working-yet)
-  - [1.1.2. Using git (development use)](#112-using-git-development-use)
-- [1.2. Enable the Plugin](#12-enable-the-plugin)
-- [1.3. Configure Plugin](#13-configure-plugin)
-  - [1.3.1. Change Netbox 'configuration.py' to add PLUGIN parameters](#131-change-netbox-configurationpy-to-add-plugin-parameters)
-  - [1.3.2. Change Netbox 'settings.py' to include Proxbox Template directory](#132-change-netbox-settingspy-to-include-proxbox-template-directory)
-- [1.4. Run Database Migrations](#14-run-database-migrations)
-- [1.5 Restart WSGI Service](#15-restart-wsgi-service)
-
-[2. Configuration Parameters](#2-configuration-parameters)
-
-[3. Custom Fields](#3-custom-fields)
-- [3.1. Custom Field Configuration](#31-custom-field-configuration)
-	- [3.1.1. Proxmox ID](#311-proxmox-id)
-	- [3.1.2. Proxmox Node](#312-proxmox-node)
-	- [3.1.3. Proxmox Type](#313-proxmox-type-qemu-or-lxc)
-	- [3.1.4. Proxmox Keep Interface](#314-proxmox-keep-interface)
-- [3.2. Custom Field Example](#32-custom-field-example)
-
-[4. Usage](#4-usage)
-
-[5. Enable Logs](#5-enable-logs)
-
-[6. Contributing](#6-contributing)
-
-[7. Roadmap](#7-roadmap)
-
-[8. Get Help from Community!](#8-get-help-from-community)
-
----
 
 ## 1. Installation
 

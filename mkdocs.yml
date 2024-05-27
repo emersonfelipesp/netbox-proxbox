@@ -1,4 +1,4 @@
-site_name: ProxBox Documentation (NetBox Plugin)
+site_name: Proxbox Docs
 site_dir: ./site
 site_url: https://proxbox.netbox.dev.br/
 docs_dir: ./docs
@@ -13,11 +13,14 @@ theme:
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
+      primary: black
+      accent: deep-orange
       toggle:
         icon: material/lightbulb-outline
         name: Switch to Dark Mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
+      primary: black
       toggle:
         icon: material/lightbulb
         name: Switch to Light Mode
@@ -30,10 +33,61 @@ theme:
     - navigation.path
     - navigation.top
     - toc.follow
-    - toc.integrate
+
 plugins:
   - search
   - social
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            extensions:
+              - griffe_typingdoc
+            show_bases: true
+            #show_root_heading: true
+            show_if_no_docstring: true
+            inherited_members: true
+            #members_order: source
+            #separate_signature: true
+            #unwrap_annotated: true
+            #merge_init_into_class: true
+            #docstring_section_style: spacy
+            #signature_crossrefs: true
+
+nav:
+  - Proxbox: index.md
+  - Backend (FastAPI): 'backend/index.md'
+  - Source Code:
+    - 'src/netboxbasic.md'
+  - Installing & Upgrade:
+    - Installing Proxbox: 'installation/index.md'
+    - Upgrading Proxbox: 'installation/upgrading.md'
+  - Features:
+    - Virtual Machine (VM): 'features/virtual-machine.md'
+    - Containers (LXC): 'features/containers.md'
+    - Network (IPAM): 'features/network.md'
+    - VLAN Management: 'features/vlan-management.md'
+    - Storage: 'features/storage.md'
+    - Backup: 'features/backup.md'
+    - Monitoring: 'features/monitoring.md'
+    - Synchronized Data: 'features/synchronized-data.md'
+    - Background Jobs: 'features/background-jobs.md'
+    - API & Integration: 'features/api-integration.md'
+  - Configuration:
+      - Configuring ProxBox: 'configuration/index.md'
+      - Required Parameters: 'configuration/required-parameters.md'
+  - Data Model:
+    - Virtual Machine (VM): 'models/virtual-machine.md'
+    - Containers (LXC): 'models/containers.md'
+    - Others: 'models/others.md'
+  - Release Notes:
+    - Summary: 'release-notes/index.md'
+    - Version 0.0.6: 'release-notes/version-0.0.1.md'
+    - Version 0.0.5: 'release-notes/version-0.0.1.md'
+    - Version 0.0.4: 'release-notes/version-0.0.1.md'
+    - Version 0.0.3: 'release-notes/version-0.0.1.md'
+    - Version 0.0.2: 'release-notes/version-0.0.1.md'
+    - Version 0.0.1: 'release-notes/version-0.0.1.md'
 extra:
   social:
     - icon: fontawesome/brands/github
@@ -65,7 +119,7 @@ markdown_extensions:
   - tables
   - footnotes
   - pymdownx.emoji:
-      emoji_index: !!python/name:materialx.emoji.twemoji
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
       emoji_generator: !!python/name:materialx.emoji.to_svg
   - pymdownx.superfences:
       custom_fences:
@@ -76,34 +130,3 @@ markdown_extensions:
       alternate_style: true
 extra_javascript:
   - 'https://cdn.jsdelivr.net/npm/@material-icons/iconfont/material-icons.min.js'
-nav:
-    - Introduction: 'introduction.md'
-    - Installing & Upgrade:
-      - Installing Proxbox: 'installation/index.md'
-      - Upgrading Proxbox: 'installation/upgrading.md'
-    - Features:
-      - Virtual Machine (VM): 'features/virtual-machine.md'
-      - Containers (LXC): 'features/containers.md'
-      - Network (IPAM): 'features/network.md'
-      - VLAN Management: 'features/vlan-management.md'
-      - Storage: 'features/storage.md'
-      - Backup: 'features/backup.md'
-      - Monitoring: 'features/monitoring.md'
-      - Synchronized Data: 'features/synchronized-data.md'
-      - Background Jobs: 'features/background-jobs.md'
-      - API & Integration: 'features/api-integration.md'
-    - Configuration:
-        - Configuring ProxBox: 'configuration/index.md'
-        - Required Parameters: 'configuration/required-parameters.md'
-    - Data Model:
-      - Virtual Machine (VM): 'models/virtual-machine.md'
-      - Containers (LXC): 'models/containers.md'
-      - Others: 'models/others.md'
-    - Release Notes:
-      - Summary: 'release-notes/index.md'
-      - Version 0.0.6: 'release-notes/version-0.0.1.md'
-      - Version 0.0.5: 'release-notes/version-0.0.1.md'
-      - Version 0.0.4: 'release-notes/version-0.0.1.md'
-      - Version 0.0.3: 'release-notes/version-0.0.1.md'
-      - Version 0.0.2: 'release-notes/version-0.0.1.md'
-      - Version 0.0.1: 'release-notes/version-0.0.1.md'

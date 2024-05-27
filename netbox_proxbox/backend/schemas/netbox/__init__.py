@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, RootModel
 
 class NetboxSessionSettingsSchema(BaseModel):
     virtualmachine_role_id: int
@@ -11,3 +11,5 @@ class NetboxSessionSchema(BaseModel):
     token: str
     ssl: bool
     settings: NetboxSessionSettingsSchema | None = None
+    
+CreateDefaultBool = RootModel[ bool | None ]

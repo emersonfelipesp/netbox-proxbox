@@ -19,14 +19,14 @@ urlpatterns = [
     path('telegram/', views.TelegramView, name='telegram'),
     
     # Base Views
-    path("list/", views.ProxmoxVMListView.as_view(), name="proxmoxvm_list"),
+    # path("list/", views.ProxmoxVMListView.as_view(), name="proxmoxvm_list"),
     # <int:pk> = plugins/netbox_proxmoxvm/<pk> | example: plugins/netbox_proxmoxvm/1/
     # ProxmoxVMView.as_view() - as.view() is need so that our view class can process requests.
     # as_view() takes request and returns well-formed response, that is a class based view.
-    path("<int:pk>/", views.ProxmoxVMView.as_view(), name="proxmoxvm"),
-    path("add/", views.ProxmoxVMCreateView.as_view(), name="proxmoxvm_add"),
-    path("<int:pk>/delete/", views.ProxmoxVMDeleteView.as_view(), name="proxmoxvm_delete"),
-    path("<int:pk>/edit/", views.ProxmoxVMEditView.as_view(), name="proxmoxvm_edit"),
+    # path("<int:pk>/", views.ProxmoxVMView.as_view(), name="proxmoxvm"),
+    # path("add/", views.ProxmoxVMCreateView.as_view(), name="proxmoxvm_add"),
+    # path("<int:pk>/delete/", views.ProxmoxVMDeleteView.as_view(), name="proxmoxvm_delete"),
+    # path("<int:pk>/edit/", views.ProxmoxVMEditView.as_view(), name="proxmoxvm_edit"),
 
     # Proxbox API full update
     path("full_update/", views.ProxmoxFullUpdate.as_view(), name="proxmoxvm_full_update"),
