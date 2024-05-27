@@ -8,3 +8,10 @@ class Site(NetboxBase):
     app = "dcim"
     endpoint = "sites"
     object_name = "Site"
+    
+    async def get_base_dict(self):
+        return {
+            "name": self.default_name,
+            "slug": self.default_slug,
+            "description": self.default_description,
+        }

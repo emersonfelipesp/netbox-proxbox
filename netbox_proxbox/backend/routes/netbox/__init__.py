@@ -22,7 +22,7 @@ async def netbox_devices(nb: NetboxSessionDep):
     "Return a list of all devices registered on Netbox."
     raw_list = []
     
-    device_list = nb.nb_session.dcim.device_roles.all()
+    device_list = nb.session.dcim.device_roles.all()
     for device in device_list:
         raw_list.append(device)
     
@@ -30,7 +30,9 @@ async def netbox_devices(nb: NetboxSessionDep):
 
 @router.get("/openapi")
 async def netbox_devices(nb: NetboxSessionDep):
-    return nb.openapi()
+    
+    output = nb.session.openapi()
+    return output
 
 @router.get("/")
 async def netbox(
