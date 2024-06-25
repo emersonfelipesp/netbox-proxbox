@@ -1,0 +1,34 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+poetry = "*"
+invoke = "*"
+requests = ">=2"
+pynetbox = ">=5"
+paramiko = ">=2"
+proxmoxer = "*"
+fastapi = {extras = ["all"], version = "*"}
+typing = "*"
+starlette = "*"
+uvicorn = "*"
+pydantic = "*"
+anyio = "*"
+websockets = "*"
+jinja2 = "*"
+ujson = ">=5.7.0"
+orjson = ">=3.8.9"
+httpcore = "*"
+pytest = ">=3.7"
+check-manifest = "*"
+twine = "*"
+netbox-proxbox = "*"
+setuptools = "*"
+gunicorn = "*"
+
+[dev-packages]
+
+[requires]
+python_version = "3.12"

@@ -39,4 +39,4 @@ class ProxboxConfig(PluginConfig):
 
 config = ProxboxConfig
 
-from . import proxbox_api
+#from . import proxbox_api
