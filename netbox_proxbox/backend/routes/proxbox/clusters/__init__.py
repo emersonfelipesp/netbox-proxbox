@@ -164,7 +164,11 @@ async def get_virtual_machines(
         devices = {}
         clusters = {}
         for vm in virtual_machines:
-            vm_node = vm.get("node")
+            
+            print(f"\n[VM] {vm}\n")
+            
+            vm_node: str = vm.get("node")
+            print(f"vm_node: {vm_node} | {type(vm_node)}")
             
             """
             Get Device from Netbox based on Proxmox Node Name only if it's not already in the devices dict
@@ -174,6 +178,9 @@ async def get_virtual_machines(
                 devices[vm_node] = await Device(nb = nb).get(name = vm.get("node"))
                 
             device = devices[vm_node]
+            print(f"devices[vm_node]: {devices[vm_node]} | {device}")
+            print(f"DEVICE TEST: {device}")
+            
             
             """
             Get Cluster from Netbox based on Cluster Name only if it's not already in the devices dict
@@ -188,8 +195,11 @@ async def get_virtual_machines(
                 await VirtualMachine(nb = nb).post(data = {
                     "name": vm.get("name"),
                     "cluster": cluster.id,
-                    "device": device.id,
+                    "device": device,
                     "status": VirtualMachineStatus(vm.get("status")).name,
+                    "vcpus": int(vm.get("maxcpu", 0)),
+                    "memory": int(int(vm.get("maxmem", 0)) / 1000000),
+                    "disk": int(int(vm.get("maxdisk", 0)) / 1000000000),
                 })
             )
         
