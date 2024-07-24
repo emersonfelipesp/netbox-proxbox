@@ -191,6 +191,36 @@ async def get_virtual_machines(
             
             cluster = clusters[px.name]
         
+        
+        
+            role = await DeviceRole(nb = nb).get(slug = vm.get("type"))
+            if role == None:
+            
+                vm_type = vm.get("type")
+                
+                vm_name = None
+                
+                color = "000000"
+                
+                if vm_type == "qemu":
+                    vm_name = "Virtual Machine (QEMU)"
+                    color = "00ffff"
+                    description = "Proxmox Virtual Machine"
+
+                if vm_type == "lxc":
+                    vm_name = "Container (LXC)"
+                    color = "7fffd4"
+                    description = "Proxmox Container"
+                
+                role = await DeviceRole(nb = nb).post(data = {
+                    "name": vm_name,
+                    "slug": vm_type,
+                    "vm_role": True,
+                    "color": color,
+                    "description": description
+                })
+                
+                
             created_virtual_machines.append(
                 await VirtualMachine(nb = nb).post(data = {
                     "name": vm.get("name"),
@@ -200,6 +230,7 @@ async def get_virtual_machines(
                     "vcpus": int(vm.get("maxcpu", 0)),
                     "memory": int(int(vm.get("maxmem", 0)) / 1000000),
                     "disk": int(int(vm.get("maxdisk", 0)) / 1000000000),
+                    "role": role.id
                 })
             )
         

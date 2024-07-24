@@ -5,7 +5,7 @@ class DeviceRole(NetboxBase):
     
     default_name = "Proxmox Node (Server)"
     default_slug = "proxbox-node"
-    default_description = "Proxbox Basic Manufacturer"
+    default_description = "Proxbox Basic Device Role"
     
     app = "dcim"
     endpoint = "device_roles"
