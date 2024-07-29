@@ -220,20 +220,81 @@ async def get_virtual_machines(
                     "description": description
                 })
                 
+            try:
+                custom_field_id = nb.session.extras.custom_fields.get(name="proxmox_vm_id")
+            except:
+                custom_field_id = nb.session.extras.custom_fields.create(
+                    {
+                        "object_types": [
+                            "virtualization.virtualmachine"
+                        ],
+                        "type": "integer",
+                        "name": "proxmox_vm_id",
+                        "label": "Proxmox VM ID",
+                        "description": "Proxmox Virtual Machine or Container ID",
+                        "ui_visible": "always",
+                        "ui_editable": "hidden",
+                        "weight": 100,
+                        "filter_logic": "loose",
+                        "search_weight": 1000,
+                    }
+                )
+            print(f'custom_field_id: {custom_field_id}')
+            
+            
+            platform = None
+            
+            #if vm.get("type") == 'lxc': print(px.session.nodes.get(f'nodes/{vm.get("node")}/lxc/{vm.get("vmid")}/config')
+            if vm.get("type") == 'lxc': 
+                vm_config = px.session.nodes(vm.get("node")).lxc(vm.get("vmid")).config.get()
                 
-            created_virtual_machines.append(
-                await VirtualMachine(nb = nb).post(data = {
+                platform_name = vm_config.get("ostype").capitalize()
+                platform_slug = vm_config.get("ostype")
+                
+                platform = nb.session.dcim.platforms.get(name = platform_name).id
+                if not platform:
+                    platform = nb.session.dcim.platforms.create(
+                        name = platform_name,
+                        slug = platform_slug
+                    ).id
+
+                    
+            if vm.get("type") == 'qemu': vm_config = px.session.nodes(vm.get("node")).qemu(vm.get("vmid")).config.get()
+            
+            
+            print(f"vm_config: {vm_config}")
+            
+            print(f"\nplatform: {platform}\n")
+            
+            # Create Custom Field and add Virtual Machine Proxmox ID
+            new_virtual_machine =  await VirtualMachine(nb = nb).post(data = {
                     "name": vm.get("name"),
                     "cluster": cluster.id,
                     "device": device,
                     "status": VirtualMachineStatus(vm.get("status")).name,
                     "vcpus": int(vm.get("maxcpu", 0)),
-                    "memory": int(int(vm.get("maxmem", 0)) / 1000000),
+                    "memory": int(vm_config.get("memory")),
                     "disk": int(int(vm.get("maxdisk", 0)) / 1000000000),
-                    "role": role.id
-                })
+                    "role": role.id,
+                    "custom_fields": {
+                        "proxmox_vm_id": vm.get("vmid")
+                    },
+                    "platform": platform
+                }
             )
-        
+            
+
+            
+
+            
+            created_virtual_machines.append(new_virtual_machine)
+            print(f"new_virtual_machine: {new_virtual_machine} | {type(new_virtual_machine)}")
+            
+
+            
+
+            
+            
         result.append({
             "name": px.name,
             "netbox": {
