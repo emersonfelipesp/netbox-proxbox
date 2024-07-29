@@ -220,9 +220,10 @@ async def get_virtual_machines(
                     "description": description
                 })
                 
-            try:
-                custom_field_id = nb.session.extras.custom_fields.get(name="proxmox_vm_id")
-            except:
+           
+            custom_field_id = nb.session.extras.custom_fields.get(name="proxmox_vm_id")
+            
+            if not custom_field_id:
                 custom_field_id = nb.session.extras.custom_fields.create(
                     {
                         "object_types": [
@@ -230,17 +231,42 @@ async def get_virtual_machines(
                         ],
                         "type": "integer",
                         "name": "proxmox_vm_id",
-                        "label": "Proxmox VM ID",
+                        "label": "VM ID",
                         "description": "Proxmox Virtual Machine or Container ID",
                         "ui_visible": "always",
                         "ui_editable": "hidden",
                         "weight": 100,
                         "filter_logic": "loose",
                         "search_weight": 1000,
+                        "group_name": "Proxmox"
                     }
                 )
-            print(f'custom_field_id: {custom_field_id}')
+            #print(f'custom_field_id: {custom_field_id}')
             
+                        
+
+            start_at_boot_field = nb.session.extras.custom_fields.get(name="proxmox_start_at_boot")
+
+            if not start_at_boot_field:
+                start_at_boot_field = nb.session.extras.custom_fields.create(
+                    {
+                        "object_types": [
+                            "virtualization.virtualmachine"
+                        ],
+                        "type": "boolean",
+                        "name": "proxmox_start_at_boot",
+                        "label": "Start at Boot",
+                        "description": "Proxmox Start at Boot Option",
+                        "ui_visible": "always",
+                        "ui_editable": "hidden",
+                        "weight": 100,
+                        "filter_logic": "loose",
+                        "search_weight": 1000,
+                        "group_name": "Proxmox"
+                    }
+                )
+            
+            print(f"start_at_boot_field: {start_at_boot_field}")
             
             platform = None
             
@@ -258,10 +284,18 @@ async def get_virtual_machines(
                         slug = platform_slug
                     ).id
 
-                    
-            if vm.get("type") == 'qemu': vm_config = px.session.nodes(vm.get("node")).qemu(vm.get("vmid")).config.get()
+
+            start_at_boot = False    
+                
+            if vm.get("type") == 'qemu':
+                vm_config = px.session.nodes(vm.get("node")).qemu(vm.get("vmid")).config.get()
+                
+                onboot = int(vm_config.get("onboot", 0))
+                
+                if onboot == 1:
+                    start_at_boot = True
             
-            
+                
             print(f"vm_config: {vm_config}")
             
             print(f"\nplatform: {platform}\n")
@@ -277,7 +311,8 @@ async def get_virtual_machines(
                     "disk": int(int(vm.get("maxdisk", 0)) / 1000000000),
                     "role": role.id,
                     "custom_fields": {
-                        "proxmox_vm_id": vm.get("vmid")
+                        "proxmox_vm_id": vm.get("vmid"),
+                        "proxmox_start_at_boot": start_at_boot,
                     },
                     "platform": platform
                 }
