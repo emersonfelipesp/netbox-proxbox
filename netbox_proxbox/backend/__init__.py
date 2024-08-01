@@ -7,3 +7,4 @@ from netbox_proxbox.backend.routes.netbox.dcim.sites import Site
 from netbox_proxbox.backend.routes.netbox.dcim.device_roles import DeviceRole
 from netbox_proxbox.backend.routes.netbox.dcim.device_types import DeviceType
 from netbox_proxbox.backend.routes.netbox.dcim.devices import Device
+from netbox_proxbox.backend.routes.netbox.dcim.interfaces import Interface

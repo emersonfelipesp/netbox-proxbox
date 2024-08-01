@@ -15,7 +15,8 @@ from netbox_proxbox.backend import (
     DeviceRole,
     DeviceType,
     Device,
-    VirtualMachine
+    VirtualMachine,
+    Interface,
 )
 
 router = APIRouter()
@@ -109,12 +110,61 @@ async def get_nodes(
         
         # List Comprehension to create the Nodes in Netbox
         nodes = [
-            await Device(nb=nb).post(data = {
-                "name": node.get("node"),
-                "cluster": get_cluster_from_netbox.id,
-                "status": "active",
-            }) for node in proxmox_nodes
         ]
+        
+        for node in proxmox_nodes:
+            
+            current_node = await Device(nb=nb).post(
+                data = {
+                    "name": node.get("node"),
+                    "cluster": get_cluster_from_netbox.id,
+                    "status": "active",
+                }
+            )
+            
+            nodes.append(current_node)
+                
+            print(node)
+            node_interfaces = px.session.nodes(node.get("node")).network.get()
+            #print(node_interfaces)
+            
+            print("\n")
+            
+            for interface in node_interfaces:
+                interface_type = None
+                interface_name = interface.get("iface")
+                interface_px_type = interface.get("type")
+                
+                if interface.get("active") == 1:
+                    enabled = True
+                else: enabled = False
+                
+                if interface_px_type == "eth":
+                
+                    if 'eno' in interface_name: interface_type = '1000base-t'
+                    elif 'en' in interface_name: interface_type = '10gbase-t'
+                    
+                    else: interface_name = 'other'
+                    
+                elif interface_px_type == "bridge": interface_type = 'bridge'
+                
+                elif interface_px_type == "bond": interface_type = 'lag'
+                
+                else: interface_type = 'other'
+                
+                create_interface = await Interface(nb=nb).post(data={
+                    "device": current_node.id,
+                    "name": interface_name,
+                    "enabled": enabled,
+                    "type": interface_type,
+                    "mtu": interface.get("mtu", None),
+                    "description": interface.get("comments", "")
+                })
+                print(f'create_interface: {create_interface}')
+                print(interface)
+            
+            print("\n")
+
         
         logger.debug(f"Nodes: {nodes}")
     
@@ -220,6 +270,9 @@ async def get_virtual_machines(
                     "description": description
                 })
                 
+            """
+            Proxmox Virtual Machine ID Custom Field
+            """    
            
             custom_field_id = nb.session.extras.custom_fields.get(name="proxmox_vm_id")
             
@@ -243,8 +296,9 @@ async def get_virtual_machines(
                 )
             #print(f'custom_field_id: {custom_field_id}')
             
-                        
-
+            """
+            Proxmox Start at Boot Custom Field
+            """            
             start_at_boot_field = nb.session.extras.custom_fields.get(name="proxmox_start_at_boot")
 
             if not start_at_boot_field:
@@ -267,8 +321,86 @@ async def get_virtual_machines(
                 )
             
             print(f"start_at_boot_field: {start_at_boot_field}")
+                        
+            """
+            Proxmox Unprivileged Container Custom Field
+            """            
+            start_unprivileged_field = nb.session.extras.custom_fields.get(name="proxmox_unprivileged_container")
+
+            if not start_unprivileged_field:
+                start_unprivileged_field = nb.session.extras.custom_fields.create(
+                    {
+                        "object_types": [
+                            "virtualization.virtualmachine"
+                        ],
+                        "type": "boolean",
+                        "name": "proxmox_unprivileged_container",
+                        "label": "Unprivileged Container",
+                        "description": "Proxmox Unprivileged Container",
+                        "ui_visible": "if-set",
+                        "ui_editable": "hidden",
+                        "weight": 100,
+                        "filter_logic": "loose",
+                        "search_weight": 1000,
+                        "group_name": "Proxmox"
+                    }
+                )
+            
+            unprivileged_container = None
+            
+            
+            """
+            Proxmox QEMU Guest Agent Custom Field
+            """            
+            start_qemu_agent_field = nb.session.extras.custom_fields.get(name="proxmox_qemu_agent")
+
+            if not start_qemu_agent_field:
+                start_qemu_agent_field = nb.session.extras.custom_fields.create(
+                    {
+                        "object_types": [
+                            "virtualization.virtualmachine"
+                        ],
+                        "type": "boolean",
+                        "name": "proxmox_qemu_agent",
+                        "label": "QEMU Guest Agent",
+                        "description": "Proxmox QEMU Guest Agent",
+                        "ui_visible": "if-set",
+                        "ui_editable": "hidden",
+                        "weight": 100,
+                        "filter_logic": "loose",
+                        "search_weight": 1000,
+                        "group_name": "Proxmox"
+                    }
+                )
+                
+            """
+            Proxmox Search Domain Field
+            """
+            search_domain_field = nb.session.extras.custom_fields.get(name="proxmox_search_domain")
+            
+            if not search_domain_field:
+                search_domain_field = nb.session.extras.custom_fields.create(
+                    {
+                        "object_types": [
+                            "virtualization.virtualmachine"
+                        ],
+                        "type": "text",
+                        "name": "proxmox_search_domain",
+                        "label": "Search Domain",
+                        "description": "Proxmox Search Domain",
+                        "ui_visible": "if-set",
+                        "ui_editable": "hidden",
+                        "weight": 100,
+                        "filter_logic": "loose",
+                        "search_weight": 1000,
+                        "group_name": "Proxmox"
+                    }
+                )
+            
+                    
             
             platform = None
+            search_domain = None
             
             #if vm.get("type") == 'lxc': print(px.session.nodes.get(f'nodes/{vm.get("node")}/lxc/{vm.get("vmid")}/config')
             if vm.get("type") == 'lxc': 
@@ -276,6 +408,13 @@ async def get_virtual_machines(
                 
                 platform_name = vm_config.get("ostype").capitalize()
                 platform_slug = vm_config.get("ostype")
+                
+                search_domain = vm_config.get("searchdomain", None)
+                
+                unprivileged = int(vm_config.get("unprivileged", 0))
+                
+                if unprivileged == 1:
+                    unprivileged_container = True
                 
                 platform = nb.session.dcim.platforms.get(name = platform_name).id
                 if not platform:
@@ -294,6 +433,16 @@ async def get_virtual_machines(
                 
                 if onboot == 1:
                     start_at_boot = True
+                
+                agent = int(vm_config.get("agent", 0))
+                
+                qemu_agent = None 
+                
+                if agent == 1:
+                    qemu_agent = True
+                else:
+                    qemu_agent = False
+
             
                 
             print(f"vm_config: {vm_config}")
@@ -313,6 +462,9 @@ async def get_virtual_machines(
                     "custom_fields": {
                         "proxmox_vm_id": vm.get("vmid"),
                         "proxmox_start_at_boot": start_at_boot,
+                        "proxmox_unprivileged_container": unprivileged_container,
+                        "proxmox_qemu_agent": qemu_agent,
+                        "proxmox_search_domain": search_domain,
                     },
                     "platform": platform
                 }
