@@ -17,6 +17,7 @@ from netbox_proxbox.backend import (
     Device,
     VirtualMachine,
     Interface,
+    IPAddress,
 )
 
 router = APIRouter()
@@ -89,6 +90,24 @@ async def proxbox_get_clusters(
     
     return result
 
+
+def find_interface_type(
+    proxmox_int_type: str,
+    proxmox_int_name: str
+):
+    if proxmox_int_type == "eth":
+            
+        if 'eno' in proxmox_int_name: interface_type = '1000base-t'
+        elif 'en' in proxmox_int_name: interface_type = '10gbase-t'
+        
+    elif proxmox_int_type == "bridge": interface_type = proxmox_int_type   
+    elif proxmox_int_type == "bond": interface_type = 'lag'
+    else: interface_type = 'other'
+    
+    print(f'interface_type: {interface_type} / {type(interface_type)}')
+    return str(interface_type)
+
+
 @router.get("/nodes")
 async def get_nodes(
     nb: NetboxSessionDep,
@@ -131,26 +150,21 @@ async def get_nodes(
             print("\n")
             
             for interface in node_interfaces:
-                interface_type = None
+                interface_type = find_interface_type(
+                    interface.get("type"),
+                    interface.get("iface")
+                )
+                print(f'[0] interface: {interface}')
+                print(f'interface_type: {interface_type}')
                 interface_name = interface.get("iface")
-                interface_px_type = interface.get("type")
+                
+                
+                
                 
                 if interface.get("active") == 1:
                     enabled = True
                 else: enabled = False
                 
-                if interface_px_type == "eth":
-                
-                    if 'eno' in interface_name: interface_type = '1000base-t'
-                    elif 'en' in interface_name: interface_type = '10gbase-t'
-                    
-                    else: interface_name = 'other'
-                    
-                elif interface_px_type == "bridge": interface_type = 'bridge'
-                
-                elif interface_px_type == "bond": interface_type = 'lag'
-                
-                else: interface_type = 'other'
                 
                 create_interface = await Interface(nb=nb).post(data={
                     "device": current_node.id,
@@ -160,8 +174,89 @@ async def get_nodes(
                     "mtu": interface.get("mtu", None),
                     "description": interface.get("comments", "")
                 })
+                
                 print(f'create_interface: {create_interface}')
-                print(interface)
+                
+                print(f"interface value type: {type(interface)}")
+                
+                cidr = interface.get("cidr")
+                print(f"cidr: {cidr}")
+                
+                if create_interface and cidr:
+                    logger.info("Interface with CIDR/Network. Creating the IP Address object on Netbox...")
+                    # If interface with network configured, create IP Address and attach interface to it.
+                    create_ipaddress = await IPAddress(nb=nb, primary_field_value=cidr).post(data={
+                        "address": cidr,
+                        "assigned_object_id": create_interface.id,
+                        "assigned_object_type": "dcim.interface"
+                    })
+                    print(f'create_ipaddress: {create_ipaddress}')
+                
+                
+                    
+                if interface_type == "bridge":
+                    
+                    bridge_ports = interface.get("bridge_ports")
+                    print(f'bridge_ports: {bridge_ports}')
+                    if bridge_ports:
+                        bridge_ports = bridge_ports.split(" ")
+                        
+                        
+                        for port in bridge_ports:
+                            print(f'current_node: {current_node}')
+                            
+                            netbox_port = await Interface(nb=nb).get(
+                                device=current_node.name,
+                                name=port
+                            )
+                            print(f"port: {port}")
+                            print(f"netbox_port: {netbox_port}")
+                            if not netbox_port:
+                                
+                                proxmox_port = px.session.nodes(node.get("node")).network(port).get()
+                                
+                                print(f"proxmox_port: {proxmox_port}")
+                                
+                                if proxmox_port.get("active") == 1:
+                                    enabled = True
+                                else: enabled = False
+                                
+                                # Interface and Bridge Interface must belong to the same Device
+                                if create_interface.device == current_node.id:
+                                    print("Creating interface...")
+                                    new_netbox_port = await Interface(nb=nb).post(data={
+                                        "device": current_node.id,
+                                        "name": port,
+                                        "enabled": enabled,
+                                        "type": interface_type,
+                                        "mtu": proxmox_port.get("mtu", None),
+                                        "description": proxmox_port.get("comments", ""),
+                                        "bridge": create_interface.id
+                                    })
+                                    
+                                    cidr = proxmox_port.get("cidr")
+                                    print(f"[2] cidr: {cidr}")
+                                   
+                                    if cidr:
+                                        # If interface with network configured, create IP Address and attach interface to it.
+                                        create_ipaddress = await IPAddress(nb=nb, primary_field_value=cidr).post(data={
+                                            "address": cidr,
+                                            "assigned_object_id": new_netbox_port.id,
+                                            "assigned_object_type": "dcim.interface"
+                                        })
+                                        
+                                        
+                            
+                            else:
+                                print("Interface already exists. Attaching Bridge to Interface")
+                                print(f'create_interface: {create_interface}')
+                                # Interface and Bridge Interface must belong to the same Device
+                                if create_interface.device == current_node.id:
+                                    netbox_port.bridge = create_interface.id
+                                    netbox_port.device = current_node.id
+                                    netbox_port.save()
+
+                print(f'interface: {interface}')
             
             print("\n")
 

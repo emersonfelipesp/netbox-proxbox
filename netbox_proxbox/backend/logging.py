@@ -44,7 +44,7 @@ def setup_logger():
     console_handler = logging.StreamHandler()
 
     # Log all messages in the console
-    console_handler.setLevel(logging.ERROR)
+    console_handler.setLevel(logging.DEBUG)
 
     # Create a formatter with colors
     formatter = ColorizedFormatter('%(name)s [%(asctime)s] [%(levelname)-8s] %(module)s: %(message)s')

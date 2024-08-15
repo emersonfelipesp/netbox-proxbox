@@ -61,15 +61,16 @@ class NetboxBase:
             ),
             Doc(
                 "Ignore Proxbox tag filter when searching for objects in Netbox. This will return all Netbox objects, not only Proxbox related ones."
-            )
-        
+            ),
         ] = False,
+        primary_field_value: str = None,
     ):
         self.nb = nb
         self.id = id
         self.all = all
         self.default = default
         self.ignore_tag = ignore_tag
+        self.primary_field_value = primary_field_value
         #self.default_extra_fields = default_extra_fields
         
         self.pynetbox_path = getattr(getattr(self.nb.session, self.app), self.endpoint)
@@ -98,7 +99,7 @@ class NetboxBase:
     app = None
     endpoint = None
     object_name = None
-    
+    primary_field = None
         
     async def get(
         self,
@@ -302,17 +303,18 @@ class NetboxBase:
                 
             # If no explicit slug was provided by the payload, create one based on the name.
             if data.get("slug") == None:
-                logger.info("[POST] SLUG field not provided on the payload. Creating one based on the NAME or MODEL field.")
-                try:
-                    data["slug"] = data.get("name").replace(" ", "-").lower()
-                except AttributeError:
-                    
+                if not self.primary_field:
+                    logger.info("[POST] SLUG field not provided on the payload. Creating one based on the NAME or MODEL field.")
                     try:
-                        data["slug"] = data.get("model").replace(" ", "-").lower()
+                        data["slug"] = data.get("name").replace(" ", "-").lower()
                     except AttributeError:
-                        raise ProxboxException(
-                            message=f"[POST] No 'name' or 'model' field provided on the payload. Please provide one of them.",
-                        )
+                        
+                        try:
+                            data["slug"] = data.get("model").replace(" ", "-").lower()
+                        except AttributeError:
+                            raise ProxboxException(
+                                message=f"[POST] No 'name' or 'model' field provided on the payload. Please provide one of them.",
+                            )
                 
         if self.default or data == None:
             logger.info(f"[POST] Creating DEFAULT '{self.object_name}' object on Netbox.")
@@ -413,15 +415,62 @@ class NetboxBase:
                 
         if object:
             try:
+                if (self.primary_field):
+                    logger.info("[CHECK DUPLICATE] (0.5) Checking object using only custom PRIMARY FIELD and Proxbox TAG provided by the class attribute.")
+                    print(f"primary field: {self.primary_field} - primary_field_value: {self.primary_field_value}")
+                    
+                    if self.primary_field == "address":
+                        result_by_primary = await asyncio.to_thread(self.pynetbox_path.get, address=self.primary_field_value)
+                    else:
+                        result_by_primary = await asyncio.to_thread(self.pynetbox_path.get,
+                            {
+                                f"{self.primary_field}": self.primary_field_value,
+                            }
+                        )
+                    
+                    print(f"result_by_primary: {result_by_primary}")
+                    if result_by_primary:
+                        logger.info(f"[CHECK_DUPLICATE] Object found on Netbox. Returning it.")
+                        print(f'result_by_primary: {result_by_primary}')
+                        return result_by_primary
+                    
+                    return None
+                    
                 logger.info("[CHECK DUPLICATE] (1) First attempt: Checking object making EXACT MATCH with the Payload provided...")
-                result = await asyncio.to_thread(self.pynetbox_path.get, object)
+                result = await asyncio.to_thread(self.pynetbox_path.get, dict(object))
                 
                 if result:
                     logger.info(f"[CHECK DUPLICATE] Object found on Netbox. Returning it.")
                     return result
                 
                 else:
-                    logger.info("[CHECK DUPLICATE] (2) Checking object using only NAME and SLUG provided by the Payload and also the PROXBOX TAG). If found, return it.")
+                    
+                    logger.info("[CHECK DUPLICATE] (1.5) Checking object using NAME and DEVICE provided by the Payload and also the PROXBOX TAG. If found, return it.")
+                    
+                    device_id = object.get("device")
+                    device_obj = None
+                    try:
+                        device_obj = self.nb.dcim.devices.get(id=device_id)
+                        print(device_obj)
+                    except:
+                        logger.info("[CHECK DUPLICATE] (1.5.1) Device Object not found when checking for duplicated using Device as parameter.")
+                    
+                    if device_obj != None:
+                        print(f"device_obj.name: {device_obj.name}")
+                        result_by_device = await asyncio.to_thread(self.pynetbox_path.get,
+                            name=object.get("name"),
+                            #device__id=object.get("device"),
+                            device=device_obj.name,
+                            tag=[self.nb.tag.slug]
+                        )
+                        
+                        if result_by_device:
+                            logger.info("[CHECK DUPLICATE] Object found on Netbox. Returning it.")
+                            return result_by_device
+                    
+                    
+                    
+                    logger.info("[CHECK DUPLICATE] (2) Checking object using only NAME and SLUG provided by the Payload and also the PROXBOX TAG. If found, return it.")
                     result_by_tag = await asyncio.to_thread(self.pynetbox_path.get,
                         name=object.get("name"),
                         slug=object.get("slug"),
@@ -432,17 +481,18 @@ class NetboxBase:
                         logger.info(f"[CHECK DUPLICATE] Object found on Netbox. Returning it.")
                         return result_by_tag
                     
-                    else:
-                        result_by_name_and_slug = await asyncio.to_thread(self.pynetbox_path.get,
-                            name=object.get("name"),
-                            slug=object.get("slug"),
+                    
+                    
+                    result_by_name_and_slug = await asyncio.to_thread(self.pynetbox_path.get,
+                        name=object.get("name"),
+                        slug=object.get("slug"),
+                    )
+                    
+                    if result_by_name_and_slug:
+                        raise ProxboxException(
+                            message=f"[CHECK DUPLICATE] '{self.object_name}' with ID '{result_by_name_and_slug.id}' found on Netbox, but without Proxbox tag. Please delete it (or add the tag) and try again.",
+                            detail="Netbox does not allow duplicated names and/or slugs."
                         )
-                        
-                        if result_by_name_and_slug:
-                            raise ProxboxException(
-                                message=f"[CHECK DUPLICATE] '{self.object_name}' with ID '{result_by_name_and_slug.id}' found on Netbox, but without Proxbox tag. Please delete it (or add the tag) and try again.",
-                                detail="Netbox does not allow duplicated names and/or slugs."
-                            )
 
                 return None
                 

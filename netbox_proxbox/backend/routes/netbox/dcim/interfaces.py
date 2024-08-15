@@ -16,7 +16,7 @@ class Interface(NetboxBase):
     
     app = "dcim"
     endpoint = "interfaces"
-    object_name = "Device"
+    object_name = "Interface"
     
     async def get_base_dict(self):
         device = await Device(nb = self.nb).get()
