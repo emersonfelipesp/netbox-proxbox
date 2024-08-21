@@ -1,0 +1,92 @@
+name: ${PROJECT_NAME:-diode}
+services:
+  ingress-nginx:
+    image: nginx:latest
+    command: >
+      /bin/sh -c "echo 'upstream diode {
+        server diode-ingester:8081;
+      }
+
+      server {
+        listen 80;
+        http2 on;
+        server_name localhost;
+        client_max_body_size 25m;
+        location /diode {
+          rewrite /diode/(.*) /$$1 break;
+          grpc_pass grpc://diode;
+        }
+      }'
+      > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"
+    restart: always
+    environment:
+      - DIODE_NGINX_PORT=${DIODE_NGINX_PORT}
+    ports:
+      - ${DIODE_NGINX_PORT}:80
+    depends_on:
+      - diode-ingester
+      - diode-reconciler
+
+  diode-ingester:
+    image: netboxlabs/diode-ingester:${DIODE_TAG:-latest}
+    environment:
+      - API_KEY=${RECONCILER_API_KEY}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - RECONCILER_GRPC_HOST=${RECONCILER_GRPC_HOST}
+      - RECONCILER_GRPC_PORT=${RECONCILER_GRPC_PORT}
+      - SENTRY_DSN=${SENTRY_DSN}
+    restart: always
+    ports:
+      - "8081:8081"
+    depends_on:
+      - diode-redis
+      - diode-reconciler
+
+  diode-reconciler:
+    image: netboxlabs/diode-reconciler:${DIODE_TAG:-latest}
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - NETBOX_DIODE_PLUGIN_API_BASE_URL=${NETBOX_DIODE_PLUGIN_API_BASE_URL}
+      - DIODE_TO_NETBOX_API_KEY=${DIODE_TO_NETBOX_API_KEY}
+      - NETBOX_TO_DIODE_API_KEY=${NETBOX_TO_DIODE_API_KEY}
+      - DIODE_API_KEY=${DIODE_API_KEY}
+      - LOGGING_LEVEL=${LOGGING_LEVEL}
+      - SENTRY_DSN=${SENTRY_DSN}
+    restart: always
+    ports: [ ]
+    depends_on:
+      - diode-redis
+  diode-redis:
+    image: redis/redis-stack-server:latest
+    command:
+      - sh
+      - -c
+      - redis-server --appendonly yes --dir /data --save 60 1 --requirepass $$REDIS_PASSWORD --loadmodule /opt/redis-stack/lib/rejson.so --loadmodule /opt/redis-stack/lib/redisearch.so --port $$REDIS_PORT
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_PORT=${REDIS_PORT}
+    ports: [ ]
+    volumes:
+      - diode-redis-data:/data
+  diode-redis-cli:
+    image: redis/redis-stack-server:latest
+    links:
+      - diode-redis
+    entrypoint:
+      - sh
+      - -c
+      - |
+        redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" -a "$REDIS_PASSWORD" <<EOF
+        FT.CREATE ingest-entity ON JSON PREFIX 1 "ingest-entity:" SCHEMA \
+        $.data_type AS data_type TEXT \
+        $.state AS state NUMERIC \
+        $.request_id AS request_id TEXT \
+        $.ingestion_ts AS ingestion_ts NUMERIC SORTABLE
+        EOF
+volumes:
+  diode-redis-data:
+    driver: local

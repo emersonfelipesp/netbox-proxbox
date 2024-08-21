@@ -420,7 +420,10 @@ class NetboxBase:
                     print(f"primary field: {self.primary_field} - primary_field_value: {self.primary_field_value}")
                     
                     if self.primary_field == "address":
+                        
                         result_by_primary = await asyncio.to_thread(self.pynetbox_path.get, address=self.primary_field_value)
+                        print(f"self.primary_field_value = {self.primary_field_value}")
+                        
                     else:
                         result_by_primary = await asyncio.to_thread(self.pynetbox_path.get,
                             {
@@ -447,40 +450,94 @@ class NetboxBase:
                     
                     logger.info("[CHECK DUPLICATE] (1.5) Checking object using NAME and DEVICE provided by the Payload and also the PROXBOX TAG. If found, return it.")
                     
+                    result_by_device = None
+                    
                     device_id = object.get("device")
+                    
+                    print(f"object: {object}")
                     device_obj = None
                     try:
-                        device_obj = self.nb.dcim.devices.get(id=device_id)
-                        print(device_obj)
-                    except:
-                        logger.info("[CHECK DUPLICATE] (1.5.1) Device Object not found when checking for duplicated using Device as parameter.")
-                    
-                    if device_obj != None:
+                        logger.info("[CHECK DUPLICATE] (1.5.1) Checking duplicate using Device Object as parameter.")
+                        device_obj = self.nb.session.dcim.devices.get(int(device_id))
+                        print(f"device_obj: {device_obj}")
+                        
                         print(f"device_obj.name: {device_obj.name}")
+                        
+                        print(f'object.get("name"): {object.get("name")}')
+                        
+                        print(f"device_obj.id: {device_obj.id}")
+                        
                         result_by_device = await asyncio.to_thread(self.pynetbox_path.get,
                             name=object.get("name"),
-                            #device__id=object.get("device"),
-                            device=device_obj.name,
+                            device__id=device_obj.id,
+                            #device=device_obj,
                             tag=[self.nb.tag.slug]
                         )
                         
-                        if result_by_device:
-                            logger.info("[CHECK DUPLICATE] Object found on Netbox. Returning it.")
-                            return result_by_device
+                        
+                    
+                    except:
+                        logger.info("[CHECK DUPLICATE] (1.5.1) Device Object NOT found when checking for duplicated using Device as parameter.")
                     
                     
-                    
+                    if result_by_device:
+                        
+                        if result_by_device.device:
+                            print(f"result_by_device: {result_by_device.device}")
+                            print(f"result_by_device.device.id: {result_by_device.device.id}")
+                            print(f"object: {object} \n{object.get("device")}")
+                            print(f"object.device: {object.get("device")}")
+                            
+                        print(f"result_by_device - object device: {result_by_device} / {result_by_device.device} / {result_by_device.device.id}")
+                        # If this happens, it means that the interface name is equal, but device is different.
+                        print(f"int(object.id): {int(object.get("device"))} | int(result_by_device.device.id): {int(result_by_device.device.id)}")
+                        if int(object.get("device")) != int(result_by_device.device.id):
+                            return None
+                        
+                        logger.info("[CHECK DUPLICATE] (1.5.1) Object found on Netbox. Returning it.")
+                        return result_by_device
+ 
+                        
                     logger.info("[CHECK DUPLICATE] (2) Checking object using only NAME and SLUG provided by the Payload and also the PROXBOX TAG. If found, return it.")
-                    result_by_tag = await asyncio.to_thread(self.pynetbox_path.get,
-                        name=object.get("name"),
-                        slug=object.get("slug"),
-                        tag=[self.nb.tag.slug]
-                    )
                     
+                    
+                    result_by_tag = None
+                    try:
+                        result_by_tag = await asyncio.to_thread(self.pynetbox_path.get,
+                            name=object.get("name"),
+                            slug=object.get("slug"),
+                            tag=[self.nb.tag.slug]
+                        )
+                    
+                    except Exception as error:
+                        
+                        try:
+                            result_by_tag = await asyncio.to_thread(self.pynetbox_path.filter,
+                                name=object.get("name"),
+                                slug=object.get("slug"),
+                                tag=[self.nb.tag.slug]
+                            )
+                            
+                            if result_by_tag:
+                                logger.info("[CHECK DUPLICATE] (2) More than one object found.")
+                                
+                                for obj in result_by_tag:
+                                    print(f"obj.id: {obj.device.id} / device_obj.id: {device_obj.id}")
+                                    
+                                    if int(obj.device.id) == int(device_obj.id):
+                                        logger.info("[CHECK DUPLICATE] (2) More than one object found, but returning with the same ID.")
+                                        return obj
+                                return None
+                            print(f"filter: {result_by_tag}")
+                        except Exception as error:
+                            logger.error(error)
+                            
+
+                        
                     if result_by_tag:
                         logger.info(f"[CHECK DUPLICATE] Object found on Netbox. Returning it.")
                         return result_by_tag
-                    
+                        
                     
                     
                     result_by_name_and_slug = await asyncio.to_thread(self.pynetbox_path.get,

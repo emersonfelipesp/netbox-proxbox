@@ -182,7 +182,7 @@ async def get_nodes(
                 cidr = interface.get("cidr")
                 print(f"cidr: {cidr}")
                 
-                if create_interface and cidr:
+                if cidr:
                     logger.info("Interface with CIDR/Network. Creating the IP Address object on Netbox...")
                     # If interface with network configured, create IP Address and attach interface to it.
                     create_ipaddress = await IPAddress(nb=nb, primary_field_value=cidr).post(data={
