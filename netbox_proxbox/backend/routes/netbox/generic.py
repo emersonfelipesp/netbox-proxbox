@@ -503,11 +503,13 @@ class NetboxBase:
                     
                     result_by_tag = None
                     try:
+                        logger.info("[CHECK DUPLICATE] (2.1) Searching object using 'get' method")
                         result_by_tag = await asyncio.to_thread(self.pynetbox_path.get,
                             name=object.get("name"),
                             slug=object.get("slug"),
                             tag=[self.nb.tag.slug]
                         )
+                        print(result_by_tag)
                     
                     except Exception as error:
                         
@@ -539,7 +541,7 @@ class NetboxBase:
                         return result_by_tag
                         
                     
-                    
+                    logger.info(f"[CHECK DUPLICATE] (3) Checking duplicate object using only NAME and SLUG")
                     result_by_name_and_slug = await asyncio.to_thread(self.pynetbox_path.get,
                         name=object.get("name"),
                         slug=object.get("slug"),

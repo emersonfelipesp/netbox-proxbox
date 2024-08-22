@@ -8,6 +8,8 @@ from netbox_proxbox.backend.session.netbox import NetboxSessionDep
 
 from netbox_proxbox.backend.logging import logger
 
+from netbox_proxbox.backend.exception import ProxboxException
+
 from netbox_proxbox.backend import (
     ClusterType,
     Cluster,
@@ -61,24 +63,31 @@ async def proxbox_get_clusters(
             description = cluster_description
         
         # Create Cluster Type object before the Cluster itself
-        cluster_type_obj = await ClusterType(nb = nb).post(
-            data = {
-                "name": cluster_type_name,
-                "slug": cluster_type_slug,
-                "description": description
-            }
-        )
+        try:
+            logger.info("Creating the Cluster Type before Cluster...")
+            cluster_type_obj = await ClusterType(nb = nb).post(
+                data = {
+                    "name": cluster_type_name,
+                    "slug": cluster_type_slug,
+                    "description": description
+                }
+            )
+        except Exception as error: raise ProxboxException(message="Error trying to create the cluster type.", python_exception=error)
         
         # Create the Cluster
-        cluster_obj = await Cluster(nb = nb).post(
-            data = {
-                "name": px.name,
-                "slug": px.name,
-                "type": cluster_type_obj["id"],
-                "status": "active",
-            }
-        )
-         
+        try:
+            logger.info("Creating the Cluster...")
+            cluster_obj = await Cluster(nb = nb).post(
+                data = {
+                    "name": px.name,
+                    "slug": px.name,
+                    "type": cluster_type_obj["id"],
+                    "status": "active",
+                }
+            )
+        except Exception as error: raise ProxboxException(message="Error trying to create the cluster.", python_exception=error)
+            
+            
         result.append(
             {
                 "name": px.name,
@@ -133,13 +142,20 @@ async def get_nodes(
         
         for node in proxmox_nodes:
             
-            current_node = await Device(nb=nb).post(
-                data = {
-                    "name": node.get("node"),
-                    "cluster": get_cluster_from_netbox.id,
-                    "status": "active",
-                }
-            )
+            try:
+                logger.info("Creating Device related with the Virtual Machine(s)")
+                current_node = await Device(nb=nb).post(
+                    data = {
+                        "name": node.get("node"),
+                        "cluster": get_cluster_from_netbox.id,
+                        "status": "active",
+                    }
+                )
+            except Exception as error:
+                raise ProxboxException(
+                    message="Error trying to create Netbox Device object.",
+                    python_exception=error
+                )
             
             nodes.append(current_node)
                 
@@ -165,15 +181,21 @@ async def get_nodes(
                     enabled = True
                 else: enabled = False
                 
-                
-                create_interface = await Interface(nb=nb).post(data={
-                    "device": current_node.id,
-                    "name": interface_name,
-                    "enabled": enabled,
-                    "type": interface_type,
-                    "mtu": interface.get("mtu", None),
-                    "description": interface.get("comments", "")
-                })
+                try:
+                    logger.info("Creating Netbox interface...")
+                    create_interface = await Interface(nb=nb).post(data={
+                        "device": current_node.id,
+                        "name": interface_name,
+                        "enabled": enabled,
+                        "type": interface_type,
+                        "mtu": interface.get("mtu", None),
+                        "description": interface.get("comments", "")
+                    })
+                except Exception as error:
+                    raise ProxboxException(
+                        message="Error trying to create Netbox interface.",
+                        python_exception=error
+                    )
                 
                 print(f'create_interface: {create_interface}')
                 
@@ -183,14 +205,20 @@ async def get_nodes(
                 print(f"cidr: {cidr}")
                 
                 if cidr:
-                    logger.info("Interface with CIDR/Network. Creating the IP Address object on Netbox...")
-                    # If interface with network configured, create IP Address and attach interface to it.
-                    create_ipaddress = await IPAddress(nb=nb, primary_field_value=cidr).post(data={
-                        "address": cidr,
-                        "assigned_object_id": create_interface.id,
-                        "assigned_object_type": "dcim.interface"
-                    })
-                    print(f'create_ipaddress: {create_ipaddress}')
+                    try:
+                        logger.info("Interface with CIDR/Network. Creating the IP Address object on Netbox...")
+                        # If interface with network configured, create IP Address and attach interface to it.
+                        create_ipaddress = await IPAddress(nb=nb, primary_field_value=cidr).post(data={
+                            "address": cidr,
+                            "assigned_object_id": create_interface.id,
+                            "assigned_object_type": "dcim.interface"
+                        })
+                        print(f'create_ipaddress: {create_ipaddress}')
+                    except Exception as error:
+                        raise ProxboxException(
+                            message="Error trying to create IP Address of Interface on Netbox.",
+                            python_exception=error
+                        )
                 
                 
                     
@@ -205,10 +233,14 @@ async def get_nodes(
                         for port in bridge_ports:
                             print(f'current_node: {current_node}')
                             
-                            netbox_port = await Interface(nb=nb).get(
-                                device=current_node.name,
-                                name=port
-                            )
+                            try:
+                                logger.info("Searching children interface of a bridge.")
+                                netbox_port = await Interface(nb=nb).get(
+                                    device=current_node.name,
+                                    name=port
+                                )
+                            except Exception as error: raise ProxboxException(message="Error trying to search bridge child interface.", python_exception=error)
+                            
                             print(f"port: {port}")
                             print(f"netbox_port: {netbox_port}")
                             if not netbox_port:
@@ -221,9 +253,13 @@ async def get_nodes(
                                     enabled = True
                                 else: enabled = False
                                 
-                                # Interface and Bridge Interface must belong to the same Device
-                                if create_interface.device == current_node.id:
-                                    print("Creating interface...")
+
+                                
+                            # Interface and Bridge Interface must belong to the same Device
+                            logger.info("Creating child interface of a bridge. Bridge interface and child must belong to the same device.")
+                            if create_interface.device == current_node.id:
+                                print("Creating interface...")
+                                try:
                                     new_netbox_port = await Interface(nb=nb).post(data={
                                         "device": current_node.id,
                                         "name": port,
@@ -233,22 +269,29 @@ async def get_nodes(
                                         "description": proxmox_port.get("comments", ""),
                                         "bridge": create_interface.id
                                     })
-                                    
-                                    cidr = proxmox_port.get("cidr")
-                                    print(f"[2] cidr: {cidr}")
-                                   
-                                    if cidr:
-                                        # If interface with network configured, create IP Address and attach interface to it.
+                                except Exception as error:
+                                    raise ProxboxException(
+                                        message="Error trying to create child interface of bridge interface.",
+                                        python_exception=error
+                                )
+                                        
+                                cidr = proxmox_port.get("cidr")
+                                print(f"[2] cidr: {cidr}")
+                            
+                                if cidr:
+                                    logger.info("If interface with network configured, create IP Address and attach interface to it.")
+                                    try:
                                         create_ipaddress = await IPAddress(nb=nb, primary_field_value=cidr).post(data={
                                             "address": cidr,
                                             "assigned_object_id": new_netbox_port.id,
                                             "assigned_object_type": "dcim.interface"
                                         })
-                                        
-                                        
+                                    except Exception as error: raise ProxboxException(message="Error trying to create IP Address on Netbox", python_exception=error)
+                                    
+                                    
                             
                             else:
-                                print("Interface already exists. Attaching Bridge to Interface")
+                                logger.info("Interface already exists. Attaching Bridge to Interface")
                                 print(f'create_interface: {create_interface}')
                                 # Interface and Bridge Interface must belong to the same Device
                                 if create_interface.device == current_node.id:
@@ -544,27 +587,37 @@ async def get_virtual_machines(
             
             print(f"\nplatform: {platform}\n")
             
-            # Create Custom Field and add Virtual Machine Proxmox ID
-            new_virtual_machine =  await VirtualMachine(nb = nb).post(data = {
-                    "name": vm.get("name"),
-                    "cluster": cluster.id,
-                    "device": device,
-                    "status": VirtualMachineStatus(vm.get("status")).name,
-                    "vcpus": int(vm.get("maxcpu", 0)),
-                    "memory": int(vm_config.get("memory")),
-                    "disk": int(int(vm.get("maxdisk", 0)) / 1000000000),
-                    "role": role.id,
-                    "custom_fields": {
-                        "proxmox_vm_id": vm.get("vmid"),
-                        "proxmox_start_at_boot": start_at_boot,
-                        "proxmox_unprivileged_container": unprivileged_container,
-                        "proxmox_qemu_agent": qemu_agent,
-                        "proxmox_search_domain": search_domain,
-                    },
-                    "platform": platform
-                }
-            )
+            print(f"device: {device} / type: {type(device)}")
             
+            # Create Custom Field and add Virtual Machine Proxmox ID
+            try:
+                logger.info("Creating Virtual Machine on Netbox...")
+                new_virtual_machine =  await VirtualMachine(nb = nb).post(data = {
+                        "name": vm.get("name"),
+                        "cluster": cluster.id,
+                        "device": int(device.id),
+                        "status": VirtualMachineStatus(vm.get("status")).name,
+                        "vcpus": int(vm.get("maxcpu", 0)),
+                        "memory": int(vm_config.get("memory")),
+                        "disk": int(int(vm.get("maxdisk", 0)) / 1000000000),
+                        "role": role.id,
+                        "custom_fields": {
+                            "proxmox_vm_id": vm.get("vmid"),
+                            "proxmox_start_at_boot": start_at_boot,
+                            "proxmox_unprivileged_container": unprivileged_container,
+                            "proxmox_qemu_agent": qemu_agent,
+                            "proxmox_search_domain": search_domain,
+                        },
+                        "platform": platform
+                    }
+                )
+            except Exception as error:
+                raise ProxboxException(
+                    message=f"[CHECK DUPLICATE] Error trying to create Virtual Machine {vm.get("name")} on Netbox.",
+                    python_exception=f"{error}"
+                )
+
+                
 
             
 
