@@ -583,7 +583,7 @@ async def get_virtual_machines(
 
             
                 
-            print(f"vm_config: {vm_config}")
+            print(f"\n\nvm_config: {vm_config}\n\n")
             
             print(f"\nplatform: {platform}\n")
             
@@ -626,7 +626,7 @@ async def get_virtual_machines(
                     duplicated_virtual_machine = await VirtualMachine(nb = nb).post(data = virtual_machine_data)
                     
                     if duplicated_virtual_machine:
-                        created_virtual_machines.append(duplicated_virtual_machine)
+                        new_virtual_machine = duplicated_virtual_machine
                 
                 print(f"error: {error} / {type(error)}")
                 raise ProxboxException(
@@ -635,10 +635,39 @@ async def get_virtual_machines(
                 )
 
 
-            
-            created_virtual_machines.append(new_virtual_machine)
-            print(f"new_virtual_machine: {new_virtual_machine} | {type(new_virtual_machine)}")
-            
+            if new_virtual_machine:
+                created_virtual_machines.append(new_virtual_machine)
+                print(f"new_virtual_machine: {new_virtual_machine} | {type(new_virtual_machine)}")
+                
+                
+                vm_networks = []
+                network_id = 0
+                
+                logger.info("Getting network info and parsing data into JSON (dict)")
+                
+                while True:
+                    network_name = f"net{network_id}"
+                    
+                    vm_network_info = vm_config.get(network_name, None)
+                    if vm_network_info != None:
+                        
+                        net_fields = vm_network_info.split(",")
+                        
+                        net_data = {}
+                        
+                        for field in net_fields:
+                            key, value = field.split("=")
+                        
+                            net_data[key] = value
+                        
+                        
+                        vm_networks.append({f"{network_name}": net_data})
+                        
+                        network_id += 1
+                    else:
+                        break
+                    
+                print(f"\nvm_networks: {vm_networks}\n")
 
             
 
