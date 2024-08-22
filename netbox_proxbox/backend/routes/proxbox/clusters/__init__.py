@@ -590,36 +590,50 @@ async def get_virtual_machines(
             print(f"device: {device} / type: {type(device)}")
             
             # Create Custom Field and add Virtual Machine Proxmox ID
+            
+            virtual_machine_data = {
+                "name": vm.get("name"),
+                "cluster": cluster.id,
+                "device": int(device.id),
+                "status": VirtualMachineStatus(vm.get("status")).name,
+                "vcpus": int(vm.get("maxcpu", 0)),
+                "memory": int(vm_config.get("memory")),
+                "disk": int(int(vm.get("maxdisk", 0)) / 1000000000),
+                "role": role.id,
+                "custom_fields": {
+                    "proxmox_vm_id": vm.get("vmid"),
+                    "proxmox_start_at_boot": start_at_boot,
+                    "proxmox_unprivileged_container": unprivileged_container,
+                    "proxmox_qemu_agent": qemu_agent,
+                    "proxmox_search_domain": search_domain,
+                },
+                "platform": platform
+            }
+            
             try:
                 logger.info("Creating Virtual Machine on Netbox...")
-                new_virtual_machine =  await VirtualMachine(nb = nb).post(data = {
-                        "name": vm.get("name"),
-                        "cluster": cluster.id,
-                        "device": int(device.id),
-                        "status": VirtualMachineStatus(vm.get("status")).name,
-                        "vcpus": int(vm.get("maxcpu", 0)),
-                        "memory": int(vm_config.get("memory")),
-                        "disk": int(int(vm.get("maxdisk", 0)) / 1000000000),
-                        "role": role.id,
-                        "custom_fields": {
-                            "proxmox_vm_id": vm.get("vmid"),
-                            "proxmox_start_at_boot": start_at_boot,
-                            "proxmox_unprivileged_container": unprivileged_container,
-                            "proxmox_qemu_agent": qemu_agent,
-                            "proxmox_search_domain": search_domain,
-                        },
-                        "platform": platform
-                    }
-                )
+                new_virtual_machine =  await VirtualMachine(nb = nb).post(data = virtual_machine_data)
+
+
             except Exception as error:
+                
+                if "Virtual machine name must be unique per cluster." in str(error.python_exception):
+                    print("\nDUPLICATED VIRTUAL MACHINE NAME\n")
+                    
+                    logger.warning("Duplicated virtual machine NAME found within the same cluster. Appending '(2)' to the name")
+                    virtual_machine_data["name"] = f"{virtual_machine_data["name"]} (2)"
+                    
+                    duplicated_virtual_machine = await VirtualMachine(nb = nb).post(data = virtual_machine_data)
+                    
+                    if duplicated_virtual_machine:
+                        created_virtual_machines.append(duplicated_virtual_machine)
+                
+                print(f"error: {error} / {type(error)}")
                 raise ProxboxException(
-                    message=f"[CHECK DUPLICATE] Error trying to create Virtual Machine {vm.get("name")} on Netbox.",
+                    message=f"[CHECK DUPLICATE] Error trying to create Virtual Machine '{vm.get("name")}' on Netbox.",
                     python_exception=f"{error}"
                 )
 
-                
-
-            
 
             
             created_virtual_machines.append(new_virtual_machine)
