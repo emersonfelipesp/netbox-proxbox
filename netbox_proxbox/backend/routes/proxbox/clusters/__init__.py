@@ -18,6 +18,7 @@ from netbox_proxbox.backend import (
     DeviceType,
     Device,
     VirtualMachine,
+    VMInterface,
     Interface,
     IPAddress,
 )
@@ -668,11 +669,48 @@ async def get_virtual_machines(
                         break
                     
                 print(f"\nvm_networks: {vm_networks}\n")
+                
+                if vm_networks:
+                    for network in vm_networks:
+                        print(f"network: {network}")
+                        print(f"network (items): {network.items()}")
+                        for k, v in network.items():
+                            print(f'k: {k} / v: {v}')
+                            
+                            
+                            mac_address = None
+                            
+                            virtio = v.get("virtio", None)
+                            if virtio: mac_address=virtio
+                    
+                            hwaddr = v.get("hwaddr", None)
+                            if hwaddr: mac_address=hwaddr
+                            
+                            try:
+                                logger.info("Try creating VirtualMachine Interface on Netbox...")
+                                
+                                #vm_already_exists = await VMInterface(nb=nb).get({
+                                #    "virtual_machine": new_virtual_machine.id,
+                                #    "name": str(k)
+                                #})
+                                
+                                #if not vm_already_exists:
+                            
+                                netbox_interface = await VMInterface(nb=nb).post(data={
+                                    "virtual_machine": new_virtual_machine.id,
+                                    "name": str(k),
+                                    "enabled": True,
+                                    "mac_address": mac_address,
+                                })
+                                
+                                if netbox_interface:
+                                    logger.info(f"Virtual Machine Interface created successfully. {netbox_interface.id} - {netbox_interface.name}")
+                            
+                            except Exception as error:
+                                raise ProxboxException(
+                                    message="Error trying to create VM interface on Netbox",
+                                )
 
-            
-
-            
-            
         result.append({
             "name": px.name,
             "netbox": {

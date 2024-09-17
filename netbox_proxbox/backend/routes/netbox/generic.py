@@ -557,12 +557,12 @@ class NetboxBase:
                 
             except ProxboxException as error: raise error
                 
-            except Exception as error:
-                raise ProxboxException(
-                    message=f"[CHECK DUPLICATE] Error trying to create {self.object_name} on Netbox.",
-                    detail=f"Payload provided: {object}",
-                    python_exception=f"{error}"
-                )
+            #except Exception as error:
+            #    raise ProxboxException(
+            #        message=f"[CHECK DUPLICATE] Error trying to create {self.object_name} on Netbox.",
+            #        detail=f"Payload provided: {object}",
+            #        python_exception=f"{error}"
+            #    )
 
         return None
         # name = search_params.get("name")
