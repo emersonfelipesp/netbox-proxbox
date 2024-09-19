@@ -1,7 +1,7 @@
 from typing import Annotated
 
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, Request, WebSocket
+from fastapi.responses import JSONResponse, HTMLResponse
 
 from netbox_proxbox.backend.exception import ProxboxException
 
@@ -42,10 +42,73 @@ async def proxmoxer_exception_handler(request: Request, exc: ProxboxException):
         }
     )
 
+from netbox_proxbox.backend.session.proxmox import ProxmoxSessionsDep
+from netbox_proxbox.backend.session.netbox import NetboxSessionDep
+
+@app.websocket("/ws")
+async def websocket_endpoint(
+    nb: NetboxSessionDep,
+    pxs: ProxmoxSessionsDep,
+    websocket: WebSocket
+):
+    await websocket.accept()
+    
+    from netbox_proxbox.backend.routes.proxbox.clusters import get_nodes, get_virtual_machines
+    
+    await get_nodes(nb=nb, pxs=pxs, websocket=websocket)
+    await get_virtual_machines(nb=nb, pxs=pxs, websocket=websocket)
+    
+    while True:
+        data = await websocket.receive_text()
+        await websocket.send_text(f"Message text was: {data}")
+        
+        
 
 #
 # Routes (Endpoints)
 #
+
+html = """
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Chat</title>
+    </head>
+    <body>
+        <h1>Log Messages</h1>
+        <!-- Disable Input
+            <form action="" onsubmit="sendMessage(event)">
+                <input type="text" id="messageText" autocomplete="off"/>
+                <button>Send</button>
+            </form>
+        -->
+        <ul id='messages'>
+        </ul>
+        <script>
+            var ws = new WebSocket("ws://10.0.30.250:8800/ws");
+            ws.onmessage = function(event) {
+                var messages = document.getElementById('messages')
+                var message = document.createElement('li')
+                var content = document.createTextNode(event.data)
+                message.appendChild(content)
+                messages.appendChild(message)
+            };
+            function sendMessage(event) {
+                var input = document.getElementById("messageText")
+                ws.send(input.value)
+                input.value = ''
+                event.preventDefault()
+            }
+        </script>
+    </body>
+</html>
+"""
+
+@app.get("/websocket")
+async def get():
+    return HTMLResponse(html)
+
+
 # Netbox Routes
 app.include_router(netbox_router, prefix="/netbox", tags=["netbox"])
 app.include_router(nb_dcim_router, prefix="/netbox/dcim", tags=["netbox / dcim"])
