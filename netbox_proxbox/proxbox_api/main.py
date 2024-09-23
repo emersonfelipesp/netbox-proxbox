@@ -26,7 +26,7 @@ VERIFY_SSL = "<BOOLEAN>"
 
 HOST = "10.0.30.9",
 port = 8006,
-USER = root@pam",
+USER = "root@pam",
 TOKEN_NAME = "root",
 TOKEN_VALUE = "039ad154-23c2-4be0-8d20-b65bbb8c4686",
 VERIFY_SSL = False
