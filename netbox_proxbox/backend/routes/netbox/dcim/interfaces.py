@@ -19,7 +19,7 @@ class Interface(NetboxBase):
     object_name = "Interface"
     
     async def get_base_dict(self):
-        device = await Device(nb = self.nb).get()
+        device = await Device(nb = self.nb, websocket = self.websocket).get()
         
         return {
             "device": device.id,

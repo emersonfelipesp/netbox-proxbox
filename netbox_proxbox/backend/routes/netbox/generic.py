@@ -6,7 +6,8 @@ from typing_extensions import Doc
 from netbox_proxbox.backend.session.netbox import NetboxSessionDep
 from netbox_proxbox.backend.exception import ProxboxException
 
-from netbox_proxbox.backend.logging import logger
+from netbox_proxbox.backend.logging import logger, log
+from fastapi import WebSocket
 
 from netbox_proxbox.backend.cache import cache
 
@@ -64,8 +65,11 @@ class NetboxBase:
             ),
         ] = False,
         primary_field_value: str = None,
+        websocket: WebSocket = None,
     ):
+        
         self.nb = nb
+        self.websocket = websocket
         self.id = id
         self.all = all
         self.default = default
@@ -117,7 +121,7 @@ class NetboxBase:
         #base_dict = await self.get_base_dict()
         
         print(kwargs)
-        logger.info(f"[GET] Getting '{self.object_name}' from Netbox.")
+        await log(self.websocket, f"<span class='text-blue'><strong><i class='mdi mdi-download'></i></strong></span> [GET] Getting '{self.object_name}' from Netbox.")
         
         if self.id: return await self._get_by_id()
         if self.all: return await self._get_all()
@@ -127,18 +131,18 @@ class NetboxBase:
 
         if self.pynetbox_path.count() == 0:
             
-            logger.info(f"[GET] There's no '{self.object_name}' registered on Netbox. Creating a DEFAULT ONE.")
+            await log(self.websocket, f"<span class='text-blue'><strong><i class='mdi mdi-download'></i></strong></span> [GET] There's no '{self.object_name}' registered on Netbox. Creating a DEFAULT ONE.")
             
             self.default = True
             create_default_object = await self.post()
              
             if create_default_object != None:
-                logger.info(f"[GET] Default '{self.object_name}' created successfully. {self.object_name} ID: {create_default_object.id}")
+                await log(self.websocket, f"<span class='text-blue'><strong><i class='mdi mdi-download'></i></strong></span> [GET] Default '{self.object_name}' created successfully. {self.object_name} ID: {create_default_object.id}")
                 return create_default_object
                 
             else:
                 raise ProxboxException(
-                    message=f"[GET] Error trying to create default '{self.object_name}' on Netbox.",
+                    message=f"<span class='text-blue'><strong><i class='mdi mdi-download'></i></strong></span> [GET] Error trying to create default '{self.object_name}' on Netbox.",
                     detail=f"No objects found. Default '{self.object_name}' could not be created."
                 )
             
@@ -150,7 +154,7 @@ class NetboxBase:
             # 2.2
             # 2.2.1 If there's any 'Object' registered on Netbox, check if is Proxbox one by checking tag and name.
             try:
-                logger.info(f"[GET] '{self.object_name}' found on Netbox. Checking if it's 'Proxbox' one...")
+                await log(self.websocket, f"<span class='text-blue'><strong><i class='mdi mdi-download'></i></strong></span> [GET] '{self.object_name}' found on Netbox. Checking if it's 'Proxbox' one...")
                 get_object = await asyncio.to_thread(self.pynetbox_path.get,
                     name=self.default_name,
                     slug=self.default_slug,
@@ -168,11 +172,11 @@ class NetboxBase:
                 )
 
             if get_object != None:
-                logger.info(f"[GET] The '{self.object_name}' found is from 'Proxbox' (because it has the tag). Returning it.")
+                await log(self.websocket, f"<span class='text-blue'><strong><i class='mdi mdi-download'></i></strong></span> [GET] The '{self.object_name}' found is from 'Proxbox' (because it has the tag). Returning it.")
                 return get_object
             
             # 2.2.2. If it's not Proxbox one, create a default one.
-            logger.info(f"[GET] The '{self.object_name}' object found IS NOT from 'Proxbox'. Creating a default one.")
+            await log(self.websocket, f"<span class='text-blue'><strong><i class='mdi mdi-download'></i></strong></span> [GET] The '{self.object_name}' object found IS NOT from 'Proxbox'. Creating a default one.")
             self.default = True
             default_object = await self.post()
             return default_object
@@ -187,27 +191,27 @@ class NetboxBase:
     
     async def _get_by_kwargs(self, **kwargs):
         
-        logger.info(f"[GET] Searching '{self.object_name}' by kwargs {kwargs}.")
+        await log(self.websocket, f"[GET] Searching '{self.object_name}' by kwargs {kwargs}.")
         try:
             try:
                 response = await asyncio.to_thread(self.pynetbox_path.get, **kwargs)
                 return response
             except Exception as error:
                 if "get() returned more than one result." in f"{error}":
-                    logger.info(f"[CHECK DUPLICATE] Object '{self.object_name}' with the same name already found. Checking with '.filter' method")
+                    await log(self.websocket, f"[CHECK DUPLICATE] Object '{self.object_name}' with the same name already found. Checking with '.filter' method")
                     
                     if self.endpoint == "interfaces" and self.primary_field == "device":
 
-                        logger.info("[CHECK DUPLICATE] Checking duplicate device using as PRIMARY FIELD the DEVICE.")
+                        await log(self.websocket, "[CHECK DUPLICATE] Checking duplicate device using as PRIMARY FIELD the DEVICE.")
                         result_by_primary = await asyncio.to_thread(self.pynetbox_path.get, virtual_machine=self.primary_field_value)
 
                         if result_by_primary:
                             if result_by_primary.virtual_machine == self.primary_field_value:
-                                logger.info("[CHECK DUPLICATE] Interface with the same Device found. Duplicated object, returning it.")
+                                await log(self.websocket, "[CHECK DUPLICATE] Interface with the same Device found. Duplicated object, returning it.")
                                 return result_by_primary
                     
                         else:
-                            logger.info("[CHECK DUPLICATE] If interface equal, but different devices, return as NOT duplicated.")
+                            await log(self.websocket, "[CHECK DUPLICATE] If interface equal, but different devices, return as NOT duplicated.")
                             return None
 
             
@@ -227,7 +231,7 @@ class NetboxBase:
         If Query Parameter 'id' provided, use it to get the object from Netbox.
         """
         
-        logger.info(f"[GET] Searching '{self.object_name}' by ID {self.id}.")
+        await log(self.websocket, f"[GET] Searching '{self.object_name}' by ID {self.id}.")
         
         response = None
         
@@ -243,7 +247,7 @@ class NetboxBase:
              
             # 1.1. Return found object.
             if response != None:
-                logger.info(f"[GET] '{self.object_name}' with ID '{self.id}' found on Netbox. Returning it.")
+                await log(self.websocket, f"[GET] '{self.object_name}' with ID '{self.id}' found on Netbox. Returning it.")
                 return response
             
             # 1.2. Raise ProxboxException if object is not found.
@@ -308,7 +312,7 @@ class NetboxBase:
             cache.set(self.endpoint, self.base_dict)
 
         if data:
-            logger.info(f"[POST] Creating '{self.object_name}' object on Netbox.")
+            await log(self.websocket, f"<span class='text-red'><strong><i class='mdi mdi-upload'></i></strong></span> [POST] Creating '{self.object_name}' object on Netbox.")
         
             if isinstance(data, dict) == False:
                 try:
@@ -316,14 +320,14 @@ class NetboxBase:
                     data = data.model_dump(exclude_unset=True)
                 except Exception as error:
                     raise ProxboxException(
-                        message=f"[POST] Error parsing Pydantic model to Dict.",
+                        message=f"<span class='text-red'><strong><i class='mdi mdi-upload'></i></strong></span> <span class='text-red'><strong><i class='mdi mdi-error'></i></strong></span> [POST] Error parsing Pydantic model to Dict.",
                         python_exception=f"{error}",
                     )
                 
             # If no explicit slug was provided by the payload, create one based on the name.
             if data.get("slug") == None:
                 if not self.primary_field:
-                    logger.info("[POST] SLUG field not provided on the payload. Creating one based on the NAME or MODEL field.")
+                    await log(self.websocket, "<span class='text-red'><strong><i class='mdi mdi-upload'></i></strong></span> [POST] SLUG field not provided on the payload. Creating one based on the NAME or MODEL field.")
                     try:
                         data["slug"] = data.get("name").replace(" ", "-").lower()
                     except AttributeError:
@@ -332,11 +336,11 @@ class NetboxBase:
                             data["slug"] = data.get("model").replace(" ", "-").lower()
                         except AttributeError:
                             raise ProxboxException(
-                                message=f"[POST] No 'name' or 'model' field provided on the payload. Please provide one of them.",
+                                message=f"<span class='text-red'><strong><i class='mdi mdi-upload'></i></strong></span> [POST] No 'name' or 'model' field provided on the payload. Please provide one of them.",
                             )
                 
         if self.default or data == None:
-            logger.info(f"[POST] Creating DEFAULT '{self.object_name}' object on Netbox.")
+            await log(self.websocket, f"<span class='text-red'><strong><i class='mdi mdi-upload'></i></strong></span> [POST] Creating DEFAULT '{self.object_name}' object on Netbox.")
             data = self.base_dict
             
         try:
@@ -358,7 +362,7 @@ class NetboxBase:
                     data["tags"].append(self.nb.tag.id)
                  
                 try:
-                    logger.info(f"[POST] Trying to create {self.object_name} object on Netbox.")
+                    await log(self.websocket, f"<span class='text-red'><strong><i class='mdi mdi-upload'></i></strong></span> [POST] Trying to create {self.object_name} object on Netbox.")
                     
                     response = await asyncio.to_thread(self.pynetbox_path.create, data)
                     
@@ -375,18 +379,18 @@ class NetboxBase:
                     
                     else:
                         raise ProxboxException(
-                            message=f"[POST] Error trying to create '{self.object_name}' object on Netbox.",
+                            message=f"<span class='text-red'><strong><i class='mdi mdi-upload'></i></strong></span> [POST] Error trying to create '{self.object_name}' object on Netbox.",
                             python_exception=error
                         )
                 
                 if response:
-                    logger.info(f"[POST] '{self.object_name}' object created successfully. {self.object_name} ID: {response.id}")
+                    await log(self.websocket, f"[POST] '{self.object_name}' object created successfully. {self.object_name} ID: {response.id}")
                     return response
                 
                 else:
-                    logger.error(f"[POST] '{self.object_name}' object could not be created.")
+                    logger.error(f"<span class='text-red'><strong><i class='mdi mdi-upload'></i></strong></span> [POST] '{self.object_name}' object could not be created.")
             else:
-                logger.info(f"[POST] '{self.object_name}' object already exists on Netbox. Returning it.")
+                await log(self.websocket, f"<span class='text-red'><strong><i class='mdi mdi-upload'></i></strong></span> [POST] '{self.object_name}' object already exists on Netbox. Returning it.")
                 return check_duplicate_result
         
         #except ProxboxException as error: raise error
@@ -410,10 +414,10 @@ class NetboxBase:
 
     async def _check_duplicate(self, search_params: dict = None, object: dict = None):
         
-        logger.info(f"[CHECK DUPLICATE] Checking if '{self.object_name}' exists on Netbox before creating it.")
+        await log(self.websocket, f"[CHECK DUPLICATE] Checking if '{self.object_name}' exists on Netbox before creating it.")
         
         if self.default:
-            logger.info("[CHECK DUPLICATE] Checking default object.")
+            await log(self.websocket, "[CHECK DUPLICATE] Checking default object.")
             try:
                 result = await asyncio.to_thread(self.pynetbox_path.get,
                     name=self.default_name,
@@ -448,21 +452,21 @@ class NetboxBase:
             
             except Exception as error:
                 raise ProxboxException(
-                    message=f"[POST] Error trying to create default {self.object_name} on Netbox.",
+                    message=f"<span class='text-red'><strong><i class='mdi mdi-upload'></i></strong></span> [POST] Error trying to create default {self.object_name} on Netbox.",
                     python_exception=f"{error}"
                 )
                 
         if object:
             try:
                 if (self.primary_field):
-                    logger.info("[CHECK DUPLICATE] (0.5) Checking object using only custom PRIMARY FIELD and Proxbox TAG provided by the class attribute.")
+                    await log(self.websocket, "[CHECK DUPLICATE] (0.5) Checking object using only custom PRIMARY FIELD and Proxbox TAG provided by the class attribute.")
                     print(f"primary field: {self.primary_field} - primary_field_value: {self.primary_field_value}")
                     
                     
                     print(f'self.primary_field = {self.primary_field} / {self.endpoint}')
                     
                     if self.primary_field == "address":
-                        logger.info("[CHECK DUPLICATE] Checking duplicate device using as PRIMARY FIELD the ADDRESS.")
+                        await log(self.websocket, "[CHECK DUPLICATE] Checking duplicate device using as PRIMARY FIELD the ADDRESS.")
                         
                         try:
                             result_by_primary = await asyncio.to_thread(self.pynetbox_path.get, address=self.primary_field_value)
@@ -485,11 +489,11 @@ class NetboxBase:
                         print(f"self.primary_field_value = {self.primary_field_value}")
                         
                         if result_by_primary:
-                            logger.info("[CHECK DUPLICATE] IP Address with the same network found. Returning it.")
+                            await log(self.websocket, "[CHECK DUPLICATE] IP Address with the same network found. Returning it.")
                             return result_by_primary
                         
                     if self.primary_field == "virtual_machine" and self.endpoint == "interfaces":
-                        logger.info("[CHECK DUPLICATE] Checking duplicate device using as PRIMARY FIELD the DEVICE.")
+                        await log(self.websocket, "[CHECK DUPLICATE] Checking duplicate device using as PRIMARY FIELD the DEVICE.")
                         
                         result_by_primary = None
                         
@@ -517,10 +521,10 @@ class NetboxBase:
                                         return None
                         
                         except Exception as error:
-                            logger.info(f"[CHECK DUPLICATE] Error trying to get interface using only 'virtual_machine' field as parameter.\n   >{error}")
+                            await log(self.websocket, f"[CHECK DUPLICATE] Error trying to get interface using only 'virtual_machine' field as parameter.\n   >{error}")
                             if "get() returned more than one result" in f"{error}":
                                 # FILTER
-                                logger.info("[CHECK DUPLICATE] Found more than one VM INTERFACE object with the same 'virtual_machine' field. Trying to use '.filter' pynetbox method now.")
+                                await log(self.websocket, "[CHECK DUPLICATE] Found more than one VM INTERFACE object with the same 'virtual_machine' field. Trying to use '.filter' pynetbox method now.")
                                 
                                 
                                 try:
@@ -562,30 +566,30 @@ class NetboxBase:
                     if result_by_primary:
                         
                         if self.endpoint == "interfaces":
-                            logger.info("[CHECK DUPLICATE] If duplicate interface found, check if the devices are the same.")
+                            await log(self.websocket, "[CHECK DUPLICATE] If duplicate interface found, check if the devices are the same.")
                             if result_by_primary.device == self.primary_field_value:
-                                logger.info("[CHECK DUPLICATE] Interface with the same Device found. Duplicated object, returning it.")
+                                await log(self.websocket, "[CHECK DUPLICATE] Interface with the same Device found. Duplicated object, returning it.")
                                 return result_by_primary
                             else:
-                                logger.info("[CHECK DUPLICATE] If interface equal, but different devices, return as NOT duplicated.")
+                                await log(self.websocket, "[CHECK DUPLICATE] If interface equal, but different devices, return as NOT duplicated.")
                                 return None
                         
-                        logger.info(f"[CHECK_DUPLICATE] Object found on Netbox. Returning it.")
+                        await log(self.websocket, f"[CHECK_DUPLICATE] Object found on Netbox. Returning it.")
                         print(f'result_by_primary: {result_by_primary}')
                         return result_by_primary
                     
                     return None
                     
-                logger.info("[CHECK DUPLICATE] (1) First attempt: Checking object making EXACT MATCH with the Payload provided...")
+                await log(self.websocket, "<span class='text-purple'><strong><i class='mdi mdi-sync'></i></strong></span> [CHECK DUPLICATE] (1) First attempt: Checking object making EXACT MATCH with the Payload provided...")
                 result = await asyncio.to_thread(self.pynetbox_path.get, dict(object))
                 
                 if result:
-                    logger.info(f"[CHECK DUPLICATE] Object found on Netbox. Returning it.")
+                    await log(self.websocket, f"<span class='text-purple'><strong><i class='mdi mdi-sync'></i></strong></span> [CHECK DUPLICATE] Object found on Netbox. Returning it.")
                     return result
                 
                 else:
                     
-                    logger.info("[CHECK DUPLICATE] (1.5) Checking object using NAME and DEVICE provided by the Payload and also the PROXBOX TAG. If found, return it.")
+                    await log(self.websocket, "<span class='text-purple'><strong><i class='mdi mdi-sync'></i></strong></span> [CHECK DUPLICATE] (1.5) Checking object using NAME and DEVICE provided by the Payload and also the PROXBOX TAG. If found, return it.")
                     
                     result_by_device = None
                     
@@ -594,7 +598,7 @@ class NetboxBase:
                     print(f"object: {object}")
                     device_obj = None
                     try:
-                        logger.info("[CHECK DUPLICATE] (1.5.1) Checking duplicate using Device Object as parameter.")
+                        await log(self.websocket, "<span class='text-purple'><strong><i class='mdi mdi-sync'></i></strong></span> [CHECK DUPLICATE] (1.5.1) Checking duplicate using Device Object as parameter.")
                         device_obj = self.nb.session.dcim.devices.get(int(device_id))
                         print(f"device_obj: {device_obj}")
                         
@@ -612,7 +616,7 @@ class NetboxBase:
                         
                     
                     except:
-                        logger.info("[CHECK DUPLICATE] (1.5.1) Device Object NOT found when checking for duplicated using Device as parameter.")
+                        await log(self.websocket, "<span class='text-purple'><strong><i class='mdi mdi-sync'></i></strong></span> [CHECK DUPLICATE] (1.5.1) Device Object NOT found when checking for duplicated using Device as parameter.")
                     
                     
                     if result_by_device:
@@ -629,16 +633,16 @@ class NetboxBase:
                         if int(object.get("device")) != int(result_by_device.device.id):
                             return None
                         
-                        logger.info("[CHECK DUPLICATE] (1.5.1) Object found on Netbox. Returning it.")
+                        await log(self.websocket, "<span class='text-purple'><strong><i class='mdi mdi-sync'></i></strong></span> [CHECK DUPLICATE] (1.5.1) Object found on Netbox. Returning it.")
                         return result_by_device
  
                         
-                    logger.info("[CHECK DUPLICATE] (2) Checking object using only NAME and SLUG provided by the Payload and also the PROXBOX TAG. If found, return it.")
+                    await log(self.websocket, "<span class='text-purple'><strong><i class='mdi mdi-sync'></i></strong></span> [CHECK DUPLICATE] (2) Checking object using only NAME and SLUG provided by the Payload and also the PROXBOX TAG. If found, return it.")
                     
                     
                     result_by_tag = None
                     try:
-                        logger.info("[CHECK DUPLICATE] (2.1) Searching object using 'get' method")
+                        await log(self.websocket, "<span class='text-purple'><strong><i class='mdi mdi-sync'></i></strong></span> [CHECK DUPLICATE] (2.1) Searching object using 'get' method")
                         result_by_tag = await asyncio.to_thread(self.pynetbox_path.get,
                             name=object.get("name"),
                             slug=object.get("slug"),
@@ -656,13 +660,13 @@ class NetboxBase:
                             )
                             
                             if result_by_tag:
-                                logger.info("[CHECK DUPLICATE] (2) More than one object found.")
+                                await log(self.websocket, "<span class='text-purple'><strong><i class='mdi mdi-sync'></i></strong></span> [CHECK DUPLICATE] (2) More than one object found.")
                                 
                                 for obj in result_by_tag:
                                     print(f"obj.id: {obj.device.id} / device_obj.id: {device_obj.id}")
                                     
                                     if int(obj.device.id) == int(device_obj.id):
-                                        logger.info("[CHECK DUPLICATE] (2) More than one object found, but returning with the same ID.")
+                                        await log(self.websocket, "<span class='text-purple'><strong><i class='mdi mdi-sync'></i></strong></span> [CHECK DUPLICATE] (2) More than one object found, but returning with the same ID.")
                                         return obj
                                 return None
                             print(f"filter: {result_by_tag}")
@@ -672,11 +676,11 @@ class NetboxBase:
 
                         
                     if result_by_tag:
-                        logger.info(f"[CHECK DUPLICATE] Object found on Netbox. Returning it.")
+                        await log(self.websocket, f"<span class='text-purple'><strong><i class='mdi mdi-sync'></i></strong></span> [CHECK DUPLICATE] Object found on Netbox. Returning it.")
                         return result_by_tag
                         
                     
-                    logger.info(f"[CHECK DUPLICATE] (3) Checking duplicate object using only NAME and SLUG")
+                    await log(self.websocket, f"<span class='text-purple'><strong><i class='mdi mdi-sync'></i></strong></span> [CHECK DUPLICATE] (3) Checking duplicate object using only NAME and SLUG")
                     result_by_name_and_slug = await asyncio.to_thread(self.pynetbox_path.get,
                         name=object.get("name"),
                         slug=object.get("slug"),
@@ -684,7 +688,7 @@ class NetboxBase:
                     
                     if result_by_name_and_slug:
                         raise ProxboxException(
-                            message=f"[CHECK DUPLICATE] '{self.object_name}' with ID '{result_by_name_and_slug.id}' found on Netbox, but without Proxbox tag. Please delete it (or add the tag) and try again.",
+                            message=f"<span class='text-purple'><strong><i class='mdi mdi-sync'></i></strong></span> [CHECK DUPLICATE] '{self.object_name}' with ID '{result_by_name_and_slug.id}' found on Netbox, but without Proxbox tag. Please delete it (or add the tag) and try again.",
                             detail="Netbox does not allow duplicated names and/or slugs."
                         )
 
@@ -703,7 +707,7 @@ class NetboxBase:
         # name = search_params.get("name")
         # slug = search_params.get("slug")
         
-        # logger.info(f"Checking if {name} exists on Netbox.")
+        # await log(self.websocket, f"Checking if {name} exists on Netbox.")
         # """
         # Check if object exists on Netbox based on the dict provided.
         # The fields used to distinguish duplicates are:

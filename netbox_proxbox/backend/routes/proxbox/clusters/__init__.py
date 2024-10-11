@@ -6,9 +6,9 @@ from typing import Annotated, Any
 from netbox_proxbox.backend.session.proxmox import ProxmoxSessionsDep
 from netbox_proxbox.backend.session.netbox import NetboxSessionDep
 
-from netbox_proxbox.backend.logging import logger
+from netbox_proxbox.backend.logging import logger, log
 
-from netbox_proxbox.backend.exception import ProxboxException
+from netbox_proxbox.backend.exception import ProxboxException, exception_log
 
 from netbox_proxbox.backend import (
     ClusterType,
@@ -65,20 +65,21 @@ async def proxbox_get_clusters(
         
         # Create Cluster Type object before the Cluster itself
         try:
-            await log(websocket, "Creating the Cluster Type before Cluster...")
-            cluster_type_obj = await ClusterType(nb = nb).post(
+            await log(websocket, "Creating the <strong>Cluster Type</strong> before Cluster...")
+            cluster_type_obj = await ClusterType(nb = nb, websocket = websocket).post(
                 data = {
                     "name": cluster_type_name,
                     "slug": cluster_type_slug,
                     "description": description
                 }
             )
-        except Exception as error: raise ProxboxException(message="Error trying to create the cluster type.", python_exception=error)
+        #except Exception as error: raise ProxboxException(message="Error trying to create the cluster type.", python_exception=error)
+        except Exception as error: await exception_log(logger=log,websocket=websocket, message="Error trying to create the cluster type.", python_exception=error)
         
         # Create the Cluster
         try:
             await log(websocket, "Creating the Cluster...")
-            cluster_obj = await Cluster(nb = nb).post(
+            cluster_obj = await Cluster(nb = nb, websocket = websocket).post(
                 data = {
                     "name": px.name,
                     "slug": px.name,
@@ -86,7 +87,8 @@ async def proxbox_get_clusters(
                     "status": "active",
                 }
             )
-        except Exception as error: raise ProxboxException(message="Error trying to create the cluster.", python_exception=error)
+        #except Exception as error: raise ProxboxException(message="Error trying to create the cluster.", python_exception=error)
+        except Exception as error: await exception_log(logger=log,websocket=websocket, message="Error trying to create the cluster.", python_exception=error)
             
             
         result.append(
@@ -119,12 +121,6 @@ def find_interface_type(
 
 from fastapi import WebSocket
 
-async def log(websocket, msg, level =  None):
-    if level == "debug": logger.debug(msg)
-    else: logger.info(msg)
-        
-    await websocket.send_text(msg)
-
 @router.get("/nodes")
 async def get_nodes(
     nb: NetboxSessionDep,
@@ -139,7 +135,7 @@ async def get_nodes(
     for px in pxs:
         
         # Get Cluster from Netbox based on Proxmox Cluster Name
-        get_cluster_from_netbox = await Cluster(nb = nb).get(name = px.name)
+        get_cluster_from_netbox = await Cluster(nb = nb, websocket = websocket).get(name = px.name)
     
         # Get Proxmox Nodes from the current Proxmox Cluster
         proxmox_nodes = px.session.nodes.get()
@@ -151,10 +147,10 @@ async def get_nodes(
         for node in proxmox_nodes:
             
             try:
-                msg = f"Creating Device '{node.get("node")}' related with the Virtual Machine(s)"
+                msg = f"<span class='text-yellow'><strong><i class='mdi mdi-sync'></i></strong></span> Creating Device <strong>{node.get("node")}</strong> related with the Virtual Machine(s)"
                 await log(websocket, msg)
                 
-                current_node = await Device(nb=nb).post(
+                current_node = await Device(nb=nb, websocket=websocket).post(
                     data = {
                         "name": node.get("node"),
                         "cluster": get_cluster_from_netbox.id,
@@ -162,16 +158,22 @@ async def get_nodes(
                     }
                 )
                 
-                msg = f"Device '{current_node}' created successfully."
+                if current_node:
+                    nodes.append(current_node)
+                    
+                msg = f"<span class='text-green'><strong><i class='mdi mdi-check'></i></strong></span> Device <strong><a href='{current_node.display_url}' target='_blank'>{current_node}</a> created successfully.</strong>"
                 await log(websocket, msg)
                 
             except Exception as error:
-                raise ProxboxException(
-                    message="Error trying to create Netbox Device object.",
+                #raise ProxboxException(
+                await exception_log(
+                    logger=log,
+                    websocket=websocket,
+                    message="<span class='text-red'><strong><i class='mdi mdi-error'></i></strong></span> Error trying to create Netbox Device object.",
                     python_exception=error
                 )
             
-            nodes.append(current_node)
+            
                 
             print(node)
             node_interfaces = px.session.nodes(node.get("node")).network.get()
@@ -195,9 +197,11 @@ async def get_nodes(
                     enabled = True
                 else: enabled = False
                 
+                create_interface = None
+                
                 try:
-                    await log(websocket, f"Creating Netbox '{interface_name}' Interface on '{current_node.name}' Device...")
-                    create_interface = await Interface(nb=nb, primary_field_value=current_node.id).post(data={
+                    await log(websocket, f"<span class='text-yellow'><strong><i class='mdi mdi-sync'></i></strong></span> Creating Netbox <strong>{interface_name}</strong> Interface on <strong><a href='{current_node.display_url}' target='_blank'>{current_node.name}</a></strong> Device...")
+                    create_interface = await Interface(nb=nb, websocket=websocket, primary_field_value=current_node.id).post(data={
                         "device": current_node.id,
                         "name": interface_name,
                         "enabled": enabled,
@@ -205,13 +209,21 @@ async def get_nodes(
                         "mtu": interface.get("mtu", None),
                         "description": interface.get("comments", "")
                     })
+                    
+                    if create_interface:
+                        print(f'create_interface: {create_interface}')
+                        await log(websocket, f"<span class='text-green'><strong><i class='mdi mdi-check'></i></strong></span> Netbox Interface <strong><a href='{create_interface.display_url}' target='_blank'>{create_interface.name}</a> created successfully.</strong>")
+                    
                 except Exception as error:
-                    raise ProxboxException(
-                        message="Error trying to create Netbox interface.",
+                    #raise ProxboxException(
+                    await exception_log(
+                        logger=log,
+                        websocket=websocket,
+                        message="<span class='text-red'><strong><i class='mdi mdi-error'></i></strong></span> Error trying to create Netbox interface.",
                         python_exception=error
                     )
                 
-                print(f'create_interface: {create_interface}')
+                
                 
                 print(f"interface value type: {type(interface)}")
                 
@@ -220,17 +232,24 @@ async def get_nodes(
                 
                 if create_interface and cidr:
                     try:
-                        await log(websocket, "Interface with CIDR/Network. Creating the IP Address object on Netbox...")
+                        await log(websocket, f"<span class='text-yellow'><strong><i class='mdi mdi-sync'></i></strong></span> Interface with CIDR/Network. Creating the IP Address <strong>{cidr}</strong> object of Interface <strong><a href='{create_interface.display_url}' target='_blank'>{create_interface.name}</a></strong> on Netbox...")
                         # If interface with network configured, create IP Address and attach interface to it.
-                        create_ipaddress = await IPAddress(nb=nb, primary_field_value=cidr).post(data={
+                        create_ipaddress = await IPAddress(nb=nb, websocket=websocket, primary_field_value=cidr).post(data={
                             "address": cidr,
                             "assigned_object_id": create_interface.id,
                             "assigned_object_type": "dcim.interface"
                         })
+                        
+                        if create_ipaddress:
+                            log(websocket, f"IP Address <strong><a href='{create_ipaddress.display_url}' target='_blank'>{create_ipaddress.address}</a></strong> of Interface <strong><a href='{create_interface.display_url}' target='_blank'>{create_interface.name}</a><span class='text-green'>created successfully.</span></strong>")
+                            
                         print(f'create_ipaddress: {create_ipaddress}')
                     except Exception as error:
-                        raise ProxboxException(
-                            message="Error trying to create IP Address of Interface on Netbox.",
+                        #raise ProxboxException(
+                        await exception_log(
+                            logger=log,
+                            websocket=websocket,
+                            message="<span class='text-red'><strong><i class='mdi mdi-error'></i></strong></span> Error trying to create IP Address of Interface on Netbox.",
                             python_exception=error
                         )
             
@@ -245,23 +264,34 @@ async def get_nodes(
                         
                         
                         for port in bridge_ports:
-                            print(f'current_node: {current_node}')
+                            # print(f'current_node: {current_node}')
+                            
+                            netbox_port = None
                             
                             try:
-                                await log(websocket, "Searching children interface of a bridge.")
+                                await log(websocket, f"<span class='text-yellow'><strong><i class='mdi mdi-sync'></i></strong></span> Searching children interface of bridge interface <strong><a href='{create_interface.display_url}' target='_blank'>{create_interface.name}</a></strong>.")
                                 print(f"current_node.id: {current_node.id} / current_node: {current_node} / current_node.name: {current_node.name}")
-                                netbox_port = await Interface(nb=nb, primary_field_value=current_node.id).get(
+                                
+                                log(websocket, f"<span class='text-yellow'>Searching</span> child interface <strong>{port}</strong> with Device ID <strong>{current_node.id}</strong>")
+                                netbox_port = await Interface(nb=nb, websocket=websocket, primary_field_value=current_node.id).get(
                                     name=port
                                 )
+                                
+                                if netbox_port:
+                                    print(f"netbox_port: {netbox_port}")
+                                    
                             except Exception as error: 
-                                raise ProxboxException(
-                                    message="Error trying to search bridge child interface.", 
+                                #raise ProxboxException(
+                                await exception_log(
+                                    logger=log,
+                                    websocket=websocket,
+                                    message="<span class='text-red'><strong><i class='mdi mdi-error'></i></strong></span> Error trying to search bridge child interface.", 
                                     python_exception=f"{error}"
                                 )
                                 
                             
                             print(f"port: {port}")
-                            print(f"netbox_port: {netbox_port}")
+                            
                             if not netbox_port:
                                 
                                 proxmox_port = px.session.nodes(node.get("node")).network(port).get()
@@ -275,60 +305,73 @@ async def get_nodes(
 
                                 
                             # Interface and Bridge Interface must belong to the same Device
-                            await log(websocket, "Creating child interface of a bridge. Bridge interface and child must belong to the same device.")
-                            if create_interface.device == current_node.id:
-                                
-                                await log(websocket, f"Creating interface '{port}'...")
-                                
-                                try:
-                                    new_netbox_port = await Interface(nb=nb, primary_field_value=current_node.id).post(data={
-                                        "device": current_node.id,
-                                        "name": port,
-                                        "enabled": enabled,
-                                        "type": interface_type,
-                                        "mtu": proxmox_port.get("mtu", None),
-                                        "description": proxmox_port.get("comments", ""),
-                                        "bridge": create_interface.id
-                                    })
-                                    
-                                    await log(websocket, f"Interface '{port}' created successfully.")
-                                    
-                                except Exception as error:
-                                    raise ProxboxException(
-                                        message="Error trying to create child interface of bridge interface.",
-                                        python_exception=error
-                                )
-                                        
-                                cidr = proxmox_port.get("cidr")
-                                print(f"[2] cidr: {cidr}")
-                            
-                                if cidr:
-                                    await log(websocket, "If interface with network configured, create IP Address and attach interface to it.")
-                                    try:
-                                        create_ipaddress = await IPAddress(nb=nb, primary_field_value=cidr).post(data={
-                                            "address": cidr,
-                                            "assigned_object_id": new_netbox_port.id,
-                                            "assigned_object_type": "dcim.interface"
-                                        })
-                                    except Exception as error: raise ProxboxException(message="Error trying to create IP Address on Netbox", python_exception=error)
-                                    
-                                    
-                            
-                            else:
-                                await log(websocket, "Interface already exists. Attaching Bridge to Interface")
-                                print(f'create_interface: {create_interface}')
-                                # Interface and Bridge Interface must belong to the same Device
+                            await log(websocket, "<span class='text-yellow'><strong><i class='mdi mdi-sync'></i></strong></span> Creating child interface of a bridge. Bridge interface and child must belong to the same device.")
+                            #print(f"create_interface.device: {create_interface.device}\ncurrent_node.id: {current_node.id}")
+                            if create_interface:
                                 if create_interface.device == current_node.id:
-                                    netbox_port.bridge = create_interface.id
-                                    netbox_port.device = current_node.id
-                                    netbox_port.save()
+                                
+                                    await log(websocket, f"Creating interface '{port}'...")
+                                    
+                                    try:
+                                        new_netbox_port = await Interface(nb=nb, websocket=websocket, primary_field_value=current_node.id).post(data={
+                                            "device": current_node.id,
+                                            "name": port,
+                                            "enabled": enabled,
+                                            "type": interface_type,
+                                            "mtu": proxmox_port.get("mtu", None),
+                                            "description": proxmox_port.get("comments", ""),
+                                            "bridge": create_interface.id
+                                        })
+                                        
+                                        if new_netbox_port:
+                                            await log(websocket, f"<span class='text-green'><strong><i class='mdi mdi-check'></i></strong></span> Child Bridge Interface <strong><a href='{new_netbox_port.display_url}' target='_blank'>{port}</a> of <a href='{create_interface.display_url}' target='_blank'>{create_interface.name}</a> created successfully.</strong>")
+                                        
+                                    except Exception as error:
+                                        
+                                        #raise ProxboxException(
+                                        await log_exception(
+                                            websocket=websocket,
+                                            message="<span class='text-red'><strong><i class='mdi mdi-error'></i></strong></span> Error trying to create child interface of bridge interface.",
+                                            python_exception=error
+                                    )
+                                            
+                                    cidr = proxmox_port.get("cidr")
+                                    print(f"[2] cidr: {cidr}")
+                                
+                                    if cidr:
+                                        await log(websocket, f"<span class='text-yellow'><strong><i class='mdi mdi-sync'></i></strong></span> If interface with network configured, create IP Address <strong>{cidr}</strong> and attach interface to it.")
+                                        try:
+                                            create_ipaddress = await IPAddress(nb=nb, websocket=websocket, primary_field_value=cidr).post(data={
+                                                "address": cidr,
+                                                "assigned_object_id": new_netbox_port.id,
+                                                "assigned_object_type": "dcim.interface"
+                                            })
+                                            
+                                            if create_ipaddress:
+                                                log(websocket, f"<span class='text-green'><strong><i class='mdi mdi-check'></i></strong></span> IP Address <strong><a href='{create_ipaddress.display_url}' target='_blank'>{create_ipaddress.address}</a></strong> of Interface <strong><a href='{new_netbox_port.display_url}' target='_blank'>{new_netbox_port.name}</a> created successfully.</strong>")
+                                                
+                                        #except Exception as error: raise ProxboxException(message="<span class='text-red'><strong><i class='mdi mdi-error'></i></strong></span> Error trying to create IP Address on Netbox", python_exception=error)
+                                        except Exception as error: await exception_log(logger=log,websocket=websocket,message="<span class='text-red'><strong><i class='mdi mdi-error'></i></strong></span> Error trying to create IP Address on Netbox", python_exception=error)
+                                    
+                                    
+                            
+                                else:
+                                    print(f"netbox_port {netbox_port}\ncreate_interface.device {create_interface.device}\ncurrent_node.id: {current_node.id}")
+
+                                    await log(websocket, f"<span class='text-green'><strong><i class='mdi mdi-check'></i></strong></span> Interface already exists. Attaching Bridge to Interface <strong><a href='{create_interface.display_url}' target='_blank'>{create_interface.name}</a></strong>")
+                                    print(f'create_interface: {create_interface}')
+                                    # Interface and Bridge Interface must belong to the same Device
+                                    if create_interface.device == current_node.id:
+                                        netbox_port.bridge = create_interface.id
+                                        netbox_port.device = current_node.id
+                                        netbox_port.save()
 
                 print(f'interface: {interface}')
             
             print("\n")
 
         
-        await log(websocket, f"Nodes: {nodes}", "debug")
+        await log(websocket, f"<span class='text-yellow'><strong><i class='mdi mdi-exclamation'></i></strong></span> Nodes: {nodes}", "debug")
     
         
         result.append({
@@ -389,7 +432,7 @@ async def get_virtual_machines(
             This way we are able to minimize the number of requests to Netbox API
             """
             if devices.get(vm_node) == None:
-                devices[vm_node] = await Device(nb = nb).get(name = vm.get("node"))
+                devices[vm_node] = await Device(nb = nb, websocket = websocket).get(name = vm.get("node"))
                 
             device = devices[vm_node]
             print(f"devices[vm_node]: {devices[vm_node]} | {device}")
@@ -401,13 +444,13 @@ async def get_virtual_machines(
             This way we are able to minimize the number of requests to Netbox API
             """
             if clusters.get(px.name) == None:
-                clusters[px.name] = await Cluster(nb = nb).get(name = px.name)
+                clusters[px.name] = await Cluster(nb = nb, websocket = websocket).get(name = px.name)
             
             cluster = clusters[px.name]
         
         
         
-            role = await DeviceRole(nb = nb).get(slug = vm.get("type"))
+            role = await DeviceRole(nb = nb, websocket = websocket).get(slug = vm.get("type"))
             if role == None:
             
                 vm_type = vm.get("type")
@@ -426,7 +469,7 @@ async def get_virtual_machines(
                     color = "7fffd4"
                     description = "Proxmox Container"
                 
-                role = await DeviceRole(nb = nb).post(data = {
+                role = await DeviceRole(nb = nb, websocket = websocket).post(data = {
                     "name": vm_name,
                     "slug": vm_type,
                     "vm_role": True,
@@ -637,26 +680,29 @@ async def get_virtual_machines(
             }
             
             try:
-                await log(websocket, "Creating Virtual Machine on Netbox...")
-                new_virtual_machine =  await VirtualMachine(nb = nb).post(data = virtual_machine_data)
+                await log(websocket, f"<span class='text-yellow'><strong><i class='mdi mdi-sync'></i></strong></span> Creating Virtual Machine <strong>{vm.get("name")}</strong> on Netbox...")
+                new_virtual_machine =  await VirtualMachine(nb = nb, websocket = websocket).post(data = virtual_machine_data)
+                
+                if new_virtual_machine:
+                    log(websocket, f"<span class='text-green'><strong><i class='mdi mdi-check'></i></strong></span>Virtual Machine <strong><a href='{new_virtual_machine.display_url}' target='_blank'>{new_virtual_machine.name}</a></strong> created successfully.")
 
 
             except Exception as error:
                 
-                if "Virtual machine name must be unique per cluster." in str(error.python_exception):
+                if "Virtual machine name must be unique per cluster." in str(error):
                     print("\nDUPLICATED VIRTUAL MACHINE NAME\n")
                     
-                    logger.warning("Duplicated virtual machine NAME found within the same cluster. Appending '(2)' to the name")
+                    log(websocket, f"<span class='text-yellow'><strong><i class='mdi mdi-warning'></i></strong></span> Duplicated virtual machine NAME <strong>{virtual_machine_data["name"]}</strong> found within the same cluster. Appending '(2)' to the name")
                     virtual_machine_data["name"] = f"{virtual_machine_data["name"]} (2)"
                     
-                    duplicated_virtual_machine = await VirtualMachine(nb = nb).post(data = virtual_machine_data)
+                    duplicated_virtual_machine = await VirtualMachine(nb = nb, websocket = websocket).post(data = virtual_machine_data)
                     
                     if duplicated_virtual_machine:
                         new_virtual_machine = duplicated_virtual_machine
                 
                 print(f"error: {error} / {type(error)}")
                 raise ProxboxException(
-                    message=f"[CHECK DUPLICATE] Error trying to create Virtual Machine '{vm.get("name")}' on Netbox.",
+                    message=f"<span class='text-red'><strong><i class='mdi mdi-error'></i></strong></span> [CHECK DUPLICATE] Error trying to create Virtual Machine '{vm.get("name")}' on Netbox.",
                     python_exception=f"{error}"
                 )
 
@@ -669,7 +715,7 @@ async def get_virtual_machines(
                 vm_networks = []
                 network_id = 0
                 
-                await log(websocket, "Getting network info and parsing data into JSON (dict)")
+                await log(websocket, "<span class='text-yellow'><strong><i class='mdi mdi-sync'></i></strong></span> Getting network info and parsing data into JSON (dict)")
                 
                 while True:
                     network_name = f"net{network_id}"
@@ -712,18 +758,18 @@ async def get_virtual_machines(
                                 hwaddr = v.get("hwaddr", None)
                                 if hwaddr: mac_address=hwaddr
                                 
-                                await log(websocket, "Try creating VirtualMachine Interface on Netbox...")
+                                await log(websocket, f"<span class='text-yellow'><strong><i class='mdi mdi-sync'></i></strong></span> Try creating VirtualMachine Interface <strong>{str(k)}</strong> on Netbox...")
                                 try:
                                     
                                     
-                                    #vm_already_exists = await VMInterface(nb=nb).get({
+                                    #vm_already_exists = await VMInterface(nb=nb, websocket=websocket).get({
                                     #    "virtual_machine": new_virtual_machine.id,
                                     #    "name": str(k)
                                     #})
                                     
                                     #if not vm_already_exists:
                                 
-                                    netbox_interface = await VMInterface(nb=nb).post(data={
+                                    netbox_interface = await VMInterface(nb=nb, websocket=websocket).post(data={
                                         "virtual_machine": new_virtual_machine.id,
                                         "name": str(k),
                                         "enabled": True,
@@ -731,15 +777,15 @@ async def get_virtual_machines(
                                     })
                                     
                                     if netbox_interface:
-                                        await log(websocket, f"Virtual Machine Interface created successfully. {netbox_interface.id} - {netbox_interface.name}")
+                                        await log(websocket, f"<span class='text-green'><strong><i class='mdi mdi-check'></i></strong></span> Virtual Machine Interface <strong><a href='{netbox_interface.display_url}' target='_blank' {netbox_interface.name}</a></strong> created successfully.")
                                 
                                 except Exception as error:
                                     raise ProxboxException(
-                                        message="Error trying to create VM interface on Netbox",
+                                        message="<span class='text-red'><strong><i class='mdi mdi-error'></i></strong></span> Error trying to create VM interface on Netbox",
                                     )
                         except Exception as error:
                             raise ProxboxException(
-                                message=f"Error trying to create {new_virtual_machine.name} VM Network Interfaces",
+                                message=f"<span class='text-red'><strong><i class='mdi mdi-error'></i></strong></span> Error trying to create {new_virtual_machine.name} VM Network Interfaces",
                             )
 
         result.append({

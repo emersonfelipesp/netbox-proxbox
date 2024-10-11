@@ -1,5 +1,6 @@
 import logging
 from logging.handlers import TimedRotatingFileHandler
+from netbox_proxbox.backend.exception import ProxboxException
 
 # ANSI escape sequences for colors
 class AnsiColorCodes:
@@ -71,3 +72,20 @@ def setup_logger():
 
 
 logger = setup_logger()
+
+from fastapi import WebSocket
+
+async def log(websocket: WebSocket, msg, level = None):
+    if websocket: 
+        await websocket.send_text(msg)
+    
+    if level == "debug": logger.debug(msg)
+    
+    if level == "ERROR" or level == "error":
+        logger.error(msg)
+        #raise ProxboxException(
+        #    message=msg,
+        #    python_exception=python_exception
+        #)
+        
+    else: logger.info(msg)

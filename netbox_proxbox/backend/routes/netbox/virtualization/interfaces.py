@@ -15,7 +15,7 @@ class VMInterface(NetboxBase):
     
     async def get_base_dict(self):
         
-        virtual_machine = await VirtualMachine(nb = self.nb).get()
+        virtual_machine = await VirtualMachine(nb = self.nb, websocket = self.websocket).get()
         
         return {
             "virtual_machine": virtual_machine.id,

@@ -13,7 +13,7 @@ class VirtualMachine(NetboxBase):
     
 
     async def get_base_dict(self):
-        cluster = await Cluster(nb = self.nb).get()
+        cluster = await Cluster(nb = self.nb, websocket = self.websocket).get()
         return {
             "name": self.default_name,
             "slug": self.default_slug,

@@ -1,5 +1,6 @@
-from netbox_proxbox.backend.logging import logger
 
+from fastapi import WebSocket
+    
 class ProxboxException(Exception):
     def __init__(
         self,
@@ -18,8 +19,14 @@ class ProxboxException(Exception):
         
         if self.python_exception:
             log_message+=f"\n > Python Exception: {self.python_exception}"
-            
+
         
-        logger.error(log_message)
-        
-        
+async def exception_log(
+    logger,
+    message: str,
+    detail: str | None = None,
+    python_exception: str | None = None,
+    websocket: WebSocket | None = None,
+):
+    log = logger
+    await log(websocket=websocket, msg=message, level="ERROR")

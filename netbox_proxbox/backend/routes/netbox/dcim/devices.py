@@ -18,10 +18,10 @@ class Device(NetboxBase):
     object_name = "Device"
     
     async def get_base_dict(self):
-        site = await Site(nb = self.nb).get()
-        role = await DeviceRole(nb = self.nb).get()
-        device_type = await DeviceType(nb = self.nb).get()
-        cluster = await Cluster(nb = self.nb).get()
+        site = await Site(nb = self.nb, websocket = self.websocket).get()
+        role = await DeviceRole(nb = self.nb, websocket = self.websocket).get()
+        device_type = await DeviceType(nb = self.nb, websocket = self.websocket).get()
+        cluster = await Cluster(nb = self.nb, websocket = self.websocket).get()
         
         return {
             "name": self.default_name,

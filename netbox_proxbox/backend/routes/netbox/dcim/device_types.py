@@ -15,7 +15,7 @@ class DeviceType(NetboxBase):
     object_name = "Device Types"
     
     async def get_base_dict(self):
-        manufacturer = await Manufacturer(nb = self.nb).get()
+        manufacturer = await Manufacturer(nb = self.nb, websocket = self.websocket).get()
         
         return {
             "model": self.default_name,

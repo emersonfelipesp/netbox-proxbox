@@ -15,7 +15,7 @@ class Cluster(NetboxBase):
 
 
     async def get_base_dict(self):
-        type = await ClusterType(nb = self.nb).get()
+        type = await ClusterType(nb = self.nb, websocket = self.websocket).get()
         
         return {
             "name": self.default_name,
