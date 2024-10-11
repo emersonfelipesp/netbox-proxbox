@@ -133,12 +133,8 @@ async def get_nodes(
 ):
     
     """Get Proxmox Nodes from a Cluster"""
-
     
     result = []
-    
-    
-    await websocket.send_text(data = "Test message")
     
     for px in pxs:
         
@@ -201,7 +197,7 @@ async def get_nodes(
                 
                 try:
                     await log(websocket, f"Creating Netbox '{interface_name}' Interface on '{current_node.name}' Device...")
-                    create_interface = await Interface(nb=nb).post(data={
+                    create_interface = await Interface(nb=nb, primary_field_value=current_node.id).post(data={
                         "device": current_node.id,
                         "name": interface_name,
                         "enabled": enabled,
@@ -222,7 +218,7 @@ async def get_nodes(
                 cidr = interface.get("cidr")
                 print(f"cidr: {cidr}")
                 
-                if cidr:
+                if create_interface and cidr:
                     try:
                         await log(websocket, "Interface with CIDR/Network. Creating the IP Address object on Netbox...")
                         # If interface with network configured, create IP Address and attach interface to it.
@@ -237,7 +233,7 @@ async def get_nodes(
                             message="Error trying to create IP Address of Interface on Netbox.",
                             python_exception=error
                         )
-                
+            
                 
                     
                 if interface_type == "bridge":
@@ -253,11 +249,16 @@ async def get_nodes(
                             
                             try:
                                 await log(websocket, "Searching children interface of a bridge.")
-                                netbox_port = await Interface(nb=nb).get(
-                                    device=current_node.name,
+                                print(f"current_node.id: {current_node.id} / current_node: {current_node} / current_node.name: {current_node.name}")
+                                netbox_port = await Interface(nb=nb, primary_field_value=current_node.id).get(
                                     name=port
                                 )
-                            except Exception as error: raise ProxboxException(message="Error trying to search bridge child interface.", python_exception=error)
+                            except Exception as error: 
+                                raise ProxboxException(
+                                    message="Error trying to search bridge child interface.", 
+                                    python_exception=f"{error}"
+                                )
+                                
                             
                             print(f"port: {port}")
                             print(f"netbox_port: {netbox_port}")
@@ -280,7 +281,7 @@ async def get_nodes(
                                 await log(websocket, f"Creating interface '{port}'...")
                                 
                                 try:
-                                    new_netbox_port = await Interface(nb=nb).post(data={
+                                    new_netbox_port = await Interface(nb=nb, primary_field_value=current_node.id).post(data={
                                         "device": current_node.id,
                                         "name": port,
                                         "enabled": enabled,

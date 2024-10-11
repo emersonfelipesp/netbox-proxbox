@@ -11,6 +11,8 @@ class VMInterface(NetboxBase):
     endpoint = "interfaces"
     object_name = "Virtual Machine Interface"
     
+    primary_field: str =  "virtual_machine"
+    
     async def get_base_dict(self):
         
         virtual_machine = await VirtualMachine(nb = self.nb).get()

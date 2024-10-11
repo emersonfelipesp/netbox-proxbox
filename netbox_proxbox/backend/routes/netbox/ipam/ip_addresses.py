@@ -7,6 +7,7 @@ class IPAddress(NetboxBase):
     app: str = "ipam"
     endpoint: str = "ip_addresses"
     object_name: str = "IP Address"
+    
     primary_field: str = "address"
     
     async def get_base_dict(self):

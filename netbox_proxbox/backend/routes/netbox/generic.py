@@ -189,8 +189,27 @@ class NetboxBase:
         
         logger.info(f"[GET] Searching '{self.object_name}' by kwargs {kwargs}.")
         try:
-            response = await asyncio.to_thread(self.pynetbox_path.get, **kwargs)
-            return response
+            try:
+                response = await asyncio.to_thread(self.pynetbox_path.get, **kwargs)
+                return response
+            except Exception as error:
+                if "get() returned more than one result." in f"{error}":
+                    logger.info(f"[CHECK DUPLICATE] Object '{self.object_name}' with the same name already found. Checking with '.filter' method")
+                    
+                    if self.endpoint == "interfaces" and self.primary_field == "device":
+
+                        logger.info("[CHECK DUPLICATE] Checking duplicate device using as PRIMARY FIELD the DEVICE.")
+                        result_by_primary = await asyncio.to_thread(self.pynetbox_path.get, virtual_machine=self.primary_field_value)
+
+                        if result_by_primary:
+                            if result_by_primary.virtual_machine == self.primary_field_value:
+                                logger.info("[CHECK DUPLICATE] Interface with the same Device found. Duplicated object, returning it.")
+                                return result_by_primary
+                    
+                        else:
+                            logger.info("[CHECK DUPLICATE] If interface equal, but different devices, return as NOT duplicated.")
+                            return None
+
             
         except ProxboxException as error: raise error
         
@@ -337,8 +356,28 @@ class NetboxBase:
                     data["tags"] = [self.nb.tag.id]
                 else:
                     data["tags"].append(self.nb.tag.id)
+                 
+                try:
+                    logger.info(f"[POST] Trying to create {self.object_name} object on Netbox.")
                     
-                response = await asyncio.to_thread(self.pynetbox_path.create, data)
+                    response = await asyncio.to_thread(self.pynetbox_path.create, data)
+                    
+                    
+                except Exception as error:
+                    
+                    if "['The fields virtual_machine, name must make a unique set.']}" in f"{error}":
+                        logger.error(f"Error trying to create 'Virtual Machine Interface' because the same 'virtual_machine' name already exists.\nPayload: {data}")
+                        return None
+                    
+                    if "['Virtual machine name must be unique per cluster.']" in f"{error}":
+                        logger.error(f"Error trying to create 'Virtual Machine' because Virtual Machine Name must be unique.\nPayload: {data}")
+                        return None
+                    
+                    else:
+                        raise ProxboxException(
+                            message=f"[POST] Error trying to create '{self.object_name}' object on Netbox.",
+                            python_exception=error
+                        )
                 
                 if response:
                     logger.info(f"[POST] '{self.object_name}' object created successfully. {self.object_name} ID: {response.id}")
@@ -350,7 +389,7 @@ class NetboxBase:
                 logger.info(f"[POST] '{self.object_name}' object already exists on Netbox. Returning it.")
                 return check_duplicate_result
         
-        except ProxboxException as error: raise error
+        #except ProxboxException as error: raise error
         
         except Exception as error:
             raise ProxboxException(
@@ -419,11 +458,99 @@ class NetboxBase:
                     logger.info("[CHECK DUPLICATE] (0.5) Checking object using only custom PRIMARY FIELD and Proxbox TAG provided by the class attribute.")
                     print(f"primary field: {self.primary_field} - primary_field_value: {self.primary_field_value}")
                     
+                    
+                    print(f'self.primary_field = {self.primary_field} / {self.endpoint}')
+                    
                     if self.primary_field == "address":
+                        logger.info("[CHECK DUPLICATE] Checking duplicate device using as PRIMARY FIELD the ADDRESS.")
                         
-                        result_by_primary = await asyncio.to_thread(self.pynetbox_path.get, address=self.primary_field_value)
+                        try:
+                            result_by_primary = await asyncio.to_thread(self.pynetbox_path.get, address=self.primary_field_value)
+                            
+                        except Exception as error:
+                            if "get() returned more than one result" in f"{error}":
+                                try:
+                                    result_by_primary = await asyncio.to_thread(self.pynetbox_path.filter, address=self.primary_field_value)
+                                    
+                                    if result_by_primary:
+                                        for address in result_by_primary:
+                                            print(f"ADDRESS OBJECT: {address}")
+                                            
+                                except Exception as error:
+                                    raise ProxboxException(
+                                        message="Error trying to filter IP ADDRESS objects.",
+                                        python_exception=error,
+                                    )
+                                        
                         print(f"self.primary_field_value = {self.primary_field_value}")
                         
+                        if result_by_primary:
+                            logger.info("[CHECK DUPLICATE] IP Address with the same network found. Returning it.")
+                            return result_by_primary
+                        
+                    if self.primary_field == "virtual_machine" and self.endpoint == "interfaces":
+                        logger.info("[CHECK DUPLICATE] Checking duplicate device using as PRIMARY FIELD the DEVICE.")
+                        
+                        result_by_primary = None
+                        
+                        try:
+                            #
+                            # THE ERROR IS HERE.
+                            #
+                            # GET
+                            logger.error("THE ERROR IS HERE.")
+                            result_by_primary = await asyncio.to_thread(
+                                self.pynetbox_path.get,
+                                virtual_machine=self.primary_field_value,
+                                name=object.get("name")
+                            )
+                            logger.error(f"result_by_primary: {result_by_primary}")
+
+                            if result_by_primary:
+                                for interface in result_by_primary:
+                                    print(f"INTERFACE OBJECT: {interface} | {interface.virtual_machine}")
+                                    
+                                    print(f"interface.virtual_machine: {interface.virtual_mchine} | primary_field_value: {self.primary_field_value}")
+                                    if interface.virtual_machine == self.primary_field_value:
+                                        return interface
+                                    else:
+                                        return None
+                        
+                        except Exception as error:
+                            logger.info(f"[CHECK DUPLICATE] Error trying to get interface using only 'virtual_machine' field as parameter.\n   >{error}")
+                            if "get() returned more than one result" in f"{error}":
+                                # FILTER
+                                logger.info("[CHECK DUPLICATE] Found more than one VM INTERFACE object with the same 'virtual_machine' field. Trying to use '.filter' pynetbox method now.")
+                                
+                                
+                                try:
+                                    result_by_primary = await asyncio.to_thread(
+                                        self.pynetbox_path.filter,
+                                        virtual_machine=self.primary_field_value,
+                                        name=object.get("name")
+                                    )
+                                    
+                                    if result_by_primary:
+                                        for interface in result_by_primary:
+                                            print(f"INTERFACE OBJECT: {interface} | {interface.virtual_machine}")
+                                            
+                                            print(f"interface.virtual_machine: {interface.virtual_mchine} | primary_field_value: {self.primary_field_value}")
+                                            if interface.virtual_machine == self.primary_field_value:
+                                                return interface
+                                            else:
+                                                return None
+        
+                                except Exception as error:
+                                    raise ProxboxException(
+                                        message="Error trying to get 'VM Interface' object using 'virtual_machine' and 'name' fields.",
+                                        python_exception=f"{error}"
+                                    )
+                                
+
+                                        
+                                        
+                        
+                    
                     else:
                         result_by_primary = await asyncio.to_thread(self.pynetbox_path.get,
                             {
@@ -433,6 +560,16 @@ class NetboxBase:
                     
                     print(f"result_by_primary: {result_by_primary}")
                     if result_by_primary:
+                        
+                        if self.endpoint == "interfaces":
+                            logger.info("[CHECK DUPLICATE] If duplicate interface found, check if the devices are the same.")
+                            if result_by_primary.device == self.primary_field_value:
+                                logger.info("[CHECK DUPLICATE] Interface with the same Device found. Duplicated object, returning it.")
+                                return result_by_primary
+                            else:
+                                logger.info("[CHECK DUPLICATE] If interface equal, but different devices, return as NOT duplicated.")
+                                return None
+                        
                         logger.info(f"[CHECK_DUPLICATE] Object found on Netbox. Returning it.")
                         print(f'result_by_primary: {result_by_primary}')
                         return result_by_primary
@@ -469,8 +606,6 @@ class NetboxBase:
                         
                         result_by_device = await asyncio.to_thread(self.pynetbox_path.get,
                             name=object.get("name"),
-                            device__id=device_obj.id,
-                            #device=device_obj,
                             tag=[self.nb.tag.slug]
                         )
                         
