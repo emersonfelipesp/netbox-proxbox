@@ -79,21 +79,28 @@
                 let elemento = document.getElementsByClassName("proxmox_version")
 
                 for (let item of elemento) {
-                    
+
                     let td = item.getElementsByTagName("td")
-
+                    
                     if (td[0].id) {
-
+                        let tdID = td[0].id
                         try {
-                            request = await fetch(`${fastapi_endpoint}/proxmox/version?source=netbox&list_all=false&plugin_name=netbox_proxbox&domain=${td[0].id}`)
+                            request = await fetch(`${fastapi_endpoint}/proxmox/version?source=netbox&list_all=false&plugin_name=netbox_proxbox&domain=${tdID}`)
                             response = await request.json()
     
-                            console.log(response[0])
+                            // console.log(response[0])
                         } catch (error) {
                             console.log(error)
                         }
 
-                        td[0].textContent = JSON.stringify(response)
+                        for (let value in response[0]) {
+                            console.log(response[0][value].release)
+                            console.log(response[0][value].repoid)
+                            console.log(response[0][value].version)
+
+                            td[0].textContent = response[0][value].version
+                        }
+                        //td[0].textContent = JSON.stringify(response[0][value].version)
 
                     }
                 }
