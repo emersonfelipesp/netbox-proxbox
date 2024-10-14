@@ -272,7 +272,7 @@ async def get_nodes(
                                 await log(websocket, f"<span class='badge text-bg-yellow' title='Syncing'><strong><i class='mdi mdi-download'></i></strong></span> Searching children interface of bridge interface <strong><a href='{create_interface.display_url}' target='_blank'>{create_interface.name}</a></strong>.")
                                 print(f"current_node.id: {current_node.id} / current_node: {current_node} / current_node.name: {current_node.name}")
                                 
-                                log(websocket, f"<span class='text-yellow'>Searching</span> child interface <strong>{port}</strong> with Device ID <strong>{current_node.id}</strong>")
+                                await log(websocket, f"<span class='badge text-bg-yellow' title='Syncing'><strong><i class='mdi mdi-download'></i></strong></span> Child interface <strong>{port}</strong> with Device ID <strong>{current_node.id}</strong>")
                                 netbox_port = await Interface(nb=nb, websocket=websocket, primary_field_value=current_node.id).get(
                                     name=port
                                 )
@@ -310,7 +310,7 @@ async def get_nodes(
                             if create_interface:
                                 if create_interface.device == current_node.id:
                                 
-                                    await log(websocket, f"Creating interface <strong>{port}</strong>...")
+                                    await log(websocket, f"<span class='badge text-bg-blue' title='Get'><strong><i class='mdi mdi-download'></i></strong></span> Creating interface <strong>{port}</strong>...")
                                     
                                     try:
                                         new_netbox_port = await Interface(nb=nb, websocket=websocket, primary_field_value=current_node.id).post(data={
@@ -339,7 +339,7 @@ async def get_nodes(
                                     print(f"[2] cidr: {cidr}")
                                 
                                     if cidr:
-                                        await log(websocket, f"<span class='text-yellow'><strong><i class='mdi mdi-sync'></i></strong></span> If interface with network configured, create IP Address <strong>{cidr}</strong> and attach interface to it.")
+                                        await log(websocket, f"<span class='badge text-bg-yellow' title='Syncing'><strong><i class='mdi mdi-download'></i></strong></span> If interface with network configured, create IP Address <strong>{cidr}</strong> and attach interface to it.")
                                         try:
                                             create_ipaddress = await IPAddress(nb=nb, websocket=websocket, primary_field_value=cidr).post(data={
                                                 "address": cidr,
@@ -371,7 +371,7 @@ async def get_nodes(
             print("\n")
 
         
-        await log(websocket, f"<span class='text-yellow'><strong><i class='mdi mdi-exclamation'></i></strong></span> Nodes: {nodes}", "debug")
+        await log(websocket, f"<span class='badge text-bg-yellow' title='Syncing'><strong><i class='mdi mdi-download'></i></strong></span> Nodes: {nodes}", "debug")
     
         
         result.append({
@@ -680,7 +680,7 @@ async def get_virtual_machines(
             }
             
             try:
-                await log(websocket, f"<span class='text-yellow'><strong><i class='mdi mdi-sync'></i></strong></span> Creating Virtual Machine <strong>{vm.get("name")}</strong> on Netbox...")
+                await log(websocket, f"<span class='badge text-bg-yellow' title='Syncing'><strong><i class='mdi mdi-download'></i></strong></span> Creating Virtual Machine <strong>{vm.get("name")}</strong> on Netbox...")
                 new_virtual_machine =  await VirtualMachine(nb = nb, websocket = websocket).post(data = virtual_machine_data)
                 
                 if new_virtual_machine:
@@ -692,7 +692,7 @@ async def get_virtual_machines(
                 if "Virtual machine name must be unique per cluster." in str(error):
                     print("\nDUPLICATED VIRTUAL MACHINE NAME\n")
                     
-                    log(websocket, f"<span class='text-yellow'><strong><i class='mdi mdi-warning'></i></strong></span> Duplicated virtual machine NAME <strong>{virtual_machine_data["name"]}</strong> found within the same cluster. Appending '(2)' to the name")
+                    log(websocket, f"<span class='badge text-bg-yellow' title='Syncing'><strong><i class='mdi mdi-download'></i></strong></span> Duplicated virtual machine NAME <strong>{virtual_machine_data["name"]}</strong> found within the same cluster. Appending '(2)' to the name")
                     virtual_machine_data["name"] = f"{virtual_machine_data["name"]} (2)"
                     
                     duplicated_virtual_machine = await VirtualMachine(nb = nb, websocket = websocket).post(data = virtual_machine_data)
@@ -715,7 +715,7 @@ async def get_virtual_machines(
                 vm_networks = []
                 network_id = 0
                 
-                await log(websocket, "<span class='text-yellow'><strong><i class='mdi mdi-sync'></i></strong></span> Getting network info and parsing data into JSON (dict)")
+                await log(websocket, "<span class='badge text-bg-yellow' title='Syncing'><strong><i class='mdi mdi-download'></i></strong></span> Getting network info and parsing data into JSON (dict)")
                 
                 while True:
                     network_name = f"net{network_id}"
@@ -758,7 +758,7 @@ async def get_virtual_machines(
                                 hwaddr = v.get("hwaddr", None)
                                 if hwaddr: mac_address=hwaddr
                                 
-                                await log(websocket, f"<span class='text-yellow'><strong><i class='mdi mdi-sync'></i></strong></span> Try creating VirtualMachine Interface <strong>{str(k)}</strong> on Netbox...")
+                                await log(websocket, f"<span class='badge text-bg-yellow' title='Syncing'><strong><i class='mdi mdi-download'></i></strong></span> Try creating VirtualMachine Interface <strong>{str(k)}</strong> on Netbox...")
                                 try:
                                     
                                     
