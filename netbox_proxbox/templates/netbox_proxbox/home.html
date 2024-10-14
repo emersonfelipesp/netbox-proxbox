@@ -9,287 +9,302 @@
             <button>Send</button>
         </form>
     -->
-    <ul id='messages'>
-    </ul>
-    <script>
-        var ws = new WebSocket("ws://10.0.30.250:8800/ws");
-        ws.onmessage = function(event) {
-            var messages = document.getElementById('messages')
-            var message = document.createElement('li')
+    
+    <!-- <div style="position: fixed; background-color: white; overflow: auto; border: 5px solid transparent; box-sizing: border-box; border-radius: 1rem; height: 200px; width: 100%;"> -->
+    
+    <div>
+        <div style='overflow-y: auto; width: 100%; height: 400px;' id="scrollable-div">
+            <div class="card" style="padding: 8px; flex-direction: cloumn; overflow-y: auto">
+                <ul id='messages' style='overflow: auto;   flex-direction: cloumn-reverse'>
+                </ul>
+            </div>
+        </div>
+        <script>
+            var ws = new WebSocket("ws://10.0.30.250:8800/ws");
+            ws.onmessage = function(event) {
 
-            message.style.lineHeight = '170%'
-            //var breakLine = document.createElement('br')
+                var messages = document.getElementById('messages')
+                var message = document.createElement('li')
+
+                message.style.lineHeight = '170%'
+                //var breakLine = document.createElement('br')
+                
+                message.innerHTML = event.data
+
+                // var content = document.createTextNode(event.data)
+                // message.appendChild(content)
+                messages.appendChild(message)
+
+                var test = document.getElementById('scrollable-div')
+                test.scrollTop = test.scrollHeight
+
+                messages.appendChild(breakLine)
+
+            };
+            function sendMessage(event) {
+                var input = document.getElementById("messageText")
+                ws.send(input.value)
+                input.value = ''
+                event.preventDefault()
+            }
+        </script>
+
+        <div class="row mb-3">
+                
+
+            <hr>
+            {# Full Update Button#}
+            <div style="margin-bottom: 15px;" class="d-flex justify-content-center noprint">
+                {% if perms.netbox_proxbox.add_proxmoxvm %}
+                <a href="{% url 'plugins:netbox_proxbox:proxmoxvm_full_update' %}" target="_blank" class="btn btn-primary">Proxmox Full Update (probably not working on v4.0)</a>
+                {% endif %}
+            </div>
+            <div style="margin-bottom: 15px;" class="d-flex justify-content-center noprint">
+                {% if perms.netbox_proxbox.add_proxmoxvm %}
+                <a href="http://{{ configuration.netbox_proxbox.fastapi.uvicorn_host }}:{{ configuration.netbox_proxbox.fastapi.uvicorn_port }}/proxbox/clusters/nodes" target="_blank" class="btn btn-primary">Proxmox Nodes Update</a>
+                {% endif %}
+            </div>
+            <div style="margin-bottom: 15px;" class="d-flex justify-content-center noprint">
+                {% if perms.netbox_proxbox.add_proxmoxvm %}
+                <a href="http://{{ configuration.netbox_proxbox.fastapi.uvicorn_host }}:{{ configuration.netbox_proxbox.fastapi.uvicorn_port }}/proxbox/clusters/virtual-machines" target="_blank" class="btn btn-primary">Proxmox Virtual Machines Update</a>
+                {% endif %}
+            </div>
+        
+            <br>
+            <br>
             
-            message.innerHTML = event.data
-
-            // var content = document.createTextNode(event.data)
-            // message.appendChild(content)
-            messages.appendChild(message)
-            messages.appendChild(breakLine)
-        };
-        function sendMessage(event) {
-            var input = document.getElementById("messageText")
-            ws.send(input.value)
-            input.value = ''
-            event.preventDefault()
-        }
-    </script>
-
-    <div class="row mb-3">
-        
-        
-
-        <hr>
-        {# Full Update Button#}
-        <div style="margin-bottom: 15px;" class="d-flex justify-content-center noprint">
-            {% if perms.netbox_proxbox.add_proxmoxvm %}
-            <a href="{% url 'plugins:netbox_proxbox:proxmoxvm_full_update' %}" target="_blank" class="btn btn-primary">Proxmox Full Update (probably not working on v4.0)</a>
-            {% endif %}
-        </div>
-        <div style="margin-bottom: 15px;" class="d-flex justify-content-center noprint">
-            {% if perms.netbox_proxbox.add_proxmoxvm %}
-            <a href="http://{{ configuration.netbox_proxbox.fastapi.uvicorn_host }}:{{ configuration.netbox_proxbox.fastapi.uvicorn_port }}/proxbox/clusters/nodes" target="_blank" class="btn btn-primary">Proxmox Nodes Update</a>
-            {% endif %}
-        </div>
-        <div style="margin-bottom: 15px;" class="d-flex justify-content-center noprint">
-            {% if perms.netbox_proxbox.add_proxmoxvm %}
-            <a href="http://{{ configuration.netbox_proxbox.fastapi.uvicorn_host }}:{{ configuration.netbox_proxbox.fastapi.uvicorn_port }}/proxbox/clusters/virtual-machines" target="_blank" class="btn btn-primary">Proxmox Virtual Machines Update</a>
-            {% endif %}
-        </div>
-        <hr>
-        
-        
-        <div class="d-flex justify-content-center flex-nowrap" style="margin-bottom: 15px;">
-            <h2>
-                Proxbox Configuration
-            </h2>
-        </div>
-
-        {% for px in configuration.netbox_proxbox.proxmox %}
-        <div class="col col-md-6">
-            <div class="card">
-                <div align=center>
-                    <br>
-                    <a href="https://{{ px.domain }}:{{ px.http_port }}" target="_blank">
-                        <img src="{% static 'netbox_proxbox/proxmox-logo.svg' %}" alt="Proxmox Logo" width="200px">
-                    </a>
-                </div>
-                <div class="card-body">
-                    <table class="table table-hover attr-table">
-                        <tr>
-                            <th scope="row"><strong>Domain / IP</strong></th>
-                            {% if px.domain %}
-                                <td>{{ px.domain }}</td>
-                            {% else %}
-                                <td>{{ default_config.proxmox.domain }} (default)</td>
-                            {% endif %}
-                        </tr>
-                        <tr>
-                        <th scope="row"><strong>HTTP Port</strong></th>
-                        {% if px.http_port %}
-                                <td>{{ px.http_port }}</td>
-                            {% else %}
-                                <td>{{ default_config.proxmox.http_port }} (default)</td>
-                            {% endif %}
-                        </tr>
-                        <tr>
-                            <th scope="row"><strong>Proxmox User</strong></th>
-                            {% if px.user %}
-                                <td>{{ px.user }}</td>
-                            {% else %}
-                                <td>{{ default_config.proxmox.user }} (default)</td>
-                            {% endif %}
-                        </tr>
-                        <tr>
-                        <th scope="row"><strong>Proxmox Password</strong></th>
-                            {% if px.password %}
-                                <td>password defined in configuration.py</td>
-                            {% else %}
-                                <td>(secret) (default)</td>
-                            {% endif %}
-                        </tr>
-                            <th scope="row"><strong>Token Name</strong></th>
-                            {% if px.token.name %}
-                                <td>{{ px.token.name }}</td>
-                            {% else %}
-                                <td>{{ default_config.proxmox.token.name }} (default)</td>
-                            {% endif %}
-                        <tr>
-                            <th scope="row"><strong>Token Value</strong></th>
-                            <td>(secret)</td>
-                        </tr>
-                        <tr>
-                            <th scope="row"><strong>SSL</strong></th>
-                            {% if px.ssl %}
-                                <td>{{ px.ssl }}</td>
-                            {% else %}
-                                <td>{{ default_config.proxmox.ssl }} (default)</td>
-                            {% endif %}
-                        </tr>
-                    </table>
-                    <div class="d-flex justify-content-between">
-                        {% if px.domain %}
-                            <form action="single_update/" method="POST" target="_blank">
-                                <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
-                                <input type="hidden" name="proxmox_domain" value="{{ px.domain }}" />
-                                <a 
-                                    class="btn btn-primary"
-                                    href="#"
-                                    onclick="event.preventDefault(); this.parentNode.submit()"
-                                >Proxmox Update</a>
-                            </form>
-                        {% else %}
-                            <a 
-                                target="_blank"
-                                class="btn btn-primary"
-                                href="{% url 'plugins:netbox_proxbox:proxmoxvm_single_update' domain=default_config.proxmox.domain %}" 
-                            >Proxmox Update</a>
-                        {% endif %}
-                        <button class="btn btn-outline-primary" type="button">
-                            <a
-                                style="text-decoration: none; color: inherit"
-                                target="_blank"
-                                href="https://github.com/netdevopsbr/netbox-proxbox#13-configure-plugin"
-                            >Show Example</a>
-                        </button>
-                    </div>
-                </div>
+            <div class="d-flex justify-content-center flex-nowrap" style="margin-bottom: 15px;">
+                <h2>
+                    Proxbox Configuration
+                </h2>
             </div>
-        </div>
-        {% endfor %}
-        <div class="col col-md-6">
-            <div class="card">
-                <div align=center>
-                    <br>
-                    <a href="{% url 'home' %}">
-                        <img src="{% static 'netbox_logo.svg' %}" alt="Netbox Logo" width="200px">
-                    </a>
-                </div>  
-                <div class="card-body">
-                    <table class="table table-hover attr-table">
-                        <tr>
-                            <th scope="row"><strong>Domain / IP</strong></th>
-                            {% if px.netbox.domain %}
-                                <td>{{ px.netbox.domain }}</td>
-                            {% else %}
-                                <td>{{ default_config.netbox.domain }} (default)</td>
-                            {% endif %}
-                        </tr>
-                        <tr>
-                            <th scope="row"><strong>HTTP Port</strong></th>
-                            {% if px.netbox.http_port %}
-                                <td>{{ px.netbox.http_port }}</td>
-                            {% else %}
-                                <td>{{ default_config.netbox.http_port }} (default)</td>
-                            {% endif %}
-                        </tr>
-                        <tr>
-                            <th scope="row"><strong>Token</strong></th>
-                            {% if px.netbox.token %}
-                                <td>{{ px.netbox.token }}</td>
-                            {% else %}
-                                <td>{{ default_config.netbox.token }} (default)</td>
-                            {% endif %}
-                        <tr>
-                        </tr>
-                            <th scope="row"><strong>SSL</strong></th>
-                            {% if px.netbox.ssl %}
-                                <td>{{ px.netbox.ssl }}</td>
-                            {% else %}
-                                <td>{{ default_config.netbox.ssl }} (default)</td>
-                            {% endif %}
-                        </tr>
-                    </table>
-                    <div align="right">
-                        <button class="btn btn-outline-primary" type="button">
-                            <a
-                                style="text-decoration: none; color: inherit"
-                                target="_blank"
-                                href="https://github.com/netdevopsbr/netbox-proxbox/blob/develop/netbox_proxbox/__init__.py"
-                            >Show Example</a>
-                        </button>
+
+            {% for px in configuration.netbox_proxbox.proxmox %}
+            <div class="col col-md-6">
+                <div class="card">
+                    <div align=center>
+                        <br>
+                        <a href="https://{{ px.domain }}:{{ px.http_port }}" target="_blank">
+                            <img src="{% static 'netbox_proxbox/proxmox-logo.svg' %}" alt="Proxmox Logo" width="200px">
+                        </a>
                     </div>
-                </div>
-            </div>
-        </div>
-        <div class="col col-md-6">
-            <div class="card">
-                <div align=center>
-                    <br>
-                    <a href="https://fastapi.tiangolo.com/" target="_blank">
-                        <img src="{% static 'netbox_proxbox/fastapi_logo.png' %}" alt="Netbox Logo" width="200px">
-                    </a>
-                </div>  
-                <div class="card-body">
-                    <table class="table table-hover attr-table">
-                        <tr>
-                            <th scope="row"><strong>Uvicorn Host</strong></th>
-                            {% if configuration.netbox_proxbox.fastapi.uvicorn_host %}
-                                <td>{{ configuration.netbox_proxbox.fastapi.uvicorn_host }}</td>
-                            {% else %}
-                                <td>{{ default_config.fastapi.uvicorn_host }} (default)</td>
-                            {% endif %}
-                        </tr>
-                        <tr>
-                            <th scope="row"><strong>Uvicorn Port</strong></th>
-                            {% if configuration.netbox_proxbox.fastapi.uvicorn_port %}
-                                <td>{{ configuration.netbox_proxbox.fastapi.uvicorn_port }}</td>
-                            {% else %}
-                                <td>{{ default_config.fastapi.uvicorn_port }} (default)</td>
-                            {% endif %}
-                        </tr>
-                    </table>
-                    <div align="right">
-                        <button class="btn btn-outline-primary" type="button">
-                            <a
-                                style="text-decoration: none; color: inherit"
-                                target="_blank"
-                                href="https://fastapi.tiangolo.com/deployment/manually/"
-                            >Show Example</a>
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    <!-- Button to show JSON result -->
-    <p>
-        <button class="btn btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#collapseExample" aria-expanded="false" aria-controls="collapseExample">
-            Show configuration (JSON)
-        </button>
-    </p>
-    <div class="collapse" id="collapseExample">
-        <div class="row mb-3" style="color: white">
-            <div class="col col-md-6" >
-                <div class="card" style="background-color: #333">
-                    <br>
-                    <a
-                        style="text-decoration: none; color: #cccccc"
-                        target="_blank"
-                        href="https://github.com/netdevopsbr/netbox-proxbox/blob/develop/netbox_proxbox/__init__.py"
-                    >
-                        <h2 align=center>Configuration (PLUGINS_CONFIG)</h2>
-                    </a>
-                    
                     <div class="card-body">
-                        <pre>{{ configuration_json }}</pre>
+                        <table class="table table-hover attr-table">
+                            <tr>
+                                <th scope="row"><strong>Domain / IP</strong></th>
+                                {% if px.domain %}
+                                    <td>{{ px.domain }}</td>
+                                {% else %}
+                                    <td>{{ default_config.proxmox.domain }} (default)</td>
+                                {% endif %}
+                            </tr>
+                            <tr>
+                            <th scope="row"><strong>HTTP Port</strong></th>
+                            {% if px.http_port %}
+                                    <td>{{ px.http_port }}</td>
+                                {% else %}
+                                    <td>{{ default_config.proxmox.http_port }} (default)</td>
+                                {% endif %}
+                            </tr>
+                            <tr>
+                                <th scope="row"><strong>Proxmox User</strong></th>
+                                {% if px.user %}
+                                    <td>{{ px.user }}</td>
+                                {% else %}
+                                    <td>{{ default_config.proxmox.user }} (default)</td>
+                                {% endif %}
+                            </tr>
+                            <tr>
+                            <th scope="row"><strong>Proxmox Password</strong></th>
+                                {% if px.password %}
+                                    <td>password defined in configuration.py</td>
+                                {% else %}
+                                    <td>(secret) (default)</td>
+                                {% endif %}
+                            </tr>
+                                <th scope="row"><strong>Token Name</strong></th>
+                                {% if px.token.name %}
+                                    <td>{{ px.token.name }}</td>
+                                {% else %}
+                                    <td>{{ default_config.proxmox.token.name }} (default)</td>
+                                {% endif %}
+                            <tr>
+                                <th scope="row"><strong>Token Value</strong></th>
+                                <td>(secret)</td>
+                            </tr>
+                            <tr>
+                                <th scope="row"><strong>SSL</strong></th>
+                                {% if px.ssl %}
+                                    <td>{{ px.ssl }}</td>
+                                {% else %}
+                                    <td>{{ default_config.proxmox.ssl }} (default)</td>
+                                {% endif %}
+                            </tr>
+                        </table>
+                        <div class="d-flex justify-content-between">
+                            {% if px.domain %}
+                                <form action="single_update/" method="POST" target="_blank">
+                                    <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+                                    <input type="hidden" name="proxmox_domain" value="{{ px.domain }}" />
+                                    <a 
+                                        class="btn btn-primary"
+                                        href="#"
+                                        onclick="event.preventDefault(); this.parentNode.submit()"
+                                    >Proxmox Update</a>
+                                </form>
+                            {% else %}
+                                <a 
+                                    target="_blank"
+                                    class="btn btn-primary"
+                                    href="{% url 'plugins:netbox_proxbox:proxmoxvm_single_update' domain=default_config.proxmox.domain %}" 
+                                >Proxmox Update</a>
+                            {% endif %}
+                            <button class="btn btn-outline-primary" type="button">
+                                <a
+                                    style="text-decoration: none; color: inherit"
+                                    target="_blank"
+                                    href="https://github.com/netdevopsbr/netbox-proxbox#13-configure-plugin"
+                                >Show Example</a>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
-            
-            <div class="col col-md-6" style="color: white">
-                <div class="card" style="background-color: #333">
-                    <br>
-                    <a
-                        style="text-decoration: none; color: #cccccc"
-                        target="_blank"
-                        href="https://github.com/netdevopsbr/netbox-proxbox/blob/develop/netbox_proxbox/__init__.py"
-                    >
-                        <h2 align=center>Default Config</h2>
-                    </a>
-                    
-                    <div class="card-body" style="color: white">
-                        <pre>{{ default_config_json }}</pre>
+            {% endfor %}
+            <div class="col col-md-6">
+                <div class="card">
+                    <div align=center>
+                        <br>
+                        <a href="{% url 'home' %}">
+                            <img src="{% static 'netbox_logo.svg' %}" alt="Netbox Logo" width="200px">
+                        </a>
+                    </div>  
+                    <div class="card-body">
+                        <table class="table table-hover attr-table">
+                            <tr>
+                                <th scope="row"><strong>Domain / IP</strong></th>
+                                {% if px.netbox.domain %}
+                                    <td>{{ px.netbox.domain }}</td>
+                                {% else %}
+                                    <td>{{ default_config.netbox.domain }} (default)</td>
+                                {% endif %}
+                            </tr>
+                            <tr>
+                                <th scope="row"><strong>HTTP Port</strong></th>
+                                {% if px.netbox.http_port %}
+                                    <td>{{ px.netbox.http_port }}</td>
+                                {% else %}
+                                    <td>{{ default_config.netbox.http_port }} (default)</td>
+                                {% endif %}
+                            </tr>
+                            <tr>
+                                <th scope="row"><strong>Token</strong></th>
+                                {% if px.netbox.token %}
+                                    <td>{{ px.netbox.token }}</td>
+                                {% else %}
+                                    <td>{{ default_config.netbox.token }} (default)</td>
+                                {% endif %}
+                            <tr>
+                            </tr>
+                                <th scope="row"><strong>SSL</strong></th>
+                                {% if px.netbox.ssl %}
+                                    <td>{{ px.netbox.ssl }}</td>
+                                {% else %}
+                                    <td>{{ default_config.netbox.ssl }} (default)</td>
+                                {% endif %}
+                            </tr>
+                        </table>
+                        <div align="right">
+                            <button class="btn btn-outline-primary" type="button">
+                                <a
+                                    style="text-decoration: none; color: inherit"
+                                    target="_blank"
+                                    href="https://github.com/netdevopsbr/netbox-proxbox/blob/develop/netbox_proxbox/__init__.py"
+                                >Show Example</a>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col col-md-6">
+                <div class="card">
+                    <div align=center>
+                        <br>
+                        <a href="https://fastapi.tiangolo.com/" target="_blank">
+                            <img src="{% static 'netbox_proxbox/fastapi_logo.png' %}" alt="Netbox Logo" width="200px">
+                        </a>
+                    </div>  
+                    <div class="card-body">
+                        <table class="table table-hover attr-table">
+                            <tr>
+                                <th scope="row"><strong>Uvicorn Host</strong></th>
+                                {% if configuration.netbox_proxbox.fastapi.uvicorn_host %}
+                                    <td>{{ configuration.netbox_proxbox.fastapi.uvicorn_host }}</td>
+                                {% else %}
+                                    <td>{{ default_config.fastapi.uvicorn_host }} (default)</td>
+                                {% endif %}
+                            </tr>
+                            <tr>
+                                <th scope="row"><strong>Uvicorn Port</strong></th>
+                                {% if configuration.netbox_proxbox.fastapi.uvicorn_port %}
+                                    <td>{{ configuration.netbox_proxbox.fastapi.uvicorn_port }}</td>
+                                {% else %}
+                                    <td>{{ default_config.fastapi.uvicorn_port }} (default)</td>
+                                {% endif %}
+                            </tr>
+                        </table>
+                        <div align="right">
+                            <button class="btn btn-outline-primary" type="button">
+                                <a
+                                    style="text-decoration: none; color: inherit"
+                                    target="_blank"
+                                    href="https://fastapi.tiangolo.com/deployment/manually/"
+                                >Show Example</a>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Button to show JSON result -->
+        <p>
+            <button class="btn btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#collapseExample" aria-expanded="false" aria-controls="collapseExample">
+                Show configuration (JSON)
+            </button>
+        </p>
+        <div class="collapse" id="collapseExample">
+            <div class="row mb-3" style="color: white">
+                <div class="col col-md-6" >
+                    <div class="card" style="background-color: #333">
+                        <br>
+                        <a
+                            style="text-decoration: none; color: #cccccc"
+                            target="_blank"
+                            href="https://github.com/netdevopsbr/netbox-proxbox/blob/develop/netbox_proxbox/__init__.py"
+                        >
+                            <h2 align=center>Configuration (PLUGINS_CONFIG)</h2>
+                        </a>
+                        
+                        <div class="card-body">
+                            <pre>{{ configuration_json }}</pre>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col col-md-6" style="color: white">
+                    <div class="card" style="background-color: #333">
+                        <br>
+                        <a
+                            style="text-decoration: none; color: #cccccc"
+                            target="_blank"
+                            href="https://github.com/netdevopsbr/netbox-proxbox/blob/develop/netbox_proxbox/__init__.py"
+                        >
+                            <h2 align=center>Default Config</h2>
+                        </a>
+                        
+                        <div class="card-body" style="color: white">
+                            <pre>{{ default_config_json }}</pre>
+                        </div>
                     </div>
                 </div>
             </div>
