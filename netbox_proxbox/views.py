@@ -42,6 +42,12 @@ class HomeView(View):
         # print("plugin_configuration: ", plugin_configuration, "\n\n")
         # print("default_config: ", default_config)
         
+        
+        uvicorn_host = plugin_configuration["netbox_proxbox"]["fastapi"]["uvicorn_host"]
+        uvicorn_port = plugin_configuration["netbox_proxbox"]["fastapi"]["uvicorn_port"]
+        
+        fastapi_endpoint = f"http://{uvicorn_host}:{uvicorn_port}"
+
         return render(
             request,
             self.template_name,

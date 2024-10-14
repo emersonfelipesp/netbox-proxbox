@@ -25,6 +25,10 @@ from .backend.schemas import *
 
 from netbox import configuration
 
+"""
+CORS ORIGINS
+"""
+
 plugin_configuration = configuration.PLUGINS_CONFIG
 
 uvicorn_host = plugin_configuration["netbox_proxbox"]["fastapi"]["uvicorn_host"]
@@ -39,6 +43,8 @@ netbox_host = plugin_configuration["netbox_proxbox"]["netbox"]["domain"]
 netbox_port = plugin_configuration["netbox_proxbox"]["netbox"]["http_port"]
 
 netbox_endpoint_port80 = f"http://{netbox_host}:80"
+netbox_endpoint_port8000 = f"http://{netbox_host}:8000"
+
 netbox_endpoint = f"http://{netbox_host}:{netbox_port}"
 https_netbox_endpoint = f"https://{netbox_host}:{netbox_port}"
 
@@ -51,12 +57,17 @@ app = FastAPI(
     version="0.0.1"
 )
 
+"""
+CORS Middleware
+"""
+
 origins = [
     fastapi_endpoint,
     https_fastapi_endpoint,
     netbox_endpoint,
     https_netbox_endpoint,
     netbox_endpoint_port80,
+    netbox_endpoint_port8000,
     fastapi_endpoint_port8000,
     fastapi_endpoint_port80,
     "http://localhost",
@@ -107,47 +118,6 @@ async def websocket_endpoint(
 #
 # Routes (Endpoints)
 #
-
-html = """
-<!DOCTYPE html>
-<html>
-    <head>
-        <title>Chat</title>
-    </head>
-    <body>
-        <h1>Log Messages</h1>
-        <!-- Disable Input
-            <form action="" onsubmit="sendMessage(event)">
-                <input type="text" id="messageText" autocomplete="off"/>
-                <button>Send</button>
-            </form>
-        -->
-        <ul id='messages'>
-        </ul>
-        <script>
-            var ws = new WebSocket("ws://10.0.30.250:8800/ws");
-            ws.onmessage = function(event) {
-                var messages = document.getElementById('messages')
-                var message = document.createElement('li')
-                var content = document.createTextNode(event.data)
-                message.appendChild(content)
-                messages.appendChild(message)
-            };
-            function sendMessage(event) {
-                var input = document.getElementById("messageText")
-                ws.send(input.value)
-                input.value = ''
-                event.preventDefault()
-            }
-        </script>
-    </body>
-</html>
-"""
-
-@app.get("/websocket")
-async def get():
-    return HTMLResponse(html)
-
 
 # Netbox Routes
 app.include_router(netbox_router, prefix="/netbox", tags=["netbox"])

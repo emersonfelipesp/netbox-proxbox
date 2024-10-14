@@ -26,6 +26,8 @@
             fastapi_endpoint = `http://${uvicorn_host}:${uvicorn_port}`
             websocket_endpoint = `ws://${uvicorn_host}:${uvicorn_port}/ws`
 
+
+            console.log(fastapi_endpoint)
             console.log(websocket_endpoint)
 
             var ws = new WebSocket(websocket_endpoint);
@@ -54,24 +56,48 @@
                 event.preventDefault()
             }
 
-            const xhr = new XMLHttpRequest();
-            xhr.open('GET', `${fastapi_endpoint}?source=netbox&list_all=false&plugin_name=netbox_proxbox`, true);
+            //function getProxmoxVersion() {
 
-            xhr.onload = function() {
-                if (xhr.status === 200) {
-                    const data = JSON.parse(xhr.responseText);
-                    console.log(data);
-                } else {
-                    console.error(`Request failed. Status: ${xhr.status}`);
+            //console.log(domain)
+
+            function getBody () {
+                body = document.getElementsByTagName("body")
+                body = body[0]
+
+                let arrai = Array.from(document.getElementsByTagName("tr"))
+                console.log("arrai0", arrai)
+
+                body.onload = getVersion
+                console.log("body", body)
+
+            }
+            
+            getBody()
+
+            async function getVersion() {
+            
+                let elemento = document.getElementsByClassName("proxmox_version")
+
+                for (let item of elemento) {
+                    
+                    let td = item.getElementsByTagName("td")
+
+                    if (td[0].id) {
+
+                        try {
+                            request = await fetch(`${fastapi_endpoint}/proxmox/version?source=netbox&list_all=false&plugin_name=netbox_proxbox&domain=${td[0].id}`)
+                            response = await request.json()
+    
+                            console.log(response[0])
+                        } catch (error) {
+                            console.log(error)
+                        }
+
+                        td[0].textContent = JSON.stringify(response)
+
+                    }
                 }
-            };
-
-            xhr.onerror = function() {
-                console.error('Network error');
-            };
-
-            xhr.send();
-
+            }
         </script>
 
         <div class="row mb-3">
@@ -105,104 +131,100 @@
             </div>
 
             {% for px in configuration.netbox_proxbox.proxmox %}
-            <div class="col col-md-6">
-                <div class="card">
-                    <div align=center>
-                        <br>
-                        <a href="https://{{ px.domain }}:{{ px.http_port }}" target="_blank">
-                            <img src="{% static 'netbox_proxbox/proxmox-logo.svg' %}" alt="Proxmox Logo" width="200px">
-                        </a>
-                    </div>
-                    <div class="card-body">
-                        <table class="table table-hover attr-table">
-                            <tr>
-                                <th scope="row"><strong>Domain / IP</strong></th>
+                <div class="col col-md-6">
+                    <div class="card">
+                        <div align=center>
+                            <br>
+                            <a href="https://{{ px.domain }}:{{ px.http_port }}" target="_blank">
+                                <img src="{% static 'netbox_proxbox/proxmox-logo.svg' %}" alt="Proxmox Logo" width="200px">
+                            </a>
+                        </div>
+                        <div class="card-body">
+                            <table class="table table-hover attr-table" >
+                                <tr>
+                                    <th scope="row"><strong>Domain / IP</strong></th>
+                                    {% if px.domain %}
+                                        <td>{{ px.domain }}</td>
+                                    {% else %}
+                                        <td>{{ default_config.proxmox.domain }} (default)</td>
+                                    {% endif %}
+                                </tr>
+                                <tr>
+                                <th scope="row"><strong>HTTP Port</strong></th>
+                                {% if px.http_port %}
+                                        <td>{{ px.http_port }}</td>
+                                    {% else %}
+                                        <td>{{ default_config.proxmox.http_port }} (default)</td>
+                                    {% endif %}
+                                </tr>
+                                <tr>
+                                    <th scope="row"><strong>Proxmox User</strong></th>
+                                    {% if px.user %}
+                                        <td>{{ px.user }}</td>
+                                    {% else %}
+                                        <td>{{ default_config.proxmox.user }} (default)</td>
+                                    {% endif %}
+                                </tr>
+                                <tr>
+                                <th scope="row"><strong>Proxmox Password</strong></th>
+                                    {% if px.password %}
+                                        <td>password defined in configuration.py</td>
+                                    {% else %}
+                                        <td>(secret) (default)</td>
+                                    {% endif %}
+                                </tr>
+                                    <th scope="row"><strong>Token Name</strong></th>
+                                    {% if px.token.name %}
+                                        <td>{{ px.token.name }}</td>
+                                    {% else %}
+                                        <td>{{ default_config.proxmox.token.name }} (default)</td>
+                                    {% endif %}
+                                <tr>
+                                    <th scope="row"><strong>Token Value</strong></th>
+                                    <td>(secret)</td>
+                                </tr>
+                                <tr>
+                                    <th scope="row"><strong>SSL</strong></th>
+                                    {% if px.ssl %}
+                                        <td>{{ px.ssl }}</td>
+                                    {% else %}
+                                        <td>{{ default_config.proxmox.ssl }} (default)</td>
+                                    {% endif %}
+                                </tr>
+                                <tr class="proxmox_version">
+                                    <th scope="row" ><strong>Proxmox Version</strong></th>
+                                    <td id="{{ px.domain }}"></td>
+                                </tr>
+                            </table>
+                            <div class="d-flex justify-content-between">
                                 {% if px.domain %}
-                                    <td>{{ px.domain }}</td>
+                                    <form action="single_update/" method="POST" target="_blank">
+                                        <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+                                        <input type="hidden" name="proxmox_domain" value="{{ px.domain }}" />
+                                        <a 
+                                            class="btn btn-primary"
+                                            href="#"
+                                            onclick="event.preventDefault(); this.parentNode.submit()"
+                                        >Proxmox Update</a>
+                                    </form>
                                 {% else %}
-                                    <td>{{ default_config.proxmox.domain }} (default)</td>
-                                {% endif %}
-                            </tr>
-                            <tr>
-                            <th scope="row"><strong>HTTP Port</strong></th>
-                            {% if px.http_port %}
-                                    <td>{{ px.http_port }}</td>
-                                {% else %}
-                                    <td>{{ default_config.proxmox.http_port }} (default)</td>
-                                {% endif %}
-                            </tr>
-                            <tr>
-                                <th scope="row"><strong>Proxmox User</strong></th>
-                                {% if px.user %}
-                                    <td>{{ px.user }}</td>
-                                {% else %}
-                                    <td>{{ default_config.proxmox.user }} (default)</td>
-                                {% endif %}
-                            </tr>
-                            <tr>
-                            <th scope="row"><strong>Proxmox Password</strong></th>
-                                {% if px.password %}
-                                    <td>password defined in configuration.py</td>
-                                {% else %}
-                                    <td>(secret) (default)</td>
-                                {% endif %}
-                            </tr>
-                                <th scope="row"><strong>Token Name</strong></th>
-                                {% if px.token.name %}
-                                    <td>{{ px.token.name }}</td>
-                                {% else %}
-                                    <td>{{ default_config.proxmox.token.name }} (default)</td>
-                                {% endif %}
-                            <tr>
-                                <th scope="row"><strong>Token Value</strong></th>
-                                <td>(secret)</td>
-                            </tr>
-                            <tr>
-                                <th scope="row"><strong>SSL</strong></th>
-                                {% if px.ssl %}
-                                    <td>{{ px.ssl }}</td>
-                                {% else %}
-                                    <td>{{ default_config.proxmox.ssl }} (default)</td>
-                                {% endif %}
-                            </tr>
-                            <tr>
-                                <th scope="row"><strong>Proxmox Version</strong></th>
-                                {% if px.ssl %}
-                                    <td>{{ px.ssl }}</td>
-                                {% else %}
-                                    <td>{{ default_config.proxmox.ssl }} (default)</td>
-                                {% endif %}
-                            </tr>
-                        </table>
-                        <div class="d-flex justify-content-between">
-                            {% if px.domain %}
-                                <form action="single_update/" method="POST" target="_blank">
-                                    <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
-                                    <input type="hidden" name="proxmox_domain" value="{{ px.domain }}" />
                                     <a 
+                                        target="_blank"
                                         class="btn btn-primary"
-                                        href="#"
-                                        onclick="event.preventDefault(); this.parentNode.submit()"
+                                        href="{% url 'plugins:netbox_proxbox:proxmoxvm_single_update' domain=default_config.proxmox.domain %}" 
                                     >Proxmox Update</a>
-                                </form>
-                            {% else %}
-                                <a 
-                                    target="_blank"
-                                    class="btn btn-primary"
-                                    href="{% url 'plugins:netbox_proxbox:proxmoxvm_single_update' domain=default_config.proxmox.domain %}" 
-                                >Proxmox Update</a>
-                            {% endif %}
-                            <button class="btn btn-outline-primary" type="button">
-                                <a
-                                    style="text-decoration: none; color: inherit"
-                                    target="_blank"
-                                    href="https://github.com/netdevopsbr/netbox-proxbox#13-configure-plugin"
-                                >Show Example</a>
-                            </button>
+                                {% endif %}
+                                <button class="btn btn-outline-primary" type="button">
+                                    <a
+                                        style="text-decoration: none; color: inherit"
+                                        target="_blank"
+                                        href="https://github.com/netdevopsbr/netbox-proxbox#13-configure-plugin"
+                                    >Show Example</a>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
             {% endfor %}
             <div class="col col-md-6">
                 <div class="card">
