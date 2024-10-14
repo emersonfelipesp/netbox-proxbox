@@ -14,13 +14,19 @@
     
     <div>
         <div style='overflow-y: auto; width: 100%; height: 400px;' id="scrollable-div">
-            <div class="card" style="padding: 8px; flex-direction: cloumn; overflow-y: auto">
-                <ul id='messages' style='overflow: auto;   flex-direction: cloumn-reverse'>
+            <div class="card" style="flex-direction: cloumn; overflow-y: auto">
+                <ul id='messages' style='overflow: auto; flex-direction: cloumn-reverse; list-style-type: none;'>
                 </ul>
             </div>
         </div>
         <script>
-            var ws = new WebSocket("ws://10.0.30.250:8800/ws");
+            uvicorn_host = "{{ configuration.netbox_proxbox.fastapi.uvicorn_host }}"
+            uvicorn_port = "{{ configuration.netbox_proxbox.fastapi.uvicorn_port }}"
+
+            websocket_endpoint = `ws://${uvicorn_host}:${uvicorn_port}/ws`
+            console.log(websocket_endpoint)
+
+            var ws = new WebSocket(websocket_endpoint);
             ws.onmessage = function(event) {
 
                 var messages = document.getElementById('messages')
