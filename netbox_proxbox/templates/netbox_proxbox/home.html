@@ -23,7 +23,9 @@
             uvicorn_host = "{{ configuration.netbox_proxbox.fastapi.uvicorn_host }}"
             uvicorn_port = "{{ configuration.netbox_proxbox.fastapi.uvicorn_port }}"
 
+            fastapi_endpoint = `http://${uvicorn_host}:${uvicorn_port}`
             websocket_endpoint = `ws://${uvicorn_host}:${uvicorn_port}/ws`
+
             console.log(websocket_endpoint)
 
             var ws = new WebSocket(websocket_endpoint);
@@ -44,8 +46,6 @@
                 var test = document.getElementById('scrollable-div')
                 test.scrollTop = test.scrollHeight
 
-                messages.appendChild(breakLine)
-
             };
             function sendMessage(event) {
                 var input = document.getElementById("messageText")
@@ -53,6 +53,25 @@
                 input.value = ''
                 event.preventDefault()
             }
+
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', `${fastapi_endpoint}?source=netbox&list_all=false&plugin_name=netbox_proxbox`, true);
+
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    const data = JSON.parse(xhr.responseText);
+                    console.log(data);
+                } else {
+                    console.error(`Request failed. Status: ${xhr.status}`);
+                }
+            };
+
+            xhr.onerror = function() {
+                console.error('Network error');
+            };
+
+            xhr.send();
+
         </script>
 
         <div class="row mb-3">
@@ -140,6 +159,14 @@
                             </tr>
                             <tr>
                                 <th scope="row"><strong>SSL</strong></th>
+                                {% if px.ssl %}
+                                    <td>{{ px.ssl }}</td>
+                                {% else %}
+                                    <td>{{ default_config.proxmox.ssl }} (default)</td>
+                                {% endif %}
+                            </tr>
+                            <tr>
+                                <th scope="row"><strong>Proxmox Version</strong></th>
                                 {% if px.ssl %}
                                     <td>{{ px.ssl }}</td>
                                 {% else %}

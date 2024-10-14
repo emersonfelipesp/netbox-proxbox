@@ -2,6 +2,7 @@ from typing import Annotated
 
 from fastapi import FastAPI, Request, WebSocket
 from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
 
 from netbox_proxbox.backend.exception import ProxboxException
 
@@ -22,6 +23,25 @@ from .backend.routes.proxmox.nodes import router as px_nodes_router
 
 from .backend.schemas import *
 
+from netbox import configuration
+
+plugin_configuration = configuration.PLUGINS_CONFIG
+
+uvicorn_host = plugin_configuration["netbox_proxbox"]["fastapi"]["uvicorn_host"]
+uvicorn_port = plugin_configuration["netbox_proxbox"]["fastapi"]["uvicorn_port"]
+        
+fastapi_endpoint = f"http://{uvicorn_host}:{uvicorn_port}"
+https_fastapi_endpoint = f"https://{uvicorn_host}:{uvicorn_port}"
+fastapi_endpoint_port8000 = f"http://{uvicorn_host}:8000"
+fastapi_endpoint_port80 = f"http://{uvicorn_host}:80"
+
+netbox_host = plugin_configuration["netbox_proxbox"]["netbox"]["domain"]
+netbox_port = plugin_configuration["netbox_proxbox"]["netbox"]["http_port"]
+
+netbox_endpoint_port80 = f"http://{netbox_host}:80"
+netbox_endpoint = f"http://{netbox_host}:{netbox_port}"
+https_netbox_endpoint = f"https://{netbox_host}:{netbox_port}"
+
 PROXBOX_PLUGIN_NAME = "netbox_proxbox"
 
 # Init FastAPI
@@ -29,6 +49,26 @@ app = FastAPI(
     title="Proxbox Backend",
     description="## Proxbox Backend made in FastAPI framework",
     version="0.0.1"
+)
+
+origins = [
+    fastapi_endpoint,
+    https_fastapi_endpoint,
+    netbox_endpoint,
+    https_netbox_endpoint,
+    netbox_endpoint_port80,
+    fastapi_endpoint_port8000,
+    fastapi_endpoint_port80,
+    "http://localhost",
+    
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"]
 )
 
 @app.exception_handler(ProxboxException)
