@@ -16,12 +16,16 @@
         ws.onmessage = function(event) {
             var messages = document.getElementById('messages')
             var message = document.createElement('li')
+
+            message.style.lineHeight = '170%'
+            //var breakLine = document.createElement('br')
             
             message.innerHTML = event.data
 
             // var content = document.createTextNode(event.data)
             // message.appendChild(content)
             messages.appendChild(message)
+            messages.appendChild(breakLine)
         };
         function sendMessage(event) {
             var input = document.getElementById("messageText")
