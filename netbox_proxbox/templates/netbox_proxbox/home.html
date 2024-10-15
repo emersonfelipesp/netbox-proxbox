@@ -81,6 +81,9 @@
                 for (let item of elemento) {
 
                     let td = item.getElementsByTagName("td")
+                    let th = item.getElementsByTagName("th")
+
+                    console.log(th[0], th[0].textContent, th[0].innerHTML)
                     
                     if (td[0].id) {
                         let tdID = td[0].id
@@ -97,8 +100,15 @@
                             console.log(response[0][value].release)
                             console.log(response[0][value].repoid)
                             console.log(response[0][value].version)
-
-                            td[0].textContent = response[0][value].version
+                            
+                            console.log("th0", th[0])
+                            if (th[0].textContent === 'Proxmox Version') {
+                                td[0].textContent = `${response[0][value].version}`
+                            }
+                            if (th[0].textContent === 'Proxmox RepoID') {
+                                td[0].textContent = `${response[0][value].repoid}`
+                            }
+                            
                         }
                         //td[0].textContent = JSON.stringify(response[0][value].version)
 
@@ -202,6 +212,10 @@
                                     <th scope="row" ><strong>Proxmox Version</strong></th>
                                     <td id="{{ px.domain }}"></td>
                                 </tr>
+                                <tr class="proxmox_version">
+                                    <th scope="row" ><strong>Proxmox RepoID</strong></th>
+                                    <td id="{{ px.domain }}"></td>
+                                </tr>
                             </table>
                             <div class="d-flex justify-content-between">
                                 {% if px.domain %}
@@ -295,6 +309,7 @@
                         <a href="https://fastapi.tiangolo.com/" target="_blank">
                             <img src="{% static 'netbox_proxbox/fastapi_logo.png' %}" alt="Netbox Logo" width="200px">
                         </a>
+                        <p>This service <strong>MUST</strong> be running to Proxbox work.<br>It's the backend which communicates with Proxmox Clusters.</br></p>
                     </div>  
                     <div class="card-body">
                         <table class="table table-hover attr-table">
