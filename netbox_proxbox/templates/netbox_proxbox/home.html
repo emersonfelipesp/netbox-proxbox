@@ -4,7 +4,6 @@
 {% block content %}
 
     <div>
-
         <script>
             uvicorn_host = "{{ configuration.netbox_proxbox.fastapi.uvicorn_host }}"
             uvicorn_port = "{{ configuration.netbox_proxbox.fastapi.uvicorn_port }}"
@@ -14,6 +13,7 @@
 
             var ws = new WebSocket(websocket_endpoint);
             ws.onmessage = function(event) {
+                // Add WebSockets Messages came from FastAPI backend on GUI
 
                 var messages = document.getElementById('messages')
                 var message = document.createElement('li')
@@ -31,14 +31,13 @@
 
             function sendMessage(event) {
                 // Send Websocket Message
-
                 ws.send("Start")
-                //input.value = ''
                 event.preventDefault()
             }
 
 
             function getBody () {
+                // Load 'getVersion()' function on HTML
                 body = document.getElementsByTagName("body")
                 body = body[0]
 
@@ -49,7 +48,7 @@
             getBody()
 
             async function getVersion() {
-            
+                // Get Info from Proxmox and Add to GUI Page, like Connection Status and Error Messages
                 let elemento = document.getElementsByClassName("proxmox_version")
 
                 for (let item of elemento) {
@@ -72,32 +71,21 @@
                                     const request = await fetch(endpoint)
                                     const response = await request.json()
                                     apiResponses.push(response[0])
-                                    //console.log("endpoint test: ", response[0] )
-                                    
 
                                     if (request.ok && response[0] && response[0].domain) {
-                                        //console.log("NAME: ", response[0].domain)
                                         let statusBadge = document.getElementById(`proxmox-connection-status-${response[0].domain}`)
                                         
-                                        //console.log("statusBadge", statusBadge)
                                         if (statusBadge) {
                                             statusBadge.className = "text-bg-green badge p-1"
                                             statusBadge.textContent = "Successful!"
                                         }
-              
-                                        
                                     }
 
                                     if (request.status === 400) {
-                                        console.log("CONEXÃO DEU RUIM")
- 
-                                        console.log("request text", response.message)
                                         
                                         let errorStatusBadge = document.getElementsByClassName("proxmox-connection-check")
 
-                                        console.log("tdID", tdID)
                                         let connectionError = document.getElementById(`proxmox-connection-error-${tdID}`)
-                                        console.log("connectionError", connectionError)
                                         let connectionErrorFilledMessage = document.getElementById(`proxmox-filled-message-${tdID}`)
 
                                         if (!connectionErrorFilledMessage) {
@@ -105,8 +93,6 @@
                                             connectionError.innerHTML = `<p id="proxmox-filled-message-${tdID}"><strong>Message: </strong>${response.message}<br><strong>Detail: </strong>${response.message}<br><strong>Python Exception: </strong>${response.python_exception}</p>`
                                         }
 
-                                        console.log("errorStatusBadge", errorStatusBadge)
-                                        
                                         for (let item of errorStatusBadge) {
       
                                             if (item.id.includes(`${tdID}`)) {
@@ -117,13 +103,8 @@
                                         }
                                     }
 
-
-
-    
-    
                                 } catch (err) {
-    
-                                    
+                                    // If Connection Fails with Proxmox Cluster, continue trying to connect with other Proxmox Cluster Nodes configured.
                                     continue
                                 }
                             }
@@ -132,7 +113,8 @@
                         if (apiResponses) {
                             if (apiResponses[0]) {
                                 for (let value in apiResponses[0]) {
-
+                                    // Add 'Proxmox Version' and 'Proxmox RepoID' to Proxmox Cluster Card Fields
+                                    // Response from FastAPI /proxmox/version
                                     if (th[0].textContent === 'Proxmox Version') {
                                         td[0].innerHTML = `<span class='badge text-bg-grey' title='Proxmox Version'><strong><i class='mdi mdi-tag'></i></strong> ${apiResponses[0][value].version}</span>`
                                     }
@@ -145,7 +127,8 @@
                             if (apiResponses[1]) {
     
                                 for (let value in apiResponses[1]) {
-    
+                                    // Add 'Proxmox Cluster Name' and 'Proxmox Cluster Mode' to Proxmox Cluster Card Fields
+                                    // Response from FastAPI /proxmox/sessions
                                     if (th[0].textContent === 'Proxmox Cluster Name') {
                                         td[0].innerHTML = `<strong>${apiResponses[1].name}</strong>`
                                     }
@@ -203,6 +186,7 @@
             {% for px in configuration.netbox_proxbox.proxmox %}
                 <div class="col col-md-6">
                     <div class="card">
+                        <!-- Placeholder for Connection Error Messages -->
                         <div class="p-4" id="proxmox-connection-error-{{ px.domain }}">
 
                         </div>
@@ -214,7 +198,8 @@
                                     <img src="{% static 'netbox_proxbox/proxmox-logo.svg' %}" alt="Proxmox Logo" width="200px">
                                 </a>
                             </div>
-        
+                            
+                            <!-- Status Badge. Default value is 'Unkown' and is changed based on API response status -->
                             <div class="d-flex ms-auto " style="margin: 0 40px 0 0">
                                 <span id="proxmox-connection-status-{{ px.domain }}" class="proxmox-connection-check badge p-1">Unknown</span>
                             </div>
@@ -223,6 +208,7 @@
 
                         <div class="card-body">
                             <table class="table table-hover attr-table" >
+                                <!-- The following four (4) fields are filled by API response. If empty, means the API failed. -->
                                 <tr class="proxmox_version">
                                     <th scope="row" ><strong>Proxmox Cluster Name</strong></th>
                                     <td id="{{ px.domain }}"></td>
@@ -239,6 +225,7 @@
                                     <th scope="row" ><strong>Proxmox RepoID</strong></th>
                                     <td id="{{ px.domain }}"></td>
                                 </tr>
+                                <!-- The rest of the fields are based on Netbox 'configuration.py' file and Plugins Configuration -->
                                 <tr>
                                     <th scope="row"><strong>Domain / IP</strong></th>
                                     {% if px.domain %}
@@ -330,6 +317,7 @@
                     </div>  
                     <div class="card-body">
                         <table class="table table-hover attr-table">
+                            <!-- The fields are based on Netbox 'configuration.py' file and Plugins Configuration -->
                             <tr>
                                 <th scope="row"><strong>Domain / IP</strong></th>
                                 {% if px.netbox.domain %}
@@ -377,6 +365,7 @@
             </div>
             <div class="col col-md-6">
                 <div class="card">
+                    <!-- FastAPI is currently the Proxbox Backend which communicates with Proxmox Cluster API. It MUST run so that Proxbox works. -->
                     <div align=center>
                         <br>
                         <a href="https://fastapi.tiangolo.com/" target="_blank">
@@ -386,6 +375,7 @@
                     </div>  
                     <div class="card-body">
                         <table class="table table-hover attr-table">
+                            <!-- The fields are based on Netbox 'configuration.py' file and Plugins Configuration -->
                             <tr>
                                 <th scope="row"><strong>Uvicorn Host</strong></th>
                                 {% if configuration.netbox_proxbox.fastapi.uvicorn_host %}
@@ -417,7 +407,7 @@
             </div>
         </div>
 
-
+        <!-- Log Messages from FastAPI backend -->
         <h1 id="log-messages">Log Messages</h1>
         <div style='overflow-y: auto; width: 100%; height: 400px;' id="scrollable-div">
             <div class="card" style="flex-direction: cloumn; overflow-y: auto">
