@@ -3,15 +3,7 @@
 
 {% block content %}
     <h1>Log Messages</h1>
-    <!--
-        <form action="" onsubmit="sendMessage(event)">
-            <input type="text" id="messageText" autocomplete="off"/>
-            <button>Send</button>
-        </form>
-    -->
-    
-    <!-- <div style="position: fixed; background-color: white; overflow: auto; border: 5px solid transparent; box-sizing: border-box; border-radius: 1rem; height: 200px; width: 100%;"> -->
-    
+
     <div>
         <div style='overflow-y: auto; width: 100%; height: 400px;' id="scrollable-div">
             <div class="card" style="flex-direction: cloumn; overflow-y: auto">
@@ -26,10 +18,6 @@
             fastapi_endpoint = `http://${uvicorn_host}:${uvicorn_port}`
             websocket_endpoint = `ws://${uvicorn_host}:${uvicorn_port}/ws`
 
-
-            console.log(fastapi_endpoint)
-            console.log(websocket_endpoint)
-
             var ws = new WebSocket(websocket_endpoint);
             ws.onmessage = function(event) {
 
@@ -37,43 +25,34 @@
                 var message = document.createElement('li')
 
                 message.style.lineHeight = '170%'
-                //var breakLine = document.createElement('br')
-                
-                message.innerHTML = event.data
 
-                // var content = document.createTextNode(event.data)
-                // message.appendChild(content)
+                message.innerHTML = event.data
                 messages.appendChild(message)
 
                 var test = document.getElementById('scrollable-div')
                 test.scrollTop = test.scrollHeight
 
             };
+
+
             function sendMessage(event) {
-                var input = document.getElementById("messageText")
-                ws.send(input.value)
-                input.value = ''
+                // Send Websocket Message
+
+                ws.send("Start")
+                //input.value = ''
                 event.preventDefault()
             }
 
-            //function getProxmoxVersion() {
-
-            //console.log(domain)
 
             function getBody () {
                 body = document.getElementsByTagName("body")
                 body = body[0]
 
-                let arrai = Array.from(document.getElementsByTagName("tr"))
-                console.log("arrai0", arrai)
-
                 body.onload = getVersion
-                console.log("body", body)
 
             }
             
             getBody()
-
 
             async function getVersion() {
             
@@ -83,12 +62,9 @@
 
                     let td = item.getElementsByTagName("td")
                     let th = item.getElementsByTagName("th")
-
-                    console.log(th[0], th[0].textContent, th[0].innerHTML)
                     
                     if (td[0].id) {
                         let tdID = td[0].id
-                        
                         
                         const version_endpoint = `${fastapi_endpoint}/proxmox/version?source=netbox&list_all=false&plugin_name=netbox_proxbox&domain=${tdID}`
                         const cluster_endpoint = `${fastapi_endpoint}/proxmox/sessions?source=netbox&list_all=false&plugin_name=netbox_proxbox&domain=${tdID}`
@@ -109,28 +85,27 @@
                         for (let value in apiResponses[0]) {
 
                             if (th[0].textContent === 'Proxmox Version') {
-                                td[0].textContent = `${apiResponses[0][value].version}`
+                                td[0].innerHTML = `<span class='badge text-bg-grey' title='Proxmox Version'><strong><i class='mdi mdi-tag'></i></strong> ${apiResponses[0][value].version}</span>`
                             }
                             if (th[0].textContent === 'Proxmox RepoID') {
-                                td[0].textContent = `${apiResponses[0][value].repoid}`
+                                td[0].innerHTML = `<span class='badge text-bg-grey' title='Proxmox RepoID'>${apiResponses[0][value].repoid}</span>`
                             }
                         }
 
                         for (let value in apiResponses[1]) {
 
                             if (th[0].textContent === 'Proxmox Cluster Name') {
-                                td[0].textContent = `${apiResponses[1].name}`
+                                td[0].innerHTML = `<strong>${apiResponses[1].name}</strong>`
                             }
 
                             if (th[0].textContent === 'Proxmox Cluster Mode') {
 
                                 let mode = apiResponses[1].mode
-                                if ( mode === "standalone" ) { mode = "Standalone" }
-                                if ( mode === "cluster" ) { mode = "Cluster" } 
-                                td[0].textContent = `${mode}`
+                                if ( mode === "standalone" ) { mode = "<span class='badge text-bg-blue' title='Standalone Mode'><strong><i class='mdi mdi-server'></i></strong> Standalone (Single Node)</span>" }
+                                if ( mode === "cluster" ) { mode = "<span class='badge text-bg-green' title='Cluster Mode'><strong><i class='mdi mdi-server'></i></strong> Cluster (Multiple Nodes)</span>" } 
+                                td[0].innerHTML = `${mode}`
                             }
                         }
-
                     }
                 }
             }
@@ -138,13 +113,19 @@
 
         <div class="row mb-3">
                 
-
             <hr>
             {# Full Update Button#}
             <div style="margin-bottom: 15px;" class="d-flex justify-content-center noprint">
-                {% if perms.netbox_proxbox.add_proxmoxvm %}
-                <a href="{% url 'plugins:netbox_proxbox:proxmoxvm_full_update' %}" target="_blank" class="btn btn-primary">Proxmox Full Update (probably not working on v4.0)</a>
-                {% endif %}
+
+                <form action="" onsubmit="sendMessage(event)">
+                    {% if perms.netbox_proxbox.add_proxmoxvm %}
+                        <button class="btn btn-primary">
+                            Proxmox Full Update (probably not working on v4.0)
+                            <!-- <a href="{% url 'plugins:netbox_proxbox:proxmoxvm_full_update' %}" target="_blank" class="btn btn-primary"></a> -->}
+                        </button>
+                    {% endif %}
+                    
+                </form>
             </div>
             <div style="margin-bottom: 15px;" class="d-flex justify-content-center noprint">
                 {% if perms.netbox_proxbox.add_proxmoxvm %}

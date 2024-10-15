@@ -106,12 +106,15 @@ async def websocket_endpoint(
     
     from netbox_proxbox.backend.routes.proxbox.clusters import get_nodes, get_virtual_machines
     
-    await get_nodes(nb=nb, pxs=pxs, websocket=websocket)
-    await get_virtual_machines(nb=nb, pxs=pxs, websocket=websocket)
-    
     while True:
         data = await websocket.receive_text()
-        await websocket.send_text(f"Message text was: {data}")
+        
+        if data == "Start":
+            await get_nodes(nb=nb, pxs=pxs, websocket=websocket)
+            await get_virtual_machines(nb=nb, pxs=pxs, websocket=websocket)
+        
+        
+        #await websocket.send_text(f"Message text was: {data}")
         
         
 
