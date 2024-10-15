@@ -66,40 +66,93 @@
                         
                         let apiResponses = []
 
-                        for (let endpoint of endpoints){
-                            try {
-                                const request = await fetch(endpoint)
-                                const response = await request.json()
-                                apiResponses.push(response[0])
-                            } catch (err) {
-                                alert(err)
+                        if (endpoints) {
+                            for (let endpoint of endpoints){
+                                try {
+                                    const request = await fetch(endpoint)
+                                    const response = await request.json()
+                                    apiResponses.push(response[0])
+                                    console.log("endpoint test: ", response[0] )
+                                    
+
+                                    if (request.ok && response[0] && response[0].domain) {
+                                        console.log("NAME: ", response[0].domain)
+                                        statusBadge = document.getElementById(`proxmox-connection-status-${response[0].domain}`)
+                                        
+                                        console.log("statusBadge", statusBadge)
+                                        if (statusBadge) {
+                                            statusBadge.className = "text-bg-green badge p-1"
+                                            statusBadge.textContent = "Successful!"
+                                        }
+              
+                                        
+                                    }
+
+                                    if (request.status === 400) {
+                                        console.log("CONEXÃO DEU RUIM")
+
+                                        errorStatusBadge = document.getElementsByClassName("proxmox-connection-check")
+
+                                        console.log("errorStatusBadge", errorStatusBadge)
+
+                                        for (let item of errorStatusBadge) {
+                                            console.log("testing it", item)
+
+                                            console.log("ITEM ID", item.id)
+                                            
+                                            console.log("uvicorn_host", uvicorn_host, tdID)
+                                            if (item.id.includes(`${tdID}`)) {
+                                                console.log("ID FOUND.", item.id)
+                                                item.className = "text-bg-red badge p-1"
+                                                item.textContent = "Connection Failed!"
+                                            }
+                                        }
+                                    }
+
+
+
+    
+    
+                                } catch (err) {
+    
+                                    
+                                    continue
+                                }
                             }
                         }
 
-                        for (let value in apiResponses[0]) {
+                        if (apiResponses) {
+                            if (apiResponses[0]) {
+                                for (let value in apiResponses[0]) {
 
-                            if (th[0].textContent === 'Proxmox Version') {
-                                td[0].innerHTML = `<span class='badge text-bg-grey' title='Proxmox Version'><strong><i class='mdi mdi-tag'></i></strong> ${apiResponses[0][value].version}</span>`
+                                    if (th[0].textContent === 'Proxmox Version') {
+                                        td[0].innerHTML = `<span class='badge text-bg-grey' title='Proxmox Version'><strong><i class='mdi mdi-tag'></i></strong> ${apiResponses[0][value].version}</span>`
+                                    }
+                                    if (th[0].textContent === 'Proxmox RepoID') {
+                                        td[0].innerHTML = `<span class='badge text-bg-grey' title='Proxmox RepoID'>${apiResponses[0][value].repoid}</span>`
+                                    }
+                                }
                             }
-                            if (th[0].textContent === 'Proxmox RepoID') {
-                                td[0].innerHTML = `<span class='badge text-bg-grey' title='Proxmox RepoID'>${apiResponses[0][value].repoid}</span>`
+
+                            if (apiResponses[1]) {
+    
+                                for (let value in apiResponses[1]) {
+    
+                                    if (th[0].textContent === 'Proxmox Cluster Name') {
+                                        td[0].innerHTML = `<strong>${apiResponses[1].name}</strong>`
+                                    }
+        
+                                    if (th[0].textContent === 'Proxmox Cluster Mode') {
+        
+                                        let mode = apiResponses[1].mode
+                                        if ( mode === "standalone" ) { mode = "<span class='badge text-bg-blue' title='Standalone Mode'><strong><i class='mdi mdi-server'></i></strong> Standalone (Single Node)</span>" }
+                                        if ( mode === "cluster" ) { mode = "<span class='badge text-bg-purple' title='Cluster Mode'><strong><i class='mdi mdi-server'></i></strong> Cluster (Multiple Nodes)</span>" } 
+                                        td[0].innerHTML = `${mode}`
+                                    }
+                                }
                             }
                         }
 
-                        for (let value in apiResponses[1]) {
-
-                            if (th[0].textContent === 'Proxmox Cluster Name') {
-                                td[0].innerHTML = `<strong>${apiResponses[1].name}</strong>`
-                            }
-
-                            if (th[0].textContent === 'Proxmox Cluster Mode') {
-
-                                let mode = apiResponses[1].mode
-                                if ( mode === "standalone" ) { mode = "<span class='badge text-bg-blue' title='Standalone Mode'><strong><i class='mdi mdi-server'></i></strong> Standalone (Single Node)</span>" }
-                                if ( mode === "cluster" ) { mode = "<span class='badge text-bg-green' title='Cluster Mode'><strong><i class='mdi mdi-server'></i></strong> Cluster (Multiple Nodes)</span>" } 
-                                td[0].innerHTML = `${mode}`
-                            }
-                        }
                     }
                 }
             }
@@ -142,7 +195,7 @@
             {% for px in configuration.netbox_proxbox.proxmox %}
                 <div class="col col-md-6">
                     <div class="card">
-                        <div class="flex d-flex flex-row  justify-content-center align-items-center">
+                        <div class="flex d-flex flex-row  justify-content-center align-items-center p-2 mt-4">
 
   
                             <div class="flex d-flex mx-auto position-absolute" >
@@ -151,8 +204,8 @@
                                 </a>
                             </div>
         
-                            <div class="flex d-flex p-2 ms-auto">
-                                <a href="#" class="btn btn-primary p-2" style="width: 70px; margin: 20px; ">Primary</a>
+                            <div class="d-flex ms-auto " style="margin: 0 40px 0 0">
+                                <span id="proxmox-connection-status-{{ px.domain }}" class="proxmox-connection-check badge p-1">Unknown</span>
                             </div>
                         </div>
 
