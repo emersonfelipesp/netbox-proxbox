@@ -72,14 +72,14 @@
                                     const request = await fetch(endpoint)
                                     const response = await request.json()
                                     apiResponses.push(response[0])
-                                    console.log("endpoint test: ", response[0] )
+                                    //console.log("endpoint test: ", response[0] )
                                     
 
                                     if (request.ok && response[0] && response[0].domain) {
-                                        console.log("NAME: ", response[0].domain)
-                                        statusBadge = document.getElementById(`proxmox-connection-status-${response[0].domain}`)
+                                        //console.log("NAME: ", response[0].domain)
+                                        let statusBadge = document.getElementById(`proxmox-connection-status-${response[0].domain}`)
                                         
-                                        console.log("statusBadge", statusBadge)
+                                        //console.log("statusBadge", statusBadge)
                                         if (statusBadge) {
                                             statusBadge.className = "text-bg-green badge p-1"
                                             statusBadge.textContent = "Successful!"
@@ -90,17 +90,26 @@
 
                                     if (request.status === 400) {
                                         console.log("CONEXÃO DEU RUIM")
+ 
+                                        console.log("request text", response.message)
+                                        //console.log("request", response[0], await request)
+                                        
+                                        let errorStatusBadge = document.getElementsByClassName("proxmox-connection-check")
 
-                                        errorStatusBadge = document.getElementsByClassName("proxmox-connection-check")
+                                        console.log("tdID", tdID)
+                                        let connectionError = document.getElementById(`proxmox-connection-error-${tdID}`)
+                                        console.log("connectionError", connectionError)
+                                        let connectionErrorFilledMessage = document.getElementById(`proxmox-filled-message-${tdID}`)
+
+                                        if (!connectionErrorFilledMessage) {
+                                            connectionError.className = "text-bg-red p-2"
+                                            connectionError.innerHTML = `<p id="proxmox-filled-message-${tdID}"><strong>Message: </strong>${response.message}<br><strong>Detail: </strong>${response.message}<br><strong>Python Exception: </strong>${response.python_exception}</p>`
+                                        }
 
                                         console.log("errorStatusBadge", errorStatusBadge)
-
+                                        
                                         for (let item of errorStatusBadge) {
-                                            console.log("testing it", item)
-
-                                            console.log("ITEM ID", item.id)
-                                            
-                                            console.log("uvicorn_host", uvicorn_host, tdID)
+      
                                             if (item.id.includes(`${tdID}`)) {
                                                 console.log("ID FOUND.", item.id)
                                                 item.className = "text-bg-red badge p-1"
@@ -195,6 +204,9 @@
             {% for px in configuration.netbox_proxbox.proxmox %}
                 <div class="col col-md-6">
                     <div class="card">
+                        <div class="p-4" id="proxmox-connection-error-{{ px.domain }}">
+
+                        </div>
                         <div class="flex d-flex flex-row  justify-content-center align-items-center p-2 mt-4">
 
   
@@ -207,6 +219,7 @@
                             <div class="d-flex ms-auto " style="margin: 0 40px 0 0">
                                 <span id="proxmox-connection-status-{{ px.domain }}" class="proxmox-connection-check badge p-1">Unknown</span>
                             </div>
+
                         </div>
 
                         <div class="card-body">
