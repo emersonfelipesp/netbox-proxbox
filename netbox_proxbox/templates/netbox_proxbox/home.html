@@ -74,6 +74,7 @@
             
             getBody()
 
+
             async function getVersion() {
             
                 let elemento = document.getElementsByClassName("proxmox_version")
@@ -87,30 +88,48 @@
                     
                     if (td[0].id) {
                         let tdID = td[0].id
-                        try {
-                            request = await fetch(`${fastapi_endpoint}/proxmox/version?source=netbox&list_all=false&plugin_name=netbox_proxbox&domain=${tdID}`)
-                            response = await request.json()
-    
-                            // console.log(response[0])
-                        } catch (error) {
-                            console.log(error)
+                        
+                        
+                        const version_endpoint = `${fastapi_endpoint}/proxmox/version?source=netbox&list_all=false&plugin_name=netbox_proxbox&domain=${tdID}`
+                        const cluster_endpoint = `${fastapi_endpoint}/proxmox/sessions?source=netbox&list_all=false&plugin_name=netbox_proxbox&domain=${tdID}`
+                        const endpoints = [version_endpoint, cluster_endpoint]
+                        
+                        let apiResponses = []
+
+                        for (let endpoint of endpoints){
+                            try {
+                                const request = await fetch(endpoint)
+                                const response = await request.json()
+                                apiResponses.push(response[0])
+                            } catch (err) {
+                                alert(err)
+                            }
                         }
 
-                        for (let value in response[0]) {
-                            console.log(response[0][value].release)
-                            console.log(response[0][value].repoid)
-                            console.log(response[0][value].version)
-                            
-                            console.log("th0", th[0])
+                        for (let value in apiResponses[0]) {
+
                             if (th[0].textContent === 'Proxmox Version') {
-                                td[0].textContent = `${response[0][value].version}`
+                                td[0].textContent = `${apiResponses[0][value].version}`
                             }
                             if (th[0].textContent === 'Proxmox RepoID') {
-                                td[0].textContent = `${response[0][value].repoid}`
+                                td[0].textContent = `${apiResponses[0][value].repoid}`
                             }
-                            
                         }
-                        //td[0].textContent = JSON.stringify(response[0][value].version)
+
+                        for (let value in apiResponses[1]) {
+
+                            if (th[0].textContent === 'Proxmox Cluster Name') {
+                                td[0].textContent = `${apiResponses[1].name}`
+                            }
+
+                            if (th[0].textContent === 'Proxmox Cluster Mode') {
+
+                                let mode = apiResponses[1].mode
+                                if ( mode === "standalone" ) { mode = "Standalone" }
+                                if ( mode === "cluster" ) { mode = "Cluster" } 
+                                td[0].textContent = `${mode}`
+                            }
+                        }
 
                     }
                 }
@@ -158,6 +177,22 @@
                         </div>
                         <div class="card-body">
                             <table class="table table-hover attr-table" >
+                                <tr class="proxmox_version">
+                                    <th scope="row" ><strong>Proxmox Cluster Name</strong></th>
+                                    <td id="{{ px.domain }}"></td>
+                                </tr>
+                                <tr class="proxmox_version">
+                                    <th scope="row" ><strong>Proxmox Cluster Mode</strong></th>
+                                    <td id="{{ px.domain }}"></td>
+                                </tr>
+                                <tr class="proxmox_version">
+                                    <th scope="row" ><strong>Proxmox Version</strong></th>
+                                    <td id="{{ px.domain }}"></td>
+                                </tr>
+                                <tr class="proxmox_version">
+                                    <th scope="row" ><strong>Proxmox RepoID</strong></th>
+                                    <td id="{{ px.domain }}"></td>
+                                </tr>
                                 <tr>
                                     <th scope="row"><strong>Domain / IP</strong></th>
                                     {% if px.domain %}
@@ -207,14 +242,6 @@
                                     {% else %}
                                         <td>{{ default_config.proxmox.ssl }} (default)</td>
                                     {% endif %}
-                                </tr>
-                                <tr class="proxmox_version">
-                                    <th scope="row" ><strong>Proxmox Version</strong></th>
-                                    <td id="{{ px.domain }}"></td>
-                                </tr>
-                                <tr class="proxmox_version">
-                                    <th scope="row" ><strong>Proxmox RepoID</strong></th>
-                                    <td id="{{ px.domain }}"></td>
                                 </tr>
                             </table>
                             <div class="d-flex justify-content-between">
