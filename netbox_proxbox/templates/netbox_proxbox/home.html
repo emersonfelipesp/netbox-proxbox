@@ -2,15 +2,9 @@
 {% load static %}
 
 {% block content %}
-    <h1>Log Messages</h1>
 
     <div>
-        <div style='overflow-y: auto; width: 100%; height: 400px;' id="scrollable-div">
-            <div class="card" style="flex-direction: cloumn; overflow-y: auto">
-                <ul id='messages' style='overflow: auto; flex-direction: cloumn-reverse; list-style-type: none;'>
-                </ul>
-            </div>
-        </div>
+
         <script>
             uvicorn_host = "{{ configuration.netbox_proxbox.fastapi.uvicorn_host }}"
             uvicorn_port = "{{ configuration.netbox_proxbox.fastapi.uvicorn_port }}"
@@ -112,21 +106,19 @@
         </script>
 
         <div class="row mb-3">
-                
-            <hr>
+
             {# Full Update Button#}
             <div style="margin-bottom: 15px;" class="d-flex justify-content-center noprint">
-
                 <form action="" onsubmit="sendMessage(event)">
                     {% if perms.netbox_proxbox.add_proxmoxvm %}
-                        <button class="btn btn-primary">
-                            Proxmox Full Update (probably not working on v4.0)
-                            <!-- <a href="{% url 'plugins:netbox_proxbox:proxmoxvm_full_update' %}" target="_blank" class="btn btn-primary"></a> -->}
-                        </button>
-                    {% endif %}
+                    <button class="btn btn-primary">Proxmox Full Update (probably not working on v4.0)</button>
+
                     
+                    {% endif %}
                 </form>
             </div>
+            
+           
             <div style="margin-bottom: 15px;" class="d-flex justify-content-center noprint">
                 {% if perms.netbox_proxbox.add_proxmoxvm %}
                 <a href="http://{{ configuration.netbox_proxbox.fastapi.uvicorn_host }}:{{ configuration.netbox_proxbox.fastapi.uvicorn_port }}/proxbox/clusters/nodes" target="_blank" class="btn btn-primary">Proxmox Nodes Update</a>
@@ -150,12 +142,20 @@
             {% for px in configuration.netbox_proxbox.proxmox %}
                 <div class="col col-md-6">
                     <div class="card">
-                        <div align=center>
-                            <br>
-                            <a href="https://{{ px.domain }}:{{ px.http_port }}" target="_blank">
-                                <img src="{% static 'netbox_proxbox/proxmox-logo.svg' %}" alt="Proxmox Logo" width="200px">
-                            </a>
+                        <div class="flex d-flex flex-row  justify-content-center align-items-center">
+
+  
+                            <div class="flex d-flex mx-auto position-absolute" >
+                                <a href="https://{{ px.domain }}:{{ px.http_port }}" target="_blank">
+                                    <img src="{% static 'netbox_proxbox/proxmox-logo.svg' %}" alt="Proxmox Logo" width="200px">
+                                </a>
+                            </div>
+        
+                            <div class="flex d-flex p-2 ms-auto">
+                                <a href="#" class="btn btn-primary p-2" style="width: 70px; margin: 20px; ">Primary</a>
+                            </div>
                         </div>
+
                         <div class="card-body">
                             <table class="table table-hover attr-table" >
                                 <tr class="proxmox_version">
@@ -351,6 +351,16 @@
                 </div>
             </div>
         </div>
+
+
+        <h1 id="log-messages">Log Messages</h1>
+        <div style='overflow-y: auto; width: 100%; height: 400px;' id="scrollable-div">
+            <div class="card" style="flex-direction: cloumn; overflow-y: auto">
+                <ul id='messages' style='overflow: auto; flex-direction: cloumn-reverse; list-style-type: none;'>
+                </ul>
+            </div>
+        </div>
+
         <!-- Button to show JSON result -->
         <p>
             <button class="btn btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#collapseExample" aria-expanded="false" aria-controls="collapseExample">
