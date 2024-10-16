@@ -28,6 +28,20 @@
 
             };
 
+            ws.onerror = function(error) {
+                console.log("WebSocket error observed: ", error);
+
+                fullUpdateButton = document.getElementById('full-update-button')
+                fullUpdateButton.className = "btn btn-red"
+
+                fullUpdateMessage = document.getElementById('full-update-error-message')
+                fullUpdateMessage.className = "text-red"
+                fullUpdateMessage.innerHTML = `
+                    <p>
+                        <strong>WebSocket</strong> communication failed with <strong><a class="text-red" href="${error.currentTarget.url}" target="_blank">${error.currentTarget.url}</a></strong>
+                        <br>The most probably cause is <strong>Proxbox Backend not running</strong> properly.
+                    </p>`
+            }
 
             function sendMessage(event) {
                 // Send Websocket Message
@@ -151,11 +165,12 @@
 
         <div class="row mb-3">
 
+            <div align=center id="full-update-error-message"></div>
             {# Full Update Button#}
             <div style="margin-bottom: 15px;" class="d-flex justify-content-center noprint">
                 <form action="" onsubmit="sendMessage(event)">
                     {% if perms.netbox_proxbox.add_proxmoxvm %}
-                    <button class="btn btn-primary">Proxmox Full Update (probably not working on v4.0)</button>
+                    <button id="full-update-button" class="btn btn-primary">Proxmox Full Update (probably not working on v4.0)</button>
 
                     
                     {% endif %}
