@@ -46,11 +46,11 @@
                 fullUpdateMessage.innerHTML = errorMessage
                 
 
-                statusBadgeError = document.getElementById('fastapi-connection-status')
-                statusBadgeError.className = "text-bg-red badge p-2"
+                let statusBadgeError = document.getElementById('fastapi-connection-status')
+                statusBadgeError.className = "text-bg-red badge p-1"
                 statusBadgeError.textContent = "Connection Failed!"
 
-                statusErrorMessage = document.getElementById('fastapi-connection-error')
+                let statusErrorMessage = document.getElementById('fastapi-connection-error')
                 statusErrorMessage.className = "text-bg-red p-2"
                 statusErrorMessage.innerHTML = errorMessage
             }
@@ -59,6 +59,25 @@
                 // Send Websocket Message
                 ws.send("Start")
                 event.preventDefault()
+            }
+
+            async function FastAPIConnectionTest() {
+                let fastapi_docs_endpoint = `${fastapi_endpoint}/docs`
+
+                const request_fastapi = await fetch(fastapi_docs_endpoint)
+                console.log("request_fastapi", request_fastapi)
+                if (request_fastapi.ok) {
+                    console.log("FastAPI OK")
+                    //onst response_fastapi = await request_fastapi.json()
+
+                    console.log("request_fastapi", request_fastapi)
+
+                    statusBadgeFastAPI = document.getElementById('fastapi-connection-status')
+                    statusBadgeFastAPI.className = "text-bg-green badge p-1"
+                    statusBadgeFastAPI.textContent = "Successful!"
+                    
+                }
+
             }
 
 
@@ -71,9 +90,16 @@
 
             }
             
+
+
             getBody()
 
             async function getVersion() {
+                // Test FastAPI Proxbox Backend Connection
+                console.log("1")
+                FastAPIConnectionTest()
+                console.log("2")
+
                 // Get Info from Proxmox and Add to GUI Page, like Connection Status and Error Messages
                 let elemento = document.getElementsByClassName("proxmox_version")
 
