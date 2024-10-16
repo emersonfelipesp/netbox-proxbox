@@ -36,11 +36,23 @@
 
                 fullUpdateMessage = document.getElementById('full-update-error-message')
                 fullUpdateMessage.className = "text-red"
-                fullUpdateMessage.innerHTML = `
-                    <p>
-                        <strong>WebSocket</strong> communication failed with <strong><a class="text-red" href="${error.currentTarget.url}" target="_blank">${error.currentTarget.url}</a></strong>
+
+                let errorMessage = `
+                    <p align=center>
+                        <strong>WebSocket</strong> communication failed with <strong>${error.currentTarget.url}</strong>
                         <br>The most probably cause is <strong>Proxbox Backend not running</strong> properly.
                     </p>`
+
+                fullUpdateMessage.innerHTML = errorMessage
+                
+
+                statusBadgeError = document.getElementById('fastapi-connection-status')
+                statusBadgeError.className = "text-bg-red badge p-2"
+                statusBadgeError.textContent = "Connection Failed!"
+
+                statusErrorMessage = document.getElementById('fastapi-connection-error')
+                statusErrorMessage.className = "text-bg-red p-2"
+                statusErrorMessage.innerHTML = errorMessage
             }
 
             function sendMessage(event) {
@@ -170,7 +182,7 @@
             <div style="margin-bottom: 15px;" class="d-flex justify-content-center noprint">
                 <form action="" onsubmit="sendMessage(event)">
                     {% if perms.netbox_proxbox.add_proxmoxvm %}
-                    <button id="full-update-button" class="btn btn-primary">Proxmox Full Update (probably not working on v4.0)</button>
+                    <button id="full-update-button" class="btn btn-primary">Proxmox Full Update</button>
 
                     
                     {% endif %}
@@ -381,13 +393,32 @@
             <div class="col col-md-6">
                 <div class="card">
                     <!-- FastAPI is currently the Proxbox Backend which communicates with Proxmox Cluster API. It MUST run so that Proxbox works. -->
+                    <!-- Placeholder for Connection Error Messages -->
+                    <div class="p-4" id="fastapi-connection-error">
+
+                    </div>
+                    <div class="flex d-flex flex-row  justify-content-center align-items-center p-2 mt-4">
+
+
+                        <div class="flex d-flex mx-auto position-absolute" >
+                            <a href="https://fastapi.tiangolo.com/" target="_blank">
+                                <img src="{% static 'netbox_proxbox/fastapi_logo.png' %}" alt="Netbox Logo" width="200px">
+                            </a>
+                            
+                        </div>
+                        
+                        <!-- Status Badge. Default value is 'Unkown' and is changed based on API response status -->
+                        <div class="d-flex ms-auto " style="margin: 0 40px 0 0">
+                            <span id="fastapi-connection-status" class="proxmox-connection-check badge p-1">Unknown</span>
+                        </div>
+
+                    </div>
+                    
                     <div align=center>
                         <br>
-                        <a href="https://fastapi.tiangolo.com/" target="_blank">
-                            <img src="{% static 'netbox_proxbox/fastapi_logo.png' %}" alt="Netbox Logo" width="200px">
-                        </a>
                         <p>This service <strong>MUST</strong> be running to Proxbox work.<br>It's the backend which communicates with Proxmox Clusters.</br></p>
                     </div>  
+
                     <div class="card-body">
                         <table class="table table-hover attr-table">
                             <!-- The fields are based on Netbox 'configuration.py' file and Plugins Configuration -->
