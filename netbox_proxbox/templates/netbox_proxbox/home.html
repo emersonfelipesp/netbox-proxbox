@@ -100,14 +100,44 @@
             
             try {
                 const requestNetbox = await fetch(netboxTestRoute)
+                const responseNetbox = await requestNetbox.json()
 
                 console.log("requestNetbox", requestNetbox)
                 if (requestNetbox.ok) {
                     let statusBadgeNetbox = document.getElementById('netbox-connection-status')
                     statusBadgeNetbox.className = "text-bg-green badge p-1"
                     statusBadgeNetbox.textContent = "Successful!"
+
+                    let netboxVersion = document.getElementById('netbox-version')
+                    netboxVersion.innerHTML = `<span class='badge text-bg-grey' title='Netbox Version'>
+                        <strong>
+                            <i class='mdi mdi-tag'></i>
+                        </strong> ${responseNetbox["netbox-version"]}
+                    </span>`
+
+                    let pythonVersion = document.getElementById('python-version')
+                    pythonVersion.innerHTML = `<span class='badge text-bg-grey' title='Python Version'>
+                        <strong>
+                            <i class='mdi mdi-tag'></i>
+                        </strong> ${responseNetbox["python-version"]}
+                    </span>`
+
+                    let djangoVersion = document.getElementById('django-version')
+                    djangoVersion.innerHTML = `<span class='badge text-bg-grey' title='Django Version'>
+                        <strong>
+                            <i class='mdi mdi-tag'></i>
+                        </strong> ${responseNetbox["django-version"]}
+                    </span>`
+
+                    let netboxPlugins = document.getElementById('netbox-plugins')
+                    netboxPlugins.innerHTML = `<span class='badge text-bg-grey' title='Netbox Proxbox Version'>
+                        <strong>
+                            <i class='mdi mdi-tag'></i>
+                        </strong> ${responseNetbox["plugins"]["netbox_proxbox"]}
+                    </span>`
+                    
                 }
-    
+
                 else {
                     let statusErrorBadgeNetboxAPI = document.getElementById('netbox-connection-status')
                     statusErrorBadgeNetboxAPI.className = "text-bg-red badge p-1"
@@ -438,35 +468,71 @@
                             <!-- The fields are based on Netbox 'configuration.py' file and Plugins Configuration -->
                             <tr>
                                 <th scope="row"><strong>Domain / IP</strong></th>
-                                {% if px.netbox.domain %}
-                                    <td>{{ px.netbox.domain }}</td>
+                                {% if configuration.netbox_proxbox.netbox.domain %}
+                                    <td><strong>{{ configuration.netbox_proxbox.netbox.domain }} </strong></td>
                                 {% else %}
-                                    <td>{{ default_config.netbox.domain }} (default)</td>
+                                    <td><strong>{{ default_config.netbox.domain }} (default)</strong></td>
                                 {% endif %}
                             </tr>
                             <tr>
                                 <th scope="row"><strong>HTTP Port</strong></th>
-                                {% if px.netbox.http_port %}
-                                    <td>{{ px.netbox.http_port }}</td>
+                                {% if configuration.netbox_proxbox.netbox.http_port %}
+                                    <td>{{ configuration.netbox_proxbox.netbox.http_port }}</td>
                                 {% else %}
                                     <td>{{ default_config.netbox.http_port }} (default)</td>
                                 {% endif %}
                             </tr>
                             <tr>
                                 <th scope="row"><strong>Token</strong></th>
-                                {% if px.netbox.token %}
-                                    <td>{{ px.netbox.token }}</td>
+                                {% if configuration.netbox_proxbox.netbox.token %}
+                                    <td>
+                                        <span  class='badge text-bg-yellow' title='Netbox Token'>
+                                        Token will not show here for security.
+                                        </span>
+                                    </td>
                                 {% else %}
                                     <td>{{ default_config.netbox.token }} (default)</td>
                                 {% endif %}
                             <tr>
                             </tr>
                                 <th scope="row"><strong>SSL</strong></th>
-                                {% if px.netbox.ssl %}
-                                    <td>{{ px.netbox.ssl }}</td>
+                                {% if configuration.netbox_proxbox.netbox.ssl %}
+                                    <td>{{ configuration.netbox_proxbox.netbox.ssl }}</td>
                                 {% else %}
                                     <td>{{ default_config.netbox.ssl }} (default)</td>
                                 {% endif %}
+                            </tr>
+                            <tr>
+                                <th scope="row"><strong>Netbox Version</strong></th>
+                                <td id="netbox-version">
+                                    <span class='badge text-bg-grey' title='Netbox Version'><strong>
+                                        </strong>Empty</strong>
+                                    </span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row"><strong>Python Version</strong></th>
+                                <td id="python-version">
+                                    <span class='badge text-bg-grey' title='Python Version'><strong>
+                                        </strong>Empty</strong>
+                                    </span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row"><strong>Django Version</strong></th>
+                                <td id="django-version">
+                                    <span class='badge text-bg-grey' title='Django Version'><strong>
+                                        </strong>Empty</strong>
+                                    </span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row"><strong>Netbox Proxbox Version</strong></th>
+                                <td id="netbox-plugins">
+                                    <span class='badge text-bg-grey' title='Netbox Plugins'><strong>
+                                        </strong>Empty</strong>
+                                    </span>
+                                </td>
                             </tr>
                         </table>
                         <div align="right">
