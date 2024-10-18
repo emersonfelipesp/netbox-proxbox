@@ -67,7 +67,8 @@ The following table shows the Netbox and Proxmox versions compatible (tested) wi
   - [1.3.1. Change Netbox 'configuration.py' to add PLUGIN parameters](#131-change-netbox-configurationpy-to-add-plugin-parameters)
   - [1.3.2. Change Netbox 'settings.py' to include Proxbox Template directory](#132-change-netbox-settingspy-to-include-proxbox-template-directory)
 - [1.4. Run Database Migrations](#14-run-database-migrations)
-- [1.5 Restart WSGI Service](#15-restart-wsgi-service)
+- [1.5. systemd Setup](#15-systemd-setup-proxbox-backend)
+- [1.6 Restart WSGI Service](#15-restart-wsgi-service)
 
 [2. Configuration Parameters](#2-configuration-parameters)
 
@@ -188,7 +189,13 @@ PLUGINS_CONFIG = {
                 'node_role_id' : 0,
                 'site_id': 0
             }
+        },
+        'fastapi': {
+            # Uvicorn Host is (most of the time) the same as Netbox (as both servers run on the same machine)
+            'uvicorn_host': 'localhost',
+            'uvicorn_port': 8800    # Default Proxbox FastAPI port
         }
+
     }
 }
 ```
@@ -212,7 +219,26 @@ PLUGINS_CONFIG = {
 
 ---
 
-### 1.5. Restart WSGI Service
+### 1.5. systemd Setup (Proxbox Backend)
+
+**OBS:** It is possible to change Proxbox Backend Port (`8800`), you need to edit `proxbox.service` file and `configuration.py`
+
+```
+sudo cp -v /opt/netbox/netbox/netbox-proxbox/contrib/*.service /etc/systemd/system/
+sudo systemctl daemon-reload
+
+sudo systemctl start proxbox
+sudo systemctl status proxbox
+```
+
+#### Optional way for developing use:
+```
+/opt/netbox/venv/bin/uvicorn netbox-proxbox.netbox_proxbox.main:app --host 0.0.0.0 --port 8800 --app-dir /opt/netbox/netbox --reload
+```
+
+---
+
+### 1.6. Restart WSGI Service
 
 Restart the WSGI service to load the new plugin:
 ```
