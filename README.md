@@ -72,23 +72,15 @@ The following table shows the Netbox and Proxmox versions compatible (tested) wi
 
 [2. Configuration Parameters](#2-configuration-parameters)
 
-[3. Custom Fields](#3-custom-fields)
-- [3.1. Custom Field Configuration](#31-custom-field-configuration)
-	- [3.1.1. Proxmox ID](#311-proxmox-id)
-	- [3.1.2. Proxmox Node](#312-proxmox-node)
-	- [3.1.3. Proxmox Type](#313-proxmox-type-qemu-or-lxc)
-	- [3.1.4. Proxmox Keep Interface](#314-proxmox-keep-interface)
-- [3.2. Custom Field Example](#32-custom-field-example)
+[3. Usage](#4-usage)
 
-[4. Usage](#4-usage)
+[4. Enable Logs](#5-enable-logs)
 
-[5. Enable Logs](#5-enable-logs)
+[5. Contributing](#6-contributing)
 
-[6. Contributing](#6-contributing)
+[6. Roadmap](#7-roadmap)
 
-[7. Roadmap](#7-roadmap)
-
-[8. Get Help from Community!](#8-get-help-from-community)
+[7. Get Help from Community!](#8-get-help-from-community)
 
 ---
 
@@ -273,74 +265,7 @@ The following options are available:
 * `netbox.settings.node_role_id`: (Integer) Role ID to be used by Proxbox when creating Nodes (Devices)
 * `netbox.settings.site_id` (Integer) Site ID to be used by Proxbox when creating Nodes (Devices)
 
----
-
-## 3. Custom Fields
-
-To get Proxmox ID, Node and Type information, is necessary to configure Custom Fields.
-Below the parameters needed to make it work:
-
-<br>
-
-### 3.1. Custom Field Configuration
-
-#### 3.1.1. Proxmox ID
-
-Required values (must be equal)
-- [Custom Field] **Type:** Integer
-- [Custom Field] **Name:** proxmox_id
-- [Assignment] **Content-type:** Virtualization > virtual machine
-- [Validation Rules] **Minimum value:** 0
-
-Optional values (may be different)
-- [Custom Field] **Label:** [Proxmox] ID
-- [Custom Field] **Description:** Proxmox VM/CT ID
-
-<br>
-
-#### 3.1.2. Proxmox Node
-
-Required values (must be equal)
-- [Custom Field] **Type:** Text
-- [Custom Field] **Name:** proxmox_node
-- [Assignment] **Content-type:** Virtualization > virtual machine
-
-Optional values (may be different)
-- [Custom Field] **Label:** [Proxmox] Node
-- [Custom Field] **Description:** Proxmox Node (Server)
-
-<br>
-
-#### 3.1.3. Proxmox Type (qemu or lxc)
-
-Required values (must be equal)
-- [Custom Field] **Type:** Selection
-- [Custom Field] **Name:** proxmox_type
-- [Assignment] **Content-type:** Virtualization > virtual machine
-- [Choices] **Choices:** qemu,lxc
-
-Optional values (may be different)
-- [Custom Field] **Label:** [Proxmox] Type
-- [Custom Field] **Description:** Proxmox type (VM or CT)
-
-<br>
-
-#### 3.1.4. Proxmox Keep Interface
-
-Required values (must be equal)
-- [Custom Field] **Type:** Boolean (true/false)
-- [Custom Field] **Name:** proxmox_keep_interface
-- [Assignment] **Content-type:** DCIM > Interface
-
-<br>
-
-### 3.2. Custom Field Example
-
-![custom field image](etc/img/custom_field_example.png?raw=true "preview")
-
----
-
-## 4. Usage
+## 3. Usage
 
 If everything is working correctly, you should see in Netbox's navigation the **Proxmox VM/CT** button in **Plugins** dropdown list.
 
@@ -352,7 +277,7 @@ It will redirect you to a new page and you just have to wait until the plugin ru
 
 ---
 
-## 5. Enable Logs
+## 4. Enable Logs
 
 So that Proxbox plugin logs what is happening to the terminal, copy the following code and paste to `configuration.py` Netbox configuration file:
 
@@ -377,14 +302,14 @@ Although the above standard configuration should do the trick to things work.
 
 ---
 
-## 6. Contributing
+## 5. Contributing
 Developing tools for this project based on [ntc-netbox-plugin-onboarding](https://github.com/networktocode/ntc-netbox-plugin-onboarding) repo.
 
 Issues and pull requests are welcomed.
 
 ---
 
-## 7. Roadmap
+## 6. Roadmap
 - Start using custom models to optimize the use of the Plugin and stop using 'Custom Fields'
 - Automatically remove Nodes on Netbox when removed on Promox (as it already happens with Virtual Machines and Containers)
 - Add individual update of VM/CT's and Nodes (currently is only possible to update all at once)
@@ -394,7 +319,7 @@ Issues and pull requests are welcomed.
 
 ---
 
-## 8. Get Help from Community!
+## 7. Get Help from Community!
 If you are struggling to get Proxbox working, feel free to contact someone from community (including me) to help you.
 Below some of the communities available:
 - **[Official - Slack Community (english)](https://netdev.chat/)**
