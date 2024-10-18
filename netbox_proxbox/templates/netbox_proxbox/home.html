@@ -36,6 +36,7 @@
 
         ws.onerror = function(error) {
             console.log("WebSocket error observed: ", error);
+            console.log("error.url", error.url)
 
             fullUpdateButton = document.getElementById('full-update-button')
             fullUpdateButton.className = "btn btn-red"
@@ -59,6 +60,8 @@
             let statusErrorMessage = document.getElementById('fastapi-connection-error')
             statusErrorMessage.className = "text-bg-red p-2"
             statusErrorMessage.innerHTML = errorMessage
+
+
         }
 
         function sendMessage(event) {
@@ -70,19 +73,52 @@
         async function FastAPIConnectionTest(fastapiEndpoint) {
             let fastapi_docs_endpoint = `${fastapiEndpoint}/docs`
 
-            const request_fastapi = await fetch(fastapi_docs_endpoint)
-            console.log("request_fastapi", request_fastapi)
-            if (request_fastapi.ok) {
-                console.log("FastAPI OK")
-                //onst response_fastapi = await request_fastapi.json()
-
+            try {
+                const request_fastapi = await fetch(fastapi_docs_endpoint)
                 console.log("request_fastapi", request_fastapi)
+                if (request_fastapi.ok) {
+                    console.log("FastAPI OK")
+                    //onst response_fastapi = await request_fastapi.json()
 
-                statusBadgeFastAPI = document.getElementById('fastapi-connection-status')
-                statusBadgeFastAPI.className = "text-bg-green badge p-1"
-                statusBadgeFastAPI.textContent = "Successful!"
-                
+                    console.log("request_fastapi", request_fastapi)
+
+                    let statusBadgeFastAPI = document.getElementById('fastapi-connection-status')
+                    statusBadgeFastAPI.className = "text-bg-green badge p-1"
+                    statusBadgeFastAPI.textContent = "Successful!"
+                    
+                }
+            } catch (error) {
+                let statusErrorBadgeFastAPI = document.getElementById('fastapi-connection-status')
+                statusErrorBadgeFastAPI.className = "text-bg-red badge p-1"
+                statusErrorBadgeFastAPI.textContent = "Connection Failed!"
             }
+
+        }
+
+        async function NetboxAPIConnectionTest(fastapiEndpoint) {
+            let netboxTestRoute = `${fastapiEndpoint}/netbox/status`
+            
+            try {
+                const requestNetbox = await fetch(netboxTestRoute)
+
+                console.log("requestNetbox", requestNetbox)
+                if (requestNetbox.ok) {
+                    let statusBadgeNetbox = document.getElementById('netbox-connection-status')
+                    statusBadgeNetbox.className = "text-bg-green badge p-1"
+                    statusBadgeNetbox.textContent = "Successful!"
+                }
+    
+                else {
+                    let statusErrorBadgeNetboxAPI = document.getElementById('netbox-connection-status')
+                    statusErrorBadgeNetboxAPI.className = "text-bg-red badge p-1"
+                    statusErrorBadgeNetboxAPI.textContent = "Connection Failed!"
+                }
+            } catch (error) {
+                let statusErrorBadgeNetboxAPI = document.getElementById('netbox-connection-status')
+                statusErrorBadgeNetboxAPI.className = "text-bg-red badge p-1"
+                statusErrorBadgeNetboxAPI.textContent = "Connection Failed!"
+            }
+
 
         }
 
@@ -102,7 +138,13 @@
         async function getVersion() {
             // Test FastAPI Proxbox Backend Connection
             console.log("1")
+
+            console.log("fastapi")
             FastAPIConnectionTest(fastapiEndpoint)
+
+            console.log("netbox")
+            NetboxAPIConnectionTest(fastapiEndpoint)
+            
             console.log("2")
 
             // Get Info from Proxmox and Add to GUI Page, like Connection Status and Error Messages
@@ -367,12 +409,30 @@
             {% endfor %}
             <div class="col col-md-6">
                 <div class="card">
-                    <div align=center>
-                        <br>
-                        <a href="{% url 'home' %}">
-                            <img src="{% static 'logo_netbox_dark_teal.svg' %}" alt="Netbox Logo" width="200px">
-                        </a>
-                    </div>  
+
+                    <!-- FastAPI is currently the Proxbox Backend which communicates with Proxmox Cluster API. It MUST run so that Proxbox works. -->
+                    <!-- Placeholder for Connection Error Messages -->
+                    <div class="p-4" id="netbox-connection-error">
+
+                    </div>
+                    <div class="flex d-flex flex-row  justify-content-center align-items-center p-2 mt-4">
+
+
+                        <div class="flex d-flex mx-auto position-absolute" >
+                            <a href="{% url 'home' %}">
+                                <img src="{% static 'logo_netbox_dark_teal.svg' %}" alt="Netbox Logo" width="200px">
+                            </a>
+                            
+                        </div>
+                        
+                        <!-- Status Badge. Default value is 'Unkown' and is changed based on API response status -->
+                        <div class="d-flex ms-auto " style="margin: 0 40px 0 0">
+                            <span id="netbox-connection-status" class="netbox-connection-check badge p-1">Unknown</span>
+                        </div>
+
+                    </div>
+
+ 
                     <div class="card-body">
                         <table class="table table-hover attr-table">
                             <!-- The fields are based on Netbox 'configuration.py' file and Plugins Configuration -->
