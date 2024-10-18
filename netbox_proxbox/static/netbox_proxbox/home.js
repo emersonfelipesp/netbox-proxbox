@@ -1,12 +1,22 @@
-uvicorn_host = "{{ configuration.netbox_proxbox.fastapi.uvicorn_host }}"
-uvicorn_port = "{{ configuration.netbox_proxbox.fastapi.uvicorn_port }}"
+/*
+This script works, but is not being used as there's not official support
+to link external script on head element to plugins.
+*/
 
-fastapi_endpoint = `http://${uvicorn_host}:${uvicorn_port}`
-websocket_endpoint = `ws://${uvicorn_host}:${uvicorn_port}/ws`
+/*
+const uvicorn_host = document.getElementById("uvicorn-host")
+const uvicorn_port = document.getElementById("uvicorn-port")
+
+console.log("uvicorn_host", uvicorn_host)
+console.log("uvicorn_port", uvicorn_port)
+
+
+const fastapi_endpoint = `http://${uvicorn_host}:${uvicorn_port}`
+const websocket_endpoint = `ws://${uvicorn_host}:${uvicorn_port}/ws`
 
 var ws = new WebSocket(websocket_endpoint);
 ws.onmessage = function(event) {
-    // Add WebSockets Messages came from FastAPI backend on GUI
+    // Add WebSockets Messages came from FasstAPI backend on GUI
 
     var messages = document.getElementById('messages')
     var message = document.createElement('li')
@@ -54,7 +64,7 @@ function sendMessage(event) {
     event.preventDefault()
 }
 
-async function FastAPIConnectionTest() {
+async function FastAPIConnectionTest(fastapi_endpoint) {
     let fastapi_docs_endpoint = `${fastapi_endpoint}/docs`
 
     const request_fastapi = await fetch(fastapi_docs_endpoint)
@@ -80,7 +90,6 @@ function getBody () {
     body = body[0]
 
     body.onload = getVersion
-
 }
 
 
@@ -90,7 +99,7 @@ getBody()
 async function getVersion() {
     // Test FastAPI Proxbox Backend Connection
     console.log("1")
-    FastAPIConnectionTest()
+    FastAPIConnectionTest(fastapi_endpoint)
     console.log("2")
 
     // Get Info from Proxmox and Add to GUI Page, like Connection Status and Error Messages
@@ -192,3 +201,4 @@ async function getVersion() {
         }
     }
 }
+*/
