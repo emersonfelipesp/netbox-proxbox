@@ -1,0 +1,19 @@
+{% extends 'base/layout.html' %}
+{% load static %}
+
+{% block content %}
+
+    {% if message %}
+    <div class="card p-4">
+            {% for line in message %}
+                {{ line }}<br>
+            {% endfor %}
+    </div> 
+    {% else %}
+        <div>Not able to get <strong>Proxbox Backend Service Status</strong></div>
+    {% endif %}
+    <br>
+    <a href="{% url 'plugins:netbox_proxbox:home' %}">
+        <button class="btn btn-primary">Return to Proxbox Homepage</button>
+    </a>
+{% endblock %}
