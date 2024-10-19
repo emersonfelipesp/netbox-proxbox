@@ -1,3 +1,5 @@
+import subprocess
+
 from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse_lazy
 # 'View' is a django subclass. Basic type of class-based views
@@ -97,7 +99,158 @@ class CommunityView(View):
                 "title": title,
             }
         )
+        
 
+class FixProxboxBackendView(View):
+    """
+    Try to fix Proxbox Backend by issuing OS commands.
+    """
+    template_name = 'netbox_proxbox/fix-proxbox-backend.html'
+    
+    def get(self, request):
+       
+        
+        output: str = ""
+        try:
+            start_proxbox_process = subprocess.check_output(
+                ['sudo','systemctl','start','proxbox'],
+                stderr=subprocess.STDOUT,
+                text=True
+            )
+            
+            # Communicate to capture the output and error
+            #stdout, stderr = start_proxbox_process.communicate()
+            
+            print("start_proxbox_process: ", start_proxbox_process)
+            
+            
+        except subprocess.CalledProcessError as e:
+            # Handle the case where the command fails
+            print(f"Command failed with return code {e.returncode}")
+            print("Output (STDOUT + STDERR):", e.output)
+            
+        except Exception as error:
+            print(error)
+            return redirect('plugins:netbox_proxbox:home')
+            
+
+        return redirect('plugins:netbox_proxbox:home')
+
+class StopProxboxBackendView(View):
+    "Stop Proxbox Backend by issuing OS commands"
+    
+    def get(self, request):
+            
+        output: str = ""
+        
+        try:
+            stop_proxbox_process = subprocess.check_output(
+                ['sudo','systemctl','stop','proxbox'],
+                stderr=subprocess.STDOUT,
+                text=True
+            )
+            
+            print("stop_proxbox_process", stop_proxbox_process )
+
+            
+            if "[sudo]" in output or "Auth" in output:
+                password = input("Enter password: ")
+
+                
+        except subprocess.CalledProcessError as e:
+            # Handle the case where the command fails
+            print(f"Command failed with return code {e.returncode}")
+            print("Output (STDOUT + STDERR):", e.output)
+            
+        except Exception as error:
+            print(error)
+            
+        return redirect('plugins:netbox_proxbox:home')
+
+        
+class RestartProxboxBackendView(View):
+    "Restart Proxbox Backend by issuing OS commands"
+    
+    def get(self, request):
+            
+        output: str = ""
+        
+        try:
+            restart_proxbox_process = subprocess.check_output(
+                ['sudo','systemctl','restart','proxbox'],
+                stderr=subprocess.STDOUT,
+                text=True
+            )
+            
+            print("stop_restart_process", restart_proxbox_process )
+
+            
+            if "[sudo]" in output or "Auth" in output:
+                password = input("Enter password: ")
+                
+        except subprocess.CalledProcessError as e:
+            # Handle the case where the command fails
+            print(f"Command failed with return code {e.returncode}")
+            print("Output (STDOUT + STDERR):", e.output)
+            
+        except Exception as error:
+            print(error)
+            
+        return redirect('plugins:netbox_proxbox:home')  
+    
+class StatusProxboxBackendView(View):
+    "Restart Proxbox Backend by issuing OS commands"
+    
+    template_name = "netbox_proxbox/proxbox-backend-status.html"
+    
+    def get(self, request):
+            
+        output: str = ""
+        status_proxbox_process: str = ""
+        
+        try:
+            status_proxbox_process = subprocess.check_output(
+                ['sudo','systemctl','status','proxbox'],
+                stderr=subprocess.STDOUT,
+                text=True
+            )
+            
+            print("\n\nstatus_proxbox_process", status_proxbox_process )
+                
+        except subprocess.CalledProcessError as e:
+            # Handle the case where the command fails
+            print(f"Command failed with return code {e.returncode}")
+            print("Output (STDOUT + STDERR):", e.output)
+            
+            
+            output: list = str(e.output).splitlines()
+            
+            output[2] = f'{output[2]} <------- PROXBOX BACKEND STATUS (SYSTEMD/SYSTEMCTL)'
+            
+            print("output", output)
+            return render(
+                request,
+                self.template_name,
+                {
+                    "message": output
+                }
+            )
+                        
+        except Exception as error:
+            print(error)
+            
+        return render(
+            request,
+            self.template_name,
+            {
+                "message": status_proxbox_process
+            }
+        )
+        
+
+                
+
+    
 def DiscussionsView(request):
     external_url = "https://github.com/orgs/netdevopsbr/discussions"
     return redirect(external_url)

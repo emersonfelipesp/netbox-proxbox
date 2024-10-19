@@ -47,10 +47,25 @@
             let errorMessage = `
                 <p align=center>
                     <strong>WebSocket</strong> communication failed with <strong>${error.currentTarget.url}</strong>
-                    <br>The most probably cause is <strong>Proxbox Backend not running</strong> properly.
+                    <br>The most probably cause is <strong>Proxbox Backend not running</strong> properly.<br><br>
+                    Check if Proxbox is running using following command: <code>systemctl status proxbox</code>.<br>If not, just issue the <code>systemctl start proxbox</code> command..<br>Otherwise, check <a href="https://github.com/netdevopsbr/netbox-proxbox#15-systemd-setup-proxbox-backend" target="_target">Proxbox Documentation</a>.
                 </p>`
 
-            fullUpdateMessage.innerHTML = errorMessage
+            let errorButtonFix = `
+                <a href="{% url 'plugins:netbox_proxbox:fix-proxbox-backend' %}">
+                    <button class="btn btn-primary m-2" id="error-button-fix" class="btn btn-primary">
+                        Let Proxbox try to fix it.
+                    </button>
+                </a><hr>
+            `
+
+            let errorDiv = `
+            <div>
+                ${errorMessage}${errorButtonFix}
+            </div>
+            `
+
+            fullUpdateMessage.innerHTML = errorDiv
             
 
             let statusBadgeError = document.getElementById('fastapi-connection-status')
@@ -100,14 +115,44 @@
             
             try {
                 const requestNetbox = await fetch(netboxTestRoute)
+                const responseNetbox = await requestNetbox.json()
 
                 console.log("requestNetbox", requestNetbox)
                 if (requestNetbox.ok) {
                     let statusBadgeNetbox = document.getElementById('netbox-connection-status')
                     statusBadgeNetbox.className = "text-bg-green badge p-1"
                     statusBadgeNetbox.textContent = "Successful!"
+
+                    let netboxVersion = document.getElementById('netbox-version')
+                    netboxVersion.innerHTML = `<span class='badge text-bg-grey' title='Netbox Version'>
+                        <strong>
+                            <i class='mdi mdi-tag'></i>
+                        </strong> ${responseNetbox["netbox-version"]}
+                    </span>`
+
+                    let pythonVersion = document.getElementById('python-version')
+                    pythonVersion.innerHTML = `<span class='badge text-bg-grey' title='Python Version'>
+                        <strong>
+                            <i class='mdi mdi-tag'></i>
+                        </strong> ${responseNetbox["python-version"]}
+                    </span>`
+
+                    let djangoVersion = document.getElementById('django-version')
+                    djangoVersion.innerHTML = `<span class='badge text-bg-grey' title='Django Version'>
+                        <strong>
+                            <i class='mdi mdi-tag'></i>
+                        </strong> ${responseNetbox["django-version"]}
+                    </span>`
+
+                    let netboxPlugins = document.getElementById('netbox-plugins')
+                    netboxPlugins.innerHTML = `<span class='badge text-bg-grey' title='Netbox Proxbox Version'>
+                        <strong>
+                            <i class='mdi mdi-tag'></i>
+                        </strong> ${responseNetbox["plugins"]["netbox_proxbox"]}
+                    </span>`
+                    
                 }
-    
+
                 else {
                     let statusErrorBadgeNetboxAPI = document.getElementById('netbox-connection-status')
                     statusErrorBadgeNetboxAPI.className = "text-bg-red badge p-1"
@@ -287,10 +332,10 @@
                 <div class="col col-md-6">
                     <div class="card">
                         <!-- Placeholder for Connection Error Messages -->
-                        <div class="p-4" id="proxmox-connection-error-{{ px.domain }}">
+                        <div class="p-1" id="proxmox-connection-error-{{ px.domain }}">
 
                         </div>
-                        <div class="flex d-flex flex-row  justify-content-center align-items-center p-2 mt-4">
+                        <div class="flex d-flex flex-row  justify-content-center align-items-center p-2 mt-1">
 
   
                             <div class="flex d-flex mx-auto position-absolute" >
@@ -311,19 +356,35 @@
                                 <!-- The following four (4) fields are filled by API response. If empty, means the API failed. -->
                                 <tr class="proxmox_version">
                                     <th scope="row" ><strong>Proxmox Cluster Name</strong></th>
-                                    <td id="{{ px.domain }}"></td>
+                                    <td id="{{ px.domain }}">
+                                        <span class='badge text-bg-grey' title='Proxmox Cluster Name'>
+                                            </strong>Empty</strong>
+                                        </span>
+                                    </td>
                                 </tr>
                                 <tr class="proxmox_version">
                                     <th scope="row" ><strong>Proxmox Cluster Mode</strong></th>
-                                    <td id="{{ px.domain }}"></td>
+                                    <td id="{{ px.domain }}">
+                                        <span class='badge text-bg-grey' title='Proxmox Cluster Mode'>
+                                            </strong>Empty</strong>
+                                        </span>
+                                    </td>
                                 </tr>
                                 <tr class="proxmox_version">
                                     <th scope="row" ><strong>Proxmox Version</strong></th>
-                                    <td id="{{ px.domain }}"></td>
+                                    <td id="{{ px.domain }}">
+                                        <span class='badge text-bg-grey' title='Proxmox Cluster Mode'>
+                                            </strong>Empty</strong>
+                                        </span>
+                                    </td>
                                 </tr>
                                 <tr class="proxmox_version">
                                     <th scope="row" ><strong>Proxmox RepoID</strong></th>
-                                    <td id="{{ px.domain }}"></td>
+                                    <td id="{{ px.domain }}">
+                                        <span class='badge text-bg-grey' title='Proxmox Cluster Mode'>
+                                            </strong>Empty</strong>
+                                        </span>
+                                    </td>
                                 </tr>
                                 <!-- The rest of the fields are based on Netbox 'configuration.py' file and Plugins Configuration -->
                                 <tr>
@@ -412,10 +473,10 @@
 
                     <!-- FastAPI is currently the Proxbox Backend which communicates with Proxmox Cluster API. It MUST run so that Proxbox works. -->
                     <!-- Placeholder for Connection Error Messages -->
-                    <div class="p-4" id="netbox-connection-error">
+                    <div class="p-1" id="netbox-connection-error">
 
                     </div>
-                    <div class="flex d-flex flex-row  justify-content-center align-items-center p-2 mt-4">
+                    <div class="flex d-flex flex-row  justify-content-center align-items-center p-2 mt-1">
 
 
                         <div class="flex d-flex mx-auto position-absolute" >
@@ -438,35 +499,71 @@
                             <!-- The fields are based on Netbox 'configuration.py' file and Plugins Configuration -->
                             <tr>
                                 <th scope="row"><strong>Domain / IP</strong></th>
-                                {% if px.netbox.domain %}
-                                    <td>{{ px.netbox.domain }}</td>
+                                {% if configuration.netbox_proxbox.netbox.domain %}
+                                    <td><strong>{{ configuration.netbox_proxbox.netbox.domain }} </strong></td>
                                 {% else %}
-                                    <td>{{ default_config.netbox.domain }} (default)</td>
+                                    <td><strong>{{ default_config.netbox.domain }} (default)</strong></td>
                                 {% endif %}
                             </tr>
                             <tr>
                                 <th scope="row"><strong>HTTP Port</strong></th>
-                                {% if px.netbox.http_port %}
-                                    <td>{{ px.netbox.http_port }}</td>
+                                {% if configuration.netbox_proxbox.netbox.http_port %}
+                                    <td>{{ configuration.netbox_proxbox.netbox.http_port }}</td>
                                 {% else %}
                                     <td>{{ default_config.netbox.http_port }} (default)</td>
                                 {% endif %}
                             </tr>
                             <tr>
                                 <th scope="row"><strong>Token</strong></th>
-                                {% if px.netbox.token %}
-                                    <td>{{ px.netbox.token }}</td>
+                                {% if configuration.netbox_proxbox.netbox.token %}
+                                    <td>
+                                        <span  class='badge text-bg-yellow' title='Netbox Token'>
+                                        Token will not show here for security.
+                                        </span>
+                                    </td>
                                 {% else %}
                                     <td>{{ default_config.netbox.token }} (default)</td>
                                 {% endif %}
                             <tr>
                             </tr>
                                 <th scope="row"><strong>SSL</strong></th>
-                                {% if px.netbox.ssl %}
-                                    <td>{{ px.netbox.ssl }}</td>
+                                {% if configuration.netbox_proxbox.netbox.ssl %}
+                                    <td>{{ configuration.netbox_proxbox.netbox.ssl }}</td>
                                 {% else %}
                                     <td>{{ default_config.netbox.ssl }} (default)</td>
                                 {% endif %}
+                            </tr>
+                            <tr>
+                                <th scope="row"><strong>Netbox Version</strong></th>
+                                <td id="netbox-version">
+                                    <span class='badge text-bg-grey' title='Netbox Version'><strong>
+                                        </strong>Empty</strong>
+                                    </span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row"><strong>Python Version</strong></th>
+                                <td id="python-version">
+                                    <span class='badge text-bg-grey' title='Python Version'><strong>
+                                        </strong>Empty</strong>
+                                    </span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row"><strong>Django Version</strong></th>
+                                <td id="django-version">
+                                    <span class='badge text-bg-grey' title='Django Version'><strong>
+                                        </strong>Empty</strong>
+                                    </span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row"><strong>Netbox Proxbox Version</strong></th>
+                                <td id="netbox-plugins">
+                                    <span class='badge text-bg-grey' title='Netbox Plugins'><strong>
+                                        </strong>Empty</strong>
+                                    </span>
+                                </td>
                             </tr>
                         </table>
                         <div align="right">
@@ -485,12 +582,46 @@
                 <div class="card">
                     <!-- FastAPI is currently the Proxbox Backend which communicates with Proxmox Cluster API. It MUST run so that Proxbox works. -->
                     <!-- Placeholder for Connection Error Messages -->
-                    <div class="p-4" id="fastapi-connection-error">
+                    <div class="p-1" id="fastapi-connection-error">
 
                     </div>
-                    <div class="flex d-flex flex-row  justify-content-center align-items-center p-2 mt-4">
+
+                    <!-- Stop/Start/Restat buttons -->
+                    <div class="flex d-flex flex-row  justify-content-left align-items-left p-1 mt-1">
+                        <div class="flex d-flex m-1">
+                            <a href="{% url 'plugins:netbox_proxbox:stop-proxbox-backend' %}">
+                                <button class="badge text-bg-red" title='Stop Service'>
+                                    <i class='mdi mdi-stop'></i>
+                                </button>
+                            </a>
+                        </div>
+                        <div class="flex d-flex m-1" >
+                            <a href="{% url 'plugins:netbox_proxbox:fix-proxbox-backend' %}">
+                                <button class="badge text-bg-green" title='Start Service'>
+                                    <i class='mdi mdi-play'></i>
+                                </button>
+                            </a>
+                        </div>
+                        <div class="flex d-flex m-1" >
+                            <a href="{% url 'plugins:netbox_proxbox:restart-proxbox-backend' %}">
+                                <button class="badge text-bg-yellow" title='Restart Service'>
+                                    <i class='mdi mdi-restart'></i>
+                                </button>
+                            </a>
+                        </div>
+                        <div class="flex d-flex m-1" >
+                            <a href="{% url 'plugins:netbox_proxbox:status-proxbox-backend' %}">
+                                <button class="badge text-bg-blue" title='Check Service Status'>
+                                    <i class='mdi mdi-exclamation'></i>
+                                </button>
+                            </a>
+                        </div>
+                    </div>
 
 
+                    <div class="flex d-flex flex-row  justify-content-center align-items-center p-1 mt-1">
+
+                        <!-- FastAPI logo -->
                         <div class="flex d-flex mx-auto position-absolute" >
                             <a href="https://fastapi.tiangolo.com/" target="_blank">
                                 <img src="{% static 'netbox_proxbox/fastapi_logo.png' %}" alt="Netbox Logo" width="200px">
@@ -530,14 +661,17 @@
                                 {% endif %}
                             </tr>
                         </table>
-                        <div align="right">
-                            <button class="btn btn-outline-primary" type="button">
-                                <a
-                                    style="text-decoration: none; color: inherit"
-                                    target="_blank"
-                                    href="https://fastapi.tiangolo.com/deployment/manually/"
-                                >Show Example</a>
-                            </button>
+                        <div class="flex d-flex flex-row  justify-content-center align-items-center p-2 mt-1">
+                            <!-- Status Badge. Default value is 'Unkown' and is changed based on API response status -->
+                            <div class="d-flex ms-auto " style="margin: 0 40px 0 0">
+                                <button class="btn btn-outline-primary" type="button">
+                                    <a
+                                        style="text-decoration: none; color: inherit"
+                                        target="_blank"
+                                        href="https://fastapi.tiangolo.com/deployment/manually/"
+                                    >Show Example</a>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
