@@ -48,7 +48,7 @@
                 <p align=center>
                     <strong>WebSocket</strong> communication failed with <strong>${error.currentTarget.url}</strong>
                     <br>The most probably cause is <strong>Proxbox Backend not running</strong> properly.<br><br>
-                    Check if Proxbox is running using following command: <code>systemctl status proxbox</code>. If not, just issue the <code>systemctl start proxbox</code> command..<br>Otherwise, check <a href="https://github.com/netdevopsbr/netbox-proxbox#15-systemd-setup-proxbox-backend" target="_target">Proxbox Documentation</a>.
+                    Check if Proxbox is running using following command: <code>systemctl status proxbox</code>.<br>If not, just issue the <code>systemctl start proxbox</code> command..<br>Otherwise, check <a href="https://github.com/netdevopsbr/netbox-proxbox#15-systemd-setup-proxbox-backend" target="_target">Proxbox Documentation</a>.
                 </p>`
 
             fullUpdateMessage.innerHTML = errorMessage
@@ -342,19 +342,35 @@
                                 <!-- The following four (4) fields are filled by API response. If empty, means the API failed. -->
                                 <tr class="proxmox_version">
                                     <th scope="row" ><strong>Proxmox Cluster Name</strong></th>
-                                    <td id="{{ px.domain }}"></td>
+                                    <td id="{{ px.domain }}">
+                                        <span class='badge text-bg-grey' title='Proxmox Cluster Name'>
+                                            </strong>Empty</strong>
+                                        </span>
+                                    </td>
                                 </tr>
                                 <tr class="proxmox_version">
                                     <th scope="row" ><strong>Proxmox Cluster Mode</strong></th>
-                                    <td id="{{ px.domain }}"></td>
+                                    <td id="{{ px.domain }}">
+                                        <span class='badge text-bg-grey' title='Proxmox Cluster Mode'>
+                                            </strong>Empty</strong>
+                                        </span>
+                                    </td>
                                 </tr>
                                 <tr class="proxmox_version">
                                     <th scope="row" ><strong>Proxmox Version</strong></th>
-                                    <td id="{{ px.domain }}"></td>
+                                    <td id="{{ px.domain }}">
+                                        <span class='badge text-bg-grey' title='Proxmox Cluster Mode'>
+                                            </strong>Empty</strong>
+                                        </span>
+                                    </td>
                                 </tr>
                                 <tr class="proxmox_version">
                                     <th scope="row" ><strong>Proxmox RepoID</strong></th>
-                                    <td id="{{ px.domain }}"></td>
+                                    <td id="{{ px.domain }}">
+                                        <span class='badge text-bg-grey' title='Proxmox Cluster Mode'>
+                                            </strong>Empty</strong>
+                                        </span>
+                                    </td>
                                 </tr>
                                 <!-- The rest of the fields are based on Netbox 'configuration.py' file and Plugins Configuration -->
                                 <tr>
