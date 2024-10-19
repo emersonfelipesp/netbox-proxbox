@@ -47,7 +47,8 @@
             let errorMessage = `
                 <p align=center>
                     <strong>WebSocket</strong> communication failed with <strong>${error.currentTarget.url}</strong>
-                    <br>The most probably cause is <strong>Proxbox Backend not running</strong> properly.
+                    <br>The most probably cause is <strong>Proxbox Backend not running</strong> properly.<br><br>
+                    Check if Proxbox is running using following command: <code>systemctl status proxbox</code>. If not, just issue the <code>systemctl start proxbox</code> command..<br>Otherwise, check <a href="https://github.com/netdevopsbr/netbox-proxbox#15-systemd-setup-proxbox-backend" target="_target">Proxbox Documentation</a>.
                 </p>`
 
             fullUpdateMessage.innerHTML = errorMessage
