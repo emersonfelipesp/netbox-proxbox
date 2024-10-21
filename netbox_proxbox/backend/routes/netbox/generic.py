@@ -593,7 +593,7 @@ class NetboxBase:
                     
                     result_by_device = None
                     
-                    device_id = object.get("device")
+                    device_id = object.get('device')
                     
                     print(f"object: {object}")
                     device_obj = None
@@ -622,15 +622,18 @@ class NetboxBase:
                     if result_by_device:
                         
                         if result_by_device.device:
-                            print(f"result_by_device: {result_by_device.device}")
-                            print(f"result_by_device.device.id: {result_by_device.device.id}")
-                            print(f"object: {object} \n{object.get("device")}")
-                            print(f"object.device: {object.get("device")}")
+                            try:
+                                print(f"result_by_device: {result_by_device.device}")
+                                print(f"result_by_device.device.id: {result_by_device.device.id}")
+                                print(f"object: {object} \n{object.get('device')}")
+                                print(f"object.device: {object.get('device')}")
+                            
                             
                         print(f"result_by_device - object device: {result_by_device} / {result_by_device.device} / {result_by_device.device.id}")
                         # If this happens, it means that the interface name is equal, but device is different.
-                        print(f"int(object.id): {int(object.get("device"))} | int(result_by_device.device.id): {int(result_by_device.device.id)}")
-                        if int(object.get("device")) != int(result_by_device.device.id):
+                        print(f"int(object.id): {int(object.get('device'))} | int(result_by_device.device.id): {int(result_by_device.device.id)}")
+                        
+                        if int(object.get('device')) != int(result_by_device.device.id):
                             return None
                         
                         await log(self.websocket, "<span class='badge text-bg-purple' title='Check Duplicate'><i class='mdi mdi-content-duplicate'></i></span> (1.5.1) <strong>Object found</strong> on Netbox. Returning it.")
