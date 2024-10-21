@@ -1,11 +1,6 @@
-#from django.<a href="http" target="_blank">http</a> import HttpResponse
-from django.http import HttpResponse
 from django.urls import path
 
 from . import views
-
-from netbox_proxbox import proxbox_api
-import json
 
 urlpatterns = [
     # Home View
@@ -23,10 +18,4 @@ urlpatterns = [
     path('discussions/', views.DiscussionsView, name='discussions'),
     path('discord/', views.DiscordView, name='discord'),
     path('telegram/', views.TelegramView, name='telegram'),
-    
-
-    # Proxbox API full update
-    path("full_update/", views.ProxmoxFullUpdate.as_view(), name="proxmoxvm_full_update"),
-    #path("single_update/", views.ProxmoxSingleUpdate.as_view(), name="proxmoxvm_single_update"),
-    #path("proxmox/cluster/", views.ProxmoxCluster.as_view(), name="proxmox_cluster"),
 ]
