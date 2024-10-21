@@ -307,7 +307,7 @@
                 </form>
             </div>
             
-           
+           <!--
             <div style="margin-bottom: 15px;" class="d-flex justify-content-center noprint">
                 {% if perms.netbox_proxbox.add_proxmoxvm %}
                 <a href="http://{{ configuration.netbox_proxbox.fastapi.uvicorn_host }}:{{ configuration.netbox_proxbox.fastapi.uvicorn_port }}/proxbox/clusters/nodes" target="_blank" class="btn btn-primary">Proxmox Nodes Update</a>
@@ -318,6 +318,7 @@
                 <a href="http://{{ configuration.netbox_proxbox.fastapi.uvicorn_host }}:{{ configuration.netbox_proxbox.fastapi.uvicorn_port }}/proxbox/clusters/virtual-machines" target="_blank" class="btn btn-primary">Proxmox Virtual Machines Update</a>
                 {% endif %}
             </div>
+            -->
         
             <br>
             <br>
@@ -439,23 +440,27 @@
                                 </tr>
                             </table>
                             <div class="d-flex justify-content-between">
-                                {% if px.domain %}
-                                    <form action="single_update/" method="POST" target="_blank">
-                                        <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
-                                        <input type="hidden" name="proxmox_domain" value="{{ px.domain }}" />
+                                <!-- 
+                                    PROXMOX INDIVIDUAL UPDATE REMOVED TEMPORARILY.
+                                    
+                                    {% if px.domain %}
+                                        <form action="single_update/" method="POST" target="_blank">
+                                            <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+                                            <input type="hidden" name="proxmox_domain" value="{{ px.domain }}" />
+                                            <a 
+                                                class="btn btn-primary"
+                                                href="#"
+                                                onclick="event.preventDefault(); this.parentNode.submit()"
+                                            >Proxmox Update</a>
+                                        </form>
+                                    {% else %}
                                         <a 
+                                            target="_blank"
                                             class="btn btn-primary"
-                                            href="#"
-                                            onclick="event.preventDefault(); this.parentNode.submit()"
+                                            href="{% url 'plugins:netbox_proxbox:proxmoxvm_single_update' domain=default_config.proxmox.domain %}" 
                                         >Proxmox Update</a>
-                                    </form>
-                                {% else %}
-                                    <a 
-                                        target="_blank"
-                                        class="btn btn-primary"
-                                        href="{% url 'plugins:netbox_proxbox:proxmoxvm_single_update' domain=default_config.proxmox.domain %}" 
-                                    >Proxmox Update</a>
-                                {% endif %}
+                                    {% endif %}
+                                -->
                                 <button class="btn btn-outline-primary" type="button">
                                     <a
                                         style="text-decoration: none; color: inherit"
