@@ -109,9 +109,13 @@ class FixProxboxBackendView(View):
     
     def get(self, request):
        
+        plugin_configuration = configuration.PLUGINS_CONFIG
         
         output: str = ""
         try:
+            switch_user = subprocess.run(["su", plugin_configuration["netbox_proxbox"]["fastapi"]["sudo"]["user"]])
+            provide_password = subprocess.run([plugin_configuration["netbox_proxbox"]["fastapi"]["sudo"]["password"]])
+            
             start_proxbox_process = subprocess.check_output(
                 ['sudo','systemctl','start','proxbox'],
                 stderr=subprocess.STDOUT,
@@ -205,7 +209,7 @@ class StatusProxboxBackendView(View):
     
     def get(self, request):
             
-        output: str = ""
+        output: list = []
         status_proxbox_process: str = ""
         
         try:
@@ -216,34 +220,74 @@ class StatusProxboxBackendView(View):
             )
             
             print("\n\nstatus_proxbox_process", status_proxbox_process )
-                
+            output: list = status_proxbox_process.splitlines()
+            
         except subprocess.CalledProcessError as e:
             # Handle the case where the command fails
             print(f"Command failed with return code {e.returncode}")
             print("Output (STDOUT + STDERR):", e.output)
             
-            
             output: list = str(e.output).splitlines()
             
-            output[2] = f'{output[2]} <------- PROXBOX BACKEND STATUS (SYSTEMD/SYSTEMCTL)'
-            
-            print("output", output)
+            """
             return render(
                 request,
                 self.template_name,
                 {
-                    "message": output
+                    "message": output,
                 }
             )
+            """
                         
         except Exception as error:
             print(error)
+        
+        
+        if output and (len(output) > 0):
+            output[0] = f"<h2>{output[0]}</h2>"
+            
+            loaded, loaded_value = str(output[1]).split("Loaded: ")
+            output[1] = f"<strong>Loaded: <span class='badge text-bg-grey'>{loaded_value}</span></strong>"
+            
+            active, active_status = str(output[2]).split(": ")
+            
+            if "active" in active_status or "running" in active_status:
+                output[2] = f"<strong>{active} Status: <span class='badge text-bg-green'>{active_status}</span>"
+            if "activating" in active_status:
+                output[2] = f"<strong>{active} Status: <span class='badge text-bg-yellow'>{active_status}</span>"
+            if "dead" in active_status:
+                output[2] = f"<strong>{active} Status: <span class='badge text-bg-red'>{active_status}</span>"
+            
+            docs, docs_link = str(output[3]).split(": ")
+            
+            output[3] = f"<strong>{docs}: <a target='_blank' href='{docs_link}'>{docs_link}</a></strong>"
+
+            if "Main PID" in output[4]:
+                main_pid, main_pid_value = str(output[4]).split(": ")
+                output[4] = f"<strong>{main_pid}: <span class='badge text-bg-grey'>{main_pid_value}</span></strong>"
+            
+            if "Tasks" in output[5]:
+                tasks, tasks_value = str(output[5]).split("Tasks: ")
+                output[5] = f"Tasks: <span class='badge text-bg-grey'>{tasks_value}</span>"
+                
+            if "Memory" in output[6]:
+                memory, memory_value = str(output[6]).split("Memory: ")
+                output[6] = f"Memory: <span class='badge text-bg-grey'>{memory_value}</span>"
+            
+            if "CPU" in output[7]:
+                cpu, cpu_value = str(output[7]).split("CPU: ")
+                output[7] = f"Memory: <span class='badge text-bg-grey'>{cpu_value}</span>"
+                
+            if "CGroup" in output[8]:
+                cgroup, cgroup_value = str(output[8]).split("CGroup: ")
+                output[8] = f"CGroup: <span class='badge text-bg-grey'>{cgroup_value}</span>"
+            
             
         return render(
             request,
             self.template_name,
             {
-                "message": status_proxbox_process
+                "message": output
             }
         )
         
