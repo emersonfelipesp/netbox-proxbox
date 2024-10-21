@@ -109,9 +109,13 @@ class FixProxboxBackendView(View):
     
     def get(self, request):
        
+        plugin_configuration = configuration.PLUGINS_CONFIG
         
         output: str = ""
         try:
+            switch_user = subprocess.run(["su", plugin_configuration["netbox_proxbox"]["fastapi"]["sudo"]["user"]])
+            provide_password = subprocess.run([plugin_configuration["netbox_proxbox"]["fastapi"]["sudo"]["password"]])
+            
             start_proxbox_process = subprocess.check_output(
                 ['sudo','systemctl','start','proxbox'],
                 stderr=subprocess.STDOUT,
