@@ -5,9 +5,9 @@
 
     {% if message %}
     <div class="card p-4">
-            {% for line in message %}
-                {{ line }}<br>
-            {% endfor %}
+        {% for line in message %}
+            <p>{{ line | safe }}</p>
+        {% endfor %}
     </div> 
     {% else %}
         <div>Not able to get <strong>Proxbox Backend Service Status</strong></div>
