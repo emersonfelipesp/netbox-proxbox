@@ -141,8 +141,25 @@ def run_command(sudo_command):
     
     except Exception as e:
         print(f"An error occurred: {e}")
-    
 
+def change_proxbox_service(desired_state: str):
+    try:
+        if desired_state == "start": 
+            print("START PROXBOX")
+            run_command(['sudo', '-S', 'systemctl', 'start', 'proxbox'])
+            
+        if desired_state == "restart":
+            print("START PROXBOX")
+            run_command(['sudo', '-S', 'systemctl', 'restart', 'proxbox'])     
+            
+        if desired_state == "stop":
+            print("STOP PROXBOX")
+            run_command(['sudo', '-S', 'systemctl', 'stop', 'proxbox'])
+        
+    except Exception as error:
+        print(error)
+
+        
 class FixProxboxBackendView(View):
     """
     Try to fix Proxbox Backend by issuing OS commands.
@@ -150,25 +167,11 @@ class FixProxboxBackendView(View):
     template_name = 'netbox_proxbox/fix-proxbox-backend.html'
     
     def get(self, request):
-       
-        plugin_configuration = configuration.PLUGINS_CONFIG
-        
-        output: str = ""
         try:
-            print("START PROXBOX")
-            run_command(['sudo', '-S', 'systemctl', 'start', 'proxbox'])
-
-            
-        except subprocess.CalledProcessError as e:
-            # Handle the case where the command fails
-            print(f"Command failed with return code {e.returncode}")
-            print("Output (STDOUT + STDERR):", e.output)
-            return redirect('plugins:netbox_proxbox:home')
-            
+           change_proxbox_service(desired_state="start")
+           
         except Exception as error:
             print(error)
-            return redirect('plugins:netbox_proxbox:home')
-            
 
         return redirect('plugins:netbox_proxbox:home')
 
@@ -177,18 +180,8 @@ class StopProxboxBackendView(View):
     "Stop Proxbox Backend by issuing OS commands"
     
     def get(self, request):
-            
-        output: str = ""
-        
         try:
-            print("STOP PROXBOX")
-            run_command(['sudo', '-S', 'systemctl', 'stop', 'proxbox'])
-
-                
-        except subprocess.CalledProcessError as e:
-            # Handle the case where the command fails
-            print(f"Command failed with return code {e.returncode}")
-            print("Output (STDOUT + STDERR):", e.output)
+           change_proxbox_service(desired_state="stop")
             
         except Exception as error:
             print(error)
@@ -200,22 +193,13 @@ class RestartProxboxBackendView(View):
     "Restart Proxbox Backend by issuing OS commands"
     
     def get(self, request):
-            
-        output: str = ""
-        
         try:
-            print("RESSTART PROXBOX")
-            run_command(['sudo', '-S', 'systemctl', 'restart', 'proxbox'])
-                
-        except subprocess.CalledProcessError as e:
-            # Handle the case where the command fails
-            print(f"Command failed with return code {e.returncode}")
-            print("Output (STDOUT + STDERR):", e.output)
+           change_proxbox_service(desired_state="restart")
             
         except Exception as error:
             print(error)
             
-        return redirect('plugins:netbox_proxbox:home')  
+        return redirect('plugins:netbox_proxbox:home')
     
 class StatusProxboxBackendView(View):
     "Restart Proxbox Backend by issuing OS commands"
@@ -244,20 +228,9 @@ class StatusProxboxBackendView(View):
             print("Output (STDOUT + STDERR):", e.output)
             
             output: list = str(e.output).splitlines()
-            
-            """
-            return render(
-                request,
-                self.template_name,
-                {
-                    "message": output,
-                }
-            )
-            """
                         
         except Exception as error:
             print(error)
-        
         
         if output and (len(output) > 0):
             output[0] = f"<h2>{output[0]}</h2>"
