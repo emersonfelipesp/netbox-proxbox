@@ -620,7 +620,6 @@ class NetboxBase:
                     
                     
                     if result_by_device:
-                        
                         if int(object.get('device')) != int(result_by_device.device.id):
                             return None
                         
