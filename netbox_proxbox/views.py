@@ -94,8 +94,72 @@ class CommunityView(View):
                 "title": title,
             }
         )
-        
 
+def returnSudoUser():
+    plugin_configuration = configuration.PLUGINS_CONFIG
+    
+    sudo_user: str = ""
+    sudo_password: str = ""
+    try:
+        sudo_user = plugin_configuration["netbox_proxbox"]["fastapi"]["sudo"]["user"]
+        sudo_password = plugin_configuration["netbox_proxbox"]["fastapi"]["sudo"]["password"]
+        
+    except Exception as error:
+        print(error)
+        
+    return { "user": sudo_user, "password": sudo_password}
+
+
+def run_command(sudo_command):
+    
+    user: dict = {}
+    username: str = ""
+    password: str = ""
+    
+    try:
+        user = returnSudoUser()
+        username = user["user"] # IMPLEMENTATION LEFT.
+        password = user["password"]
+    except Exception as error:
+        print(f"Not able to get sudo user and password from 'configuration.py'\n{error}")
+    
+    try:
+        # Run the command and pass the password to stdin
+        result = subprocess.run(
+            sudo_command, 
+            input=password + '\n',   # Pass the password
+            stdout=subprocess.PIPE,  # Capture stdout
+            stderr=subprocess.PIPE,  # Capture stderr
+            text=True                # Use text mode for strings
+        )  
+        
+        # Check the result
+        if result.returncode == 0:
+            print(f"Command '{sudo_command}' correctly issued.")
+        else:
+            print(f"Failed to run Command '{sudo_command}' Error:", result.stderr)
+    
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+def change_proxbox_service(desired_state: str):
+    try:
+        if desired_state == "start": 
+            print("START PROXBOX")
+            run_command(['sudo', '-S', 'systemctl', 'start', 'proxbox'])
+            
+        if desired_state == "restart":
+            print("START PROXBOX")
+            run_command(['sudo', '-S', 'systemctl', 'restart', 'proxbox'])     
+            
+        if desired_state == "stop":
+            print("STOP PROXBOX")
+            run_command(['sudo', '-S', 'systemctl', 'stop', 'proxbox'])
+        
+    except Exception as error:
+        print(error)
+
+        
 class FixProxboxBackendView(View):
     """
     Try to fix Proxbox Backend by issuing OS commands.
@@ -103,63 +167,21 @@ class FixProxboxBackendView(View):
     template_name = 'netbox_proxbox/fix-proxbox-backend.html'
     
     def get(self, request):
-       
-        plugin_configuration = configuration.PLUGINS_CONFIG
-        
-        output: str = ""
         try:
-            switch_user = subprocess.run(["su", plugin_configuration["netbox_proxbox"]["fastapi"]["sudo"]["user"]])
-            provide_password = subprocess.run([plugin_configuration["netbox_proxbox"]["fastapi"]["sudo"]["password"]])
-            
-            start_proxbox_process = subprocess.check_output(
-                ['sudo','systemctl','start','proxbox'],
-                stderr=subprocess.STDOUT,
-                text=True
-            )
-            
-            # Communicate to capture the output and error
-            #stdout, stderr = start_proxbox_process.communicate()
-            
-            print("start_proxbox_process: ", start_proxbox_process)
-            
-            
-        except subprocess.CalledProcessError as e:
-            # Handle the case where the command fails
-            print(f"Command failed with return code {e.returncode}")
-            print("Output (STDOUT + STDERR):", e.output)
-            
+           change_proxbox_service(desired_state="start")
+           
         except Exception as error:
             print(error)
-            return redirect('plugins:netbox_proxbox:home')
-            
 
         return redirect('plugins:netbox_proxbox:home')
+
 
 class StopProxboxBackendView(View):
     "Stop Proxbox Backend by issuing OS commands"
     
     def get(self, request):
-            
-        output: str = ""
-        
         try:
-            stop_proxbox_process = subprocess.check_output(
-                ['sudo','systemctl','stop','proxbox'],
-                stderr=subprocess.STDOUT,
-                text=True
-            )
-            
-            print("stop_proxbox_process", stop_proxbox_process )
-
-            
-            if "[sudo]" in output or "Auth" in output:
-                password = input("Enter password: ")
-
-                
-        except subprocess.CalledProcessError as e:
-            # Handle the case where the command fails
-            print(f"Command failed with return code {e.returncode}")
-            print("Output (STDOUT + STDERR):", e.output)
+           change_proxbox_service(desired_state="stop")
             
         except Exception as error:
             print(error)
@@ -171,31 +193,13 @@ class RestartProxboxBackendView(View):
     "Restart Proxbox Backend by issuing OS commands"
     
     def get(self, request):
-            
-        output: str = ""
-        
         try:
-            restart_proxbox_process = subprocess.check_output(
-                ['sudo','systemctl','restart','proxbox'],
-                stderr=subprocess.STDOUT,
-                text=True
-            )
-            
-            print("stop_restart_process", restart_proxbox_process )
-
-            
-            if "[sudo]" in output or "Auth" in output:
-                password = input("Enter password: ")
-                
-        except subprocess.CalledProcessError as e:
-            # Handle the case where the command fails
-            print(f"Command failed with return code {e.returncode}")
-            print("Output (STDOUT + STDERR):", e.output)
+           change_proxbox_service(desired_state="restart")
             
         except Exception as error:
             print(error)
             
-        return redirect('plugins:netbox_proxbox:home')  
+        return redirect('plugins:netbox_proxbox:home')
     
 class StatusProxboxBackendView(View):
     "Restart Proxbox Backend by issuing OS commands"
@@ -208,6 +212,7 @@ class StatusProxboxBackendView(View):
         status_proxbox_process: str = ""
         
         try:
+            print("CONSOLE STATUS")
             status_proxbox_process = subprocess.check_output(
                 ['sudo','systemctl','status','proxbox'],
                 stderr=subprocess.STDOUT,
@@ -223,20 +228,9 @@ class StatusProxboxBackendView(View):
             print("Output (STDOUT + STDERR):", e.output)
             
             output: list = str(e.output).splitlines()
-            
-            """
-            return render(
-                request,
-                self.template_name,
-                {
-                    "message": output,
-                }
-            )
-            """
                         
         except Exception as error:
             print(error)
-        
         
         if output and (len(output) > 0):
             output[0] = f"<h2>{output[0]}</h2>"
