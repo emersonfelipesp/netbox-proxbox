@@ -112,9 +112,16 @@ def returnSudoUser():
 
 def run_command(sudo_command):
     
-    user = returnSudoUser()
-    username = user["user"]
-    password = user["password"]
+    user: dict = {}
+    username: str = ""
+    password: str = ""
+    
+    try:
+        user = returnSudoUser()
+        username = user["user"] # IMPLEMENTATION LEFT.
+        password = user["password"]
+    except Exception as error:
+        print(f"Not able to get sudo user and password from 'configuration.py'\n{error}")
     
     try:
         # Run the command and pass the password to stdin
