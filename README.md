@@ -185,9 +185,14 @@ PLUGINS_CONFIG = {
         'fastapi': {
             # Uvicorn Host is (most of the time) the same as Netbox (as both servers run on the same machine)
             'uvicorn_host': 'localhost',
-            'uvicorn_port': 8800    # Default Proxbox FastAPI port
+            'uvicorn_port': 8800,    # Default Proxbox FastAPI port
+            # Although it seems weird, the sudo-user is necessary so that Proxbox automatically starts Proxbox Backend.
+            # It makes it more "plug-in", without the need to user input manual commands.
+            'sudo': {
+                'user': "sudo_enabled_user",
+                'password': 'Strong@P4ssword',
+            }
         }
-
     }
 }
 ```
