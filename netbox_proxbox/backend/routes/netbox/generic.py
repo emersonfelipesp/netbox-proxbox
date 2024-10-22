@@ -620,20 +620,6 @@ class NetboxBase:
                     
                     
                     if result_by_device:
-                        
-                        if result_by_device.device:
-                            try:
-                                print(f"result_by_device: {result_by_device.device}")
-                                print(f"result_by_device.device.id: {result_by_device.device.id}")
-                                print(f"object: {object} \n{object.get('device')}")
-                                print(f"object.device: {object.get('device')}")
-                            except Exception as error: logger.error(error)
-                            
-                            
-                        #print(f"result_by_device - object device: {result_by_device} / {result_by_device.device} / {result_by_device.device.id}")
-                        # If this happens, it means that the interface name is equal, but device is different.
-                        #print(f"int(object.id): {int(object.get('device'))} | int(result_by_device.device.id): {int(result_by_device.device.id)}")
-                        
                         if int(object.get('device')) != int(result_by_device.device.id):
                             return None
                         

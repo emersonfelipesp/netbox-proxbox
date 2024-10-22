@@ -193,7 +193,6 @@ PLUGINS_CONFIG = {
                 'password': 'Strong@P4ssword',
             }
         }
-
     }
 }
 ```
