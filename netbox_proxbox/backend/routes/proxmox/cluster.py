@@ -16,6 +16,16 @@ router = APIRouter()
 async def cluster_status(
     pxs: ProxmoxSessionsDep
 ):
+    """
+    ### Retrieve the status of clusters from multiple Proxmox sessions.
+    
+    **Args:**
+    - **pxs (`ProxmoxSessionsDep`):** A list of Proxmox session dependencies.
+    
+    **Returns:**
+    - **list:** A list of dictionaries containing the status of each cluster.
+    """
+    
     json_response = []
     
     for px in pxs:
@@ -40,6 +50,20 @@ async def cluster_resources(
         )
     ] = None,
 ):
+    
+    """
+    ### Fetches Proxmox cluster resources.
+    
+    This asynchronous function retrieves resources from a Proxmox cluster. It supports filtering by resource type.
+    
+    **Args:**
+    - **pxs (`ProxmoxSessionsDep`):** Dependency injection for Proxmox sessions.
+    - **type (`Annotated[ClusterResourcesType, Query]`):** Optional. The type of Proxmox resource to return. If not provided, all resources are returned.
+    
+    **Returns:**
+    - **list:** A list of dictionaries containing the Proxmox cluster resources.
+    """
+    
     json_response = []
     
     for px in pxs:

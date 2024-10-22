@@ -26,7 +26,27 @@ from . import github
 import requests
 
 class HomeView(View):
-    """Homepage"""
+    """
+    ## HomeView class-based view to handle incoming GET HTTP requests.
+    
+    ### Attributes:
+    - **template_name (str):** The path to the HTML template used for rendering the view.
+    
+    ### Methods:
+    - **get(request):**
+            Handles GET requests to the view.
+            Retrieves plugin configuration and default settings.
+            Constructs the FastAPI endpoint URL.
+            Renders the template with the configuration and default settings.
+            
+            **Args:**
+            - **request (HttpRequest):** The HTTP request object.
+            
+            **Returns:**
+            - **HttpResponse:** The rendered HTML response.
+    """
+    
+    
     template_name = 'netbox_proxbox/home.html'
 
     # service incoming GET HTTP requests
@@ -58,7 +78,17 @@ class HomeView(View):
 
 
 class ContributingView(View):
-    """Contributing"""
+    """
+    **ContributingView** handles the rendering of the contributing page for the Proxbox project.
+    
+    **Attributes:**
+    - **template_name (str):** The path to the HTML template for the contributing page.
+    
+    **Methods:**
+    - **get(request):** Handles GET HTTP requests and renders the contributing page with the content
+    of the 'CONTRIBUTING.md' file and a title.
+    """
+    
     template_name = 'netbox_proxbox/contributing.html'
 
     # service incoming GET HTTP requests
@@ -78,7 +108,17 @@ class ContributingView(View):
 
 
 class CommunityView(View):
-    """Community"""
+    """
+    CommunityView handles the rendering of the community page.
+    
+    **Attributes:**
+    - **template_name (str):** The path to the HTML template for the community page.
+    
+    **Methods:**
+    - **get(request):** Handles GET HTTP requests and renders the community page with a title.
+    """
+    
+    
     template_name = 'netbox_proxbox/community.html'
 
     # service incoming GET HTTP requests
@@ -96,6 +136,17 @@ class CommunityView(View):
         )
 
 def returnSudoUser():
+    """
+    Retrieves the sudo user and password from the plugin configuration.
+    This function accesses the plugin configuration to fetch the sudo user and password
+    required for FastAPI operations. If the configuration keys are not found, it catches
+    the exception and prints the error.
+    
+    **Returns:**
+    - **dict:** A dictionary containing the sudo user and password with keys "user" and "password".
+    """
+    
+    
     plugin_configuration = configuration.PLUGINS_CONFIG
     
     sudo_user: str = ""
@@ -111,6 +162,24 @@ def returnSudoUser():
 
 
 def run_command(sudo_command):
+    """
+    ### Executes a given sudo command using the credentials retrieved from the configuration.
+    
+    **Args:**
+    - **sudo_command (str):** The sudo command to be executed.
+    
+    **Returns:**
+        None
+        
+    **Raises:**
+    - **Exception:** If there is an error retrieving the sudo user credentials or executing the command.
+    
+    The function performs the following steps:
+    1. Retrieves the sudo user credentials (username and password) from the configuration.
+    2. Executes the given sudo command, passing the password to stdin.
+    3. Captures and prints the stdout and stderr of the command execution.
+    4. Prints a success message if the command is executed successfully, otherwise prints the error message.
+    """
     
     user: dict = {}
     username: str = ""
@@ -143,13 +212,28 @@ def run_command(sudo_command):
         print(f"An error occurred: {e}")
 
 def change_proxbox_service(desired_state: str):
+    """
+    ### Change the state of the Proxbox service.
+    
+    This function attempts to start, restart, or stop the Proxbox service
+    based on the provided desired state. It uses system commands to manage
+    the service.
+    
+    **Args:**
+    - **desired_state (str):** The desired state of the Proxbox service. 
+    It can be "start", "restart", or "stop".
+    
+    **Raises:**
+    - **Exception:** If an error occurs while attempting to change the Proxbox service state.
+    """
+    
     try:
         if desired_state == "start": 
             print("START PROXBOX")
             run_command(['sudo', '-S', 'systemctl', 'start', 'proxbox'])
             
         if desired_state == "restart":
-            print("START PROXBOX")
+            print("RESTART PROXBOX")
             run_command(['sudo', '-S', 'systemctl', 'restart', 'proxbox'])     
             
         if desired_state == "stop":
@@ -157,13 +241,21 @@ def change_proxbox_service(desired_state: str):
             run_command(['sudo', '-S', 'systemctl', 'stop', 'proxbox'])
         
     except Exception as error:
-        print(error)
+        print("Error occured trying to change Proxbox status")
 
         
 class FixProxboxBackendView(View):
     """
-    Try to fix Proxbox Backend by issuing OS commands.
+    ### View to handle the fixing of the Proxbox backend service.
+    
+    **Attributes:**
+    - **template_name (str):** The path to the HTML template for this view.
+    
+    **Methods:**
+    - **get(request):** Handles GET requests to start the Proxbox service and redirect to the home page.
+    If an error occurs while starting the service, it prints the error.
     """
+
     template_name = 'netbox_proxbox/fix-proxbox-backend.html'
     
     def get(self, request):
@@ -177,7 +269,16 @@ class FixProxboxBackendView(View):
 
 
 class StopProxboxBackendView(View):
-    "Stop Proxbox Backend by issuing OS commands"
+    """
+    ### StopProxboxBackendView handles the stopping of the Proxbox backend service.
+    
+    **Methods:**
+    - **get(request):** Handles GET requests to stop the Proxbox service. Redirects to the home page of the netbox_proxbox plugin.
+    - request: The HTTP request object.
+    
+    **Raises:**
+    - **Exception:** If an error occurs while attempting to stop the Proxbox service.
+    """
     
     def get(self, request):
         try:
@@ -190,7 +291,14 @@ class StopProxboxBackendView(View):
 
         
 class RestartProxboxBackendView(View):
-    "Restart Proxbox Backend by issuing OS commands"
+    """
+    ### RestartProxboxBackendView is a Django view that handles the restart of the Proxbox backend service.
+   
+    **Methods:**
+    - **get(request):** Handles GET requests to restart the Proxbox service. It calls the change_proxbox_service function
+    with the desired state set to "restart". If an exception occurs, it prints the error and redirects
+    to the home page of the netbox_proxbox plugin.
+    """
     
     def get(self, request):
         try:
@@ -200,9 +308,23 @@ class RestartProxboxBackendView(View):
             print(error)
             
         return redirect('plugins:netbox_proxbox:home')
-    
+
+
 class StatusProxboxBackendView(View):
-    "Restart Proxbox Backend by issuing OS commands"
+    """
+    ### A Django view to display the status of the Proxbox backend service.
+    
+    **Attributes:**
+    - **template_name (str):** The template to render the status page.
+    
+    **Methods:**
+    - **get(request):** Handles GET requests to retrieve and display the status of the Proxbox service.
+    Executes a system command to get the status of the Proxbox service using `systemctl`.
+    Parses the output and formats it for display in the template.
+    Handles exceptions and errors that may occur during the command execution.
+    Returns the rendered template with the status information.
+    """
+    
     
     template_name = "netbox_proxbox/proxbox-backend-status.html"
     
@@ -282,13 +404,46 @@ class StatusProxboxBackendView(View):
 
     
 def DiscussionsView(request):
+    """
+    ### Redirects the user to the external discussions URL.
+    
+    **Args:**
+    - **request:** The HTTP request object.
+        
+    **Returns:**
+    - **HttpResponseRedirect:** A redirect response to the external discussions URL.
+    """
+    
     external_url = "https://github.com/orgs/netdevopsbr/discussions"
     return redirect(external_url)
 
+
 def DiscordView(request):
+    """
+    ### Redirects the user to the specified Discord invite URL.
+    
+    **Args:**
+    - **request:** The HTTP request object.
+    
+    **Returns:**
+    - **HttpResponseRedirect:** A redirection response to the Discord invite URL.
+    """
+    
+    
     external_url = "https://discord.com/invite/9N3V4mpMXU"
     return redirect(external_url)
 
+
 def TelegramView(request):
+    """
+    ### Redirects the user to the NetBox Telegram group.
+    
+    **Args:**
+    - **request:** The HTTP request object.
+    
+    **Returns:**
+    - **HttpResponseRedirect:** A redirect response to the specified external URL.
+    """
+    
     external_url = "https://t.me/netboxbr"
     return redirect(external_url)

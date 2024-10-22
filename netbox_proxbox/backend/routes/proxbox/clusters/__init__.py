@@ -23,6 +23,8 @@ from netbox_proxbox.backend import (
     IPAddress,
 )
 
+from fastapi import WebSocket
+
 router = APIRouter()
 
 
@@ -31,16 +33,31 @@ async def proxmox_session_with_cluster(
     nb: NetboxSessionDep
 ):
     """Get Proxmox Session with Cluster"""
+    pass
 
 
 @router.get("/")
 async def proxbox_get_clusters(
     pxs: ProxmoxSessionsDep,
-    nb: NetboxSessionDep
+    nb: NetboxSessionDep,
+    websocket: WebSocket
 ):
+    """
+    Automatically sync Proxmox Clusters with Netbox Clusters.
+    This asynchronous function iterates over a list of Proxmox sessions and creates corresponding 
+    Cluster Types and Clusters in Netbox. It handles both standalone and clustered Proxmox modes.
     
+    **Args:**
+    - **pxs (ProxmoxSessionsDep):** Dependency injection for Proxmox sessions.
+    - **nb (NetboxSessionDep):** Dependency injection for Netbox session.
     
-    """Automatically sync Proxmox Clusters with Netbox Clusters"""
+    **Returns:**
+    - **list:** A list of dictionaries containing the name of the Proxmox session and the corresponding 
+    Netbox cluster object.
+    
+    **Raises:**
+    - **`ProxboxException`:** If there is an error creating the cluster type or the cluster.
+    """
     
     result = []
     
@@ -107,6 +124,17 @@ def find_interface_type(
     proxmox_int_type: str,
     proxmox_int_name: str
 ):
+    """
+    ### Determine the interface type based on the provided Proxmox interface type and name.
+    
+    **Args:**
+    - **proxmox_int_type (`str`):** The type of the Proxmox interface (e.g., "eth", "bridge", "bond").
+    - **proxmox_int_name (`str`):** The name of the Proxmox interface (e.g., "eno1", "enp0s3").
+    
+    **Returns:**
+    - `str`: The determined interface type as a string.
+    """
+    
     if proxmox_int_type == "eth":
             
         if 'eno' in proxmox_int_name: interface_type = '1000base-t'
@@ -127,8 +155,38 @@ async def get_nodes(
     pxs: ProxmoxSessionsDep,
     websocket: WebSocket
 ):
+    """
+    ### Synchronizes nodes and their interfaces from Proxmox to Netbox.
     
-    """Get Proxmox Nodes from a Cluster"""
+    **Args:**
+    - **nb (`NetboxSessionDep`):** The Netbox session dependency.
+    - **pxs (`ProxmoxSessionsDep`):** The Proxmox sessions dependency.
+    - **websocket (`WebSocket`):** The WebSocket connection for logging.
+    
+    **Returns:**
+    - **`list`:** A list of dictionaries containing the Proxmox cluster name and the corresponding Netbox nodes.
+    
+    **Raises:**
+    - **`ProxboxException`:** If there is an error during the synchronization process.
+    
+    **Workflow:**
+        1. For each Proxmox session:
+            a. Retrieve the corresponding cluster from Netbox.
+            b. Get the nodes from the Proxmox cluster.
+            c. For each node:
+                i. Log the creation process.
+                ii. Create the node in Netbox.
+                iii. Log the success or failure of the creation.
+                iv. Retrieve the network interfaces of the node.
+                v. For each interface:
+                    - Determine the interface type.
+                    - Log the interface creation process.
+                    - Create the interface in Netbox.
+                    - Log the success or failure of the creation.
+                    - If the interface has a CIDR, create the IP address in Netbox.
+                    - If the interface is a bridge, handle the bridge ports.
+    """
+    
     
     result = []
     
@@ -173,7 +231,6 @@ async def get_nodes(
                     python_exception=error
                 )
             
-            
                 
             print(node)
             node_interfaces = px.session.nodes(node.get("node")).network.get()
@@ -189,9 +246,6 @@ async def get_nodes(
                 print(f'[0] interface: {interface}')
                 print(f'interface_type: {interface_type}')
                 interface_name = interface.get("iface")
-                
-                
-                
                 
                 if interface.get("active") == 1:
                     enabled = True
@@ -222,8 +276,7 @@ async def get_nodes(
                         message="<span class='text-red'><strong><i class='mdi mdi-error'></i></strong></span> Error trying to create Netbox interface.",
                         python_exception=error
                     )
-                
-                
+            
                 
                 print(f"interface value type: {type(interface)}")
                 
@@ -253,7 +306,6 @@ async def get_nodes(
                             python_exception=error
                         )
             
-                
                     
                 if interface_type == "bridge":
                     
@@ -386,6 +438,11 @@ async def get_nodes(
 
 @router.get("/nodes/interfaces")
 async def get_nodes_interfaces():
+    """
+    Asynchronously retrieves the network interfaces of nodes in a cluster.
+    This function is a placeholder and currently does not contain any implementation.
+    """
+    
     pass
 
 @router.get("/virtual-machines")
@@ -393,7 +450,23 @@ async def get_virtual_machines(
     nb: NetboxSessionDep,
     pxs: ProxmoxSessionsDep,
     websocket: WebSocket
-):
+):    
+    """
+    ### Asynchronously retrieves virtual machines from Proxmox and creates corresponding entries in Netbox.
+    
+    **Args:**
+    - **nb (`NetboxSessionDep`):** The Netbox session dependency.
+    - **pxs (`ProxmoxSessionsDep`):** The Proxmox sessions dependency.
+    - **websocket (`WebSocket`):** The WebSocket connection for logging and communication.
+    
+    **Returns:**
+    - **`list`:** A list of dictionaries containing the name of the Proxmox cluster and the created virtual machines in Netbox.
+    
+    **Raises:**
+    - **`ProxboxException:`** If there is an error creating virtual machines or their interfaces in Netbox.
+    """
+    
+
     from enum import Enum
     class VirtualMachineStatus(Enum):
         """

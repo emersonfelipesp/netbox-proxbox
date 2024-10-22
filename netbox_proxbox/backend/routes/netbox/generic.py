@@ -50,10 +50,6 @@ class NetboxBase:
             bool,
             Query(title="Create Default Object", description="Create a default Object if there's no Object registered on Netbox."),
         ] = False,
-        # default_extra_fields: Annotated[
-        #     dict,
-        #     Body(title="Extra Fields", description="Extra fields to be added to the default Object.")
-        # ] = None,
         ignore_tag: Annotated[
             bool,
             Query(
@@ -75,28 +71,13 @@ class NetboxBase:
         self.default = default
         self.ignore_tag = ignore_tag
         self.primary_field_value = primary_field_value
-        #self.default_extra_fields = default_extra_fields
-        
         self.pynetbox_path = getattr(getattr(self.nb.session, self.app), self.endpoint)
-        
-        # self.default_dict = {
-        #     "name": self.default_name,
-        #     "slug": self.default_slug,
-        #     "description": self.default_description,
-        #     "tags": [self.nb.tag.id]
-        # }
-        
+
         
     # New Implementantion of "default_dict" and "default_extra_fields".
     async def get_base_dict(self):
         "This method MUST be overwritten by the child class."
         pass
-    
-    # Default Object Parameters.
-    # It should be overwritten by the child class.
-    # default_name = None
-    # default_slug = None
-    # default_description = None
     
     # Parameters to be used as Pynetbox class attributes. 
     # It should be overwritten by the child class.
@@ -190,6 +171,22 @@ class NetboxBase:
             )
     
     async def _get_by_kwargs(self, **kwargs):
+        """
+        Asynchronously retrieves an object based on the provided keyword arguments.
+        This method attempts to fetch an object from the Netbox API using the specified
+        keyword arguments. If multiple objects are found, it handles the duplication
+        by checking specific conditions based on the endpoint and primary field.
+        
+        **Args:**
+        - **kwargs: Arbitrary keyword arguments used to filter the objects.
+        
+        **Returns:**
+        - The object retrieved from the Netbox API if found, otherwise None.
+        
+        **Raises:**
+        - **ProxboxException:** If an error occurs while fetching the object or if
+        multiple objects are found and cannot be resolved.
+        """
         
         await log(self.websocket, f"<span class='badge text-bg-blue' title='Get'><strong><i class='mdi mdi-download'></i></strong></span> Searching <strong>{self.object_name}</strong> by kwargs {kwargs}.")
         try:
@@ -228,6 +225,16 @@ class NetboxBase:
     
     async def _get_by_id(self):
         """
+        Asynchronously retrieves an object from Netbox using its ID.
+        If the 'id' query parameter is provided, this method attempts to fetch the object
+        from Netbox. It logs the process and handles exceptions appropriately.
+        
+        **Raises:**
+        - **ProxboxException:** If the object is not found or if any other error occurs during retrieval.
+        
+        **Returns:**
+        - The object retrieved from Netbox if found.
+        
         If Query Parameter 'id' provided, use it to get the object from Netbox.
         """
         
@@ -274,8 +281,18 @@ class NetboxBase:
     
     async def _get_all(self):
         """
-        # If Query Parameter 'all' is True, return all Objects registered from Netbox.
+        ### Asynchronously retrieves all objects from Netbox.
+        
+        If `ignore_tag` is True, it returns all objects from Netbox.
+        If `ignore_tag` is False, it returns only objects with the Proxbox tag.
+        
+        **Returns:**
+        - **list:** A list of objects retrieved from Netbox.
+        
+        **Raises:**
+        - **ProxboxException:** If there is an error while trying to retrieve the objects.
         """
+
         
         if self.ignore_tag:
             try:
@@ -306,6 +323,33 @@ class NetboxBase:
         self,
         data: dict = None,
     ): 
+        """
+        ### Asynchronously handles the POST request to create an object on Netbox.
+        
+        **Args:**
+        - **data (dict, optional):** The data payload for creating the object. Defaults to None.
+        
+        **Returns:**
+        - **response:** The created object response from Netbox if successful, or the existing object if a duplicate is found.
+        - **None:** If the object could not be created due to a unique constraint violation.
+       
+        **Raises:**
+        - **ProxboxException:** If there is an error parsing the Pydantic model to a dictionary, 
+                              if required fields are missing, or if there is an error during the creation process.
+        
+        **Workflow:**
+            1. Retrieves the base dictionary from the cache or fetches it if not present.
+            2. Logs the creation attempt.
+            3. Converts the Pydantic model to a dictionary if necessary.
+            4. Generates a slug from the name or model field if not provided.
+            5. Uses the base dictionary if no data is provided or if default is set.
+            6. Merges the base dictionary with the provided data.
+            7. Checks for duplicates.
+            8. Appends the Proxbox tag to the tags field if present, or creates it.
+            9. Attempts to create the object on Netbox.
+            10. Logs the success or failure of the creation attempt.
+        """ 
+        
         self.base_dict = cache.get(self.endpoint)
         if self.base_dict is None:
             self.base_dict = await self.get_base_dict()
@@ -413,6 +457,21 @@ class NetboxBase:
 
 
     async def _check_duplicate(self, search_params: dict = None, object: dict = None):
+        """
+        Asynchronously checks for duplicate objects in Netbox before creating a new one.
+        This method performs several checks to determine if an object already exists in Netbox based on various criteria 
+        such as default settings, primary fields, and specific attributes provided in the `object` parameter.
+        
+        **Args:**
+        - **search_params (dict, optional):** Parameters to search for duplicates. Defaults to None.
+        - **object (dict, optional):** The object to check for duplication. Defaults to None.
+        
+        **Returns:**
+        - **dict or None:** The existing object if a duplicate is found, otherwise None.
+        
+        **Raises:**
+        - **ProxboxException:** If an error occurs during the duplicate check process.
+        """
         
         await log(self.websocket, f"<span class='badge text-bg-purple' title='Check Duplicate'><i class='mdi mdi-content-duplicate'></i></span> Checking if <strong>{self.object_name}</strong> exists on Netbox before creating it.")
         
