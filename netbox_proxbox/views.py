@@ -94,7 +94,43 @@ class CommunityView(View):
                 "title": title,
             }
         )
+
+def returnSudoUser():
+    plugin_configuration = configuration.PLUGINS_CONFIG
+    
+    sudo_user: str = ""
+    sudo_password: str = ""
+    try:
+        sudo_user = plugin_configuration["netbox_proxbox"]["fastapi"]["sudo"]["user"]
+        sudo_password = plugin_configuration["netbox_proxbox"]["fastapi"]["sudo"]["password"]
         
+    except Exception as error:
+        print(error)
+        
+    return { "user": sudo_user, "password": sudo_password}
+
+
+def run_command(sudo_command, password):
+    try:
+        # The command to run with sudo and systemctl
+        #sudo_command = ['sudo', '-S', 'systemctl', 'start', command]
+        
+        # Run the command and pass the password to stdin
+        result = subprocess.run(sudo_command, 
+                                input=password + '\n',  # Pass the password
+                                stdout=subprocess.PIPE,  # Capture stdout
+                                stderr=subprocess.PIPE,  # Capture stderr
+                                text=True)  # Use text mode for strings
+        
+        # Check the result
+        if result.returncode == 0:
+            print(f"Service started successfully!")
+        else:
+            print(f"Failed to start. Error:", result.stderr)
+    
+    except Exception as e:
+        print(f"An error occurred: {e}")
+    
 
 class FixProxboxBackendView(View):
     """
@@ -108,25 +144,23 @@ class FixProxboxBackendView(View):
         
         output: str = ""
         try:
-            switch_user = subprocess.run(["su", plugin_configuration["netbox_proxbox"]["fastapi"]["sudo"]["user"]])
-            provide_password = subprocess.run([plugin_configuration["netbox_proxbox"]["fastapi"]["sudo"]["password"]])
+
+            user = returnSudoUser()
+
+            print("PROXBOX")
+            run_command(['sudo', '-S', 'systemctl', 'start', 'proxbox'], user["password"])
             
-            start_proxbox_process = subprocess.check_output(
-                ['sudo','systemctl','start','proxbox'],
-                stderr=subprocess.STDOUT,
-                text=True
-            )
             
-            # Communicate to capture the output and error
-            #stdout, stderr = start_proxbox_process.communicate()
+            #print("START SERVICE")
+            #run_command(['sudo', '-S', 'systemctl', 'start', 'proxbox'], user["password"])
             
-            print("start_proxbox_process: ", start_proxbox_process)
-            
+
             
         except subprocess.CalledProcessError as e:
             # Handle the case where the command fails
             print(f"Command failed with return code {e.returncode}")
             print("Output (STDOUT + STDERR):", e.output)
+            return redirect('plugins:netbox_proxbox:home')
             
         except Exception as error:
             print(error)
@@ -134,6 +168,7 @@ class FixProxboxBackendView(View):
             
 
         return redirect('plugins:netbox_proxbox:home')
+
 
 class StopProxboxBackendView(View):
     "Stop Proxbox Backend by issuing OS commands"
