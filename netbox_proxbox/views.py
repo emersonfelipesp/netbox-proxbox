@@ -110,23 +110,27 @@ def returnSudoUser():
     return { "user": sudo_user, "password": sudo_password}
 
 
-def run_command(sudo_command, password):
+def run_command(sudo_command):
+    
+    user = returnSudoUser()
+    username = user["user"]
+    password = user["password"]
+    
     try:
-        # The command to run with sudo and systemctl
-        #sudo_command = ['sudo', '-S', 'systemctl', 'start', command]
-        
         # Run the command and pass the password to stdin
-        result = subprocess.run(sudo_command, 
-                                input=password + '\n',  # Pass the password
-                                stdout=subprocess.PIPE,  # Capture stdout
-                                stderr=subprocess.PIPE,  # Capture stderr
-                                text=True)  # Use text mode for strings
+        result = subprocess.run(
+            sudo_command, 
+            input=password + '\n',   # Pass the password
+            stdout=subprocess.PIPE,  # Capture stdout
+            stderr=subprocess.PIPE,  # Capture stderr
+            text=True                # Use text mode for strings
+        )  
         
         # Check the result
         if result.returncode == 0:
-            print(f"Service started successfully!")
+            print(f"Command '{sudo_command}' correctly issued.")
         else:
-            print(f"Failed to start. Error:", result.stderr)
+            print(f"Failed to run Command '{sudo_command}' Error:", result.stderr)
     
     except Exception as e:
         print(f"An error occurred: {e}")
@@ -144,16 +148,8 @@ class FixProxboxBackendView(View):
         
         output: str = ""
         try:
-
-            user = returnSudoUser()
-
-            print("PROXBOX")
-            run_command(['sudo', '-S', 'systemctl', 'start', 'proxbox'], user["password"])
-            
-            
-            #print("START SERVICE")
-            #run_command(['sudo', '-S', 'systemctl', 'start', 'proxbox'], user["password"])
-            
+            print("START PROXBOX")
+            run_command(['sudo', '-S', 'systemctl', 'start', 'proxbox'])
 
             
         except subprocess.CalledProcessError as e:
@@ -178,17 +174,8 @@ class StopProxboxBackendView(View):
         output: str = ""
         
         try:
-            stop_proxbox_process = subprocess.check_output(
-                ['sudo','systemctl','stop','proxbox'],
-                stderr=subprocess.STDOUT,
-                text=True
-            )
-            
-            print("stop_proxbox_process", stop_proxbox_process )
-
-            
-            if "[sudo]" in output or "Auth" in output:
-                password = input("Enter password: ")
+            print("STOP PROXBOX")
+            run_command(['sudo', '-S', 'systemctl', 'stop', 'proxbox'])
 
                 
         except subprocess.CalledProcessError as e:
@@ -210,17 +197,8 @@ class RestartProxboxBackendView(View):
         output: str = ""
         
         try:
-            restart_proxbox_process = subprocess.check_output(
-                ['sudo','systemctl','restart','proxbox'],
-                stderr=subprocess.STDOUT,
-                text=True
-            )
-            
-            print("stop_restart_process", restart_proxbox_process )
-
-            
-            if "[sudo]" in output or "Auth" in output:
-                password = input("Enter password: ")
+            print("RESSTART PROXBOX")
+            run_command(['sudo', '-S', 'systemctl', 'restart', 'proxbox'])
                 
         except subprocess.CalledProcessError as e:
             # Handle the case where the command fails
@@ -243,6 +221,7 @@ class StatusProxboxBackendView(View):
         status_proxbox_process: str = ""
         
         try:
+            print("CONSOLE STATUS")
             status_proxbox_process = subprocess.check_output(
                 ['sudo','systemctl','status','proxbox'],
                 stderr=subprocess.STDOUT,
