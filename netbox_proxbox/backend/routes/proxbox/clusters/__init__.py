@@ -205,12 +205,12 @@ async def get_nodes(
         for node in proxmox_nodes:
             
             try:
-                msg = f"<span class='badge text-bg-yellow' title='Syncing'><strong><i class='mdi mdi-download'></i></strong></span> Creating Device <strong>{node.get("node")}</strong> related with the Virtual Machine(s)"
+                msg = f"<span class='badge text-bg-yellow' title='Syncing'><strong><i class='mdi mdi-download'></i></strong></span> Creating Device <strong>{node.get('node')}</strong> related with the Virtual Machine(s)"
                 await log(websocket, msg)
                 
                 current_node = await Device(nb=nb, websocket=websocket).post(
                     data = {
-                        "name": node.get("node"),
+                        "name": node.get('node'),
                         "cluster": get_cluster_from_netbox.id,
                         "status": "active",
                     }
@@ -346,7 +346,7 @@ async def get_nodes(
                             
                             if not netbox_port:
                                 
-                                proxmox_port = px.session.nodes(node.get("node")).network(port).get()
+                                proxmox_port = px.session.nodes(node.get('node')).network(port).get()
                                 
                                 print(f"proxmox_port: {proxmox_port}")
                                 
@@ -358,7 +358,6 @@ async def get_nodes(
                                 
                             # Interface and Bridge Interface must belong to the same Device
                             await log(websocket, "<span class='badge text-bg-yellow' title='Syncing'><strong><i class='mdi mdi-download'></i></strong></span> Creating child interface of a bridge. Bridge interface and child must belong to the same device.")
-                            #print(f"create_interface.device: {create_interface.device}\ncurrent_node.id: {current_node.id}")
                             if create_interface:
                                 if create_interface.device == current_node.id:
                                 
@@ -509,7 +508,6 @@ async def get_virtual_machines(
                 
             device = devices[vm_node]
             print(f"devices[vm_node]: {devices[vm_node]} | {device}")
-            print(f"DEVICE TEST: {device}")
             
             
             """
@@ -574,7 +572,6 @@ async def get_virtual_machines(
                         "group_name": "Proxmox"
                     }
                 )
-            #print(f'custom_field_id: {custom_field_id}')
             
             """
             Proxmox Start at Boot Custom Field
@@ -599,8 +596,6 @@ async def get_virtual_machines(
                         "group_name": "Proxmox"
                     }
                 )
-            
-            print(f"start_at_boot_field: {start_at_boot_field}")
                         
             """
             Proxmox Unprivileged Container Custom Field
@@ -753,11 +748,11 @@ async def get_virtual_machines(
             }
             
             try:
-                await log(websocket, f"<span class='badge text-bg-yellow' title='Syncing'><strong><i class='mdi mdi-download'></i></strong></span> Creating Virtual Machine <strong>{vm.get("name")}</strong> on Netbox...")
+                await log(websocket, f"<span class='badge text-bg-yellow' title='Syncing'><strong><i class='mdi mdi-download'></i></strong></span> Creating Virtual Machine <strong>{vm.get('name')}</strong> on Netbox...")
                 new_virtual_machine =  await VirtualMachine(nb = nb, websocket = websocket).post(data = virtual_machine_data)
                 
                 if new_virtual_machine:
-                    log(websocket, f"<span class='badge text-bg-green' title='Success'><strong><i class='mdi mdi-download'></i></strong></span> Virtual Machine <strong><a href='{new_virtual_machine.display_url}' target='_blank'>{new_virtual_machine.name}</a></strong> created successfully.")
+                    await log(websocket, f"<span class='badge text-bg-green' title='Success'><strong><i class='mdi mdi-download'></i></strong></span> Virtual Machine <strong><a href='{new_virtual_machine.display_url}' target='_blank'>{new_virtual_machine.name}</a></strong> created successfully.")
 
 
             except Exception as error:
@@ -765,7 +760,7 @@ async def get_virtual_machines(
                 if "Virtual machine name must be unique per cluster." in str(error):
                     print("\nDUPLICATED VIRTUAL MACHINE NAME\n")
                     
-                    log(websocket, f"<span class='badge text-bg-yellow' title='Syncing'><strong><i class='mdi mdi-download'></i></strong></span> Duplicated virtual machine NAME <strong>{virtual_machine_data["name"]}</strong> found within the same cluster. Appending '(2)' to the name")
+                    await log(websocket, f"<span class='badge text-bg-yellow' title='Syncing'><strong><i class='mdi mdi-download'></i></strong></span> Duplicated virtual machine NAME <strong>{virtual_machine_data['name']}</strong> found within the same cluster. Appending '(2)' to the name")
                     virtual_machine_data["name"] = f"{virtual_machine_data["name"]} (2)"
                     
                     duplicated_virtual_machine = await VirtualMachine(nb = nb, websocket = websocket).post(data = virtual_machine_data)
@@ -775,7 +770,7 @@ async def get_virtual_machines(
                 
                 print(f"error: {error} / {type(error)}")
                 raise ProxboxException(
-                    message=f"<span class='text-red'><strong><i class='mdi mdi-error'></i></strong></span> [CHECK DUPLICATE] Error trying to create Virtual Machine '{vm.get("name")}' on Netbox.",
+                    message=f"<span class='text-red'><strong><i class='mdi mdi-error'></i></strong></span> [CHECK DUPLICATE] Error trying to create Virtual Machine <strong>{vm.get('name')}</strong> on Netbox.",
                     python_exception=f"{error}"
                 )
 
@@ -806,7 +801,7 @@ async def get_virtual_machines(
                             net_data[key] = value
                         
                         
-                        vm_networks.append({f"{network_name}": net_data})
+                        vm_networks.append({f"{network_name}: net_data"})
                         
                         network_id += 1
                     else:
@@ -834,14 +829,6 @@ async def get_virtual_machines(
                                 await log(websocket, f"<span class='badge text-bg-yellow' title='Syncing'><strong><i class='mdi mdi-download'></i></strong></span> Try creating VirtualMachine Interface <strong>{str(k)}</strong> on Netbox...")
                                 try:
                                     
-                                    
-                                    #vm_already_exists = await VMInterface(nb=nb, websocket=websocket).get({
-                                    #    "virtual_machine": new_virtual_machine.id,
-                                    #    "name": str(k)
-                                    #})
-                                    
-                                    #if not vm_already_exists:
-                                
                                     netbox_interface = await VMInterface(nb=nb, websocket=websocket).post(data={
                                         "virtual_machine": new_virtual_machine.id,
                                         "name": str(k),
@@ -858,7 +845,7 @@ async def get_virtual_machines(
                                     )
                         except Exception as error:
                             raise ProxboxException(
-                                message=f"<span class='text-red'><strong><i class='mdi mdi-error'></i></strong></span> Error trying to create {new_virtual_machine.name} VM Network Interfaces",
+                                message=f"<span class='text-red'><strong><i class='mdi mdi-error'></i></strong></span> Error trying to create <strong>{new_virtual_machine.name}</strong> VM Network Interfaces",
                             )
 
         result.append({

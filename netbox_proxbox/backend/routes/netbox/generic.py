@@ -254,13 +254,13 @@ class NetboxBase:
              
             # 1.1. Return found object.
             if response != None:
-                await log(self.websocket, f"<span class='badge text-bg-blue' title='Get'><strong><i class='mdi mdi-download'></i></strong></span> <strong>{self.object_name}</strong> with ID '{self.id}' found on Netbox. Returning it.")
+                await log(self.websocket, f"<span class='badge text-bg-blue' title='Get'><strong><i class='mdi mdi-download'></i></strong></span> <strong>{self.object_name}</strong> with ID <strong>{self.id}</strong> found on Netbox. Returning it.")
                 return response
             
             # 1.2. Raise ProxboxException if object is not found.
             else:
                 raise ProxboxException(
-                    message=f"<span class='text-blue'><strong><i class='mdi mdi-download'></i></strong></span> <span class='text-grey'><strong>[GET]</strong></span>' {self.object_name}' with ID '{self.id}' not found on Netbox.",
+                    message=f"<span class='text-blue'><strong><i class='mdi mdi-download'></i></strong></span> <span class='text-grey'><strong>[GET]</strong></span> <strong>{self.object_name}</strong> with ID <strong>{self.id}</strong> not found on Netbox.",
                     detail=f"Please check if the ID provided is correct. If it is, please check if the object has the Proxbox tag. (You can use the 'ignore_tag' query parameter to ignore this check and return object without Proxbox tag)"
                 )
             
@@ -269,7 +269,7 @@ class NetboxBase:
         
         except Exception as error:
             raise ProxboxException(
-                message=f"<span class='badge text-bg-blue' title='Get'><strong><i class='mdi mdi-download'></i></strong></span> Error trying to get <strong>{self.object_name}</strong> from Netbox using the specified ID '{self.id}'.",
+                message=f"<span class='badge text-bg-blue' title='Get'><strong><i class='mdi mdi-download'></i></strong></span> Error trying to get <strong>{self.object_name}</strong> from Netbox using the specified ID <strong>{self.id}</strong>.",
                 python_exception=f"{error}"
             )
         
@@ -406,7 +406,7 @@ class NetboxBase:
                     data["tags"].append(self.nb.tag.id)
                  
                 try:
-                    await log(self.websocket, f"<span class='badge text-bg-red' title='Post'><strong><i class='mdi mdi-upload'></i></strong></span> Trying to create {self.object_name} object on Netbox.")
+                    await log(self.websocket, f"<span class='badge text-bg-red' title='Post'><strong><i class='mdi mdi-upload'></i></strong></span> Trying to create <strong>{self.object_name}</strong> object on Netbox.")
                     
                     response = await asyncio.to_thread(self.pynetbox_path.create, data)
                     
@@ -441,19 +441,10 @@ class NetboxBase:
         
         except Exception as error:
             raise ProxboxException(
-                message=f"Error trying to create {self.object_name} on Netbox.",
+                message=f"Error trying to create <strong>{self.object_name}</strong> on Netbox.",
                 detail=f"Payload provided: {data}",
                 python_exception=f"{error}"
             )
-    
-        # raise ProxboxException(
-        #     message=f"<strong>[POST]</strong> No data provided to create <strong>{self.object_name}</strong> on Netbox.",
-        #     detail=f"Please provide a JSON payload to create the <strong>{self.object_name}</strong> on Netbox or set 'default' to 'True' on Query Parameter to create a default one."
-        # )
-
-
-
-
 
 
     async def _check_duplicate(self, search_params: dict = None, object: dict = None):
@@ -498,7 +489,7 @@ class NetboxBase:
                     
                     if result:
                         raise ProxboxException(
-                            message=f"<span class='badge text-bg-purple' title='Check Duplicate'><i class='mdi mdi-content-duplicate'></i></span> Default <strong>{self.object_name}</strong> with ID '{result.id}' found on Netbox, but without Proxbox tag. Please delete it (or add the tag) and try again.",
+                            message=f"<span class='badge text-bg-purple' title='Check Duplicate'><i class='mdi mdi-content-duplicate'></i></span> Default <strong>{self.object_name}</strong> with ID <strong>{result.id}</strong> found on Netbox, but without Proxbox tag. Please delete it (or add the tag) and try again.",
                             detail="Netbox does not allow duplicated names and/or slugs."
                         )
                     
@@ -511,7 +502,7 @@ class NetboxBase:
             
             except Exception as error:
                 raise ProxboxException(
-                    message=f"<span class='badge text-bg-red' title='Post'><strong><i class='mdi mdi-upload'></i></strong></span> Error trying to create default {self.object_name} on Netbox.",
+                    message=f"<span class='badge text-bg-red' title='Post'><strong><i class='mdi mdi-upload'></i></strong></span> Error trying to create default <strong>{self.object_name}</strong> on Netbox.",
                     python_exception=f"{error}"
                 )
                 
@@ -737,7 +728,7 @@ class NetboxBase:
                     
                     if result_by_name_and_slug:
                         raise ProxboxException(
-                            message=f"<span class='badge text-bg-purple' title='Check Duplicate'><i class='mdi mdi-content-duplicate'></i></span> <strong>{self.object_name}</strong> with ID '{result_by_name_and_slug.id}' found on Netbox, but <strong>without PROXBOX TAG</strong> Please delete it (or add the tag) and try again.",
+                            message=f"<span class='badge text-bg-purple' title='Check Duplicate'><i class='mdi mdi-content-duplicate'></i></span> <strong>{self.object_name}</strong> with ID <strong>{result_by_name_and_slug.id}</strong> found on Netbox, but <strong>without PROXBOX TAG</strong> Please delete it (or add the tag) and try again.",
                             detail="Netbox does not allow duplicated names and/or slugs."
                         )
 

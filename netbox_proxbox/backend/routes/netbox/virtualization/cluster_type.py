@@ -1,6 +1,7 @@
 from netbox_proxbox.backend.routes.netbox.generic import NetboxBase
 
 class ClusterType(NetboxBase):
+    
     app = "virtualization"
     endpoint = "cluster_types"
     object_name = "Cluster Type"
