@@ -28,8 +28,25 @@ async def netbox_plugins_config(
             )
         ] | None = False
     ):
+    
     """
-    PLUGIN_CONFIG variable defined by user in Netbox 'configuration.py' file
+    Asynchronously retrieves the configuration for a specified Netbox plugin from the `PLUGINS_CONFIG` variable 
+    located in the Netbox '`configuration.py`' file.
+    
+    **Args:**
+    - **plugin_name (`Annotated[str, Query]`):** The name of the Netbox plugin to get the configuration for. 
+    Defaults to PROXBOX_PLUGIN_NAME.
+    
+    - **list_all (`Annotated[bool, Query]`):** If True, returns the entire PLUGINS_CONFIG including configurations 
+    for all plugins. Defaults to False.
+   
+    **Returns:**
+    - **dict:** The configuration for the specified plugin, or an error message if the plugin is not found.
+    If `list_all` is `True`, returns the entire `PLUGINS_CONFIG`.
+    
+    **Raises:**
+    - **`ProxboxException`:** If there is an error importing PLUGINS_CONFIG from 'configuration.py' or if the 
+    plugin configuration is incorrect and cannot be fed into the PluginConfig pydantic model.
     """
 
     try:
@@ -77,9 +94,12 @@ async def netbox_plugins_config(
 @router.get("/netbox/default-settings")
 async def proxbox_netbox_default():
     """
-    Default Plugins settings 
-    """
+    ### Asynchronously retrieves the default settings for Proxbox from the Netbox configuration.
     
+    **Returns:**
+    - **dict:** The default settings for Proxbox.
+    """
+
     from netbox_proxbox import ProxboxConfig
     return ProxboxConfig.default_settings
 
@@ -108,8 +128,15 @@ async def netbox_settings(
     proxbox_config: ProxboxConfigDep
 ):
     """
-    Get user configuration for Netbox from PLUGINS_CONFIG
+    Retrieve NetBox settings from the provided Proxbox configuration.
+
+    **Args:**
+    - **proxbox_config (`ProxboxConfigDep`):** The Proxbox configuration dependency.
+
+    **Returns:**
+    - **dict:** The NetBox settings from the Proxbox configuration.
     """
+    
     return proxbox_config.netbox
 
     
@@ -119,8 +146,15 @@ async def proxmox_settings(
     proxbox_config: ProxboxConfigDep
 ):
     """
-    Get user configuration for Proxmox from PLUGINS_CONFIG
+    ### Retrieve Proxmox settings from the provided Proxbox configuration.
+
+    **Args:**
+    - **proxbox_config (`ProxboxConfigDep`):** The Proxbox configuration dependency.
+
+    **Returns:**
+    - **dict:** The Proxmox settings from the Proxbox configuration.
     """
+
     return proxbox_config.proxmox
 
 
