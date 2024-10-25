@@ -205,11 +205,84 @@ def run_command(sudo_command):
         # Check the result
         if result.returncode == 0:
             print(f"Command '{sudo_command}' correctly issued.")
+            return result.stdout
         else:
             print(f"Failed to run Command '{sudo_command}' Error:", result.stderr)
+            return None
     
     except Exception as e:
         print(f"An error occurred: {e}")
+        return None
+
+
+def find_proxbox_service_in_ls(service_name: str, folder_path: str):
+    """
+    ### Find the Proxbox service in the list of services.
+    
+    This function uses the `ls` command to list the services in the system and
+    searches for the Proxbox service in the output.
+    
+    **Returns:**
+    - **bool:** True if the Proxbox service is found, False otherwise.
+    """
+    
+    output:str = str(run_command(['sudo', '-S', 'ls', '-l', folder_path]))
+    
+    for line in output.splitlines():
+        if service_name in line:
+            return True
+
+    return False
+
+
+def check_proxbox_service_file():
+    """
+    Checks for the existence of the `proxbox.service`' file in the systemd folder.
+    If the file does not exist, attempts to download it from a specified GitHub repository.
+   
+    **Steps:**
+    1. Checks if the `proxbox.service` file exists in the '/etc/systemd/system' directory.
+    2. If the file is not found, changes the directory to '/etc/systemd/system'.
+    3. Attempts to download the `proxbox.service` file from the GitHub repository.
+    4. Rechecks if the `proxbox.service` file exists after the download attempt.
+    
+    **Returns:**
+    - **bool:** True if the `proxbox.service` file is found or successfully downloaded, False otherwise.
+    """
+    
+    branch: str = 'develop'
+    systemd_folder: str = '/etc/systemd/system'
+    service_name: str = 'proxbox.service'
+    github_url: str = f'https://raw.githubusercontent.com/netdevopsbr/netbox-proxbox/{branch}/contrib/{service_name}'
+    
+    file_exists: bool = False
+    
+    file_exists = find_proxbox_service_in_ls(service_name=service_name, folder_path=systemd_folder)
+        
+    if file_exists == False:
+        print("Proxbox service file not found.")
+        
+        try:
+            get_file = run_command(['sudo', '-S', 'wget', '-P', systemd_folder, github_url])
+            
+            daemon_reload = run_command(['sudo', '-S', 'systemctl', 'daemon-reload'])
+            
+        except Exception as error:
+            print("Error getting proxbox.service file.")
+            return False
+
+        file_exists = find_proxbox_service_in_ls(service_name=service_name, folder_path=systemd_folder)
+        
+        if file_exists == True:
+            print("Proxbox service file found.")
+            return True
+    else:
+        print("Proxbox service file found.")
+        return True
+    
+    print(f"[ERROR] Proxbox service file not found and not able to get it from GitHub.\nURL to Download it: {github_url}")
+    return False
+
 
 def change_proxbox_service(desired_state: str):
     """
@@ -227,21 +300,26 @@ def change_proxbox_service(desired_state: str):
     - **Exception:** If an error occurs while attempting to change the Proxbox service state.
     """
     
-    try:
-        if desired_state == "start": 
-            print("START PROXBOX")
-            run_command(['sudo', '-S', 'systemctl', 'start', 'proxbox'])
+    if check_proxbox_service_file() == True:
+        print(f"Proxbox service file found. Try to change Service State to: {desired_state}")
+        try:
+            if desired_state == "start": 
+                print("START PROXBOX")
+                run_command(['sudo', '-S', 'systemctl', 'start', 'proxbox'])
+                
+            if desired_state == "restart":
+                print("RESTART PROXBOX")
+                run_command(['sudo', '-S', 'systemctl', 'restart', 'proxbox'])     
+                
+            if desired_state == "stop":
+                print("STOP PROXBOX")
+                run_command(['sudo', '-S', 'systemctl', 'stop', 'proxbox'])
             
-        if desired_state == "restart":
-            print("RESTART PROXBOX")
-            run_command(['sudo', '-S', 'systemctl', 'restart', 'proxbox'])     
-            
-        if desired_state == "stop":
-            print("STOP PROXBOX")
-            run_command(['sudo', '-S', 'systemctl', 'stop', 'proxbox'])
-        
-    except Exception as error:
-        print("Error occured trying to change Proxbox status")
+        except Exception as error:
+            print("Error occured trying to change Proxbox status")
+    else:
+        print("Proxbox service file not found. Not able to change Service State.")
+        return False
 
         
 class FixProxboxBackendView(View):
@@ -260,7 +338,9 @@ class FixProxboxBackendView(View):
     
     def get(self, request):
         try:
-           change_proxbox_service(desired_state="start")
+            output = check_proxbox_service_file()
+            
+            change_proxbox_service(desired_state="start")
            
         except Exception as error:
             print(error)
