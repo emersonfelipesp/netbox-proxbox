@@ -135,6 +135,8 @@ def find_interface_type(
     - `str`: The determined interface type as a string.
     """
     
+    interface_type: str = ""
+    
     if proxmox_int_type == "eth":
             
         if 'eno' in proxmox_int_name: interface_type = '1000base-t'
@@ -203,6 +205,8 @@ async def get_nodes(
         ]
         
         for node in proxmox_nodes:
+            
+            current_node = None
             
             try:
                 msg = f"<span class='badge text-bg-yellow' title='Syncing'><strong><i class='mdi mdi-download'></i></strong></span> Creating Device <strong>{node.get('node')}</strong> related with the Virtual Machine(s)"
@@ -294,7 +298,7 @@ async def get_nodes(
                         })
                         
                         if create_ipaddress:
-                            log(websocket, f"<span class='badge text-bg-green' title='Success'><strong><i class='mdi mdi-download'></i></strong></span> IP Address <strong><a href='{create_ipaddress.display_url}' target='_blank'>{create_ipaddress.address}</a></strong> of Interface <strong><a href='{create_interface.display_url}' target='_blank'>{create_interface.name}</a><span class='text-green'>created successfully.</span></strong>")
+                            await log(websocket, f"<span class='badge text-bg-green' title='Success'><strong><i class='mdi mdi-download'></i></strong></span> IP Address <strong><a href='{create_ipaddress.display_url}' target='_blank'>{create_ipaddress.address}</a></strong> of Interface <strong><a href='{create_interface.display_url}' target='_blank'>{create_interface.name}</a><span class='text-green'>created successfully.</span></strong>")
                             
                         print(f'create_ipaddress: {create_ipaddress}')
                     except Exception as error:
@@ -699,26 +703,25 @@ async def get_virtual_machines(
                     ).id
 
 
-            start_at_boot = False    
-                
+            start_at_boot: bool = False    
+            
+            
+            vm_config: dict = {}
+            
             if vm.get("type") == 'qemu':
                 vm_config = px.session.nodes(vm.get("node")).qemu(vm.get("vmid")).config.get()
                 
-                onboot = int(vm_config.get("onboot", 0))
+                onboot: int = int(vm_config.get("onboot", 0))
                 
                 if onboot == 1:
                     start_at_boot = True
                 
-                agent = int(vm_config.get("agent", 0))
+                agent: int = int(vm_config.get("agent", 0))
                 
-                qemu_agent = None 
+                qemu_agent: bool = False
                 
                 if agent == 1:
-                    qemu_agent = True
-                else:
-                    qemu_agent = False
-
-            
+                    qemu_agent = True 
                 
             print(f"\n\nvm_config: {vm_config}\n\n")
             
@@ -734,11 +737,11 @@ async def get_virtual_machines(
                 "device": int(device.id),
                 "status": VirtualMachineStatus(vm.get("status")).name,
                 "vcpus": int(vm.get("maxcpu", 0)),
-                "memory": int(vm_config.get("memory")),
+                "memory": int(vm_config.get("memory", 0)),
                 "disk": int(int(vm.get("maxdisk", 0)) / 1000000),
                 "role": role.id,
                 "custom_fields": {
-                    "proxmox_vm_id": vm.get("vmid"),
+                    "proxmox_vm_id": vm.get('vmid'),
                     "proxmox_start_at_boot": start_at_boot,
                     "proxmox_unprivileged_container": unprivileged_container,
                     "proxmox_qemu_agent": qemu_agent,
@@ -761,7 +764,7 @@ async def get_virtual_machines(
                     print("\nDUPLICATED VIRTUAL MACHINE NAME\n")
                     
                     await log(websocket, f"<span class='badge text-bg-yellow' title='Syncing'><strong><i class='mdi mdi-download'></i></strong></span> Duplicated virtual machine NAME <strong>{virtual_machine_data['name']}</strong> found within the same cluster. Appending '(2)' to the name")
-                    virtual_machine_data["name"] = f"{virtual_machine_data["name"]} (2)"
+                    virtual_machine_data["name"] = f"{virtual_machine_data['name']} (2)"
                     
                     duplicated_virtual_machine = await VirtualMachine(nb = nb, websocket = websocket).post(data = virtual_machine_data)
                     
