@@ -23,32 +23,72 @@ from .backend.routes.proxmox.nodes import router as px_nodes_router
 
 from .backend.schemas import *
 
-from netbox import configuration
-
 """
 CORS ORIGINS
 """
 
-plugin_configuration = configuration.PLUGINS_CONFIG
+cfg_not_found_msg = "Netbox configuration not found. Using default configuration."
 
-uvicorn_host = plugin_configuration["netbox_proxbox"]["fastapi"]["uvicorn_host"]
-uvicorn_port = plugin_configuration["netbox_proxbox"]["fastapi"]["uvicorn_port"]
+plugin_configuration: dict = {}
+
+uvicorn_host: str = "localhost"
+uvicorn_port: int = 8800
+
+netbox_host: str = "localhost"
+netbox_port: int = 80
+                
+try:
+    from netbox import configuration
+    
+    if configuration:  
+        plugin_configuration = configuration.PLUGINS_CONFIG
+
+        proxbox_cfg = plugin_configuration.get("netbox_proxbox", False)
         
+        
+        if proxbox_cfg:
+            print("Netbox Proxbox configuration found.")
+            
+            fastapi_cfg = proxbox_cfg.get("fastapi", False)
+            
+            if fastapi_cfg:
+                uvicorn_host = fastapi_cfg.get("uvicorn_host", "localhost")
+                uvicorn_port = fastapi_cfg.get("uvicorn_port", 8800)
+
+            netbox_cfg = proxbox_cfg.get("netbox", False)
+            
+            if netbox_cfg:
+                netbox_host = netbox_cfg.get("domain", "localhost")
+                netbox_port = netbox_cfg.get("http_port", 80)
+        
+        else:
+            print("PLUGINS_CONFIG found, but 'netbox_proxbox' configuration not found.")
+            
+            # TODO
+            # Raise an exception here.
+
+
+    
+except ImportError:
+    print(cfg_not_found_msg)
+    
+    # TODO
+    # Look for the 'configuration.py' via 'os' module.
+
+
 fastapi_endpoint = f"http://{uvicorn_host}:{uvicorn_port}"
 https_fastapi_endpoint = f"https://{uvicorn_host}:{uvicorn_port}"
 fastapi_endpoint_port8000 = f"http://{uvicorn_host}:8000"
 fastapi_endpoint_port80 = f"http://{uvicorn_host}:80"
 
-netbox_host = plugin_configuration["netbox_proxbox"]["netbox"]["domain"]
-netbox_port = plugin_configuration["netbox_proxbox"]["netbox"]["http_port"]
-
 netbox_endpoint_port80 = f"http://{netbox_host}:80"
 netbox_endpoint_port8000 = f"http://{netbox_host}:8000"
-
 netbox_endpoint = f"http://{netbox_host}:{netbox_port}"
 https_netbox_endpoint = f"https://{netbox_host}:{netbox_port}"
 
+
 PROXBOX_PLUGIN_NAME = "netbox_proxbox"
+
 
 # Init FastAPI
 app = FastAPI(
