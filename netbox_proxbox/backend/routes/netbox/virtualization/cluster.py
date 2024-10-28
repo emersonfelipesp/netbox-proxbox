@@ -1,8 +1,6 @@
 from netbox_proxbox.backend.routes.netbox.generic import NetboxBase
 from .cluster_type import ClusterType
 
-from typing import Any
-
 class Cluster(NetboxBase):
     # Default Cluster Type Params
     default_name: str = "Proxbox Basic Cluster"

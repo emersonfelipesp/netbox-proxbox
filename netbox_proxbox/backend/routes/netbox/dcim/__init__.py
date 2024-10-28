@@ -8,10 +8,7 @@ from .device_types import DeviceType
 from .device_roles import DeviceRole
 from .manufacturers import Manufacturer
 
-from netbox_proxbox.backend.schemas.netbox import CreateDefaultBool
 from netbox_proxbox.backend.schemas.netbox.dcim import SitesSchema
-
-from netbox_proxbox.backend.logging import logger
 
 # FastAPI Router
 router = APIRouter()

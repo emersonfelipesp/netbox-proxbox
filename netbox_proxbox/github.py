@@ -1,12 +1,10 @@
 import requests
-import base64
 
 def get(**kwargs):
-    branch = None
     
     owner = "netdevopsbr"
     repo = "netbox-proxbox"
-    branch = "develop"
+    #branch = "develop"
     
     # Get variable passed from function
     if kwargs.get("filename"):

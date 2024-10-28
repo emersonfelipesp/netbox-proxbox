@@ -1,8 +1,6 @@
 from netbox_proxbox.backend.routes.netbox.generic import NetboxBase
 from .manufacturers import Manufacturer
 
-from typing import Any
-
 class DeviceType(NetboxBase):
         
     # Default Device Type Params

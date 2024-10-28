@@ -1,7 +1,5 @@
-from typing import Annotated
-
 from fastapi import FastAPI, Request, WebSocket
-from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from netbox_proxbox.backend.exception import ProxboxException
@@ -20,8 +18,11 @@ from .backend.routes.proxmox import router as proxmox_router
 from .backend.routes.proxmox.cluster import router as px_cluster_router
 from .backend.routes.proxmox.nodes import router as px_nodes_router
 
-
 from .backend.schemas import *
+
+# Sessions
+from .backend.session.proxmox import ProxmoxSessionsDep
+from .backend.session.netbox import NetboxSessionDep
 
 """
 CORS ORIGINS
@@ -151,8 +152,6 @@ async def proxmoxer_exception_handler(request: Request, exc: ProxboxException):
         }
     )
 
-from netbox_proxbox.backend.session.proxmox import ProxmoxSessionsDep
-from netbox_proxbox.backend.session.netbox import NetboxSessionDep
 
 @app.websocket("/ws")
 async def websocket_endpoint(

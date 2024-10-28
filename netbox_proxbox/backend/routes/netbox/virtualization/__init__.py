@@ -1,14 +1,11 @@
-from fastapi import APIRouter, Depends, Body, Query
+from fastapi import APIRouter, Depends, Body
 from typing import Annotated
 
 from .cluster_type import ClusterType
 from .cluster import Cluster
 from .virtual_machines import VirtualMachine
 
-from netbox_proxbox.backend.schemas.netbox import CreateDefaultBool
-from netbox_proxbox.backend.schemas.netbox.virtualization import ClusterTypeSchema, ClusterSchema
-
-from netbox_proxbox.backend.session.netbox import NetboxSessionDep
+from netbox_proxbox.backend.schemas.netbox.virtualization import ClusterTypeSchema
 
 router = APIRouter()
 

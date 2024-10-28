@@ -51,7 +51,7 @@ async def netbox_devices(nb: NetboxSessionDep):
     return raw_list
 
 @router.get("/openapi")
-async def netbox_devices(nb: NetboxSessionDep):
+async def netbox_openapi(nb: NetboxSessionDep):
     """
     ### Fetches the OpenAPI documentation from the Netbox session.
     

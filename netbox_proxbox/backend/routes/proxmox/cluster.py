@@ -1,11 +1,10 @@
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from fastapi import APIRouter, Query
 
 from typing import Annotated
 
 from netbox_proxbox.backend.schemas.proxmox import *
 from netbox_proxbox.backend.session.proxmox import ProxmoxSessionsDep
-from netbox_proxbox.backend.exception import ProxboxException
 from netbox_proxbox.backend.enum.proxmox import *
 
 router = APIRouter()

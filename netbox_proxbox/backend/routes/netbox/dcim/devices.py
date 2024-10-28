@@ -1,5 +1,4 @@
 from netbox_proxbox.backend.routes.netbox.generic import NetboxBase
-from typing import Any
 
 from .sites import Site
 from .device_types import DeviceType
@@ -9,13 +8,13 @@ from netbox_proxbox.backend.routes.netbox.virtualization.cluster import Cluster
 
 class Device(NetboxBase):
     
-    default_name = "Proxbox Basic Device"
-    default_slug = "proxbox-basic-device"
-    default_description = "Proxbox Basic Device"
+    default_name: str = "Proxbox Basic Device"
+    default_slug: str = "proxbox-basic-device"
+    default_description: str = "Proxbox Basic Device"
     
-    app = "dcim"
-    endpoint = "devices"
-    object_name = "Device"
+    app: str = "dcim"
+    endpoint: str = "devices"
+    object_name: str = "Device"
     
     async def get_base_dict(self):
         site = await Site(nb = self.nb, websocket = self.websocket).get()

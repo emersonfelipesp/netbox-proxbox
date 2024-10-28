@@ -3,7 +3,6 @@ from typing import Annotated, Any
 
 # Proxmox
 from proxmoxer import ProxmoxAPI
-from proxmoxer.core import ResourceException
 
 from netbox_proxbox.backend.schemas.proxmox import ProxmoxSessionSchema
 from netbox_proxbox.backend.exception import ProxboxException
@@ -94,7 +93,7 @@ class ProxmoxSession:
         #
         try:
             # DISABLE SSL WARNING
-            if self.ssl == False:
+            if not self.ssl:
                 import urllib3
                 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
             

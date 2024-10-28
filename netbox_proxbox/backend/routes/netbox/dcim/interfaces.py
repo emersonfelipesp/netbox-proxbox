@@ -1,22 +1,16 @@
 from netbox_proxbox.backend.routes.netbox.generic import NetboxBase
-from typing import Any
-
-from .sites import Site
-from .device_types import DeviceType
-from .device_roles import DeviceRole
 
 from netbox_proxbox.backend.routes.netbox.dcim.devices import Device
 
 class Interface(NetboxBase):
     
-    default_name = "Proxbox Basic interface"
-    #default_slug = "proxbox-basic-interface"
-    default_description = "Proxbox Basic Interface"
-    type = "other"
+    default_name: str = "Proxbox Basic interface"
+    default_description: str = "Proxbox Basic Interface"
+    type: str = "other"
     
-    app = "dcim"
-    endpoint = "interfaces"
-    object_name = "Interface"
+    app: str = "dcim"
+    endpoint: str = "interfaces"
+    object_name: str = "Interface"
     
     async def get_base_dict(self):
         device = await Device(nb = self.nb, websocket = self.websocket).get()

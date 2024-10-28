@@ -1,5 +1,4 @@
 from netbox_proxbox.backend.routes.netbox.generic import NetboxBase
-from typing import Any
 
 class DeviceRole(NetboxBase):
     """

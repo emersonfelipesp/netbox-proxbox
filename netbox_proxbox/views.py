@@ -1,29 +1,21 @@
 import subprocess
 
-from django.shortcuts import get_object_or_404, render, redirect
-from django.urls import reverse_lazy
+from django.shortcuts import render, redirect
+
 # 'View' is a django subclass. Basic type of class-based views
 from django.views import View
-from django.views.generic.edit import CreateView, DeleteView, UpdateView
-
-from django.views.decorators.cache import never_cache
 
 # Enables permissions for views using Django authentication system.
 # PermissionRequiredMixin = will handle permission checks logic and will plug into the
 # Netbox's existing authorization system.
-from django.contrib.auth.mixins import PermissionRequiredMixin
-
-from .icon_classes import icon_classes
+#from django.contrib.auth.mixins import PermissionRequiredMixin
 
 import json
 
 from netbox import configuration
 from . import ProxboxConfig
     
-import markdown
 from . import github
-
-import requests
 
 class HomeView(View):
     """
@@ -56,15 +48,6 @@ class HomeView(View):
         plugin_configuration = configuration.PLUGINS_CONFIG
         default_config = ProxboxConfig.default_settings
         
-        # print("plugin_configuration: ", plugin_configuration, "\n\n")
-        # print("default_config: ", default_config)
-        
-        
-        uvicorn_host = plugin_configuration["netbox_proxbox"]["fastapi"]["uvicorn_host"]
-        uvicorn_port = plugin_configuration["netbox_proxbox"]["fastapi"]["uvicorn_port"]
-        
-        fastapi_endpoint = f"http://{uvicorn_host}:{uvicorn_port}"
-
         return render(
             request,
             self.template_name,
@@ -182,12 +165,12 @@ def run_command(sudo_command):
     """
     
     user: dict = {}
-    username: str = ""
+    #username: str = ""
     password: str = ""
     
     try:
         user = returnSudoUser()
-        username = user["user"] # IMPLEMENTATION LEFT.
+        # username = user["user"] # IMPLEMENTATION LEFT.
         password = user["password"]
     except Exception as error:
         print(f"Not able to get sudo user and password from 'configuration.py'\n{error}")
@@ -259,21 +242,20 @@ def check_proxbox_service_file():
     
     file_exists = find_proxbox_service_in_ls(service_name=service_name, folder_path=systemd_folder)
         
-    if file_exists == False:
+    if not file_exists:
         print("Proxbox service file not found.")
         
         try:
-            get_file = run_command(['sudo', '-S', 'wget', '-P', systemd_folder, github_url])
-            
-            daemon_reload = run_command(['sudo', '-S', 'systemctl', 'daemon-reload'])
+            run_command(['sudo', '-S', 'wget', '-P', systemd_folder, github_url])
+            run_command(['sudo', '-S', 'systemctl', 'daemon-reload'])
             
         except Exception as error:
-            print("Error getting proxbox.service file.")
+            print(f"Error getting proxbox.service file.\n   > {error}")
             return False
 
         file_exists = find_proxbox_service_in_ls(service_name=service_name, folder_path=systemd_folder)
         
-        if file_exists == True:
+        if file_exists:
             print("Proxbox service file found.")
             return True
     else:
@@ -300,7 +282,7 @@ def change_proxbox_service(desired_state: str):
     - **Exception:** If an error occurs while attempting to change the Proxbox service state.
     """
     
-    if check_proxbox_service_file() == True:
+    if check_proxbox_service_file():
         print(f"Proxbox service file found. Try to change Service State to: {desired_state}")
         try:
             if desired_state == "start": 
@@ -316,7 +298,7 @@ def change_proxbox_service(desired_state: str):
                 run_command(['sudo', '-S', 'systemctl', 'stop', 'proxbox'])
             
         except Exception as error:
-            print("Error occured trying to change Proxbox status")
+            print(f"Error occured trying to change Proxbox status.\n   > {error}")
     else:
         print("Proxbox service file not found. Not able to change Service State.")
         return False
@@ -338,7 +320,7 @@ class FixProxboxBackendView(View):
     
     def get(self, request):
         try:
-            output = check_proxbox_service_file()
+            check_proxbox_service_file()
             
             change_proxbox_service(desired_state="start")
            

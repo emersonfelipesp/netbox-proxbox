@@ -4,27 +4,9 @@ from typing import Annotated
 
 from proxmoxer.core import ResourceException
 
-router = APIRouter()
-
 from netbox_proxbox.backend.session.proxmox import ProxmoxSessionsDep
-from netbox_proxbox.backend.schemas.proxmox import ResponseNodeList
 
-
-
-"""
-@router.get("/", response_model=ResponseNodeList)
-async def nodes(pxs: ProxmoxSessionsDep):
-    json_result = []
-    
-    for px in pxs:
-        json_result.append(
-            {
-                px.name: px.session(path).get()
-            }
-        )
-    
-    return json_result
-"""
+router = APIRouter()
 
 @router.get("/teste")
 async def test():
@@ -47,7 +29,7 @@ async def nodes(
     return json_result
 
 @router.get("/{node}/qemu")
-async def nodes(
+async def node_qemu(
     pxs: ProxmoxSessionsDep,
     node: Annotated[str, Path(title="Proxmox Node", description="Proxmox Node name (ex. 'pve01').")],
 ):
@@ -61,6 +43,7 @@ async def nodes(
                 }
             )
         except ResourceException as error:
+            print(f"Error: {error}")
             pass
     
     return json_result

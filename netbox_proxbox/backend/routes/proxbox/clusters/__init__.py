@@ -1,21 +1,17 @@
-from fastapi import APIRouter, Depends
-
-from typing import Annotated, Any
+from fastapi import APIRouter
 
 # Import Both Proxmox Sessions and Netbox Session Dependencies
 from netbox_proxbox.backend.session.proxmox import ProxmoxSessionsDep
 from netbox_proxbox.backend.session.netbox import NetboxSessionDep
 
-from netbox_proxbox.backend.logging import logger, log
+from netbox_proxbox.backend.logging import log
 
 from netbox_proxbox.backend.exception import ProxboxException, exception_log
 
 from netbox_proxbox.backend import (
     ClusterType,
     Cluster,
-    Site,
     DeviceRole,
-    DeviceType,
     Device,
     VirtualMachine,
     VMInterface,
@@ -26,7 +22,6 @@ from netbox_proxbox.backend import (
 from fastapi import WebSocket
 
 router = APIRouter()
-
 
 async def proxmox_session_with_cluster(
     pxs: ProxmoxSessionsDep,
@@ -91,7 +86,12 @@ async def proxbox_get_clusters(
                 }
             )
         #except Exception as error: raise ProxboxException(message="Error trying to create the cluster type.", python_exception=error)
-        except Exception as error: await exception_log(logger=log,websocket=websocket, message="Error trying to create the cluster type.", python_exception=error)
+        except Exception as error:
+            await exception_log(
+                logger=log,
+                websocket=websocket,
+                message="Error trying to create the cluster type.",
+                python_exception=f'{error}')
         
         # Create the Cluster
         try:
@@ -105,7 +105,13 @@ async def proxbox_get_clusters(
                 }
             )
         #except Exception as error: raise ProxboxException(message="Error trying to create the cluster.", python_exception=error)
-        except Exception as error: await exception_log(logger=log,websocket=websocket, message="Error trying to create the cluster.", python_exception=error)
+        except Exception as error:
+            await exception_log(
+                logger=log,
+                websocket=websocket,
+                message="Error trying to create the cluster.",
+                python_exception=f'{error}'
+            )
             
             
         result.append(
@@ -139,17 +145,21 @@ def find_interface_type(
     
     if proxmox_int_type == "eth":
             
-        if 'eno' in proxmox_int_name: interface_type = '1000base-t'
-        elif 'en' in proxmox_int_name: interface_type = '10gbase-t'
+        if 'eno' in proxmox_int_name:
+            interface_type = '1000base-t'
+        elif 'en' in proxmox_int_name:
+            interface_type = '10gbase-t'
         
-    elif proxmox_int_type == "bridge": interface_type = proxmox_int_type   
-    elif proxmox_int_type == "bond": interface_type = 'lag'
-    else: interface_type = 'other'
+    elif proxmox_int_type == "bridge":
+        interface_type = proxmox_int_type   
+    elif proxmox_int_type == "bond":
+        interface_type = 'lag'
+    else:
+        interface_type = 'other'
     
     print(f'interface_type: {interface_type} / {type(interface_type)}')
     return str(interface_type)
 
-from fastapi import WebSocket
 
 @router.get("/nodes")
 async def get_nodes(
@@ -251,9 +261,10 @@ async def get_nodes(
                 print(f'interface_type: {interface_type}')
                 interface_name = interface.get("iface")
                 
+                
+                enabled: bool = False
                 if interface.get("active") == 1:
                     enabled = True
-                else: enabled = False
                 
                 create_interface = None
                 
@@ -354,11 +365,9 @@ async def get_nodes(
                                 
                                 print(f"proxmox_port: {proxmox_port}")
                                 
+                                enabled: bool = False
                                 if proxmox_port.get("active") == 1:
                                     enabled = True
-                                else: enabled = False
-                                
-
                                 
                             # Interface and Bridge Interface must belong to the same Device
                             await log(websocket, "<span class='badge text-bg-yellow' title='Syncing'><strong><i class='mdi mdi-download'></i></strong></span> Creating child interface of a bridge. Bridge interface and child must belong to the same device.")
@@ -382,13 +391,10 @@ async def get_nodes(
                                             await log(websocket, f"<span class='badge text-bg-green' title='Success'><strong><i class='mdi mdi-download'></i></strong></span> Child Bridge Interface <strong><a href='{new_netbox_port.display_url}' target='_blank'>{port}</a> of <a href='{create_interface.display_url}' target='_blank'>{create_interface.name}</a> created successfully.</strong>")
                                         
                                     except Exception as error:
-                                        
-                                        #raise ProxboxException(
-                                        await log_exception(
-                                            websocket=websocket,
-                                            message="<span class='text-red'><strong><i class='mdi mdi-error'></i></strong></span> Error trying to create child interface of bridge interface.",
-                                            python_exception=error
-                                    )
+                                        await log(
+                                            websocket,
+                                            f"<span class='text-red'><strong><i class='mdi mdi-error'></i></strong></span> Error trying to create child interface of bridge interface.<br>{error}",
+                                        )
                                             
                                     cidr = proxmox_port.get("cidr")
                                     print(f"[2] cidr: {cidr}")
@@ -406,7 +412,13 @@ async def get_nodes(
                                                 log(websocket, f"<span class='badge text-bg-green' title='Success'><strong><i class='mdi mdi-download'></i></strong></span> IP Address <strong><a href='{create_ipaddress.display_url}' target='_blank'>{create_ipaddress.address}</a></strong> of Interface <strong><a href='{new_netbox_port.display_url}' target='_blank'>{new_netbox_port.name}</a> created successfully.</strong>")
                                                 
                                         #except Exception as error: raise ProxboxException(message="<span class='text-red'><strong><i class='mdi mdi-error'></i></strong></span> Error trying to create IP Address on Netbox", python_exception=error)
-                                        except Exception as error: await exception_log(logger=log,websocket=websocket,message="<span class='text-red'><strong><i class='mdi mdi-error'></i></strong></span> Error trying to create IP Address on Netbox", python_exception=error)
+                                        except Exception as error:
+                                            await exception_log(
+                                                logger=log,
+                                                websocket=websocket,
+                                                message="<span class='text-red'><strong><i class='mdi mdi-error'></i></strong></span> Error trying to create IP Address on Netbox",
+                                                python_exception=f'{error}'
+                                            )
                                     
                                     
                             
@@ -481,9 +493,6 @@ async def get_virtual_machines(
     
     result = []
     
-    
-    containers = []
-    
     from netbox_proxbox.backend.cache import cache
     
     print("CACHE start:", cache.cache)
@@ -507,7 +516,7 @@ async def get_virtual_machines(
             Get Device from Netbox based on Proxmox Node Name only if it's not already in the devices dict
             This way we are able to minimize the number of requests to Netbox API
             """
-            if devices.get(vm_node) == None:
+            if devices.get(vm_node) is None:
                 devices[vm_node] = await Device(nb = nb, websocket = websocket).get(name = vm.get("node"))
                 
             device = devices[vm_node]
@@ -518,7 +527,7 @@ async def get_virtual_machines(
             Get Cluster from Netbox based on Cluster Name only if it's not already in the devices dict
             This way we are able to minimize the number of requests to Netbox API
             """
-            if clusters.get(px.name) == None:
+            if clusters.get(px.name) is None:
                 clusters[px.name] = await Cluster(nb = nb, websocket = websocket).get(name = px.name)
             
             cluster = clusters[px.name]
@@ -526,7 +535,7 @@ async def get_virtual_machines(
         
         
             role = await DeviceRole(nb = nb, websocket = websocket).get(slug = vm.get("type"))
-            if role == None:
+            if role is not None:
             
                 vm_type = vm.get("type")
                 
@@ -792,7 +801,7 @@ async def get_virtual_machines(
                     network_name = f"net{network_id}"
                     
                     vm_network_info = vm_config.get(network_name, None)
-                    if vm_network_info != None:
+                    if vm_network_info is not None:
                         
                         net_fields = vm_network_info.split(",")
                         
@@ -824,10 +833,12 @@ async def get_virtual_machines(
                                 mac_address = None
                                 
                                 virtio = v.get("virtio", None)
-                                if virtio: mac_address=virtio
+                                if virtio:
+                                    mac_address=virtio
                         
                                 hwaddr = v.get("hwaddr", None)
-                                if hwaddr: mac_address=hwaddr
+                                if hwaddr:
+                                    mac_address=hwaddr
                                 
                                 await log(websocket, f"<span class='badge text-bg-yellow' title='Syncing'><strong><i class='mdi mdi-download'></i></strong></span> Try creating VirtualMachine Interface <strong>{str(k)}</strong> on Netbox...")
                                 try:
@@ -843,13 +854,11 @@ async def get_virtual_machines(
                                         await log(websocket, f"<span class='badge text-bg-green' title='Success'><strong><i class='mdi mdi-download'></i></strong></span> Virtual Machine Interface <strong><a href='{netbox_interface.display_url}' target='_blank' {netbox_interface.name}</a></strong> created successfully.")
                                 
                                 except Exception as error:
-                                    raise ProxboxException(
-                                        message="<span class='text-red'><strong><i class='mdi mdi-error'></i></strong></span> Error trying to create VM interface on Netbox",
-                                    )
+                                    await log(websocket, f"<span class='text-red'><strong><i class='mdi mdi-error'></i></strong></span> Error trying to create VM interface on Netbox<br>{error}")
+
                         except Exception as error:
-                            raise ProxboxException(
-                                message=f"<span class='text-red'><strong><i class='mdi mdi-error'></i></strong></span> Error trying to create <strong>{new_virtual_machine.name}</strong> VM Network Interfaces",
-                            )
+                            await log(websocket, f"<span class='text-red'><strong><i class='mdi mdi-error'></i></strong></span> Error trying to create <strong>{new_virtual_machine.name}</strong> VM Network Interfaces<br>{error}")
+
 
         result.append({
             "name": px.name,

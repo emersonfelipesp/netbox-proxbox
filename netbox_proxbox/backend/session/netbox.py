@@ -61,7 +61,7 @@ class NetboxSession:
                 slug = proxbox_tag_slug
             )
 
-            if proxbox_tag == None:
+            if proxbox_tag is None:
                 try:
                     # If Proxbox tag does not exist, create one.
                     tag = self.session.extras.tags.create(
