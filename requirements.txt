@@ -148,3 +148,4 @@ watchdog==5.0.3
 watchfiles==0.24.0
 websockets==13.1
 wheel==0.44.0
+ruff==0.7.1
