@@ -1,12 +1,6 @@
 {% extends 'base/layout.html' %}
 {% load static %}
 
-<!-- External JSS not working. Needs FIX.
-{% block head %}
-    <script type="text/javascript" src="{% static 'netbox_proxbox/home.js' %}"></script>
-{% endblock %}
--->
-
 {% block content %}
     <script>
         const uvicornHost = "{{ configuration.netbox_proxbox.fastapi.uvicorn_host }}"
