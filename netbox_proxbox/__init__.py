@@ -34,6 +34,14 @@ class ProxboxConfig(PluginConfig):
                 'node_role_id' : 0,
                 'site_id': 0
             }
+        },
+        'fastapi': {
+            'uvicorn_host': 'localhost',
+            'uvicorn_port': 8800,
+            'sudo': {
+                'user': "linuxUserWithSudo",
+                'password': "Strong@P4ssword",
+            }
         }
     }
 

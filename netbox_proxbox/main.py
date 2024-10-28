@@ -36,44 +36,62 @@ uvicorn_port: int = 8800
 
 netbox_host: str = "localhost"
 netbox_port: int = 80
-                
+
+
+configuration = None
+default_config: dict = {}
+plugin_configuration: dict = {}
+proxbox_cfg: dict = {}  
+    
 try:
     from netbox import configuration
-    
-    if configuration:  
-        plugin_configuration = configuration.PLUGINS_CONFIG
-
-        proxbox_cfg = plugin_configuration.get("netbox_proxbox", False)
-        
-        
-        if proxbox_cfg:
-            print("Netbox Proxbox configuration found.")
-            
-            fastapi_cfg = proxbox_cfg.get("fastapi", False)
-            
-            if fastapi_cfg:
-                uvicorn_host = fastapi_cfg.get("uvicorn_host", "localhost")
-                uvicorn_port = fastapi_cfg.get("uvicorn_port", 8800)
-
-            netbox_cfg = proxbox_cfg.get("netbox", False)
-            
-            if netbox_cfg:
-                netbox_host = netbox_cfg.get("domain", "localhost")
-                netbox_port = netbox_cfg.get("http_port", 80)
-        
-        else:
-            print("PLUGINS_CONFIG found, but 'netbox_proxbox' configuration not found.")
-            
-            # TODO
-            # Raise an exception here.
-
-
+    plugin_configuration = configuration.PLUGINS_CONFIG
+    proxbox_cfg: dict = plugin_configuration.get("netbox_proxbox", {})
     
 except ImportError:
     print(cfg_not_found_msg)
     
     # TODO
     # Look for the 'configuration.py' via 'os' module.
+
+try:
+    from . import ProxboxConfig
+    default_config: dict = ProxboxConfig.default_settings
+    
+except ImportError:
+    print(cfg_not_found_msg)
+    
+    # TODO
+    # Look for the 'ProxboxConfig' via 'os' module.   
+
+
+try:    
+    if proxbox_cfg and default_config:
+        print("Netbox Proxbox configuration and Proxbox Default config found.")
+        
+        if proxbox_cfg:
+            print("Netbox Proxbox configuration found.")
+            
+            fastapi_cfg: dict = proxbox_cfg.get("fastapi", default_config.get('fastapi'))
+            
+            if fastapi_cfg:
+                uvicorn_host: str = fastapi_cfg.get("uvicorn_host", default_config['fastapi']['uvicorn_host'])
+                uvicorn_port: int = fastapi_cfg.get("uvicorn_port", default_config['fastapi']['uvicorn_port'])
+
+            netbox_cfg: dict = proxbox_cfg.get("netbox", default_config.get('netbox'))
+            
+            if netbox_cfg:
+                netbox_host: str = netbox_cfg.get("domain", default_config['netbox']['domain'])
+                netbox_port: int = netbox_cfg.get("http_port", default_config['netbox']['http_port'])
+        
+        else:
+            print("PLUGINS_CONFIG found, but 'netbox_proxbox' configuration not found.")
+            
+            # TODO
+            # Raise an exception here.
+            
+except Exception as error:
+    print(f"Error while trying to get configuration from Netbox.\n   > {error}")
 
 
 fastapi_endpoint = f"http://{uvicorn_host}:{uvicorn_port}"
@@ -87,7 +105,7 @@ netbox_endpoint = f"http://{netbox_host}:{netbox_port}"
 https_netbox_endpoint = f"https://{netbox_host}:{netbox_port}"
 
 
-PROXBOX_PLUGIN_NAME = "netbox_proxbox"
+PROXBOX_PLUGIN_NAME: str = "netbox_proxbox"
 
 
 # Init FastAPI
