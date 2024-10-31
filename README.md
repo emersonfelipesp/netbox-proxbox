@@ -116,10 +116,19 @@ Clone netbox-proxbox repository
 git clone https://github.com/netdevopsbr/netbox-proxbox.git
 ```
 
-Install netbox-proxbox
+Install required packages
+
 ```
 cd netbox-proxbox
+
 source /opt/netbox/venv/bin/activate
+
+sudo pip3 install -r requirements.txt
+```
+
+Run netbox-proxbox on develop mode
+
+```
 python3 setup.py develop
 ```
 
