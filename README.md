@@ -259,7 +259,7 @@ The commands above creates the service file, enables it to run at boot time and 
 
 #### Optional way for developing use:
 ```
-/opt/netbox/venv/bin/uvicorn netbox-proxbox.netbox_proxbox.main:app --host 0.0.0.0 --port 8800 --app-dir /opt/netbox/netbox --ssl-keyfile=/etc/ssl/proxbox.key --ssl-certfile=/etc/ssl/proxbox.crt --reload
+/opt/netbox/venv/bin/uvicorn netbox-proxbox.netbox_proxbox.main:app --host 0.0.0.0 --port 8800 --app-dir /opt/netbox/netbox --ssl-keyfile=/etc/ssl/private/proxbox.key --ssl-certfile=/etc/ssl/certs/proxbox.crt --reload
 ```
 
 ---
