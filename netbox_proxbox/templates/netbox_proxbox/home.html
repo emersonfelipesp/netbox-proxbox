@@ -6,7 +6,7 @@
         const uvicornHost = "{{ configuration.netbox_proxbox.fastapi.uvicorn_host }}"
         const uvicornPort = "{{ configuration.netbox_proxbox.fastapi.uvicorn_port }}"
 
-        const fastapiEndpoint = `https://${uvicornHost}:${uvicornPort}`
+        const fastapiEndpoint = `http://${uvicornHost}:${uvicornPort}`
         const websocketEndpoint = `wss://${uvicornHost}:${uvicornPort}/ws`
 
         // Instantiate WebSocket connection to FastAPI backend.
