@@ -119,9 +119,9 @@ git clone https://github.com/netdevopsbr/netbox-proxbox.git
 Install required packages
 
 ```
-cd netbox-proxbox
-
-source /opt/netbox/venv/bin/activate
+cd /opt/netbox
+source venv/bin/activate
+cd netbox/netbox-proxbox
 
 sudo pip3 install -r requirements.txt
 ```
