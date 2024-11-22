@@ -60,8 +60,8 @@ The following table shows the Netbox and Proxmox versions compatible (tested) wi
 ### Summary
 [1. Installation](#1-installation)
 - [1.1. Install package](#11-install-package)
-  - [1.1.1. Using pip (production use)](#111-using-pip-production-use---not-working-yet)
-  - [1.1.2. Using git (development use)](#112-using-git-development-use)
+  - [1.1.1. Using pip (production use)](#111-using-pip-production-use---not-working-yet) - NOT WORKING
+  - [1.1.2. Using git (development use)](#112-using-git-development-use) - CURRENTLY WORKING
 - [1.2. Enable the Plugin](#12-enable-the-plugin)
 - [1.3. Configure Plugin](#13-configure-plugin)
   - [1.3.1. Change Netbox 'configuration.py' to add PLUGIN parameters](#131-change-netbox-configurationpy-to-add-plugin-parameters)
@@ -93,6 +93,8 @@ The plugin is available as a Python package in pypi and can be installed with pi
 
 #### 1.1.1. Using pip (production use)
 
+> NOT WORKING
+
 Enter Netbox's virtual environment.
 ```
 source /opt/netbox/venv/bin/activate
@@ -104,6 +106,9 @@ Install the plugin package.
 ```
 
 #### 1.1.2. Using git (development use)
+
+> CURRENTLY WORKING
+
 **OBS:** This method is recommend for testing and development purposes and is not for production use.
 
 Move to netbox main folder
@@ -119,11 +124,11 @@ git clone https://github.com/netdevopsbr/netbox-proxbox.git
 Install required packages
 
 ```
-cd netbox-proxbox
+cd /opt/netbox
+source venv/bin/activate
+cd netbox/netbox-proxbox
 
-source /opt/netbox/venv/bin/activate
-
-sudo pip3 install -r requirements.txt
+pip3 install -r requirements.txt
 ```
 
 Run netbox-proxbox on develop mode
