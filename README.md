@@ -238,8 +238,8 @@ PLUGINS_CONFIG = {
 
 ```
 sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
--keyout /etc/ssl/proxbox.key \
--out /etc/ssl/proxbox.crt
+-keyout /etc/ssl/private/proxbox.key \
+-out /etc/ssl/certs/proxbox.crt
 ```
 
 > The certificate files created are by default located at `/etc/ssl`.
