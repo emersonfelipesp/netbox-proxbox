@@ -128,7 +128,7 @@ cd /opt/netbox
 source venv/bin/activate
 cd netbox/netbox-proxbox
 
-sudo pip3 install -r requirements.txt
+pip3 install -r requirements.txt
 ```
 
 Run netbox-proxbox on develop mode
