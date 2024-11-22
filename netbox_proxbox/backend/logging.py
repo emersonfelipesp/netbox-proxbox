@@ -53,14 +53,17 @@ def setup_logger():
     # Set the formatter for the console handler and file handler
     console_handler.setFormatter(formatter)
 
-    # Create a file handler
-    file_handler = TimedRotatingFileHandler(log_path, when='midnight', interval=1, backupCount=7)
+    try:
+        # Create a file handler
+        file_handler = TimedRotatingFileHandler(log_path, when='midnight', interval=1, backupCount=7)
 
-    # Log only WARNINGS and above in the file
-    file_handler.setLevel(logging.WARNING)
+        # Log only WARNINGS and above in the file
+        file_handler.setLevel(logging.WARNING)
 
-    # Set the formatter for the file handler
-    file_handler.setFormatter(formatter)
+        # Set the formatter for the file handler
+        file_handler.setFormatter(formatter)
+    except:
+        print("Not able to create '/var/log/proxbox.log' archive.")
 
     # Add the handlers to the logger
     logger.addHandler(console_handler)
