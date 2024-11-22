@@ -232,6 +232,7 @@ PLUGINS_CONFIG = {
 ```
 sudo cp -v /opt/netbox/netbox/netbox-proxbox/contrib/*.service /etc/systemd/system/
 sudo systemctl daemon-reload
+sudo systemctl enable --now proxbox
 
 sudo systemctl start proxbox
 sudo systemctl status proxbox
