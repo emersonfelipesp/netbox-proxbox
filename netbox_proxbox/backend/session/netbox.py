@@ -25,7 +25,6 @@ class NetboxSession:
         self.domain = netbox_settings.domain
         self.http_port = netbox_settings.http_port
         self.token = netbox_settings.token
-        self.ssl = netbox_settings.ssl
         self.settings = netbox_settings.settings
         self.session = self.pynetbox_session()
         self.tag = self.proxbox_tag()
@@ -35,8 +34,8 @@ class NetboxSession:
         print("Establish Netbox connection...")
         try:
             # CHANGE SSL VERIFICATION TO FALSE
-            session = requests.Session()
-            session.verify = False
+            #session = requests.Session()
+            #session.verify = False
             
             netbox_session = pynetbox.api(
                     f'http://{self.domain}:{self.http_port}{DEFAULT_BASE_PATH}',
@@ -44,8 +43,8 @@ class NetboxSession:
                     threading=True,
             )
             # DISABLES SSL VERIFICATION
-            netbox_session.http_session = session
-            
+            #netbox_session.http_session = session
+            #
             return netbox_session
         
         except Exception as error:

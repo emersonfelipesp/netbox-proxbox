@@ -28,7 +28,6 @@ class ProxboxConfig(PluginConfig):
             'domain': 'netbox.example.com',     # May also be IP address
             'http_port': 80,
             'token': 'PASTE_YOUR_TOKEN_HERE',
-            'ssl': False,
             'settings': {
                 'virtualmachine_role_id' : 0,
                 'node_role_id' : 0,

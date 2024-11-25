@@ -9,7 +9,6 @@ class NetboxSessionSchema(BaseModel):
     domain: str
     http_port: int
     token: str
-    ssl: bool
     settings: NetboxSessionSettingsSchema | None = None
     
 CreateDefaultBool = RootModel[ bool | None ]

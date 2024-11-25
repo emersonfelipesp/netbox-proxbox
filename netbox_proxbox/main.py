@@ -130,6 +130,9 @@ origins = [
     fastapi_endpoint_port8000,
     fastapi_endpoint_port80,
     "http://localhost",
+    "https://10.0.30.168",
+    "https://10.0.30.168:443"
+    "https://10.0.30.168:80"
 ]
 
 app.add_middleware(

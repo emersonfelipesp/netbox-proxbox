@@ -490,14 +490,6 @@
                                     <td>{{ default_config.netbox.token }} (default)</td>
                                 {% endif %}
                             <tr>
-                            </tr>
-                                <th scope="row"><strong>SSL</strong></th>
-                                {% if configuration.netbox_proxbox.netbox.ssl %}
-                                    <td>{{ configuration.netbox_proxbox.netbox.ssl }}</td>
-                                {% else %}
-                                    <td>{{ default_config.netbox.ssl }} (default)</td>
-                                {% endif %}
-                            </tr>
                             <tr>
                                 <th scope="row"><strong>Netbox Version</strong></th>
                                 <td id="netbox-version">
