@@ -234,6 +234,13 @@ PLUGINS_CONFIG = {
 
 **OBS:** It is possible to change Proxbox Backend Port (`8800`), you need to edit `proxbox.service` file and `configuration.py`
 
+Enables **read/exec permission** for **Uvicorn** use **Netbox certificates**. This is a generic way of doing it and probably **not** the **safe** option.
+```
+sudo chmod +rx -R /etc/ssl/private/
+sudo chmod +rx -R /etc/ssl/certs/
+```
+
+Copies `proxbox.service` from repository to **systemd folder** and enables it.
 ```
 sudo cp -v /opt/netbox/netbox/netbox-proxbox/contrib/*.service /etc/systemd/system/
 sudo systemctl daemon-reload
