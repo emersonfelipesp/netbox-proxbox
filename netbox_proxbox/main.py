@@ -103,7 +103,9 @@ fastapi_endpoint_port80 = f"http://{uvicorn_host}:80"
 netbox_endpoint_port80 = f"http://{netbox_host}:80"
 netbox_endpoint_port8000 = f"http://{netbox_host}:8000"
 netbox_endpoint = f"http://{netbox_host}:{netbox_port}"
-https_netbox_endpoint = f"https://{netbox_host}:{netbox_port}"
+https_netbox_endpoint = f"https://{netbox_host}"
+https_netbox_endpoint443 = f"https://{netbox_host}:443"
+https_netbox_endpoint_port = f"https://{netbox_host}:{netbox_port}"
 
 
 PROXBOX_PLUGIN_NAME: str = "netbox_proxbox"
@@ -122,17 +124,16 @@ CORS Middleware
 
 origins = [
     fastapi_endpoint,
-    https_fastapi_endpoint,
-    netbox_endpoint,
-    https_netbox_endpoint,
-    netbox_endpoint_port80,
-    netbox_endpoint_port8000,
     fastapi_endpoint_port8000,
     fastapi_endpoint_port80,
+    https_fastapi_endpoint,
+    netbox_endpoint,
+    netbox_endpoint_port80,
+    netbox_endpoint_port8000,
+    https_netbox_endpoint,
+    https_netbox_endpoint443,
+    https_netbox_endpoint_port,
     "http://localhost",
-    "https://10.0.30.168",
-    "https://10.0.30.168:443"
-    "https://10.0.30.168:80"
 ]
 
 app.add_middleware(
