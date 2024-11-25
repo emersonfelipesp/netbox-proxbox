@@ -234,18 +234,6 @@ PLUGINS_CONFIG = {
 
 **OBS:** It is possible to change Proxbox Backend Port (`8800`), you need to edit `proxbox.service` file and `configuration.py`
 
-#### Create self-signed certificates so Proxbox Backend (FastAPI) runs both HTTP and WS (Websocket) via TLS.
-
-```
-sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
--keyout /etc/ssl/proxbox.key \
--out /etc/ssl/proxbox.crt
-```
-
-> The certificate files created are by default located at `/etc/ssl`.
-> Proxbox SystemD file will link to this path to find `proxbox.key` and `proxbox.crt` files.
-> To change this default behavior, you have to change `ExecStart` variable on `proxbox.service` file or use some HTTP Proxy like NGINX to serve FastAPI.
-
 ```
 sudo cp -v /opt/netbox/netbox/netbox-proxbox/contrib/*.service /etc/systemd/system/
 sudo systemctl daemon-reload
@@ -258,9 +246,26 @@ sudo systemctl status proxbox
 The commands above creates the service file, enables it to run at boot time and starts it immediately.
 
 #### Optional way for developing use:
+
+The certificates used are from Netbox, considering both applications are on the same machine.
+If you plan to put Proxbox Backend in another host, I recommend creating another pair of certificates and enabling NGINX in front ot it.
+
 ```
-/opt/netbox/venv/bin/uvicorn netbox-proxbox.netbox_proxbox.main:app --host 0.0.0.0 --port 8800 --app-dir /opt/netbox/netbox --ssl-keyfile=/etc/ssl/private/proxbox.key --ssl-certfile=/etc/ssl/certs/proxbox.crt --reload
+/opt/netbox/venv/bin/uvicorn netbox-proxbox.netbox_proxbox.main:app --host 0.0.0.0 --port 8800 --app-dir /opt/netbox/netbox --ssl-keyfile=/etc/ssl/private/netbox.key --ssl-certfile=/etc/ssl/certs/netbox.crt --reload
 ```
+
+#### (Developer Use Only) Creating self-signed certificates so Proxbox Backend (FastAPI) runs both HTTP and WS (Websocket) via TLS.
+
+If you need to test the plugin without reusing Netbox certificates, you can create your own self-signed certificates and change systemd file.
+
+```
+sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+-keyout /etc/ssl/proxbox.key \
+-out /etc/ssl/proxbox.crt
+
+> The certificate files created are by default located at `/etc/ssl`.
+> Proxbox SystemD file needs to be changed to link to this path to find `proxbox.key` and `proxbox.crt` files.
+> Consider use some HTTP Proxy like NGINX to serve FastAPI.
 
 ---
 
