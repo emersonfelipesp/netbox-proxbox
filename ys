@@ -1,0 +1,25 @@
+[0;1;32m●[0m netbox.service - NetBox WSGI Service
+     Loaded: loaded (]8;;file://nmultifibra/etc/systemd/system/netbox.service/etc/systemd/system/netbox.service]8;;; [0;1;32menabled[0m; preset: [0;1;32menabled[0m)
+     Active: [0;1;32mactive (running)[0m since Mon 2024-11-25 14:12:07 UTC; 5s ago
+       Docs: ]8;;https://docs.netbox.dev/https://docs.netbox.dev/]8;;
+   Main PID: 2987763 (gunicorn)
+      Tasks: 6 (limit: 9444)
+     Memory: 545.7M (peak: 546.5M)
+        CPU: 8.906s
+     CGroup: /system.slice/netbox.service
+             ├─[0;38;5;245m2987763 /opt/netbox/venv/bin/python3 /opt/netbox/venv/bin/gunicorn --pid /var/tmp/netbox.pid --pythonpath /opt/netbox/netbox --config /opt/netbox/gunicorn.py netbox.wsgi[0m
+             ├─[0;38;5;245m2987765 /opt/netbox/venv/bin/python3 /opt/netbox/venv/bin/gunicorn --pid /var/tmp/netbox.pid --pythonpath /opt/netbox/netbox --config /opt/netbox/gunicorn.py netbox.wsgi[0m
+             ├─[0;38;5;245m2987766 /opt/netbox/venv/bin/python3 /opt/netbox/venv/bin/gunicorn --pid /var/tmp/netbox.pid --pythonpath /opt/netbox/netbox --config /opt/netbox/gunicorn.py netbox.wsgi[0m
+             ├─[0;38;5;245m2987767 /opt/netbox/venv/bin/python3 /opt/netbox/venv/bin/gunicorn --pid /var/tmp/netbox.pid --pythonpath /opt/netbox/netbox --config /opt/netbox/gunicorn.py netbox.wsgi[0m
+             ├─[0;38;5;245m2987768 /opt/netbox/venv/bin/python3 /opt/netbox/venv/bin/gunicorn --pid /var/tmp/netbox.pid --pythonpath /opt/netbox/netbox --config /opt/netbox/gunicorn.py netbox.wsgi[0m
+             └─[0;38;5;245m2987769 /opt/netbox/venv/bin/python3 /opt/netbox/venv/bin/gunicorn --pid /var/tmp/netbox.pid --pythonpath /opt/netbox/netbox --config /opt/netbox/gunicorn.py netbox.wsgi[0m
+
+Nov 25 14:12:07 nmultifibra systemd[1]: Started netbox.service - NetBox WSGI Service.
+Nov 25 14:12:07 nmultifibra gunicorn[2987763]: [2024-11-25 14:12:07 +0000] [2987763] [INFO] Starting gunicorn 23.0.0
+Nov 25 14:12:07 nmultifibra gunicorn[2987763]: [2024-11-25 14:12:07 +0000] [2987763] [INFO] Listening at: http://0.0.0.0:8001 (2987763)
+Nov 25 14:12:07 nmultifibra gunicorn[2987763]: [2024-11-25 14:12:07 +0000] [2987763] [INFO] Using worker: gthread
+Nov 25 14:12:07 nmultifibra gunicorn[2987765]: [2024-11-25 14:12:07 +0000] [2987765] [INFO] Booting worker with pid: 2987765
+Nov 25 14:12:07 nmultifibra gunicorn[2987766]: [2024-11-25 14:12:07 +0000] [2987766] [INFO] Booting worker with pid: 2987766
+Nov 25 14:12:07 nmultifibra gunicorn[2987767]: [2024-11-25 14:12:07 +0000] [2987767] [INFO] Booting worker with pid: 2987767
+Nov 25 14:12:07 nmultifibra gunicorn[2987768]: [2024-11-25 14:12:07 +0000] [2987768] [INFO] Booting worker with pid: 2987768
+Nov 25 14:12:07 nmultifibra gunicorn[2987769]: [2024-11-25 14:12:07 +0000] [2987769] [INFO] Booting worker with pid: 2987769
