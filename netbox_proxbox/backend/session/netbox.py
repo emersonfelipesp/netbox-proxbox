@@ -32,33 +32,50 @@ class NetboxSession:
         
     def pynetbox_session(self):
         print("Establish Netbox connection...")
+        
+        netbox_session = None
         try:
             # CHANGE SSL VERIFICATION TO FALSE
-            #session = requests.Session()
-            #session.verify = False
+            # Default certificate is self signed. Future versions will use a valid certificate and enable verify (or make it optional)
+            session = requests.Session()
+            session.verify = False
             
             netbox_session = pynetbox.api(
-                    f'http://{self.domain}:{self.http_port}{DEFAULT_BASE_PATH}',
+                    f'https://{self.domain}:{self.http_port}{DEFAULT_BASE_PATH}',
                     token=self.token,
                     threading=True,
             )
             # DISABLES SSL VERIFICATION
-            #netbox_session.http_session = session
-            #
-            return netbox_session
+            netbox_session.http_session = session
+            
+            
+            if netbox_session is not None:
+                print("Netbox connection established.")
+                return netbox_session
         
         except Exception as error:
             raise RuntimeError(f"Error trying to initialize Netbox Session using TOKEN {self.token} provided.\nPython Error: {error}")
+        
+        if netbox_session is None:
+            raise RuntimeError(f"Error trying to initialize Netbox Session using TOKEN and HOST provided.")
         
     def proxbox_tag(self):
             proxbox_tag_name = 'Proxbox'
             proxbox_tag_slug = 'proxbox'
 
-            # Check if Proxbox tag already exists.
-            proxbox_tag = self.session.extras.tags.get(
-                name = proxbox_tag_name,
-                slug = proxbox_tag_slug
-            )
+            proxbox_tag = None
+
+            try:
+                # Check if Proxbox tag already exists.
+                proxbox_tag = self.session.extras.tags.get(
+                    name = proxbox_tag_name,
+                    slug = proxbox_tag_slug
+                )
+            except Exception as error:
+                raise ProxboxException(
+                    message = f"Error trying to get the '{proxbox_tag_name}' tag. Possible errors: the name '{proxbox_tag_name}' or slug '{proxbox_tag_slug}' is not found.",
+                    python_exception=f"{error}"
+                )
 
             if proxbox_tag is None:
                 try:
