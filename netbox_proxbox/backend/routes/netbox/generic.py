@@ -331,7 +331,7 @@ class NetboxBase:
               
     async def post(
         self,
-        data: dict = None,
+        data: dict = {},
     ): 
         """
         ### Asynchronously handles the POST request to create an object on Netbox.
@@ -458,7 +458,7 @@ class NetboxBase:
             )
 
 
-    async def _check_duplicate(self, search_params: dict = None, object: dict = None):
+    async def _check_duplicate(self, search_params: dict = {}, object: dict = {}):
         """
         Asynchronously checks for duplicate objects in Netbox before creating a new one.
         This method performs several checks to determine if an object already exists in Netbox based on various criteria 
@@ -568,7 +568,7 @@ class NetboxBase:
                             result_by_primary = await asyncio.to_thread(
                                 self.pynetbox_path.get,
                                 virtual_machine=self.primary_field_value,
-                                name=object.get("name")
+                                name=object.get("name", "Not specified.")
                             )
                             logger.error(f"result_by_primary: {result_by_primary}")
 
@@ -593,7 +593,7 @@ class NetboxBase:
                                     result_by_primary = await asyncio.to_thread(
                                         self.pynetbox_path.filter,
                                         virtual_machine=self.primary_field_value,
-                                        name=object.get("name")
+                                        name=object.get("name", "Not specified.")
                                     )
                                     
                                     if result_by_primary:
@@ -659,7 +659,7 @@ class NetboxBase:
                     
                     result_by_device = None
                     
-                    device_id = object.get('device')
+                    device_id: int = object.get('device', 0)
                     
                     print(f"object: {object}")
                     device_obj = None
@@ -668,14 +668,14 @@ class NetboxBase:
                         device_obj = self.nb.session.dcim.devices.get(int(device_id))
                         print(f"device_obj: {device_obj}")
                         
-                        print(f"device_obj.name: {device_obj.name}")
+                        print(f"device_obj.name: {getattr(device_obj, "name", "Not specified.")}")
                         
-                        print(f'object.get("name"): {object.get("name")}')
+                        print(f'object.get("name"): {object.get("name", "Not specified.")}')
                         
-                        print(f"device_obj.id: {device_obj.id}")
+                        print(f"device_obj.id: {getattr(device_obj, "id", "Not specified")}")
                         
                         result_by_device = await asyncio.to_thread(self.pynetbox_path.get,
-                            name=object.get('name'),
+                            name=object.get('name', "Not specified."),
                             tag=[self.nb.tag.slug]
                         )
                         

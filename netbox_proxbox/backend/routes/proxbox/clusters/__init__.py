@@ -500,11 +500,11 @@ async def get_virtual_machines(
     for px in pxs:
         virtual_machines = px.session.cluster.resources.get(type="vm")
         
-        created_virtual_machines = []
+        created_virtual_machines: list = []
         
         
-        devices = {}
-        clusters = {}
+        devices: dict = {}
+        clusters: dict = {}
         for vm in virtual_machines:
             
             print(f"\n[VM] {vm}\n")
@@ -704,18 +704,20 @@ async def get_virtual_machines(
                 if unprivileged == 1:
                     unprivileged_container = True
                 
-                platform = nb.session.dcim.platforms.get(name = platform_name).id
+                platform = getattr(nb.session.dcim.platforms.get(name = platform_name), "id", None)
                 if not platform:
                     platform = nb.session.dcim.platforms.create(
                         name = platform_name,
                         slug = platform_slug
-                    ).id
-
-
+                    )
+                    
+                    if platform:
+                        platform = platform.id
+            
+            
             start_at_boot: bool = False    
-            
-            
             vm_config: dict = {}
+            qemu_agent: bool = False
             
             if vm.get("type") == 'qemu':
                 vm_config = px.session.nodes(vm.get("node")).qemu(vm.get("vmid")).config.get()
@@ -726,9 +728,7 @@ async def get_virtual_machines(
                     start_at_boot = True
                 
                 agent: int = int(vm_config.get("agent", 0))
-                
-                qemu_agent: bool = False
-                
+            
                 if agent == 1:
                     qemu_agent = True 
                 
@@ -742,13 +742,13 @@ async def get_virtual_machines(
             
             virtual_machine_data = {
                 "name": vm.get("name"),
-                "cluster": cluster.id,
-                "device": int(device.id),
+                "cluster": getattr(cluster, "id", None),
+                "device": int(getattr(device, "id", 0)),
                 "status": VirtualMachineStatus(vm.get("status")).name,
                 "vcpus": int(vm.get("maxcpu", 0)),
                 "memory": int(vm_config.get("memory", 0)),
                 "disk": int(int(vm.get("maxdisk", 0)) / 1000000),
-                "role": role.id,
+                "role": getattr(role, "id", None),
                 "custom_fields": {
                     "proxmox_vm_id": vm.get('vmid'),
                     "proxmox_start_at_boot": start_at_boot,
@@ -759,6 +759,7 @@ async def get_virtual_machines(
                 "platform": platform
             }
             
+            new_virtual_machine = None
             try:
                 await log(websocket, f"<span class='badge text-bg-yellow' title='Syncing'><strong><i class='mdi mdi-download'></i></strong></span> Creating Virtual Machine <strong>{vm.get('name')}</strong> on Netbox...")
                 new_virtual_machine =  await VirtualMachine(nb = nb, websocket = websocket).post(data = virtual_machine_data)
@@ -781,9 +782,9 @@ async def get_virtual_machines(
                         new_virtual_machine = duplicated_virtual_machine
                 
                 print(f"error: {error} / {type(error)}")
-                raise ProxboxException(
-                    message=f"<span class='text-red'><strong><i class='mdi mdi-error'></i></strong></span> [CHECK DUPLICATE] Error trying to create Virtual Machine <strong>{vm.get('name')}</strong> on Netbox.",
-                    python_exception=f"{error}"
+                await log(
+                    websocket,
+                    msg=f"<span class='text-red'><strong><i class='mdi mdi-error'></i></strong></span> [CHECK DUPLICATE] Error trying to create Virtual Machine <strong>{vm.get('name')}</strong> on Netbox.\n   > {error}",
                 )
 
 
