@@ -262,6 +262,7 @@ If you need to test the plugin without reusing Netbox certificates, you can crea
 sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
 -keyout /etc/ssl/proxbox.key \
 -out /etc/ssl/proxbox.crt
+```
 
 > The certificate files created are by default located at `/etc/ssl`.
 > Proxbox SystemD file needs to be changed to link to this path to find `proxbox.key` and `proxbox.crt` files.
