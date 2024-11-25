@@ -130,7 +130,6 @@ origins = [
     fastapi_endpoint_port8000,
     fastapi_endpoint_port80,
     "http://localhost",
-    
 ]
 
 app.add_middleware(
