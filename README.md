@@ -234,21 +234,6 @@ PLUGINS_CONFIG = {
 
 **OBS:** It is possible to change Proxbox Backend Port (`8800`), you need to edit `proxbox.service` file and `configuration.py`
 
-<<<<<<< HEAD
-=======
-#### Create self-signed certificates so Proxbox Backend (FastAPI) runs both HTTP and WS (Websocket) via TLS.
-
-```
-sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
--keyout /etc/ssl/private/proxbox.key \
--out /etc/ssl/certs/proxbox.crt
-```
-
-> The certificate files created are by default located at `/etc/ssl`.
-> Proxbox SystemD file will link to this path to find `proxbox.key` and `proxbox.crt` files.
-> To change this default behavior, you have to change `ExecStart` variable on `proxbox.service` file or use some HTTP Proxy like NGINX to serve FastAPI.
-
->>>>>>> 16f2fb65f414fbc8dca97e480542a5fbf5dbc10f
 ```
 sudo cp -v /opt/netbox/netbox/netbox-proxbox/contrib/*.service /etc/systemd/system/
 sudo systemctl daemon-reload
