@@ -189,7 +189,6 @@ PLUGINS_CONFIG = {
             'domain': 'localhost',     # Ensure localhost is added to ALLOWED_HOSTS
             'http_port': 8001,     # Gunicorn port.
             'token': '0dd7cddfaee3b38bbffbd2937d44c4a03f9c9d38',
-            'ssl': False,	# There is no support to SSL on Netbox yet, so let it always False.
             'settings': {
                 'virtualmachine_role_id' : 0,
                 'node_role_id' : 0,
@@ -304,7 +303,6 @@ The following options are available:
 * `netbox.domain`: (String) Domain or IP address of Netbox. Ensure name or ip is added to `ALLOWED_HOSTS`
 * `netbox.http_port`: (Integer) Netbox HTTP PORT (default: 8001).  If you are not targeting gunicorn directly make sure the HTTP port is not redirected to HTTPS by your HTTP server.
 * `netbox.token`: (String) Netbox Token Value.
-* `netbox.ssl`: (Bool) Defines the use of SSL (default: False). - Proxbox doesn't support SSL on Netbox yet.
 * `netbox.settings`: (Dict) Default items of Netbox to be used by Proxbox.
   - If not configured, Proxbox will automatically create a basic configuration to make it work.
   - The ID of each item can be easily found on the URL of the item you want to use.
