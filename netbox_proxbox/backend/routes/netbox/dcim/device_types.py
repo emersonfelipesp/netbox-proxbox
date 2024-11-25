@@ -1,4 +1,5 @@
 from netbox_proxbox.backend.routes.netbox.generic import NetboxBase
+from netbox_proxbox.backend.logging import log
 from .manufacturers import Manufacturer
 
 class DeviceType(NetboxBase):
@@ -15,10 +16,13 @@ class DeviceType(NetboxBase):
     async def get_base_dict(self):
         manufacturer = await Manufacturer(nb = self.nb, websocket = self.websocket).get()
         
+        if manufacturer is None:
+            await log(self.websocket, f"Failed to fetch manufacturer for device type: {self.default_name}")
+            
         return {
             "model": self.default_name,
             "slug": self.default_slug,
-            "manufacturer": manufacturer.id,
+            "manufacturer": getattr(manufacturer, "id", None),
             "description": self.default_description,
             "u_height": 1,
         }
