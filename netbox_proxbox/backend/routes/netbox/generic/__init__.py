@@ -13,6 +13,7 @@ from netbox_proxbox.backend.cache import cache
 from netbox_proxbox.backend.routes.netbox.generic.check_duplicate import (
     _check_default,
     _check_pk_address,
+    _check_pk_virtual_machine,
 )
 
 from netbox_proxbox.backend.routes.netbox.generic.get import (
@@ -404,13 +405,23 @@ class NetboxBase:
                 
                 # Check if the object exists in Netbox using ADDRESS as the PRIMARY FIELD.
                 if self.primary_field == "address":
-                    return _check_pk_address(
+                    return await _check_pk_address(
                         websocket=self.websocket,
                         pynetbox_path=self.pynetbox_path,
                         primary_field_value=self.primary_field_value,
                         object_name=self.object_name,
                     )
                 
+                if self.primary_field == "virtual_machine" and self.endpoint == "interfaces":
+                    await log(self.websocket, "<span class='badge text-bg-purple' title='Check Duplicate'><i class='mdi mdi-content-duplicate'></i></span> Checking duplicate device using the VIRTUAL MACHINE as PRIMARY FIELD.")
+                
+                    return await _check_pk_virtual_machine(
+                        websocket=self.websocket,
+                        pynetbox_path=self.pynetbox_path,
+                        primary_field_value=self.primary_field_value,
+                        object_name=self.object_name,
+                        endpoint=self.endpoint,
+                    )
 
                 
             

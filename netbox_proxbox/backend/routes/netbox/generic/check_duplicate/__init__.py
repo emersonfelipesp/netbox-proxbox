@@ -1,2 +1,3 @@
 from .check_default import _check_default
 from .check_pk_address import _check_pk_address
+from .check_pk_virtual_machine import _check_pk_virtual_machine

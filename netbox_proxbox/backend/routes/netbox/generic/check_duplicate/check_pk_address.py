@@ -50,4 +50,5 @@ async def _check_pk_address(
             websocket=websocket,
             msg="<span class='badge text-bg-purple' title='Check Duplicate'><i class='mdi mdi-content-duplicate'></i></span> IP Address with the same network found. Returning it."
         )
+        
         return result_by_address
