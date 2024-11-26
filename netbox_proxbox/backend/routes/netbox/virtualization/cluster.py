@@ -28,7 +28,7 @@ class Cluster(NetboxBase):
                 "slug": self.default_slug,
                 "description": self.default_description,
                 "status": "active",
-                "type": getattr(type, "id", 0)
+                "type": getattr(type, 'id', 0)
             }
         else:
             await log(self.websocket, f"Failed to fetch cluster type for cluster: {self.default_name}. As it is a required field, the cluster will not be created.")

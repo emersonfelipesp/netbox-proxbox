@@ -425,7 +425,7 @@ class NetboxBase:
                     if response:
                         await log(
                             self.websocket,
-                            f"<span class='badge text-bg-red' title='Post'><strong><i class='mdi mdi-upload'></i></strong></span> <strong>{self.object_name}</strong> object created successfully. {self.object_name} ID: {getattr(response, "id", "Not specified.")}"
+                            f"<span class='badge text-bg-red' title='Post'><strong><i class='mdi mdi-upload'></i></strong></span> <strong>{self.object_name}</strong> object created successfully. {self.object_name} ID: {getattr(response, 'id', 'Not specified.')}"
                         )
                         return response
                     
@@ -674,9 +674,9 @@ class NetboxBase:
                     
                     print(f"object: {object}")
                     print(f"device_obj: {device_obj}") 
-                    print(f"device_obj.name: {getattr(device_obj, "name", "Not specified.")}")
-                    print(f'object.get("name"): {object.get("name", "Not specified.")}')
-                    print(f"device_obj.id: {getattr(device_obj, "id", "Not specified")}")
+                    print(f"device_obj.name: {getattr(device_obj, 'name', 'Not specified.')}")
+                    print(f"object.get('name'): {object.get('name', 'Not specified.')}")
+                    print(f"device_obj.id: {getattr(device_obj, 'id', 'Not specified')}")
                     
                     try:
                         await log(self.websocket, "<span class='badge text-bg-purple' title='Check Duplicate'><i class='mdi mdi-content-duplicate'></i></span> (1.5.1) Checking duplicate using <strong>Device Object</strong> as parameter.")
@@ -785,7 +785,7 @@ class NetboxBase:
                     if result_by_name_and_slug:
                         await log(
                             self.websocket,
-                            msg=f"<span class='badge text-bg-purple' title='Check Duplicate'><i class='mdi mdi-content-duplicate'></i></span> <strong>{self.object_name}</strong> with ID <strong>{getattr(result_by_name_and_slug, "id", 0)}</strong> found on Netbox, but <strong>without PROXBOX TAG</strong> Please delete it (or add the tag) and try again.\nNetbox does not allow duplicated names and/or slugs.",
+                            msg=f"<span class='badge text-bg-purple' title='Check Duplicate'><i class='mdi mdi-content-duplicate'></i></span> <strong>{self.object_name}</strong> with ID <strong>{getattr(result_by_name_and_slug, 'id', 0)}</strong> found on Netbox, but <strong>without PROXBOX TAG</strong> Please delete it (or add the tag) and try again.\nNetbox does not allow duplicated names and/or slugs.",
                         )
 
                 return None

@@ -27,7 +27,7 @@ class VirtualMachine(NetboxBase):
                 "slug": self.default_slug,
                 "description": self.default_description,
                 "status": "active",
-                "cluster": getattr(cluster, "id", 0)
+                "cluster": getattr(cluster, 'id', 0)
             }
         else:
             await log(self.websocket, f"Failed to fetch cluster for virtual machine: {self.default_name}. As it is a required field, the virtual machine will not be created.")
