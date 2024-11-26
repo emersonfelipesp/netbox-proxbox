@@ -125,7 +125,7 @@ class NetboxBase:
         
         if kwargs:
             return await _get_by_kwargs(
-                weboscket=self.websocket,
+                websocket=self.websocket,
                 pynetbox_path=self.pynetbox_path,
                 endpoint=self.endpoint,
                 primary_field=self.primary_field,
