@@ -14,6 +14,7 @@ from netbox_proxbox.backend.routes.netbox.generic.check_duplicate import (
     _check_default,
     _check_pk_address,
     _check_pk_virtual_machine,
+    _check_vm_interface,
 )
 
 from netbox_proxbox.backend.routes.netbox.generic.get import (
@@ -396,6 +397,7 @@ class NetboxBase:
             )
 
         if object:
+            
             # Check if the object already exists in Netbox using PRIMARY FIELD and VALUE as parameters.
             if self.primary_field and self.primary_field_value:
                 await log(
@@ -422,6 +424,27 @@ class NetboxBase:
                         object_name=self.object_name,
                         endpoint=self.endpoint,
                     )
+                
+                if self.app == "virtualization" and self.endpoint == "interfaces" and self.primary_field == "name":
+                    return await _check_vm_interface(
+                        websocket=self.websocket,
+                        pynetbox_path=self.pynetbox_path,
+                        primary_field_value=self.primary_field_value,
+                        vm_interface_object=object,
+                    )
+                
+                if self.primary_field:
+                    result_by_primary = await asyncio.to_thread(
+                        self.pynetbox_path.get,
+                        {
+                            f"{self.primary_field}": self.primary_field_value,
+                        }
+                    )
+                    
+                    if result_by_primary:
+                        return result_by_primary
+    
+        return None
 
                 
             
