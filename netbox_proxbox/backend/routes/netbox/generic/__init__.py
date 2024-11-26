@@ -443,7 +443,150 @@ class NetboxBase:
                     
                     if result_by_primary:
                         return result_by_primary
-    
+
+
+            # If primary field not specified, check for duplicates using the object provided.
+            await log(self.websocket, "<span class='badge text-bg-purple' title='Check Duplicate'><i class='mdi mdi-content-duplicate'></i></span> (1) First attempt: Checking object making <strong>EXACT MATCH</strong> with the Payload provided...")
+            result = await asyncio.to_thread(self.pynetbox_path.get, dict(object))
+            
+            if result:
+                await log(
+                    self.websocket,
+                    "<span class='badge text-bg-purple' title='Check Duplicate'><i class='mdi mdi-content-duplicate'></i></span> <strong>Object found</strong> on Netbox with exactly the same values as provided. Returning it."
+                )
+                
+                return result
+            
+            else:
+                
+                await log(self.websocket, "<span class='badge text-bg-purple' title='Check Duplicate'><i class='mdi mdi-content-duplicate'></i></span> (1.5) Checking object using <strong>NAME</strong> and <strong>DEVICE</strong> provided by the Payload and also the <strong>PROXBOX TAG</strong>. If found, return it.")
+                
+                result_by_device = None
+                
+                device_id: int = object.get('device', 0)
+                
+                device_obj = None
+                result_by_device_id = None
+                result_by_device_name = None
+                
+                print(f"object: {object}")
+                print(f"device_obj: {device_obj}") 
+                print(f"device_obj.name: {getattr(device_obj, 'name', 'Not specified.')}")
+                print(f"object.get('name'): {object.get('name', 'Not specified.')}")
+                print(f"device_obj.id: {getattr(device_obj, 'id', 'Not specified')}")
+                
+                try:
+                    await log(self.websocket, "<span class='badge text-bg-purple' title='Check Duplicate'><i class='mdi mdi-content-duplicate'></i></span> (1.5.1) Checking duplicate using <strong>Device Object</strong> as parameter.")
+                    
+                    if device_id > 0:
+                        await log(
+                            self.websocket,
+                            "<span class='badge text-bg-purple' title='Check Duplicate'><i class='mdi mdi-content-duplicate'></i></span> (1.5.1.1) Searching for <strong>Device Object</strong> using <strong>Device ID</strong> as parameter."
+                        )
+                        result_by_device_id = self.nb.session.dcim.devices.get(int(device_id))
+                        
+                        if result_by_device_id:
+                            return result_by_device_id
+                        
+                    if result_by_device_id is None:
+                        await log(
+                            self.websocket,
+                            "<span class='badge text-bg-purple' title='Check Duplicate'><i class='mdi mdi-content-duplicate'></i></span> (1.5.1.2) Device Object <strong>NOT</strong> found using <strong>Device ID</strong> as parameter. Trying to use <strong>Device NAME</strong> as parameter."
+                        )
+                        
+                        result_by_device_name = await asyncio.to_thread(self.pynetbox_path.get,
+                            name=object.get('name', "Not specified."),
+                            tag=[self.nb.tag.slug]
+                        )
+                        
+                        if result_by_device_name:
+                            return result_by_device_name
+                        
+                        else:
+                            await log(
+                                self.websocket,
+                                "<span class='badge text-bg-purple' title='Check Duplicate'><i class='mdi mdi-content-duplicate'></i></span> Not abe to get <strong>Device Object</strong> using <strong>Device NAME</strong> neither <strong>Device ID</strong> as parameter."
+                            )
+                    
+                except Exception as error:
+                    await log(
+                        self.websocket,
+                        f"<span class='badge text-bg-purple' title='Check Duplicate'><i class='mdi mdi-content-duplicate'></i></span> (1.5.1) Device Object <strong>NOT</strong> found when checking for duplicated using <strong>Device<strong> as parameter.<br>{error}"
+                    )
+                
+                
+                if result_by_device:
+                    if int(object.get('device', 0)) != int(result_by_device.device.id):
+                        return None
+                    
+                    await log(self.websocket, "<span class='badge text-bg-purple' title='Check Duplicate'><i class='mdi mdi-content-duplicate'></i></span> (1.5.1) <strong>Object found</strong> on Netbox. Returning it.")
+                    return result_by_device
+
+                    
+                await log(self.websocket, "<span class='badge text-bg-purple' title='Check Duplicate'><i class='mdi mdi-content-duplicate'></i></span> (2) Checking object using only <strong>NAME</strong> and <strong>SLUG</strong> provided by the Payload and also the <strong>PROXBOX TAG</strong>. If found, return it.")
+                
+                
+                result_by_tag = None
+                try:
+                    await log(self.websocket, "<span class='badge text-bg-purple' title='Check Duplicate'><i class='mdi mdi-content-duplicate'></i></span> (2.1) Searching object using <strong>GET</strong> method")
+                    result_by_tag = await asyncio.to_thread(self.pynetbox_path.get,
+                        name=object.get("name"),
+                        slug=object.get("slug"),
+                        tag=[self.nb.tag.slug]
+                    )
+                    print(result_by_tag)
+                
+                except Exception as error:
+                    print(f'Error: {error}')
+                    
+                    try:
+                        result_by_tag = await asyncio.to_thread(self.pynetbox_path.filter,
+                            name=object.get("name"),
+                            slug=object.get("slug"),
+                            tag=[self.nb.tag.slug]
+                        )
+                        
+                        if result_by_tag:
+                            await log(self.websocket, "<span class='badge text-bg-purple' title='Check Duplicate'><i class='mdi mdi-content-duplicate'></i></span> (2) More than one <strong>object found</strong>.")
+                            
+                            for obj in result_by_tag:
+                                print(f"obj.id: {obj.device.id} / device_obj.id: {device_obj.id}")
+                                
+                                if int(obj.device.id) == int(device_obj.id):
+                                    await log(self.websocket, "<span class='badge text-bg-purple' title='Check Duplicate'><i class='mdi mdi-content-duplicate'></i></span> (2) More than one <strong>object found</strong>, but returning with the <strong>same ID</strong>.")
+                                    return obj
+                            return None
+                        print(f"filter: {result_by_tag}")
+                        
+                    except Exception as error:
+                        await log(self.websocket, f'{error}')
+                    
+                if result_by_tag:
+                    await log(
+                        self.websocket,
+                        "<span class='badge text-bg-purple' title='Check Duplicate'><i class='mdi mdi-content-duplicate'></i></span> <strong>Object found</strong> on Netbox. Returning it."
+                    )
+                    
+                    return result_by_tag
+                    
+                await log(
+                    self.websocket,
+                    "<span class='badge text-bg-purple' title='Check Duplicate'><i class='mdi mdi-content-duplicate'></i></span> (3) Checking <strong>duplicate object</strong> using only <strong>NAME</strong> and <strong>SLUG</strong>"
+                )
+                
+                result_by_name_and_slug = await asyncio.to_thread(self.pynetbox_path.get,
+                    name=object.get("name"),
+                    slug=object.get("slug"),
+                )
+                
+                if result_by_name_and_slug:
+                    await log(
+                        self.websocket,
+                        msg=f"<span class='badge text-bg-purple' title='Check Duplicate'><i class='mdi mdi-content-duplicate'></i></span> <strong>{self.object_name}</strong> with ID <strong>{getattr(result_by_name_and_slug, 'id', 0)}</strong> found on Netbox, but <strong>without PROXBOX TAG</strong> Please delete it (or add the tag) and try again.\nNetbox does not allow duplicated names and/or slugs.",
+                    )
+
+            return None
+            
         return None
 
                 
