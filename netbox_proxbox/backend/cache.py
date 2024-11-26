@@ -5,9 +5,8 @@ class Cache:
         self.cache: dict = {}
     
     def get(self, key: str):
-        result = self.cache.get(key)
-        if result is not None:
-            return result
+        result = self.cache.get(key, {})
+        return result
         
     def set(self, key: str, value: Any):
         self.cache[key] = value
