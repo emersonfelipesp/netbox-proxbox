@@ -10,7 +10,11 @@ from netbox_proxbox.backend.logging import log
 
 from netbox_proxbox.backend.cache import cache
 
-from netbox_proxbox.backend.routes.netbox.generic.check_duplicate import _check_default
+from netbox_proxbox.backend.routes.netbox.generic.check_duplicate import (
+    _check_default,
+    _check_pk_address,
+)
+
 from netbox_proxbox.backend.routes.netbox.generic.get import (
     _get_by_id,
     _get_all,
@@ -381,7 +385,7 @@ class NetboxBase:
 
         # Check if Proxbox default object exists in Netbox.
         if self.default:
-            check_default = await _check_default(
+            return await _check_default(
                 websocket=self.websocket,
                 pynetbox_path=self.pynetbox_path,
                 default_name=self.default_name,
@@ -389,8 +393,26 @@ class NetboxBase:
                 object_name=self.object_name,
                 nb=self.nb,
             )
-            if check_default is not None:
-                return check_default
+
+        if object:
+            # Check if the object already exists in Netbox using PRIMARY FIELD and VALUE as parameters.
+            if self.primary_field and self.primary_field_value:
+                await log(
+                    websocket=self.websocket,
+                    msg="<span class='badge text-bg-purple' title='Check Duplicate'><i class='mdi mdi-content-duplicate'></i></span> (0.5) Checking object using only custom PRIMARY FIELD and Proxbox TAG provided by the class attribute."
+                )
+                
+                # Check if the object exists in Netbox using ADDRESS as the PRIMARY FIELD.
+                if self.primary_field == "address":
+                    return _check_pk_address(
+                        websocket=self.websocket,
+                        pynetbox_path=self.pynetbox_path,
+                        primary_field_value=self.primary_field_value,
+                        object_name=self.object_name,
+                    )
+                
+
+                
             
             
             
