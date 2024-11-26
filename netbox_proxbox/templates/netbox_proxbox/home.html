@@ -303,7 +303,91 @@
         
             <br>
             <br>
-            
+
+            <div class="form form-horizontal">
+                <div class="card">
+                    <div class="htmx-container table-responsive" id="object_list">
+                        <div class="htmx-container table-responsive">
+                            <table class="table table-hover object-list" hx-disinherit="hx-target hx-select" hx-swap="outerHTML">
+                                <thead hx-target="closest .htmx-container" hx-push-url="true">
+                                <tr>
+                                    <th class="w-1" aria-label="Select all"><input type="checkbox" class="toggle form-check-input" title="Toggle all"></th>
+                                    <th class="orderable">
+                                        <a href="#" hx-get="?sort=name">Name</a>
+                                    </th>
+                                    <th class="orderable">
+                                        <a href="#" hx-get="?sort=status">Status</a>
+                                    </th>
+                                    <th class="orderable">
+                                        <a href="#" hx-get="?sort=tenant">Tenant</a>
+                                    </th>
+                                    <th class="orderable">
+                                        <a href="#" hx-get="?sort=site">Site</a>
+                                    </th>
+                                    <th class="orderable">
+                                        <a href="#" hx-get="?sort=location">Location</a>
+                                    </th>
+                                    <th class="orderable">
+                                        <a href="#" hx-get="?sort=rack">Rack</a>
+                                    </th>
+                                    <th class="orderable">
+                                        <a href="#" hx-get="?sort=role">Role</a>
+                                    </th>
+                                    <th class="orderable">
+                                        <a href="#" hx-get="?sort=manufacturer">Manufacturer</a>
+                                    </th>
+                                    <th class="orderable">
+                                        <a href="#" hx-get="?sort=device_type">Type</a>
+                                    </th>
+                                    <th class="orderable">
+                                        <a href="#" hx-get="?sort=primary_ip">IP Address</a>
+                                    </th>
+                                    <th class="orderable">
+                                        <a href="#" hx-get="?sort=actions"></a>
+                                    </th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <tr>
+                                    <td colspan="12" class="text-center text-muted">— No devices found —</td>
+                                </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="htmx-container table-responsive" id="object_list">
+                        <div class="htmx-container table-responsive">
+                            <table class="table table-hover object-list" hx-disinherit="hx-target hx-select" hx-swap="outerHTML">
+                                <thead hx-target="closest .htmx-container" hx-push-url="true">
+                                    <tr>
+                                        <th class="orderable">
+                                            <a href="#" hx-get="?sort=name">Name</a>
+                                        </th>
+                                        <th class="orderable">
+                                            <a href="#" hx-get="?sort=status">Status</a>
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr class="even">
+                                        <td>Test</td>
+                                        <td>Other test</td>
+                                    </tr>
+                                    <tr class="odd">
+                                        <td>Test</td>
+                                        <td>Other test 2</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+
             <div class="d-flex justify-content-center flex-nowrap" style="margin-bottom: 15px;">
                 <h2>
                     Proxbox Configuration
@@ -313,6 +397,7 @@
             {% for px in configuration.netbox_proxbox.proxmox %}
                 <div class="col col-md-6">
                     <div class="card">
+                        <h2 class="card-header">Proxmox Cluster</h2>
                         <!-- Placeholder for Connection Error Messages -->
                         <div class="p-1" id="proxmox-connection-error-{{ px.domain }}">
 
@@ -435,13 +520,14 @@
             {% endfor %}
             <div class="col col-md-6">
                 <div class="card">
+                    <h2 class="card-header">Netbox</h2>
 
                     <!-- FastAPI is currently the Proxbox Backend which communicates with Proxmox Cluster API. It MUST run so that Proxbox works. -->
                     <!-- Placeholder for Connection Error Messages -->
                     <div class="p-1" id="netbox-connection-error">
 
                     </div>
-                    <div class="flex d-flex flex-row  justify-content-center align-items-center p-1 m-2 mt-1">
+                    <div class="flex d-flex flex-row  justify-content-center align-items-center p-3 m-2 mt-1">
 
 
                         <div class="flex d-flex mx-auto position-absolute p-2" >
@@ -537,6 +623,8 @@
             </div>
             <div class="col col-md-6">
                 <div class="card">
+                    <h2 class="card-header">FastAPI (Backend Service)</h2>
+
                     <!-- FastAPI is currently the Proxbox Backend which communicates with Proxmox Cluster API. It MUST run so that Proxbox works. -->
                     <!-- Placeholder for Connection Error Messages -->
                     <div class="p-1" id="fastapi-connection-error">
@@ -599,6 +687,7 @@
                     </div>  
 
                     <div class="card-body">
+                        
                         <table class="table table-hover attr-table">
                             <!-- The fields are based on Netbox 'configuration.py' file and Plugins Configuration -->
                             <tr>
