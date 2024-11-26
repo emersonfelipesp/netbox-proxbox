@@ -107,7 +107,7 @@ class NetboxBase:
     async def get(
         self,
         **kwargs
-    )
+    ):
         self.base_dict = cache.get(self.endpoint)
         if self.base_dict is None:
             self.base_dict = await self.get_base_dict()
@@ -380,9 +380,7 @@ class NetboxBase:
 
         await log(
             websocket=self.websocket,
-            msg=f"<span class='badge text-bg-purple' title='Check Duplicate'>
-                <i class='mdi mdi-content-duplicate'></i>
-            </span> Checking if <strong>{self.object_name}</strong> exists on Netbox before creating it."
+            msg=f"<span class='badge text-bg-purple' title='Check Duplicate'><i class='mdi mdi-content-duplicate'></i></span> Checking if <strong>{self.object_name}</strong> exists on Netbox before creating it."
         )
 
         # Check if Proxbox default object exists in Netbox.

@@ -48,10 +48,7 @@ async def _check_default(
             if result:
                 await log(
                     websocket=websocket,
-                    msg=f"<span class='badge text-bg-purple' title='Check Duplicate'>
-                        <i class='mdi mdi-content-duplicate'></i>
-                    </span> Default <strong>{object_name}</strong> with ID <strong>{result.id}</strong> found on Netbox, but without Proxbox tag. 
-                    Please delete it (or add the tag) and try again.\nNetbox does not allow duplicated names and/or slugs."
+                    msg=f"<span class='badge text-bg-purple' title='Check Duplicate'><i class='mdi mdi-content-duplicate'></i></span> Default <strong>{object_name}</strong> with ID <strong>{result.id}</strong> found on Netbox, but without Proxbox tag.\nPlease delete it (or add the tag) and try again.\nNetbox does not allow duplicated names and/or slugs."
                 )
             else:
                 return None
