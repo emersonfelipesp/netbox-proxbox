@@ -502,12 +502,12 @@ async def get_virtual_machines(
         
         created_virtual_machines: list = []
         
-        
         devices: dict = {}
         clusters: dict = {}
+
         for vm in virtual_machines:
-            
-            print(f"\n[VM] {vm}\n")
+            print(f"\n\n\n[VM] {vm}\n\n\n")
+            await websocket.send_json(vm)
             
             vm_node: str = vm.get("node")
             print(f"vm_node: {vm_node} | {type(vm_node)}")

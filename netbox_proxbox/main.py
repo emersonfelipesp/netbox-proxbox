@@ -173,6 +173,11 @@ async def websocket_endpoint(
             await get_nodes(nb=nb, pxs=pxs, websocket=websocket)
             await get_virtual_machines(nb=nb, pxs=pxs, websocket=websocket)
         
+        if data == "Sync Nodes":
+            await get_nodes(nb=nb, pxs=pxs, websocket=websocket)
+
+        if data == "Sync Virtual Machines":
+            await get_virtual_machines(nb=nb, pxs=pxs, websocket=websocket)
         
         #await websocket.send_text(f"Message text was: {data}")
         

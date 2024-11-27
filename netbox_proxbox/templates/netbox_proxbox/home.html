@@ -14,12 +14,20 @@
 
         ws.onmessage = function(event) {
             // Add WebSockets Messages came from FasstAPI backend on GUI
+            console.log(event.data)
+
+            try {
+                var jsonMessage = JSON.parse(event.data)
+                console.log(jsonMessage)
+            } catch (error) {
+                // do nothing
+            }
 
             var messages = document.getElementById('messages')
             var message = document.createElement('li')
 
             message.style.lineHeight = '170%'
-
+            
             message.innerHTML = event.data
             messages.appendChild(message)
 
@@ -73,9 +81,19 @@
 
         }
 
-        function sendMessage(event) {
+        function fullUpdate(event) {
             // Send Websocket Message
             ws.send("Start")
+            event.preventDefault()
+        }
+
+        function syncNodes(event) {
+            ws.send("Sync Nodes")
+            event.preventDefault()
+        }
+
+        function syncVirtualMachines(event) {
+            ws.send("Sync Virtual Machines")
             event.preventDefault()
         }
 
@@ -292,26 +310,36 @@
             <div align=center id="full-update-error-message"></div>
             {# Full Update Button#}
             <div style="margin-bottom: 15px;" class="d-flex justify-content-center noprint">
-                <form action="" onsubmit="sendMessage(event)">
+                <form class="m-2" action="" onsubmit="fullUpdate(event)">
                     {% if perms.netbox_proxbox.add_proxmoxvm %}
-                    <button id="full-update-button" class="btn btn-primary">Proxmox Full Update</button>
-
-                    
+                        <button id="full-update-button" class="btn btn-primary">Proxmox Full Update</button>
+                    {% endif %}
+                </form>
+                <form class="m-2" action="" onsubmit="syncNodes(event)">
+                    {% if perms.netbox_proxbox.add_proxmoxvm %}
+                        <button id="full-update-button" class="btn btn-primary">Sync Nodes</button>
+                    {% endif %}
+                </form>
+                <form class="m-2" action="" onsubmit="syncVirtualMachines(event)">
+                    {% if perms.netbox_proxbox.add_proxmoxvm %}
+                        <button id="full-update-button" class="btn btn-primary">Sync Virtual Machines</button>
                     {% endif %}
                 </form>
             </div>
-        
             <br>
             <br>
 
             <div class="form form-horizontal">
+                <h2 id="proxmox-virtual-machines-table" class="text-center">Virtual Machines</h2>
                 <div class="card">
                     <div class="htmx-container table-responsive" id="object_list">
                         <div class="htmx-container table-responsive">
                             <table class="table table-hover object-list" hx-disinherit="hx-target hx-select" hx-swap="outerHTML">
                                 <thead hx-target="closest .htmx-container" hx-push-url="true">
                                 <tr>
-                                    <th class="w-1" aria-label="Select all"><input type="checkbox" class="toggle form-check-input" title="Toggle all"></th>
+                                    <th class="orderable">
+                                        <a href="#" hx-get="?sort=name">VM ID</a>
+                                    </th>
                                     <th class="orderable">
                                         <a href="#" hx-get="?sort=name">Name</a>
                                     </th>
@@ -319,25 +347,25 @@
                                         <a href="#" hx-get="?sort=status">Status</a>
                                     </th>
                                     <th class="orderable">
-                                        <a href="#" hx-get="?sort=tenant">Tenant</a>
+                                        <a href="#" hx-get="?sort=tenant">Role</a>
                                     </th>
                                     <th class="orderable">
-                                        <a href="#" hx-get="?sort=site">Site</a>
+                                        <a href="#" hx-get="?sort=site">Cluster</a>
                                     </th>
                                     <th class="orderable">
-                                        <a href="#" hx-get="?sort=location">Location</a>
+                                        <a href="#" hx-get="?sort=location">Cluster Type</a>
                                     </th>
                                     <th class="orderable">
-                                        <a href="#" hx-get="?sort=rack">Rack</a>
+                                        <a href="#" hx-get="?sort=rack">Device</a>
                                     </th>
                                     <th class="orderable">
-                                        <a href="#" hx-get="?sort=role">Role</a>
+                                        <a href="#" hx-get="?sort=role">Virtual CPUs</a>
                                     </th>
                                     <th class="orderable">
-                                        <a href="#" hx-get="?sort=manufacturer">Manufacturer</a>
+                                        <a href="#" hx-get="?sort=manufacturer">Memory</a>
                                     </th>
                                     <th class="orderable">
-                                        <a href="#" hx-get="?sort=device_type">Type</a>
+                                        <a href="#" hx-get="?sort=device_type">Disk Space</a>
                                     </th>
                                     <th class="orderable">
                                         <a href="#" hx-get="?sort=primary_ip">IP Address</a>
@@ -348,38 +376,24 @@
                                 </tr>
                                 </thead>
                                 <tbody>
-                                <tr>
-                                    <td colspan="12" class="text-center text-muted">— No devices found —</td>
-                                </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="htmx-container table-responsive" id="object_list">
-                        <div class="htmx-container table-responsive">
-                            <table class="table table-hover object-list" hx-disinherit="hx-target hx-select" hx-swap="outerHTML">
-                                <thead hx-target="closest .htmx-container" hx-push-url="true">
                                     <tr>
-                                        <th class="orderable">
-                                            <a href="#" hx-get="?sort=name">Name</a>
-                                        </th>
-                                        <th class="orderable">
-                                            <a href="#" hx-get="?sort=status">Status</a>
-                                        </th>
+                                        <td id="vm-table-vm-id">100</td>
+                                        <td id="vm-table-name">100</td>
+                                        <td id="vm-table-status">100</td>
+                                        <td id="vm-table-role">100</td>
+                                        <td id="vm-table-cluster">100</td>
+                                        <td id="vm-table-cluster-type">100</td>
+                                        <td id="vm-table-device">100</td>
+                                        <td id="vm-table-virtual-cpus">100</td>
+                                        <td id="vm-table-memory">100</td>
+                                        <td id="vm-table-disk-space">100</td>
+                                        <td id="vm-table-ip-address">100</td>
                                     </tr>
-                                </thead>
-                                <tbody>
-                                    <tr class="even">
-                                        <td>Test</td>
-                                        <td>Other test</td>
+                                    <!-- Show it if no virtual machines synced.
+                                    <tr>
+                                        <td colspan="12" class="text-center text-muted">— No virtual machines could be synced with Proxmox —</td>
                                     </tr>
-                                    <tr class="odd">
-                                        <td>Test</td>
-                                        <td>Other test 2</td>
-                                    </tr>
+                                    -->
                                 </tbody>
                             </table>
                         </div>
