@@ -507,7 +507,7 @@ async def get_virtual_machines(
 
         for vm in virtual_machines:
             print(f"\n\n\n[VM] {vm}\n\n\n")
-            await websocket.send_json(vm)
+            await websocket.send_json({'type': 'virtual_machine', 'data': vm})
             
             vm_node: str = vm.get("node")
             print(f"vm_node: {vm_node} | {type(vm_node)}")

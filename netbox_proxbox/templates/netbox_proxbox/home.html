@@ -10,28 +10,109 @@
         const websocketEndpoint = `wss://${uvicornHost}:${uvicornPort}/ws`
 
         // Instantiate WebSocket connection to FastAPI backend.
-        var ws = new WebSocket(websocketEndpoint);
+        let ws = new WebSocket(websocketEndpoint);
 
         ws.onmessage = function(event) {
             // Add WebSockets Messages came from FasstAPI backend on GUI
             console.log(event.data)
 
+            // Get Virtual Machine Table
+            let virtualMachineTable = document.getElementById('virtual-machine-table-data')
+
+            if (!virtualMachineTable) {
+                console.log("Virtual Machine Table not found.")
+                return
+            }
+
             try {
-                var jsonMessage = JSON.parse(event.data)
+                let jsonMessage = JSON.parse(event.data)
+                if (jsonMessage.type == "virtual_machine") {
+                    console.log(jsonMessage.data)
+                    console.log('test')
+
+                    console.log(virtualMachineTable)
+
+                    // Create Table Row
+                    let vmTableRow = document.createElement('tr')
+                    
+                    // Create Table Data
+                    let vmIdData = document.createElement('td')
+                    vmIdData.id = `vm-${jsonMessage.data.name}-id-data`
+                    vmIdData.innerHTML = jsonMessage.data.vmid
+                    vmTableRow.appendChild(vmIdData)
+
+                    let vmNameData = document.createElement('td')
+                    vmNameData.id = `vm-${jsonMessage.data.name}-name-data`
+                    vmNameData.innerHTML = jsonMessage.data.name
+                    vmTableRow.appendChild(vmNameData)
+
+                    let vmStatusData = document.createElement('td')
+                    vmStatusData.id = `vm-${jsonMessage.data.name}-status-data`
+                    vmStatusData.innerHTML = jsonMessage.data.status
+                    vmTableRow.appendChild(vmStatusData)
+
+                    let vmRoleData = document.createElement('td')
+                    vmRoleData.id = `vm-${jsonMessage.data.name}-role-data`
+                    vmRoleData.innerHTML = "Undefined"
+                    vmTableRow.appendChild(vmRoleData)
+            
+                    let vmClusterData = document.createElement('td')
+                    vmClusterData.id = `vm-${jsonMessage.data.name}-cluster-data`
+                    vmClusterData.innerHTML = "Undefined"
+                    vmTableRow.appendChild(vmClusterData)
+
+                    let vmClusterTypeData = document.createElement('td')
+                    vmClusterTypeData.id = `vm-${jsonMessage.data.name}-cluster-type-data`
+                    vmClusterTypeData.innerHTML = "Undefined"
+                    vmTableRow.appendChild(vmClusterTypeData)
+
+                    let vmDeviceData = document.createElement('td')
+                    vmDeviceData.id = `vm-${jsonMessage.data.name}-device-data`
+                    vmDeviceData.innerHTML = jsonMessage.data.node
+                    vmTableRow.appendChild(vmDeviceData)
+                    
+                    let vmVirtualCPUsData = document.createElement('td')
+                    vmVirtualCPUsData.id = `vm-${jsonMessage.data.name}-virtual-cpus-data`
+                    vmVirtualCPUsData.innerHTML = jsonMessage.data.maxcpu
+                    vmTableRow.appendChild(vmVirtualCPUsData)
+
+                    let vmMemoryData = document.createElement('td')
+                    vmMemoryData.id = `vm-${jsonMessage.data.name}-memory-data`
+                    vmMemoryData.innerHTML = Math.ceil(jsonMessage.data.maxmem / 1000000)
+                    vmTableRow.appendChild(vmMemoryData)
+
+                    let vmDiskSpaceData = document.createElement('td')
+                    vmDiskSpaceData.id = `vm-${jsonMessage.data.name}-disk-space-data`
+                    vmDiskSpaceData.innerHTML = Math.ceil(jsonMessage.data.maxdisk / 1000000)
+                    vmTableRow.appendChild(vmDiskSpaceData)
+
+                    let vmIPAddressData = document.createElement('td')
+                    vmIPAddressData.id = `vm-${jsonMessage.data.name}-ip-address-data`
+                    vmIPAddressData.innerHTML = "Undefined"
+                    vmTableRow.appendChild(vmIPAddressData)
+
+                    
+                    virtualMachineTable.appendChild(vmTableRow)
+                    console.log(virtualMachineTable)	 
+
+                    console.log(vmTableRow)                   
+                }
+
                 console.log(jsonMessage)
             } catch (error) {
                 // do nothing
+                console.log(error)
             }
 
-            var messages = document.getElementById('messages')
-            var message = document.createElement('li')
+            let messages = document.getElementById('messages')
+            let message = document.createElement('li')
 
             message.style.lineHeight = '170%'
             
             message.innerHTML = event.data
             messages.appendChild(message)
 
-            var test = document.getElementById('scrollable-div')
+            let test = document.getElementById('scrollable-div')
             test.scrollTop = test.scrollHeight
 
         };
@@ -375,20 +456,7 @@
                                     </th>
                                 </tr>
                                 </thead>
-                                <tbody>
-                                    <tr>
-                                        <td id="vm-table-vm-id">100</td>
-                                        <td id="vm-table-name">100</td>
-                                        <td id="vm-table-status">100</td>
-                                        <td id="vm-table-role">100</td>
-                                        <td id="vm-table-cluster">100</td>
-                                        <td id="vm-table-cluster-type">100</td>
-                                        <td id="vm-table-device">100</td>
-                                        <td id="vm-table-virtual-cpus">100</td>
-                                        <td id="vm-table-memory">100</td>
-                                        <td id="vm-table-disk-space">100</td>
-                                        <td id="vm-table-ip-address">100</td>
-                                    </tr>
+                                <tbody id="virtual-machine-table-data">
                                     <!-- Show it if no virtual machines synced.
                                     <tr>
                                         <td colspan="12" class="text-center text-muted">— No virtual machines could be synced with Proxmox —</td>
