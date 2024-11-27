@@ -11,7 +11,7 @@
 
         // Instantiate WebSocket connection to FastAPI backend.
         let ws = new WebSocket(websocketEndpoint);
-
+        
         ws.onmessage = function(event) {
             // Add WebSockets Messages came from FasstAPI backend on GUI
             console.log(event.data)
@@ -19,90 +19,122 @@
             // Get Virtual Machine Table
             let virtualMachineTable = document.getElementById('virtual-machine-table-data')
 
+            let virtualMachinesDiv = document.getElementById('virtual-machines-div')
+            virtualMachinesDiv.style.display = "block"
+
             if (!virtualMachineTable) {
                 console.log("Virtual Machine Table not found.")
                 return
             }
 
+            let jsonMessage = undefined
+
             try {
-                let jsonMessage = JSON.parse(event.data)
-                if (jsonMessage.type == "virtual_machine") {
-                    console.log(jsonMessage.data)
-                    console.log('test')
-
-                    console.log(virtualMachineTable)
-
-                    // Create Table Row
-                    let vmTableRow = document.createElement('tr')
-                    
-                    // Create Table Data
-                    let vmIdData = document.createElement('td')
-                    vmIdData.id = `vm-${jsonMessage.data.name}-id-data`
-                    vmIdData.innerHTML = jsonMessage.data.vmid
-                    vmTableRow.appendChild(vmIdData)
-
-                    let vmNameData = document.createElement('td')
-                    vmNameData.id = `vm-${jsonMessage.data.name}-name-data`
-                    vmNameData.innerHTML = jsonMessage.data.name
-                    vmTableRow.appendChild(vmNameData)
-
-                    let vmStatusData = document.createElement('td')
-                    vmStatusData.id = `vm-${jsonMessage.data.name}-status-data`
-                    vmStatusData.innerHTML = jsonMessage.data.status
-                    vmTableRow.appendChild(vmStatusData)
-
-                    let vmRoleData = document.createElement('td')
-                    vmRoleData.id = `vm-${jsonMessage.data.name}-role-data`
-                    vmRoleData.innerHTML = "Undefined"
-                    vmTableRow.appendChild(vmRoleData)
-            
-                    let vmClusterData = document.createElement('td')
-                    vmClusterData.id = `vm-${jsonMessage.data.name}-cluster-data`
-                    vmClusterData.innerHTML = "Undefined"
-                    vmTableRow.appendChild(vmClusterData)
-
-                    let vmClusterTypeData = document.createElement('td')
-                    vmClusterTypeData.id = `vm-${jsonMessage.data.name}-cluster-type-data`
-                    vmClusterTypeData.innerHTML = "Undefined"
-                    vmTableRow.appendChild(vmClusterTypeData)
-
-                    let vmDeviceData = document.createElement('td')
-                    vmDeviceData.id = `vm-${jsonMessage.data.name}-device-data`
-                    vmDeviceData.innerHTML = jsonMessage.data.node
-                    vmTableRow.appendChild(vmDeviceData)
-                    
-                    let vmVirtualCPUsData = document.createElement('td')
-                    vmVirtualCPUsData.id = `vm-${jsonMessage.data.name}-virtual-cpus-data`
-                    vmVirtualCPUsData.innerHTML = jsonMessage.data.maxcpu
-                    vmTableRow.appendChild(vmVirtualCPUsData)
-
-                    let vmMemoryData = document.createElement('td')
-                    vmMemoryData.id = `vm-${jsonMessage.data.name}-memory-data`
-                    vmMemoryData.innerHTML = Math.ceil(jsonMessage.data.maxmem / 1000000)
-                    vmTableRow.appendChild(vmMemoryData)
-
-                    let vmDiskSpaceData = document.createElement('td')
-                    vmDiskSpaceData.id = `vm-${jsonMessage.data.name}-disk-space-data`
-                    vmDiskSpaceData.innerHTML = Math.ceil(jsonMessage.data.maxdisk / 1000000)
-                    vmTableRow.appendChild(vmDiskSpaceData)
-
-                    let vmIPAddressData = document.createElement('td')
-                    vmIPAddressData.id = `vm-${jsonMessage.data.name}-ip-address-data`
-                    vmIPAddressData.innerHTML = "Undefined"
-                    vmTableRow.appendChild(vmIPAddressData)
-
-                    
-                    virtualMachineTable.appendChild(vmTableRow)
-                    console.log(virtualMachineTable)	 
-
-                    console.log(vmTableRow)                   
-                }
-
-                console.log(jsonMessage)
+                jsonMessage = JSON.parse(event.data)
             } catch (error) {
                 // do nothing
-                console.log(error)
+                console.log("Could not parse JSON message.")
             }
+
+            if (jsonMessage) {
+                // JSON message is parsed. Now, let's check if it's a Virtual Machine message.
+                try {
+                    if (jsonMessage.type == "virtual_machine") {
+                        let undefinedHtml = `<span class='badge text-bg-grey' title='Proxmox VM ID'><strong></strong>undefined</strong></span>`
+
+                        virtualMachinesDiv.style.display = "block"
+
+                        console.log(jsonMessage.data)
+                        console.log('test')
+
+                        console.log(virtualMachineTable)
+
+                        // Create Table Row
+                        let vmTableRow = document.createElement('tr')
+
+                        let vmNetboxIdData = document.createElement('td')
+                        vmNetboxIdData.id = `vm-${jsonMessage.data.name}-netbox-id-data`
+                        vmNetboxIdData.innerHTML = undefinedHtml
+                        vmTableRow.appendChild(vmNetboxIdData)
+
+                        // Create Table Data
+                        let vmIdData = document.createElement('td')
+                        vmIdData.id = `vm-${jsonMessage.data.name}-id-data`
+                        vmIdData.innerHTML = `<span class='badge text-bg-grey' title='Proxmox VM ID'><strong></strong>${jsonMessage.data.vmid}</strong></span>`
+                        vmTableRow.appendChild(vmIdData)
+
+                        let vmNameData = document.createElement('td')
+                        vmNameData.id = `vm-${jsonMessage.data.name}-name-data`
+                        vmNameData.innerHTML = `<strong>${jsonMessage.data.name}</strong>`
+                        vmTableRow.appendChild(vmNameData)
+
+                        let vmStatusData = document.createElement('td')
+                        vmStatusData.id = `vm-${jsonMessage.data.name}-status-data`
+
+                        if (jsonMessage.data.status === "running") {
+                            vmStatusData.innerHTML = `<span class="text-bg-green badge p-1">${jsonMessage.data.status}</span>`
+                        } else if (json.data.status === "stopped") {
+                            vmStatusData.innerHTML = `<span class="text-bg-red badge p-1">${jsonMessage.data.status}</span>`
+                        } else {
+                            vmStatusData.innerHTML = `<span class="text-bg-grey badge p-1">${jsonMessage.data.status}</span>`
+                        }
+
+                        vmTableRow.appendChild(vmStatusData)
+
+                        let vmDeviceData = document.createElement('td')
+                        vmDeviceData.id = `vm-${jsonMessage.data.name}-device-data`
+                        vmDeviceData.innerHTML = `<strong>${jsonMessage.data.node}</strong>`
+                        vmTableRow.appendChild(vmDeviceData)
+                
+                        let vmClusterData = document.createElement('td')
+                        vmClusterData.id = `vm-${jsonMessage.data.name}-cluster-data`
+                        vmClusterData.innerHTML = undefinedHtml
+                        vmTableRow.appendChild(vmClusterData)
+
+                        let vmClusterTypeData = document.createElement('td')
+                        vmClusterTypeData.id = `vm-${jsonMessage.data.name}-cluster-type-data`
+                        vmClusterTypeData.innerHTML = undefinedHtml
+                        vmTableRow.appendChild(vmClusterTypeData)
+
+                        let vmRoleData = document.createElement('td')
+                        vmRoleData.id = `vm-${jsonMessage.data.name}-role-data`
+                        vmRoleData.innerHTML = undefinedHtml
+                        vmTableRow.appendChild(vmRoleData)
+
+                        let vmVirtualCPUsData = document.createElement('td')
+                        vmVirtualCPUsData.id = `vm-${jsonMessage.data.name}-virtual-cpus-data`
+                        vmVirtualCPUsData.innerHTML = jsonMessage.data.maxcpu
+                        vmTableRow.appendChild(vmVirtualCPUsData)
+
+                        let vmMemoryData = document.createElement('td')
+                        vmMemoryData.id = `vm-${jsonMessage.data.name}-memory-data`
+                        vmMemoryData.innerHTML = `${Math.ceil(jsonMessage.data.maxmem / 1000000)}`
+                        vmTableRow.appendChild(vmMemoryData)
+
+                        let vmDiskSpaceData = document.createElement('td')
+                        vmDiskSpaceData.id = `vm-${jsonMessage.data.name}-disk-space-data`
+                        vmDiskSpaceData.innerHTML = `${Math.ceil(jsonMessage.data.maxdisk / 1000000)}`
+                        vmTableRow.appendChild(vmDiskSpaceData)
+
+                        let vmIPAddressData = document.createElement('td')
+                        vmIPAddressData.id = `vm-${jsonMessage.data.name}-ip-address-data`
+                        vmIPAddressData.innerHTML = undefinedHtml
+                        vmTableRow.appendChild(vmIPAddressData)
+
+                        
+                        virtualMachineTable.appendChild(vmTableRow)
+                        console.log(virtualMachineTable)	 
+
+                        console.log(vmTableRow)                   
+                    }
+
+                    console.log(jsonMessage)
+                } catch (error) {
+                    // do nothing
+                    console.log(error)
+                }
+            }
+            
 
             let messages = document.getElementById('messages')
             let message = document.createElement('li')
@@ -274,6 +306,9 @@
         getBody()
 
         async function getVersion() {
+            let virtualMachinesDiv = document.getElementById('virtual-machines-div')
+            virtualMachinesDiv.style.display = "none"
+
             // Test FastAPI Proxbox Backend Connection
             console.log("1")
 
@@ -410,7 +445,7 @@
             <br>
             <br>
 
-            <div class="form form-horizontal">
+            <div id="virtual-machines-div" class="form form-horizontal">
                 <h2 id="proxmox-virtual-machines-table" class="text-center">Virtual Machines</h2>
                 <div class="card">
                     <div class="htmx-container table-responsive" id="object_list">
@@ -419,7 +454,10 @@
                                 <thead hx-target="closest .htmx-container" hx-push-url="true">
                                 <tr>
                                     <th class="orderable">
-                                        <a href="#" hx-get="?sort=name">VM ID</a>
+                                        <a href="#" hx-get="?sort=name">Netbox ID</a>
+                                    </th>
+                                    <th class="orderable">
+                                        <a href="#" hx-get="?sort=name">VM/CT ID</a>
                                     </th>
                                     <th class="orderable">
                                         <a href="#" hx-get="?sort=name">Name</a>
@@ -428,7 +466,7 @@
                                         <a href="#" hx-get="?sort=status">Status</a>
                                     </th>
                                     <th class="orderable">
-                                        <a href="#" hx-get="?sort=tenant">Role</a>
+                                        <a href="#" hx-get="?sort=tenant">Device</a>
                                     </th>
                                     <th class="orderable">
                                         <a href="#" hx-get="?sort=site">Cluster</a>
@@ -437,16 +475,16 @@
                                         <a href="#" hx-get="?sort=location">Cluster Type</a>
                                     </th>
                                     <th class="orderable">
-                                        <a href="#" hx-get="?sort=rack">Device</a>
+                                        <a href="#" hx-get="?sort=rack">Role</a>
                                     </th>
                                     <th class="orderable">
                                         <a href="#" hx-get="?sort=role">Virtual CPUs</a>
                                     </th>
                                     <th class="orderable">
-                                        <a href="#" hx-get="?sort=manufacturer">Memory</a>
+                                        <a href="#" hx-get="?sort=manufacturer">Memory (MB)</a>
                                     </th>
                                     <th class="orderable">
-                                        <a href="#" hx-get="?sort=device_type">Disk Space</a>
+                                        <a href="#" hx-get="?sort=device_type">Disk Space (GB)</a>
                                     </th>
                                     <th class="orderable">
                                         <a href="#" hx-get="?sort=primary_ip">IP Address</a>
