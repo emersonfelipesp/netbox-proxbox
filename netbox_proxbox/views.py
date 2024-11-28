@@ -60,6 +60,21 @@ class HomeView(View):
         )
 
 
+class NodesView(View):
+    template = 'netbox_proxbox/nodes.html'
+
+    def get(self, request):
+        plugin_configuration = configuration.PLUGINS_CONFIG
+
+        return render(
+            request, 
+            self.template,
+            {
+                "configuration": plugin_configuration
+            }
+        )
+
+
 class VirtualMachinesView(View):
     template = 'netbox_proxbox/virtual_machines.html'
 
