@@ -490,6 +490,7 @@ async def get_virtual_machines(
         """
         active = "running"
         offline = "stopped"
+        prelaunch = "prelaunch"
     
     result = []
     
