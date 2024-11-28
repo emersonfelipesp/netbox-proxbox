@@ -1,0 +1,11 @@
+{% extends 'base/layout.html' %}
+{% load static %}
+
+{% block content %}
+    <div class="d-flex justify-content-center flex-nowrap" style="margin-bottom: 15px;">
+        <h2>
+            Proxmox Virtual Machines and Containers
+        </h2>
+    </div>
+    {% include "netbox_proxbox/virtual_machines_table.html" %}
+{% endblock %}

@@ -1,0 +1,103 @@
+{% load static %}            
+
+<div class="col col-md-6">
+    <div class="card">
+        <h2 class="card-header">FastAPI (Backend Service)</h2>
+
+        <!-- FastAPI is currently the Proxbox Backend which communicates with Proxmox Cluster API. It MUST run so that Proxbox works. -->
+        <!-- Placeholder for Connection Error Messages -->
+        <div class="p-1" id="fastapi-connection-error">
+
+        </div>
+
+        <!-- Stop/Start/Restat buttons -->
+        <div class="flex d-flex flex-row  justify-content-left align-items-left p-1 mt-1">
+            <div class="flex d-flex m-1">
+                <a href="{% url 'plugins:netbox_proxbox:stop-proxbox-backend' %}">
+                    <button class="badge text-bg-red" title='Stop Service'>
+                        <i class='mdi mdi-stop'></i>
+                    </button>
+                </a>
+            </div>
+            <div class="flex d-flex m-1" >
+                <a href="{% url 'plugins:netbox_proxbox:fix-proxbox-backend' %}">
+                    <button class="badge text-bg-green" title='Start Service'>
+                        <i class='mdi mdi-play'></i>
+                    </button>
+                </a>
+            </div>
+            <div class="flex d-flex m-1" >
+                <a href="{% url 'plugins:netbox_proxbox:restart-proxbox-backend' %}">
+                    <button class="badge text-bg-yellow" title='Restart Service'>
+                        <i class='mdi mdi-restart'></i>
+                    </button>
+                </a>
+            </div>
+            <div class="flex d-flex m-1" >
+                <a href="{% url 'plugins:netbox_proxbox:status-proxbox-backend' %}">
+                    <button class="badge text-bg-blue" title='Check Service Status'>
+                        <i class='mdi mdi-exclamation'></i>
+                    </button>
+                </a>
+            </div>
+        </div>
+
+
+        <div class="flex d-flex flex-row  justify-content-center align-items-center p-1 mt-1">
+
+            <!-- FastAPI logo -->
+            <div class="flex d-flex mx-auto position-absolute" >
+                <a href="https://fastapi.tiangolo.com/" target="_blank">
+                    <img src="{% static 'netbox_proxbox/fastapi_logo.png' %}" alt="Netbox Logo" width="200px">
+                </a>
+                
+            </div>
+            
+            <!-- Status Badge. Default value is 'Unkown' and is changed based on API response status -->
+            <div class="d-flex ms-auto " style="margin: 0 40px 0 0">
+                <span id="fastapi-connection-status" class="proxmox-connection-check badge p-1">Unknown</span>
+            </div>
+
+        </div>
+        
+        <div align=center>
+            <br>
+            <p>This service <strong>MUST</strong> be running to Proxbox work.<br>It's the backend which communicates with Proxmox Clusters.</br></p>
+        </div>  
+
+        <div class="card-body">
+            
+            <table class="table table-hover attr-table">
+                <!-- The fields are based on Netbox 'configuration.py' file and Plugins Configuration -->
+                <tr>
+                    <th scope="row"><strong>Uvicorn Host</strong></th>
+                    {% if configuration.netbox_proxbox.fastapi.uvicorn_host %}
+                        <td id="uvicorn-host">{{ configuration.netbox_proxbox.fastapi.uvicorn_host }}</td>
+                    {% else %}
+                        <td id="uvicorn-host">{{ default_config.fastapi.uvicorn_host }} (default)</td>
+                    {% endif %}
+                </tr>
+                <tr>
+                    <th scope="row"><strong>Uvicorn Port</strong></th>
+                    {% if configuration.netbox_proxbox.fastapi.uvicorn_port %}
+                        <td id="uvicorn-port">{{ configuration.netbox_proxbox.fastapi.uvicorn_port }}</td>
+                    {% else %}
+                        <td id="uvicorn-port">{{ default_config.fastapi.uvicorn_port }} (default)</td>
+                    {% endif %}
+                </tr>
+            </table>
+            <div class="flex d-flex flex-row  justify-content-center align-items-center p-2 mt-1">
+                <!-- Status Badge. Default value is 'Unkown' and is changed based on API response status -->
+                <div class="d-flex ms-auto " style="margin: 0 40px 0 0">
+                    <button class="btn btn-outline-primary" type="button">
+                        <a
+                            style="text-decoration: none; color: inherit"
+                            target="_blank"
+                            href="https://fastapi.tiangolo.com/deployment/manually/"
+                        >Show Example</a>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

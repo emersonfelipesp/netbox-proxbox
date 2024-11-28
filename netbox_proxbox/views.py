@@ -60,6 +60,15 @@ class HomeView(View):
         )
 
 
+class VirtualMachinesView(View):
+    template = 'netbox_proxbox/virtual_machines.html'
+
+    def get(self, request):
+        return render(
+            request, 
+            self.template
+        )
+
 class ContributingView(View):
     """
     **ContributingView** handles the rendering of the contributing page for the Proxbox project.

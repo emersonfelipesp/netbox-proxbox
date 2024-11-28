@@ -6,6 +6,11 @@ fullupdate_item = PluginMenuItem(
     link_text='Full Update',
 )
 
+virtual_machines_item = PluginMenuItem(
+    link='plugins:netbox_proxbox:virtual_machines',
+    link_text='Virtual Machines',
+)
+
 contributing_item = PluginMenuItem(
     link='plugins:netbox_proxbox:contributing',
     link_text='Contributing!',
@@ -40,7 +45,7 @@ community_item = PluginMenuItem(
 menu = PluginMenu(
     label='Proxbox',
     groups=(
-        ('Proxmox Plugin', (fullupdate_item,)),
+        ('Proxmox Plugin', (fullupdate_item, virtual_machines_item,)),
         ('Join our community', (contributing_item, community_item,)),
     ),
     icon_class='mdi mdi-dns'
