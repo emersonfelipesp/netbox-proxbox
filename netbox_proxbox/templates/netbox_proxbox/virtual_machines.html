@@ -1,8 +1,6 @@
 {% extends 'base/layout.html' %}
 {% load static %}
 
-
-
 {% block content %}
     {% include "netbox_proxbox/virtual_machines_table/script.html" %}
     
@@ -40,8 +38,10 @@
             }
 
             if (jsonMessage) {
-                if (jsonMessage.type == "virtual_machine") {
+                if (jsonMessage.object == "virtual_machine") {
                     populateVirtualMachinesTable(jsonMessage)
+                } else if (jsonMessage.object == "device") {
+                    console.log(jsonMessage)
                 }
             }
         }

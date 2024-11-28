@@ -508,7 +508,9 @@ async def get_virtual_machines(
 
         for vm in virtual_machines:
             print(f"\n\n\n[VM] {vm}\n\n\n")
-            await websocket.send_json({'type': 'virtual_machine', 'data': vm})
+            
+            # Creates a new row in table for each virtual machine
+            await websocket.send_json({'object': 'virtual_machine', 'type': 'create', 'data': vm})
             
             vm_node: str = vm.get("node")
             print(f"vm_node: {vm_node} | {type(vm_node)}")
@@ -517,13 +519,20 @@ async def get_virtual_machines(
             Get Device from Netbox based on Proxmox Node Name only if it's not already in the devices dict
             This way we are able to minimize the number of requests to Netbox API
             """
+            
+            device = None
+            
             if devices.get(vm_node) is None:
-                devices[vm_node] = await Device(nb = nb, websocket = websocket).get(name = vm.get("node"))
+                # Try to get the device from Netbox, if not found, create it
+                device = await Device(nb = nb, websocket = websocket).get(name = vm.get("node"))
                 
-            device = devices[vm_node]
-            print(f"devices[vm_node]: {devices[vm_node]} | {device}")
-            
-            
+                if device:
+                    devices[vm_node] = device
+                    
+                    print(f'device: {device}')
+                    
+                    await websocket.send_json({'object': 'device', 'type': 'create', 'data': device})
+           
             """
             Get Cluster from Netbox based on Cluster Name only if it's not already in the devices dict
             This way we are able to minimize the number of requests to Netbox API

@@ -25,7 +25,7 @@
         }
 
         if (jsonMessage) {
-            if (jsonMessage.type == "virtual_machine") {
+            if (jsonMessage.object == "virtual_machine") {
                 populateVirtualMachinesTable(jsonMessage)
             }
         }
