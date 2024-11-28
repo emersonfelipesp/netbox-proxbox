@@ -1,11 +1,79 @@
 {% extends 'base/layout.html' %}
 {% load static %}
 
+
+
 {% block content %}
+    {% include "netbox_proxbox/virtual_machines_table/script.html" %}
+    
+    <script>
+        const uvicornHost = "{{ configuration.netbox_proxbox.fastapi.uvicorn_host }}"
+        const uvicornPort = "{{ configuration.netbox_proxbox.fastapi.uvicorn_port }}"
+
+        const fastapiEndpoint = `https://${uvicornHost}:${uvicornPort}`
+        const websocketEndpoint = `wss://${uvicornHost}:${uvicornPort}/ws/virtual-machine`
+
+        // Instantiate WebSocket connection to FastAPI backend.
+        let ws_vm = new WebSocket(websocketEndpoint);
+
+        // A flag to track the connection state
+        let isConnected = false;
+
+
+        // Event handler for when the WebSocket connection is established
+        ws_vm.onopen = function(event) {
+            console.log('WebSocket is connected');
+            isConnected = true;
+        };
+
+        ws_vm.onmessage = function(event) {
+            // Add WebSockets Messages came from FasstAPI backend on GUI
+            console.log(event.data)
+
+            let jsonMessage = undefined
+
+            try {
+                jsonMessage = JSON.parse(event.data)
+            } catch (error) {
+                // do nothing
+                console.log("Could not parse JSON message.")
+            }
+
+            if (jsonMessage) {
+                if (jsonMessage.type == "virtual_machine") {
+                    populateVirtualMachinesTable(jsonMessage)
+                }
+            }
+        }
+
+        ws_vm.onerror = function(error) {
+            console.log("WebSocket Error: " + error)
+        }
+
+        function syncVirtualMachines(event) {
+            if (!isConnected) {
+                console.log("WebSocket is not connected.")
+                return
+            } else {
+                ws_vm.send("Sync Virtual Machines")
+                event.preventDefault()
+            }
+        }
+    </script>
+
+
     <div class="d-flex justify-content-center flex-nowrap" style="margin-bottom: 15px;">
         <h2>
             Proxmox Virtual Machines and Containers
         </h2>
     </div>
-    {% include "netbox_proxbox/virtual_machines_table.html" %}
+
+    <div style="margin-bottom: 15px;" class="d-flex justify-content-center noprint">
+        <form class="m-2" action="" onsubmit="syncVirtualMachines(event)">
+            {% if perms.netbox_proxbox.add_proxmoxvm %}
+                <button id="full-update-button" class="btn btn-primary">Sync Virtual Machines</button>
+            {% endif %}
+        </form>
+    </div>
+    {% include "netbox_proxbox/virtual_machines_table/table.html" %}
 {% endblock %}

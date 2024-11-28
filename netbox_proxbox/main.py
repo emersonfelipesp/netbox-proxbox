@@ -155,6 +155,7 @@ async def proxmoxer_exception_handler(request: Request, exc: ProxboxException):
         }
     )
 
+from netbox_proxbox.backend.routes.proxbox.clusters import get_nodes, get_virtual_machines
 
 @app.websocket("/ws")
 async def websocket_endpoint(
@@ -164,23 +165,51 @@ async def websocket_endpoint(
 ):
     await websocket.accept()
     
-    from netbox_proxbox.backend.routes.proxbox.clusters import get_nodes, get_virtual_machines
-    
     while True:
         data = await websocket.receive_text()
         
         if data == "Start":
             await get_nodes(nb=nb, pxs=pxs, websocket=websocket)
             await get_virtual_machines(nb=nb, pxs=pxs, websocket=websocket)
-        
+            await websocket.close()
+            
         if data == "Sync Nodes":
             await get_nodes(nb=nb, pxs=pxs, websocket=websocket)
+            await websocket.close()
 
         if data == "Sync Virtual Machines":
             await get_virtual_machines(nb=nb, pxs=pxs, websocket=websocket)
-        
-        #await websocket.send_text(f"Message text was: {data}")
-        
+            await websocket.close()
+            
+        else:
+            print("Invalid command.")
+            await websocket.send_text("Invalid command.")
+            await websocket.close()
+
+        await websocket.close()
+    
+    
+
+@app.websocket("/ws/virtual-machine")
+async def websocket_vm_endpoint(
+    nb: NetboxSessionDep,
+    pxs: ProxmoxSessionsDep,
+    websocket: WebSocket
+):
+    await websocket.accept()
+
+    while True:
+        data = await websocket.receive_text()
+
+        if data == "Sync Virtual Machines":
+            await get_virtual_machines(nb=nb, pxs=pxs, websocket=websocket)
+            await websocket.close()
+
+        else:
+            print("Invalid command.")
+            await websocket.send_text("Invalid command.")
+            await websocket.close()
+
         
 
 #
