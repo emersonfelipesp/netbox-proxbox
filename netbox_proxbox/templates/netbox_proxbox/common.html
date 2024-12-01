@@ -1,0 +1,26 @@
+<script>
+    let syncStatus = `<span class="text-bg-yellow badge p-1" title="Syncing VM" ><i class='mdi mdi-sync'></i></span>`
+
+        /*
+    * Create Table Data Element
+    * @param {string} field - Type of Table Data Element
+    * @param {string} innerHTML - Inner HTML of Table Data Element
+    * @returns {HTMLTableDataCellElement} - Table Data Element
+    */
+    function createTdElement(type, name, field, innerHTML) {
+        let tdElement = document.createElement('td')
+
+        try {
+            if (type == "virtual_machine") {
+                tdElement.id = `vm-${name}-${field}-data`
+            } else if (type == "device") {
+                tdElement.id = `node-${name}-${field}-data`
+            }
+        } catch (error) {
+            console.log(`ERROR: ${error}`)
+        }
+
+        tdElement.innerHTML = innerHTML
+        return tdElement
+    }
+</script>

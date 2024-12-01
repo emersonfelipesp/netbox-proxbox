@@ -5,8 +5,12 @@ from netbox_proxbox.backend.session.proxmox import ProxmoxSessionsDep
 from netbox_proxbox.backend.session.netbox import NetboxSessionDep
 
 from netbox_proxbox.backend.logging import log
-
 from netbox_proxbox.backend.exception import ProxboxException, exception_log
+from netbox_proxbox.backend.routes.netbox.generic.bootstrap import (
+    create_default_custom_fields,
+    create_default_objects,
+)
+
 
 from netbox_proxbox.backend import (
     ClusterType,
@@ -529,43 +533,52 @@ async def get_virtual_machines(
                 # Try to get the device from Netbox, if not found, create it
                 device = await Device(nb = nb, websocket = websocket).get(name = vm.get("node"))
                 
+                await websocket.send_json({'object': 'device', 'type': 'update', 'data': device})
+
                 if device:
                     devices[vm_node] = device
                     
                     print(f'device: {device}')
                     
-                    await websocket.send_json({'object': 'device', 'type': 'create', 'data': device})
+                    await websocket.send_json({'object': 'device', 'type': 'update', 'data': device})
            
             """
             Get Cluster from Netbox based on Cluster Name only if it's not already in the devices dict
             This way we are able to minimize the number of requests to Netbox API
             """
+            cluster = None
             if clusters.get(px.name) is None:
-                clusters[px.name] = await Cluster(nb = nb, websocket = websocket).get(name = px.name)
+                cluster = await Cluster(nb = nb, websocket = websocket).get(name = px.name)
+
+                if cluster:
+                    await websocket.send_json({'object': 'cluster', 'type': 'update', 'data': cluster})
             
-            cluster = clusters[px.name]
+            clusters[px.name] = cluster
         
-        
-        
-            role = await DeviceRole(nb = nb, websocket = websocket).get(slug = vm.get("type"))
-            if role is not None:
-            
-                vm_type = vm.get("type")
+            # Get Virtual Machine Role from Netbox based on Proxmox VM Type
+            vm_type = vm.get("type")
+            role = await DeviceRole(nb = nb, websocket = websocket).get(slug = vm_type)
+
+            # If Role not found, create it
+            if not role:
                 
-                vm_name = None
-                
-                color = "000000"
-                
+                # Set the Virtual Machine Role based on Proxmox VM Type
                 if vm_type == "qemu":
                     vm_name = "Virtual Machine (QEMU)"
                     color = "00ffff"
                     description = "Proxmox Virtual Machine"
-
-                if vm_type == "lxc":
+            
+                elif vm_type == "lxc":
                     vm_name = "Container (LXC)"
                     color = "7fffd4"
                     description = "Proxmox Container"
                 
+                else:
+                    vm_name: str = "Unknown"
+                    color: str = "000000"
+                    description: str = "VM Type not found. Neither QEMU nor LXC."
+
+                # Create Virtual Machine Role based on Proxmox VM Type
                 role = await DeviceRole(nb = nb, websocket = websocket).post(data = {
                     "name": vm_name,
                     "slug": vm_type,
@@ -578,127 +591,39 @@ async def get_virtual_machines(
             Proxmox Virtual Machine ID Custom Field
             """    
            
+            # Get Custom Field from Netbox based on Custom Field Name
             custom_field_id = nb.session.extras.custom_fields.get(name="proxmox_vm_id")
             
             if not custom_field_id:
-                custom_field_id = nb.session.extras.custom_fields.create(
-                    {
-                        "object_types": [
-                            "virtualization.virtualmachine"
-                        ],
-                        "type": "integer",
-                        "name": "proxmox_vm_id",
-                        "label": "VM ID",
-                        "description": "Proxmox Virtual Machine or Container ID",
-                        "ui_visible": "always",
-                        "ui_editable": "hidden",
-                        "weight": 100,
-                        "filter_logic": "loose",
-                        "search_weight": 1000,
-                        "group_name": "Proxmox"
-                    }
-                )
+                await create_default_custom_fields(nb=nb, websocket=websocket, custom_field="proxmox_vm_id")
             
             """
             Proxmox Start at Boot Custom Field
             """            
             start_at_boot_field = nb.session.extras.custom_fields.get(name="proxmox_start_at_boot")
-
             if not start_at_boot_field:
-                start_at_boot_field = nb.session.extras.custom_fields.create(
-                    {
-                        "object_types": [
-                            "virtualization.virtualmachine"
-                        ],
-                        "type": "boolean",
-                        "name": "proxmox_start_at_boot",
-                        "label": "Start at Boot",
-                        "description": "Proxmox Start at Boot Option",
-                        "ui_visible": "always",
-                        "ui_editable": "hidden",
-                        "weight": 100,
-                        "filter_logic": "loose",
-                        "search_weight": 1000,
-                        "group_name": "Proxmox"
-                    }
-                )
+                await create_default_custom_fields(nb=nb, websocket=websocket, custom_field="proxmox_start_at_boot")
                         
             """
             Proxmox Unprivileged Container Custom Field
-            """            
+            """        
             start_unprivileged_field = nb.session.extras.custom_fields.get(name="proxmox_unprivileged_container")
-
             if not start_unprivileged_field:
-                start_unprivileged_field = nb.session.extras.custom_fields.create(
-                    {
-                        "object_types": [
-                            "virtualization.virtualmachine"
-                        ],
-                        "type": "boolean",
-                        "name": "proxmox_unprivileged_container",
-                        "label": "Unprivileged Container",
-                        "description": "Proxmox Unprivileged Container",
-                        "ui_visible": "if-set",
-                        "ui_editable": "hidden",
-                        "weight": 100,
-                        "filter_logic": "loose",
-                        "search_weight": 1000,
-                        "group_name": "Proxmox"
-                    }
-                )
-            
-            unprivileged_container = None
-            
+                await create_default_custom_fields(nb=nb, websocket=websocket, custom_field="proxmox_unprivileged_container")
             
             """
             Proxmox QEMU Guest Agent Custom Field
             """            
             start_qemu_agent_field = nb.session.extras.custom_fields.get(name="proxmox_qemu_agent")
-
             if not start_qemu_agent_field:
-                start_qemu_agent_field = nb.session.extras.custom_fields.create(
-                    {
-                        "object_types": [
-                            "virtualization.virtualmachine"
-                        ],
-                        "type": "boolean",
-                        "name": "proxmox_qemu_agent",
-                        "label": "QEMU Guest Agent",
-                        "description": "Proxmox QEMU Guest Agent",
-                        "ui_visible": "if-set",
-                        "ui_editable": "hidden",
-                        "weight": 100,
-                        "filter_logic": "loose",
-                        "search_weight": 1000,
-                        "group_name": "Proxmox"
-                    }
-                )
+                await create_default_custom_fields(nb=nb, websocket=websocket, custom_field="proxmox_qemu_agent")
                 
             """
             Proxmox Search Domain Field
             """
             search_domain_field = nb.session.extras.custom_fields.get(name="proxmox_search_domain")
-            
             if not search_domain_field:
-                search_domain_field = nb.session.extras.custom_fields.create(
-                    {
-                        "object_types": [
-                            "virtualization.virtualmachine"
-                        ],
-                        "type": "text",
-                        "name": "proxmox_search_domain",
-                        "label": "Search Domain",
-                        "description": "Proxmox Search Domain",
-                        "ui_visible": "if-set",
-                        "ui_editable": "hidden",
-                        "weight": 100,
-                        "filter_logic": "loose",
-                        "search_weight": 1000,
-                        "group_name": "Proxmox"
-                    }
-                )
-            
-                    
+                await create_default_custom_fields(nb=nb, websocket=websocket, custom_field="proxmox_search_domain")
             
             platform = None
             search_domain = None

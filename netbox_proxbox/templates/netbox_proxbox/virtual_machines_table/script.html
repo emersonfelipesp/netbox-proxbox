@@ -1,76 +1,76 @@
-<script>
-    function populateVirtualMachinesTable(jsonMessage) {
-        // Populate Virtual Machines Table with data from Websocket JSON message
-        if (!jsonMessage) {
-            return
-        }
+{% load static %}
 
-        // Get Virtual Machine Table
-        let virtualMachineTable = document.getElementById('virtual-machine-table-data')
+{% block content %}
+    {% include "netbox_proxbox/common.html" %}
 
-        let virtualMachinesDiv = document.getElementById('virtual-machines-div')
-        virtualMachinesDiv.style.display = "block"
-
-        if (!virtualMachineTable) {
-            return
-        }
-
-
-        // JSON message is parsed. Now, let's check if it's a Virtual Machine message.
-        try {
-            
-            let undefinedHtml = `<span class='badge text-bg-grey' title='Proxmox VM ID'><strong></strong>undefined</strong></span>`
-
+    <script>
+        function populateVirtualMachinesTable(jsonMessage) {
+            // Populate Virtual Machines Table with data from Websocket JSON message
+            if (!jsonMessage) {
+                return
+            }
+    
+            // Get Virtual Machine Table
+            let virtualMachineTable = document.getElementById('virtual-machine-table-data')
+    
+            let virtualMachinesDiv = document.getElementById('virtual-machines-div')
             virtualMachinesDiv.style.display = "block"
+    
+            if (!virtualMachineTable) {
+                return
+            }
+    
+            let jsonDataName = undefined
 
-            let vmTableDefaultTd = document.getElementById('virtual-machines-table-default-td')
-            vmTableDefaultTd.style.display = "none"
-
-            // Create Table Row
-            let vmTableRow = document.createElement('tr')
-
-            /*
-            * Create Table Data Element
-            * @param {string} type - Type of Table Data Element
-            * @param {string} innerHTML - Inner HTML of Table Data Element
-            * @returns {HTMLTableDataCellElement} - Table Data Element
-            */
-            function createTdElement(type, innerHTML) {
-                let tdElement = document.createElement('td')
-                tdElement.id = `vm-${jsonMessage.data.name}-${type}-data`
-                tdElement.innerHTML = innerHTML
-                return tdElement
+            try {
+                jsonDataName = jsonMessage.data.name
+            } catch (error) {
+                console.log(`ERROR: ${error}`)
             }
 
-            let vmStatusDataHtml = undefinedHtml
-
-            if (jsonMessage.data.status === "running") {
-                vmStatusDataHtml = `<span class="text-bg-green badge p-1">${jsonMessage.data.status}</span>`
-            } else if (jsonMessage.data.status === "stopped") {
-                vmStatusDataHtml = `<span class="text-bg-red badge p-1">${jsonMessage.data.status}</span>`
-            } else {
-                vmStatusDataHtml = `<span class="text-bg-grey badge p-1">${jsonMessage.data.status}</span>`
+            // JSON message is parsed. Now, let's check if it's a Virtual Machine message.
+            try {
+                
+                let undefinedHtml = `<span class='badge text-bg-grey' title='Proxmox VM ID'><strong></strong>undefined</strong></span>`
+    
+                virtualMachinesDiv.style.display = "block"
+    
+                let vmTableDefaultTd = document.getElementById('virtual-machines-table-default-td')
+                vmTableDefaultTd.style.display = "none"
+                
+                // Create Table Row
+                let vmTableRow = document.createElement('tr')
+    
+                let vmStatusDataHtml = undefinedHtml
+    
+                if (jsonMessage.data.status === "running") {
+                    vmStatusDataHtml = `<span class="text-bg-green badge p-1">${jsonMessage.data.status}</span>`
+                } else if (jsonMessage.data.status === "stopped") {
+                    vmStatusDataHtml = `<span class="text-bg-red badge p-1">${jsonMessage.data.status}</span>`
+                } else {
+                    vmStatusDataHtml = `<span class="text-bg-grey badge p-1">${jsonMessage.data.status}</span>`
+                }
+    
+                // Populate Table Row with Table Data parsed from Websocket JSON message
+                vmTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `status`, syncStatus))
+                vmTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `netbox-id`, undefinedHtml))
+                vmTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `id`, `<span class='badge text-bg-grey' title='Proxmox VM ID'><strong></strong>${jsonMessage.data.vmid}</strong></span>`))
+                vmTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `name`, `<strong>${jsonMessage.data.name}</strong>`))
+                vmTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `status`, vmStatusDataHtml))
+                vmTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `device`, `<strong>${jsonMessage.data.node}</strong>`))
+                vmTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `cluster`, undefinedHtml))
+                vmTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `cluster-type`, undefinedHtml))
+                vmTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `role`, undefinedHtml))
+                vmTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `virtual-cpus`, jsonMessage.data.maxcpu))
+                vmTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `memory`, `${Math.ceil(jsonMessage.data.maxmem / 1000000)}`))
+                vmTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `disk-space`, `${Math.ceil(jsonMessage.data.maxdisk / 1000000)}`))
+                vmTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `ip-address`, undefinedHtml))
+                
+                virtualMachineTable.appendChild(vmTableRow)
+    
+            } catch (error) {
+                console.log(`ERROR: ${error}`)
             }
-
-            // Populate Table Row with Table Data parsed from Websocket JSON message
-            vmTableRow.appendChild(createTdElement(`status`, `<span class="text-bg-yellow badge p-1" title="Syncing VM" ><i class='mdi mdi-sync'></i></span>`))
-            vmTableRow.appendChild(createTdElement(`netbox-id`, undefinedHtml))
-            vmTableRow.appendChild(createTdElement(`id`, `<span class='badge text-bg-grey' title='Proxmox VM ID'><strong></strong>${jsonMessage.data.vmid}</strong></span>`))
-            vmTableRow.appendChild(createTdElement(`name`, `<strong>${jsonMessage.data.name}</strong>`))
-            vmTableRow.appendChild(createTdElement(`status`, vmStatusDataHtml))
-            vmTableRow.appendChild(createTdElement(`device`, `<strong>${jsonMessage.data.node}</strong>`))
-            vmTableRow.appendChild(createTdElement(`cluster`, undefinedHtml))
-            vmTableRow.appendChild(createTdElement(`cluster-type`, undefinedHtml))
-            vmTableRow.appendChild(createTdElement(`role`, undefinedHtml))
-            vmTableRow.appendChild(createTdElement(`virtual-cpus`, jsonMessage.data.maxcpu))
-            vmTableRow.appendChild(createTdElement(`memory`, `${Math.ceil(jsonMessage.data.maxmem / 1000000)}`))
-            vmTableRow.appendChild(createTdElement(`disk-space`, `${Math.ceil(jsonMessage.data.maxdisk / 1000000)}`))
-            vmTableRow.appendChild(createTdElement(`ip-address`, undefinedHtml))
-            
-            virtualMachineTable.appendChild(vmTableRow)
-
-        } catch (error) {
-            console.log(`ERROR: ${error}`)
         }
-    }
-</script>
+    </script>
+{% endblock %}

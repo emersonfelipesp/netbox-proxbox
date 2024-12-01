@@ -27,22 +27,32 @@
 
         ws_vm.onmessage = function(event) {
             // Add WebSockets Messages came from FasstAPI backend on GUI
-            console.log(event.data)
 
             let jsonMessage = undefined
+
+            if (!event.data) {
+                return
+            }
 
             try {
                 jsonMessage = JSON.parse(event.data)
             } catch (error) {
-                // do nothing
-                console.log("Could not parse JSON message.")
+
+                // Parse HTML Document
+                const parser = new DOMParser();
+                const htmlDocument = parser.parseFromString(event.data, 'text/html');
+                
+                // Check if HTML Document is undefined
+                if (typeof htmlDocument === undefined) {
+                    // If HTML Document is undefined, console log it.
+                    console.log(`ERROR: ${error}`)
+                }
             }
 
             if (jsonMessage) {
                 if (jsonMessage.object == "virtual_machine") {
                     populateVirtualMachinesTable(jsonMessage)
                 } else if (jsonMessage.object == "device") {
-                    console.log(jsonMessage)
                     populateNodesTable(jsonMessage)
                 }
             }
@@ -80,4 +90,5 @@
 
     {% include "netbox_proxbox/nodes_table/table.html" %}
     {% include "netbox_proxbox/virtual_machines_table/table.html" %}
+    {% include "netbox_proxbox/home/log_messages.html" %}
 {% endblock %}

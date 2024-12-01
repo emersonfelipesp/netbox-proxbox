@@ -163,10 +163,21 @@ async def websocket_endpoint(
     pxs: ProxmoxSessionsDep,
     websocket: WebSocket
 ):
-    await websocket.accept()
+    try:
+        await websocket.accept()
+    except Exception as error:
+        print(f"Error while accepting WebSocket connection: {error}")
+        await websocket.close()
     
+    data = None
+
     while True:
-        data = await websocket.receive_text()
+        try:
+            data = await websocket.receive_text()
+        except Exception as error:
+            print(f"Error while receiving data from WebSocket: {error}")
+            await websocket.close()
+            break
         
         if data == "Start":
             await get_nodes(nb=nb, pxs=pxs, websocket=websocket)
@@ -196,10 +207,21 @@ async def websocket_vm_endpoint(
     pxs: ProxmoxSessionsDep,
     websocket: WebSocket
 ):
-    await websocket.accept()
+    try:
+        await websocket.accept()
+    except Exception as error:
+        print(f"Error while accepting WebSocket connection: {error}")
+        await websocket.close()
+
+    data = None
 
     while True:
-        data = await websocket.receive_text()
+        try:
+            data = await websocket.receive_text()
+        except Exception as error:
+            print(f"Error while receiving data from WebSocket: {error}")
+            await websocket.close()
+            break
 
         if data == "Sync Virtual Machines":
             await get_virtual_machines(nb=nb, pxs=pxs, websocket=websocket)
