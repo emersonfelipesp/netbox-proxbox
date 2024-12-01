@@ -3,6 +3,7 @@
 
 {% block content %}
     {% include "netbox_proxbox/virtual_machines_table/script.html" %}
+    {% include "netbox_proxbox/nodes_table/script.html" %}
     
     <script>
         const uvicornHost = "{{ configuration.netbox_proxbox.fastapi.uvicorn_host }}"
@@ -42,6 +43,7 @@
                     populateVirtualMachinesTable(jsonMessage)
                 } else if (jsonMessage.object == "device") {
                     console.log(jsonMessage)
+                    populateNodesTable(jsonMessage)
                 }
             }
         }
@@ -75,5 +77,7 @@
             {% endif %}
         </form>
     </div>
+
+    {% include "netbox_proxbox/nodes_table/table.html" %}
     {% include "netbox_proxbox/virtual_machines_table/table.html" %}
 {% endblock %}

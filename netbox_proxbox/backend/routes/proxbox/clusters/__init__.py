@@ -515,6 +515,9 @@ async def get_virtual_machines(
             vm_node: str = vm.get("node")
             print(f"vm_node: {vm_node} | {type(vm_node)}")
             
+            await websocket.send_json({'object': 'device', 'type': 'create', 'data': { 'name': vm_node }})
+            
+            
             """
             Get Device from Netbox based on Proxmox Node Name only if it's not already in the devices dict
             This way we are able to minimize the number of requests to Netbox API

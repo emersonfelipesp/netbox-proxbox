@@ -1,0 +1,74 @@
+<script>
+    function populateNodesTable(jsonMessage) {
+        // Populate Nodes Table with data from Websocket JSON message
+        if (!jsonMessage) {
+            return
+        }
+
+        // Get Virtual Machine Table
+        let nodesTable = document.getElementById('nodes-table-data')
+
+        let nodesDiv = document.getElementById('nodes-div')
+        nodesDiv.style.display = "block"
+
+        if (!nodesTable) {
+            return
+        }
+
+
+        // JSON message is parsed. Now, let's check if it's a Virtual Machine message.
+        try {
+            
+            let undefinedHtml = `<span class='badge text-bg-grey' title='Proxmox VM ID'><strong></strong>undefined</strong></span>`
+
+            nodesDiv.style.display = "block"
+
+            let nodeTableDefaultTd = document.getElementById('nodes-table-default-td')
+            nodeTableDefaultTd.style.display = "none"
+
+
+            if (jsonMessage.type == 'create') {
+                searchForNodeRow = document.getElementById(`node-${jsonMessage.data.name}-row`)
+
+                if (searchForNodeRow) {
+                    return
+                }
+
+                // Create Table Row
+                let nodeTableRow = document.createElement('tr')
+                nodeTableRow.id = `node-${jsonMessage.data.name}-row`
+
+                /*
+                * Create Table Data Element
+                * @param {string} type - Type of Table Data Element
+                * @param {string} innerHTML - Inner HTML of Table Data Element
+                * @returns {HTMLTableDataCellElement} - Table Data Element
+                */
+                function createTdElement(type, innerHTML) {
+                    let tdElement = document.createElement('td')
+                    tdElement.id = `node-${jsonMessage.data.name}-${type}-data`
+                    tdElement.innerHTML = innerHTML
+                    return tdElement
+                }
+
+                // Populate Table Row with Table Data parsed from Websocket JSON message
+                nodeTableRow.appendChild(createTdElement(`status`, undefinedHtml))
+                nodeTableRow.appendChild(createTdElement(`netbox-id`, undefinedHtml))
+                nodeTableRow.appendChild(createTdElement(`node-id`, undefinedHtml))
+                nodeTableRow.appendChild(createTdElement(`name`, `<strong>${jsonMessage.data.name}</strong>`))
+                nodeTableRow.appendChild(createTdElement(`manufacturer`, undefinedHtml))
+                nodeTableRow.appendChild(createTdElement(`type`, undefinedHtml))
+                nodeTableRow.appendChild(createTdElement(`vm-ct-count`, undefinedHtml))
+                nodeTableRow.appendChild(createTdElement(`ip-address`, undefinedHtml))
+                nodeTableRow.appendChild(createTdElement(`role`, undefinedHtml))
+                nodeTableRow.appendChild(createTdElement(`virtual-cpus`, undefinedHtml))
+                nodeTableRow.appendChild(createTdElement(`memory`, undefinedHtml))
+                nodeTableRow.appendChild(createTdElement(`disk-space`, undefinedHtml))
+                
+                nodesTable.appendChild(nodeTableRow)
+            }
+        } catch (error) {
+            console.log(`ERROR: ${error}`)
+        }
+    }
+</script>

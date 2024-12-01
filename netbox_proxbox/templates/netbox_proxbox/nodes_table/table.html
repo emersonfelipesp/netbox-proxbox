@@ -1,5 +1,5 @@
-<div id="virtual-machines-div" class="form form-horizontal">
-    <h2 id="proxmox-virtual-machines-table" class="text-center">Nodes</h2>
+<div id="nodes-div" class="form form-horizontal">
+    <h2 id="proxmox-nodes-table" class="text-center">Nodes</h2>
     <div class="card">
         <div class="htmx-container table-responsive" id="object_list">
             <div class="htmx-container table-responsive">
@@ -43,17 +43,14 @@
                             <a href="#" hx-get="?sort=device_type">Disk Space (GB)</a>
                         </th>
                         <th class="orderable">
-                            <a href="#" hx-get="?sort=primary_ip">IP Address</a>
-                        </th>
-                        <th class="orderable">
                             <a href="#" hx-get="?sort=actions"></a>
                         </th>
                     </tr>
                     </thead>
-                    <tbody id="virtual-machine-table-data">
+                    <tbody id="nodes-table-data">
                         <!-- Show it if no virtual machines synced. -->
                         <tr>
-                            <td id="virtual-machines-table-default-td" colspan="12" class="text-center text-muted">— No nodes could be synced with Proxmox —</td>
+                            <td id="nodes-table-default-td" colspan="12" class="text-center text-muted">— No nodes could be synced with Proxmox —</td>
                         </tr>
                     </tbody>
                 </table>

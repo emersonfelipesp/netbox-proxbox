@@ -1,10 +1,7 @@
 <script>
     function populateVirtualMachinesTable(jsonMessage) {
-        console.log("JSON MESSAGE...")
-        console.log(jsonMessage)
-
+        // Populate Virtual Machines Table with data from Websocket JSON message
         if (!jsonMessage) {
-            console.log("No data found in JSON message.")
             return
         }
 
@@ -15,7 +12,6 @@
         virtualMachinesDiv.style.display = "block"
 
         if (!virtualMachineTable) {
-            console.log("Virtual Machine Table not found.")
             return
         }
 
@@ -29,11 +25,6 @@
 
             let vmTableDefaultTd = document.getElementById('virtual-machines-table-default-td')
             vmTableDefaultTd.style.display = "none"
-
-            console.log(jsonMessage.data)
-            console.log('test')
-
-            console.log(virtualMachineTable)
 
             // Create Table Row
             let vmTableRow = document.createElement('tr')
@@ -77,13 +68,9 @@
             vmTableRow.appendChild(createTdElement(`ip-address`, undefinedHtml))
             
             virtualMachineTable.appendChild(vmTableRow)
-            console.log(virtualMachineTable)	 
 
-            console.log(vmTableRow)                   
         } catch (error) {
-            // do nothing
-            console.log(error)
+            console.log(`ERROR: ${error}`)
         }
-
     }
 </script>
