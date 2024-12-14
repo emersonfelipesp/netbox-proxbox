@@ -106,7 +106,7 @@ pynetbox==7.4.0
 pyproject_hooks==1.2.0
 python-dateutil==2.9.0.post0
 python-dotenv==1.0.1
-python-multipart==0.0.12
+python-multipart==0.0.18
 python3-openid==3.2.0
 pytkdocs==0.16.2
 PyYAML==6.0.2
