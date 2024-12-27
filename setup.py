@@ -26,13 +26,13 @@ requires = [
     'pynetbox>=5',
     'proxmoxer>=1',
     'fastapi[all]',
-    'starlette',
+    'starlette<0.42.0,>=0.40.0',
     'uvicorn[standard]',
     'websockets',
     'jinja2',
     'ujson>=5.7.0',
     'orjson>=3.8.9',
-    'httpcore',
+    'httpcore<0.14.0,>=0.13.3',
     'pydantic',
 ]
 
