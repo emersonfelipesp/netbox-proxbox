@@ -587,57 +587,38 @@ async def get_virtual_machines(
                     "description": description
                 })
                 
-            """
-            Proxmox Virtual Machine ID Custom Field
-            """    
-           
-            # Get Custom Field from Netbox based on Custom Field Name
-            custom_field_id = nb.session.extras.custom_fields.get(name="proxmox_vm_id")
-            
-            if not custom_field_id:
-                await create_default_custom_fields(nb=nb, websocket=websocket, custom_field="proxmox_vm_id")
-            
-            """
-            Proxmox Start at Boot Custom Field
-            """            
-            start_at_boot_field = nb.session.extras.custom_fields.get(name="proxmox_start_at_boot")
-            if not start_at_boot_field:
-                await create_default_custom_fields(nb=nb, websocket=websocket, custom_field="proxmox_start_at_boot")
-                        
-            """
-            Proxmox Unprivileged Container Custom Field
-            """        
-            start_unprivileged_field = nb.session.extras.custom_fields.get(name="proxmox_unprivileged_container")
-            if not start_unprivileged_field:
-                await create_default_custom_fields(nb=nb, websocket=websocket, custom_field="proxmox_unprivileged_container")
-            
-            """
-            Proxmox QEMU Guest Agent Custom Field
-            """            
-            start_qemu_agent_field = nb.session.extras.custom_fields.get(name="proxmox_qemu_agent")
-            if not start_qemu_agent_field:
-                await create_default_custom_fields(nb=nb, websocket=websocket, custom_field="proxmox_qemu_agent")
-                
-            """
-            Proxmox Search Domain Field
-            """
-            search_domain_field = nb.session.extras.custom_fields.get(name="proxmox_search_domain")
-            if not search_domain_field:
-                await create_default_custom_fields(nb=nb, websocket=websocket, custom_field="proxmox_search_domain")
+
+            # Proxmox Custom Fields on Netbox
+            proxmox_custom_field_list: list = [
+                "proxmox_vm_id",
+                "proxmox_start_at_boot",
+                "proxmox_unprivileged_container",
+                "proxmox_qemu_agent",
+                "proxmox_search_domain"
+            ]
+
+            # Look for existing custom fields and create it, if not found.
+            for cf in proxmox_custom_field_list:
+                get_current_cf = nb.session.extras.custom_fields.get(name=cf)
+
+                if not get_current_cf:
+                    await create_default_custom_fields(nb=nb, websocket=websocket, custom_field=cf)
             
             platform = None
             search_domain = None
-            
+            unprivileged_container = False
+
             #if vm.get("type") == 'lxc': print(px.session.nodes.get(f'nodes/{vm.get("node")}/lxc/{vm.get("vmid")}/config')
             if vm.get("type") == 'lxc': 
                 vm_config = px.session.nodes(vm.get("node")).lxc(vm.get("vmid")).config.get()
                 
-                platform_name = vm_config.get("ostype").capitalize()
-                platform_slug = vm_config.get("ostype")
+                platform_name = vm_config.get("ostype", "Name not found.").capitalize()
+                platform_slug = vm_config.get("ostype", "Slug not found.")
                 
                 search_domain = vm_config.get("searchdomain", None)
                 
                 unprivileged = int(vm_config.get("unprivileged", 0))
+                
                 
                 if unprivileged == 1:
                     unprivileged_container = True
