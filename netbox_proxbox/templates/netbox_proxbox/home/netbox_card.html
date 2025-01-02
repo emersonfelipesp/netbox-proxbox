@@ -1,0 +1,105 @@
+{% load static %}
+
+<div class="col col-md-6">
+    <div class="card">
+        <h2 class="card-header">Netbox</h2>
+
+        <!-- FastAPI is currently the Proxbox Backend which communicates with Proxmox Cluster API. It MUST run so that Proxbox works. -->
+        <!-- Placeholder for Connection Error Messages -->
+        <div class="p-1" id="netbox-connection-error">
+
+        </div>
+        <div class="flex d-flex flex-row  justify-content-center align-items-center p-3 m-2 mt-1">
+
+
+            <div class="flex d-flex mx-auto position-absolute p-2" >
+                <a href="{% url 'home' %}">
+                    <img src="{% static 'logo_netbox_dark_teal.svg' %}" alt="Netbox Logo" width="200px">
+                </a>
+                
+            </div>
+            
+            <!-- Status Badge. Default value is 'Unkown' and is changed based on API response status -->
+            <div class="d-flex ms-auto " style="margin: 0 40px 0 0">
+                <span id="netbox-connection-status" class="netbox-connection-check badge p-1">Unknown</span>
+            </div>
+
+        </div>
+
+
+        <div class="card-body">
+            <table class="table table-hover attr-table">
+                <!-- The fields are based on Netbox 'configuration.py' file and Plugins Configuration -->
+                <tr>
+                    <th scope="row"><strong>Domain / IP</strong></th>
+                    {% if configuration.netbox_proxbox.netbox.domain %}
+                        <td><strong>{{ configuration.netbox_proxbox.netbox.domain }} </strong></td>
+                    {% else %}
+                        <td><strong>{{ default_config.netbox.domain }} (default)</strong></td>
+                    {% endif %}
+                </tr>
+                <tr>
+                    <th scope="row"><strong>HTTP Port</strong></th>
+                    {% if configuration.netbox_proxbox.netbox.http_port %}
+                        <td>{{ configuration.netbox_proxbox.netbox.http_port }}</td>
+                    {% else %}
+                        <td>{{ default_config.netbox.http_port }} (default)</td>
+                    {% endif %}
+                </tr>
+                <tr>
+                    <th scope="row"><strong>Token</strong></th>
+                    {% if configuration.netbox_proxbox.netbox.token %}
+                        <td>
+                            <span  class='badge text-bg-yellow' title='Netbox Token'>
+                            Token will not show here for security.
+                            </span>
+                        </td>
+                    {% else %}
+                        <td>{{ default_config.netbox.token }} (default)</td>
+                    {% endif %}
+                <tr>
+                <tr>
+                    <th scope="row"><strong>Netbox Version</strong></th>
+                    <td id="netbox-version">
+                        <span class='badge text-bg-grey' title='Netbox Version'><strong>
+                            </strong>Empty</strong>
+                        </span>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><strong>Python Version</strong></th>
+                    <td id="python-version">
+                        <span class='badge text-bg-grey' title='Python Version'><strong>
+                            </strong>Empty</strong>
+                        </span>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><strong>Django Version</strong></th>
+                    <td id="django-version">
+                        <span class='badge text-bg-grey' title='Django Version'><strong>
+                            </strong>Empty</strong>
+                        </span>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><strong>Netbox Proxbox Version</strong></th>
+                    <td id="netbox-plugins">
+                        <span class='badge text-bg-grey' title='Netbox Plugins'><strong>
+                            </strong>Empty</strong>
+                        </span>
+                    </td>
+                </tr>
+            </table>
+            <div align="right">
+                <button class="btn btn-outline-primary" type="button">
+                    <a
+                        style="text-decoration: none; color: inherit"
+                        target="_blank"
+                        href="https://github.com/netdevopsbr/netbox-proxbox/blob/develop/netbox_proxbox/__init__.py"
+                    >Show Example</a>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

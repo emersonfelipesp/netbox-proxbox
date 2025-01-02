@@ -49,7 +49,7 @@ graphql-relay==3.2.0
 gunicorn==23.0.0
 h11==0.14.0
 httpx
-httpcore
+httpcore<0.14.0,>=0.13.3
 httptools==0.6.1
 idna==3.10
 inflection==0.5.1
@@ -128,7 +128,7 @@ sniffio==1.3.1
 social-auth-app-django==5.4.2
 social-auth-core==4.5.4
 sqlparse==0.5.1
-starlette<0.39.0,>=0.37.2
+starlette<0.42.0,>=0.40.0
 strawberry-graphql==0.243.1
 strawberry-graphql-django==0.48.0
 svgwrite==1.4.3

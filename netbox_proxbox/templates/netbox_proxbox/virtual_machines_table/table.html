@@ -1,0 +1,63 @@
+<div id="virtual-machines-div" class="form form-horizontal">
+    <h2 id="proxmox-virtual-machines-table" class="text-center">Virtual Machines</h2>
+    <div class="card">
+        <div class="htmx-container table-responsive" id="object_list">
+            <div class="htmx-container table-responsive">
+                <table class="table table-hover object-list" hx-disinherit="hx-target hx-select" hx-swap="outerHTML">
+                    <thead hx-target="closest .htmx-container" hx-push-url="true">
+                    <tr>
+                        <th class="orderable">
+                            <a href="#" hx-get="?sort=name">Status</a>
+                        </th>
+                        <th class="orderable">
+                            <a href="#" hx-get="?sort=name">Netbox ID</a>
+                        </th>
+                        <th class="orderable">
+                            <a href="#" hx-get="?sort=name">VM/CT ID</a>
+                        </th>
+                        <th class="orderable">
+                            <a href="#" hx-get="?sort=name">Name</a>
+                        </th>
+                        <th class="orderable">
+                            <a href="#" hx-get="?sort=status">VM/CT Status</a>
+                        </th>
+                        <th class="orderable">
+                            <a href="#" hx-get="?sort=tenant">Device</a>
+                        </th>
+                        <th class="orderable">
+                            <a href="#" hx-get="?sort=site">Cluster</a>
+                        </th>
+                        <th class="orderable">
+                            <a href="#" hx-get="?sort=location">Cluster Type</a>
+                        </th>
+                        <th class="orderable">
+                            <a href="#" hx-get="?sort=rack">Role</a>
+                        </th>
+                        <th class="orderable">
+                            <a href="#" hx-get="?sort=role">Virtual CPUs</a>
+                        </th>
+                        <th class="orderable">
+                            <a href="#" hx-get="?sort=manufacturer">Memory (MB)</a>
+                        </th>
+                        <th class="orderable">
+                            <a href="#" hx-get="?sort=device_type">Disk Space (GB)</a>
+                        </th>
+                        <th class="orderable">
+                            <a href="#" hx-get="?sort=primary_ip">IP Address</a>
+                        </th>
+                        <th class="orderable">
+                            <a href="#" hx-get="?sort=actions"></a>
+                        </th>
+                    </tr>
+                    </thead>
+                    <tbody id="virtual-machine-table-data">
+                        <!-- Show it if no virtual machines synced. -->
+                        <tr>
+                            <td id="virtual-machines-table-default-td" colspan="12" class="text-center text-muted">— No virtual machines could be synced with Proxmox —</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>

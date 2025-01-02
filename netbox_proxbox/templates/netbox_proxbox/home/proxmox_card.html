@@ -1,0 +1,124 @@
+{% load static %}
+
+<div class="col col-md-6">
+    <div class="card">
+        <h2 class="card-header">Proxmox Cluster</h2>
+        <!-- Placeholder for Connection Error Messages -->
+        <div class="p-1" id="proxmox-connection-error-{{ px.domain }}">
+
+        </div>
+        <div class="flex d-flex flex-row  justify-content-center align-items-center p-2 mt-1">
+
+
+            <div class="flex d-flex mx-auto position-absolute" >
+                <a href="https://{{ px.domain }}:{{ px.http_port }}" target="_blank">
+                    <img src="{% static 'netbox_proxbox/proxmox-logo.svg' %}" alt="Proxmox Logo" width="200px">
+                </a>
+            </div>
+            
+            <!-- Status Badge. Default value is 'Unkown' and is changed based on API response status -->
+            <div class="d-flex ms-auto " style="margin: 0 40px 0 0">
+                <span id="proxmox-connection-status-{{ px.domain }}" class="proxmox-connection-check badge p-1">Unknown</span>
+            </div>
+
+        </div>
+
+        <div class="card-body">
+            <table class="table table-hover attr-table" >
+                <!-- The following four (4) fields are filled by API response. If empty, means the API failed. -->
+                <tr class="proxmox_version">
+                    <th scope="row" ><strong>Proxmox Cluster Name</strong></th>
+                    <td id="{{ px.domain }}">
+                        <span class='badge text-bg-grey' title='Proxmox Cluster Name'>
+                            </strong>Empty</strong>
+                        </span>
+                    </td>
+                </tr>
+                <tr class="proxmox_version">
+                    <th scope="row" ><strong>Proxmox Cluster Mode</strong></th>
+                    <td id="{{ px.domain }}">
+                        <span class='badge text-bg-grey' title='Proxmox Cluster Mode'>
+                            </strong>Empty</strong>
+                        </span>
+                    </td>
+                </tr>
+                <tr class="proxmox_version">
+                    <th scope="row" ><strong>Proxmox Version</strong></th>
+                    <td id="{{ px.domain }}">
+                        <span class='badge text-bg-grey' title='Proxmox Cluster Mode'>
+                            </strong>Empty</strong>
+                        </span>
+                    </td>
+                </tr>
+                <tr class="proxmox_version">
+                    <th scope="row" ><strong>Proxmox RepoID</strong></th>
+                    <td id="{{ px.domain }}">
+                        <span class='badge text-bg-grey' title='Proxmox Cluster Mode'>
+                            </strong>Empty</strong>
+                        </span>
+                    </td>
+                </tr>
+                <!-- The rest of the fields are based on Netbox 'configuration.py' file and Plugins Configuration -->
+                <tr>
+                    <th scope="row"><strong>Domain / IP</strong></th>
+                    {% if px.domain %}
+                        <td>{{ px.domain }}</td>
+                    {% else %}
+                        <td>{{ default_config.proxmox.domain }} (default)</td>
+                    {% endif %}
+                </tr>
+                <tr>
+                <th scope="row"><strong>HTTP Port</strong></th>
+                {% if px.http_port %}
+                        <td>{{ px.http_port }}</td>
+                    {% else %}
+                        <td>{{ default_config.proxmox.http_port }} (default)</td>
+                    {% endif %}
+                </tr>
+                <tr>
+                    <th scope="row"><strong>Proxmox User</strong></th>
+                    {% if px.user %}
+                        <td>{{ px.user }}</td>
+                    {% else %}
+                        <td>{{ default_config.proxmox.user }} (default)</td>
+                    {% endif %}
+                </tr>
+                <tr>
+                <th scope="row"><strong>Proxmox Password</strong></th>
+                    {% if px.password %}
+                        <td>password defined in configuration.py</td>
+                    {% else %}
+                        <td>(secret) (default)</td>
+                    {% endif %}
+                </tr>
+                    <th scope="row"><strong>Token Name</strong></th>
+                    {% if px.token.name %}
+                        <td>{{ px.token.name }}</td>
+                    {% else %}
+                        <td>{{ default_config.proxmox.token.name }} (default)</td>
+                    {% endif %}
+                <tr>
+                    <th scope="row"><strong>Token Value</strong></th>
+                    <td>(secret)</td>
+                </tr>
+                <tr>
+                    <th scope="row"><strong>SSL</strong></th>
+                    {% if px.ssl %}
+                        <td>{{ px.ssl }}</td>
+                    {% else %}
+                        <td>{{ default_config.proxmox.ssl }} (default)</td>
+                    {% endif %}
+                </tr>
+            </table>
+            <div class="d-flex justify-content-between">
+                <button class="btn btn-outline-primary" type="button">
+                    <a
+                        style="text-decoration: none; color: inherit"
+                        target="_blank"
+                        href="https://github.com/netdevopsbr/netbox-proxbox#13-configure-plugin"
+                    >Show Example</a>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

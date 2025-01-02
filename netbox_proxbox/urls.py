@@ -5,6 +5,8 @@ from . import views
 urlpatterns = [
     # Home View
     path('', views.HomeView.as_view(), name='home'),
+    path('nodes', views.NodesView.as_view(), name='nodes'),
+    path('virtual_machines', views.VirtualMachinesView.as_view(), name='virtual_machines'),
     path('contributing/', views.ContributingView.as_view(), name='contributing'),
     path('community/', views.CommunityView.as_view(), name='community'),
     

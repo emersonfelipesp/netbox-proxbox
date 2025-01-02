@@ -1,0 +1,90 @@
+{% load static %}
+
+{% block content %}
+    {% include "netbox_proxbox/common.html" %}
+
+    <script>
+        function populateNodesTable(jsonMessage) {
+            // Populate Nodes Table with data from Websocket JSON message
+            if (!jsonMessage) {
+                return
+            }
+    
+            // Get Virtual Machine Table
+            let nodesTable = document.getElementById('nodes-table-data')
+    
+            let nodesDiv = document.getElementById('nodes-div')
+            nodesDiv.style.display = "block"
+    
+            if (!nodesTable) {
+                return
+            }
+            
+            let undefinedHtml = `<span class='badge text-bg-grey' title='Proxmox VM ID'><strong></strong>undefined</strong></span>`
+            
+            nodesDiv.style.display = "block"
+
+            let nodeTableDefaultTd = document.getElementById('nodes-table-default-td')
+            nodeTableDefaultTd.style.display = "none"
+            
+            let jsonDataName = undefined
+
+            try {
+                jsonDataName = jsonMessage.data.name
+            } catch (error) {
+                console.log(`ERROR: ${error}`)
+            }
+
+            // JSON message is parsed. Now, let's check if it's a Virtual Machine message.
+            if (jsonMessage.type == 'create') {
+                try {
+                    searchForNodeRow = document.getElementById(`node-${jsonDataName}-row`)
+    
+                    if (searchForNodeRow) {
+                        return
+                    }
+    
+                    // Create Table Row
+                    let nodeTableRow = document.createElement('tr')
+                    nodeTableRow.id = `node-${jsonDataName}-row`
+    
+                    // Populate Table Row with Table Data parsed from Websocket JSON message
+                    nodeTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `status`, syncStatus))
+                    nodeTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `netbox-id`, undefinedHtml))
+                    nodeTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `node-id`, undefinedHtml))
+                    nodeTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `name`, `<strong>${jsonMessage.data.name}</strong>`))
+                    nodeTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `manufacturer`, undefinedHtml))
+                    nodeTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `type`, undefinedHtml))
+                    nodeTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `vm-ct-count`, undefinedHtml))
+                    nodeTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `ip-address`, undefinedHtml))
+                    nodeTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `role`, undefinedHtml))
+                    nodeTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `virtual-cpus`, undefinedHtml))
+                    nodeTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `memory`, undefinedHtml))
+                    nodeTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `disk-space`, undefinedHtml))
+                    
+                    nodesTable.appendChild(nodeTableRow)
+                } catch (error) {
+                console.log(`ERROR: ${error}`)
+                }
+            }
+
+            if (jsonMessage.type == 'update') {
+                try {
+                    
+                    console.log(`Updating Node: ${jsonMessage.data}`)
+
+                    searchForNodeRow = document.getElementById(`node-${jsonDataName}-row`)
+    
+                    if (!searchForNodeRow) {
+                        return
+                    }
+                    
+                    
+    
+                } catch (error) {
+                    console.log(`ERROR: ${error}`)
+                }
+            }
+        }
+    </script>
+{% endblock %}

@@ -1,0 +1,60 @@
+<div id="nodes-div" class="form form-horizontal">
+    <h2 id="proxmox-nodes-table" class="text-center">Nodes</h2>
+    <div class="card">
+        <div class="htmx-container table-responsive" id="object_list">
+            <div class="htmx-container table-responsive">
+                <table class="table table-hover object-list" hx-disinherit="hx-target hx-select" hx-swap="outerHTML">
+                    <thead hx-target="closest .htmx-container" hx-push-url="true">
+                    <tr>
+                        <th class="orderable">
+                            <a href="#" hx-get="?sort=name">Status</a>
+                        </th>
+                        <th class="orderable">
+                            <a href="#" hx-get="?sort=name">Netbox ID</a>
+                        </th>
+                        <th class="orderable">
+                            <a href="#" hx-get="?sort=name">Node ID</a>
+                        </th>
+                        <th class="orderable">
+                            <a href="#" hx-get="?sort=name">Name</a>
+                        </th>
+                        <th class="orderable">
+                            <a href="#" hx-get="?sort=status">Node Status</a>
+                        </th>
+                        <th class="orderable">
+                            <a href="#" hx-get="?sort=site">Role</a>
+                        </th>
+                        <th class="orderable">
+                            <a href="#" hx-get="?sort=location">Manufacturer</a>
+                        </th>
+                        <th class="orderable">
+                            <a href="#" hx-get="?sort=rack">Type</a>
+                        </th>
+                        <th class="orderable">
+                            <a href="#" hx-get="?sort=role">VM/CT Count</a>
+                        </th>
+                        <th class="orderable">
+                            <a href="#" hx-get="?sort=role">IP Address</a>
+                        </th>
+                        <th class="orderable">
+                            <a href="#" hx-get="?sort=manufacturer">Memory (MB)</a>
+                        </th>
+                        <th class="orderable">
+                            <a href="#" hx-get="?sort=device_type">Disk Space (GB)</a>
+                        </th>
+                        <th class="orderable">
+                            <a href="#" hx-get="?sort=actions"></a>
+                        </th>
+                    </tr>
+                    </thead>
+                    <tbody id="nodes-table-data">
+                        <!-- Show it if no virtual machines synced. -->
+                        <tr>
+                            <td id="nodes-table-default-td" colspan="12" class="text-center text-muted">— No nodes could be synced with Proxmox —</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
