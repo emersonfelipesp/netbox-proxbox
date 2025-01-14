@@ -1,0 +1,86 @@
+<mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36" version="26.0.5">
+  <diagram name="Page-1" id="x4dSUact0P5fK-Qy8Xl-">
+    <mxGraphModel dx="1434" dy="772" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="EdG-kj7KLfY3jNbYbdV8-16" value="" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="775" y="170" width="170" height="200" as="geometry" />
+        </mxCell>
+        <mxCell id="EdG-kj7KLfY3jNbYbdV8-4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="EdG-kj7KLfY3jNbYbdV8-1" target="EdG-kj7KLfY3jNbYbdV8-2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="EdG-kj7KLfY3jNbYbdV8-1" value="&lt;b&gt;Proxbox GU&lt;/b&gt;I&lt;div&gt;(Netbox Plugin&lt;/div&gt;&lt;div&gt;/ Django App)&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="320" y="360" width="120" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="EdG-kj7KLfY3jNbYbdV8-8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="EdG-kj7KLfY3jNbYbdV8-2" target="EdG-kj7KLfY3jNbYbdV8-7">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="EdG-kj7KLfY3jNbYbdV8-9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="EdG-kj7KLfY3jNbYbdV8-2" target="EdG-kj7KLfY3jNbYbdV8-3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="EdG-kj7KLfY3jNbYbdV8-10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="EdG-kj7KLfY3jNbYbdV8-2" target="EdG-kj7KLfY3jNbYbdV8-5">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="730" y="180" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="EdG-kj7KLfY3jNbYbdV8-11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="EdG-kj7KLfY3jNbYbdV8-2" target="EdG-kj7KLfY3jNbYbdV8-6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="EdG-kj7KLfY3jNbYbdV8-20" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" edge="1" parent="1" source="EdG-kj7KLfY3jNbYbdV8-2" target="EdG-kj7KLfY3jNbYbdV8-19">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="EdG-kj7KLfY3jNbYbdV8-23" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" edge="1" parent="1" source="EdG-kj7KLfY3jNbYbdV8-2" target="EdG-kj7KLfY3jNbYbdV8-22">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="620" y="320" />
+              <mxPoint x="380" y="320" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="EdG-kj7KLfY3jNbYbdV8-2" value="&lt;b&gt;Proxbox Backend&lt;/b&gt;&lt;div&gt;(FastAPI app)&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="560" y="360" width="120" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="EdG-kj7KLfY3jNbYbdV8-3" value="&lt;b&gt;Proxmox Endpoint&lt;/b&gt;&lt;div&gt;(Cluster)&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;strokeWidth=3;" vertex="1" parent="1">
+          <mxGeometry x="800" y="320" width="120" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="EdG-kj7KLfY3jNbYbdV8-5" value="&lt;b&gt;Proxmox Endpoint&lt;/b&gt;&lt;div&gt;(Cluster)&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;strokeWidth=3;" vertex="1" parent="1">
+          <mxGeometry x="800" y="270" width="120" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="EdG-kj7KLfY3jNbYbdV8-6" value="&lt;b&gt;Proxmox Endpoint&lt;/b&gt;&lt;div&gt;(Cluster)&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;strokeWidth=3;" vertex="1" parent="1">
+          <mxGeometry x="800" y="220" width="120" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="EdG-kj7KLfY3jNbYbdV8-7" value="&lt;b&gt;Netbox API&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="800" y="440" width="120" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="EdG-kj7KLfY3jNbYbdV8-12" value="The backend app works only through API REST, by syncing both Proxmox and Netbox data and modeling it inside Netbox. Using the pydantic for data validation/ingestion." style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontColor=#4D4D4D;" vertex="1" parent="1">
+          <mxGeometry x="530" y="480" width="180" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="EdG-kj7KLfY3jNbYbdV8-13" value="The API data served by Proxbox Backend is rendered into Netbox GUI pages using Django Template/Views, HTMX and Alpine.js. The templates inherits from Netbox layout." style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontColor=#4D4D4D;" vertex="1" parent="1">
+          <mxGeometry x="290" y="480" width="180" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="EdG-kj7KLfY3jNbYbdV8-14" value="The plugin currently does not work with Django Models, so the only communication with Netbox is using API." style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontColor=#4D4D4D;" vertex="1" parent="1">
+          <mxGeometry x="770" y="540" width="180" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="EdG-kj7KLfY3jNbYbdV8-15" value="Proxbox is able to sync multiple clusters, having a multi-cluster environment on Netbox." style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontColor=#4D4D4D;" vertex="1" parent="1">
+          <mxGeometry x="770" y="380" width="180" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="EdG-kj7KLfY3jNbYbdV8-17" value="&lt;font style=&quot;font-size: 14px;&quot;&gt;Multi-Cluster&lt;/font&gt;" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="810" y="180" width="100" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="EdG-kj7KLfY3jNbYbdV8-19" value="&lt;b&gt;Proxbox&amp;nbsp;&lt;/b&gt;&lt;div&gt;&lt;b&gt;Standalone&lt;/b&gt;&lt;/div&gt;&lt;div&gt;(planned for future)&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="560" y="200" width="120" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="EdG-kj7KLfY3jNbYbdV8-21" value="Proxbox Standalone will basically expose Netbox and Proxmox information into a separate application (GUI)." style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontColor=#4D4D4D;" vertex="1" parent="1">
+          <mxGeometry x="530" y="150" width="180" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="EdG-kj7KLfY3jNbYbdV8-22" value="&lt;b&gt;Proxbox CLI&lt;/b&gt;&lt;div&gt;(planned for future)&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="320" y="200" width="120" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="EdG-kj7KLfY3jNbYbdV8-25" value="Proxbox CLI will enable user to simply manage Proxmox using Netbox as SoT via command-line." style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontColor=#4D4D4D;" vertex="1" parent="1">
+          <mxGeometry x="290" y="150" width="190" height="30" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
