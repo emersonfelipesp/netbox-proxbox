@@ -41,6 +41,10 @@ Proxbox is currently able to get the following information from Proxmox:
 
 <div align="center">
 
+### Proxbox current environment and future plan.
+
+![proxbox services image](/etc/img/proxbox-services.png)
+
 ### Versions
 
 
