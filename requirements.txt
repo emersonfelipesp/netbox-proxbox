@@ -129,7 +129,7 @@ social-auth-app-django==5.4.2
 social-auth-core==4.5.4
 sqlparse==0.5.1
 starlette<0.42.0,>=0.40.0
-strawberry-graphql==0.243.1
+strawberry-graphql==0.257.0
 strawberry-graphql-django==0.48.0
 svgwrite==1.4.3
 tablib==3.6.1
