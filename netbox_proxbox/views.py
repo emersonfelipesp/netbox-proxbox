@@ -12,7 +12,11 @@ from django.views import View
 
 import json
 
-from netbox import configuration
+try:
+    from netbox import configuration
+except Exception as error:
+    print(error)
+    
 from . import ProxboxConfig
     
 from . import github
@@ -45,8 +49,8 @@ class HomeView(View):
     def get(self, request):
         """Get request."""
         
-        plugin_configuration = configuration.PLUGINS_CONFIG
-        default_config = ProxboxConfig.default_settings
+        plugin_configuration: dict = getattr(configuration, "PLUGINS_CONFIG", {})
+        default_config = dict =  getattr(ProxboxConfig, 'default_settings', {})
         
         return render(
             request,
@@ -64,7 +68,7 @@ class NodesView(View):
     template = 'netbox_proxbox/nodes.html'
 
     def get(self, request):
-        plugin_configuration = configuration.PLUGINS_CONFIG
+        plugin_configuration: dict = getattr(configuration, "PLUGINS_CONFIG", {})
 
         return render(
             request, 
@@ -79,7 +83,7 @@ class VirtualMachinesView(View):
     template = 'netbox_proxbox/virtual_machines.html'
 
     def get(self, request):
-        plugin_configuration = configuration.PLUGINS_CONFIG
+        plugin_configuration: dict = getattr(configuration, "PLUGINS_CONFIG", {})
 
         return render(
             request, 
@@ -159,7 +163,7 @@ def returnSudoUser():
     """
     
     
-    plugin_configuration = configuration.PLUGINS_CONFIG
+    plugin_configuration: dict = getattr(configuration, "PLUGINS_CONFIG", {})
     
     sudo_user: str = ""
     sudo_password: str = ""
