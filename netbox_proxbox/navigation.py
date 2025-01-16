@@ -6,6 +6,14 @@ fullupdate_item = PluginMenuItem(
     link_text='Full Update',
 )
 
+proxmox_endpoints_item = PluginMenuItem(
+    link='plugins:netbox_proxbox:proxmoxendpoint_list',
+    link_text='Proxmox (Clusters)',
+    buttons=(
+        PluginMenuButton('plugins:netbox_proxbox:proxmoxendpoint_add', 'Add Proxmox Endpoint', 'mdi mdi-plus'),
+    )
+)
+
 nodes_item = PluginMenuItem(
     link='plugins:netbox_proxbox:nodes',
     link_text='Nodes (Devices)',
@@ -50,7 +58,13 @@ community_item = PluginMenuItem(
 menu = PluginMenu(
     label='Proxbox',
     groups=(
-        ('Proxmox Plugin', (fullupdate_item, nodes_item, virtual_machines_item,)),
+        ('Proxmox Plugin', (
+            fullupdate_item,
+            proxmox_endpoints_item,
+            nodes_item,
+            virtual_machines_item,
+            )
+         ),
         ('Join our community', (contributing_item, community_item,)),
     ),
     icon_class='mdi mdi-dns'

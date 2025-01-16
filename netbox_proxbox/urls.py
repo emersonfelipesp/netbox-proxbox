@@ -1,4 +1,5 @@
-from django.urls import path
+from django.urls import include, path
+from utilities.urls import get_model_urls
 
 from . import views
 
@@ -20,4 +21,8 @@ urlpatterns = [
     path('discussions/', views.DiscussionsView, name='discussions'),
     path('discord/', views.DiscordView, name='discord'),
     path('telegram/', views.TelegramView, name='telegram'),
+    
+    path('endpoints/proxmox/', views.ProxmoxEndpointListView.as_view(), name='proxmoxendpoint_list'),
+    path('endpoints/proxmox/<int:pk>', views.ProxmoxEndpointView.as_view(), name='proxmoxendpoint'),
+    path('endpoints/proxmox/add/', views.ProxmoxEndpointEditView.as_view(), name='proxmoxendpoint_add'),
 ]

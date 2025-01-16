@@ -5,6 +5,19 @@ from django.shortcuts import render, redirect
 # 'View' is a django subclass. Basic type of class-based views
 from django.views import View
 
+from netbox.views import generic
+from utilities.views import register_model_view
+
+from .models import (
+    ProxmoxEndpoint,
+    NetboxEndpoint,
+    FastAPIEndpoint
+)
+
+from . import forms
+from . import filtersets
+from . import tables
+
 # Enables permissions for views using Django authentication system.
 # PermissionRequiredMixin = will handle permission checks logic and will plug into the
 # Netbox's existing authorization system.
@@ -41,7 +54,6 @@ class HomeView(View):
             **Returns:**
             - **HttpResponse:** The rendered HTML response.
     """
-    
     
     template_name = 'netbox_proxbox/home.html'
 
@@ -150,6 +162,22 @@ class CommunityView(View):
                 "title": title,
             }
         )
+        
+class ProxmoxEndpointListView(generic.ObjectListView):
+    queryset = ProxmoxEndpoint.objects.all()
+    filterset = filtersets.ProxmoxEndpointFilterSet
+    filterset_form = forms.ProxmoxEndpointFilterForm
+    table = tables.ProxmoxEndpointTable
+    
+class ProxmoxEndpointView(generic.ObjectView):
+    queryset = ProxmoxEndpoint.objects.all()
+    template_name = 'netbox_proxbox/proxmox_endpoint.html'
+
+
+class ProxmoxEndpointEditView(generic.ObjectEditView):
+    queryset = ProxmoxEndpoint.objects.all()
+    form = forms.ProxmoxEndpointForm
+
 
 def returnSudoUser():
     """
