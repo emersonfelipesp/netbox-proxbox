@@ -73,7 +73,7 @@ class ProxmoxEndpoint(NetBoxModel):
         ordering = ('name',)
         
     def __str__(self):
-        return f"{self.name} ({self.host})"
+        return f"{self.name} ({self.ip_address})"
     
     def get_absolute_url(self):
         return reverse('plugins:netbox_proxbox:proxmoxendpoint', args=[self.pk])
@@ -106,7 +106,7 @@ class NetboxEndpoint(NetBoxModel):
         unique_together = ['name', 'ip_address']
         
     def __str__(self):
-        return f"{self.name} ({self.host})"
+        return f"{self.name} ({self.ip_address})"
 
     def get_absolute_url(self):
         return reverse("plugins:netbox_proxbox:netboxendpoints", args=[self.pk])
@@ -134,8 +134,7 @@ class FastAPIEndpoint(NetBoxModel):
         unique_together = ['name', 'ip_address']
     
     def __str__(self):
-        return f"{self.name} ({self.host})"
+        return f"{self.name} ({self.ip_address})"
 
     def get_absolute_url(self):
         return reverse("plugins:netbox_proxbox:fastapiendpoints", args=[self.pk])
-    
