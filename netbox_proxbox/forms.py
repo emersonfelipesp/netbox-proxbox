@@ -24,7 +24,7 @@ class ProxmoxEndpointForm(NetBoxModelForm):
     
     class Meta:
         model = ProxmoxEndpoint
-        fields = ('ip_address', 'port', 'username', 'password', 'token_name', 'token_value', 'verify_ssl', 'tags')
+        fields = ('name', 'ip_address', 'port', 'username', 'password', 'token_name', 'token_value', 'verify_ssl', 'tags')
 
 
 class ProxmoxEndpointFilterForm(NetBoxModelFilterSetForm):

@@ -9,6 +9,7 @@ from .choices import ProxmoxModeChoices
 
 class ProxmoxEndpoint(NetBoxModel):
     name = models.CharField(
+        default='Proxmox Endpoint',
         max_length=255,
         blank=True,
         null=True,
