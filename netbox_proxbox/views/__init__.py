@@ -4,18 +4,6 @@ import json
 from django.shortcuts import render
 from django.views import View
 
-from netbox.views import generic
-from utilities.views import register_model_view
-
-from netbox_proxbox.models import (
-    ProxmoxEndpoint,
-    NetboxEndpoint,
-    FastAPIEndpoint
-)
-
-from netbox_proxbox import forms
-from netbox_proxbox import filtersets
-from netbox_proxbox import tables
 
 try:
     from netbox import configuration
@@ -28,6 +16,7 @@ from netbox_proxbox import github
 # Import other proxbox views
 from .external_pages import *
 from .proxbox_backend import *
+from .proxmox_endpoint import *
 
 class HomeView(View):
     """
@@ -157,18 +146,3 @@ class CommunityView(View):
                 "title": title,
             }
         )
-        
-class ProxmoxEndpointListView(generic.ObjectListView):
-    queryset = ProxmoxEndpoint.objects.all()
-    filterset = filtersets.ProxmoxEndpointFilterSet
-    filterset_form = forms.ProxmoxEndpointFilterForm
-    table = tables.ProxmoxEndpointTable
-    
-class ProxmoxEndpointView(generic.ObjectView):
-    queryset = ProxmoxEndpoint.objects.all()
-    template_name = 'netbox_proxbox/proxmox_endpoint.html'
-
-
-class ProxmoxEndpointEditView(generic.ObjectEditView):
-    queryset = ProxmoxEndpoint.objects.all()
-    form = forms.ProxmoxEndpointForm

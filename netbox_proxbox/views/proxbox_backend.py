@@ -1,5 +1,11 @@
 from django.views import View
+from django.shortcuts import render, redirect
 
+try:
+    from netbox import configuration
+except Exception as error:
+    print(error)
+    
 def returnSudoUser():
     """
     Retrieves the sudo user and password from the plugin configuration.

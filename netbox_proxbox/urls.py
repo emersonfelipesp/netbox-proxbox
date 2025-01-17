@@ -1,7 +1,9 @@
 from django.urls import include, path
 from utilities.urls import get_model_urls
 
-from . import views
+from netbox.views.generic import ObjectChangeLogView
+
+from . import models, views
 
 urlpatterns = [
     # Home View
@@ -22,7 +24,13 @@ urlpatterns = [
     path('discord/', views.DiscordView, name='discord'),
     path('telegram/', views.TelegramView, name='telegram'),
     
+    # ProxmoxEndpoint Model URLs
     path('endpoints/proxmox/', views.ProxmoxEndpointListView.as_view(), name='proxmoxendpoint_list'),
-    path('endpoints/proxmox/<int:pk>', views.ProxmoxEndpointView.as_view(), name='proxmoxendpoint'),
     path('endpoints/proxmox/add/', views.ProxmoxEndpointEditView.as_view(), name='proxmoxendpoint_add'),
+    path('endpoints/proxmox/<int:pk>', views.ProxmoxEndpointView.as_view(), name='proxmoxendpoint'),
+    path('endpoints/proxmox/<int:pk>/edit/', views.ProxmoxEndpointEditView.as_view(), name='proxmoxendpoint_edit'),
+    path('endpoints/proxmox/<int:pk>/delete/', views.ProxmoxEndpointDeleteView.as_view(), name='proxmoxendpoint_delete'),
+    path('endpoints/proxmox/<int:pk>/changelog/', ObjectChangeLogView.as_view(), name='proxmoxendpoint_changelog', kwargs={
+        'model': models.ProxmoxEndpoint
+    })
 ]
