@@ -4,7 +4,6 @@ import json
 from django.shortcuts import render
 from django.views import View
 
-
 try:
     from netbox import configuration
 except Exception as error:
