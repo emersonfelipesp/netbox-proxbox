@@ -10,6 +10,7 @@ from .models import (
 
 class ProxmoxEndpointTable(NetBoxTable):
     name = tables.Column(linkify=True)
+    ip_address = tables.Column(linkify=True)
     mode = ChoiceFieldColumn()
     verify_ssl = BooleanColumn()
     
