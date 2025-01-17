@@ -5,7 +5,7 @@ from .models import ProxmoxEndpoint
 class ProxmoxEndpointFilterSet(NetBoxModelFilterSet):
     class Meta:
         model = ProxmoxEndpoint
-        fields = ['name', 'ip_address', 'port', 'username', 'verify_ssl']
+        fields = ['id', 'name', 'ip_address', 'mode']
     
     def search(self, queryset, name, value):
         """Perform the filtered search."""

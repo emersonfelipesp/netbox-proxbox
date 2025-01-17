@@ -13,6 +13,8 @@ from .models import (
     ProxmoxEndpoint,
 )
 
+from . import choices
+
 class ProxmoxEndpointForm(NetBoxModelForm):
     ip_address = DynamicModelChoiceField(
         queryset=IPAddress.objects.all()
@@ -26,8 +28,17 @@ class ProxmoxEndpointForm(NetBoxModelForm):
 
 
 class ProxmoxEndpointFilterForm(NetBoxModelFilterSetForm):
-    q = forms.CharField(
-        required=False, label="Search"
-    )
     model = ProxmoxEndpoint
+    name = forms.CharField(
+        required=False
+    )
+    ip_address = forms.ModelMultipleChoiceField(
+        queryset=IPAddress.objects.all(),
+        required=False,
+        help_text='Select IP Address'
+    )
+    mode = forms.MultipleChoiceField(
+        choices=choices.ProxmoxModeChoices,
+        required=False
+    )
         

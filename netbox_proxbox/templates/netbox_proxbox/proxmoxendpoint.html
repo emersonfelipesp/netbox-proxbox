@@ -15,7 +15,11 @@
                         </tr>
                         <tr>
                             <th scope="row">IP Address</th>
-                            <td>{{ object.ip_address }}</td>
+                            <td>
+                                <a href="{{ object.ip_address.get_absolute_url }}">
+                                    {{ object.ip_address }}
+                                </a>
+                            </td>
                         </tr>
                         <tr>
                             <th scope="row">Port</th>
