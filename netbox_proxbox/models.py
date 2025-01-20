@@ -1,89 +1,153 @@
-
-# Provides standard field types like 'CharField' and 'ForeignKey'
-from django.db import models
-
 from django.urls import reverse
+from django.db import models
+from django.utils.translation import gettext_lazy as _
+from django.core.validators import MaxValueValidator, MinValueValidator 
 
-# Model class 'ChangeLoggedModel' defined by Netbox
-#from extras.models import ChangeLoggedModel
-from extras.models.models import ChangeLoggedModel
+from netbox.models import NetBoxModel
 
-# Class defined by Netbox to handle IPv4/IPv6 address
-#from ipam.fields import IPAddressField
+from .choices import ProxmoxModeChoices
 
-# Class defined by Netbox to define (choice) the VM operational status
-from virtualization.choices import VirtualMachineStatusChoices
-
-# 'RestrictedQuerySet' will make it possible to filter out objects 
-# for which user doest nothave specific rights
-from utilities.querysets import RestrictedQuerySet
-
-# model class that subclasses 'ChangeLoggedModel'
-class ProxmoxVM(ChangeLoggedModel):
-    cluster = models.ForeignKey(      # Field 'cluster' links to Netbox's 'virtualization.Cluster' model
-        to="virtualization.Cluster",  # and is set to 'ForeignKey' because of it.
-        on_delete=models.SET_NULL,    # If Netbox linked object is deleted, set the field to NULL
-        blank=True, # Makes field optional
-        null=True,   # Allows corresponding database column to be NULL (contain no value)
-        verbose_name="Cluster"
-    )
-    node = models.CharField(
-        max_length=64,
+class ProxmoxEndpoint(NetBoxModel):
+    name = models.CharField(
+        default='Proxmox Endpoint',
+        max_length=255,
         blank=True,
-        verbose_name="Node (Server)"
+        null=True,
+        help_text=_('Name of the Proxmox Endpoint/Cluster. It will be filled automatically by API.'),
     )
-    virtual_machine = models.ForeignKey(
-        to="virtualization.VirtualMachine",
-        on_delete=models.PROTECT,     # linked virtual_machine cannot be deleted as long as this object exists
-        verbose_name="Proxmox VM/CT"
+    ip_address = models.ForeignKey(
+        to='ipam.IPAddress',
+        on_delete=models.PROTECT,
+        related_name='+',
+        verbose_name=_('IP Address'),
+        null=True,
+        help_text=_('IP Address of the Proxmox Endpoint (Cluster). It will try using the DNS name provided in IP Address if it is not empty.'),
     )
-    status = models.CharField(
-        max_length=50,
-        choices=VirtualMachineStatusChoices,
-        default=VirtualMachineStatusChoices.STATUS_ACTIVE,
-        verbose_name='Status'
-    )    
-    proxmox_vm_id = models.PositiveIntegerField(verbose_name="Proxmox VM ID")
+    port = models.PositiveIntegerField(
+        default=8006,
+        validators=[MinValueValidator(1), MaxValueValidator(65535)],
+        verbose_name=_('HTTP Port'),
+    )
+    mode = models.CharField(
+        max_length=255,
+        choices=ProxmoxModeChoices,
+        default=ProxmoxModeChoices.PROXMOX_MODE_UNDEFINED,
 
-    vcpus = models.PositiveIntegerField(verbose_name="VCPUs")
-
-    memory = models.PositiveIntegerField(verbose_name="Memory (MB)")
-    disk = models.PositiveIntegerField(verbose_name="Disk (GB)")
-    type = models.CharField(
-        max_length=64,
+    )
+    version = models.CharField(max_length=20, blank=True, null=True)
+    repoid = models.CharField(
+        max_length=16,
         blank=True,
-        verbose_name="Type (qemu or lxc)"
+        null=True,
+        verbose_name=_('Repository ID'),
     )
-    description = models.CharField(
-        max_length=200, 
+    username = models.CharField(
+        default='root@pam',
+        max_length=255,
+        verbose_name=_('Username'),
+        help_text=_("Username must be in the format of 'user@realm'. Default is 'root@pam'.")
+    )
+    password = models.CharField(
+        max_length=255,
+        verbose_name=_('Password'),
+        help_text=_('Password of the Proxmox Endpoint. It is not needed if you use Token.'),
         blank=True,
-        verbose_name="Description"
+        null=True,
+    )
+    token_name = models.CharField(
+        max_length=255,
+        verbose_name=_('Token Name'),
+    )
+    token_value = models.CharField(
+        max_length=255,
+        verbose_name=_('Token Value'),
+    )
+    verify_ssl = models.BooleanField(
+        default=True,
+        verbose_name=_('Verify SSL'),
+        help_text=_('Choose or not to verify SSL certificate of the Proxmox Endpoint'),
     )
 
-    # Retrieve and filter 'ProxmoxVM' records
-    objects = RestrictedQuerySet.as_manager()
-
-    # display name of ProxmoxVM object defined to virtual_machine
+    class Meta:
+        verbose_name_plural: str = "Proxmox Endpoints"
+        unique_together = ['name', 'ip_address']
+        ordering = ('name',)
+        
     def __str__(self):
-        return f"{self.virtual_machine}"
+        return f"{self.name} ({self.ip_address})"
+    
+    def get_absolute_url(self):
+        return reverse('plugins:netbox_proxbox:proxmoxendpoint', args=[self.pk])
+
+
+class NetBoxEndpoint(NetBoxModel):
+    name = models.CharField(
+        default='NetBox Endpoint',
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text=_('Name of the NetBox Endpoint.'),
+    )
+    ip_address = models.ForeignKey(
+        to='ipam.IPAddress',
+        on_delete=models.PROTECT,
+        related_name='+',
+        verbose_name=_('IP Address'),
+        null=True,
+        help_text=_('IP Address of the NetBox. It will try using the DNS name provided in IP Address if it is not empty.'),
+    )
+    port = models.PositiveIntegerField(
+        default=443,
+        validators=[MinValueValidator(1), MaxValueValidator(65535)],
+        verbose_name=_('HTTP Port'),
+    )
+    token = models.CharField(max_length=255)
+    verify_ssl = models.BooleanField(
+        default=True,
+        verbose_name=_('Verify SSL'),
+        help_text=_('Choose or not to verify SSL certificate of the Netbox Endpoint'),
+    )
+
+    class Meta:
+        verbose_name_plural: str = 'Netbox Endpoints'
+        unique_together = ['name', 'ip_address']
+        
+    def __str__(self):
+        return f"{self.name} ({self.ip_address})"
 
     def get_absolute_url(self):
-        """Provide absolute URL to a ProxmoxVM object."""
+        return reverse("plugins:netbox_proxbox:netboxendpoint", args=[self.pk])
+        
 
-        # 'reverse' generate correct URL for given class record based on the provided pk.
-        return reverse("plugins:netbox_proxbox:proxmoxvm", kwargs={"pk": self.pk})
+class FastAPIEndpoint(NetBoxModel):
+    name = models.CharField(
+        default='ProxBox Endpoint',
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text=_('Name of the ProxBox Endpoint.'),
+    )
+    ip_address = models.ForeignKey(
+        to='ipam.IPAddress',
+        on_delete=models.PROTECT,
+        related_name='+',
+        verbose_name=_('IP Address'),
+        null=True,
+        help_text=_('IP Address of the Proxbox API (Backend Service). It will try using the DNS name provided in IP Address if it is not empty.'),
+    )
+    port = models.PositiveIntegerField(
+        default=8800,
+        validators=[MinValueValidator(1), MaxValueValidator(65535)],
+        verbose_name=_('HTTP Port'),
+    )
+    verify_ssl = models.BooleanField(default=True)
+
+    class Meta:
+        verbose_name_plural: str = 'FastAPI Endpoints'
+        unique_together = ['name', 'ip_address']
     
-    """
-    def validate_unique(self, exclude=None):
-        # Check for a duplicate name on a VM assigned to the same Cluster and no Tenant. This is necessary
-        # because Django does not consider two NULL fields to be equal, and thus will not trigger a violation
-        # of the uniqueness constraint without manual intervention.
-        if self.virtual_machine is None and VirtualMachine.objects.exclude(pk=self.pk).filter(
-                name=self.virtual_machine, cluster=self.cluster, tenant__isnull=True
-        ):
-            raise ValidationError({
-                'name': 'A virtual machine with this name already exists in the assigned cluster.'
-            })
+    def __str__(self):
+        return f"{self.name} ({self.ip_address})"
 
-        super().validate_unique(exclude)
-    """
+    def get_absolute_url(self):
+        return reverse("plugins:netbox_proxbox:fastapiendpoint", args=[self.pk])

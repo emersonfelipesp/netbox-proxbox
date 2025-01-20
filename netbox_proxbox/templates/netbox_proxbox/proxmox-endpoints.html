@@ -1,0 +1,17 @@
+{% extends 'base/layout.html' %}
+
+{% block content %}
+    {% for proxmox in proxmox_endpoints %}
+        <div class="card p-4">
+            <h3>{{ proxmox.name }}</h3>
+            <p>Host: {{ proxmox.host }}</p>
+            <p>Port: {{ proxmox.port }}</p>
+            <p>Username: {{ proxmox.username }}</p>
+            <p>Realm: {{ proxmox.realm }}</p>
+            <p>SSL: {{ proxmox.ssl }}</p>
+            <p>Verify SSL: {{ proxmox.verify_ssl }}</p>
+            <p>API Token: {{ proxmox.api_token }}</p>
+            <p>Enabled: {{ proxmox.enabled }}</p>
+        </div>
+    {% endfor %}
+{% endblock %}
