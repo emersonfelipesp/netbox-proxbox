@@ -1,6 +1,6 @@
 {% load static %}
 
-<div class="col col-md-6">
+<div class="col col-md-4">
     <div class="card">
         <h2 class="card-header">Netbox</h2>
 
@@ -13,7 +13,7 @@
 
 
             <div class="flex d-flex mx-auto position-absolute p-2" >
-                <a href="{% url 'home' %}">
+                <a href="{{ object.get_absolute_url }}">
                     <img src="{% static 'logo_netbox_dark_teal.svg' %}" alt="Netbox Logo" width="200px">
                 </a>
                 
@@ -29,29 +29,43 @@
 
         <div class="card-body">
             <table class="table table-hover attr-table">
-                <!-- The fields are based on Netbox 'configuration.py' file and Plugins Configuration -->
+                <tr>
+                    <th scope="row"><strong>Name</strong></th>
+                    <td>
+                        {% if object.name %}
+                            <span title='Netbox Name'>
+                                <a href="{{ object.get_absolute_url }}">{{ object.name }}</a>
+                            </span>
+                        {% else %}
+                            <span class='badge text-bg-grey' title='Netbox Name'>
+                                <strong>Empty</strong>
+                        {% endif %}
+                    </td>
+                </tr>
                 <tr>
                     <th scope="row"><strong>Domain / IP</strong></th>
-                    {% if configuration.netbox_proxbox.netbox.domain %}
-                        <td><strong>{{ configuration.netbox_proxbox.netbox.domain }} </strong></td>
+                    {% if object.ip_address %}
+                        <td>
+                            <a href="{{ object.ip_address.get_absolute_url }}">{{ object.ip_address }}</a>
+                        </td>
                     {% else %}
-                        <td><strong>{{ default_config.netbox.domain }} (default)</strong></td>
+                        <td>{{ default_config.netbox.domain }} (default)</td>
                     {% endif %}
                 </tr>
                 <tr>
                     <th scope="row"><strong>HTTP Port</strong></th>
-                    {% if configuration.netbox_proxbox.netbox.http_port %}
-                        <td>{{ configuration.netbox_proxbox.netbox.http_port }}</td>
+                    {% if object.port %}
+                        <td>{{ object.port }}</td>
                     {% else %}
                         <td>{{ default_config.netbox.http_port }} (default)</td>
                     {% endif %}
                 </tr>
                 <tr>
                     <th scope="row"><strong>Token</strong></th>
-                    {% if configuration.netbox_proxbox.netbox.token %}
+                    {% if object.token %}
                         <td>
-                            <span  class='badge text-bg-yellow' title='Netbox Token'>
-                            Token will not show here for security.
+                            <span  class='badge text-bg-gray' title='Netbox Token'>
+                                Token will not show here for security.
                             </span>
                         </td>
                     {% else %}
@@ -90,6 +104,23 @@
                         </span>
                     </td>
                 </tr>
+                <tr>
+                    <th scope="row"><strong>SSL</strong></th>
+                    {% if object.verify_ssl %}
+                        <td>
+                            <span class="text-success">
+                                <i class="mdi mdi-check-bold"></i>
+                            </span>
+                        </td>
+                    {% else %}
+                        <td>
+                            <span class="text-danger">
+                                <i class="mdi mdi-close-thick"></i>
+                            </span>
+                        </td>
+                    {% endif %}
+                </tr>
+                
             </table>
             <div align="right">
                 <button class="btn btn-outline-primary" type="button">

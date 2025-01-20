@@ -1,24 +1,24 @@
 {% load static %}
 
-<div class="col col-md-6">
+<div class="col col-md-4">
     <div class="card">
         <h2 class="card-header">Proxmox Cluster</h2>
         <!-- Placeholder for Connection Error Messages -->
-        <div class="p-1" id="proxmox-connection-error-{{ px.domain }}">
+        <div class="p-1" id="proxmox-connection-error-{{ object.ip_address }}">
 
         </div>
         <div class="flex d-flex flex-row  justify-content-center align-items-center p-2 mt-1">
 
 
             <div class="flex d-flex mx-auto position-absolute" >
-                <a href="https://{{ px.domain }}:{{ px.http_port }}" target="_blank">
+                <a href="{{ object.get_absolute_url }}">
                     <img src="{% static 'netbox_proxbox/proxmox-logo.svg' %}" alt="Proxmox Logo" width="200px">
                 </a>
             </div>
             
             <!-- Status Badge. Default value is 'Unkown' and is changed based on API response status -->
             <div class="d-flex ms-auto " style="margin: 0 40px 0 0">
-                <span id="proxmox-connection-status-{{ px.domain }}" class="proxmox-connection-check badge p-1">Unknown</span>
+                <span id="proxmox-connection-status-{{ object.ip_address }}" class="proxmox-connection-check badge p-1">Unknown</span>
             </div>
 
         </div>
@@ -28,15 +28,21 @@
                 <!-- The following four (4) fields are filled by API response. If empty, means the API failed. -->
                 <tr class="proxmox_version">
                     <th scope="row" ><strong>Proxmox Cluster Name</strong></th>
-                    <td id="{{ px.domain }}">
-                        <span class='badge text-bg-grey' title='Proxmox Cluster Name'>
-                            </strong>Empty</strong>
-                        </span>
+                    <td id="{{ object.ip_address }}">
+                        {% if object.name %}
+                            <span title='Proxmox Cluster Name'>
+                                <a href="{{ object.get_absolute_url }}">{{ object.name}}</a>
+                            </span>
+                        {% else %}
+                            <span class='badge text-bg-grey' title='Proxmox Cluster Name'>
+                                </strong>Empty</strong>
+                            </span>
+                        {% endif %}
                     </td>
                 </tr>
                 <tr class="proxmox_version">
                     <th scope="row" ><strong>Proxmox Cluster Mode</strong></th>
-                    <td id="{{ px.domain }}">
+                    <td id="{{ object.ip_address }}">
                         <span class='badge text-bg-grey' title='Proxmox Cluster Mode'>
                             </strong>Empty</strong>
                         </span>
@@ -44,7 +50,7 @@
                 </tr>
                 <tr class="proxmox_version">
                     <th scope="row" ><strong>Proxmox Version</strong></th>
-                    <td id="{{ px.domain }}">
+                    <td id="{{ object.ip_address }}">
                         <span class='badge text-bg-grey' title='Proxmox Cluster Mode'>
                             </strong>Empty</strong>
                         </span>
@@ -52,7 +58,7 @@
                 </tr>
                 <tr class="proxmox_version">
                     <th scope="row" ><strong>Proxmox RepoID</strong></th>
-                    <td id="{{ px.domain }}">
+                    <td id="{{ object.ip_address }}">
                         <span class='badge text-bg-grey' title='Proxmox Cluster Mode'>
                             </strong>Empty</strong>
                         </span>
@@ -61,39 +67,41 @@
                 <!-- The rest of the fields are based on Netbox 'configuration.py' file and Plugins Configuration -->
                 <tr>
                     <th scope="row"><strong>Domain / IP</strong></th>
-                    {% if px.domain %}
-                        <td>{{ px.domain }}</td>
+                    {% if object.ip_address %}
+                        <td>
+                            <a href="{{ object.ip_address.get_absolute_url }}">{{ object.ip_address }}</a>
+                        </td>
                     {% else %}
                         <td>{{ default_config.proxmox.domain }} (default)</td>
                     {% endif %}
                 </tr>
                 <tr>
                 <th scope="row"><strong>HTTP Port</strong></th>
-                {% if px.http_port %}
-                        <td>{{ px.http_port }}</td>
+                    {% if object.port %}
+                        <td>{{ object.port }}</td>
                     {% else %}
                         <td>{{ default_config.proxmox.http_port }} (default)</td>
                     {% endif %}
                 </tr>
                 <tr>
                     <th scope="row"><strong>Proxmox User</strong></th>
-                    {% if px.user %}
-                        <td>{{ px.user }}</td>
+                    {% if object.username %}
+                        <td>{{ object.username }}</td>
                     {% else %}
                         <td>{{ default_config.proxmox.user }} (default)</td>
                     {% endif %}
                 </tr>
                 <tr>
                 <th scope="row"><strong>Proxmox Password</strong></th>
-                    {% if px.password %}
-                        <td>password defined in configuration.py</td>
+                    {% if object.password %}
+                        <td>password defined in the model (secret)</td>
                     {% else %}
                         <td>(secret) (default)</td>
                     {% endif %}
                 </tr>
                     <th scope="row"><strong>Token Name</strong></th>
-                    {% if px.token.name %}
-                        <td>{{ px.token.name }}</td>
+                    {% if object.token_name %}
+                        <td>{{ object.token_name }}</td>
                     {% else %}
                         <td>{{ default_config.proxmox.token.name }} (default)</td>
                     {% endif %}
@@ -103,10 +111,18 @@
                 </tr>
                 <tr>
                     <th scope="row"><strong>SSL</strong></th>
-                    {% if px.ssl %}
-                        <td>{{ px.ssl }}</td>
+                    {% if object.verify_ssl %}
+                        <td>
+                            <span class="text-success">
+                                <i class="mdi mdi-check-bold"></i>
+                            </span>
+                        </td>
                     {% else %}
-                        <td>{{ default_config.proxmox.ssl }} (default)</td>
+                        <td>
+                            <span class="text-danger">
+                                <i class="mdi mdi-close-thick"></i>
+                            </span>
+                        </td>
                     {% endif %}
                 </tr>
             </table>

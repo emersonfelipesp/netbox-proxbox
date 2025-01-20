@@ -1,6 +1,6 @@
 {% load static %}            
 
-<div class="col col-md-6">
+<div class="col col-md-4">
     <div class="card">
         <h2 class="card-header">FastAPI (Backend Service)</h2>
 
@@ -47,8 +47,8 @@
 
             <!-- FastAPI logo -->
             <div class="flex d-flex mx-auto position-absolute" >
-                <a href="https://fastapi.tiangolo.com/" target="_blank">
-                    <img src="{% static 'netbox_proxbox/fastapi_logo.png' %}" alt="Netbox Logo" width="200px">
+                <a href="{{ object.get_absolute_url }}" target="_blank">
+                    <img src="{% static 'netbox_proxbox/fastapi_logo.png' %}" alt="FastAPI Logo" width="200px">
                 </a>
                 
             </div>
@@ -68,19 +68,35 @@
         <div class="card-body">
             
             <table class="table table-hover attr-table">
-                <!-- The fields are based on Netbox 'configuration.py' file and Plugins Configuration -->
+                <tr>
+                    <th scope="row"><strong>Name</strong></th>
+                    <td>
+                        {% if object.name %}
+                            <span title='FastAPI Endpoint Name'>
+                                <a href="{{ object.get_absolute_url }}">{{ object.name }}</a>
+                            </span>
+                        {% else %}
+                            <span class='badge text-bg-grey' title='Netbox Name'>
+                                <strong>Empty</strong>
+                        {% endif %}
+                    </td>
+                </tr>
                 <tr>
                     <th scope="row"><strong>Uvicorn Host</strong></th>
-                    {% if configuration.netbox_proxbox.fastapi.uvicorn_host %}
-                        <td id="uvicorn-host">{{ configuration.netbox_proxbox.fastapi.uvicorn_host }}</td>
+                    {% if object.ip_address %}
+                        <td id="uvicorn-host">
+                            <a href="{{ object.ip_address.get_absolute_url }}">
+                                {{ object.ip_address }}
+                            </a>
+                        </td>
                     {% else %}
                         <td id="uvicorn-host">{{ default_config.fastapi.uvicorn_host }} (default)</td>
                     {% endif %}
                 </tr>
                 <tr>
                     <th scope="row"><strong>Uvicorn Port</strong></th>
-                    {% if configuration.netbox_proxbox.fastapi.uvicorn_port %}
-                        <td id="uvicorn-port">{{ configuration.netbox_proxbox.fastapi.uvicorn_port }}</td>
+                    {% if object.port %}
+                        <td id="uvicorn-port">{{ object.port }}</td>
                     {% else %}
                         <td id="uvicorn-port">{{ default_config.fastapi.uvicorn_port }} (default)</td>
                     {% endif %}
