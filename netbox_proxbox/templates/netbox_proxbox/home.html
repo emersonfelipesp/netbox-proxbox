@@ -1,8 +1,22 @@
 {% extends 'base/layout.html' %}
 {% load static %}
 
+{% block head %}
+<script src="https://unpkg.com/htmx.org@1.7.0"></script>
+{% endblock %}
 {% block content %}
     {% include "netbox_proxbox/home/script.html" %}
+
+    <div 
+        id=abcde
+        hx-get="{% url 'plugins:netbox_proxbox:keepalive_status' 'fastapi' %}"
+        hx-trigger=click
+        hx-target=#abcde
+        hx-swap=outerHTML
+    >
+        Test
+    </div>
+
 
     <div>
         <div class="row mb-3">

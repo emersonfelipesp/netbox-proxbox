@@ -15,8 +15,8 @@ from netbox_proxbox import github
 # Import other proxbox views
 from .external_pages import *
 from .proxbox_backend import *
-
 from .endpoints import  *
+from .keepalive_status import *
 
 from netbox_proxbox.models import ProxmoxEndpoint, NetBoxEndpoint, FastAPIEndpoint
 
