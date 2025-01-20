@@ -21,7 +21,7 @@ class ProxmoxEndpoint(NetBoxModel):
         related_name='+',
         verbose_name=_('IP Address'),
         null=True,
-        help_text=_('IP Address of the Proxmox Endpoint/Cluster. It will try using the DNS name provided in IP Address if it is not empty.'),
+        help_text=_('IP Address of the Proxmox Endpoint (Cluster). It will try using the DNS name provided in IP Address if it is not empty.'),
     )
     port = models.PositiveIntegerField(
         default=8006,
@@ -94,7 +94,7 @@ class NetBoxEndpoint(NetBoxModel):
         related_name='+',
         verbose_name=_('IP Address'),
         null=True,
-        help_text=_('IP Address of the Netbox. It will try using the DNS name provided in IP Address if it is not empty.'),
+        help_text=_('IP Address of the NetBox. It will try using the DNS name provided in IP Address if it is not empty.'),
     )
     port = models.PositiveIntegerField(
         default=443,
@@ -120,14 +120,20 @@ class NetBoxEndpoint(NetBoxModel):
         
 
 class FastAPIEndpoint(NetBoxModel):
-    name = models.CharField(max_length=255)
+    name = models.CharField(
+        default='ProxBox Endpoint',
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text=_('Name of the ProxBox Endpoint.'),
+    )
     ip_address = models.ForeignKey(
         to='ipam.IPAddress',
         on_delete=models.PROTECT,
         related_name='+',
         verbose_name=_('IP Address'),
         null=True,
-        help_text=_('IP Address of the FastAPI. It will try using the DNS name provided in IP Address if it is not empty.'),
+        help_text=_('IP Address of the Proxbox API (Backend Service). It will try using the DNS name provided in IP Address if it is not empty.'),
     )
     port = models.PositiveIntegerField(
         default=8800,
@@ -144,4 +150,4 @@ class FastAPIEndpoint(NetBoxModel):
         return f"{self.name} ({self.ip_address})"
 
     def get_absolute_url(self):
-        return reverse("plugins:netbox_proxbox:fastapiendpoints", args=[self.pk])
+        return reverse("plugins:netbox_proxbox:fastapiendpoint", args=[self.pk])

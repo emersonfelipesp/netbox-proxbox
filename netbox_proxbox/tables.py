@@ -23,13 +23,8 @@ class ProxmoxEndpointTable(NetBoxTable):
         )
         
         default_columns = (
-            'pk',
-            'name',
-            'ip_address',
-            'port',
-            'mode',
-            'version',
-            'verify_ssl'
+            'pk', 'name', 'ip_address', 'port', 'mode',
+            'version', 'verify_ssl'
         )
 
 
@@ -46,9 +41,22 @@ class NetBoxEndpointTable(NetBoxTable):
         )
         
         default_columns = (
-            'pk',
-            'name',
-            'ip_address',
-            'port',
-            'verify_ssl'
+            'pk', 'name', 'ip_address', 'port', 'verify_ssl'
+        )
+
+
+class FastAPIEndpointTable(NetBoxTable):
+    name = tables.Column(linkify=True)
+    ip_address = tables.Column(linkify=True)
+    verify_ssl = BooleanColumn()
+    
+    class Meta(NetBoxTable.Meta):
+        model = FastAPIEndpoint
+        fields = (
+            'pk', 'id', 'name', 'ip_address', 'port',
+            'verify_ssl', 'actions',
+        )
+        
+        default_columns = (
+            'pk', 'name', 'ip_address', 'port', 'verify_ssl',
         )

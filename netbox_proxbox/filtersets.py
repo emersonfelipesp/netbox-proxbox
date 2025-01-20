@@ -1,6 +1,6 @@
 from django.db.models import Q
 from netbox.filtersets import NetBoxModelFilterSet
-from .models import ProxmoxEndpoint, NetBoxEndpoint
+from .models import ProxmoxEndpoint, NetBoxEndpoint, FastAPIEndpoint
 
 
 class ProxmoxEndpointFilterSet(NetBoxModelFilterSet):
@@ -17,5 +17,14 @@ class NetBoxEndpointFilterSet(NetBoxModelFilterSet):
         model = NetBoxEndpoint
         fields = ['id', 'name', 'ip_address']
 
+    def search(self, queryset, name, value):
+        return queryset.filter(name__icontains=value)
+
+
+class FastAPIEndpointFilterSet(NetBoxModelFilterSet):
+    class Meta:
+        model = FastAPIEndpoint
+        fields = ['id', 'name', 'ip_address']
+    
     def search(self, queryset, name, value):
         return queryset.filter(name__icontains=value)

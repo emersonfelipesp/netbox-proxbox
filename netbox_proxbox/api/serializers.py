@@ -2,7 +2,7 @@ from rest_framework import serializers
 
 from netbox.api.serializers import NetBoxModelSerializer
 from ipam.api.serializers import IPAddressSerializer
-from ..models import ProxmoxEndpoint, NetBoxEndpoint
+from ..models import ProxmoxEndpoint, NetBoxEndpoint, FastAPIEndpoint
 
 
 class ProxmoxEndpointSerializer(NetBoxModelSerializer):
@@ -35,3 +35,16 @@ class NetBoxEndpointSerializer(NetBoxModelSerializer):
             'created', 'last_updated',
         )
 
+
+class FastAPIEndpointSerializer(NetBoxModelSerializer):
+    url = serializers.HyperlinkedIdentityField(
+        view_name='plugins-api:netbox_proxbox-api:fastapiendpoint-detail',
+    )
+    ip_address = IPAddressSerializer()
+    
+    class Meta:
+        model = FastAPIEndpoint
+        fields = (
+            'id', 'url', 'display', 'name', 'ip_address', 'port',
+            'verify_ssl', 'tags', 'custom_fields', 'created', 'last_updated',
+        )

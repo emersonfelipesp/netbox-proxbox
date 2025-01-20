@@ -1,0 +1,46 @@
+{% extends 'generic/object.html' %}
+
+{% block content %}
+    <div class="row mb-3">
+        <div class="col col-md-6">
+            <div class="card">
+                <h5 class="card-header">ProxBox API Endpoint (FastAPI app)</h5>
+                
+                <div class="card-body">
+    
+                    <table class="table table-hover attr-table">
+                        <tr>
+                            <th scope="row">Name</th>
+                            <td>{{ object.name }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">IP Address</th>
+                            <td>
+                                <a href="{{ object.ip_address.get_absolute_url }}">
+                                    {{ object.ip_address }}
+                                </a>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Port</th>
+                            <td>{{ object.port }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Username</th>
+                            <td>{{ object.username }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Mode</th>
+                            <td>{{ object.mode }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+            {% include 'inc/panels/custom_fields.html' %}
+        </div>
+        <div class="col col-md-6">
+            {% include 'inc/panels/tags.html' %}
+            {% include 'inc/panels/comments.html' %}
+        </div>
+    </div>
+{% endblock %}

@@ -42,5 +42,16 @@ urlpatterns = [
     path('endpoints/netbox/<int:pk>/delete/', views.NetBoxEndpointDeleteView.as_view(), name='netboxendpoint_delete'),
     path('endpoints/netbox/<int:pk>/changelog/', ObjectChangeLogView.as_view(), name='netboxendpoint_changelog', kwargs={
         'model': models.NetBoxEndpoint
+    }),
+    
+    
+    # FastAPIEndpoint Model URLs
+    path('endpoints/fastapi/', views.FastAPIEndpointListView.as_view(), name='fastapiendpoint_list'),
+    path('endpoints/fastapi/add/', views.FastAPIEndpointEditView.as_view(), name='fastapiendpoint_add'),
+    path('endpoints/fastapi/<int:pk>', views.FastAPIEndpointView.as_view(), name='fastapiendpoint'),
+    path('endpoints/fastapi/<int:pk>/edit/', views.FastAPIEndpointEditView.as_view(), name='fastapiendpoint_edit'),
+    path('endpoints/fastapi/<int:pk>/delete/', views.FastAPIEndpointDeleteView.as_view(), name='fastapiendpoint_delete'),
+    path('endpoints/fastapi/<int:pk>/changelog/', ObjectChangeLogView.as_view(), name='fastapiendpoint_changelog', kwargs={
+        'model': models.FastAPIEndpoint
     })
 ]

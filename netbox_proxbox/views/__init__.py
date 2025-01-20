@@ -15,8 +15,9 @@ from netbox_proxbox import github
 # Import other proxbox views
 from .external_pages import *
 from .proxbox_backend import *
-from .proxmox_endpoint import *
-from .netbox_endpoint import *
+
+from .endpoints import  *
+
 
 class HomeView(View):
     """

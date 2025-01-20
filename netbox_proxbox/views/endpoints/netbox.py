@@ -8,6 +8,14 @@ from netbox_proxbox.filtersets import NetBoxEndpointFilterSet
 from netbox_proxbox.forms import NetBoxEndpointForm, NetBoxEndpointFilterForm
 
 
+__all__ = (
+    'NetBoxEndpointView',
+    'NetBoxEndpointListView',
+    'NetBoxEndpointEditView',
+    'NetBoxEndpointDeleteView',
+)
+
+
 class NetBoxEndpointView(generic.ObjectView):
     queryset = NetBoxEndpoint.objects.all()
 

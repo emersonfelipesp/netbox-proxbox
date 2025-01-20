@@ -9,6 +9,14 @@ from netbox_proxbox.filtersets import ProxmoxEndpointFilterSet
 from netbox_proxbox.forms import ProxmoxEndpointForm, ProxmoxEndpointFilterForm
 
 
+__all__ = (
+    'ProxmoxEndpointView',
+    'ProxmoxEndpointListView',
+    'ProxmoxEndpointEditView',
+    'ProxmoxEndpointDeleteView',
+)
+
+
 class ProxmoxEndpointView(generic.ObjectView):
     queryset = ProxmoxEndpoint.objects.all()
 
