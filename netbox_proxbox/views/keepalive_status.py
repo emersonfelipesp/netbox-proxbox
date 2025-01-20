@@ -16,10 +16,9 @@ class HtmxHttpRequest(HttpRequest):
 from netbox_proxbox.models import *
 
 @require_GET
-def get_service_status(
+def get_fastapi_service_status(
     request: HtmxHttpRequest,
-    service: str,
-    obj = None
+    pk: int,
 ) -> HttpResponse:
     """Get the status of a service."""
     template_name: str = 'netbox_proxbox/status_badge.html'
@@ -29,23 +28,24 @@ def get_service_status(
     
     status: str = 'unknown'
     
-    if service == 'fastapi':
-        fastapi_service_obj = FastAPIEndpoint.objects.first()
-        host = str(fastapi_service_obj.ip_address.address).split('/')[0]
-        url: str = f"https://{host}:{fastapi_service_obj.port}/"
+    fastapi_service_obj = FastAPIEndpoint.objects.get(pk=pk)
+    print(fastapi_service_obj)
+    
+    host = str(fastapi_service_obj.ip_address.address).split('/')[0]
+    url: str = f"http://{host}:{fastapi_service_obj.port}/"
+    
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        status = 'success'
         
-        try:
-            response = requests.get(url)
-            response.raise_for_status()
-            status = 'success'
-            
-        except requests.exceptions.HTTPError as err:
-            print(f'HTTP error ocrrured: {err}')
-            status = 'error'
-            
-        except Exception as errr:
-            print(f'Error ocurred: {errr}')
-            status = 'error'
+    except requests.exceptions.HTTPError as err:
+        print(f'HTTP error ocrrured: {err}')
+        status = 'error'
+        
+    except Exception as errr:
+        print(f'Error ocurred: {errr}')
+        status = 'error'
     
     return render(
         request,

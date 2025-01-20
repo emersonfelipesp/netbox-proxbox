@@ -55,5 +55,5 @@ urlpatterns = [
         'model': models.FastAPIEndpoint
     }),
     
-    path('keepalive-status/<str:service>', views.get_service_status, name='keepalive_status'),
+    path('keepalive-status/fastapi/<int:pk>', views.get_fastapi_service_status, name='fastapi_keepalive_status'),
 ]

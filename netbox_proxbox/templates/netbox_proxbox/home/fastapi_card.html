@@ -58,7 +58,14 @@
                 class="d-flex ms-auto" 
                 style="margin: 0 40px 0 0"
             >
-                <span id="fastapi-connection-status" class="proxmox-connection-check badge p-1">Unknown</span>
+                <span
+                    id="status-badge-{{ object.pk }}"
+                    class="proxmox-connection-check badge p-1"
+                    hx-get="{% url 'plugins:netbox_proxbox:fastapi_keepalive_status' object.pk %}"
+                    hx-trigger="load"
+                    hx-target="#status-badge-{{ object.pk }}"
+                    hx-swap="outerHTML"
+                >Unknown</span>
             </div>
 
         </div>
