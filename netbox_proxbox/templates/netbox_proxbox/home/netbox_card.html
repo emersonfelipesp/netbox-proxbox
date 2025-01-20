@@ -29,12 +29,24 @@
 
         <div class="card-body">
             <table class="table table-hover attr-table">
-                <!-- The fields are based on Netbox 'configuration.py' file and Plugins Configuration -->
+                <tr>
+                    <th scope="row"><strong>Name</strong></th>
+                    <td>
+                        {% if object.name %}
+                            <span title='Netbox Name'>
+                                <a href="{{ object.get_absolute_url }}">{{ object.name }}</a>
+                            </span>
+                        {% else %}
+                            <span class='badge text-bg-grey' title='Netbox Name'>
+                                <strong>Empty</strong>
+                        {% endif %}
+                    </td>
+                </tr>
                 <tr>
                     <th scope="row"><strong>Domain / IP</strong></th>
                     {% if object.ip_address %}
                         <td>
-                            <a href="{{ object.get_absolute_url }}">{{ object.ip_address }}</a>
+                            <a href="{{ object.ip_address.get_absolute_url }}">{{ object.ip_address }}</a>
                         </td>
                     {% else %}
                         <td>{{ default_config.netbox.domain }} (default)</td>

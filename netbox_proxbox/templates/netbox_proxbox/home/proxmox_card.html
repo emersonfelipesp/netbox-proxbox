@@ -69,7 +69,7 @@
                     <th scope="row"><strong>Domain / IP</strong></th>
                     {% if object.ip_address %}
                         <td>
-                            <a href="{{ object.get_absolute_url }}">{{ object.ip_address }}</a>
+                            <a href="{{ object.ip_address.get_absolute_url }}">{{ object.ip_address }}</a>
                         </td>
                     {% else %}
                         <td>{{ default_config.proxmox.domain }} (default)</td>
