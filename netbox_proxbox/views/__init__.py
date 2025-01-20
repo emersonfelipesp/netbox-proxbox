@@ -18,6 +18,7 @@ from .proxbox_backend import *
 
 from .endpoints import  *
 
+from netbox_proxbox.models import ProxmoxEndpoint, NetBoxEndpoint, FastAPIEndpoint
 
 class HomeView(View):
     """
@@ -49,6 +50,14 @@ class HomeView(View):
         plugin_configuration: dict = getattr(configuration, "PLUGINS_CONFIG", {})
         default_config = dict =  getattr(ProxboxConfig, 'default_settings', {})
         
+        proxmox_endpoint_obj = ProxmoxEndpoint.objects.all()
+        netbox_endpoint_obj = NetBoxEndpoint.objects.all()
+        fastapi_endpoint_obj = FastAPIEndpoint.objects.all()
+        
+        print(proxmox_endpoint_obj)
+        print(netbox_endpoint_obj)
+        print(fastapi_endpoint_obj)
+        
         return render(
             request,
             self.template_name,
@@ -56,7 +65,10 @@ class HomeView(View):
                 "configuration": plugin_configuration,
                 "default_config": default_config,
                 "configuration_json": json.dumps(plugin_configuration, indent=4),
-                "default_config_json": json.dumps(default_config, indent=4)
+                "default_config_json": json.dumps(default_config, indent=4),
+                'proxmox_endpoint_list': proxmox_endpoint_obj,
+                'netbox_endpoint_list': netbox_endpoint_obj,
+                'fastapi_endpoint_list': fastapi_endpoint_obj,
             }
         )
 

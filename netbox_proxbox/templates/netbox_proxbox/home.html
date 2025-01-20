@@ -4,6 +4,10 @@
 {% block content %}
     {% include "netbox_proxbox/home/script.html" %}
 
+
+    {% for proxmox in proxmox_endpoint_list %}
+        {{ proxmox.ip_address }}
+    {% endfor %}
     <div>
         <div class="row mb-3">
 
@@ -39,7 +43,7 @@
             </div>
 
             
-            {% for px in configuration.netbox_proxbox.proxmox %}
+            {% for object in proxmox_endpoint_list %}
                 {% include "netbox_proxbox/home/proxmox_card.html" %}
             {% endfor %}
 
