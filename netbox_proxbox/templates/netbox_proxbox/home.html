@@ -4,10 +4,6 @@
 {% block content %}
     {% include "netbox_proxbox/home/script.html" %}
 
-
-    {% for proxmox in proxmox_endpoint_list %}
-        {{ proxmox.ip_address }}
-    {% endfor %}
     <div>
         <div class="row mb-3">
 
