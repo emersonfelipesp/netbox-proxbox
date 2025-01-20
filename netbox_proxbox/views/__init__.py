@@ -62,10 +62,7 @@ class HomeView(View):
             request,
             self.template_name,
             {
-                "configuration": plugin_configuration,
                 "default_config": default_config,
-                "configuration_json": json.dumps(plugin_configuration, indent=4),
-                "default_config_json": json.dumps(default_config, indent=4),
                 'proxmox_endpoint_list': proxmox_endpoint_obj,
                 'netbox_endpoint_list': netbox_endpoint_obj,
                 'fastapi_endpoint_list': fastapi_endpoint_obj,
