@@ -11,7 +11,7 @@
 
 
             <div class="flex d-flex mx-auto position-absolute" >
-                <a href="https://{{ object.ip_address }}:{{ object.http_port }}" target="_blank">
+                <a href="{{ object.get_absolute_url }}">
                     <img src="{% static 'netbox_proxbox/proxmox-logo.svg' %}" alt="Proxmox Logo" width="200px">
                 </a>
             </div>
