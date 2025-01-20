@@ -47,17 +47,12 @@ class HomeView(View):
     def get(self, request):
         """Get request."""
         
-        plugin_configuration: dict = getattr(configuration, "PLUGINS_CONFIG", {})
         default_config = dict =  getattr(ProxboxConfig, 'default_settings', {})
         
         proxmox_endpoint_obj = ProxmoxEndpoint.objects.all()
         netbox_endpoint_obj = NetBoxEndpoint.objects.all()
         fastapi_endpoint_obj = FastAPIEndpoint.objects.all()
-        
-        print(proxmox_endpoint_obj)
-        print(netbox_endpoint_obj)
-        print(fastapi_endpoint_obj)
-        
+
         return render(
             request,
             self.template_name,
