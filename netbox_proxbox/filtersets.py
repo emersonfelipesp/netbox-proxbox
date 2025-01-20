@@ -1,6 +1,7 @@
 from django.db.models import Q
 from netbox.filtersets import NetBoxModelFilterSet
-from .models import ProxmoxEndpoint
+from .models import ProxmoxEndpoint, NetBoxEndpoint
+
 
 class ProxmoxEndpointFilterSet(NetBoxModelFilterSet):
     class Meta:
@@ -8,11 +9,13 @@ class ProxmoxEndpointFilterSet(NetBoxModelFilterSet):
         fields = ['id', 'name', 'ip_address', 'mode']
     
     def search(self, queryset, name, value):
-        """Perform the filtered search."""
-        if not value.strip():
-            return queryset
-        qs_filter = (
-                Q(value__icontains=value)
-                | Q(description__icontains=value)
-        )
-        return queryset.filter(qs_filter)
+            return queryset.filter(name__icontains=value)
+
+
+class NetBoxEndpointFilterSet(NetBoxModelFilterSet):
+    class Meta:
+        model = NetBoxEndpoint
+        fields = ['id', 'name', 'ip_address']
+
+    def search(self, queryset, name, value):
+        return queryset.filter(name__icontains=value)

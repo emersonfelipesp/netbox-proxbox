@@ -1,21 +1,21 @@
+# Django Imports
 from django import forms
 
-from netbox.forms import (
-    NetBoxModelForm,
-    NetBoxModelFilterSetForm,
-)
-
+# NetBox Imports
+from netbox.forms import NetBoxModelForm, NetBoxModelFilterSetForm
+from utilities.forms.fields import CommentField, DynamicModelChoiceField
 from ipam.models import IPAddress
 
-from utilities.forms.fields import CommentField, DynamicModelChoiceField
+# Proxbox Imports
+from ..models import ProxmoxEndpoint
+from ..choices import ProxmoxModeChoices
 
-from .models import (
-    ProxmoxEndpoint,
-)
-
-from . import choices
 
 class ProxmoxEndpointForm(NetBoxModelForm):
+    """
+    Form for ProxmoxEndpoint model.
+    It is used to CREATE and UPDATE ProxmoxEndpoint objects.
+    """
     ip_address = DynamicModelChoiceField(
         queryset=IPAddress.objects.all()
     )
@@ -24,10 +24,19 @@ class ProxmoxEndpointForm(NetBoxModelForm):
     
     class Meta:
         model = ProxmoxEndpoint
-        fields = ('name', 'ip_address', 'port', 'username', 'password', 'token_name', 'token_value', 'verify_ssl', 'tags')
+        fields = (
+            'name', 'ip_address', 'port', 'username',
+            'password', 'token_name', 'token_value', 'verify_ssl',
+            'tags'
+        )
 
 
 class ProxmoxEndpointFilterForm(NetBoxModelFilterSetForm):
+    """
+    Filter form for ProxmoxEndpoint model.
+    It is used in the ProxmoxEndpointListView.
+    """
+    
     model = ProxmoxEndpoint
     name = forms.CharField(
         required=False
@@ -38,7 +47,6 @@ class ProxmoxEndpointFilterForm(NetBoxModelFilterSetForm):
         help_text='Select IP Address'
     )
     mode = forms.MultipleChoiceField(
-        choices=choices.ProxmoxModeChoices,
+        choices=ProxmoxModeChoices,
         required=False
     )
-        

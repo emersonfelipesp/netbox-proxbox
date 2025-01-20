@@ -4,7 +4,7 @@ from netbox.tables.columns import BooleanColumn
 
 from .models import (
     ProxmoxEndpoint,
-    NetboxEndpoint,
+    NetBoxEndpoint,
     FastAPIEndpoint,
 )
 
@@ -29,4 +29,17 @@ class ProxmoxEndpointTable(NetBoxTable):
             'port',
             'mode',
             'version',
+        )
+
+
+class NetBoxEndpointTable(NetBoxTable):
+    name = tables.Column(linkify=True)
+    ip_address = tables.Column(linkify=True)
+    verify_ssl = BooleanColumn()
+    
+    class Meta(NetBoxTable.Meta):
+        model = NetBoxEndpoint
+        fields = (
+            'pk', 'id', 'name', 'ip_address', 'port',
+            'verify_ssl', 'actions',
         )

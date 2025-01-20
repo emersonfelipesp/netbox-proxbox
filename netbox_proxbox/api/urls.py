@@ -5,5 +5,6 @@ app_name = 'proxbox'
 
 router = NetBoxRouter()
 router.register('endpoints/proxmox', views.ProxmoxEndpointViewSet)
+router.register('endpoints/netbox', views.NetBoxEndpointViewSet)
 
 urlpatterns = router.urls

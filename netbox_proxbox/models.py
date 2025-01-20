@@ -80,8 +80,14 @@ class ProxmoxEndpoint(NetBoxModel):
         return reverse('plugins:netbox_proxbox:proxmoxendpoint', args=[self.pk])
 
 
-class NetboxEndpoint(NetBoxModel):
-    name = models.CharField(max_length=255)
+class NetBoxEndpoint(NetBoxModel):
+    name = models.CharField(
+        default='NetBox Endpoint',
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text=_('Name of the NetBox Endpoint.'),
+    )
     ip_address = models.ForeignKey(
         to='ipam.IPAddress',
         on_delete=models.PROTECT,
@@ -110,7 +116,7 @@ class NetboxEndpoint(NetBoxModel):
         return f"{self.name} ({self.ip_address})"
 
     def get_absolute_url(self):
-        return reverse("plugins:netbox_proxbox:netboxendpoints", args=[self.pk])
+        return reverse("plugins:netbox_proxbox:netboxendpoint", args=[self.pk])
         
 
 class FastAPIEndpoint(NetBoxModel):

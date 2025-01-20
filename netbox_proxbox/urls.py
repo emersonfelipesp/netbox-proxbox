@@ -32,5 +32,15 @@ urlpatterns = [
     path('endpoints/proxmox/<int:pk>/delete/', views.ProxmoxEndpointDeleteView.as_view(), name='proxmoxendpoint_delete'),
     path('endpoints/proxmox/<int:pk>/changelog/', ObjectChangeLogView.as_view(), name='proxmoxendpoint_changelog', kwargs={
         'model': models.ProxmoxEndpoint
+    }),
+    
+    # NetBoxEndpoint Model URLs
+    path('endpoints/netbox/', views.NetBoxEndpointListView.as_view(), name='netboxendpoint_list'),
+    path('endpoints/netbox/add/', views.NetBoxEndpointEditView.as_view(), name='netboxendpoint_add'),
+    path('endpoints/netbox/<int:pk>', views.NetBoxEndpointView.as_view(), name='netboxendpoint'),
+    path('endpoints/netbox/<int:pk>/edit/', views.NetBoxEndpointEditView.as_view(), name='netboxendpoint_edit'),
+    path('endpoints/netbox/<int:pk>/delete/', views.NetBoxEndpointDeleteView.as_view(), name='netboxendpoint_delete'),
+    path('endpoints/netbox/<int:pk>/changelog/', ObjectChangeLogView.as_view(), name='netboxendpoint_changelog', kwargs={
+        'model': models.NetBoxEndpoint
     })
 ]
