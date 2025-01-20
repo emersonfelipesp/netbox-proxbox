@@ -29,6 +29,7 @@ class ProxmoxEndpointTable(NetBoxTable):
             'port',
             'mode',
             'version',
+            'verify_ssl'
         )
 
 
@@ -42,4 +43,12 @@ class NetBoxEndpointTable(NetBoxTable):
         fields = (
             'pk', 'id', 'name', 'ip_address', 'port',
             'verify_ssl', 'actions',
+        )
+        
+        default_columns = (
+            'pk',
+            'name',
+            'ip_address',
+            'port',
+            'verify_ssl'
         )
