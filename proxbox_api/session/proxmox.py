@@ -4,9 +4,9 @@ from typing import Annotated, Any
 # Proxmox
 from proxmoxer import ProxmoxAPI
 
-from netbox_proxbox.backend.schemas.proxmox import ProxmoxSessionSchema
-from netbox_proxbox.backend.exception import ProxboxException
-from netbox_proxbox.backend.routes.proxbox import ProxmoxConfigDep
+from proxbox_api.schemas.proxmox import ProxmoxSessionSchema
+from proxbox_api.exception import ProxboxException
+from proxbox_api.routes.proxbox import ProxmoxConfigDep
 
 #
 # PROXMOX SESSION

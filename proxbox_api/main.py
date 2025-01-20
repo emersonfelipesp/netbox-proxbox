@@ -2,27 +2,27 @@ from fastapi import FastAPI, Request, WebSocket
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-from netbox_proxbox.backend.exception import ProxboxException
+from proxbox_api.exception import ProxboxException
 
 # Netbox Routes
-from .backend.routes.netbox import router as netbox_router
-from .backend.routes.netbox.dcim import router as nb_dcim_router
-from .backend.routes.netbox.virtualization import router as nb_virtualization_router
+from proxbox_api.routes.netbox import router as netbox_router
+from proxbox_api.routes.netbox.dcim import router as nb_dcim_router
+from proxbox_api.routes.netbox.virtualization import router as nb_virtualization_router
 
 # Proxbox Routes
-from .backend.routes.proxbox import router as proxbox_router
-from .backend.routes.proxbox.clusters import router as pb_cluster_router
+from proxbox_api.routes.proxbox import router as proxbox_router
+from proxbox_api.routes.proxbox.clusters import router as pb_cluster_router
 
 # Proxmox Routes
-from .backend.routes.proxmox import router as proxmox_router
-from .backend.routes.proxmox.cluster import router as px_cluster_router
-from .backend.routes.proxmox.nodes import router as px_nodes_router
+from proxbox_api.routes.proxmox import router as proxmox_router
+from proxbox_api.routes.proxmox.cluster import router as px_cluster_router
+from proxbox_api.routes.proxmox.nodes import router as px_nodes_router
 
-from .backend.schemas import *
+from proxbox_api.schemas import *
 
 # Sessions
-from .backend.session.proxmox import ProxmoxSessionsDep
-from .backend.session.netbox import NetboxSessionDep
+from proxbox_api.session.proxmox import ProxmoxSessionsDep
+from proxbox_api.session.netbox import NetboxSessionDep
 
 """
 CORS ORIGINS
@@ -155,7 +155,7 @@ async def proxmoxer_exception_handler(request: Request, exc: ProxboxException):
         }
     )
 
-from netbox_proxbox.backend.routes.proxbox.clusters import get_nodes, get_virtual_machines
+from proxbox_api.routes.proxbox.clusters import get_nodes, get_virtual_machines
 
 @app.websocket("/ws")
 async def websocket_endpoint(

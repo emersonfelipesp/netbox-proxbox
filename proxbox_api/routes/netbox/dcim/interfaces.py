@@ -1,6 +1,5 @@
-from netbox_proxbox.backend.routes.netbox.generic import NetboxBase
-
-from netbox_proxbox.backend.routes.netbox.dcim.devices import Device
+from proxbox_api.routes.netbox.generic import NetboxBase
+from proxbox_api.routes.netbox.dcim.devices import Device
 
 class Interface(NetboxBase):
     

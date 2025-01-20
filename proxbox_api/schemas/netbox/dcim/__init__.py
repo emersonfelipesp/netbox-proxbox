@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 
-from netbox_proxbox.backend.schemas.netbox.extras import TagSchema
-from netbox_proxbox.backend.enum.netbox.dcim import StatusOptions
+from proxbox_api.schemas.netbox.extras import TagSchema
+from proxbox_api.enum.netbox.dcim import StatusOptions
 
 class SitesSchema(BaseModel):
     name: str

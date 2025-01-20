@@ -1,18 +1,18 @@
 from fastapi import APIRouter
 
 # Import Both Proxmox Sessions and Netbox Session Dependencies
-from netbox_proxbox.backend.session.proxmox import ProxmoxSessionsDep
-from netbox_proxbox.backend.session.netbox import NetboxSessionDep
+from proxbox_api.session.proxmox import ProxmoxSessionsDep
+from proxbox_api.session.netbox import NetboxSessionDep
 
-from netbox_proxbox.backend.logging import log
-from netbox_proxbox.backend.exception import ProxboxException, exception_log
-from netbox_proxbox.backend.routes.netbox.generic.bootstrap import (
+from proxbox_api.logging import log
+from proxbox_api.exception import ProxboxException, exception_log
+from proxbox_api.routes.netbox.generic.bootstrap import (
     create_default_custom_fields,
     create_default_objects,
 )
 
 
-from netbox_proxbox.backend import (
+from proxbox_api import (
     ClusterType,
     Cluster,
     DeviceRole,
@@ -498,7 +498,7 @@ async def get_virtual_machines(
     
     result = []
     
-    from netbox_proxbox.backend.cache import cache
+    from proxbox_api.cache import cache
     
     print("CACHE start:", cache.cache)
     

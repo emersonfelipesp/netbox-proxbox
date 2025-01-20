@@ -2,10 +2,10 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 
-from netbox_proxbox.backend.schemas import PluginConfig
-from netbox_proxbox.backend.schemas.netbox import NetboxSessionSchema
-from netbox_proxbox.backend.schemas.proxmox import ProxmoxMultiClusterConfig
-from netbox_proxbox.backend.exception import ProxboxException
+from proxbox_api.schemas import PluginConfig
+from proxbox_api.schemas.netbox import NetboxSessionSchema
+from proxbox_api.schemas.proxmox import ProxmoxMultiClusterConfig
+from proxbox_api.exception import ProxboxException
 
 router = APIRouter()
 

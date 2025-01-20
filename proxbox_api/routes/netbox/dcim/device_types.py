@@ -1,5 +1,5 @@
-from netbox_proxbox.backend.routes.netbox.generic import NetboxBase
-from netbox_proxbox.backend.logging import log
+from proxbox_api.routes.netbox.generic import NetboxBase
+from proxbox_api.logging import log
 from .manufacturers import Manufacturer
 
 class DeviceType(NetboxBase):

@@ -1,6 +1,6 @@
 # TODO: Create Default Custom Fields
-from netbox_proxbox.backend.session.netbox import NetboxSessionDep
-from netbox_proxbox.backend.logging import log
+from proxbox_api.session.netbox import NetboxSessionDep
+from proxbox_api.logging import log
 
 from fastapi import WebSocket
 

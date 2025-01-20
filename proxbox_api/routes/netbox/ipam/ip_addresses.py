@@ -1,4 +1,4 @@
-from netbox_proxbox.backend.routes.netbox.generic import NetboxBase
+from proxbox_api.routes.netbox.generic import NetboxBase
 
 class IPAddress(NetboxBase):
     # Default IP Address Params

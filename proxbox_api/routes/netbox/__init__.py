@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends
 
 from typing import Annotated, Any
 
-from netbox_proxbox.backend.routes.proxbox import netbox_settings
-from netbox_proxbox.backend.session.netbox import NetboxSessionDep
+from proxbox_api.routes.proxbox import netbox_settings
+from proxbox_api.session.netbox import NetboxSessionDep
 
 # FastAPI Router
 router = APIRouter()

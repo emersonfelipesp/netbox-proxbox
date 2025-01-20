@@ -3,9 +3,9 @@ import requests
 from typing import Annotated, Any
 from fastapi import Depends
 
-from netbox_proxbox.backend.routes.proxbox import netbox_settings
-from netbox_proxbox.backend.schemas.netbox import NetboxSessionSchema
-from netbox_proxbox.backend.exception import ProxboxException
+from proxbox_api.routes.proxbox import netbox_settings
+from proxbox_api.schemas.netbox import NetboxSessionSchema
+from proxbox_api.exception import ProxboxException
 
 # Netbox
 import pynetbox

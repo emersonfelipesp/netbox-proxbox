@@ -2,7 +2,7 @@ from pydantic import BaseModel, RootModel
 
 from typing import List, Dict
 
-from netbox_proxbox.backend.enum.proxmox import ResourceType, NodeStatus
+from proxbox_api.enum.proxmox import ResourceType, NodeStatus
 
 
 class ProxmoxTokenSchema(BaseModel):

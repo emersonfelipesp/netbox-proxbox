@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 
-from netbox_proxbox.backend.schemas.netbox.extras import TagSchema
-from netbox_proxbox.backend.enum.netbox.virtualization import ClusterStatusOptions
+from proxbox_api.schemas.netbox.extras import TagSchema
+from proxbox_api.enum.netbox.virtualization import ClusterStatusOptions
 
 
 class ClusterTypeSchema(BaseModel):

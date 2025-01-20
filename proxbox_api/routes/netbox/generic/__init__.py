@@ -3,21 +3,21 @@ from fastapi import Query, WebSocket
 from typing import Annotated
 from typing_extensions import Doc
 
-from netbox_proxbox.backend.session.netbox import NetboxSessionDep
-from netbox_proxbox.backend.exception import ProxboxException
+from proxbox_api.session.netbox import NetboxSessionDep
+from proxbox_api.exception import ProxboxException
 
-from netbox_proxbox.backend.logging import log
+from proxbox_api.logging import log
 
-from netbox_proxbox.backend.cache import cache
+from proxbox_api.cache import cache
 
-from netbox_proxbox.backend.routes.netbox.generic.check_duplicate import (
+from proxbox_api.routes.netbox.generic.check_duplicate import (
     _check_default,
     _check_pk_address,
     _check_pk_virtual_machine,
     _check_vm_interface,
 )
 
-from netbox_proxbox.backend.routes.netbox.generic.get import (
+from proxbox_api.routes.netbox.generic.get import (
     _get_by_id,
     _get_all,
     _get_by_kwargs,

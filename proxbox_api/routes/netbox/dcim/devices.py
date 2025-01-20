@@ -1,10 +1,11 @@
-from netbox_proxbox.backend.routes.netbox.generic import NetboxBase
+from proxbox_api.routes.netbox.generic import NetboxBase
+from proxbox_api.routes.netbox.virtualization.cluster import Cluster
 
 from .sites import Site
 from .device_types import DeviceType
 from .device_roles import DeviceRole
 
-from netbox_proxbox.backend.routes.netbox.virtualization.cluster import Cluster
+
 
 class Device(NetboxBase):
     

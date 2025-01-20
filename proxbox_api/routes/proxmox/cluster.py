@@ -3,9 +3,9 @@ from fastapi import APIRouter, Query
 
 from typing import Annotated
 
-from netbox_proxbox.backend.schemas.proxmox import *
-from netbox_proxbox.backend.session.proxmox import ProxmoxSessionsDep
-from netbox_proxbox.backend.enum.proxmox import *
+from proxbox_api.schemas.proxmox import *
+from proxbox_api.session.proxmox import ProxmoxSessionsDep
+from proxbox_api.enum.proxmox import *
 
 router = APIRouter()
 

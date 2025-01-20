@@ -1,6 +1,6 @@
-from netbox_proxbox.backend.exception import ProxboxException
-from netbox_proxbox.backend.logging import log
-from netbox_proxbox.backend.cache import cache
+from proxbox_api.exception import ProxboxException
+from proxbox_api.logging import log
+from proxbox_api.cache import cache
 
 from fastapi import WebSocket
 

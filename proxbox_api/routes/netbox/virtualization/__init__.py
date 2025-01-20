@@ -5,7 +5,7 @@ from .cluster_type import ClusterType
 from .cluster import Cluster
 from .virtual_machines import VirtualMachine
 
-from netbox_proxbox.backend.schemas.netbox.virtualization import ClusterTypeSchema
+from proxbox_api.schemas.netbox.virtualization import ClusterTypeSchema
 
 router = APIRouter()
 

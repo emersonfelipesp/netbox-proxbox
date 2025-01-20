@@ -4,7 +4,7 @@ from typing import Annotated
 
 from proxmoxer.core import ResourceException
 
-from netbox_proxbox.backend.session.proxmox import ProxmoxSessionsDep
+from proxbox_api.session.proxmox import ProxmoxSessionsDep
 
 router = APIRouter()
 
