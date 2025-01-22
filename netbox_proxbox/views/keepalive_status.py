@@ -6,7 +6,6 @@ from django.urls import reverse
 import requests
 
 # Django-HTMX Imports
-
 from django_htmx.middleware import HtmxDetails
 from django_htmx.http import replace_url
 
