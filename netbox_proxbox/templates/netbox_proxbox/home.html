@@ -1,6 +1,9 @@
 {% extends 'base/layout.html' %}
 {% load static %}
 
+{% block head %}
+<script src="https://unpkg.com/htmx.org@1.7.0"></script>
+{% endblock %}
 {% block content %}
     {% include "netbox_proxbox/home/script.html" %}
 

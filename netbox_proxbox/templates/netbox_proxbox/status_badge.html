@@ -1,0 +1,23 @@
+{% extends 'base/layout.html' %}
+
+{% block content %}
+    {% if status == 'success' %}
+        <td id="{{ object.ip_address }}">
+            <span class='badge text-bg-green' title='Proxmox Cluster Mode'>
+                </strong>Successful!</strong>
+            </span>
+        </td>
+    {% elif status == 'error' %}
+        <td id="{{ object.ip_address }}">
+            <span class='badge text-bg-red' title='Proxmox Cluster Mode'>
+                </strong>Error!</strong>
+            </span>
+        </td>
+    {% else %}
+        <td id="{{ object.ip_address }}">
+            <span class='badge text-bg-grey' title='Proxmox Cluster Mode'>
+                </strong>Undefined</strong>
+            </span>
+        </td>
+    {% endif %}
+{% endblock %}

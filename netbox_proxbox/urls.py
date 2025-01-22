@@ -53,5 +53,7 @@ urlpatterns = [
     path('endpoints/fastapi/<int:pk>/delete/', views.FastAPIEndpointDeleteView.as_view(), name='fastapiendpoint_delete'),
     path('endpoints/fastapi/<int:pk>/changelog/', ObjectChangeLogView.as_view(), name='fastapiendpoint_changelog', kwargs={
         'model': models.FastAPIEndpoint
-    })
+    }),
+    
+    path('keepalive-status/<str:service>/<int:pk>', views.get_service_status, name='keepalive_status'),
 ]

@@ -54,8 +54,18 @@
             </div>
             
             <!-- Status Badge. Default value is 'Unkown' and is changed based on API response status -->
-            <div class="d-flex ms-auto " style="margin: 0 40px 0 0">
-                <span id="fastapi-connection-status" class="proxmox-connection-check badge p-1">Unknown</span>
+            <div
+                class="d-flex ms-auto" 
+                style="margin: 0 40px 0 0"
+            >
+                <span
+                    id="status-badge-{{ object.pk }}"
+                    class="proxmox-connection-check badge p-1"
+                    hx-get="{% url 'plugins:netbox_proxbox:keepalive_status' 'fastapi' object.pk %}"
+                    hx-trigger="load"
+                    hx-target="#status-badge-{{ object.pk }}"
+                    hx-swap="outerHTML"
+                >Unknown</span>
             </div>
 
         </div>
