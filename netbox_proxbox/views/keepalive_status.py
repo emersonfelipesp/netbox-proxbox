@@ -16,24 +16,42 @@ class HtmxHttpRequest(HttpRequest):
 from netbox_proxbox.models import *
 
 @require_GET
-def get_fastapi_service_status(
+def get_service_status(
     request: HtmxHttpRequest,
+    service: str,
     pk: int,
 ) -> HttpResponse:
     """Get the status of a service."""
     template_name: str = 'netbox_proxbox/status_badge.html'
     
+    # Accept only HTMX requests to render this view.
     if not request.htmx:
         return HttpResponse(status=400)
     
+    host: str = ''
+    url: str = ''
     status: str = 'unknown'
     
-    fastapi_service_obj = FastAPIEndpoint.objects.get(pk=pk)
-    print(fastapi_service_obj)
+    if service == 'fastapi':
+        fastapi_service_obj = FastAPIEndpoint.objects.get(pk=pk)
+    else:
+        fastapi_service_obj = FastAPIEndpoint.objects.first()
     
-    host = str(fastapi_service_obj.ip_address.address).split('/')[0]
-    url: str = f"http://{host}:{fastapi_service_obj.port}/"
+    if fastapi_service_obj:
+        host = str(fastapi_service_obj.ip_address.address).split('/')[0]
+        url: str = f"http://{host}:{fastapi_service_obj.port}/"
     
+    if service == 'proxmox':
+        proxmox_service_obj = ProxmoxEndpoint.objects.get(pk=pk)
+            
+        if proxmox_service_obj:
+            proxmox_host: str = str(proxmox_service_obj.ip_address).split('/')[0]
+            url = f'{url}/proxmox/version?domain={proxmox_host}'
+        
+    if service == 'netbox':
+        netbox_service_obj = NetBoxEndpoint.objects.get(pk=pk)
+        url = f'{url}/netbox/status'
+        
     try:
         response = requests.get(url)
         response.raise_for_status()

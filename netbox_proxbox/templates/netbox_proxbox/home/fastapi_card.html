@@ -61,7 +61,7 @@
                 <span
                     id="status-badge-{{ object.pk }}"
                     class="proxmox-connection-check badge p-1"
-                    hx-get="{% url 'plugins:netbox_proxbox:fastapi_keepalive_status' object.pk %}"
+                    hx-get="{% url 'plugins:netbox_proxbox:keepalive_status' 'fastapi' object.pk %}"
                     hx-trigger="load"
                     hx-target="#status-badge-{{ object.pk }}"
                     hx-swap="outerHTML"
