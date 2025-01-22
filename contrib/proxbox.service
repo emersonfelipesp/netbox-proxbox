@@ -12,7 +12,7 @@ Group=netbox
 PIDFile=/var/tmp/proxbox.pid
 WorkingDirectory=/opt/netbox/netbox/netbox-proxbox
 
-ExecStart=/opt/netbox/venv/bin/uvicorn netbox-proxbox.proxbox_app.main:app --host 0.0.0.0 --port 8800 --app-dir /opt/netbox/netbox --ssl-keyfile=/etc/ssl/private/netbox.key --ssl-certfile=/etc/ssl/certs/netbox.crt
+ExecStart=/opt/netbox/venv/bin/uvicorn netbox-proxbox.proxbox_api.main:app --host 0.0.0.0 --port 8800 --app-dir /opt/netbox/netbox --ssl-keyfile=/etc/ssl/private/netbox.key --ssl-certfile=/etc/ssl/certs/netbox.crt
 
 Restart=on-failure
 RestartSec=30
