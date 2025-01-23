@@ -1,3 +1,6 @@
+# Django Imports
+from django.shortcuts import get_object_or_404
+
 # NetBox Imports
 from netbox.views import generic
 
@@ -28,8 +31,25 @@ class FastAPIEndpointListView(generic.ObjectListView):
 
 
 class FastAPIEndpointEditView(generic.ObjectEditView):
+    """
+    This view is used to edit and create the FastAPIEndpoint object.
+    
+    If there is already an existing FastAPIEndpoint object,
+    the view will return the existing object, allowing only one object to be created.
+    """
+    template_name = 'netbox_proxbox/fastapiendpoint_edit.html'
     queryset = FastAPIEndpoint.objects.all()
     form = FastAPIEndpointForm
+    
+    def get_object(self, **kwargs):
+        if int(FastAPIEndpoint.objects.count()) >= 1:
+            return FastAPIEndpoint.objects.first()
+    
+    def get_extra_context(self, request, instance):
+        if int(FastAPIEndpoint.objects.count()) >= 1:
+            return {'existing_object': True,}
+        else:
+            return {'existing_object': False}
 
 
 class FastAPIEndpointDeleteView(generic.ObjectDeleteView):
