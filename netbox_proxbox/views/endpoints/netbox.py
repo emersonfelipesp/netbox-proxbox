@@ -1,3 +1,7 @@
+# Django Imports
+from django.shortcuts import get_object_or_404
+from django.urls import reverse
+
 # NetBox Imports
 from netbox.views import generic
 
@@ -28,9 +32,35 @@ class NetBoxEndpointListView(generic.ObjectListView):
 
 
 class NetBoxEndpointEditView(generic.ObjectEditView):
+    """
+    This view is used to edit and create the NetBoxEndpoint object.
+    
+    If there is already an existing NetBoxEndpoint object,
+    the view will return the existing object, allowing only one object to be created.
+    """
+    
+    template_name = 'netbox_proxbox/netboxendpoint_edit.html'
     queryset = NetBoxEndpoint.objects.all()
     form = NetBoxEndpointForm
+    
+    def get_object(self, **kwargs):
+        if int(NetBoxEndpoint.objects.count()) >= 1:
+            return NetBoxEndpoint.objects.first()
+        
+        if not kwargs:
+            # We're creating a new object
+            return self.queryset.model()
+            
+        return get_object_or_404(NetBoxEndpoint.objects.all(), **kwargs)
+    
+    def get_extra_context(self, request, instance):
+        if int(NetBoxEndpoint.objects.count()) >= 1:
+            return {'existing_object': True}
+        
+        return {'existing_object': False}
 
 
 class NetBoxEndpointDeleteView(generic.ObjectDeleteView):
     queryset = NetBoxEndpoint.objects.all()
+
+    

@@ -1,0 +1,17 @@
+{% extends 'generic/object_edit.html' %}
+{% load i18n %}
+
+{% block title %}
+  {% if existing_object %}
+    {% trans "Editing existing" %} {{ object }}. Plugin supports only one NetBox endpoint currently.
+  {% else %}
+    {% if object.pk %}
+        {% trans "Editing" %} {{ object|meta:"verbose_name" }} {{ object }}
+    {% else %}
+        {% blocktrans trimmed with object_type=object|meta:"verbose_name" %}
+        Add a new {{ object_type }}
+        {% endblocktrans %}
+    {% endif %}
+  {% endif %}
+  
+{% endblock title %}
