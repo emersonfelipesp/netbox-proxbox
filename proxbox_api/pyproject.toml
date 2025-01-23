@@ -8,4 +8,5 @@ dependencies = [
     "fastapi[standard]>=0.115.6",
     "proxmoxer>=2.2.0",
     "pynetbox>=7.4.1",
+    "sqlmodel>=0.0.22",
 ]
