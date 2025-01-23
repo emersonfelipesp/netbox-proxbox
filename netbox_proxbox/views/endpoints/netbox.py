@@ -1,5 +1,6 @@
 # Django Imports
 from django.shortcuts import get_object_or_404
+from django.urls import reverse
 
 # NetBox Imports
 from netbox.views import generic
@@ -61,3 +62,5 @@ class NetBoxEndpointEditView(generic.ObjectEditView):
 
 class NetBoxEndpointDeleteView(generic.ObjectDeleteView):
     queryset = NetBoxEndpoint.objects.all()
+
+    

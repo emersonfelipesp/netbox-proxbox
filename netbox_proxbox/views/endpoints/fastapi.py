@@ -1,5 +1,6 @@
 # Django Imports
 from django.shortcuts import get_object_or_404
+from django.urls import reverse
 
 # NetBox Imports
 from netbox.views import generic
@@ -45,11 +46,17 @@ class FastAPIEndpointEditView(generic.ObjectEditView):
         if int(FastAPIEndpoint.objects.count()) >= 1:
             return FastAPIEndpoint.objects.first()
     
+        if not kwargs:
+            # We're creating a new object
+            return self.queryset.model()
+        
+        return get_object_or_404(FastAPIEndpoint.objects.all(), **kwargs)
+    
     def get_extra_context(self, request, instance):
         if int(FastAPIEndpoint.objects.count()) >= 1:
             return {'existing_object': True,}
-        else:
-            return {'existing_object': False}
+        
+        return {'existing_object': False}
 
 
 class FastAPIEndpointDeleteView(generic.ObjectDeleteView):
