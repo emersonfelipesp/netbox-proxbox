@@ -40,12 +40,7 @@
                     Proxbox Configuration
                 </h2>
             </div>
-
-            {# Proxmox Card #}
-            {% for object in proxmox_endpoint_list %}
-                {% include "netbox_proxbox/home/proxmox_card.html" %}
-            {% endfor %}
-            
+         
             {# Netbox Card #}
             {% for object in netbox_endpoint_list %}
                 {% include "netbox_proxbox/home/netbox_card.html" %}
@@ -54,6 +49,11 @@
             {# FastAPI Card #}
             {% for object in fastapi_endpoint_list %}
                 {% include "netbox_proxbox/home/fastapi_card.html" %}
+            {% endfor %}
+
+            {# Proxmox Card #}
+            {% for object in proxmox_endpoint_list %}
+                {% include "netbox_proxbox/home/proxmox_card.html" %}
             {% endfor %}
             
         </div>

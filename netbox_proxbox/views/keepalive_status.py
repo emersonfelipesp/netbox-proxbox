@@ -53,40 +53,51 @@ def get_service_status(
         
         netbox_endpoint_url = f'{url}/netbox/endpoint'
         
-        # Check if NetBoxEndpoint exists on FastAPI database.
-        response = requests.get(netbox_endpoint_url)
-        response.raise_for_status()
-        response = list(response.json())
-        
-        netbox = None
-        if len(response) > 0:
-            for nb in response:
-                if (nb['id'] == pk) and (nb['ip_address'] == netbox_ip):
-                    netbox = nb
-                    break
+        try:
+            # Check if NetBoxEndpoint exists on FastAPI database.
+            response = requests.get(netbox_endpoint_url)
+            response.raise_for_status()
+            response = list(response.json())
+            
+            netbox = None
+            
+            if len(response) > 0:
+                for nb in response:
+                    if (nb['id'] == pk) and (nb['ip_address'] == netbox_ip):
+                        netbox = nb
+                        break
+                
+                if netbox:
+                    # Delete all NetBoxEndpoints from FastAPI database, except the one that matches the current NetBoxEndpoint.
+                    for nb in response:
+                        if nb['id'] != pk:
+                            requests.delete(f'{netbox_endpoint_url}/{nb["id"]}')
+                else:
+                    # Delete all NetBoxEndpoints from FastAPI database.
+                    for nb in response:
+                        requests.delete(f'{netbox_endpoint_url}/{nb["id"]}')
             
             if netbox:
-                # Delete all NetBoxEndpoints from FastAPI database, except the one that matches the current NetBoxEndpoint.
-                for nb in response:
-                    if nb['id'] != pk:
-                        requests.delete(f'{netbox_endpoint_url}/{nb["id"]}')
+                # NetBoxEndpoint exists on FastAPI database. Check if it is alive.
+                url = f'{url}/netbox/status'
             else:
-                # Delete all NetBoxEndpoints from FastAPI database.
-                for nb in response:
-                    requests.delete(f'{netbox_endpoint_url}/{nb["id"]}')
+                # Create NetBoxEndpoint on FastAPI database.
+                requests.post(netbox_endpoint_url, json={
+                    'id': pk,
+                    'name': netbox_service_obj.name,
+                    'ip_address': netbox_ip,
+                    'port': netbox_service_obj.port,
+                    'token': netbox_service_obj.token
+                })
+            
+        except requests.exceptions.HTTPError as err:
+            print(f'HTTP error ocrrured: {err}')
+            status = 'error'
         
-        if netbox:
-            # NetBoxEndpoint exists on FastAPI database. Check if it is alive.
-            url = f'{url}/netbox/status'
-        else:
-            # Create NetBoxEndpoint on FastAPI database.
-            requests.post(netbox_endpoint_url, json={
-                'id': pk,
-                'name': netbox_service_obj.name,
-                'ip_address': netbox_ip,
-                'port': netbox_service_obj.port,
-                'token': netbox_service_obj.token
-            })
+        except Exception as errr:
+            print(f'Error ocurred: {errr}')
+            status = 'error'
+            
         
     try:
         response = requests.get(url)
