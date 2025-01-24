@@ -31,7 +31,7 @@ class NetboxSession:
         
         
     def pynetbox_session(self):
-        print("Establish Netbox connection...")
+        print("🔃 Establishing Netbox connection...")
         
         netbox_session = None
         try:
@@ -40,8 +40,16 @@ class NetboxSession:
             session = requests.Session()
             session.verify = False
             
+            # Default Netbox URL
+            netbox_url: str = f'https://{self.domain}:{self.http_port}{DEFAULT_BASE_PATH}'
+            
+            # If port is 8000, use HTTP (insecure).
+            # This hardcoded exception maybe changed to a dynamic identification of the protocol in the future.
+            if int(self.http_port) == 8000:
+                netbox_url = f'http://{self.domain}:{self.http_port}{DEFAULT_BASE_PATH}'
+                
             netbox_session = pynetbox.api(
-                    f'https://{self.domain}:{self.http_port}{DEFAULT_BASE_PATH}',
+                    netbox_url,
                     token=self.token,
                     threading=True,
             )
@@ -50,7 +58,7 @@ class NetboxSession:
             
             
             if netbox_session is not None:
-                print("Netbox connection established.")
+                print("✅ Netbox connection established.")
                 return netbox_session
         
         except Exception as error:
@@ -99,9 +107,15 @@ class NetboxSession:
 
 async def netbox_session(
     netbox_settings: Annotated[NetboxSessionSchema, Depends(netbox_settings)],
-):
+) -> NetboxSession:
     """Instantiate 'NetboxSession' class with user parameters and return Netbox  HTTP connection to make API calls"""
+    if netbox_settings is None:
+        raise ProxboxException(
+            message = "Netbox settings not found.",
+            detail = "Netbox settings are required to establish a connection with the Netbox API.",
+        )
+        
     return NetboxSession(netbox_settings)
 
 # Make Session reusable
-NetboxSessionDep = Annotated[Any, Depends(netbox_session)]
+NetboxSessionDep = Annotated[NetboxSession, Depends(netbox_session)]

@@ -43,56 +43,6 @@ configuration = None
 default_config: dict = {}
 plugin_configuration: dict = {}
 proxbox_cfg: dict = {}  
-    
-try:
-    from netbox import configuration
-    plugin_configuration = configuration.PLUGINS_CONFIG
-    proxbox_cfg: dict = plugin_configuration.get("netbox_proxbox", {})
-    
-except ImportError:
-    print(cfg_not_found_msg)
-    
-    # TODO
-    # Look for the 'configuration.py' via 'os' module.
-
-try:
-    from . import ProxboxConfig
-    default_config: dict = ProxboxConfig.default_settings
-    
-except ImportError:
-    print(cfg_not_found_msg)
-    
-    # TODO
-    # Look for the 'ProxboxConfig' via 'os' module.   
-
-
-try:    
-    if proxbox_cfg and default_config:
-        print("Netbox Proxbox configuration and Proxbox Default config found.")
-        
-        if proxbox_cfg:
-            print("Netbox Proxbox configuration found.")
-            
-            fastapi_cfg: dict = proxbox_cfg.get("fastapi", default_config.get('fastapi'))
-            
-            if fastapi_cfg:
-                uvicorn_host: str = fastapi_cfg.get("uvicorn_host", default_config['fastapi']['uvicorn_host'])
-                uvicorn_port: int = fastapi_cfg.get("uvicorn_port", default_config['fastapi']['uvicorn_port'])
-
-            netbox_cfg: dict = proxbox_cfg.get("netbox", default_config.get('netbox'))
-            
-            if netbox_cfg:
-                netbox_host: str = netbox_cfg.get("domain", default_config['netbox']['domain'])
-                netbox_port: int = netbox_cfg.get("http_port", default_config['netbox']['http_port'])
-        
-        else:
-            print("PLUGINS_CONFIG found, but 'netbox_proxbox' configuration not found.")
-            
-            # TODO
-            # Raise an exception here.
-            
-except Exception as error:
-    print(f"Error while trying to get configuration from Netbox.\n   > {error}")
 
 
 fastapi_endpoint = f"http://{uvicorn_host}:{uvicorn_port}"
@@ -117,6 +67,11 @@ app = FastAPI(
     description="## Proxbox Backend made in FastAPI framework",
     version="0.0.1"
 )
+
+@app.on_event('startup')
+def on_startup():
+    from proxbox_api.database import create_db_and_tables
+    create_db_and_tables()
 
 """
 CORS Middleware
@@ -143,6 +98,7 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["*"]
 )
+
 
 @app.exception_handler(ProxboxException)
 async def proxmoxer_exception_handler(request: Request, exc: ProxboxException):

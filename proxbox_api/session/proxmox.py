@@ -4,9 +4,9 @@ from typing import Annotated, Any
 # Proxmox
 from proxmoxer import ProxmoxAPI
 
-from proxbox_api.schemas.proxmox import ProxmoxSessionSchema
+from proxbox_api.schemas.proxmox import ProxmoxSessionSchema, ProxmoxTokenSchema
 from proxbox_api.exception import ProxboxException
-from proxbox_api.routes.proxbox import ProxmoxConfigDep
+from proxbox_api.session.netbox import NetboxSessionDep
 
 #
 # PROXMOX SESSION
@@ -22,7 +22,7 @@ class ProxmoxSession:
         
         Example of class instantiation:
         ```python
-        ProxmoxSingleSession(
+        ProxmoxSessionSchema(
             {
                 "domain": "proxmox.domain.com",
                 "http_port": 8006,
@@ -267,7 +267,7 @@ class ProxmoxSession:
 
 
 async def proxmox_sessions(
-    pxc: ProxmoxConfigDep,
+    nb: NetboxSessionDep,
     source: str = "netbox",
     name: Annotated[
         str,
@@ -283,28 +283,57 @@ async def proxmox_sessions(
             description="Domain of Proxmox Cluster or Proxmox Node (if standalone)."
         )
     ] = None,
+    ip_address: Annotated[
+        str,
+        Query(
+            title="Proxmox IP Address",
+            description="IP Address of Proxmox Cluster or Proxmox Node (if standalone)."
+        )
+    ] = None,
+    port: Annotated[
+        int,
+        Query(
+            title="Proxmox HTTP Port",
+            description="HTTP Port of Proxmox Cluster or Proxmox Node (if standalone)."
+        )
+    ] = 8006,
 ):
     """
         Default Behavior: Instantiate Proxmox Sessions and return a list of Proxmox Sessions objects.
         If 'name' is provided, return only the Proxmox Session with that name.
     """
+    
+    # GET /api/plugins/proxbox/endpoints/proxmox/
+    proxmox = nb.session.plugins.proxbox.__getattr__('endpoints/proxmox').all()
 
+    if domain and not ip_address:
+        ip_address = domain
+        
     if source == "netbox":
-        proxmox_objects = []
+        proxmox_schemas = []
         
-        for px in pxc:
-            # Instantiate Proxmox Session object from ProxmoxSession class
-            px_obj = ProxmoxSession(px)
+        for endpoint in proxmox:
+            proxmox_schema = ProxmoxSessionSchema(
+                domain = endpoint.ip_address.address.split('/')[0],
+                http_port = endpoint.port,
+                user = endpoint.username,
+                password = endpoint.password,
+                ssl = endpoint.verify_ssl,
+                token = ProxmoxTokenSchema(
+                    name = endpoint.token_name,
+                    value = endpoint.token_value
+                )
+            )
             
-            # If name is provided, return only the Proxmox Session with that name
-            if px_obj.name == name:
-                return [px_obj]
-            elif px_obj.domain == domain:
+            if (ip_address == endpoint.ip_address.address.split('/')[0]) and (port == endpoint.port):
+                # Instantiate Proxmox Session object from ProxmoxSession class
+                px_obj = ProxmoxSession(proxmox_schema)
                 return [px_obj]
             
-            proxmox_objects.append(px_obj)
+            else:
+                proxmox_schemas.append(proxmox_schema)           
         
-        # Return all Proxmox Sessions based on User-Provided Config
-        return proxmox_objects
+        # Only if no match was found, return all Proxmox Sessions
+        return [ProxmoxSession(px) for px in proxmox_schemas]
 
 ProxmoxSessionsDep = Annotated[list, Depends(proxmox_sessions)]

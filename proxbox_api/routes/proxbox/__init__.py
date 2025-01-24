@@ -1,11 +1,12 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
-
+from sqlmodel import select
+    
 from proxbox_api.schemas import PluginConfig
 from proxbox_api.schemas.netbox import NetboxSessionSchema
-from proxbox_api.schemas.proxmox import ProxmoxMultiClusterConfig
 from proxbox_api.exception import ProxboxException
+from proxbox_api.database import SessionDep, NetBoxEndpoint
 
 router = APIRouter()
 
@@ -124,40 +125,30 @@ async def proxbox_settings(
 ProxboxConfigDep = Annotated[PluginConfig, Depends(proxbox_settings)]
 
 @router.get("/settings/netbox")
-async def netbox_settings(
-    proxbox_config: ProxboxConfigDep
-):
+async def netbox_settings(session: SessionDep) -> NetboxSessionSchema:
     """
-    Retrieve NetBox settings from the provided Proxbox configuration.
-
-    **Args:**
-    - **proxbox_config (`ProxboxConfigDep`):** The Proxbox configuration dependency.
+    Get NetBox settings.
 
     **Returns:**
-    - **dict:** The NetBox settings from the Proxbox configuration.
+    - **`NetboxSessionSchema`**
     """
     
-    return proxbox_config.netbox
-
+    try:
+        # Return the first NetBoxEndpoint from the database.
+        netbox: list = session.exec(select(NetBoxEndpoint).limit(1)).all()
+        for nb in netbox:
+            return NetboxSessionSchema(
+                domain = nb.ip_address,
+                http_port = nb.port,
+                token = nb.token
+            )
+            
+    except Exception as e:
+        raise ProxboxException(
+            message = "Error trying to get Netbox settings from database.",
+            python_exception = f"{str(e)}"
+        )
     
-    
-@router.get("/settings/proxmox")
-async def proxmox_settings(
-    proxbox_config: ProxboxConfigDep
-):
-    """
-    ### Retrieve Proxmox settings from the provided Proxbox configuration.
+    return None
 
-    **Args:**
-    - **proxbox_config (`ProxboxConfigDep`):** The Proxbox configuration dependency.
-
-    **Returns:**
-    - **dict:** The Proxmox settings from the Proxbox configuration.
-    """
-
-    return proxbox_config.proxmox
-
-
-NetboxConfigDep = Annotated[NetboxSessionSchema, Depends(netbox_settings)]
-ProxmoxConfigDep = Annotated[ProxmoxMultiClusterConfig, Depends(proxmox_settings)]
- 
+NetboxConfigDep = Annotated[NetboxSessionSchema, Depends(netbox_settings)] 
