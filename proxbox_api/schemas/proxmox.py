@@ -13,9 +13,9 @@ class ProxmoxSessionSchema(BaseModel):
     domain: str
     http_port: int
     user: str
-    password: str
+    password: str | None = None
     token: ProxmoxTokenSchema
-    ssl: bool
+    ssl: bool = True
 
 ProxmoxMultiClusterConfig = RootModel[List[ProxmoxSessionSchema]]
   

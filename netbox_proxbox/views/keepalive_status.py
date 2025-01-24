@@ -45,7 +45,7 @@ def get_service_status(
             
         if proxmox_service_obj:
             proxmox_host: str = str(proxmox_service_obj.ip_address).split('/')[0]
-            url = f'{url}/proxmox/version?domain={proxmox_host}'
+            url = f'{url}/proxmox/version?ip_address={proxmox_host}&port={proxmox_service_obj.port}'
         
     if service == 'netbox':
         netbox_service_obj = NetBoxEndpoint.objects.get(pk=pk)

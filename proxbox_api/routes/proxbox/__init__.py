@@ -5,10 +5,8 @@ from sqlmodel import select
     
 from proxbox_api.schemas import PluginConfig
 from proxbox_api.schemas.netbox import NetboxSessionSchema
-from proxbox_api.schemas.proxmox import ProxmoxMultiClusterConfig
 from proxbox_api.exception import ProxboxException
 from proxbox_api.database import SessionDep, NetBoxEndpoint
-
 
 router = APIRouter()
 
@@ -153,25 +151,4 @@ async def netbox_settings(session: SessionDep) -> NetboxSessionSchema:
     
     return None
 
-    
-    
-@router.get("/settings/proxmox")
-async def proxmox_settings(
-    proxbox_config: ProxboxConfigDep
-):
-    """
-    ### Retrieve Proxmox settings from the provided Proxbox configuration.
-
-    **Args:**
-    - **proxbox_config (`ProxboxConfigDep`):** The Proxbox configuration dependency.
-
-    **Returns:**
-    - **dict:** The Proxmox settings from the Proxbox configuration.
-    """
-
-    return proxbox_config.proxmox
-
-
-NetboxConfigDep = Annotated[NetboxSessionSchema, Depends(netbox_settings)]
-ProxmoxConfigDep = Annotated[ProxmoxMultiClusterConfig, Depends(proxmox_settings)]
- 
+NetboxConfigDep = Annotated[NetboxSessionSchema, Depends(netbox_settings)] 
