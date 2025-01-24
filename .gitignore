@@ -1,5 +1,9 @@
 development/
 
+# Ignore database file
+proxbox_api/database.db
+*.db
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
