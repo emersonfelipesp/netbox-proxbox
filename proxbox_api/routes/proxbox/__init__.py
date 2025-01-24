@@ -127,17 +127,12 @@ async def proxbox_settings(
 ProxboxConfigDep = Annotated[PluginConfig, Depends(proxbox_settings)]
 
 @router.get("/settings/netbox")
-async def netbox_settings(
-    session: SessionDep,
-):
+async def netbox_settings(session: SessionDep) -> NetboxSessionSchema:
     """
-    Retrieve NetBox settings from the provided Proxbox configuration.
-
-    **Args:**
-    - **proxbox_config (`ProxboxConfigDep`):** The Proxbox configuration dependency.
+    Get NetBox settings.
 
     **Returns:**
-    - **dict:** The NetBox settings from the Proxbox configuration.
+    - **`NetboxSessionSchema`**
     """
     
     try:
@@ -153,7 +148,7 @@ async def netbox_settings(
     except Exception as e:
         raise ProxboxException(
             message = "Error trying to get Netbox settings from database.",
-            python_exception = f"{e}"
+            python_exception = f"{str(e)}"
         )
 
     
