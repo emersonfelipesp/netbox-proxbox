@@ -109,6 +109,12 @@ async def netbox_session(
     netbox_settings: Annotated[NetboxSessionSchema, Depends(netbox_settings)],
 ) -> NetboxSession:
     """Instantiate 'NetboxSession' class with user parameters and return Netbox  HTTP connection to make API calls"""
+    if netbox_settings is None:
+        raise ProxboxException(
+            message = "Netbox settings not found.",
+            detail = "Netbox settings are required to establish a connection with the Netbox API.",
+        )
+        
     return NetboxSession(netbox_settings)
 
 # Make Session reusable

@@ -150,6 +150,8 @@ async def netbox_settings(session: SessionDep) -> NetboxSessionSchema:
             message = "Error trying to get Netbox settings from database.",
             python_exception = f"{str(e)}"
         )
+    
+    return None
 
     
     
