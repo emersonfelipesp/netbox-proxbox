@@ -31,7 +31,7 @@ class NetboxSession:
         
         
     def pynetbox_session(self):
-        print("Establish Netbox connection...")
+        print("🔃 Establishing Netbox connection...")
         
         netbox_session = None
         try:
@@ -58,7 +58,7 @@ class NetboxSession:
             
             
             if netbox_session is not None:
-                print("Netbox connection established.")
+                print("✅ Netbox connection established.")
                 return netbox_session
         
         except Exception as error:

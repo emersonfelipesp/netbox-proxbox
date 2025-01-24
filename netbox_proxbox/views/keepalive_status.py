@@ -38,7 +38,7 @@ def get_service_status(
     
     if fastapi_service_obj:
         host = str(fastapi_service_obj.ip_address.address).split('/')[0]
-        url: str = f"http://{host}:{fastapi_service_obj.port}/"
+        url: str = f"http://{host}:{fastapi_service_obj.port}"
     
     if service == 'proxmox':
         proxmox_service_obj = ProxmoxEndpoint.objects.get(pk=pk)
@@ -49,7 +49,44 @@ def get_service_status(
         
     if service == 'netbox':
         netbox_service_obj = NetBoxEndpoint.objects.get(pk=pk)
-        url = f'{url}/netbox/status'
+        netbox_ip = str(netbox_service_obj.ip_address.address).split('/')[0]
+        
+        netbox_endpoint_url = f'{url}/netbox/endpoint'
+        
+        # Check if NetBoxEndpoint exists on FastAPI database.
+        response = requests.get(netbox_endpoint_url)
+        response.raise_for_status()
+        response = list(response.json())
+        
+        netbox = None
+        if len(response) > 0:
+            for nb in response:
+                if (nb['id'] == pk) and (nb['ip_address'] == netbox_ip):
+                    netbox = nb
+                    break
+            
+            if netbox:
+                # Delete all NetBoxEndpoints from FastAPI database, except the one that matches the current NetBoxEndpoint.
+                for nb in response:
+                    if nb['id'] != pk:
+                        requests.delete(f'{netbox_endpoint_url}/{nb["id"]}')
+            else:
+                # Delete all NetBoxEndpoints from FastAPI database.
+                for nb in response:
+                    requests.delete(f'{netbox_endpoint_url}/{nb["id"]}')
+        
+        if netbox:
+            # NetBoxEndpoint exists on FastAPI database. Check if it is alive.
+            url = f'{url}/netbox/status'
+        else:
+            # Create NetBoxEndpoint on FastAPI database.
+            requests.post(netbox_endpoint_url, json={
+                'id': pk,
+                'name': netbox_service_obj.name,
+                'ip_address': netbox_ip,
+                'port': netbox_service_obj.port,
+                'token': netbox_service_obj.token
+            })
         
     try:
         response = requests.get(url)
