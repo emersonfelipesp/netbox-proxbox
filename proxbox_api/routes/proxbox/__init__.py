@@ -1,11 +1,14 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
-
+from sqlmodel import select
+    
 from proxbox_api.schemas import PluginConfig
 from proxbox_api.schemas.netbox import NetboxSessionSchema
 from proxbox_api.schemas.proxmox import ProxmoxMultiClusterConfig
 from proxbox_api.exception import ProxboxException
+from proxbox_api.database import SessionDep, NetBoxEndpoint
+
 
 router = APIRouter()
 
@@ -125,7 +128,7 @@ ProxboxConfigDep = Annotated[PluginConfig, Depends(proxbox_settings)]
 
 @router.get("/settings/netbox")
 async def netbox_settings(
-    proxbox_config: ProxboxConfigDep
+    session: SessionDep,
 ):
     """
     Retrieve NetBox settings from the provided Proxbox configuration.
@@ -137,7 +140,21 @@ async def netbox_settings(
     - **dict:** The NetBox settings from the Proxbox configuration.
     """
     
-    return proxbox_config.netbox
+    try:
+        # Return the first NetBoxEndpoint from the database.
+        netbox: list = session.exec(select(NetBoxEndpoint).limit(1)).all()
+        for nb in netbox:
+            return NetboxSessionSchema(
+                domain = nb.ip_address,
+                http_port = nb.port,
+                token = nb.token
+            )
+            
+    except Exception as e:
+        raise ProxboxException(
+            message = "Error trying to get Netbox settings from database.",
+            python_exception = f"{e}"
+        )
 
     
     
