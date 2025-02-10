@@ -1,7 +1,6 @@
 from proxbox_api.routes.netbox.generic import NetboxBase
-from proxbox_api.logging import log
-
 from .cluster import Cluster
+from proxbox_api.logger import log
 
 class VirtualMachine(NetboxBase):
     # Default Cluster Type Params
