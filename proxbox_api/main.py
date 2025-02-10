@@ -2,6 +2,17 @@ from fastapi import FastAPI, Request, WebSocket
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
+# pynetbox AsPI Imports
+from pynetbox_api.dcim import (
+    Device,
+    DeviceRole,
+    DeviceType,
+    Manufacturer,
+    Site,
+)
+from pynetbox_api.extras import Tags
+
+# Proxbox API Imports
 from proxbox_api.exception import ProxboxException
 
 # Netbox Routes
@@ -189,6 +200,12 @@ async def websocket_vm_endpoint(
             await websocket.close()
 
         
+
+@app.get('/dcim/devices')
+async def create_devices():
+    return {
+        "message": "Devices created"
+    }
 
 #
 # Routes (Endpoints)

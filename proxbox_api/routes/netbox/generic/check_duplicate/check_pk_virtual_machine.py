@@ -1,4 +1,4 @@
-from proxbox_api.logging import log
+from proxbox_api.logger import log
 
 from fastapi import WebSocket
 
