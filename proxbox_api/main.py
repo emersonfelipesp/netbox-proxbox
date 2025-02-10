@@ -1,8 +1,8 @@
+import traceback
+
 from fastapi import FastAPI, Request, WebSocket
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-
-from pynetbox_api import nb
 
 # pynetbox AsPI Imports
 from pynetbox_api.dcim import (
@@ -13,6 +13,7 @@ from pynetbox_api.dcim import (
     Site,
 )
 from pynetbox_api.extras import Tags
+from pynetbox_api.exceptions import FastAPIException
 
 # Proxbox API Imports
 from proxbox_api.exception import ProxboxException
@@ -201,23 +202,43 @@ async def websocket_vm_endpoint(
             await websocket.send_text("Invalid command.")
             await websocket.close()
 
-        
-@app.get('/netbox-version')
-async def get_netbox_version():
-    try:
-        return {
-            "message": nb.version
-        }
-    except Exception as error:
-        return {
-            "message": f"Error trying to get Netbox version: {error}"
-        }
-    
+         
 @app.get('/dcim/devices')
 async def create_devices():
     return {
         "message": "Devices created"
     }
+
+@app.get('/dcim/devices/create')
+async def get_netbox_version(
+    proxmox_sessions: ProxmoxSessionsDep,
+    nb: NetboxSessionDep
+):
+    device_list: list = []
+    for px in proxmox_sessions:
+        result = px.session.nodes.get()
+        for node in result:
+            name = node.get('node', 'Undefined Node')
+            
+            try:
+                Device(
+                    nb=nb.session,
+                    name=name,
+                )
+            except FastAPIException as error:
+                traceback.print_exc()
+                raise ProxboxException(
+                    message="Unknown Error creating device in Netbox",
+                    detail=f"Error: {str(error)}"
+                )
+            
+            except Exception as error:
+                traceback.print_exc()
+                raise ProxboxException(
+                    message="Unknown Error creating device in Netbox",
+                    detail=f"Error: {str(error)}"
+                )
+
 
 #
 # Routes (Endpoints)
