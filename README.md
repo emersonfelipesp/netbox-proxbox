@@ -132,7 +132,16 @@ pip3 install -r requirements.txt
 Run netbox-proxbox on develop mode
 
 ```
-python3 setup.py develop
+python3 -m pip install -e .
+```
+
+**(NEW) Install pynetbox-api package in development mode**
+
+- You must be on `netbox-proxbox` repository.
+
+```
+git clone https://github.com/emersonfelipesp/pynetbox-api.git
+python3 -m pip install pynetbox-api/ -e .
 ```
 
 ---
