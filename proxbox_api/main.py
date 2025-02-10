@@ -2,6 +2,8 @@ from fastapi import FastAPI, Request, WebSocket
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
+from pynetbox_api import nb
+
 # pynetbox AsPI Imports
 from pynetbox_api.dcim import (
     Device,
@@ -200,7 +202,17 @@ async def websocket_vm_endpoint(
             await websocket.close()
 
         
-
+@app.get('/netbox-version')
+async def get_netbox_version():
+    try:
+        return {
+            "message": nb.version
+        }
+    except Exception as error:
+        return {
+            "message": f"Error trying to get Netbox version: {error}"
+        }
+    
 @app.get('/dcim/devices')
 async def create_devices():
     return {

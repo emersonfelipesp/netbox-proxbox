@@ -143,6 +143,12 @@ python3 -m pip install -e .
 git clone https://github.com/emersonfelipesp/pynetbox-api.git
 python3 -m pip install pynetbox-api/ -e .
 ```
+
+Or clone it to a totally different repository like `/opt` and use `uv` to build it as development
+```
+uv pip install -e "pynetbox_api @ /opt/pynetbox-api"
+```
+
 **OBS:** For now, you must manually configure `.env` on `pynetbox-api` root folder with NetBox URL and Token
 
 ---
