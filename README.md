@@ -137,12 +137,13 @@ python3 -m pip install -e .
 
 **(NEW) Install pynetbox-api package in development mode**
 
-- You must be on `netbox-proxbox` repository.
+- You must be on `netbox-proxbox` root folder.
 
 ```
 git clone https://github.com/emersonfelipesp/pynetbox-api.git
 python3 -m pip install pynetbox-api/ -e .
 ```
+**OBS:** For now, you must manually configure `.env` on `pynetbox-api` root folder with NetBox URL and Token
 
 ---
 
