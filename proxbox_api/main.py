@@ -217,27 +217,19 @@ async def create_devices():
 @app.get('/dcim/devices/create')
 async def get_netbox_version(
     clusters_status: ClusterStatusDep,
-    nodes: ProxmoxNodeDep,
-    proxmox_sessions: ProxmoxSessionsDep,
     nb: NetboxSessionDep
 ):
-    print('CLUSTER STATUS', clusters_status)
-    print('NODES', nodes)
-
     device_list: list = []
     
-    for cluster_status, node in zip(clusters_status, nodes):
-        for (name, cluster_value), (name, node_value) in zip(cluster_status.items(), node.items()):
-
-            print(f'cluster_value: {cluster_value}\n\nnode_value: {node_value}')
+    for cluster_status in clusters_status:
+        for node in cluster_status.node_list:
             try:
-                print(f'cluster_value.type: {cluster_value.type}')
-                if cluster_value.type == 'node':
-                    Device(
-                        nb=nb.session,
-                        name=name,
-                        tags=[ProxboxTag(bootstrap_placeholder=True).result['id']],
-                    )
+                # TODO: Based on name.ip create Device IP Address
+                Device(
+                    nb=nb.session,
+                    name=node.name,
+                    tags=[ProxboxTag(bootstrap_placeholder=True).result['id']],
+                )
             except FastAPIException as error:
                 traceback.print_exc()
                 raise ProxboxException(
