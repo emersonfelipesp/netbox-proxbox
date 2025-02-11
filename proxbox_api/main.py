@@ -12,7 +12,7 @@ from pynetbox_api.dcim import (
     Manufacturer,
     Site,
 )
-from pynetbox_api.extras import Tags
+from proxbox_api import ProxboxTag
 from pynetbox_api.exceptions import FastAPIException
 
 # Proxbox API Imports
@@ -214,6 +214,7 @@ async def get_netbox_version(
     proxmox_sessions: ProxmoxSessionsDep,
     nb: NetboxSessionDep
 ):
+
     device_list: list = []
     for px in proxmox_sessions:
         result = px.session.nodes.get()
@@ -224,6 +225,7 @@ async def get_netbox_version(
                 Device(
                     nb=nb.session,
                     name=name,
+                    tags=[ProxboxTag(bootstrap_placeholder=True).result['id']],
                 )
             except FastAPIException as error:
                 traceback.print_exc()
