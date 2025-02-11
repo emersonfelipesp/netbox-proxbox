@@ -18,6 +18,11 @@ from pynetbox_api.exceptions import FastAPIException
 # Proxbox API Imports
 from proxbox_api.exception import ProxboxException
 
+# Proxmox Routes
+from proxbox_api.routes.proxmox import router as proxmox_router
+from proxbox_api.routes.proxmox.cluster import router as px_cluster_router
+from proxbox_api.routes.proxmox.nodes import router as px_nodes_router
+
 # Netbox Routes
 from proxbox_api.routes.netbox import router as netbox_router
 from proxbox_api.routes.netbox.dcim import router as nb_dcim_router
@@ -27,16 +32,16 @@ from proxbox_api.routes.netbox.virtualization import router as nb_virtualization
 from proxbox_api.routes.proxbox import router as proxbox_router
 from proxbox_api.routes.proxbox.clusters import router as pb_cluster_router
 
-# Proxmox Routes
-from proxbox_api.routes.proxmox import router as proxmox_router
-from proxbox_api.routes.proxmox.cluster import router as px_cluster_router
-from proxbox_api.routes.proxmox.nodes import router as px_nodes_router
-
 from proxbox_api.schemas import *
 
 # Sessions
 from proxbox_api.session.proxmox import ProxmoxSessionsDep
 from proxbox_api.session.netbox import NetboxSessionDep
+
+
+# Proxmox Deps
+from proxbox_api.routes.proxmox.nodes import ProxmoxNodeDep
+from proxbox_api.routes.proxmox.cluster import ClusterStatusDep
 
 """
 CORS ORIGINS
@@ -211,22 +216,28 @@ async def create_devices():
 
 @app.get('/dcim/devices/create')
 async def get_netbox_version(
+    clusters_status: ClusterStatusDep,
+    nodes: ProxmoxNodeDep,
     proxmox_sessions: ProxmoxSessionsDep,
     nb: NetboxSessionDep
 ):
+    print('CLUSTER STATUS', clusters_status)
+    print('NODES', nodes)
 
     device_list: list = []
-    for px in proxmox_sessions:
-        result = px.session.nodes.get()
-        for node in result:
-            name = node.get('node', 'Undefined Node')
-            
+    
+    for cluster_status, node in zip(clusters_status, nodes):
+        for (name, cluster_value), (name, node_value) in zip(cluster_status.items(), node.items()):
+
+            print(f'cluster_value: {cluster_value}\n\nnode_value: {node_value}')
             try:
-                Device(
-                    nb=nb.session,
-                    name=name,
-                    tags=[ProxboxTag(bootstrap_placeholder=True).result['id']],
-                )
+                print(f'cluster_value.type: {cluster_value.type}')
+                if cluster_value.type == 'node':
+                    Device(
+                        nb=nb.session,
+                        name=name,
+                        tags=[ProxboxTag(bootstrap_placeholder=True).result['id']],
+                    )
             except FastAPIException as error:
                 traceback.print_exc()
                 raise ProxboxException(
