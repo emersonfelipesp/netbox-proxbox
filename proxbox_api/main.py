@@ -1,17 +1,20 @@
 import traceback
 
-from fastapi import FastAPI, Request, WebSocket
+from fastapi import FastAPI, Request, WebSocket, Depends, Query, Path
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
+from typing import Annotated
+
 # pynetbox AsPI Imports
+from pynetbox_api.dcim.device import Device, DeviceSchemaList
 from pynetbox_api.dcim import (
-    Device,
     DeviceRole,
     DeviceType,
     Manufacturer,
     Site,
 )
+
 from proxbox_api import ProxboxTag
 from pynetbox_api.exceptions import FastAPIException
 
@@ -40,7 +43,7 @@ from proxbox_api.session.netbox import NetboxSessionDep
 
 
 # Proxmox Deps
-from proxbox_api.routes.proxmox.nodes import ProxmoxNodeDep
+from proxbox_api.routes.proxmox.nodes import ProxmoxNodeDep, ProxmoxNodeInterfacesDep
 from proxbox_api.routes.proxmox.cluster import ClusterStatusDep
 
 """
@@ -214,8 +217,9 @@ async def create_devices():
         "message": "Devices created"
     }
 
+
 @app.get('/dcim/devices/create')
-async def get_netbox_version(
+async def create_proxmox_devices(
     clusters_status: ClusterStatusDep,
     nb: NetboxSessionDep
 ):
@@ -225,11 +229,11 @@ async def get_netbox_version(
         for node in cluster_status.node_list:
             try:
                 # TODO: Based on name.ip create Device IP Address
-                Device(
+                device_list.append(Device(
                     nb=nb.session,
                     name=node.name,
                     tags=[ProxboxTag(bootstrap_placeholder=True).result['id']],
-                )
+                ))
             except FastAPIException as error:
                 traceback.print_exc()
                 raise ProxboxException(
@@ -243,7 +247,18 @@ async def get_netbox_version(
                     message="Unknown Error creating device in Netbox",
                     detail=f"Error: {str(error)}"
                 )
+    return DeviceSchemaList(device_list)
 
+ProxmoxCreateDevicesDep = Annotated[DeviceSchemaList, Depends(create_proxmox_devices)]
+
+
+@app.get('/dcim/devices/interfaces/create')
+async def create_proxmox_device_interfaces(
+    node_interfaces: ProxmoxNodeInterfacesDep
+):
+    pass
+
+    
 
 #
 # Routes (Endpoints)

@@ -113,6 +113,8 @@ async def get_node_network(
         
         return ProxmoxNodeInterfaceSchemaList(interfaces)
 
+ProxmoxNodeInterfacesDep = Annotated[ProxmoxNodeInterfaceSchemaList, Depends(get_node_network)]
+
 @router.get("/{node}/qemu")
 async def node_qemu(
     pxs: ProxmoxSessionsDep,
