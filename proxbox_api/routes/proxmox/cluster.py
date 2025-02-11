@@ -9,20 +9,19 @@ from proxbox_api.enum.proxmox import *
 
 router = APIRouter()
 
-class ClusterNodeStatusSchema(BaseModel):
+class BaseClusterStatusSchema(BaseModel):
     id: str
     name: str
     type: str
-    ip: str | None = None
+
+class ClusterNodeStatusSchema(BaseClusterStatusSchema):
+    ip: str
     level: str | None = None
-    local: int | None = None
-    nodeid: int | None = None
-    online: int | None = None
+    local: int
+    nodeid: int
+    online: int
     
-class ClusterStatusSchema(ClusterNodeStatusSchema):
-    id: str
-    name: str
-    type: str
+class ClusterStatusSchema(BaseClusterStatusSchema):
     nodes: int
     quorate: int
     version: int
@@ -43,6 +42,40 @@ async def cluster_status(
     
     **Returns:**
     - **list (`ClusterStatusSchemaList`):** A list of dictionaries containing the status of each cluster.
+    
+    ### Example Response:
+    ```json
+    [
+        "id": "cluster",
+        "name": "Cluster-Name",
+        "type": "cluster",
+        'nodes:' 2,
+        'quorate': 1,
+        'version': 1,
+        'node_list': [
+            {
+                'id': 'node/node-name',
+                'name': 'node-name',
+                'type': 'node',
+                'ip': '10.0.0.1',
+                'level: '',
+                'local': 1,
+                'nodeid': 1,
+                'online': 1                
+            },
+            {
+                'id': 'node/node-name2',
+                'name': 'node-name2',
+                'type': 'node',
+                'ip': '10.0.0.2',
+                'level: '',
+                'local': 1,
+                'nodeid': 1,
+                'online': 1                
+            }
+        ]
+    ]
+    ```
     """
     
     async def parse_cluster_status(data: dict) -> ClusterStatusSchema:
