@@ -6,9 +6,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from typing import Annotated
 
+import asyncio
+
 # pynetbox API Imports
 from pynetbox_api.ipam.ip_address import IPAddress
-from pynetbox_api.dcim.device import Device, DeviceSchemaList
+from pynetbox_api.dcim.device import Device, DeviceSchemaList, DeviceSchema
 from pynetbox_api.dcim.interface import Interface, InterfaceSchemaList
 from pynetbox_api.dcim import (
     DeviceRole,
@@ -45,7 +47,11 @@ from proxbox_api.session.netbox import NetboxSessionDep
 
 
 # Proxmox Deps
-from proxbox_api.routes.proxmox.nodes import ProxmoxNodeDep, ProxmoxNodeInterfacesDep
+from proxbox_api.routes.proxmox.nodes import (
+    ProxmoxNodeDep,
+    ProxmoxNodeInterfacesDep,
+    get_node_network
+)
 from proxbox_api.routes.proxmox.cluster import ClusterStatusDep
 
 """
@@ -197,6 +203,41 @@ async def create_proxmox_devices(
 ProxmoxCreateDevicesDep = Annotated[DeviceSchemaList, Depends(create_proxmox_devices)]
 
 
+async def create_interface_and_ip(node_interface, node):
+    interface_type_mapping: dict = {
+        'lo': 'loopback',
+        'bridge': 'bridge',
+        'bond': 'lag',
+        'vlan': 'virtual',
+    }
+        
+    node_cidr = getattr(node_interface, 'cidr', None)
+    
+    interface = Interface(
+        device=node.id,
+        name=node_interface.iface,
+        status='active',
+        type=interface_type_mapping.get(node_interface.type, 'other'),
+        tags=[ProxboxTag(bootstrap_placeholder=True).id],
+    )
+    
+    try:
+        interface_id = getattr(interface, 'id', interface.get('id', None))
+    except:
+        interface_id = None
+        pass
+
+    if node_cidr and interface_id:
+        IPAddress(
+            address=node_cidr,
+            assigned_object_type='dcim.interface',
+            assigned_object_id=int(interface_id),
+            status='active',
+            tags=[ProxboxTag(bootstrap_placeholder=True).id],
+        )
+    
+    return interface
+
 @app.get(
     '/dcim/devices/{node}/interfaces/create',
     response_model=InterfaceSchemaList,
@@ -205,52 +246,39 @@ ProxmoxCreateDevicesDep = Annotated[DeviceSchemaList, Depends(create_proxmox_dev
 )
 async def create_proxmox_device_interfaces(
     nodes: ProxmoxCreateDevicesDep,
-    node_interfaces: ProxmoxNodeInterfacesDep
+    node_interfaces: ProxmoxNodeInterfacesDep,
 ):
     node = None
     for device in nodes:
         node = device[1][0]
         break
-   
-    interfaces: list = []
-    for node_interface in node_interfaces:
-        interface_type_mapping: dict = {
-            'lo': 'loopback',
-            'bridge': 'bridge',
-            'bond': 'lag',
-            'vlan': 'virtual',
-        }
-            
-        node_cidr = getattr(node_interface, 'cidr', None)
-        
-        interface = Interface(
-            device=node.id,
-            name=node_interface.iface,
-            status='active',
-            type=interface_type_mapping.get(node_interface.type, 'other'),
-            tags=[ProxboxTag(bootstrap_placeholder=True).id],
-        )
-        
-        try:
-            interface_id = getattr(interface, 'id', interface.get('id', None))
-        except:
-            interface_id = None
-            pass
 
-        if node_cidr and interface_id:
-            IPAddress(
-                address=node_cidr,
-                assigned_object_type='dcim.interface',
-                assigned_object_id=int(interface_id),
-                status='active',
-                tags=[ProxboxTag(bootstrap_placeholder=True).id],
-            )
-        
-        interfaces.append(interface)
-    
-    return InterfaceSchemaList(interfaces)
+    return InterfaceSchemaList(
+        await asyncio.gather(
+            *[create_interface_and_ip(node_interface, node) for node_interface in node_interfaces]
+        )
+    )
 
 ProxmoxCreateDeviceInterfacesDep = Annotated[InterfaceSchemaList, Depends(create_proxmox_device_interfaces)]  
+
+@app.get('/dcim/devices/interfaces/create')
+async def create_all_devices_interfaces(
+    #nodes: ProxmoxCreateDevicesDep,
+    #node_interfaces: ProxmoxNodeInterfacesDep,
+):  
+    return {
+        'message': 'Endpoint currently not working. Use /dcim/devices/{node}/interfaces/create instead.'
+    }
+    
+    nodes = nodes.root
+    for node in nodes:
+        print(node.name)
+
+    return await asyncio.gather(*[create_proxmox_device_interfaces(
+        node=node.name,
+        nodes=nodes,
+        node_interfaces=node_interfaces
+    ) for node in nodes])
 
 ''' 
 @app.get(
