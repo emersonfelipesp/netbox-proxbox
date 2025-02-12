@@ -6,7 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from typing import Annotated
 
-# pynetbox AsPI Imports
+# pynetbox API Imports
+from pynetbox_api.ipam.ip_address import IPAddress
 from pynetbox_api.dcim.device import Device, DeviceSchemaList
 from pynetbox_api.dcim.interface import Interface, InterfaceSchemaList
 from pynetbox_api.dcim import (
@@ -203,23 +204,16 @@ ProxmoxCreateDevicesDep = Annotated[DeviceSchemaList, Depends(create_proxmox_dev
     response_model_exclude_unset=True
 )
 async def create_proxmox_device_interfaces(
-    nb: NetboxSessionDep,
     nodes: ProxmoxCreateDevicesDep,
     node_interfaces: ProxmoxNodeInterfacesDep
 ):
-    print(nodes)
-    print(node_interfaces)
-
     node = None
     for device in nodes:
         node = device[1][0]
         break
-    
-    print(f'\n\n\nDEVICE: ({node.id}) {node.name}\n')
-    
+   
     interfaces: list = []
     for node_interface in node_interfaces:
-        
         interface_type_mapping: dict = {
             'lo': 'loopback',
             'bridge': 'bridge',
@@ -227,17 +221,50 @@ async def create_proxmox_device_interfaces(
             'vlan': 'virtual',
         }
             
-        interfaces.append(
-            Interface(
-                device=node.id,
-                name=node_interface.iface,
-                type=interface_type_mapping.get(node_interface.type, 'other'),
+        node_cidr = getattr(node_interface, 'cidr', None)
+        
+        interface = Interface(
+            device=node.id,
+            name=node_interface.iface,
+            status='active',
+            type=interface_type_mapping.get(node_interface.type, 'other'),
+            tags=[ProxboxTag(bootstrap_placeholder=True).id],
+        )
+        
+        try:
+            interface_id = getattr(interface, 'id', interface.get('id', None))
+        except:
+            interface_id = None
+            pass
+
+        if node_cidr and interface_id:
+            IPAddress(
+                address=node_cidr,
+                assigned_object_type='dcim.interface',
+                assigned_object_id=int(interface_id),
+                status='active',
                 tags=[ProxboxTag(bootstrap_placeholder=True).id],
             )
-        )
+        
+        interfaces.append(interface)
     
-    return InterfaceSchemaList(interfaces)  
+    return InterfaceSchemaList(interfaces)
 
+ProxmoxCreateDeviceInterfacesDep = Annotated[InterfaceSchemaList, Depends(create_proxmox_device_interfaces)]  
+
+''' 
+@app.get(
+    '/dcim/devices/{node}/interfaces/ip-address/create',
+    response_model=InterfaceSchemaList,
+    response_model_exclude_none=True,
+    response_model_exclude_unset=True
+)
+async def create_proxmox_interface_ip_address(
+    nb: NetboxSessionDep,
+    nodes: ProxmoxCreateDeviceInterfacesDep,
+    node_interfaces: ProxmoxNodeInterfacesDep
+):
+'''
 #
 # Routes (Endpoints)
 #
