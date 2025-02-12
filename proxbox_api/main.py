@@ -218,22 +218,36 @@ async def create_devices():
     }
 
 
-@app.get('/dcim/devices/create')
+@app.get(
+    '/dcim/devices/create',
+    response_model=DeviceSchemaList,
+    response_model_exclude_none=True,
+    response_model_exclude_unset=True,
+)
 async def create_proxmox_devices(
     clusters_status: ClusterStatusDep,
-    nb: NetboxSessionDep
+    nb: NetboxSessionDep,
+    node: str | None = None,
 ):
     device_list: list = []
     
     for cluster_status in clusters_status:
-        for node in cluster_status.node_list:
+        for node_obj in cluster_status.node_list:
             try:
                 # TODO: Based on name.ip create Device IP Address
-                device_list.append(Device(
+                netbox_device = Device(
                     nb=nb.session,
-                    name=node.name,
+                    name=node_obj.name,
                     tags=[ProxboxTag(bootstrap_placeholder=True).result['id']],
-                ))
+                )
+                if node:
+                    if node == node_obj.name:
+                        return DeviceSchemaList([netbox_device])
+                    else:
+                        continue
+                elif not node:
+                    device_list.append(netbox_device)
+
             except FastAPIException as error:
                 traceback.print_exc()
                 raise ProxboxException(
@@ -252,11 +266,13 @@ async def create_proxmox_devices(
 ProxmoxCreateDevicesDep = Annotated[DeviceSchemaList, Depends(create_proxmox_devices)]
 
 
-@app.get('/dcim/devices/interfaces/create')
+@app.get('/dcim/devices/{node}interfaces/create')
 async def create_proxmox_device_interfaces(
+    nodes: ProxmoxCreateDevicesDep,
     node_interfaces: ProxmoxNodeInterfacesDep
 ):
-    pass
+    print(nodes)
+    print(node_interfaces)
 
     
 
