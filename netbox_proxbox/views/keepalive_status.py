@@ -91,7 +91,7 @@ def get_service_status(
                 })
             
         except requests.exceptions.HTTPError as err:
-            print(f'HTTP error ocrrured: {err}')
+            print(f'HTTP error ocurred: {err}')
             status = 'error'
         
         except Exception as errr:
@@ -105,7 +105,7 @@ def get_service_status(
         status = 'success'
         
     except requests.exceptions.HTTPError as err:
-        print(f'HTTP error ocrrured: {err}')
+        print(f'HTTP error ocurred: {err}')
         status = 'error'
         
     except Exception as errr:
