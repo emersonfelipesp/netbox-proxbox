@@ -7,7 +7,7 @@ from .virtual_machines import VirtualMachine
 
 from proxbox_api.schemas.netbox.virtualization import ClusterTypeSchema
 
-router = APIRouter()
+router = APIRouter() 
 
 @router.get("/cluster-types")
 async def get_cluster_types( all = None, cluster_type: ClusterType = Depends() ):

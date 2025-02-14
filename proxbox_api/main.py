@@ -202,7 +202,6 @@ async def create_proxmox_devices(
 
 ProxmoxCreateDevicesDep = Annotated[DeviceSchemaList, Depends(create_proxmox_devices)]
 
-
 async def create_interface_and_ip(node_interface, node):
     interface_type_mapping: dict = {
         'lo': 'loopback',
@@ -280,6 +279,40 @@ async def create_all_devices_interfaces(
         node_interfaces=node_interfaces
     ) for node in nodes])
 
+@app.get('/virtualization/cluster-types/create')
+async def create_cluster_types():
+    # TODO
+    pass
+
+
+@app.get('/virtualization/clusters/create')
+async def create_clusters():
+    # TODO
+    pass
+
+@app.get('/virtualization/virtual-machines/create')
+async def create_virtual_machines():
+    # TODO
+    pass
+
+@app.get('/virtualization/virtual-machines/interfaces/create')
+async def create_virtual_machines_interfaces():
+    # TODO
+    pass
+
+@app.get('/virtualization/virtual-machines/interfaces/ip-address/create')
+async def create_virtual_machines_interfaces_ip_address():
+    # TODO
+    pass
+
+@app.get('/virtualization/virtual-machines/virtual-disks/create')
+async def create_virtual_disks():
+    # TODO
+    pass
+
+
+
+
 ''' 
 @app.get(
     '/dcim/devices/{node}/interfaces/ip-address/create',
@@ -299,12 +332,12 @@ async def create_proxmox_interface_ip_address(
 
 # Netbox Routes
 app.include_router(netbox_router, prefix="/netbox", tags=["netbox"])
-app.include_router(nb_dcim_router, prefix="/netbox/dcim", tags=["netbox / dcim"])
-app.include_router(nb_virtualization_router, prefix="/netbox/virtualization", tags=["netbox / virtualization"])
+#app.include_router(nb_dcim_router, prefix="/netbox/dcim", tags=["netbox / dcim"])
+#app.include_router(nb_virtualization_router, prefix="/netbox/virtualization", tags=["netbox / virtualization"])
 
 # Proxmox Routes
-app.include_router(px_nodes_router, prefix="/proxmox/nodes", tags=["proxmox / nodes"])
-app.include_router(px_cluster_router, prefix="/proxmox/cluster", tags=["proxmox / cluster"])
+#app.include_router(px_nodes_router, prefix="/proxmox/nodes", tags=["proxmox / nodes"])
+#app.include_router(px_cluster_router, prefix="/proxmox/cluster", tags=["proxmox / cluster"])
 app.include_router(proxmox_router, prefix="/proxmox", tags=["proxmox"])
 
 # Proxbox Routes
