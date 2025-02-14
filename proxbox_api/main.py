@@ -336,8 +336,8 @@ app.include_router(netbox_router, prefix="/netbox", tags=["netbox"])
 #app.include_router(nb_virtualization_router, prefix="/netbox/virtualization", tags=["netbox / virtualization"])
 
 # Proxmox Routes
-#app.include_router(px_nodes_router, prefix="/proxmox/nodes", tags=["proxmox / nodes"])
-#app.include_router(px_cluster_router, prefix="/proxmox/cluster", tags=["proxmox / cluster"])
+app.include_router(px_nodes_router, prefix="/proxmox/nodes", tags=["proxmox / nodes"])
+app.include_router(px_cluster_router, prefix="/proxmox/cluster", tags=["proxmox / cluster"])
 app.include_router(proxmox_router, prefix="/proxmox", tags=["proxmox"])
 
 # Proxbox Routes

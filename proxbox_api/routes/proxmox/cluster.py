@@ -6,6 +6,7 @@ from pydantic import BaseModel, RootModel
 from proxbox_api.schemas.proxmox import *
 from proxbox_api.session.proxmox import ProxmoxSessionsDep
 from proxbox_api.enum.proxmox import *
+from proxbox_api.session.proxmox import ProxmoxSession
 
 router = APIRouter()
 
@@ -25,6 +26,7 @@ class ClusterStatusSchema(BaseClusterStatusSchema):
     nodes: int
     quorate: int
     version: int
+    mode: str
     node_list: list[ClusterNodeStatusSchema] | None = None
     
 ClusterStatusSchemaList = list[ClusterStatusSchema]
@@ -49,6 +51,7 @@ async def cluster_status(
         "id": "cluster",
         "name": "Cluster-Name",
         "type": "cluster",
+        "mode": "standalone",
         'nodes:' 2,
         'quorate': 1,
         'version': 1,
@@ -77,12 +80,12 @@ async def cluster_status(
     ]
     ```
     """
-    
-    async def parse_cluster_status(data: dict) -> ClusterStatusSchema:
+    async def parse_cluster_status(proxmox_object: ProxmoxSession, data: dict) -> ClusterStatusSchema:
         node_list = []
         cluster: ClusterStatusSchema = None
         
         for item in data:
+            item['mode'] = proxmox_object.mode
             if item.get('type') == 'cluster':
                 cluster = ClusterStatusSchema(**item)
             
@@ -96,7 +99,9 @@ async def cluster_status(
     
     
     return ClusterStatusSchemaList([
-        await parse_cluster_status(px.session('cluster/status').get())
+        await parse_cluster_status(
+            proxmox_object=px,
+            data=px.session('cluster/status').get())
         for px in pxs
     ])
 
