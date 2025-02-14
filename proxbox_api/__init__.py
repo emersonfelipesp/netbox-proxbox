@@ -13,13 +13,15 @@ from proxbox_api.routes.netbox.ipam.ip_addresses import IPAddress
 
 
 from pydantic import BaseModel
-from pynetbox_api.extras import Tags, TagsSchemaIn
+from pynetbox_api.extras import Tags
 
-class ProxboxTagSchemaIn(TagsSchemaIn):
-    name: str = 'Proxbox'
-    slug: str = 'proxbox'
-    color: str = 'ff5722'
-    description: str = 'Proxbox Identifier (used to identify the items the plugin created)'
+
 
 class ProxboxTag(Tags):
-    schema_in = ProxboxTagSchemaIn
+    class SchemaIn(Tags.SchemaIn):
+        name: str = 'Proxbox'
+        slug: str = 'proxbox'
+        color: str = 'ff5722'
+        description: str = 'Proxbox Identifier (used to identify the items the plugin created)'
+    
+    schema_in = SchemaIn

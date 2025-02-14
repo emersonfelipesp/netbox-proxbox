@@ -10,19 +10,16 @@ import asyncio
 
 # pynetbox API Imports
 from pynetbox_api.ipam.ip_address import IPAddress
-from pynetbox_api.dcim.device import Device, DeviceSchemaList, DeviceSchema
-from pynetbox_api.dcim.interface import Interface, InterfaceSchemaList
-from pynetbox_api.dcim import (
-    DeviceRole,
-    DeviceType,
-    Manufacturer,
-    Site,
-)
+from pynetbox_api.dcim.device import Device, DeviceRole, DeviceType
+from pynetbox_api.dcim.interface import Interface
+from pynetbox_api.dcim.manufacturer import Manufacturer
+from pynetbox_api.virtualization.cluster import Cluster
+from pynetbox_api.virtualization.cluster_type import ClusterType
 
-from proxbox_api import ProxboxTag
 from pynetbox_api.exceptions import FastAPIException
 
 # Proxbox API Imports
+from proxbox_api import ProxboxTag
 from proxbox_api.exception import ProxboxException
 
 # Proxmox Routes
@@ -153,7 +150,7 @@ async def create_devices():
 
 @app.get(
     '/dcim/devices/create',
-    response_model=DeviceSchemaList,
+    response_model=Device.SchemaList,
     response_model_exclude_none=True,
     response_model_exclude_unset=True,
 )
@@ -164,20 +161,74 @@ async def create_proxmox_devices(
 ):
     device_list: list = []
     
+    '''
+    cluster_type_standalone = ClusterType(
+        name='Standalone',
+        slug='standalone',
+        description='Proxmox standalone cluster (single-node).',
+        tags=[ProxboxTag(bootstrap_placeholder=True).id]
+    )
+    
+    cluster_type_cluster = ClusterType(
+        name='Cluster',
+        slug='cluster',
+        description='Proxmox cluster mode (multiple-nodes).',
+        tags=[ProxboxTag(bootstrap_placeholder=True).id]
+    )
+    
+    cluster_type_mapping: dict = {
+        'standalone': cluster_type_standalone,
+        'cluster': cluster_type_cluster
+    }
+    '''
+    
     for cluster_status in clusters_status:
+        '''
+        print(f'cluster_status: {cluster_status}')
+        # Get cluster type, if not found, use bootstrap placeholder.
+        cluster_type: ClusterType = cluster_type_mapping.get(cluster_status.mode, ClusterType(bootstrap_placeholder=True).result)
+        print(f'cluster_type: {cluster_type}')
+        cluster_type_id = int(getattr(cluster_type, 'id', cluster_type.get('id')))
+        print(cluster_type_id)
+        
+        
+        cluster = Cluster(
+            name = cluster_status.name,
+            type = cluster_type_id,
+            status = 'active',
+            description = f'Proxmox {cluster_status.mode} cluster.',
+            tags=[ProxboxTag(bootstrap_placeholder=True).id]
+        ).id
+        
+        print('\n\ncluster:', cluster)
+        '''
+        #cluster_id = getattr(cluster, 'id', cluster.get('id', None))
+        
         for node_obj in cluster_status.node_list:
             try:
                 # TODO: Based on name.ip create Device IP Address
                 netbox_device = Device(
                     nb=nb.session,
                     name=node_obj.name,
-                    tags=[ProxboxTag(bootstrap_placeholder=True).result['id']],
+                    tags=[ProxboxTag(bootstrap_placeholder=True).id],
+                    cluster = Cluster(
+                        name = cluster_status.name,
+                        type = ClusterType(
+                            name=cluster_status.mode.capitalize(),
+                            slug=cluster_status.mode,
+                            description=f'Proxmox {cluster_status.mode} mode',
+                            tags=[ProxboxTag(bootstrap_placeholder=True).id]
+                        )['id'],
+                        status = 'active',
+                        description = f'Proxmox {cluster_status.mode} cluster.',
+                        tags=[ProxboxTag(bootstrap_placeholder=True).id]
+                    ).get('id', Cluster(bootstrap_placeholder=True).id),
                 )
                 
                 # If node, return only the node requested.
                 if node:
                     if node == node_obj.name:
-                        return DeviceSchemaList([netbox_device])
+                        return Device.SchemaList([netbox_device])
                     else:
                         continue
                     
@@ -198,9 +249,9 @@ async def create_proxmox_devices(
                     message="Unknown Error creating device in Netbox",
                     detail=f"Error: {str(error)}"
                 )
-    return DeviceSchemaList(device_list)
+    return Device.SchemaList(device_list)
 
-ProxmoxCreateDevicesDep = Annotated[DeviceSchemaList, Depends(create_proxmox_devices)]
+ProxmoxCreateDevicesDep = Annotated[Device.SchemaList, Depends(create_proxmox_devices)]
 
 async def create_interface_and_ip(node_interface, node):
     interface_type_mapping: dict = {
@@ -239,7 +290,7 @@ async def create_interface_and_ip(node_interface, node):
 
 @app.get(
     '/dcim/devices/{node}/interfaces/create',
-    response_model=InterfaceSchemaList,
+    response_model=Interface.SchemaList,
     response_model_exclude_none=True,
     response_model_exclude_unset=True
 )
@@ -258,7 +309,7 @@ async def create_proxmox_device_interfaces(
         )
     )
 
-ProxmoxCreateDeviceInterfacesDep = Annotated[InterfaceSchemaList, Depends(create_proxmox_device_interfaces)]  
+ProxmoxCreateDeviceInterfacesDep = Annotated[Interface.SchemaList, Depends(create_proxmox_device_interfaces)]  
 
 @app.get('/dcim/devices/interfaces/create')
 async def create_all_devices_interfaces(
@@ -286,9 +337,9 @@ async def create_cluster_types():
 
 
 @app.get('/virtualization/clusters/create')
-async def create_clusters():
-    # TODO
+async def create_clusters(cluster_status: ClusterStatusDep):
     pass
+
 
 @app.get('/virtualization/virtual-machines/create')
 async def create_virtual_machines():

@@ -48,10 +48,10 @@ async def cluster_status(
     ### Example Response:
     ```json
     [
-        "id": "cluster",
-        "name": "Cluster-Name",
-        "type": "cluster",
-        "mode": "standalone",
+        'id': 'cluster',
+        'name': 'Cluster-Name',
+        'type': 'cluster',
+        'mode': 'standalone',
         'nodes:' 2,
         'quorate': 1,
         'version': 1,
