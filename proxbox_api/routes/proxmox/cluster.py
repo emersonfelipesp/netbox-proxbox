@@ -145,3 +145,5 @@ async def cluster_resources(
         )
 
     return json_response
+
+ClusterResourcesDep = Annotated[ClusterResourcesList, Depends(cluster_resources)]

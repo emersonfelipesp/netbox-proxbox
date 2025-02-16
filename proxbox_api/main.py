@@ -13,6 +13,7 @@ from pynetbox_api.ipam.ip_address import IPAddress
 from pynetbox_api.dcim.device import Device, DeviceRole, DeviceType
 from pynetbox_api.dcim.interface import Interface
 from pynetbox_api.dcim.manufacturer import Manufacturer
+from pynetbox_api.virtualization.virtual_machine import VirtualMachine
 from pynetbox_api.virtualization.cluster import Cluster
 from pynetbox_api.virtualization.cluster_type import ClusterType
 
@@ -24,7 +25,10 @@ from proxbox_api.exception import ProxboxException
 
 # Proxmox Routes
 from proxbox_api.routes.proxmox import router as proxmox_router
-from proxbox_api.routes.proxmox.cluster import router as px_cluster_router
+from proxbox_api.routes.proxmox.cluster import (
+    router as px_cluster_router,
+    ClusterResourcesDep
+)
 from proxbox_api.routes.proxmox.nodes import router as px_nodes_router
 
 # Netbox Routes
@@ -340,12 +344,74 @@ async def create_cluster_types():
 async def create_clusters(cluster_status: ClusterStatusDep):
     pass
 
+'''
+@app.get('/virtualization/virtual-machines/create')
+async def create_virtual_machines(
+    cluster_resources: ClusterResourcesDep
+):
+
+    TODO: Add previus fields (located at: /proxbox_api/routes/proxbox/clusters/__init__.py)
+    "role": getattr(role, "id", None),
+    "custom_fields": {
+        "proxmox_vm_id": vm.get('vmid'),
+        "proxmox_start_at_boot": start_at_boot,
+        "proxmox_unprivileged_container": unprivileged_container,
+        "proxmox_qemu_agent": qemu_agent,
+        "proxmox_search_domain": search_domain,
+    },
+    "platform": platform
+    
+    async def _create_vm(cluster: dict):
+        for cluster_name, resources in cluster.items():
+            return await asyncio.gather(*[
+                VirtualMachine(
+                        name=resource.get('name'),
+                        status=VirtualMachine.status_field.get(resource.get('status'), 'active'),
+                        cluster=Cluster(name=cluster_name).get('id'),
+                        device=Device(name=resource.get('node')).get('id'),
+                        vcpus=int(resource.get("maxcpu", 0)),
+                        memory=int(resource.get("mexmem", 0)),
+                        disk=int(int(resource.get("maxdisk", 0)) / 1000000),
+                        tags=[ProxboxTag(bootstrap_placeholder=True).id]
+                    ) for resource in resources if resource.get('type') in ('qemu' or 'lxc')
+                ])
+        
+    return await asyncio.gather(*[_create_vm(cluster) for cluster in cluster_resources])
+'''
 
 @app.get('/virtualization/virtual-machines/create')
-async def create_virtual_machines():
-    # TODO
-    pass
+async def create_virtual_machines(
+    cluster_resources: ClusterResourcesDep
+):
 
+    async def _create_vm(cluster: dict):
+        tasks = []  # Collect coroutines
+        for cluster_name, resources in cluster.items():
+            for resource in resources:
+                if resource.get('type') in ('qemu', 'lxc'):
+                    tasks.append(create_vm_task(cluster_name, resource))
+
+        return await asyncio.gather(*tasks)  # Gather coroutines
+
+    async def create_vm_task(cluster_name, resource):
+        """Ensure this function is async if it does any I/O (e.g., DB inserts, API calls)."""
+        return await asyncio.to_thread(lambda: VirtualMachine(
+            name=resource.get('name'),
+            status=VirtualMachine.status_field.get(resource.get('status'), 'active'),
+            cluster=Cluster(name=cluster_name).get('id'),
+            device=Device(name=resource.get('node')).get('id'),
+            vcpus=int(resource.get("maxcpu", 0)),
+            memory=int(resource.get("maxmem")) // 1000,  # Fixed typo 'mexmem'
+            disk=int(resource.get("maxdisk", 0)) // 1000000,
+            tags=[ProxboxTag(bootstrap_placeholder=True).id]
+        ))
+
+    return await asyncio.gather(*[_create_vm(cluster) for cluster in cluster_resources])
+                
+                
+                
+                
+ 
 @app.get('/virtualization/virtual-machines/interfaces/create')
 async def create_virtual_machines_interfaces():
     # TODO
