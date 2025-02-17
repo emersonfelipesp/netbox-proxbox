@@ -25,3 +25,5 @@ class ProxboxTag(Tags):
         description: str = 'Proxbox Identifier (used to identify the items the plugin created)'
     
     schema_in = SchemaIn
+
+proxbox_tag = ProxboxTag(bootstrap_placeholder=True)

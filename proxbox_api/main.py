@@ -20,7 +20,7 @@ from pynetbox_api.virtualization.cluster_type import ClusterType
 from pynetbox_api.exceptions import FastAPIException
 
 # Proxbox API Imports
-from proxbox_api import ProxboxTag
+from proxbox_api import ProxboxTag, proxbox_tag
 from proxbox_api.exception import ProxboxException
 
 # Proxmox Routes
@@ -383,7 +383,6 @@ async def create_virtual_machines(
 async def create_virtual_machines(
     cluster_resources: ClusterResourcesDep
 ):
-
     async def _create_vm(cluster: dict):
         tasks = []  # Collect coroutines
         for cluster_name, resources in cluster.items():
@@ -394,7 +393,37 @@ async def create_virtual_machines(
         return await asyncio.gather(*tasks)  # Gather coroutines
 
     async def create_vm_task(cluster_name, resource):
-        """Ensure this function is async if it does any I/O (e.g., DB inserts, API calls)."""
+        vm_role_mapping: dict = {
+            'qemu': {
+                'name': 'Virtual Machine (QEMU)',
+                'slug': 'virtual-machine-qemu',
+                'color': '00ffff',
+                'description': 'Proxmox Virtual Machine',
+                'tags': [proxbox_tag.id],
+                'vm_role': True
+            },
+            'lxc': {
+                'name': 'Container (LXC)',
+                'slug': 'container-lxc',
+                'color': '7fffd4',
+                'description': 'Proxmox LXC Container',
+                'tags': [proxbox_tag.id],
+                'vm_role': True
+            },
+            'undefined': {
+                'name': 'Unknown',
+                'slug': 'unknown',
+                'color': '000000',
+                'description': 'VM Type not found. Neither QEMU nor LXC.',
+                'tags': [proxbox_tag.id],
+                'vm_role': True
+            }
+        }
+        
+        vm_type = resource.get('type', 'unknown')
+        
+        
+        # Lamba is necessary to treat the object instantiation as a coroutine/function.
         return await asyncio.to_thread(lambda: VirtualMachine(
             name=resource.get('name'),
             status=VirtualMachine.status_field.get(resource.get('status'), 'active'),
@@ -403,11 +432,12 @@ async def create_virtual_machines(
             vcpus=int(resource.get("maxcpu", 0)),
             memory=int(resource.get("maxmem")) // 1000,  # Fixed typo 'mexmem'
             disk=int(resource.get("maxdisk", 0)) // 1000000,
-            tags=[ProxboxTag(bootstrap_placeholder=True).id]
+            tags=[ProxboxTag(bootstrap_placeholder=True).id],
+            role=DeviceRole(**vm_role_mapping.get(vm_type)).get('id', None),
         ))
 
     return await asyncio.gather(*[_create_vm(cluster) for cluster in cluster_resources])
-                
+
                 
                 
                 
