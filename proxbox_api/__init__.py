@@ -11,10 +11,8 @@ from proxbox_api.routes.netbox.dcim.devices import Device
 from proxbox_api.routes.netbox.dcim.interfaces import Interface
 from proxbox_api.routes.netbox.ipam.ip_addresses import IPAddress
 
-
 from pydantic import BaseModel
-from pynetbox_api.extras import Tags
-
+from pynetbox_api.extras.tag import Tags
 
 
 class ProxboxTag(Tags):

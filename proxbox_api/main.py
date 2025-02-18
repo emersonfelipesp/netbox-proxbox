@@ -16,6 +16,7 @@ from pynetbox_api.dcim.manufacturer import Manufacturer
 from pynetbox_api.virtualization.virtual_machine import VirtualMachine
 from pynetbox_api.virtualization.cluster import Cluster
 from pynetbox_api.virtualization.cluster_type import ClusterType
+from pynetbox_api.extras.custom_field import CustomField
 
 from pynetbox_api.exceptions import FastAPIException
 
@@ -165,49 +166,7 @@ async def create_proxmox_devices(
 ):
     device_list: list = []
     
-    '''
-    cluster_type_standalone = ClusterType(
-        name='Standalone',
-        slug='standalone',
-        description='Proxmox standalone cluster (single-node).',
-        tags=[ProxboxTag(bootstrap_placeholder=True).id]
-    )
-    
-    cluster_type_cluster = ClusterType(
-        name='Cluster',
-        slug='cluster',
-        description='Proxmox cluster mode (multiple-nodes).',
-        tags=[ProxboxTag(bootstrap_placeholder=True).id]
-    )
-    
-    cluster_type_mapping: dict = {
-        'standalone': cluster_type_standalone,
-        'cluster': cluster_type_cluster
-    }
-    '''
-    
     for cluster_status in clusters_status:
-        '''
-        print(f'cluster_status: {cluster_status}')
-        # Get cluster type, if not found, use bootstrap placeholder.
-        cluster_type: ClusterType = cluster_type_mapping.get(cluster_status.mode, ClusterType(bootstrap_placeholder=True).result)
-        print(f'cluster_type: {cluster_type}')
-        cluster_type_id = int(getattr(cluster_type, 'id', cluster_type.get('id')))
-        print(cluster_type_id)
-        
-        
-        cluster = Cluster(
-            name = cluster_status.name,
-            type = cluster_type_id,
-            status = 'active',
-            description = f'Proxmox {cluster_status.mode} cluster.',
-            tags=[ProxboxTag(bootstrap_placeholder=True).id]
-        ).id
-        
-        print('\n\ncluster:', cluster)
-        '''
-        #cluster_id = getattr(cluster, 'id', cluster.get('id', None))
-        
         for node_obj in cluster_status.node_list:
             try:
                 # TODO: Based on name.ip create Device IP Address
@@ -307,7 +266,7 @@ async def create_proxmox_device_interfaces(
         node = device[1][0]
         break
 
-    return InterfaceSchemaList(
+    return Interface.SchemaList(
         await asyncio.gather(
             *[create_interface_and_ip(node_interface, node) for node_interface in node_interfaces]
         )
@@ -323,65 +282,117 @@ async def create_all_devices_interfaces(
     return {
         'message': 'Endpoint currently not working. Use /dcim/devices/{node}/interfaces/create instead.'
     }
-    
-    nodes = nodes.root
-    for node in nodes:
-        print(node.name)
-
-    return await asyncio.gather(*[create_proxmox_device_interfaces(
-        node=node.name,
-        nodes=nodes,
-        node_interfaces=node_interfaces
-    ) for node in nodes])
 
 @app.get('/virtualization/cluster-types/create')
 async def create_cluster_types():
     # TODO
     pass
 
-
 @app.get('/virtualization/clusters/create')
 async def create_clusters(cluster_status: ClusterStatusDep):
+    # TOOD
     pass
 
-'''
-@app.get('/virtualization/virtual-machines/create')
-async def create_virtual_machines(
-    cluster_resources: ClusterResourcesDep
-):
-
-    TODO: Add previus fields (located at: /proxbox_api/routes/proxbox/clusters/__init__.py)
-    "role": getattr(role, "id", None),
-    "custom_fields": {
-        "proxmox_vm_id": vm.get('vmid'),
-        "proxmox_start_at_boot": start_at_boot,
-        "proxmox_unprivileged_container": unprivileged_container,
-        "proxmox_qemu_agent": qemu_agent,
-        "proxmox_search_domain": search_domain,
-    },
-    "platform": platform
+@app.get(
+    '/extras/custom-fields/create',
+    response_model=CustomField.SchemaList,
+    response_model_exclude_none=True,
+    response_model_exclude_unset=True
+)
+async def create_custom_fields():
+    custom_fields: list = [
+        {
+            "object_types": [
+                "virtualization.virtualmachine"
+            ],
+            "type": "integer",
+            "name": "proxmox_vm_id",
+            "label": "VM ID",
+            "description": "Proxmox Virtual Machine or Container ID",
+            "ui_visible": "always",
+            "ui_editable": "hidden",
+            "weight": 100,
+            "filter_logic": "loose",
+            "search_weight": 1000,
+            "group_name": "Proxmox"
+        },
+        {
+            "object_types": [
+                "virtualization.virtualmachine"
+            ],
+            "type": "boolean",
+            "name": "proxmox_start_at_boot",
+            "label": "Start at Boot",
+            "description": "Proxmox Start at Boot Option",
+            "ui_visible": "always",
+            "ui_editable": "hidden",
+            "weight": 100,
+            "filter_logic": "loose",
+            "search_weight": 1000,
+            "group_name": "Proxmox"
+        },
+        {
+            "object_types": [
+                "virtualization.virtualmachine"
+            ],
+            "type": "boolean",
+            "name": "proxmox_unprivileged_container",
+            "label": "Unprivileged Container",
+            "description": "Proxmox Unprivileged Container",
+            "ui_visible": "if-set",
+            "ui_editable": "hidden",
+            "weight": 100,
+            "filter_logic": "loose",
+            "search_weight": 1000,
+            "group_name": "Proxmox"
+        },
+        {
+            "object_types": [
+                "virtualization.virtualmachine"
+            ],
+            "type": "boolean",
+            "name": "proxmox_qemu_agent",
+            "label": "QEMU Guest Agent",
+            "description": "Proxmox QEMU Guest Agent",
+            "ui_visible": "if-set",
+            "ui_editable": "hidden",
+            "weight": 100,
+            "filter_logic": "loose",
+            "search_weight": 1000,
+            "group_name": "Proxmox"
+        },
+        {
+            "object_types": [
+                "virtualization.virtualmachine"
+            ],
+            "type": "text",
+            "name": "proxmox_search_domain",
+            "label": "Search Domain",
+            "description": "Proxmox Search Domain",
+            "ui_visible": "if-set",
+            "ui_editable": "hidden",
+            "weight": 100,
+            "filter_logic": "loose",
+            "search_weight": 1000,
+            "group_name": "Proxmox"
+        }
+    ]
     
-    async def _create_vm(cluster: dict):
-        for cluster_name, resources in cluster.items():
-            return await asyncio.gather(*[
-                VirtualMachine(
-                        name=resource.get('name'),
-                        status=VirtualMachine.status_field.get(resource.get('status'), 'active'),
-                        cluster=Cluster(name=cluster_name).get('id'),
-                        device=Device(name=resource.get('node')).get('id'),
-                        vcpus=int(resource.get("maxcpu", 0)),
-                        memory=int(resource.get("mexmem", 0)),
-                        disk=int(int(resource.get("maxdisk", 0)) / 1000000),
-                        tags=[ProxboxTag(bootstrap_placeholder=True).id]
-                    ) for resource in resources if resource.get('type') in ('qemu' or 'lxc')
-                ])
-        
-    return await asyncio.gather(*[_create_vm(cluster) for cluster in cluster_resources])
-'''
+    async def create_custom_field_task(custom_field: dict):
+        return await asyncio.to_thread(lambda: CustomField(**custom_field))
+
+    # Create Custom Fields
+    return await asyncio.gather(*[
+        create_custom_field_task(custom_field_dict)
+        for custom_field_dict in custom_fields
+    ])              
+
+CreateCustomFieldsDep = Annotated[CustomField.SchemaList, Depends(create_custom_fields)]    
 
 @app.get('/virtualization/virtual-machines/create')
 async def create_virtual_machines(
-    cluster_resources: ClusterResourcesDep
+    cluster_resources: ClusterResourcesDep,
+    custom_fields: CreateCustomFieldsDep
 ):
     async def _create_vm(cluster: dict):
         tasks = []  # Collect coroutines
@@ -420,8 +431,9 @@ async def create_virtual_machines(
             }
         }
         
+        #vm_config = px.session.nodes(resource.get("node")).qemu(resource.get("vmid")).config.get()
+     
         vm_type = resource.get('type', 'unknown')
-        
         
         # Lamba is necessary to treat the object instantiation as a coroutine/function.
         return await asyncio.to_thread(lambda: VirtualMachine(
@@ -434,13 +446,18 @@ async def create_virtual_machines(
             disk=int(resource.get("maxdisk", 0)) // 1000000,
             tags=[ProxboxTag(bootstrap_placeholder=True).id],
             role=DeviceRole(**vm_role_mapping.get(vm_type)).get('id', None),
+            custom_fields={
+                "proxmox_vm_id": resource.get('vmid'),
+            }
         ))
 
-    return await asyncio.gather(*[_create_vm(cluster) for cluster in cluster_resources])
-
-                
-                
-                
+        """""
+        proxmox_start_at_boot": resource.get(''),
+        "proxmox_unprivileged_container": unprivileged_container,
+        "proxmox_qemu_agent": qemu_agent,
+        "proxmox_search_domain": search_domain,
+        """
+    return await asyncio.gather(*[_create_vm(cluster) for cluster in cluster_resources])   
  
 @app.get('/virtualization/virtual-machines/interfaces/create')
 async def create_virtual_machines_interfaces():
@@ -457,22 +474,6 @@ async def create_virtual_disks():
     # TODO
     pass
 
-
-
-
-''' 
-@app.get(
-    '/dcim/devices/{node}/interfaces/ip-address/create',
-    response_model=InterfaceSchemaList,
-    response_model_exclude_none=True,
-    response_model_exclude_unset=True
-)
-async def create_proxmox_interface_ip_address(
-    nb: NetboxSessionDep,
-    nodes: ProxmoxCreateDeviceInterfacesDep,
-    node_interfaces: ProxmoxNodeInterfacesDep
-):
-'''
 #
 # Routes (Endpoints)
 #
@@ -490,11 +491,6 @@ app.include_router(proxmox_router, prefix="/proxmox", tags=["proxmox"])
 # Proxbox Routes
 app.include_router(proxbox_router, prefix="/proxbox", tags=["proxbox"])
 app.include_router(pb_cluster_router, prefix="/proxbox/clusters", tags=["proxbox / clusters"])
-
-
-
-
-
 
 @app.get("/")
 async def standalone_info():
