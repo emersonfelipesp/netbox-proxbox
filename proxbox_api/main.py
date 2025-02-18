@@ -4,7 +4,11 @@ from fastapi import FastAPI, Request, WebSocket, Depends, Query, Path
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-from typing import Annotated
+from proxmoxer.core import ResourceException
+
+import re
+from pydantic import BaseModel, Field, conint, constr, model_validator, root_validator, Extra
+from typing import Annotated, Optional, Dict, Any
 
 import asyncio
 
@@ -389,6 +393,68 @@ async def create_custom_fields():
 
 CreateCustomFieldsDep = Annotated[CustomField.SchemaList, Depends(create_custom_fields)]    
 
+
+class VMConfig(BaseModel):
+    boot: str
+    name: str
+    cores: int
+    scsihw: str
+    vmgenid: str
+    memory: int
+    description: str
+    ostype: str
+    numa: int
+    digest: str
+    sockets: int
+    cpulimit: int
+    onboot: int
+    cpuunits: int
+    agent: int
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_dynamic_keys(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        # Validate dynamic keys (e.g. scsi0, net0, etc.).
+        for key in values.keys():
+            if not re.match(r'^(scsi|net|ide|unused|smbios)\d+$', key) and key not in cls.model_fields:
+                raise ValueError(f"Invalid key: {key}")
+        return values
+
+    class Config:
+        extra = 'allow'
+
+@app.get(
+    '/proxmox/{node}/{type}/{vmid}/config',
+    response_model=VMConfig,
+    response_model_exclude_none=True,
+    response_model_exclude_unset=True
+)
+async def get_vm_config(
+    pxs: ProxmoxSessionsDep,
+    node: str = Path(..., title="Node", description="Proxmox Node Name"),
+    type: str = Path(..., title="Type", description="Proxmox VM Type"),
+    vmid: int = Path(..., title="VM ID", description="Proxmox VM ID"),
+):
+    px = pxs[0]
+    
+    if type:
+        if type not in ('qemu', 'lxc'):
+            return {
+                "message": "Invalid VM Type. Use 'qemu' or 'lxc'."
+            }
+    
+    if type:
+        try:
+            if type == 'qemu':
+                return px.session.nodes(node).qemu(vmid).config.get()
+            elif type == 'lxc':
+                return px.session.nodes(node).lxc(vmid).config.get()
+        except ResourceException as error:
+            raise ProxboxException(
+                message="Error getting VM Config",
+                python_exception=f"Error: {str(error)}"
+            )
+    
 @app.get('/virtualization/virtual-machines/create')
 async def create_virtual_machines(
     cluster_resources: ClusterResourcesDep,
@@ -434,6 +500,8 @@ async def create_virtual_machines(
         #vm_config = px.session.nodes(resource.get("node")).qemu(resource.get("vmid")).config.get()
      
         vm_type = resource.get('type', 'unknown')
+        vm_config = get_vm_config(node=resource.get("node"), type=vm_type, vmid=resource.get("vmid"))
+        print(f'vm_config: {vm_config}')
         
         # Lamba is necessary to treat the object instantiation as a coroutine/function.
         return await asyncio.to_thread(lambda: VirtualMachine(
