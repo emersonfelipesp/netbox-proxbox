@@ -395,30 +395,44 @@ CreateCustomFieldsDep = Annotated[CustomField.SchemaList, Depends(create_custom_
 
 
 class VMConfig(BaseModel):
-    boot: str
-    name: str
-    cores: int
-    scsihw: str
-    vmgenid: str
-    memory: int
-    description: str
-    ostype: str
-    numa: int
-    digest: str
-    sockets: int
-    cpulimit: int
-    onboot: int
-    cpuunits: int
-    agent: int
-
+    parent: str | None = None
+    digest: str | None = None
+    swap: int | None = None
+    searchdomain: str | None = None
+    boot: str | None = None
+    name: str | None = None
+    cores: int | None = None
+    scsihw: str | None = None
+    vmgenid: str | None = None
+    memory: int | None = None
+    description: str | None = None
+    ostype: str | None = None
+    numa: int | None = None
+    digest: str | None = None
+    sockets: int | None = None
+    cpulimit: int | None = None
+    onboot: int | None = None
+    cpuunits: int | None = None
+    agent: int | None = None
+    tags: str | None = None
+    rootfs: str | None = None
+    unprivileged: int | None = None
+    nesting: int | None = None
+    nameserver: str | None = None
+    arch: str | None = None
+    hostname: str | None = None
+    rootfs: str | None = None
+    features: str | None = None
+    
     @model_validator(mode="before")
     @classmethod
     def validate_dynamic_keys(cls, values: Dict[str, Any]) -> Dict[str, Any]:
         # Validate dynamic keys (e.g. scsi0, net0, etc.).
-        for key in values.keys():
-            if not re.match(r'^(scsi|net|ide|unused|smbios)\d+$', key) and key not in cls.model_fields:
-                raise ValueError(f"Invalid key: {key}")
-        return values
+        if values:
+            for key in values.keys():
+                if not re.match(r'^(scsi|net|ide|unused|smbios)\d+$', key) and key not in cls.model_fields:
+                    raise ValueError(f"Invalid key: {key}")
+            return values
 
     class Config:
         extra = 'allow'
@@ -431,29 +445,60 @@ class VMConfig(BaseModel):
 )
 async def get_vm_config(
     pxs: ProxmoxSessionsDep,
+    cluster_status: ClusterStatusDep,
+    name: str = Query(title="Cluster", description="Proxmox Cluster Name", default=None),
     node: str = Path(..., title="Node", description="Proxmox Node Name"),
     type: str = Path(..., title="Type", description="Proxmox VM Type"),
     vmid: int = Path(..., title="VM ID", description="Proxmox VM ID"),
 ):
-    px = pxs[0]
+    '''
+    Loops through all Proxmox Clusters looking for a match in the node name.
+    If found, it returns the VM Config.
+    '''
     
-    if type:
+    # Early error return.
+    if not type:
+        return {
+            "message": "VM Type is required. Use 'qemu' or 'lxc'."
+        }
+    else:
         if type not in ('qemu', 'lxc'):
             return {
                 "message": "Invalid VM Type. Use 'qemu' or 'lxc'."
             }
-    
-    if type:
-        try:
-            if type == 'qemu':
-                return px.session.nodes(node).qemu(vmid).config.get()
-            elif type == 'lxc':
-                return px.session.nodes(node).lxc(vmid).config.get()
-        except ResourceException as error:
+
+    try:
+        config = None
+        for px, cluster in zip(pxs, cluster_status):
+            try:
+                for cluster_node in cluster.node_list:
+                    if str(node) == str(cluster_node.name):
+                        if type == 'qemu':
+                            config = px.session.nodes(node).qemu(vmid).config.get()
+                        elif type == 'lxc':
+                            config = px.session.nodes(node).lxc(vmid).config.get()
+                            
+                        if config: return config
+            
+            except ResourceException as error:
+                raise ProxboxException(
+                    message="Error getting VM Config",
+                    python_exception=f"Error: {str(error)}"
+                )
+
+        if config is None:
             raise ProxboxException(
-                message="Error getting VM Config",
-                python_exception=f"Error: {str(error)}"
-            )
+                message="VM Config not found.",
+                detail="VM Config not found. Check if the 'node', 'type', and 'vmid' are correct."
+            )            
+    
+    except ProxboxException:
+        raise
+    except Exception as error:
+        raise ProxboxException(
+            message="Unknown error getting VM Config. Search parameters probably wrong.",
+            detail="Check if the node, type, and vmid are correct."
+        )
     
 @app.get('/virtualization/virtual-machines/create')
 async def create_virtual_machines(
@@ -501,6 +546,13 @@ async def create_virtual_machines(
      
         vm_type = resource.get('type', 'unknown')
         vm_config = get_vm_config(node=resource.get("node"), type=vm_type, vmid=resource.get("vmid"))
+        
+ 
+        start_at_boot = True if vm_config.get('onboot', 0) == 1 else False
+        qemu_agent = True if vm_config.get('agent', 0) == 1 else False
+        unprivileged_container = True if vm_config.get('unprivileged', 0) == 1 else False
+        search_domain = vm_config.get('searchdomain', None)
+        
         print(f'vm_config: {vm_config}')
         
         # Lamba is necessary to treat the object instantiation as a coroutine/function.
@@ -516,6 +568,10 @@ async def create_virtual_machines(
             role=DeviceRole(**vm_role_mapping.get(vm_type)).get('id', None),
             custom_fields={
                 "proxmox_vm_id": resource.get('vmid'),
+                "proxmox_start_at_boot": start_at_boot,
+                "proxmox_unprivileged_container": unprivileged_container,
+                "proxmox_qemu_agent": qemu_agent,
+                "proxmox_search_domain": search_domain,
             }
         ))
 
