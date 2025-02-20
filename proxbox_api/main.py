@@ -502,6 +502,8 @@ async def get_vm_config(
     
 @app.get('/virtualization/virtual-machines/create')
 async def create_virtual_machines(
+    pxs: ProxmoxSessionsDep,
+    cluster_status: ClusterStatusDep,
     cluster_resources: ClusterResourcesDep,
     custom_fields: CreateCustomFieldsDep
 ):
@@ -545,7 +547,13 @@ async def create_virtual_machines(
         #vm_config = px.session.nodes(resource.get("node")).qemu(resource.get("vmid")).config.get()
      
         vm_type = resource.get('type', 'unknown')
-        vm_config = get_vm_config(node=resource.get("node"), type=vm_type, vmid=resource.get("vmid"))
+        vm_config = await get_vm_config(
+            pxs=pxs,
+            cluster_status=cluster_status,
+            node=resource.get("node"),
+            type=vm_type,
+            vmid=resource.get("vmid")
+        )
         
  
         start_at_boot = True if vm_config.get('onboot', 0) == 1 else False
@@ -562,7 +570,7 @@ async def create_virtual_machines(
             cluster=Cluster(name=cluster_name).get('id'),
             device=Device(name=resource.get('node')).get('id'),
             vcpus=int(resource.get("maxcpu", 0)),
-            memory=int(resource.get("maxmem")) // 1000,  # Fixed typo 'mexmem'
+            memory=int(resource.get("maxmem")) // 1000000,  # Fixed typo 'mexmem'
             disk=int(resource.get("maxdisk", 0)) // 1000000,
             tags=[ProxboxTag(bootstrap_placeholder=True).id],
             role=DeviceRole(**vm_role_mapping.get(vm_type)).get('id', None),
