@@ -18,6 +18,7 @@ from pynetbox_api.dcim.device import Device, DeviceRole, DeviceType
 from pynetbox_api.dcim.interface import Interface
 from pynetbox_api.dcim.manufacturer import Manufacturer
 from pynetbox_api.virtualization.virtual_machine import VirtualMachine
+from pynetbox_api.virtualization.interface import VMInterface
 from pynetbox_api.virtualization.cluster import Cluster
 from pynetbox_api.virtualization.cluster_type import ClusterType
 from pynetbox_api.extras.custom_field import CustomField
@@ -149,7 +150,12 @@ async def proxmoxer_exception_handler(request: Request, exc: ProxboxException):
 
 from proxbox_api.routes.proxbox.clusters import get_nodes, get_virtual_machines
 
-         
+
+@app.get('/cache')
+async def get_cache():
+    from pynetbox_api.cache import global_cache
+    return global_cache.return_cache()
+ 
 @app.get('/dcim/devices')
 async def create_devices():
     return {
@@ -563,8 +569,7 @@ async def create_virtual_machines(
         
         print(f'vm_config: {vm_config}')
         
-        # Lamba is necessary to treat the object instantiation as a coroutine/function.
-        return await asyncio.to_thread(lambda: VirtualMachine(
+        virtual_machine = await asyncio.to_thread(lambda: VirtualMachine(
             name=resource.get('name'),
             status=VirtualMachine.status_field.get(resource.get('status'), 'active'),
             cluster=Cluster(name=cluster_name).get('id'),
@@ -582,6 +587,45 @@ async def create_virtual_machines(
                 "proxmox_search_domain": search_domain,
             }
         ))
+        
+        
+        if virtual_machine and vm_config:
+            ''' 
+            Create Virtual Machine Interfaces
+            '''
+            vm_networks: list = []
+            network_id: int = 0 # Network ID
+            while True:
+                # Parse network information got from Proxmox to dict
+                network_name = f'net{network_id}'
+                
+                vm_network_info = vm_config.get(network_name, None) # Example result: virtio=CE:59:22:67:69:b2,bridge=vmbr1,queues=20,tag=2010 
+                if vm_network_info is not None:
+                    net_fields = vm_network_info.split(',') # Example result: ['virtio=CE:59:22:67:69:b2', 'bridge=vmbr1', 'queues=20', 'tag=2010']
+                    network_dict = dict([field.split('=') for field in net_fields]) # Example result: {'virtio': 'CE:59:22:67:69:b2', 'bridge': 'vmbr1', 'queues': '20', 'tag': '2010'}
+                    vm_networks.append({network_name:network_dict})
+                    
+                    network_id += 1
+                else:
+                    # If no network found by increasing network id, break the loop.
+                    break
+            
+            if vm_networks:
+                for network in vm_networks:
+                    # Parse the dict to valid netbox interface fields and Create Virtual Machine Interfaces
+                    [
+                        await asyncio.to_thread(lambda: VMInterface(
+                            virtual_machine=virtual_machine.get('id'),
+                            name=interface_name,
+                            enabled=True,
+                            mac_address= value.get('virtio', value.get('hwaddr', None)), # Try get MAC from 'virtio' first, then 'hwaddr'. Else None.
+                        )) for interface_name, value in network.items()
+                    ]
+                            
+        
+        
+        # Lamba is necessary to treat the object instantiation as a coroutine/function.
+        return virtual_machine
 
         """""
         proxmox_start_at_boot": resource.get(''),
