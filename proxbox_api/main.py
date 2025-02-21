@@ -570,6 +570,7 @@ async def create_virtual_machines(
         print(f'vm_config: {vm_config}')
         
         virtual_machine = await asyncio.to_thread(lambda: VirtualMachine(
+            cache=False,
             name=resource.get('name'),
             status=VirtualMachine.status_field.get(resource.get('status'), 'active'),
             cluster=Cluster(name=cluster_name).get('id'),
@@ -585,7 +586,7 @@ async def create_virtual_machines(
                 "proxmox_unprivileged_container": unprivileged_container,
                 "proxmox_qemu_agent": qemu_agent,
                 "proxmox_search_domain": search_domain,
-            }
+            },
         ))
         
         
@@ -612,15 +613,51 @@ async def create_virtual_machines(
             
             if vm_networks:
                 for network in vm_networks:
+                    print(f'vm: {virtual_machine.get('name')} - network: {network}')
                     # Parse the dict to valid netbox interface fields and Create Virtual Machine Interfaces
-                    [
-                        await asyncio.to_thread(lambda: VMInterface(
+                    for interface_name, value in network.items():
+                        # If 'bridge' value exists, create a bridge interface.
+                        bridge_name = value.get('bridge', None)
+                        bridge: dict = {}
+                        if bridge_name:
+                            bridge=VMInterface(
+                                name=bridge_name,
+                                virtual_machine=virtual_machine.get('id'),
+                                type='bridge',
+                                description=f'Bridge interface of Device {resource.get("node")}. The current NetBox modeling does not allow correct abstraction of virtual bridge.',
+                                tags=[ProxboxTag(bootstrap_placeholder=True).id]
+                            )
+                        
+                        if type(bridge) != dict:
+                            bridge = bridge.dict()
+                        
+                        vm_interface = await asyncio.to_thread(lambda: VMInterface(
                             virtual_machine=virtual_machine.get('id'),
-                            name=interface_name,
+                            name=value.get('name', interface_name),
                             enabled=True,
+                            bridge=bridge.get('id', None),
                             mac_address= value.get('virtio', value.get('hwaddr', None)), # Try get MAC from 'virtio' first, then 'hwaddr'. Else None.
-                        )) for interface_name, value in network.items()
-                    ]
+                            tags=[ProxboxTag(bootstrap_placeholder=True).id]
+                        ))
+                        
+                        if type(vm_interface) != dict:
+                            vm_interface = vm_interface.dict()
+                        
+                        # If 'ip' value exists and is not 'dhcp', create IP Address on NetBox.
+                        interface_ip = value.get('ip', None)
+                        if interface_ip and interface_ip != 'dhcp':
+                            IPAddress(
+                                address=interface_ip,
+                                assigned_object_type='virtualization.vminterface',
+                                assigned_object_id=vm_interface.get('id'),
+                                status='active',
+                                tags=[ProxboxTag(bootstrap_placeholder=True).id],
+                            )
+                            
+                        # TODO: Create VLANs and other network related objects.
+                        # 'tag' is the VLAN ID.
+                        # 'bridge' is the bridge name.
+                    
                             
         
         
