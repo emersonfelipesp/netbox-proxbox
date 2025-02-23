@@ -38,7 +38,7 @@ from proxbox_api.routes.proxmox.cluster import (
 from proxbox_api.routes.proxmox.nodes import router as px_nodes_router
 
 # Netbox Routes
-from proxbox_api.routes.netbox import router as netbox_router
+from proxbox_api.routes.netbox import router as netbox_router, GetNetBoxEndpoint
 from proxbox_api.routes.netbox.dcim import router as nb_dcim_router
 from proxbox_api.routes.netbox.virtualization import router as nb_virtualization_router
 
@@ -61,9 +61,32 @@ from proxbox_api.routes.proxmox.nodes import (
 )
 from proxbox_api.routes.proxmox.cluster import ClusterStatusDep
 
+from sqlmodel import select
+from proxbox_api.database import NetBoxEndpoint, get_session
+
 """
 CORS ORIGINS
 """
+
+netbox_url: str = "http://localhost:80"
+try:
+    database_session = next(get_session())
+    netbox_endpoint = database_session.exec(select(NetBoxEndpoint)).first()
+    
+    if netbox_endpoint:
+        print(netbox_endpoint)
+
+        https_netbox_url: str = f"https://{netbox_endpoint.ip_address}:{netbox_endpoint.port}"
+        http_netbox_url: str = f"http://{netbox_endpoint.ip_address}:{netbox_endpoint.port}"
+        netbox_url = https_netbox_url if netbox_endpoint.verify_ssl else http_netbox_url
+
+        print(netbox_url)
+except Exception as error:
+    raise ProxboxException(
+        message="Error getting Netbox Endpoint",
+        detail=f"Error: {str(error)}"
+    )
+    
 
 cfg_not_found_msg = "Netbox configuration not found. Using default configuration."
 
@@ -81,7 +104,7 @@ default_config: dict = {}
 plugin_configuration: dict = {}
 proxbox_cfg: dict = {}  
 
-
+'''
 fastapi_endpoint = f"http://{uvicorn_host}:{uvicorn_port}"
 https_fastapi_endpoint = f"https://{uvicorn_host}:{uvicorn_port}"
 fastapi_endpoint_port8000 = f"http://{uvicorn_host}:8000"
@@ -93,7 +116,7 @@ netbox_endpoint = f"http://{netbox_host}:{netbox_port}"
 https_netbox_endpoint = f"https://{netbox_host}"
 https_netbox_endpoint443 = f"https://{netbox_host}:443"
 https_netbox_endpoint_port = f"https://{netbox_host}:{netbox_port}"
-
+'''
 
 PROXBOX_PLUGIN_NAME: str = "netbox_proxbox"
 
@@ -114,17 +137,21 @@ def on_startup():
 CORS Middleware
 """
 
+'''
+fastapi_endpoint,
+fastapi_endpoint_port8000,
+fastapi_endpoint_port80,
+https_fastapi_endpoint,
+netbox_endpoint,
+netbox_endpoint_port80,
+netbox_endpoint_port8000,
+https_netbox_endpoint,
+https_netbox_endpoint443,
+https_netbox_endpoint_port,
+'''
+    
 origins = [
-    fastapi_endpoint,
-    fastapi_endpoint_port8000,
-    fastapi_endpoint_port80,
-    https_fastapi_endpoint,
-    netbox_endpoint,
-    netbox_endpoint_port80,
-    netbox_endpoint_port8000,
-    https_netbox_endpoint,
-    https_netbox_endpoint443,
-    https_netbox_endpoint_port,
+    netbox_url,
     "http://localhost",
 ]
 

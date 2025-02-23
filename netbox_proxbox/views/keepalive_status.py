@@ -87,7 +87,8 @@ def get_service_status(
                     'name': netbox_service_obj.name,
                     'ip_address': netbox_ip,
                     'port': netbox_service_obj.port,
-                    'token': netbox_service_obj.token
+                    'token': netbox_service_obj.token,
+                    'verify_ssl': netbox_service_obj.verify_ssl,
                 })
             
         except requests.exceptions.HTTPError as err:

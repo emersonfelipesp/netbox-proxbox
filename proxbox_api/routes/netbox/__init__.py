@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException, Depends
 from sqlmodel import select
 
 from typing import Annotated, Any
@@ -27,6 +27,8 @@ def get_netbox_endpoints(
 ) -> list[NetBoxEndpoint]:
     netbox_endpoints = session.exec(select(NetBoxEndpoint).offset(offset).limit(limit)).all()
     return netbox_endpoints
+
+GetNetBoxEndpoint = Annotated[list[NetBoxEndpoint], Depends(get_netbox_endpoints)]
 
 @router.get('/endpoint/{netbox_id}')
 def get_netbox_endpoint(netbox_id: int, session: SessionDep) -> NetBoxEndpoint:

@@ -129,6 +129,11 @@ cd netbox/netbox-proxbox
 pip3 install -r requirements.txt
 ```
 
+Run pynetbox-api on [develop mode (editable)](https://docs.astral.sh/uv/concepts/projects/dependencies/#editable-dependencies) using astral-uv
+```
+uv add --editable ./your-path-to-package/pynetbox-api
+```
+
 Run netbox-proxbox on develop mode
 
 ```
