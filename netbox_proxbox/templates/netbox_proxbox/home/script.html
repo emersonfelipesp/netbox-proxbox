@@ -2,11 +2,8 @@
 {% include "netbox_proxbox/virtual_machines_table/script.html" %}
 
 <script>
-    const uvicornHost = "{{ configuration.netbox_proxbox.fastapi.uvicorn_host }}"
-    const uvicornPort = "{{ configuration.netbox_proxbox.fastapi.uvicorn_port }}"
-
-    const fastapiEndpoint = `https://${uvicornHost}:${uvicornPort}`
-    const websocketEndpoint = `wss://${uvicornHost}:${uvicornPort}/ws`
+    const fastapiEndpoint = '{{ fastapi_url }}'
+    const websocketEndpoint = '{{ fastapi_websocket_url }}/ws/v2'
 
     // Instantiate WebSocket connection to FastAPI backend.
     let ws = new WebSocket(websocketEndpoint);
@@ -88,6 +85,12 @@
 
     }
 
+    function useWebsocket(event) {
+        // Send Websocket Message
+        ws.send("Hello, World!")
+        event.preventDefault()
+    }
+
     function fullUpdate(event) {
         // Send Websocket Message
         ws.send("Start")
@@ -104,6 +107,7 @@
         event.preventDefault()
     }
 
+    
     async function FastAPIConnectionTest(fastapiEndpoint) {
         let fastapi_docs_endpoint = `${fastapiEndpoint}/docs`
 
@@ -128,7 +132,9 @@
         }
 
     }
+    
 
+    
     async function NetboxAPIConnectionTest(fastapiEndpoint) {
         let netboxTestRoute = `${fastapiEndpoint}/netbox/status`
         

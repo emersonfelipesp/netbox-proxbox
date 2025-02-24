@@ -336,7 +336,9 @@ async def create_clusters(cluster_status: ClusterStatusDep):
     response_model_exclude_none=True,
     response_model_exclude_unset=True
 )
-async def create_custom_fields():
+async def create_custom_fields(
+    websocket = WebSocket
+):
     custom_fields: list = [
         {
             "object_types": [
@@ -416,7 +418,7 @@ async def create_custom_fields():
     ]
     
     async def create_custom_field_task(custom_field: dict):
-        return await asyncio.to_thread(lambda: CustomField(**custom_field))
+        return await asyncio.to_thread(lambda: CustomField(websocket=websocket, **custom_field))
 
     # Create Custom Fields
     return await asyncio.gather(*[
@@ -538,7 +540,8 @@ async def create_virtual_machines(
     pxs: ProxmoxSessionsDep,
     cluster_status: ClusterStatusDep,
     cluster_resources: ClusterResourcesDep,
-    custom_fields: CreateCustomFieldsDep
+    custom_fields: CreateCustomFieldsDep,
+    websocket = WebSocket
 ):
     async def _create_vm(cluster: dict):
         tasks = []  # Collect coroutines
@@ -597,6 +600,7 @@ async def create_virtual_machines(
         print(f'vm_config: {vm_config}')
         
         virtual_machine = await asyncio.to_thread(lambda: VirtualMachine(
+            websocket=websocket,
             cache=False,
             name=resource.get('name'),
             status=VirtualMachine.status_field.get(resource.get('status'), 'active'),
@@ -747,15 +751,44 @@ async def standalone_info():
         }
     }
 
-'''
+@app.websocket('/ws/v2')
+async def websocket_endpoint_v2(
+    websocket = WebSocket
+):
+    print('WebSocket v2')
+    await websocket.accept()
+    try:
+        while True:
+            data = await websocket.receive_text()
+            await websocket.send_text(f"Message text was: {data}")
+    finally:
+        await websocket.close()
+
+
+@app.websocket("/ws/test")
+async def websocket_test_endpoint(websocket: WebSocket):
+    try:
+        await websocket.accept()
+        while True:
+            await websocket.send_text("What's your name?")
+            data = await websocket.receive_text()
+            print(f'json: {data}')
+            await websocket.send_text(f"Message text was: {data}")
+    except Exception as error:
+        print(f"Error while accepting WebSocket connection: {error}")
+
 @app.websocket("/ws")
 async def websocket_endpoint(
     nb: NetboxSessionDep,
     pxs: ProxmoxSessionsDep,
-    websocket: WebSocket
+    cluster_status: ClusterStatusDep,
+    cluster_resources: ClusterResourcesDep,
+    custom_fields: CreateCustomFieldsDep,
+    websocket = WebSocket
 ):
     try:
         await websocket.accept()
+        await websocket.send_text('Connected!')
     except Exception as error:
         print(f"Error while accepting WebSocket connection: {error}")
         await websocket.close()
@@ -780,7 +813,17 @@ async def websocket_endpoint(
             await websocket.close()
 
         if data == "Sync Virtual Machines":
-            await get_virtual_machines(nb=nb, pxs=pxs, websocket=websocket)
+            # Old method
+            # await get_virtual_machines(nb=nb, pxs=pxs, websocket=websocket)
+            
+            # New method
+            await create_virtual_machines(
+                pxs=pxs,
+                cluster_status=cluster_status,
+                cluster_resources=cluster_resources,
+                custom_fields=custom_fields,
+                websocket=websocket
+            )
             await websocket.close()
             
         else:
@@ -789,9 +832,7 @@ async def websocket_endpoint(
             await websocket.close()
 
         await websocket.close()
-'''
-    
-'''
+
 @app.websocket("/ws/virtual-machine")
 async def websocket_vm_endpoint(
     nb: NetboxSessionDep,
@@ -822,4 +863,3 @@ async def websocket_vm_endpoint(
             print("Invalid command.")
             await websocket.send_text("Invalid command.")
             await websocket.close()
-'''
