@@ -24,4 +24,5 @@ class ProxboxTag(Tags):
     
     schema_in = SchemaIn
 
+
 proxbox_tag = ProxboxTag(bootstrap_placeholder=True)

@@ -630,24 +630,13 @@ async def create_virtual_machines(
         device_html = format_to_html(virtual_machine, 'device')
         role_html = format_to_html(virtual_machine, 'role')
         
-        await websocket.send_json(
-            {
-                'object': 'virtual_machine',
-                'type': 'create',
-                'data': 
-                {
-                    'name': f"<a href='{virtual_machine.get('display_url')}'>{virtual_machine.get('name')}</a>",
-                    'netbox_id': virtual_machine.get('id'),
-                    'status': str(virtual_machine.get('status').get('label')),
-                    'cluster': cluster_html,
-                    'device': device_html,
-                    'role': role_html,
-                    'vcpus': virtual_machine.get('vcpus'),
-                    'memory': virtual_machine.get('memory'),
-                    'disk': virtual_machine.get('disk'),
-                }
-            }
-        )
+        status_html_choices = {
+            'active': "<span class='text-bg-green badge p-1'>Active</span>",
+            'offline': "<span class='text-bg-red badge p-1'>Offline</span>",
+            'unknown': "<span class='text-bg-grey badge p-1'>Unknown</span>"
+        }
+        status_html = status_html_choices.get(virtual_machine.get('status').get('value'), status_html_choices.get('unknown'))
+        netbox_vm_interfaces: list = []
         
         if virtual_machine and vm_config:
             ''' 
@@ -699,6 +688,8 @@ async def create_virtual_machines(
                             tags=[ProxboxTag(bootstrap_placeholder=True).id]
                         ))
                         
+                        netbox_vm_interfaces.append(vm_interface)
+                        
                         if type(vm_interface) != dict:
                             vm_interface = vm_interface.dict()
                         
@@ -717,8 +708,26 @@ async def create_virtual_machines(
                         # 'tag' is the VLAN ID.
                         # 'bridge' is the bridge name.
                     
-                            
         
+        await websocket.send_json(
+            {
+                'object': 'virtual_machine',
+                'type': 'create',
+                'data': 
+                {
+                    'name': f"<a href='{virtual_machine.get('display_url')}'>{virtual_machine.get('name')}</a>",
+                    'netbox_id': virtual_machine.get('id'),
+                    'status': status_html,
+                    'cluster': cluster_html,
+                    'device': device_html,
+                    'role': role_html,
+                    'vcpus': virtual_machine.get('vcpus'),
+                    'memory': virtual_machine.get('memory'),
+                    'disk': virtual_machine.get('disk'),
+                    'vm_interfaces': [f"<a href='{interface.get('display_url')}'>{interface.get('name')}</a>" for interface in netbox_vm_interfaces],
+                }
+            }
+        )
         
         # Lamba is necessary to treat the object instantiation as a coroutine/function.
         return virtual_machine

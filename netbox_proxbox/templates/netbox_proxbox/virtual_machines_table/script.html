@@ -43,23 +43,14 @@
     
                 let vmStatusDataHtml = undefinedHtml
     
-                if (jsonMessage.data.status === "running") {
-                    vmStatusDataHtml = `<span class="text-bg-green badge p-1">${jsonMessage.data.status}</span>`
-                } else if (jsonMessage.data.status === "stopped") {
-                    vmStatusDataHtml = `<span class="text-bg-red badge p-1">${jsonMessage.data.status}</span>`
-                } else {
-                    vmStatusDataHtml = `<span class="text-bg-grey badge p-1">${jsonMessage.data.status}</span>`
-                }
-    
                 // Populate Table Row with Table Data parsed from Websocket JSON message
-                vmTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `status`, syncStatus))
+                vmTableRow.appendChild(createTdElement(type=jsonMessage.object, name=jsonDataName, field=`status`, syncStatus))
                 vmTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `netbox-id`, jsonMessage.data.netbox_id))
-                vmTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `id`, `<span class='badge text-bg-grey' title='Proxmox VM ID'><strong></strong>${jsonMessage.data.vmid}</strong></span>`))
                 vmTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `name`, jsonMessage.data.name))
-                vmTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `status`, vmStatusDataHtml))
+                vmTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `status`, jsonMessage.data.status))
                 vmTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `device`, jsonMessage.data.device))
                 vmTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `cluster`, jsonMessage.data.cluster))
-                vmTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `cluster-type`, jsonMessage.data.cluster_type))
+                vmTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `vm-interfaces`, jsonMessage.data.vm_interfaces))
                 vmTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `role`, jsonMessage.data.role))
                 vmTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `vcpus`, jsonMessage.data.vcpus))
                 vmTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `memory`, jsonMessage.data.memory))
