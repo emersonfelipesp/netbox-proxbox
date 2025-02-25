@@ -38,8 +38,12 @@
                         {% endif %}
                     </form>
                     -->
-
-                    <form class="m-2" action="" onsubmit="syncVirtualMachines(event)">
+                    <form class="m-2" action="" onsubmit=syncNodes(event)>
+                        {% if perms.netbox_proxbox.add_proxmoxvm %}
+                            <button id="full-update-button" class="btn btn-primary">Sync Nodes Using WebSocket (Beta)</button>
+                        {% endif %}
+                    </form>
+                    <form class="m-2" action="" onsubmit=syncVirtualMachines(event)>
                         {% if perms.netbox_proxbox.add_proxmoxvm %}
                             <button id="full-update-button" class="btn btn-primary">Sync Virtual Machines Using WebSocket (Beta)</button>
                         {% endif %}
@@ -54,6 +58,7 @@
             <br>
 
             {% include "netbox_proxbox/virtual_machines_table/table.html" %}
+            {% include "netbox_proxbox/devices_table/table.html" %}
 
 
             <div class="d-flex justify-content-center flex-nowrap" style="margin-bottom: 15px;">

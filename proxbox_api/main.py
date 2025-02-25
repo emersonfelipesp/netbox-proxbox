@@ -200,11 +200,13 @@ async def create_proxmox_devices(
     clusters_status: ClusterStatusDep,
     nb: NetboxSessionDep,
     node: str | None = None,
+    websocket = WebSocket
 ):
     device_list: list = []
     
     for cluster_status in clusters_status:
         for node_obj in cluster_status.node_list:
+            websocket_node_json: dict = {}
             try:
                 # TODO: Based on name.ip create Device IP Address
                 netbox_device = Device(
@@ -223,6 +225,18 @@ async def create_proxmox_devices(
                         description = f'Proxmox {cluster_status.mode} cluster.',
                         tags=[ProxboxTag(bootstrap_placeholder=True).id]
                     ).get('id', Cluster(bootstrap_placeholder=True).id),
+                )
+                
+                await websocket.send_json(
+                    {
+                        'object': 'device',
+                        'type': 'create',
+                        'data': websocket_node_json | {
+                            'rowid': node_obj.name,
+                            'name': node_obj.name,
+                            'cluster': cluster_status.name,
+                        }
+                    }
                 )
                 
                 # If node, return only the node requested.
@@ -828,32 +842,6 @@ async def standalone_info():
         }
     }
 
-@app.websocket('/ws/v2')
-async def websocket_endpoint_v2(
-    websocket = WebSocket
-):
-    print('WebSocket v2')
-    await websocket.accept()
-    try:
-        while True:
-            data = await websocket.receive_text()
-            await websocket.send_text(f"Message text was: {data}")
-    finally:
-        await websocket.close()
-
-
-@app.websocket("/ws/test")
-async def websocket_test_endpoint(websocket: WebSocket):
-    
-    await websocket.accept()
-    try:
-        while True:
-            data = await websocket.receive_text()
-            print(f'json: {data}')
-            await websocket.send_text(f"Message text was: {data}")
-    except Exception as error:
-        print(f"Error while accepting WebSocket connection: {error}")
-
 @app.websocket("/ws")
 async def websocket_endpoint(
     nb: NetboxSessionDep,
@@ -886,7 +874,15 @@ async def websocket_endpoint(
             await websocket.close()
             
         if data == "Sync Nodes":
-            await get_nodes(nb=nb, pxs=pxs, websocket=websocket)
+            # Old method
+            # await get_nodes(nb=nb, pxs=pxs, websocket=websocket)
+            # New method
+            await create_proxmox_devices(
+                clusters_status=cluster_status,
+                nb=nb,
+                node=None,
+                websocket=websocket
+            )
             await websocket.close()
 
         if data == "Sync Virtual Machines":
