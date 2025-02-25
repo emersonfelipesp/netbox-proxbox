@@ -553,8 +553,11 @@ async def create_virtual_machines(
         return await asyncio.gather(*tasks)  # Gather coroutines
 
     async def create_vm_task(cluster_name, resource):
+        sync_status_html = "<span class='text-bg-yellow badge p-1' title='Syncing VM' ><i class='mdi mdi-sync'></i></span>"
+        completed_sync_html = "<span class='text-bg-green badge p-1' title='Synced VM'><i class='mdi mdi-check'></i></span>"
         undefined_html = "<span class='badge text-bg-grey'><strong></strong>undefined</strong></span>"
         websocket_vm_json: dict = {
+            'sync_status': sync_status_html,
             'name': undefined_html,
             'netbox_id': undefined_html,
             'status': undefined_html,
@@ -744,6 +747,7 @@ async def create_virtual_machines(
                         # 'bridge' is the bridge name.
         
         vm_created_json: dict = initial_vm_json | {
+            'sync_status': completed_sync_html,
             'rowid': str(resource.get('name')),
             'name': f"<a href='{virtual_machine.get('display_url')}'>{virtual_machine.get('name')}</a>",
             'netbox_id': virtual_machine.get('id'),

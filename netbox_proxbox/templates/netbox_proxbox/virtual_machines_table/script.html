@@ -56,7 +56,7 @@
                 let vmStatusDataHtml = undefinedHtml
     
                 // Populate Table Row with Table Data parsed from Websocket JSON message
-                vmTableRow.appendChild(createTdElement(type=jsonMessage.object, name=jsonDataName, field=`status`, syncStatus))
+                vmTableRow.appendChild(createTdElement(type=jsonMessage.object, name=jsonDataName, field=`status`, jsonMessage.data.sync_status))
                 vmTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `netbox-id`, jsonMessage.data.netbox_id))
                 vmTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `name`, jsonMessage.data.name))
                 vmTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `status`, jsonMessage.data.status))
