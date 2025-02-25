@@ -553,6 +553,20 @@ async def create_virtual_machines(
         return await asyncio.gather(*tasks)  # Gather coroutines
 
     async def create_vm_task(cluster_name, resource):
+        undefined_html = "<span class='badge text-bg-grey'><strong></strong>undefined</strong></span>"
+        websocket_vm_json: dict = {
+            'name': undefined_html,
+            'netbox_id': undefined_html,
+            'status': undefined_html,
+            'cluster': undefined_html,
+            'device': undefined_html,
+            'role': undefined_html,
+            'vcpus': undefined_html,
+            'memory': undefined_html,
+            'disk': undefined_html,
+            'vm_interfaces': undefined_html
+        }
+        
         vm_role_mapping: dict = {
             'qemu': {
                 'name': 'Virtual Machine (QEMU)',
@@ -600,7 +614,28 @@ async def create_virtual_machines(
         print(f'vm_config: {vm_config}')
         
         await websocket.send_text(f"Creating Virtual Machine {resource.get('name')} in Cluster {cluster_name}")
-        #await websocket.send_json({'object': 'virtual_machine', 'type': 'create', 'data': vm_config})
+        print(f'data: {websocket_vm_json | {
+                    'name': str(resource.get('name')),
+                    'cluster': str(cluster_name),
+                    'device': str(resource.get('node')),
+                }}')
+        
+        initial_vm_json = websocket_vm_json | {
+            'rowid': str(resource.get('name')),
+            'name': str(resource.get('name')),
+            'cluster': str(cluster_name),
+            'device': str(resource.get('node')),
+        }
+        
+        
+        print(f'initial_vm_json: {initial_vm_json}')
+        
+        await websocket.send_json(
+            {
+                'object': 'virtual_machine',
+                'type': 'create',
+                'data': initial_vm_json
+            })
         
         virtual_machine = await asyncio.to_thread(lambda: VirtualMachine(
             websocket=websocket,
@@ -707,25 +742,26 @@ async def create_virtual_machines(
                         # TODO: Create VLANs and other network related objects.
                         # 'tag' is the VLAN ID.
                         # 'bridge' is the bridge name.
-                    
+        
+        vm_created_json: dict = initial_vm_json | {
+            'rowid': str(resource.get('name')),
+            'name': f"<a href='{virtual_machine.get('display_url')}'>{virtual_machine.get('name')}</a>",
+            'netbox_id': virtual_machine.get('id'),
+            'status': status_html,
+            'cluster': cluster_html,
+            'device': device_html,
+            'role': role_html,
+            'vcpus': virtual_machine.get('vcpus'),
+            'memory': virtual_machine.get('memory'),
+            'disk': virtual_machine.get('disk'),
+            'vm_interfaces': [f"<a href='{interface.get('display_url')}'>{interface.get('name')}</a>" for interface in netbox_vm_interfaces],
+        }
         
         await websocket.send_json(
             {
                 'object': 'virtual_machine',
                 'type': 'create',
-                'data': 
-                {
-                    'name': f"<a href='{virtual_machine.get('display_url')}'>{virtual_machine.get('name')}</a>",
-                    'netbox_id': virtual_machine.get('id'),
-                    'status': status_html,
-                    'cluster': cluster_html,
-                    'device': device_html,
-                    'role': role_html,
-                    'vcpus': virtual_machine.get('vcpus'),
-                    'memory': virtual_machine.get('memory'),
-                    'disk': virtual_machine.get('disk'),
-                    'vm_interfaces': [f"<a href='{interface.get('display_url')}'>{interface.get('name')}</a>" for interface in netbox_vm_interfaces],
-                }
+                'data': vm_created_json
             }
         )
         
