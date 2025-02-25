@@ -1,0 +1,103 @@
+<script>
+    // Instantiate WebSocket connection to FastAPI backend.
+    let ws = new WebSocket(websocketEndpoint);
+
+    ws.onmessage = function(event) {
+        // Add WebSockets Messages came from FasstAPI backend on GUI
+        console.log(event.data)
+
+        let jsonMessage = undefined
+
+        try {
+            jsonMessage = JSON.parse(event.data)
+        } catch (error) {
+            // do nothing
+            console.log("Could not parse JSON message.")
+        }
+
+        if (jsonMessage) {
+            if (jsonMessage.object == "virtual_machine") {
+                populateVirtualMachinesTable(jsonMessage)
+            }
+        }
+
+        let messages = document.getElementById('messages')
+        let message = document.createElement('li')
+
+        message.style.lineHeight = '170%'
+        
+        message.innerHTML = event.data
+        messages.appendChild(message)
+
+        let test = document.getElementById('scrollable-div')
+        test.scrollTop = test.scrollHeight
+
+    };
+
+    ws.onerror = function(error) {
+        console.log("WebSocket error observed: ", error);
+        console.log("error.url", error.url)
+
+        fullUpdateButton = document.getElementById('full-update-button')
+        fullUpdateButton.className = "btn btn-red"
+
+        fullUpdateMessage = document.getElementById('full-update-error-message')
+        fullUpdateMessage.className = "text-red"
+
+        let errorMessage = `
+            <p align=center>
+                <strong>WebSocket</strong> communication failed with <strong>${error.currentTarget.url}</strong>
+                <br>The most probably cause is <strong>Proxbox Backend not running</strong> properly.<br><br>
+                Check if Proxbox is running using following command: <code>systemctl status proxbox</code>.<br>If not, just issue the <code>systemctl start proxbox</code> command..<br>Otherwise, check <a href="https://github.com/netdevopsbr/netbox-proxbox#15-systemd-setup-proxbox-backend" target="_target">Proxbox Documentation</a>.
+            </p>`
+
+        let errorButtonFix = `
+            <a href="{% url 'plugins:netbox_proxbox:fix-proxbox-backend' %}">
+                <button class="btn btn-primary m-2" id="error-button-fix" class="btn btn-primary">
+                    Let Proxbox try to fix it.
+                </button>
+            </a><hr>
+        `
+
+        let errorDiv = `
+        <div>
+            ${errorMessage}${errorButtonFix}
+        </div>
+        `
+
+        fullUpdateMessage.innerHTML = errorDiv
+        
+
+        let statusBadgeError = document.getElementById('fastapi-connection-status')
+        statusBadgeError.className = "text-bg-red badge p-1"
+        statusBadgeError.textContent = "Connection Failed!"
+
+        let statusErrorMessage = document.getElementById('fastapi-connection-error')
+        statusErrorMessage.className = "text-bg-red p-2"
+        statusErrorMessage.innerHTML = errorMessage
+
+
+    }
+
+    function useWebsocket(event) {
+        // Send Websocket Message
+        ws.send("Hello, World!")
+        event.preventDefault()
+    }
+
+    function fullUpdate(event) {
+        // Send Websocket Message
+        ws.send("Start")
+        event.preventDefault()
+    }
+
+    function syncNodes(event) {
+        ws.send("Sync Nodes")
+        event.preventDefault()
+    }
+
+    function syncVirtualMachines(event) {
+        ws.send("Sync Virtual Machines")
+        event.preventDefault()
+    }
+</script>

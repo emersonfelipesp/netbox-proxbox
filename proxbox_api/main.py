@@ -599,6 +599,9 @@ async def create_virtual_machines(
         
         print(f'vm_config: {vm_config}')
         
+        await websocket.send_text(f"Creating Virtual Machine {resource.get('name')} in Cluster {cluster_name}")
+        #await websocket.send_json({'object': 'virtual_machine', 'type': 'create', 'data': vm_config})
+        
         virtual_machine = await asyncio.to_thread(lambda: VirtualMachine(
             websocket=websocket,
             cache=False,
@@ -620,6 +623,31 @@ async def create_virtual_machines(
             },
         ))
         
+        def format_to_html(json: dict, key: str):
+            return f"<a href='{json.get(key).get('url')}'>{json.get(key).get('name')}</a>"
+        
+        cluster_html = format_to_html(virtual_machine, 'cluster')
+        device_html = format_to_html(virtual_machine, 'device')
+        role_html = format_to_html(virtual_machine, 'role')
+        
+        await websocket.send_json(
+            {
+                'object': 'virtual_machine',
+                'type': 'create',
+                'data': 
+                {
+                    'name': f"<a href='{virtual_machine.get('display_url')}'>{virtual_machine.get('name')}</a>",
+                    'netbox_id': virtual_machine.get('id'),
+                    'status': str(virtual_machine.get('status').get('label')),
+                    'cluster': cluster_html,
+                    'device': device_html,
+                    'role': role_html,
+                    'vcpus': virtual_machine.get('vcpus'),
+                    'memory': virtual_machine.get('memory'),
+                    'disk': virtual_machine.get('disk'),
+                }
+            }
+        )
         
         if virtual_machine and vm_config:
             ''' 
@@ -767,10 +795,10 @@ async def websocket_endpoint_v2(
 
 @app.websocket("/ws/test")
 async def websocket_test_endpoint(websocket: WebSocket):
+    
+    await websocket.accept()
     try:
-        await websocket.accept()
         while True:
-            await websocket.send_text("What's your name?")
             data = await websocket.receive_text()
             print(f'json: {data}')
             await websocket.send_text(f"Message text was: {data}")
@@ -784,7 +812,7 @@ async def websocket_endpoint(
     cluster_status: ClusterStatusDep,
     cluster_resources: ClusterResourcesDep,
     custom_fields: CreateCustomFieldsDep,
-    websocket = WebSocket
+    websocket: WebSocket
 ):
     try:
         await websocket.accept()

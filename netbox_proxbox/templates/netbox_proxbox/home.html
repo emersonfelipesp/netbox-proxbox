@@ -5,7 +5,12 @@
 <script src="https://unpkg.com/htmx.org@1.7.0"></script>
 {% endblock %}
 {% block content %}
+    <script>
+        const fastapiEndpoint = '{{ fastapi_url }}'
+        const websocketEndpoint = '{{ fastapi_websocket_url }}/ws'
+    </script>
     {% include "netbox_proxbox/home/script.html" %}
+    {% include "netbox_proxbox/home/websocket.html" %}
 
     <div>
         <div class="row mb-3">
@@ -16,11 +21,6 @@
                 
 
                 {% for object in fastapi_endpoint_list %}
-                    <form class="m-2" action="" onsubmit="useWebsocket(event)">
-                        {% if perms.netbox_proxbox.add_proxmoxvm %}
-                            <button id="full-update-button" class="btn btn-primary">Using WebSocket (Beta)</button>
-                        {% endif %}
-                    </form>
                     <!-- Old way using websocket vanilla
                     <form class="m-2" action="" onsubmit="fullUpdate(event)">
                         {% if perms.netbox_proxbox.add_proxmoxvm %}
@@ -39,22 +39,12 @@
                     </form>
                     -->
 
-                    {% if perms.netbox_proxbox.add_proxmoxvm %}
-                        <button id="full-update-button" class="btn btn-primary">Proxmox Full Update</button>
-                    {% endif %}
-
-
-                    {% if perms.netbox_proxbox.add_proxmoxvm %}
-                        <a href='{{ fastapi_url }}/virtualization/virtual-machines/create'>
-                            <button id="full-update-button" class="btn btn-primary">Sync Virtual Machines</button>
-                        </a>
-                    {% endif %}
-
                     <form class="m-2" action="" onsubmit="syncVirtualMachines(event)">
                         {% if perms.netbox_proxbox.add_proxmoxvm %}
                             <button id="full-update-button" class="btn btn-primary">Sync Virtual Machines Using WebSocket (Beta)</button>
                         {% endif %}
                     </form>
+
                 {% endfor %}
                 
                 

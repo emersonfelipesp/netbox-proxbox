@@ -6,53 +6,6 @@
     <title>HTMX WebSocket Example</title>
     <script src="https://unpkg.com/htmx.org@1.7.0"></script>
     <script src="https://unpkg.com/htmx.org/dist/ext/ws.js"></script>
-    <!-- 
-    <script>
-        // Define the factory function to create custom WebSocket instances
-        function createWebSocket(url) {
-            const ws = new WebSocket(url);
-            
-            // Custom configurations can be added here
-            ws.onopen = () => {
-                console.log('WebSocket is open now.');
-            };
-            
-            ws.onclose = () => {
-                console.log('WebSocket is closed now.');
-            };
-            
-            ws.onerror = (error) => {
-                console.error('WebSocket error observed:', error);
-            };
-            
-            return ws;
-        }
-
-        // Define the WebSocket configuration
-        const wsConfig = {
-            createWebSocket: createWebSocket,
-            wsBinaryType: 'arraybuffer' // or 'blob' which is default
-        };
-
-        // Example usage of the WebSocket configuration
-        const socket = wsConfig.createWebSocket('{{ fastapi_websocket_url}}/ws/test');
-        socket.binaryType = wsConfig.wsBinaryType;
-
-        // Example event listeners
-        socket.onmessage = (event) => {
-            if (event.data instanceof ArrayBuffer) {
-                console.log('Received ArrayBuffer message:', event.data);
-            } else {
-                console.log('Received message:', event.data);
-            }
-        };
-
-        // Send a sample message
-        socket.onopen = () => {
-            socket.send('Hello WebSocket');
-        };
-    </script>
-    -->
 </head>
 <body>
     <h1>HTMX WebSocket Example</h1>
@@ -66,15 +19,17 @@
 
     </form>
     -->
-
-    <div hx-ext="ws" ws-connect='{{ fastapi_websocket_url}}/ws/test'>
+    <div hx-ext="ws" ws-connect="{{ fastapi_websocket_url}}/ws/test">
+        <h1>Chat Room</h1>
         <div id="notifications"></div>
         <div id="chat_room">
         </div>
-        <form id="form" ws-send>
+        <form id="form" >
             <input name="chat_message">
+            <button ws-send hx-trigger='submit' hx-target="#chat_room" hx-swap="outerHTML">Send</button>
         </form>
     </div>
+
     
     <script>
         // Define the factory function to create custom WebSocket instances
@@ -100,7 +55,7 @@
         // Define the WebSocket configuration
         const wsConfig = {
             createWebSocket: createWebSocket,
-            wsBinaryType: 'arraybuffer' // or 'blob' which is default
+            wsBinaryType: 'arraybuffer'
         }
 
 
@@ -111,34 +66,28 @@
         document.addEventListener('htmx:wsOpen', function(evt) {
             console.log('WebSocket connection established:', evt.detail.event.type);
         });
+
+        document.addEventListener('htmx:wsClose', function(evt) {
+            console.log('WebSocket connection closed:', evt.detail.event.type);
+        });
+
+        document.addEventListener('htmx:wsBeforeMessage', function(evt) {
+            console.log('WebSocket message is about to be sent:', evt.detail.message);
+        });
         
         // Example usage of the WebSocket configuration
         const socket = wsConfig.createWebSocket('{{ fastapi_websocket_url}}/ws/test');
         socket.binaryType = wsConfig.wsBinaryType;
 
-        document.getElementById('message-form').addEventListener('htmx:wsMessage', function(evt) {
-            var messageContainer = document.getElementById('messages');
-            var newMessage = document.createElement('div');
-            newMessage.textContent = evt.detail.data;
-            console.log(newMessage);
-            messageContainer.appendChild(newMessage);
-        });
-
         // Example event listeners
         socket.onmessage = (event) => {
-            if (event.data instanceof ArrayBuffer) {
-                console.log('Received ArrayBuffer message:', event.data);
-            } else {
-                const messageContainer = document.getElementById('messages');
-                const newMessage = document.createElement('div');
-                newMessage.textContent = event.data;
-                messageContainer.appendChild(newMessage);
-            }
+            console.log('2-Received message:', event.data);
         };
 
         // Send a sample message
         socket.onopen = () => {
-            socket.send('Hello WebSocket');
+            console.log('[socket.onopen] WebSocket is open now.');
+            //socket.send('Hello WebSocket');
         };
     </script>
 </body>
