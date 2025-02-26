@@ -1,5 +1,6 @@
-import { populateDevicesTable } from "./device.js";
-import { populateVirtualMachinesTable } from "./virtual_machine.js";
+//import { populateDevicesTable } from "./device.js";
+//import { populateVirtualMachinesTable } from "./virtual_machine.js";
+import { populateTable } from "./table.js";
 
 // Instantiate WebSocket connection to FastAPI backend.
 //let ws = new WebSocket(websocketEndpoint);
@@ -71,17 +72,27 @@ class WebSocketClient {
             console.warn('Could not parse JSON message:', event.data);
         }
 
-        // if (jsonMessage) {
-        //     if (jsonMessage.object == 'virtual_machine') {
-        //         // Populate Virtual Machines Table with data from Websocket JSON message
-        //         populateVirtualMachinesTable(jsonMessage);
-        //     } else if (jsonMessage.object == 'device') {
-        //         // Populate Devices Table with data from Websocket JSON message
-        //         populateDevicesTable(jsonMessage);
-        //     }
-        // }
+        if (jsonMessage) {
+            if (jsonMessage.object == 'virtual_machine') {
+                // Populate Virtual Machines Table with data from Websocket JSON message
+                populateTable({
+                    jsonMessage: jsonMessage,
+                    tableDivId: 'virtual-machines-div',
+                    tableId: 'virtual-machine-table-data',
+                    defaultRowId: 'virtual-machines-table-default-td'
+                });
+            } else if (jsonMessage.object == 'device') {
+                // Populate Devices Table with data from Websocket JSON message
+                populateTable({
+                    jsonMessage: jsonMessage,
+                    tableDivId: 'device-div',
+                    tableId: 'device-table-data',
+                    defaultRowId:'device-table-default-td'
+                });
+            }
+        }
 
-        //this.displayMessage(event.data);
+        this.displayMessage(event.data);
         console.log(event.data);
     }
 
@@ -109,6 +120,23 @@ class WebSocketClient {
             console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
             this.connect();
         }, delay);
+    }
+
+    displayMessage(data) {
+        // Add WebSockets Messages came from FastAPI backend on GUI at Logs Messages
+        const messages = document.getElementById('messages');
+        if (!messages) return;
+
+        // Create <li> element and put the websocket data received on it.
+        const message = document.createElement('li');
+        message.style.lineHeight = '170%';
+        message.innerHTML = data;
+        messages.appendChild(message);
+
+        const scrollableDiv = document.getElementById('scrollable-div');
+        if (scrollableDiv) {
+            scrollableDiv.scrollTop = scrollableDiv.scrollHeight
+        }
     }
 
     // Public methods for sending commands to the WebSocket Server
