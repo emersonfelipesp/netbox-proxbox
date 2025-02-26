@@ -108,12 +108,8 @@ function getBody () {
     body.onload = getVersion
 }
 
-
-export function printName () {
-    console.log("Hello World!")
-}
-
 getBody()
+
 
 async function getVersion() {
     let virtualMachinesDiv = document.getElementById('virtual-machines-div')
@@ -225,3 +221,6 @@ async function getVersion() {
         }
     }
 }
+
+
+export { FastAPIConnectionTest, NetboxAPIConnectionTest, getVersion }

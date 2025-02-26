@@ -1,5 +1,3 @@
-import { createTdElement } from './common.js'
-
 export function populateTable({jsonMessage, tableDivId, tableId, defaultRowId}) {
     // Populate Table with data from Websocket JSON message
     if (!jsonMessage) {
@@ -7,10 +5,10 @@ export function populateTable({jsonMessage, tableDivId, tableId, defaultRowId}) 
     }
 
     // Get whole table div element
-    let tableDiv = document.getElementById(tableId)
+    let tableDiv = document.getElementById(tableDivId)
 
     // Get Virtual Machine Table <table> element
-    let table = document.getElementById(tableDivId)
+    let table = document.getElementById(tableId)
 
     if (!table) {
         // If table not found, return.
@@ -18,7 +16,6 @@ export function populateTable({jsonMessage, tableDivId, tableId, defaultRowId}) 
     } else {
         // If table found, display it.
         tableDiv.style.display = "block"
-        table.style.display = "block"
     }
 
     let jsonDataName = undefined
@@ -34,8 +31,32 @@ export function populateTable({jsonMessage, tableDivId, tableId, defaultRowId}) 
         let undefinedHtml = `<span class='badge text-bg-grey' title='Proxmox VM ID'><strong></strong>undefined</strong></span>`
 
         let defaultRow = document.getElementById(defaultRowId)
-        defaultRow.style.display = "none"
+        if (defaultRow) {
+            defaultRow.style.display = "none"
+        }
         
+        
+        let vmStatusDataHtml = undefinedHtml
+
+        function createTdElement({table_element, row_element, rowID, field, innerHTML}) {
+            let dataId = `${rowID}-${field}-data`
+
+            let data_element = document.getElementById(dataId)
+            if (data_element) {
+                // If data element found, update it.
+                data_element.innerHTML = innerHTML
+            } else {
+                // If data element not found, create it.
+                data_element = document.createElement('td')
+                data_element.id = dataId
+                data_element.innerHTML = innerHTML
+
+                row_element.appendChild(data_element)
+                table_element.appendChild(row)
+            }
+        }
+
+
         // Create Table Row
         let rowID = jsonMessage.data.rowid
 
@@ -47,30 +68,25 @@ export function populateTable({jsonMessage, tableDivId, tableId, defaultRowId}) 
         if (!row) {
             row = document.createElement('tr')
             row.id = rowID
-        } else {
-            // Clear Table Row
-            row.innerHTML = ""
         }
-        
-        let vmStatusDataHtml = undefinedHtml
 
-        // Populate Table Row with Table Data parsed from Websocket JSON message
-        row.appendChild(createTdElement(jsonMessage.object, jsonDataName, `status`, jsonMessage.data.sync_status))
-        row.appendChild(createTdElement(jsonMessage.object, jsonDataName, `netbox-id`, jsonMessage.data.netbox_id))
-        row.appendChild(createTdElement(jsonMessage.object, jsonDataName, `name`, jsonMessage.data.name))
-        row.appendChild(createTdElement(jsonMessage.object, jsonDataName, `status`, jsonMessage.data.status))
-        row.appendChild(createTdElement(jsonMessage.object, jsonDataName, `device`, jsonMessage.data.device))
-        row.appendChild(createTdElement(jsonMessage.object, jsonDataName, `cluster`, jsonMessage.data.cluster))
-        row.appendChild(createTdElement(jsonMessage.object, jsonDataName, `vm-interfaces`, jsonMessage.data.vm_interfaces))
-        row.appendChild(createTdElement(jsonMessage.object, jsonDataName, `role`, jsonMessage.data.role))
-        row.appendChild(createTdElement(jsonMessage.object, jsonDataName, `vcpus`, jsonMessage.data.vcpus))
-        row.appendChild(createTdElement(jsonMessage.object, jsonDataName, `memory`, jsonMessage.data.memory))
-        row.appendChild(createTdElement(jsonMessage.object, jsonDataName, `disk-space`, jsonMessage.data.disk))
-        row.appendChild(createTdElement(jsonMessage.object, jsonDataName, `ip-address`, undefinedHtml))
-        
-        table.appendChild(row)
+        if (jsonMessage.object == 'virtual_machine') {
+            // Populate Table Row with Table Data parsed from Websocket JSON message
+            createTdElement({table_element: table, row_element: row, rowID, field: `sync_status`, innerHTML: jsonMessage.data.sync_status})
+            createTdElement({table_element: table, row_element: row, rowID, field: `netbox-id`, innerHTML: jsonMessage.data.netbox_id})
+            createTdElement({table_element: table, row_element: row, rowID, field: `name`, innerHTML: jsonMessage.data.name})
+            createTdElement({table_element: table, row_element: row, rowID, field: `status`, innerHTML: jsonMessage.data.status})
+            createTdElement({table_element: table, row_element: row, rowID, field: `device`, innerHTML: jsonMessage.data.device})
+            createTdElement({table_element: table, row_element: row, rowID, field: `cluster`, innerHTML: jsonMessage.data.cluster})
+            createTdElement({table_element: table, row_element: row, rowID, field: `vm-interfaces`, innerHTML: jsonMessage.data.vm_interfaces})
+            createTdElement({table_element: table, row_element: row, rowID, field: `role`, innerHTML: jsonMessage.data.role})
+            createTdElement({table_element: table, row_element: row, rowID, field: `vcpus`, innerHTML: jsonMessage.data.vcpus})
+            createTdElement({table_element: table, row_element: row, rowID, field: `memory`, innerHTML: jsonMessage.data.memory})
+            createTdElement({table_element: table, row_element: row, rowID, field: `disk-space`, innerHTML: jsonMessage.data.disk})
+            createTdElement({table_element: table, row_element: row, rowID, field: `ip-address`, innerHTML: undefinedHtml})
+        }
 
-        } catch (error) {
+    } catch (error) {
         console.log(`ERROR: ${error}`)
     }
 }
