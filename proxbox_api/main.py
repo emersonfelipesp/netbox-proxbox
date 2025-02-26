@@ -680,6 +680,10 @@ async def create_virtual_machines(
             },
         ))
         
+        
+        if type(virtual_machine) != dict:
+            virtual_machine = virtual_machine.dict()
+        
         def format_to_html(json: dict, key: str):
             return f"<a href='{json.get(key).get('url')}'>{json.get(key).get('name')}</a>"
         
@@ -693,6 +697,32 @@ async def create_virtual_machines(
             'unknown': "<span class='text-bg-grey badge p-1'>Unknown</span>"
         }
         status_html = status_html_choices.get(virtual_machine.get('status').get('value'), status_html_choices.get('unknown'))
+        
+        
+        vm_created_json: dict = initial_vm_json | {
+            'sync_status': completed_sync_html,
+            'rowid': str(resource.get('name')),
+            'name': f"<a href='{virtual_machine.get('display_url')}'>{virtual_machine.get('name')}</a>",
+            'netbox_id': virtual_machine.get('id'),
+            'status': status_html,
+            'cluster': cluster_html,
+            'device': device_html,
+            'role': role_html,
+            'vcpus': virtual_machine.get('vcpus'),
+            'memory': virtual_machine.get('memory'),
+            'disk': virtual_machine.get('disk'),
+            'vm_interfaces': [],
+        }
+        
+        # At this point, the Virtual Machine was created in NetBox. Left to create the interfaces.
+        await websocket.send_json(
+            {
+                'object': 'virtual_machine',
+                'type': 'create',
+                'data': vm_created_json
+            }
+        )
+        
         netbox_vm_interfaces: list = []
         
         if virtual_machine and vm_config:
@@ -745,10 +775,11 @@ async def create_virtual_machines(
                             tags=[ProxboxTag(bootstrap_placeholder=True).id]
                         ))
                         
-                        netbox_vm_interfaces.append(vm_interface)
                         
                         if type(vm_interface) != dict:
                             vm_interface = vm_interface.dict()
+                        
+                        netbox_vm_interfaces.append(vm_interface)
                         
                         # If 'ip' value exists and is not 'dhcp', create IP Address on NetBox.
                         interface_ip = value.get('ip', None)
@@ -765,18 +796,8 @@ async def create_virtual_machines(
                         # 'tag' is the VLAN ID.
                         # 'bridge' is the bridge name.
         
-        vm_created_json: dict = initial_vm_json | {
-            'sync_status': completed_sync_html,
-            'rowid': str(resource.get('name')),
-            'name': f"<a href='{virtual_machine.get('display_url')}'>{virtual_machine.get('name')}</a>",
-            'netbox_id': virtual_machine.get('id'),
-            'status': status_html,
-            'cluster': cluster_html,
-            'device': device_html,
-            'role': role_html,
-            'vcpus': virtual_machine.get('vcpus'),
-            'memory': virtual_machine.get('memory'),
-            'disk': virtual_machine.get('disk'),
+        
+        vm_created_with_interfaces_json: dict = vm_created_json | {
             'vm_interfaces': [f"<a href='{interface.get('display_url')}'>{interface.get('name')}</a>" for interface in netbox_vm_interfaces],
         }
         
@@ -784,7 +805,7 @@ async def create_virtual_machines(
             {
                 'object': 'virtual_machine',
                 'type': 'create',
-                'data': vm_created_json
+                'data': vm_created_with_interfaces_json
             }
         )
         
