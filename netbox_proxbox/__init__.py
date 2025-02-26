@@ -7,42 +7,11 @@ class ProxboxConfig(PluginConfig):
     description = "Integrates Proxmox and Netbox"
     version = "0.0.5"
     author = "Emerson Felipe (@emersonfelipesp)"
-    author_email = "emerson.felipe@nmultifibra.com.br"
+    author_email = "emersonfelipe.2003@gmail.com"
+    min_version = '4.2.0'
+    max_version = '4.2.99'
     base_url = "proxbox"
     required_settings = []
-    default_settings = {
-        'proxmox': [
-            {
-                'domain': 'proxbox.example.com',    # May also be IP address
-                'http_port': 8006,
-                'user': 'root@pam',
-                'password': 'Strong@P4ssword',
-                'token': {
-                    'name': 'proxbox',
-                    'value': 'PASTE_YOUR_TOKEN_HERE'
-                },
-                'ssl': False
-            }
-        ],
-        'netbox': {
-            'domain': 'netbox.example.com',     # May also be IP address
-            'http_port': 80,
-            'token': 'PASTE_YOUR_TOKEN_HERE',
-            'settings': {
-                'virtualmachine_role_id' : 0,
-                'node_role_id' : 0,
-                'site_id': 0
-            }
-        },
-        'fastapi': {
-            'uvicorn_host': 'localhost',
-            'uvicorn_port': 8800,
-            'sudo': {
-                'user': "linuxUserWithSudo",
-                'password': "Strong@P4ssword",
-            }
-        }
-    }
 
 config = ProxboxConfig
 
