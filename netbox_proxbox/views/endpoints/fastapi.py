@@ -61,3 +61,4 @@ class FastAPIEndpointEditView(generic.ObjectEditView):
 
 class FastAPIEndpointDeleteView(generic.ObjectDeleteView):
     queryset = FastAPIEndpoint.objects.all()
+ 

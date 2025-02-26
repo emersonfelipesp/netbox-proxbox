@@ -1,109 +1,4 @@
-
-{% include "netbox_proxbox/virtual_machines_table/script.html" %}
-
 <script>
-    const uvicornHost = "{{ configuration.netbox_proxbox.fastapi.uvicorn_host }}"
-    const uvicornPort = "{{ configuration.netbox_proxbox.fastapi.uvicorn_port }}"
-
-    const fastapiEndpoint = `https://${uvicornHost}:${uvicornPort}`
-    const websocketEndpoint = `wss://${uvicornHost}:${uvicornPort}/ws`
-
-    // Instantiate WebSocket connection to FastAPI backend.
-    let ws = new WebSocket(websocketEndpoint);
-    
-    ws.onmessage = function(event) {
-        // Add WebSockets Messages came from FasstAPI backend on GUI
-        console.log(event.data)
-
-        let jsonMessage = undefined
-
-        try {
-            jsonMessage = JSON.parse(event.data)
-        } catch (error) {
-            // do nothing
-            console.log("Could not parse JSON message.")
-        }
-
-        if (jsonMessage) {
-            if (jsonMessage.object == "virtual_machine") {
-                populateVirtualMachinesTable(jsonMessage)
-            }
-        }
-
-        let messages = document.getElementById('messages')
-        let message = document.createElement('li')
-
-        message.style.lineHeight = '170%'
-        
-        message.innerHTML = event.data
-        messages.appendChild(message)
-
-        let test = document.getElementById('scrollable-div')
-        test.scrollTop = test.scrollHeight
-
-    };
-
-    ws.onerror = function(error) {
-        console.log("WebSocket error observed: ", error);
-        console.log("error.url", error.url)
-
-        fullUpdateButton = document.getElementById('full-update-button')
-        fullUpdateButton.className = "btn btn-red"
-
-        fullUpdateMessage = document.getElementById('full-update-error-message')
-        fullUpdateMessage.className = "text-red"
-
-        let errorMessage = `
-            <p align=center>
-                <strong>WebSocket</strong> communication failed with <strong>${error.currentTarget.url}</strong>
-                <br>The most probably cause is <strong>Proxbox Backend not running</strong> properly.<br><br>
-                Check if Proxbox is running using following command: <code>systemctl status proxbox</code>.<br>If not, just issue the <code>systemctl start proxbox</code> command..<br>Otherwise, check <a href="https://github.com/netdevopsbr/netbox-proxbox#15-systemd-setup-proxbox-backend" target="_target">Proxbox Documentation</a>.
-            </p>`
-
-        let errorButtonFix = `
-            <a href="{% url 'plugins:netbox_proxbox:fix-proxbox-backend' %}">
-                <button class="btn btn-primary m-2" id="error-button-fix" class="btn btn-primary">
-                    Let Proxbox try to fix it.
-                </button>
-            </a><hr>
-        `
-
-        let errorDiv = `
-        <div>
-            ${errorMessage}${errorButtonFix}
-        </div>
-        `
-
-        fullUpdateMessage.innerHTML = errorDiv
-        
-
-        let statusBadgeError = document.getElementById('fastapi-connection-status')
-        statusBadgeError.className = "text-bg-red badge p-1"
-        statusBadgeError.textContent = "Connection Failed!"
-
-        let statusErrorMessage = document.getElementById('fastapi-connection-error')
-        statusErrorMessage.className = "text-bg-red p-2"
-        statusErrorMessage.innerHTML = errorMessage
-
-
-    }
-
-    function fullUpdate(event) {
-        // Send Websocket Message
-        ws.send("Start")
-        event.preventDefault()
-    }
-
-    function syncNodes(event) {
-        ws.send("Sync Nodes")
-        event.preventDefault()
-    }
-
-    function syncVirtualMachines(event) {
-        ws.send("Sync Virtual Machines")
-        event.preventDefault()
-    }
-
     async function FastAPIConnectionTest(fastapiEndpoint) {
         let fastapi_docs_endpoint = `${fastapiEndpoint}/docs`
 
@@ -117,18 +12,24 @@
                 console.log("request_fastapi", request_fastapi)
 
                 let statusBadgeFastAPI = document.getElementById('fastapi-connection-status')
-                statusBadgeFastAPI.className = "text-bg-green badge p-1"
-                statusBadgeFastAPI.textContent = "Successful!"
-                
+                if (statusBadgeFastAPI) {
+                    statusBadgeFastAPI.className = "text-bg-green badge p-1"
+                    statusBadgeFastAPI.textContent = "Successful!"
+                }
             }
         } catch (error) {
             let statusErrorBadgeFastAPI = document.getElementById('fastapi-connection-status')
-            statusErrorBadgeFastAPI.className = "text-bg-red badge p-1"
-            statusErrorBadgeFastAPI.textContent = "Connection Failed!"
+
+            if (statusErrorBadgeFastAPI) {
+                statusErrorBadgeFastAPI.className = "text-bg-red badge p-1"
+                statusErrorBadgeFastAPI.textContent = "Connection Failed!"
+            }
         }
 
     }
+    
 
+    
     async function NetboxAPIConnectionTest(fastapiEndpoint) {
         let netboxTestRoute = `${fastapiEndpoint}/netbox/status`
         
@@ -139,37 +40,49 @@
             console.log("requestNetbox", requestNetbox)
             if (requestNetbox.ok) {
                 let statusBadgeNetbox = document.getElementById('netbox-connection-status')
-                statusBadgeNetbox.className = "text-bg-green badge p-1"
-                statusBadgeNetbox.textContent = "Successful!"
+
+                if (statusBadgeNetbox) {
+                    statusBadgeNetbox.className = "text-bg-green badge p-1"
+                    statusBadgeNetbox.textContent = "Successful!"
+                }
 
                 let netboxVersion = document.getElementById('netbox-version')
-                netboxVersion.innerHTML = `<span class='badge text-bg-grey' title='Netbox Version'>
-                    <strong>
-                        <i class='mdi mdi-tag'></i>
-                    </strong> ${responseNetbox["netbox-version"]}
-                </span>`
+
+                if (netboxVersion) {
+                    netboxVersion.innerHTML = `<span class='badge text-bg-grey' title='Netbox Version'>
+                        <strong>
+                            <i class='mdi mdi-tag'></i>
+                        </strong> ${responseNetbox["netbox-version"]}
+                    </span>`
+                }
 
                 let pythonVersion = document.getElementById('python-version')
-                pythonVersion.innerHTML = `<span class='badge text-bg-grey' title='Python Version'>
-                    <strong>
-                        <i class='mdi mdi-tag'></i>
-                    </strong> ${responseNetbox["python-version"]}
-                </span>`
+
+                if (pythonVersion) {
+                    pythonVersion.innerHTML = `<span class='badge text-bg-grey' title='Python Version'>
+                        <strong>
+                            <i class='mdi mdi-tag'></i>
+                        </strong> ${responseNetbox["python-version"]}
+                    </span>`
+                }
 
                 let djangoVersion = document.getElementById('django-version')
-                djangoVersion.innerHTML = `<span class='badge text-bg-grey' title='Django Version'>
-                    <strong>
-                        <i class='mdi mdi-tag'></i>
-                    </strong> ${responseNetbox["django-version"]}
-                </span>`
+                if (djangoVersion) {
+                    djangoVersion.innerHTML = `<span class='badge text-bg-grey' title='Django Version'>
+                        <strong>
+                            <i class='mdi mdi-tag'></i>
+                        </strong> ${responseNetbox["django-version"]}
+                    </span>`
+                }
 
                 let netboxPlugins = document.getElementById('netbox-plugins')
-                netboxPlugins.innerHTML = `<span class='badge text-bg-blue' title='Netbox Proxbox Version'>
-                    <strong>
-                        <i class='mdi mdi-tag'></i>
-                    </strong> ${responseNetbox["plugins"]["netbox_proxbox"]}
-                </span>`
-                
+                if (netboxPlugins) {
+                    netboxPlugins.innerHTML = `<span class='badge text-bg-blue' title='Netbox Proxbox Version'>
+                        <strong>
+                            <i class='mdi mdi-tag'></i>
+                        </strong> ${responseNetbox["plugins"]["netbox_proxbox"]}
+                    </span>`
+                }
             }
 
             else {
@@ -195,8 +108,6 @@
         body.onload = getVersion
     }
 
-
-
     getBody()
 
     async function getVersion() {
@@ -204,15 +115,12 @@
         virtualMachinesDiv.style.display = "none"
 
         // Test FastAPI Proxbox Backend Connection
-        console.log("1")
-
-        console.log("fastapi")
+        console.log("Testing FastAPI Connection...")
         FastAPIConnectionTest(fastapiEndpoint)
 
-        console.log("netbox")
+        console.log("Testing NetBox API Connection...")
         NetboxAPIConnectionTest(fastapiEndpoint)
-        
-        console.log("2")
+  
 
         // Get Info from Proxmox and Add to GUI Page, like Connection Status and Error Messages
         let elemento = document.getElementsByClassName("proxmox_version")

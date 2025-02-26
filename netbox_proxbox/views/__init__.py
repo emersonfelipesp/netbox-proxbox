@@ -53,6 +53,19 @@ class HomeView(View):
         netbox_endpoint_obj = NetBoxEndpoint.objects.all()
         fastapi_endpoint_obj = FastAPIEndpoint.objects.all()
 
+        fastapi_object = fastapi_endpoint_obj[0]
+        fastapi_ip = str(fastapi_object.ip_address).split('/')[0]
+        
+        # Define HTTP(S) URL for FastAPI
+        fastapi_url_https = f"https://{fastapi_ip}:{fastapi_object.port}"
+        fastapi_url_http = f"http://{fastapi_ip}:{fastapi_object.port}"
+        fastapi_url = fastapi_url_https if fastapi_object.verify_ssl else fastapi_url_http
+        
+        # Define (Secure) WebSocket URL for FastAPI
+        fastapi_wss_url = f"wss://{fastapi_ip}:{fastapi_object.port}"
+        fastapi_ws_url = f"ws://{fastapi_ip}:{fastapi_object.port}"
+        fastapi_websocket_url = fastapi_wss_url if fastapi_object.verify_ssl else fastapi_ws_url
+        
         return render(
             request,
             self.template_name,
@@ -61,8 +74,39 @@ class HomeView(View):
                 'proxmox_endpoint_list': proxmox_endpoint_obj,
                 'netbox_endpoint_list': netbox_endpoint_obj,
                 'fastapi_endpoint_list': fastapi_endpoint_obj,
+                'fastapi_url': fastapi_url,
+                'fastapi_websocket_url': fastapi_websocket_url
             }
         )
+
+class TestWebSocketView(View):
+    template_name = 'netbox_proxbox/test/websocket.html'
+    
+    def get(self, request):
+        fastapi_endpoint_obj = FastAPIEndpoint.objects.all()
+
+        fastapi_object = fastapi_endpoint_obj[0]
+        fastapi_ip = str(fastapi_object.ip_address).split('/')[0]
+        
+        # Define HTTP(S) URL for FastAPI
+        fastapi_url_https = f"https://{fastapi_ip}:{fastapi_object.port}"
+        fastapi_url_http = f"http://{fastapi_ip}:{fastapi_object.port}"
+        fastapi_url = fastapi_url_https if fastapi_object.verify_ssl else fastapi_url_http
+        
+        # Define (Secure) WebSocket URL for FastAPI
+        fastapi_wss_url = f"wss://{fastapi_ip}:{fastapi_object.port}"
+        fastapi_ws_url = f"ws://{fastapi_ip}:{fastapi_object.port}"
+        fastapi_websocket_url = fastapi_wss_url if fastapi_object.verify_ssl else fastapi_ws_url
+        
+        return render(
+            request,
+            self.template_name,
+            {
+                'fastapi_url': fastapi_url,
+                'fastapi_websocket_url': fastapi_websocket_url
+            }
+        )
+    
 
 
 class NodesView(View):

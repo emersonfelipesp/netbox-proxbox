@@ -1,7 +1,5 @@
-from proxbox_api.logging import log
-
 from fastapi import WebSocket
-
+from proxbox_api.logger import log
 import asyncio
 
 async def _check_vm_interface(

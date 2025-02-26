@@ -1,6 +1,6 @@
+from proxbox_api.logger import log
 from proxbox_api.routes.netbox.generic import NetboxBase
 from proxbox_api.routes.netbox.virtualization import VirtualMachine
-from proxbox_api.logging import log
 
 class VMInterface(NetboxBase):
     

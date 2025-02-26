@@ -1,7 +1,6 @@
 # TODO: Create Default Custom Fields
+from proxbox_api.logger import log
 from proxbox_api.session.netbox import NetboxSessionDep
-from proxbox_api.logging import log
-
 from fastapi import WebSocket
 
 async def create_default_custom_fields(

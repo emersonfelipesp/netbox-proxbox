@@ -1,7 +1,6 @@
 from proxbox_api.exception import ProxboxException
-from proxbox_api.logging import log
 from proxbox_api.cache import cache
-
+from proxbox_api.logger import log
 from fastapi import WebSocket
 
 import asyncio

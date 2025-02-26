@@ -129,11 +129,32 @@ cd netbox/netbox-proxbox
 pip3 install -r requirements.txt
 ```
 
+Run pynetbox-api on [develop mode (editable)](https://docs.astral.sh/uv/concepts/projects/dependencies/#editable-dependencies) using astral-uv
+```
+uv add --editable ./your-path-to-package/pynetbox-api
+```
+
 Run netbox-proxbox on develop mode
 
 ```
-python3 setup.py develop
+python3 -m pip install -e .
 ```
+
+**(NEW) Install pynetbox-api package in development mode**
+
+- You must be on `netbox-proxbox` root folder.
+
+```
+git clone https://github.com/emersonfelipesp/pynetbox-api.git
+python3 -m pip install pynetbox-api/ -e .
+```
+
+Or clone it to a totally different repository like `/opt` and use `uv` to build it as development
+```
+uv pip install -e "pynetbox_api @ /opt/pynetbox-api"
+```
+
+**OBS:** For now, you must manually configure `.env` on `pynetbox-api` root folder with NetBox URL and Token
 
 ---
 

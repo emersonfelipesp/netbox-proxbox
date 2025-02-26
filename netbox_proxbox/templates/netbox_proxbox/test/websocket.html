@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTMX WebSocket Example</title>
+    <script src="https://unpkg.com/htmx.org@1.7.0"></script>
+    <script src="https://unpkg.com/htmx.org/dist/ext/ws.js"></script>
+</head>
+<body>
+    <h1>HTMX WebSocket Example</h1>
+    
+    <!--
+    <div id="messages">
+    </div>
+
+    <form id="message-form" hx-ext="ws" ws-connect='{{ fastapi_websocket_url}}/ws/test' ws-send>
+        <input type="text" id="message-input" name="message" placeholder="Type your message here" required>
+
+    </form>
+    -->
+    <div hx-ext="ws" ws-connect="{{ fastapi_websocket_url}}/ws/test">
+        <h1>Chat Room</h1>
+        <div id="notifications"></div>
+        <div id="chat_room">
+        </div>
+        <form id="form" >
+            <input name="chat_message">
+            <button ws-send hx-trigger='submit' hx-target="#chat_room" hx-swap="outerHTML">Send</button>
+        </form> 
+    </div>
+
+    
+    <script>
+        // Define the factory function to create custom WebSocket instances
+        function createWebSocket(url) {
+            const ws = new WebSocket(url);
+            
+            // Custom configurations can be added here
+            ws.onopen = () => {
+                console.log('WebSocket is open now.');
+            };
+            
+            ws.onclose = () => {
+                console.log('WebSocket is closed now.');
+            };
+            
+            ws.onerror = (error) => {
+                console.error('WebSocket error observed:', error);
+            };
+            
+            return ws;
+        }
+
+        // Define the WebSocket configuration
+        const wsConfig = {
+            createWebSocket: createWebSocket,
+            wsBinaryType: 'arraybuffer'
+        }
+
+
+        document.addEventListener('htmx:wsConnecting', function(evt) {
+            console.log('WebSocket is connecting:', evt.detail.event.type);
+        });
+
+        document.addEventListener('htmx:wsOpen', function(evt) {
+            console.log('WebSocket connection established:', evt.detail.event.type);
+        });
+
+        document.addEventListener('htmx:wsClose', function(evt) {
+            console.log('WebSocket connection closed:', evt.detail.event.type);
+        });
+
+        document.addEventListener('htmx:wsBeforeMessage', function(evt) {
+            console.log('WebSocket message is about to be sent:', evt.detail.message);
+        });
+        
+        // Example usage of the WebSocket configuration
+        const socket = wsConfig.createWebSocket('{{ fastapi_websocket_url}}/ws/test');
+        socket.binaryType = wsConfig.wsBinaryType;
+
+        // Example event listeners
+        socket.onmessage = (event) => {
+            console.log('2-Received message:', event.data);
+        };
+
+        // Send a sample message
+        socket.onopen = () => {
+            console.log('[socket.onopen] WebSocket is open now.');
+            //socket.send('Hello WebSocket');
+        };
+    </script>
+</body>
+</html>

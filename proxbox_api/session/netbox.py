@@ -112,7 +112,7 @@ async def netbox_session(
     if netbox_settings is None:
         raise ProxboxException(
             message = "Netbox settings not found.",
-            detail = "Netbox settings are required to establish a connection with the Netbox API.",
+            detail = "Netbox settings are required to establish a connection with the Netbox API. Verify if plugin's backend (FastAPI) is correctly configured on NetBox GUI or API."
         )
         
     return NetboxSession(netbox_settings)

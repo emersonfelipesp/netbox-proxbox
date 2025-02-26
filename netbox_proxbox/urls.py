@@ -56,4 +56,5 @@ urlpatterns = [
     }),
     
     path('keepalive-status/<str:service>/<int:pk>', views.get_service_status, name='keepalive_status'),
+    path('test/websocket/', views.TestWebSocketView.as_view(), name='test_websocket'),
 ]
