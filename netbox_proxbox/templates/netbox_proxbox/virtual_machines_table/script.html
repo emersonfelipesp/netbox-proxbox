@@ -39,15 +39,13 @@
                 vmTableDefaultTd.style.display = "none"
                 
                 // Create Table Row
-                vmTableRowID = jsonMessage.data.rowid
+                let vmTableRowID = jsonMessage.data.rowid
                 let vmTableRow = document.getElementById(vmTableRowID)
                 
                 if (!vmTableRow) {
                     vmTableRow = document.createElement('tr')
                     vmTableRow.id = vmTableRowID
-                }
-
-                else {
+                } else {
                     // Clear Table Row
                     vmTableRow.innerHTML = ""
                 }

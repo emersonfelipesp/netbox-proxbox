@@ -12,14 +12,18 @@
                 console.log("request_fastapi", request_fastapi)
 
                 let statusBadgeFastAPI = document.getElementById('fastapi-connection-status')
-                statusBadgeFastAPI.className = "text-bg-green badge p-1"
-                statusBadgeFastAPI.textContent = "Successful!"
-                
+                if (statusBadgeFastAPI) {
+                    statusBadgeFastAPI.className = "text-bg-green badge p-1"
+                    statusBadgeFastAPI.textContent = "Successful!"
+                }
             }
         } catch (error) {
             let statusErrorBadgeFastAPI = document.getElementById('fastapi-connection-status')
-            statusErrorBadgeFastAPI.className = "text-bg-red badge p-1"
-            statusErrorBadgeFastAPI.textContent = "Connection Failed!"
+
+            if (statusErrorBadgeFastAPI) {
+                statusErrorBadgeFastAPI.className = "text-bg-red badge p-1"
+                statusErrorBadgeFastAPI.textContent = "Connection Failed!"
+            }
         }
 
     }
@@ -36,37 +40,49 @@
             console.log("requestNetbox", requestNetbox)
             if (requestNetbox.ok) {
                 let statusBadgeNetbox = document.getElementById('netbox-connection-status')
-                statusBadgeNetbox.className = "text-bg-green badge p-1"
-                statusBadgeNetbox.textContent = "Successful!"
+
+                if (statusBadgeNetbox) {
+                    statusBadgeNetbox.className = "text-bg-green badge p-1"
+                    statusBadgeNetbox.textContent = "Successful!"
+                }
 
                 let netboxVersion = document.getElementById('netbox-version')
-                netboxVersion.innerHTML = `<span class='badge text-bg-grey' title='Netbox Version'>
-                    <strong>
-                        <i class='mdi mdi-tag'></i>
-                    </strong> ${responseNetbox["netbox-version"]}
-                </span>`
+
+                if (netboxVersion) {
+                    netboxVersion.innerHTML = `<span class='badge text-bg-grey' title='Netbox Version'>
+                        <strong>
+                            <i class='mdi mdi-tag'></i>
+                        </strong> ${responseNetbox["netbox-version"]}
+                    </span>`
+                }
 
                 let pythonVersion = document.getElementById('python-version')
-                pythonVersion.innerHTML = `<span class='badge text-bg-grey' title='Python Version'>
-                    <strong>
-                        <i class='mdi mdi-tag'></i>
-                    </strong> ${responseNetbox["python-version"]}
-                </span>`
+
+                if (pythonVersion) {
+                    pythonVersion.innerHTML = `<span class='badge text-bg-grey' title='Python Version'>
+                        <strong>
+                            <i class='mdi mdi-tag'></i>
+                        </strong> ${responseNetbox["python-version"]}
+                    </span>`
+                }
 
                 let djangoVersion = document.getElementById('django-version')
-                djangoVersion.innerHTML = `<span class='badge text-bg-grey' title='Django Version'>
-                    <strong>
-                        <i class='mdi mdi-tag'></i>
-                    </strong> ${responseNetbox["django-version"]}
-                </span>`
+                if (djangoVersion) {
+                    djangoVersion.innerHTML = `<span class='badge text-bg-grey' title='Django Version'>
+                        <strong>
+                            <i class='mdi mdi-tag'></i>
+                        </strong> ${responseNetbox["django-version"]}
+                    </span>`
+                }
 
                 let netboxPlugins = document.getElementById('netbox-plugins')
-                netboxPlugins.innerHTML = `<span class='badge text-bg-blue' title='Netbox Proxbox Version'>
-                    <strong>
-                        <i class='mdi mdi-tag'></i>
-                    </strong> ${responseNetbox["plugins"]["netbox_proxbox"]}
-                </span>`
-                
+                if (netboxPlugins) {
+                    netboxPlugins.innerHTML = `<span class='badge text-bg-blue' title='Netbox Proxbox Version'>
+                        <strong>
+                            <i class='mdi mdi-tag'></i>
+                        </strong> ${responseNetbox["plugins"]["netbox_proxbox"]}
+                    </span>`
+                }
             }
 
             else {

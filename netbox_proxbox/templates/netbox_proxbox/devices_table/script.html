@@ -51,17 +51,17 @@
 
             try {
                 // Populate Table Row with Table Data parsed from Websocket JSON message
-                deviceTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `status`, undefinedHtml))
-                deviceTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `netbox-id`, undefinedHtml))
+                deviceTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `status`, jsonMessage.data.sync_status))
+                deviceTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `netbox-id`, jsonMessage.data.netbox_id))
                 deviceTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `node-id`, undefinedHtml))
                 deviceTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `name`, jsonMessage.data.name))
-                deviceTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `manufacturer`, undefinedHtml))
-                deviceTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `type`, undefinedHtml))
+                deviceTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `manufacturer`, jsonMessage.data.manufacturer))
+                deviceTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `type`, jsonMessage.data.device_type))
                 deviceTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `vm-ct-count`, undefinedHtml))
                 deviceTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `ip-address`, undefinedHtml))
-                deviceTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `role`, undefinedHtml))
+                deviceTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `role`, jsonMessage.data.role))
                 deviceTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `virtual-cpus`, undefinedHtml))
-                deviceTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `memory`, undefinedHtml))
+                deviceTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `cluster`, jsonMessage.data.cluster))
                 deviceTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `disk-space`, undefinedHtml))
                 
                 deviceTable.appendChild(deviceTableRow)

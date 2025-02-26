@@ -39,6 +39,10 @@
 
     };
 
+    ws.addEventListener('error', (event) => {
+        console.log("WebSocket error observed: ", event)
+    })
+    
     ws.onerror = function(error) {
         console.log("WebSocket error observed: ", error);
         console.log("error.url", error.url)

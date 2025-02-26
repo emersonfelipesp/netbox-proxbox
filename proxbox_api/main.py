@@ -177,7 +177,9 @@ async def proxmoxer_exception_handler(request: Request, exc: ProxboxException):
 
 from proxbox_api.routes.proxbox.clusters import get_nodes, get_virtual_machines
 
-
+sync_status_html = "<span class='text-bg-yellow badge p-1' title='Syncing VM' ><i class='mdi mdi-sync'></i></span>"
+completed_sync_html = "<span class='text-bg-green badge p-1' title='Synced VM'><i class='mdi mdi-check'></i></span>"
+        
 @app.get('/cache')
 async def get_cache():
     from pynetbox_api.cache import global_cache
@@ -231,10 +233,15 @@ async def create_proxmox_devices(
                     {
                         'object': 'device',
                         'type': 'create',
-                        'data': websocket_node_json | {
+                        'data': {
+                            'sync_status': completed_sync_html,
                             'rowid': node_obj.name,
-                            'name': node_obj.name,
-                            'cluster': cluster_status.name,
+                            'name': f"<a href='{netbox_device.get('display_url')}'>{netbox_device.get('name')}</a>",
+                            'netbox_id': netbox_device.get('id'),
+                            'manufacturer': f"<a href='{netbox_device.get('manufacturer').get('url')}'>{netbox_device.get('manufacturer').get('name')}</a>",
+                            'role': f"<a href='{netbox_device.get('role').get('url')}'>{netbox_device.get('role').get('name')}</a>",
+                            'cluster': f"<a href='{netbox_device.get('cluster').get('url')}'>{netbox_device.get('cluster').get('name')}</a>",
+                            'device_type': f"<a href='{netbox_device.get('device_type').get('url')}'>{netbox_device.get('device_type').get('model')}</a>",
                         }
                     }
                 )
@@ -567,8 +574,6 @@ async def create_virtual_machines(
         return await asyncio.gather(*tasks)  # Gather coroutines
 
     async def create_vm_task(cluster_name, resource):
-        sync_status_html = "<span class='text-bg-yellow badge p-1' title='Syncing VM' ><i class='mdi mdi-sync'></i></span>"
-        completed_sync_html = "<span class='text-bg-green badge p-1' title='Synced VM'><i class='mdi mdi-check'></i></span>"
         undefined_html = "<span class='badge text-bg-grey'><strong></strong>undefined</strong></span>"
         websocket_vm_json: dict = {
             'sync_status': sync_status_html,
