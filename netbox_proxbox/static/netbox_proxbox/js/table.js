@@ -1,4 +1,4 @@
-export function populateTable({jsonMessage, tableDivId, tableId, defaultRowId}) {
+export function populateTable({tableType, jsonMessage, tableDivId, tableId, defaultRowId}) {
     // Populate Table with data from Websocket JSON message
     if (!jsonMessage) {
         return
@@ -70,7 +70,7 @@ export function populateTable({jsonMessage, tableDivId, tableId, defaultRowId}) 
             row.id = rowID
         }
 
-        if (jsonMessage.object == 'virtual_machine') {
+        if (tableType == 'virtual_machine' && jsonMessage.object == 'virtual_machine') {
             // Populate Table Row with Table Data parsed from Websocket JSON message
             createTdElement({table_element: table, row_element: row, rowID, field: `sync_status`, innerHTML: jsonMessage.data.sync_status})
             createTdElement({table_element: table, row_element: row, rowID, field: `netbox-id`, innerHTML: jsonMessage.data.netbox_id})
@@ -84,8 +84,31 @@ export function populateTable({jsonMessage, tableDivId, tableId, defaultRowId}) 
             createTdElement({table_element: table, row_element: row, rowID, field: `memory`, innerHTML: jsonMessage.data.memory})
             createTdElement({table_element: table, row_element: row, rowID, field: `disk-space`, innerHTML: jsonMessage.data.disk})
             createTdElement({table_element: table, row_element: row, rowID, field: `ip-address`, innerHTML: undefinedHtml})
-        }
+            
+            // Total VM Count
+            if (jsonMessage.data.completed != undefined && jsonMessage.data.completed == false) {
+                let totalVmCount = document.getElementById('total-vm-count')
+                if (totalVmCount) {
+                    totalVmCount.innerHTML = parseInt(totalVmCount.innerHTML) + 1
+                }
+            }
+            // Synced VM Count
+            if (jsonMessage.data.completed != undefined && jsonMessage.data.completed == true && jsonMessage.data.increment_count == 'yes') {
+                let currentCompletedCount = document.getElementById('synced-vm-count')
+                if (currentCompletedCount) {
+                    currentCompletedCount.innerHTML = parseInt(currentCompletedCount.innerHTML) + 1
+                }
+            }
+            // Update Sync Percentage
+            let percentageCompleted = document.getElementById('sync-percentage-ratio')
+            if (percentageCompleted) {
+                let totalVmCount = parseInt(document.getElementById('total-vm-count').innerHTML)
+                let currentCompletedCount = parseInt(document.getElementById('synced-vm-count').innerHTML)
+                let percentage = (currentCompletedCount / totalVmCount) * 100
 
+                percentageCompleted.innerHTML = `${percentage.toFixed(2)}%`
+            }
+        }
     } catch (error) {
         console.log(`ERROR: ${error}`)
     }

@@ -635,14 +635,9 @@ async def create_virtual_machines(
         
         print(f'vm_config: {vm_config}')
         
-        await websocket.send_text(f"Creating Virtual Machine {resource.get('name')} in Cluster {cluster_name}")
-        print(f'data: {websocket_vm_json | {
-                    'name': str(resource.get('name')),
-                    'cluster': str(cluster_name),
-                    'device': str(resource.get('node')),
-                }}')
         
         initial_vm_json = websocket_vm_json | {
+            'completed': False,
             'rowid': str(resource.get('name')),
             'name': str(resource.get('name')),
             'cluster': str(cluster_name),
@@ -698,8 +693,9 @@ async def create_virtual_machines(
         }
         status_html = status_html_choices.get(virtual_machine.get('status').get('value'), status_html_choices.get('unknown'))
         
-        
         vm_created_json: dict = initial_vm_json | {
+            'increment_count': 'yes',
+            'completed': True,
             'sync_status': completed_sync_html,
             'rowid': str(resource.get('name')),
             'name': f"<a href='{virtual_machine.get('display_url')}'>{virtual_machine.get('name')}</a>",
@@ -797,9 +793,13 @@ async def create_virtual_machines(
                         # 'bridge' is the bridge name.
         
         
+        
         vm_created_with_interfaces_json: dict = vm_created_json | {
             'vm_interfaces': [f"<a href='{interface.get('display_url')}'>{interface.get('name')}</a>" for interface in netbox_vm_interfaces],
         }
+        # Remove 'completed' and 'increment_count' keys from the dictionary so it does not affect progress count on GUI.
+        vm_created_with_interfaces_json.pop('completed')
+        vm_created_with_interfaces_json.pop('increment_count')
         
         await websocket.send_json(
             {
@@ -808,6 +808,7 @@ async def create_virtual_machines(
                 'data': vm_created_with_interfaces_json
             }
         )
+        
         
         # Lamba is necessary to treat the object instantiation as a coroutine/function.
         return virtual_machine

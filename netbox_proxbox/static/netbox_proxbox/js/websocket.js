@@ -76,6 +76,7 @@ class WebSocketClient {
             if (jsonMessage.object == 'virtual_machine') {
                 // Populate Virtual Machines Table with data from Websocket JSON message
                 populateTable({
+                    tableType: 'virtual_machine',
                     jsonMessage: jsonMessage,
                     tableDivId: 'virtual-machines-div',
                     tableId: 'virtual-machine-table-data',
@@ -84,6 +85,7 @@ class WebSocketClient {
             } else if (jsonMessage.object == 'device') {
                 // Populate Devices Table with data from Websocket JSON message
                 populateTable({
+                    tableType: 'device',
                     jsonMessage: jsonMessage,
                     tableDivId: 'device-div',
                     tableId: 'device-table-data',
