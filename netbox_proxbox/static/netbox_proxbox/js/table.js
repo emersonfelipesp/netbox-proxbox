@@ -70,6 +70,49 @@ export function populateTable({tableType, jsonMessage, tableDivId, tableId, defa
             row.id = rowID
         }
 
+        if (tableType == 'device' && jsonMessage.object == 'device') {
+            // Populate Table Row with Table Data parsed from Websocket JSON message
+            createTdElement({table_element: table, row_element: row, rowID, field: `status`, innerHTML: jsonMessage.data.sync_status})
+            createTdElement({table_element: table, row_element: row, rowID, field: `netbox-id`, innerHTML: jsonMessage.data.netbox_id})
+            createTdElement({table_element: table, row_element: row, rowID, field: `node-id`, innerHTML: undefinedHtml})
+            createTdElement({table_element: table, row_element: row, rowID, field: `name`, innerHTML: jsonMessage.data.name})
+            createTdElement({table_element: table, row_element: row, rowID, field: `manufacturer`, innerHTML: jsonMessage.data.manufacturer})
+            createTdElement({table_element: table, row_element: row, rowID, field: `type`, innerHTML: jsonMessage.data.device_type})
+            createTdElement({table_element: table, row_element: row, rowID, field: `vm-ct-count`, innerHTML: undefinedHtml})
+            createTdElement({table_element: table, row_element: row, rowID, field: `ip-address`, innerHTML: undefinedHtml})
+            createTdElement({table_element: table, row_element: row, rowID, field: `role`, innerHTML: jsonMessage.data.role})
+            createTdElement({table_element: table, row_element: row, rowID, field: `virtual-cpus`, innerHTML: undefinedHtml})
+            createTdElement({table_element: table, row_element: row, rowID, field: `cluster`, innerHTML: jsonMessage.data.cluster})
+            createTdElement({table_element: table, row_element: row, rowID, field: `disk-space`, innerHTML: undefinedHtml})
+            
+            let totalDeviceCountName = 'total-device-count'
+            let syncedDeviceCountName = 'synced-device-count'
+            let percentageDeviceCompletedName = 'device-sync-percentage-ratio'
+
+            // Total VM Count
+            if (jsonMessage.data.completed != undefined && jsonMessage.data.completed == false) {
+                let totalVmCount = document.getElementById(totalDeviceCountName)
+                if (totalVmCount) {
+                    totalVmCount.innerHTML = parseInt(totalVmCount.innerHTML) + 1
+                }
+            }
+            // Synced VM Count
+            if (jsonMessage.data.completed != undefined && jsonMessage.data.completed == true && jsonMessage.data.increment_count == 'yes') {
+                let currentCompletedCount = document.getElementById(syncedDeviceCountName)
+                if (currentCompletedCount) {
+                    currentCompletedCount.innerHTML = parseInt(currentCompletedCount.innerHTML) + 1
+                }
+            }
+            // Update Sync Percentage
+            let percentageCompleted = document.getElementById(percentageDeviceCompletedName)
+            if (percentageCompleted) {
+                let totalVmCount = parseInt(document.getElementById(totalDeviceCountName).innerHTML)
+                let currentCompletedCount = parseInt(document.getElementById(syncedDeviceCountName).innerHTML)
+                let percentage = (currentCompletedCount / totalVmCount) * 100
+
+                percentageCompleted.innerHTML = `${percentage.toFixed(2)}%`
+            }
+        }
         if (tableType == 'virtual_machine' && jsonMessage.object == 'virtual_machine') {
             // Populate Table Row with Table Data parsed from Websocket JSON message
             createTdElement({table_element: table, row_element: row, rowID, field: `sync_status`, innerHTML: jsonMessage.data.sync_status})
@@ -85,30 +128,35 @@ export function populateTable({tableType, jsonMessage, tableDivId, tableId, defa
             createTdElement({table_element: table, row_element: row, rowID, field: `disk-space`, innerHTML: jsonMessage.data.disk})
             createTdElement({table_element: table, row_element: row, rowID, field: `ip-address`, innerHTML: undefinedHtml})
             
+            let totalVmCountName = 'total-vm-count'
+            let syncedVmCountName = 'synced-vm-count'
+            let percentageVmCompletedName = 'sync-percentage-ratio'
+
             // Total VM Count
             if (jsonMessage.data.completed != undefined && jsonMessage.data.completed == false) {
-                let totalVmCount = document.getElementById('total-vm-count')
+                let totalVmCount = document.getElementById(totalVmCountName)
                 if (totalVmCount) {
                     totalVmCount.innerHTML = parseInt(totalVmCount.innerHTML) + 1
                 }
             }
             // Synced VM Count
             if (jsonMessage.data.completed != undefined && jsonMessage.data.completed == true && jsonMessage.data.increment_count == 'yes') {
-                let currentCompletedCount = document.getElementById('synced-vm-count')
+                let currentCompletedCount = document.getElementById(syncedVmCountName)
                 if (currentCompletedCount) {
                     currentCompletedCount.innerHTML = parseInt(currentCompletedCount.innerHTML) + 1
                 }
             }
             // Update Sync Percentage
-            let percentageCompleted = document.getElementById('sync-percentage-ratio')
+            let percentageCompleted = document.getElementById(percentageVmCompletedName)
             if (percentageCompleted) {
-                let totalVmCount = parseInt(document.getElementById('total-vm-count').innerHTML)
-                let currentCompletedCount = parseInt(document.getElementById('synced-vm-count').innerHTML)
+                let totalVmCount = parseInt(document.getElementById(totalVmCountName).innerHTML)
+                let currentCompletedCount = parseInt(document.getElementById(syncedVmCountName).innerHTML)
                 let percentage = (currentCompletedCount / totalVmCount) * 100
 
                 percentageCompleted.innerHTML = `${percentage.toFixed(2)}%`
             }
         }
+
     } catch (error) {
         console.log(`ERROR: ${error}`)
     }

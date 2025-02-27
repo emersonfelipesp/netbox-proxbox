@@ -99,7 +99,7 @@ class WebSocketClient {
     }
 
     handleError(event) {
-        console.error('WebSocket error observed:', error);
+        console.error('WebSocket error observed:', event.error);
         // this.updateConnectionStatus(false, error);
     }
 
@@ -114,9 +114,10 @@ class WebSocketClient {
     }
 
     scheduleReconnect() {
+        console.log('Trying to reconnect...');
         this.reconnectAttempts++;
         const delay = this.reconnectDelay * Math.pow(1.5, this.reconnectAttempts -1); // Exponential backoff
-        console.log(`Scheduling reconnect attempt (${this.reconnectAttempts} in ${defaly}ms`);
+        console.log(`Scheduling reconnect attempt (${this.reconnectAttempts} in ${delay}ms`);
 
         setTimeout(() => {
             console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
@@ -142,6 +143,18 @@ class WebSocketClient {
     }
 
     // Public methods for sending commands to the WebSocket Server
+    sendMessage(message) {
+        try {
+            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                this.ws.send(message);
+                return true;
+            }
+        } catch (error) {
+            console.error('Failed to send message over WebSocket:', error);
+        }
+        return false;
+    }
+
     sendFullUpdate() {
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             this.ws.send('Full Update');

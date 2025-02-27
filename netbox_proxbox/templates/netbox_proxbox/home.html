@@ -44,12 +44,12 @@
                     </form>
                     -->
 
-                    <form class="m-2" action="" onsubmit='window.ProxboxWebSocket.syncNodes()'>
+                    <form class="m-2" action="" onsubmit="window.ProxboxWebSocket.sendMessage('Sync Nodes')">
                         {% if perms.netbox_proxbox.add_proxmoxvm %}
                             <button id="full-update-button" class="btn btn-primary">Sync Nodes Using WebSocket (Beta)</button>
                         {% endif %}
                     </form>
-                    <form class="m-2" action="" onsubmit='window.ProxboxWebSocket.syncVirtualMachines()'>
+                    <form class="m-2" action="" onsubmit="window.ProxboxWebSocket.sendMessage('Sync Virtual Machines')">
                         {% if perms.netbox_proxbox.add_proxmoxvm %}
                             <button id="full-update-button" class="btn btn-primary">Sync Virtual Machines Using WebSocket (Beta)</button>
                         {% endif %}
