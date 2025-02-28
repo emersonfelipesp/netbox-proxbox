@@ -1,6 +1,6 @@
 import traceback
 
-from fastapi import FastAPI, Request, WebSocket, Depends, Query, Path
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, Depends, Query, Path
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -61,31 +61,11 @@ from proxbox_api.routes.proxmox.nodes import (
 )
 from proxbox_api.routes.proxmox.cluster import ClusterStatusDep
 
-from sqlmodel import select
-from proxbox_api.database import NetBoxEndpoint, get_session
-
 """
 CORS ORIGINS
 """
 
 netbox_url: str = "http://localhost:80"
-try:
-    database_session = next(get_session())
-    netbox_endpoint = database_session.exec(select(NetBoxEndpoint)).first()
-    
-    if netbox_endpoint:
-        print(netbox_endpoint)
-
-        https_netbox_url: str = f"https://{netbox_endpoint.ip_address}:{netbox_endpoint.port}"
-        http_netbox_url: str = f"http://{netbox_endpoint.ip_address}:{netbox_endpoint.port}"
-        netbox_url = https_netbox_url if netbox_endpoint.verify_ssl else http_netbox_url
-
-        print(netbox_url)
-except Exception as error:
-    raise ProxboxException(
-        message="Error getting Netbox Endpoint",
-        detail=f"Error: {str(error)}"
-    )
     
 
 cfg_not_found_msg = "Netbox configuration not found. Using default configuration."
@@ -128,27 +108,11 @@ app = FastAPI(
     version="0.0.1"
 )
 
-@app.on_event('startup')
-def on_startup():
-    from proxbox_api.database import create_db_and_tables
-    create_db_and_tables()
 
 """
 CORS Middleware
 """
 
-'''
-fastapi_endpoint,
-fastapi_endpoint_port8000,
-fastapi_endpoint_port80,
-https_fastapi_endpoint,
-netbox_endpoint,
-netbox_endpoint_port80,
-netbox_endpoint_port8000,
-https_netbox_endpoint,
-https_netbox_endpoint443,
-https_netbox_endpoint_port,
-'''
     
 origins = [
     netbox_url,
@@ -209,36 +173,61 @@ async def create_proxmox_devices(
     for cluster_status in clusters_status:
         for node_obj in cluster_status.node_list:
             websocket_node_json: dict = {}
+            await websocket.send_json(
+                {
+                    'object': 'device',
+                    'type': 'create',
+                    'data': {
+                        'completed': False,
+                        'sync_status': sync_status_html,
+                        'rowid': node_obj.name,
+                        'name': node_obj.name,
+                        'netbox_id': None,
+                        'manufacturer': None,
+                        'role': None,
+                        'cluster': cluster_status.mode.capitalize(),
+                        'device_type': None,
+                    }
+                }
+            )
             try:
                 # TODO: Based on name.ip create Device IP Address
                 netbox_device = Device(
+                    return_type='dict',
                     nb=nb.session,
                     name=node_obj.name,
-                    tags=[ProxboxTag(bootstrap_placeholder=True).id],
+                    tags=[ProxboxTag(bootstrap_placeholder=True).get('id', 0)],
                     cluster = Cluster(
+                        return_type='dict',
                         name = cluster_status.name,
                         type = ClusterType(
+                            return_type='dict',
                             name=cluster_status.mode.capitalize(),
                             slug=cluster_status.mode,
                             description=f'Proxmox {cluster_status.mode} mode',
-                            tags=[ProxboxTag(bootstrap_placeholder=True).id]
+                            tags=[ProxboxTag(bootstrap_placeholder=True).get('id', 0)]
                         )['id'],
                         status = 'active',
                         description = f'Proxmox {cluster_status.mode} cluster.',
-                        tags=[ProxboxTag(bootstrap_placeholder=True).id]
-                    ).get('id', Cluster(bootstrap_placeholder=True).id),
+                        tags=[ProxboxTag(bootstrap_placeholder=True).get('id', 0)]
+                    ).get('id', Cluster(bootstrap_placeholder=True).get('id', 0)),
                 )
+                
+                if type(netbox_device) != dict:
+                    netbox_device = netbox_device.dict()
                 
                 await websocket.send_json(
                     {
                         'object': 'device',
                         'type': 'create',
                         'data': {
+                            'completed': True,
+                            'increment_count': 'yes',
                             'sync_status': completed_sync_html,
                             'rowid': node_obj.name,
                             'name': f"<a href='{netbox_device.get('display_url')}'>{netbox_device.get('name')}</a>",
                             'netbox_id': netbox_device.get('id'),
-                            'manufacturer': f"<a href='{netbox_device.get('manufacturer').get('url')}'>{netbox_device.get('manufacturer').get('name')}</a>",
+                            #'manufacturer': f"<a href='{netbox_device.get('manufacturer').get('url')}'>{netbox_device.get('manufacturer').get('name')}</a>",
                             'role': f"<a href='{netbox_device.get('role').get('url')}'>{netbox_device.get('role').get('name')}</a>",
                             'cluster': f"<a href='{netbox_device.get('cluster').get('url')}'>{netbox_device.get('cluster').get('name')}</a>",
                             'device_type': f"<a href='{netbox_device.get('device_type').get('url')}'>{netbox_device.get('device_type').get('model')}</a>",
@@ -285,11 +274,11 @@ async def create_interface_and_ip(node_interface, node):
     node_cidr = getattr(node_interface, 'cidr', None)
     
     interface = Interface(
-        device=node.id,
+        device=node.get('id', 0),
         name=node_interface.iface,
         status='active',
         type=interface_type_mapping.get(node_interface.type, 'other'),
-        tags=[ProxboxTag(bootstrap_placeholder=True).id],
+        tags=[ProxboxTag(bootstrap_placeholder=True).get('id', 0)],
     )
     
     try:
@@ -304,7 +293,7 @@ async def create_interface_and_ip(node_interface, node):
             assigned_object_type='dcim.interface',
             assigned_object_id=int(interface_id),
             status='active',
-            tags=[ProxboxTag(bootstrap_placeholder=True).id],
+            tags=[ProxboxTag(bootstrap_placeholder=True).get('id', 0)],
         )
     
     return interface
@@ -595,7 +584,7 @@ async def create_virtual_machines(
                 'slug': 'virtual-machine-qemu',
                 'color': '00ffff',
                 'description': 'Proxmox Virtual Machine',
-                'tags': [proxbox_tag.id],
+                'tags': [proxbox_tag.get('id', 0)],
                 'vm_role': True
             },
             'lxc': {
@@ -603,7 +592,7 @@ async def create_virtual_machines(
                 'slug': 'container-lxc',
                 'color': '7fffd4',
                 'description': 'Proxmox LXC Container',
-                'tags': [proxbox_tag.id],
+                'tags': [proxbox_tag.get('id', 0)],
                 'vm_role': True
             },
             'undefined': {
@@ -611,7 +600,7 @@ async def create_virtual_machines(
                 'slug': 'unknown',
                 'color': '000000',
                 'description': 'VM Type not found. Neither QEMU nor LXC.',
-                'tags': [proxbox_tag.id],
+                'tags': [proxbox_tag.get('id', 0)],
                 'vm_role': True
             }
         }
@@ -633,16 +622,11 @@ async def create_virtual_machines(
         unprivileged_container = True if vm_config.get('unprivileged', 0) == 1 else False
         search_domain = vm_config.get('searchdomain', None)
         
-        print(f'vm_config: {vm_config}')
+        #print(f'vm_config: {vm_config}')
         
-        await websocket.send_text(f"Creating Virtual Machine {resource.get('name')} in Cluster {cluster_name}")
-        print(f'data: {websocket_vm_json | {
-                    'name': str(resource.get('name')),
-                    'cluster': str(cluster_name),
-                    'device': str(resource.get('node')),
-                }}')
         
         initial_vm_json = websocket_vm_json | {
+            'completed': False,
             'rowid': str(resource.get('name')),
             'name': str(resource.get('name')),
             'cluster': str(cluster_name),
@@ -650,7 +634,7 @@ async def create_virtual_machines(
         }
         
         
-        print(f'initial_vm_json: {initial_vm_json}')
+        #print(f'initial_vm_json: {initial_vm_json}')
         
         await websocket.send_json(
             {
@@ -659,26 +643,75 @@ async def create_virtual_machines(
                 'data': initial_vm_json
             })
         
-        virtual_machine = await asyncio.to_thread(lambda: VirtualMachine(
-            websocket=websocket,
-            cache=False,
-            name=resource.get('name'),
-            status=VirtualMachine.status_field.get(resource.get('status'), 'active'),
-            cluster=Cluster(name=cluster_name).get('id'),
-            device=Device(name=resource.get('node')).get('id'),
-            vcpus=int(resource.get("maxcpu", 0)),
-            memory=int(resource.get("maxmem")) // 1000000,  # Fixed typo 'mexmem'
-            disk=int(resource.get("maxdisk", 0)) // 1000000,
-            tags=[ProxboxTag(bootstrap_placeholder=True).id],
-            role=DeviceRole(**vm_role_mapping.get(vm_type)).get('id', None),
-            custom_fields={
-                "proxmox_vm_id": resource.get('vmid'),
-                "proxmox_start_at_boot": start_at_boot,
-                "proxmox_unprivileged_container": unprivileged_container,
-                "proxmox_qemu_agent": qemu_agent,
-                "proxmox_search_domain": search_domain,
-            },
-        ))
+        '''
+        try:
+            cluster_type = ClusterType(bootstrap_placeholder=True)
+            print(type(cluster_type))
+            print('cluster_type: ', cluster_type)
+            cluster_type.get('id')
+            print('cluster_type_id: ', cluster_type.get('id'))
+            cluster = Cluster(name=cluster_name, type=ClusterType(bootstrap_placeholder=True).get('id'))
+            print(type(cluster))
+            print(f'cluster: {cluster}')
+            cluster_id = cluster.get('id')
+            print(f'cluster_id: {cluster_id}')
+        except Exception as error:
+            print(f'\n\nError creating Cluster in Netbox: {str(error)}\n\n')
+            raise ProxboxException(
+                message="Error creating Cluster in Netbox",
+                python_exception=f"Error: {str(error)}"
+            )
+        '''
+        try:
+            print('Creating Virtual Machine Dependents')
+            cluster = await asyncio.to_thread(lambda: Cluster(name=cluster_name))
+            device = await asyncio.to_thread(lambda: Device(name=resource.get('node')))
+            tag = await asyncio.to_thread(lambda: ProxboxTag(bootstrap_placeholder=True))
+            role = await asyncio.to_thread(lambda: DeviceRole(**vm_role_mapping.get(vm_type)))
+            
+            print('Cluster: ', cluster.get('name'))
+            print('Device: ', device.get('name'))
+            print('Tag: ', tag.get('name'))
+            print('Role: ', role.get('name'))
+            
+            print('Finish creating Virtual Machine Dependents')
+        except Exception as error:
+            raise ProxboxException(
+                message="Error creating Virtual Machine dependent objects (cluster, device, tag and role)",
+                python_exception=f"Error: {str(error)}"
+            )
+            
+        try:
+            virtual_machine = await asyncio.to_thread(lambda: VirtualMachine(
+                name=resource.get('name'),
+                status=VirtualMachine.status_field.get(resource.get('status'), 'active'),
+                cluster=cluster.get('id'),
+                device=device.get('id'),
+                vcpus=int(resource.get("maxcpu", 0)),
+                memory=int(resource.get("maxmem")) // 1000000,  # Fixed typo 'mexmem'
+                disk=int(resource.get("maxdisk", 0)) // 1000000,
+                tags=[tag.get('id', 0)],
+                role=role.get('id', 0),
+                custom_fields={
+                    "proxmox_vm_id": resource.get('vmid'),
+                    "proxmox_start_at_boot": start_at_boot,
+                    "proxmox_unprivileged_container": unprivileged_container,
+                    "proxmox_qemu_agent": qemu_agent,
+                    "proxmox_search_domain": search_domain,
+                },
+            ))
+        except ProxboxException:
+            raise
+        except Exception as error:
+            print(f'Error creating Virtual Machine in Netbox: {str(error)}')
+            raise ProxboxException(
+                message="Error creating Virtual Machine in Netbox",
+                python_exception=f"Error: {str(error)}"
+            )
+            
+        
+        if type(virtual_machine) != dict:
+            virtual_machine = virtual_machine.dict()
         
         def format_to_html(json: dict, key: str):
             return f"<a href='{json.get(key).get('url')}'>{json.get(key).get('name')}</a>"
@@ -693,6 +726,33 @@ async def create_virtual_machines(
             'unknown': "<span class='text-bg-grey badge p-1'>Unknown</span>"
         }
         status_html = status_html_choices.get(virtual_machine.get('status').get('value'), status_html_choices.get('unknown'))
+        
+        vm_created_json: dict = initial_vm_json | {
+            'increment_count': 'yes',
+            'completed': True,
+            'sync_status': completed_sync_html,
+            'rowid': str(resource.get('name')),
+            'name': f"<a href='{virtual_machine.get('display_url')}'>{virtual_machine.get('name')}</a>",
+            'netbox_id': virtual_machine.get('id'),
+            'status': status_html,
+            'cluster': cluster_html,
+            'device': device_html,
+            'role': role_html,
+            'vcpus': virtual_machine.get('vcpus'),
+            'memory': virtual_machine.get('memory'),
+            'disk': virtual_machine.get('disk'),
+            'vm_interfaces': [],
+        }
+        
+        # At this point, the Virtual Machine was created in NetBox. Left to create the interfaces.
+        await websocket.send_json(
+            {
+                'object': 'virtual_machine',
+                'type': 'create',
+                'data': vm_created_json
+            }
+        )
+        
         netbox_vm_interfaces: list = []
         
         if virtual_machine and vm_config:
@@ -730,7 +790,7 @@ async def create_virtual_machines(
                                 virtual_machine=virtual_machine.get('id'),
                                 type='bridge',
                                 description=f'Bridge interface of Device {resource.get("node")}. The current NetBox modeling does not allow correct abstraction of virtual bridge.',
-                                tags=[ProxboxTag(bootstrap_placeholder=True).id]
+                                tags=[ProxboxTag(bootstrap_placeholder=True).get('id', 0)]
                             )
                         
                         if type(bridge) != dict:
@@ -742,13 +802,14 @@ async def create_virtual_machines(
                             enabled=True,
                             bridge=bridge.get('id', None),
                             mac_address= value.get('virtio', value.get('hwaddr', None)), # Try get MAC from 'virtio' first, then 'hwaddr'. Else None.
-                            tags=[ProxboxTag(bootstrap_placeholder=True).id]
+                            tags=[ProxboxTag(bootstrap_placeholder=True).get('id', 0)]
                         ))
                         
-                        netbox_vm_interfaces.append(vm_interface)
                         
                         if type(vm_interface) != dict:
                             vm_interface = vm_interface.dict()
+                        
+                        netbox_vm_interfaces.append(vm_interface)
                         
                         # If 'ip' value exists and is not 'dhcp', create IP Address on NetBox.
                         interface_ip = value.get('ip', None)
@@ -758,35 +819,30 @@ async def create_virtual_machines(
                                 assigned_object_type='virtualization.vminterface',
                                 assigned_object_id=vm_interface.get('id'),
                                 status='active',
-                                tags=[ProxboxTag(bootstrap_placeholder=True).id],
+                                tags=[ProxboxTag(bootstrap_placeholder=True).get('id', 0)],
                             )
                             
                         # TODO: Create VLANs and other network related objects.
                         # 'tag' is the VLAN ID.
                         # 'bridge' is the bridge name.
         
-        vm_created_json: dict = initial_vm_json | {
-            'sync_status': completed_sync_html,
-            'rowid': str(resource.get('name')),
-            'name': f"<a href='{virtual_machine.get('display_url')}'>{virtual_machine.get('name')}</a>",
-            'netbox_id': virtual_machine.get('id'),
-            'status': status_html,
-            'cluster': cluster_html,
-            'device': device_html,
-            'role': role_html,
-            'vcpus': virtual_machine.get('vcpus'),
-            'memory': virtual_machine.get('memory'),
-            'disk': virtual_machine.get('disk'),
+        
+        
+        vm_created_with_interfaces_json: dict = vm_created_json | {
             'vm_interfaces': [f"<a href='{interface.get('display_url')}'>{interface.get('name')}</a>" for interface in netbox_vm_interfaces],
         }
+        # Remove 'completed' and 'increment_count' keys from the dictionary so it does not affect progress count on GUI.
+        vm_created_with_interfaces_json.pop('completed')
+        vm_created_with_interfaces_json.pop('increment_count')
         
         await websocket.send_json(
             {
                 'object': 'virtual_machine',
                 'type': 'create',
-                'data': vm_created_json
+                'data': vm_created_with_interfaces_json
             }
         )
+        
         
         # Lamba is necessary to treat the object instantiation as a coroutine/function.
         return virtual_machine
@@ -858,58 +914,66 @@ async def websocket_endpoint(
 ):
     try:
         await websocket.accept()
+        connection_open = True
         await websocket.send_text('Connected!')
     except Exception as error:
         print(f"Error while accepting WebSocket connection: {error}")
-        await websocket.close()
+        try:
+            await websocket.close()
+        except Exception as error:
+            print(f"Error while closing WebSocket connection: {error}")
     
     data = None
 
-    while True:
-        try:
-            data = await websocket.receive_text()
-        except Exception as error:
-            print(f"Error while receiving data from WebSocket: {error}")
-            await websocket.close()
-            break
+    try:
+        while True:
+            try:
+                data = await websocket.receive_text()
+                print(f'Received message: {data}')
+            except Exception as error:
+                print(f"Error while receiving data from WebSocket: {error}")
+                break
+            
+            if data == "Start":
+                await get_nodes(nb=nb, pxs=pxs, websocket=websocket)
+                await get_virtual_machines(nb=nb, pxs=pxs, websocket=websocket)
+                
+            if data == "Sync Nodes":
+                # Old method
+                # await get_nodes(nb=nb, pxs=pxs, websocket=websocket)
+                # New method
+                print('Syncing nodes...')
+                await create_proxmox_devices(
+                    clusters_status=cluster_status,
+                    nb=nb,
+                    node=None,
+                    websocket=websocket
+                )
+
+            elif data == "Sync Virtual Machines":
+                # Old method
+                # await get_virtual_machines(nb=nb, pxs=pxs, websocket=websocket)
+                
+                # New method
+                await create_virtual_machines(
+                    pxs=pxs,
+                    cluster_status=cluster_status,
+                    cluster_resources=cluster_resources,
+                    custom_fields=custom_fields,
+                    websocket=websocket
+                )
+                
+            else:
+                print("Invalid command.")
+                await websocket.send_denial_response("Invalid command.")
+
+    except WebSocketDisconnect as error:
+        print(f"WebSocket Disconnected: {error}")
+        connection_open = False
+    finally:
+        if connection_open and websocket.client_state.CONNECTED:
+            await websocket.close(code=1000, reason=None)
         
-        if data == "Start":
-            await get_nodes(nb=nb, pxs=pxs, websocket=websocket)
-            await get_virtual_machines(nb=nb, pxs=pxs, websocket=websocket)
-            await websocket.close()
-            
-        if data == "Sync Nodes":
-            # Old method
-            # await get_nodes(nb=nb, pxs=pxs, websocket=websocket)
-            # New method
-            await create_proxmox_devices(
-                clusters_status=cluster_status,
-                nb=nb,
-                node=None,
-                websocket=websocket
-            )
-            await websocket.close()
-
-        if data == "Sync Virtual Machines":
-            # Old method
-            # await get_virtual_machines(nb=nb, pxs=pxs, websocket=websocket)
-            
-            # New method
-            await create_virtual_machines(
-                pxs=pxs,
-                cluster_status=cluster_status,
-                cluster_resources=cluster_resources,
-                custom_fields=custom_fields,
-                websocket=websocket
-            )
-            await websocket.close()
-            
-        else:
-            print("Invalid command.")
-            await websocket.send_text("Invalid command.")
-            await websocket.close()
-
-        await websocket.close()
 
 @app.websocket("/ws/virtual-machine")
 async def websocket_vm_endpoint(

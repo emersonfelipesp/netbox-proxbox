@@ -2,16 +2,21 @@
 {% load static %}
 
 {% block head %}
-<script src="https://unpkg.com/htmx.org@1.7.0"></script>
-{% endblock %}
-{% block content %}
+    <script src="https://unpkg.com/htmx.org@1.7.0"></script>
     <script>
         const fastapiEndpoint = '{{ fastapi_url }}'
         const websocketEndpoint = '{{ fastapi_websocket_url }}/ws'
     </script>
-    {% include "netbox_proxbox/home/script.html" %}
-    {% include "netbox_proxbox/home/websocket.html" %}
-
+    <script type="module">
+        import * as HomeScripts from "{% static 'netbox_proxbox/js/home.js' %}";
+        window.HomeScripts = HomeScripts
+    </script>
+    <script type="module">
+        import ProxboxWebSocket from "{% static 'netbox_proxbox/js/websocket.js' %}";
+        window.ProxboxWebSocket = ProxboxWebSocket
+    </script>
+{% endblock %}
+{% block content %}
     <div>
         <div class="row mb-3">
 
@@ -38,12 +43,13 @@
                         {% endif %}
                     </form>
                     -->
-                    <form class="m-2" action="" onsubmit=syncNodes(event)>
+
+                    <form class="m-2" action="" onsubmit="window.ProxboxWebSocket.sendMessage('Sync Nodes')">
                         {% if perms.netbox_proxbox.add_proxmoxvm %}
                             <button id="full-update-button" class="btn btn-primary">Sync Nodes Using WebSocket (Beta)</button>
                         {% endif %}
                     </form>
-                    <form class="m-2" action="" onsubmit=syncVirtualMachines(event)>
+                    <form class="m-2" action="" onsubmit="window.ProxboxWebSocket.sendMessage('Sync Virtual Machines')">
                         {% if perms.netbox_proxbox.add_proxmoxvm %}
                             <button id="full-update-button" class="btn btn-primary">Sync Virtual Machines Using WebSocket (Beta)</button>
                         {% endif %}

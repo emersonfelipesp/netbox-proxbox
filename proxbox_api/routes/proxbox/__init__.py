@@ -6,7 +6,8 @@ from sqlmodel import select
 from proxbox_api.schemas import PluginConfig
 from proxbox_api.schemas.netbox import NetboxSessionSchema
 from proxbox_api.exception import ProxboxException
-from proxbox_api.database import SessionDep, NetBoxEndpoint
+
+from pynetbox_api.database import SessionDep, NetBoxEndpoint
 
 router = APIRouter()
 
