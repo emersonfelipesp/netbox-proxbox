@@ -4,7 +4,7 @@ from sqlmodel import select
 from typing import Annotated, Any
 from proxbox_api.routes.proxbox import netbox_settings
 from proxbox_api.session.netbox import NetboxSessionDep
-from proxbox_api.database import SessionDep, NetBoxEndpoint
+from pynetbox_api.database import SessionDep, NetBoxEndpoint
 # FastAPI Router
 router = APIRouter()
 

@@ -61,31 +61,11 @@ from proxbox_api.routes.proxmox.nodes import (
 )
 from proxbox_api.routes.proxmox.cluster import ClusterStatusDep
 
-from sqlmodel import select
-from proxbox_api.database import NetBoxEndpoint, get_session
-
 """
 CORS ORIGINS
 """
 
 netbox_url: str = "http://localhost:80"
-try:
-    database_session = next(get_session())
-    netbox_endpoint = database_session.exec(select(NetBoxEndpoint)).first()
-    
-    if netbox_endpoint:
-        print(netbox_endpoint)
-
-        https_netbox_url: str = f"https://{netbox_endpoint.ip_address}:{netbox_endpoint.port}"
-        http_netbox_url: str = f"http://{netbox_endpoint.ip_address}:{netbox_endpoint.port}"
-        netbox_url = https_netbox_url if netbox_endpoint.verify_ssl else http_netbox_url
-
-        print(netbox_url)
-except Exception as error:
-    raise ProxboxException(
-        message="Error getting Netbox Endpoint",
-        detail=f"Error: {str(error)}"
-    )
     
 
 cfg_not_found_msg = "Netbox configuration not found. Using default configuration."
@@ -128,27 +108,11 @@ app = FastAPI(
     version="0.0.1"
 )
 
-@app.on_event('startup')
-def on_startup():
-    from proxbox_api.database import create_db_and_tables
-    create_db_and_tables()
 
 """
 CORS Middleware
 """
 
-'''
-fastapi_endpoint,
-fastapi_endpoint_port8000,
-fastapi_endpoint_port80,
-https_fastapi_endpoint,
-netbox_endpoint,
-netbox_endpoint_port80,
-netbox_endpoint_port8000,
-https_netbox_endpoint,
-https_netbox_endpoint443,
-https_netbox_endpoint_port,
-'''
     
 origins = [
     netbox_url,
