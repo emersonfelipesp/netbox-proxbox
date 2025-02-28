@@ -17,6 +17,7 @@ from pynetbox_api.ipam.ip_address import IPAddress
 from pynetbox_api.dcim.device import Device, DeviceRole, DeviceType
 from pynetbox_api.dcim.interface import Interface
 from pynetbox_api.dcim.manufacturer import Manufacturer
+from pynetbox_api.dcim.site import Site
 from pynetbox_api.virtualization.virtual_machine import VirtualMachine
 from pynetbox_api.virtualization.interface import VMInterface
 from pynetbox_api.virtualization.cluster import Cluster
@@ -190,31 +191,44 @@ async def create_proxmox_devices(
                     }
                 }
             )
+            
+            
             try:
-                # TODO: Based on name.ip create Device IP Address
-                netbox_device = Device(
-                    return_type='dict',
-                    nb=nb.session,
-                    name=node_obj.name,
-                    tags=[ProxboxTag(bootstrap_placeholder=True).get('id', 0)],
-                    cluster = Cluster(
-                        return_type='dict',
-                        name = cluster_status.name,
-                        type = ClusterType(
-                            return_type='dict',
-                            name=cluster_status.mode.capitalize(),
-                            slug=cluster_status.mode,
-                            description=f'Proxmox {cluster_status.mode} mode',
-                            tags=[ProxboxTag(bootstrap_placeholder=True).get('id', 0)]
-                        )['id'],
-                        status = 'active',
-                        description = f'Proxmox {cluster_status.mode} cluster.',
-                        tags=[ProxboxTag(bootstrap_placeholder=True).get('id', 0)]
-                    ).get('id', Cluster(bootstrap_placeholder=True).get('id', 0)),
-                )
+                tag = await asyncio.to_thread(lambda: ProxboxTag(bootstrap_placeholder=True))
+                cluster_type = await asyncio.to_thread(lambda: ClusterType(
+                    name=cluster_status.mode.capitalize(),
+                    slug=cluster_status.mode,
+                    description=f'Proxmox {cluster_status.mode} mode',
+                    tags=[tag.get('id', None)]
+                ))
                 
-                if type(netbox_device) != dict:
-                    netbox_device = netbox_device.dict()
+                #cluster_type = await asyncio.to_thread(lambda: )
+                cluster = await asyncio.to_thread(lambda: Cluster(
+                    name=cluster_status.name,
+                    type=cluster_type.get('id'),
+                    description = f'Proxmox {cluster_status.mode} cluster.',
+                    tags=[tag.get('id', None)]
+                ))
+                
+                device_type = await asyncio.to_thread(lambda: DeviceType(bootstrap_placeholder=True))
+                role = await asyncio.to_thread(lambda: DeviceRole(bootstrap_placeholder=True))
+                site = await asyncio.to_thread(lambda: Site(bootstrap_placeholder=True))
+                
+                if cluster is not None:
+                    # TODO: Based on name.ip create Device IP Address
+                    netbox_device = await asyncio.to_thread(lambda: Device(
+                        name=node_obj.name,
+                        tags=[tag.get('id', 0)],
+                        cluster = cluster.get('id', Cluster(bootstrap_placeholder=True).get('id', 0)),
+                        status='active',
+                        description=f'Proxmox Node {node_obj.name}',
+                        device_type=device_type.get('id', None),
+                        role=role.get('id', None),
+                        site=site.get('id', None),
+                    ))
+                
+                    if type(netbox_device) != dict:
+                        netbox_device = netbox_device.dict()
                 
                 await websocket.send_json(
                     {
@@ -669,10 +683,13 @@ async def create_virtual_machines(
             tag = await asyncio.to_thread(lambda: ProxboxTag(bootstrap_placeholder=True))
             role = await asyncio.to_thread(lambda: DeviceRole(**vm_role_mapping.get(vm_type)))
             
-            print('Cluster: ', cluster.get('name'))
-            print('Device: ', device.get('name'))
-            print('Tag: ', tag.get('name'))
-            print('Role: ', role.get('name'))
+            print('\n')
+            print('Virtual Machine Name: ', resource.get('name'))
+            print('Cluster: ', cluster.get('name'), cluster.get('id'), type(cluster.get('id')))
+            print('Device: ', device.get('name'), device.get('id'), type(device.get('id')))
+            print('Tag: ', tag.get('name'), tag.get('id'))
+            print('Role: ', role.get('name'), role.get('id'))
+            print('\n')
             
             print('Finish creating Virtual Machine Dependents')
         except Exception as error:
@@ -692,14 +709,17 @@ async def create_virtual_machines(
                 disk=int(resource.get("maxdisk", 0)) // 1000000,
                 tags=[tag.get('id', 0)],
                 role=role.get('id', 0),
-                custom_fields={
+            ))
+            
+            """custom_fields={
                     "proxmox_vm_id": resource.get('vmid'),
                     "proxmox_start_at_boot": start_at_boot,
                     "proxmox_unprivileged_container": unprivileged_container,
                     "proxmox_qemu_agent": qemu_agent,
                     "proxmox_search_domain": search_domain,
                 },
-            ))
+            """
+            
         except ProxboxException:
             raise
         except Exception as error:
