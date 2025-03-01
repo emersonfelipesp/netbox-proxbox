@@ -666,6 +666,7 @@ dependencies = [
     { name = "pynetbox" },
     { name = "python-dotenv" },
     { name = "requests" },
+    { name = "sqlmodel" },
     { name = "typer" },
 ]
 
@@ -677,6 +678,7 @@ requires-dist = [
     { name = "pynetbox", specifier = ">=7.4.1" },
     { name = "python-dotenv", specifier = ">=1.0.1" },
     { name = "requests", specifier = ">=2.32.3" },
+    { name = "sqlmodel", specifier = ">=0.0.22" },
     { name = "typer", specifier = ">=0.15.1" },
 ]
 
