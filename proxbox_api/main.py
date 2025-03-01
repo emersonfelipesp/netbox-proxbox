@@ -970,16 +970,47 @@ async def websocket_endpoint(
             )
             
             if data == "Full Update Sync":
-                print('Syncing nodes...')
-                sync_nodes = await sync_nodes_function
+                # Sync Nodes
+                sync_nodes = await create_proxmox_devices(
+                    clusters_status=cluster_status,
+                    nb=nb,
+                    node=None,
+                    websocket=websocket,
+                    tag=tag
+                )
                 
-                if sync_nodes:
-                    print('Syncing virtual machines...')
-                    await sync_vms_function
+                if sync_nodes: 
+                    # Sync Virtual Machines
+                    await create_virtual_machines(
+                        pxs=pxs,
+                        cluster_status=cluster_status,
+                        cluster_resources=cluster_resources,
+                        custom_fields=custom_fields,
+                        websocket=websocket,
+                        tag=tag
+                    )
                 
-            if data == "Sync Nodes": await sync_nodes_function
-            elif data == "Sync Virtual Machines": await sync_vms_function
-            else: await websocket.send_denial_response("Invalid command.")
+            if data == "Sync Nodes":
+                await create_proxmox_devices(
+                    clusters_status=cluster_status,
+                    nb=nb,
+                    node=None,
+                    websocket=websocket,
+                    tag=tag
+                )
+                
+            elif data == "Sync Virtual Machines":
+                await create_virtual_machines(
+                    pxs=pxs,
+                    cluster_status=cluster_status,
+                    cluster_resources=cluster_resources,
+                    custom_fields=custom_fields,
+                    websocket=websocket,
+                    tag=tag
+                )
+                
+            else:
+                await websocket.send_denial_response("Invalid command.")
 
     except WebSocketDisconnect as error:
         print(f"WebSocket Disconnected: {error}")
