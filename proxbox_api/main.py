@@ -938,6 +938,7 @@ async def websocket_endpoint(
         except Exception as error:
             print(f"Error while closing WebSocket connection: {error}")
     
+    # 'data' is the message received from the WebSocket.
     data = None
 
     try:
@@ -949,40 +950,36 @@ async def websocket_endpoint(
                 print(f"Error while receiving data from WebSocket: {error}")
                 break
             
-            if data == "Start":
-                await get_nodes(nb=nb, pxs=pxs, websocket=websocket)
-                await get_virtual_machines(nb=nb, pxs=pxs, websocket=websocket)
-                
-            if data == "Sync Nodes":
-                # Old method
-                # await get_nodes(nb=nb, pxs=pxs, websocket=websocket)
-                # New method
+            # Sync Nodes
+            sync_nodes_function = create_proxmox_devices(
+                clusters_status=cluster_status,
+                nb=nb,
+                node=None,
+                websocket=websocket,
+                tag=tag
+            )
+            
+            # Sync Virtual Machines
+            sync_vms_function = create_virtual_machines(
+                pxs=pxs,
+                cluster_status=cluster_status,
+                cluster_resources=cluster_resources,
+                custom_fields=custom_fields,
+                websocket=websocket,
+                tag=tag
+            )
+            
+            if data == "Full Update Sync":
                 print('Syncing nodes...')
-                await create_proxmox_devices(
-                    clusters_status=cluster_status,
-                    nb=nb,
-                    node=None,
-                    websocket=websocket
-                )
-
-            elif data == "Sync Virtual Machines":
-                # Old method
-                # await get_virtual_machines(nb=nb, pxs=pxs, websocket=websocket)
+                sync_nodes = await sync_nodes_function
                 
+                if sync_nodes:
+                    print('Syncing virtual machines...')
+                    await sync_vms_function
                 
-                # New method
-                await create_virtual_machines(
-                    pxs=pxs,
-                    cluster_status=cluster_status,
-                    cluster_resources=cluster_resources,
-                    custom_fields=custom_fields,
-                    websocket=websocket,
-                    tag=tag
-                )
-                
-            else:
-                print("Invalid command.")
-                await websocket.send_denial_response("Invalid command.")
+            if data == "Sync Nodes": await sync_nodes_function
+            elif data == "Sync Virtual Machines": await sync_vms_function
+            else: await websocket.send_denial_response("Invalid command.")
 
     except WebSocketDisconnect as error:
         print(f"WebSocket Disconnected: {error}")
@@ -990,35 +987,3 @@ async def websocket_endpoint(
     finally:
         if connection_open and websocket.client_state.CONNECTED:
             await websocket.close(code=1000, reason=None)
-        
-
-@app.websocket("/ws/virtual-machine")
-async def websocket_vm_endpoint(
-    nb: NetboxSessionDep,
-    pxs: ProxmoxSessionsDep,
-    websocket: WebSocket
-):
-    try:
-        await websocket.accept()
-    except Exception as error:
-        print(f"Error while accepting WebSocket connection: {error}")
-        await websocket.close()
-
-    data = None
-
-    while True:
-        try:
-            data = await websocket.receive_text()
-        except Exception as error:
-            print(f"Error while receiving data from WebSocket: {error}")
-            await websocket.close()
-            break
-
-        if data == "Sync Virtual Machines":
-            await get_virtual_machines(nb=nb, pxs=pxs, websocket=websocket)
-            await websocket.close()
-
-        else:
-            print("Invalid command.")
-            await websocket.send_text("Invalid command.")
-            await websocket.close()

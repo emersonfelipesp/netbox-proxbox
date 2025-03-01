@@ -26,39 +26,22 @@
                 
 
                 {% for object in fastapi_endpoint_list %}
-                    <!-- Old way using websocket vanilla
-                    <form class="m-2" action="" onsubmit="fullUpdate(event)">
-                        {% if perms.netbox_proxbox.add_proxmoxvm %}
-                            <button id="full-update-button" class="btn btn-primary">Proxmox Full Update</button>
-                        {% endif %}
-                    </form>
-                    <form class="m-2" action="" onsubmit="syncNodes(event)">
+                    <form class="m-2" action="" onsubmit="window.ProxboxWebSocket.sendMessage('Sync Nodes')">
                         {% if perms.netbox_proxbox.add_proxmoxvm %}
                             <button id="full-update-button" class="btn btn-primary">Sync Nodes</button>
                         {% endif %}
                     </form>
-                    <form class="m-2" action="" onsubmit="syncVirtualMachines(event)">
+                    <form class="m-2" action="" onsubmit="window.ProxboxWebSocket.sendMessage('Sync Virtual Machines')">
                         {% if perms.netbox_proxbox.add_proxmoxvm %}
                             <button id="full-update-button" class="btn btn-primary">Sync Virtual Machines</button>
                         {% endif %}
                     </form>
-                    -->
-
-                    <form class="m-2" action="" onsubmit="window.ProxboxWebSocket.sendMessage('Sync Nodes')">
+                    <form class="m-2" action="" onsubmit="window.ProxboxWebSocket.sendMessage('Full Update Sync')">
                         {% if perms.netbox_proxbox.add_proxmoxvm %}
-                            <button id="full-update-button" class="btn btn-primary">Sync Nodes Using WebSocket (Beta)</button>
+                            <button id="full-update-button" class="btn btn-primary">Full Update Sync</button>
                         {% endif %}
                     </form>
-                    <form class="m-2" action="" onsubmit="window.ProxboxWebSocket.sendMessage('Sync Virtual Machines')">
-                        {% if perms.netbox_proxbox.add_proxmoxvm %}
-                            <button id="full-update-button" class="btn btn-primary">Sync Virtual Machines Using WebSocket (Beta)</button>
-                        {% endif %}
-                    </form>
-
                 {% endfor %}
-                
-                
-                
             </div>
             <br>
             <br>
