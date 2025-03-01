@@ -28,6 +28,11 @@ requires = [
     "poetry-core>=1.0.0",
     "requests",
     "pynetbox",
-    "proxmoxer"
+    "proxmoxer",
+    "fastapi[standard]>=0.115.6",
+    "proxmoxer>=2.2.0",
+    "pynetbox>=7.4.1",
+    "pynetbox-api",
+    "sqlmodel>=0.0.22",
 ]
 build-backend = "poetry.core.masonry.api"
