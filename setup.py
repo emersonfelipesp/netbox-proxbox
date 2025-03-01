@@ -12,7 +12,7 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 '''
 
-version = "0.0.5"
+version = "0.0.6b1"
 github = 'https://github.com/netdevopsbr/netbox-proxbox'
 name = "netbox-proxbox"
 python_min_version = "3.10"
