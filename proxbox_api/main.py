@@ -23,12 +23,25 @@ from pynetbox_api.virtualization.interface import VMInterface
 from pynetbox_api.virtualization.cluster import Cluster
 from pynetbox_api.virtualization.cluster_type import ClusterType
 from pynetbox_api.extras.custom_field import CustomField
-
+from pynetbox_api.extras.tag import Tags
 from pynetbox_api.exceptions import FastAPIException
 
 # Proxbox API Imports
-from proxbox_api import ProxboxTag, proxbox_tag
 from proxbox_api.exception import ProxboxException
+from pydantic import BaseModel
+
+
+async def proxbox_tag():
+    return await asyncio.to_thread(
+        lambda: Tags(
+            name='Proxbox',
+            slug='proxbox',
+            color='ff5722',
+            description='Proxbox Identifier (used to identify the items the plugin created)'
+        )
+    )
+    
+ProxboxTagDep = Annotated[Tags.Schema, Depends(proxbox_tag)]
 
 # Proxmox Routes
 from proxbox_api.routes.proxmox import router as proxmox_router
@@ -166,6 +179,7 @@ async def create_devices():
 async def create_proxmox_devices(
     clusters_status: ClusterStatusDep,
     nb: NetboxSessionDep,
+    tag: ProxboxTagDep,
     node: str | None = None,
     websocket = WebSocket
 ):
@@ -194,7 +208,6 @@ async def create_proxmox_devices(
             
             
             try:
-                tag = await asyncio.to_thread(lambda: ProxboxTag(bootstrap_placeholder=True))
                 cluster_type = await asyncio.to_thread(lambda: ClusterType(
                     name=cluster_status.mode.capitalize(),
                     slug=cluster_status.mode,
@@ -277,7 +290,11 @@ async def create_proxmox_devices(
 
 ProxmoxCreateDevicesDep = Annotated[Device.SchemaList, Depends(create_proxmox_devices)]
 
-async def create_interface_and_ip(node_interface, node):
+async def create_interface_and_ip(
+    tag: ProxboxTagDep,
+    node_interface,
+    node
+):
     interface_type_mapping: dict = {
         'lo': 'loopback',
         'bridge': 'bridge',
@@ -286,13 +303,13 @@ async def create_interface_and_ip(node_interface, node):
     }
         
     node_cidr = getattr(node_interface, 'cidr', None)
-    
+
     interface = Interface(
         device=node.get('id', 0),
         name=node_interface.iface,
         status='active',
         type=interface_type_mapping.get(node_interface.type, 'other'),
-        tags=[ProxboxTag(bootstrap_placeholder=True).get('id', 0)],
+        tags=[tag.get('id', 0)],
     )
     
     try:
@@ -307,7 +324,7 @@ async def create_interface_and_ip(node_interface, node):
             assigned_object_type='dcim.interface',
             assigned_object_id=int(interface_id),
             status='active',
-            tags=[ProxboxTag(bootstrap_placeholder=True).get('id', 0)],
+            tags=[tag.get('id', 0)],
         )
     
     return interface
@@ -565,6 +582,7 @@ async def create_virtual_machines(
     cluster_status: ClusterStatusDep,
     cluster_resources: ClusterResourcesDep,
     custom_fields: CreateCustomFieldsDep,
+    tag: ProxboxTagDep,
     websocket = WebSocket
 ):
     async def _create_vm(cluster: dict):
@@ -598,7 +616,7 @@ async def create_virtual_machines(
                 'slug': 'virtual-machine-qemu',
                 'color': '00ffff',
                 'description': 'Proxmox Virtual Machine',
-                'tags': [proxbox_tag.get('id', 0)],
+                'tags': [tag.get('id', 0)],
                 'vm_role': True
             },
             'lxc': {
@@ -606,7 +624,7 @@ async def create_virtual_machines(
                 'slug': 'container-lxc',
                 'color': '7fffd4',
                 'description': 'Proxmox LXC Container',
-                'tags': [proxbox_tag.get('id', 0)],
+                'tags': [tag.get('id', 0)],
                 'vm_role': True
             },
             'undefined': {
@@ -614,7 +632,7 @@ async def create_virtual_machines(
                 'slug': 'unknown',
                 'color': '000000',
                 'description': 'VM Type not found. Neither QEMU nor LXC.',
-                'tags': [proxbox_tag.get('id', 0)],
+                'tags': [tag.get('id', 0)],
                 'vm_role': True
             }
         }
@@ -646,52 +664,29 @@ async def create_virtual_machines(
             'cluster': str(cluster_name),
             'device': str(resource.get('node')),
         }
-        
-        
-        #print(f'initial_vm_json: {initial_vm_json}')
-        
+
         await websocket.send_json(
             {
                 'object': 'virtual_machine',
                 'type': 'create',
                 'data': initial_vm_json
             })
-        
-        '''
+
         try:
-            cluster_type = ClusterType(bootstrap_placeholder=True)
-            print(type(cluster_type))
-            print('cluster_type: ', cluster_type)
-            cluster_type.get('id')
-            print('cluster_type_id: ', cluster_type.get('id'))
-            cluster = Cluster(name=cluster_name, type=ClusterType(bootstrap_placeholder=True).get('id'))
-            print(type(cluster))
-            print(f'cluster: {cluster}')
-            cluster_id = cluster.get('id')
-            print(f'cluster_id: {cluster_id}')
-        except Exception as error:
-            print(f'\n\nError creating Cluster in Netbox: {str(error)}\n\n')
-            raise ProxboxException(
-                message="Error creating Cluster in Netbox",
-                python_exception=f"Error: {str(error)}"
-            )
-        '''
-        try:
+            print('\n')
             print('Creating Virtual Machine Dependents')
             cluster = await asyncio.to_thread(lambda: Cluster(name=cluster_name))
             device = await asyncio.to_thread(lambda: Device(name=resource.get('node')))
-            tag = await asyncio.to_thread(lambda: ProxboxTag(bootstrap_placeholder=True))
             role = await asyncio.to_thread(lambda: DeviceRole(**vm_role_mapping.get(vm_type)))
             
-            print('\n')
-            print('Virtual Machine Name: ', resource.get('name'))
-            print('Cluster: ', cluster.get('name'), cluster.get('id'), type(cluster.get('id')))
-            print('Device: ', device.get('name'), device.get('id'), type(device.get('id')))
-            print('Tag: ', tag.get('name'), tag.get('id'))
-            print('Role: ', role.get('name'), role.get('id'))
-            print('\n')
             
+            print('> Virtual Machine Name: ', resource.get('name'))
+            print('> Cluster: ', cluster.get('name'), cluster.get('id'), type(cluster.get('id')))
+            print('> Device: ', device.get('name'), device.get('id'), type(device.get('id')))
+            print('> Tag: ', tag.get('name'), tag.get('id'))
+            print('> Role: ', role.get('name'), role.get('id'))
             print('Finish creating Virtual Machine Dependents')
+            print('\n')
         except Exception as error:
             raise ProxboxException(
                 message="Error creating Virtual Machine dependent objects (cluster, device, tag and role)",
@@ -709,16 +704,15 @@ async def create_virtual_machines(
                 disk=int(resource.get("maxdisk", 0)) // 1000000,
                 tags=[tag.get('id', 0)],
                 role=role.get('id', 0),
-            ))
-            
-            """custom_fields={
+                custom_fields={
                     "proxmox_vm_id": resource.get('vmid'),
                     "proxmox_start_at_boot": start_at_boot,
                     "proxmox_unprivileged_container": unprivileged_container,
                     "proxmox_qemu_agent": qemu_agent,
                     "proxmox_search_domain": search_domain,
                 },
-            """
+            ))
+
             
         except ProxboxException:
             raise
@@ -810,7 +804,7 @@ async def create_virtual_machines(
                                 virtual_machine=virtual_machine.get('id'),
                                 type='bridge',
                                 description=f'Bridge interface of Device {resource.get("node")}. The current NetBox modeling does not allow correct abstraction of virtual bridge.',
-                                tags=[ProxboxTag(bootstrap_placeholder=True).get('id', 0)]
+                                tags=[tag.get('id', 0)]
                             )
                         
                         if type(bridge) != dict:
@@ -822,7 +816,7 @@ async def create_virtual_machines(
                             enabled=True,
                             bridge=bridge.get('id', None),
                             mac_address= value.get('virtio', value.get('hwaddr', None)), # Try get MAC from 'virtio' first, then 'hwaddr'. Else None.
-                            tags=[ProxboxTag(bootstrap_placeholder=True).get('id', 0)]
+                            tags=[tag.get('id', 0)]
                         ))
                         
                         
@@ -839,7 +833,7 @@ async def create_virtual_machines(
                                 assigned_object_type='virtualization.vminterface',
                                 assigned_object_id=vm_interface.get('id'),
                                 status='active',
-                                tags=[ProxboxTag(bootstrap_placeholder=True).get('id', 0)],
+                                tags=[tag.get('id', 0)],
                             )
                             
                         # TODO: Create VLANs and other network related objects.
@@ -930,6 +924,7 @@ async def websocket_endpoint(
     cluster_status: ClusterStatusDep,
     cluster_resources: ClusterResourcesDep,
     custom_fields: CreateCustomFieldsDep,
+    tag: ProxboxTagDep,
     websocket: WebSocket
 ):
     try:
@@ -974,13 +969,15 @@ async def websocket_endpoint(
                 # Old method
                 # await get_virtual_machines(nb=nb, pxs=pxs, websocket=websocket)
                 
+                
                 # New method
                 await create_virtual_machines(
                     pxs=pxs,
                     cluster_status=cluster_status,
                     cluster_resources=cluster_resources,
                     custom_fields=custom_fields,
-                    websocket=websocket
+                    websocket=websocket,
+                    tag=tag
                 )
                 
             else:
