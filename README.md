@@ -99,8 +99,23 @@ source /opt/netbox/venv/bin/activate
 ```
 
 Install the plugin package.
+
+> It will automatically install `proxbox_api` (plugin backend) and `pynetbox-api` (the lib used to communicate with NetBox API)
+
 ```
-(venv) $ pip install netbox-proxbox
+pip install netbox-proxbox
+```
+
+Start Proxbox Backend (FastAPI app)
+
+```
+systemctl start proxbox
+```
+
+If failing to start the systemd service, try using the following command to see the error messages:
+
+```
+uvicorn proxbox_api.main:app --host 0.0.0.0 --port 8800 --reload
 ```
 
 #### 1.1.2. Using git (development use)

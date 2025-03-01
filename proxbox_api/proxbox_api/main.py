@@ -227,12 +227,13 @@ async def create_proxmox_devices(
                 role = await asyncio.to_thread(lambda: DeviceRole(bootstrap_placeholder=True))
                 site = await asyncio.to_thread(lambda: Site(bootstrap_placeholder=True))
                 
+                netbox_device = None
                 if cluster is not None:
                     # TODO: Based on name.ip create Device IP Address
                     netbox_device = await asyncio.to_thread(lambda: Device(
                         name=node_obj.name,
                         tags=[tag.get('id', 0)],
-                        cluster = cluster.get('id', Cluster(bootstrap_placeholder=True).get('id', 0)),
+                        cluster = cluster.get('id'),
                         status='active',
                         description=f'Proxmox Node {node_obj.name}',
                         device_type=device_type.get('id', None),
@@ -243,35 +244,36 @@ async def create_proxmox_devices(
                     if type(netbox_device) != dict:
                         netbox_device = netbox_device.dict()
                 
-                await websocket.send_json(
-                    {
-                        'object': 'device',
-                        'type': 'create',
-                        'data': {
-                            'completed': True,
-                            'increment_count': 'yes',
-                            'sync_status': completed_sync_html,
-                            'rowid': node_obj.name,
-                            'name': f"<a href='{netbox_device.get('display_url')}'>{netbox_device.get('name')}</a>",
-                            'netbox_id': netbox_device.get('id'),
-                            #'manufacturer': f"<a href='{netbox_device.get('manufacturer').get('url')}'>{netbox_device.get('manufacturer').get('name')}</a>",
-                            'role': f"<a href='{netbox_device.get('role').get('url')}'>{netbox_device.get('role').get('name')}</a>",
-                            'cluster': f"<a href='{netbox_device.get('cluster').get('url')}'>{netbox_device.get('cluster').get('name')}</a>",
-                            'device_type': f"<a href='{netbox_device.get('device_type').get('url')}'>{netbox_device.get('device_type').get('model')}</a>",
+                if netbox_device is None:
+                    await websocket.send_json(
+                        {
+                            'object': 'device',
+                            'type': 'create',
+                            'data': {
+                                'completed': True,
+                                'increment_count': 'yes',
+                                'sync_status': completed_sync_html,
+                                'rowid': node_obj.name,
+                                'name': f"<a href='{netbox_device.get('display_url')}'>{netbox_device.get('name')}</a>",
+                                'netbox_id': netbox_device.get('id'),
+                                #'manufacturer': f"<a href='{netbox_device.get('manufacturer').get('url')}'>{netbox_device.get('manufacturer').get('name')}</a>",
+                                'role': f"<a href='{netbox_device.get('role').get('url')}'>{netbox_device.get('role').get('name')}</a>",
+                                'cluster': f"<a href='{netbox_device.get('cluster').get('url')}'>{netbox_device.get('cluster').get('name')}</a>",
+                                'device_type': f"<a href='{netbox_device.get('device_type').get('url')}'>{netbox_device.get('device_type').get('model')}</a>",
+                            }
                         }
-                    }
-                )
-                
-                # If node, return only the node requested.
-                if node:
-                    if node == node_obj.name:
-                        return Device.SchemaList([netbox_device])
-                    else:
-                        continue
+                    )
                     
-                # If not node, return all nodes.
-                elif not node:
-                    device_list.append(netbox_device)
+                    # If node, return only the node requested.
+                    if node:
+                        if node == node_obj.name:
+                            return Device.SchemaList([netbox_device])
+                        else:
+                            continue
+                        
+                    # If not node, return all nodes.
+                    elif not node:
+                        device_list.append(netbox_device)
 
             except FastAPIException as error:
                 traceback.print_exc()
