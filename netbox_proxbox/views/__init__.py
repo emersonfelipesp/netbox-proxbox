@@ -128,7 +128,7 @@ class TestWebSocketView(View):
 
 
 class NodesView(View):
-    template = 'netbox_proxbox/nodes.html'
+    template = 'netbox_proxbox/devices.html'
 
     def get(self, request):
         plugin_configuration: dict = getattr(configuration, "PLUGINS_CONFIG", {})
