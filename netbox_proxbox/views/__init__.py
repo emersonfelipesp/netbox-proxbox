@@ -49,22 +49,40 @@ class HomeView(View):
         
         default_config = dict =  getattr(ProxboxConfig, 'default_settings', {})
         
+        fastapi_url: str = 'https://example.fastapi.com',
+        fastapi_websocket_url: str = 'wss://example.fastapi.com'
+                
+                
         proxmox_endpoint_obj = ProxmoxEndpoint.objects.all()
+        proxmox_endpoint_count = proxmox_endpoint_obj.count()
+        if proxmox_endpoint_count <= 0:
+            proxmox_endpoint_obj = None
+        
+            
         netbox_endpoint_obj = NetBoxEndpoint.objects.all()
+        netbox_endpoint_count = netbox_endpoint_obj.count()
+        if netbox_endpoint_count <= 0:
+            netbox_endpoint_obj = None
+        
         fastapi_endpoint_obj = FastAPIEndpoint.objects.all()
+        fastapi_endpoint_count = fastapi_endpoint_obj.count()
+        if fastapi_endpoint_count <= 0:
+            fastapi_endpoint_obj = None
 
-        fastapi_object = fastapi_endpoint_obj[0]
-        fastapi_ip = str(fastapi_object.ip_address).split('/')[0]
-        
-        # Define HTTP(S) URL for FastAPI
-        fastapi_url_https = f"https://{fastapi_ip}:{fastapi_object.port}"
-        fastapi_url_http = f"http://{fastapi_ip}:{fastapi_object.port}"
-        fastapi_url = fastapi_url_https if fastapi_object.verify_ssl else fastapi_url_http
-        
-        # Define (Secure) WebSocket URL for FastAPI
-        fastapi_wss_url = f"wss://{fastapi_ip}:{fastapi_object.port}"
-        fastapi_ws_url = f"ws://{fastapi_ip}:{fastapi_object.port}"
-        fastapi_websocket_url = fastapi_wss_url if fastapi_object.verify_ssl else fastapi_ws_url
+        if fastapi_endpoint_obj is not None:
+            # Get first object from FastAPIEndpoint queryset.
+            fastapi_object = fastapi_endpoint_obj[0]
+            fastapi_ip = str(fastapi_object.ip_address).split('/')[0]
+            
+            # Define HTTP(S) URL for FastAPI
+            fastapi_url_https = f"https://{fastapi_ip}:{fastapi_object.port}"
+            fastapi_url_http = f"http://{fastapi_ip}:{fastapi_object.port}"
+            fastapi_url = fastapi_url_https if fastapi_object.verify_ssl else fastapi_url_http
+            
+            # Define (Secure) WebSocket URL for FastAPI
+            fastapi_wss_url = f"wss://{fastapi_ip}:{fastapi_object.port}"
+            fastapi_ws_url = f"ws://{fastapi_ip}:{fastapi_object.port}"
+            fastapi_websocket_url = fastapi_wss_url if fastapi_object.verify_ssl else fastapi_ws_url
         
         return render(
             request,
@@ -110,7 +128,7 @@ class TestWebSocketView(View):
 
 
 class NodesView(View):
-    template = 'netbox_proxbox/nodes.html'
+    template = 'netbox_proxbox/devices.html'
 
     def get(self, request):
         plugin_configuration: dict = getattr(configuration, "PLUGINS_CONFIG", {})

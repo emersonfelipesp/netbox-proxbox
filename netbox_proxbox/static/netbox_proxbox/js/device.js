@@ -10,7 +10,7 @@ export function populateDevicesTable(jsonMessage) {
     let deviceTable = document.getElementById('device-table-data')
     console.log('Device Table: ', deviceTable)
 
-    let nodesDiv = document.getElementById('nodes-div')
+    let nodesDiv = document.getElementById('device-div')
     nodesDiv.style.display = "block"
 
     if (!deviceTable) {
