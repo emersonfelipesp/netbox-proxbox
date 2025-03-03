@@ -115,6 +115,9 @@ async function getVersion() {
     let virtualMachinesDiv = document.getElementById('virtual-machines-div')
     virtualMachinesDiv.style.display = "none"
 
+    let nodesDiv = document.getElementById('device-div')
+    nodesDiv.style.display = "none"
+
     // Test FastAPI Proxbox Backend Connection
     console.log("Testing FastAPI Connection...")
     FastAPIConnectionTest(fastapiEndpoint)

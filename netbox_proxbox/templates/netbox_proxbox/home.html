@@ -24,24 +24,25 @@
             {# Full Update Button#}
             <div style="margin-bottom: 15px;" class="d-flex justify-content-center noprint">
                 
-
-                {% for object in fastapi_endpoint_list %}
-                    <form class="m-2" action="" onsubmit="window.ProxboxWebSocket.sendMessage('Sync Nodes')">
-                        {% if perms.netbox_proxbox.add_proxmoxvm %}
-                            <button id="full-update-button" class="btn btn-primary">Sync Nodes</button>
-                        {% endif %}
-                    </form>
-                    <form class="m-2" action="" onsubmit="window.ProxboxWebSocket.sendMessage('Sync Virtual Machines')">
-                        {% if perms.netbox_proxbox.add_proxmoxvm %}
-                            <button id="full-update-button" class="btn btn-primary">Sync Virtual Machines</button>
-                        {% endif %}
-                    </form>
-                    <form class="m-2" action="" onsubmit="window.ProxboxWebSocket.sendMessage('Full Update Sync')">
-                        {% if perms.netbox_proxbox.add_proxmoxvm %}
-                            <button id="full-update-button" class="btn btn-primary">Full Update Sync</button>
-                        {% endif %}
-                    </form>
-                {% endfor %}
+                {% if fastapi_endpoint_list and fastapi_endpoint_list|length > 0 %}
+                    {% for object in fastapi_endpoint_list %}
+                        <form class="m-2" action="" onsubmit="window.ProxboxWebSocket.sendMessage('Sync Nodes')">
+                            {% if perms.netbox_proxbox.add_proxmoxvm %}
+                                <button id="full-update-button" class="btn btn-primary">Sync Nodes</button>
+                            {% endif %}
+                        </form>
+                        <form class="m-2" action="" onsubmit="window.ProxboxWebSocket.sendMessage('Sync Virtual Machines')">
+                            {% if perms.netbox_proxbox.add_proxmoxvm %}
+                                <button id="full-update-button" class="btn btn-primary">Sync Virtual Machines</button>
+                            {% endif %}
+                        </form>
+                        <form class="m-2" action="" onsubmit="window.ProxboxWebSocket.sendMessage('Full Update Sync')">
+                            {% if perms.netbox_proxbox.add_proxmoxvm %}
+                                <button id="full-update-button" class="btn btn-primary">Full Update Sync</button>
+                            {% endif %}
+                        </form>
+                    {% endfor %}
+                {% endif %}
             </div>
             <br>
             <br>
@@ -61,24 +62,69 @@
                 {% for object in netbox_endpoint_list %}
                     {% include "netbox_proxbox/home/netbox_card.html" %}
                 {% endfor %}
+            {% else %}
+                <div class="d-flex flex-column align-items-center" style="margin-bottom: 15px;">
+                    
+                    <div>
+                        <h2>
+                            There is no NetBox Endpoint configured.
+                        </h2>
+                    </div>
+                    <div class="justify-content-center">
+                        <a href="{% url 'plugins:netbox_proxbox:netboxendpoint_add' %}">
+                            <button class="btn btn-primary">
+                                Create new NetBox Endpoint
+                            </button>
+                        </a>
+                    </div>
+                </div>
             {% endif %}
-
+            <hr>
             {% if fastapi_endpoint_list and fastapi_endpoint_list|length > 0 %}
                 {# FastAPI Card #}
                 {% for object in fastapi_endpoint_list %}
                     {% include "netbox_proxbox/home/fastapi_card.html" %}
                 {% endfor %}
+            {% else %}
+                <div class="d-flex flex-column align-items-center" style="margin-bottom: 15px;">
+                    <div>
+                        <h2>
+                            There is no FastAPI Endpoint configured.
+                        </h2>
+                    </div>
+                    <div class="justify-content-center">
+                        <a href="{% url 'plugins:netbox_proxbox:proxmoxendpoint_add' %}">
+                            <button class="btn btn-primary">
+                                Create new FastAPI Endpoint
+                            </button>
+                        </a>
+                    </div>
+                </div>
             {% endif %}
-
-
+            <hr>
             {% if proxmox_endpoint_list and proxmox_endpoint_list|length > 0 %}
                 {# Proxmox Card #}
                 {% for object in proxmox_endpoint_list %}
                     {% include "netbox_proxbox/home/proxmox_card.html" %}
                 {% endfor %}
+            {% else %}
+                <div class="d-flex flex-column align-items-center" style="margin-bottom: 15px;">
+                    <div>
+                        <h2>
+                            There are no Proxmox Endpoints configured.
+                        </h2>
+                    </div>
+                    <div class="justify-content-center">
+                        <a href="{% url 'plugins:netbox_proxbox:proxmoxendpoint_add' %}">
+                            <button class="btn btn-primary">
+                                Create new Proxmox Endpoint
+                            </button>
+                        </a>
+                    </div>
+                </div>
             {% endif %}
         </div>
-
+        <hr>
         {% include "netbox_proxbox/home/log_messages.html" %}
     </div>
 {% endblock %}
