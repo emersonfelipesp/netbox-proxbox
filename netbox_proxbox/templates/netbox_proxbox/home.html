@@ -57,20 +57,26 @@
             </div>
          
             {# Netbox Card #}
-            {% for object in netbox_endpoint_list %}
-                {% include "netbox_proxbox/home/netbox_card.html" %}
-            {% endfor %}
-            
-            {# FastAPI Card #}
-            {% for object in fastapi_endpoint_list %}
-                {% include "netbox_proxbox/home/fastapi_card.html" %}
-            {% endfor %}
+            {% if netbox_endpoint_list and netbox_endpoint_list|length > 0 %}
+                {% for object in netbox_endpoint_list %}
+                    {% include "netbox_proxbox/home/netbox_card.html" %}
+                {% endfor %}
+            {% endif %}
 
-            {# Proxmox Card #}
-            {% for object in proxmox_endpoint_list %}
-                {% include "netbox_proxbox/home/proxmox_card.html" %}
-            {% endfor %}
-            
+            {% if fastapi_endpoint_list and fastapi_endpoint_list|length > 0 %}
+                {# FastAPI Card #}
+                {% for object in fastapi_endpoint_list %}
+                    {% include "netbox_proxbox/home/fastapi_card.html" %}
+                {% endfor %}
+            {% endif %}
+
+
+            {% if proxmox_endpoint_list and proxmox_endpoint_list|length > 0 %}
+                {# Proxmox Card #}
+                {% for object in proxmox_endpoint_list %}
+                    {% include "netbox_proxbox/home/proxmox_card.html" %}
+                {% endfor %}
+            {% endif %}
         </div>
 
         {% include "netbox_proxbox/home/log_messages.html" %}
