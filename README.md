@@ -76,21 +76,19 @@ source /opt/netbox/venv/bin/activate
 Install the plugin package.
 
 ```
-pip install proxbox-api
 pip install netbox-proxbox==0.0.6b1
 ```
 
-Start Proxbox Backend (FastAPI app)
+Install the plugin backend using docker:
 
 ```
-systemctl start proxbox
+docker pull emersonfelipesp/proxbox-api:latest
+docker run -d -p 8800:8800 --name proxbox-api emersonfelipesp/proxbox-api:latest
 ```
 
-If failing to start the systemd service, try using the following command to see the error messages:
+If docker is not a option for you,  [click here](https://github.com/netdevopsbr/netbox-proxbox/blob/develop/proxbox_api/README.md) to see all other possible ways.
 
-```
-uvicorn proxbox_api.main:app --host 0.0.0.0 --port 8800 --reload
-```
+
 
 #### 1.1.2. Using git (development use)
 
