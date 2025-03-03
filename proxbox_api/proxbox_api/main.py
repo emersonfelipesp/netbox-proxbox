@@ -127,15 +127,15 @@ app = FastAPI(
 CORS Middleware
 """
 
-    
+# TODO: #255 - Generate CORS origins based on user provided information at NetBox Endpoint.
+# https://github.com/netdevopsbr/netbox-proxbox/issues/255
 origins = [
-    netbox_url,
-    "http://localhost",
+    netbox_url
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=['*'],
     allow_credentials=True,
     allow_methods=["GET", "POST"],
     allow_headers=["*"]
