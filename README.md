@@ -1,21 +1,5 @@
 > Although **Proxbox is under constant development**, I do it with **best effort** and **spare time**. I have no financial gain with this and hope you guys understand, as I know it is pretty useful to some people. If you want to **speed up its development**, solve the problem or create new features with your own code and create a **[Pull Request](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/about-pull-requests)** so that I can **review** it. **I also would like to appreciate the people who already contributed with code or/and bug reports.** Without this help, surely Proxbox would be much less useful as it is already today to several environments!
 
-<div align="center">
-	<a href="http://proxbox.netbox.dev.br/">
-		<img width="532" src="https://github.com/N-Multifibra/proxbox/blob/main/etc/img/proxbox-full-logo.png" alt="Proxbox logo">
-	</a>
-	<br>
-
-<div>
-
-### [New Documentation available!](https://proxbox.netbox.dev.br/introduction/)
-</div>
-<br>
-</div>
-
-
-
-
 ## Netbox Plugin which integrates [Proxmox](https://www.proxmox.com/) and [Netbox](https://netbox.readthedocs.io/)!
 
 > **NOTE:** Although the Proxbox plugin is in development, it only use **GET requests** and there is **no risk to harm your Proxmox environment** by changing things incorrectly.
@@ -23,19 +7,9 @@
 <br>
 
 Proxbox is currently able to get the following information from Proxmox:
-
-- **Cluster name**
-- **Nodes:**
-  - Status (online / offline)
-  - Name
-- **Virtual Machines and Containers:**
-  - Status (online / offline)
-  - Name
-  - ID
-  - CPU
-  - Disk
-  - Memory
-  - Node (Server)
+- Clusters
+- Nodes and its interfaces
+- Virtual Machines/Containers, the network interfaces and IP address (when LXC)
 
 ---
 
@@ -50,11 +24,12 @@ Proxbox is currently able to get the following information from Proxmox:
 
 The following table shows the Netbox and Proxmox versions compatible (tested) with Proxbox plugin.
 
-| netbox version | proxmox version | proxbox version |
-| ------------- |-------------|-------------|
-| >= v3.4.0 | >= v6.2.0  | =v0.0.5 |
-| >= v3.2.0 | >= v6.2.0 | =v0.0.4 |
-| >= v3.0.0 < v3.2 | >= v6.2.0 | =v0.0.3 |
+| netbox version   | proxmox version | proxbox version | proxbox-api | pynetbox-api |
+|------------------|-----------------|-----------------|-------------|--------------|
+| =v4.2.0          | >=8.3.0         | v0.0.6b1        | v0.0.1      | v0.0.1       | 
+| >= v3.4.0        | >= v6.2.0       | =v0.0.5         |             |              |
+| >= v3.2.0        | >= v6.2.0       | =v0.0.4         |             |              |
+| >= v3.0.0 < v3.2 | >= v6.2.0       |  =v0.0.3        |             |              |
 
 
 </div>
@@ -64,8 +39,8 @@ The following table shows the Netbox and Proxmox versions compatible (tested) wi
 ### Summary
 [1. Installation](#1-installation)
 - [1.1. Install package](#11-install-package)
-  - [1.1.1. Using pip (production use)](#111-using-pip-production-use---not-working-yet) - NOT WORKING
-  - [1.1.2. Using git (development use)](#112-using-git-development-use) - CURRENTLY WORKING
+  - [1.1.1. Using pip (production use)](#111-using-pip-production-use)
+  - [1.1.2. Using git (development use)](#112-using-git-development-use)
 - [1.2. Enable the Plugin](#12-enable-the-plugin)
 - [1.3. Configure Plugin](#13-configure-plugin)
 - [1.4. Run Database Migrations](#14-run-database-migrations)
@@ -91,7 +66,7 @@ The plugin is available as a Python package in pypi and can be installed with pi
 
 #### 1.1.1. Using pip (production use)
 
-> NOT WORKING
+> The latest release is a beta release, so you may find bugs.
 
 Enter Netbox's virtual environment.
 ```
@@ -100,10 +75,9 @@ source /opt/netbox/venv/bin/activate
 
 Install the plugin package.
 
-> It will automatically install `proxbox_api` (plugin backend) and `pynetbox-api` (the lib used to communicate with NetBox API)
-
 ```
-pip install netbox-proxbox
+pip install proxbox-api
+pip install netbox-proxbox==0.0.6b1
 ```
 
 Start Proxbox Backend (FastAPI app)
@@ -119,8 +93,6 @@ uvicorn proxbox_api.main:app --host 0.0.0.0 --port 8800 --reload
 ```
 
 #### 1.1.2. Using git (development use)
-
-> CURRENTLY WORKING
 
 **OBS:** This method is recommend for testing and development purposes and is not for production use.
 
