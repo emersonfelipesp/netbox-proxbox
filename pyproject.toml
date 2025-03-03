@@ -28,6 +28,7 @@ requires = [
     "poetry-core>=1.0.0",
     "requests",
     "pynetbox",
+    "pynetbox-api",
     "proxmoxer",
     "fastapi[standard]>=0.115.6",
     "proxmoxer>=2.2.0",
