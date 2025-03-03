@@ -1,0 +1,31 @@
+{% extends 'base/layout.html' %}
+{% load static %}
+
+{% block head %}
+    <script>
+        const fastapiEndpoint = '{{ fastapi_url }}'
+        const websocketEndpoint = '{{ fastapi_websocket_url }}/ws'
+    </script>
+    <script type="module">
+        import ProxboxWebSocket from "{% static 'netbox_proxbox/js/websocket.js' %}";
+        window.ProxboxWebSocket = ProxboxWebSocket
+    </script>
+{% endblock %}
+
+{% block content %}
+    <div class="d-flex justify-content-center flex-nowrap" style="margin-bottom: 15px;">
+        <h2>
+            Proxmox Nodes (Devices)
+        </h2>
+    </div>
+
+    <div style="margin-bottom: 15px;" class="d-flex justify-content-center noprint">
+        <form class="m-2" action="" onsubmit="window.ProxboxWebSocket.sendMessage('Sync Nodes')">
+            {% if perms.netbox_proxbox.add_proxmoxvm %}
+                <button id="full-update-button" class="btn btn-primary">Sync Nodes</button>
+            {% endif %}
+        </form>
+    </div>
+
+    {% include "netbox_proxbox/table/devices.html" %}
+{% endblock %}
