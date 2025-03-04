@@ -71,10 +71,18 @@ Install the local CA in the system trust store.
 
 ```
 mkcert -install
-mkcert localhost 127.0.0.1 ::1
+mkcert proxbox.backend.local localhost 127.0.0.1 ::1
 ```
 
 With the keyfile and certfile generated, pass it on uvicorn command to start up FastAPI
+
+### NGINX
+
+```
+sudo cp nginx.conf /etc/nginx/sites-available/proxbox
+sudo ln -s -f /etc/nginx/sites-available/proxbox /etc/nginx/sites-enabled/proxbox
+sudo systemctl restart nginx
+```
 
 ```
 /opt/netbox/venv/bin/uvicorn netbox-proxbox.proxbox_api.proxbox_api.main:app --host 0.0.0.0 --port 8800 --app-dir /opt/netbox/netbox --ssl-keyfile=localhost+2-key.pem --ssl-certfile=localhost+2.pem
@@ -84,5 +92,5 @@ Or
 
 ```
 cd /opt/netbox/netbox/netbox-proxbox/proxbox_api
-uvicorn proxbox_api.main:app --host 0.0.0.0 --port 8800 --reload --ssl-keyfile=./proxbox_api/localhost+2-key.pem --ssl-certfile=./proxbox_api/localhost+2.pem
+uvicorn proxbox_api.main:app --host 0.0.0.0 --port 8800 --reload --ssl-keyfile=./proxbox_api/proxbox.backend.local+3-key.pem --ssl-certfile=./proxbox_api/proxbox.backend.local+3.pem
 ```
