@@ -91,26 +91,48 @@
                         {% endif %}
                     </td>
                 </tr>
-                <tr>
-                    <th scope="row"><strong>Uvicorn Host</strong></th>
-                    {% if object.ip_address %}
-                        <td id="uvicorn-host">
+                {% if object.domain %}
+                    <tr>
+                        <th scope="row"><strong>Domain</strong></th>
+                        <td id="fastapi-domain">
+                            {{ object.domain }}
+                        </td>
+                    </tr>
+                {% endif %}
+                {% if object.ip_address %}
+                    <tr>
+                        <th scope="row"><strong>IP Address</strong></th>
+                        <td id="fastapi-ip-address">
                             <a href="{{ object.ip_address.get_absolute_url }}">
                                 {{ object.ip_address }}
                             </a>
                         </td>
-                    {% else %}
-                        <td id="uvicorn-host">{{ default_config.fastapi.uvicorn_host }} (default)</td>
-                    {% endif %}
+                    </tr>
+                {% endif %}
+                {% if fastapi_url %}
+                    <tr>
+                        <th scope="row"><strong>HTTP URL</strong></th>
+                        <td id="fastapi-url">
+                            <a href="{{ fastapi_url }}" target="_blank">{{ fastapi_url }}</a>
+                        </td>
+                    </tr>
+                {% endif %}
+                {% if fastapi_websocket_url %}
+                    <tr>
+                        <th scope="row"><strong>WebSocket URL</strong></th>
+                        <td id="fastapi-websocket-url">
+                            <a href="{{ fastapi_websocket_url }}" target="_blank">{{ fastapi_websocket_url }}</a>
+                        </td>
+                    </tr>
+                {% endif %}
                 </tr>
-                <tr>
-                    <th scope="row"><strong>Uvicorn Port</strong></th>
-                    {% if object.port %}
-                        <td id="uvicorn-port">{{ object.port }}</td>
-                    {% else %}
-                        <td id="uvicorn-port">{{ default_config.fastapi.uvicorn_port }} (default)</td>
-                    {% endif %}
-                </tr>
+                {% if object.port %}
+                    <tr>
+                        <th scope="row"><strong>Port</strong></th>
+                            <td id="uvicorn-port">{{ object.port }}
+                        </td>
+                    </tr>
+                {% endif %}
             </table>
             <div class="flex d-flex flex-row  justify-content-center align-items-center p-2 mt-1">
                 <!-- Status Badge. Default value is 'Unkown' and is changed based on API response status -->
