@@ -24,7 +24,7 @@ class NetBoxEndpointFilterSet(NetBoxModelFilterSet):
 class FastAPIEndpointFilterSet(NetBoxModelFilterSet):
     class Meta:
         model = FastAPIEndpoint
-        fields = ['id', 'name', 'ip_address']
+        fields = ['id', 'name', 'domain', 'ip_address']
     
     def search(self, queryset, name, value):
         return queryset.filter(name__icontains=value)

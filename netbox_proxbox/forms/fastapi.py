@@ -17,7 +17,10 @@ class FastAPIEndpointForm(NetBoxModelForm):
     """
 
     ip_address = DynamicModelChoiceField(
-        queryset=IPAddress.objects.all()
+        queryset=IPAddress.objects.all(),
+        required=False,
+        help_text='Select NetBox IP Address. Fallback if domain name is not provided.',
+        label='IP Address'
     )
 
     comments = CommentField()
@@ -25,7 +28,7 @@ class FastAPIEndpointForm(NetBoxModelForm):
     class Meta:
         model = FastAPIEndpoint
         fields = (
-            'name', 'ip_address', 'port',
+            'name', 'domain', 'ip_address', 'port',
             'verify_ssl', 'tags'
         )
 

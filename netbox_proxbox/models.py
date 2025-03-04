@@ -5,6 +5,7 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 
 from netbox.models import NetBoxModel
 
+from .fields import DomainField
 from .choices import ProxmoxModeChoices
 
 class ProxmoxEndpoint(NetBoxModel):
@@ -133,7 +134,15 @@ class FastAPIEndpoint(NetBoxModel):
         related_name='+',
         verbose_name=_('IP Address'),
         null=True,
-        help_text=_('IP Address of the Proxbox API (Backend Service). It will try using the DNS name provided in IP Address if it is not empty.'),
+        blank=True,
+        help_text=_('IP Address of the Proxbox API (Backend Service). Fallback if domain name is not provided.'),
+    )
+    domain = DomainField(
+        default='proxbox.backend.local',
+        verbose_name=_('Domain'),
+        null=True,
+        blank=True,
+        help_text=_('Domain name of the Proxbox API (Backend Service). Default is "proxbox.backend.local".'),
     )
     port = models.PositiveIntegerField(
         default=8800,
