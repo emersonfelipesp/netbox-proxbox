@@ -919,6 +919,11 @@ async def standalone_info():
         }
     }
 
+@app.websocket('/')
+async def base_websocket(websocket: WebSocket):
+    await websocket.accept()
+    await websocket.send_text('Connected!')
+
 @app.websocket("/ws")
 async def websocket_endpoint(
     nb: NetboxSessionDep,
@@ -929,6 +934,10 @@ async def websocket_endpoint(
     tag: ProxboxTagDep,
     websocket: WebSocket
 ):
+    await websocket.accept()
+    await websocket.send_text('Connected!')
+    
+    print('route ws reached')
     try:
         await websocket.accept()
         connection_open = True

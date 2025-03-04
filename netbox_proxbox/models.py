@@ -156,7 +156,7 @@ class FastAPIEndpoint(NetBoxModel):
         unique_together = ['name', 'ip_address']
     
     def __str__(self):
-        return f"{self.name} ({self.ip_address})"
+        return f"{self.name} ({self.domain})"
 
     def get_absolute_url(self):
         return reverse("plugins:netbox_proxbox:fastapiendpoint", args=[self.pk])
