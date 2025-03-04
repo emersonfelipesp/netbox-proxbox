@@ -1,5 +1,8 @@
 development/
 
+# Ignore pem files
+*.pem
+
 # Ignore database file
 proxbox_api/database.db
 *.db
