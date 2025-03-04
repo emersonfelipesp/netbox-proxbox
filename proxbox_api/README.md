@@ -64,3 +64,25 @@ Or using `uvicorn`:
 ```
 uvicorn main:app --host 0.0.0.0 --port 8800
 ```
+
+## Using mkcert
+
+Install the local CA in the system trust store.
+
+```
+mkcert -install
+mkcert localhost 127.0.0.1 ::1
+```
+
+With the keyfile and certfile generated, pass it on uvicorn command to start up FastAPI
+
+```
+/opt/netbox/venv/bin/uvicorn netbox-proxbox.proxbox_api.proxbox_api.main:app --host 0.0.0.0 --port 8800 --app-dir /opt/netbox/netbox --ssl-keyfile=localhost+2-key.pem --ssl-certfile=localhost+2.pem
+```
+
+Or 
+
+```
+cd /opt/netbox/netbox/netbox-proxbox/proxbox_api
+uvicorn proxbox_api.main:app --host 0.0.0.0 --port 8800 --reload --ssl-keyfile=./proxbox_api/localhost+2-key.pem --ssl-certfile=./proxbox_api/localhost+2.pem
+```
