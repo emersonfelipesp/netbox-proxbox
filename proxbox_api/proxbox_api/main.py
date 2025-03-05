@@ -1,6 +1,7 @@
 import traceback
 
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, Depends, Query, Path
+from starlette.websockets import WebSocketState
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -921,8 +922,19 @@ async def standalone_info():
 
 @app.websocket('/')
 async def base_websocket(websocket: WebSocket):
+    count = 0
+    
     await websocket.accept()
-    await websocket.send_text('Connected!')
+    try:
+        while True:
+            #data = await websocket.receive_text()
+            #await websocket.send_text(f"Message text was: {data}")
+            count = count+1
+            await websocket.send_text(f'Message: {count}')
+            await asyncio.sleep(2)
+            
+    except WebSocketDisconnect:
+        print("WebSocket connection closed")
 
 @app.websocket("/ws")
 async def websocket_endpoint(

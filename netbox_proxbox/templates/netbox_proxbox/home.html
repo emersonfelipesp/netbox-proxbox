@@ -5,7 +5,8 @@
     <script src="https://unpkg.com/htmx.org@1.7.0"></script>
     <script>
         const fastapiEndpoint = '{{ fastapi_url }}'
-        const websocketEndpoint = '{{ fastapi_websocket_url }}/ws'
+        //const websocketEndpoint = '{{ fastapi_websocket_url }}'
+        const websocketEndpoint = 'ws://127.0.0.1:8001'
     </script>
     <script type="module">
         import * as HomeScripts from "{% static 'netbox_proxbox/js/home.js' %}";

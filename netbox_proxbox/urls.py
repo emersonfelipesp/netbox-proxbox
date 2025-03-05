@@ -1,7 +1,7 @@
 from django.urls import include, path
 from utilities.urls import get_model_urls
 
-from netbox_proxbox.websocket_client import websocket_client
+from netbox_proxbox.websocket_client import websocket_client, WebSocketView
 
 from netbox.views.generic import ObjectChangeLogView
 
@@ -59,5 +59,7 @@ urlpatterns = [
     
     path('keepalive-status/<str:service>/<int:pk>', views.get_service_status, name='keepalive_status'),
     path('test/websocket/', views.TestWebSocketView.as_view(), name='test_websocket'),
-    path('test/websocket/2/', websocket_client, name='test_websocket_2'),
+    
+    #path('test/websocket/2/', websocket_client, name='test_websocket_2'),
+    path('test/websocket/2/', WebSocketView.as_view(), name='websocket_class_view'),
 ]
