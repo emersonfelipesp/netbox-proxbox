@@ -6,7 +6,7 @@
     <script>
         const fastapiEndpoint = '{{ fastapi_url }}'
         //const websocketEndpoint = '{{ fastapi_websocket_url }}'
-        const websocketEndpoint = 'ws://127.0.0.1:8001'
+        const websocketEndpoint = 'wss'
     </script>
     <script type="module">
         import * as HomeScripts from "{% static 'netbox_proxbox/js/home.js' %}";
@@ -18,7 +18,18 @@
     </script>
 {% endblock %}
 {% block content %}
-    <div>
+        <div 
+            id="websocket-messages"
+        ></div>
+        <button
+            hx-get="{% url 'plugins:netbox_proxbox:websocket_class_view' %}"
+            hx-target="#websocket-messages"
+            hx-swap="beforeend"
+            class="btn btn-primary"
+            >
+            Get websocket messages
+        </button>
+
         <div class="row mb-3">
 
             <div align=center id="full-update-error-message"></div>
@@ -57,7 +68,7 @@
                     Proxbox Configuration
                 </h2>
             </div>
-         
+            
             {# Netbox Card #}
             {% if netbox_endpoint_list and netbox_endpoint_list|length > 0 %}
                 {% for object in netbox_endpoint_list %}
