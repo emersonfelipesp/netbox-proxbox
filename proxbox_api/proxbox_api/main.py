@@ -54,14 +54,14 @@ from proxbox_api.routes.proxmox.nodes import router as px_nodes_router
 
 # Netbox Routes
 from proxbox_api.routes.netbox import router as netbox_router, GetNetBoxEndpoint
-from proxbox_api.routes.netbox.dcim import router as nb_dcim_router
-from proxbox_api.routes.netbox.virtualization import router as nb_virtualization_router
+#from proxbox_api.routes.netbox.dcim import router as nb_dcim_router
+#from proxbox_api.routes.netbox.virtualization import router as nb_virtualization_router
 
 # Proxbox Routes
-from proxbox_api.routes.proxbox import router as proxbox_router
-from proxbox_api.routes.proxbox.clusters import router as pb_cluster_router
+#from proxbox_api.routes.proxbox import router as proxbox_router
+#from proxbox_api.routes.proxbox.clusters import router as pb_cluster_router
 
-from proxbox_api.schemas import *
+#from proxbox_api.schemas import *
 
 # Sessions
 from proxbox_api.session.proxmox import ProxmoxSessionsDep
@@ -154,7 +154,7 @@ async def proxmoxer_exception_handler(request: Request, exc: ProxboxException):
         }
     )
 
-from proxbox_api.routes.proxbox.clusters import get_nodes, get_virtual_machines
+#from proxbox_api.routes.proxbox.clusters import get_nodes, get_virtual_machines
 
 sync_status_html = "<span class='text-bg-yellow badge p-1' title='Syncing VM' ><i class='mdi mdi-sync'></i></span>"
 completed_sync_html = "<span class='text-bg-green badge p-1' title='Synced VM'><i class='mdi mdi-check'></i></span>"
@@ -902,8 +902,8 @@ app.include_router(px_cluster_router, prefix="/proxmox/cluster", tags=["proxmox 
 app.include_router(proxmox_router, prefix="/proxmox", tags=["proxmox"])
 
 # Proxbox Routes
-app.include_router(proxbox_router, prefix="/proxbox", tags=["proxbox"])
-app.include_router(pb_cluster_router, prefix="/proxbox/clusters", tags=["proxbox / clusters"])
+#app.include_router(proxbox_router, prefix="/proxbox", tags=["proxbox"])
+#app.include_router(pb_cluster_router, prefix="/proxbox/clusters", tags=["proxbox / clusters"])
 
 @app.get("/")
 async def standalone_info():
@@ -935,6 +935,23 @@ async def base_websocket(websocket: WebSocket):
             
     except WebSocketDisconnect:
         print("WebSocket connection closed")
+
+@app.get("/ws-test-http")
+async def websocket_endpoint(
+    nb: NetboxSessionDep,
+    pxs: ProxmoxSessionsDep,
+    cluster_status: ClusterStatusDep,
+    cluster_resources: ClusterResourcesDep,
+    custom_fields: CreateCustomFieldsDep,
+    tag: ProxboxTagDep,
+):
+    print(NetboxSessionDep)
+    print(ProxmoxSessionsDep)
+    print(ClusterStatusDep)
+    print(ClusterResourcesDep)
+    print(CreateCustomFieldsDep)
+    print(ProxboxTagDep)
+    print('route ws-test-http reached')
 
 @app.websocket("/ws")
 async def websocket_endpoint(

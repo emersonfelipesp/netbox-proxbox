@@ -1,148 +1,176 @@
+{% extends 'base/layout.html' %}
 {% load static %}
 
-<div class="card">
-    <h2 class="card-header">Proxmox Cluster</h2>
-    <!-- Placeholder for Connection Error Messages -->
-    <div class="p-1" id="proxmox-connection-error-{{ object.ip_address }}">
+{% block content %}
+    <div class="card">
+        <h2 class="card-header">Proxmox Cluster</h2>
+        <!-- Placeholder for Connection Error Messages -->
+        <div class="p-1" id="proxmox-connection-error-{{ object.pk }}">
 
-    </div>
-    <div class="flex d-flex flex-row  justify-content-center align-items-center p-2 mt-1">
-
-
-        <div class="flex d-flex mx-auto position-absolute" >
-            <a href="{{ object.get_absolute_url }}">
-                <img src="{% static 'netbox_proxbox/proxmox-logo.svg' %}" alt="Proxmox Logo" width="200px">
-            </a>
         </div>
-        
-        <!-- Status Badge. Default value is 'Unkown' and is changed based on API response status -->
-        <div
-            class="d-flex ms-auto" 
-            style="margin: 0 40px 0 0"
-        >
-            <span
-                id="proxmox-status-badge-{{ object.pk }}"
-                class="proxmox-connection-check badge p-1"
-                hx-get="{% url 'plugins:netbox_proxbox:keepalive_status' 'proxmox' object.pk %}"
-                hx-trigger="load"
-                hx-target="#proxmox-status-badge-{{ object.pk }}"
-                hx-swap="outerHTML"
-            >Unknown</span>
+        <div class="flex d-flex flex-row  justify-content-center align-items-center p-2 mt-1">
+
+
+            <div class="flex d-flex mx-auto position-absolute" >
+                <a href="{{ object.get_absolute_url }}">
+                    <img src="{% static 'netbox_proxbox/proxmox-logo.svg' %}" alt="Proxmox Logo" width="200px">
+                </a>
+            </div>
+            
+            <!-- Status Badge. Default value is 'Unkown' and is changed based on API response status -->
+            {% if object.pk %}
+                <div
+                    class="d-flex ms-auto" 
+                    style="margin: 0 40px 0 0"
+                >
+                    <span
+                        id="proxmox-status-badge-{{ object.pk }}"
+                        class="proxmox-connection-check badge p-1"
+                        hx-get="{% url 'plugins:netbox_proxbox:keepalive_status' 'proxmox' object.pk %}"
+                        hx-trigger="load"
+                        hx-target="#proxmox-status-badge-{{ object.pk }}"
+                        hx-swap="outerHTML"
+                    >Unknown</span>
+                </div>
+            {% endif %}
+
         </div>
 
-    </div>
-
-    <div class="card-body">
-        <table class="table table-hover attr-table" >
-            <!-- The following four (4) fields are filled by API response. If empty, means the API failed. -->
-            <tr class="proxmox_version">
-                <th scope="row" ><strong>Proxmox Cluster Name</strong></th>
-                <td id="{{ object.ip_address }}">
-                    {% if object.name %}
-                        <span title='Proxmox Cluster Name'>
-                            <a href="{{ object.get_absolute_url }}">{{ object.name}}</a>
+        <div class="card-body">
+            <table class="table table-hover attr-table" >
+                <!-- The following four (4) fields are filled by API response. If empty, means the API failed. -->
+                <tr class="proxmox_version">
+                    <th scope="row" ><strong>Proxmox Cluster Name</strong></th>
+                    <td id="{{ object.ip_address }}">
+                        {% if object.name %}
+                            <span title='Proxmox Cluster Name'>
+                                <a href="{{ object.get_absolute_url }}">{{ object.name}}</a>
+                            </span>
+                        {% else %}
+                            <span class='badge text-bg-grey' title='Proxmox Cluster Name'>
+                                </strong>Empty</strong>
+                            </span>
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr class="proxmox_version">
+                    <th scope="row" ><strong>Proxmox Cluster Mode</strong></th>
+                    <td id="{{ object.ip_address }}">
+                        {% if cluster_data.mode == 'standalone' %}
+                            <span class='badge text-bg-purple' title='Cluster Mode'>
+                                <strong>
+                                    <i class='mdi mdi-server'></i>
+                                </strong> Cluster (Multiple Nodes)
+                            </span>
+                        {% elif cluster_data.mode == 'cluster' %}
+                            <span class='badge text-bg-purple' title='Cluster Mode'>
+                                <strong>
+                                    <i class='mdi mdi-server'></i>
+                                </strong> Cluster (Multiple Nodes)
+                            </span>
+                        {% else %}
+                            <span class='badge text-bg-grey' title='Proxmox Cluster Mode'>
+                                </strong>Empty</strong>
+                            </span>
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr class="proxmox_version">
+                    <th scope="row" ><strong>Proxmox Version</strong></th>
+                    <td id="{{ object.ip_address }}">
+                        <span class='badge text-bg-grey' title='Proxmox Cluster Mode'>
+                            {% if cluster_data.version %}
+                                <strong>{{ cluster_data.version }}</strong>
+                            {% else %}
+                                </strong>Empty</strong>
+                            {% endif %}
                         </span>
+                    </td>
+                </tr>
+                <tr class="proxmox_version">
+                    <th scope="row" ><strong>Proxmox RepoID</strong></th>
+                    <td id="{{ object.ip_address }}">
+                        <span class='badge text-bg-grey' title='Proxmox Cluster Mode'>
+                            {% if cluster_data.repoid %}
+                                <strong>{{ cluster_data.repoid }}</strong>
+                            {% else %}
+                                </strong>Empty</strong>
+                            {% endif %}
+                        </span>
+                    </td>
+                </tr>
+                <!-- The rest of the fields are based on Netbox 'configuration.py' file and Plugins Configuration -->
+                <tr>
+                    <th scope="row"><strong>Domain / IP</strong></th>
+                    {% if object.ip_address %}
+                        <td>
+                            <a href="{{ object.ip_address.get_absolute_url }}">{{ object.ip_address }}</a>
+                        </td>
                     {% else %}
-                        <span class='badge text-bg-grey' title='Proxmox Cluster Name'>
-                            </strong>Empty</strong>
-                        </span>
+                        <td>{{ default_config.proxmox.domain }} (default)</td>
                     {% endif %}
-                </td>
-            </tr>
-            <tr class="proxmox_version">
-                <th scope="row" ><strong>Proxmox Cluster Mode</strong></th>
-                <td id="{{ object.ip_address }}">
-                    <span class='badge text-bg-grey' title='Proxmox Cluster Mode'>
-                        </strong>Empty</strong>
-                    </span>
-                </td>
-            </tr>
-            <tr class="proxmox_version">
-                <th scope="row" ><strong>Proxmox Version</strong></th>
-                <td id="{{ object.ip_address }}">
-                    <span class='badge text-bg-grey' title='Proxmox Cluster Mode'>
-                        </strong>Empty</strong>
-                    </span>
-                </td>
-            </tr>
-            <tr class="proxmox_version">
-                <th scope="row" ><strong>Proxmox RepoID</strong></th>
-                <td id="{{ object.ip_address }}">
-                    <span class='badge text-bg-grey' title='Proxmox Cluster Mode'>
-                        </strong>Empty</strong>
-                    </span>
-                </td>
-            </tr>
-            <!-- The rest of the fields are based on Netbox 'configuration.py' file and Plugins Configuration -->
-            <tr>
-                <th scope="row"><strong>Domain / IP</strong></th>
-                {% if object.ip_address %}
-                    <td>
-                        <a href="{{ object.ip_address.get_absolute_url }}">{{ object.ip_address }}</a>
-                    </td>
-                {% else %}
-                    <td>{{ default_config.proxmox.domain }} (default)</td>
-                {% endif %}
-            </tr>
-            <tr>
-            <th scope="row"><strong>HTTP Port</strong></th>
-                {% if object.port %}
-                    <td>{{ object.port }}</td>
-                {% else %}
-                    <td>{{ default_config.proxmox.http_port }} (default)</td>
-                {% endif %}
-            </tr>
-            <tr>
-                <th scope="row"><strong>Proxmox User</strong></th>
-                {% if object.username %}
-                    <td>{{ object.username }}</td>
-                {% else %}
-                    <td>{{ default_config.proxmox.user }} (default)</td>
-                {% endif %}
-            </tr>
-            <tr>
-            <th scope="row"><strong>Proxmox Password</strong></th>
-                {% if object.password %}
-                    <td>password defined in the model (secret)</td>
-                {% else %}
-                    <td>(secret) (default)</td>
-                {% endif %}
-            </tr>
-                <th scope="row"><strong>Token Name</strong></th>
-                {% if object.token_name %}
-                    <td>{{ object.token_name }}</td>
-                {% else %}
-                    <td>{{ default_config.proxmox.token.name }} (default)</td>
-                {% endif %}
-            <tr>
-                <th scope="row"><strong>Token Value</strong></th>
-                <td>(secret)</td>
-            </tr>
-            <tr>
-                <th scope="row"><strong>SSL</strong></th>
-                {% if object.verify_ssl %}
-                    <td>
-                        <span class="text-success">
-                            <i class="mdi mdi-check-bold"></i>
-                        </span>
-                    </td>
-                {% else %}
-                    <td>
-                        <span class="text-danger">
-                            <i class="mdi mdi-close-thick"></i>
-                        </span>
-                    </td>
-                {% endif %}
-            </tr>
-        </table>
-        <div class="d-flex justify-content-between">
-            <button class="btn btn-outline-primary" type="button">
-                <a
-                    style="text-decoration: none; color: inherit"
-                    target="_blank"
-                    href="https://github.com/netdevopsbr/netbox-proxbox#13-configure-plugin"
-                >Show Example</a>
-            </button>
+                </tr>
+                <tr>
+                <th scope="row"><strong>HTTP Port</strong></th>
+                    {% if object.port %}
+                        <td>{{ object.port }}</td>
+                    {% else %}
+                        <td>{{ default_config.proxmox.http_port }} (default)</td>
+                    {% endif %}
+                </tr>
+                <tr>
+                    <th scope="row"><strong>Proxmox User</strong></th>
+                    {% if object.username %}
+                        <td>{{ object.username }}</td>
+                    {% else %}
+                        <td>{{ default_config.proxmox.user }} (default)</td>
+                    {% endif %}
+                </tr>
+                <tr>
+                <th scope="row"><strong>Proxmox Password</strong></th>
+                    {% if object.password %}
+                        <td>password defined in the model (secret)</td>
+                    {% else %}
+                        <td>(secret) (default)</td>
+                    {% endif %}
+                </tr>
+                    <th scope="row"><strong>Token Name</strong></th>
+                    {% if object.token_name %}
+                        <td>{{ object.token_name }}</td>
+                    {% else %}
+                        <td>{{ default_config.proxmox.token.name }} (default)</td>
+                    {% endif %}
+                <tr>
+                    <th scope="row"><strong>Token Value</strong></th>
+                    <td>(secret)</td>
+                </tr>
+                <tr>
+                    <th scope="row"><strong>SSL</strong></th>
+                    {% if object.verify_ssl %}
+                        <td>
+                            <span class="text-success">
+                                <i class="mdi mdi-check-bold"></i>
+                            </span>
+                        </td>
+                    {% else %}
+                        <td>
+                            <span class="text-danger">
+                                <i class="mdi mdi-close-thick"></i>
+                            </span>
+                        </td>
+                    {% endif %}
+                </tr>
+            </table>
+            <div class="d-flex justify-content-between">
+                <button class="btn btn-outline-primary" type="button">
+                    <a
+                        style="text-decoration: none; color: inherit"
+                        target="_blank"
+                        href="https://github.com/netdevopsbr/netbox-proxbox#13-configure-plugin"
+                    >Show Example</a>
+                </button>
+            </div>
         </div>
     </div>
-</div>
+{% endblock %}
+
