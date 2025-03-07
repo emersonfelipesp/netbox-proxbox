@@ -116,31 +116,16 @@
                 <hr>
             {% endif %}
             {% if proxmox_endpoint_list and proxmox_endpoint_list|length > 0 %}
-                {% if proxmox_endpoint_list|length == 1 %}
-                    <div class="col">
+                {% for object in proxmox_endpoint_list %}
+                    {% if proxmox_endpoint_list|length == 1 %}
+                        <div class="col">
+                    {% elif proxmox_endpoint_list|length == 2 %}
+                        <div class="col col-md-6">
+                    {% else %}
+                        <div class="col col-md-4">
+                    {% endif %}
                         {# Proxmox Card #}
-                        {% for object in proxmox_endpoint_list %}
-                            <div
-                                class="d-flex ms-auto" 
-                                style="margin: 0 40px 0 0"
-                            >
-                                <span
-                                    id="proxmox-card-{{ object.pk }}"
-                                    hx-get="{% url 'plugins:netbox_proxbox:proxmox_card' object.pk %}"
-                                    hx-trigger="load"
-                                    hx-target="#proxmox-card-{{ object.pk }}"
-                                    hx-swap="outerHTML"
-                                ></span>
-                            </div>
-                        {% endfor %}
-                    </div>
-                {% elif proxmox_endpoint_list|length == 2 %}
-                    {# Proxmox Card #}
-                    {% for object in proxmox_endpoint_list %}
-                        <div
-                            class="d-flex ms-auto" 
-                            style="margin: 0 40px 0 0"
-                        >
+                        
                             <span
                                 id="proxmox-card-{{ object.pk }}"
                                 hx-get="{% url 'plugins:netbox_proxbox:proxmox_card' object.pk %}"
@@ -148,24 +133,9 @@
                                 hx-target="#proxmox-card-{{ object.pk }}"
                                 hx-swap="outerHTML"
                             ></span>
+                        
                         </div>
-                    {% endfor %}
-                {% else %}
-                    {% for object in proxmox_endpoint_list %}
-                        <div
-                            class="d-flex ms-auto" 
-                            style="margin: 0 40px 0 0"
-                        >
-                            <span
-                                id="proxmox-card-{{ object.pk }}"
-                                hx-get="{% url 'plugins:netbox_proxbox:proxmox_card' object.pk %}"
-                                hx-trigger="load"
-                                hx-target="#proxmox-card-{{ object.pk }}"
-                                hx-swap="outerHTML"
-                            ></span>
-                        </div>
-                    {% endfor %}
-                {% endif %}
+                {% endfor %}
             {% else %}
                 <div class="d-flex flex-column align-items-center" style="margin-bottom: 15px;">
                     <div>
