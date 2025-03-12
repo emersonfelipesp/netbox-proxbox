@@ -138,11 +138,11 @@ class FastAPIEndpoint(NetBoxModel):
         help_text=_('IP Address of the Proxbox API (Backend Service). Fallback if domain name is not provided.'),
     )
     domain = DomainField(
-        default='proxbox.backend.local',
+        default='localhost',
         verbose_name=_('Domain'),
         null=True,
         blank=True,
-        help_text=_('Domain name of the Proxbox API (Backend Service). Default is "proxbox.backend.local".'),
+        help_text=_('Domain name of the Proxbox API (Backend Service). Default is "localhost".'),
     )
     port = models.PositiveIntegerField(
         default=8800,
