@@ -15,7 +15,7 @@ class ProxmoxEndpointFilterSet(NetBoxModelFilterSet):
 class NetBoxEndpointFilterSet(NetBoxModelFilterSet):
     class Meta:
         model = NetBoxEndpoint
-        fields = ['id', 'name', 'ip_address']
+        fields = ['id', 'name', 'domain', 'ip_address']
 
     def search(self, queryset, name, value):
         return queryset.filter(name__icontains=value)

@@ -72,6 +72,16 @@ def netbox_status(pk: int, base_url: str) -> str:
         
         netbox = None
         
+        current_netbox: dict = {
+            'id': pk,
+            'name': netbox_service_obj.name,
+            'ip_address': netbox_ip,
+            'domain': netbox_service_obj.domain,
+            'port': netbox_service_obj.port,
+            'token': netbox_service_obj.token,
+            'verify_ssl': netbox_service_obj.verify_ssl,
+        }
+        
         if len(response) > 0:
             for nb in response:
                 # Check if NetBoxEndpoint exists on pynetbox-api database.
@@ -84,6 +94,13 @@ def netbox_status(pk: int, base_url: str) -> str:
                 for nb in response:
                     if nb['id'] != pk:
                         requests.delete(f'{netbox_endpoint_url}/{nb["id"]}')
+                    else:
+                        # If NetBox ID exists, update it (if needed)
+                        if nb != current_netbox:
+                            updated_netbox = nb | current_netbox
+                            requests.delete(f'{netbox_endpoint_url}/{nb["id"]}') 
+                            requests.post(netbox_endpoint_url, json=updated_netbox)
+                    
             else:
                 # Delete all NetBoxEndpoints from FastAPI database.
                 for nb in response:
@@ -91,14 +108,8 @@ def netbox_status(pk: int, base_url: str) -> str:
             
         else:
             # Create NetBoxEndpoint on FastAPI database.
-            requests.post(netbox_endpoint_url, json={
-                'id': pk,
-                'name': netbox_service_obj.name,
-                'ip_address': netbox_ip,
-                'port': netbox_service_obj.port,
-                'token': netbox_service_obj.token,
-                'verify_ssl': netbox_service_obj.verify_ssl,
-            })
+            print('Creating NetBoxEndpoint on FastAPI database...')
+            requests.post(netbox_endpoint_url, json=current_netbox)
         
         # NetBoxEndpoint exists on FastAPI database. Check if it is alive.
         try:

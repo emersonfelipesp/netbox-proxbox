@@ -25,7 +25,7 @@ class NetBoxEndpointForm(NetBoxModelForm):
     class Meta:
         model = NetBoxEndpoint
         fields = (
-            'name', 'ip_address', 'port',
+            'name', 'domain', 'ip_address', 'port',
             'token', 'verify_ssl', 'tags'
         )
 

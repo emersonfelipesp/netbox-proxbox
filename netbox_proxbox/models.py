@@ -95,7 +95,13 @@ class NetBoxEndpoint(NetBoxModel):
         related_name='+',
         verbose_name=_('IP Address'),
         null=True,
-        help_text=_('IP Address of the NetBox. It will try using the DNS name provided in IP Address if it is not empty.'),
+        blank=True,
+        help_text=_('IP Address of the NetBox API. Fallback if domain name is not provided.'),
+    )
+    domain = DomainField(
+        default='localhost',
+        verbose_name=_('Domain'),
+        help_text=_('Domain name of the NetBox API. Default is "localhost".'),
     )
     port = models.PositiveIntegerField(
         default=443,
@@ -140,8 +146,6 @@ class FastAPIEndpoint(NetBoxModel):
     domain = DomainField(
         default='localhost',
         verbose_name=_('Domain'),
-        null=True,
-        blank=True,
         help_text=_('Domain name of the Proxbox API (Backend Service). Default is "localhost".'),
     )
     port = models.PositiveIntegerField(
