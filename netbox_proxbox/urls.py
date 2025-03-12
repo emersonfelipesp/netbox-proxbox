@@ -61,6 +61,6 @@ urlpatterns = [
     path('keepalive-status/<str:service>/<int:pk>', views.get_service_status, name='keepalive_status'),
     path('proxmox-card/<int:pk>', views.get_proxmox_card, name='proxmox_card'),
     path('test/websocket/', views.TestWebSocketView.as_view(), name='test_websocket'),
-    path('test/websocket/2/', WebSocketView.as_view(), name='websocket_class_view'),
+    path('test/websocket/2/<str:message>', WebSocketView.as_view(), name='websocket_class_view'),
     #path('test/websocket/2/', websocket_client, name='test_websocket_2'),
 ]

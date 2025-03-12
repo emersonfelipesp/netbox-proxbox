@@ -13,11 +13,11 @@ GLOBAL_WEBSOCKET_MESSAGES = []
 websocket_task = None
 websocket_lock = threading.Lock()  # Add a lock to ensure thread safety
 
-async def websocket_client(uri):
+async def websocket_client(uri, message: str):
     try:
         print(f'Connecting with websocket server: {uri}')
         async with websockets.connect(f'{uri}') as websocket:
-            await websocket.send("Hello, server!")
+            await websocket.send(message)
             while True:
                 response = await websocket.recv()
                 with websocket_lock:
@@ -26,12 +26,12 @@ async def websocket_client(uri):
     except Exception as e:
         print(f'WebSocket connection error: {e}')
 
-def start_websocket(uri):
+def start_websocket(uri, message: str):
     global websocket_task
     if websocket_task is None or websocket_task.done():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        websocket_task = loop.create_task(websocket_client(uri))
+        websocket_task = loop.create_task(websocket_client(uri, message))
         threading.Thread(target=loop.run_forever).start()
         print('WebSocket task started.')
 
@@ -45,7 +45,7 @@ class WebSocketView(View):
     template_name = 'netbox_proxbox/websocket_page.html'
     htmx_template_name = 'netbox_proxbox/partials/websocket_messages.html'
     
-    def get(self, request):
+    def get(self, request, message):
         bulk_messages_count = 20
         # Declare the global variable to store the messages
         global GLOBAL_WEBSOCKET_MESSAGES
@@ -70,7 +70,7 @@ class WebSocketView(View):
         
         # Start websocket only if not already running
         if not websocket_task or websocket_task.done():
-            start_websocket(uri)
+            start_websocket(uri, message)
         
         print('GLOBAL_WEBSOCKET_MESSAGES:', GLOBAL_WEBSOCKET_MESSAGES)
         print(websocket_task)

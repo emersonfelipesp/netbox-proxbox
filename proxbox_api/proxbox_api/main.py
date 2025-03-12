@@ -13,7 +13,7 @@ from typing import Annotated, Optional, Dict, Any
 
 import asyncio
 
-# pynetbox API Imports
+# pynetbox API Imports (from v6.0.0 plugin uses pynetbox-api package)
 from pynetbox_api.ipam.ip_address import IPAddress
 from pynetbox_api.dcim.device import Device, DeviceRole, DeviceType
 from pynetbox_api.dcim.interface import Interface
@@ -29,8 +29,8 @@ from pynetbox_api.exceptions import FastAPIException
 
 # Proxbox API Imports
 from proxbox_api.exception import ProxboxException
-from pydantic import BaseModel
 
+from pydantic import BaseModel
 
 async def proxbox_tag():
     return await asyncio.to_thread(
@@ -54,18 +54,10 @@ from proxbox_api.routes.proxmox.nodes import router as px_nodes_router
 
 # Netbox Routes
 from proxbox_api.routes.netbox import router as netbox_router, GetNetBoxEndpoint
-#from proxbox_api.routes.netbox.dcim import router as nb_dcim_router
-#from proxbox_api.routes.netbox.virtualization import router as nb_virtualization_router
 
-# Proxbox Routes
-#from proxbox_api.routes.proxbox import router as proxbox_router
-#from proxbox_api.routes.proxbox.clusters import router as pb_cluster_router
-
-#from proxbox_api.schemas import *
 
 # Sessions
 from proxbox_api.session.proxmox import ProxmoxSessionsDep
-from proxbox_api.session.netbox import NetboxSessionDep
 
 
 # Proxmox Deps
@@ -80,44 +72,15 @@ from proxbox_api.routes.proxmox.cluster import ClusterStatusDep
 CORS ORIGINS
 """
 
-netbox_url: str = "http://localhost:80"
-    
-
-cfg_not_found_msg = "Netbox configuration not found. Using default configuration."
-
-plugin_configuration: dict = {}
-
-uvicorn_host: str = "localhost"
-uvicorn_port: int = 8800
-
-netbox_host: str = "localhost"
-netbox_port: int = 80
-
-
 configuration = None
 default_config: dict = {}
 plugin_configuration: dict = {}
 proxbox_cfg: dict = {}  
 
-'''
-fastapi_endpoint = f"http://{uvicorn_host}:{uvicorn_port}"
-https_fastapi_endpoint = f"https://{uvicorn_host}:{uvicorn_port}"
-fastapi_endpoint_port8000 = f"http://{uvicorn_host}:8000"
-fastapi_endpoint_port80 = f"http://{uvicorn_host}:80"
-
-netbox_endpoint_port80 = f"http://{netbox_host}:80"
-netbox_endpoint_port8000 = f"http://{netbox_host}:8000"
-netbox_endpoint = f"http://{netbox_host}:{netbox_port}"
-https_netbox_endpoint = f"https://{netbox_host}"
-https_netbox_endpoint443 = f"https://{netbox_host}:443"
-https_netbox_endpoint_port = f"https://{netbox_host}:{netbox_port}"
-'''
-
 PROXBOX_PLUGIN_NAME: str = "netbox_proxbox"
 
-
 # Init FastAPI
-app = FastAPI(
+app = FastAPI(  
     title="Proxbox Backend",
     description="## Proxbox Backend made in FastAPI framework",
     version="0.0.1"
@@ -131,7 +94,10 @@ CORS Middleware
 # TODO: #255 - Generate CORS origins based on user provided information at NetBox Endpoint.
 # https://github.com/netdevopsbr/netbox-proxbox/issues/255
 origins = [
-    netbox_url
+    "https://127.0.0.1:443",
+    "http://127.0.0.1:80",
+    "http://127.0.0.1:8000",
+    #netbox_url
 ]
 
 app.add_middleware(
@@ -154,11 +120,24 @@ async def proxmoxer_exception_handler(request: Request, exc: ProxboxException):
         }
     )
 
-#from proxbox_api.routes.proxbox.clusters import get_nodes, get_virtual_machines
-
 sync_status_html = "<span class='text-bg-yellow badge p-1' title='Syncing VM' ><i class='mdi mdi-sync'></i></span>"
 completed_sync_html = "<span class='text-bg-green badge p-1' title='Synced VM'><i class='mdi mdi-check'></i></span>"
-        
+
+@app.get("/")
+async def standalone_info():
+    return {
+        "message": "Proxbox Backend made in FastAPI framework",
+        "proxbox": {
+            "github": "https://github.com/netdevopsbr/netbox-proxbox",
+            "docs": "https://docs.netbox.dev.br",
+        },
+        "fastapi": {
+            "github": "https://github.com/tiangolo/fastapi",
+            "website": "https://fastapi.tiangolo.com/",
+            "reason": "FastAPI was chosen because of performance and reliabilty."
+        }
+    }
+      
 @app.get('/cache')
 async def get_cache():
     from pynetbox_api.cache import global_cache
@@ -179,7 +158,6 @@ async def create_devices():
 )
 async def create_proxmox_devices(
     clusters_status: ClusterStatusDep,
-    nb: NetboxSessionDep,
     tag: ProxboxTagDep,
     node: str | None = None,
     websocket = WebSocket
@@ -242,7 +220,7 @@ async def create_proxmox_devices(
                         site=site.get('id', None),
                     ))
                 
-                    if type(netbox_device) != dict:
+                    if type(netbox_device) != dict and netbox_device is not None:
                         netbox_device = netbox_device.dict()
                 
                 if netbox_device is None:
@@ -905,21 +883,6 @@ app.include_router(proxmox_router, prefix="/proxmox", tags=["proxmox"])
 #app.include_router(proxbox_router, prefix="/proxbox", tags=["proxbox"])
 #app.include_router(pb_cluster_router, prefix="/proxbox/clusters", tags=["proxbox / clusters"])
 
-@app.get("/")
-async def standalone_info():
-    return {
-        "message": "Proxbox Backend made in FastAPI framework",
-        "proxbox": {
-            "github": "https://github.com/netdevopsbr/netbox-proxbox",
-            "docs": "https://docs.netbox.dev.br",
-        },
-        "fastapi": {
-            "github": "https://github.com/tiangolo/fastapi",
-            "website": "https://fastapi.tiangolo.com/",
-            "reason": "FastAPI was chosen because of performance and reliabilty."
-        }
-    }
-
 @app.websocket('/')
 async def base_websocket(websocket: WebSocket):
     count = 0
@@ -938,7 +901,6 @@ async def base_websocket(websocket: WebSocket):
 
 @app.get("/ws-test-http")
 async def websocket_endpoint(
-    nb: NetboxSessionDep,
     pxs: ProxmoxSessionsDep,
     cluster_status: ClusterStatusDep,
     cluster_resources: ClusterResourcesDep,
@@ -955,16 +917,14 @@ async def websocket_endpoint(
 
 @app.websocket("/ws")
 async def websocket_endpoint(
-    nb: NetboxSessionDep,
     pxs: ProxmoxSessionsDep,
     cluster_status: ClusterStatusDep,
     cluster_resources: ClusterResourcesDep,
     custom_fields: CreateCustomFieldsDep,
     tag: ProxboxTagDep,
-    websocket: WebSocket
+    websocket: WebSocket,
 ):
-    await websocket.accept()
-    await websocket.send_text('Connected!')
+    connection_open = False
     
     print('route ws reached')
     try:
@@ -993,7 +953,6 @@ async def websocket_endpoint(
             # Sync Nodes
             sync_nodes_function = create_proxmox_devices(
                 clusters_status=cluster_status,
-                nb=nb,
                 node=None,
                 websocket=websocket,
                 tag=tag
@@ -1013,7 +972,6 @@ async def websocket_endpoint(
                 # Sync Nodes
                 sync_nodes = await create_proxmox_devices(
                     clusters_status=cluster_status,
-                    nb=nb,
                     node=None,
                     websocket=websocket,
                     tag=tag
@@ -1033,7 +991,6 @@ async def websocket_endpoint(
             if data == "Sync Nodes":
                 await create_proxmox_devices(
                     clusters_status=cluster_status,
-                    nb=nb,
                     node=None,
                     websocket=websocket,
                     tag=tag
@@ -1050,7 +1007,9 @@ async def websocket_endpoint(
                 )
                 
             else:
-                await websocket.send_denial_response("Invalid command.")
+                await websocket.send_text(f"Invalid command: {data}")
+                await websocket.send_text("Valid commands: 'Sync Nodes', 'Sync Virtual Machines', 'Full Update Sync'")
+                #await websocket.send_denial_response("Invalid command.")
 
     except WebSocketDisconnect as error:
         print(f"WebSocket Disconnected: {error}")

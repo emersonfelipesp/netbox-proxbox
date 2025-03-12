@@ -22,7 +22,7 @@
             id="websocket-messages"
         ></div>
         <button
-            hx-get="{% url 'plugins:netbox_proxbox:websocket_class_view' %}"
+            hx-get="{% url 'plugins:netbox_proxbox:websocket_class_view' 'Sync Nodes' %}"
             hx-target="#websocket-messages"
             hx-swap="beforeend"
             class="btn btn-primary"
