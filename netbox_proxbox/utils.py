@@ -2,7 +2,7 @@ def get_fastapi_url(object):
     domain_or_ip = None
     if object.domain:
         domain_or_ip = object.domain
-    if object.ip_address:
+    else:
         domain_or_ip = str(object.ip_address).split('/')[0]
     
     
@@ -16,7 +16,7 @@ def get_fastapi_url(object):
     fastapi_ws_url = f"ws://{domain_or_ip}:{object.port}/ws"
     fastapi_websocket_url = fastapi_wss_url if object.verify_ssl else fastapi_ws_url
     
-    if 'proxbox.backend.local' in fastapi_url:
+    if any(host in fastapi_url for host in ['proxbox.backend.local', 'localhost', '127.0.0.1']):
         # If proxbox.backend.local is in the URL, set the REQUESTS_CA_BUNDLE environment variable.
         # It means user used mkcert to generate a certificate for the domain.
         # This is necessary to avoid SSL errors, so that python requests library can trust the certificate.
