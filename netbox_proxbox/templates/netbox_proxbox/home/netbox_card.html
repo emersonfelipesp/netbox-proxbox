@@ -52,16 +52,24 @@
                         {% endif %}
                     </td>
                 </tr>
-                <tr>
-                    <th scope="row"><strong>Domain / IP</strong></th>
-                    {% if object.ip_address %}
-                        <td>
-                            <a href="{{ object.ip_address.get_absolute_url }}">{{ object.ip_address }}</a>
+                {% if object.domain %}
+                    <tr>
+                        <th scope="row"><strong>Domain</strong></th>
+                        <td id="fastapi-domain">
+                            {{ object.domain }}
                         </td>
-                    {% else %}
-                        <td>{{ default_config.netbox.domain }} (default)</td>
-                    {% endif %}
-                </tr>
+                    </tr>
+                {% endif %}
+                {% if object.ip_address %}
+                    <tr>
+                        <th scope="row"><strong>IP Address</strong></th>
+                        <td id="fastapi-ip-address">
+                            <a href="{{ object.ip_address.get_absolute_url }}">
+                                {{ object.ip_address }}
+                            </a>
+                        </td>
+                    </tr>
+                {% endif %}
                 <tr>
                     <th scope="row"><strong>HTTP Port</strong></th>
                     {% if object.port %}
