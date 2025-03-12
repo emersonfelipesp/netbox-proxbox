@@ -53,10 +53,10 @@ class FastAPIEndpointTable(NetBoxTable):
     class Meta(NetBoxTable.Meta):
         model = FastAPIEndpoint
         fields = (
-            'pk', 'id', 'name', 'ip_address', 'port',
+            'pk', 'id', 'name', 'domain', 'ip_address', 'port',
             'verify_ssl', 'actions',
         )
         
         default_columns = (
-            'pk', 'name', 'ip_address', 'port', 'verify_ssl',
+            'pk', 'name', 'domain', 'ip_address', 'port', 'verify_ssl',
         )

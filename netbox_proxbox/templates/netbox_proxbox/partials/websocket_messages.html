@@ -1,0 +1,6 @@
+{% extends 'base/layout.html' %}
+{% block content %}
+    {% for message in messages %}
+        <div>{{ message }}</div>
+    {% endfor %}
+{% endblock %}

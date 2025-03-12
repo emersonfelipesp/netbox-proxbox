@@ -5,6 +5,7 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 
 from netbox.models import NetBoxModel
 
+from .fields import DomainField
 from .choices import ProxmoxModeChoices
 
 class ProxmoxEndpoint(NetBoxModel):
@@ -94,7 +95,13 @@ class NetBoxEndpoint(NetBoxModel):
         related_name='+',
         verbose_name=_('IP Address'),
         null=True,
-        help_text=_('IP Address of the NetBox. It will try using the DNS name provided in IP Address if it is not empty.'),
+        blank=True,
+        help_text=_('IP Address of the NetBox API. Fallback if domain name is not provided.'),
+    )
+    domain = DomainField(
+        default='localhost',
+        verbose_name=_('Domain'),
+        help_text=_('Domain name of the NetBox API. Default is "localhost".'),
     )
     port = models.PositiveIntegerField(
         default=443,
@@ -133,7 +140,13 @@ class FastAPIEndpoint(NetBoxModel):
         related_name='+',
         verbose_name=_('IP Address'),
         null=True,
-        help_text=_('IP Address of the Proxbox API (Backend Service). It will try using the DNS name provided in IP Address if it is not empty.'),
+        blank=True,
+        help_text=_('IP Address of the Proxbox API (Backend Service). Fallback if domain name is not provided.'),
+    )
+    domain = DomainField(
+        default='localhost',
+        verbose_name=_('Domain'),
+        help_text=_('Domain name of the Proxbox API (Backend Service). Default is "localhost".'),
     )
     port = models.PositiveIntegerField(
         default=8800,
@@ -147,7 +160,7 @@ class FastAPIEndpoint(NetBoxModel):
         unique_together = ['name', 'ip_address']
     
     def __str__(self):
-        return f"{self.name} ({self.ip_address})"
+        return f"{self.name} ({self.domain})"
 
     def get_absolute_url(self):
         return reverse("plugins:netbox_proxbox:fastapiendpoint", args=[self.pk])

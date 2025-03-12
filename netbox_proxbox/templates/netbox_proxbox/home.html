@@ -5,7 +5,8 @@
     <script src="https://unpkg.com/htmx.org@1.7.0"></script>
     <script>
         const fastapiEndpoint = '{{ fastapi_url }}'
-        const websocketEndpoint = '{{ fastapi_websocket_url }}/ws'
+        //const websocketEndpoint = '{{ fastapi_websocket_url }}'
+        const websocketEndpoint = 'wss'
     </script>
     <script type="module">
         import * as HomeScripts from "{% static 'netbox_proxbox/js/home.js' %}";
@@ -17,7 +18,18 @@
     </script>
 {% endblock %}
 {% block content %}
-    <div>
+        <div 
+            id="websocket-messages"
+        ></div>
+        <button
+            hx-get="{% url 'plugins:netbox_proxbox:websocket_class_view' 'Sync Nodes' %}"
+            hx-target="#websocket-messages"
+            hx-swap="beforeend"
+            class="btn btn-primary"
+            >
+            Get websocket messages
+        </button>
+
         <div class="row mb-3">
 
             <div align=center id="full-update-error-message"></div>
@@ -56,7 +68,7 @@
                     Proxbox Configuration
                 </h2>
             </div>
-         
+            
             {# Netbox Card #}
             {% if netbox_endpoint_list and netbox_endpoint_list|length > 0 %}
                 {% for object in netbox_endpoint_list %}
@@ -78,8 +90,9 @@
                         </a>
                     </div>
                 </div>
+                <hr>
             {% endif %}
-            <hr>
+            
             {% if fastapi_endpoint_list and fastapi_endpoint_list|length > 0 %}
                 {# FastAPI Card #}
                 {% for object in fastapi_endpoint_list %}
@@ -100,12 +113,28 @@
                         </a>
                     </div>
                 </div>
+                <hr>
             {% endif %}
-            <hr>
             {% if proxmox_endpoint_list and proxmox_endpoint_list|length > 0 %}
-                {# Proxmox Card #}
                 {% for object in proxmox_endpoint_list %}
-                    {% include "netbox_proxbox/home/proxmox_card.html" %}
+                    {% if proxmox_endpoint_list|length == 1 %}
+                        <div class="col">
+                    {% elif proxmox_endpoint_list|length == 2 %}
+                        <div class="col col-md-6">
+                    {% else %}
+                        <div class="col col-md-4">
+                    {% endif %}
+                        {# Proxmox Card #}
+                        
+                            <span
+                                id="proxmox-card-{{ object.pk }}"
+                                hx-get="{% url 'plugins:netbox_proxbox:proxmox_card' object.pk %}"
+                                hx-trigger="load"
+                                hx-target="#proxmox-card-{{ object.pk }}"
+                                hx-swap="outerHTML"
+                            ></span>
+                        
+                        </div>
                 {% endfor %}
             {% else %}
                 <div class="d-flex flex-column align-items-center" style="margin-bottom: 15px;">
@@ -122,9 +151,10 @@
                         </a>
                     </div>
                 </div>
+                <hr>
             {% endif %}
         </div>
-        <hr>
+        
         {% include "netbox_proxbox/home/log_messages.html" %}
     </div>
 {% endblock %}

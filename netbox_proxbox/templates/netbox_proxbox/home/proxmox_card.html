@@ -1,10 +1,11 @@
+{% extends 'base/layout.html' %}
 {% load static %}
 
-<div class="col col-md-4">
+{% block content %}
     <div class="card">
         <h2 class="card-header">Proxmox Cluster</h2>
         <!-- Placeholder for Connection Error Messages -->
-        <div class="p-1" id="proxmox-connection-error-{{ object.ip_address }}">
+        <div class="p-1" id="proxmox-connection-error-{{ object.pk }}">
 
         </div>
         <div class="flex d-flex flex-row  justify-content-center align-items-center p-2 mt-1">
@@ -17,19 +18,21 @@
             </div>
             
             <!-- Status Badge. Default value is 'Unkown' and is changed based on API response status -->
-            <div
-                class="d-flex ms-auto" 
-                style="margin: 0 40px 0 0"
-            >
-                <span
-                    id="status-badge-{{ object.pk }}"
-                    class="proxmox-connection-check badge p-1"
-                    hx-get="{% url 'plugins:netbox_proxbox:keepalive_status' 'proxmox' object.pk %}"
-                    hx-trigger="load"
-                    hx-target="#status-badge-{{ object.pk }}"
-                    hx-swap="outerHTML"
-                >Unknown</span>
-            </div>
+            {% if object.pk %}
+                <div
+                    class="d-flex ms-auto" 
+                    style="margin: 0 40px 0 0"
+                >
+                    <span
+                        id="proxmox-status-badge-{{ object.pk }}"
+                        class="proxmox-connection-check badge p-1"
+                        hx-get="{% url 'plugins:netbox_proxbox:keepalive_status' 'proxmox' object.pk %}"
+                        hx-trigger="load"
+                        hx-target="#proxmox-status-badge-{{ object.pk }}"
+                        hx-swap="outerHTML"
+                    >Unknown</span>
+                </div>
+            {% endif %}
 
         </div>
 
@@ -53,16 +56,34 @@
                 <tr class="proxmox_version">
                     <th scope="row" ><strong>Proxmox Cluster Mode</strong></th>
                     <td id="{{ object.ip_address }}">
-                        <span class='badge text-bg-grey' title='Proxmox Cluster Mode'>
-                            </strong>Empty</strong>
-                        </span>
+                        {% if cluster_data.mode == 'standalone' %}
+                            <span class='badge text-bg-purple' title='Cluster Mode'>
+                                <strong>
+                                    <i class='mdi mdi-server'></i>
+                                </strong> Cluster (Multiple Nodes)
+                            </span>
+                        {% elif cluster_data.mode == 'cluster' %}
+                            <span class='badge text-bg-purple' title='Cluster Mode'>
+                                <strong>
+                                    <i class='mdi mdi-server'></i>
+                                </strong> Cluster (Multiple Nodes)
+                            </span>
+                        {% else %}
+                            <span class='badge text-bg-grey' title='Proxmox Cluster Mode'>
+                                </strong>Empty</strong>
+                            </span>
+                        {% endif %}
                     </td>
                 </tr>
                 <tr class="proxmox_version">
                     <th scope="row" ><strong>Proxmox Version</strong></th>
                     <td id="{{ object.ip_address }}">
                         <span class='badge text-bg-grey' title='Proxmox Cluster Mode'>
-                            </strong>Empty</strong>
+                            {% if cluster_data.version %}
+                                <strong>{{ cluster_data.version }}</strong>
+                            {% else %}
+                                </strong>Empty</strong>
+                            {% endif %}
                         </span>
                     </td>
                 </tr>
@@ -70,7 +91,11 @@
                     <th scope="row" ><strong>Proxmox RepoID</strong></th>
                     <td id="{{ object.ip_address }}">
                         <span class='badge text-bg-grey' title='Proxmox Cluster Mode'>
-                            </strong>Empty</strong>
+                            {% if cluster_data.repoid %}
+                                <strong>{{ cluster_data.repoid }}</strong>
+                            {% else %}
+                                </strong>Empty</strong>
+                            {% endif %}
                         </span>
                     </td>
                 </tr>
@@ -147,4 +172,5 @@
             </div>
         </div>
     </div>
-</div>
+{% endblock %}
+

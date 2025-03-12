@@ -127,9 +127,9 @@ async function getVersion() {
 
 
     // Get Info from Proxmox and Add to GUI Page, like Connection Status and Error Messages
-    let elemento = document.getElementsByClassName("proxmox_version")
+    let elements = document.getElementsByClassName("proxmox_version")
 
-    for (let item of elemento) {
+    for (let item of elements) {
 
         let td = item.getElementsByTagName("td")
         let th = item.getElementsByTagName("th")
@@ -207,10 +207,14 @@ async function getVersion() {
                     for (let value in apiResponses[1]) {
                         // Add 'Proxmox Cluster Name' and 'Proxmox Cluster Mode' to Proxmox Cluster Card Fields
                         // Response from FastAPI /proxmox/sessions
+                        
+                        /* Replaced with Django Model field name on proxmox_card.html
                         if (th[0].textContent === 'Proxmox Cluster Name') {
                             td[0].innerHTML = `<strong>${apiResponses[1].name}</strong>`
                         }
+                        */
 
+                        /* Replaced to HTMX on proxmox_card.html
                         if (th[0].textContent === 'Proxmox Cluster Mode') {
 
                             let mode = apiResponses[1].mode
@@ -218,11 +222,13 @@ async function getVersion() {
                             if ( mode === "cluster" ) { mode = "<span class='badge text-bg-purple' title='Cluster Mode'><strong><i class='mdi mdi-server'></i></strong> Cluster (Multiple Nodes)</span>" } 
                             td[0].innerHTML = `${mode}`
                         }
+                        */
                     }
                 }
             }
         }
     }
+    
 }
 
 
