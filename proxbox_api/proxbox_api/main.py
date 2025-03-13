@@ -251,9 +251,8 @@ async def create_proxmox_devices(
                         role=role.get('id', None),
                         site=site.get('id', None),
                     ))
-                
-                    if type(netbox_device) != dict and netbox_device is not None:
-                        netbox_device = netbox_device.dict()
+                    
+                print(f'netbox_device: {netbox_device}')
                 
                 if netbox_device is None:
                     await websocket.send_json(
@@ -472,7 +471,7 @@ async def create_custom_fields(
     ]
     
     async def create_custom_field_task(custom_field: dict):
-        return await asyncio.to_thread(lambda: CustomField(websocket=websocket, **custom_field))
+        return await asyncio.to_thread(lambda: CustomField(**custom_field))
 
     # Create Custom Fields
     return await asyncio.gather(*[
