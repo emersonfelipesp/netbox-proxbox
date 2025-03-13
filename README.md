@@ -1,5 +1,13 @@
 > Although **Proxbox is under constant development**, I do it with **best effort** and **spare time**. I have no financial gain with this and hope you guys understand, as I know it is pretty useful to some people. If you want to **speed up its development**, solve the problem or create new features with your own code and create a **[Pull Request](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/about-pull-requests)** so that I can **review** it. **I also would like to appreciate the people who already contributed with code or/and bug reports.** Without this help, surely Proxbox would be much less useful as it is already today to several environments!
 
+
+# Plugin is not currently supported on NetBox >v4.0
+
+There's already a beta release **[v0.0.6b1](https://pypi.org/project/netbox-proxbox/0.0.6b1/)** launched and I'm working on **[v0.0.6b2](https://github.com/netdevopsbr/netbox-proxbox/milestone/10)**. I hope this to be the last beta release before releasing a stable **v0.0.6** that will actually work with latest NetBox and Proxmox versions.
+
+If you want to follow my progress, the issue **[Support for netbox 4.x](https://github.com/netdevopsbr/netbox-proxbox/issues/176)** contains all sub-issues that I'm working on and the already completed ones.
+
+
 ## Netbox Plugin which integrates [Proxmox](https://www.proxmox.com/) and [Netbox](https://netbox.readthedocs.io/)!
 
 > **NOTE:** Although the Proxbox plugin is in development, it only use **GET requests** and there is **no risk to harm your Proxmox environment** by changing things incorrectly.
