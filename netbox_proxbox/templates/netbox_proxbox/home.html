@@ -16,26 +16,117 @@
         import ProxboxWebSocket from "{% static 'netbox_proxbox/js/websocket.js' %}";
         window.ProxboxWebSocket = ProxboxWebSocket
     </script>
+    <script type="module">
+        import * as Polling from "{% static 'netbox_proxbox/js/polling.js' %}";
+        window.Polling = Polling
+    </script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script>
+        function handleResponse(event) {
+            console.log('handleResponse', event)
+            // Check if the response is successful
+            if (event.detail.xhr.status === 200) {
+                // Parse the JSON response
+                const data = JSON.parse(event.detail.xhr.responseText);
+
+                // Transform the JSON data into HTML and append it to the table
+                const tableBody = document.getElementById('device-table-data');
+                data.forEach(item => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${item.id}</td>
+                        <td>${item.name}</td>
+                        <td>${item.status}</td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+            } else {
+                console.error('Request failed:', event.detail.xhr.status, event.detail.xhr.statusText);
+            }
+        }
+        window.handleResponse = handleResponse
+    </script>
+
 {% endblock %}
 {% block content %}
-        <div 
-            id="websocket-messages"
-        ></div>
+
+
+
+
+ <!-- Button to trigger the request -->
+    <button
+        hx-get="{% url 'plugins:netbox_proxbox:websocket' 'Sync Nodes' %}"
+        hx-trigger="click"
+        hx-target="#device-table-data-2"
+        hx-swap="none"
+        class="btn btn-primary"
+        x-data
+        @htmx:afterRequest.window="handleResponse"
+    >
+        Sync Nodes with server-only websocket 2
+    </button>
+
+    <!-- Table to display the data -->
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody id="device-table-data-2">
+        </tbody>
+    </table>
+
+<div x-data="{ count: 0 }">
+    <button x-on:click="count++">Increment</button>
+ 
+    <span x-text="count"></span>
+</div>
+    <div x-data="{ open: false }">
+        <button @click="open = true">Expand</button>
+    
+        <span x-show="open">
+            Content...
+        </span>
+    </div>
+    <div 
+        id="websocket-messages"
+    ></div>
+
+        
         <button
-            hx-get="{% url 'plugins:netbox_proxbox:websocket' 'Sync Nodes' %}"
-            hx-target="#websocket-messages"
+            id="sync-nodes-button"
+            hx-get="{% url 'plugins:netbox_proxbox:websocket' 'devices' %}"
+            hx-target="#device-table-data"
             hx-swap="beforeend"
             class="btn btn-primary"
             >
-            Sync Nodes with server-only websocket
+            Sync Nodes with server-only websocket each 2s
         </button>
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                let syncNodesButton = document.getElementById('sync-nodes-button');
+                
+                syncNodesButton.addEventListener('click', function() {
+                    // Only set the trigger if it doesn't already have one
+                    if (!syncNodesButton.getAttribute('hx-trigger')) {
+                        syncNodesButton.setAttribute('hx-trigger', 'every 2s');
+                        
+                        // Trigger HTMX to start the polling
+                        htmx.trigger(syncNodesButton, 'every 2s');
+                    }
+                });
+            });
+        </script>
 
         <div 
             id="websocket-messages-vm"
         ></div>
         <br>
         <button
-            hx-get="{% url 'plugins:netbox_proxbox:websocket' 'Sync Virtual Machines' %}"
+            hx-get="{% url 'plugins:netbox_proxbox:websocket' 'virtual-machines' %}"
             hx-target="#websocket-messages-vm"
             hx-swap="beforeend"
             class="btn btn-primary"
@@ -51,17 +142,17 @@
                 
                 {% if fastapi_endpoint_list and fastapi_endpoint_list|length > 0 %}
                     {% for object in fastapi_endpoint_list %}
-                        <form class="m-2" action="" onsubmit="window.ProxboxWebSocket.sendMessage('Sync Nodes')">
+                        <form class="m-2" action="" onsubmit="window.Polling.poll('device')">
                             {% if perms.netbox_proxbox.add_proxmoxvm %}
                                 <button id="full-update-button" class="btn btn-primary">Sync Nodes</button>
                             {% endif %}
                         </form>
-                        <form class="m-2" action="" onsubmit="window.ProxboxWebSocket.sendMessage('Sync Virtual Machines')">
+                        <form class="m-2" action="" onsubmit="window.Polling.poll('virtual-machine')">
                             {% if perms.netbox_proxbox.add_proxmoxvm %}
                                 <button id="full-update-button" class="btn btn-primary">Sync Virtual Machines</button>
                             {% endif %}
                         </form>
-                        <form class="m-2" action="" onsubmit="window.ProxboxWebSocket.sendMessage('Full Update Sync')">
+                        <form class="m-2" action="" onsubmit="window.Polling.poll('full-update')">
                             {% if perms.netbox_proxbox.add_proxmoxvm %}
                                 <button id="full-update-button" class="btn btn-primary">Full Update Sync</button>
                             {% endif %}

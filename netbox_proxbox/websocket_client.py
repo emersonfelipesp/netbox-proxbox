@@ -4,7 +4,7 @@ from asgiref.sync import async_to_sync, sync_to_async
 from netbox_proxbox.views import get_fastapi_url
 from netbox_proxbox.models import FastAPIEndpoint
 from django.shortcuts import render
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 import threading
 from django.views import View
 from django_htmx.http import HttpResponseClientRedirect
@@ -17,7 +17,13 @@ async def websocket_client(uri, message: str):
     try:
         print(f'Connecting with websocket server: {uri}')
         async with websockets.connect(f'{uri}') as websocket:
-            await websocket.send(message)
+            if message == 'full-update':
+                await websocket.send('Full Update')
+            if message == 'devices':
+                await websocket.send('Sync Nodes')
+            if message == 'virtual-machines':
+                await websocket.send('Sync Virtual Machines')
+
             while True:
                 response = await websocket.recv()
                 with websocket_lock:
@@ -46,6 +52,9 @@ class WebSocketView(View):
     htmx_template_name = 'netbox_proxbox/partials/websocket_messages.html'
     
     def get(self, request, message):
+        # Access `json_response` from kwargs
+        json_response = request.GET.get('json_response', 'false').lower() == 'true'
+        
         bulk_messages_count = 20
         # Declare the global variable to store the messages
         global GLOBAL_WEBSOCKET_MESSAGES
@@ -78,6 +87,10 @@ class WebSocketView(View):
         context = {
             'messages': messages_to_render,
         }
+        
+        if json_response:
+            # safe=False is used to allow non-dict objects to be serialized
+            return JsonResponse(messages_to_render, safe=False)
         
         if request.htmx:
             # Return partial update for HTMX request

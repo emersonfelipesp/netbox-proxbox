@@ -169,10 +169,11 @@ async def standalone_info():
             "reason": "FastAPI was chosen because of performance and reliabilty."
         }
     }
-      
+    
+from pynetbox_api.cache import global_cache
+
 @app.get('/cache')
 async def get_cache():
-    from pynetbox_api.cache import global_cache
     return global_cache.return_cache()
  
 @app.get('/dcim/devices')
@@ -181,6 +182,12 @@ async def create_devices():
         "message": "Devices created"
     }
 
+@app.get('/clear-cache')
+async def clear_cache():
+    global_cache.clear_cache()
+    return {
+        "message": "Cache cleared"
+    }
 
 @app.get(
     '/dcim/devices/create',
@@ -298,6 +305,13 @@ async def create_proxmox_devices(
                     message="Unknown Error creating device in Netbox",
                     detail=f"Error: {str(error)}"
                 )
+    
+    # Send end message to websocket to indicate that the creation of devices is finished.
+    await websocket.send_json({'object': 'device', 'end': True})
+    
+    # Clear cache after creating devices.
+    global_cache.clear_cache()
+    
     return Device.SchemaList(device_list)
 
 ProxmoxCreateDevicesDep = Annotated[Device.SchemaList, Depends(create_proxmox_devices)]
@@ -879,6 +893,14 @@ async def create_virtual_machines(
         "proxmox_qemu_agent": qemu_agent,
         "proxmox_search_domain": search_domain,
         """
+    
+    # Send end message to websocket to indicate that the creation of virtual machines is finished.
+    await websocket.send_json({'object': 'virtual_machine', 'end': True})
+    
+    # Clear cache after creating virtual machines.
+    global_cache.clear_cache()
+    
+    # Return the created virtual machines.
     return await asyncio.gather(*[_create_vm(cluster) for cluster in cluster_resources])   
  
 @app.get('/virtualization/virtual-machines/interfaces/create')
