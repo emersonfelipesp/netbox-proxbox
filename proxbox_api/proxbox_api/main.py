@@ -189,6 +189,13 @@ async def clear_cache():
         "message": "Cache cleared"
     }
 
+'''
+@app.websocket("/ws-test")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    while True:
+        await websocket.send_text(f"Successful")
+'''
 @app.get(
     '/dcim/devices/create',
     response_model=Device.SchemaList,
@@ -198,8 +205,8 @@ async def clear_cache():
 async def create_proxmox_devices(
     clusters_status: ClusterStatusDep,
     tag: ProxboxTagDep,
+    websocket: WebSocket,
     node: str | None = None,
-    websocket = WebSocket
 ):
     device_list: list = []
     
@@ -994,11 +1001,14 @@ async def websocket_endpoint(
     # 'data' is the message received from the WebSocket.
     data = None
 
+    await websocket.send_text('Connected 2!')
+    
     try:
         while True:
             try:
                 data = await websocket.receive_text()
                 print(f'Received message: {data}')
+                await websocket.send_text(f'Received message: {data}')
             except Exception as error:
                 print(f"Error while receiving data from WebSocket: {error}")
                 break
@@ -1042,6 +1052,8 @@ async def websocket_endpoint(
                     )
                 
             if data == "Sync Nodes":
+                print('Sync Nodes')
+                await websocket.send_text('Sync Nodes')
                 await create_proxmox_devices(
                     clusters_status=cluster_status,
                     node=None,
