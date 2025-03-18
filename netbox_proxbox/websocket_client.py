@@ -16,9 +16,9 @@ websocket_task = None
 websocket_lock = threading.Lock()  # Add a lock to ensure thread safety
 message_queue = Queue()
 sync_processes = {
-    'full-update': False,
+    'full-update': 'not-started',
     'devices': 'not-started',
-    'virtual-machines': False,
+    'virtual-machines': 'not-started',
 }
 
 async def websocket_client(uri):
@@ -62,6 +62,8 @@ async def websocket_client(uri):
                 print('GLOBAL_WEBSOCKET_MESSAGES:', GLOBAL_WEBSOCKET_MESSAGES)
     except Exception as e:
         print(f'WebSocket connection error: {e}')
+        await asyncio.sleep(5)  # Wait for 5 seconds before attempting to reconnect
+        await websocket_client(uri)
 
 def start_websocket(uri):
     global websocket_task
