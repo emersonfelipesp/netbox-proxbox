@@ -616,7 +616,8 @@ async def create_virtual_machines(
     cluster_resources: ClusterResourcesDep,
     custom_fields: CreateCustomFieldsDep,
     tag: ProxboxTagDep,
-    websocket = WebSocket
+    websocket = WebSocket,
+    use_css: bool = False
 ):
     async def _create_vm(cluster: dict):
         tasks = []  # Collect coroutines
@@ -628,7 +629,14 @@ async def create_virtual_machines(
         return await asyncio.gather(*tasks)  # Gather coroutines
 
     async def create_vm_task(cluster_name, resource):
-        undefined_html = "<span class='badge text-bg-grey'><strong></strong>undefined</strong></span>"
+        undefined_html_raw = "undefined"
+        undefined_html_css = f"<span class='badge text-bg-grey'><strong>{undefined_html_raw}</strong></span>"
+        undefined_html = undefined_html_css if use_css else undefined_html_raw
+        
+        sync_status_html_raw = "syncing..."
+        sync_status_html_css = f"<span class='badge text-bg-grey'><strong>{sync_status_html_raw}</strong></span>"
+        sync_status_html = sync_status_html_css if use_css else sync_status_html_raw
+        
         websocket_vm_json: dict = {
             'sync_status': sync_status_html,
             'name': undefined_html,
@@ -901,14 +909,20 @@ async def create_virtual_machines(
         "proxmox_search_domain": search_domain,
         """
     
+    
+    
+    # Return the created virtual machines.
+    result_list = await asyncio.gather(*[_create_vm(cluster) for cluster in cluster_resources], return_exceptions=True)
+
+    print('result_list: ', result_list)
+
     # Send end message to websocket to indicate that the creation of virtual machines is finished.
     await websocket.send_json({'object': 'virtual_machine', 'end': True})
-    
+
     # Clear cache after creating virtual machines.
     global_cache.clear_cache()
     
-    # Return the created virtual machines.
-    return await asyncio.gather(*[_create_vm(cluster) for cluster in cluster_resources])   
+    return result_list
  
 @app.get('/virtualization/virtual-machines/interfaces/create')
 async def create_virtual_machines_interfaces():
@@ -975,6 +989,44 @@ async def websocket_endpoint(
     print(ProxboxTagDep)
     print('route ws-test-http reached')
 
+@app.websocket("/ws/virtual-machines")
+async def websocket_endpoint(
+    pxs: ProxmoxSessionsDep,
+    cluster_status: ClusterStatusDep,
+    cluster_resources: ClusterResourcesDep,
+    custom_fields: CreateCustomFieldsDep,
+    tag: ProxboxTagDep,
+    websocket: WebSocket,
+):
+    print('route ws/virtual-machines reached')
+    
+    connection_open = False
+    
+    try:
+        await websocket.accept()
+        connection_open = True
+        await websocket.send_text('Connected!')
+    except Exception as error:
+        print(f"Error while accepting WebSocket connection: {error}")
+        try:
+            await websocket.close()
+        except Exception as error:
+            print(f"Error while closing WebSocket connection: {error}")
+            
+    data = None
+    
+    await create_virtual_machines(
+        pxs=pxs,
+        cluster_status=cluster_status,
+        cluster_resources=cluster_resources,
+        custom_fields=custom_fields,
+        websocket=websocket,
+        tag=tag,
+        use_css=False
+    )
+                
+                
+    
 @app.websocket("/ws")
 async def websocket_endpoint(
     pxs: ProxmoxSessionsDep,
