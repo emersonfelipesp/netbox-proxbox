@@ -152,8 +152,25 @@ async def proxmoxer_exception_handler(request: Request, exc: ProxboxException):
         }
     )
 
-sync_status_html = "<span class='text-bg-yellow badge p-1' title='Syncing VM' ><i class='mdi mdi-sync'></i></span>"
-completed_sync_html = "<span class='text-bg-green badge p-1' title='Synced VM'><i class='mdi mdi-check'></i></span>"
+def return_status_html(status: str, use_css: bool):
+    undefined_html_raw = "undefined"
+    undefined_html_css = f"<span class='badge text-bg-grey'><strong>{undefined_html_raw}</strong></span>"
+    undefined_html = undefined_html_css if use_css else undefined_html_raw
+         
+    sync_status_html_css = "<span class='text-bg-yellow badge p-1' title='Syncing VM' ><i class='mdi mdi-sync'></i></span>"
+    sync_status_html_raw = "syncing"
+    sync_status_html = sync_status_html_css if use_css else sync_status_html_raw
+
+    completed_sync_html_css = "<span class='text-bg-green badge p-1' title='Synced VM'><i class='mdi mdi-check'></i></span>"
+    completed_sync_html_raw = "completed"
+    completed_sync_html = completed_sync_html_css if use_css else completed_sync_html_raw
+
+    if status == "syncing":
+        return sync_status_html
+    elif status == "completed":
+        return completed_sync_html
+    return undefined_html
+
 
 @app.get("/")
 async def standalone_info():
@@ -207,26 +224,28 @@ async def create_proxmox_devices(
     tag: ProxboxTagDep,
     websocket: WebSocket,
     node: str | None = None,
+    use_websocket: bool = False,
+    use_css: bool = False
 ):
     device_list: list = []
     
     for cluster_status in clusters_status:
         for node_obj in cluster_status.node_list:
-            websocket_node_json: dict = {}
-            await websocket.send_json(
-                {
-                    'object': 'device',
-                    'type': 'create',
-                    'data': {
-                        'completed': False,
-                        'sync_status': sync_status_html,
-                        'rowid': node_obj.name,
-                        'name': node_obj.name,
-                        'netbox_id': None,
-                        'manufacturer': None,
-                        'role': None,
-                        'cluster': cluster_status.mode.capitalize(),
-                        'device_type': None,
+            if use_websocket:
+                await websocket.send_json(
+                    {
+                        'object': 'device',
+                        'type': 'create',
+                        'data': {
+                            'completed': False,
+                            'sync_status': return_status_html('syncing', use_css),
+                            'rowid': node_obj.name,
+                            'name': node_obj.name,
+                            'netbox_id': None,
+                            'manufacturer': None,
+                            'role': None,
+                            'cluster': cluster_status.mode.capitalize(),
+                            'device_type': None,
                     }
                 }
             )
@@ -268,7 +287,7 @@ async def create_proxmox_devices(
                     
                 print(f'netbox_device: {netbox_device}')
                 
-                if netbox_device is None:
+                if netbox_device is None and use_websocket:
                     await websocket.send_json(
                         {
                             'object': 'device',
@@ -276,7 +295,7 @@ async def create_proxmox_devices(
                             'data': {
                                 'completed': True,
                                 'increment_count': 'yes',
-                                'sync_status': completed_sync_html,
+                                'sync_status': return_status_html('completed', use_css),
                                 'rowid': node_obj.name,
                                 'name': f"<a href='{netbox_device.get('display_url')}'>{netbox_device.get('name')}</a>",
                                 'netbox_id': netbox_device.get('id'),
@@ -314,7 +333,8 @@ async def create_proxmox_devices(
                 )
     
     # Send end message to websocket to indicate that the creation of devices is finished.
-    await websocket.send_json({'object': 'device', 'end': True})
+    if use_websocket:
+        await websocket.send_json({'object': 'device', 'end': True})
     
     # Clear cache after creating devices.
     global_cache.clear_cache()
@@ -617,7 +637,8 @@ async def create_virtual_machines(
     custom_fields: CreateCustomFieldsDep,
     tag: ProxboxTagDep,
     websocket = WebSocket,
-    use_css: bool = False
+    use_css: bool = False,
+    use_websocket: bool = False
 ):
     async def _create_vm(cluster: dict):
         tasks = []  # Collect coroutines
@@ -629,16 +650,10 @@ async def create_virtual_machines(
         return await asyncio.gather(*tasks)  # Gather coroutines
 
     async def create_vm_task(cluster_name, resource):
-        undefined_html_raw = "undefined"
-        undefined_html_css = f"<span class='badge text-bg-grey'><strong>{undefined_html_raw}</strong></span>"
-        undefined_html = undefined_html_css if use_css else undefined_html_raw
-        
-        sync_status_html_raw = "syncing..."
-        sync_status_html_css = f"<span class='badge text-bg-grey'><strong>{sync_status_html_raw}</strong></span>"
-        sync_status_html = sync_status_html_css if use_css else sync_status_html_raw
+        undefined_html = return_status_html('undefined', use_css)
         
         websocket_vm_json: dict = {
-            'sync_status': sync_status_html,
+            'sync_status': return_status_html('syncing', use_css),
             'name': undefined_html,
             'netbox_id': undefined_html,
             'status': undefined_html,
@@ -706,12 +721,13 @@ async def create_virtual_machines(
             'device': str(resource.get('node')),
         }
 
-        await websocket.send_json(
-            {
-                'object': 'virtual_machine',
-                'type': 'create',
-                'data': initial_vm_json
-            })
+        if use_websocket:
+            await websocket.send_json(
+                {
+                    'object': 'virtual_machine',
+                    'type': 'create',
+                    'data': initial_vm_json
+                })
 
         try:
             print('\n')
@@ -775,19 +791,37 @@ async def create_virtual_machines(
         device_html = format_to_html(virtual_machine, 'device')
         role_html = format_to_html(virtual_machine, 'role')
         
+        
+        active_raw = "Active"
+        active_css = "<span class='text-bg-green badge p-1'>Active</span>"
+        active_html = active_css if use_css else active_raw
+        
+        offline_raw = "Offline"
+        offline_css = "<span class='text-bg-red badge p-1'>Offline</span>"
+        offline_html = offline_css if use_css else offline_raw
+        
+        unknown_raw = "Unknown"
+        unknown_css = "<span class='text-bg-grey badge p-1'>Unknown</span>"
+        unknown_html = unknown_css if use_css else unknown_raw
+        
         status_html_choices = {
-            'active': "<span class='text-bg-green badge p-1'>Active</span>",
-            'offline': "<span class='text-bg-red badge p-1'>Offline</span>",
-            'unknown': "<span class='text-bg-grey badge p-1'>Unknown</span>"
+            'active': active_html,
+            'offline': offline_html,
+            'unknown': unknown_html
         }
+        
         status_html = status_html_choices.get(virtual_machine.get('status').get('value'), status_html_choices.get('unknown'))
+    
+        name_html_css = f"<a href='{virtual_machine.get('display_url')}'>{virtual_machine.get('name')}</a>"
+        name_html_raw = f"{virtual_machine.get('name')}"
+        name_html = name_html_css if use_css else name_html_raw
         
         vm_created_json: dict = initial_vm_json | {
             'increment_count': 'yes',
             'completed': True,
-            'sync_status': completed_sync_html,
+            'sync_status': return_status_html('completed', use_css),
             'rowid': str(resource.get('name')),
-            'name': f"<a href='{virtual_machine.get('display_url')}'>{virtual_machine.get('name')}</a>",
+            'name': name_html,
             'netbox_id': virtual_machine.get('id'),
             'status': status_html,
             'cluster': cluster_html,
@@ -800,13 +834,14 @@ async def create_virtual_machines(
         }
         
         # At this point, the Virtual Machine was created in NetBox. Left to create the interfaces.
-        await websocket.send_json(
-            {
-                'object': 'virtual_machine',
-                'type': 'create',
-                'data': vm_created_json
-            }
-        )
+        if use_websocket:
+            await websocket.send_json(
+                {
+                    'object': 'virtual_machine',
+                    'type': 'create',
+                    'data': vm_created_json
+                }
+            )
         
         netbox_vm_interfaces: list = []
         
@@ -890,13 +925,14 @@ async def create_virtual_machines(
         vm_created_with_interfaces_json.pop('completed')
         vm_created_with_interfaces_json.pop('increment_count')
         
-        await websocket.send_json(
-            {
-                'object': 'virtual_machine',
-                'type': 'create',
-                'data': vm_created_with_interfaces_json
-            }
-        )
+        if use_websocket:
+            await websocket.send_json(
+                {
+                    'object': 'virtual_machine',
+                    'type': 'create',
+                    'data': vm_created_with_interfaces_json
+                }
+            )
         
         
         # Lamba is necessary to treat the object instantiation as a coroutine/function.
@@ -917,7 +953,8 @@ async def create_virtual_machines(
     print('result_list: ', result_list)
 
     # Send end message to websocket to indicate that the creation of virtual machines is finished.
-    await websocket.send_json({'object': 'virtual_machine', 'end': True})
+    if use_websocket:
+        await websocket.send_json({'object': 'virtual_machine', 'end': True})
 
     # Clear cache after creating virtual machines.
     global_cache.clear_cache()
@@ -1042,6 +1079,7 @@ async def websocket_endpoint(
     try:
         await websocket.accept()
         connection_open = True
+        
         await websocket.send_text('Connected!')
     except Exception as error:
         print(f"Error while accepting WebSocket connection: {error}")
@@ -1080,7 +1118,8 @@ async def websocket_endpoint(
                 cluster_resources=cluster_resources,
                 custom_fields=custom_fields,
                 websocket=websocket,
-                tag=tag
+                tag=tag,
+                use_websocket=True
             )
             
             if data == "Full Update Sync":
@@ -1089,7 +1128,8 @@ async def websocket_endpoint(
                     clusters_status=cluster_status,
                     node=None,
                     websocket=websocket,
-                    tag=tag
+                    tag=tag,
+                    use_websocket=True
                 )
                 
                 if sync_nodes: 
@@ -1100,7 +1140,8 @@ async def websocket_endpoint(
                         cluster_resources=cluster_resources,
                         custom_fields=custom_fields,
                         websocket=websocket,
-                        tag=tag
+                        tag=tag,
+                        use_websocket=True
                     )
                 
             if data == "Sync Nodes":
@@ -1110,7 +1151,8 @@ async def websocket_endpoint(
                     clusters_status=cluster_status,
                     node=None,
                     websocket=websocket,
-                    tag=tag
+                    tag=tag,
+                    use_websocket=True
                 )
                 
             elif data == "Sync Virtual Machines":
@@ -1120,7 +1162,8 @@ async def websocket_endpoint(
                     cluster_resources=cluster_resources,
                     custom_fields=custom_fields,
                     websocket=websocket,
-                    tag=tag
+                    tag=tag,
+                    use_websocket=True
                 )
                 
             else:
