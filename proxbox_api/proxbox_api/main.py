@@ -976,9 +976,19 @@ async def get_virtual_machines():
 
 @app.get(
     '/virtualization/virtual-machines/{id}',
+    response_model=VirtualMachine.Schema,
+    response_model_exclude_none=True,
+    response_model_exclude_unset=True
 )
 async def get_virtual_machine(id: int):
-    pass
+    try:
+        virtual_machine = VirtualMachine().get(id=id)
+        if virtual_machine:
+            return virtual_machine
+        else:
+            return {}
+    except Exception as error:
+        return {}
 
 class CPU(BaseModel):
     cores: int
