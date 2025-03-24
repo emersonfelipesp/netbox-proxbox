@@ -16,6 +16,11 @@ virtual_machines_item = PluginMenuItem(
     link_text='Virtual Machines',
 )
 
+sync_processes_item = PluginMenuItem(
+    link='plugins:netbox_proxbox:syncprocess_list',
+    link_text='Sync Processes',
+)
+
 contributing_item = PluginMenuItem(
     link='plugins:netbox_proxbox:contributing',
     link_text='Contributing!',
@@ -78,9 +83,10 @@ menu = PluginMenu(
     label='Proxbox',
     groups=(
         ('Proxmox Plugin', (
-            fullupdate_item,
-            nodes_item,
-            virtual_machines_item,
+                fullupdate_item,
+                nodes_item,
+                virtual_machines_item,
+                sync_processes_item,
             )
          ),
         ('Endpoints', (proxmox_endpoints_item, netbox_endpoints_item, fastapi_endpoints_item,)),

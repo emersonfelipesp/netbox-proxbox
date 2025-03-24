@@ -1,6 +1,15 @@
 from django.db.models import Q
 from netbox.filtersets import NetBoxModelFilterSet
-from .models import ProxmoxEndpoint, NetBoxEndpoint, FastAPIEndpoint
+from .models import ProxmoxEndpoint, NetBoxEndpoint, FastAPIEndpoint, SyncProcess
+
+
+class SyncProcessFilterSet(NetBoxModelFilterSet):
+    class Meta:
+        model = SyncProcess
+        fields = ['id', 'name', 'sync_type', 'status', 'started_at', 'completed_at']
+
+    def search(self, queryset, name, value):
+        return queryset.filter(name__icontains=value)
 
 
 class ProxmoxEndpointFilterSet(NetBoxModelFilterSet):

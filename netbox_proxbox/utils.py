@@ -1,9 +1,10 @@
 def get_fastapi_url(object):
     domain_or_ip = None
+    ip = str(object.ip_address).split('/')[0]
     if object.domain:
         domain_or_ip = object.domain
     else:
-        domain_or_ip = str(object.ip_address).split('/')[0]
+        domain_or_ip = ip
     
     
     # Define HTTP(S) URL for FastAPI
@@ -38,6 +39,7 @@ def get_fastapi_url(object):
     return {
         'domain': object.domain,
         'ip_address': object.ip_address,
+        'ip_address_url': f'https://{ip}:{object.port}',
         'http_url': fastapi_url,
         'websocket_url': fastapi_websocket_url,
         'verify_ssl': object.verify_ssl

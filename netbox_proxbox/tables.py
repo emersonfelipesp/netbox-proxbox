@@ -6,7 +6,28 @@ from .models import (
     ProxmoxEndpoint,
     NetBoxEndpoint,
     FastAPIEndpoint,
+    SyncProcess,
 )
+
+
+class SyncProcessTable(NetBoxTable):
+    name = tables.Column(linkify=True)
+    sync_type = ChoiceFieldColumn()
+    status = ChoiceFieldColumn()
+    started_at = tables.Column()
+    completed_at = tables.Column()
+    last_updated = tables.Column()
+    
+    class Meta(NetBoxTable.Meta):
+        model = SyncProcess
+        fields = (
+            'pk', 'id', 'name', 'sync_type', 'status', 'started_at', 'completed_at', 'last_updated',
+            'actions',
+        )
+    
+        default_columns = (
+            'pk', 'name', 'sync_type', 'status', 'started_at', 'completed_at', 'last_updated'
+        )
 
 class ProxmoxEndpointTable(NetBoxTable):
     name = tables.Column(linkify=True)

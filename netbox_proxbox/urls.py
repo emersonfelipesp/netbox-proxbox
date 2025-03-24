@@ -57,8 +57,19 @@ urlpatterns = [
         'model': models.FastAPIEndpoint
     }),
     
+    # SyncProcess Model URLs
+    path('sync-processes/', views.SyncProcessListView.as_view(), name='syncprocess_list'),
+    path('sync-processes/add/', views.SyncProcessEditView.as_view(), name='syncprocess_add'),
+    path('sync-processes/<int:pk>', views.SyncProcessView.as_view(), name='syncprocess'),
+    path('sync-processes/<int:pk>/edit/', views.SyncProcessEditView.as_view(), name='syncprocess_edit'),
+    path('sync-processes/<int:pk>/delete/', views.SyncProcessDeleteView.as_view(), name='syncprocess_delete'),
+    path('sync-processes/<int:pk>/changelog/', ObjectChangeLogView.as_view(), name='syncprocess_changelog', kwargs={
+        'model': models.SyncProcess
+    }),
+    
     
     path('keepalive-status/<str:service>/<int:pk>', views.get_service_status, name='keepalive_status'),
     path('proxmox-card/<int:pk>', views.get_proxmox_card, name='proxmox_card'),
-    path('websocket/<str:message>', WebSocketView.as_view(), name='websocket')
+    path('websocket/<str:message>', WebSocketView.as_view(), name='websocket'),
+    
 ]

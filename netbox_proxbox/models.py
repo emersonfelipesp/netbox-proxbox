@@ -6,7 +6,7 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from netbox.models import NetBoxModel
 
 from .fields import DomainField
-from .choices import ProxmoxModeChoices
+from .choices import ProxmoxModeChoices, SyncType, SyncStatus
 
 class ProxmoxEndpoint(NetBoxModel):
     name = models.CharField(
@@ -164,3 +164,25 @@ class FastAPIEndpoint(NetBoxModel):
 
     def get_absolute_url(self):
         return reverse("plugins:netbox_proxbox:fastapiendpoint", args=[self.pk])
+
+
+class SyncProcess(NetBoxModel):
+    name = models.CharField(max_length=255, unique=True)
+    sync_type = models.CharField(
+        max_length=20,
+        choices=SyncType.choices,
+        default=SyncType.ALL,
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=SyncStatus.choices,
+        default=SyncStatus.NOT_STARTED,
+    )
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f'{self.name} ({self.sync_type})'
+    
+    def get_absolute_url(self):
+        return reverse("plugins:netbox_proxbox:syncprocess", args=[self.pk])
