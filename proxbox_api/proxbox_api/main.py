@@ -26,7 +26,7 @@ from pynetbox_api.virtualization.cluster import Cluster
 from pynetbox_api.virtualization.cluster_type import ClusterType
 from pynetbox_api.extras.custom_field import CustomField
 from pynetbox_api.extras.tag import Tags
-from pynetbox_api.exceptions import FastAPIException
+from pynetbox_api import RawNetBoxSession
 
 # Proxbox API Imports
 from proxbox_api.exception import ProxboxException
@@ -207,6 +207,64 @@ async def clear_cache():
         "message": "Cache cleared"
     }
 
+
+from pydantic import BaseModel
+from datetime import datetime
+from typing import Optional
+
+class SyncProcessIn(BaseModel):
+    name: str
+    sync_type: str
+    status: str
+    started_at: datetime
+    completed_at: datetime
+
+class SyncProcess(SyncProcessIn):
+    id: int
+    url: str
+    display: str
+    
+# Example instance
+example_sync_process = SyncProcess(
+    id=1,
+    url="https://10.0.30.200/api/plugins/proxbox/sync-processes/1/",
+    display="teste (all)",
+    name="teste",
+    sync_type="all",
+    status="not-started",
+    started_at="2025-03-13T15:08:09.051478Z",
+    completed_at="2025-03-13T15:08:09.051478Z",
+
+)
+
+@app.get('/sync-processes', response_model=List[SyncProcess])
+async def get_sync_processes():
+    """
+    Get all sync processes from Netbox.
+    """
+    
+    nb = RawNetBoxSession
+    sync_processes = [process.serialize() for process in nb.plugins.proxbox.__getattr__('sync-processes').all()]
+    return sync_processes
+
+@app.post('/sync-processes', response_model=SyncProcess)
+async def create_sync_process():
+    """
+    Create a new sync process in Netbox.
+    """
+    
+    print(datetime.now())
+    
+    nb = RawNetBoxSession
+    sync_process = nb.plugins.proxbox.__getattr__('sync-processes').create(
+        name=f"sync-process-{datetime.now()}",
+        sync_type="all",
+        status="not-started",
+        started_at=str(datetime.now()),
+        completed_at=str(datetime.now()),
+    )
+    
+    return sync_process
 '''
 @app.websocket("/ws-test")
 async def websocket_endpoint(websocket: WebSocket):
@@ -223,11 +281,26 @@ async def websocket_endpoint(websocket: WebSocket):
 async def create_proxmox_devices(
     clusters_status: ClusterStatusDep,
     tag: ProxboxTagDep,
-    websocket: WebSocket,
+    websocket: WebSocket = None,
     node: str | None = None,
     use_websocket: bool = False,
     use_css: bool = False
 ):
+    # GET /api/plugins/proxbox/sync-processes/
+    nb = RawNetBoxSession
+    
+    sync_process = None
+    try:    
+        sync_process = nb.plugins.proxbox.__getattr__('sync-processes').create(
+            name=f"sync-process-{datetime.now()}",
+            sync_type="devices",
+            status="not-started",
+            started_at=str(datetime.now()),
+        )
+    except Exception as error:
+        print(error)
+        pass
+    
     device_list: list = []
     
     for cluster_status in clusters_status:
@@ -288,7 +361,7 @@ async def create_proxmox_devices(
                     
                 print(f'netbox_device: {netbox_device}')
                 
-                if netbox_device is None and use_websocket:
+                if netbox_device is None and all([use_websocket, websocket]):
                     await websocket.send_json(
                         {
                             'object': 'device',
@@ -334,11 +407,16 @@ async def create_proxmox_devices(
                 )
     
     # Send end message to websocket to indicate that the creation of devices is finished.
-    if use_websocket:
+    if all([use_websocket, websocket]):
         await websocket.send_json({'object': 'device', 'end': True})
     
     # Clear cache after creating devices.
     global_cache.clear_cache()
+    
+    if sync_process:
+        sync_process.status = "completed"
+        sync_process.completed_at = str(datetime.now())
+        sync_process.save()
     
     return Device.SchemaList(device_list)
 
@@ -641,6 +719,25 @@ async def create_virtual_machines(
     use_css: bool = False,
     use_websocket: bool = False
 ):
+    '''
+    Creates a new virtual machine in Netbox.
+    '''
+    
+    # GET /api/plugins/proxbox/sync-processes/
+    nb = RawNetBoxSession
+    
+    sync_process = None
+    try:
+        sync_process = nb.plugins.proxbox.__getattr__('sync-processes').create(
+            name=f"sync-process-{datetime.now()}",
+            sync_type="virtual-machines",
+            status="not-started",
+            started_at=str(datetime.now()),
+        )
+    except Exception as error:
+        print(error)
+        pass
+    
     async def _create_vm(cluster: dict):
         tasks = []  # Collect coroutines
         for cluster_name, resources in cluster.items():
@@ -722,7 +819,7 @@ async def create_virtual_machines(
             'device': str(resource.get('node')),
         }
 
-        if use_websocket:
+        if all([use_websocket, websocket]):
             await websocket.send_json(
                 {
                     'object': 'virtual_machine',
@@ -835,7 +932,7 @@ async def create_virtual_machines(
         }
         
         # At this point, the Virtual Machine was created in NetBox. Left to create the interfaces.
-        if use_websocket:
+        if all([use_websocket, websocket]):
             await websocket.send_json(
                 {
                     'object': 'virtual_machine',
@@ -926,7 +1023,7 @@ async def create_virtual_machines(
         vm_created_with_interfaces_json.pop('completed')
         vm_created_with_interfaces_json.pop('increment_count')
         
-        if use_websocket:
+        if all([use_websocket, websocket]):
             await websocket.send_json(
                 {
                     'object': 'virtual_machine',
@@ -954,11 +1051,16 @@ async def create_virtual_machines(
     print('result_list: ', result_list)
 
     # Send end message to websocket to indicate that the creation of virtual machines is finished.
-    if use_websocket:
+    if all([use_websocket, websocket]):
         await websocket.send_json({'object': 'virtual_machine', 'end': True})
 
     # Clear cache after creating virtual machines.
     global_cache.clear_cache()
+    
+    if sync_process:
+        sync_process.status = "completed"
+        sync_process.completed_at = str(datetime.now())
+        sync_process.save()
     
     return result_list
  
@@ -1200,7 +1302,63 @@ async def websocket_endpoint(
         use_css=False
     )
                 
-                
+
+@app.get('/full-update')
+async def full_update_sync(
+    pxs: ProxmoxSessionsDep,
+    cluster_status: ClusterStatusDep,
+    cluster_resources: ClusterResourcesDep,
+    custom_fields: CreateCustomFieldsDep,
+    tag: ProxboxTagDep
+):
+    sync_process = None
+
+    nb = RawNetBoxSession
+    try:
+        sync_process = nb.plugins.proxbox.__getattr__('sync-processes').create(
+            name=f"sync-process-{datetime.now()}",
+            sync_type="all",
+            status="not-started",
+            started_at=str(datetime.now()),
+        )
+    except Exception as error:
+        print(error)
+        pass
+
+    try:
+        # Sync Nodes
+        sync_nodes = await create_proxmox_devices(
+            clusters_status=cluster_status,
+                node=None,
+                tag=tag,
+                use_websocket=False
+            )
+    except Exception as error:
+        print(error)
+        raise ProxboxException(message=f"Error while syncing nodes.", python_exception=str(error))
+
+    if sync_nodes: 
+        # Sync Virtual Machines
+        try:
+            sync_vms = await create_virtual_machines(
+                pxs=pxs,
+                cluster_status=cluster_status,
+                cluster_resources=cluster_resources,
+                custom_fields=custom_fields,
+                tag=tag,
+                use_websocket=False
+            )
+        except Exception as error:
+            print(error)
+            raise ProxboxException(message=f"Error while syncing virtual machines.", python_exception=str(error))
+
+    if sync_process:
+        sync_process.status = "completed"
+        sync_process.completed_at = str(datetime.now())
+        sync_process.save()
+        
+    return sync_nodes, sync_vms
+
     
 @app.websocket("/ws")
 async def websocket_endpoint(
@@ -1212,6 +1370,8 @@ async def websocket_endpoint(
     websocket: WebSocket,
 ):
     connection_open = False
+    
+    nb = RawNetBoxSession
     
     print('route ws reached')
     try:
@@ -1261,6 +1421,19 @@ async def websocket_endpoint(
             )
             
             if data == "Full Update Sync":
+                sync_process = None
+                
+                try:
+                    sync_process = nb.plugins.proxbox.__getattr__('sync-processes').create(
+                        name=f"sync-process-{datetime.now()}",
+                        sync_type="all",
+                        status="not-started",
+                        started_at=str(datetime.now()),
+                    )
+                except Exception as error:
+                    print(error)
+                    pass
+                
                 # Sync Nodes
                 sync_nodes = await create_proxmox_devices(
                     clusters_status=cluster_status,
@@ -1281,6 +1454,11 @@ async def websocket_endpoint(
                         tag=tag,
                         use_websocket=True
                     )
+                
+                if sync_process:
+                    sync_process.status = "completed"
+                    sync_process.completed_at = str(datetime.now())
+                    sync_process.save()
                 
             if data == "Sync Nodes":
                 print('Sync Nodes')
