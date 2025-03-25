@@ -178,8 +178,16 @@ class SyncProcess(NetBoxModel):
         choices=SyncStatus.choices,
         default=SyncStatus.NOT_STARTED,
     )
-    started_at = models.DateTimeField(null=True, blank=True)
-    completed_at = models.DateTimeField(null=True, blank=True)
+    started_at = models.DateTimeField(
+        null=True, 
+        blank=True,
+        help_text=_('When the sync process started. Format: YYYY-MM-DD HH:MM:SS')
+    )
+    completed_at = models.DateTimeField(
+        null=True, 
+        blank=True,
+        help_text=_('When the sync process completed. Format: YYYY-MM-DD HH:MM:SS')
+    )
 
     def __str__(self):
         return f'{self.name} ({self.sync_type})'

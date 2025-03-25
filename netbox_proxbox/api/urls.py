@@ -7,5 +7,6 @@ router = NetBoxRouter()
 router.register('endpoints/proxmox', views.ProxmoxEndpointViewSet)
 router.register('endpoints/netbox', views.NetBoxEndpointViewSet)
 router.register('endpoints/fastapi', views.FastAPIEndpointViewSet)
+router.register('sync-processes', views.SyncProcessViewSet)
 
 urlpatterns = router.urls
