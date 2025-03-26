@@ -288,15 +288,19 @@ async def create_proxmox_devices(
 ):
     # GET /api/plugins/proxbox/sync-processes/
     nb = RawNetBoxSession
-    
+    start_time = datetime.now()
     sync_process = None
+    
     try:    
-        sync_process = nb.plugins.proxbox.__getattr__('sync-processes').create(
-            name=f"sync-process-{datetime.now()}",
-            sync_type="devices",
-            status="not-started",
-            started_at=str(datetime.now()),
-        )
+        sync_process = nb.plugins.proxbox.__getattr__('sync-processes').create({
+            'name': f"sync-devices-{start_time}",
+            'sync_type': "devices",
+            'status': "not-started",
+            'started_at': str(start_time),
+            'completed_at': None,
+            'runtime': None,
+        })
+
     except Exception as error:
         print(error)
         pass
@@ -414,8 +418,10 @@ async def create_proxmox_devices(
     global_cache.clear_cache()
     
     if sync_process:
+        end_time = datetime.now()
         sync_process.status = "completed"
-        sync_process.completed_at = str(datetime.now())
+        sync_process.completed_at = str(end_time)
+        sync_process.runtime = float((end_time - start_time).total_seconds())
         sync_process.save()
     
     return Device.SchemaList(device_list)
@@ -725,14 +731,14 @@ async def create_virtual_machines(
     
     # GET /api/plugins/proxbox/sync-processes/
     nb = RawNetBoxSession
-    
+    start_time = datetime.now()
     sync_process = None
     try:
         sync_process = nb.plugins.proxbox.__getattr__('sync-processes').create(
-            name=f"sync-process-{datetime.now()}",
+            name=f"sync-virtual-machines-{start_time}",
             sync_type="virtual-machines",
             status="not-started",
-            started_at=str(datetime.now()),
+            started_at=str(start_time),
         )
     except Exception as error:
         print(error)
@@ -1058,8 +1064,10 @@ async def create_virtual_machines(
     global_cache.clear_cache()
     
     if sync_process:
+        end_time = datetime.now()
         sync_process.status = "completed"
-        sync_process.completed_at = str(datetime.now())
+        sync_process.completed_at = str(end_time)
+        sync_process.runtime = float((end_time - start_time).total_seconds())
         sync_process.save()
     
     return result_list
@@ -1311,15 +1319,18 @@ async def full_update_sync(
     custom_fields: CreateCustomFieldsDep,
     tag: ProxboxTagDep
 ):
+    start_time = datetime.now()
     sync_process = None
 
     nb = RawNetBoxSession
     try:
         sync_process = nb.plugins.proxbox.__getattr__('sync-processes').create(
-            name=f"sync-process-{datetime.now()}",
+            name=f"sync-all-{start_time}",
             sync_type="all",
             status="not-started",
-            started_at=str(datetime.now()),
+            started_at=str(start_time),
+            completed_at=None,
+            runtime=None,
         )
     except Exception as error:
         print(error)
@@ -1353,10 +1364,14 @@ async def full_update_sync(
             raise ProxboxException(message=f"Error while syncing virtual machines.", python_exception=str(error))
 
     if sync_process:
+        end_time = datetime.now()
         sync_process.status = "completed"
-        sync_process.completed_at = str(datetime.now())
+        sync_process.completed_at = str(end_time)
+        sync_process.runtime = float((end_time - start_time).total_seconds())
         sync_process.save()
         
+        print(sync_process)
+        print(sync_process.runtime)
     return sync_nodes, sync_vms
 
     
