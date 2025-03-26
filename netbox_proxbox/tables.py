@@ -1,4 +1,6 @@
 import django_tables2 as tables
+from django.utils.translation import gettext as _
+
 from netbox.tables import NetBoxTable, ChoiceFieldColumn
 from netbox.tables.columns import BooleanColumn
 
@@ -12,21 +14,34 @@ from .models import (
 
 class SyncProcessTable(NetBoxTable):
     name = tables.Column(linkify=True)
-    sync_type = ChoiceFieldColumn()
-    status = ChoiceFieldColumn()
-    started_at = tables.Column()
-    completed_at = tables.Column()
-    last_updated = tables.Column()
+    sync_type = ChoiceFieldColumn(
+        verbose_name=_('Sync Type'),
+    )
+    status = ChoiceFieldColumn(
+        verbose_name=_('Status'),
+    )
+    started_at = tables.Column(
+        verbose_name=_('Started At'),
+    )
+    completed_at = tables.Column(
+        verbose_name=_('Completed At'),
+    )
+    last_updated = tables.Column(
+        verbose_name=_('Last Updated'),
+    )
+    runtime = tables.Column(
+        verbose_name=_('Runtime'),
+    )
     
     class Meta(NetBoxTable.Meta):
         model = SyncProcess
         fields = (
             'pk', 'id', 'name', 'sync_type', 'status', 'started_at', 'completed_at', 'last_updated',
-            'actions',
+            'runtime', 'actions',
         )
     
         default_columns = (
-            'pk', 'name', 'sync_type', 'status', 'started_at', 'completed_at', 'last_updated'
+            'pk', 'name', 'sync_type', 'status', 'started_at', 'completed_at', 'runtime'
         )
 
 class ProxmoxEndpointTable(NetBoxTable):

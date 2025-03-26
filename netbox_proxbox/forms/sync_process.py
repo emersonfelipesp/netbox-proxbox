@@ -1,13 +1,13 @@
 # Django Imports
 from django import forms
-
+from django.utils.translation import gettext as _
 # NetBox Imports
 from utilities.forms.fields import DynamicModelChoiceField, CommentField
 from netbox.forms import NetBoxModelForm, NetBoxModelFilterSetForm
 
 # Proxbox Imports
 from ..models import SyncProcess
-from ..choices import SyncType, SyncStatus
+from ..choices import SyncTypeChoices, SyncStatusChoices
 
 class SyncProcessForm(NetBoxModelForm):
     """
@@ -18,17 +18,21 @@ class SyncProcessForm(NetBoxModelForm):
     comments = CommentField()
     
     sync_type = forms.ChoiceField(
-        choices=SyncType.choices,
+        choices=SyncTypeChoices,
         required=False
     )
     status = forms.ChoiceField(
-        choices=SyncStatus.choices,
+        choices=SyncStatusChoices,
         required=False
+    )
+    runtime = forms.FloatField(
+        required=False,
+        help_text=_('Time elapsed for the sync process. Format: seconds')
     )
     
     class Meta:
         model = SyncProcess
-        fields = ('name', 'sync_type', 'status', 'started_at', 'completed_at')
+        fields = ('name', 'sync_type', 'status', 'started_at', 'completed_at', 'runtime')
 
 
 class SyncProcessFilterForm(NetBoxModelFilterSetForm):
@@ -42,11 +46,14 @@ class SyncProcessFilterForm(NetBoxModelFilterSetForm):
         required=False
     )
     sync_type = forms.ChoiceField(
-        choices=SyncType.choices,
-        required=False
+        choices=SyncTypeChoices,
+        required=False,
     )
     status = forms.ChoiceField(
-        choices=SyncStatus.choices,
-        required=False
+        choices=SyncStatusChoices,
+        required=False,
     )
-    
+    runtime = forms.FloatField(
+        required=False,
+        help_text=_('Time elapsed for the sync process. Format: seconds')
+    )

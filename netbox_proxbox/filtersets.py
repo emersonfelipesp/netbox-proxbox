@@ -4,9 +4,13 @@ from .models import ProxmoxEndpoint, NetBoxEndpoint, FastAPIEndpoint, SyncProces
 
 
 class SyncProcessFilterSet(NetBoxModelFilterSet):
+    """
+    FilterSet for SyncProcess model.
+    It is used in the SyncProcessListView.
+    """
     class Meta:
         model = SyncProcess
-        fields = ['id', 'name', 'sync_type', 'status', 'started_at', 'completed_at']
+        fields = ['id', 'name', 'sync_type', 'status', 'started_at', 'completed_at', 'runtime']
 
     def search(self, queryset, name, value):
         return queryset.filter(name__icontains=value)

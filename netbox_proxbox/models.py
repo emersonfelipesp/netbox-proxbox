@@ -6,7 +6,7 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from netbox.models import NetBoxModel
 
 from .fields import DomainField
-from .choices import ProxmoxModeChoices, SyncType, SyncStatus
+from .choices import ProxmoxModeChoices, SyncTypeChoices, SyncStatusChoices
 
 class ProxmoxEndpoint(NetBoxModel):
     name = models.CharField(
@@ -170,13 +170,13 @@ class SyncProcess(NetBoxModel):
     name = models.CharField(max_length=255, unique=True)
     sync_type = models.CharField(
         max_length=20,
-        choices=SyncType.choices,
-        default=SyncType.ALL,
+        choices=SyncTypeChoices,
+        default=SyncTypeChoices.ALL,
     )
     status = models.CharField(
         max_length=20,
-        choices=SyncStatus.choices,
-        default=SyncStatus.NOT_STARTED,
+        choices=SyncStatusChoices,
+        default=SyncStatusChoices.NOT_STARTED,
     )
     started_at = models.DateTimeField(
         null=True, 
@@ -187,6 +187,11 @@ class SyncProcess(NetBoxModel):
         null=True, 
         blank=True,
         help_text=_('When the sync process completed. Format: YYYY-MM-DD HH:MM:SS')
+    )
+    runtime = models.FloatField(
+        null=True,
+        blank=True,
+        help_text=_('Time elapsed for the sync process. Format: seconds')
     )
 
     def __str__(self):

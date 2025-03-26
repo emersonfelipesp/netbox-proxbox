@@ -15,18 +15,30 @@ __all__ = (
 )
 
 class SyncProcessView(generic.ObjectView):
+    """
+    Display a single sync process.
+    """
     queryset = SyncProcess.objects.all()
 
 class SyncProcessListView(generic.ObjectListView):
+    """
+    Display a list of sync processes.
+    """
     queryset = SyncProcess.objects.all()
     table = SyncProcessTable
     filterset = SyncProcessFilterSet
     filterset_form = SyncProcessFilterForm
 
 class SyncProcessEditView(generic.ObjectEditView):
+    """
+    Edit a sync process.
+    """
     queryset = SyncProcess.objects.all()
     form = SyncProcessForm
 
 class SyncProcessDeleteView(generic.ObjectDeleteView):
+    """
+    Delete a sync process.
+    """
     queryset = SyncProcess.objects.all()
 
