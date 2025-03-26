@@ -299,6 +299,7 @@ async def create_proxmox_devices(
             'started_at': str(start_time),
             'completed_at': None,
             'runtime': None,
+            'tags': [tag.get('id', 0)],
         })
 
     except Exception as error:
@@ -739,6 +740,9 @@ async def create_virtual_machines(
             sync_type="virtual-machines",
             status="not-started",
             started_at=str(start_time),
+            completed_at=None,
+            runtime=None,
+            tags=[tag.get('id', 0)],
         )
     except Exception as error:
         print(error)
@@ -1331,6 +1335,7 @@ async def full_update_sync(
             started_at=str(start_time),
             completed_at=None,
             runtime=None,
+            tags=[tag.get('id', 0)],
         )
     except Exception as error:
         print(error)
