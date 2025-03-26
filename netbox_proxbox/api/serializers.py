@@ -11,9 +11,9 @@ class SyncProcessSerializer(NetBoxModelSerializer):
     )
     sync_type = serializers.ChoiceField(choices=SyncTypeChoices)
     status = serializers.ChoiceField(choices=SyncStatusChoices)
-    runtime = serializers.FloatField()
+    runtime = serializers.FloatField(required=False, allow_null=True)
     started_at = serializers.DateTimeField()
-    completed_at = serializers.DateTimeField()
+    completed_at = serializers.DateTimeField(required=False, allow_null=True)
     
     class Meta:
         model = SyncProcess
