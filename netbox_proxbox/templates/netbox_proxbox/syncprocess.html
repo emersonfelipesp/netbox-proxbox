@@ -1,0 +1,47 @@
+{% extends 'generic/object.html' %}
+
+{% block content %}
+    <div class="row mb-3">
+        <div class="col col-md-6">
+            <div class="card">
+                <h5 class="card-header">Sync Process</h5>
+                <div class="card-body">
+    
+                    <table class="table table-hover attr-table">
+                        <tr>
+                            <th scope="row">Name</th>
+                            <td>{{ object.name }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Sync Type</th>
+                            <td>
+                                {{ object.sync_type }}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Status</th>
+                            <td>{{ object.status }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Started At</th>
+                            <td>{{ object.started_at }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Completed At</th>
+                            <td>{{ object.completed_at }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Runtime</th>
+                            <td>{{ object.runtime }} seconds</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+            {% include 'inc/panels/custom_fields.html' %}
+        </div>
+        <div class="col col-md-6">
+            {% include 'inc/panels/tags.html' %}
+            {% include 'inc/panels/comments.html' %}
+        </div>
+    </div>
+{% endblock %}
