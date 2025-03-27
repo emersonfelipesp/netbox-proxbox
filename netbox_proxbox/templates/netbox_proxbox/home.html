@@ -5,16 +5,15 @@
     <script src="https://unpkg.com/htmx.org@1.7.0"></script>
     <script>
         const fastapiEndpoint = '{{ fastapi_url }}'
-        //const websocketEndpoint = '{{ fastapi_websocket_url }}'
-        const websocketEndpoint = 'wss'
+        const websocketEndpoint = '{{ fastapi_websocket_url }}'
     </script>
     <script type="module">
         import * as HomeScripts from "{% static 'netbox_proxbox/js/home.js' %}";
         window.HomeScripts = HomeScripts
     </script>
     <script type="module">
-        import ProxboxWebSocket from "{% static 'netbox_proxbox/js/websocket.js' %}";
-        window.ProxboxWebSocket = ProxboxWebSocket
+        import WebSocketClient from "{% static 'netbox_proxbox/js/websocket.js' %}";
+        window.ProxboxWebSocket = new WebSocketClient(websocketEndpoint)
     </script>
     <script type="module">
         import * as Polling from "{% static 'netbox_proxbox/js/polling.js' %}";
@@ -73,50 +72,50 @@
                             {% if object.use_websocket %}
                                 {% if object.server_side_websocket %}
                                     {# Server-Only = Polling Connection between NetBox user (client) and Django (server) that then triggers FastAPI #}
-                                    <form class="m-2" action="" onsubmit="window.Polling.poll('device')">
-                                        <button id="full-update-button" class="btn btn-primary">Sync Nodes</button>
+                                    <form id="sync-nodes-form" style="cursor:not-allowed;" class="m-2" action="" onsubmit="window.Polling.poll('device')">
+                                        <button disabled id="sync-nodes-button" class="btn btn-secondaryy">Sync Nodes</button>
                                     </form>
                                 {% else %}
                                     {# Client-Server = Direct WebSocket Connection between NetBox user (client) and FastAPI (server) #}
-                                    <form class="m-2" action="" onsubmit="window.ProxboxWebSocket.connect('{{ object.websocket_domain }}', {{ object.websocket_port }}, '{{ object.token }}')">
-                                        <button id="full-update-button" class="btn btn-primary">Sync Nodes</button>
+                                    <form id="sync-nodes-form" style="cursor:not-allowed;" class="m-2" action="" onsubmit="window.ProxboxWebSocket.syncNodes()">
+                                        <button disabled id="sync-nodes-button" class="btn btn-secondary">Sync Nodes</button>
                                     </form>
                                 {% endif %}
                             {% else %}
                                 {# Server-Only = Simple HTTP Request between NetBox user (client) and Django (server) that then triggers FastAPI #}
-                                <a class="m-2" href="{% url 'plugins:netbox_proxbox:sync_devices' %}"><button id="full-update-button" class="btn btn-primary">Sync Nodes</button></a>
+                                <a class="m-2" href="{% url 'plugins:netbox_proxbox:sync_devices' %}"><button disabled id="sync-nodes-button" class="btn btn-secondary">Sync Nodes</button></a>
                             {% endif %}
 
                             {# Sync Virtual Machines #}
                             {% if object.use_websocket %}
                                 {% if object.server_side_websocket %}
-                                    <form class="m-2" action="" onsubmit="window.Polling.poll('virtual-machine')">
-                                        <button id="full-update-button" class="btn btn-primary">Sync Virtual Machines</button>
+                                    <form id="sync-virtual-machines-form" style="cursor:not-allowed;" class="m-2" action="" onsubmit="window.Polling.poll('virtual-machine')">
+                                        <button disabled id="sync-virtual-machines-button" class="btn btn-secondary">Sync Virtual Machines</button>
                                     </form>
                                 {% else %}
-                                    <form class="m-2" action="" onsubmit="window.ProxboxWebSocket.connect('{{ object.websocket_domain }}', {{ object.websocket_port }}, '{{ object.token }}')">
-                                        <button id="full-update-button" class="btn btn-primary">Sync Virtual Machines</button>
+                                    <form id="sync-virtual-machines-form" style="cursor:not-allowed;" class="m-2" action="" onsubmit="window.ProxboxWebSocket.syncVirtualMachines()">
+                                        <button disabled id="sync-virtual-machines-button" class="btn btn-secondary">Sync Virtual Machines</button>
                                     </form>
                                 {% endif %}
                             {% else %}
                                 {# Server-Only = Simple HTTP Request between NetBox user (client) and Django (server) that then triggers FastAPI #}
-                                <a class="m-2" href="{% url 'plugins:netbox_proxbox:sync_virtual_machines' %}"><button id="full-update-button" class="btn btn-primary">Sync Virtual Machines</button></a>
+                                <a class="m-2" href="{% url 'plugins:netbox_proxbox:sync_virtual_machines' %}"><button id="sync-virtual-machines-button" class="btn btn-primary">Sync Virtual Machines</button></a>
                             {% endif %}
 
                             {# Full Update Sync #}
                             {% if object.use_websocket %}
                                 {% if object.server_side_websocket %}
-                                    <form class="m-2" action="" onsubmit="window.Polling.poll('full-update')">
-                                        <button id="full-update-button" class="btn btn-primary">Full Update Sync</button>
+                                    <form id="sync-full-update-form" style="cursor:not-allowed;" class="m-2" action="" onsubmit="window.Polling.poll('full-update')">
+                                        <button disabled id="sync-full-update-button" class="btn btn-secondary">Full Update Sync</button>
                                     </form>
                                 {% else %}
-                                    <form class="m-2" action="" onsubmit="window.ProxboxWebSocket.connect('{{ object.websocket_domain }}', {{ object.websocket_port }}, '{{ object.token }}')">
-                                        <button id="full-update-button" class="btn btn-primary">Full Update Sync</button>
+                                    <form id="sync-full-update-form" style="cursor:not-allowed;" class="m-2" action="" onsubmit="window.ProxboxWebSocket.sendFullUpdate()">
+                                        <button disabled id="sync-full-update-button" class="btn btn-secondary">Full Update Sync</button>
                                     </form>
                                 {% endif %}
                             {% else %}
                                 {# Server-Only = Simple HTTP Request between NetBox user (client) and Django (server) that then triggers FastAPI #}
-                                <a class="m-2" href="{% url 'plugins:netbox_proxbox:sync_full_update' %}"><button id="full-update-button" class="btn btn-primary">Full Update Sync</button></a>
+                                <a class="m-2" href="{% url 'plugins:netbox_proxbox:sync_full_update' %}"><button id="sync-full-update-button" class="btn btn-primary">Full Update Sync</button></a>
                             {% endif %}
                         </div>
                     </div>

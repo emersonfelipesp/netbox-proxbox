@@ -2,11 +2,37 @@
 //import { populateVirtualMachinesTable } from "./virtual_machine.js";
 import { populateTable } from "./table.js";
 
-// Instantiate WebSocket connection to FastAPI backend.
-//let ws = new WebSocket(websocketEndpoint);
+function changeSyncButtonState(status) {
+    // Change Connection Status Badge to Green
+    console.log('changeSyncButtonState', status);
+    let buttonMapping = [
+        {
+            "button": document.getElementById('sync-nodes-button'),
+            "form": document.getElementById('sync-nodes-form')
+        },
+        {
+            "button": document.getElementById('sync-virtual-machines-button'),
+            "form": document.getElementById('sync-virtual-machines-form')
+        },
+        {
+            "button": document.getElementById('sync-full-update-button'),
+            "form": document.getElementById('sync-full-update-form')
+        }
+    ]
+
+    for (let element of buttonMapping) {
+        // Sync Nodes Button
+        element.button.className = status == 'connected' ? "btn btn-primary" : "btn btn-danger";
+        element.button.disabled = status == 'connected' ? false : true;
+        element.button.style.cursor = status == 'connected' ? "pointer" : "not-allowed";
+
+        element.form.style.cursor = status == 'connected' ? "pointer" : "not-allowed";
+    }
+    console.log('buttonMapping', buttonMapping);
+}
 
 // WebSocket Connection Management
-class WebSocketClient {
+export default class WebSocketClient {
     constructor(websocketEndpoint) {
         this.websocketURL = websocketEndpoint
         this.ws = null;
@@ -15,6 +41,8 @@ class WebSocketClient {
         this.reconnectDelay = 2000; // Start with 2s delay
         this.initialize()
     }
+
+    
 
     initialize() {
         this.connect();
@@ -58,12 +86,15 @@ class WebSocketClient {
     handleOpen(event) {
         console.log('WebSocket connection established.');
         this.reconnectAttempts = 0;
-        // this.updateConnectionStatus(true);
+
+        changeSyncButtonState('connected');
     }
 
     handleMessage(event) {
         console.log('WebSocket message received:', event.data);
         let jsonMessage;
+
+        changeSyncButtonState('connected');
 
         try {
             // Parse websocket received message to JSON.
@@ -101,6 +132,8 @@ class WebSocketClient {
     handleError(event) {
         console.error('WebSocket error observed:', event.error);
         // this.updateConnectionStatus(false, error);
+
+        changeSyncButtonState('disconnected');
     }
 
     handleClose(event) {
@@ -111,6 +144,8 @@ class WebSocketClient {
         if (event.code !== 1000 && this.reconnectAttempts < this.maxReconnectAttempts) {
             this.scheduleReconnect();
         }
+
+        changeSyncButtonState('disconnected');
     }
 
     scheduleReconnect() {
@@ -294,4 +329,4 @@ function syncVirtualMachines(event) {
 }
 */
 
-export default new WebSocketClient(websocketEndpoint);
+//export default new WebSocketClient(websocketEndpoint);
