@@ -126,8 +126,15 @@
         <br>
         <br>
 
-        {% include "netbox_proxbox/table/virtual_machines.html" %}
-        {% include "netbox_proxbox/table/devices.html" %}
+
+        {% if fastapi_endpoint_list and fastapi_endpoint_list|length > 0 %}
+            {% for object in fastapi_endpoint_list %}
+                {% if object.use_websocket %}
+                    {% include "netbox_proxbox/table/virtual_machines.html" %}
+                    {% include "netbox_proxbox/table/devices.html" %}
+                {% endif %}
+            {% endfor %}
+        {% endif %}
 
 
         <div class="d-flex justify-content-center flex-nowrap" style="margin-bottom: 15px;">
