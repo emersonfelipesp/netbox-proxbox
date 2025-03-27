@@ -67,6 +67,10 @@ urlpatterns = [
         'model': models.SyncProcess
     }),
     
+    # Manual Sync (HTTP Request)
+    path('sync/devices', views.sync_devices, name='sync_devices'),
+    path('sync/virtual-machines', views.sync_virtual_machines, name='sync_virtual_machines'),
+    path('sync/full-update', views.sync_full_update, name='sync_full_update'),
     
     path('keepalive-status/<str:service>/<int:pk>', views.get_service_status, name='keepalive_status'),
     path('proxmox-card/<int:pk>', views.get_proxmox_card, name='proxmox_card'),

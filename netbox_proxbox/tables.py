@@ -43,6 +43,8 @@ class SyncProcessTable(NetBoxTable):
         default_columns = (
             'pk', 'name', 'sync_type', 'status', 'started_at', 'completed_at', 'runtime'
         )
+        
+        order_by = ('-id',)
 
 class ProxmoxEndpointTable(NetBoxTable):
     name = tables.Column(linkify=True)
@@ -90,9 +92,9 @@ class FastAPIEndpointTable(NetBoxTable):
         model = FastAPIEndpoint
         fields = (
             'pk', 'id', 'name', 'domain', 'ip_address', 'port',
-            'verify_ssl', 'actions',
+            'verify_ssl', 'use_websocket', 'websocket_domain', 'websocket_port', 'server_side_websocket', 'token', 'actions',
         )
         
         default_columns = (
-            'pk', 'name', 'domain', 'ip_address', 'port', 'verify_ssl',
+            'pk', 'name', 'domain', 'ip_address', 'port', 'verify_ssl', 'use_websocket', 'websocket_domain'
         )

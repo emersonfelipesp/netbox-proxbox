@@ -49,197 +49,160 @@
 
 {% endblock %}
 {% block content %}
+    <div class="row mb-3">
 
-
-
-
- <!-- Button to trigger the request -->
-    <button
-        hx-get="{% url 'plugins:netbox_proxbox:websocket' 'Sync Nodes' %}"
-        hx-trigger="click"
-        hx-target="#device-table-data-2"
-        hx-swap="none"
-        class="btn btn-primary"
-        x-data
-        @htmx:afterRequest.window="handleResponse"
-    >
-        Sync Nodes with server-only websocket 2
-    </button>
-
-    <!-- Table to display the data -->
-    <table>
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>Name</th>
-                <th>Status</th>
-            </tr>
-        </thead>
-        <tbody id="device-table-data-2">
-        </tbody>
-    </table>
-
-<div x-data="{ count: 0 }">
-    <button x-on:click="count++">Increment</button>
- 
-    <span x-text="count"></span>
-</div>
-    <div x-data="{ open: false }">
-        <button @click="open = true">Expand</button>
-    
-        <span x-show="open">
-            Content...
-        </span>
-    </div>
-    <div 
-        id="websocket-messages"
-    ></div>
-
-        
-        <button
-            id="sync-nodes-button"
-            hx-get="{% url 'plugins:netbox_proxbox:websocket' 'devices' %}"
-            hx-target="#device-table-data"
-            hx-swap="beforeend"
-            class="btn btn-primary"
-            >
-            Sync Nodes with server-only websocket each 2s
-        </button>
-        <script>
-            document.addEventListener('DOMContentLoaded', function() {
-                let syncNodesButton = document.getElementById('sync-nodes-button');
-                
-                syncNodesButton.addEventListener('click', function() {
-                    // Only set the trigger if it doesn't already have one
-                    if (!syncNodesButton.getAttribute('hx-trigger')) {
-                        syncNodesButton.setAttribute('hx-trigger', 'every 2s');
-                        
-                        // Trigger HTMX to start the polling
-                        htmx.trigger(syncNodesButton, 'every 2s');
-                    }
-                });
-            });
-        </script>
-
-        <div 
-            id="websocket-messages-vm"
-        ></div>
-        <br>
-        <button
-            hx-get="{% url 'plugins:netbox_proxbox:websocket' 'virtual-machines' %}"
-            hx-target="#websocket-messages-vm"
-            hx-swap="beforeend"
-            class="btn btn-primary"
-            >
-            Sync Virtual Machines with server-only websocket
-        </button>
-
-        <div class="row mb-3">
-
-            <div align=center id="full-update-error-message"></div>
-            {# Full Update Button#}
-            <div style="margin-bottom: 15px;" class="d-flex justify-content-center noprint">
-                
-                {% if fastapi_endpoint_list and fastapi_endpoint_list|length > 0 %}
-                    {% for object in fastapi_endpoint_list %}
-                        <form class="m-2" action="" onsubmit="window.Polling.poll('device')">
-                            {% if perms.netbox_proxbox.add_proxmoxvm %}
-                                <button id="full-update-button" class="btn btn-primary">Sync Nodes</button>
-                            {% endif %}
-                        </form>
-                        <form class="m-2" action="" onsubmit="window.Polling.poll('virtual-machine')">
-                            {% if perms.netbox_proxbox.add_proxmoxvm %}
-                                <button id="full-update-button" class="btn btn-primary">Sync Virtual Machines</button>
-                            {% endif %}
-                        </form>
-                        <form class="m-2" action="" onsubmit="window.Polling.poll('full-update')">
-                            {% if perms.netbox_proxbox.add_proxmoxvm %}
-                                <button id="full-update-button" class="btn btn-primary">Full Update Sync</button>
-                            {% endif %}
-                        </form>
-                    {% endfor %}
-                {% endif %}
-            </div>
-            <br>
-            <br>
-
-            {% include "netbox_proxbox/table/virtual_machines.html" %}
-            {% include "netbox_proxbox/table/devices.html" %}
-
-
-            <div class="d-flex justify-content-center flex-nowrap" style="margin-bottom: 15px;">
-                <h2>
-                    Proxbox Configuration
-                </h2>
-            </div>
-            
-            {# Netbox Card #}
-            {% if netbox_endpoint_list and netbox_endpoint_list|length > 0 %}
-                {% for object in netbox_endpoint_list %}
-                    {% include "netbox_proxbox/home/netbox_card.html" %}
-                {% endfor %}
-            {% else %}
-                <div class="d-flex flex-column align-items-center" style="margin-bottom: 15px;">
-                    
-                    <div>
-                        <h2>
-                            There is no NetBox Endpoint configured.
-                        </h2>
-                    </div>
-                    <div class="justify-content-center">
-                        <a href="{% url 'plugins:netbox_proxbox:netboxendpoint_add' %}">
-                            <button class="btn btn-primary">
-                                Create new NetBox Endpoint
-                            </button>
-                        </a>
-                    </div>
-                </div>
-                <hr>
-            {% endif %}
-            
+        <div align=center id="full-update-error-message"></div>
+        {# Full Update Button#}
+        <div style="margin-bottom: 15px;" class="container noprint">
             {% if fastapi_endpoint_list and fastapi_endpoint_list|length > 0 %}
-                {# FastAPI Card #}
                 {% for object in fastapi_endpoint_list %}
-                    {% include "netbox_proxbox/home/fastapi_card.html" %}
-                {% endfor %}
-            {% else %}
-                <div class="d-flex flex-column align-items-center" style="margin-bottom: 15px;">
-                    <div>
-                        <h2>
-                            There is no FastAPI Endpoint configured.
-                        </h2>
-                    </div>
-                    <div class="justify-content-center">
-                        <a href="{% url 'plugins:netbox_proxbox:fastapiendpoint_add' %}">
-                            <button class="btn btn-primary">
-                                Create new FastAPI Endpoint
-                            </button>
-                        </a>
-                    </div>
-                </div>
-                <hr>
-            {% endif %}
-            {% if proxmox_endpoint_list and proxmox_endpoint_list|length > 0 %}
-                {% for object in proxmox_endpoint_list %}
-                    {% if proxmox_endpoint_list|length == 1 %}
-                        <div class="col">
-                    {% elif proxmox_endpoint_list|length == 2 %}
-                        <div class="col col-md-6">
-                    {% else %}
-                        <div class="col col-md-4">
-                    {% endif %}
-                        {# Proxmox Card #}
-                        
-                            <span
-                                id="proxmox-card-{{ object.pk }}"
-                                hx-get="{% url 'plugins:netbox_proxbox:proxmox_card' object.pk %}"
-                                hx-trigger="load"
-                                hx-target="#proxmox-card-{{ object.pk }}"
-                                hx-swap="outerHTML"
-                            ></span>
-                        
+                    <div class="row mb-2">
+                        <div class="col-12 text-center">
+                            {% if object.use_websocket %}
+                                {% if object.server_side_websocket %}
+                                    <p>Using Polling (Server-Only)</p>
+                                {% else %}
+                                    <p>Using WebSocket (Client-Server)</p>
+                                {% endif %}
+                            {% else %}
+                                <p>Using Simple HTTP Request (Server-Only)</p>
+                            {% endif %}
                         </div>
+                        <div class="d-flex justify-content-center noprint">
+                            {# Sync Nodes #}
+                            {% if object.use_websocket %}
+                                {% if object.server_side_websocket %}
+                                    {# Server-Only = Polling Connection between NetBox user (client) and Django (server) that then triggers FastAPI #}
+                                    <form class="m-2" action="" onsubmit="window.Polling.poll('device')">
+                                        <button id="full-update-button" class="btn btn-primary">Sync Nodes</button>
+                                    </form>
+                                {% else %}
+                                    {# Client-Server = Direct WebSocket Connection between NetBox user (client) and FastAPI (server) #}
+                                    <form class="m-2" action="" onsubmit="window.ProxboxWebSocket.connect('{{ object.websocket_domain }}', {{ object.websocket_port }}, '{{ object.token }}')">
+                                        <button id="full-update-button" class="btn btn-primary">Sync Nodes</button>
+                                    </form>
+                                {% endif %}
+                            {% else %}
+                                {# Server-Only = Simple HTTP Request between NetBox user (client) and Django (server) that then triggers FastAPI #}
+                                <a class="m-2" href="{% url 'plugins:netbox_proxbox:sync_devices' %}"><button id="full-update-button" class="btn btn-primary">Sync Nodes</button></a>
+                            {% endif %}
+
+                            {# Sync Virtual Machines #}
+                            {% if object.use_websocket %}
+                                {% if object.server_side_websocket %}
+                                    <form class="m-2" action="" onsubmit="window.Polling.poll('virtual-machine')">
+                                        <button id="full-update-button" class="btn btn-primary">Sync Virtual Machines</button>
+                                    </form>
+                                {% else %}
+                                    <form class="m-2" action="" onsubmit="window.ProxboxWebSocket.connect('{{ object.websocket_domain }}', {{ object.websocket_port }}, '{{ object.token }}')">
+                                        <button id="full-update-button" class="btn btn-primary">Sync Virtual Machines</button>
+                                    </form>
+                                {% endif %}
+                            {% else %}
+                                {# Server-Only = Simple HTTP Request between NetBox user (client) and Django (server) that then triggers FastAPI #}
+                                <a class="m-2" href="{% url 'plugins:netbox_proxbox:sync_virtual_machines' %}"><button id="full-update-button" class="btn btn-primary">Sync Virtual Machines</button></a>
+                            {% endif %}
+
+                            {# Full Update Sync #}
+                            {% if object.use_websocket %}
+                                {% if object.server_side_websocket %}
+                                    <form class="m-2" action="" onsubmit="window.Polling.poll('full-update')">
+                                        <button id="full-update-button" class="btn btn-primary">Full Update Sync</button>
+                                    </form>
+                                {% else %}
+                                    <form class="m-2" action="" onsubmit="window.ProxboxWebSocket.connect('{{ object.websocket_domain }}', {{ object.websocket_port }}, '{{ object.token }}')">
+                                        <button id="full-update-button" class="btn btn-primary">Full Update Sync</button>
+                                    </form>
+                                {% endif %}
+                            {% else %}
+                                {# Server-Only = Simple HTTP Request between NetBox user (client) and Django (server) that then triggers FastAPI #}
+                                <a class="m-2" href="{% url 'plugins:netbox_proxbox:sync_full_update' %}"><button id="full-update-button" class="btn btn-primary">Full Update Sync</button></a>
+                            {% endif %}
+                        </div>
+                    </div>
                 {% endfor %}
+            {% endif %}
+        </div>
+        <br>
+        <br>
+
+        {% include "netbox_proxbox/table/virtual_machines.html" %}
+        {% include "netbox_proxbox/table/devices.html" %}
+
+
+        <div class="d-flex justify-content-center flex-nowrap" style="margin-bottom: 15px;">
+            <h2>
+                Proxbox Configuration
+            </h2>
+        </div>
+        
+        {# Netbox Card #}
+        {% if netbox_endpoint_list and netbox_endpoint_list|length > 0 %}
+            {% for object in netbox_endpoint_list %}
+                {% include "netbox_proxbox/home/netbox_card.html" %}
+            {% endfor %}
+        {% else %}
+            <div class="d-flex flex-column align-items-center" style="margin-bottom: 15px;">
+                
+                <div>
+                    <h2>
+                        There is no NetBox Endpoint configured.
+                    </h2>
+                </div>
+                <div class="justify-content-center">
+                    <a href="{% url 'plugins:netbox_proxbox:netboxendpoint_add' %}">
+                        <button class="btn btn-primary">
+                            Create new NetBox Endpoint
+                        </button>
+                    </a>
+                </div>
+            </div>
+            <hr>
+        {% endif %}
+        
+        {% if fastapi_endpoint_list and fastapi_endpoint_list|length > 0 %}
+            {# FastAPI Card #}
+            {% for object in fastapi_endpoint_list %}
+                {% include "netbox_proxbox/home/fastapi_card.html" %}
+            {% endfor %}
+        {% else %}
+            <div class="d-flex flex-column align-items-center" style="margin-bottom: 15px;">
+                <div>
+                    <h2>
+                        There is no FastAPI Endpoint configured.
+                    </h2>
+                </div>
+                <div class="justify-content-center">
+                    <a href="{% url 'plugins:netbox_proxbox:fastapiendpoint_add' %}">
+                        <button class="btn btn-primary">
+                            Create new FastAPI Endpoint
+                        </button>
+                    </a>
+                </div>
+            </div>
+            <hr>
+        {% endif %}
+        {% if proxmox_endpoint_list and proxmox_endpoint_list|length > 0 %}
+            {% for object in proxmox_endpoint_list %}
+                {% if proxmox_endpoint_list|length == 1 %}
+                    <div class="col">
+                {% elif proxmox_endpoint_list|length == 2 %}
+                    <div class="col col-md-6">
+                {% else %}
+                    <div class="col col-md-4">
+                {% endif %}
+                    {# Proxmox Card #}
+                    
+                        <span
+                            id="proxmox-card-{{ object.pk }}"
+                            hx-get="{% url 'plugins:netbox_proxbox:proxmox_card' object.pk %}"
+                            hx-trigger="load"
+                            hx-target="#proxmox-card-{{ object.pk }}"
+                            hx-swap="outerHTML"
+                        ></span>
+                    
+                    </div>
+            {% endfor %}
             {% else %}
                 <div class="d-flex flex-column align-items-center" style="margin-bottom: 15px;">
                     <div>
@@ -258,8 +221,8 @@
                 <hr>
             {% endif %}
         </div>
-        
-        {% include "netbox_proxbox/home/log_messages.html" %}
+    
+    {% include "netbox_proxbox/home/log_messages.html" %}
     </div>
 {% endblock %}
 

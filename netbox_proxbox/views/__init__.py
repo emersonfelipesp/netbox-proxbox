@@ -19,6 +19,7 @@ from .endpoints import  *
 from .keepalive_status import *
 from .cards import *
 from .sync_process import *
+from .sync import *
 
 from netbox_proxbox.models import ProxmoxEndpoint, NetBoxEndpoint, FastAPIEndpoint
 
