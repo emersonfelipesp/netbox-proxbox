@@ -15,7 +15,10 @@ class HtmxHttpRequest(HttpRequest):
 from netbox_proxbox.models import *
 from netbox_proxbox.utils import get_fastapi_url
 
+CONNECTED_URL_SUCCESSFUL = None
+
 def fastapi_status(pk: int) -> dict:
+    global CONNECTED_URL_SUCCESSFUL
     connected: bool = False
     
     fastapi_service_obj = None
@@ -37,11 +40,25 @@ def fastapi_status(pk: int) -> dict:
                 print(f'FastAPI response: {response.json()}')
                 response.raise_for_status()
                 connected = True
-            except requests.exceptions.HTTPError as err:
-                print(f'HTTP error ocurred: {err}')
+                CONNECTED_URL_SUCCESSFUL = fastapi_url
             except Exception as errr:
                 print(f'Error ocurred: {errr}')
-    
+                
+                # Try to connect to FastAPI using the IP address and port.
+                print(f'Trying to connect to FastAPI using the IP address and port: {fastapi_detail.get("ip_address_url")}')
+                response = requests.get(fastapi_detail.get('ip_address_url'), verify=False)
+                print(f'FastAPI response: {response.json()}')
+                connected = True
+                CONNECTED_URL_SUCCESSFUL = fastapi_detail.get('ip_address_url')
+            '''
+            except requests.exceptions.HTTPError as err:
+                print(f'HTTP error ocurred: {err}')
+                response = requests.get(fastapi_detail.get('ip_address_url'), verify=False)
+                print(f'FastAPI response: {response.json()}')
+                response.raise_for_status()
+                connected = True
+            '''
+            
     return {
         'url': fastapi_url,
         'connected': connected
@@ -176,6 +193,7 @@ def get_service_status(
 
     status: str = 'unknown'
     fastapi_response: dict = {}
+    global CONNECTED_URL_SUCCESSFUL
     
     if service == 'fastapi':
         fastapi_response = fastapi_status(pk)
@@ -188,12 +206,12 @@ def get_service_status(
     
     if service == 'netbox' and fastapi_response.get('connected') == True:
         print('Trying to get NetBox status...')
-        netbox_response = netbox_status(pk=pk, base_url=fastapi_response.get('url'))
+        netbox_response = netbox_status(pk=pk, base_url=CONNECTED_URL_SUCCESSFUL)
         status = netbox_response if netbox_response is not None else 'error'
 
     if service == 'proxmox' and fastapi_response.get('connected') == True:
         print('Trying to get Proxmox status...')
-        proxmox_response = proxmox_status(pk=pk, base_url=fastapi_response.get('url'))
+        proxmox_response = proxmox_status(pk=pk, base_url=CONNECTED_URL_SUCCESSFUL)
         status = proxmox_response if proxmox_response is not None else 'error'
     
     return render(

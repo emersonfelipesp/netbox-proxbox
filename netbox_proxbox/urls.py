@@ -57,10 +57,23 @@ urlpatterns = [
         'model': models.FastAPIEndpoint
     }),
     
+    # SyncProcess Model URLs
+    path('sync-processes/', views.SyncProcessListView.as_view(), name='syncprocess_list'),
+    path('sync-processes/add/', views.SyncProcessEditView.as_view(), name='syncprocess_add'),
+    path('sync-processes/<int:pk>', views.SyncProcessView.as_view(), name='syncprocess'),
+    path('sync-processes/<int:pk>/edit/', views.SyncProcessEditView.as_view(), name='syncprocess_edit'),
+    path('sync-processes/<int:pk>/delete/', views.SyncProcessDeleteView.as_view(), name='syncprocess_delete'),
+    path('sync-processes/<int:pk>/changelog/', ObjectChangeLogView.as_view(), name='syncprocess_changelog', kwargs={
+        'model': models.SyncProcess
+    }),
+    
+    # Manual Sync (HTTP Request)
+    path('sync/devices', views.sync_devices, name='sync_devices'),
+    path('sync/virtual-machines', views.sync_virtual_machines, name='sync_virtual_machines'),
+    path('sync/full-update', views.sync_full_update, name='sync_full_update'),
     
     path('keepalive-status/<str:service>/<int:pk>', views.get_service_status, name='keepalive_status'),
     path('proxmox-card/<int:pk>', views.get_proxmox_card, name='proxmox_card'),
-    path('test/websocket/', views.TestWebSocketView.as_view(), name='test_websocket'),
-    path('test/websocket/2/<str:message>', WebSocketView.as_view(), name='websocket_class_view'),
-    #path('test/websocket/2/', websocket_client, name='test_websocket_2'),
+    path('websocket/<str:message>', WebSocketView.as_view(), name='websocket'),
+    
 ]

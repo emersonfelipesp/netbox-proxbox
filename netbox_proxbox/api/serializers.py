@@ -2,8 +2,27 @@ from rest_framework import serializers
 
 from netbox.api.serializers import NetBoxModelSerializer
 from ipam.api.serializers import IPAddressSerializer
-from ..models import ProxmoxEndpoint, NetBoxEndpoint, FastAPIEndpoint
+from ..models import ProxmoxEndpoint, NetBoxEndpoint, FastAPIEndpoint, SyncProcess
+from ..choices import SyncTypeChoices, SyncStatusChoices
+from extras.models import Tag
 
+class SyncProcessSerializer(NetBoxModelSerializer):
+    url = serializers.HyperlinkedIdentityField(
+        view_name='plugins-api:netbox_proxbox-api:syncprocess-detail',
+    )
+    sync_type = serializers.ChoiceField(choices=SyncTypeChoices)
+    status = serializers.ChoiceField(choices=SyncStatusChoices)
+    runtime = serializers.FloatField(required=False, allow_null=True)
+    started_at = serializers.DateTimeField()
+    completed_at = serializers.DateTimeField(required=False, allow_null=True)
+    tags = serializers.PrimaryKeyRelatedField(queryset=Tag.objects.all(), many=True)
+    
+    class Meta:
+        model = SyncProcess
+        fields = (
+            'id', 'url', 'display', 'name', 'sync_type', 'status', 'started_at', 'completed_at',
+            'runtime', 'tags', 'created', 'last_updated',
+        )
 
 class ProxmoxEndpointSerializer(NetBoxModelSerializer):
     url = serializers.HyperlinkedIdentityField(

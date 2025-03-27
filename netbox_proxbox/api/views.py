@@ -5,8 +5,14 @@ from .serializers import (
     ProxmoxEndpointSerializer,
     NetBoxEndpointSerializer,
     FastAPIEndpointSerializer,
+    SyncProcessSerializer,
 )
 
+
+class SyncProcessViewSet(NetBoxModelViewSet):
+    queryset = models.SyncProcess.objects.all()
+    serializer_class = SyncProcessSerializer
+    filterset_class = filtersets.SyncProcessFilterSet
 
 class ProxmoxEndpointViewSet(NetBoxModelViewSet):
     queryset = models.ProxmoxEndpoint.objects.all()

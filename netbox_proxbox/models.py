@@ -6,7 +6,7 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from netbox.models import NetBoxModel
 
 from .fields import DomainField
-from .choices import ProxmoxModeChoices
+from .choices import ProxmoxModeChoices, SyncTypeChoices, SyncStatusChoices
 
 class ProxmoxEndpoint(NetBoxModel):
     name = models.CharField(
@@ -153,7 +153,41 @@ class FastAPIEndpoint(NetBoxModel):
         validators=[MinValueValidator(1), MaxValueValidator(65535)],
         verbose_name=_('HTTP Port'),
     )
-    verify_ssl = models.BooleanField(default=True)
+    verify_ssl = models.BooleanField(
+        default=True,
+        verbose_name=_('Verify SSL'),
+        help_text=_('Choose or not to verify SSL certificate of the Proxbox Endpoint'),
+    )
+    token = models.CharField(
+        blank=True,
+        null=True,
+        max_length=255,
+        verbose_name=_('Token'),
+        help_text=_('Token for the Proxbox Endpoint. If not provided, the Proxbox Endpoint will not be able to send messages to the client (user) browser.'),
+    )
+    use_websocket = models.BooleanField(
+        default=False,
+        verbose_name=_('Use WebSocket'),
+        help_text=_('Choose or not to use WebSocket for the Proxbox Endpoint. If enabled, the Proxbox Endpoint will use WebSocket connection to send messages to the client (user) browser.'),
+    )
+    websocket_domain = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name=_('WebSocket Domain'),
+        help_text=_('Domain name of the WebSocket for the Proxbox Endpoint'),
+    )
+    websocket_port = models.PositiveIntegerField(
+        default=8800,
+        validators=[MinValueValidator(1), MaxValueValidator(65535)],
+        verbose_name=_('WebSocket Port'),
+        help_text=_('Port of the WebSocket for the Proxbox Endpoint (the same as HTTP port)'),
+    )
+    server_side_websocket = models.BooleanField(
+        default=False,
+        verbose_name=_('[BETA] Server Side WebSocket'),
+        help_text=_('Choose or not to use server side WebSocket connection for the Proxbox Endpoint. This is experimental feature and may not work as expected. This way, client (user) browser will not be able to send messages to the Proxbox Endpoint.'),
+    )
 
     class Meta:
         verbose_name_plural: str = 'FastAPI Endpoints'
@@ -164,3 +198,38 @@ class FastAPIEndpoint(NetBoxModel):
 
     def get_absolute_url(self):
         return reverse("plugins:netbox_proxbox:fastapiendpoint", args=[self.pk])
+
+
+class SyncProcess(NetBoxModel):
+    name = models.CharField(max_length=255, unique=True)
+    sync_type = models.CharField(
+        max_length=20,
+        choices=SyncTypeChoices,
+        default=SyncTypeChoices.ALL,
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=SyncStatusChoices,
+        default=SyncStatusChoices.NOT_STARTED,
+    )  
+    started_at = models.DateTimeField(
+        null=True, 
+        blank=True,
+        help_text=_('When the sync process started. Format: YYYY-MM-DD HH:MM:SS')
+    )
+    completed_at = models.DateTimeField(
+        null=True, 
+        blank=True,
+        help_text=_('When the sync process completed. Format: YYYY-MM-DD HH:MM:SS')
+    )
+    runtime = models.FloatField(
+        null=True,
+        blank=True,
+        help_text=_('Time elapsed for the sync process. Format: seconds')
+    )
+
+    def __str__(self):
+        return f'{self.name} ({self.sync_type})'
+    
+    def get_absolute_url(self):
+        return reverse("plugins:netbox_proxbox:syncprocess", args=[self.pk])

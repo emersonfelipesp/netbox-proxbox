@@ -1,0 +1,20 @@
+{% extends 'base/layout.html' %}
+
+{% block content %}
+    <div class="row mb-3">
+        <div class="col col-md-6">
+            <div class="card">
+                <h5 class="card-header">Sync Virtual Machines</h5>
+                <div class="card-body">
+                    <p>Syncing virtual machines...</p>
+                    <p>To view Sync Process, please go to <a href="{% url 'plugins:netbox_proxbox:syncprocess_list' %}">Sync Process</a> page.</p>
+                    <p>If you want real-time updates of the sync process, consider enabling WebSocket in the <a href="{% url 'plugins:netbox_proxbox:fastapiendpoint_list' %}">FastAPI Endpoint</a> configuration.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <br>
+
+    <button class="btn btn-primary" onclick="window.location.href='{% url 'plugins:netbox_proxbox:home' %}'">Return to Proxbox Homepage</button>
+{% endblock %}
