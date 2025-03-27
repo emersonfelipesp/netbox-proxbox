@@ -6,6 +6,12 @@ def get_fastapi_url(object):
     else:
         domain_or_ip = ip
     
+    # Define WebSocket Domain
+    websocket_domain = None
+    if object.use_websocket and object.websocket_domain:
+        websocket_domain = object.websocket_domain
+    else:
+        websocket_domain = ip
     
     # Define HTTP(S) URL for FastAPI
     fastapi_url_https = f"https://{domain_or_ip}:{object.port}"
@@ -13,8 +19,8 @@ def get_fastapi_url(object):
     fastapi_url = fastapi_url_https if object.verify_ssl else fastapi_url_http
     
     # Define (Secure) WebSocket URL for FastAPI
-    fastapi_wss_url = f"wss://{domain_or_ip}:{object.port}/ws"
-    fastapi_ws_url = f"ws://{domain_or_ip}:{object.port}/ws"
+    fastapi_wss_url = f"wss://{websocket_domain}:{object.websocket_port}/ws"
+    fastapi_ws_url = f"ws://{websocket_domain}:{object.websocket_port}/ws"
     fastapi_websocket_url = fastapi_wss_url if object.verify_ssl else fastapi_ws_url
     
     if any(host in fastapi_url for host in ['proxbox.backend.local', 'localhost', '127.0.0.1']):

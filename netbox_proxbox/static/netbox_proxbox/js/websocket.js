@@ -2,11 +2,9 @@
 //import { populateVirtualMachinesTable } from "./virtual_machine.js";
 import { populateTable } from "./table.js";
 
-// Instantiate WebSocket connection to FastAPI backend.
-//let ws = new WebSocket(websocketEndpoint);
 
 // WebSocket Connection Management
-class WebSocketClient {
+export default class WebSocketClient {
     constructor(websocketEndpoint) {
         this.websocketURL = websocketEndpoint
         this.ws = null;
@@ -294,4 +292,4 @@ function syncVirtualMachines(event) {
 }
 */
 
-export default new WebSocketClient(websocketEndpoint);
+//export default new WebSocketClient(websocketEndpoint);

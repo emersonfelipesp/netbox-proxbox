@@ -5,16 +5,15 @@
     <script src="https://unpkg.com/htmx.org@1.7.0"></script>
     <script>
         const fastapiEndpoint = '{{ fastapi_url }}'
-        //const websocketEndpoint = '{{ fastapi_websocket_url }}'
-        const websocketEndpoint = 'wss'
+        const websocketEndpoint = '{{ fastapi_websocket_url }}'
     </script>
     <script type="module">
         import * as HomeScripts from "{% static 'netbox_proxbox/js/home.js' %}";
         window.HomeScripts = HomeScripts
     </script>
     <script type="module">
-        import ProxboxWebSocket from "{% static 'netbox_proxbox/js/websocket.js' %}";
-        window.ProxboxWebSocket = ProxboxWebSocket
+        import WebSocketClient from "{% static 'netbox_proxbox/js/websocket.js' %}";
+        window.ProxboxWebSocket = new WebSocketClient(websocketEndpoint)
     </script>
     <script type="module">
         import * as Polling from "{% static 'netbox_proxbox/js/polling.js' %}";
@@ -78,7 +77,7 @@
                                     </form>
                                 {% else %}
                                     {# Client-Server = Direct WebSocket Connection between NetBox user (client) and FastAPI (server) #}
-                                    <form class="m-2" action="" onsubmit="window.ProxboxWebSocket.connect('{{ object.websocket_domain }}', {{ object.websocket_port }}, '{{ object.token }}')">
+                                    <form class="m-2" action="" onsubmit="window.ProxboxWebSocket.syncNodes()">
                                         <button id="full-update-button" class="btn btn-primary">Sync Nodes</button>
                                     </form>
                                 {% endif %}
@@ -94,7 +93,7 @@
                                         <button id="full-update-button" class="btn btn-primary">Sync Virtual Machines</button>
                                     </form>
                                 {% else %}
-                                    <form class="m-2" action="" onsubmit="window.ProxboxWebSocket.connect('{{ object.websocket_domain }}', {{ object.websocket_port }}, '{{ object.token }}')">
+                                    <form class="m-2" action="" onsubmit="window.ProxboxWebSocket.syncVirtualMachines()">
                                         <button id="full-update-button" class="btn btn-primary">Sync Virtual Machines</button>
                                     </form>
                                 {% endif %}
@@ -110,7 +109,7 @@
                                         <button id="full-update-button" class="btn btn-primary">Full Update Sync</button>
                                     </form>
                                 {% else %}
-                                    <form class="m-2" action="" onsubmit="window.ProxboxWebSocket.connect('{{ object.websocket_domain }}', {{ object.websocket_port }}, '{{ object.token }}')">
+                                    <form class="m-2" action="" onsubmit="window.ProxboxWebSocket.sendFullUpdate()">
                                         <button id="full-update-button" class="btn btn-primary">Full Update Sync</button>
                                     </form>
                                 {% endif %}
