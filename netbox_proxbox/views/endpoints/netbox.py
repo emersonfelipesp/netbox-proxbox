@@ -44,6 +44,7 @@ class NetBoxEndpointEditView(generic.ObjectEditView):
     form = NetBoxEndpointForm
     
     def get_object(self, **kwargs):
+        # If there is already an existing NetBoxEndpoint object, return the first object
         if int(NetBoxEndpoint.objects.count()) >= 1:
             return NetBoxEndpoint.objects.first()
         
@@ -51,12 +52,15 @@ class NetBoxEndpointEditView(generic.ObjectEditView):
             # We're creating a new object
             return self.queryset.model()
             
+        # If there is no existing NetBoxEndpoint object, return the object with the given kwargs
         return get_object_or_404(NetBoxEndpoint.objects.all(), **kwargs)
     
     def get_extra_context(self, request, instance):
+        # If there is already an existing NetBoxEndpoint object, pass True to the template
         if int(NetBoxEndpoint.objects.count()) >= 1:
             return {'existing_object': True}
         
+        # If there is no existing NetBoxEndpoint object, pass False to the template
         return {'existing_object': False}
 
 

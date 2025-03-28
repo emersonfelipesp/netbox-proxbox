@@ -44,7 +44,7 @@ class NetBoxEndpointSerializer(NetBoxModelSerializer):
     url = serializers.HyperlinkedIdentityField(
         view_name='plugins-api:netbox_proxbox-api:netboxendpoint-detail',
     )
-    ip_address = IPAddressSerializer()
+    ip_address = IPAddressSerializer(nested=True, required=False, allow_null=True)
     
     class Meta:
         model = NetBoxEndpoint
@@ -53,13 +53,23 @@ class NetBoxEndpointSerializer(NetBoxModelSerializer):
             'token', 'verify_ssl', 'tags', 'custom_fields',
             'created', 'last_updated',
         )
-
+    
+    
+    def create(self, validated_data):
+        """
+        Check if a NetBoxEndpoint already exists. If it does, return the existing one.
+        Otherwise, create a new one.
+        """
+        if NetBoxEndpoint.objects.exists():
+            return NetBoxEndpoint.objects.first()
+        return super().create(validated_data)
+    
 
 class FastAPIEndpointSerializer(NetBoxModelSerializer):
     url = serializers.HyperlinkedIdentityField(
         view_name='plugins-api:netbox_proxbox-api:fastapiendpoint-detail',
     )
-    ip_address = IPAddressSerializer()
+    ip_address = IPAddressSerializer(nested=True, required=False, allow_null=True)
     
     class Meta:
         model = FastAPIEndpoint
@@ -67,3 +77,12 @@ class FastAPIEndpointSerializer(NetBoxModelSerializer):
             'id', 'url', 'display', 'name', 'ip_address', 'port',
             'verify_ssl', 'tags', 'custom_fields', 'created', 'last_updated',
         )
+
+    def create(self, validated_data):
+        """
+        Check if a FastAPIEndpoint already exists. If it does, return the existing one.
+        Otherwise, create a new one.
+        """
+        if FastAPIEndpoint.objects.exists():
+            return FastAPIEndpoint.objects.first()
+        return super().create(validated_data)
