@@ -21,12 +21,6 @@ class ProxmoxEndpointViewSet(NetBoxModelViewSet):
 class NetBoxEndpointViewSet(NetBoxModelViewSet):
     queryset = models.NetBoxEndpoint.objects.all()
     serializer_class = NetBoxEndpointSerializer
-    
-    def get_object(self):
-        # If there is already an existing NetBoxEndpoint object, return the first object
-        if models.NetBoxEndpoint.objects.exists():
-            return models.NetBoxEndpoint.objects.first()
-        return super().get_object()
 
 
 class FastAPIEndpointViewSet(NetBoxModelViewSet):

@@ -63,7 +63,7 @@ class NetBoxEndpointSerializer(NetBoxModelSerializer):
         if NetBoxEndpoint.objects.exists():
             return NetBoxEndpoint.objects.first()
         return super().create(validated_data)
-
+    
 
 class FastAPIEndpointSerializer(NetBoxModelSerializer):
     url = serializers.HyperlinkedIdentityField(
