@@ -2,9 +2,9 @@ from fastapi import APIRouter, Depends, Query, HTTPException, Depends
 from sqlmodel import select
 
 from typing import Annotated, Any
-from proxbox_api.routes.proxbox import netbox_settings
-from proxbox_api.session.netbox import NetboxSessionDep
+
 from pynetbox_api.database import SessionDep, NetBoxEndpoint
+from pynetbox_api.session import RawNetBoxSession
 # FastAPI Router
 router = APIRouter()
 
@@ -49,7 +49,7 @@ def delete_netbox_endpoint(netbox_id: int, session: SessionDep) -> dict:
 
 @router.get("/status")
 async def netbox_status(
-    nb: NetboxSessionDep
+    nb = RawNetBoxSession
 ):
     """
     ### Asynchronously retrieves the status of the Netbox session.
@@ -66,7 +66,7 @@ async def netbox_status(
     return nb.session.status()
 
 @router.get("/devices")
-async def netbox_devices(nb: NetboxSessionDep):
+async def netbox_devices(nb = RawNetBoxSession):
     """
     ### Fetches all device roles from the Netbox session and returns them as a list.
     
@@ -87,7 +87,7 @@ async def netbox_devices(nb: NetboxSessionDep):
     return raw_list
 
 @router.get("/openapi")
-async def netbox_openapi(nb: NetboxSessionDep):
+async def netbox_openapi(nb = RawNetBoxSession):
     """
     ### Fetches the OpenAPI documentation from the Netbox session.
     
@@ -105,8 +105,7 @@ async def netbox_openapi(nb: NetboxSessionDep):
 @router.get("/")
 async def netbox(
     status: Annotated[Any, Depends(netbox_status)],
-    config: Annotated[Any, Depends(netbox_settings)],
-    nb: NetboxSessionDep,
+    nb = RawNetBoxSession,
 ):
     """
     ### Asynchronous function to retrieve Netbox configuration, status, and Proxbox tag.

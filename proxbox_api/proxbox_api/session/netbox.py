@@ -7,6 +7,9 @@ from proxbox_api.routes.proxbox import netbox_settings
 from proxbox_api.schemas.netbox import NetboxSessionSchema
 from proxbox_api.exception import ProxboxException
 
+from pynetbox_api.database import SessionDep, NetBoxEndpoint
+
+
 # Netbox
 import pynetbox
 
@@ -15,11 +18,48 @@ try:
     DEFAULT_BASE_PATH = '/' + BASE_PATH
 except ImportError:
     DEFAULT_BASE_PATH = ''
+
+async def netbox_settings(session: SessionDep) -> NetboxSessionSchema:
+    """
+    Get NetBox settings.
+
+    **Returns:**
+    - **`NetboxSessionSchema`**
+    """
     
+    try:
+        # Return the first NetBoxEndpoint from the database.
+        netbox: list = session.exec(select(NetBoxEndpoint).limit(1)).all()
+        for nb in netbox:
+            return NetboxSessionSchema(
+                domain = nb.ip_address,
+                http_port = nb.port,
+                token = nb.token
+            )
+            
+    except Exception as e:
+        raise ProxboxException(
+            message = "Error trying to get Netbox settings from database.",
+            python_exception = f"{str(e)}"
+        )
+    
+    return None
+
+NetboxConfigDep = Annotated[NetboxSessionSchema, Depends(netbox_settings)] 
+
+
 #
 # NETBOX SESSION 
 #
 # TODO: CREATES SSL VERIFICATION - Issue #32
+'''
+This is the old NetboxSession class.
+It is not used anymore.
+It is kept here for reference.
+
+The new NetboxSession class is in the pynetbox-api/pynetbox_api/session.py file on pynetbox-api project/package.
+
+
 class NetboxSession:
     def __init__(self, netbox_settings):
         self.domain = netbox_settings.domain
@@ -103,8 +143,11 @@ class NetboxSession:
                 tag = proxbox_tag
 
             return tag
-        
+'''
 
+
+'''
+NetBox Session function used in the old NetboxSession class to Dependency Injection.
 async def netbox_session(
     netbox_settings: Annotated[NetboxSessionSchema, Depends(netbox_settings)],
 ) -> NetboxSession:
@@ -119,3 +162,4 @@ async def netbox_session(
 
 # Make Session reusable
 NetboxSessionDep = Annotated[NetboxSession, Depends(netbox_session)]
+'''

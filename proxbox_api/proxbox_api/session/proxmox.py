@@ -6,7 +6,11 @@ from proxmoxer import ProxmoxAPI
 
 from proxbox_api.schemas.proxmox import ProxmoxSessionSchema, ProxmoxTokenSchema
 from proxbox_api.exception import ProxboxException
-from proxbox_api.session.netbox import NetboxSessionDep
+#from proxbox_api.session.netbox import NetboxSessionDep
+
+
+# Pynetbox-api Imports
+from pynetbox_api.session import RawNetBoxSession
 
 #
 # PROXMOX SESSION
@@ -267,7 +271,7 @@ class ProxmoxSession:
 
 
 async def proxmox_sessions(
-    nb: NetboxSessionDep,
+    nb = RawNetBoxSession,
     source: str = "netbox",
     name: Annotated[
         str,
