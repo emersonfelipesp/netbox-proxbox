@@ -117,7 +117,7 @@
                         </td>
                     </tr>
                 {% endif %}
-                {% if fastapi_websocket_url %}
+                {% if fastapi_websocket_url and object.use_websocket %}
                     <tr>
                         <th scope="row"><strong>WebSocket URL</strong></th>
                         <td id="fastapi-websocket-url">
