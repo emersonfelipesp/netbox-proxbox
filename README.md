@@ -102,6 +102,48 @@ If docker is not a option for you,  [click here](https://github.com/netdevopsbr/
 
 **OBS:** This method is recommend for testing and development purposes and is not for production use.
 
+**TL'DR:**
+
+Install the plugin.
+
+```
+cd /opt/netbox
+source venv/bin/activate
+cd ./netbox
+
+# Install Netbox Plugin (netbox_proxbox package)
+git clone https://github.com/netdevopsbr/netbox-proxbox
+cd ./netbox-proxbox
+python3 -m pip install -r requirements.txt
+uv pip install -e .
+
+# Install backend (FastAPI)
+cd ./proxbox_api
+python3 -m venv venv
+source venv/bin/activate
+python3 -m pip install uv
+uv pip install -e .
+
+git clone https://github.com/emersonfelipesp/pynetbox-api
+cd ./pynetbox-api
+uv pip install -e .
+```
+
+Enable the plugin in **/opt/netbox/netbox/netbox/configuration.py**:
+```python
+PLUGINS = ['netbox_proxbox']
+```
+
+Finish installation:
+
+```
+cd /opt/netbox/netbox
+python3 manage.py migrate netbox_proxbox
+python3 manage.py collectstatic --no-input
+```
+
+
+
 Move to netbox main folder
 ```
 cd /opt/netbox/netbox
