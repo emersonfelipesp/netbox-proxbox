@@ -21,16 +21,22 @@ class HtmxHttpRequest(HttpRequest):
 
 CONNECTED_URL_SUCCESSFUL = None
 
+fastapi_service_obj = None
 # Get the first FastAPI Endpoint object
-fastapi_service_obj = FastAPIEndpoint.objects.first()
+try:
+    fastapi_service_obj = FastAPIEndpoint.objects.first()
+except Exception as errr:
+    print(f'Error occurred getting FastAPI Endpoint object: {errr}')
 
-# Get the FastAPI URL
-fastapi_detail = get_fastapi_url(fastapi_service_obj)
-fastapi_url: str = fastapi_detail.get('http_url', None)
-fastapi_verify_ssl: bool = fastapi_detail.get('verify_ssl', True)
+if fastapi_service_obj:
+    # Get the FastAPI URL
+    fastapi_detail = get_fastapi_url(fastapi_service_obj)
+    fastapi_url: str = fastapi_detail.get('http_url', None)
+    fastapi_verify_ssl: bool = fastapi_detail.get('verify_ssl', True)
 
 def sync_resource(request: HtmxHttpRequest, path: str, template_name: str) -> HttpResponse:
     global CONNECTED_URL_SUCCESSFUL
+
     fastapi_path: str = f'{fastapi_url}/{path}' if fastapi_url else None
 
     if not fastapi_url:
