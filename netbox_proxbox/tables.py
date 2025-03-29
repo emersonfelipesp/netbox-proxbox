@@ -75,11 +75,11 @@ class NetBoxEndpointTable(NetBoxTable):
         model = NetBoxEndpoint
         fields = (
             'pk', 'id', 'name', 'ip_address', 'port',
-            'verify_ssl', 'actions',
+            'verify_ssl', 'token', 'actions',
         )
         
         default_columns = (
-            'pk', 'name', 'ip_address', 'port', 'verify_ssl'
+            'pk', 'name', 'ip_address', 'port', 'verify_ssl', 'token'
         )
 
 
