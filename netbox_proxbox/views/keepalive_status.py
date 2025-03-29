@@ -75,8 +75,16 @@ def netbox_status(pk: int, base_url: str) -> str:
         return status
     
     # Get NetBoxEndpoint IP address.
-    netbox_ip = str(getattr(getattr(netbox_service_obj, 'ip_address', None), 'address', None))
-    netbox_ip = netbox_ip.split('/')[0] if netbox_ip else None
+    default_netbox_ip = "127.0.0.1"
+    netbox_ip = default_netbox_ip
+    try:
+        netbox_ipaddress_obj = getattr(netbox_service_obj,  "ip_address", None)
+        if netbox_ipaddress_obj:
+            netbox_ip = getattr(netbox_ipaddress_obj, "address")
+            netbox_ip = netbox_ip.split('/')[0] if netbox_ip else default_netbox_ip
+    except Exception as err:
+        print(f"Error getting NetBoxEndpoint IP address: {err}. Using default IP address: {default_netbox_ip}")
+        netbox_ip = default_netbox_ip
     
     # Define NetBoxEndpoint URL to get endpoints from pynetbox-api database (sqlite)
     netbox_endpoint_url: str = f'{base_url}/netbox/endpoint'
@@ -93,11 +101,11 @@ def netbox_status(pk: int, base_url: str) -> str:
         current_netbox: dict = {
             'id': pk,
             'name': netbox_service_obj.name if netbox_service_obj.name else None,
-            'ip_address': netbox_ip if netbox_ip else None,
+            'ip_address': netbox_ip,
             'domain': netbox_service_obj.domain if netbox_service_obj.domain else None,
             'port': netbox_service_obj.port if netbox_service_obj.port else None,
             'token': netbox_service_obj.token.key if netbox_service_obj.token.key else None,
-            'verify_ssl': netbox_service_obj.verify_ssl if netbox_service_obj.verify_ssl else None,
+            'verify_ssl': netbox_service_obj.verify_ssl if netbox_service_obj.verify_ssl else False,
         }
         
         if len(response) > 0:
@@ -115,6 +123,13 @@ def netbox_status(pk: int, base_url: str) -> str:
                     else:
                         # If NetBox ID exists, update it (if needed)
                         if nb != current_netbox:
+                            print('\n\n\n')
+                            print(f"NB: {nb.get('verify_ssl')}")
+                            print(f"CURRENT: {current_netbox.get('verify_ssl')}")
+                            
+                            print(f"IP ADDRESS NB: {nb.get('ip_address')}")
+                            print(f"IP ADDRESS CURRENT: {current_netbox.get('ip_address')}")
+                            
                             updated_netbox = nb | current_netbox
                             requests.delete(f'{netbox_endpoint_url}/{nb["id"]}') 
                             requests.post(netbox_endpoint_url, json=updated_netbox)
