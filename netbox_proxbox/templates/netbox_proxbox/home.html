@@ -68,54 +68,42 @@
                             {% endif %}
                         </div>
                         <div class="d-flex justify-content-center noprint">
-                            {# Sync Nodes #}
+                            {# Sync Buttons #}
                             {% if object.use_websocket %}
                                 {% if object.server_side_websocket %}
                                     {# Server-Only = Polling Connection between NetBox user (client) and Django (server) that then triggers FastAPI #}
                                     <form id="sync-nodes-form" style="cursor:not-allowed;" class="m-2" action="" onsubmit="window.Polling.poll('device')">
                                         <button disabled id="sync-nodes-button" class="btn btn-secondaryy">Sync Nodes</button>
                                     </form>
+                                    <form id="sync-virtual-machines-form" style="cursor:not-allowed;" class="m-2" action="" onsubmit="window.Polling.poll('virtual-machine')">
+                                        <button disabled id="sync-virtual-machines-button" class="btn btn-secondary">Sync Virtual Machines</button>
+                                    </form>
+                                    <form id="sync-full-update-form" style="cursor:not-allowed;" class="m-2" action="" onsubmit="window.Polling.poll('full-update')">
+                                        <button disabled id="sync-full-update-button" class="btn btn-secondary">Full Update Sync</button>
+                                    </form>
                                 {% else %}
                                     {# Client-Server = Direct WebSocket Connection between NetBox user (client) and FastAPI (server) #}
                                     <form id="sync-nodes-form" style="cursor:not-allowed;" class="m-2" action="" onsubmit="window.ProxboxWebSocket.syncNodes()">
                                         <button disabled id="sync-nodes-button" class="btn btn-secondary">Sync Nodes</button>
                                     </form>
-                                {% endif %}
-                            {% else %}
-                                {# Server-Only = Simple HTTP Request between NetBox user (client) and Django (server) that then triggers FastAPI #}
-                                <a class="m-2" href="{% url 'plugins:netbox_proxbox:sync_devices' %}"><button disabled id="sync-nodes-button" class="btn btn-secondary">Sync Nodes</button></a>
-                            {% endif %}
-
-                            {# Sync Virtual Machines #}
-                            {% if object.use_websocket %}
-                                {% if object.server_side_websocket %}
-                                    <form id="sync-virtual-machines-form" style="cursor:not-allowed;" class="m-2" action="" onsubmit="window.Polling.poll('virtual-machine')">
-                                        <button disabled id="sync-virtual-machines-button" class="btn btn-secondary">Sync Virtual Machines</button>
-                                    </form>
-                                {% else %}
                                     <form id="sync-virtual-machines-form" style="cursor:not-allowed;" class="m-2" action="" onsubmit="window.ProxboxWebSocket.syncVirtualMachines()">
                                         <button disabled id="sync-virtual-machines-button" class="btn btn-secondary">Sync Virtual Machines</button>
                                     </form>
-                                {% endif %}
-                            {% else %}
-                                {# Server-Only = Simple HTTP Request between NetBox user (client) and Django (server) that then triggers FastAPI #}
-                                <a class="m-2" href="{% url 'plugins:netbox_proxbox:sync_virtual_machines' %}"><button id="sync-virtual-machines-button" class="btn btn-primary">Sync Virtual Machines</button></a>
-                            {% endif %}
-
-                            {# Full Update Sync #}
-                            {% if object.use_websocket %}
-                                {% if object.server_side_websocket %}
-                                    <form id="sync-full-update-form" style="cursor:not-allowed;" class="m-2" action="" onsubmit="window.Polling.poll('full-update')">
-                                        <button disabled id="sync-full-update-button" class="btn btn-secondary">Full Update Sync</button>
-                                    </form>
-                                {% else %}
                                     <form id="sync-full-update-form" style="cursor:not-allowed;" class="m-2" action="" onsubmit="window.ProxboxWebSocket.sendFullUpdate()">
                                         <button disabled id="sync-full-update-button" class="btn btn-secondary">Full Update Sync</button>
                                     </form>
                                 {% endif %}
                             {% else %}
                                 {# Server-Only = Simple HTTP Request between NetBox user (client) and Django (server) that then triggers FastAPI #}
-                                <a class="m-2" href="{% url 'plugins:netbox_proxbox:sync_full_update' %}"><button id="sync-full-update-button" class="btn btn-primary">Full Update Sync</button></a>
+                                <a class="m-2" href="{% url 'plugins:netbox_proxbox:sync_devices' %}">
+                                    <button disabled id="sync-nodes-button" class="btn btn-secondary">Sync Nodes</button>
+                                </a>
+                                <a class="m-2" href="{% url 'plugins:netbox_proxbox:sync_virtual_machines' %}">
+                                    <button disabled id="sync-virtual-machines-button" class="btn btn-secondary">Sync Virtual Machines</button>
+                                </a>
+                                <a class="m-2" href="{% url 'plugins:netbox_proxbox:sync_full_update' %}">
+                                    <button disabled id="sync-full-update-button" class="btn btn-secondary">Full Update Sync</button>
+                                </a>
                             {% endif %}
                         </div>
                     </div>

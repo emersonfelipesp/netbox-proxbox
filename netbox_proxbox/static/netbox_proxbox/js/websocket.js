@@ -22,11 +22,16 @@ function changeSyncButtonState(status) {
 
     for (let element of buttonMapping) {
         // Sync Nodes Button
-        element.button.className = status == 'connected' ? "btn btn-primary" : "btn btn-danger";
-        element.button.disabled = status == 'connected' ? false : true;
-        element.button.style.cursor = status == 'connected' ? "pointer" : "not-allowed";
 
-        element.form.style.cursor = status == 'connected' ? "pointer" : "not-allowed";
+        if (element.button) {
+            element.button.className = status == 'connected' ? "btn btn-primary" : "btn btn-danger";
+            element.button.disabled = status == 'connected' ? false : true;
+            element.button.style.cursor = status == 'connected' ? "pointer" : "not-allowed";
+        }
+
+        if (element.form) {
+            element.form.style.cursor = status == 'connected' ? "pointer" : "not-allowed";
+        }
     }
     console.log('buttonMapping', buttonMapping);
 }
