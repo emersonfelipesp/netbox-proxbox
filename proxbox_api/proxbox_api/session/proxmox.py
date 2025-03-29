@@ -271,7 +271,6 @@ class ProxmoxSession:
 
 
 async def proxmox_sessions(
-    nb = RawNetBoxSession,
     source: str = "netbox",
     name: Annotated[
         str,
@@ -306,9 +305,10 @@ async def proxmox_sessions(
         Default Behavior: Instantiate Proxmox Sessions and return a list of Proxmox Sessions objects.
         If 'name' is provided, return only the Proxmox Session with that name.
     """
+    nb = RawNetBoxSession
     
     # GET /api/plugins/proxbox/endpoints/proxmox/
-    proxmox = nb.session.plugins.proxbox.__getattr__('endpoints/proxmox').all()
+    proxmox = nb.plugins.proxbox.__getattr__('endpoints/proxmox').all()
 
     if domain and not ip_address:
         ip_address = domain
