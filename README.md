@@ -118,15 +118,34 @@ python3 -m pip install -r requirements.txt
 uv pip install -e .
 
 # Install backend (FastAPI)
+deactivate
 cd ./proxbox_api
 python3 -m venv venv
 source venv/bin/activate
 python3 -m pip install uv
 uv pip install -e .
 
+# Install pynetbox-api (backend depends on it)
 git clone https://github.com/emersonfelipesp/pynetbox-api
 cd ./pynetbox-api
 uv pip install -e .
+
+# Start Proxbox Backend
+cd ../proxbox_api
+uvicorn main:app --host 0.0.0.0 --port 8800
+
+#
+# Enable the plugin int /opt/netbox/netbox/netbox/configuration.py
+#
+
+# Finish plugin setup
+cd /opt/netbox/netbox
+python3 manage.py migrate netbox_proxbox
+python3 manage.py collectstatic --no-input
+
+
+
+
 ```
 
 Enable the plugin in **/opt/netbox/netbox/netbox/configuration.py**:
@@ -137,9 +156,7 @@ PLUGINS = ['netbox_proxbox']
 Finish installation:
 
 ```
-cd /opt/netbox/netbox
-python3 manage.py migrate netbox_proxbox
-python3 manage.py collectstatic --no-input
+
 ```
 
 
