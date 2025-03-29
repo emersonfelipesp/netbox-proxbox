@@ -45,6 +45,7 @@ The following table shows the Netbox and Proxmox versions compatible (tested) wi
 ---
 
 ### Summary
+[0. Pre-Installation](#0-pre-installation)
 [1. Installation](#1-installation)
 - [1.1. Install package](#11-install-package)
   - [1.1.1. Using pip (production use)](#111-using-pip-production-use)
@@ -64,6 +65,17 @@ The following table shows the Netbox and Proxmox versions compatible (tested) wi
 [5. Get Help from Community!](#7-get-help-from-community)
 
 ---
+
+## 0. Pre-Installation
+
+### Enable HTMX Navigation on NetBox User Preferences.
+
+> If not enabled, this will cause visual bugs on Proxbox GUI. For more details, [check this issue](https://github.com/netdevopsbr/netbox-proxbox/issues/277).
+
+Go to **/user/preferences** path and change enable HTMX navigation like below:
+
+![image](https://github.com/user-attachments/assets/f29d13c1-4933-4e25-b97b-81b5f3e76fe7)
+
 
 ## 1. Installation
 
