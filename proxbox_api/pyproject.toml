@@ -11,6 +11,3 @@ dependencies = [
     "pynetbox-api",
     "sqlmodel>=0.0.22",
 ]
-
-[tool.uv.sources]
-pynetbox-api = { path = "../../../../pynetbox-api", editable = true }
