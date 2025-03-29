@@ -11,10 +11,17 @@
         import * as HomeScripts from "{% static 'netbox_proxbox/js/home.js' %}";
         window.HomeScripts = HomeScripts
     </script>
-    <script type="module">
-        import WebSocketClient from "{% static 'netbox_proxbox/js/websocket.js' %}";
-        window.ProxboxWebSocket = new WebSocketClient(websocketEndpoint)
-    </script>
+    {# WebSocket Client object instantiation. Only if there are FastAPI Endpoints configured with WebSocket enabled. #}
+    {% if fastapi_endpoint_list and fastapi_endpoint_list|length > 0 %}
+        {% for object in fastapi_endpoint_list %}
+            {% if object.use_websocket %}
+                <script type="module">
+                    import WebSocketClient from "{% static 'netbox_proxbox/js/websocket.js' %}";
+                    window.ProxboxWebSocket = new WebSocketClient(websocketEndpoint)
+                </script>
+            {% endif %}
+        {% endfor %}
+    {% endif %}
     <script type="module">
         import * as Polling from "{% static 'netbox_proxbox/js/polling.js' %}";
         window.Polling = Polling
