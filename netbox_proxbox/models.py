@@ -108,7 +108,15 @@ class NetBoxEndpoint(NetBoxModel):
         validators=[MinValueValidator(1), MaxValueValidator(65535)],
         verbose_name=_('HTTP Port'),
     )
-    token = models.CharField(max_length=255)
+    token = models.ForeignKey(
+        to='users.Token',
+        on_delete=models.PROTECT,
+        related_name='+',
+        verbose_name=_('API Token'),
+        null=True,
+        blank=True,
+        help_text=_('API Token for the NetBox API. Needed for Proxbox Backend Service to communicate with NetBox.'),
+    )
     verify_ssl = models.BooleanField(
         default=True,
         verbose_name=_('Verify SSL'),

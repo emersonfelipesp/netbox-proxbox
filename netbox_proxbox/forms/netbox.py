@@ -5,6 +5,7 @@ from django import forms
 from utilities.forms.fields import DynamicModelChoiceField, CommentField
 from netbox.forms import NetBoxModelForm, NetBoxModelFilterSetForm
 from ipam.models import IPAddress
+from users.models import Token
 
 # Proxbox Imports
 from ..models import NetBoxEndpoint
@@ -17,7 +18,18 @@ class NetBoxEndpointForm(NetBoxModelForm):
     """
     
     ip_address = DynamicModelChoiceField(
-        queryset=IPAddress.objects.all()
+        queryset=IPAddress.objects.all(),
+        required=False,
+        help_text='Select IP Address',
+        label='IP Address'
+    )
+    
+    token = forms.ModelChoiceField(
+        queryset=Token.objects.all(),
+        required=False,
+        help_text='Choose an existing NetBox API Token',
+        label='API Token',
+        to_field_name='key'  # This will return the full token from the database
     )
     
     comments = CommentField()
