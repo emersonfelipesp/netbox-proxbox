@@ -75,7 +75,8 @@ def netbox_status(pk: int, base_url: str) -> str:
         return status
     
     # Get NetBoxEndpoint IP address.
-    netbox_ip = str(netbox_service_obj.ip_address.address).split('/')[0]
+    netbox_ip = str(getattr(getattr(netbox_service_obj, 'ip_address', None), 'address', None))
+    netbox_ip = netbox_ip.split('/')[0] if netbox_ip else None
     
     # Define NetBoxEndpoint URL to get endpoints from pynetbox-api database (sqlite)
     netbox_endpoint_url: str = f'{base_url}/netbox/endpoint'
@@ -91,12 +92,12 @@ def netbox_status(pk: int, base_url: str) -> str:
         
         current_netbox: dict = {
             'id': pk,
-            'name': netbox_service_obj.name,
-            'ip_address': netbox_ip,
-            'domain': netbox_service_obj.domain,
-            'port': netbox_service_obj.port,
-            'token': netbox_service_obj.token,
-            'verify_ssl': netbox_service_obj.verify_ssl,
+            'name': netbox_service_obj.name if netbox_service_obj.name else None,
+            'ip_address': netbox_ip if netbox_ip else None,
+            'domain': netbox_service_obj.domain if netbox_service_obj.domain else None,
+            'port': netbox_service_obj.port if netbox_service_obj.port else None,
+            'token': netbox_service_obj.token.key if netbox_service_obj.token.key else None,
+            'verify_ssl': netbox_service_obj.verify_ssl if netbox_service_obj.verify_ssl else None,
         }
         
         if len(response) > 0:
