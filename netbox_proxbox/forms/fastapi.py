@@ -24,8 +24,8 @@ class FastAPIEndpointForm(NetBoxModelForm):
     )
     token = forms.CharField(
         required=False,
-        help_text='Token for the Proxbox Endpoint. If not provided, the Proxbox Endpoint will not be able to send messages to the client (user) browser.',
-        label='Token'
+        help_text='This will only be working from v0.0.7 and above. Token for the Proxbox Endpoint. If not provided, the Proxbox Endpoint will not be able to send messages to the client (user) browser.',
+        label='[BETA] Proxbox Backend Token'
     )
     use_websocket = forms.BooleanField(
         required=False,
