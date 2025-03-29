@@ -17,7 +17,9 @@ class ProxmoxEndpointForm(NetBoxModelForm):
     It is used to CREATE and UPDATE ProxmoxEndpoint objects.
     """
     ip_address = DynamicModelChoiceField(
-        queryset=IPAddress.objects.all()
+        queryset=IPAddress.objects.all(),
+        help_text='Select a NetBox IP Address',
+        label='IP Address'
     )
     
     comments = CommentField()

@@ -102,14 +102,15 @@
                                 {% endif %}
                             {% else %}
                                 {# Server-Only = Simple HTTP Request between NetBox user (client) and Django (server) that then triggers FastAPI #}
+                                {# TODO: Add htmx to this button to update the button style when the request is successful #}
                                 <a class="m-2" href="{% url 'plugins:netbox_proxbox:sync_devices' %}">
-                                    <button disabled id="sync-nodes-button" class="btn btn-secondary">Sync Nodes</button>
+                                    <button id="sync-nodes-button" class="btn btn-primary">Sync Nodes</button>
                                 </a>
                                 <a class="m-2" href="{% url 'plugins:netbox_proxbox:sync_virtual_machines' %}">
-                                    <button disabled id="sync-virtual-machines-button" class="btn btn-secondary">Sync Virtual Machines</button>
+                                    <button id="sync-virtual-machines-button" class="btn btn-primary">Sync Virtual Machines</button>
                                 </a>
                                 <a class="m-2" href="{% url 'plugins:netbox_proxbox:sync_full_update' %}">
-                                    <button disabled id="sync-full-update-button" class="btn btn-secondary">Full Update Sync</button>
+                                    <button id="sync-full-update-button" class="btn btn-primary">Full Update Sync</button>
                                 </a>
                             {% endif %}
                         </div>
