@@ -9,14 +9,7 @@ authors = [
 license = "Apache-2.0"
 requires-python = ">=3.8"
 dependencies = [
-    "pynetbox>=7.0.1",
-    "proxmoxer>=2.0.1",
-    "fastapi==0.95.2",
-    "pydantic==1.10.13",
-    "sqlmodel>=0.0.22",
     "websockets>=13.1",
-    "strawberry-graphql==0.217.0",
-    "strawberry-django-plus==0.15.0",
 ]
 
 [project.optional-dependencies]
