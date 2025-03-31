@@ -176,8 +176,16 @@ def proxmox_status(pk: int, base_url: str) -> str:
         return status
         
     if proxmox_service_obj:
-        proxmox_host: str = str(proxmox_service_obj.ip_address).split('/')[0]
-        url = f'{base_url}/proxmox/version?ip_address={proxmox_host}&port={proxmox_service_obj.port}'
+        proxmox_ip_address: str = str(proxmox_service_obj.ip_address).split('/')[0]
+        proxmox_domain: str = proxmox_service_obj.domain if proxmox_service_obj.domain else None
+        
+        url = None
+        if proxmox_domain:
+            url = f'{base_url}/proxmox/version?domain={proxmox_domain}'
+        
+        if not proxmox_domain and proxmox_ip_address:
+            url = f'{base_url}/proxmox/version?ip_address={proxmox_ip_address}'
+        
         
         if url:
             try:

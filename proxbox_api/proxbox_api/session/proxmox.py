@@ -44,6 +44,7 @@ class ProxmoxSession:
         self,
         cluster_config: Any
     ):
+        self.CONNECTED = False  
         #
         # Validate cluster_config type
         #
@@ -77,6 +78,7 @@ class ProxmoxSession:
               
         try:
             # Save cluster_config as class attributes
+            self.ip_address = cluster_config["ip_address"]
             self.domain = cluster_config["domain"]
             self.http_port = cluster_config["http_port"]
             self.user = cluster_config["user"]
@@ -102,14 +104,15 @@ class ProxmoxSession:
                 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
             
             # Prefer using token to authenticate
-            if self.token_name and self.token_value:
-                self.proxmoxer = self.token_auth() 
             
-            else:
-                self.proxmoxer = self.password_auth()
-                
-            self.session = self.proxmoxer
+            self.proxmoxer = self._auth(auth_method="token") if self.token_name and self.token_value else self._auth(auth_method="password")
+            if self.proxmoxer:
+                self.session = self.proxmoxer
+                self.CONNECTED = True
 
+        except ProxboxException as error:
+            raise error
+        
         except Exception as error:
             raise ProxboxException(
                 message = f"Could not establish Proxmox connection to '{self.domain}:{self.http_port}' using token name '{self.token_name}'.",
@@ -120,35 +123,45 @@ class ProxmoxSession:
         #
         # Test Connection and Return Cluster Status if succeeded.
         # 
-        try:
-            """Test Proxmox Connection and return Cluster Status API response as class attribute"""
-            self.cluster_status = self.proxmoxer("cluster/status").get()
-        except Exception as error:
-            raise ProxboxException(
-                message = f"After instatiating object connection, could not make API call to Proxmox '{self.domain}:{self.http_port}' using token name '{self.token_name}'.",
-                detail = "Unknown error.",
-                python_exception = f"{__name__}: {error}"
-            )   
+        if self.CONNECTED:
+            try:
+                """Test Proxmox Connection and return Cluster Status API response as class attribute"""
+                self.cluster_status = self.session("cluster/status").get()
+            except ProxboxException as error:
+                raise error
+            
+            except Exception as error:
+                raise ProxboxException(
+                    message = f"After instatiating object connection, could not make API call to Proxmox '{self.domain}:{self.http_port}' using token name '{self.token_name}'.",
+                    detail = "Unknown error.",
+                    python_exception = f"{__name__}: {error}"
+                )   
         
         #
         # Add more attributes to class about Proxmox Session
         #
-        self.mode = self.get_cluster_mode()
-        if self.mode == "cluster":
-            cluster_name: str = self.get_cluster_name()
+        self.mode = None
+        self.cluster_name = None
+        self.node_name = None
+        self.fingerprints = None
+        
+        if self.CONNECTED:
+            self.mode = self.get_cluster_mode()
+            if self.mode == "cluster":
+                cluster_name: str = self.get_cluster_name()
+                
+                self.cluster_name = cluster_name
+                self.name = cluster_name
+                self.fingerprints: list = self.get_node_fingerprints(self.proxmoxer)
             
-            self.cluster_name = cluster_name
-            self.name = cluster_name
-            self.fingerprints: list = self.get_node_fingerprints(self.proxmoxer)
+            elif self.mode == "standalone":
+                standalone_node_name: str = self.get_standalone_name()
+                
+                self.node_name = standalone_node_name
+                self.name = standalone_node_name
+                self.fingerprints = None
         
-        elif self.mode == "standalone":
-            standalone_node_name: str = self.get_standalone_name()
-            
-            self.node_name = standalone_node_name
-            self.name = standalone_node_name
-            self.fingerprints = None
-        
-        
+    
 
     def __repr__(self):
         return f"Proxmox Connection Object. URL: {self.domain}:{self.http_port}"
@@ -158,54 +171,79 @@ class ProxmoxSession:
     # Proxmox Authentication Modes: TOKEN-BASED & PASSWORD-BASED
     #
     
-    def token_auth(self):
+    def _auth(self, auth_method: str):
+        if auth_method != "token" and auth_method != "password":
+            raise ProxboxException(
+                message = f"Invalid authentication method provided: {auth_method}",
+                detail = "ProxmoxSession class only accepts 'token' or 'password' as authentication method"
+            )
+        
         error_message = f"Error trying to initialize Proxmox API connection using TOKEN NAME '{self.token_name}' and TOKEN_VALUE provided",
         
         # Establish Proxmox Session with Token
+        USE_IP_ADDRESS = False
         try:
-            print("Using token to authenticate with Proxmox")
-            proxmox_session = ProxmoxAPI(
-                self.domain,
-                port=self.http_port,
-                user=self.user,
-                token_name=self.token_name,
-                token_value=self.token_value,
-                verify_ssl=self.ssl
-            )
+            print(f"Using {auth_method} to authenticate with Proxmox")
+            kwargs = {
+                'port': self.http_port,
+                'user': self.user,
+                'token_name': self.token_name,
+                'token_value': self.token_value,
+                'verify_ssl': self.ssl
+            } if auth_method == "token" else {
+                'port': self.http_port,
+                'user': self.user,
+                'password': self.password,
+                'verify_ssl': self.ssl
+            }
             
-            return proxmox_session
-            
+            # Initialize Proxmox Session using Token or Password
+            if self.domain:
+                print(f'Using domain {self.domain} to authenticate with Proxmox')
+                proxmox_session = ProxmoxAPI(
+                    self.domain,
+                    **kwargs
+                )
+                
+                # Get Proxmox Version to test connection.
+                # Object instatiation does not actually connect to Proxmox, need to make an API call to test connection.
+                self.version = proxmox_session.version.get()
+                return proxmox_session
+            else:
+                print(f'Using IP {self.ip_address} address to authenticate with Proxmox as domain is not provided')
+                proxmox_session = ProxmoxAPI(
+                    self.ip_address,
+                    **kwargs
+                )
+                
+                # Get Proxmox Version to test connection.
+                # Object instatiation does not actually connect to Proxmox, need to make an API call to test connection.
+                self.version = proxmox_session.version.get()
+                return proxmox_session
+                
         except Exception as error:
-            raise ProxboxException(
-                message = error_message,
-                detail = "Unknown error.",
-                python_exception = f"{error}"
-            )
-
-
-    def password_auth(self):
-        error_message = f'Error trying to initialize Proxmox API connection using USER {self.user} and PASSWORD provided',
+            print(f'Proxmox connection using domain failed, trying to connect using IP address {self.ip_address}')
+            USE_IP_ADDRESS = True
+                
+        if USE_IP_ADDRESS:
+            # If domain connection failed, try to connect using IP address.
+            try:
+                proxmox_session = ProxmoxAPI(
+                    self.ip_address,
+                    **kwargs
+                )
+                
+                # Get Proxmox Version to test connection.
+                # Object instatiation does not actually connect to Proxmox, need to make an API call to test connection.
+                self.version = proxmox_session.version.get()
+                return proxmox_session
         
-        try:
-            # Start PROXMOX session using USER CREDENTIALS
-            print("Using password authenticate with Proxmox")
-            proxmox_session = ProxmoxAPI(
-                self.domain,
-                port=self.http_port,
-                user=self.user,
-                password=self.password,
-                verify_ssl=self.ssl
-            )
-            
-            return proxmox_session
-
-        except Exception as error:
-            raise ProxboxException(
-                message = error_message,
-                detail = "Unknown error.",
-                python_exception = f"{error}"
-            )
-
+            except Exception as error:
+                raise ProxboxException(
+                    message = error_message,
+                    detail = "Unknown error.",
+                    python_exception = f"{error}"
+                )
 
     #
     # Get Proxmox Details about Cluster and Nodes
@@ -230,18 +268,21 @@ class ProxmoxSession:
 
     def get_cluster_mode(self):
         """Get Proxmox Cluster Mode (Standalone or Cluster)"""
-        try:
-            if len(self.cluster_status) == 1 and self.cluster_status[0].get("type") == "node":
-                return "standalone"
-            else:
-                return "cluster"
+        if self.CONNECTED:
+            try:
+                if len(self.cluster_status) == 1 and self.cluster_status[0].get("type") == "node":
+                    return "standalone"
+                else:
+                    return "cluster"
             
-        except Exception as error:
-            raise ProxboxException(
-                message = "Could not get Proxmox Cluster Mode (Standalone or Cluster)",
-                python_exception = f"{error}"
-            )
-        
+            except Exception as error:
+                raise ProxboxException(
+                    message = "Could not get Proxmox Cluster Mode (Standalone or Cluster)",
+                    python_exception = f"{error}"
+                )
+        else:
+            print('Proxmox Session is not connected, so not able to get Cluster Mode')
+            
     
     def get_cluster_name(self):
         """Get Proxmox Cluster Name"""
@@ -307,37 +348,60 @@ async def proxmox_sessions(
     """
     nb = RawNetBoxSession
     
-    # GET /api/plugins/proxbox/endpoints/proxmox/
-    proxmox = nb.plugins.proxbox.__getattr__('endpoints/proxmox').all()
 
-    if domain and not ip_address:
-        ip_address = domain
+    def parse_to_schema(endpoint):
+        ip = None
+        ip_address_object = getattr(endpoint, 'ip_address', None)
+        if ip_address_object:
+            ip_address_with_mask = getattr(ip_address_object, 'address', None)
+            ip = ip_address_with_mask.split('/')[0]
         
-    if source == "netbox":
-        proxmox_schemas = []
-        
-        for endpoint in proxmox:
-            proxmox_schema = ProxmoxSessionSchema(
-                domain = endpoint.ip_address.address.split('/')[0],
-                http_port = endpoint.port,
-                user = endpoint.username,
-                password = endpoint.password,
-                ssl = endpoint.verify_ssl,
-                token = ProxmoxTokenSchema(
-                    name = endpoint.token_name,
-                    value = endpoint.token_value
-                )
+        return ProxmoxSessionSchema(
+            ip_address = ip,
+            domain = getattr(endpoint, 'domain', None),
+            http_port = getattr(endpoint, 'port', None),
+            user = getattr(endpoint, 'username', None),
+            password = getattr(endpoint, 'password', None),
+            ssl = getattr(endpoint, 'verify_ssl', None),
+            token = ProxmoxTokenSchema(
+                name = getattr(endpoint, 'token_name', None),
+                value = getattr(endpoint, 'token_value', None)
             )
-            
-            if (ip_address == endpoint.ip_address.address.split('/')[0]) and (port == endpoint.port):
-                # Instantiate Proxmox Session object from ProxmoxSession class
-                px_obj = ProxmoxSession(proxmox_schema)
-                return [px_obj]
-            
-            else:
-                proxmox_schemas.append(proxmox_schema)           
+        )
         
-        # Only if no match was found, return all Proxmox Sessions
-        return [ProxmoxSession(px) for px in proxmox_schemas]
+
+    # GET /api/plugins/proxbox/endpoints/proxmox/ and parse the JSON result to schemas.
+    proxmox_schemas = [parse_to_schema(endpoint) for endpoint in nb.plugins.proxbox.__getattr__('endpoints/proxmox').all()]
+    print(f"proxmox_schemas: {proxmox_schemas}")
+    
+    def return_single_session(field, value):
+        for proxmox_schema in proxmox_schemas:
+            if value == getattr(proxmox_schema, field, None):
+                return [ProxmoxSession(proxmox_schema)]
+        
+        raise ProxboxException(
+            message = f"No result found for Proxmox Sessions based on the provided {field}",
+            detail = "Check if the provided parameters are correct"
+        )
+                
+    try:
+        if ip_address is not None:
+            return return_single_session("ip_address", ip_address)
+        
+        if domain is not None:
+            return return_single_session("domain", domain)
+        
+        if name is not None:
+            return return_single_session("name", name)
+    except ProxboxException as error:
+        raise error
+    
+    try:
+        return [ProxmoxSession(px_schema) for px_schema in proxmox_schemas]
+    except Exception as error:
+        raise ProxboxException(
+            message = "Could not return Proxmox Sessions",
+            python_exception = f"{error}"
+        )
 
 ProxmoxSessionsDep = Annotated[list, Depends(proxmox_sessions)]

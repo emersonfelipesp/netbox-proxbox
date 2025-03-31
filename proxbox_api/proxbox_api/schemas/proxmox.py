@@ -6,16 +6,17 @@ from proxbox_api.enum.proxmox import ResourceType, NodeStatus
 
 
 class ProxmoxTokenSchema(BaseModel):
-    name: str
-    value: str
+    name: str | None = None
+    value: str | None = None
     
 class ProxmoxSessionSchema(BaseModel):
-    domain: str
-    http_port: int
-    user: str
+    ip_address: str | None = None
+    domain: str | None = None
+    http_port: int | None = None
+    user: str | None = None
     password: str | None = None
-    token: ProxmoxTokenSchema
-    ssl: bool = True
+    token: ProxmoxTokenSchema | None = None
+    ssl: bool = False
 
 ProxmoxMultiClusterConfig = RootModel[List[ProxmoxSessionSchema]]
   
