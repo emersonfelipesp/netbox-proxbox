@@ -55,13 +55,13 @@ class ProxmoxEndpointTable(NetBoxTable):
     class Meta(NetBoxTable.Meta):
         model = ProxmoxEndpoint
         fields = (
-            'pk', 'id', 'name', 'ip_address', 'port',
+            'pk', 'id', 'name', 'domain', 'ip_address', 'port',
             'mode', 'version', 'repoid', 'username', 'token_name',
             'verify_ssl', 'actions',
         )
         
         default_columns = (
-            'pk', 'name', 'ip_address', 'port', 'mode',
+            'pk', 'name', 'domain', 'ip_address', 'port', 'mode',
             'version', 'verify_ssl'
         )
 

@@ -4,6 +4,8 @@ from proxbox_api.schemas.proxmox import *
 from proxbox_api.session.proxmox import ProxmoxSessionsDep
 from proxbox_api.enum.proxmox import *
 
+from fastapi import HTTPException
+
 router = APIRouter()
 
 #
@@ -34,11 +36,12 @@ async def proxmox_sessions(
     for px in pxs:
         json_response.append(
             {
-                "domain": px.domain,
-                "http_port": px.http_port,
-                "user": px.user,
-                "name": px.name,
-                "mode": px.mode,
+                "ip_address": getattr(px, 'ip_address', None),
+                "domain": getattr(px, 'domain', None),
+                "http_port": getattr(px, 'http_port', None),
+                "user": getattr(px, 'user', None),
+                "name": getattr(px, 'name', None),
+                "mode": getattr(px, 'mode', None),
             }
         )
     
@@ -62,12 +65,17 @@ async def proxmox_version(
     json_response = []
     
     for px in pxs:
-        json_response.append(
-            {
-                px.name: px.session.version.get()
-            }
-        )
+        if px.CONNECTED:
+            session = getattr(px, 'session', None)
+            json_response.append(
+                {
+                    getattr(px, 'name', None): session.version.get()
+                }
+            )
             
+    if not json_response:
+        raise HTTPException(status_code=404, detail="No Proxmox active connections found, not able to retrieve version information")
+
     return json_response
 
 

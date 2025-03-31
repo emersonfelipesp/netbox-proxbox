@@ -22,7 +22,14 @@ class ProxmoxEndpoint(NetBoxModel):
         related_name='+',
         verbose_name=_('IP Address'),
         null=True,
-        help_text=_('IP Address of the Proxmox Endpoint (Cluster). It will try using the DNS name provided in IP Address if it is not empty.'),
+        blank=True,
+        help_text=_('IP Address of the Proxmox Endpoint (Cluster). Fallback if domain name is not provided.'),
+    )
+    domain = DomainField(
+        verbose_name=_('Domain'),
+        help_text=_('Domain name of the Proxmox Endpoint (Cluster).'),
+        blank=True,
+        null=True,
     )
     port = models.PositiveIntegerField(
         default=8006,
@@ -64,14 +71,14 @@ class ProxmoxEndpoint(NetBoxModel):
         verbose_name=_('Token Value'),
     )
     verify_ssl = models.BooleanField(
-        default=True,
+        default=False,
         verbose_name=_('Verify SSL'),
         help_text=_('Choose or not to verify SSL certificate of the Proxmox Endpoint'),
     )
 
     class Meta:
         verbose_name_plural: str = "Proxmox Endpoints"
-        unique_together = ['name', 'ip_address']
+        unique_together = ['name', 'ip_address', 'domain']
         ordering = ('name',)
         
     def __str__(self):

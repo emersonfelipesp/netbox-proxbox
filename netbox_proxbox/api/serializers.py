@@ -29,11 +29,12 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
         view_name='plugins-api:netbox_proxbox-api:proxmoxendpoint-detail',
     )
     ip_address = IPAddressSerializer()
+    domain = serializers.CharField(required=False, allow_null=True)
     
     class Meta:
         model = ProxmoxEndpoint
         fields = (
-            'id', 'url', 'display', 'name', 'ip_address', 'port',
+            'id', 'url', 'display', 'name', 'ip_address', 'domain', 'port',
             'token_name', 'token_value', 'username', 'password', 'verify_ssl',
             'mode', 'version', 'repoid', 
             'tags', 'custom_fields', 'created', 'last_updated',

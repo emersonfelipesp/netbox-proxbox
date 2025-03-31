@@ -100,16 +100,22 @@
                     </td>
                 </tr>
                 <!-- The rest of the fields are based on Netbox 'configuration.py' file and Plugins Configuration -->
-                <tr>
-                    <th scope="row"><strong>Domain / IP</strong></th>
-                    {% if object.ip_address %}
+                {% if object.domain %}
+                    <tr>
+                        <th scope="row"><strong>Domain</strong></th>
+                        <td id="proxmox-domain">
+                            {{ object.domain }}
+                        </td>
+                    </tr>
+                {% endif %}
+                {% if object.ip_address %}
+                    <tr>
+                        <th scope="row"><strong>IP Address</strong></th>
                         <td>
                             <a href="{{ object.ip_address.get_absolute_url }}">{{ object.ip_address }}</a>
                         </td>
-                    {% else %}
-                        <td>{{ default_config.proxmox.domain }} (default)</td>
-                    {% endif %}
-                </tr>
+                    </tr>
+                {% endif %}
                 <tr>
                 <th scope="row"><strong>HTTP Port</strong></th>
                     {% if object.port %}
