@@ -7,7 +7,7 @@ from proxbox_api.schemas import PluginConfig
 from proxbox_api.schemas.netbox import NetboxSessionSchema
 from proxbox_api.exception import ProxboxException
 
-from pynetbox_api.database import SessionDep, NetBoxEndpoint
+
 
 router = APIRouter()
 
@@ -125,31 +125,3 @@ async def proxbox_settings(
 
 ProxboxConfigDep = Annotated[PluginConfig, Depends(proxbox_settings)]
 
-@router.get("/settings/netbox")
-async def netbox_settings(session: SessionDep) -> NetboxSessionSchema:
-    """
-    Get NetBox settings.
-
-    **Returns:**
-    - **`NetboxSessionSchema`**
-    """
-    
-    try:
-        # Return the first NetBoxEndpoint from the database.
-        netbox: list = session.exec(select(NetBoxEndpoint).limit(1)).all()
-        for nb in netbox:
-            return NetboxSessionSchema(
-                domain = nb.ip_address,
-                http_port = nb.port,
-                token = nb.token
-            )
-            
-    except Exception as e:
-        raise ProxboxException(
-            message = "Error trying to get Netbox settings from database.",
-            python_exception = f"{str(e)}"
-        )
-    
-    return None
-
-NetboxConfigDep = Annotated[NetboxSessionSchema, Depends(netbox_settings)] 
