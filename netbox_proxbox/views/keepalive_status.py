@@ -98,46 +98,40 @@ def netbox_status(pk: int, base_url: str) -> str:
         
         netbox = None
         
+        token_obj = getattr(netbox_service_obj, 'token', None)
+        token_key = getattr(token_obj, 'key', None) if token_obj else 'invalid-token'
+        
         current_netbox: dict = {
             'id': pk,
             'name': netbox_service_obj.name if netbox_service_obj.name else None,
             'ip_address': netbox_ip,
             'domain': netbox_service_obj.domain if netbox_service_obj.domain else None,
             'port': netbox_service_obj.port if netbox_service_obj.port else None,
-            'token': netbox_service_obj.token.key if netbox_service_obj.token.key else None,
+            'token': token_key,
             'verify_ssl': netbox_service_obj.verify_ssl if netbox_service_obj.verify_ssl else False,
         }
         
-        if len(response) > 0:
-            for nb in response:
-                # Check if NetBoxEndpoint exists on pynetbox-api database.
-                if (nb['id'] == pk) and (nb['ip_address'] == netbox_ip):
-                    netbox = nb
-                    break
+        # If no NetBoxEndpoints are found on FastAPI database, create a new one.
+        if len(response) == 0:
+            print('No NetBoxEndpoints found on FastAPI database.')
             
-            if netbox:
-                # Delete all NetBoxEndpoints from FastAPI database, except the one that matches the current NetBoxEndpoint.
-                for nb in response:
-                    if nb['id'] != pk:
-                        requests.delete(f'{netbox_endpoint_url}/{nb["id"]}')
-                    else:
-                        # If NetBox ID exists, update it (if needed)
-                        if nb != current_netbox:
-                            print('\n\n\n')
-                            print(f"NB: {nb.get('verify_ssl')}")
-                            print(f"CURRENT: {current_netbox.get('verify_ssl')}")
-                            
-                            print(f"IP ADDRESS NB: {nb.get('ip_address')}")
-                            print(f"IP ADDRESS CURRENT: {current_netbox.get('ip_address')}")
-                            
-                            updated_netbox = nb | current_netbox
-                            requests.delete(f'{netbox_endpoint_url}/{nb["id"]}') 
-                            requests.post(netbox_endpoint_url, json=updated_netbox)
-                    
-            else:
-                # Delete all NetBoxEndpoints from FastAPI database.
-                for nb in response:
-                    requests.delete(f'{netbox_endpoint_url}/{nb["id"]}')
+            # Create NetBoxEndpoint on FastAPI database.
+            print('Creating NetBoxEndpoint on FastAPI database...')
+            print(f'current_netbox: {current_netbox}')
+            print(f'netbox_endpoint_url: {netbox_endpoint_url}')
+            requests.post(netbox_endpoint_url, json=current_netbox)
+        
+        if len(response) > 0:
+            # Delete all NetBoxEndpoints from FastAPI database, except the one that matches the current NetBoxEndpoint.
+            for netbox_endpoint in response:
+                if netbox_endpoint['id'] != pk:
+                    requests.delete(f'{netbox_endpoint_url}/{netbox_endpoint["id"]}')
+                else:
+                    # If NetBox ID exists, update it (if needed)
+                    if netbox_endpoint != current_netbox:
+                        updated_netbox_endpoint: dict = netbox_endpoint | current_netbox
+                        requests.delete(f'{netbox_endpoint_url}/{netbox_endpoint["id"]}') 
+                        requests.post(netbox_endpoint_url, json=updated_netbox_endpoint)
             
         else:
             # Create NetBoxEndpoint on FastAPI database.
