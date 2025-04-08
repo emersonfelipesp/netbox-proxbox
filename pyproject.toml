@@ -4,7 +4,7 @@ version = "0.0.6b2"
 description = "Netbox Plugin - Integrate Proxmox and Netbox"
 readme = "README.md"
 authors = [
-    {name = "Emerson Felipe", email = "emerson.felipe@nmultifibra.com"}
+    {name = "Emerson Felipe", email = "emersonfelipe.2003@gmail.com"}
 ]
 license = "Apache-2.0"
 requires-python = ">=3.8"
