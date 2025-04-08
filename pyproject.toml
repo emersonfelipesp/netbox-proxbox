@@ -1,6 +1,6 @@
 [project]
 name = "netbox-proxbox"
-version = "0.0.6b2.dev4"
+version = "0.0.6b2"
 description = "Netbox Plugin - Integrate Proxmox and Netbox"
 readme = "README.md"
 authors = [
@@ -10,6 +10,7 @@ license = "Apache-2.0"
 requires-python = ">=3.8"
 dependencies = [
     "websockets>=13.1",
+    "proxbox-api==0.0.2"
 ]
 
 [project.optional-dependencies]

@@ -34,6 +34,8 @@ The following table shows the Netbox and Proxmox versions compatible (tested) wi
 
 | netbox version   | proxmox version | proxbox version | proxbox-api | pynetbox-api |
 |------------------|-----------------|-----------------|-------------|--------------|
+|------------------|-----------------|-----------------|-------------|--------------|
+| =v4.2.6          | >=8.3.0         | v0.0.6b2        | v0.0.2      | v0.0.2       | 
 | =v4.2.0          | >=8.3.0         | v0.0.6b1        | v0.0.1      | v0.0.1       | 
 | >= v3.4.0        | >= v6.2.0       | =v0.0.5         |             |              |
 | >= v3.2.0        | >= v6.2.0       | =v0.0.4         |             |              |
