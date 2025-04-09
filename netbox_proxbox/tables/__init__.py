@@ -4,7 +4,7 @@ from django.utils.translation import gettext as _
 from netbox.tables import NetBoxTable, ChoiceFieldColumn
 from netbox.tables.columns import BooleanColumn
 
-from .models import (
+from netbox_proxbox.models import (
     ProxmoxEndpoint,
     NetBoxEndpoint,
     FastAPIEndpoint,
@@ -70,7 +70,7 @@ class NetBoxEndpointTable(NetBoxTable):
     name = tables.Column(linkify=True)
     ip_address = tables.Column(linkify=True)
     verify_ssl = BooleanColumn()
-    
+    token = tables.Column(linkify=True)
     class Meta(NetBoxTable.Meta):
         model = NetBoxEndpoint
         fields = (

@@ -5,8 +5,9 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 
 from netbox.models import NetBoxModel
 
-from .fields import DomainField
-from .choices import ProxmoxModeChoices, SyncTypeChoices, SyncStatusChoices
+from netbox_proxbox.fields import DomainField
+from netbox_proxbox.choices import ProxmoxModeChoices, SyncTypeChoices, SyncStatusChoices
+from netbox_proxbox.models.vm_backup import VMBackup
 
 class ProxmoxEndpoint(NetBoxModel):
     name = models.CharField(
