@@ -1,6 +1,7 @@
 # Django Imports
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+from django.urls import reverse
 
 # NetBox Imports
 from netbox.models import NetBoxModel
@@ -9,6 +10,13 @@ from netbox.models import NetBoxModel
 from netbox_proxbox.choices import ProxmoxBackupSubtypeChoices, ProxmoxBackupFormatChoices
 
 class VMBackup(NetBoxModel):
+    storage = models.CharField(
+        max_length=255,
+        null=True,
+        blank=False,
+        help_text=_('Storage of the backup.'),
+    )
+    
     virtual_machine = models.ForeignKey(
         to='virtualization.VirtualMachine',
         on_delete=models.CASCADE,
@@ -82,6 +90,17 @@ class VMBackup(NetBoxModel):
         blank=True,
         help_text=_('Verification UPID of the backup.'),
     )
+    
+    class Meta:
+        verbose_name_plural: str = 'VM Backups'
+        ordering = ('storage', 'virtual_machine', 'creation_time')
+        unique_together = ('storage', 'virtual_machine', 'subtype', 'format', 'creation_time', 'volume_id', 'vmid')
+        
+    def __str__(self):
+        return f"{self.virtual_machine} - {self.creation_time}"
+    
+    def get_absolute_url(self):
+        return reverse('plugins:netbox_proxbox:vmbackup', args=[self.pk])
     
     
     

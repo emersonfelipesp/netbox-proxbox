@@ -1,0 +1,61 @@
+{% extends 'generic/object.html' %}
+
+{% block content %}
+    <div class="row mb-3">
+        <div class="col col-md-6">
+            <div class="card">
+                <h5 class="card-header">Sync Process</h5>
+                <div class="card-body">
+    
+                    <table class="table table-hover attr-table">
+                        <tr>
+                            <th scope="row">Virtual Machine</th>
+                            <td>{{ object.virtual_machine }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Subtype</th>
+                            <td>{{ object.subtype }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Creation Time</th>
+                            <td>{{ object.creation_time }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Size</th>
+                            <td>{{ object.size }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Verification State</th>
+                            <td>{{ object.verification_state }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Verification UPID</th>
+                            <td>{{ object.verification_upid }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Volume ID</th>
+                            <td>{{ object.volume_id }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">VM ID</th>
+                            <td>{{ object.vmid }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Format</th>
+                            <td>{{ object.format }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Notes</th>
+                            <td>{{ object.notes }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+            {% include 'inc/panels/custom_fields.html' %}
+        </div>
+        <div class="col col-md-6">
+            {% include 'inc/panels/tags.html' %}
+            {% include 'inc/panels/comments.html' %}
+        </div>
+    </div>
+{% endblock %}

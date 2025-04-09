@@ -31,7 +31,8 @@ class VMBackupSerializer(NetBoxModelSerializer):
     class Meta:
         model = VMBackup
         fields = (
-            'id', 'url', 'display', 'virtual_machine', 'subtype', 'format', 'creation_time', 'size', 'used', 'encrypted', 'volume_id', 'vmid',
+            'id', 'url', 'display', 'virtual_machine', 'subtype', 'format', 'creation_time', 'size', 'used', 'encrypted',
+            'verification_state', 'verification_upid', 'volume_id', 'vmid', 'storage',
             'tags', 'custom_fields', 'created', 'last_updated',
         )
     

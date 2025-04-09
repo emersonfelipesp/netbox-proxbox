@@ -41,17 +41,16 @@ class VMBackupTable(NetBoxTable):
     class Meta(NetBoxTable.Meta):
         model = VMBackup
         fields = (
-            'pk', 'id', 'virtual_machine', 'subtype',
+            'pk', 'id', 'vmid', 'storage', 'virtual_machine', 'subtype',
             'format', 'creation_time', 'size', 'used',
-            'encrypted', 'volume_id', 'vmid',
+            'encrypted', 'volume_id',
             'verification_state', 'verification_upid',
-            'notes', 'actions',
+            'notes'
         )
         
         default_columns = (
-            'pk', 'virtual_machine', 'subtype', 'format',
-            'creation_time', 'size', 'encrypted', 'volume_id',
-            'vmid', 'verification_state', 'notes'
+            'pk', 'storage', 'id', 'virtual_machine', 'subtype', 'format',
+            'creation_time', 'size', 'volume_id', 'encrypted'
         )
 
 

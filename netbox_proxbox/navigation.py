@@ -22,7 +22,7 @@ sync_processes_item = PluginMenuItem(
 )
 
 backups_item = PluginMenuItem(
-    link='plugins:netbox_proxbox:backup_list',
+    link='plugins:netbox_proxbox:vmbackup_list',
     link_text='Backups',
 )
 

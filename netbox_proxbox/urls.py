@@ -68,15 +68,15 @@ urlpatterns = [
     }),
     
     # VMBackup Model URLs
-    path('backups/', views.VMBackupListView.as_view(), name='backup_list'),
-    path('backups/<int:pk>', views.VMBackupView.as_view(), name='backup'),
-    path('backups/<int:pk>/changelog/', ObjectChangeLogView.as_view(), name='backup_changelog', kwargs={
+    path('backups/', views.VMBackupListView.as_view(), name='vmbackup_list'),
+    path('backups/<int:pk>', views.VMBackupView.as_view(), name='vmbackup'),
+    path('backups/<int:pk>/changelog/', ObjectChangeLogView.as_view(), name='vmbackup_changelog', kwargs={
         'model': models.VMBackup
     }),
     # Don't allow editing, deleting or adding backups using the UI.
-    #path('backups/<int:pk>/edit/', views.VMBackupEditView.as_view(), name='backup_edit'),
-    #path('backups/<int:pk>/delete/', views.VMBackupDeleteView.as_view(), name='backup_delete'),
-    #path('backups/add/', views.VMBackupEditView.as_view(), name='backup_add'),
+    path('backups/<int:pk>/edit/', views.VMBackupEditView.as_view(), name='vmbackup_edit'),
+    path('backups/<int:pk>/delete/', views.VMBackupDeleteView.as_view(), name='vmbackup_delete'),
+    path('backups/add/', views.VMBackupEditView.as_view(), name='vmbackup_add'),
     
     
     
