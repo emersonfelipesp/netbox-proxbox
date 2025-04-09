@@ -2,9 +2,39 @@ from rest_framework import serializers
 
 from netbox.api.serializers import NetBoxModelSerializer
 from ipam.api.serializers import IPAddressSerializer
-from ..models import ProxmoxEndpoint, NetBoxEndpoint, FastAPIEndpoint, SyncProcess
-from ..choices import SyncTypeChoices, SyncStatusChoices
+from virtualization.api.serializers import VirtualMachineSerializer
+from netbox_proxbox.models import (
+    ProxmoxEndpoint,
+    NetBoxEndpoint,
+    FastAPIEndpoint,
+    SyncProcess,
+    VMBackup
+)
+from netbox_proxbox.choices import (
+    SyncTypeChoices,
+    SyncStatusChoices,
+    ProxmoxBackupSubtypeChoices,
+    ProxmoxBackupFormatChoices
+)
+
 from extras.models import Tag
+from virtualization.models import VirtualMachine
+
+class VMBackupSerializer(NetBoxModelSerializer):
+    url = serializers.HyperlinkedIdentityField(
+        view_name='plugins-api:netbox_proxbox-api:vmbackup-detail',
+    )
+    virtual_machine = VirtualMachineSerializer(nested=True)
+    subtype = serializers.ChoiceField(choices=ProxmoxBackupSubtypeChoices)
+    format = serializers.ChoiceField(choices=ProxmoxBackupFormatChoices)
+    
+    class Meta:
+        model = VMBackup
+        fields = (
+            'id', 'url', 'display', 'virtual_machine', 'subtype', 'format', 'creation_time', 'size', 'used', 'encrypted', 'volume_id', 'vmid',
+            'tags', 'custom_fields', 'created', 'last_updated',
+        )
+    
 
 class SyncProcessSerializer(NetBoxModelSerializer):
     url = serializers.HyperlinkedIdentityField(

@@ -1,15 +1,19 @@
+# Django Imports
 import django_tables2 as tables
 from django.utils.translation import gettext as _
 
+# NetBox Imports
 from netbox.tables import NetBoxTable, ChoiceFieldColumn
 from netbox.tables.columns import BooleanColumn
 
+# Proxbox Imports
 from netbox_proxbox.models import (
     ProxmoxEndpoint,
     NetBoxEndpoint,
     FastAPIEndpoint,
     SyncProcess,
 )
+from netbox_proxbox.tables.vm_backup import VMBackupTable
 
 
 class SyncProcessTable(NetBoxTable):

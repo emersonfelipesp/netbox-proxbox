@@ -8,5 +8,6 @@ router.register('endpoints/proxmox', views.ProxmoxEndpointViewSet)
 router.register('endpoints/netbox', views.NetBoxEndpointViewSet)
 router.register('endpoints/fastapi', views.FastAPIEndpointViewSet)
 router.register('sync-processes', views.SyncProcessViewSet)
+router.register('backups', views.VMBackupViewSet)
 
 urlpatterns = router.urls

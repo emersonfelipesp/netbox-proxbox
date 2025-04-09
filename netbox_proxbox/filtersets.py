@@ -1,6 +1,6 @@
 from django.db.models import Q
 from netbox.filtersets import NetBoxModelFilterSet
-from .models import ProxmoxEndpoint, NetBoxEndpoint, FastAPIEndpoint, SyncProcess
+from .models import ProxmoxEndpoint, NetBoxEndpoint, FastAPIEndpoint, SyncProcess, VMBackup
 
 
 class SyncProcessFilterSet(NetBoxModelFilterSet):
@@ -41,3 +41,12 @@ class FastAPIEndpointFilterSet(NetBoxModelFilterSet):
     
     def search(self, queryset, name, value):
         return queryset.filter(name__icontains=value)
+
+
+class VMBackupFilterSet(NetBoxModelFilterSet):
+    class Meta:
+        model = VMBackup
+        fields = ['id', 'virtual_machine', 'subtype', 'format', 'creation_time', 'size', 'used', 'encrypted', 'volume_id', 'vmid']
+
+    def search(self, queryset, virtual_machine, value):
+        return queryset.filter(virtual_machine__icontains=value)

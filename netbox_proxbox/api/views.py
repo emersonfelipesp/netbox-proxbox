@@ -6,8 +6,14 @@ from .serializers import (
     NetBoxEndpointSerializer,
     FastAPIEndpointSerializer,
     SyncProcessSerializer,
+    VMBackupSerializer
 )
 
+
+class VMBackupViewSet(NetBoxModelViewSet):
+    queryset = models.VMBackup.objects.all()
+    serializer_class = VMBackupSerializer
+    filterset_class = filtersets.VMBackupFilterSet
 
 class SyncProcessViewSet(NetBoxModelViewSet):
     queryset = models.SyncProcess.objects.all()

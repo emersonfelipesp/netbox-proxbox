@@ -67,6 +67,19 @@ urlpatterns = [
         'model': models.SyncProcess
     }),
     
+    # VMBackup Model URLs
+    path('backups/', views.VMBackupListView.as_view(), name='backup_list'),
+    path('backups/<int:pk>', views.VMBackupView.as_view(), name='backup'),
+    path('backups/<int:pk>/changelog/', ObjectChangeLogView.as_view(), name='backup_changelog', kwargs={
+        'model': models.VMBackup
+    }),
+    # Don't allow editing, deleting or adding backups using the UI.
+    #path('backups/<int:pk>/edit/', views.VMBackupEditView.as_view(), name='backup_edit'),
+    #path('backups/<int:pk>/delete/', views.VMBackupDeleteView.as_view(), name='backup_delete'),
+    #path('backups/add/', views.VMBackupEditView.as_view(), name='backup_add'),
+    
+    
+    
     # Manual Sync (HTTP Request)
     path('sync/devices', views.sync_devices, name='sync_devices'),
     path('sync/virtual-machines', views.sync_virtual_machines, name='sync_virtual_machines'),
