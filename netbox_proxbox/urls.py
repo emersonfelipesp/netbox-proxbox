@@ -77,9 +77,7 @@ urlpatterns = [
     path('backups/<int:pk>/edit/', views.VMBackupEditView.as_view(), name='vmbackup_edit'),
     path('backups/<int:pk>/delete/', views.VMBackupDeleteView.as_view(), name='vmbackup_delete'),
     path('backups/add/', views.VMBackupEditView.as_view(), name='vmbackup_add'),
-    
-    
-    
+    path('backups/bulk-delete/', views.VMBackupBulkDeleteView.as_view(), name='vmbackup_bulk_delete'),
     # Manual Sync (HTTP Request)
     path('sync/devices', views.sync_devices, name='sync_devices'),
     path('sync/virtual-machines', views.sync_virtual_machines, name='sync_virtual_machines'),

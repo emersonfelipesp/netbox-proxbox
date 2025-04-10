@@ -1,5 +1,6 @@
 # NetBox Imports
 from netbox.views import generic
+from utilities.views import register_model_view
 
 # Proxbox Imports
 from netbox_proxbox.models import VMBackup
@@ -12,7 +13,8 @@ __all__ = (
     'VMBackupListView',
     'VMBackupEditView',
     'VMBackupDeleteView',
-)
+    'VMBackupBulkDeleteView',
+) 
 
 class VMBackupView(generic.ObjectView):
     """
@@ -28,7 +30,25 @@ class VMBackupListView(generic.ObjectListView):
     table = VMBackupTable
     filterset = VMBackupFilterSet
     filterset_form = VMBackupFilterForm
+    template_name = 'netbox_proxbox/vmbackup_list.html'
+    actions = {
+        'bulk_delete': {'delete'},
+        'export': {'view'},
+    }
+    
+    def get_required_permission(self):
+        # Override to bypass permission check
+        return 'netbox_proxbox.delete_vmbackup'
 
+@register_model_view(VMBackup, 'bulk_delete', path='delete', detail=False)
+class VMBackupBulkDeleteView(generic.BulkDeleteView):
+    """
+    Delete multiple VM backups.
+    """
+    queryset = VMBackup.objects.all()
+    filterset = VMBackupFilterSet
+    table = VMBackupTable
+    
 class VMBackupEditView(generic.ObjectEditView):
     """
     This view is currently not allowed to be used.
