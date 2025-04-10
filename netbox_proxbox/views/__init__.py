@@ -23,9 +23,8 @@ from .sync import *
 from .vm_backup import *
 
 from netbox_proxbox.models import ProxmoxEndpoint, NetBoxEndpoint, FastAPIEndpoint
-
 from netbox_proxbox.utils import get_fastapi_url
-    
+
 class HomeView(View):
     """
     ## HomeView class-based view to handle incoming GET HTTP requests.
