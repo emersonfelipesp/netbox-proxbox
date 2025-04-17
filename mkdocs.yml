@@ -61,7 +61,10 @@ nav:
       - Using pip (recommended): 'installation/1-installing-plugin.md'
       - Using git: 'installation/2-installing-plugin-git.md'
       - Using Docker: 'installation/3-installing-plugin-docker.md'
-    - Backend Setup: 'installation/backend-setup.md'
+    - Backend Setup:
+      - Using pip (recommended): 'backend/using-pip.md'
+      - Using git: 'backend/using-git.md'
+      - Using Docker: 'backend/using-docker.md'
   # - Backend (FastAPI): 'backend/index.md'
   # - Source Code:
   #   - 'src/netboxbasic.md'

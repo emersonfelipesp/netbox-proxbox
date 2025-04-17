@@ -40,7 +40,7 @@ PLUGINS = ['netbox_proxbox']
 source /opt/netbox/venv/bin/activate
 
 # Install plugin
-pip install netbox-proxbox==0.0.6b2
+pip install netbox-proxbox==0.0.6b2.post1
 
 # Run migrations
 cd /opt/netbox/netbox/
