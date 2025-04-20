@@ -120,8 +120,7 @@ def netbox_status(pk: int, base_url: str) -> str:
             print(f'current_netbox: {current_netbox}')
             print(f'netbox_endpoint_url: {netbox_endpoint_url}')
             requests.post(netbox_endpoint_url, json=current_netbox)
-        
-        if len(response) > 0:
+        else:
             # Delete all NetBoxEndpoints from FastAPI database, except the one that matches the current NetBoxEndpoint.
             for netbox_endpoint in response:
                 if netbox_endpoint['id'] != pk:
@@ -132,11 +131,6 @@ def netbox_status(pk: int, base_url: str) -> str:
                         updated_netbox_endpoint: dict = netbox_endpoint | current_netbox
                         requests.delete(f'{netbox_endpoint_url}/{netbox_endpoint["id"]}') 
                         requests.post(netbox_endpoint_url, json=updated_netbox_endpoint)
-            
-        else:
-            # Create NetBoxEndpoint on FastAPI database.
-            print('Creating NetBoxEndpoint on FastAPI database...')
-            requests.post(netbox_endpoint_url, json=current_netbox)
         
         # NetBoxEndpoint exists on FastAPI database. Check if it is alive.
         try:
