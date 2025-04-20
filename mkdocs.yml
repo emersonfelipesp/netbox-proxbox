@@ -36,7 +36,6 @@ theme:
 
 plugins:
   - search
-  - social
   - mkdocstrings:
       handlers:
         python:
@@ -56,48 +55,49 @@ plugins:
 
 nav:
   - Proxbox: index.md
-  - Backend (FastAPI): 'backend/index.md'
-  - Source Code:
-    - 'src/netboxbasic.md'
-  - Installing & Upgrade:
-    - Installing Proxbox: 'installation/index.md'
-    - Upgrading Proxbox: 'installation/upgrading.md'
-  - Features:
-    - Virtual Machine (VM): 'features/virtual-machine.md'
-    - Containers (LXC): 'features/containers.md'
-    - Network (IPAM): 'features/network.md'
-    - VLAN Management: 'features/vlan-management.md'
-    - Storage: 'features/storage.md'
-    - Backup: 'features/backup.md'
-    - Monitoring: 'features/monitoring.md'
-    - Synchronized Data: 'features/synchronized-data.md'
-    - Background Jobs: 'features/background-jobs.md'
-    - API & Integration: 'features/api-integration.md'
-  - Configuration:
-      - Configuring ProxBox: 'configuration/index.md'
-      - Required Parameters: 'configuration/required-parameters.md'
-  - Data Model:
-    - Virtual Machine (VM): 'models/virtual-machine.md'
-    - Containers (LXC): 'models/containers.md'
-    - Others: 'models/others.md'
-  - Release Notes:
-    - Summary: 'release-notes/index.md'
-    - Version 0.0.6: 'release-notes/version-0.0.1.md'
-    - Version 0.0.5: 'release-notes/version-0.0.1.md'
-    - Version 0.0.4: 'release-notes/version-0.0.1.md'
-    - Version 0.0.3: 'release-notes/version-0.0.1.md'
-    - Version 0.0.2: 'release-notes/version-0.0.1.md'
-    - Version 0.0.1: 'release-notes/version-0.0.1.md'
+  - Installation:
+    - Pre-Installation: 'installation/pre-installation.md'
+    - Installing the Plugin:
+      - Using pip (recommended): 'installation/1-installing-plugin.md'
+      - Using git: 'installation/2-installing-plugin-git.md'
+      - Using Docker: 'installation/3-installing-plugin-docker.md'
+    - Backend Setup:
+      - Using pip (recommended): 'backend/using-pip.md'
+      - Using git: 'backend/using-git.md'
+      - Using Docker: 'backend/using-docker.md'
+  # - Backend (FastAPI): 'backend/index.md'
+  # - Source Code:
+  #   - 'src/netboxbasic.md'
+  # - Installing & Upgrade:
+  #   - Installing Proxbox: 'installation/index.md'
+  #   - Upgrading Proxbox: 'installation/upgrading.md'
+  # - Features:
+  #   - Virtual Machine (VM): 'features/virtual-machine.md'
+  #   - Containers (LXC): 'features/containers.md'
+  #   - Network (IPAM): 'features/network.md'
+  #   - VLAN Management: 'features/vlan-management.md'
+  #   - Storage: 'features/storage.md'
+  #   - Backup: 'features/backup.md'
+  #   - Monitoring: 'features/monitoring.md'
+  #   - Synchronized Data: 'features/synchronized-data.md'
+  #   - Background Jobs: 'features/background-jobs.md'
+  #   - API & Integration: 'features/api-integration.md'
+  # - Configuration:
+  #     - Configuring ProxBox: 'configuration/index.md'
+  #     - Required Parameters: 'configuration/required-parameters.md'
+  # - Data Model:
+  #   - Virtual Machine (VM): 'models/virtual-machine.md'
+  #   - Containers (LXC): 'models/containers.md'
+  #   - Others: 'models/others.md'
+  # - Release Notes:
+  #   - Summary: 'release-notes/index.md'
+  #   - Version 0.0.6: 'release-notes/version-0.0.1.md'
+  #   - Version 0.0.5: 'release-notes/version-0.0.1.md'
+  #   - Version 0.0.4: 'release-notes/version-0.0.1.md'
+  #   - Version 0.0.3: 'release-notes/version-0.0.1.md'
+  #   - Version 0.0.2: 'release-notes/version-0.0.1.md'
+  #   - Version 0.0.1: 'release-notes/version-0.0.1.md'
 extra:
-  social:
-    - icon: fontawesome/brands/github
-      link: https://github.com/netdevopsbr/netbox-proxbox
-    - icon: fontawesome/brands/slack
-      link: https://netdev.chat/
-    - icon: fontawesome/brands/telegram
-      link: https://t.me/netboxbr
-    - icon: fontawesome/brands/discord
-      link: https://discord.gg/9N3V4mpMXU
   homepage: https://netboxlabs.com
 extra_css:
   - https://cdn.materialdesignicons.com/5.4.55/css/materialdesignicons.min.css
