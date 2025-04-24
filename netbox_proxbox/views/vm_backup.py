@@ -4,11 +4,17 @@ from utilities.views import register_model_view, ViewTab
 from django.shortcuts import render
 from virtualization.models import VirtualMachine
 
+import requests
+
 # Proxbox Imports
-from netbox_proxbox.models import VMBackup
+from netbox_proxbox.models import VMBackup, FastAPIEndpoint
 from netbox_proxbox.tables import VMBackupTable
 from netbox_proxbox.filtersets import VMBackupFilterSet
 from netbox_proxbox.forms import VMBackupForm, VMBackupFilterForm
+from netbox_proxbox.utils import get_fastapi_url
+
+import logging
+logger = logging.getLogger(__name__)
 
 __all__ = (
     'VMBackupView',
@@ -18,6 +24,7 @@ __all__ = (
     'VMBackupBulkDeleteView',
     'VMBackupTabView',
 ) 
+
 
 @register_model_view(VirtualMachine, 'backups', path='backups')
 class VMBackupTabView(generic.ObjectView):
@@ -111,6 +118,7 @@ class VMBackupListView(generic.ObjectListView):
     actions = {
         'bulk_delete': {'delete'},
         'export': {'view'},
+        'sync_backups': {'view'},
     }
     
     def get_required_permission(self):

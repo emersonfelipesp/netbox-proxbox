@@ -64,12 +64,32 @@ def sync_resource(request: HtmxHttpRequest, path: str, template_name: str) -> Ht
 
 @require_GET
 def sync_devices(request: HtmxHttpRequest) -> HttpResponse:
-    return sync_resource(request, 'dcim/devices/create', 'netbox_proxbox/sync_devices.html')
+    return sync_resource(
+        request,
+        path='dcim/devices/create',
+        template_name='netbox_proxbox/sync_devices.html'
+    )
 
 @require_GET
 def sync_virtual_machines(request: HtmxHttpRequest) -> HttpResponse:
-    return sync_resource(request, 'virtualization/virtual-machines/create', 'netbox_proxbox/sync_virtual_machines.html')
+    return sync_resource(
+        request,
+        path='virtualization/virtual-machines/create',
+        template_name='netbox_proxbox/sync_virtual_machines.html'
+    )
 
 @require_GET
 def sync_full_update(request: HtmxHttpRequest) -> HttpResponse:
-    return sync_resource(request, 'full-update', 'netbox_proxbox/sync_full_update.html')
+    return sync_resource(
+        request,
+        path='full-update',
+        template_name='netbox_proxbox/sync_full_update.html'
+    )
+
+@require_GET
+def sync_vm_backups(request: HtmxHttpRequest) -> HttpResponse:
+    return sync_resource(
+        request,
+        path='virtualization/virtual-machines/backups/all/create',
+        template_name='netbox_proxbox/sync_vm_backups.html'
+    )
