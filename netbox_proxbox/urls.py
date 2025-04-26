@@ -59,14 +59,8 @@ urlpatterns = [
     }),
     
     # SyncProcess Model URLs
-    path('sync-processes/', views.SyncProcessListView.as_view(), name='syncprocess_list'),
-    path('sync-processes/add/', views.SyncProcessEditView.as_view(), name='syncprocess_add'),
-    path('sync-processes/<int:pk>', views.SyncProcessView.as_view(), name='syncprocess'),
-    path('sync-processes/<int:pk>/edit/', views.SyncProcessEditView.as_view(), name='syncprocess_edit'),
-    path('sync-processes/<int:pk>/delete/', views.SyncProcessDeleteView.as_view(), name='syncprocess_delete'),
-    path('sync-processes/<int:pk>/changelog/', ObjectChangeLogView.as_view(), name='syncprocess_changelog', kwargs={
-        'model': models.SyncProcess
-    }),
+    path('sync-processes/<int:pk>/', include(get_model_urls('netbox_proxbox', 'syncprocess'))),
+    path('sync-processes/', include(get_model_urls('netbox_proxbox', 'syncprocess', detail=False))),
     
     # VMBackup Model URLs
     path('backups/<int:pk>/', include(get_model_urls('netbox_proxbox', 'vmbackup'))),
