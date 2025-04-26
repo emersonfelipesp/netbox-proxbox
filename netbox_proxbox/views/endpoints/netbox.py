@@ -4,6 +4,7 @@ from django.urls import reverse
 
 # NetBox Imports
 from netbox.views import generic
+from utilities.views import register_model_view
 
 # ProxBox Imports
 from netbox_proxbox.models import NetBoxEndpoint
@@ -20,17 +21,27 @@ __all__ = (
 )
 
 
+@register_model_view(NetBoxEndpoint)
 class NetBoxEndpointView(generic.ObjectView):
+    """
+    Display a single NetBox endpoint.
+    """
     queryset = NetBoxEndpoint.objects.all()
 
 
+@register_model_view(NetBoxEndpoint, 'list', path='', detail=False)
 class NetBoxEndpointListView(generic.ObjectListView):
+    """
+    Display a list of NetBox endpoints.
+    """
     queryset = NetBoxEndpoint.objects.all()
     table = NetBoxEndpointTable
     filterset = NetBoxEndpointFilterSet
     filterset_form = NetBoxEndpointFilterForm
 
 
+@register_model_view(NetBoxEndpoint, 'add', detail=False)
+@register_model_view(NetBoxEndpoint, 'edit')
 class NetBoxEndpointEditView(generic.ObjectEditView):
     """
     This view is used to edit and create the NetBoxEndpoint object.
@@ -64,7 +75,11 @@ class NetBoxEndpointEditView(generic.ObjectEditView):
         return {'existing_object': False}
 
 
+@register_model_view(NetBoxEndpoint, 'delete')
 class NetBoxEndpointDeleteView(generic.ObjectDeleteView):
+    """
+    Delete a NetBox endpoint.
+    """
     queryset = NetBoxEndpoint.objects.all()
 
     
