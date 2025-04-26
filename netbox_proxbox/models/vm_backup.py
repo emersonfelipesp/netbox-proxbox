@@ -92,7 +92,8 @@ class VMBackup(NetBoxModel):
     )
     
     class Meta:
-        verbose_name_plural: str = 'VM Backups'
+        verbose_name = 'VM Backup'
+        verbose_name_plural = 'VM Backups'
         ordering = ('storage', 'virtual_machine', 'creation_time')
         unique_together = ('storage', 'virtual_machine', 'subtype', 'format', 'creation_time', 'volume_id', 'vmid')
         
@@ -101,12 +102,7 @@ class VMBackup(NetBoxModel):
     
     def get_absolute_url(self):
         return reverse('plugins:netbox_proxbox:vmbackup', args=[self.pk])
-    
-    
-    
-    
-    
-    
+
     
     
     

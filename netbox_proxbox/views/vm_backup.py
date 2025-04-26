@@ -1,7 +1,7 @@
 # NetBox Imports
 from netbox.views import generic
 from utilities.views import register_model_view, ViewTab
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from virtualization.models import VirtualMachine
 
 import requests
@@ -23,8 +23,84 @@ __all__ = (
     'VMBackupDeleteView',
     'VMBackupBulkDeleteView',
     'VMBackupTabView',
-) 
+    'VMBackupAddView',
+)  
 
+@register_model_view(VMBackup, 'list', path='', detail=False)
+class VMBackupListView(generic.ObjectListView):
+    """
+    Display a list of VM backups.
+    """
+    queryset = VMBackup.objects.all()
+    table = VMBackupTable
+    filterset = VMBackupFilterSet
+    filterset_form = VMBackupFilterForm
+    template_name = 'netbox_proxbox/vmbackup_list.html'
+    actions = {
+        'bulk_delete': {'delete'},
+        'export': {'view'},
+        'sync_backups': {'view'},
+    }
+    
+    def get_required_permission(self):
+        # Override to bypass permission check
+        return 'netbox_proxbox.delete_vmbackup'
+
+@register_model_view(VMBackup)
+class VMBackupView(generic.ObjectView):
+    """
+    Display a single VM backup.
+    """
+    queryset = VMBackup.objects.all()
+
+
+
+@register_model_view(VMBackup, 'add', detail=False)
+class VMBackupAddView(generic.ObjectView):
+    """
+    This view is not allowed to be used.
+    Adding backups through the UI is not supported.
+    
+    Although this view is not allowed to be used, it is still necessary to define it because @get_model_urls() 
+    from utilities.urls import get_model_urls
+    will raise an error if it is not defined.
+    """
+    queryset = VMBackup.objects.none()  # Empty queryset since we don't need any objects
+    
+    def get(self, request):
+        from django.contrib import messages
+        from django.shortcuts import redirect
+        
+        messages.error(request, "Adding backups through the UI is not supported. Backups can only be created through the plugin backend.")
+        return redirect('plugins:netbox_proxbox:vmbackup_list')
+
+@register_model_view(VMBackup, 'edit')
+class VMBackupEditView(generic.ObjectEditView):
+    """
+    Edit a VM backup's information.
+    """
+    queryset = VMBackup.objects.all()
+    form = VMBackupForm
+    default_return_url = 'plugins:netbox_proxbox:vmbackup_list'
+
+@register_model_view(VMBackup, 'delete')
+class VMBackupDeleteView(generic.ObjectDeleteView):
+    """
+    This view is currently not allowed to be used.
+    Delete a VM backup.
+    """
+    queryset = VMBackup.objects.all()
+    default_return_url = 'plugins:netbox_proxbox:vmbackup_list'
+
+@register_model_view(VMBackup, 'bulk_delete', detail=False)
+class VMBackupBulkDeleteView(generic.BulkDeleteView):
+    """
+    Delete multiple VM backups.
+    """
+    queryset = VMBackup.objects.all()
+    filterset = VMBackupFilterSet
+    table = VMBackupTable
+    default_return_url = 'plugins:netbox_proxbox:vmbackup_list'
 
 @register_model_view(VirtualMachine, 'backups', path='backups')
 class VMBackupTabView(generic.ObjectView):
@@ -99,52 +175,3 @@ class VMBackupTabView(generic.ObjectView):
                 'tab': self.tab,
             }
         )
-
-class VMBackupView(generic.ObjectView):
-    """
-    Display a single VM backup.
-    """
-    queryset = VMBackup.objects.all()
-
-class VMBackupListView(generic.ObjectListView):
-    """
-    Display a list of VM backups.
-    """
-    queryset = VMBackup.objects.all()
-    table = VMBackupTable
-    filterset = VMBackupFilterSet
-    filterset_form = VMBackupFilterForm
-    template_name = 'netbox_proxbox/vmbackup_list.html'
-    actions = {
-        'bulk_delete': {'delete'},
-        'export': {'view'},
-        'sync_backups': {'view'},
-    }
-    
-    def get_required_permission(self):
-        # Override to bypass permission check
-        return 'netbox_proxbox.delete_vmbackup'
-
-@register_model_view(VMBackup, 'bulk_delete', path='delete', detail=False)
-class VMBackupBulkDeleteView(generic.BulkDeleteView):
-    """
-    Delete multiple VM backups.
-    """
-    queryset = VMBackup.objects.all()
-    filterset = VMBackupFilterSet
-    table = VMBackupTable
-    
-class VMBackupEditView(generic.ObjectEditView):
-    """
-    This view is currently not allowed to be used.
-    Edit a VM backup.
-    """
-    queryset = VMBackup.objects.all()
-    form = VMBackupForm
-
-class VMBackupDeleteView(generic.ObjectDeleteView):
-    """
-    This view is currently not allowed to be used.
-    Delete a VM backup.
-    """
-    queryset = VMBackup.objects.all()

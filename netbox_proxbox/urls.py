@@ -5,7 +5,9 @@ from netbox_proxbox.websocket_client import websocket_client, WebSocketView
 
 from netbox.views.generic import ObjectChangeLogView
 
-from . import models, views
+from netbox_proxbox import models, views
+
+app_name = 'netbox_proxbox'
 
 urlpatterns = [
     # Home View
@@ -46,7 +48,6 @@ urlpatterns = [
         'model': models.NetBoxEndpoint
     }),
     
-    
     # FastAPIEndpoint Model URLs
     path('endpoints/fastapi/', views.FastAPIEndpointListView.as_view(), name='fastapiendpoint_list'),
     path('endpoints/fastapi/add/', views.FastAPIEndpointEditView.as_view(), name='fastapiendpoint_add'),
@@ -68,16 +69,8 @@ urlpatterns = [
     }),
     
     # VMBackup Model URLs
-    path('backups/', views.VMBackupListView.as_view(), name='vmbackup_list'),
-    path('backups/<int:pk>', views.VMBackupView.as_view(), name='vmbackup'),
-    path('backups/<int:pk>/changelog/', ObjectChangeLogView.as_view(), name='vmbackup_changelog', kwargs={
-        'model': models.VMBackup
-    }),
-    # Don't allow editing, deleting or adding backups using the UI.
-    path('backups/<int:pk>/edit/', views.VMBackupEditView.as_view(), name='vmbackup_edit'),
-    path('backups/<int:pk>/delete/', views.VMBackupDeleteView.as_view(), name='vmbackup_delete'),
-    path('backups/add/', views.VMBackupEditView.as_view(), name='vmbackup_add'),
-    path('backups/bulk-delete/', views.VMBackupBulkDeleteView.as_view(), name='vmbackup_bulk_delete'),
+    path('backups/<int:pk>/', include(get_model_urls('netbox_proxbox', 'vmbackup'))),
+    path('backups/', include(get_model_urls('netbox_proxbox', 'vmbackup', detail=False))),
     
     # Manual Sync (HTTP Request)
     path('sync/devices', views.sync_devices, name='sync_devices'),
@@ -85,9 +78,7 @@ urlpatterns = [
     path('sync/virtual-machines/backups', views.sync_vm_backups, name='sync_vm_backups'),
     path('sync/full-update', views.sync_full_update, name='sync_full_update'),
     
-    
     path('keepalive-status/<str:service>/<int:pk>', views.get_service_status, name='keepalive_status'),
     path('proxmox-card/<int:pk>', views.get_proxmox_card, name='proxmox_card'),
     path('websocket/<str:message>', WebSocketView.as_view(), name='websocket'),
-    
 ]

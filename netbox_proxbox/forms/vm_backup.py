@@ -15,6 +15,13 @@ class VMBackupForm(NetBoxModelForm):
     """
     Form for VMBackup model.
     """
+    class Meta:
+        model = VMBackup
+        fields = (
+            'storage', 'virtual_machine', 'subtype', 'format', 'creation_time',
+            'size', 'notes', 'volume_id', 'vmid', 'used', 'encrypted',
+            'verification_state', 'verification_upid', 'tags', 'comments'
+        )
 
     comments = CommentField()
 

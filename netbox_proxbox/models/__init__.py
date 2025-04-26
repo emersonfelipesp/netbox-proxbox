@@ -4,6 +4,7 @@ from django.utils.translation import gettext_lazy as _
 from django.core.validators import MaxValueValidator, MinValueValidator 
 
 from netbox.models import NetBoxModel
+from netbox.models.features import JournalingMixin
 
 from netbox_proxbox.fields import DomainField
 from netbox_proxbox.choices import ProxmoxModeChoices, SyncTypeChoices, SyncStatusChoices
@@ -216,7 +217,7 @@ class FastAPIEndpoint(NetBoxModel):
         return reverse("plugins:netbox_proxbox:fastapiendpoint", args=[self.pk])
 
 
-class SyncProcess(NetBoxModel):
+class SyncProcess(NetBoxModel, JournalingMixin):
     name = models.CharField(max_length=255, unique=True)
     sync_type = models.CharField(
         max_length=20,

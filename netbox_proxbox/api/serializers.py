@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from netbox.api.serializers import NetBoxModelSerializer
+from extras.api.serializers import TagSerializer
 from ipam.api.serializers import IPAddressSerializer
 from virtualization.api.serializers import VirtualMachineSerializer
 from netbox_proxbox.models import (
@@ -27,6 +28,7 @@ class VMBackupSerializer(NetBoxModelSerializer):
     virtual_machine = VirtualMachineSerializer(nested=True)
     subtype = serializers.ChoiceField(choices=ProxmoxBackupSubtypeChoices)
     format = serializers.ChoiceField(choices=ProxmoxBackupFormatChoices)
+    tags = TagSerializer(many=True, required=False, nested=True)
     
     class Meta:
         model = VMBackup
@@ -46,7 +48,7 @@ class SyncProcessSerializer(NetBoxModelSerializer):
     runtime = serializers.FloatField(required=False, allow_null=True)
     started_at = serializers.DateTimeField()
     completed_at = serializers.DateTimeField(required=False, allow_null=True)
-    tags = serializers.PrimaryKeyRelatedField(queryset=Tag.objects.all(), many=True)
+    tags = TagSerializer(many=True, required=False, nested=True)
     
     class Meta:
         model = SyncProcess
