@@ -149,7 +149,7 @@ class SyncProcessSerializer(NetBoxModelSerializer):
 
 class ProxmoxEndpointSerializer(NetBoxModelSerializer):
     url = serializers.HyperlinkedIdentityField(
-        view_name='plugins-api:netbox_proxbox-api:proxmoxendpoint-detail',
+        view_name='plugins-api:netbox_proxbox-api:endpoints:proxmox-endpoint-detail',
     )
     ip_address = IPAddressSerializer()
     domain = serializers.CharField(required=False, allow_null=True)
@@ -166,7 +166,7 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
 
 class NetBoxEndpointSerializer(NetBoxModelSerializer):
     url = serializers.HyperlinkedIdentityField(
-        view_name='plugins-api:netbox_proxbox-api:netboxendpoint-detail',
+        view_name='plugins-api:netbox_proxbox-api:endpoints:netbox-endpoint-detail',
     )
     ip_address = IPAddressSerializer(nested=True, required=False, allow_null=True)
     
@@ -191,7 +191,7 @@ class NetBoxEndpointSerializer(NetBoxModelSerializer):
 
 class FastAPIEndpointSerializer(NetBoxModelSerializer):
     url = serializers.HyperlinkedIdentityField(
-        view_name='plugins-api:netbox_proxbox-api:fastapiendpoint-detail',
+        view_name='plugins-api:netbox_proxbox-api:endpoints:fastapi-endpoint-detail',
     )
     ip_address = IPAddressSerializer(nested=True, required=False, allow_null=True)
     

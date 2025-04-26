@@ -1,3 +1,6 @@
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.routers import APIRootView
 from netbox.api.viewsets import NetBoxModelViewSet
 from rest_framework import viewsets
 from extras.models import JournalEntry
@@ -15,6 +18,28 @@ from .serializers import (
     VMBackupSerializer
 )
 
+class ProxBoxRootView(APIRootView):
+    """
+    ProxBox API root view
+    """
+    def get_view_name(self):
+        return "ProxBox"
+
+    def get(self, request, *args, **kwargs):
+        # Get the default response from the parent class
+        response = super().get(request, *args, **kwargs)
+        
+        # Get the base URL for the API
+        base_url = request.build_absolute_uri('/').rstrip('/')
+        
+        # Add the endpoints link to the response data
+        response.data['endpoints'] = f"{base_url}/api/plugins/proxbox/endpoints/"
+        
+        return response
+
+class ProxBoxEndpointsView(APIRootView):
+    def get_view_name(self):
+        return "Endpoints"
 
 class VMBackupViewSet(NetBoxModelViewSet):
     queryset = models.VMBackup.objects.all()
