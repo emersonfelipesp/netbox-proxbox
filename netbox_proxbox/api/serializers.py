@@ -46,11 +46,10 @@ class VMBackupSerializer(NetBoxModelSerializer):
 
 class SyncProcessSerializer(NetBoxModelSerializer):
     """
-    Serializer for SyncProcess model with journal entries integration.
+    Serializer for SyncProcess model.
     
-    This serializer handles the conversion of SyncProcess objects to/from JSON,
-    including their associated journal entries. It extends NetBoxModelSerializer
-    to support NetBox's standard features like tags and custom fields.
+    This serializer handles the conversion of SyncProcess objects to/from JSON.
+    It extends NetBoxModelSerializer to support NetBox's standard features like tags and custom fields.
     
     Attributes:
         url: HyperlinkedIdentityField for the object's detail view
@@ -60,7 +59,6 @@ class SyncProcessSerializer(NetBoxModelSerializer):
         started_at: DateTimeField for process start time
         completed_at: DateTimeField for process completion time
         tags: TagSerializer for associated tags
-        journal_entries: JournalEntrySerializer for associated journal entries
         
     Fields:
         - id: Unique identifier
@@ -73,33 +71,8 @@ class SyncProcessSerializer(NetBoxModelSerializer):
         - completed_at: Completion timestamp
         - runtime: Process duration in seconds
         - tags: Associated tags
-        - journal_entries: Associated journal entries
         - created: Creation timestamp
         - last_updated: Last update timestamp
-        
-    Example JSON:
-        {
-            "id": 1,
-            "url": "/api/plugins/proxbox/sync-processes/1/",
-            "display": "Full Sync - 2024-01-01",
-            "name": "Full Sync",
-            "sync_type": "full",
-            "status": "completed",
-            "started_at": "2024-01-01T00:00:00Z",
-            "completed_at": "2024-01-01T00:05:00Z",
-            "runtime": 300.0,
-            "tags": [],
-            "journal_entries": [
-                {
-                    "id": 1,
-                    "kind": "info",
-                    "comments": "Sync process started",
-                    "created": "2024-01-01T00:00:00Z"
-                }
-            ],
-            "created": "2024-01-01T00:00:00Z",
-            "last_updated": "2024-01-01T00:05:00Z"
-        }
     """
     url = serializers.HyperlinkedIdentityField(
         view_name='plugins-api:netbox_proxbox-api:syncprocess-detail',
@@ -110,42 +83,13 @@ class SyncProcessSerializer(NetBoxModelSerializer):
     started_at = serializers.DateTimeField()
     completed_at = serializers.DateTimeField(required=False, allow_null=True)
     tags = TagSerializer(many=True, required=False, nested=True)
-    journal_entries = serializers.SerializerMethodField()
     
     class Meta:
         model = SyncProcess
         fields = (
             'id', 'url', 'display', 'name', 'sync_type', 'status', 'started_at', 'completed_at',
-            'runtime', 'tags', 'journal_entries', 'created', 'last_updated',
+            'runtime', 'tags', 'created', 'last_updated',
         )
-
-    def get_journal_entries(self, obj):
-        """
-        Get journal entries for this sync process.
-        This method prevents circular references by manually serializing the journal entries.
-        """
-        from extras.models import JournalEntry
-        from django.contrib.contenttypes.models import ContentType
-        
-        # Get the content type for SyncProcess
-        content_type = ContentType.objects.get_for_model(SyncProcess)
-        
-        # Get all journal entries for this sync process using the correct GenericForeignKey fields
-        entries = JournalEntry.objects.filter(
-            assigned_object_type=content_type,
-            assigned_object_id=obj.id
-        ).order_by('created')
-        
-        # Manually serialize the entries to avoid circular references
-        return [{
-            'id': entry.id,
-            'url': self.context['request'].build_absolute_uri(f'/api/extras/journal-entries/{entry.id}/'),
-            'display': str(entry),
-            'kind': entry.kind,
-            'comments': entry.comments,
-            'created': entry.created,
-            'last_updated': entry.last_updated
-        } for entry in entries]
 
 class ProxmoxEndpointSerializer(NetBoxModelSerializer):
     url = serializers.HyperlinkedIdentityField(
