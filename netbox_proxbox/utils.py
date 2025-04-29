@@ -1,6 +1,9 @@
 def get_fastapi_url(object):
     domain_or_ip = None
-    ip = str(object.ip_address).split('/')[0]
+    ip = '127.0.0.1'  # Default fallback IP
+    if object.ip_address:
+        ip = str(object.ip_address).split('/')[0]
+    
     if object.domain:
         domain_or_ip = object.domain
     else:

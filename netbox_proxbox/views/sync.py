@@ -45,17 +45,23 @@ def sync_resource(request: HtmxHttpRequest, path: str, template_name: str) -> Ht
     def make_request():
         try:
             response = requests.get(fastapi_path, verify=fastapi_verify_ssl)
-            print(f'FastAPI response: {response.json()}')
-            response.raise_for_status()
-            CONNECTED_URL_SUCCESSFUL = fastapi_url
+            if response.ok:
+                print(f'FastAPI response: {response.json()}')
+                CONNECTED_URL_SUCCESSFUL = fastapi_url
+            else:
+                response.raise_for_status()
         except Exception as errr:
-            print(f'Error occurred: {errr}')
+            try:
+                print(f'Error occurred: {errr}')
 
-            # Try to connect to FastAPI using the IP address and port.
-            print(f'Trying to connect to FastAPI using the IP address and port: {fastapi_detail.get("ip_address_url")}')
-            response = requests.get(fastapi_detail.get('ip_address_url') + f'/{path}', verify=False)
-            print(f'FastAPI response: {response.json()}')
-            CONNECTED_URL_SUCCESSFUL = fastapi_detail.get('ip_address_url')
+                # Try to connect to FastAPI using the IP address and port.
+                print(f'Trying to connect to FastAPI using the IP address and port: {fastapi_detail.get("ip_address_url")}')
+                response = requests.get(fastapi_detail.get('ip_address_url') + f'/{path}', verify=False)
+                print(f'FastAPI response: {response.json()}')
+                CONNECTED_URL_SUCCESSFUL = fastapi_detail.get('ip_address_url')
+            except Exception as errr:
+                print(f'Error occurred: {errr}')
+                raise
 
     # Run the request in a separate thread
     Thread(target=make_request).start()

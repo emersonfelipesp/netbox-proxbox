@@ -142,6 +142,13 @@ class NetBoxEndpoint(NetBoxModel):
     def get_absolute_url(self):
         return reverse("plugins:netbox_proxbox:netboxendpoint", args=[self.pk])
         
+    @property
+    def url(self) -> str:
+        """Construct the full URL for the NetBox endpoint."""
+        protocol = 'https' if self.verify_ssl else 'http'
+        host = self.domain if self.domain else self.ip_address.address.split('/')[0]
+        return f"{protocol}://{host}:{self.port}"
+
 
 class FastAPIEndpoint(NetBoxModel):
     name = models.CharField(
@@ -217,7 +224,7 @@ class FastAPIEndpoint(NetBoxModel):
         return reverse("plugins:netbox_proxbox:fastapiendpoint", args=[self.pk])
 
 
-class SyncProcess(NetBoxModel, JournalingMixin):
+class SyncProcess(NetBoxModel):
     name = models.CharField(max_length=255, unique=True)
     sync_type = models.CharField(
         max_length=20,

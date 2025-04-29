@@ -6,6 +6,8 @@ from virtualization.models import VirtualMachine
 
 import requests
 
+from django.contrib import messages
+
 # Proxbox Imports
 from netbox_proxbox.models import VMBackup, FastAPIEndpoint
 from netbox_proxbox.tables import VMBackupTable
@@ -68,9 +70,6 @@ class VMBackupAddView(generic.ObjectView):
     queryset = VMBackup.objects.none()  # Empty queryset since we don't need any objects
     
     def get(self, request):
-        from django.contrib import messages
-        from django.shortcuts import redirect
-        
         messages.error(request, "Adding backups through the UI is not supported. Backups can only be created through the plugin backend.")
         return redirect('plugins:netbox_proxbox:vmbackup_list')
 
