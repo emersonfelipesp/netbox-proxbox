@@ -109,11 +109,11 @@
                         </td>
                     </tr>
                 {% endif %}
-                {% if fastapi_url %}
+                {% if object.url %}
                     <tr>
                         <th scope="row"><strong>HTTP URL</strong></th>
                         <td id="fastapi-url">
-                            <a href="{{ fastapi_url }}" target="_blank">{{ fastapi_url }}</a>
+                            <a href="{{ object.url }}" target="_blank">{{ object.url }}</a>
                         </td>
                     </tr>
                 {% endif %}
