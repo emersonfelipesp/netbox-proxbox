@@ -1,0 +1,25 @@
+{% extends 'generic/object_list.html' %}
+{% load buttons %}
+{% load helpers %}
+{% load i18n %}
+
+{% block controls %}
+  <div class="btn-group" role="group">
+    {% if 'sync_backups' in actions %}
+      <a href="{% url 'plugins:netbox_proxbox:sync_vm_backups' %}">
+        <button type="submit" name="_sync_backups" {% formaction %}="{% url 'plugins:netbox_proxbox:sync_vm_backups' %}" class="btn btn-primary">
+            <i class="mdi mdi-sync" aria-hidden="true"></i> {% trans "Sync Backups" %}
+        </button>
+      </a>
+    {% endif %}
+  </div>
+{% endblock %}
+{% block bulk_buttons %}
+  <div class="btn-group" role="group">
+    {% if 'bulk_delete' in actions %}
+      <button type="submit" name="_delete" {% formaction %}="{% url 'plugins:netbox_proxbox:vmbackup_bulk_delete' %}" class="btn btn-danger">
+        <i class="mdi mdi-trash-can-outline" aria-hidden="true"></i> {% trans "Delete Selected" %}
+      </button>
+    {% endif %}
+  </div>
+{% endblock %} 

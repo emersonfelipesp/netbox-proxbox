@@ -34,7 +34,7 @@ if fastapi_service_obj:
     fastapi_url: str = fastapi_detail.get('http_url', None)
     fastapi_verify_ssl: bool = fastapi_detail.get('verify_ssl', True)
 
-def sync_resource(request: HtmxHttpRequest, path: str, template_name: str) -> HttpResponse:
+def sync_resource(request: HtmxHttpRequest, path: str, template_name: str, query_params: dict = None) -> HttpResponse:
     global CONNECTED_URL_SUCCESSFUL
 
     fastapi_path: str = f'{fastapi_url}/{path}' if fastapi_url else None
@@ -44,18 +44,24 @@ def sync_resource(request: HtmxHttpRequest, path: str, template_name: str) -> Ht
 
     def make_request():
         try:
-            response = requests.get(fastapi_path, verify=fastapi_verify_ssl)
-            print(f'FastAPI response: {response.json()}')
-            response.raise_for_status()
-            CONNECTED_URL_SUCCESSFUL = fastapi_url
+            response = requests.get(fastapi_path, params=query_params, verify=fastapi_verify_ssl)
+            if response.ok:
+                print(f'FastAPI response: {response.json()}')
+                CONNECTED_URL_SUCCESSFUL = fastapi_url
+            else:
+                response.raise_for_status()
         except Exception as errr:
-            print(f'Error occurred: {errr}')
+            try:
+                print(f'Error occurred: {errr}')
 
-            # Try to connect to FastAPI using the IP address and port.
-            print(f'Trying to connect to FastAPI using the IP address and port: {fastapi_detail.get("ip_address_url")}')
-            response = requests.get(fastapi_detail.get('ip_address_url') + f'/{path}', verify=False)
-            print(f'FastAPI response: {response.json()}')
-            CONNECTED_URL_SUCCESSFUL = fastapi_detail.get('ip_address_url')
+                # Try to connect to FastAPI using the IP address and port.
+                print(f'Trying to connect to FastAPI using the IP address and port: {fastapi_detail.get("ip_address_url")}')
+                response = requests.get(fastapi_detail.get('ip_address_url') + f'/{path}', params=query_params, verify=False)
+                print(f'FastAPI response: {response.json()}')
+                CONNECTED_URL_SUCCESSFUL = fastapi_detail.get('ip_address_url')
+            except Exception as errr:
+                print(f'Error occurred: {errr}')
+                raise
 
     # Run the request in a separate thread
     Thread(target=make_request).start()
@@ -64,12 +70,35 @@ def sync_resource(request: HtmxHttpRequest, path: str, template_name: str) -> Ht
 
 @require_GET
 def sync_devices(request: HtmxHttpRequest) -> HttpResponse:
-    return sync_resource(request, 'dcim/devices/create', 'netbox_proxbox/sync_devices.html')
+    return sync_resource(
+        request,
+        path='dcim/devices/create',
+        template_name='netbox_proxbox/sync_devices.html'
+    )
 
 @require_GET
 def sync_virtual_machines(request: HtmxHttpRequest) -> HttpResponse:
-    return sync_resource(request, 'virtualization/virtual-machines/create', 'netbox_proxbox/sync_virtual_machines.html')
+    return sync_resource(
+        request,
+        path='virtualization/virtual-machines/create',
+        template_name='netbox_proxbox/sync_virtual_machines.html'
+    )
 
 @require_GET
 def sync_full_update(request: HtmxHttpRequest) -> HttpResponse:
-    return sync_resource(request, 'full-update', 'netbox_proxbox/sync_full_update.html')
+    return sync_resource(
+        request,
+        path='full-update',
+        template_name='netbox_proxbox/sync_full_update.html'
+    )
+
+@require_GET
+def sync_vm_backups(request: HtmxHttpRequest) -> HttpResponse:
+    return sync_resource(
+        request,
+        path='virtualization/virtual-machines/backups/all/create',
+        query_params={
+            'delete_nonexistent_backup': True
+        },
+        template_name='netbox_proxbox/sync_vm_backups.html'
+    )

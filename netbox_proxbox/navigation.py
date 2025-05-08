@@ -21,6 +21,11 @@ sync_processes_item = PluginMenuItem(
     link_text='Sync Processes',
 )
 
+backups_item = PluginMenuItem(
+    link='plugins:netbox_proxbox:vmbackup_list',
+    link_text='Backups',
+)
+
 contributing_item = PluginMenuItem(
     link='plugins:netbox_proxbox:contributing',
     link_text='Contributing!',
@@ -86,6 +91,7 @@ menu = PluginMenu(
                 fullupdate_item,
                 nodes_item,
                 virtual_machines_item,
+                backups_item,
                 sync_processes_item,
             )
          ),

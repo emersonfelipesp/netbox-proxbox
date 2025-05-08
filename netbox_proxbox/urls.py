@@ -5,7 +5,9 @@ from netbox_proxbox.websocket_client import websocket_client, WebSocketView
 
 from netbox.views.generic import ObjectChangeLogView
 
-from . import models, views
+from netbox_proxbox import models, views
+
+app_name = 'netbox_proxbox'
 
 urlpatterns = [
     # Home View
@@ -27,53 +29,32 @@ urlpatterns = [
     path('telegram/', views.TelegramView, name='telegram'),
     
     # ProxmoxEndpoint Model URLs
-    path('endpoints/proxmox/', views.ProxmoxEndpointListView.as_view(), name='proxmoxendpoint_list'),
-    path('endpoints/proxmox/add/', views.ProxmoxEndpointEditView.as_view(), name='proxmoxendpoint_add'),
-    path('endpoints/proxmox/<int:pk>', views.ProxmoxEndpointView.as_view(), name='proxmoxendpoint'),
-    path('endpoints/proxmox/<int:pk>/edit/', views.ProxmoxEndpointEditView.as_view(), name='proxmoxendpoint_edit'),
-    path('endpoints/proxmox/<int:pk>/delete/', views.ProxmoxEndpointDeleteView.as_view(), name='proxmoxendpoint_delete'),
-    path('endpoints/proxmox/<int:pk>/changelog/', ObjectChangeLogView.as_view(), name='proxmoxendpoint_changelog', kwargs={
-        'model': models.ProxmoxEndpoint
-    }),
+    path('endpoints/proxmox/<int:pk>/', include(get_model_urls('netbox_proxbox', 'proxmoxendpoint'))),
+    path('endpoints/proxmox/', include(get_model_urls('netbox_proxbox', 'proxmoxendpoint', detail=False))),
     
     # NetBoxEndpoint Model URLs
-    path('endpoints/netbox/', views.NetBoxEndpointListView.as_view(), name='netboxendpoint_list'),
-    path('endpoints/netbox/add/', views.NetBoxEndpointEditView.as_view(), name='netboxendpoint_add'),
-    path('endpoints/netbox/<int:pk>', views.NetBoxEndpointView.as_view(), name='netboxendpoint'),
-    path('endpoints/netbox/<int:pk>/edit/', views.NetBoxEndpointEditView.as_view(), name='netboxendpoint_edit'),
-    path('endpoints/netbox/<int:pk>/delete/', views.NetBoxEndpointDeleteView.as_view(), name='netboxendpoint_delete'),
-    path('endpoints/netbox/<int:pk>/changelog/', ObjectChangeLogView.as_view(), name='netboxendpoint_changelog', kwargs={
-        'model': models.NetBoxEndpoint
-    }),
-    
+    path('endpoints/netbox/<int:pk>/', include(get_model_urls('netbox_proxbox', 'netboxendpoint'))),
+    path('endpoints/netbox/', include(get_model_urls('netbox_proxbox', 'netboxendpoint', detail=False))),
     
     # FastAPIEndpoint Model URLs
-    path('endpoints/fastapi/', views.FastAPIEndpointListView.as_view(), name='fastapiendpoint_list'),
-    path('endpoints/fastapi/add/', views.FastAPIEndpointEditView.as_view(), name='fastapiendpoint_add'),
-    path('endpoints/fastapi/<int:pk>', views.FastAPIEndpointView.as_view(), name='fastapiendpoint'),
-    path('endpoints/fastapi/<int:pk>/edit/', views.FastAPIEndpointEditView.as_view(), name='fastapiendpoint_edit'),
-    path('endpoints/fastapi/<int:pk>/delete/', views.FastAPIEndpointDeleteView.as_view(), name='fastapiendpoint_delete'),
-    path('endpoints/fastapi/<int:pk>/changelog/', ObjectChangeLogView.as_view(), name='fastapiendpoint_changelog', kwargs={
-        'model': models.FastAPIEndpoint
-    }),
+    path('endpoints/fastapi/<int:pk>/', include(get_model_urls('netbox_proxbox', 'fastapiendpoint'))),
+    path('endpoints/fastapi/', include(get_model_urls('netbox_proxbox', 'fastapiendpoint', detail=False))),
     
     # SyncProcess Model URLs
-    path('sync-processes/', views.SyncProcessListView.as_view(), name='syncprocess_list'),
-    path('sync-processes/add/', views.SyncProcessEditView.as_view(), name='syncprocess_add'),
-    path('sync-processes/<int:pk>', views.SyncProcessView.as_view(), name='syncprocess'),
-    path('sync-processes/<int:pk>/edit/', views.SyncProcessEditView.as_view(), name='syncprocess_edit'),
-    path('sync-processes/<int:pk>/delete/', views.SyncProcessDeleteView.as_view(), name='syncprocess_delete'),
-    path('sync-processes/<int:pk>/changelog/', ObjectChangeLogView.as_view(), name='syncprocess_changelog', kwargs={
-        'model': models.SyncProcess
-    }),
+    path('sync-processes/<int:pk>/', include(get_model_urls('netbox_proxbox', 'syncprocess'))),
+    path('sync-processes/', include(get_model_urls('netbox_proxbox', 'syncprocess', detail=False))),
+    
+    # VMBackup Model URLs
+    path('backups/<int:pk>/', include(get_model_urls('netbox_proxbox', 'vmbackup'))),
+    path('backups/', include(get_model_urls('netbox_proxbox', 'vmbackup', detail=False))),
     
     # Manual Sync (HTTP Request)
     path('sync/devices', views.sync_devices, name='sync_devices'),
     path('sync/virtual-machines', views.sync_virtual_machines, name='sync_virtual_machines'),
+    path('sync/virtual-machines/backups', views.sync_vm_backups, name='sync_vm_backups'),
     path('sync/full-update', views.sync_full_update, name='sync_full_update'),
     
     path('keepalive-status/<str:service>/<int:pk>', views.get_service_status, name='keepalive_status'),
     path('proxmox-card/<int:pk>', views.get_proxmox_card, name='proxmox_card'),
     path('websocket/<str:message>', WebSocketView.as_view(), name='websocket'),
-    
 ]

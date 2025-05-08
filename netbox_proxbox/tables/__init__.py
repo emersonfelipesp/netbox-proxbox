@@ -1,15 +1,19 @@
+# Django Imports
 import django_tables2 as tables
 from django.utils.translation import gettext as _
 
+# NetBox Imports
 from netbox.tables import NetBoxTable, ChoiceFieldColumn
 from netbox.tables.columns import BooleanColumn
 
-from .models import (
+# Proxbox Imports
+from netbox_proxbox.models import (
     ProxmoxEndpoint,
     NetBoxEndpoint,
     FastAPIEndpoint,
     SyncProcess,
 )
+from netbox_proxbox.tables.vm_backup import VMBackupTable
 
 
 class SyncProcessTable(NetBoxTable):
@@ -70,7 +74,7 @@ class NetBoxEndpointTable(NetBoxTable):
     name = tables.Column(linkify=True)
     ip_address = tables.Column(linkify=True)
     verify_ssl = BooleanColumn()
-    
+    token = tables.Column(linkify=True)
     class Meta(NetBoxTable.Meta):
         model = NetBoxEndpoint
         fields = (

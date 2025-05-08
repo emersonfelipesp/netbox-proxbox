@@ -1,0 +1,15 @@
+{% extends 'generic/bulk_delete.html' %}
+{% load i18n %}
+
+{% block title %}
+  {% trans "Delete VM Backups" %}
+{% endblock %}
+
+{% block message %}
+  <p>{% trans "Are you sure you want to delete these VM backups?" %}</p>
+  <ul>
+    {% for vmbackup in selected_objects %}
+      <li>{{ vmbackup }}</li>
+    {% endfor %}
+  </ul>
+{% endblock %} 

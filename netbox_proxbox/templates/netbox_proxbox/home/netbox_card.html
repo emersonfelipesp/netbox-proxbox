@@ -52,6 +52,14 @@
                         {% endif %}
                     </td>
                 </tr>
+                {% if object.url %}
+                    <tr>
+                        <th scope="row"><strong>URL</strong></th>
+                        <td id="fastapi-url">
+                            {{ object.url }}
+                        </td>
+                    </tr>
+                {% endif %}
                 {% if object.domain %}
                     <tr>
                         <th scope="row"><strong>Domain</strong></th>

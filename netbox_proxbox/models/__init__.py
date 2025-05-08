@@ -4,11 +4,29 @@ from django.utils.translation import gettext_lazy as _
 from django.core.validators import MaxValueValidator, MinValueValidator 
 
 from netbox.models import NetBoxModel
+from netbox.models.features import JournalingMixin
 
-from .fields import DomainField
-from .choices import ProxmoxModeChoices, SyncTypeChoices, SyncStatusChoices
+from netbox_proxbox.fields import DomainField
+from netbox_proxbox.choices import ProxmoxModeChoices, SyncTypeChoices, SyncStatusChoices
+from netbox_proxbox.models.vm_backup import VMBackup
 
-class ProxmoxEndpoint(NetBoxModel):
+class CommonProperties:
+    @property
+    def ip(self) -> str:
+        """Get the IP address of the Proxmox endpoint."""
+        return self.ip_address.address.split('/')[0] if self.ip_address else None
+    
+    @property
+    def url(self) -> str:
+        """Construct the full URL for the Proxmox endpoint."""
+        try:
+            protocol = 'https' if self.verify_ssl else 'http'
+            host = self.domain if self.domain else self.ip
+            return f"{protocol}://{host}:{self.port}"
+        except Exception as e:
+            return f"Error: {e}"
+
+class ProxmoxEndpoint(NetBoxModel, CommonProperties):
     name = models.CharField(
         default='Proxmox Endpoint',
         max_length=255,
@@ -88,7 +106,7 @@ class ProxmoxEndpoint(NetBoxModel):
         return reverse('plugins:netbox_proxbox:proxmoxendpoint', args=[self.pk])
 
 
-class NetBoxEndpoint(NetBoxModel):
+class NetBoxEndpoint(NetBoxModel, CommonProperties):
     name = models.CharField(
         default='NetBox Endpoint',
         max_length=255,
@@ -139,9 +157,9 @@ class NetBoxEndpoint(NetBoxModel):
 
     def get_absolute_url(self):
         return reverse("plugins:netbox_proxbox:netboxendpoint", args=[self.pk])
-        
 
-class FastAPIEndpoint(NetBoxModel):
+
+class FastAPIEndpoint(NetBoxModel, CommonProperties):
     name = models.CharField(
         default='ProxBox Endpoint',
         max_length=255,
@@ -208,6 +226,16 @@ class FastAPIEndpoint(NetBoxModel):
         verbose_name_plural: str = 'FastAPI Endpoints'
         unique_together = ['name', 'ip_address']
     
+    @property
+    def websocket_url(self) -> str:
+        """Construct the full URL for the Proxbox endpoint."""
+        try:
+            protocol = 'wss' if self.verify_ssl else 'ws'
+            host = self.domain if self.domain else self.ip
+            return f"{protocol}://{host}:{self.websocket_port}"
+        except Exception as e:
+            return f"Error: {e}"
+        
     def __str__(self):
         return f"{self.name} ({self.domain})"
 
