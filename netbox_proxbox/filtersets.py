@@ -48,5 +48,5 @@ class VMBackupFilterSet(NetBoxModelFilterSet):
         model = VMBackup
         fields = ['id', 'virtual_machine', 'subtype', 'format', 'creation_time', 'size', 'used', 'encrypted', 'volume_id', 'vmid']
 
-    def search(self, queryset, virtual_machine, value):
-        return queryset.filter(virtual_machine__icontains=value)
+    def search(self, queryset, name, value):
+        return queryset.filter(virtual_machine__name__icontains=value)
