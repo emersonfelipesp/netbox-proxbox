@@ -36,11 +36,13 @@ class SyncStatusChoices(ChoiceSet):
     NOT_STARTED = 'not-started'
     SYNCING = 'syncing'
     COMPLETED = 'completed'
+    FAILED = 'failed'
     
     CHOICES = [
         (NOT_STARTED, _('Not Started'), 'gray'),
         (SYNCING, _('Syncing'), 'blue'),
         (COMPLETED, _('Completed'), 'green'),
+        (FAILED, _('Failed'), 'red'),
     ]
 
 
