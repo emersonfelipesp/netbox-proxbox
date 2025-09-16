@@ -32,19 +32,19 @@ jobs:
           sudo pip3 install mkdocstrings-python
       - name: Deploy MkDocs Page
         run: sudo mkdocs gh-deploy --force
-      - name: Git Commit staged
-        run: |
-          sudo git config --global --add user.name emersonfelipesp
-          sudo git config --global --add user.email emersonfelipe.2003@gmail.com
-          sudo git add .
-          sudo git commit -m "Saves 'site' html pages"
-      - name: Git checkout to 'gh-pages' branch
-        run: |
-          sudo git checkout gh-pages
-          sudo git push --set-upstream origin gh-pages
-      - name: Change custom domain
-        run: |
-          sudo echo 'proxbox.netbox.dev.br' > CNAME
-          sudo git add CNAME
-          sudo git commit -m "Change custom domain to 'proxbox.netbox.dev.br'"
-          sudo git push
+      # - name: Git Commit staged
+      #   run: |
+      #     sudo git config --global --add user.name emersonfelipesp
+      #     sudo git config --global --add user.email emersonfelipe.2003@gmail.com
+      #     sudo git add .
+      #     sudo git commit -m "Saves 'site' html pages"
+      # - name: Git checkout to 'gh-pages' branch
+      #   run: |
+      #     sudo git checkout gh-pages
+      #     sudo git push --set-upstream origin gh-pages
+      # - name: Change custom domain
+      #   run: |
+      #     sudo echo 'proxbox.netbox.dev.br' > CNAME
+      #     sudo git add CNAME
+      #     sudo git commit -m "Change custom domain to 'proxbox.netbox.dev.br'"
+      #     sudo git push
