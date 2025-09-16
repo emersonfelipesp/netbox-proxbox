@@ -19,8 +19,6 @@ from threading import Thread
 class HtmxHttpRequest(HttpRequest):
     htmx: HtmxDetails
 
-CONNECTED_URL_SUCCESSFUL = None
-
 fastapi_service_obj = None
 # Get the first FastAPI Endpoint object
 try:
@@ -35,7 +33,6 @@ if fastapi_service_obj:
     fastapi_verify_ssl: bool = fastapi_detail.get('verify_ssl', True)
 
 def sync_resource(request: HtmxHttpRequest, path: str, template_name: str, query_params: dict = None) -> HttpResponse:
-    global CONNECTED_URL_SUCCESSFUL
 
     fastapi_path: str = f'{fastapi_url}/{path}' if fastapi_url else None
 
@@ -47,7 +44,6 @@ def sync_resource(request: HtmxHttpRequest, path: str, template_name: str, query
             response = requests.get(fastapi_path, params=query_params, verify=fastapi_verify_ssl)
             if response.ok:
                 print(f'FastAPI response: {response.json()}')
-                CONNECTED_URL_SUCCESSFUL = fastapi_url
             else:
                 response.raise_for_status()
         except Exception as errr:
@@ -58,7 +54,6 @@ def sync_resource(request: HtmxHttpRequest, path: str, template_name: str, query
                 print(f'Trying to connect to FastAPI using the IP address and port: {fastapi_detail.get("ip_address_url")}')
                 response = requests.get(fastapi_detail.get('ip_address_url') + f'/{path}', params=query_params, verify=False)
                 print(f'FastAPI response: {response.json()}')
-                CONNECTED_URL_SUCCESSFUL = fastapi_detail.get('ip_address_url')
             except Exception as errr:
                 print(f'Error occurred: {errr}')
                 raise

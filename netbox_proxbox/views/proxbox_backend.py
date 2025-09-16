@@ -1,5 +1,6 @@
 from django.views import View
 from django.shortcuts import render, redirect
+import subprocess
 
 try:
     from netbox import configuration
