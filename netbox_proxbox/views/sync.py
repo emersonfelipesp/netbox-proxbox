@@ -20,7 +20,9 @@ def _get_fastapi_request_context():
     if fastapi_service_obj is None:
         return None
 
-    fastapi_detail = get_fastapi_url(fastapi_service_obj)
+    fastapi_detail = get_fastapi_url(fastapi_service_obj) or {}
+    if not isinstance(fastapi_detail, dict):
+        fastapi_detail = {}
     return {
         "detail": fastapi_detail,
         "http_url": fastapi_detail.get("http_url"),
@@ -36,10 +38,12 @@ def sync_resource(path: str, query_params: dict | None = None) -> tuple[dict, in
     fastapi_path = f"{context['http_url']}/{path}"
     requested_urls = []
 
-    for url, verify in (
-        (fastapi_path, context["verify_ssl"]),
-        (f"{context['detail']['ip_address_url']}/{path}", False),
-    ):
+    request_candidates = [(fastapi_path, context["verify_ssl"])]
+    fallback_url = context["detail"].get("ip_address_url")
+    if fallback_url:
+        request_candidates.append((f"{fallback_url}/{path}", False))
+
+    for url, verify in request_candidates:
         try:
             requested_urls.append(url)
             response = requests.get(url, params=query_params, verify=verify, timeout=5)
