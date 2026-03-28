@@ -12,6 +12,17 @@ def get_ip_address_host(value) -> str:
     return str(value).split("/")[0]
 
 
+def get_backend_auth_headers(endpoint) -> dict[str, str]:
+    token = (getattr(endpoint, "token", "") or "").strip()
+    if not token:
+        return {}
+
+    if token.startswith("Bearer ") or token.startswith("Token "):
+        return {"Authorization": token}
+
+    return {"Authorization": f"Bearer {token}"}
+
+
 def get_fastapi_url(endpoint):
     ip = get_ip_address_host(getattr(endpoint, "ip_address", None))
     domain = getattr(endpoint, "domain", None) or ip
@@ -22,7 +33,7 @@ def get_fastapi_url(endpoint):
     websocket_scheme = "wss" if verify_ssl else "ws"
     http_url = f"{scheme}://{domain}:{endpoint.port}"
     websocket_url = f"{websocket_scheme}://{websocket_domain}:{endpoint.websocket_port}/ws"
-    ip_address_url = f"https://{ip}:{endpoint.port}"
+    ip_address_url = f"{scheme}://{ip}:{endpoint.port}"
 
     if verify_ssl and any(host in http_url for host in ("proxbox.backend.local", "localhost", "127.0.0.1")):
         try:

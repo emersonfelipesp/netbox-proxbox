@@ -30,7 +30,29 @@ def test_get_fastapi_url_builds_http_and_websocket_urls(monkeypatch):
 
     assert result["http_url"] == "http://proxbox.local:8800"
     assert result["websocket_url"] == "ws://ws.proxbox.local:8801/ws"
-    assert result["ip_address_url"] == "https://10.0.0.5:8800"
+    assert result["ip_address_url"] == "http://10.0.0.5:8800"
+
+
+def test_get_backend_auth_headers_normalizes_bearer_tokens(monkeypatch):
+    netbox_module = types.ModuleType("netbox")
+    netbox_plugins = types.ModuleType("netbox.plugins")
+    netbox_plugins.PluginConfig = type("PluginConfig", (), {})
+    monkeypatch.setitem(sys.modules, "netbox", netbox_module)
+    monkeypatch.setitem(sys.modules, "netbox.plugins", netbox_plugins)
+    sys.modules.pop("netbox_proxbox.utils", None)
+
+    utils = importlib.import_module("netbox_proxbox.utils")
+
+    assert utils.get_backend_auth_headers(SimpleNamespace(token="")) == {}
+    assert utils.get_backend_auth_headers(SimpleNamespace(token="abc")) == {
+        "Authorization": "Bearer abc"
+    }
+    assert utils.get_backend_auth_headers(SimpleNamespace(token="Bearer abc")) == {
+        "Authorization": "Bearer abc"
+    }
+    assert utils.get_backend_auth_headers(SimpleNamespace(token="Token abc")) == {
+        "Authorization": "Token abc"
+    }
 
 
 def test_get_fastapi_url_configures_mkcert_bundle_for_local_https(monkeypatch):
