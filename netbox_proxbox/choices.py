@@ -46,6 +46,18 @@ class SyncStatusChoices(ChoiceSet):
     ]
 
 
+class NetBoxTokenVersionChoices(ChoiceSet):
+    key = 'NetBoxEndpoint.token_version'
+
+    V1 = 'v1'
+    V2 = 'v2'
+
+    CHOICES = [
+        (V1, _('v1 Token'), 'blue'),
+        (V2, _('v2 Token'), 'green'),
+    ]
+
+
 class ProxmoxBackupSubtypeChoices(ChoiceSet):
     key = 'VMBackup.subtype'
     

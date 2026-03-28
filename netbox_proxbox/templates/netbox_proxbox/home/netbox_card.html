@@ -32,7 +32,8 @@
                     <tr><th scope="row"><strong>IP Address</strong></th><td><a href="{{ object.ip_address.get_absolute_url }}">{{ object.ip_address }}</a></td></tr>
                 {% endif %}
                 <tr><th scope="row"><strong>HTTP Port</strong></th><td>{{ object.port }}</td></tr>
-                <tr><th scope="row"><strong>Token</strong></th><td>{% if object.token %}<span class="badge text-bg-gray">Token will not show here for security.</span>{% else %}<span class="badge text-bg-grey">Not configured</span>{% endif %}</td></tr>
+                <tr><th scope="row"><strong>Token Version</strong></th><td>{{ object.token_version_label }}</td></tr>
+                <tr><th scope="row"><strong>Token</strong></th><td>{% if object.has_configured_token %}<span class="badge text-bg-gray">Token will not show here for security.</span>{% else %}<span class="badge text-bg-grey">Not configured</span>{% endif %}</td></tr>
                 <tr><th scope="row"><strong>SSL</strong></th><td>{% if object.verify_ssl %}<span class="text-success"><i class="mdi mdi-check-bold"></i></span>{% else %}<span class="text-danger"><i class="mdi mdi-close-thick"></i></span>{% endif %}</td></tr>
             </table>
             <div align="right">

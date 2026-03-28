@@ -1,4 +1,5 @@
 {% extends 'generic/object_edit.html' %}
+{% load form_helpers %}
 {% load i18n %}
 
 {% block title %}
@@ -15,3 +16,59 @@
   {% endif %}
   
 {% endblock title %}
+
+{% block form %}
+  {% for field in form.hidden_fields %}
+    {{ field }}
+  {% endfor %}
+
+  <div class="field-group mb-5">
+    {% render_field form.name %}
+    {% render_field form.domain %}
+    {% render_field form.ip_address %}
+    {% render_field form.port %}
+    {% render_field form.token_version %}
+    <div id="netbox-v1-token-field">
+      {% render_field form.token %}
+    </div>
+    <div id="netbox-v2-token-fields">
+      {% render_field form.token_key %}
+      {% render_field form.token_secret %}
+    </div>
+    {% render_field form.verify_ssl %}
+    {% render_field form.tags %}
+  </div>
+
+  {% if form.comments %}
+    <div class="field-group mb-5">
+      {% render_field form.comments %}
+    </div>
+  {% endif %}
+
+  {% if form.changelog_message %}
+    <div class="bg-primary-subtle border border-primary rounded-1 pt-3 px-3 mb-3">
+      {% render_field form.changelog_message %}
+    </div>
+  {% endif %}
+
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      const tokenVersionField = document.getElementById("id_token_version");
+      const v1TokenField = document.getElementById("netbox-v1-token-field");
+      const v2TokenFields = document.getElementById("netbox-v2-token-fields");
+
+      if (!tokenVersionField || !v1TokenField || !v2TokenFields) {
+        return;
+      }
+
+      function setVisibility() {
+        const useV2 = tokenVersionField.value === "v2";
+        v1TokenField.hidden = useV2;
+        v2TokenFields.hidden = !useV2;
+      }
+
+      setVisibility();
+      tokenVersionField.addEventListener("change", setVisibility);
+    });
+  </script>
+{% endblock form %}

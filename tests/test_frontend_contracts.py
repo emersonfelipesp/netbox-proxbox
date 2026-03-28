@@ -34,3 +34,17 @@ def test_home_template_uses_plugin_vanilla_js_entrypoint():
     contents = _read("netbox_proxbox/templates/netbox_proxbox/home.html")
     assert "netbox_proxbox/js/home.js" in contents
     assert "htmx.org" not in contents
+
+
+def test_netbox_endpoint_edit_template_supports_v1_and_v2_tokens():
+    contents = _read("netbox_proxbox/templates/netbox_proxbox/netboxendpoint_edit.html")
+    assert "id_token_version" in contents
+    assert "netbox-v1-token-field" in contents
+    assert "netbox-v2-token-fields" in contents
+    assert 'tokenVersionField.value === "v2"' in contents
+
+
+def test_netbox_endpoint_home_card_uses_configured_token_state():
+    contents = _read("netbox_proxbox/templates/netbox_proxbox/home/netbox_card.html")
+    assert "object.token_version_label" in contents
+    assert "object.has_configured_token" in contents

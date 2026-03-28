@@ -81,7 +81,10 @@ def test_endpoint_serializers_expose_supported_model_fields():
             "ip_address",
             "domain",
             "port",
+            "token_version",
             "token",
+            "token_key",
+            "token_secret",
             "verify_ssl",
         },
         "FastAPIEndpointSerializer": {
