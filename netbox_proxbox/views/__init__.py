@@ -57,18 +57,28 @@ class HomeView(View):
 
         fastapi_info = {}
         if fastapi_endpoint_obj:
-            fastapi_info = get_fastapi_url(fastapi_endpoint_obj[0])
+            fastapi_info = get_fastapi_url(fastapi_endpoint_obj[0]) or {}
+            if not isinstance(fastapi_info, dict):
+                fastapi_info = {}
 
         return render(
             request,
             self.template_name,
             {
                 "default_config": default_config,
-                "proxmox_endpoint_list": proxmox_endpoint_obj if proxmox_endpoint_obj.exists() else None,
-                "netbox_endpoint_list": netbox_endpoint_obj if netbox_endpoint_obj.exists() else None,
-                "fastapi_endpoint_list": fastapi_endpoint_obj if fastapi_endpoint_obj.exists() else None,
+                "proxmox_endpoint_list": proxmox_endpoint_obj
+                if proxmox_endpoint_obj.exists()
+                else None,
+                "netbox_endpoint_list": netbox_endpoint_obj
+                if netbox_endpoint_obj.exists()
+                else None,
+                "fastapi_endpoint_list": fastapi_endpoint_obj
+                if fastapi_endpoint_obj.exists()
+                else None,
                 "fastapi_url": fastapi_info.get("http_url", fastapi_example_url),
-                "fastapi_websocket_url": fastapi_info.get("websocket_url", fastapi_example_websocket_url),
+                "fastapi_websocket_url": fastapi_info.get(
+                    "websocket_url", fastapi_example_websocket_url
+                ),
             },
         )
 

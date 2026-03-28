@@ -39,11 +39,20 @@ async def websocket_client(uri):
                 response = await websocket.recv()
                 try:
                     response_dict = json.loads(response)
-                    if response_dict.get("object") == "device" and response_dict.get("end") is True:
+                    if (
+                        response_dict.get("object") == "device"
+                        and response_dict.get("end") is True
+                    ):
                         sync_processes["devices"] = "not-started"
-                    if response_dict.get("object") == "virtual_machine" and response_dict.get("end") is True:
+                    if (
+                        response_dict.get("object") == "virtual_machine"
+                        and response_dict.get("end") is True
+                    ):
                         sync_processes["virtual-machines"] = "not-started"
-                    if response_dict.get("object") == "full-update" and response_dict.get("end") is True:
+                    if (
+                        response_dict.get("object") == "full-update"
+                        and response_dict.get("end") is True
+                    ):
                         sync_processes["full-update"] = "not-started"
                 except json.JSONDecodeError:
                     pass
@@ -68,7 +77,9 @@ def start_websocket(uri):
 
     thread = threading.Thread(target=run_loop, daemon=True)
     thread.start()
-    websocket_task = asyncio.run_coroutine_threadsafe(websocket_client(uri), websocket_loop)
+    websocket_task = asyncio.run_coroutine_threadsafe(
+        websocket_client(uri), websocket_loop
+    )
 
 
 def send_message(message):
@@ -92,7 +103,11 @@ class WebSocketView(View):
         if fastapi_object is None:
             return HttpResponse("FastAPIEndpoint object not found", status=404)
 
-        uri = get_fastapi_url(fastapi_object).get("websocket_url")
+        fastapi_detail = get_fastapi_url(fastapi_object) or {}
+        if not isinstance(fastapi_detail, dict):
+            fastapi_detail = {}
+
+        uri = fastapi_detail.get("websocket_url")
         if uri is None:
             return HttpResponse("WebSocket URL not found", status=404)
 
@@ -104,7 +119,10 @@ class WebSocketView(View):
         elif message == "devices" and sync_processes["devices"] == "not-started":
             sync_processes["devices"] = "syncing"
             send_message("Sync Nodes")
-        elif message == "virtual-machines" and sync_processes["virtual-machines"] == "not-started":
+        elif (
+            message == "virtual-machines"
+            and sync_processes["virtual-machines"] == "not-started"
+        ):
             sync_processes["virtual-machines"] = "syncing"
             send_message("Sync Virtual Machines")
 

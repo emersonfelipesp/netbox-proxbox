@@ -41,12 +41,24 @@ def get_proxmox_card(request, pk: int) -> JsonResponse:
 
     fastapi_object = FastAPIEndpoint.objects.first()
     if fastapi_object is None:
-        return JsonResponse({"cluster_data": {}, "object": {"name": proxmox_object.name, "pk": proxmox_object.pk}})
+        return JsonResponse(
+            {
+                "cluster_data": {},
+                "object": {"name": proxmox_object.name, "pk": proxmox_object.pk},
+            }
+        )
 
-    fastapi_info = get_fastapi_url(fastapi_object)
+    fastapi_info = get_fastapi_url(fastapi_object) or {}
+    if not isinstance(fastapi_info, dict):
+        fastapi_info = {}
     fastapi_url = fastapi_info.get("http_url")
     if not fastapi_url:
-        return JsonResponse({"cluster_data": {}, "object": {"name": proxmox_object.name, "pk": proxmox_object.pk}})
+        return JsonResponse(
+            {
+                "cluster_data": {},
+                "object": {"name": proxmox_object.name, "pk": proxmox_object.pk},
+            }
+        )
 
     domain = proxmox_object.domain or get_ip_address_host(proxmox_object.ip_address)
     version_endpoint = f"{fastapi_url}/proxmox/version?domain={domain}"
@@ -68,10 +80,14 @@ def get_proxmox_card(request, pk: int) -> JsonResponse:
         {
             "cluster_data": _merge_cluster_payloads(version_data, cluster_data),
             "object": {
-                "pk": getattr(proxmox_object, "pk", getattr(proxmox_object, "id", None)),
+                "pk": getattr(
+                    proxmox_object, "pk", getattr(proxmox_object, "id", None)
+                ),
                 "name": proxmox_object.name,
                 "domain": proxmox_object.domain,
-                "ip_address": str(proxmox_object.ip_address) if proxmox_object.ip_address else None,
+                "ip_address": str(proxmox_object.ip_address)
+                if proxmox_object.ip_address
+                else None,
             },
         }
     )
