@@ -36,7 +36,7 @@ class VMBackupSerializer(NetBoxModelSerializer):
     url = serializers.HyperlinkedIdentityField(
         view_name="plugins-api:netbox_proxbox-api:vmbackup-detail",
     )
-    virtual_machine = NestedVirtualMachineSerializer(nested=True)
+    virtual_machine = NestedVirtualMachineSerializer()
     subtype = ChoiceField(choices=ProxmoxBackupSubtypeChoices)
     format = ChoiceField(choices=ProxmoxBackupFormatChoices)
 
@@ -101,7 +101,7 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
     url = serializers.HyperlinkedIdentityField(
         view_name="plugins-api:netbox_proxbox-api:endpoints:proxmox-endpoint-detail",
     )
-    ip_address = NestedIPAddressSerializer(nested=True, required=False, allow_null=True)
+    ip_address = NestedIPAddressSerializer(required=False, allow_null=True)
     domain = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     mode = ChoiceField(choices=ProxmoxModeChoices)
 
@@ -139,8 +139,8 @@ class NetBoxEndpointSerializer(NetBoxModelSerializer):
     url = serializers.HyperlinkedIdentityField(
         view_name="plugins-api:netbox_proxbox-api:endpoints:netbox-endpoint-detail",
     )
-    ip_address = NestedIPAddressSerializer(nested=True, required=False, allow_null=True)
-    token = NestedTokenSerializer(nested=True, required=False, allow_null=True)
+    ip_address = NestedIPAddressSerializer(required=False, allow_null=True)
+    token = NestedTokenSerializer(required=False, allow_null=True)
 
     class Meta:
         model = NetBoxEndpoint
@@ -219,7 +219,7 @@ class FastAPIEndpointSerializer(NetBoxModelSerializer):
     url = serializers.HyperlinkedIdentityField(
         view_name="plugins-api:netbox_proxbox-api:endpoints:fastapi-endpoint-detail",
     )
-    ip_address = NestedIPAddressSerializer(nested=True, required=False, allow_null=True)
+    ip_address = NestedIPAddressSerializer(required=False, allow_null=True)
 
     class Meta:
         model = FastAPIEndpoint
