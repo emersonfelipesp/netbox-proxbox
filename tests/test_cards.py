@@ -15,7 +15,7 @@ def test_get_proxmox_card_merges_cluster_and_version_payloads(
         proxmox_endpoint=proxmox_endpoint,
     )
 
-    def fake_get(url):
+    def fake_get(url, timeout=None):
         if "/proxmox/version" in url:
             return ResponseStub([{"CLUSTER-A": {"version": "8.3.0", "release": "8.3"}}])
         if "/proxmox/sessions" in url:
@@ -34,9 +34,8 @@ def test_get_proxmox_card_merges_cluster_and_version_payloads(
 
     monkeypatch.setattr(module.requests, "get", fake_get)
 
-    rendered = module.get_proxmox_card(None, 1)
-    cluster_data = rendered["context"]["cluster_data"]
-    assert rendered["template"] == "netbox_proxbox/home/proxmox_card.html"
+    response = module.get_proxmox_card(None, 1)
+    cluster_data = response.payload["cluster_data"]
     assert cluster_data["name"] == "CLUSTER-A"
     assert cluster_data["version"] == "8.3.0"
-    assert rendered["context"]["object"].name == "pve01"
+    assert response.payload["object"]["name"] == "pve01"

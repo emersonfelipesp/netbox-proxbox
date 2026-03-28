@@ -17,6 +17,16 @@ class HttpResponse:
         self.content = content
 
 
+class JsonResponse(HttpResponse):
+    def __init__(self, payload=None, status: int = 200, safe: bool = True):
+        super().__init__(status=status, content=payload)
+        self.payload = payload
+        self.safe = safe
+
+    def json(self):
+        return self.payload
+
+
 class HttpRequest:
     pass
 
@@ -85,6 +95,7 @@ def load_plugin_module(
     django_http = types.ModuleType("django.http")
     django_http.HttpRequest = HttpRequest
     django_http.HttpResponse = HttpResponse
+    django_http.JsonResponse = JsonResponse
 
     django_shortcuts = types.ModuleType("django.shortcuts")
     django_shortcuts.render = (
@@ -104,12 +115,6 @@ def load_plugin_module(
 
     django_urls = types.ModuleType("django.urls")
     django_urls.reverse = lambda *args, **kwargs: "/dummy/"
-
-    django_htmx = types.ModuleType("django_htmx")
-    django_htmx_middleware = types.ModuleType("django_htmx.middleware")
-    django_htmx_middleware.HtmxDetails = type("HtmxDetails", (), {})
-    django_htmx_http = types.ModuleType("django_htmx.http")
-    django_htmx_http.replace_url = lambda response, url: response
 
     netbox_module = types.ModuleType("netbox")
     netbox_plugins = types.ModuleType("netbox.plugins")
@@ -138,8 +143,10 @@ def load_plugin_module(
             "http_url": "https://proxbox.local:8800",
             "ip_address_url": "https://10.0.0.5:8800",
             "verify_ssl": True,
+            "websocket_url": "wss://proxbox.local:8801/ws",
         }
     )
+    utils_module.get_ip_address_host = lambda value: str(value).split("/")[0] if value else "127.0.0.1"
 
     stub_modules = {
         "django": django_module,
@@ -149,9 +156,6 @@ def load_plugin_module(
         "django.views.decorators": django_views_decorators,
         "django.views.decorators.http": django_views_http,
         "django.urls": django_urls,
-        "django_htmx": django_htmx,
-        "django_htmx.middleware": django_htmx_middleware,
-        "django_htmx.http": django_htmx_http,
         "netbox": netbox_module,
         "netbox.plugins": netbox_plugins,
         "netbox_proxbox.models": models_module,
