@@ -136,6 +136,24 @@ class ProxmoxEndpointAPITest(APIViewTestCases.APIViewTestCase):
         assert "password" not in response.data
         assert "token_value" not in response.data
 
+    def test_create_requires_domain_or_ip_address(self):
+        self.add_permissions("netbox_proxbox.add_proxmoxendpoint")
+        payload = {
+            "name": "pve-no-host",
+            "domain": "",
+            "port": 8006,
+            "mode": ProxmoxModeChoices.PROXMOX_MODE_CLUSTER,
+            "username": "root@pam",
+            "verify_ssl": False,
+        }
+
+        response = self.client.post(
+            self._get_list_url(), payload, format="json", **self.header
+        )
+        self.assertHttpStatus(response, 400)
+        assert "domain" in response.data
+        assert "ip_address" in response.data
+
 
 class NetBoxEndpointAPITest(APIViewTestCases.APIViewTestCase):
     model = NetBoxEndpoint
@@ -195,6 +213,25 @@ class NetBoxEndpointAPITest(APIViewTestCases.APIViewTestCase):
                 "verify_ssl": True,
             },
         ]
+
+    def test_create_requires_domain_or_ip_address(self):
+        self.add_permissions("netbox_proxbox.add_netboxendpoint")
+        payload = {
+            "name": "netbox-no-host",
+            "domain": "",
+            "port": 443,
+            "token_version": "v2",
+            "token_key": "ABCDEF123456",
+            "token_secret": "0123456789abcdef0123456789abcdef",
+            "verify_ssl": False,
+        }
+
+        response = self.client.post(
+            self._get_list_url(), payload, format="json", **self.header
+        )
+        self.assertHttpStatus(response, 400)
+        assert "domain" in response.data
+        assert "ip_address" in response.data
 
 
 class FastAPIEndpointAPITest(APIViewTestCases.APIViewTestCase):
@@ -266,6 +303,27 @@ class FastAPIEndpointAPITest(APIViewTestCases.APIViewTestCase):
                 "server_side_websocket": False,
             },
         ]
+
+    def test_create_requires_domain_or_ip_address(self):
+        self.add_permissions("netbox_proxbox.add_fastapiendpoint")
+        payload = {
+            "name": "backend-no-host",
+            "domain": "",
+            "port": 8800,
+            "verify_ssl": False,
+            "token": "backend-token",
+            "use_websocket": False,
+            "websocket_domain": "",
+            "websocket_port": 8800,
+            "server_side_websocket": False,
+        }
+
+        response = self.client.post(
+            self._get_list_url(), payload, format="json", **self.header
+        )
+        self.assertHttpStatus(response, 400)
+        assert "domain" in response.data
+        assert "ip_address" in response.data
 
 
 class SyncProcessAPITest(APIViewTestCases.APIViewTestCase):

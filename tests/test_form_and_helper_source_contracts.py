@@ -121,3 +121,15 @@ def test_netbox_endpoint_form_documents_v2_manual_credential_requirement():
     contents = _read("netbox_proxbox/forms/netbox.py")
     assert "Choose an existing NetBox v1 API token" in contents
     assert "Use token key and token secret fields instead" in contents
+
+
+def test_endpoint_forms_require_domain_or_ip_address():
+    files = [
+        "netbox_proxbox/forms/proxmox.py",
+        "netbox_proxbox/forms/netbox.py",
+        "netbox_proxbox/forms/fastapi.py",
+    ]
+
+    for path in files:
+        contents = _read(path)
+        assert "Provide either a domain or an IP address." in contents

@@ -1,6 +1,7 @@
 """Define endpoint and sync-process models used throughout the plugin."""
 
 from django.core.validators import MaxValueValidator, MinValueValidator
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
@@ -66,6 +67,16 @@ class EndpointBase(CommonProperties, NetBoxModel):
     def __str__(self):
         return self.name or self.domain or self.ip or self.__class__.__name__
 
+    def clean(self):
+        super().clean()
+        if not (self.domain or self.ip_address_id):
+            raise ValidationError(
+                {
+                    "domain": "Provide either a domain or an IP address.",
+                    "ip_address": "Provide either a domain or an IP address.",
+                }
+            )
+
 
 class ProxmoxEndpoint(EndpointBase):
     name = models.CharField(
@@ -73,7 +84,9 @@ class ProxmoxEndpoint(EndpointBase):
         max_length=255,
         blank=True,
         null=True,
-        help_text=_("Name of the Proxmox endpoint or cluster. It may be updated from the API."),
+        help_text=_(
+            "Name of the Proxmox endpoint or cluster. It may be updated from the API."
+        ),
     )
     ip_address = models.ForeignKey(
         to="ipam.IPAddress",
@@ -116,7 +129,9 @@ class ProxmoxEndpoint(EndpointBase):
     password = models.CharField(
         max_length=255,
         verbose_name=_("Password"),
-        help_text=_("Password for the Proxmox endpoint. Leave blank when using token authentication."),
+        help_text=_(
+            "Password for the Proxmox endpoint. Leave blank when using token authentication."
+        ),
         blank=True,
         null=True,
     )
@@ -168,7 +183,8 @@ class NetBoxEndpoint(EndpointBase):
         help_text=_("Fallback API address when no domain name is configured."),
     )
     domain = DomainField(
-        default="localhost",
+        blank=True,
+        null=True,
         verbose_name=_("Domain"),
         help_text=_("Domain name of the remote NetBox API."),
     )
@@ -184,26 +200,30 @@ class NetBoxEndpoint(EndpointBase):
         verbose_name=_("API token"),
         null=True,
         blank=True,
-        help_text=_("Token used by the ProxBox backend when communicating with NetBox."),
+        help_text=_(
+            "Token used by the ProxBox backend when communicating with NetBox."
+        ),
     )
     token_version = models.CharField(
         max_length=2,
         choices=NetBoxTokenVersionChoices,
         default=NetBoxTokenVersionChoices.V1,
-        verbose_name=_('Token Version'),
-        help_text=_('Choose whether to authenticate using a v1 token or a v2 token key/secret pair.'),
+        verbose_name=_("Token Version"),
+        help_text=_(
+            "Choose whether to authenticate using a v1 token or a v2 token key/secret pair."
+        ),
     )
     token_key = models.CharField(
         max_length=255,
         blank=True,
-        verbose_name=_('Token Key'),
-        help_text=_('Key portion of a NetBox v2 API token.'),
+        verbose_name=_("Token Key"),
+        help_text=_("Key portion of a NetBox v2 API token."),
     )
     token_secret = models.CharField(
         max_length=255,
         blank=True,
-        verbose_name=_('Token Secret'),
-        help_text=_('Secret portion of a NetBox v2 API token.'),
+        verbose_name=_("Token Secret"),
+        help_text=_("Secret portion of a NetBox v2 API token."),
     )
     verify_ssl = models.BooleanField(
         default=True,
@@ -225,7 +245,11 @@ class NetBoxEndpoint(EndpointBase):
     def effective_token_version(self) -> str:
         token_obj = getattr(self, "token", None)
         if token_obj is not None:
-            return NetBoxTokenVersionChoices.V2 if getattr(token_obj, "version", None) == 2 else NetBoxTokenVersionChoices.V1
+            return (
+                NetBoxTokenVersionChoices.V2
+                if getattr(token_obj, "version", None) == 2
+                else NetBoxTokenVersionChoices.V1
+            )
         return self.token_version
 
     @property
@@ -234,7 +258,9 @@ class NetBoxEndpoint(EndpointBase):
         if token_obj is not None:
             if self.effective_token_version == NetBoxTokenVersionChoices.V2:
                 return getattr(token_obj, "key", None)
-            return getattr(token_obj, "plaintext", None) or getattr(token_obj, "key", None)
+            return getattr(token_obj, "plaintext", None) or getattr(
+                token_obj, "key", None
+            )
 
         if self.effective_token_version == NetBoxTokenVersionChoices.V2:
             return self.token_key or None
@@ -250,7 +276,11 @@ class NetBoxEndpoint(EndpointBase):
 
     @property
     def token_version_label(self) -> str:
-        return "v2 Token" if self.effective_token_version == NetBoxTokenVersionChoices.V2 else "v1 Token"
+        return (
+            "v2 Token"
+            if self.effective_token_version == NetBoxTokenVersionChoices.V2
+            else "v1 Token"
+        )
 
     def get_absolute_url(self):
         return reverse("plugins:netbox_proxbox:netboxendpoint", args=[self.pk])
@@ -274,7 +304,8 @@ class FastAPIEndpoint(EndpointBase):
         help_text=_("Fallback backend address when no domain name is configured."),
     )
     domain = DomainField(
-        default="localhost",
+        blank=True,
+        null=True,
         verbose_name=_("Domain"),
         help_text=_("Domain name of the ProxBox backend service."),
     )
@@ -316,7 +347,9 @@ class FastAPIEndpoint(EndpointBase):
     server_side_websocket = models.BooleanField(
         default=False,
         verbose_name=_("Server-side WebSocket"),
-        help_text=_("Use server-side WebSocket connectivity when supported by the backend."),
+        help_text=_(
+            "Use server-side WebSocket connectivity when supported by the backend."
+        ),
     )
 
     class Meta(EndpointBase.Meta):
@@ -375,6 +408,8 @@ class SyncProcess(NetBoxModel):
 
     def get_absolute_url(self):
         return reverse("plugins:netbox_proxbox:syncprocess", args=[self.pk])
+
+
 __all__ = (
     "FastAPIEndpoint",
     "NetBoxEndpoint",

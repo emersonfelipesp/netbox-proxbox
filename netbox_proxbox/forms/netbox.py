@@ -95,10 +95,17 @@ class NetBoxEndpointForm(NetBoxModelForm):
     def clean(self):
         super().clean()
         cleaned_data = self.cleaned_data
+        domain = (cleaned_data.get("domain") or "").strip()
+        ip_address = cleaned_data.get("ip_address")
         token = cleaned_data.get("token")
         token_version = cleaned_data.get("token_version")
         token_key = (cleaned_data.get("token_key") or "").strip()
         token_secret = (cleaned_data.get("token_secret") or "").strip()
+
+        if not domain and ip_address is None:
+            self.add_error("domain", "Provide either a domain or an IP address.")
+            self.add_error("ip_address", "Provide either a domain or an IP address.")
+            return cleaned_data
 
         if token:
             selected_token_version = self._token_version_from_token(token)
