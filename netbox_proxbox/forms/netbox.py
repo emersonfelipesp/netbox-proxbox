@@ -31,7 +31,7 @@ class NetBoxEndpointForm(NetBoxModelForm):
     token = DynamicModelChoiceField(
         queryset=Token.objects.all(),
         required=False,
-        help_text="Choose an existing NetBox v1 or v2 API token. If selected, manual token fields are not required.",
+        help_text="Choose an existing NetBox v1 API token. For NetBox v2 authentication, provide token key and token secret below.",
         label="API Token",
         quick_add=True,
     )
@@ -101,7 +101,15 @@ class NetBoxEndpointForm(NetBoxModelForm):
         token_secret = (cleaned_data.get("token_secret") or "").strip()
 
         if token:
-            cleaned_data["token_version"] = self._token_version_from_token(token)
+            selected_token_version = self._token_version_from_token(token)
+            if selected_token_version == NetBoxTokenVersionChoices.V2:
+                self.add_error(
+                    "token",
+                    "Selected NetBox v2 token cannot be used here because its secret cannot be retrieved. Use token key and token secret fields instead.",
+                )
+                return cleaned_data
+
+            cleaned_data["token_version"] = selected_token_version
             cleaned_data["token_key"] = ""
             cleaned_data["token_secret"] = ""
         elif token_version == NetBoxTokenVersionChoices.V2:

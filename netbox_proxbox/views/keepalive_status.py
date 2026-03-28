@@ -22,6 +22,17 @@ class ServiceStatus:
     def __init__(self):
         self.connected_url = None
 
+    @staticmethod
+    def _backend_auth_headers(fastapi_obj: FastAPIEndpoint | None) -> dict[str, str]:
+        token = (getattr(fastapi_obj, "token", "") or "").strip()
+        if not token:
+            return {}
+
+        if token.startswith("Bearer ") or token.startswith("Token "):
+            return {"Authorization": token}
+
+        return {"Authorization": f"Bearer {token}"}
+
     def fastapi_status(self, pk: int) -> dict:
         connected = False
         fastapi_url = None
@@ -67,10 +78,17 @@ class ServiceStatus:
 
         return {"url": fastapi_url, "connected": connected}
 
-    def netbox_status(self, pk: int, base_url: str) -> str:
+    def netbox_status(
+        self,
+        pk: int,
+        base_url: str,
+        auth_headers: dict[str, str] | None = None,
+    ) -> str:
         status = "error"
         max_retries = 3
         retry_delay = 1
+
+        request_headers = auth_headers or {}
 
         try:
             netbox_service_obj = NetBoxEndpoint.objects.get(pk=pk)
@@ -101,7 +119,9 @@ class ServiceStatus:
         for attempt in range(max_retries):
             try:
                 response = requests.get(
-                    netbox_endpoint_url, timeout=self.request_timeout
+                    netbox_endpoint_url,
+                    headers=request_headers,
+                    timeout=self.request_timeout,
                 )
                 response.raise_for_status()
                 endpoints = list(response.json())
@@ -110,6 +130,7 @@ class ServiceStatus:
                     create_response = requests.post(
                         netbox_endpoint_url,
                         json=current_netbox,
+                        headers=request_headers,
                         timeout=self.request_timeout,
                     )
                     create_response.raise_for_status()
@@ -119,23 +140,37 @@ class ServiceStatus:
                         if endpoint["id"] != pk:
                             requests.delete(
                                 f"{netbox_endpoint_url}/{endpoint['id']}",
+                                headers=request_headers,
                                 timeout=self.request_timeout,
                             )
                         elif endpoint != current_netbox:
                             updated_endpoint = endpoint | current_netbox
-                            requests.put(
+                            update_response = requests.put(
                                 f"{netbox_endpoint_url}/{endpoint['id']}",
                                 json=updated_endpoint,
+                                headers=request_headers,
                                 timeout=self.request_timeout,
                             )
+                            update_response.raise_for_status()
 
                 status_response = requests.get(
-                    netbox_status_route, timeout=self.request_timeout
+                    netbox_status_route,
+                    headers=request_headers,
+                    timeout=self.request_timeout,
                 )
                 status_response.raise_for_status()
                 status = "success"
                 break
             except requests.exceptions.RequestException as exc:
+                response = getattr(exc, "response", None)
+                if response is not None:
+                    response_body = response.text[:500]
+                    logger.error(
+                        "NetBox status request failed on attempt %s with HTTP %s: %s",
+                        attempt + 1,
+                        response.status_code,
+                        response_body,
+                    )
                 logger.error(
                     "NetBox status request failed on attempt %s: %s", attempt + 1, exc
                 )
@@ -204,6 +239,8 @@ def get_service_status(request, service: str, pk: int) -> JsonResponse:
     if not fastapi_response.get("connected"):
         return JsonResponse({"status": "error"}, status=503)
 
+    auth_headers = service_status._backend_auth_headers(fastapi_object)
+
     if not service_status.connected_url:
         logger.error(
             "FastAPI connectivity reported success but no connected URL was recorded"
@@ -213,7 +250,11 @@ def get_service_status(request, service: str, pk: int) -> JsonResponse:
     connected_url = service_status.connected_url
 
     if service == "netbox":
-        status = service_status.netbox_status(pk=pk, base_url=connected_url)
+        status = service_status.netbox_status(
+            pk=pk,
+            base_url=connected_url,
+            auth_headers=auth_headers,
+        )
     elif service == "proxmox":
         status = service_status.proxmox_status(pk=pk, base_url=connected_url)
 

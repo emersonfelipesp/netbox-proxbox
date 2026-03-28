@@ -167,6 +167,11 @@ def test_endpoint_serializers_do_not_override_create_semantics():
         assert "create" not in _class_methods(class_node)
 
 
+def test_netbox_endpoint_serializer_rejects_selected_v2_token_objects():
+    contents = SERIALIZERS_PATH.read_text()
+    assert "Selected NetBox v2 token cannot be used by this endpoint" in contents
+
+
 def test_writable_nested_related_fields_are_declared():
     module = _parse_module(SERIALIZERS_PATH)
 

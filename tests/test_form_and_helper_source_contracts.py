@@ -115,3 +115,9 @@ def test_netbox_endpoint_form_enables_token_quick_add():
     assert _has_kwarg_true(field_call, "quick_add"), (
         "NetBoxEndpointForm.token must set quick_add=True"
     )
+
+
+def test_netbox_endpoint_form_documents_v2_manual_credential_requirement():
+    contents = _read("netbox_proxbox/forms/netbox.py")
+    assert "Choose an existing NetBox v1 API token" in contents
+    assert "Use token key and token secret fields instead" in contents
