@@ -1,7 +1,18 @@
-## How it works
+# Backend Overview
 
-The backend made using the FastAPI framework connects with both Netbox and Proxmox (it can be many different clusters) and exposes the API REST routes that will be consumed by the Netbox Plugin (the Frontend) that is simply a Django App attached to the Netbox Django Project.
+Proxbox uses a separate FastAPI service as its backend. The NetBox plugin does not talk to Proxmox directly.
 
-### Proxbox Architecture
+## How It Works
 
-![Proxbox Architecure Image](./proxbox-architecture.png)
+The backend:
+
+- connects to Proxmox
+- connects back to NetBox
+- exposes HTTP endpoints used by the plugin
+- can optionally provide WebSocket updates for sync progress
+
+The NetBox plugin stores and manages endpoint records, then triggers sync requests against the backend.
+
+## Architecture
+
+![Proxbox Architecture Image](./proxbox-architecture.png)
