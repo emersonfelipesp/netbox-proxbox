@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 from typing import Annotated, Optional
 
 try:
@@ -39,6 +40,9 @@ app.add_typer(proxmox_app, name="proxmox")
 app.add_typer(dcim_app, name="dcim")
 app.add_typer(virtualization_app, name="virtualization")
 app.add_typer(extras_app, name="extras")
+
+docs_app = typer.Typer(no_args_is_help=True, help="Documentation generation commands.")
+app.add_typer(docs_app, name="docs")
 
 
 # ── Root commands ─────────────────────────────────────────────────────────────
@@ -145,6 +149,32 @@ def sync_processes_create(
     """Create a new sync process record in NetBox."""
     resp = run_with_spinner(_get_client().post("/sync-processes"))
     print_response(resp, as_json=as_json, as_yaml=as_yaml)
+
+
+@docs_app.command("generate-capture")
+def docs_generate_capture(
+    output: Annotated[Optional[str], typer.Option("--output", help="Markdown snapshot output path.")] = None,
+    raw_dir: Annotated[Optional[str], typer.Option("--raw-dir", help="Raw JSON artifact directory.")] = None,
+    catalog_output: Annotated[
+        Optional[str],
+        typer.Option("--catalog-output", help="Command catalog JSON output path."),
+    ] = None,
+) -> None:
+    """Generate machine-readable CLI docs artifacts for the MkDocs site."""
+    from proxbox_cli.docgen_capture import generate_command_capture_docs, resolve_capture_paths
+
+    output_path, raw_dir_path, catalog_path = resolve_capture_paths(
+        Path(output) if output else None,
+        Path(raw_dir) if raw_dir else None,
+        Path(catalog_output) if catalog_output else None,
+    )
+    raise SystemExit(
+        generate_command_capture_docs(
+            output=output_path,
+            raw_dir=raw_dir_path,
+            catalog_output=catalog_path,
+        )
+    )
 
 
 # ── Entrypoint ────────────────────────────────────────────────────────────────

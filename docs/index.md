@@ -64,6 +64,7 @@ See:
 - [Pre-Installation](./installation/pre-installation.md)
 - [Installing the Plugin Using Git](./installation/2-installing-plugin-git.md)
 - [Backend Setup](./installation/backend-setup.md)
+- [Proxbox CLI Overview](./cli/index.md)
 
 ## Read-Only Proxmox Behavior
 

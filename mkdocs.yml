@@ -52,9 +52,15 @@ plugins:
             #merge_init_into_class: true
             #docstring_section_style: spacy
             #signature_crossrefs: true
+hooks:
+  - docs/hooks.py
 
 nav:
   - Proxbox: index.md
+  - CLI:
+    - Overview: 'cli/index.md'
+    - Command Reference: 'reference/proxbox-cli/command-catalog/index.md'
+    - Command Examples: 'reference/proxbox-cli/command-examples/index.md'
   - Installation:
     - Pre-Installation: 'installation/pre-installation.md'
     - Installing the Plugin:
@@ -65,6 +71,8 @@ nav:
       - Using pip (recommended): 'backend/using-pip.md'
       - Using git: 'backend/using-git.md'
       - Using Docker: 'backend/using-docker.md'
+  - Developer:
+    - Proxbox CLI Docgen: 'developer/proxbox-cli-docgen.md'
   # - Backend (FastAPI): 'backend/index.md'
   # - Source Code:
   #   - 'src/netboxbasic.md'
