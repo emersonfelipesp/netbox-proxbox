@@ -1,3 +1,5 @@
+"""Define NetBox forms for Proxmox endpoint objects and list filtering."""
+
 # Django Imports
 from django import forms
 

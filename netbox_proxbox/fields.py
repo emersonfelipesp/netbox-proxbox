@@ -1,3 +1,5 @@
+"""Define custom model fields and validators used by plugin models."""
+
 import re
 
 from django.core.exceptions import ValidationError

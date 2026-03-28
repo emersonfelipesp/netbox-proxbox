@@ -1,3 +1,5 @@
+"""Provide NetBox CRUD and tab views for VM backup records."""
+
 from django.shortcuts import render
 
 from netbox.views import generic

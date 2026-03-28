@@ -1,3 +1,5 @@
+"""Define shared choice sets for endpoint, sync, token, and backup fields."""
+
 from django.utils.translation import gettext_lazy as _
 from utilities.choices import ChoiceSet
 

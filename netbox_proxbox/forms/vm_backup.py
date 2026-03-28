@@ -1,3 +1,5 @@
+"""Define NetBox forms for VM backup records and backup list filtering."""
+
 # Django Imports
 from django import forms
 from django.utils.translation import gettext as _

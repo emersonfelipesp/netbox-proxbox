@@ -1,3 +1,5 @@
+"""Define endpoint and sync-process models used throughout the plugin."""
+
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.urls import reverse

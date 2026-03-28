@@ -1,3 +1,5 @@
+"""Implement the plugin dashboard pages and re-export major view entrypoints."""
+
 from django.shortcuts import render
 from django.views import View
 

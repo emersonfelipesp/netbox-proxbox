@@ -1,3 +1,5 @@
+"""Provide helper functions for backend host resolution and URL construction."""
+
 from __future__ import annotations
 
 import os

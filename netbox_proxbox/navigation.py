@@ -1,3 +1,5 @@
+"""Define the NetBox plugin navigation menu and shortcut buttons."""
+
 from netbox.plugins import PluginMenuButton, PluginMenuItem, PluginMenu
 #from utilities.choices import ButtonColorChoices
 

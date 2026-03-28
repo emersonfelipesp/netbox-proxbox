@@ -1,3 +1,5 @@
+"""Fetch repository markdown content from GitHub for plugin pages."""
+
 import requests
 
 def get(**kwargs):

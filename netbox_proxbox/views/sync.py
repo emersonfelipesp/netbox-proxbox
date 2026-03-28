@@ -1,3 +1,5 @@
+"""Trigger sync operations on the external ProxBox backend over HTTP."""
+
 from __future__ import annotations
 
 import logging

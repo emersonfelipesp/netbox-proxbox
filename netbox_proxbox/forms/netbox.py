@@ -1,3 +1,5 @@
+"""Define NetBox forms for remote NetBox endpoints and token selection."""
+
 # Django Imports
 from django import forms
 

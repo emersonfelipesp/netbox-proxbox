@@ -1,3 +1,5 @@
+"""Add explicit NetBox v2 token fields to the remote NetBox endpoint model."""
+
 from django.db import migrations, models
 
 

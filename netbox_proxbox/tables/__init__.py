@@ -1,3 +1,5 @@
+"""Define NetBox table classes for endpoint and sync-process list views."""
+
 # Django Imports
 import django_tables2 as tables
 from django.utils.translation import gettext as _

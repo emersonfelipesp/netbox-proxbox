@@ -1,3 +1,5 @@
+"""Provide NetBox API root views and model viewsets for the plugin."""
+
 from netbox.api.viewsets import NetBoxModelViewSet
 from rest_framework.routers import APIRootView
 

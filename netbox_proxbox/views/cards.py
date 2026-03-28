@@ -1,3 +1,5 @@
+"""Build dashboard card payloads from Proxmox and backend API responses."""
+
 from __future__ import annotations
 
 import logging
