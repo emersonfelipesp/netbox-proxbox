@@ -4,63 +4,71 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('extras', '0134_owner'),
-        ('ipam', '0086_gfk_indexes'),
-        ('netbox_proxbox', '0009_vmbackup'),
-        ('users', '0015_owner'),
+        ("extras", "0134_owner"),
+        ("ipam", "0086_gfk_indexes"),
+        ("netbox_proxbox", "0009_vmbackup"),
+        ("users", "0015_owner"),
     ]
 
     operations = [
         migrations.AlterModelOptions(
-            name='fastapiendpoint',
-            options={'ordering': ('name', 'pk')},
+            name="fastapiendpoint",
+            options={"ordering": ("name", "pk")},
         ),
         migrations.AlterModelOptions(
-            name='netboxendpoint',
-            options={'ordering': ('name', 'pk')},
+            name="netboxendpoint",
+            options={"ordering": ("name", "pk")},
         ),
         migrations.AlterModelOptions(
-            name='proxmoxendpoint',
-            options={'ordering': ('name', 'pk')},
+            name="proxmoxendpoint",
+            options={"ordering": ("name", "pk")},
         ),
         migrations.AlterModelOptions(
-            name='syncprocess',
-            options={'ordering': ('-created', '-pk')},
+            name="syncprocess",
+            options={"ordering": ("-created", "-pk")},
         ),
         migrations.AlterUniqueTogether(
-            name='fastapiendpoint',
+            name="fastapiendpoint",
             unique_together=set(),
         ),
         migrations.AlterUniqueTogether(
-            name='netboxendpoint',
+            name="netboxendpoint",
             unique_together=set(),
         ),
         migrations.AlterUniqueTogether(
-            name='proxmoxendpoint',
+            name="proxmoxendpoint",
             unique_together=set(),
         ),
         migrations.AlterField(
-            model_name='proxmoxendpoint',
-            name='token_name',
+            model_name="proxmoxendpoint",
+            name="token_name",
             field=models.CharField(blank=True, max_length=255),
         ),
         migrations.AlterField(
-            model_name='proxmoxendpoint',
-            name='token_value',
+            model_name="proxmoxendpoint",
+            name="token_value",
             field=models.CharField(blank=True, max_length=255),
         ),
         migrations.AddConstraint(
-            model_name='fastapiendpoint',
-            constraint=models.UniqueConstraint(fields=('name', 'ip_address'), name='netbox_proxbox_fastapiendpoint_identity'),
+            model_name="fastapiendpoint",
+            constraint=models.UniqueConstraint(
+                fields=("name", "ip_address"),
+                name="netbox_proxbox_fastapiendpoint_identity",
+            ),
         ),
         migrations.AddConstraint(
-            model_name='netboxendpoint',
-            constraint=models.UniqueConstraint(fields=('name', 'ip_address'), name='netbox_proxbox_netboxendpoint_identity'),
+            model_name="netboxendpoint",
+            constraint=models.UniqueConstraint(
+                fields=("name", "ip_address"),
+                name="netbox_proxbox_netboxendpoint_identity",
+            ),
         ),
         migrations.AddConstraint(
-            model_name='proxmoxendpoint',
-            constraint=models.UniqueConstraint(fields=('name', 'ip_address', 'domain'), name='netbox_proxbox_proxmoxendpoint_identity'),
+            model_name="proxmoxendpoint",
+            constraint=models.UniqueConstraint(
+                fields=("name", "ip_address", "domain"),
+                name="netbox_proxbox_proxmoxendpoint_identity",
+            ),
         ),
     ]
