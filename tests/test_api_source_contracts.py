@@ -186,6 +186,41 @@ def test_writable_nested_related_fields_are_declared():
         )
 
 
+def _call_kwargs_for_assignment(
+    class_node: ast.ClassDef, assignment_name: str
+) -> dict[str, ast.AST]:
+    for node in class_node.body:
+        if (
+            isinstance(node, ast.Assign)
+            and len(node.targets) == 1
+            and isinstance(node.targets[0], ast.Name)
+            and node.targets[0].id == assignment_name
+            and isinstance(node.value, ast.Call)
+        ):
+            return {
+                kw.arg: kw.value for kw in node.value.keywords if kw.arg is not None
+            }
+    raise AssertionError(f"Assignment {assignment_name} not found in {class_node.name}")
+
+
+def test_nested_serializers_do_not_pass_nested_keyword_argument():
+    module = _parse_module(SERIALIZERS_PATH)
+    assignments = [
+        ("VMBackupSerializer", "virtual_machine"),
+        ("ProxmoxEndpointSerializer", "ip_address"),
+        ("NetBoxEndpointSerializer", "ip_address"),
+        ("NetBoxEndpointSerializer", "token"),
+        ("FastAPIEndpointSerializer", "ip_address"),
+    ]
+
+    for serializer_name, assignment_name in assignments:
+        class_node = _classdef(module, serializer_name)
+        kwargs = _call_kwargs_for_assignment(class_node, assignment_name)
+        assert "nested" not in kwargs, (
+            f"{serializer_name}.{assignment_name} should not pass nested=... to nested serializers"
+        )
+
+
 def test_proxmox_endpoint_serializer_marks_secrets_write_only():
     module = _parse_module(SERIALIZERS_PATH)
     class_node = _classdef(module, "ProxmoxEndpointSerializer")
