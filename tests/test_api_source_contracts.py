@@ -180,8 +180,9 @@ def test_endpoint_serializers_require_domain_or_ip_address():
 def test_keepalive_builds_v2_token_and_compacts_payload():
     keepalive_path = REPO_ROOT / "netbox_proxbox" / "views" / "keepalive_status.py"
     contents = keepalive_path.read_text()
-    assert "nbt_" in contents
+    assert "_effective_netbox_backend_credentials" in contents
     assert "_compact_payload" in contents
+    assert '"token_key"' in contents
 
 
 def test_writable_nested_related_fields_are_declared():

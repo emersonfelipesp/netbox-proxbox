@@ -79,9 +79,10 @@ def test_netbox_status_creates_endpoint_and_checks_status(
     assert created_payloads[0][0].endswith("/netbox/endpoint")
     assert created_payloads[0][1]["token"] == "token-1"
     assert created_payloads[0][1]["token_version"] == "v1"
+    assert created_payloads[0][1]["domain"] == "netbox.local"
 
 
-def test_netbox_status_uses_selected_v2_token_without_manual_secret(
+def test_netbox_status_v2_without_secret_fails_backend_validation(
     monkeypatch,
     fastapi_endpoint,
 ):
@@ -108,16 +109,25 @@ def test_netbox_status_uses_selected_v2_token_without_manual_secret(
 
     created_payloads = []
 
+    class ValidationErrorResponse(ResponseStub):
+        def raise_for_status(self):
+            raise requests.exceptions.HTTPError("400")
+
     def fake_get(url, verify=True, timeout=None, headers=None):
         if url.endswith("/netbox/endpoint"):
             return ResponseStub([])
         if url.endswith("/netbox/status"):
-            return ResponseStub({"status": "ok"})
+            raise AssertionError("status check should not be reached")
         raise AssertionError(url)
 
     def fake_post(url, json, timeout=None, headers=None):
         created_payloads.append((url, json))
-        return ResponseStub({"id": 1})
+        return ValidationErrorResponse(
+            {
+                "detail": "token_key and token (secret) must both be set for NetBox API token v2"
+            },
+            status_code=400,
+        )
 
     monkeypatch.setattr(module.requests, "get", fake_get)
     monkeypatch.setattr(module.requests, "post", fake_post)
@@ -127,11 +137,10 @@ def test_netbox_status_uses_selected_v2_token_without_manual_secret(
         "https://proxbox.local:8800",
         auth_headers={"Authorization": "Bearer backend-token"},
     )
-    assert status == "success"
-    assert created_payloads[0][1]["token"] == "v2-token-key"
+    assert status == "error"
     assert created_payloads[0][1]["token_version"] == "v2"
+    assert "token" not in created_payloads[0][1]
     assert "token_key" not in created_payloads[0][1]
-    assert "token_secret" not in created_payloads[0][1]
 
 
 def test_netbox_status_builds_full_v2_token_from_key_and_secret(
@@ -181,10 +190,11 @@ def test_netbox_status_builds_full_v2_token_from_key_and_secret(
         auth_headers={"Authorization": "Bearer backend-token"},
     )
     assert status == "success"
-    assert created_payloads[0][1]["token"] == "nbt_v2-token-key.v2-token-secret"
+    assert created_payloads[0][1]["token"] == "v2-token-secret"
     assert created_payloads[0][1]["token_version"] == "v2"
+    assert created_payloads[0][1]["token_key"] == "v2-token-key"
     assert created_payloads[0][1]["ip_address"] == "10.0.0.20"
-    assert "domain" not in created_payloads[0][1]
+    assert created_payloads[0][1]["domain"] == "10.0.0.20"
 
 
 def test_backend_auth_headers_accepts_prefixed_and_bare_tokens(

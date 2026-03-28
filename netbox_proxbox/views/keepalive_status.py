@@ -38,17 +38,35 @@ class ServiceStatus:
         return {key: value for key, value in payload.items() if value not in (None, "")}
 
     @staticmethod
-    def _effective_netbox_backend_token(endpoint: NetBoxEndpoint) -> str | None:
-        token_version = getattr(endpoint, "effective_token_version", None)
+    def _effective_netbox_backend_credentials(
+        endpoint: NetBoxEndpoint,
+    ) -> dict[str, str | None]:
+        token_version = (
+            (getattr(endpoint, "effective_token_version", "") or "v1").strip().lower()
+        )
         token_value = getattr(endpoint, "effective_token_value", None)
+        token_key = (getattr(endpoint, "token_key", "") or "").strip() or None
+        token_secret = (getattr(endpoint, "token_secret", "") or "").strip() or None
 
         if token_version == "v2":
-            token_key = (getattr(endpoint, "token_key", "") or "").strip()
-            token_secret = (getattr(endpoint, "token_secret", "") or "").strip()
-            if token_key and token_secret:
-                return f"nbt_{token_key}.{token_secret}"
+            if (
+                not token_secret
+                and token_value
+                and token_value.startswith("nbt_")
+                and "." in token_value
+            ):
+                token_secret = token_value.split(".", 1)[1]
+            return {
+                "token_version": "v2",
+                "token": token_secret,
+                "token_key": token_key,
+            }
 
-        return token_value
+        return {
+            "token_version": "v1",
+            "token": token_value,
+            "token_key": None,
+        }
 
     def fastapi_status(self, pk: int) -> dict:
         connected = False
@@ -113,20 +131,21 @@ class ServiceStatus:
             logger.error("NetBox endpoint with pk=%s not found", pk)
             return status
 
+        ip_address = get_ip_address_host(
+            getattr(netbox_service_obj, "ip_address", None)
+        )
+        domain = (netbox_service_obj.domain or "").strip() or ip_address
+        credentials = self._effective_netbox_backend_credentials(netbox_service_obj)
+
         current_netbox = {
             "id": pk,
             "name": netbox_service_obj.name or None,
-            "ip_address": get_ip_address_host(
-                getattr(netbox_service_obj, "ip_address", None)
-            ),
-            "domain": netbox_service_obj.domain or None,
+            "ip_address": ip_address,
+            "domain": domain,
             "port": netbox_service_obj.port or None,
-            "token": self._effective_netbox_backend_token(netbox_service_obj),
-            "token_version": getattr(
-                netbox_service_obj, "effective_token_version", None
-            ),
-            "token_key": getattr(netbox_service_obj, "token_key", "") or None,
-            "token_secret": getattr(netbox_service_obj, "token_secret", "") or None,
+            "token": credentials.get("token"),
+            "token_version": credentials.get("token_version"),
+            "token_key": credentials.get("token_key"),
             "verify_ssl": bool(netbox_service_obj.verify_ssl),
         }
         current_netbox = self._compact_payload(current_netbox)
@@ -154,22 +173,30 @@ class ServiceStatus:
                     create_response.raise_for_status()
                     time.sleep(retry_delay)
                 else:
+                    target = next(
+                        (ep for ep in endpoints if ep.get("id") == pk), endpoints[0]
+                    )
+                    target_id = target["id"]
+                    updated_endpoint = target | current_netbox
+                    updated_endpoint["id"] = target_id
+
+                    update_response = requests.put(
+                        f"{netbox_endpoint_url}/{target_id}",
+                        json=updated_endpoint,
+                        headers=request_headers,
+                        timeout=self.request_timeout,
+                    )
+                    update_response.raise_for_status()
+
                     for endpoint in endpoints:
-                        if endpoint["id"] != pk:
-                            requests.delete(
-                                f"{netbox_endpoint_url}/{endpoint['id']}",
+                        endpoint_id = endpoint.get("id")
+                        if endpoint_id and endpoint_id != target_id:
+                            delete_response = requests.delete(
+                                f"{netbox_endpoint_url}/{endpoint_id}",
                                 headers=request_headers,
                                 timeout=self.request_timeout,
                             )
-                        elif endpoint != current_netbox:
-                            updated_endpoint = endpoint | current_netbox
-                            update_response = requests.put(
-                                f"{netbox_endpoint_url}/{endpoint['id']}",
-                                json=updated_endpoint,
-                                headers=request_headers,
-                                timeout=self.request_timeout,
-                            )
-                            update_response.raise_for_status()
+                            delete_response.raise_for_status()
 
                 status_response = requests.get(
                     netbox_status_route,
