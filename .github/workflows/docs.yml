@@ -36,10 +36,6 @@ jobs:
       - name: Build docs
         run: mkdocs build
 
-      - name: Write Pages CNAME
-        if: github.event_name == 'push'
-        run: echo "proxbox.netbox.dev.br" > site/CNAME
-
       - name: Deploy to gh-pages
         if: github.event_name == 'push'
         uses: peaceiris/actions-gh-pages@v4
