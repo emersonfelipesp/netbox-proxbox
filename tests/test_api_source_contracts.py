@@ -177,6 +177,13 @@ def test_endpoint_serializers_require_domain_or_ip_address():
     assert contents.count("Provide either a domain or an IP address.") >= 3
 
 
+def test_keepalive_builds_v2_token_and_compacts_payload():
+    keepalive_path = REPO_ROOT / "netbox_proxbox" / "views" / "keepalive_status.py"
+    contents = keepalive_path.read_text()
+    assert "nbt_" in contents
+    assert "_compact_payload" in contents
+
+
 def test_writable_nested_related_fields_are_declared():
     module = _parse_module(SERIALIZERS_PATH)
 

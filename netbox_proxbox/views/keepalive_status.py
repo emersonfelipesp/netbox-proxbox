@@ -33,6 +33,23 @@ class ServiceStatus:
 
         return {"Authorization": f"Bearer {token}"}
 
+    @staticmethod
+    def _compact_payload(payload: dict) -> dict:
+        return {key: value for key, value in payload.items() if value not in (None, "")}
+
+    @staticmethod
+    def _effective_netbox_backend_token(endpoint: NetBoxEndpoint) -> str | None:
+        token_version = getattr(endpoint, "effective_token_version", None)
+        token_value = getattr(endpoint, "effective_token_value", None)
+
+        if token_version == "v2":
+            token_key = (getattr(endpoint, "token_key", "") or "").strip()
+            token_secret = (getattr(endpoint, "token_secret", "") or "").strip()
+            if token_key and token_secret:
+                return f"nbt_{token_key}.{token_secret}"
+
+        return token_value
+
     def fastapi_status(self, pk: int) -> dict:
         connected = False
         fastapi_url = None
@@ -104,7 +121,7 @@ class ServiceStatus:
             ),
             "domain": netbox_service_obj.domain or None,
             "port": netbox_service_obj.port or None,
-            "token": getattr(netbox_service_obj, "effective_token_value", None),
+            "token": self._effective_netbox_backend_token(netbox_service_obj),
             "token_version": getattr(
                 netbox_service_obj, "effective_token_version", None
             ),
@@ -112,6 +129,7 @@ class ServiceStatus:
             "token_secret": getattr(netbox_service_obj, "token_secret", "") or None,
             "verify_ssl": bool(netbox_service_obj.verify_ssl),
         }
+        current_netbox = self._compact_payload(current_netbox)
 
         netbox_endpoint_url = f"{base_url}/netbox/endpoint"
         netbox_status_route = f"{base_url}/netbox/status"
