@@ -10,6 +10,8 @@ from django.views.decorators.http import require_GET
 
 from netbox_proxbox.models import FastAPIEndpoint, ProxmoxEndpoint
 from netbox_proxbox.utils import get_fastapi_url, get_ip_address_host
+from netbox_proxbox.views.backend_sync import sync_proxmox_endpoint_to_backend
+from netbox_proxbox.views.error_utils import extract_proxmox_backend_error_detail
 
 
 logger = logging.getLogger(__name__)
@@ -41,37 +43,6 @@ def _backend_auth_headers(fastapi_obj: FastAPIEndpoint | None) -> dict[str, str]
         return {"Authorization": token}
 
     return {"Authorization": f"Bearer {token}"}
-
-
-def _extract_error_detail(
-    exc: requests.exceptions.RequestException,
-) -> tuple[str, int | None]:
-    response = getattr(exc, "response", None)
-    if response is None:
-        return str(exc), None
-
-    status_code = getattr(response, "status_code", None)
-    detail = None
-
-    try:
-        payload = response.json()
-        if isinstance(payload, dict):
-            detail = payload.get("detail") or payload.get("message")
-            python_exception = payload.get("python_exception")
-            if python_exception:
-                detail = (
-                    f"{detail} ({python_exception})"
-                    if detail
-                    else str(python_exception)
-                )
-    except Exception:
-        detail = None
-
-    if not detail:
-        body = (getattr(response, "text", "") or "").strip()
-        detail = body[:500] if body else str(exc)
-
-    return detail, status_code
 
 
 @require_GET
@@ -108,7 +79,8 @@ def get_proxmox_card(request, pk: int) -> JsonResponse:
 
     domain = (proxmox_object.domain or "").strip()
     ip_address = get_ip_address_host(proxmox_object.ip_address)
-    query_params = {"source": "netbox"}
+    proxmox_host = domain or ip_address
+    query_params = {"source": "database"}
     if domain:
         query_params["domain"] = domain
     else:
@@ -121,6 +93,33 @@ def get_proxmox_card(request, pk: int) -> JsonResponse:
     cluster_data = []
     detail = None
     http_status = None
+
+    sync_ok, sync_detail, sync_http_status = sync_proxmox_endpoint_to_backend(
+        proxmox_object,
+        base_url=fastapi_url,
+        auth_headers=backend_headers,
+        backend_verify_ssl=backend_verify_ssl,
+        timeout=5,
+    )
+    if not sync_ok:
+        payload = {
+            "cluster_data": {},
+            "object": {
+                "pk": getattr(
+                    proxmox_object, "pk", getattr(proxmox_object, "id", None)
+                ),
+                "name": proxmox_object.name,
+                "domain": proxmox_object.domain,
+                "ip_address": str(proxmox_object.ip_address)
+                if proxmox_object.ip_address
+                else None,
+            },
+            "detail": sync_detail,
+        }
+        if sync_http_status is not None:
+            payload["http_status"] = sync_http_status
+        return JsonResponse(payload)
+
     try:
         version_response = requests.get(
             version_endpoint,
@@ -141,7 +140,22 @@ def get_proxmox_card(request, pk: int) -> JsonResponse:
         version_data = version_response.json()
         cluster_data = cluster_response.json()
     except requests.exceptions.RequestException as exc:
-        detail, http_status = _extract_error_detail(exc)
+        failed_endpoint = version_endpoint
+        response = getattr(exc, "response", None)
+        if response is not None:
+            response_url = getattr(response, "url", "") or ""
+            if "/proxmox/sessions" in response_url:
+                failed_endpoint = cluster_endpoint
+            elif "/proxmox/version" in response_url:
+                failed_endpoint = version_endpoint
+        elif "/proxmox/sessions" in str(exc):
+            failed_endpoint = cluster_endpoint
+        detail, http_status = extract_proxmox_backend_error_detail(
+            exc,
+            proxmox_host=proxmox_host,
+            proxmox_port=proxmox_object.port,
+            backend_url=failed_endpoint,
+        )
         logger.error("Unable to hydrate Proxmox card for endpoint %s: %s", pk, exc)
 
     payload: dict = {

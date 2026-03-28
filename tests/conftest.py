@@ -225,9 +225,14 @@ def netbox_endpoint():
 def proxmox_endpoint():
     return SimpleNamespace(
         id=1,
+        pk=1,
         name="pve01",
         domain="pve.local",
         ip_address="10.0.0.30/24",
         port=8006,
+        username="root@pam",
+        password="secret",
+        token_name="proxbox2",
+        token_value="token-secret",
         verify_ssl=False,
     )
