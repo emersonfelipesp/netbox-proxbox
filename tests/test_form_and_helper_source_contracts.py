@@ -123,6 +123,13 @@ def test_netbox_endpoint_form_documents_v2_manual_credential_requirement():
     assert "Use token key and token secret fields instead" in contents
 
 
+def test_netbox_endpoint_form_rejects_unusable_v1_selected_token():
+    contents = _read("netbox_proxbox/forms/netbox.py")
+    assert (
+        "Selected NetBox v1 token does not expose a usable plaintext value" in contents
+    )
+
+
 def test_endpoint_forms_require_domain_or_ip_address():
     files = [
         "netbox_proxbox/forms/proxmox.py",

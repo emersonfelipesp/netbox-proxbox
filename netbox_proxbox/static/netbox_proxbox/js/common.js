@@ -7,7 +7,7 @@ export function createTdElement(type, name, field, innerHTML) {
     return cell;
 }
 
-export function setBadgeState(element, status) {
+export function setBadgeState(element, status, detail = "") {
     if (!element) {
         return;
     }
@@ -25,6 +25,17 @@ export function setBadgeState(element, status) {
 
     element.className = styles[status] ?? styles.unknown;
     element.textContent = labels[status] ?? labels.unknown;
+
+    const tooltip = typeof detail === "string" ? detail.trim() : "";
+    if (tooltip) {
+        element.title = tooltip;
+        element.dataset.bsToggle = "tooltip";
+        element.dataset.bsTitle = tooltip;
+    } else {
+        element.removeAttribute("title");
+        element.removeAttribute("data-bs-toggle");
+        element.removeAttribute("data-bs-title");
+    }
 }
 
 export async function fetchJson(url, options = {}) {

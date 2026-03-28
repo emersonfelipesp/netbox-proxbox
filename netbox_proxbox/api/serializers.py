@@ -232,6 +232,18 @@ class NetBoxEndpointSerializer(NetBoxModelSerializer):
                     }
                 )
 
+            token_plaintext = (getattr(token, "plaintext", "") or "").strip()
+            if not token_plaintext:
+                raise serializers.ValidationError(
+                    {
+                        "token": (
+                            "Selected NetBox v1 token does not expose a usable plaintext "
+                            "value. Create a new v1 token (or use v2 key/secret fields) "
+                            "and reselect it."
+                        )
+                    }
+                )
+
             attrs["token_version"] = selected_token_version
             attrs["token_key"] = ""
             attrs["token_secret"] = ""

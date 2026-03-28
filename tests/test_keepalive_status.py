@@ -107,40 +107,16 @@ def test_netbox_status_v2_without_secret_fails_backend_validation(
     )
     monkeypatch.setattr(module.time, "sleep", lambda seconds: None)
 
-    created_payloads = []
-
-    class ValidationErrorResponse(ResponseStub):
-        def raise_for_status(self):
-            raise requests.exceptions.HTTPError("400")
-
-    def fake_get(url, verify=True, timeout=None, headers=None):
-        if url.endswith("/netbox/endpoint"):
-            return ResponseStub([])
-        if url.endswith("/netbox/status"):
-            raise AssertionError("status check should not be reached")
-        raise AssertionError(url)
-
-    def fake_post(url, json, timeout=None, headers=None):
-        created_payloads.append((url, json))
-        return ValidationErrorResponse(
-            {
-                "detail": "token_key and token (secret) must both be set for NetBox API token v2"
-            },
-            status_code=400,
-        )
-
-    monkeypatch.setattr(module.requests, "get", fake_get)
-    monkeypatch.setattr(module.requests, "post", fake_post)
-
-    status = module.ServiceStatus().netbox_status(
+    service_status = module.ServiceStatus()
+    status = service_status.netbox_status(
         1,
         "https://proxbox.local:8800",
         auth_headers={"Authorization": "Bearer backend-token"},
     )
     assert status == "error"
-    assert created_payloads[0][1]["token_version"] == "v2"
-    assert "token" not in created_payloads[0][1]
-    assert "token_key" not in created_payloads[0][1]
+    assert service_status.last_error_detail == (
+        "NetBox v2 credentials are incomplete. Provide both token key and token secret."
+    )
 
 
 def test_netbox_status_builds_full_v2_token_from_key_and_secret(
@@ -218,6 +194,58 @@ def test_backend_auth_headers_accepts_prefixed_and_bare_tokens(
     assert module.ServiceStatus._backend_auth_headers(SimpleNamespace(token="abc")) == {
         "Authorization": "Bearer abc"
     }
+
+
+def test_netbox_status_exposes_error_detail_on_backend_failure(
+    monkeypatch,
+    fastapi_endpoint,
+    netbox_endpoint,
+):
+    module = load_plugin_module(
+        "netbox_proxbox.views.keepalive_status",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+        netbox_endpoint=netbox_endpoint,
+    )
+    monkeypatch.setattr(module.time, "sleep", lambda seconds: None)
+
+    class FailingResponse(ResponseStub):
+        text = '{"detail": "token is required for NetBox API token v1", "python_exception": "ValidationError"}'
+
+        def raise_for_status(self):
+            err = requests.exceptions.HTTPError("400")
+            err.response = self
+            raise err
+
+    def fake_get(url, verify=True, timeout=None, headers=None):
+        if url.endswith("/netbox/endpoint"):
+            return ResponseStub([])
+        raise AssertionError(url)
+
+    def fake_post(url, json, timeout=None, headers=None):
+        return FailingResponse(
+            {
+                "detail": "token is required for NetBox API token v1",
+                "python_exception": "ValidationError",
+            },
+            status_code=400,
+        )
+
+    monkeypatch.setattr(module.requests, "get", fake_get)
+    monkeypatch.setattr(module.requests, "post", fake_post)
+
+    service_status = module.ServiceStatus()
+    status = service_status.netbox_status(
+        1,
+        "https://proxbox.local:8800",
+        auth_headers={"Authorization": "Bearer backend-token"},
+    )
+
+    assert status == "error"
+    assert "token is required for NetBox API token v1" in (
+        service_status.last_error_detail or ""
+    )
+    assert service_status.last_error_http_status == 400
 
 
 def test_proxmox_status_uses_domain_query_when_available(
