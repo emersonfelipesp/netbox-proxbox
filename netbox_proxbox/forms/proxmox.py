@@ -5,7 +5,9 @@ from django import forms
 
 # NetBox Imports
 from netbox.forms import NetBoxModelForm, NetBoxModelFilterSetForm
+from netbox.forms import NetBoxModelImportForm
 from utilities.forms.fields import CommentField, DynamicModelChoiceField
+from utilities.forms.fields import CSVChoiceField, CSVModelChoiceField
 from ipam.models import IPAddress
 from django.utils.translation import gettext as _
 
@@ -83,3 +85,30 @@ class ProxmoxEndpointFilterForm(NetBoxModelFilterSetForm):
         queryset=IPAddress.objects.all(), required=False, help_text="Select IP Address"
     )
     mode = forms.MultipleChoiceField(choices=ProxmoxModeChoices, required=False)
+
+
+class ProxmoxEndpointImportForm(NetBoxModelImportForm):
+    ip_address = CSVModelChoiceField(
+        queryset=IPAddress.objects.all(),
+        required=False,
+        to_field_name="address",
+        help_text=_("IP address in CIDR format, for example 192.0.2.10/24."),
+    )
+    mode = CSVChoiceField(choices=ProxmoxModeChoices, required=False)
+
+    class Meta:
+        model = ProxmoxEndpoint
+        fields = (
+            "name",
+            "domain",
+            "ip_address",
+            "port",
+            "mode",
+            "username",
+            "password",
+            "token_name",
+            "token_value",
+            "verify_ssl",
+            "comments",
+            "tags",
+        )

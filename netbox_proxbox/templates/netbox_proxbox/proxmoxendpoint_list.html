@@ -1,0 +1,72 @@
+{% extends 'generic/object_list.html' %}
+{% load i18n %}
+
+{% block extra_controls %}
+  <a class="btn btn-outline-primary" href="{% url 'plugins:netbox_proxbox:proxmoxendpoint_bulk_import' %}">
+    <i class="mdi mdi-upload" aria-hidden="true"></i> {% trans "Import" %}
+  </a>
+  <div class="btn-group" role="group">
+    <button type="button" class="btn btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+      <i class="mdi mdi-download" aria-hidden="true"></i> {% trans "Export" %}
+    </button>
+    <ul class="dropdown-menu">
+      <li><a class="dropdown-item" href="{% url 'plugins:netbox_proxbox:proxmoxendpoint_export' %}?format=csv">{% trans "Export CSV" %}</a></li>
+      <li><a class="dropdown-item" href="{% url 'plugins:netbox_proxbox:proxmoxendpoint_export' %}?format=json">{% trans "Export JSON" %}</a></li>
+      <li><a class="dropdown-item" href="{% url 'plugins:netbox_proxbox:proxmoxendpoint_export' %}?format=yaml">{% trans "Export YAML" %}</a></li>
+    </ul>
+  </div>
+  <button class="btn btn-warning" type="button" data-bs-toggle="modal" data-bs-target="#proxmox-export-secrets-modal">
+    <i class="mdi mdi-alert" aria-hidden="true"></i> {% trans "Export with secrets" %}
+  </button>
+{% endblock %}
+
+{% block modals %}
+  {{ block.super }}
+  <div class="modal fade" id="proxmox-export-secrets-modal" tabindex="-1" aria-labelledby="proxmox-export-secrets-label" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <form method="post" action="{% url 'plugins:netbox_proxbox:proxmoxendpoint_export' %}">
+          {% csrf_token %}
+          <input type="hidden" name="include_sensitive" value="true" />
+          <div class="modal-header">
+            <h5 class="modal-title" id="proxmox-export-secrets-label">{% trans "Sensitive export confirmation" %}</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{% trans 'Close' %}"></button>
+          </div>
+          <div class="modal-body">
+            <div class="alert alert-warning mb-3" role="alert">
+              <strong>{% trans "Warning:" %}</strong>
+              {% trans "This export includes Proxmox passwords and token values in plain text. Handle the file as a secret and store it securely." %}
+            </div>
+            <div class="mb-3">
+              <label class="form-label" for="id_export_format">{% trans "Export format" %}</label>
+              <select class="form-select" id="id_export_format" name="format" required>
+                <option value="csv">CSV</option>
+                <option value="json">JSON</option>
+                <option value="yaml">YAML</option>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label" for="id_netbox_token">{% trans "NetBox API token" %}</label>
+              <input
+                class="form-control"
+                id="id_netbox_token"
+                name="netbox_token"
+                type="password"
+                placeholder="{% trans 'Token <v1-token> or Bearer nbt_<key>.<secret>' %}"
+                autocomplete="off"
+                required
+              />
+              <div class="form-text">
+                {% trans "Provide a valid NetBox API token to authorize secret export." %}
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">{% trans "Cancel" %}</button>
+            <button type="submit" class="btn btn-danger">{% trans "Export with secrets" %}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+{% endblock %}

@@ -9,6 +9,9 @@ SERIALIZERS_PATH = REPO_ROOT / "netbox_proxbox" / "api" / "serializers.py"
 VIEWS_PATH = REPO_ROOT / "netbox_proxbox" / "api" / "views.py"
 FILTERS_PATH = REPO_ROOT / "netbox_proxbox" / "api" / "filters.py"
 URLS_PATH = REPO_ROOT / "netbox_proxbox" / "api" / "urls.py"
+PROXMOX_ENDPOINT_VIEWS_PATH = (
+    REPO_ROOT / "netbox_proxbox" / "views" / "endpoints" / "proxmox.py"
+)
 
 
 def _parse_module(path: Path) -> ast.Module:
@@ -350,3 +353,26 @@ def test_plugin_api_routes_register_all_plugin_objects():
 
     assert set(endpoint_registers) == {"proxmox", "netbox", "fastapi"}
     assert set(root_registers) == {"sync-processes", "backups"}
+
+
+def test_proxmox_endpoint_views_register_bulk_import_and_csv_export():
+    contents = PROXMOX_ENDPOINT_VIEWS_PATH.read_text()
+    assert (
+        '@register_model_view(ProxmoxEndpoint, "bulk_import", path="import", detail=False)'
+        in contents
+    )
+    assert "class ProxmoxEndpointBulkImportView" in contents
+    assert "model_form = ProxmoxEndpointImportForm" in contents
+    assert (
+        '@register_model_view(ProxmoxEndpoint, "export", path="export", detail=False)'
+        in contents
+    )
+    assert "class ProxmoxEndpointExportView" in contents
+
+
+def test_proxmox_endpoint_export_requires_token_for_sensitive_payloads():
+    contents = PROXMOX_ENDPOINT_VIEWS_PATH.read_text()
+    assert "include_sensitive" in contents
+    assert "TokenAuthentication" in contents
+    assert "A valid NetBox token is required to export secrets." in contents
+    assert 'allowed_formats = {"csv", "json", "yaml"}' in contents
