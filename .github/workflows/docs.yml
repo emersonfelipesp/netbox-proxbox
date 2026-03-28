@@ -11,10 +11,10 @@ on:
       - main
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
@@ -36,8 +36,15 @@ jobs:
       - name: Build docs
         run: mkdocs build
 
-      - name: Upload docs artifact
-        uses: actions/upload-artifact@v4
+      - name: Write Pages CNAME
+        if: github.event_name == 'push'
+        run: echo "proxbox.netbox.dev.br" > site/CNAME
+
+      - name: Deploy to gh-pages
+        if: github.event_name == 'push'
+        uses: peaceiris/actions-gh-pages@v4
         with:
-          name: netbox-proxbox-docs-site
-          path: site/
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: ./site
+          force_orphan: true
