@@ -8,6 +8,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 SERIALIZERS_PATH = REPO_ROOT / "netbox_proxbox" / "api" / "serializers.py"
 VIEWS_PATH = REPO_ROOT / "netbox_proxbox" / "api" / "views.py"
 FILTERS_PATH = REPO_ROOT / "netbox_proxbox" / "api" / "filters.py"
+URLS_PATH = REPO_ROOT / "netbox_proxbox" / "api" / "urls.py"
 
 
 def _parse_module(path: Path) -> ast.Module:
@@ -22,7 +23,11 @@ def _classdef(module: ast.Module, name: str) -> ast.ClassDef:
 
 
 def _assigned_name(node: ast.Assign | ast.AnnAssign) -> str | None:
-    if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+    if (
+        isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and isinstance(node.targets[0], ast.Name)
+    ):
         return node.targets[0].id
     if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
         return node.target.id
@@ -32,7 +37,11 @@ def _assigned_name(node: ast.Assign | ast.AnnAssign) -> str | None:
 def _meta_fields(class_node: ast.ClassDef) -> tuple[str, ...]:
     meta_node = _classdef(ast.Module(body=class_node.body, type_ignores=[]), "Meta")
     for node in meta_node.body:
-        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+        if (
+            isinstance(node, ast.Assign)
+            and len(node.targets) == 1
+            and isinstance(node.targets[0], ast.Name)
+        ):
             if node.targets[0].id == "fields":
                 return tuple(ast.literal_eval(node.value))
     raise AssertionError(f"Meta.fields not found for {class_node.name}")
@@ -41,7 +50,11 @@ def _meta_fields(class_node: ast.ClassDef) -> tuple[str, ...]:
 def _meta_extra_kwargs(class_node: ast.ClassDef) -> dict:
     meta_node = _classdef(ast.Module(body=class_node.body, type_ignores=[]), "Meta")
     for node in meta_node.body:
-        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+        if (
+            isinstance(node, ast.Assign)
+            and len(node.targets) == 1
+            and isinstance(node.targets[0], ast.Name)
+        ):
             if node.targets[0].id == "extra_kwargs":
                 return ast.literal_eval(node.value)
     return {}
@@ -50,6 +63,8 @@ def _meta_extra_kwargs(class_node: ast.ClassDef) -> dict:
 def _class_assignments(class_node: ast.ClassDef) -> set[str]:
     names: set[str] = set()
     for node in class_node.body:
+        if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+            continue
         name = _assigned_name(node)
         if name:
             names.add(name)
@@ -58,6 +73,19 @@ def _class_assignments(class_node: ast.ClassDef) -> set[str]:
 
 def _class_methods(class_node: ast.ClassDef) -> set[str]:
     return {node.name for node in class_node.body if isinstance(node, ast.FunctionDef)}
+
+
+def _meta_brief_fields(class_node: ast.ClassDef) -> tuple[str, ...] | None:
+    meta_node = _classdef(ast.Module(body=class_node.body, type_ignores=[]), "Meta")
+    for node in meta_node.body:
+        if (
+            isinstance(node, ast.Assign)
+            and len(node.targets) == 1
+            and isinstance(node.targets[0], ast.Name)
+        ):
+            if node.targets[0].id == "brief_fields":
+                return tuple(ast.literal_eval(node.value))
+    return None
 
 
 def test_endpoint_serializers_expose_supported_model_fields():
@@ -153,7 +181,9 @@ def test_writable_nested_related_fields_are_declared():
         class_node = _classdef(module, serializer_name)
         present = _class_assignments(class_node)
         missing = assignments - present
-        assert not missing, f"{serializer_name} missing class assignments: {sorted(missing)}"
+        assert not missing, (
+            f"{serializer_name} missing class assignments: {sorted(missing)}"
+        )
 
 
 def test_proxmox_endpoint_serializer_marks_secrets_write_only():
@@ -184,7 +214,9 @@ def test_all_viewsets_use_netbox_model_viewset_and_plugin_filtersets():
 
     for viewset_name, filterset_name in expected_viewsets.items():
         class_node = _classdef(module, viewset_name)
-        base_names = [base.id for base in class_node.bases if isinstance(base, ast.Name)]
+        base_names = [
+            base.id for base in class_node.bases if isinstance(base, ast.Name)
+        ]
         assert "NetBoxModelViewSet" in base_names
 
         assignments = _class_assignments(class_node)
@@ -211,7 +243,9 @@ def test_all_viewsets_use_netbox_model_viewset_and_plugin_filtersets():
 
 def test_api_filters_module_reexports_all_plugin_filtersets():
     module = _parse_module(FILTERS_PATH)
-    import_from = next((node for node in module.body if isinstance(node, ast.ImportFrom)), None)
+    import_from = next(
+        (node for node in module.body if isinstance(node, ast.ImportFrom)), None
+    )
     assert import_from is not None
     assert import_from.module == "netbox_proxbox.filtersets"
     exported = {alias.name for alias in import_from.names}
@@ -222,3 +256,39 @@ def test_api_filters_module_reexports_all_plugin_filtersets():
         "SyncProcessFilterSet",
         "VMBackupFilterSet",
     }
+
+
+def test_nested_writable_serializers_define_brief_fields():
+    module = _parse_module(SERIALIZERS_PATH)
+    class_node = _classdef(module, "NestedTokenSerializer")
+    brief_fields = _meta_brief_fields(class_node)
+    assert brief_fields is not None
+    assert set(brief_fields) == {"id", "url", "display", "key"}
+
+
+def test_plugin_api_routes_register_all_plugin_objects():
+    module = _parse_module(URLS_PATH)
+
+    endpoint_registers = []
+    root_registers = []
+
+    for node in module.body:
+        if not isinstance(node, ast.Expr) or not isinstance(node.value, ast.Call):
+            continue
+        call = node.value
+        if not isinstance(call.func, ast.Attribute) or call.func.attr != "register":
+            continue
+        if not isinstance(call.func.value, ast.Name):
+            continue
+
+        router_name = call.func.value.id
+        if not call.args:
+            continue
+        route = ast.literal_eval(call.args[0])
+        if router_name == "endpoints_router":
+            endpoint_registers.append(route)
+        elif router_name == "router":
+            root_registers.append(route)
+
+    assert set(endpoint_registers) == {"proxmox", "netbox", "fastapi"}
+    assert set(root_registers) == {"sync-processes", "backups"}
