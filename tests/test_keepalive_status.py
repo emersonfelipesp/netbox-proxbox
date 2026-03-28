@@ -288,6 +288,11 @@ def test_proxmox_status_uses_domain_query_when_available(
         proxmox_endpoint=proxmox_endpoint,
     )
     monkeypatch.setattr(module.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(
+        module,
+        "sync_proxmox_endpoint_to_backend",
+        lambda *args, **kwargs: (True, None, None),
+    )
     requested = []
 
     def fake_get(url, verify=True, timeout=None, params=None, headers=None):
@@ -306,7 +311,7 @@ def test_proxmox_status_uses_domain_query_when_available(
     assert requested == [
         (
             "https://proxbox.local:8800/proxmox/version",
-            {"source": "netbox", "domain": "pve.local"},
+            {"source": "database", "domain": "pve.local"},
             {"Authorization": "Bearer backend-token"},
             True,
         )
@@ -331,6 +336,11 @@ def test_proxmox_status_uses_ip_query_when_domain_missing(
         fastapi_endpoint=fastapi_endpoint,
         proxmox_endpoint=proxmox_endpoint,
     )
+    monkeypatch.setattr(
+        module,
+        "sync_proxmox_endpoint_to_backend",
+        lambda *args, **kwargs: (True, None, None),
+    )
     requested = []
 
     def fake_get(url, verify=True, timeout=None, params=None, headers=None):
@@ -349,8 +359,97 @@ def test_proxmox_status_uses_ip_query_when_domain_missing(
     assert requested == [
         (
             "https://proxbox.local:8800/proxmox/version",
-            {"source": "netbox", "ip_address": "10.0.0.30"},
+            {"source": "database", "ip_address": "10.0.0.30"},
             {"Authorization": "Bearer backend-token"},
             False,
         )
     ]
+
+
+def test_proxmox_status_normalizes_backend_connection_refused(
+    monkeypatch,
+    fastapi_endpoint,
+    proxmox_endpoint,
+):
+    module = load_plugin_module(
+        "netbox_proxbox.views.keepalive_status",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+        proxmox_endpoint=proxmox_endpoint,
+    )
+    monkeypatch.setattr(module.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(
+        module,
+        "sync_proxmox_endpoint_to_backend",
+        lambda *args, **kwargs: (True, None, None),
+    )
+
+    def fake_get(url, verify=True, timeout=None, params=None, headers=None):
+        raise requests.exceptions.ConnectionError(
+            "HTTPConnectionPool(host='10.0.30.207', port=8000): Max retries exceeded "
+            "with url: /proxmox/version?source=database&domain=pve.local "
+            '(Caused by NewConnectionError("Failed to establish a new connection: '
+            '[Errno 111] Connection refused"))'
+        )
+
+    monkeypatch.setattr(module.requests, "get", fake_get)
+
+    service_status = module.ServiceStatus()
+    status = service_status.proxmox_status(
+        1,
+        "https://proxbox.local:8800",
+        auth_headers={"Authorization": "Bearer backend-token"},
+        backend_verify_ssl=True,
+    )
+
+    assert status == "error"
+    assert service_status.last_error_http_status is None
+    assert (
+        service_status.last_error_detail
+        == "ProxBox backend could not connect to the configured Proxmox endpoint "
+        "(pve.local:8006). Backend route: https://proxbox.local:8800/proxmox/version. "
+        "Upstream error: HTTPConnectionPool(host='10.0.30.207', port=8000): Max "
+        "retries exceeded with url: /proxmox/version?source=database&domain=pve.local "
+        '(Caused by NewConnectionError("Failed to establish a new connection: '
+        '[Errno 111] Connection refused"))'
+    )
+
+
+def test_proxmox_status_returns_sync_error_before_backend_version_call(
+    monkeypatch,
+    fastapi_endpoint,
+    proxmox_endpoint,
+):
+    module = load_plugin_module(
+        "netbox_proxbox.views.keepalive_status",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+        proxmox_endpoint=proxmox_endpoint,
+    )
+
+    monkeypatch.setattr(
+        module,
+        "sync_proxmox_endpoint_to_backend",
+        lambda *args, **kwargs: (False, "sync failed", 503),
+    )
+
+    calls = []
+
+    def fake_get(url, verify=True, timeout=None, params=None, headers=None):
+        calls.append(url)
+        return ResponseStub([{"pve01": {"version": "8.3.0"}}])
+
+    monkeypatch.setattr(module.requests, "get", fake_get)
+
+    service_status = module.ServiceStatus()
+    status = service_status.proxmox_status(
+        1,
+        "https://proxbox.local:8800",
+        auth_headers={"Authorization": "Bearer backend-token"},
+        backend_verify_ssl=True,
+    )
+
+    assert status == "error"
+    assert service_status.last_error_detail == "sync failed"
+    assert service_status.last_error_http_status == 503
+    assert calls == []

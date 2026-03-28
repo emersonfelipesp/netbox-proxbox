@@ -11,6 +11,11 @@ from django.views.decorators.http import require_GET
 
 from netbox_proxbox.models import FastAPIEndpoint, NetBoxEndpoint, ProxmoxEndpoint
 from netbox_proxbox.utils import get_fastapi_url, get_ip_address_host
+from netbox_proxbox.views.backend_sync import sync_proxmox_endpoint_to_backend
+from netbox_proxbox.views.error_utils import (
+    extract_backend_error_detail,
+    extract_proxmox_backend_error_detail,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -37,53 +42,7 @@ class ServiceStatus:
     def _extract_error_detail(
         exc: requests.exceptions.RequestException,
     ) -> tuple[str, int | None]:
-        response = getattr(exc, "response", None)
-        if response is None:
-            return str(exc), None
-
-        status_code = getattr(response, "status_code", None)
-        detail = None
-
-        try:
-            payload = response.json()
-            if isinstance(payload, dict):
-                detail = payload.get("detail") or payload.get("message")
-                python_exception = payload.get("python_exception")
-                if python_exception:
-                    detail = (
-                        f"{detail} ({python_exception})"
-                        if detail
-                        else str(python_exception)
-                    )
-        except Exception:
-            detail = None
-
-        if not detail:
-            body = (getattr(response, "text", "") or "").strip()
-            content_type = (getattr(response, "headers", {}) or {}).get(
-                "Content-Type", ""
-            )
-            response_url = getattr(response, "url", "") or ""
-            body_lower = body.lower()
-
-            if (
-                "text/html" in content_type.lower() or "<html" in body_lower
-            ) and status_code in {400, 401, 403, 404}:
-                detail = (
-                    "Backend returned HTML instead of ProxBox API JSON"
-                    f" (HTTP {status_code})."
-                )
-                if response_url:
-                    detail += f" URL: {response_url}."
-                detail += (
-                    " Check FastAPI endpoint host/port; it may be pointing to NetBox UI "
-                    "instead of proxbox-api."
-                )
-                return detail, status_code
-
-            detail = body[:500] if body else str(exc)
-
-        return detail, status_code
+        return extract_backend_error_detail(exc)
 
     @staticmethod
     def _backend_auth_headers(fastapi_obj: FastAPIEndpoint | None) -> dict[str, str]:
@@ -355,9 +314,21 @@ class ServiceStatus:
             getattr(proxmox_service_obj, "ip_address", None)
         )
         proxmox_domain = proxmox_service_obj.domain or None
+        proxmox_host = proxmox_domain or proxmox_ip_address
+
+        sync_ok, sync_detail, sync_http_status = sync_proxmox_endpoint_to_backend(
+            proxmox_service_obj,
+            base_url=base_url,
+            auth_headers=request_headers,
+            backend_verify_ssl=backend_verify_ssl,
+            timeout=self.request_timeout,
+        )
+        if not sync_ok:
+            self._set_error(sync_detail, http_status=sync_http_status)
+            return status
 
         url = f"{base_url}/proxmox/version"
-        query_params = {"source": "netbox"}
+        query_params = {"source": "database"}
         if proxmox_domain:
             query_params["domain"] = proxmox_domain
         else:
@@ -377,7 +348,12 @@ class ServiceStatus:
                 status = "success"
                 break
             except requests.exceptions.RequestException as exc:
-                detail, http_status = self._extract_error_detail(exc)
+                detail, http_status = extract_proxmox_backend_error_detail(
+                    exc,
+                    proxmox_host=proxmox_host,
+                    proxmox_port=proxmox_service_obj.port,
+                    backend_url=url,
+                )
                 self._set_error(detail, http_status=http_status)
                 logger.error(
                     "Proxmox status request failed on attempt %s: %s", attempt + 1, exc
