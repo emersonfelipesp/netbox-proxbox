@@ -25,13 +25,15 @@ class NetBoxEndpointForm(NetBoxModelForm):
         required=False,
         help_text="Select IP Address",
         label="IP Address",
+        quick_add=True,
     )
 
-    token = forms.ModelChoiceField(
+    token = DynamicModelChoiceField(
         queryset=Token.objects.all(),
         required=False,
         help_text="Choose an existing NetBox v1 or v2 API token. If selected, manual token fields are not required.",
         label="API Token",
+        quick_add=True,
     )
 
     token_version = forms.ChoiceField(
