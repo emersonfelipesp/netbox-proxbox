@@ -1,70 +1,80 @@
 # Proxbox Backend Setup
 
-The Proxbox backend is required for the plugin to function. This guide covers the installation and configuration of the backend service.
+The NetBox plugin requires a separate `proxbox-api` FastAPI service. The plugin stores configuration in NetBox, but sync requests are sent to this backend.
 
-## Option 1: Using Docker (Recommended)
+## Backend Role
 
-The simplest way to install the backend is using Docker:
+The current plugin code expects a configured `FastAPIEndpoint` object and uses it for:
 
+- device sync
+- virtual machine sync
+- full update
+- VM backup sync
+
+## Option 1: Install The Backend With pip
+
+```bash
+mkdir -p /opt/proxbox-api
+cd /opt/proxbox-api
+python3 -m venv venv
+source venv/bin/activate
+pip install proxbox-api==0.0.2.post3
 ```
+
+Start it manually:
+
+```bash
+/opt/proxbox-api/venv/bin/uvicorn proxbox_api.main:app --host 0.0.0.0 --port 8800 --app-dir /opt/proxbox-api
+```
+
+## Option 2: Run The Backend In Docker
+
+```bash
 docker pull emersonfelipesp/proxbox-api:latest
-docker run -d -p 8800:8800 --name proxbox-api emersonfelipesp/proxbox-api:latest
+docker run -d --name proxbox-api -p 8800:8800 emersonfelipesp/proxbox-api:latest
 ```
 
-## Option 2: Manual Installation
+## Option 3: Run It As A systemd Service
 
-If Docker is not an option, you can install the backend manually. For detailed instructions, please refer to the [Proxbox API documentation](https://github.com/netdevopsbr/netbox-proxbox/blob/develop/proxbox_api/README.md).
+This repository includes sample service files:
 
-## SSL Configuration
+- `contrib/proxbox.service`
+- `contrib/proxbox-https.service`
 
-If you're using SSL certificates, you may need to set the appropriate permissions for the Proxbox backend to access them:
+Install one of them:
 
+```bash
+sudo cp -v /opt/netbox/netbox/netbox-proxbox/contrib/proxbox.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now proxbox
+sudo systemctl status proxbox
 ```
+
+The sample unit expects the backend virtual environment under `/opt/proxbox-api/venv` and starts:
+
+```bash
+/opt/proxbox-api/venv/bin/uvicorn proxbox_api.main:app --host 0.0.0.0 --port 8800 --app-dir /opt/proxbox-api
+```
+
+Adjust the service file if your backend lives somewhere else.
+
+## TLS Notes
+
+If you use the HTTPS sample unit and point it at NetBox-managed certificates, the backend process may need permission to read them:
+
+```bash
 sudo chmod +rx -R /etc/ssl/private/
 sudo chmod +rx -R /etc/ssl/certs/
 ```
 
-## Systemd Service Setup
+That is convenient, but you should review the security impact for your environment before using it.
 
-To run the backend as a systemd service:
+## Next Step In NetBox
 
-1. Copy the service file to the systemd directory:
-```
-sudo cp -v /opt/netbox/netbox/netbox-proxbox/contrib/*.service /etc/systemd/system/
-```
+After the backend is reachable, create these objects in the Proxbox UI:
 
-2. Reload systemd and enable the service:
-```
-sudo systemctl daemon-reload
-sudo systemctl enable --now proxbox
-```
+1. `Proxmox API`
+2. `NetBox API`
+3. `ProxBox API (FastAPI)`
 
-3. Start and verify the service:
-```
-sudo systemctl start proxbox
-sudo systemctl status proxbox
-```
-
-## Development Setup
-
-For development purposes, you can run the backend directly:
-
-```
-/opt/netbox/venv/bin/uvicorn netbox-proxbox.proxbox_api.main:app --host 0.0.0.0 --port 8800 --app-dir /opt/netbox/netbox --ssl-keyfile=/etc/ssl/private/netbox.key --ssl-certfile=/etc/ssl/certs/netbox.crt --reload
-```
-
-### Creating Self-Signed Certificates (Development Only)
-
-If you need to test the plugin without reusing Netbox certificates, you can create your own self-signed certificates:
-
-```
-sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
--keyout /etc/ssl/proxbox.key \
--out /etc/ssl/proxbox.crt
-```
-
-> **Note:** The certificate files are created in `/etc/ssl` by default. You'll need to update the systemd service file to use these certificates. Consider using an HTTP proxy like NGINX to serve the FastAPI application.
-
-## Next Steps
-
-After setting up the backend, you can proceed to configure the plugin through the Netbox web interface. The plugin configuration is managed entirely through the Netbox GUI or its API. 
+Then return to `Plugins > Proxbox` and run `Full Update`.
