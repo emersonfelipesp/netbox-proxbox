@@ -1,6 +1,5 @@
 from rest_framework import serializers
 
-from extras.api.serializers import JournalEntrySerializer as NetBoxJournalEntrySerializer
 from ipam.api.serializers_.nested import NestedIPAddressSerializer
 from netbox.api.fields import ChoiceField
 from netbox.api.serializers import NetBoxModelSerializer, WritableNestedSerializer
@@ -126,6 +125,10 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
             "last_updated",
         )
         brief_fields = ("id", "url", "display", "name", "domain", "port")
+        extra_kwargs = {
+            "password": {"write_only": True, "required": False, "allow_null": True},
+            "token_value": {"write_only": True, "required": False, "allow_blank": True},
+        }
 
 
 class NetBoxEndpointSerializer(NetBoxModelSerializer):
@@ -183,9 +186,3 @@ class FastAPIEndpointSerializer(NetBoxModelSerializer):
             "last_updated",
         )
         brief_fields = ("id", "url", "display", "name", "domain", "port")
-
-
-class JournalEntrySerializer(NetBoxJournalEntrySerializer):
-    url = serializers.HyperlinkedIdentityField(
-        view_name="plugins-api:netbox_proxbox-api:journalentry-detail",
-    )

@@ -1,243 +1,282 @@
-from django.urls import reverse
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
-from django.core.validators import MaxValueValidator, MinValueValidator 
 
 from netbox.models import NetBoxModel
-from netbox.models.features import JournalingMixin
 
+from netbox_proxbox.choices import ProxmoxModeChoices, SyncStatusChoices, SyncTypeChoices
 from netbox_proxbox.fields import DomainField
-from netbox_proxbox.choices import ProxmoxModeChoices, SyncTypeChoices, SyncStatusChoices
 from netbox_proxbox.models.vm_backup import VMBackup
+
+
+PORT_VALIDATORS = (MinValueValidator(1), MaxValueValidator(65535))
+
 
 class CommonProperties:
     @property
-    def ip(self) -> str:
-        """Get the IP address of the Proxmox endpoint."""
-        return self.ip_address.address.split('/')[0] if self.ip_address else None
-    
+    def ip(self) -> str | None:
+        return str(self.ip_address.address.ip) if self.ip_address else None
+
     @property
     def url(self) -> str:
-        """Construct the full URL for the Proxmox endpoint."""
-        try:
-            protocol = 'https' if self.verify_ssl else 'http'
-            host = self.domain if self.domain else self.ip
-            return f"{protocol}://{host}:{self.port}"
-        except Exception as e:
-            return f"Error: {e}"
+        protocol = "https" if self.verify_ssl else "http"
+        host = self.domain or self.ip
+        return f"{protocol}://{host}:{self.port}" if host else ""
 
-class ProxmoxEndpoint(NetBoxModel, CommonProperties):
+
+class EndpointBase(CommonProperties, NetBoxModel):
     name = models.CharField(
-        default='Proxmox Endpoint',
         max_length=255,
         blank=True,
         null=True,
-        help_text=_('Name of the Proxmox Endpoint/Cluster. It will be filled automatically by API.'),
     )
     ip_address = models.ForeignKey(
-        to='ipam.IPAddress',
+        to="ipam.IPAddress",
         on_delete=models.PROTECT,
-        related_name='+',
-        verbose_name=_('IP Address'),
+        related_name="+",
+        verbose_name=_("IP address"),
         null=True,
         blank=True,
-        help_text=_('IP Address of the Proxmox Endpoint (Cluster). Fallback if domain name is not provided.'),
     )
     domain = DomainField(
-        verbose_name=_('Domain'),
-        help_text=_('Domain name of the Proxmox Endpoint (Cluster).'),
+        verbose_name=_("Domain"),
+        blank=True,
+        null=True,
+    )
+    port = models.PositiveIntegerField(
+        validators=PORT_VALIDATORS,
+        verbose_name=_("HTTP port"),
+    )
+    verify_ssl = models.BooleanField(
+        verbose_name=_("Verify SSL"),
+    )
+
+    class Meta:
+        abstract = True
+        ordering = ("name", "pk")
+
+    def __str__(self):
+        return self.name or self.domain or self.ip or self.__class__.__name__
+
+
+class ProxmoxEndpoint(EndpointBase):
+    name = models.CharField(
+        default="Proxmox Endpoint",
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text=_("Name of the Proxmox endpoint or cluster. It may be updated from the API."),
+    )
+    ip_address = models.ForeignKey(
+        to="ipam.IPAddress",
+        on_delete=models.PROTECT,
+        related_name="+",
+        verbose_name=_("IP address"),
+        null=True,
+        blank=True,
+        help_text=_("Fallback endpoint address when no domain name is configured."),
+    )
+    domain = DomainField(
+        verbose_name=_("Domain"),
+        help_text=_("Domain name of the Proxmox endpoint or cluster."),
         blank=True,
         null=True,
     )
     port = models.PositiveIntegerField(
         default=8006,
-        validators=[MinValueValidator(1), MaxValueValidator(65535)],
-        verbose_name=_('HTTP Port'),
+        validators=PORT_VALIDATORS,
+        verbose_name=_("HTTP port"),
     )
     mode = models.CharField(
         max_length=255,
         choices=ProxmoxModeChoices,
         default=ProxmoxModeChoices.PROXMOX_MODE_UNDEFINED,
-
     )
     version = models.CharField(max_length=20, blank=True, null=True)
     repoid = models.CharField(
         max_length=16,
         blank=True,
         null=True,
-        verbose_name=_('Repository ID'),
+        verbose_name=_("Repository ID"),
     )
     username = models.CharField(
-        default='root@pam',
+        default="root@pam",
         max_length=255,
-        verbose_name=_('Username'),
-        help_text=_("Username must be in the format of 'user@realm'. Default is 'root@pam'.")
+        verbose_name=_("Username"),
+        help_text=_("Username must use the format 'user@realm'."),
     )
     password = models.CharField(
         max_length=255,
-        verbose_name=_('Password'),
-        help_text=_('Password of the Proxmox Endpoint. It is not needed if you use Token.'),
+        verbose_name=_("Password"),
+        help_text=_("Password for the Proxmox endpoint. Leave blank when using token authentication."),
         blank=True,
         null=True,
     )
     token_name = models.CharField(
         max_length=255,
-        verbose_name=_('Token Name'),
+        verbose_name=_("Token name"),
+        blank=True,
     )
     token_value = models.CharField(
         max_length=255,
-        verbose_name=_('Token Value'),
+        verbose_name=_("Token value"),
+        blank=True,
     )
     verify_ssl = models.BooleanField(
         default=False,
-        verbose_name=_('Verify SSL'),
-        help_text=_('Choose or not to verify SSL certificate of the Proxmox Endpoint'),
+        verbose_name=_("Verify SSL"),
+        help_text=_("Verify the TLS certificate presented by the Proxmox endpoint."),
     )
 
-    class Meta:
-        verbose_name_plural: str = "Proxmox Endpoints"
-        unique_together = ['name', 'ip_address', 'domain']
-        ordering = ('name',)
-        
-    def __str__(self):
-        return f"{self.name} ({self.ip_address})"
-    
+    class Meta(EndpointBase.Meta):
+        verbose_name = _("Proxmox endpoint")
+        verbose_name_plural = _("Proxmox endpoints")
+        constraints = (
+            models.UniqueConstraint(
+                fields=("name", "ip_address", "domain"),
+                name="netbox_proxbox_proxmoxendpoint_identity",
+            ),
+        )
+
     def get_absolute_url(self):
-        return reverse('plugins:netbox_proxbox:proxmoxendpoint', args=[self.pk])
+        return reverse("plugins:netbox_proxbox:proxmoxendpoint", args=[self.pk])
 
 
-class NetBoxEndpoint(NetBoxModel, CommonProperties):
+class NetBoxEndpoint(EndpointBase):
     name = models.CharField(
-        default='NetBox Endpoint',
+        default="NetBox Endpoint",
         max_length=255,
         blank=True,
         null=True,
-        help_text=_('Name of the NetBox Endpoint.'),
+        help_text=_("Name of the remote NetBox endpoint."),
     )
     ip_address = models.ForeignKey(
-        to='ipam.IPAddress',
+        to="ipam.IPAddress",
         on_delete=models.PROTECT,
-        related_name='+',
-        verbose_name=_('IP Address'),
+        related_name="+",
+        verbose_name=_("IP address"),
         null=True,
         blank=True,
-        help_text=_('IP Address of the NetBox API. Fallback if domain name is not provided.'),
+        help_text=_("Fallback API address when no domain name is configured."),
     )
     domain = DomainField(
-        default='localhost',
-        verbose_name=_('Domain'),
-        help_text=_('Domain name of the NetBox API. Default is "localhost".'),
+        default="localhost",
+        verbose_name=_("Domain"),
+        help_text=_("Domain name of the remote NetBox API."),
     )
     port = models.PositiveIntegerField(
         default=443,
-        validators=[MinValueValidator(1), MaxValueValidator(65535)],
-        verbose_name=_('HTTP Port'),
+        validators=PORT_VALIDATORS,
+        verbose_name=_("HTTP port"),
     )
     token = models.ForeignKey(
-        to='users.Token',
+        to="users.Token",
         on_delete=models.PROTECT,
-        related_name='+',
-        verbose_name=_('API Token'),
+        related_name="+",
+        verbose_name=_("API token"),
         null=True,
         blank=True,
-        help_text=_('API Token for the NetBox API. Needed for Proxbox Backend Service to communicate with NetBox.'),
+        help_text=_("Token used by the ProxBox backend when communicating with NetBox."),
     )
     verify_ssl = models.BooleanField(
         default=True,
-        verbose_name=_('Verify SSL'),
-        help_text=_('Choose or not to verify SSL certificate of the Netbox Endpoint'),
+        verbose_name=_("Verify SSL"),
+        help_text=_("Verify the TLS certificate presented by the NetBox API."),
     )
 
-    class Meta:
-        verbose_name_plural: str = 'Netbox Endpoints'
-        unique_together = ['name', 'ip_address']
-        
-    def __str__(self):
-        return f"{self.name} ({self.ip_address})"
+    class Meta(EndpointBase.Meta):
+        verbose_name = _("NetBox endpoint")
+        verbose_name_plural = _("NetBox endpoints")
+        constraints = (
+            models.UniqueConstraint(
+                fields=("name", "ip_address"),
+                name="netbox_proxbox_netboxendpoint_identity",
+            ),
+        )
 
     def get_absolute_url(self):
         return reverse("plugins:netbox_proxbox:netboxendpoint", args=[self.pk])
 
 
-class FastAPIEndpoint(NetBoxModel, CommonProperties):
+class FastAPIEndpoint(EndpointBase):
     name = models.CharField(
-        default='ProxBox Endpoint',
+        default="ProxBox Endpoint",
         max_length=255,
         blank=True,
         null=True,
-        help_text=_('Name of the ProxBox Endpoint.'),
+        help_text=_("Name of the ProxBox backend endpoint."),
     )
     ip_address = models.ForeignKey(
-        to='ipam.IPAddress',
+        to="ipam.IPAddress",
         on_delete=models.PROTECT,
-        related_name='+',
-        verbose_name=_('IP Address'),
+        related_name="+",
+        verbose_name=_("IP address"),
         null=True,
         blank=True,
-        help_text=_('IP Address of the Proxbox API (Backend Service). Fallback if domain name is not provided.'),
+        help_text=_("Fallback backend address when no domain name is configured."),
     )
     domain = DomainField(
-        default='localhost',
-        verbose_name=_('Domain'),
-        help_text=_('Domain name of the Proxbox API (Backend Service). Default is "localhost".'),
+        default="localhost",
+        verbose_name=_("Domain"),
+        help_text=_("Domain name of the ProxBox backend service."),
     )
     port = models.PositiveIntegerField(
         default=8800,
-        validators=[MinValueValidator(1), MaxValueValidator(65535)],
-        verbose_name=_('HTTP Port'),
+        validators=PORT_VALIDATORS,
+        verbose_name=_("HTTP port"),
     )
     verify_ssl = models.BooleanField(
         default=True,
-        verbose_name=_('Verify SSL'),
-        help_text=_('Choose or not to verify SSL certificate of the Proxbox Endpoint'),
+        verbose_name=_("Verify SSL"),
+        help_text=_("Verify the TLS certificate presented by the ProxBox backend."),
     )
     token = models.CharField(
         blank=True,
         null=True,
         max_length=255,
-        verbose_name=_('Token'),
-        help_text=_('Token for the Proxbox Endpoint. If not provided, the Proxbox Endpoint will not be able to send messages to the client (user) browser.'),
+        verbose_name=_("Token"),
+        help_text=_("Optional backend token used by the ProxBox service."),
     )
     use_websocket = models.BooleanField(
         default=False,
-        verbose_name=_('Use WebSocket'),
-        help_text=_('Choose or not to use WebSocket for the Proxbox Endpoint. If enabled, the Proxbox Endpoint will use WebSocket connection to send messages to the client (user) browser.'),
+        verbose_name=_("Use WebSocket"),
+        help_text=_("Use WebSocket connectivity for browser updates."),
     )
     websocket_domain = models.CharField(
         max_length=255,
         blank=True,
         null=True,
-        verbose_name=_('WebSocket Domain'),
-        help_text=_('Domain name of the WebSocket for the Proxbox Endpoint'),
+        verbose_name=_("WebSocket domain"),
+        help_text=_("Domain name used for browser WebSocket connections."),
     )
     websocket_port = models.PositiveIntegerField(
         default=8800,
-        validators=[MinValueValidator(1), MaxValueValidator(65535)],
-        verbose_name=_('WebSocket Port'),
-        help_text=_('Port of the WebSocket for the Proxbox Endpoint (the same as HTTP port)'),
+        validators=PORT_VALIDATORS,
+        verbose_name=_("WebSocket port"),
+        help_text=_("Port used for WebSocket connectivity."),
     )
     server_side_websocket = models.BooleanField(
         default=False,
-        verbose_name=_('[BETA] Server Side WebSocket'),
-        help_text=_('Choose or not to use server side WebSocket connection for the Proxbox Endpoint. This is experimental feature and may not work as expected. This way, client (user) browser will not be able to send messages to the Proxbox Endpoint.'),
+        verbose_name=_("Server-side WebSocket"),
+        help_text=_("Use server-side WebSocket connectivity when supported by the backend."),
     )
 
-    class Meta:
-        verbose_name_plural: str = 'FastAPI Endpoints'
-        unique_together = ['name', 'ip_address']
-    
+    class Meta(EndpointBase.Meta):
+        verbose_name = _("FastAPI endpoint")
+        verbose_name_plural = _("FastAPI endpoints")
+        constraints = (
+            models.UniqueConstraint(
+                fields=("name", "ip_address"),
+                name="netbox_proxbox_fastapiendpoint_identity",
+            ),
+        )
+
     @property
     def websocket_url(self) -> str:
-        """Construct the full URL for the Proxbox endpoint."""
-        try:
-            protocol = 'wss' if self.verify_ssl else 'ws'
-            host = self.domain if self.domain else self.ip
-            return f"{protocol}://{host}:{self.websocket_port}"
-        except Exception as e:
-            return f"Error: {e}"
-        
-    def __str__(self):
-        return f"{self.name} ({self.domain})"
+        protocol = "wss" if self.verify_ssl else "ws"
+        host = self.websocket_domain or self.domain or self.ip
+        return f"{protocol}://{host}:{self.websocket_port}" if host else ""
 
     def get_absolute_url(self):
         return reverse("plugins:netbox_proxbox:fastapiendpoint", args=[self.pk])
@@ -254,25 +293,37 @@ class SyncProcess(NetBoxModel):
         max_length=20,
         choices=SyncStatusChoices,
         default=SyncStatusChoices.NOT_STARTED,
-    )  
+    )
     started_at = models.DateTimeField(
-        null=True, 
+        null=True,
         blank=True,
-        help_text=_('When the sync process started. Format: YYYY-MM-DD HH:MM:SS')
+        help_text=_("When the sync process started."),
     )
     completed_at = models.DateTimeField(
-        null=True, 
+        null=True,
         blank=True,
-        help_text=_('When the sync process completed. Format: YYYY-MM-DD HH:MM:SS')
+        help_text=_("When the sync process completed."),
     )
     runtime = models.FloatField(
         null=True,
         blank=True,
-        help_text=_('Time elapsed for the sync process. Format: seconds')
+        help_text=_("Time elapsed for the sync process in seconds."),
     )
 
+    class Meta:
+        ordering = ("-created", "-pk")
+
     def __str__(self):
-        return f'{self.name} ({self.sync_type})'
-    
+        return f"{self.name} ({self.sync_type})"
+
     def get_absolute_url(self):
         return reverse("plugins:netbox_proxbox:syncprocess", args=[self.pk])
+
+
+__all__ = (
+    "FastAPIEndpoint",
+    "NetBoxEndpoint",
+    "ProxmoxEndpoint",
+    "SyncProcess",
+    "VMBackup",
+)

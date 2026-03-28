@@ -38,6 +38,15 @@ def _meta_fields(class_node: ast.ClassDef) -> tuple[str, ...]:
     raise AssertionError(f"Meta.fields not found for {class_node.name}")
 
 
+def _meta_extra_kwargs(class_node: ast.ClassDef) -> dict:
+    meta_node = _classdef(ast.Module(body=class_node.body, type_ignores=[]), "Meta")
+    for node in meta_node.body:
+        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+            if node.targets[0].id == "extra_kwargs":
+                return ast.literal_eval(node.value)
+    return {}
+
+
 def _class_assignments(class_node: ast.ClassDef) -> set[str]:
     names: set[str] = set()
     for node in class_node.body:
@@ -51,7 +60,7 @@ def _class_methods(class_node: ast.ClassDef) -> set[str]:
     return {node.name for node in class_node.body if isinstance(node, ast.FunctionDef)}
 
 
-def test_endpoint_serializers_expose_full_model_fields():
+def test_endpoint_serializers_expose_supported_model_fields():
     module = _parse_module(SERIALIZERS_PATH)
 
     expected = {
@@ -64,9 +73,7 @@ def test_endpoint_serializers_expose_full_model_fields():
             "version",
             "repoid",
             "username",
-            "password",
             "token_name",
-            "token_value",
             "verify_ssl",
         },
         "NetBoxEndpointSerializer": {
@@ -137,7 +144,6 @@ def test_writable_nested_related_fields_are_declared():
         "ProxmoxEndpointSerializer": {"ip_address"},
         "NetBoxEndpointSerializer": {"ip_address", "token"},
         "FastAPIEndpointSerializer": {"ip_address"},
-        "JournalEntrySerializer": {"url"},
     }
 
     for serializer_name, assignments in expected_assignments.items():
@@ -147,7 +153,15 @@ def test_writable_nested_related_fields_are_declared():
         assert not missing, f"{serializer_name} missing class assignments: {sorted(missing)}"
 
 
-def test_all_viewsets_use_netbox_model_viewset_and_filtersets():
+def test_proxmox_endpoint_serializer_marks_secrets_write_only():
+    module = _parse_module(SERIALIZERS_PATH)
+    class_node = _classdef(module, "ProxmoxEndpointSerializer")
+    extra_kwargs = _meta_extra_kwargs(class_node)
+    assert extra_kwargs["password"]["write_only"] is True
+    assert extra_kwargs["token_value"]["write_only"] is True
+
+
+def test_all_viewsets_use_netbox_model_viewset_and_plugin_filtersets():
     module = _parse_module(VIEWS_PATH)
 
     expected_viewsets = {
@@ -156,7 +170,6 @@ def test_all_viewsets_use_netbox_model_viewset_and_filtersets():
         "ProxmoxEndpointViewSet": "ProxmoxEndpointFilterSet",
         "NetBoxEndpointViewSet": "NetBoxEndpointFilterSet",
         "FastAPIEndpointViewSet": "FastAPIEndpointFilterSet",
-        "JournalEntryViewSet": "JournalEntryFilterSet",
     }
 
     for viewset_name, filterset_name in expected_viewsets.items():
@@ -186,9 +199,16 @@ def test_all_viewsets_use_netbox_model_viewset_and_filtersets():
             raise AssertionError(f"Unexpected filterset assignment in {viewset_name}")
 
 
-def test_api_filters_module_reexports_shared_sync_process_filterset():
+def test_api_filters_module_reexports_all_plugin_filtersets():
     module = _parse_module(FILTERS_PATH)
     import_from = next((node for node in module.body if isinstance(node, ast.ImportFrom)), None)
     assert import_from is not None
     assert import_from.module == "netbox_proxbox.filtersets"
-    assert any(alias.name == "SyncProcessFilterSet" for alias in import_from.names)
+    exported = {alias.name for alias in import_from.names}
+    assert exported == {
+        "FastAPIEndpointFilterSet",
+        "NetBoxEndpointFilterSet",
+        "ProxmoxEndpointFilterSet",
+        "SyncProcessFilterSet",
+        "VMBackupFilterSet",
+    }
