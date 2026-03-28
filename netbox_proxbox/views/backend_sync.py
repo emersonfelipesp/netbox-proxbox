@@ -6,7 +6,7 @@ import requests
 
 from netbox_proxbox.models import ProxmoxEndpoint
 from netbox_proxbox.utils import get_ip_address_host
-from netbox_proxbox.views.error_utils import extract_proxmox_backend_error_detail
+from netbox_proxbox.views.error_utils import extract_backend_error_detail
 
 
 def proxmox_backend_name(endpoint: ProxmoxEndpoint) -> str:
@@ -38,7 +38,7 @@ def sync_proxmox_endpoint_to_backend(
     base_url: str,
     auth_headers: dict[str, str] | None = None,
     backend_verify_ssl: bool = True,
-    timeout: int = 5,
+    timeout: int = 15,
 ) -> tuple[bool, str | None, int | None]:
     """Ensure the selected NetBox Proxmox endpoint exists in proxbox-api backend DB."""
 
@@ -93,17 +93,9 @@ def sync_proxmox_endpoint_to_backend(
         return True, None, None
 
     except requests.exceptions.RequestException as exc:
-        proxmox_host = (
-            payload.get("domain") or payload.get("ip_address") or "unknown"
-        ).strip()
-        detail, http_status = extract_proxmox_backend_error_detail(
-            exc,
-            proxmox_host=proxmox_host,
-            proxmox_port=int(payload.get("port", 8006)),
-            backend_url=list_url,
-        )
+        detail, http_status = extract_backend_error_detail(exc)
         return (
             False,
-            f"Failed to sync Proxmox endpoint to backend: {detail}",
+            f"Failed to sync Proxmox endpoint to ProxBox backend: {detail}",
             http_status,
         )
