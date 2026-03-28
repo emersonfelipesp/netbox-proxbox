@@ -1,6 +1,3 @@
-import subprocess
-import json
-
 from django.shortcuts import render
 from django.views import View
 
@@ -52,10 +49,10 @@ class HomeView(View):
     def get(self, request):
         """Get request."""
         
-        default_config = dict =  getattr(ProxboxConfig, 'default_settings', {})
+        default_config = getattr(ProxboxConfig, 'default_settings', {})
         
-        fastapi_example_url: str = 'https://example.fastapi.com',
-        fastapi_exampel_websocket_url: str = 'wss://example.fastapi.com'
+        fastapi_example_url = 'https://example.fastapi.com'
+        fastapi_example_websocket_url = 'wss://example.fastapi.com/ws'
                 
                 
         proxmox_endpoint_obj = ProxmoxEndpoint.objects.all()
@@ -89,7 +86,7 @@ class HomeView(View):
                 'netbox_endpoint_list': netbox_endpoint_obj,
                 'fastapi_endpoint_list': fastapi_endpoint_obj,
                 'fastapi_url': fastapi_info.get('http_url', fastapi_example_url),
-                'fastapi_websocket_url': fastapi_info.get('websocket_url', fastapi_exampel_websocket_url)
+                'fastapi_websocket_url': fastapi_info.get('websocket_url', fastapi_example_websocket_url)
             }
         )
 

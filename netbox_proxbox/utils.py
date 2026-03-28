@@ -1,58 +1,46 @@
-def get_fastapi_url(object):
-    domain_or_ip = None
-    ip = '127.0.0.1'  # Default fallback IP
-    if object.ip_address:
-        ip = str(object.ip_address).split('/')[0]
-    
-    if object.domain:
-        domain_or_ip = object.domain
-    else:
-        domain_or_ip = ip
-    
-    # Define WebSocket Domain
-    websocket_domain = None
-    if object.use_websocket and object.websocket_domain:
-        websocket_domain = object.websocket_domain
-    else:
-        websocket_domain = ip
-    
-    # Define HTTP(S) URL for FastAPI
-    fastapi_url_https = f"https://{domain_or_ip}:{object.port}"
-    fastapi_url_http = f"http://{domain_or_ip}:{object.port}"
-    fastapi_url = fastapi_url_https if object.verify_ssl else fastapi_url_http
-    
-    # Define (Secure) WebSocket URL for FastAPI
-    fastapi_wss_url = f"wss://{websocket_domain}:{object.websocket_port}/ws"
-    fastapi_ws_url = f"ws://{websocket_domain}:{object.websocket_port}/ws"
-    fastapi_websocket_url = fastapi_wss_url if object.verify_ssl else fastapi_ws_url
-    
-    if object.verify_ssl:
-        if any(host in fastapi_url for host in ['proxbox.backend.local', 'localhost', '127.0.0.1']):
-            # If proxbox.backend.local is in the URL, set the REQUESTS_CA_BUNDLE environment variable.
-            # It means user used mkcert to generate a certificate for the domain.
-            # This is necessary to avoid SSL errors, so that python requests library can trust the certificate.
-            
-            import os
-            import subprocess
-            
-            try:
-                # Run mkcert -CAROOT to get the root certificate path.
-                ca_root_folder = subprocess.run(['mkcert', '-CAROOT'], capture_output=True, text=True, check=True).stdout.strip()
-                
-                os.environ['REQUESTS_CA_BUNDLE'] = f'/{ca_root_folder}/rootCA.pem'
-            except subprocess.CalledProcessError as e:
-                print(f'Error running mkcert -CAROOT: {e}')
-            except FileNotFoundError:
-                # mkcert is not installed, which is fine if verify_ssl is False
-                pass
-            except Exception as e:
-                print(f'Error setting REQUESTS_CA_BUNDLE: {e}\nLikely because the user did not use mkcert to generate a certificate.')
-    
+from __future__ import annotations
+
+import os
+import subprocess
+
+
+def get_ip_address_host(value) -> str:
+    if value is None:
+        return "127.0.0.1"
+    return str(value).split("/")[0]
+
+
+def get_fastapi_url(endpoint):
+    ip = get_ip_address_host(getattr(endpoint, "ip_address", None))
+    domain = getattr(endpoint, "domain", None) or ip
+    websocket_domain = getattr(endpoint, "websocket_domain", None) or ip
+    verify_ssl = bool(getattr(endpoint, "verify_ssl", False))
+
+    scheme = "https" if verify_ssl else "http"
+    websocket_scheme = "wss" if verify_ssl else "ws"
+    http_url = f"{scheme}://{domain}:{endpoint.port}"
+    websocket_url = f"{websocket_scheme}://{websocket_domain}:{endpoint.websocket_port}/ws"
+    ip_address_url = f"https://{ip}:{endpoint.port}"
+
+    if verify_ssl and any(host in http_url for host in ("proxbox.backend.local", "localhost", "127.0.0.1")):
+        try:
+            ca_root_folder = subprocess.run(
+                ["mkcert", "-CAROOT"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+            os.environ["REQUESTS_CA_BUNDLE"] = f"/{ca_root_folder}/rootCA.pem"
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            pass
+        except Exception:
+            pass
+
     return {
-        'domain': object.domain,
-        'ip_address': object.ip_address,
-        'ip_address_url': f'https://{ip}:{object.port}',
-        'http_url': fastapi_url,
-        'websocket_url': fastapi_websocket_url,
-        'verify_ssl': object.verify_ssl
+        "domain": getattr(endpoint, "domain", None),
+        "ip_address": getattr(endpoint, "ip_address", None),
+        "ip_address_url": ip_address_url,
+        "http_url": http_url,
+        "websocket_url": websocket_url,
+        "verify_ssl": verify_ssl,
     }

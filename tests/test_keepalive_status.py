@@ -18,7 +18,7 @@ def test_fastapi_status_falls_back_to_ip_after_ssl_error(
     )
     calls = []
 
-    def fake_get(url, verify=True):
+    def fake_get(url, verify=True, timeout=None):
         calls.append((url, verify))
         if "proxbox.local" in url:
             raise requests.exceptions.SSLError("bad cert")
@@ -50,7 +50,7 @@ def test_netbox_status_creates_endpoint_and_checks_status(
     created_payloads = []
     endpoint_checks = {"count": 0}
 
-    def fake_get(url, verify=True):
+    def fake_get(url, verify=True, timeout=None):
         if url.endswith("/netbox/endpoint"):
             endpoint_checks["count"] += 1
             if endpoint_checks["count"] == 1:
@@ -60,7 +60,7 @@ def test_netbox_status_creates_endpoint_and_checks_status(
             return ResponseStub({"status": "ok"})
         raise AssertionError(url)
 
-    def fake_post(url, json):
+    def fake_post(url, json, timeout=None):
         created_payloads.append((url, json))
         return ResponseStub({"id": 1})
 
@@ -87,7 +87,7 @@ def test_proxmox_status_uses_domain_query_when_available(
     monkeypatch.setattr(module.time, "sleep", lambda seconds: None)
     requested = []
 
-    def fake_get(url, verify=True):
+    def fake_get(url, verify=True, timeout=None):
         requested.append((url, verify))
         return ResponseStub([{"pve01": {"version": "8.3.0"}}])
 

@@ -1,13 +1,13 @@
 [project]
 name = "netbox-proxbox"
-version = "0.0.6b2.post1"
+version = "0.0.7"
 description = "Netbox Plugin - Integrate Proxmox and Netbox"
 readme = "README.md"
 authors = [
     {name = "Emerson Felipe", email = "emersonfelipe.2003@gmail.com"}
 ]
 license = "Apache-2.0"
-requires-python = ">=3.8"
+requires-python = ">=3.12"
 dependencies = [
     "requests>=2.32.0",
     "websockets>=13.1",
