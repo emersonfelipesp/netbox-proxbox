@@ -140,3 +140,11 @@ def test_endpoint_forms_require_domain_or_ip_address():
     for path in files:
         contents = _read(path)
         assert "Provide either a domain or an IP address." in contents
+
+
+def test_proxmox_import_form_exists_with_csv_fields():
+    contents = _read("netbox_proxbox/forms/proxmox.py")
+    assert "class ProxmoxEndpointImportForm" in contents
+    assert "NetBoxModelImportForm" in contents
+    assert "CSVModelChoiceField" in contents
+    assert "CSVChoiceField" in contents

@@ -62,3 +62,20 @@ def test_common_badge_state_supports_hover_tooltip_details():
     contents = _read("netbox_proxbox/static/netbox_proxbox/js/common.js")
     assert 'element.dataset.bsToggle = "tooltip"' in contents
     assert "element.dataset.bsTitle = tooltip" in contents
+
+
+def test_proxmox_list_template_exposes_import_export_controls_and_warning_modal():
+    contents = _read(
+        "netbox_proxbox/templates/netbox_proxbox/proxmoxendpoint_list.html"
+    )
+    assert "proxmoxendpoint_bulk_import" in contents
+    assert "proxmoxendpoint_export" in contents
+    assert "Export JSON" in contents
+    assert "Export YAML" in contents
+    assert "Export with secrets" in contents
+    assert 'name="format"' in contents
+    assert (
+        "This export includes Proxmox passwords and token values in plain text"
+        in contents
+    )
+    assert 'name="netbox_token"' in contents
