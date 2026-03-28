@@ -134,6 +134,23 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
             "token_value": {"write_only": True, "required": False, "allow_blank": True},
         }
 
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        domain = (
+            attrs.get("domain", getattr(self.instance, "domain", "")) or ""
+        ).strip()
+        ip_address = attrs.get("ip_address", getattr(self.instance, "ip_address", None))
+
+        if not domain and ip_address is None:
+            raise serializers.ValidationError(
+                {
+                    "domain": "Provide either a domain or an IP address.",
+                    "ip_address": "Provide either a domain or an IP address.",
+                }
+            )
+
+        return attrs
+
 
 class NetBoxEndpointSerializer(NetBoxModelSerializer):
     url = serializers.HyperlinkedIdentityField(
@@ -173,6 +190,18 @@ class NetBoxEndpointSerializer(NetBoxModelSerializer):
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
+
+        domain = (
+            attrs.get("domain", getattr(self.instance, "domain", "")) or ""
+        ).strip()
+        ip_address = attrs.get("ip_address", getattr(self.instance, "ip_address", None))
+        if not domain and ip_address is None:
+            raise serializers.ValidationError(
+                {
+                    "domain": "Provide either a domain or an IP address.",
+                    "ip_address": "Provide either a domain or an IP address.",
+                }
+            )
 
         token = attrs.get("token", getattr(self.instance, "token", None))
         token_version = attrs.get(
@@ -255,3 +284,20 @@ class FastAPIEndpointSerializer(NetBoxModelSerializer):
             "last_updated",
         )
         brief_fields = ("id", "url", "display", "name", "domain", "port")
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        domain = (
+            attrs.get("domain", getattr(self.instance, "domain", "")) or ""
+        ).strip()
+        ip_address = attrs.get("ip_address", getattr(self.instance, "ip_address", None))
+
+        if not domain and ip_address is None:
+            raise serializers.ValidationError(
+                {
+                    "domain": "Provide either a domain or an IP address.",
+                    "ip_address": "Provide either a domain or an IP address.",
+                }
+            )
+
+        return attrs

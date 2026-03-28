@@ -5,18 +5,23 @@ import re
 from django.core.exceptions import ValidationError
 from django.db import models
 
+
 def validate_domain(value):
+    if value in (None, ""):
+        return
+
     domain_regex = re.compile(
-        r'^(?:[a-zA-Z0-9]'  # First character of the domain
-        r'(?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)'  # Sub domain + hostname
-        r'+[a-zA-Z]{2,6}$'  # Top level domain
+        r"^(?:[a-zA-Z0-9]"  # First character of the domain
+        r"(?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)"  # Sub domain + hostname
+        r"+[a-zA-Z]{2,6}$"  # Top level domain
     )
-    if value != 'localhost':
+    if value != "localhost":
         if not domain_regex.match(value):
-            raise ValidationError(f'{value} is not a valid domain name')
+            raise ValidationError(f"{value} is not a valid domain name")
+
 
 class DomainField(models.CharField):
     def __init__(self, *args, **kwargs):
-        kwargs['max_length'] = 253  # Maximum length of a domain name is 253 characters
+        kwargs["max_length"] = 253  # Maximum length of a domain name is 253 characters
         super().__init__(*args, **kwargs)
         self.validators.append(validate_domain)

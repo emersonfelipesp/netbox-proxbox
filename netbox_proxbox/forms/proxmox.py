@@ -58,6 +58,18 @@ class ProxmoxEndpointForm(NetBoxModelForm):
             "tags",
         )
 
+    def clean(self):
+        super().clean()
+        cleaned_data = self.cleaned_data
+        domain = (cleaned_data.get("domain") or "").strip()
+        ip_address = cleaned_data.get("ip_address")
+
+        if not domain and ip_address is None:
+            self.add_error("domain", "Provide either a domain or an IP address.")
+            self.add_error("ip_address", "Provide either a domain or an IP address.")
+
+        return cleaned_data
+
 
 class ProxmoxEndpointFilterForm(NetBoxModelFilterSetForm):
     """
