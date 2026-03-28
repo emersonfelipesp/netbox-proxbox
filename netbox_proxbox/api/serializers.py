@@ -29,6 +29,7 @@ class NestedTokenSerializer(WritableNestedSerializer):
     class Meta:
         model = Token
         fields = ["id", "url", "display", "key"]
+        brief_fields = ("id", "url", "display", "key")
 
 
 class VMBackupSerializer(NetBoxModelSerializer):
@@ -163,7 +164,11 @@ class NetBoxEndpointSerializer(NetBoxModelSerializer):
         )
         brief_fields = ("id", "url", "display", "name", "domain", "port")
         extra_kwargs = {
-            "token_secret": {"write_only": True, "required": False, "allow_blank": True},
+            "token_secret": {
+                "write_only": True,
+                "required": False,
+                "allow_blank": True,
+            },
         }
 
     def validate(self, attrs):
@@ -174,22 +179,36 @@ class NetBoxEndpointSerializer(NetBoxModelSerializer):
             "token_version",
             getattr(self.instance, "token_version", NetBoxTokenVersionChoices.V1),
         )
-        token_key = (attrs.get("token_key", getattr(self.instance, "token_key", "")) or "").strip()
-        token_secret = (attrs.get("token_secret", getattr(self.instance, "token_secret", "")) or "").strip()
+        token_key = (
+            attrs.get("token_key", getattr(self.instance, "token_key", "")) or ""
+        ).strip()
+        token_secret = (
+            attrs.get("token_secret", getattr(self.instance, "token_secret", "")) or ""
+        ).strip()
 
         if token is not None:
-            attrs["token_version"] = NetBoxTokenVersionChoices.V2 if getattr(token, "version", None) == 2 else NetBoxTokenVersionChoices.V1
+            attrs["token_version"] = (
+                NetBoxTokenVersionChoices.V2
+                if getattr(token, "version", None) == 2
+                else NetBoxTokenVersionChoices.V1
+            )
             attrs["token_key"] = ""
             attrs["token_secret"] = ""
         elif token_version == NetBoxTokenVersionChoices.V2:
             if not token_key:
-                raise serializers.ValidationError({"token_key": "Token key is required when using a v2 token."})
+                raise serializers.ValidationError(
+                    {"token_key": "Token key is required when using a v2 token."}
+                )
             if not token_secret:
-                raise serializers.ValidationError({"token_secret": "Token secret is required when using a v2 token."})
+                raise serializers.ValidationError(
+                    {"token_secret": "Token secret is required when using a v2 token."}
+                )
             attrs["token_key"] = token_key
             attrs["token_secret"] = token_secret
         else:
-            raise serializers.ValidationError({"token": "Select an existing API token to use v1 authentication."})
+            raise serializers.ValidationError(
+                {"token": "Select an existing API token to use v1 authentication."}
+            )
             attrs["token_key"] = ""
             attrs["token_secret"] = ""
 
