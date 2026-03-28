@@ -248,6 +248,33 @@ def test_netbox_status_exposes_error_detail_on_backend_failure(
     assert service_status.last_error_http_status == 400
 
 
+def test_extract_error_detail_identifies_html_404_from_wrong_backend_target(
+    monkeypatch,
+    fastapi_endpoint,
+):
+    module = load_plugin_module(
+        "netbox_proxbox.views.keepalive_status",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+    )
+
+    class Html404Response(ResponseStub):
+        def __init__(self):
+            super().__init__(payload={}, status_code=404)
+            self.text = "<!DOCTYPE html><html><body>Page Not Found</body></html>"
+            self.headers = {"Content-Type": "text/html; charset=utf-8"}
+            self.url = "http://10.0.30.206:8000/netbox/endpoint"
+
+    err = requests.exceptions.HTTPError("404")
+    err.response = Html404Response()
+
+    detail, status = module.ServiceStatus._extract_error_detail(err)
+
+    assert status == 404
+    assert "Backend returned HTML instead of ProxBox API JSON" in detail
+    assert "pointing to NetBox UI instead of proxbox-api" in detail
+
+
 def test_proxmox_status_uses_domain_query_when_available(
     monkeypatch,
     fastapi_endpoint,
