@@ -98,12 +98,10 @@ def load_plugin_module(
     django_http.JsonResponse = JsonResponse
 
     django_shortcuts = types.ModuleType("django.shortcuts")
-    django_shortcuts.render = (
-        lambda request, template_name, context=None: {
-            "template": template_name,
-            "context": context or {},
-        }
-    )
+    django_shortcuts.render = lambda request, template_name, context=None: {
+        "template": template_name,
+        "context": context or {},
+    }
     django_shortcuts.redirect = lambda name: {"redirect": name}
 
     django_views = types.ModuleType("django.views")
@@ -146,7 +144,9 @@ def load_plugin_module(
             "websocket_url": "wss://proxbox.local:8801/ws",
         }
     )
-    utils_module.get_ip_address_host = lambda value: str(value).split("/")[0] if value else "127.0.0.1"
+    utils_module.get_ip_address_host = lambda value: (
+        str(value).split("/")[0] if value else "127.0.0.1"
+    )
 
     stub_modules = {
         "django": django_module,
@@ -197,6 +197,7 @@ def fastapi_endpoint():
         ip_address="10.0.0.5/24",
         port=8800,
         verify_ssl=True,
+        token="backend-token",
         websocket_port=8801,
         websocket_domain="proxbox.local",
         use_websocket=True,

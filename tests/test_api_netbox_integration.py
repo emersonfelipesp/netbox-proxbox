@@ -18,7 +18,10 @@ for candidate in (REPO_ROOT, NETBOX_ROOT):
 try:
     import django
 except ModuleNotFoundError:
-    pytest.skip("Django/NetBox test dependencies are not installed in this environment.", allow_module_level=True)
+    pytest.skip(
+        "Django/NetBox test dependencies are not installed in this environment.",
+        allow_module_level=True,
+    )
 
 os.environ.setdefault("NETBOX_CONFIGURATION", "tests.netbox_test_configuration")
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "netbox.settings")
@@ -26,11 +29,17 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "netbox.settings")
 try:
     django.setup()
 except Exception as exc:  # pragma: no cover - depends on external test services
-    pytest.skip(f"NetBox test environment is not available: {exc}", allow_module_level=True)
+    pytest.skip(
+        f"NetBox test environment is not available: {exc}", allow_module_level=True
+    )
 
 from ipam.models import IPAddress
 from users.models import Token
-from utilities.testing import APIViewTestCases, create_test_user, create_test_virtualmachine
+from utilities.testing import (
+    APIViewTestCases,
+    create_test_user,
+    create_test_virtualmachine,
+)
 
 from netbox_proxbox.choices import (
     ProxmoxBackupFormatChoices,
@@ -120,7 +129,9 @@ class ProxmoxEndpointAPITest(APIViewTestCases.APIViewTestCase):
 
     def test_secrets_are_write_only_on_read(self):
         self.add_permissions("netbox_proxbox.view_proxmoxendpoint")
-        response = self.client.get(self._get_detail_url(self._get_queryset().first()), **self.header)
+        response = self.client.get(
+            self._get_detail_url(self._get_queryset().first()), **self.header
+        )
         self.assertHttpStatus(response, 200)
         assert "password" not in response.data
         assert "token_value" not in response.data
@@ -143,7 +154,10 @@ class NetBoxEndpointAPITest(APIViewTestCases.APIViewTestCase):
             IPAddress.objects.create(address="198.51.100.6/24"),
         ]
         cls.users = [create_test_user(f"token-user-{idx}") for idx in range(6)]
-        cls.tokens = [Token.objects.create(user=user) for user in cls.users]
+        cls.tokens = [
+            Token.objects.create(user=user, version=1, token=("a" * 32) + f"{idx:08d}")
+            for idx, user in enumerate(cls.users)
+        ]
 
         for idx in range(3):
             NetBoxEndpoint.objects.create(
@@ -295,7 +309,9 @@ class VMBackupAPITest(APIViewTestCases.APIViewTestCase):
 
     @classmethod
     def setUpTestData(cls):
-        cls.virtual_machines = [create_test_virtualmachine(f"vm-{idx}") for idx in range(6)]
+        cls.virtual_machines = [
+            create_test_virtualmachine(f"vm-{idx}") for idx in range(6)
+        ]
 
         for idx in range(3):
             VMBackup.objects.create(
@@ -333,4 +349,3 @@ class VMBackupAPITest(APIViewTestCases.APIViewTestCase):
                 "encrypted": False,
             },
         ]
-

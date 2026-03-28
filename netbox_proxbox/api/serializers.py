@@ -187,11 +187,23 @@ class NetBoxEndpointSerializer(NetBoxModelSerializer):
         ).strip()
 
         if token is not None:
-            attrs["token_version"] = (
+            selected_token_version = (
                 NetBoxTokenVersionChoices.V2
                 if getattr(token, "version", None) == 2
                 else NetBoxTokenVersionChoices.V1
             )
+            if selected_token_version == NetBoxTokenVersionChoices.V2:
+                raise serializers.ValidationError(
+                    {
+                        "token": (
+                            "Selected NetBox v2 token cannot be used by this endpoint "
+                            "because its secret is not retrievable. Provide token_key and "
+                            "token_secret fields instead."
+                        )
+                    }
+                )
+
+            attrs["token_version"] = selected_token_version
             attrs["token_key"] = ""
             attrs["token_secret"] = ""
         elif token_version == NetBoxTokenVersionChoices.V2:
