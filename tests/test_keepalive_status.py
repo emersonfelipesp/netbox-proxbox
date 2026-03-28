@@ -28,6 +28,7 @@ def test_fastapi_status_falls_back_to_ip_after_ssl_error(
 
     status = module.ServiceStatus().fastapi_status(1)
     assert status["connected"] is True
+    assert status["connected_verify_ssl"] is False
     assert calls == [
         ("https://proxbox.local:8800", True),
         ("https://10.0.0.5:8800", False),
@@ -289,14 +290,67 @@ def test_proxmox_status_uses_domain_query_when_available(
     monkeypatch.setattr(module.time, "sleep", lambda seconds: None)
     requested = []
 
-    def fake_get(url, verify=True, timeout=None):
-        requested.append((url, verify))
+    def fake_get(url, verify=True, timeout=None, params=None, headers=None):
+        requested.append((url, params, headers, verify))
         return ResponseStub([{"pve01": {"version": "8.3.0"}}])
 
     monkeypatch.setattr(module.requests, "get", fake_get)
 
-    status = module.ServiceStatus().proxmox_status(1, "https://proxbox.local:8800")
+    status = module.ServiceStatus().proxmox_status(
+        1,
+        "https://proxbox.local:8800",
+        auth_headers={"Authorization": "Bearer backend-token"},
+        backend_verify_ssl=True,
+    )
     assert status == "success"
     assert requested == [
-        ("https://proxbox.local:8800/proxmox/version?domain=pve.local", False)
+        (
+            "https://proxbox.local:8800/proxmox/version",
+            {"source": "netbox", "domain": "pve.local"},
+            {"Authorization": "Bearer backend-token"},
+            True,
+        )
+    ]
+
+
+def test_proxmox_status_uses_ip_query_when_domain_missing(
+    monkeypatch,
+    fastapi_endpoint,
+):
+    proxmox_endpoint = SimpleNamespace(
+        id=1,
+        name="pve01",
+        domain="",
+        ip_address="10.0.0.30/24",
+        port=8006,
+        verify_ssl=False,
+    )
+    module = load_plugin_module(
+        "netbox_proxbox.views.keepalive_status",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+        proxmox_endpoint=proxmox_endpoint,
+    )
+    requested = []
+
+    def fake_get(url, verify=True, timeout=None, params=None, headers=None):
+        requested.append((url, params, headers, verify))
+        return ResponseStub([{"pve01": {"version": "8.3.0"}}])
+
+    monkeypatch.setattr(module.requests, "get", fake_get)
+
+    status = module.ServiceStatus().proxmox_status(
+        1,
+        "https://proxbox.local:8800",
+        auth_headers={"Authorization": "Bearer backend-token"},
+        backend_verify_ssl=False,
+    )
+    assert status == "success"
+    assert requested == [
+        (
+            "https://proxbox.local:8800/proxmox/version",
+            {"source": "netbox", "ip_address": "10.0.0.30"},
+            {"Authorization": "Bearer backend-token"},
+            False,
+        )
     ]

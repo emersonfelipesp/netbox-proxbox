@@ -21,6 +21,7 @@ class ServiceStatus:
 
     def __init__(self):
         self.connected_url = None
+        self.connected_verify_ssl = True
         self.last_error_detail = None
         self.last_error_http_status = None
 
@@ -133,6 +134,7 @@ class ServiceStatus:
     def fastapi_status(self, pk: int) -> dict:
         connected = False
         fastapi_url = None
+        connected_verify_ssl = True
         self._clear_error()
 
         try:
@@ -156,6 +158,8 @@ class ServiceStatus:
                 response.raise_for_status()
                 connected = True
                 self.connected_url = fastapi_url
+                self.connected_verify_ssl = fastapi_verify_ssl
+                connected_verify_ssl = fastapi_verify_ssl
             except requests.exceptions.SSLError:
                 ip_url = fastapi_detail.get("ip_address_url")
                 if ip_url:
@@ -166,6 +170,8 @@ class ServiceStatus:
                         response.raise_for_status()
                         connected = True
                         self.connected_url = ip_url
+                        self.connected_verify_ssl = False
+                        connected_verify_ssl = False
                     except requests.exceptions.RequestException as exc:
                         detail, http_status = self._extract_error_detail(exc)
                         self._set_error(
@@ -188,6 +194,7 @@ class ServiceStatus:
         return {
             "url": fastapi_url,
             "connected": connected,
+            "connected_verify_ssl": connected_verify_ssl,
             "detail": self.last_error_detail,
             "http_status": self.last_error_http_status,
         }
@@ -323,11 +330,19 @@ class ServiceStatus:
 
         return status
 
-    def proxmox_status(self, pk: int, base_url: str) -> str:
+    def proxmox_status(
+        self,
+        pk: int,
+        base_url: str,
+        auth_headers: dict[str, str] | None = None,
+        backend_verify_ssl: bool = True,
+    ) -> str:
         status = "error"
         max_retries = 3
         retry_delay = 1
         self._clear_error()
+
+        request_headers = auth_headers or {}
 
         try:
             proxmox_service_obj = ProxmoxEndpoint.objects.get(pk=pk)
@@ -341,16 +356,20 @@ class ServiceStatus:
         )
         proxmox_domain = proxmox_service_obj.domain or None
 
+        url = f"{base_url}/proxmox/version"
+        query_params = {"source": "netbox"}
         if proxmox_domain:
-            url = f"{base_url}/proxmox/version?domain={proxmox_domain}"
+            query_params["domain"] = proxmox_domain
         else:
-            url = f"{base_url}/proxmox/version?ip_address={proxmox_ip_address}"
+            query_params["ip_address"] = proxmox_ip_address
 
         for attempt in range(max_retries):
             try:
                 response = requests.get(
                     url,
-                    verify=proxmox_service_obj.verify_ssl,
+                    params=query_params,
+                    headers=request_headers,
+                    verify=backend_verify_ssl,
                     timeout=self.request_timeout,
                 )
                 response.raise_for_status()
@@ -427,7 +446,12 @@ def get_service_status(request, service: str, pk: int) -> JsonResponse:
             auth_headers=auth_headers,
         )
     elif service == "proxmox":
-        status = service_status.proxmox_status(pk=pk, base_url=connected_url)
+        status = service_status.proxmox_status(
+            pk=pk,
+            base_url=connected_url,
+            auth_headers=auth_headers,
+            backend_verify_ssl=service_status.connected_verify_ssl,
+        )
 
     payload: dict = {"status": status}
     if status != "success" and service_status.last_error_detail:
