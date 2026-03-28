@@ -71,7 +71,7 @@
             </tr>
             <tr>
                 <th scope="row"><strong>Proxmox Password</strong></th>
-                <td>{% if object.password %}password defined in the model (secret){% else %}(secret){% endif %}</td>
+                <td>{% if object.password %}Configured{% else %}Not configured{% endif %}</td>
             </tr>
             <tr>
                 <th scope="row"><strong>Token Name</strong></th>
@@ -79,7 +79,7 @@
             </tr>
             <tr>
                 <th scope="row"><strong>Token Value</strong></th>
-                <td>(secret)</td>
+                <td>{% if object.token_value %}Configured{% else %}Not configured{% endif %}</td>
             </tr>
             <tr>
                 <th scope="row"><strong>SSL</strong></th>

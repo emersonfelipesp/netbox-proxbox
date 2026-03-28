@@ -1,12 +1,9 @@
-from extras import filtersets as extras_filtersets
-from extras.models import JournalEntry
 from netbox.api.viewsets import NetBoxModelViewSet
 from rest_framework.routers import APIRootView
 
 from .. import filtersets, models
 from .serializers import (
     FastAPIEndpointSerializer,
-    JournalEntrySerializer,
     NetBoxEndpointSerializer,
     ProxmoxEndpointSerializer,
     SyncProcessSerializer,
@@ -58,9 +55,3 @@ class FastAPIEndpointViewSet(NetBoxModelViewSet):
     queryset = models.FastAPIEndpoint.objects.all()
     serializer_class = FastAPIEndpointSerializer
     filterset_class = filtersets.FastAPIEndpointFilterSet
-
-
-class JournalEntryViewSet(NetBoxModelViewSet):
-    queryset = JournalEntry.objects.all()
-    serializer_class = JournalEntrySerializer
-    filterset_class = extras_filtersets.JournalEntryFilterSet

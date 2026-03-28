@@ -28,9 +28,6 @@ try:
 except Exception as exc:  # pragma: no cover - depends on external test services
     pytest.skip(f"NetBox test environment is not available: {exc}", allow_module_level=True)
 
-from core.models import ObjectType
-from extras.choices import JournalEntryKindChoices
-from extras.models import JournalEntry
 from ipam.models import IPAddress
 from users.models import Token
 from utilities.testing import APIViewTestCases, create_test_user, create_test_virtualmachine
@@ -120,6 +117,13 @@ class ProxmoxEndpointAPITest(APIViewTestCases.APIViewTestCase):
                 "verify_ssl": True,
             },
         ]
+
+    def test_secrets_are_write_only_on_read(self):
+        self.add_permissions("netbox_proxbox.view_proxmoxendpoint")
+        response = self.client.get(self._get_detail_url(self._get_queryset().first()), **self.header)
+        self.assertHttpStatus(response, 200)
+        assert "password" not in response.data
+        assert "token_value" not in response.data
 
 
 class NetBoxEndpointAPITest(APIViewTestCases.APIViewTestCase):
@@ -330,55 +334,3 @@ class VMBackupAPITest(APIViewTestCases.APIViewTestCase):
             },
         ]
 
-
-class JournalEntryAPITest(APIViewTestCases.APIViewTestCase):
-    model = JournalEntry
-    view_namespace = "netbox_proxbox-api"
-    brief_fields = ["created", "display", "id", "url"]
-    bulk_update_data = {"kind": JournalEntryKindChoices.KIND_WARNING}
-    validation_excluded_fields = ["assigned_object_type", "created_by"]
-
-    @classmethod
-    def setUpTestData(cls):
-        cls.sync_processes = [
-            SyncProcess.objects.create(name=f"journal-sync-{idx}", sync_type=SyncTypeChoices.ALL)
-            for idx in range(6)
-        ]
-        cls.sync_process_type = ObjectType.objects.get_for_model(SyncProcess)
-
-        for idx in range(3):
-            JournalEntry.objects.create(
-                assigned_object=self.sync_processes[idx],
-                kind=JournalEntryKindChoices.KIND_INFO,
-                comments=f"journal {idx}",
-            )
-
-        cls.create_data = [
-            {
-                "assigned_object_type": "netbox_proxbox.syncprocess",
-                "assigned_object_id": cls.sync_processes[3].pk,
-                "kind": JournalEntryKindChoices.KIND_INFO,
-                "comments": "journal 3",
-            },
-            {
-                "assigned_object_type": "netbox_proxbox.syncprocess",
-                "assigned_object_id": cls.sync_processes[4].pk,
-                "kind": JournalEntryKindChoices.KIND_SUCCESS,
-                "comments": "journal 4",
-            },
-            {
-                "assigned_object_type": "netbox_proxbox.syncprocess",
-                "assigned_object_id": cls.sync_processes[5].pk,
-                "kind": JournalEntryKindChoices.KIND_WARNING,
-                "comments": "journal 5",
-            },
-        ]
-
-    def test_filter_by_assigned_object_id(self):
-        self.add_permissions("extras.view_journalentry")
-        response = self.client.get(
-            f"{self._get_list_url()}?assigned_object_id={self.sync_processes[0].pk}",
-            **self.header,
-        )
-        self.assertHttpStatus(response, 200)
-        assert len(response.data["results"]) == 1

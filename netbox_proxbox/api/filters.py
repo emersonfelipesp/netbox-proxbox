@@ -1,3 +1,15 @@
-from netbox_proxbox.filtersets import SyncProcessFilterSet
+from netbox_proxbox.filtersets import (
+    FastAPIEndpointFilterSet,
+    NetBoxEndpointFilterSet,
+    ProxmoxEndpointFilterSet,
+    SyncProcessFilterSet,
+    VMBackupFilterSet,
+)
 
-__all__ = ("SyncProcessFilterSet",)
+__all__ = (
+    "FastAPIEndpointFilterSet",
+    "NetBoxEndpointFilterSet",
+    "ProxmoxEndpointFilterSet",
+    "SyncProcessFilterSet",
+    "VMBackupFilterSet",
+)

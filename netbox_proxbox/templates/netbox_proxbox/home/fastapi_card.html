@@ -5,13 +5,6 @@
         <h2 class="card-header">FastAPI (Backend Service)</h2>
         <div class="p-1" id="fastapi-connection-error-{{ object.pk }}"></div>
 
-        <div class="d-flex flex-row justify-content-left align-items-left p-1 mt-1">
-            <div class="d-flex m-1"><a href="{% url 'plugins:netbox_proxbox:stop-proxbox-backend' %}" class="badge text-bg-red" title="Stop Service"><i class="mdi mdi-stop"></i></a></div>
-            <div class="d-flex m-1"><a href="{% url 'plugins:netbox_proxbox:fix-proxbox-backend' %}" class="badge text-bg-green" title="Start Service"><i class="mdi mdi-play"></i></a></div>
-            <div class="d-flex m-1"><a href="{% url 'plugins:netbox_proxbox:restart-proxbox-backend' %}" class="badge text-bg-yellow" title="Restart Service"><i class="mdi mdi-restart"></i></a></div>
-            <div class="d-flex m-1"><a href="{% url 'plugins:netbox_proxbox:status-proxbox-backend' %}" class="badge text-bg-blue" title="Check Service Status"><i class="mdi mdi-exclamation"></i></a></div>
-        </div>
-
         <div class="d-flex flex-row justify-content-center align-items-center p-1 mt-1">
             <div class="d-flex mx-auto position-absolute">
                 <a href="{{ object.get_absolute_url }}" target="_blank">
@@ -29,7 +22,7 @@
 
         <div align="center">
             <br>
-            <p>This service <strong>MUST</strong> be running for ProxBox to work.<br>It's the backend that communicates with Proxmox clusters.</p>
+            <p>This service must be reachable for ProxBox to work.<br>NetBox exposes status visibility here, but it does not manage the backend service lifecycle.</p>
         </div>
 
         <div class="card-body">
