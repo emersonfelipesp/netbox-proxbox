@@ -66,16 +66,16 @@ class ServiceStatus:
             logger.error("NetBox endpoint with pk=%s not found", pk)
             return status
 
-        token_obj = getattr(netbox_service_obj, "token", None)
-        token_key = getattr(token_obj, "key", None) if token_obj else "invalid-token"
-
         current_netbox = {
             "id": pk,
             "name": netbox_service_obj.name or None,
             "ip_address": get_ip_address_host(getattr(netbox_service_obj, "ip_address", None)),
             "domain": netbox_service_obj.domain or None,
             "port": netbox_service_obj.port or None,
-            "token": token_key,
+            "token": getattr(netbox_service_obj, "effective_token_value", None),
+            "token_version": getattr(netbox_service_obj, "effective_token_version", None),
+            "token_key": getattr(netbox_service_obj, "token_key", "") or None,
+            "token_secret": getattr(netbox_service_obj, "token_secret", "") or None,
             "verify_ssl": bool(netbox_service_obj.verify_ssl),
         }
 

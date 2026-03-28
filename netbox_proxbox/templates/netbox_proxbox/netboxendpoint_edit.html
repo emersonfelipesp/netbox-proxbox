@@ -54,21 +54,23 @@
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       const tokenVersionField = document.getElementById("id_token_version");
+      const tokenField = document.getElementById("id_token");
       const v1TokenField = document.getElementById("netbox-v1-token-field");
       const v2TokenFields = document.getElementById("netbox-v2-token-fields");
 
-      if (!tokenVersionField || !v1TokenField || !v2TokenFields) {
+      if (!tokenVersionField || !tokenField || !v1TokenField || !v2TokenFields) {
         return;
       }
 
       function setVisibility() {
+        const hasSelectedToken = tokenField.value !== "";
         const useV2 = tokenVersionField.value === "v2";
-        v1TokenField.hidden = useV2;
-        v2TokenFields.hidden = !useV2;
+        v2TokenFields.hidden = hasSelectedToken || !useV2;
       }
 
       setVisibility();
       tokenVersionField.addEventListener("change", setVisibility);
+      tokenField.addEventListener("change", setVisibility);
     });
   </script>
 {% endblock form %}

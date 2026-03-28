@@ -39,9 +39,11 @@ def test_home_template_uses_plugin_vanilla_js_entrypoint():
 def test_netbox_endpoint_edit_template_supports_v1_and_v2_tokens():
     contents = _read("netbox_proxbox/templates/netbox_proxbox/netboxendpoint_edit.html")
     assert "id_token_version" in contents
+    assert "id_token" in contents
     assert "netbox-v1-token-field" in contents
     assert "netbox-v2-token-fields" in contents
     assert 'tokenVersionField.value === "v2"' in contents
+    assert 'tokenField.value !== ""' in contents
 
 
 def test_netbox_endpoint_home_card_uses_configured_token_state():

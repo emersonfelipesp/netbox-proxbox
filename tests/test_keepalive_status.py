@@ -71,6 +71,56 @@ def test_netbox_status_creates_endpoint_and_checks_status(
     assert status == "success"
     assert created_payloads[0][0].endswith("/netbox/endpoint")
     assert created_payloads[0][1]["token"] == "token-1"
+    assert created_payloads[0][1]["token_version"] == "v1"
+
+
+def test_netbox_status_uses_selected_v2_token_without_manual_secret(
+    monkeypatch,
+    fastapi_endpoint,
+):
+    netbox_endpoint = SimpleNamespace(
+        id=1,
+        name="netbox",
+        domain="netbox.local",
+        ip_address=SimpleNamespace(address="10.0.0.20/24"),
+        port=443,
+        token=SimpleNamespace(version=2, key="v2-token-key"),
+        effective_token_value="v2-token-key",
+        effective_token_version="v2",
+        token_key="",
+        token_secret="",
+        verify_ssl=True,
+    )
+    module = load_plugin_module(
+        "netbox_proxbox.views.keepalive_status",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+        netbox_endpoint=netbox_endpoint,
+    )
+    monkeypatch.setattr(module.time, "sleep", lambda seconds: None)
+
+    created_payloads = []
+
+    def fake_get(url, verify=True, timeout=None):
+        if url.endswith("/netbox/endpoint"):
+            return ResponseStub([])
+        if url.endswith("/netbox/status"):
+            return ResponseStub({"status": "ok"})
+        raise AssertionError(url)
+
+    def fake_post(url, json, timeout=None):
+        created_payloads.append((url, json))
+        return ResponseStub({"id": 1})
+
+    monkeypatch.setattr(module.requests, "get", fake_get)
+    monkeypatch.setattr(module.requests, "post", fake_post)
+
+    status = module.ServiceStatus().netbox_status(1, "https://proxbox.local:8800")
+    assert status == "success"
+    assert created_payloads[0][1]["token"] == "v2-token-key"
+    assert created_payloads[0][1]["token_version"] == "v2"
+    assert created_payloads[0][1]["token_key"] is None
+    assert created_payloads[0][1]["token_secret"] is None
 
 
 def test_proxmox_status_uses_domain_query_when_available(
