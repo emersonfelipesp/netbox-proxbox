@@ -160,6 +160,17 @@ def load_plugin_module(
             "websocket_url": "wss://proxbox.local:8801/ws",
         }
     )
+    utils_module.get_backend_auth_headers = lambda obj: (
+        {}
+        if not (getattr(obj, "token", "") or "").strip()
+        else {
+            "Authorization": (
+                getattr(obj, "token").strip()
+                if getattr(obj, "token").strip().startswith(("Bearer ", "Token "))
+                else f"Bearer {getattr(obj, 'token').strip()}"
+            )
+        }
+    )
     utils_module.get_ip_address_host = lambda value: (
         str(value).split("/")[0] if value else "127.0.0.1"
     )

@@ -11,7 +11,8 @@ from django.shortcuts import redirect
 from django.views.decorators.http import require_http_methods
 
 from netbox_proxbox.models import FastAPIEndpoint
-from netbox_proxbox.utils import get_fastapi_url
+from netbox_proxbox.utils import get_backend_auth_headers, get_fastapi_url
+from netbox_proxbox.views.error_utils import extract_backend_error_detail
 
 
 logger = logging.getLogger(__name__)
@@ -46,7 +47,9 @@ def _get_fastapi_request_context():
     return {
         "detail": fastapi_detail,
         "http_url": fastapi_detail.get("http_url"),
+        "ip_address_url": fastapi_detail.get("ip_address_url"),
         "verify_ssl": fastapi_detail.get("verify_ssl", True),
+        "headers": get_backend_auth_headers(fastapi_service_obj),
     }
 
 
@@ -57,16 +60,26 @@ def sync_resource(path: str, query_params: dict | None = None) -> tuple[dict, in
 
     fastapi_path = f"{context['http_url']}/{path}"
     requested_urls = []
+    backend_headers = context.get("headers") or {}
+    last_detail = None
 
     request_candidates = [(fastapi_path, context["verify_ssl"])]
-    fallback_url = context["detail"].get("ip_address_url")
+    fallback_url = context.get("ip_address_url")
     if fallback_url:
-        request_candidates.append((f"{fallback_url}/{path}", False))
+        fallback_path = f"{fallback_url}/{path}"
+        if fallback_path != fastapi_path:
+            request_candidates.append((fallback_path, context["verify_ssl"]))
 
     for url, verify in request_candidates:
         try:
             requested_urls.append(url)
-            response = requests.get(url, params=query_params, verify=verify, timeout=5)
+            response = requests.get(
+                url,
+                params=query_params,
+                headers=backend_headers,
+                verify=verify,
+                timeout=5,
+            )
             response.raise_for_status()
             payload = response.json() if hasattr(response, "json") else {}
             return {
@@ -76,15 +89,17 @@ def sync_resource(path: str, query_params: dict | None = None) -> tuple[dict, in
                 "response": payload,
             }, 202
         except requests.exceptions.RequestException as exc:
+            last_detail, _ = extract_backend_error_detail(exc)
             logger.error("Sync request failed for %s via %s: %s", path, url, exc)
         except Exception as exc:  # pragma: no cover
+            last_detail = str(exc)
             logger.error("Unexpected sync error for %s via %s: %s", path, url, exc)
 
     return {
         "queued": False,
         "path": path,
         "requested_urls": requested_urls,
-        "detail": "Unable to reach the ProxBox backend.",
+        "detail": last_detail or "Unable to reach the ProxBox backend.",
     }, 503
 
 

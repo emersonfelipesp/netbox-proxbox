@@ -9,7 +9,11 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_GET
 
 from netbox_proxbox.models import FastAPIEndpoint, ProxmoxEndpoint
-from netbox_proxbox.utils import get_fastapi_url, get_ip_address_host
+from netbox_proxbox.utils import (
+    get_backend_auth_headers,
+    get_fastapi_url,
+    get_ip_address_host,
+)
 from netbox_proxbox.views.backend_sync import sync_proxmox_endpoint_to_backend
 from netbox_proxbox.views.error_utils import extract_proxmox_backend_error_detail
 
@@ -32,18 +36,6 @@ def _merge_cluster_payloads(version_payload, cluster_payload) -> dict:
     if isinstance(cluster_data, dict) and isinstance(version_data, dict):
         return cluster_data | version_data
     return {}
-
-
-def _backend_auth_headers(fastapi_obj: FastAPIEndpoint | None) -> dict[str, str]:
-    token = (getattr(fastapi_obj, "token", "") or "").strip()
-    if not token:
-        return {}
-
-    if token.startswith("Bearer ") or token.startswith("Token "):
-        return {"Authorization": token}
-
-    return {"Authorization": f"Bearer {token}"}
-
 
 @require_GET
 def get_proxmox_card(request, pk: int) -> JsonResponse:
@@ -74,7 +66,7 @@ def get_proxmox_card(request, pk: int) -> JsonResponse:
             }
         )
 
-    backend_headers = _backend_auth_headers(fastapi_object)
+    backend_headers = get_backend_auth_headers(fastapi_object)
     backend_verify_ssl = bool(fastapi_info.get("verify_ssl", True))
 
     domain = (proxmox_object.domain or "").strip()

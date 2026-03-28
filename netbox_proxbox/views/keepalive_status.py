@@ -10,7 +10,11 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_GET
 
 from netbox_proxbox.models import FastAPIEndpoint, NetBoxEndpoint, ProxmoxEndpoint
-from netbox_proxbox.utils import get_fastapi_url, get_ip_address_host
+from netbox_proxbox.utils import (
+    get_backend_auth_headers,
+    get_fastapi_url,
+    get_ip_address_host,
+)
 from netbox_proxbox.views.backend_sync import sync_proxmox_endpoint_to_backend
 from netbox_proxbox.views.error_utils import (
     extract_backend_error_detail,
@@ -46,14 +50,7 @@ class ServiceStatus:
 
     @staticmethod
     def _backend_auth_headers(fastapi_obj: FastAPIEndpoint | None) -> dict[str, str]:
-        token = (getattr(fastapi_obj, "token", "") or "").strip()
-        if not token:
-            return {}
-
-        if token.startswith("Bearer ") or token.startswith("Token "):
-            return {"Authorization": token}
-
-        return {"Authorization": f"Bearer {token}"}
+        return get_backend_auth_headers(fastapi_obj)
 
     @staticmethod
     def _compact_payload(payload: dict) -> dict:
