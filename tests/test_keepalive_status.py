@@ -130,8 +130,61 @@ def test_netbox_status_uses_selected_v2_token_without_manual_secret(
     assert status == "success"
     assert created_payloads[0][1]["token"] == "v2-token-key"
     assert created_payloads[0][1]["token_version"] == "v2"
-    assert created_payloads[0][1]["token_key"] is None
-    assert created_payloads[0][1]["token_secret"] is None
+    assert "token_key" not in created_payloads[0][1]
+    assert "token_secret" not in created_payloads[0][1]
+
+
+def test_netbox_status_builds_full_v2_token_from_key_and_secret(
+    monkeypatch,
+    fastapi_endpoint,
+):
+    netbox_endpoint = SimpleNamespace(
+        id=1,
+        name="netbox",
+        domain=None,
+        ip_address="10.0.0.20/24",
+        port=8000,
+        token=None,
+        effective_token_value="v2-token-key",
+        effective_token_version="v2",
+        token_key="v2-token-key",
+        token_secret="v2-token-secret",
+        verify_ssl=False,
+    )
+    module = load_plugin_module(
+        "netbox_proxbox.views.keepalive_status",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+        netbox_endpoint=netbox_endpoint,
+    )
+    monkeypatch.setattr(module.time, "sleep", lambda seconds: None)
+
+    created_payloads = []
+
+    def fake_get(url, verify=True, timeout=None, headers=None):
+        if url.endswith("/netbox/endpoint"):
+            return ResponseStub([])
+        if url.endswith("/netbox/status"):
+            return ResponseStub({"status": "ok"})
+        raise AssertionError(url)
+
+    def fake_post(url, json, timeout=None, headers=None):
+        created_payloads.append((url, json))
+        return ResponseStub({"id": 1})
+
+    monkeypatch.setattr(module.requests, "get", fake_get)
+    monkeypatch.setattr(module.requests, "post", fake_post)
+
+    status = module.ServiceStatus().netbox_status(
+        1,
+        "https://proxbox.local:8800",
+        auth_headers={"Authorization": "Bearer backend-token"},
+    )
+    assert status == "success"
+    assert created_payloads[0][1]["token"] == "nbt_v2-token-key.v2-token-secret"
+    assert created_payloads[0][1]["token_version"] == "v2"
+    assert created_payloads[0][1]["ip_address"] == "10.0.0.20"
+    assert "domain" not in created_payloads[0][1]
 
 
 def test_backend_auth_headers_accepts_prefixed_and_bare_tokens(
