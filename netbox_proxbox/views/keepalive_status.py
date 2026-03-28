@@ -59,6 +59,27 @@ class ServiceStatus:
 
         if not detail:
             body = (getattr(response, "text", "") or "").strip()
+            content_type = (getattr(response, "headers", {}) or {}).get(
+                "Content-Type", ""
+            )
+            response_url = getattr(response, "url", "") or ""
+            body_lower = body.lower()
+
+            if (
+                "text/html" in content_type.lower() or "<html" in body_lower
+            ) and status_code in {400, 401, 403, 404}:
+                detail = (
+                    "Backend returned HTML instead of ProxBox API JSON"
+                    f" (HTTP {status_code})."
+                )
+                if response_url:
+                    detail += f" URL: {response_url}."
+                detail += (
+                    " Check FastAPI endpoint host/port; it may be pointing to NetBox UI "
+                    "instead of proxbox-api."
+                )
+                return detail, status_code
+
             detail = body[:500] if body else str(exc)
 
         return detail, status_code
