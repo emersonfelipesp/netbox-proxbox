@@ -1,3 +1,5 @@
+"""Check backend, NetBox, and Proxmox service reachability for the plugin UI."""
+
 from __future__ import annotations
 
 import logging

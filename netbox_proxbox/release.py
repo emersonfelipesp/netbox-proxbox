@@ -1,3 +1,5 @@
+"""Expose parsed NetBox release constants used for version comparisons."""
+
 from packaging import version
 from django.conf import settings
 

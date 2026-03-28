@@ -1,3 +1,5 @@
+"""Define NetBox filtersets for the plugin's list views and API queries."""
+
 from django.db.models import Q
 
 from netbox.filtersets import NetBoxModelFilterSet

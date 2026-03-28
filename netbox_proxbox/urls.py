@@ -1,3 +1,5 @@
+"""Register plugin UI routes for pages, models, sync actions, and status checks."""
+
 from django.urls import include, path
 
 from utilities.urls import get_model_urls

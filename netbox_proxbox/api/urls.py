@@ -1,3 +1,5 @@
+"""Register API routes for plugin endpoints, sync processes, and backups."""
+
 from django.urls import include, path
 
 from netbox.api.routers import NetBoxRouter

@@ -1,3 +1,5 @@
+"""Provide NetBox CRUD views for Proxmox endpoint records."""
+
 # NetBox Imports
 from netbox.views import generic
 from utilities.views import register_model_view

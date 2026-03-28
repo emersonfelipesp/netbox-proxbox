@@ -1,3 +1,5 @@
+"""Provide NetBox CRUD views for remote NetBox endpoint records."""
+
 from netbox.views import generic
 from utilities.views import register_model_view
 

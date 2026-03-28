@@ -1,3 +1,5 @@
+"""Define the NetBox table used to render VM backup records."""
+
 # Django Imports
 from django_tables2 import tables
 from django.utils.translation import gettext as _
@@ -52,5 +54,4 @@ class VMBackupTable(NetBoxTable):
             'pk', 'storage', 'id', 'virtual_machine', 'subtype', 'format',
             'creation_time', 'size', 'volume_id', 'encrypted'
         )
-
 

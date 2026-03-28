@@ -1,3 +1,5 @@
+"""Register the ProxBox NetBox plugin and declare its compatibility metadata."""
+
 # Netbox plugin related import
 from netbox.plugins import PluginConfig
 

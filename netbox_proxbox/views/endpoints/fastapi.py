@@ -1,3 +1,5 @@
+"""Provide NetBox CRUD views for FastAPI backend endpoint records."""
+
 from netbox.views import generic
 from utilities.views import register_model_view
 

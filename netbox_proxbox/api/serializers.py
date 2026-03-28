@@ -1,3 +1,5 @@
+"""Serialize ProxBox plugin models for the NetBox plugin API."""
+
 from rest_framework import serializers
 
 from ipam.api.serializers_.nested import NestedIPAddressSerializer

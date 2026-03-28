@@ -1,3 +1,5 @@
+"""Define NetBox forms for viewing and editing sync process records."""
+
 # Django Imports
 from django import forms
 from django.utils.translation import gettext as _

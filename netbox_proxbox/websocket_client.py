@@ -1,3 +1,5 @@
+"""Bridge browser polling requests to the backend WebSocket message stream."""
+
 from __future__ import annotations
 
 import asyncio

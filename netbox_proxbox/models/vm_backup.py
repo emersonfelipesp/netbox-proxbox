@@ -1,3 +1,5 @@
+"""Define the VM backup model stored alongside NetBox virtual machines."""
+
 # Django Imports
 from django.db import models
 from django.utils.translation import gettext_lazy as _
