@@ -109,6 +109,5 @@ class ProxmoxEndpointImportForm(NetBoxModelImportForm):
             "token_name",
             "token_value",
             "verify_ssl",
-            "comments",
             "tags",
         )
