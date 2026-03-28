@@ -50,16 +50,40 @@ async function hydrateProxmoxCards() {
     const cards = document.querySelectorAll("[data-proxmox-card-url]");
     await Promise.all(
         Array.from(cards).map(async (card) => {
+            const cardId = card.dataset.proxmoxCardId;
+            const badge = cardId ? document.getElementById(`proxmox-status-badge-${cardId}`) : null;
+            const errorContainer = cardId
+                ? document.getElementById(`proxmox-connection-error-${cardId}`)
+                : null;
+
             try {
                 const payload = await fetchJson(card.dataset.proxmoxCardUrl);
                 const clusterData = payload.cluster_data ?? {};
                 renderProxmoxField(card, "mode", clusterData.mode);
                 renderProxmoxField(card, "version", clusterData.version);
                 renderProxmoxField(card, "repoid", clusterData.repoid);
+
+                if (payload.detail && badge) {
+                    setBadgeState(badge, "error", payload.detail);
+                }
+
+                if (errorContainer) {
+                    if (payload.detail) {
+                        errorContainer.innerHTML = `<div class="alert alert-warning py-2 px-3 mb-0">${payload.detail}</div>`;
+                    } else {
+                        errorContainer.innerHTML = "";
+                    }
+                }
             } catch (error) {
                 renderProxmoxField(card, "mode", null);
                 renderProxmoxField(card, "version", null);
                 renderProxmoxField(card, "repoid", null);
+                if (badge) {
+                    setBadgeState(badge, "error", error.message || "Unknown error");
+                }
+                if (errorContainer) {
+                    errorContainer.innerHTML = `<div class="alert alert-danger py-2 px-3 mb-0">${error.message || "Unable to load Proxmox card data."}</div>`;
+                }
             }
         }),
     );
