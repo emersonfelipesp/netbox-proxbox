@@ -34,6 +34,11 @@ def test_home_template_uses_plugin_vanilla_js_entrypoint():
     contents = _read("netbox_proxbox/templates/netbox_proxbox/home.html")
     assert "netbox_proxbox/js/home.js" in contents
     assert "htmx.org" not in contents
+    assert 'method="post"' in contents
+    assert "{% csrf_token %}" in contents
+    assert 'type="submit"' in contents
+    assert "data-sync-url" in contents
+    assert "data-sync-kind" in contents
 
 
 def test_netbox_endpoint_edit_template_supports_v1_and_v2_tokens():
@@ -58,12 +63,18 @@ def test_home_javascript_passes_error_detail_to_badge_state():
     assert 'setBadgeState(element, "error", error.message' in contents
     assert "proxmox-connection-error-" in contents
     assert "payload.detail && badge" in contents
+    assert 'form.addEventListener("submit"' in contents
+    assert 'method: "POST"' in contents
+    assert '"X-CSRFToken": getCsrfToken()' in contents
+    assert '"X-Requested-With": "XMLHttpRequest"' in contents
 
 
 def test_common_badge_state_supports_hover_tooltip_details():
     contents = _read("netbox_proxbox/static/netbox_proxbox/js/common.js")
     assert 'element.dataset.bsToggle = "tooltip"' in contents
     assert "element.dataset.bsTitle = tooltip" in contents
+    assert "export function getCsrfToken()" in contents
+    assert 'querySelector("input[name=\'csrfmiddlewaretoken\']")' in contents
 
 
 def test_proxmox_list_template_exposes_import_export_controls_and_warning_modal():

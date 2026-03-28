@@ -60,3 +60,16 @@ export async function fetchJson(url, options = {}) {
 
     return payload;
 }
+
+export function getCsrfToken() {
+    const csrfInput = document.querySelector("input[name='csrfmiddlewaretoken']");
+    if (csrfInput?.value) {
+        return csrfInput.value;
+    }
+
+    const csrfCookie = document.cookie
+        .split(";")
+        .map((part) => part.trim())
+        .find((part) => part.startsWith("csrftoken="));
+    return csrfCookie ? csrfCookie.split("=", 2)[1] : "";
+}

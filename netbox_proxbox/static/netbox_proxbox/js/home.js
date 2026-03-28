@@ -1,4 +1,4 @@
-import { fetchJson, setBadgeState } from "./common.js";
+import { fetchJson, getCsrfToken, setBadgeState } from "./common.js";
 import { poll } from "./polling.js";
 import WebSocketClient from "./websocket.js";
 
@@ -106,16 +106,26 @@ function appendLogMessage(message) {
     }
 }
 
-function wireSyncButtons(websocketClient) {
-    const syncButtons = document.querySelectorAll("[data-sync-url][data-sync-kind]");
-    for (const button of syncButtons) {
-        button.addEventListener("click", async (event) => {
+function wireSyncForms(websocketClient) {
+    const syncForms = document.querySelectorAll("form[data-sync-url][data-sync-kind]");
+    for (const form of syncForms) {
+        form.addEventListener("submit", async (event) => {
             event.preventDefault();
-            const { syncUrl, syncKind } = button.dataset;
+            const { syncUrl, syncKind } = form.dataset;
+            const button = form.querySelector("button[type='submit']");
+            if (!button) {
+                return;
+            }
             button.disabled = true;
 
             try {
-                const payload = await fetchJson(syncUrl);
+                const payload = await fetchJson(syncUrl, {
+                    method: "POST",
+                    headers: {
+                        "X-CSRFToken": getCsrfToken(),
+                        "X-Requested-With": "XMLHttpRequest",
+                    },
+                });
                 appendLogMessage(`${syncKind}: request accepted`);
 
                 if (syncKind === "devices" || syncKind === "virtual-machines" || syncKind === "full-update") {
@@ -147,6 +157,6 @@ function wireSyncButtons(websocketClient) {
 
 document.addEventListener("DOMContentLoaded", async () => {
     const websocketClient = initializeWebSocket();
-    wireSyncButtons(websocketClient);
+    wireSyncForms(websocketClient);
     await Promise.all([refreshStatusBadges(), hydrateProxmoxCards()]);
 });

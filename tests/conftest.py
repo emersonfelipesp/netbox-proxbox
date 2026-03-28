@@ -39,6 +39,17 @@ class DummyPluginConfig:
     pass
 
 
+class MessagesStub:
+    def __init__(self):
+        self.calls = []
+
+    def success(self, request, message):
+        self.calls.append(("success", message))
+
+    def error(self, request, message):
+        self.calls.append(("error", message))
+
+
 @dataclass
 class ResponseStub:
     payload: object
@@ -110,9 +121,14 @@ def load_plugin_module(
     django_views_decorators = types.ModuleType("django.views.decorators")
     django_views_http = types.ModuleType("django.views.decorators.http")
     django_views_http.require_GET = lambda func: func
+    django_views_http.require_http_methods = lambda methods: (lambda func: func)
 
     django_urls = types.ModuleType("django.urls")
     django_urls.reverse = lambda *args, **kwargs: "/dummy/"
+
+    django_contrib = types.ModuleType("django.contrib")
+    django_messages = MessagesStub()
+    django_contrib.messages = django_messages
 
     netbox_module = types.ModuleType("netbox")
     netbox_plugins = types.ModuleType("netbox.plugins")
@@ -156,6 +172,8 @@ def load_plugin_module(
         "django.views.decorators": django_views_decorators,
         "django.views.decorators.http": django_views_http,
         "django.urls": django_urls,
+        "django.contrib": django_contrib,
+        "django.contrib.messages": django_messages,
         "netbox": netbox_module,
         "netbox.plugins": netbox_plugins,
         "netbox_proxbox.models": models_module,
@@ -185,6 +203,7 @@ def load_plugin_module(
     assert spec and spec.loader
     sys.modules[module_name] = module
     spec.loader.exec_module(module)
+    module._messages_stub = django_messages
     return module
 
 

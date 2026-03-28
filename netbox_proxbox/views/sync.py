@@ -5,14 +5,34 @@ from __future__ import annotations
 import logging
 
 import requests
+from django.contrib import messages
 from django.http import JsonResponse
-from django.views.decorators.http import require_GET
+from django.shortcuts import redirect
+from django.views.decorators.http import require_http_methods
 
 from netbox_proxbox.models import FastAPIEndpoint
 from netbox_proxbox.utils import get_fastapi_url
 
 
 logger = logging.getLogger(__name__)
+
+
+def _wants_json_response(request) -> bool:
+    if request is None:
+        return True
+
+    requested_with = ""
+    headers = getattr(request, "headers", {}) or {}
+    if isinstance(headers, dict):
+        requested_with = headers.get("X-Requested-With", "")
+        accept = headers.get("Accept", "")
+    else:
+        requested_with = getattr(headers, "get", lambda *args, **kwargs: "")(
+            "X-Requested-With", ""
+        )
+        accept = getattr(headers, "get", lambda *args, **kwargs: "")("Accept", "")
+
+    return requested_with == "XMLHttpRequest" or "application/json" in accept
 
 
 def _get_fastapi_request_context():
@@ -68,28 +88,51 @@ def sync_resource(path: str, query_params: dict | None = None) -> tuple[dict, in
     }, 503
 
 
-@require_GET
-def sync_devices(request) -> JsonResponse:
-    payload, status = sync_resource("dcim/devices/create")
-    return JsonResponse(payload, status=status)
+def _sync_response(request, *, path: str, action_label: str, query_params: dict | None = None):
+    payload, status = sync_resource(path, query_params=query_params)
+    if _wants_json_response(request):
+        return JsonResponse(payload, status=status)
+
+    detail = payload.get("detail")
+    if status < 400:
+        messages.success(request, detail or f"{action_label} sync queued successfully.")
+    else:
+        messages.error(request, detail or f"{action_label} sync failed.")
+    return redirect("plugins:netbox_proxbox:home")
 
 
-@require_GET
-def sync_virtual_machines(request) -> JsonResponse:
-    payload, status = sync_resource("virtualization/virtual-machines/create")
-    return JsonResponse(payload, status=status)
+@require_http_methods(["GET", "POST"])
+def sync_devices(request):
+    return _sync_response(
+        request,
+        path="dcim/devices/create",
+        action_label="Devices",
+    )
 
 
-@require_GET
-def sync_full_update(request) -> JsonResponse:
-    payload, status = sync_resource("full-update")
-    return JsonResponse(payload, status=status)
+@require_http_methods(["GET", "POST"])
+def sync_virtual_machines(request):
+    return _sync_response(
+        request,
+        path="virtualization/virtual-machines/create",
+        action_label="Virtual machines",
+    )
 
 
-@require_GET
-def sync_vm_backups(request) -> JsonResponse:
-    payload, status = sync_resource(
-        "virtualization/virtual-machines/backups/all/create",
+@require_http_methods(["GET", "POST"])
+def sync_full_update(request):
+    return _sync_response(
+        request,
+        path="full-update",
+        action_label="Full update",
+    )
+
+
+@require_http_methods(["GET", "POST"])
+def sync_vm_backups(request):
+    return _sync_response(
+        request,
+        path="virtualization/virtual-machines/backups/all/create",
+        action_label="VM backups",
         query_params={"delete_nonexistent_backup": True},
     )
-    return JsonResponse(payload, status=status)
