@@ -1,6 +1,6 @@
 site_name: Proxbox Docs
 site_dir: ./site
-site_url: https://proxbox.netbox.dev.br/
+site_url: https://emersonfelipesp.github.io/netbox-proxbox/
 docs_dir: ./docs
 repo_name: netdevopsbr/netbox-proxbox
 repo_url: https://github.com/netdevopsbr/netbox-proxbox
