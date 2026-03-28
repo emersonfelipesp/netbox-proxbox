@@ -116,6 +116,14 @@ class NetBoxEndpointForm(NetBoxModelForm):
                 )
                 return cleaned_data
 
+            token_plaintext = (getattr(token, "plaintext", "") or "").strip()
+            if not token_plaintext:
+                self.add_error(
+                    "token",
+                    "Selected NetBox v1 token does not expose a usable plaintext value. Create a new v1 token (or use v2 key/secret fields) and reselect it.",
+                )
+                return cleaned_data
+
             cleaned_data["token_version"] = selected_token_version
             cleaned_data["token_key"] = ""
             cleaned_data["token_secret"] = ""

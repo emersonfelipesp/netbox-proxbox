@@ -172,6 +172,11 @@ def test_netbox_endpoint_serializer_rejects_selected_v2_token_objects():
     assert "Selected NetBox v2 token cannot be used by this endpoint" in contents
 
 
+def test_netbox_endpoint_serializer_rejects_unusable_v1_selected_token():
+    contents = SERIALIZERS_PATH.read_text()
+    assert "Selected NetBox v1 token does not expose a usable plaintext" in contents
+
+
 def test_endpoint_serializers_require_domain_or_ip_address():
     contents = SERIALIZERS_PATH.read_text()
     assert contents.count("Provide either a domain or an IP address.") >= 3

@@ -21,6 +21,47 @@ class ServiceStatus:
 
     def __init__(self):
         self.connected_url = None
+        self.last_error_detail = None
+        self.last_error_http_status = None
+
+    def _set_error(self, detail: str | None, http_status: int | None = None) -> None:
+        self.last_error_detail = detail
+        self.last_error_http_status = http_status
+
+    def _clear_error(self) -> None:
+        self.last_error_detail = None
+        self.last_error_http_status = None
+
+    @staticmethod
+    def _extract_error_detail(
+        exc: requests.exceptions.RequestException,
+    ) -> tuple[str, int | None]:
+        response = getattr(exc, "response", None)
+        if response is None:
+            return str(exc), None
+
+        status_code = getattr(response, "status_code", None)
+        detail = None
+
+        try:
+            payload = response.json()
+            if isinstance(payload, dict):
+                detail = payload.get("detail") or payload.get("message")
+                python_exception = payload.get("python_exception")
+                if python_exception:
+                    detail = (
+                        f"{detail} ({python_exception})"
+                        if detail
+                        else str(python_exception)
+                    )
+        except Exception:
+            detail = None
+
+        if not detail:
+            body = (getattr(response, "text", "") or "").strip()
+            detail = body[:500] if body else str(exc)
+
+        return detail, status_code
 
     @staticmethod
     def _backend_auth_headers(fastapi_obj: FastAPIEndpoint | None) -> dict[str, str]:
@@ -71,12 +112,14 @@ class ServiceStatus:
     def fastapi_status(self, pk: int) -> dict:
         connected = False
         fastapi_url = None
+        self._clear_error()
 
         try:
             fastapi_service_obj = FastAPIEndpoint.objects.get(pk=pk)
         except FastAPIEndpoint.DoesNotExist:
             logger.warning("FastAPI endpoint with pk=%s not found", pk)
-            return {"url": None, "connected": False}
+            self._set_error(f"FastAPI endpoint with id={pk} not found.")
+            return {"url": None, "connected": False, "detail": self.last_error_detail}
 
         fastapi_detail = get_fastapi_url(fastapi_service_obj) or {}
         if not isinstance(fastapi_detail, dict):
@@ -103,15 +146,30 @@ class ServiceStatus:
                         connected = True
                         self.connected_url = ip_url
                     except requests.exceptions.RequestException as exc:
+                        detail, http_status = self._extract_error_detail(exc)
+                        self._set_error(
+                            f"FastAPI fallback URL check failed: {detail}",
+                            http_status=http_status,
+                        )
                         logger.error(
                             "Failed to connect to FastAPI fallback URL %s: %s",
                             ip_url,
                             exc,
                         )
             except requests.exceptions.RequestException as exc:
+                detail, http_status = self._extract_error_detail(exc)
+                self._set_error(
+                    f"FastAPI URL check failed: {detail}",
+                    http_status=http_status,
+                )
                 logger.error("Error connecting to FastAPI at %s: %s", fastapi_url, exc)
 
-        return {"url": fastapi_url, "connected": connected}
+        return {
+            "url": fastapi_url,
+            "connected": connected,
+            "detail": self.last_error_detail,
+            "http_status": self.last_error_http_status,
+        }
 
     def netbox_status(
         self,
@@ -122,6 +180,7 @@ class ServiceStatus:
         status = "error"
         max_retries = 3
         retry_delay = 1
+        self._clear_error()
 
         request_headers = auth_headers or {}
 
@@ -129,6 +188,7 @@ class ServiceStatus:
             netbox_service_obj = NetBoxEndpoint.objects.get(pk=pk)
         except NetBoxEndpoint.DoesNotExist:
             logger.error("NetBox endpoint with pk=%s not found", pk)
+            self._set_error(f"NetBox endpoint with id={pk} not found.")
             return status
 
         ip_address = get_ip_address_host(
@@ -149,6 +209,20 @@ class ServiceStatus:
             "verify_ssl": bool(netbox_service_obj.verify_ssl),
         }
         current_netbox = self._compact_payload(current_netbox)
+
+        token_version = current_netbox.get("token_version")
+        if token_version == "v1" and not current_netbox.get("token"):
+            self._set_error(
+                "NetBox v1 token is missing. Select a v1 token with a retrievable plaintext value, or switch to v2 key/secret credentials."
+            )
+            return status
+        if token_version == "v2" and (
+            not current_netbox.get("token") or not current_netbox.get("token_key")
+        ):
+            self._set_error(
+                "NetBox v2 credentials are incomplete. Provide both token key and token secret."
+            )
+            return status
 
         netbox_endpoint_url = f"{base_url}/netbox/endpoint"
         netbox_status_route = f"{base_url}/netbox/status"
@@ -204,12 +278,16 @@ class ServiceStatus:
                     timeout=self.request_timeout,
                 )
                 status_response.raise_for_status()
+                self._clear_error()
                 status = "success"
                 break
             except requests.exceptions.RequestException as exc:
+                detail, http_status = self._extract_error_detail(exc)
+                self._set_error(detail, http_status=http_status)
                 response = getattr(exc, "response", None)
                 if response is not None:
-                    response_body = response.text[:500]
+                    response_text = getattr(response, "text", "") or ""
+                    response_body = response_text[:500]
                     logger.error(
                         "NetBox status request failed on attempt %s with HTTP %s: %s",
                         attempt + 1,
@@ -228,11 +306,13 @@ class ServiceStatus:
         status = "error"
         max_retries = 3
         retry_delay = 1
+        self._clear_error()
 
         try:
             proxmox_service_obj = ProxmoxEndpoint.objects.get(pk=pk)
         except ProxmoxEndpoint.DoesNotExist:
             logger.error("Proxmox endpoint with pk=%s not found", pk)
+            self._set_error(f"Proxmox endpoint with id={pk} not found.")
             return status
 
         proxmox_ip_address = get_ip_address_host(
@@ -253,9 +333,12 @@ class ServiceStatus:
                     timeout=self.request_timeout,
                 )
                 response.raise_for_status()
+                self._clear_error()
                 status = "success"
                 break
             except requests.exceptions.RequestException as exc:
+                detail, http_status = self._extract_error_detail(exc)
+                self._set_error(detail, http_status=http_status)
                 logger.error(
                     "Proxmox status request failed on attempt %s: %s", attempt + 1, exc
                 )
@@ -273,16 +356,32 @@ def get_service_status(request, service: str, pk: int) -> JsonResponse:
     if service == "fastapi":
         fastapi_response = service_status.fastapi_status(pk)
         status = "success" if fastapi_response.get("connected") else "error"
-        return JsonResponse({"status": status})
+        payload: dict = {"status": status}
+        if fastapi_response.get("detail"):
+            payload["detail"] = fastapi_response["detail"]
+        return JsonResponse(payload)
 
     fastapi_object = FastAPIEndpoint.objects.first()
     if fastapi_object is None:
         logger.error("No FastAPI endpoints found")
-        return JsonResponse({"status": "error"}, status=503)
+        return JsonResponse(
+            {
+                "status": "error",
+                "detail": "No FastAPI endpoint is configured.",
+            },
+            status=503,
+        )
 
     fastapi_response = service_status.fastapi_status(pk=fastapi_object.id)
     if not fastapi_response.get("connected"):
-        return JsonResponse({"status": "error"}, status=503)
+        return JsonResponse(
+            {
+                "status": "error",
+                "detail": fastapi_response.get("detail")
+                or "Unable to connect to configured FastAPI endpoint.",
+            },
+            status=503,
+        )
 
     auth_headers = service_status._backend_auth_headers(fastapi_object)
 
@@ -290,7 +389,13 @@ def get_service_status(request, service: str, pk: int) -> JsonResponse:
         logger.error(
             "FastAPI connectivity reported success but no connected URL was recorded"
         )
-        return JsonResponse({"status": "error"}, status=503)
+        return JsonResponse(
+            {
+                "status": "error",
+                "detail": "FastAPI endpoint responded, but no connected URL was recorded.",
+            },
+            status=503,
+        )
 
     connected_url = service_status.connected_url
 
@@ -303,4 +408,10 @@ def get_service_status(request, service: str, pk: int) -> JsonResponse:
     elif service == "proxmox":
         status = service_status.proxmox_status(pk=pk, base_url=connected_url)
 
-    return JsonResponse({"status": status})
+    payload: dict = {"status": status}
+    if status != "success" and service_status.last_error_detail:
+        payload["detail"] = service_status.last_error_detail
+    if status != "success" and service_status.last_error_http_status is not None:
+        payload["http_status"] = service_status.last_error_http_status
+
+    return JsonResponse(payload)

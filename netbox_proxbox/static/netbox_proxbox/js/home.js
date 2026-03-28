@@ -18,9 +18,9 @@ async function refreshStatusBadges() {
         Array.from(elements).map(async (element) => {
             try {
                 const payload = await fetchJson(element.dataset.serviceStatusUrl);
-                setBadgeState(element, payload.status);
+                setBadgeState(element, payload.status, payload.detail || "");
             } catch (error) {
-                setBadgeState(element, "error");
+                setBadgeState(element, "error", error.message || "Unknown error");
             }
         }),
     );

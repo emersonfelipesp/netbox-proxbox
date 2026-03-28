@@ -50,3 +50,15 @@ def test_netbox_endpoint_home_card_uses_configured_token_state():
     contents = _read("netbox_proxbox/templates/netbox_proxbox/home/netbox_card.html")
     assert "object.token_version_label" in contents
     assert "object.has_configured_token" in contents
+
+
+def test_home_javascript_passes_error_detail_to_badge_state():
+    contents = _read("netbox_proxbox/static/netbox_proxbox/js/home.js")
+    assert "setBadgeState(element, payload.status, payload.detail" in contents
+    assert 'setBadgeState(element, "error", error.message' in contents
+
+
+def test_common_badge_state_supports_hover_tooltip_details():
+    contents = _read("netbox_proxbox/static/netbox_proxbox/js/common.js")
+    assert 'element.dataset.bsToggle = "tooltip"' in contents
+    assert "element.dataset.bsTitle = tooltip" in contents
