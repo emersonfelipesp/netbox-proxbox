@@ -5,7 +5,12 @@ from django.utils.translation import gettext_lazy as _
 
 from netbox.models import NetBoxModel
 
-from netbox_proxbox.choices import ProxmoxModeChoices, SyncStatusChoices, SyncTypeChoices
+from netbox_proxbox.choices import (
+    NetBoxTokenVersionChoices,
+    ProxmoxModeChoices,
+    SyncStatusChoices,
+    SyncTypeChoices,
+)
 from netbox_proxbox.fields import DomainField
 from netbox_proxbox.models.vm_backup import VMBackup
 
@@ -179,6 +184,25 @@ class NetBoxEndpoint(EndpointBase):
         blank=True,
         help_text=_("Token used by the ProxBox backend when communicating with NetBox."),
     )
+    token_version = models.CharField(
+        max_length=2,
+        choices=NetBoxTokenVersionChoices,
+        default=NetBoxTokenVersionChoices.V1,
+        verbose_name=_('Token Version'),
+        help_text=_('Choose whether to authenticate using a v1 token or a v2 token key/secret pair.'),
+    )
+    token_key = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name=_('Token Key'),
+        help_text=_('Key portion of a NetBox v2 API token.'),
+    )
+    token_secret = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name=_('Token Secret'),
+        help_text=_('Secret portion of a NetBox v2 API token.'),
+    )
     verify_ssl = models.BooleanField(
         default=True,
         verbose_name=_("Verify SSL"),
@@ -194,6 +218,16 @@ class NetBoxEndpoint(EndpointBase):
                 name="netbox_proxbox_netboxendpoint_identity",
             ),
         )
+
+    @property
+    def has_configured_token(self) -> bool:
+        if self.token_version == NetBoxTokenVersionChoices.V2:
+            return bool(self.token_key and self.token_secret)
+        return self.token is not None
+
+    @property
+    def token_version_label(self) -> str:
+        return self.get_token_version_display()
 
     def get_absolute_url(self):
         return reverse("plugins:netbox_proxbox:netboxendpoint", args=[self.pk])
@@ -318,8 +352,6 @@ class SyncProcess(NetBoxModel):
 
     def get_absolute_url(self):
         return reverse("plugins:netbox_proxbox:syncprocess", args=[self.pk])
-
-
 __all__ = (
     "FastAPIEndpoint",
     "NetBoxEndpoint",

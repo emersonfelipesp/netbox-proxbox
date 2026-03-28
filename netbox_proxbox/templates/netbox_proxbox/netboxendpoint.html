@@ -26,16 +26,32 @@
                             <td>{{ object.port }}</td>
                         </tr>
                         <tr>
-                            <th scope="row">Username</th>
-                            <td>{{ object.username }}</td>
+                            <th scope="row">Domain</th>
+                            <td>{{ object.domain }}</td>
                         </tr>
                         <tr>
-                            <th scope="row">Mode</th>
-                            <td>{{ object.mode }}</td>
+                            <th scope="row">Token Version</th>
+                            <td>{{ object.token_version_label }}</td>
                         </tr>
                         <tr>
                             <th scope="row">Token</th>
-                            <td>{{ object.token }}</td>
+                            <td>
+                                {% if object.has_configured_token %}
+                                    <span class="badge text-bg-gray">Configured</span>
+                                {% else %}
+                                    <span class="badge text-bg-grey">Not configured</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Verify SSL</th>
+                            <td>
+                                {% if object.verify_ssl %}
+                                    <span class="text-success"><i class="mdi mdi-check-bold"></i></span>
+                                {% else %}
+                                    <span class="text-danger"><i class="mdi mdi-close-thick"></i></span>
+                                {% endif %}
+                            </td>
                         </tr>
                     </table>
                 </div>

@@ -7,6 +7,7 @@ from users.models import Token
 from virtualization.api.serializers_.nested import NestedVirtualMachineSerializer
 
 from netbox_proxbox.choices import (
+    NetBoxTokenVersionChoices,
     ProxmoxBackupFormatChoices,
     ProxmoxBackupSubtypeChoices,
     ProxmoxModeChoices,
@@ -148,7 +149,10 @@ class NetBoxEndpointSerializer(NetBoxModelSerializer):
             "ip_address",
             "domain",
             "port",
+            "token_version",
             "token",
+            "token_key",
+            "token_secret",
             "verify_ssl",
             "tags",
             "custom_fields",
@@ -156,6 +160,31 @@ class NetBoxEndpointSerializer(NetBoxModelSerializer):
             "last_updated",
         )
         brief_fields = ("id", "url", "display", "name", "domain", "port")
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+
+        token_version = attrs.get(
+            "token_version",
+            getattr(self.instance, "token_version", NetBoxTokenVersionChoices.V1),
+        )
+        token = attrs.get("token", getattr(self.instance, "token", None))
+        token_key = (attrs.get("token_key", getattr(self.instance, "token_key", "")) or "").strip()
+        token_secret = (attrs.get("token_secret", getattr(self.instance, "token_secret", "")) or "").strip()
+
+        if token_version == NetBoxTokenVersionChoices.V2:
+            if not token_key:
+                raise serializers.ValidationError({"token_key": "Token key is required when using a v2 token."})
+            if not token_secret:
+                raise serializers.ValidationError({"token_secret": "Token secret is required when using a v2 token."})
+            attrs["token"] = None
+        else:
+            if token is None:
+                raise serializers.ValidationError({"token": "API token is required when using a v1 token."})
+            attrs["token_key"] = ""
+            attrs["token_secret"] = ""
+
+        return attrs
 
 
 class FastAPIEndpointSerializer(NetBoxModelSerializer):
