@@ -220,14 +220,35 @@ class NetBoxEndpoint(EndpointBase):
         )
 
     @property
+    def effective_token_version(self) -> str:
+        token_obj = getattr(self, "token", None)
+        if token_obj is not None:
+            return NetBoxTokenVersionChoices.V2 if getattr(token_obj, "version", None) == 2 else NetBoxTokenVersionChoices.V1
+        return self.token_version
+
+    @property
+    def effective_token_value(self) -> str | None:
+        token_obj = getattr(self, "token", None)
+        if token_obj is not None:
+            if self.effective_token_version == NetBoxTokenVersionChoices.V2:
+                return getattr(token_obj, "key", None)
+            return getattr(token_obj, "plaintext", None) or getattr(token_obj, "key", None)
+
+        if self.effective_token_version == NetBoxTokenVersionChoices.V2:
+            return self.token_key or None
+        return None
+
+    @property
     def has_configured_token(self) -> bool:
-        if self.token_version == NetBoxTokenVersionChoices.V2:
+        if self.token is not None:
+            return True
+        if self.effective_token_version == NetBoxTokenVersionChoices.V2:
             return bool(self.token_key and self.token_secret)
-        return self.token is not None
+        return False
 
     @property
     def token_version_label(self) -> str:
-        return self.get_token_version_display()
+        return "v2 Token" if self.effective_token_version == NetBoxTokenVersionChoices.V2 else "v1 Token"
 
     def get_absolute_url(self):
         return reverse("plugins:netbox_proxbox:netboxendpoint", args=[self.pk])

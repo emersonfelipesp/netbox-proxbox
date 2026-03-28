@@ -164,6 +164,13 @@ def test_proxmox_endpoint_serializer_marks_secrets_write_only():
     assert extra_kwargs["token_value"]["write_only"] is True
 
 
+def test_netbox_endpoint_serializer_marks_token_secret_write_only():
+    module = _parse_module(SERIALIZERS_PATH)
+    class_node = _classdef(module, "NetBoxEndpointSerializer")
+    extra_kwargs = _meta_extra_kwargs(class_node)
+    assert extra_kwargs["token_secret"]["write_only"] is True
+
+
 def test_all_viewsets_use_netbox_model_viewset_and_plugin_filtersets():
     module = _parse_module(VIEWS_PATH)
 

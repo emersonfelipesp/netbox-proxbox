@@ -212,6 +212,10 @@ def netbox_endpoint():
         ip_address=SimpleNamespace(address="10.0.0.20/24"),
         port=443,
         token=SimpleNamespace(key="token-1"),
+        effective_token_value="token-1",
+        effective_token_version="v1",
+        token_key="",
+        token_secret="",
         verify_ssl=True,
     )
 
