@@ -15,7 +15,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
           cache: "pip"
 
       - name: Install dependencies
@@ -25,4 +25,3 @@ jobs:
 
       - name: Run contract-sensitive mocked tests
         run: pytest -q tests/test_keepalive_status.py tests/test_sync.py tests/test_cards.py
-
