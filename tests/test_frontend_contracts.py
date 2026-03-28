@@ -56,6 +56,8 @@ def test_home_javascript_passes_error_detail_to_badge_state():
     contents = _read("netbox_proxbox/static/netbox_proxbox/js/home.js")
     assert "setBadgeState(element, payload.status, payload.detail" in contents
     assert 'setBadgeState(element, "error", error.message' in contents
+    assert "proxmox-connection-error-" in contents
+    assert "payload.detail && badge" in contents
 
 
 def test_common_badge_state_supports_hover_tooltip_details():
