@@ -353,3 +353,44 @@ def test_sync_resource_prefers_backend_message_over_generic_internal_server_erro
 
     assert response.status_code == 503
     assert response.payload["detail"] == "Error while syncing virtual machines."
+
+
+def test_sync_full_update_surfaces_structured_backend_type_error(monkeypatch, fastapi_endpoint):
+    module = load_plugin_module(
+        "netbox_proxbox.views.sync",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+    )
+
+    class FailingResponse(ResponseStub):
+        text = (
+            '{"detail": "\'async for\' requires an object with __aiter__ method, got PluginsApp", '
+            '"message": "Error ensuring Proxbox tag"}'
+        )
+        headers = {"Content-Type": "application/json"}
+        url = "https://proxbox.local:8800/dcim/devices/create"
+
+        def raise_for_status(self):
+            err = requests.exceptions.HTTPError("500")
+            err.response = self
+            raise err
+
+    monkeypatch.setattr(
+        module.requests,
+        "get",
+        lambda *args, **kwargs: FailingResponse(
+            {
+                "detail": "'async for' requires an object with __aiter__ method, got PluginsApp",
+                "message": "Error ensuring Proxbox tag",
+            },
+            status_code=500,
+        ),
+    )
+
+    response = module.sync_full_update(_json_request())
+
+    assert response.status_code == 503
+    assert response.payload["stage"] == "devices"
+    assert response.payload["detail"] == (
+        "'async for' requires an object with __aiter__ method, got PluginsApp"
+    )
