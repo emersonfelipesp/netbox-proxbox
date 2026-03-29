@@ -1,5 +1,7 @@
 import { fetchJson, getCsrfToken, setBadgeState } from "./common.js";
 import WebSocketClient from "./websocket.js";
+import { handleDeviceSSEEvent } from "./device.js";
+import { handleVMSSEEvent } from "./virtual_machine.js";
 
 function initializeWebSocket() {
     const websocketEndpoint = window.proxboxConfig?.websocketEndpoint;
@@ -295,6 +297,20 @@ async function streamSyncEvents(syncKind, syncStreamUrl) {
             if (!data) {
                 continue;
             }
+
+            const step = data.step || data.payload?.object || "";
+            if (step === "device" && syncKind === "devices") {
+                handleDeviceSSEEvent(data);
+            } else if (step === "virtual_machine" && syncKind === "virtual-machines") {
+                handleVMSSEEvent(data);
+            } else if (syncKind === "full-update") {
+                if (step === "device") {
+                    handleDeviceSSEEvent(data);
+                } else if (step === "virtual_machine") {
+                    handleVMSSEEvent(data);
+                }
+            }
+
             const message = formatStreamMessage(syncKind, data, event);
             appendLogMessage(`${syncKind}: ${message}`);
             if (data.status === "started" || data.status === "progress") {

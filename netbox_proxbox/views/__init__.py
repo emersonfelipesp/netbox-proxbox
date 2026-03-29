@@ -126,16 +126,92 @@ class NodesView(View):
     template = "netbox_proxbox/devices.html"
 
     def get(self, request):
+        from dcim.models import Device
+        from django.contrib.contenttypes.models import ContentType
+        from netbox.models import Tag
+
+        from netbox_proxbox.models import FastAPIEndpoint
+
         plugin_configuration = getattr(configuration, "PLUGINS_CONFIG", {})
-        return render(request, self.template, {"configuration": plugin_configuration})
+        fastapi_endpoint = FastAPIEndpoint.objects.first()
+        fastapi_info = {}
+        if fastapi_endpoint:
+            fastapi_info = get_fastapi_url(fastapi_endpoint) or {}
+
+        proxbox_tag = Tag.objects.filter(slug="proxbox").first()
+        devices = []
+        if proxbox_tag:
+            device_content_type = ContentType.objects.get_for_model(Device)
+            tagged_device_ids = list(
+                proxbox_tag.tagged_items.filter(
+                    content_type=device_content_type
+                ).values_list("object_id", flat=True)[:100]
+            )
+            if tagged_device_ids:
+                devices = list(
+                    Device.objects.filter(id__in=tagged_device_ids)
+                    .select_related(
+                        "device_type__manufacturer", "role", "site", "tenant", "cluster"
+                    )
+                    .prefetch_related("interfaces__ip_addresses")
+                )
+
+        return render(
+            request,
+            self.template,
+            {
+                "configuration": plugin_configuration,
+                "fastapi_url": fastapi_info.get("http_url", ""),
+                "fastapi_websocket_url": fastapi_info.get("websocket_url", ""),
+                "devices": devices,
+            },
+        )
 
 
 class VirtualMachinesView(View):
     template = "netbox_proxbox/virtual_machines.html"
 
     def get(self, request):
+        from django.contrib.contenttypes.models import ContentType
+        from netbox.models import Tag
+        from virtualization.models import VirtualMachine
+
+        from netbox_proxbox.models import FastAPIEndpoint
+
         plugin_configuration = getattr(configuration, "PLUGINS_CONFIG", {})
-        return render(request, self.template, {"configuration": plugin_configuration})
+        fastapi_endpoint = FastAPIEndpoint.objects.first()
+        fastapi_info = {}
+        if fastapi_endpoint:
+            fastapi_info = get_fastapi_url(fastapi_endpoint) or {}
+
+        proxbox_tag = Tag.objects.filter(slug="proxbox").first()
+        virtual_machines = []
+        if proxbox_tag:
+            vm_content_type = ContentType.objects.get_for_model(VirtualMachine)
+            tagged_vm_ids = list(
+                proxbox_tag.tagged_items.filter(
+                    content_type=vm_content_type
+                ).values_list("object_id", flat=True)[:100]
+            )
+            if tagged_vm_ids:
+                virtual_machines = list(
+                    VirtualMachine.objects.filter(id__in=tagged_vm_ids)
+                    .select_related(
+                        "cluster__site", "role", "tenant", "platform", "tenant"
+                    )
+                    .prefetch_related("interfaces__ip_addresses")
+                )
+
+        return render(
+            request,
+            self.template,
+            {
+                "configuration": plugin_configuration,
+                "fastapi_url": fastapi_info.get("http_url", ""),
+                "fastapi_websocket_url": fastapi_info.get("websocket_url", ""),
+                "virtual_machines": virtual_machines,
+            },
+        )
 
 
 class ContributingView(View):

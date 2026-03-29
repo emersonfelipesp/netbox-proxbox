@@ -1,6 +1,6 @@
 <div id="device-div" class="form form-horizontal">
     <h2 id="proxmox-nodes-table" class="text-center">Nodes</h2>
-    <h3>Synced Devices (Nodes): <span id='synced-device-count'>0</span> / <span id='total-device-count'>0</span> (<span id='device-sync-percentage-ratio'>0</span>)</h3>
+    <h3>Synced Devices (Nodes): <span id='synced-device-count'>{% if devices %}{{ devices|length }}{% else %}0{% endif %}</span></h3>
     <div class="card">
         <div class="table-responsive" id="object_list">
             <div class="table-responsive">
@@ -9,24 +9,39 @@
                     <tr>
                         <th>Status</th>
                         <th>NetBox ID</th>
-                        <th>Node ID</th>
                         <th>Name</th>
-                        <th>Node Status</th>
+                        <th>Status</th>
                         <th>Role</th>
                         <th>Manufacturer</th>
                         <th>Type</th>
-                        <th>VM/CT Count</th>
-                        <th>IP Address</th>
+                        <th>Site</th>
                         <th>Cluster</th>
-                        <th>Disk Space (GB)</th>
+                        <th>Tenant</th>
                         <th></th>
                     </tr>
                     </thead>
                     <tbody id="device-table-data">
-                        <!-- Show it if no virtual machines synced. -->
-                        <tr>
-                            <td id="device-table-default-td" colspan="12" class="text-center text-muted">— No nodes could be synced with Proxmox —</td>
-                        </tr>
+                        {% if devices %}
+                            {% for device in devices %}
+                            <tr id="{{ device.name }}">
+                                <td><span class="badge text-bg-{{ device.status_color }}">{{ device.get_status_display }}</span></td>
+                                <td><a href="{% url 'dcim:device' device.pk %}">{{ device.pk }}</a></td>
+                                <td><a href="{% url 'dcim:device' device.pk %}">{{ device.name }}</a></td>
+                                <td><span class="badge text-bg-{{ device.status_color }}">{{ device.get_status_display }}</span></td>
+                                <td>{{ device.role|default:"—" }}</td>
+                                <td>{{ device.device_type.manufacturer|default:"—" }}</td>
+                                <td>{{ device.device_type|default:"—" }}</td>
+                                <td>{{ device.site|default:"—" }}</td>
+                                <td>{{ device.cluster|default:"—" }}</td>
+                                <td>{{ device.tenant|default:"—" }}</td>
+                                <td></td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td id="device-table-default-td" colspan="11" class="text-center text-muted">— No nodes synced with Proxbox —</td>
+                            </tr>
+                        {% endif %}
                     </tbody>
                 </table>
             </div>

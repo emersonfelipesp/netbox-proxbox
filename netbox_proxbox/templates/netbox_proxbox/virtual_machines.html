@@ -3,29 +3,44 @@
 
 {% block head %}
     <script>
-        const fastapiEndpoint = '{{ fastapi_url }}'
-        const websocketEndpoint = '{{ fastapi_websocket_url }}/ws'
+        window.proxboxConfig = {
+            fastapiEndpoint: "{{ fastapi_url|default:''|escapejs }}",
+            websocketEndpoint: "{{ fastapi_websocket_url|default:''|escapejs }}"
+        };
     </script>
-    <script type="module">
-        import ProxboxWebSocket from "{% static 'netbox_proxbox/js/websocket.js' %}";
-        window.ProxboxWebSocket = ProxboxWebSocket
-    </script>
+    <script type="module" src="{% static 'netbox_proxbox/js/virtual_machine.js' %}"></script>
+    <script type="module" src="{% static 'netbox_proxbox/js/home.js' %}"></script>
 {% endblock %}
 
 {% block content %}
-    <div class="d-flex justify-content-center flex-nowrap" style="margin-bottom: 15px;">
-        <h2>
-            Proxmox Virtual Machines and Containers
-        </h2>
-    </div>
+    <div class="row mb-3">
+        <div id="sync-progress-container" class="d-none sticky-top pt-2 mb-3" style="z-index: 1030;">
+            <div class="col-12">
+                <div class="card border-primary shadow-sm">
+                    <div class="card-body py-2">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <strong id="sync-progress-label">Sync in progress</strong>
+                            <span id="sync-progress-state" class="text-muted small">Working...</span>
+                        </div>
+                        <div class="progress mt-2" role="progressbar" aria-label="Sync progress indicator" aria-valuemin="0" aria-valuemax="100">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 100%;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-    <div style="margin-bottom: 15px;" class="d-flex justify-content-center noprint">
-        <form class="m-2" action="" onsubmit="window.ProxboxWebSocket.sendMessage('Sync Virtual Machines')">
-            {% if perms.netbox_proxbox.add_proxmoxvm %}
-                <button id="full-update-button" class="btn btn-primary">Sync Virtual Machines</button>
-            {% endif %}
-        </form>
-    </div>
+        <div align="center" id="full-update-error-message"></div>
 
-    {% include "netbox_proxbox/table/virtual_machines.html" %}
+        <div style="margin-bottom: 15px;" class="container noprint">
+            <form class="m-2" method="post" action="{% url 'plugins:netbox_proxbox:sync_virtual_machines' %}" data-sync-url="{% url 'plugins:netbox_proxbox:sync_virtual_machines' %}" data-sync-kind="virtual-machines">
+                {% csrf_token %}
+                <button id="sync-virtual-machines-button" type="submit" class="btn btn-primary" data-sync-url="{% url 'plugins:netbox_proxbox:sync_virtual_machines' %}" data-sync-stream-url="{% url 'plugins:netbox_proxbox:sync_virtual_machines_stream' %}" data-sync-kind="virtual-machines">Sync Virtual Machines</button>
+            </form>
+        </div>
+
+        {% include "netbox_proxbox/table/virtual_machines.html" %}
+
+        {% include "netbox_proxbox/home/log_messages.html" %}
+    </div>
 {% endblock %}
