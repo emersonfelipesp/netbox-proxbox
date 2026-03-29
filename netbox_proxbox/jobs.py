@@ -41,6 +41,8 @@ class ProxboxSyncJob(JobRunner):
             query_params["proxmox_endpoint_ids"] = ",".join(proxmox_endpoint_ids)
         if netbox_endpoint_ids:
             query_params["netbox_endpoint_ids"] = ",".join(netbox_endpoint_ids)
+        if sync_type == SyncTypeChoices.VIRTUAL_MACHINES_BACKUPS:
+            query_params["delete_nonexistent_backup"] = True
 
         if sync_type == SyncTypeChoices.ALL:
             payload, status = sync_full_update_resource(

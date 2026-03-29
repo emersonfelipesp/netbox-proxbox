@@ -20,6 +20,16 @@ from netbox_proxbox.views.error_utils import extract_backend_error_detail
 
 logger = logging.getLogger(__name__)
 
+# proxbox-api awaits the full backup sync in one GET; allow long read like the stream proxy.
+_LONG_RUNNING_BACKUP_PATH_MARKER = "virtualization/virtual-machines/backups/all/create"
+_LONG_HTTP_READ_TIMEOUT = (5, 3600)
+
+
+def _http_timeout_for_sync_path(path: str) -> float | tuple[int, int]:
+    if _LONG_RUNNING_BACKUP_PATH_MARKER in path:
+        return _LONG_HTTP_READ_TIMEOUT
+    return 5
+
 
 def _sse_error_frames(message: str, *, final_message: str = "Stream request failed."):
     yield "event: error\n"
@@ -67,6 +77,8 @@ def _request_backend_resource(
     context: dict,
     path: str,
     query_params: dict | None = None,
+    *,
+    timeout: float | tuple[int, int] = 5,
 ) -> tuple[dict, int]:
     fastapi_path = f"{context['http_url']}/{path}"
     requested_urls = []
@@ -88,7 +100,7 @@ def _request_backend_resource(
                 params=query_params,
                 headers=backend_headers,
                 verify=verify,
-                timeout=5,
+                timeout=timeout,
             )
             response.raise_for_status()
             payload = response.json() if hasattr(response, "json") else {}
@@ -179,10 +191,15 @@ def sync_resource(path: str, query_params: dict | None = None) -> tuple[dict, in
     if context is None or not context["http_url"]:
         return {"queued": False, "detail": "No FastAPI URL found."}, 404
 
-    return _request_backend_resource(context, path, query_params=query_params)
+    return _request_backend_resource(
+        context,
+        path,
+        query_params=query_params,
+        timeout=_http_timeout_for_sync_path(path),
+    )
 
 
-def sync_full_update_resource() -> tuple[dict, int]:
+def sync_full_update_resource(query_params: dict | None = None) -> tuple[dict, int]:
     context = _get_fastapi_request_context()
     if context is None or not context["http_url"]:
         return {"queued": False, "detail": "No FastAPI URL found."}, 404
@@ -196,7 +213,16 @@ def sync_full_update_resource() -> tuple[dict, int]:
     responses: dict[str, dict] = {}
 
     for stage, path in steps:
-        payload, status = _request_backend_resource(context, path)
+        step_params = dict(query_params or {})
+        if _LONG_RUNNING_BACKUP_PATH_MARKER in path:
+            step_params["delete_nonexistent_backup"] = True
+        qp = step_params if step_params else None
+        payload, status = _request_backend_resource(
+            context,
+            path,
+            query_params=qp,
+            timeout=_http_timeout_for_sync_path(path),
+        )
         requested_urls.extend(payload.get("requested_urls", []))
         if status >= 400:
             return {
@@ -221,7 +247,12 @@ def _sync_response(
     request, *, path: str, action_label: str, query_params: dict | None = None
 ):
     if path == "full-update":
-        payload, status = sync_full_update_resource()
+        merged_qp = {**(query_params or {})}
+        if request is not None and getattr(request, "GET", None):
+            merged_qp.update(dict(request.GET.items()))
+        payload, status = sync_full_update_resource(
+            query_params=merged_qp if merged_qp else None
+        )
     else:
         payload, status = sync_resource(path, query_params=query_params)
     if _wants_json_response(request):
