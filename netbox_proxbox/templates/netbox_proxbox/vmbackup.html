@@ -1,5 +1,4 @@
 {% extends 'generic/object.html' %}
-{% load i18n %}
 
 {% block content %}
     <div class="row mb-3">
@@ -23,7 +22,7 @@
                         </tr>
                         <tr>
                             <th scope="row">Size</th>
-                            <td>{{ object.size|default:"—"|intcomma }}</td>
+                            <td>{{ object.size|default:"—" }}</td>
                         </tr>
                         <tr>
                             <th scope="row">Verification State</th>
