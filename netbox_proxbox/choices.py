@@ -22,12 +22,14 @@ class SyncTypeChoices(ChoiceSet):
     key = "SyncProcess.sync_type"
 
     VIRTUAL_MACHINES = "virtual-machines"
+    VIRTUAL_MACHINES_DISKS = "vm-disks"
     VIRTUAL_MACHINES_BACKUPS = "vm-backups"
     DEVICES = "devices"
     ALL = "all"
 
     CHOICES = [
         (VIRTUAL_MACHINES, _("Virtual Machines"), "blue"),
+        (VIRTUAL_MACHINES_DISKS, _("VM Disks"), "orange"),
         (VIRTUAL_MACHINES_BACKUPS, _("Virtual Machines Backups"), "purple"),
         (DEVICES, _("Devices"), "green"),
         (ALL, _("All"), "red"),
