@@ -47,8 +47,55 @@ class HttpRequest:
     pass
 
 
-class View:
+class Http404(Exception):
     pass
+
+
+class View:
+    """Minimal Django CBV stub for plugin view tests."""
+
+    http_method_names = [
+        "get",
+        "post",
+        "put",
+        "patch",
+        "delete",
+        "head",
+        "options",
+        "trace",
+    ]
+
+    @classmethod
+    def as_view(cls, **initkwargs):
+        def view(request, *args, **kwargs):
+            self = cls(**initkwargs)
+            self.request = request
+            self.args = args
+            self.kwargs = kwargs
+            return self.dispatch(request, *args, **kwargs)
+
+        view.view_class = cls
+        view.view_initkwargs = initkwargs
+        return view
+
+    def dispatch(self, request, *args, **kwargs):
+        if request is None:
+            request = SimpleNamespace(
+                method="GET",
+                user=SimpleNamespace(
+                    is_authenticated=True,
+                    has_perms=lambda *a, **k: True,
+                    has_perm=lambda *a, **k: True,
+                ),
+            )
+        method = (getattr(request, "method", "GET") or "GET").lower()
+        if method in self.http_method_names:
+            handler = getattr(self, method, self.http_method_not_allowed)
+            return handler(request, *args, **kwargs)
+        return self.http_method_not_allowed(request, *args, **kwargs)
+
+    def http_method_not_allowed(self, request, *args, **kwargs):
+        return HttpResponse(status=405)
 
 
 class DummyPluginConfig:
@@ -87,10 +134,22 @@ def _manager(*, first=None, objects_by_pk=None, does_not_exist=None):
     objects_by_pk = objects_by_pk or {}
 
     class Manager:
+        def restrict(self, user, action):
+            return self
+
         def first(self):
             return first
 
-        def get(self, pk):
+        def exists(self):
+            return first is not None or bool(objects_by_pk)
+
+        def filter(self, *args, **kwargs):
+            return self
+
+        def get(self, *args, **kwargs):
+            pk = kwargs.get("pk")
+            if pk is None and args:
+                pk = args[0]
             if pk in objects_by_pk:
                 return objects_by_pk[pk]
             raise does_not_exist()
@@ -101,6 +160,12 @@ def _manager(*, first=None, objects_by_pk=None, does_not_exist=None):
 def _make_model_class(name: str, *, first=None, objects_by_pk=None):
     does_not_exist = type("DoesNotExist", (Exception,), {})
     cls = type(name, (), {"DoesNotExist": does_not_exist})
+    _mn = {
+        "FastAPIEndpoint": "fastapiendpoint",
+        "NetBoxEndpoint": "netboxendpoint",
+        "ProxmoxEndpoint": "proxmoxendpoint",
+    }.get(name, name.lower())
+    cls._meta = SimpleNamespace(app_label="netbox_proxbox", model_name=_mn)
     cls.objects = _manager(
         first=first,
         objects_by_pk=objects_by_pk,
@@ -124,6 +189,7 @@ def load_plugin_module(
     django_http.HttpResponse = HttpResponse
     django_http.JsonResponse = JsonResponse
     django_http.StreamingHttpResponse = StreamingHttpResponse
+    django_http.Http404 = Http404
 
     django_shortcuts = types.ModuleType("django.shortcuts")
     django_shortcuts.render = lambda request, template_name, context=None: {
@@ -131,6 +197,18 @@ def load_plugin_module(
         "context": context or {},
     }
     django_shortcuts.redirect = lambda name: {"redirect": name}
+
+    def get_object_or_404(klass, *args, **kwargs):
+        try:
+            if hasattr(klass, "get"):
+                return klass.get(*args, **kwargs)
+        except Exception as exc:
+            if type(exc).__name__ == "DoesNotExist":
+                raise Http404 from exc
+            raise
+        raise Http404()
+
+    django_shortcuts.get_object_or_404 = get_object_or_404
 
     django_views = types.ModuleType("django.views")
     django_views.View = View
@@ -152,11 +230,52 @@ def load_plugin_module(
     django_auth_decorators.login_required = lambda func: func
     django_auth_mixins = types.ModuleType("django.contrib.auth.mixins")
 
+    class AccessMixin:
+        def handle_no_permission(self):
+            return HttpResponse(status=403)
+
     class LoginRequiredMixin:
         pass
 
+    django_auth_mixins.AccessMixin = AccessMixin
     django_auth_mixins.LoginRequiredMixin = LoginRequiredMixin
     django_contrib.auth = django_auth
+
+    utilities_permissions = types.ModuleType("utilities.permissions")
+    utilities_permissions.get_permission_for_model = lambda model, action: (
+        f"{getattr(model._meta, 'app_label', 'stub')}.{action}_"
+        f"{getattr(model._meta, 'model_name', 'stub')}"
+    )
+
+    utilities_views = types.ModuleType("utilities.views")
+
+    class ConditionalLoginRequiredMixin:
+        def dispatch(self, request, *args, **kwargs):
+            return super().dispatch(request, *args, **kwargs)
+
+    class TokenConditionalLoginRequiredMixin:
+        def dispatch(self, request, *args, **kwargs):
+            return super().dispatch(request, *args, **kwargs)
+
+    class ContentTypePermissionRequiredMixin:
+        additional_permissions = []
+
+        def get_required_permission(self):
+            return "stub.view_stub"
+
+        def has_permission(self):
+            return True
+
+        def dispatch(self, request, *args, **kwargs):
+            if not self.has_permission():
+                return HttpResponse(status=403)
+            return super().dispatch(request, *args, **kwargs)
+
+    utilities_views.ConditionalLoginRequiredMixin = ConditionalLoginRequiredMixin
+    utilities_views.TokenConditionalLoginRequiredMixin = TokenConditionalLoginRequiredMixin
+    utilities_views.ContentTypePermissionRequiredMixin = (
+        ContentTypePermissionRequiredMixin
+    )
 
     netbox_module = types.ModuleType("netbox")
     netbox_plugins = types.ModuleType("netbox.plugins")
@@ -178,6 +297,7 @@ def load_plugin_module(
         first=proxmox_endpoint,
         objects_by_pk={1: proxmox_endpoint} if proxmox_endpoint is not None else {},
     )
+    models_module.SyncProcess = _make_model_class("SyncProcess")
 
     utils_module = types.ModuleType("netbox_proxbox.utils")
     utils_module.get_fastapi_url = get_fastapi_url or (
@@ -220,6 +340,8 @@ def load_plugin_module(
         "netbox.plugins": netbox_plugins,
         "netbox_proxbox.models": models_module,
         "netbox_proxbox.utils": utils_module,
+        "utilities.permissions": utilities_permissions,
+        "utilities.views": utilities_views,
     }
 
     for name, module in stub_modules.items():

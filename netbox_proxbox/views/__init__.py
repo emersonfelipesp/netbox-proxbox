@@ -1,5 +1,6 @@
 """Implement the plugin dashboard pages and re-export major view entrypoints."""
 
+from django.contrib.auth.mixins import AccessMixin
 from django.shortcuts import render
 from django.views import View
 
@@ -8,6 +9,15 @@ from netbox import configuration
 from netbox_proxbox import ProxboxConfig, github
 from netbox_proxbox.models import FastAPIEndpoint, NetBoxEndpoint, ProxmoxEndpoint
 from netbox_proxbox.utils import get_fastapi_url
+from netbox_proxbox.views.proxbox_access import (
+    permission_view_fastapi_endpoint,
+    user_may_access_proxbox_dashboard,
+)
+from utilities.views import (
+    ConditionalLoginRequiredMixin,
+    ContentTypePermissionRequiredMixin,
+    TokenConditionalLoginRequiredMixin,
+)
 
 from .cards import get_proxmox_card
 from .endpoints import (
@@ -53,7 +63,22 @@ from .vm_backup import (
 )
 
 
-class HomeView(View):
+class RequireProxboxDashboardEndpointViewMixin(AccessMixin):
+    """Require view permission on at least one plugin endpoint model when logged in."""
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.is_authenticated and not user_may_access_proxbox_dashboard(
+            request.user
+        ):
+            return self.handle_no_permission()
+        return super().dispatch(request, *args, **kwargs)
+
+
+class HomeView(
+    ConditionalLoginRequiredMixin,
+    RequireProxboxDashboardEndpointViewMixin,
+    View,
+):
     template_name = "netbox_proxbox/home.html"
 
     def get(self, request):
@@ -61,13 +86,13 @@ class HomeView(View):
         fastapi_example_url = "https://example.fastapi.com"
         fastapi_example_websocket_url = "wss://example.fastapi.com/ws"
 
-        proxmox_endpoint_obj = ProxmoxEndpoint.objects.all()
-        netbox_endpoint_obj = NetBoxEndpoint.objects.all()
-        fastapi_endpoint_obj = FastAPIEndpoint.objects.all()
+        proxmox_endpoint_obj = ProxmoxEndpoint.objects.restrict(request.user, "view")
+        netbox_endpoint_obj = NetBoxEndpoint.objects.restrict(request.user, "view")
+        fastapi_endpoint_obj = FastAPIEndpoint.objects.restrict(request.user, "view")
 
         fastapi_info = {}
-        if fastapi_endpoint_obj:
-            fastapi_info = get_fastapi_url(fastapi_endpoint_obj[0]) or {}
+        if fastapi_endpoint_obj.exists():
+            fastapi_info = get_fastapi_url(fastapi_endpoint_obj.first()) or {}
             if not isinstance(fastapi_info, dict):
                 fastapi_info = {}
 
@@ -93,11 +118,20 @@ class HomeView(View):
         )
 
 
-class TestWebSocketView(View):
+class TestWebSocketView(
+    TokenConditionalLoginRequiredMixin,
+    ContentTypePermissionRequiredMixin,
+    View,
+):
     template_name = "netbox_proxbox/test/websocket.html"
 
+    def get_required_permission(self):
+        return permission_view_fastapi_endpoint()
+
     def get(self, request):
-        fastapi_object = FastAPIEndpoint.objects.first()
+        fastapi_object = FastAPIEndpoint.objects.restrict(
+            request.user, "view"
+        ).first()
         if fastapi_object is None:
             return render(request, self.template_name, {})
 
@@ -123,7 +157,7 @@ class TestWebSocketView(View):
         )
 
 
-class NodesView(View):
+class NodesView(ConditionalLoginRequiredMixin, View):
     template = "netbox_proxbox/devices.html"
 
     def get(self, request):
@@ -134,7 +168,9 @@ class NodesView(View):
         from netbox_proxbox.models import FastAPIEndpoint
 
         plugin_configuration = getattr(configuration, "PLUGINS_CONFIG", {})
-        fastapi_endpoint = FastAPIEndpoint.objects.first()
+        fastapi_endpoint = FastAPIEndpoint.objects.restrict(
+            request.user, "view"
+        ).first()
         fastapi_info = {}
         if fastapi_endpoint:
             fastapi_info = get_fastapi_url(fastapi_endpoint) or {}
@@ -150,7 +186,8 @@ class NodesView(View):
             )
             if tagged_device_ids:
                 devices = list(
-                    Device.objects.filter(id__in=tagged_device_ids)
+                    Device.objects.restrict(request.user, "view")
+                    .filter(id__in=tagged_device_ids)
                     .select_related(
                         "device_type__manufacturer", "role", "site", "tenant", "cluster"
                     )
@@ -169,7 +206,7 @@ class NodesView(View):
         )
 
 
-class VirtualMachinesView(View):
+class VirtualMachinesView(ConditionalLoginRequiredMixin, View):
     template = "netbox_proxbox/virtual_machines.html"
 
     def get(self, request):
@@ -180,7 +217,9 @@ class VirtualMachinesView(View):
         from netbox_proxbox.models import FastAPIEndpoint
 
         plugin_configuration = getattr(configuration, "PLUGINS_CONFIG", {})
-        fastapi_endpoint = FastAPIEndpoint.objects.first()
+        fastapi_endpoint = FastAPIEndpoint.objects.restrict(
+            request.user, "view"
+        ).first()
         fastapi_info = {}
         if fastapi_endpoint:
             fastapi_info = get_fastapi_url(fastapi_endpoint) or {}
@@ -196,7 +235,8 @@ class VirtualMachinesView(View):
             )
             if tagged_vm_ids:
                 virtual_machines = list(
-                    VirtualMachine.objects.filter(id__in=tagged_vm_ids)
+                    VirtualMachine.objects.restrict(request.user, "view")
+                    .filter(id__in=tagged_vm_ids)
                     .select_related("site", "cluster", "role", "tenant", "platform")
                     .prefetch_related("interfaces__ip_addresses")
                 )
@@ -213,7 +253,7 @@ class VirtualMachinesView(View):
         )
 
 
-class ContributingView(View):
+class ContributingView(ConditionalLoginRequiredMixin, View):
     template_name = "netbox_proxbox/contributing.html"
 
     def get(self, request):
@@ -227,7 +267,7 @@ class ContributingView(View):
         )
 
 
-class CommunityView(View):
+class CommunityView(ConditionalLoginRequiredMixin, View):
     template_name = "netbox_proxbox/community.html"
 
     def get(self, request):

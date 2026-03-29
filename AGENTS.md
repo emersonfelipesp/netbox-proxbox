@@ -20,6 +20,10 @@ When implementing or changing behavior, prefer solutions in this order:
 
 Do **not** add new third-party PyPI dependencies to replace what NetBox or Django already provides (forms, widgets, routing, auth, REST patterns). Existing runtime deps in `pyproject.toml` (for example `requests`, `websockets`, optional CLI extras) are fine; avoid piling on more libraries for the same problems.
 
+## Security
+
+Use NetBox view mixins from `utilities.views` (`ConditionalLoginRequiredMixin`, `TokenConditionalLoginRequiredMixin`, `ContentTypePermissionRequiredMixin`) for custom routes; enforce object visibility with `QuerySet.restrict()`. Permission strings for ProxBox-specific operations are centralized in [`netbox_proxbox/views/proxbox_access.py`](./netbox_proxbox/views/proxbox_access.py). Details: [`CLAUDE.md`](./CLAUDE.md) (Security and permissions).
+
 ---
 
 Read [`CLAUDE.md`](./CLAUDE.md) first for the plugin architecture and the full documentation map. Use the lower-level `CLAUDE.md` files when working in a specific directory or when changing only one layer of the plugin.

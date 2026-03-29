@@ -6,9 +6,9 @@ import logging
 import time
 
 import requests
-from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
-from django.views.decorators.http import require_GET
+from django.shortcuts import get_object_or_404
+from django.views import View
 
 from netbox_proxbox.models import FastAPIEndpoint, NetBoxEndpoint, ProxmoxEndpoint
 from netbox_proxbox.utils import (
@@ -21,6 +21,7 @@ from netbox_proxbox.views.error_utils import (
     extract_backend_error_detail,
     extract_proxmox_backend_error_detail,
 )
+from utilities.views import TokenConditionalLoginRequiredMixin
 
 
 logger = logging.getLogger(__name__)
@@ -362,13 +363,24 @@ class ServiceStatus:
         return status
 
 
-@login_required
-@require_GET
-def get_service_status(request, service: str, pk: int) -> JsonResponse:
+class GetServiceStatusView(TokenConditionalLoginRequiredMixin, View):
+    """JSON keepalive; object visibility enforced via QuerySet.restrict per service."""
+
+    http_method_names = ["get", "head", "options"]
+
+    def get(self, request, service: str, pk: int) -> JsonResponse:
+        return _get_service_status_impl(request, service, pk)
+
+
+def _get_service_status_impl(request, service: str, pk: int) -> JsonResponse:
     status = "unknown"
     service_status = ServiceStatus()
 
     if service == "fastapi":
+        get_object_or_404(
+            FastAPIEndpoint.objects.restrict(request.user, "view"),
+            pk=pk,
+        )
         fastapi_response = service_status.fastapi_status(pk)
         status = "success" if fastapi_response.get("connected") else "error"
         payload: dict = {"status": status}
@@ -376,7 +388,18 @@ def get_service_status(request, service: str, pk: int) -> JsonResponse:
             payload["detail"] = fastapi_response["detail"]
         return JsonResponse(payload)
 
-    fastapi_object = FastAPIEndpoint.objects.first()
+    if service == "netbox":
+        get_object_or_404(
+            NetBoxEndpoint.objects.restrict(request.user, "view"),
+            pk=pk,
+        )
+    elif service == "proxmox":
+        get_object_or_404(
+            ProxmoxEndpoint.objects.restrict(request.user, "view"),
+            pk=pk,
+        )
+
+    fastapi_object = FastAPIEndpoint.objects.restrict(request.user, "view").first()
     if fastapi_object is None:
         logger.error("No FastAPI endpoints found")
         return JsonResponse(
@@ -435,3 +458,6 @@ def get_service_status(request, service: str, pk: int) -> JsonResponse:
         payload["http_status"] = service_status.last_error_http_status
 
     return JsonResponse(payload)
+
+
+get_service_status = GetServiceStatusView.as_view()
