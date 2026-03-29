@@ -80,6 +80,7 @@ def test_home_javascript_passes_error_detail_to_badge_state():
     assert "request completed" in contents
     assert "streamSyncEvents" in contents
     assert 'Accept: "text/event-stream"' in contents
+    assert "await response.text()" in contents
 
 
 def test_common_badge_state_supports_hover_tooltip_details():

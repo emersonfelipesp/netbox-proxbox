@@ -113,51 +113,58 @@ def _iter_backend_sse_lines(
     path: str,
     query_params: dict | None = None,
 ) -> Generator[str, None, None]:
-    backend_headers = context.get("headers") or {}
-    request_candidates = [
-        (f"{context['http_url']}/{path}", context["verify_ssl"]),
-    ]
-    fallback_url = context.get("ip_address_url")
-    if fallback_url:
-        fallback_path = f"{fallback_url}/{path}"
-        if fallback_path != request_candidates[0][0]:
-            request_candidates.append((fallback_path, context["verify_ssl"]))
+    try:
+        backend_headers = context.get("headers") or {}
+        request_candidates = [
+            (f"{context['http_url']}/{path}", context["verify_ssl"]),
+        ]
+        fallback_url = context.get("ip_address_url")
+        if fallback_url:
+            fallback_path = f"{fallback_url}/{path}"
+            if fallback_path != request_candidates[0][0]:
+                request_candidates.append((fallback_path, context["verify_ssl"]))
 
-    last_error = None
-    for url, verify in request_candidates:
-        try:
-            with requests.get(
-                url,
-                params=query_params,
-                headers=backend_headers,
-                verify=verify,
-                timeout=(5, 3600),
-                stream=True,
-            ) as response:
-                response.raise_for_status()
-                for raw_line in response.iter_lines(decode_unicode=True):
-                    if raw_line is None:
-                        continue
-                    line = str(raw_line)
-                    yield f"{line}\n"
-                return
-        except requests.exceptions.RequestException as exc:
-            detail, _ = extract_backend_error_detail(exc)
-            last_error = detail
-            logger.error("Sync stream request failed for %s via %s: %s", path, url, exc)
-            if getattr(exc, "response", None) is not None:
-                break
-        except Exception as exc:  # pragma: no cover
-            last_error = str(exc)
-            logger.error(
-                "Unexpected sync stream error for %s via %s: %s", path, url, exc
-            )
+        last_error = None
+        for url, verify in request_candidates:
+            try:
+                with requests.get(
+                    url,
+                    params=query_params,
+                    headers=backend_headers,
+                    verify=verify,
+                    timeout=(5, 3600),
+                    stream=True,
+                ) as response:
+                    response.raise_for_status()
+                    for raw_line in response.iter_lines(decode_unicode=True):
+                        if raw_line is None:
+                            continue
+                        line = str(raw_line)
+                        yield f"{line}\n"
+                    return
+            except requests.exceptions.RequestException as exc:
+                detail, _ = extract_backend_error_detail(exc)
+                last_error = detail
+                logger.exception("Sync stream request failed for %s via %s", path, url)
+                if getattr(exc, "response", None) is not None:
+                    break
+            except Exception as exc:  # pragma: no cover
+                last_error = str(exc)
+                logger.exception(
+                    "Unexpected sync stream error for %s via %s", path, url
+                )
 
-    payload = last_error or "Unable to reach the ProxBox backend stream."
-    yield "event: error\n"
-    yield f"data: {json.dumps({'step': 'stream', 'status': 'failed', 'error': payload})}\n\n"
-    yield "event: complete\n"
-    yield 'data: {"ok": false, "message": "Stream request failed."}\n\n'
+        payload = last_error or "Unable to reach the ProxBox backend stream."
+        yield "event: error\n"
+        yield f"data: {json.dumps({'step': 'stream', 'status': 'failed', 'error': payload})}\n\n"
+        yield "event: complete\n"
+        yield 'data: {"ok": false, "message": "Stream request failed."}\n\n'
+    except Exception as exc:  # pragma: no cover
+        logger.exception("Stream proxy crashed while handling %s", path)
+        yield "event: error\n"
+        yield f"data: {json.dumps({'step': 'stream', 'status': 'failed', 'error': str(exc)})}\n\n"
+        yield "event: complete\n"
+        yield 'data: {"ok": false, "message": "Stream proxy failed."}\n\n'
 
 
 def sync_resource(path: str, query_params: dict | None = None) -> tuple[dict, int]:

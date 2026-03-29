@@ -235,7 +235,16 @@ async function streamSyncEvents(syncKind, syncStreamUrl) {
         },
     });
     if (!response.ok || !response.body) {
-        throw new Error(`Stream request failed with status ${response.status}`);
+        let detail = "";
+        try {
+            detail = await response.text();
+        } catch {
+            detail = "";
+        }
+        const message = detail && detail.trim().length > 0
+            ? `Stream request failed with status ${response.status}: ${detail.slice(0, 500)}`
+            : `Stream request failed with status ${response.status}`;
+        throw new Error(message);
     }
 
     const reader = response.body.getReader();
