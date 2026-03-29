@@ -8,13 +8,17 @@ from collections.abc import Generator
 
 import requests
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.http import StreamingHttpResponse
 from django.shortcuts import redirect
-from django.views.decorators.http import require_http_methods
+from django.views import View
 
 from netbox_proxbox.models import FastAPIEndpoint
+from netbox_proxbox.views.proxbox_access import permission_change_fastapi_endpoint
+from utilities.views import (
+    ContentTypePermissionRequiredMixin,
+    TokenConditionalLoginRequiredMixin,
+)
 from netbox_proxbox.utils import get_backend_auth_headers, get_fastapi_url
 from netbox_proxbox.views.error_utils import extract_backend_error_detail
 
@@ -305,79 +309,98 @@ def _sync_stream_response(
         return response
 
 
-@login_required
-@require_http_methods(["GET", "POST"])
-def sync_devices(request):
-    return _sync_response(
-        request,
-        path="dcim/devices/create",
-        action_label="Devices",
-    )
+class _ProxboxSyncActionView(
+    TokenConditionalLoginRequiredMixin,
+    ContentTypePermissionRequiredMixin,
+    View,
+):
+    """POST/GET sync trigger; requires change on FastAPIEndpoint (backend integration)."""
+
+    http_method_names = ["get", "post", "head", "options"]
+    sync_path: str = ""
+    action_label: str = ""
+    sync_query_params: dict | None = None
+
+    def get_required_permission(self):
+        return permission_change_fastapi_endpoint()
+
+    def get(self, request, *args, **kwargs):
+        return _sync_response(
+            request,
+            path=self.sync_path,
+            action_label=self.action_label,
+            query_params=self.sync_query_params,
+        )
+
+    def post(self, request, *args, **kwargs):
+        return self.get(request, *args, **kwargs)
 
 
-@login_required
-@require_http_methods(["GET", "POST"])
-def sync_virtual_machines(request):
-    return _sync_response(
-        request,
-        path="virtualization/virtual-machines/create",
-        action_label="Virtual machines",
-    )
+class SyncDevicesView(_ProxboxSyncActionView):
+    sync_path = "dcim/devices/create"
+    action_label = "Devices"
 
 
-@login_required
-@require_http_methods(["GET", "POST"])
-def sync_full_update(request):
-    return _sync_response(
-        request,
-        path="full-update",
-        action_label="Full update",
-    )
+class SyncVirtualMachinesView(_ProxboxSyncActionView):
+    sync_path = "virtualization/virtual-machines/create"
+    action_label = "Virtual machines"
 
 
-@login_required
-@require_http_methods(["GET", "POST"])
-def sync_vm_backups(request):
-    return _sync_response(
-        request,
-        path="virtualization/virtual-machines/backups/all/create",
-        action_label="VM backups",
-        query_params={"delete_nonexistent_backup": True},
-    )
+class SyncFullUpdateView(_ProxboxSyncActionView):
+    sync_path = "full-update"
+    action_label = "Full update"
 
 
-@login_required
-@require_http_methods(["GET"])
-def sync_vm_backups_stream(request):
-    return _sync_stream_response(
-        request,
-        path="virtualization/virtual-machines/backups/all/create",
-        query_params={"delete_nonexistent_backup": True},
-    )
+class SyncVmBackupsView(_ProxboxSyncActionView):
+    sync_path = "virtualization/virtual-machines/backups/all/create"
+    action_label = "VM backups"
+    sync_query_params = {"delete_nonexistent_backup": True}
 
 
-@login_required
-@require_http_methods(["GET"])
-def sync_devices_stream(request):
-    return _sync_stream_response(
-        request,
-        path="dcim/devices/create",
-    )
+class _ProxboxSyncStreamView(
+    TokenConditionalLoginRequiredMixin,
+    ContentTypePermissionRequiredMixin,
+    View,
+):
+    """SSE proxy; same permission as sync triggers."""
+
+    http_method_names = ["get", "head", "options"]
+    stream_path: str = ""
+    stream_query_params: dict | None = None
+
+    def get_required_permission(self):
+        return permission_change_fastapi_endpoint()
+
+    def get(self, request, *args, **kwargs):
+        return _sync_stream_response(
+            request,
+            path=self.stream_path,
+            query_params=self.stream_query_params,
+        )
 
 
-@login_required
-@require_http_methods(["GET"])
-def sync_virtual_machines_stream(request):
-    return _sync_stream_response(
-        request,
-        path="virtualization/virtual-machines/create",
-    )
+class SyncDevicesStreamView(_ProxboxSyncStreamView):
+    stream_path = "dcim/devices/create"
 
 
-@login_required
-@require_http_methods(["GET"])
-def sync_full_update_stream(request):
-    return _sync_stream_response(
-        request,
-        path="full-update",
-    )
+class SyncVirtualMachinesStreamView(_ProxboxSyncStreamView):
+    stream_path = "virtualization/virtual-machines/create"
+
+
+class SyncVmBackupsStreamView(_ProxboxSyncStreamView):
+    stream_path = "virtualization/virtual-machines/backups/all/create"
+    stream_query_params = {"delete_nonexistent_backup": True}
+
+
+class SyncFullUpdateStreamView(_ProxboxSyncStreamView):
+    stream_path = "full-update"
+
+
+sync_devices = SyncDevicesView.as_view()
+sync_virtual_machines = SyncVirtualMachinesView.as_view()
+sync_full_update = SyncFullUpdateView.as_view()
+sync_vm_backups = SyncVmBackupsView.as_view()
+sync_devices_stream = SyncDevicesStreamView.as_view()
+sync_virtual_machines_stream = SyncVirtualMachinesStreamView.as_view()
+sync_vm_backups_stream = SyncVmBackupsStreamView.as_view()
+sync_full_update_stream = SyncFullUpdateStreamView.as_view()

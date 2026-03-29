@@ -8,12 +8,16 @@ import threading
 from queue import Queue
 
 import websockets
-from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.views import View
 
 from netbox_proxbox.models import FastAPIEndpoint
+from netbox_proxbox.views.proxbox_access import permission_view_fastapi_endpoint
+from utilities.views import (
+    ContentTypePermissionRequiredMixin,
+    TokenConditionalLoginRequiredMixin,
+)
 from netbox_proxbox.utils import get_fastapi_url
 
 
@@ -87,8 +91,15 @@ def send_message(message):
     message_queue.put(message)
 
 
-class WebSocketView(LoginRequiredMixin, View):
+class WebSocketView(
+    TokenConditionalLoginRequiredMixin,
+    ContentTypePermissionRequiredMixin,
+    View,
+):
     template_name = "netbox_proxbox/websocket_page.html"
+
+    def get_required_permission(self):
+        return permission_view_fastapi_endpoint()
 
     def get(self, request, message):
         json_response = request.GET.get("json_response", "false").lower() == "true"

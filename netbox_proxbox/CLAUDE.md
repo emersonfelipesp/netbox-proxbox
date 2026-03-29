@@ -13,6 +13,7 @@ This package contains the actual NetBox plugin. It defines the plugin config, UR
 - [`utils.py`](./utils.py): URL and host helpers, especially for the FastAPI backend and mkcert-aware local TLS handling.
 - [`github.py`](./github.py): fetches markdown content from GitHub for the contributing page.
 - [`websocket_client.py`](./websocket_client.py): long-lived WebSocket client, message queue, and HTTP view used to stream backend messages into NetBox pages.
+- [`views/proxbox_access.py`](./views/proxbox_access.py): canonical `get_permission_for_model()` helpers for custom views (sync, jobs, WebSocket, dashboard gate).
 - Child directories: models, forms, tables, views, api, migrations, templates, and static assets.
 
 ## Data Flow

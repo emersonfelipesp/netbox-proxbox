@@ -1,12 +1,16 @@
 """View for scheduling a ProxBox sync job."""
 
 from django.contrib import messages
-from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import redirect, render
 from django.views import View
 
 from netbox_proxbox.forms.schedule_sync import ScheduleSyncForm
 from netbox_proxbox.jobs import ProxboxSyncJob
+from netbox_proxbox.views.proxbox_access import permission_add_sync_process
+from utilities.views import (
+    ContentTypePermissionRequiredMixin,
+    TokenConditionalLoginRequiredMixin,
+)
 
 __all__ = ("ScheduleSyncView",)
 
@@ -14,7 +18,14 @@ __all__ = ("ScheduleSyncView",)
 _QUEUE_NAME = "netbox_proxbox.sync"
 
 
-class ScheduleSyncView(LoginRequiredMixin, View):
+class ScheduleSyncView(
+    TokenConditionalLoginRequiredMixin,
+    ContentTypePermissionRequiredMixin,
+    View,
+):
+    def get_required_permission(self):
+        return permission_add_sync_process()
+
     template_name = "netbox_proxbox/schedule_sync.html"
 
     def get(self, request):
