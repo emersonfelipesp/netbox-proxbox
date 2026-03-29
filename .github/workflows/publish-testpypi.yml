@@ -1,0 +1,158 @@
+name: Release validation and publish
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prepare-release:
+    name: prepare artifacts + metadata
+    runs-on: ubuntu-latest
+    outputs:
+      package_name: ${{ steps.meta.outputs.package_name }}
+      version: ${{ steps.meta.outputs.version }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Validate package metadata and tag
+        id: meta
+        env:
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+        run: |
+          python - <<'PY'
+          import os
+          import pathlib
+          import tomllib
+
+          data = tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8'))
+          project_name = data['project']['name']
+          version = data['project']['version']
+          tag = os.getenv('GITHUB_REF_NAME', '')
+          event = os.getenv('GITHUB_EVENT_NAME', '')
+          if project_name != 'netbox-proxbox':
+              raise SystemExit(f'Expected project name netbox-proxbox, got {project_name!r}')
+          if event == 'push' and tag and tag != f'v{version}':
+              raise SystemExit(f'Tag/version mismatch: tag={tag!r}, version={version!r}')
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as fh:
+              fh.write(f'package_name={project_name}\nversion={version}\n')
+          PY
+
+      - name: Build distribution
+        run: uv run --with build python -m build
+
+      - name: Upload dist artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/*
+          if-no-files-found: error
+
+  publish-testpypi:
+    name: publish to TestPyPI
+    needs: prepare-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Download dist artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist
+
+      - name: Upload to TestPyPI
+        env:
+          TEST_PYPI_USERNAME: ${{ secrets.TEST_PYPI_USERNAME }}
+          TEST_PYPI_TOKEN: ${{ secrets.TEST_PYPI_TOKEN }}
+        run: |
+          uv run --with twine python -m twine upload \
+            --non-interactive \
+            --skip-existing \
+            --repository-url https://test.pypi.org/legacy/ \
+            --username "$TEST_PYPI_USERNAME" \
+            --password "$TEST_PYPI_TOKEN" \
+            dist/*
+
+  validate-testpypi:
+    name: validate TestPyPI / py${{ matrix.python-version }}
+    needs: [prepare-release, publish-testpypi]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.12', '3.13']
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Sync development environment
+        run: uv sync --extra test --extra dev --locked
+
+      - name: Compile package
+        run: uv run python -m compileall netbox_proxbox tests
+
+      - name: Run full test suite
+        run: uv run pytest --cov=netbox_proxbox --cov-report=term-missing --cov-report=xml tests
+
+  publish-pypi:
+    name: publish to PyPI
+    if: github.event_name == 'push'
+    needs: [prepare-release, validate-testpypi]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Download dist artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist
+
+      - name: Upload to PyPI
+        env:
+          PYPI_USERNAME: ${{ secrets.PYPI_USERNAME }}
+          PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
+        run: |
+          uv run --with twine python -m twine upload \
+            --non-interactive \
+            --skip-existing \
+            --repository-url https://upload.pypi.org/legacy/ \
+            --username "$PYPI_USERNAME" \
+            --password "$PYPI_TOKEN" \
+            dist/*
