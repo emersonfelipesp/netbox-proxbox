@@ -470,3 +470,46 @@ def test_sync_stream_response_handles_unexpected_generator_errors(
     assert "event: error" in payload
     assert "stream exploded" in payload
     assert "event: complete" in payload
+
+
+def test_sync_stream_response_handles_missing_http_url(monkeypatch, fastapi_endpoint):
+    module = load_plugin_module(
+        "netbox_proxbox.views.sync",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+    )
+
+    monkeypatch.setattr(
+        module,
+        "_get_fastapi_request_context",
+        lambda: {"verify_ssl": True, "headers": {}},
+    )
+
+    response = module.sync_full_update_stream(_json_request(method="GET"))
+    payload = "".join(list(response.streaming_content))
+
+    assert response.status_code == 200
+    assert "No FastAPI URL found." in payload
+    assert "event: complete" in payload
+
+
+def test_sync_stream_response_handles_context_resolution_crash(
+    monkeypatch, fastapi_endpoint
+):
+    module = load_plugin_module(
+        "netbox_proxbox.views.sync",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+    )
+
+    def _crash():
+        raise RuntimeError("context failed")
+
+    monkeypatch.setattr(module, "_get_fastapi_request_context", _crash)
+
+    response = module.sync_full_update_stream(_json_request(method="GET"))
+    payload = "".join(list(response.streaming_content))
+
+    assert response.status_code == 200
+    assert "context failed" in payload
+    assert "event: complete" in payload

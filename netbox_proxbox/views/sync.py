@@ -21,6 +21,13 @@ from netbox_proxbox.views.error_utils import extract_backend_error_detail
 logger = logging.getLogger(__name__)
 
 
+def _sse_error_frames(message: str, *, final_message: str = "Stream request failed."):
+    yield "event: error\n"
+    yield f"data: {json.dumps({'step': 'stream', 'status': 'failed', 'error': message})}\n\n"
+    yield "event: complete\n"
+    yield f"data: {json.dumps({'ok': False, 'message': final_message})}\n\n"
+
+
 def _wants_json_response(request) -> bool:
     if request is None:
         return True
@@ -115,14 +122,20 @@ def _iter_backend_sse_lines(
 ) -> Generator[str, None, None]:
     try:
         backend_headers = context.get("headers") or {}
+        http_url = context.get("http_url")
+        if not http_url:
+            yield from _sse_error_frames("No FastAPI URL found.")
+            return
+
+        verify_ssl = bool(context.get("verify_ssl", True))
         request_candidates = [
-            (f"{context['http_url']}/{path}", context["verify_ssl"]),
+            (f"{http_url}/{path}", verify_ssl),
         ]
         fallback_url = context.get("ip_address_url")
         if fallback_url:
             fallback_path = f"{fallback_url}/{path}"
             if fallback_path != request_candidates[0][0]:
-                request_candidates.append((fallback_path, context["verify_ssl"]))
+                request_candidates.append((fallback_path, verify_ssl))
 
         last_error = None
         for url, verify in request_candidates:
@@ -155,16 +168,10 @@ def _iter_backend_sse_lines(
                 )
 
         payload = last_error or "Unable to reach the ProxBox backend stream."
-        yield "event: error\n"
-        yield f"data: {json.dumps({'step': 'stream', 'status': 'failed', 'error': payload})}\n\n"
-        yield "event: complete\n"
-        yield 'data: {"ok": false, "message": "Stream request failed."}\n\n'
+        yield from _sse_error_frames(payload)
     except Exception as exc:  # pragma: no cover
         logger.exception("Stream proxy crashed while handling %s", path)
-        yield "event: error\n"
-        yield f"data: {json.dumps({'step': 'stream', 'status': 'failed', 'error': str(exc)})}\n\n"
-        yield "event: complete\n"
-        yield 'data: {"ok": false, "message": "Stream proxy failed."}\n\n'
+        yield from _sse_error_frames(str(exc), final_message="Stream proxy failed.")
 
 
 def sync_resource(path: str, query_params: dict | None = None) -> tuple[dict, int]:
@@ -233,22 +240,38 @@ def _sync_stream_response(
     path: str,
     query_params: dict | None = None,
 ):
-    context = _get_fastapi_request_context()
-    if context is None or not context["http_url"]:
-        return JsonResponse(
-            {"detail": "No FastAPI URL found.", "ok": False},
-            status=404,
-        )
+    try:
+        context = _get_fastapi_request_context()
+        if context is None:
+            stream_iter = _sse_error_frames("No FastAPI endpoint configured.")
+        else:
+            stream_path = f"{path.rstrip('/')}/stream"
+            stream_iter = _iter_backend_sse_lines(
+                context,
+                stream_path,
+                query_params=query_params,
+            )
 
-    stream_path = f"{path.rstrip('/')}/stream"
-    response = StreamingHttpResponse(
-        _iter_backend_sse_lines(context, stream_path, query_params=query_params),
-        content_type="text/event-stream",
-    )
-    response["Cache-Control"] = "no-cache"
-    response["Connection"] = "keep-alive"
-    response["X-Accel-Buffering"] = "no"
-    return response
+        response = StreamingHttpResponse(
+            stream_iter,
+            content_type="text/event-stream",
+        )
+        response["Cache-Control"] = "no-cache"
+        response["Connection"] = "keep-alive"
+        response["X-Accel-Buffering"] = "no"
+        return response
+    except Exception as exc:  # pragma: no cover
+        logger.exception("Failed to build stream response for %s", path)
+        response = StreamingHttpResponse(
+            _sse_error_frames(
+                str(exc), final_message="Stream response bootstrap failed."
+            ),
+            content_type="text/event-stream",
+        )
+        response["Cache-Control"] = "no-cache"
+        response["Connection"] = "keep-alive"
+        response["X-Accel-Buffering"] = "no"
+        return response
 
 
 @require_http_methods(["GET", "POST"])
