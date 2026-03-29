@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import logging
+import json
+from collections.abc import Generator
 
 import requests
 from django.contrib import messages
 from django.http import JsonResponse
+from django.http import StreamingHttpResponse
 from django.shortcuts import redirect
 from django.views.decorators.http import require_http_methods
 
@@ -105,6 +108,58 @@ def _request_backend_resource(
     }, 503
 
 
+def _iter_backend_sse_lines(
+    context: dict,
+    path: str,
+    query_params: dict | None = None,
+) -> Generator[str, None, None]:
+    backend_headers = context.get("headers") or {}
+    request_candidates = [
+        (f"{context['http_url']}/{path}", context["verify_ssl"]),
+    ]
+    fallback_url = context.get("ip_address_url")
+    if fallback_url:
+        fallback_path = f"{fallback_url}/{path}"
+        if fallback_path != request_candidates[0][0]:
+            request_candidates.append((fallback_path, context["verify_ssl"]))
+
+    last_error = None
+    for url, verify in request_candidates:
+        try:
+            with requests.get(
+                url,
+                params=query_params,
+                headers=backend_headers,
+                verify=verify,
+                timeout=(5, 3600),
+                stream=True,
+            ) as response:
+                response.raise_for_status()
+                for raw_line in response.iter_lines(decode_unicode=True):
+                    if raw_line is None:
+                        continue
+                    line = str(raw_line)
+                    yield f"{line}\n"
+                return
+        except requests.exceptions.RequestException as exc:
+            detail, _ = extract_backend_error_detail(exc)
+            last_error = detail
+            logger.error("Sync stream request failed for %s via %s: %s", path, url, exc)
+            if getattr(exc, "response", None) is not None:
+                break
+        except Exception as exc:  # pragma: no cover
+            last_error = str(exc)
+            logger.error(
+                "Unexpected sync stream error for %s via %s: %s", path, url, exc
+            )
+
+    payload = last_error or "Unable to reach the ProxBox backend stream."
+    yield "event: error\n"
+    yield f"data: {json.dumps({'step': 'stream', 'status': 'failed', 'error': payload})}\n\n"
+    yield "event: complete\n"
+    yield 'data: {"ok": false, "message": "Stream request failed."}\n\n'
+
+
 def sync_resource(path: str, query_params: dict | None = None) -> tuple[dict, int]:
     context = _get_fastapi_request_context()
     if context is None or not context["http_url"]:
@@ -147,7 +202,9 @@ def sync_full_update_resource() -> tuple[dict, int]:
     }, 202
 
 
-def _sync_response(request, *, path: str, action_label: str, query_params: dict | None = None):
+def _sync_response(
+    request, *, path: str, action_label: str, query_params: dict | None = None
+):
     if path == "full-update":
         payload, status = sync_full_update_resource()
     else:
@@ -161,6 +218,30 @@ def _sync_response(request, *, path: str, action_label: str, query_params: dict 
     else:
         messages.error(request, detail or f"{action_label} sync failed.")
     return redirect("plugins:netbox_proxbox:home")
+
+
+def _sync_stream_response(
+    request,
+    *,
+    path: str,
+    query_params: dict | None = None,
+):
+    context = _get_fastapi_request_context()
+    if context is None or not context["http_url"]:
+        return JsonResponse(
+            {"detail": "No FastAPI URL found.", "ok": False},
+            status=404,
+        )
+
+    stream_path = f"{path.rstrip('/')}/stream"
+    response = StreamingHttpResponse(
+        _iter_backend_sse_lines(context, stream_path, query_params=query_params),
+        content_type="text/event-stream",
+    )
+    response["Cache-Control"] = "no-cache"
+    response["Connection"] = "keep-alive"
+    response["X-Accel-Buffering"] = "no"
+    return response
 
 
 @require_http_methods(["GET", "POST"])
@@ -197,4 +278,28 @@ def sync_vm_backups(request):
         path="virtualization/virtual-machines/backups/all/create",
         action_label="VM backups",
         query_params={"delete_nonexistent_backup": True},
+    )
+
+
+@require_http_methods(["GET"])
+def sync_devices_stream(request):
+    return _sync_stream_response(
+        request,
+        path="dcim/devices/create",
+    )
+
+
+@require_http_methods(["GET"])
+def sync_virtual_machines_stream(request):
+    return _sync_stream_response(
+        request,
+        path="virtualization/virtual-machines/create",
+    )
+
+
+@require_http_methods(["GET"])
+def sync_full_update_stream(request):
+    return _sync_stream_response(
+        request,
+        path="full-update",
     )

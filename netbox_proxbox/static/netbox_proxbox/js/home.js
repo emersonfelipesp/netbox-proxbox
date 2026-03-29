@@ -164,11 +164,20 @@ function wireSyncForms() {
             if (!button) {
                 return;
             }
+            const syncStreamUrl = button.dataset.syncStreamUrl || "";
             button.disabled = true;
             startSyncProgress(syncKind);
             appendLogMessage(`${syncKind}: request started`);
 
             try {
+                if (syncStreamUrl) {
+                    await streamSyncEvents(syncKind, syncStreamUrl);
+                    appendLogMessage(`${syncKind}: stream completed`);
+                    await Promise.all([refreshStatusBadges(), hydrateProxmoxCards()]);
+                    stopSyncProgress("success", "Finished.");
+                    return;
+                }
+
                 const payload = await fetchJson(syncUrl, {
                     method: "POST",
                     headers: {
@@ -193,6 +202,83 @@ function wireSyncForms() {
                 button.disabled = false;
             }
         });
+    }
+}
+
+function parseSSEFrame(rawFrame) {
+    const lines = rawFrame.split("\n");
+    let event = "message";
+    let data = null;
+    for (const line of lines) {
+        if (line.startsWith("event:")) {
+            event = line.slice(6).trim();
+            continue;
+        }
+        if (line.startsWith("data:")) {
+            const raw = line.slice(5).trim();
+            try {
+                data = JSON.parse(raw);
+            } catch {
+                data = { message: raw };
+            }
+        }
+    }
+    return { event, data };
+}
+
+async function streamSyncEvents(syncKind, syncStreamUrl) {
+    const response = await fetch(syncStreamUrl, {
+        method: "GET",
+        headers: {
+            Accept: "text/event-stream",
+            "X-Requested-With": "XMLHttpRequest",
+        },
+    });
+    if (!response.ok || !response.body) {
+        throw new Error(`Stream request failed with status ${response.status}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let completeOk = true;
+    let completeMessage = "";
+
+    while (true) {
+        const { value, done } = await reader.read();
+        if (done) {
+            break;
+        }
+        buffer += decoder.decode(value, { stream: true });
+        const frames = buffer.split("\n\n");
+        buffer = frames.pop() || "";
+
+        for (const frame of frames) {
+            const { event, data } = parseSSEFrame(frame);
+            if (!data) {
+                continue;
+            }
+            const message = data.message || data.error || `${data.step || syncKind}: ${data.status || event}`;
+            appendLogMessage(`${syncKind}: ${message}`);
+            if (data.status === "started" || data.status === "progress") {
+                const progressState = document.getElementById("sync-progress-state");
+                if (progressState) {
+                    progressState.textContent = message;
+                }
+            }
+            if (event === "error") {
+                completeOk = false;
+                completeMessage = data.error || data.detail || message;
+            }
+            if (event === "complete") {
+                completeOk = data.ok !== false && completeOk;
+                completeMessage = data.message || completeMessage;
+            }
+        }
+    }
+
+    if (!completeOk) {
+        throw new Error(completeMessage || "Stream sync failed.");
     }
 }
 

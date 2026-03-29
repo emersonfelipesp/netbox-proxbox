@@ -26,7 +26,15 @@ from .endpoints import (
 )
 from .external_pages import DiscordView, DiscussionsView, TelegramView
 from .keepalive_status import get_service_status
-from .sync import sync_devices, sync_full_update, sync_virtual_machines, sync_vm_backups
+from .sync import (
+    sync_devices,
+    sync_devices_stream,
+    sync_full_update,
+    sync_full_update_stream,
+    sync_virtual_machines,
+    sync_virtual_machines_stream,
+    sync_vm_backups,
+)
 from .sync_process import (
     SyncProcessDeleteView,
     SyncProcessEditView,
