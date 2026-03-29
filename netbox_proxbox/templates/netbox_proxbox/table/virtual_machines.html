@@ -1,6 +1,6 @@
 <div id="virtual-machines-div" class="form form-horizontal">
     <h2 id="proxmox-virtual-machines-table" class="text-center">Virtual Machines</h2>
-    <h3>Synced Virtual Machines: <span id='synced-vm-count'>0</span> / <span id='total-vm-count'>0</span> (<span id='sync-percentage-ratio'>0</span>)</h3>
+    <h3>Synced Virtual Machines: <span id='synced-vm-count'>{% if virtual_machines %}{{ virtual_machines|length }}{% else %}0{% endif %}</span></h3>
     <div class="card">
         <div class="table-responsive" id="object_list">
             <div class="table-responsive">
@@ -10,23 +10,40 @@
                             <th>Status</th>
                             <th>NetBox ID</th>
                             <th>Name</th>
-                            <th>VM/CT Status</th>
-                            <th>Device</th>
+                            <th>VM Status</th>
                             <th>Cluster</th>
-                            <th>VM Interfaces</th>
+                            <th>Site</th>
                             <th>Role</th>
-                            <th>Virtual CPUs</th>
+                            <th>Tenant</th>
+                            <th>VCPU</th>
                             <th>Memory (MB)</th>
-                            <th>Disk Space (GB)</th>
-                            <th>IP Address</th>
+                            <th>Disk (GB)</th>
                             <th></th>
                         </tr>
                     </thead>
                     <tbody id="virtual-machine-table-data">
-                        <!-- Show it if no virtual machines synced. -->
-                        <tr id='virtual-machines-table-default-td'>
-                            <td colspan="12" class="text-center text-muted">— No virtual machines could be synced with Proxmox —</td>
-                        </tr>
+                        {% if virtual_machines %}
+                            {% for vm in virtual_machines %}
+                            <tr id="{{ vm.name }}">
+                                <td><span class="badge text-bg-{{ vm.status_color }}">{{ vm.get_status_display }}</span></td>
+                                <td><a href="{% url 'virtualization:virtualmachine' vm.pk %}">{{ vm.pk }}</a></td>
+                                <td><a href="{% url 'virtualization:virtualmachine' vm.pk %}">{{ vm.name }}</a></td>
+                                <td><span class="badge text-bg-{{ vm.status_color }}">{{ vm.get_status_display }}</span></td>
+                                <td>{{ vm.cluster|default:"—" }}</td>
+                                <td>{{ vm.cluster.site|default:"—" }}</td>
+                                <td>{{ vm.role|default:"—" }}</td>
+                                <td>{{ vm.tenant|default:"—" }}</td>
+                                <td>{{ vm.vcpus|default:"—" }}</td>
+                                <td>{{ vm.memory|default:"—" }}</td>
+                                <td>{{ vm.disk|default:"—" }}</td>
+                                <td></td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr id='virtual-machines-table-default-td'>
+                                <td colspan="12" class="text-center text-muted">— No virtual machines synced with Proxbox —</td>
+                            </tr>
+                        {% endif %}
                     </tbody>
                 </table>
             </div>

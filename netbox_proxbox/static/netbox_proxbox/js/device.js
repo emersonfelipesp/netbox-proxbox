@@ -1,68 +1,104 @@
 import { createTdElement } from './common.js'
 
 export function populateDevicesTable(jsonMessage) {
-    // Populate Nodes Table with data from Websocket JSON message
     if (!jsonMessage) {
-        return
+        return;
     }
 
-    // Get Device Table
-    let deviceTable = document.getElementById('device-table-data')
-    console.log('Device Table: ', deviceTable)
-
-    let nodesDiv = document.getElementById('device-div')
-    nodesDiv.style.display = "block"
-
+    const deviceTable = document.getElementById('device-table-data');
     if (!deviceTable) {
-        return
-    }
-    
-    let jsonDataName = undefined
-
-    let nodeTableDefaultTd = document.getElementById('device-table-default-td')
-    nodeTableDefaultTd.style.display = "none"
-    
-    // Create Table Row
-    let deviceTableRowID = jsonMessage.data.rowid
-    let deviceTableRow = document.getElementById(deviceTableRowID)
-
-    if (!deviceTableRow) {
-        deviceTableRow = document.createElement('tr')
-        deviceTableRow.id = deviceTableRowID
+        return;
     }
 
-    else {
-        // Clear Table Row
-        deviceTableRow.innerHTML = ""
+    const nodesDiv = document.getElementById('device-div');
+    if (nodesDiv) {
+        nodesDiv.style.display = "block";
     }
 
-
-    try {
-        jsonDataName = jsonMessage.data.name
-    } catch (error) {
-        console.log(`ERROR: ${error}`)
+    const deviceTableDefaultTd = document.getElementById('device-table-default-td');
+    if (deviceTableDefaultTd) {
+        deviceTableDefaultTd.style.display = "none";
     }
 
-    let undefinedHtml = `<span class='badge text-bg-grey'><strong></strong>undefined</strong></span>`
-
-    try {
-        // Populate Table Row with Table Data parsed from Websocket JSON message
-        deviceTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `status`, jsonMessage.data.sync_status))
-        deviceTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `netbox-id`, jsonMessage.data.netbox_id))
-        deviceTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `node-id`, undefinedHtml))
-        deviceTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `name`, jsonMessage.data.name))
-        deviceTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `manufacturer`, jsonMessage.data.manufacturer))
-        deviceTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `type`, jsonMessage.data.device_type))
-        deviceTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `vm-ct-count`, undefinedHtml))
-        deviceTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `ip-address`, undefinedHtml))
-        deviceTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `role`, jsonMessage.data.role))
-        deviceTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `virtual-cpus`, undefinedHtml))
-        deviceTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `cluster`, jsonMessage.data.cluster))
-        deviceTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `disk-space`, undefinedHtml))
-        
-        deviceTable.appendChild(deviceTableRow)
-
-    } catch (error) {
-        console.log(`ERROR: ${error}`)
+    const data = jsonMessage.data || {};
+    const rowId = data.rowid || data.name;
+    if (!rowId) {
+        return;
     }
+
+    let row = document.getElementById(rowId);
+    if (!row) {
+        row = document.createElement('tr');
+        row.id = rowId;
+    } else {
+        row.innerHTML = "";
+    }
+
+    const jsonDataName = data.name;
+    const undefinedHtml = '<span class="badge text-bg-grey"><strong>undefined</strong></span>';
+
+    const status = data.sync_status || data.status || 'unknown';
+    const statusClass = getStatusClass(status);
+
+    row.appendChild(createTdElement('device', jsonDataName, 'status', `<span class="badge text-bg-${statusClass}">${status}</span>`));
+    row.appendChild(createTdElement('device', jsonDataName, 'netbox-id', data.netbox_id || undefinedHtml));
+    row.appendChild(createTdElement('device', jsonDataName, 'name', data.name || undefinedHtml));
+    row.appendChild(createTdElement('device', jsonDataName, 'device-status', `<span class="badge text-bg-${statusClass}">${status}</span>`));
+    row.appendChild(createTdElement('device', jsonDataName, 'role', data.role || undefinedHtml));
+    row.appendChild(createTdElement('device', jsonDataName, 'manufacturer', data.manufacturer || undefinedHtml));
+    row.appendChild(createTdElement('device', jsonDataName, 'type', data.device_type || data.type || undefinedHtml));
+    row.appendChild(createTdElement('device', jsonDataName, 'site', data.site || undefinedHtml));
+    row.appendChild(createTdElement('device', jsonDataName, 'cluster', data.cluster || undefinedHtml));
+    row.appendChild(createTdElement('device', jsonDataName, 'tenant', data.tenant || undefinedHtml));
+    row.appendChild(createTdElement('device', jsonDataName, 'actions', ''));
+
+    deviceTable.appendChild(row);
+}
+
+function getStatusClass(status) {
+    const statusMap = {
+        active: 'green',
+        offline: 'red',
+        planned: 'blue',
+        staged: 'yellow',
+        failed: 'red',
+        inventory: 'grey',
+        reserved: 'yellow',
+    };
+    return statusMap[status] || 'grey';
+}
+
+export function handleDeviceSSEEvent(sseData) {
+    const normalized = normalizeDeviceMessage(sseData);
+    if (normalized) {
+        populateDevicesTable(normalized);
+    }
+}
+
+function normalizeDeviceMessage(sseData) {
+    if (!sseData || typeof sseData !== 'object') {
+        return null;
+    }
+    const payload = sseData.payload;
+    if (!payload || typeof payload !== 'object') {
+        return null;
+    }
+    const payloadData = payload.data || {};
+    return {
+        object: payload.object || 'device',
+        data: {
+            ...payloadData,
+            rowid: sseData.rowid || payloadData.rowid || payloadData.name,
+            netbox_id: payloadData.netbox_id,
+            name: payloadData.name,
+            sync_status: payloadData.sync_status || sseData.status,
+            status: payloadData.status,
+            role: payloadData.role,
+            manufacturer: payloadData.manufacturer,
+            device_type: payloadData.device_type,
+            site: payloadData.site,
+            cluster: payloadData.cluster,
+            tenant: payloadData.tenant,
+        },
+    };
 }
