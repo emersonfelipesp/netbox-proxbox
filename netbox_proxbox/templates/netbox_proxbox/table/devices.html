@@ -1,50 +1,110 @@
+{% load helpers %}
 <div id="device-div" class="form form-horizontal">
     <h2 id="proxmox-nodes-table" class="text-center">Nodes</h2>
     <h3>Synced Devices (Nodes): <span id='synced-device-count'>{% if devices %}{{ devices|length }}{% else %}0{% endif %}</span></h3>
     <div class="card">
-        <div class="table-responsive" id="object_list">
-            <div class="table-responsive">
-                <table class="table table-hover object-list">
-                    <thead>
+        <div class="table-responsive">
+            <table class="table table-hover object-list">
+                <thead>
                     <tr>
-                        <th>Status</th>
-                        <th>NetBox ID</th>
-                        <th>Name</th>
-                        <th>Status</th>
-                        <th>Role</th>
-                        <th>Manufacturer</th>
-                        <th>Type</th>
-                        <th>Site</th>
-                        <th>Cluster</th>
-                        <th>Tenant</th>
-                        <th></th>
+                        <th class="text-center text-nowrap"><span class="mdi mdi-check-bold" title="Status"></span></th>
+                        <th class="text-center text-nowrap">ID</th>
+                        <th class="text-nowrap">Name</th>
+                        <th class="text-nowrap">Status</th>
+                        <th class="text-nowrap">Role</th>
+                        <th class="text-nowrap">Manufacturer</th>
+                        <th class="text-nowrap">Type</th>
+                        <th class="text-nowrap">Site</th>
+                        <th class="text-nowrap">Cluster</th>
+                        <th class="text-nowrap">Tenant</th>
+                        <th class="text-end text-nowrap noprint">Actions</th>
                     </tr>
-                    </thead>
-                    <tbody id="device-table-data">
-                        {% if devices %}
-                            {% for device in devices %}
-                            <tr id="{{ device.name }}">
-                                <td><span class="badge text-bg-{{ device.status_color }}">{{ device.get_status_display }}</span></td>
-                                <td><a href="{% url 'dcim:device' device.pk %}">{{ device.pk }}</a></td>
-                                <td><a href="{% url 'dcim:device' device.pk %}">{{ device.name }}</a></td>
-                                <td><span class="badge text-bg-{{ device.status_color }}">{{ device.get_status_display }}</span></td>
-                                <td>{{ device.role|default:"—" }}</td>
-                                <td>{{ device.device_type.manufacturer|default:"—" }}</td>
-                                <td>{{ device.device_type|default:"—" }}</td>
-                                <td>{{ device.site|default:"—" }}</td>
-                                <td>{{ device.cluster|default:"—" }}</td>
-                                <td>{{ device.tenant|default:"—" }}</td>
-                                <td></td>
-                            </tr>
-                            {% endfor %}
-                        {% else %}
+                </thead>
+                <tbody id="device-table-data">
+                    {% if devices %}
+                        {% for device in devices %}
                             <tr>
-                                <td id="device-table-default-td" colspan="11" class="text-center text-muted">— No nodes synced with Proxbox —</td>
+                                <td class="text-center">
+                                    {% if device.status == 'active' %}
+                                        <span class="mdi mdi-check-circle text-success" title="Active"></span>
+                                    {% elif device.status == 'offline' %}
+                                        <span class="mdi mdi-close-circle text-danger" title="Offline"></span>
+                                    {% elif device.status == 'planned' %}
+                                        <span class="mdi text-info" title="Planned">—</span>
+                                    {% else %}
+                                        <span class="mdi text-secondary" title="{{ device.get_status_display }}">—</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center text-muted">{{ device.pk }}</td>
+                                <td>
+                                    <a href="{% url 'dcim:device' device.pk %}" class="text-body text-decoration-none">
+                                        <span class="mdi mdi-router-network"></span> {{ device.name }}
+                                    </a>
+                                </td>
+                                <td>
+                                    <span class="badge text-bg-{{ device.status_color }}">{{ device.get_status_display }}</span>
+                                </td>
+                                <td>
+                                    {% if device.role %}
+                                        <a href="{% url 'dcim:devicerole' device.role.pk %}" class="text-decoration-none">{{ device.role }}</a>
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if device.device_type and device.device_type.manufacturer %}
+                                        <a href="{% url 'dcim:manufacturer' device.device_type.manufacturer.pk %}" class="text-decoration-none">{{ device.device_type.manufacturer }}</a>
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if device.device_type %}
+                                        <a href="{% url 'dcim:devicetype' device.device_type.pk %}" class="text-decoration-none">{{ device.device_type }}</a>
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if device.site %}
+                                        <a href="{% url 'dcim:site' device.site.pk %}" class="text-decoration-none">{{ device.site }}</a>
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if device.cluster %}
+                                        <a href="{% url 'virtualization:cluster' device.cluster.pk %}" class="text-decoration-none">{{ device.cluster }}</a>
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if device.tenant %}
+                                        <a href="{% url 'tenancy:tenant' device.tenant.pk %}" class="text-decoration-none">{{ device.tenant }}</a>
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end text-nowrap noprint">
+                                    <a href="{% url 'dcim:device' device.pk %}" class="btn btn-sm btn-outline-dark" title="View">
+                                        <span class="mdi mdi-eye" aria-hidden="true"></span>
+                                    </a>
+                                </td>
                             </tr>
-                        {% endif %}
-                    </tbody>
-                </table>
-            </div>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="11" class="text-center text-muted p-4">
+                                <span class="mdi mdi-information-outline mdi-24px d-block mb-2"></span>
+                                No nodes synced with Proxbox yet.
+                                <br>
+                                <small>Click "Sync Nodes" to synchronize Proxmox nodes with NetBox.</small>
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
