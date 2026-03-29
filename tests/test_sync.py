@@ -137,6 +137,16 @@ def test_sync_resource_uses_http_ip_fallback_when_ssl_verification_is_disabled(
             {"Authorization": "Bearer backend-token"},
             False,
         ),
+        (
+            "http://proxbox.local:8800/virtualization/virtual-machines/backups/all/create",
+            {"Authorization": "Bearer backend-token"},
+            False,
+        ),
+        (
+            "http://10.0.0.5:8800/virtualization/virtual-machines/backups/all/create",
+            {"Authorization": "Bearer backend-token"},
+            False,
+        ),
     ]
 
 
@@ -249,11 +259,17 @@ def test_sync_full_update_runs_devices_then_virtual_machines(
             {"Authorization": "Bearer backend-token"},
             True,
         ),
+        (
+            "https://proxbox.local:8800/virtualization/virtual-machines/backups/all/create",
+            {"Authorization": "Bearer backend-token"},
+            True,
+        ),
     ]
     assert response.payload["path"] == "full-update"
     assert response.payload["detail"] == "Full update sync completed successfully."
     assert response.payload["response"]["devices"]["ok"] is True
     assert response.payload["response"]["virtual-machines"]["ok"] is True
+    assert response.payload["response"]["backups"]["ok"] is True
 
 
 def test_sync_full_update_stops_when_devices_step_fails(monkeypatch, fastapi_endpoint):
