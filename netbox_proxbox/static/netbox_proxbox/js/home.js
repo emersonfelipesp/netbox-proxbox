@@ -226,6 +226,34 @@ function parseSSEFrame(rawFrame) {
     return { event, data };
 }
 
+function formatStreamMessage(syncKind, data, event) {
+    const payload = data && typeof data === "object" ? (data.payload || {}) : {};
+    const payloadData = payload && typeof payload === "object" ? (payload.data || {}) : {};
+    const rowId = data.rowid || payloadData.rowid || payloadData.name || null;
+
+    if (payloadData.error) {
+        return String(payloadData.error);
+    }
+    if (data.error) {
+        return String(data.error);
+    }
+
+    const objectName = payload.object || data.step || syncKind;
+    const safeObject = String(objectName).replace(/-/g, " ");
+
+    if (data.status === "completed" && rowId) {
+        return `Synced ${safeObject} ${rowId}`;
+    }
+    if ((data.status === "progress" || data.status === "started") && rowId) {
+        return `Processing ${safeObject} ${rowId}`;
+    }
+    if (event === "complete") {
+        return data.message || `${safeObject} stream completed.`;
+    }
+
+    return data.message || `${safeObject}: ${data.status || event}`;
+}
+
 async function streamSyncEvents(syncKind, syncStreamUrl) {
     const response = await fetch(syncStreamUrl, {
         method: "GET",
@@ -267,7 +295,7 @@ async function streamSyncEvents(syncKind, syncStreamUrl) {
             if (!data) {
                 continue;
             }
-            const message = data.message || data.error || `${data.step || syncKind}: ${data.status || event}`;
+            const message = formatStreamMessage(syncKind, data, event);
             appendLogMessage(`${syncKind}: ${message}`);
             if (data.status === "started" || data.status === "progress") {
                 const progressState = document.getElementById("sync-progress-state");
