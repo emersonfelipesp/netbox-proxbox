@@ -196,9 +196,7 @@ class VirtualMachinesView(View):
             if tagged_vm_ids:
                 virtual_machines = list(
                     VirtualMachine.objects.filter(id__in=tagged_vm_ids)
-                    .select_related(
-                        "cluster__site", "role", "tenant", "platform", "tenant"
-                    )
+                    .select_related("site", "cluster", "role", "tenant", "platform")
                     .prefetch_related("interfaces__ip_addresses")
                 )
 
