@@ -27,7 +27,6 @@ class ScheduleSyncForm(forms.Form):
         help_text=_(
             "Select specific Proxmox endpoints to sync. Leave empty to sync all."
         ),
-        selector=True,
     )
     netbox_endpoints = DynamicModelMultipleChoiceField(
         queryset=NetBoxEndpoint.objects.all(),
@@ -36,7 +35,6 @@ class ScheduleSyncForm(forms.Form):
         help_text=_(
             "Select specific NetBox endpoints to sync to. Leave empty to sync all."
         ),
-        selector=True,
     )
     schedule_at = forms.DateTimeField(
         required=False,
