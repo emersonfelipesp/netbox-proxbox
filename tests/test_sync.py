@@ -445,3 +445,28 @@ def test_sync_stream_response_returns_sse(monkeypatch, fastapi_endpoint):
     assert response["Cache-Control"] == "no-cache"
     assert any("event: step" in chunk for chunk in chunks)
     assert any("event: complete" in chunk for chunk in chunks)
+
+
+def test_sync_stream_response_handles_unexpected_generator_errors(
+    monkeypatch, fastapi_endpoint
+):
+    module = load_plugin_module(
+        "netbox_proxbox.views.sync",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+    )
+
+    def _boom(*args, **kwargs):
+        del args, kwargs
+        raise RuntimeError("stream exploded")
+
+    monkeypatch.setattr(module.requests, "get", _boom)
+
+    response = module.sync_full_update_stream(_json_request(method="GET"))
+    chunks = list(response.streaming_content)
+    payload = "".join(chunks)
+
+    assert response.status_code == 200
+    assert "event: error" in payload
+    assert "stream exploded" in payload
+    assert "event: complete" in payload
