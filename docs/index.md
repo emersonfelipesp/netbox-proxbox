@@ -47,7 +47,7 @@ Proxbox is split into two services:
 1. The NetBox plugin from this repository.
 2. A separate FastAPI backend service, `proxbox-api`.
 
-The NetBox plugin stores endpoint configuration and triggers sync requests. The backend talks to Proxmox and NetBox over HTTP and can optionally stream updates over WebSocket.
+The NetBox plugin stores endpoint configuration and triggers sync requests. The backend talks to Proxmox and NetBox over HTTP and streams real-time progress updates via SSE (Server-Sent Events). Legacy WebSocket streaming is also supported.
 
 ## Recommended Install Path
 
