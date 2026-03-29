@@ -1,4 +1,4 @@
-{% load helpers %}
+{% load helpers i18n %}
 <div id="virtual-machines-div" class="form form-horizontal">
     <h2 id="proxmox-virtual-machines-table" class="text-center">Virtual Machines</h2>
     <h3>Synced Virtual Machines: <span id='synced-vm-count'>{% if virtual_machines %}{{ virtual_machines|length }}{% else %}0{% endif %}</span></h3>
@@ -81,7 +81,7 @@
                                     {% endif %}
                                 </td>
                                 <td class="text-center">{{ vm.vcpus|default:"—" }}</td>
-                                <td class="text-end">{{ vm.memory|default:"—"|format_bytes }}</td>
+                                <td class="text-end">{{ vm.memory|default:"—"|intcomma }}</td>
                                 <td class="text-end text-nowrap noprint">
                                     <a href="{% url 'virtualization:virtualmachine' vm.pk %}" class="btn btn-sm btn-outline-dark" title="View">
                                         <span class="mdi mdi-eye" aria-hidden="true"></span>
