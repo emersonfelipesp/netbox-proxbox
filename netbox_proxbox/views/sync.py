@@ -8,6 +8,7 @@ from collections.abc import Generator
 
 import requests
 from django.contrib import messages
+from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.http import StreamingHttpResponse
 from django.shortcuts import redirect
@@ -304,6 +305,7 @@ def _sync_stream_response(
         return response
 
 
+@login_required
 @require_http_methods(["GET", "POST"])
 def sync_devices(request):
     return _sync_response(
@@ -313,6 +315,7 @@ def sync_devices(request):
     )
 
 
+@login_required
 @require_http_methods(["GET", "POST"])
 def sync_virtual_machines(request):
     return _sync_response(
@@ -322,6 +325,7 @@ def sync_virtual_machines(request):
     )
 
 
+@login_required
 @require_http_methods(["GET", "POST"])
 def sync_full_update(request):
     return _sync_response(
@@ -331,6 +335,7 @@ def sync_full_update(request):
     )
 
 
+@login_required
 @require_http_methods(["GET", "POST"])
 def sync_vm_backups(request):
     return _sync_response(
@@ -341,6 +346,7 @@ def sync_vm_backups(request):
     )
 
 
+@login_required
 @require_http_methods(["GET"])
 def sync_vm_backups_stream(request):
     return _sync_stream_response(
@@ -350,6 +356,7 @@ def sync_vm_backups_stream(request):
     )
 
 
+@login_required
 @require_http_methods(["GET"])
 def sync_devices_stream(request):
     return _sync_stream_response(
@@ -358,6 +365,7 @@ def sync_devices_stream(request):
     )
 
 
+@login_required
 @require_http_methods(["GET"])
 def sync_virtual_machines_stream(request):
     return _sync_stream_response(
@@ -366,6 +374,7 @@ def sync_virtual_machines_stream(request):
     )
 
 
+@login_required
 @require_http_methods(["GET"])
 def sync_full_update_stream(request):
     return _sync_stream_response(

@@ -147,6 +147,17 @@ def load_plugin_module(
     django_messages = MessagesStub()
     django_contrib.messages = django_messages
 
+    django_auth = types.ModuleType("django.contrib.auth")
+    django_auth_decorators = types.ModuleType("django.contrib.auth.decorators")
+    django_auth_decorators.login_required = lambda func: func
+    django_auth_mixins = types.ModuleType("django.contrib.auth.mixins")
+
+    class LoginRequiredMixin:
+        pass
+
+    django_auth_mixins.LoginRequiredMixin = LoginRequiredMixin
+    django_contrib.auth = django_auth
+
     netbox_module = types.ModuleType("netbox")
     netbox_plugins = types.ModuleType("netbox.plugins")
     netbox_plugins.PluginConfig = DummyPluginConfig
@@ -201,6 +212,9 @@ def load_plugin_module(
         "django.views.decorators.http": django_views_http,
         "django.urls": django_urls,
         "django.contrib": django_contrib,
+        "django.contrib.auth": django_auth,
+        "django.contrib.auth.decorators": django_auth_decorators,
+        "django.contrib.auth.mixins": django_auth_mixins,
         "django.contrib.messages": django_messages,
         "netbox": netbox_module,
         "netbox.plugins": netbox_plugins,

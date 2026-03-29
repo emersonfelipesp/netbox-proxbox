@@ -8,6 +8,7 @@ import threading
 from queue import Queue
 
 import websockets
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.views import View
@@ -86,7 +87,7 @@ def send_message(message):
     message_queue.put(message)
 
 
-class WebSocketView(View):
+class WebSocketView(LoginRequiredMixin, View):
     template_name = "netbox_proxbox/websocket_page.html"
 
     def get(self, request, message):

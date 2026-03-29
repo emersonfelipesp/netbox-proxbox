@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 import requests
+from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET
 
@@ -37,6 +38,7 @@ def _merge_cluster_payloads(version_payload, cluster_payload) -> dict:
         return cluster_data | version_data
     return {}
 
+@login_required
 @require_GET
 def get_proxmox_card(request, pk: int) -> JsonResponse:
     try:

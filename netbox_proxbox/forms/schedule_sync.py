@@ -68,8 +68,8 @@ class ScheduleSyncForm(forms.Form):
             value, unit = ScheduleIntervalUnitChoices.from_minutes(
                 self.initial_interval
             )
-            self.fields["interval_value"].Initial = value
-            self.fields["interval_unit"].Initial = unit
+            self.fields["interval_value"].initial = value
+            self.fields["interval_unit"].initial = unit
 
     def clean(self):
         super().clean()
