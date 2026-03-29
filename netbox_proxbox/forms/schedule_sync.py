@@ -41,11 +41,12 @@ class ScheduleSyncForm(forms.Form):
         ).format(now=now)
 
     def clean(self):
-        cleaned = super().clean()
-        schedule_at = cleaned.get("schedule_at")
+        super().clean()
+        cleaned_data = self.cleaned_data
+        schedule_at = cleaned_data.get("schedule_at")
         if schedule_at and schedule_at < local_now():
             raise forms.ValidationError(_("Scheduled time must be in the future."))
         # If only interval is provided, default schedule_at to now
-        if cleaned.get("interval") and not schedule_at:
-            cleaned["schedule_at"] = local_now()
-        return cleaned
+        if cleaned_data.get("interval") and not schedule_at:
+            cleaned_data["schedule_at"] = local_now()
+        return cleaned_data
