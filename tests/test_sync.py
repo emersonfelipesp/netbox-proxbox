@@ -116,12 +116,22 @@ def test_sync_resource_uses_http_ip_fallback_when_ssl_verification_is_disabled(
     assert response.status_code == 202
     assert requested == [
         (
-            "http://proxbox.local:8800/full-update",
+            "http://proxbox.local:8800/dcim/devices/create",
             {"Authorization": "Bearer backend-token"},
             False,
         ),
         (
-            "http://10.0.0.5:8800/full-update",
+            "http://10.0.0.5:8800/dcim/devices/create",
+            {"Authorization": "Bearer backend-token"},
+            False,
+        ),
+        (
+            "http://proxbox.local:8800/virtualization/virtual-machines/create",
+            {"Authorization": "Bearer backend-token"},
+            False,
+        ),
+        (
+            "http://10.0.0.5:8800/virtualization/virtual-machines/create",
             {"Authorization": "Bearer backend-token"},
             False,
         ),
@@ -206,6 +216,76 @@ def test_sync_resource_redirects_browser_requests_with_error_message(
     assert module._messages_stub.calls == [("error", "connection refused")]
 
 
+def test_sync_full_update_runs_devices_then_virtual_machines(monkeypatch, fastapi_endpoint):
+    module = load_plugin_module(
+        "netbox_proxbox.views.sync",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+    )
+    requested = []
+
+    def fake_get(url, params=None, headers=None, verify=True, timeout=None):
+        requested.append((url, headers, verify))
+        return ResponseStub({"ok": True, "url": url})
+
+    monkeypatch.setattr(module.requests, "get", fake_get)
+
+    response = module.sync_full_update(_json_request())
+
+    assert response.status_code == 202
+    assert requested == [
+        (
+            "https://proxbox.local:8800/dcim/devices/create",
+            {"Authorization": "Bearer backend-token"},
+            True,
+        ),
+        (
+            "https://proxbox.local:8800/virtualization/virtual-machines/create",
+            {"Authorization": "Bearer backend-token"},
+            True,
+        ),
+    ]
+    assert response.payload["path"] == "full-update"
+    assert response.payload["detail"] == "Full update sync completed successfully."
+    assert response.payload["response"]["devices"]["ok"] is True
+    assert response.payload["response"]["virtual-machines"]["ok"] is True
+
+
+def test_sync_full_update_stops_when_devices_step_fails(monkeypatch, fastapi_endpoint):
+    module = load_plugin_module(
+        "netbox_proxbox.views.sync",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+    )
+
+    class FailingResponse(ResponseStub):
+        text = '{"detail": "devices failed"}'
+        headers = {"Content-Type": "application/json"}
+        url = "https://proxbox.local:8800/dcim/devices/create"
+
+        def raise_for_status(self):
+            err = requests.exceptions.HTTPError("500")
+            err.response = self
+            raise err
+
+    requested = []
+
+    def fake_get(url, params=None, headers=None, verify=True, timeout=None):
+        requested.append(url)
+        if url.endswith("/dcim/devices/create"):
+            return FailingResponse({"detail": "devices failed"}, status_code=500)
+        return ResponseStub({"ok": True})
+
+    monkeypatch.setattr(module.requests, "get", fake_get)
+
+    response = module.sync_full_update(_json_request())
+
+    assert response.status_code == 503
+    assert requested == ["https://proxbox.local:8800/dcim/devices/create"]
+    assert response.payload["stage"] == "devices"
+    assert response.payload["detail"] == "devices failed"
+
+
 def test_sync_resource_surfaces_backend_error_detail(monkeypatch, fastapi_endpoint):
     module = load_plugin_module(
         "netbox_proxbox.views.sync",
@@ -232,7 +312,7 @@ def test_sync_resource_surfaces_backend_error_detail(monkeypatch, fastapi_endpoi
         ),
     )
 
-    response = module.sync_full_update(_json_request())
+    response = module.sync_devices(_json_request())
 
     assert response.status_code == 503
     assert response.payload["detail"] == "backend token missing"
@@ -269,7 +349,7 @@ def test_sync_resource_prefers_backend_message_over_generic_internal_server_erro
         ),
     )
 
-    response = module.sync_full_update(_json_request())
+    response = module.sync_devices(_json_request())
 
     assert response.status_code == 503
     assert response.payload["detail"] == "Error while syncing virtual machines."

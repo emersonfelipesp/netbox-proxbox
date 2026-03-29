@@ -53,11 +53,11 @@ def _get_fastapi_request_context():
     }
 
 
-def sync_resource(path: str, query_params: dict | None = None) -> tuple[dict, int]:
-    context = _get_fastapi_request_context()
-    if context is None or not context["http_url"]:
-        return {"queued": False, "detail": "No FastAPI URL found."}, 404
-
+def _request_backend_resource(
+    context: dict,
+    path: str,
+    query_params: dict | None = None,
+) -> tuple[dict, int]:
     fastapi_path = f"{context['http_url']}/{path}"
     requested_urls = []
     backend_headers = context.get("headers") or {}
@@ -91,6 +91,8 @@ def sync_resource(path: str, query_params: dict | None = None) -> tuple[dict, in
         except requests.exceptions.RequestException as exc:
             last_detail, _ = extract_backend_error_detail(exc)
             logger.error("Sync request failed for %s via %s: %s", path, url, exc)
+            if getattr(exc, "response", None) is not None:
+                break
         except Exception as exc:  # pragma: no cover
             last_detail = str(exc)
             logger.error("Unexpected sync error for %s via %s: %s", path, url, exc)
@@ -103,8 +105,53 @@ def sync_resource(path: str, query_params: dict | None = None) -> tuple[dict, in
     }, 503
 
 
+def sync_resource(path: str, query_params: dict | None = None) -> tuple[dict, int]:
+    context = _get_fastapi_request_context()
+    if context is None or not context["http_url"]:
+        return {"queued": False, "detail": "No FastAPI URL found."}, 404
+
+    return _request_backend_resource(context, path, query_params=query_params)
+
+
+def sync_full_update_resource() -> tuple[dict, int]:
+    context = _get_fastapi_request_context()
+    if context is None or not context["http_url"]:
+        return {"queued": False, "detail": "No FastAPI URL found."}, 404
+
+    requested_urls = []
+    steps = [
+        ("devices", "dcim/devices/create"),
+        ("virtual-machines", "virtualization/virtual-machines/create"),
+    ]
+    responses: dict[str, dict] = {}
+
+    for stage, path in steps:
+        payload, status = _request_backend_resource(context, path)
+        requested_urls.extend(payload.get("requested_urls", []))
+        if status >= 400:
+            return {
+                "queued": False,
+                "path": "full-update",
+                "stage": stage,
+                "requested_urls": requested_urls,
+                "detail": payload.get("detail", "Unable to reach the ProxBox backend."),
+            }, status
+        responses[stage] = payload.get("response", {})
+
+    return {
+        "queued": True,
+        "path": "full-update",
+        "requested_urls": requested_urls,
+        "detail": "Full update sync completed successfully.",
+        "response": responses,
+    }, 202
+
+
 def _sync_response(request, *, path: str, action_label: str, query_params: dict | None = None):
-    payload, status = sync_resource(path, query_params=query_params)
+    if path == "full-update":
+        payload, status = sync_full_update_resource()
+    else:
+        payload, status = sync_resource(path, query_params=query_params)
     if _wants_json_response(request):
         return JsonResponse(payload, status=status)
 
