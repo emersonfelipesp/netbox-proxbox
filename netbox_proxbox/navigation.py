@@ -23,6 +23,23 @@ sync_processes_item = PluginMenuItem(
     link_text='Sync Processes',
 )
 
+schedule_sync_item = PluginMenuItem(
+    link='plugins:netbox_proxbox:schedule_sync',
+    link_text='Schedule Sync',
+    buttons=(
+        PluginMenuButton(
+            'plugins:netbox_proxbox:schedule_sync',
+            'Schedule',
+            'mdi mdi-clock-outline',
+        ),
+    ),
+)
+
+sync_jobs_item = PluginMenuItem(
+    link='core:job_list',
+    link_text='Sync Jobs',
+)
+
 backups_item = PluginMenuItem(
     link='plugins:netbox_proxbox:vmbackup_list',
     link_text='Backups',
@@ -95,6 +112,8 @@ menu = PluginMenu(
                 virtual_machines_item,
                 backups_item,
                 sync_processes_item,
+                schedule_sync_item,
+                sync_jobs_item,
             )
          ),
         ('Endpoints', (proxmox_endpoints_item, netbox_endpoints_item, fastapi_endpoints_item,)),

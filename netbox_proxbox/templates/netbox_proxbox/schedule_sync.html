@@ -1,0 +1,147 @@
+{% extends 'base/layout.html' %}
+{% load i18n %}
+
+{% block title %}{% trans "Schedule Proxbox Sync" %}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col col-md-6">
+        <div class="card">
+            <h5 class="card-header">
+                <i class="mdi mdi-clock-outline"></i>
+                {% trans "Schedule Sync Job" %}
+            </h5>
+            <div class="card-body">
+                <p class="text-muted">
+                    {% blocktrans trimmed %}
+                    Schedule a ProxBox sync operation to run at a specific time. Set a recurrence interval
+                    to repeat the sync automatically (e.g. every 1440 minutes = daily).
+                    Leave <strong>Schedule at</strong> blank to run immediately.
+                    {% endblocktrans %}
+                </p>
+
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ form.sync_type.id_for_label }}">
+                            {{ form.sync_type.label }}
+                        </label>
+                        {{ form.sync_type }}
+                        {% if form.sync_type.help_text %}
+                            <div class="form-text text-muted">{{ form.sync_type.help_text }}</div>
+                        {% endif %}
+                        {% for error in form.sync_type.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ form.schedule_at.id_for_label }}">
+                            {{ form.schedule_at.label }}
+                        </label>
+                        {{ form.schedule_at }}
+                        {% if form.schedule_at.help_text %}
+                            <div class="form-text text-muted">{{ form.schedule_at.help_text|safe }}</div>
+                        {% endif %}
+                        {% for error in form.schedule_at.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ form.interval.id_for_label }}">
+                            {{ form.interval.label }}
+                        </label>
+                        {{ form.interval }}
+                        {% if form.interval.help_text %}
+                            <div class="form-text text-muted">{{ form.interval.help_text }}</div>
+                        {% endif %}
+                        {% for error in form.interval.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {% for error in form.non_field_errors %}
+                                <div>{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="mdi mdi-clock-plus-outline"></i>
+                            {% trans "Schedule" %}
+                        </button>
+                        <a href="{% url 'core:job_list' %}" class="btn btn-outline-secondary">
+                            <i class="mdi mdi-format-list-bulleted"></i>
+                            {% trans "View Sync Jobs" %}
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col col-md-6">
+        <div class="card">
+            <h5 class="card-header">
+                <i class="mdi mdi-information-outline"></i>
+                {% trans "Sync Types" %}
+            </h5>
+            <div class="card-body">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>{% trans "Type" %}</th>
+                            <th>{% trans "Description" %}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span class="badge bg-danger">All</span></td>
+                            <td>{% trans "Sync both devices (nodes) and virtual machines." %}</td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge bg-success">Devices</span></td>
+                            <td>{% trans "Sync Proxmox nodes as NetBox devices." %}</td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge bg-primary">Virtual Machines</span></td>
+                            <td>{% trans "Sync Proxmox VMs as NetBox virtual machines." %}</td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge bg-purple">VM Backups</span></td>
+                            <td>{% trans "Sync all VM backup records." %}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <h5 class="card-header">
+                <i class="mdi mdi-repeat"></i>
+                {% trans "Common Intervals" %}
+            </h5>
+            <div class="card-body">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>{% trans "Minutes" %}</th>
+                            <th>{% trans "Frequency" %}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>1</td><td>{% trans "Every minute" %}</td></tr>
+                        <tr><td>60</td><td>{% trans "Every hour" %}</td></tr>
+                        <tr><td>1440</td><td>{% trans "Every day (daily)" %}</td></tr>
+                        <tr><td>10080</td><td>{% trans "Every week (weekly)" %}</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

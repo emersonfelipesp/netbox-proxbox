@@ -74,6 +74,20 @@ Enable the plugin in `/opt/netbox/netbox/netbox/configuration.py`:
 PLUGINS = ["netbox_proxbox"]
 ```
 
+### RQ Worker (required for scheduled sync)
+
+Scheduled and recurring sync jobs run through NetBox's Redis Queue system. Start a worker that includes the plugin's queue alongside the standard NetBox queues:
+
+```bash
+cd /opt/netbox/netbox
+source /opt/netbox/venv/bin/activate
+python3 manage.py rqworker high default low netbox_proxbox.sync
+```
+
+For production, add a systemd unit so the worker starts automatically. See [Scheduled Sync — systemd unit](./docs/features/scheduled-sync.md#systemd-unit) for an example service file.
+
+> Manual sync (clicking the sync buttons in the UI) does **not** require the RQ worker. The worker is only needed for scheduled and recurring jobs.
+
 ## Backend Setup
 
 The plugin requires a running `proxbox-api` service. The simplest backend install is a separate virtual environment:
@@ -108,6 +122,30 @@ After both services are running, configure the plugin through the NetBox UI:
 5. Return to the Proxbox home page and run a sync.
 
 If you enable WebSocket support on the FastAPI endpoint, the sync pages can display real-time messages from the backend.
+
+## Scheduled Sync
+
+Proxbox supports scheduling sync operations to run automatically on a recurring interval (e.g. daily at 02:00).
+
+1. Start the RQ worker (see [Install From Source](#install-from-source) above).
+2. In NetBox, go to **Proxbox > Schedule Sync**.
+3. Choose a sync type (All, Devices, Virtual Machines, VM Backups).
+4. Set an optional schedule time and recurrence interval (in minutes).
+5. Click **Schedule**.
+
+After the job is queued, view its status, structured logs, and any error details under **Proxbox > Sync Jobs** or **Operations > Background Jobs**.
+
+Common intervals:
+
+| Minutes | Frequency |
+|---------|-----------|
+| `60` | Every hour |
+| `1440` | Every day (daily) |
+| `10080` | Every week (weekly) |
+
+Recurring jobs re-schedule automatically after each execution. To stop recurrence, delete the scheduled job from the NetBox job list.
+
+See [docs/features/scheduled-sync.md](./docs/features/scheduled-sync.md) for full details.
 
 ## Notes
 
