@@ -37,6 +37,9 @@
                 {% csrf_token %}
                 <button id="sync-nodes-button" type="submit" class="btn btn-primary" data-sync-url="{% url 'plugins:netbox_proxbox:sync_devices' %}" data-sync-stream-url="{% url 'plugins:netbox_proxbox:sync_devices_stream' %}" data-sync-kind="devices">Sync Nodes</button>
             </form>
+            <a href="{% url 'plugins:netbox_proxbox:schedule_sync' %}?sync_type=devices" class="btn btn-outline-primary m-2">
+                <i class="mdi mdi-clock-outline"></i> Schedule Sync
+            </a>
         </div>
 
         {% include "netbox_proxbox/table/devices.html" %}

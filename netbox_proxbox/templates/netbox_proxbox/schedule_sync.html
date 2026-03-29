@@ -15,7 +15,7 @@
                 <p class="text-muted">
                     {% blocktrans trimmed %}
                     Schedule a ProxBox sync operation to run at a specific time. Set a recurrence interval
-                    to repeat the sync automatically (e.g. every 1440 minutes = daily).
+                    to repeat the sync automatically (e.g. every 4 hours, daily, weekly).
                     Leave <strong>Schedule at</strong> blank to run immediately.
                     {% endblocktrans %}
                 </p>
@@ -36,6 +36,32 @@
                     </div>
 
                     <div class="mb-3">
+                        <label class="form-label" for="{{ form.proxmox_endpoints.id_for_label }}">
+                            {{ form.proxmox_endpoints.label }}
+                        </label>
+                        {{ form.proxmox_endpoints }}
+                        {% if form.proxmox_endpoints.help_text %}
+                            <div class="form-text text-muted">{{ form.proxmox_endpoints.help_text }}</div>
+                        {% endif %}
+                        {% for error in form.proxmox_endpoints.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ form.netbox_endpoints.id_for_label }}">
+                            {{ form.netbox_endpoints.label }}
+                        </label>
+                        {{ form.netbox_endpoints }}
+                        {% if form.netbox_endpoints.help_text %}
+                            <div class="form-text text-muted">{{ form.netbox_endpoints.help_text }}</div>
+                        {% endif %}
+                        {% for error in form.netbox_endpoints.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="mb-3">
                         <label class="form-label" for="{{ form.schedule_at.id_for_label }}">
                             {{ form.schedule_at.label }}
                         </label>
@@ -49,16 +75,26 @@
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label" for="{{ form.interval.id_for_label }}">
-                            {{ form.interval.label }}
+                        <label class="form-label">
+                            {{ form.interval_value.label }}
                         </label>
-                        {{ form.interval }}
-                        {% if form.interval.help_text %}
-                            <div class="form-text text-muted">{{ form.interval.help_text }}</div>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                {{ form.interval_value }}
+                                {% for error in form.interval_value.errors %}
+                                    <div class="invalid-feedback d-block">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                            <div class="col-6">
+                                {{ form.interval_unit }}
+                                {% for error in form.interval_unit.errors %}
+                                    <div class="invalid-feedback d-block">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% if form.interval_value.help_text %}
+                            <div class="form-text text-muted">{{ form.interval_value.help_text }}</div>
                         {% endif %}
-                        {% for error in form.interval.errors %}
-                            <div class="invalid-feedback d-block">{{ error }}</div>
-                        {% endfor %}
                     </div>
 
                     {% if form.non_field_errors %}
@@ -129,15 +165,17 @@
                 <table class="table table-hover">
                     <thead>
                         <tr>
-                            <th>{% trans "Minutes" %}</th>
+                            <th>{% trans "Example" %}</th>
                             <th>{% trans "Frequency" %}</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr><td>1</td><td>{% trans "Every minute" %}</td></tr>
-                        <tr><td>60</td><td>{% trans "Every hour" %}</td></tr>
-                        <tr><td>1440</td><td>{% trans "Every day (daily)" %}</td></tr>
-                        <tr><td>10080</td><td>{% trans "Every week (weekly)" %}</td></tr>
+                        <tr><td><strong>15 minutes</strong></td><td>{% trans "Frequent sync" %}</td></tr>
+                        <tr><td><strong>1 hour</strong></td><td>{% trans "Hourly sync" %}</td></tr>
+                        <tr><td><strong>4 hours</strong></td><td>{% trans "Regular sync" %}</td></tr>
+                        <tr><td><strong>12 hours</strong></td><td>{% trans "Twice daily" %}</td></tr>
+                        <tr><td><strong>1 day</strong></td><td>{% trans "Daily sync" %}</td></tr>
+                        <tr><td><strong>1 week</strong></td><td>{% trans "Weekly sync" %}</td></tr>
                     </tbody>
                 </table>
             </div>

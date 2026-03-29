@@ -37,6 +37,9 @@
                 {% csrf_token %}
                 <button id="sync-virtual-machines-button" type="submit" class="btn btn-primary" data-sync-url="{% url 'plugins:netbox_proxbox:sync_virtual_machines' %}" data-sync-stream-url="{% url 'plugins:netbox_proxbox:sync_virtual_machines_stream' %}" data-sync-kind="virtual-machines">Sync Virtual Machines</button>
             </form>
+            <a href="{% url 'plugins:netbox_proxbox:schedule_sync' %}?sync_type=virtual-machines" class="btn btn-outline-primary m-2">
+                <i class="mdi mdi-clock-outline"></i> Schedule Sync
+            </a>
         </div>
 
         {% include "netbox_proxbox/table/virtual_machines.html" %}
