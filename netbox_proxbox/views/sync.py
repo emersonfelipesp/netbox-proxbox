@@ -257,7 +257,6 @@ def _sync_stream_response(
             content_type="text/event-stream",
         )
         response["Cache-Control"] = "no-cache"
-        response["Connection"] = "keep-alive"
         response["X-Accel-Buffering"] = "no"
         return response
     except Exception as exc:  # pragma: no cover
@@ -269,7 +268,6 @@ def _sync_stream_response(
             content_type="text/event-stream",
         )
         response["Cache-Control"] = "no-cache"
-        response["Connection"] = "keep-alive"
         response["X-Accel-Buffering"] = "no"
         return response
 
