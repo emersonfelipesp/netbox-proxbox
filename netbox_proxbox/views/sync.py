@@ -191,6 +191,7 @@ def sync_full_update_resource() -> tuple[dict, int]:
     steps = [
         ("devices", "dcim/devices/create"),
         ("virtual-machines", "virtualization/virtual-machines/create"),
+        ("backups", "virtualization/virtual-machines/backups/all/create"),
     ]
     responses: dict[str, dict] = {}
 
