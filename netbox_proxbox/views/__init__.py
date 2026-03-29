@@ -35,6 +35,7 @@ from .sync import (
     sync_virtual_machines,
     sync_virtual_machines_stream,
     sync_vm_backups,
+    sync_vm_backups_stream,
 )
 from .sync_process import (
     SyncProcessDeleteView,

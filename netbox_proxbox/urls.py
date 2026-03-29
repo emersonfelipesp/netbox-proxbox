@@ -73,6 +73,11 @@ urlpatterns = [
     path(
         "sync/virtual-machines/backups/", views.sync_vm_backups, name="sync_vm_backups"
     ),
+    path(
+        "sync/virtual-machines/backups/stream/",
+        views.sync_vm_backups_stream,
+        name="sync_vm_backups_stream",
+    ),
     path("sync/full-update/", views.sync_full_update, name="sync_full_update"),
     path(
         "sync/full-update/stream/",

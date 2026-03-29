@@ -311,6 +311,15 @@ def sync_vm_backups(request):
 
 
 @require_http_methods(["GET"])
+def sync_vm_backups_stream(request):
+    return _sync_stream_response(
+        request,
+        path="virtualization/virtual-machines/backups/all/create",
+        query_params={"delete_nonexistent_backup": True},
+    )
+
+
+@require_http_methods(["GET"])
 def sync_devices_stream(request):
     return _sync_stream_response(
         request,
