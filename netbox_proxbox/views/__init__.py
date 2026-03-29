@@ -26,6 +26,7 @@ from .endpoints import (
 )
 from .external_pages import DiscordView, DiscussionsView, TelegramView
 from .keepalive_status import get_service_status
+from .schedule_sync import ScheduleSyncView
 from .sync import (
     sync_devices,
     sync_devices_stream,

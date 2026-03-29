@@ -73,13 +73,17 @@ nav:
       - Using Docker: 'backend/using-docker.md'
   - Developer:
     - Proxbox CLI Docgen: 'developer/proxbox-cli-docgen.md'
+  - Features:
+    - Synchronized Data: 'features/synchronized-data.md'
+    - Scheduled Sync: 'features/scheduled-sync.md'
+    - Background Jobs: 'features/background-jobs.md'
   # - Backend (FastAPI): 'backend/index.md'
   # - Source Code:
   #   - 'src/netboxbasic.md'
   # - Installing & Upgrade:
   #   - Installing Proxbox: 'installation/index.md'
   #   - Upgrading Proxbox: 'installation/upgrading.md'
-  # - Features:
+  # - Features (extended):
   #   - Virtual Machine (VM): 'features/virtual-machine.md'
   #   - Containers (LXC): 'features/containers.md'
   #   - Network (IPAM): 'features/network.md'
@@ -87,8 +91,6 @@ nav:
   #   - Storage: 'features/storage.md'
   #   - Backup: 'features/backup.md'
   #   - Monitoring: 'features/monitoring.md'
-  #   - Synchronized Data: 'features/synchronized-data.md'
-  #   - Background Jobs: 'features/background-jobs.md'
   #   - API & Integration: 'features/api-integration.md'
   # - Configuration:
   #     - Configuring ProxBox: 'configuration/index.md'

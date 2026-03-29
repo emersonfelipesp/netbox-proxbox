@@ -15,6 +15,11 @@ class ProxboxConfig(PluginConfig):
     max_version = "4.5.99"
     base_url = "proxbox"
     required_settings = []
+    queues = ["sync"]
+
+    def ready(self):
+        super().ready()
+        from . import jobs  # noqa: F401 — registers ProxboxSyncJob with the NetBox job system
 
 
 config = ProxboxConfig

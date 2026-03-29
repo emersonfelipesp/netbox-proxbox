@@ -79,6 +79,7 @@ urlpatterns = [
         views.sync_full_update_stream,
         name="sync_full_update_stream",
     ),
+    path("sync/schedule/", views.ScheduleSyncView.as_view(), name="schedule_sync"),
     path(
         "keepalive-status/<str:service>/<int:pk>/",
         views.get_service_status,
