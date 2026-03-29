@@ -32,10 +32,10 @@ def test_sync_resource_uses_primary_fastapi_url(monkeypatch, fastapi_endpoint):
     monkeypatch.setattr(
         module.requests,
         "get",
-        lambda url, params=None, headers=None, verify=True, timeout=None: requested.append(
-            (url, params, headers, verify)
-        )
-        or ResponseStub({"ok": True}),
+        lambda url, params=None, headers=None, verify=True, timeout=None: (
+            requested.append((url, params, headers, verify))
+            or ResponseStub({"ok": True})
+        ),
     )
 
     response = module.sync_devices(_json_request())
@@ -106,7 +106,9 @@ def test_sync_resource_uses_http_ip_fallback_when_ssl_verification_is_disabled(
     def fake_get(url, params=None, headers=None, verify=True, timeout=None):
         requested.append((url, headers, verify))
         if "proxbox.local" in url:
-            raise requests.exceptions.ConnectionError("dial tcp 10.0.0.5:8800: connect: refused")
+            raise requests.exceptions.ConnectionError(
+                "dial tcp 10.0.0.5:8800: connect: refused"
+            )
         return ResponseStub({"ok": True})
 
     monkeypatch.setattr(module.requests, "get", fake_get)
@@ -156,10 +158,9 @@ def test_sync_resource_skips_duplicate_ip_fallback(monkeypatch, fastapi_endpoint
     monkeypatch.setattr(
         module.requests,
         "get",
-        lambda url, params=None, headers=None, verify=True, timeout=None: requested.append(
-            (url, headers, verify)
-        )
-        or ResponseStub({"ok": True}),
+        lambda url, params=None, headers=None, verify=True, timeout=None: (
+            requested.append((url, headers, verify)) or ResponseStub({"ok": True})
+        ),
     )
 
     response = module.sync_devices(_json_request())
@@ -183,7 +184,9 @@ def test_sync_resource_redirects_browser_requests_with_success_message(
         fastapi_endpoint=fastapi_endpoint,
     )
 
-    monkeypatch.setattr(module.requests, "get", lambda *args, **kwargs: ResponseStub({"ok": True}))
+    monkeypatch.setattr(
+        module.requests, "get", lambda *args, **kwargs: ResponseStub({"ok": True})
+    )
 
     response = module.sync_virtual_machines(_browser_request())
 
@@ -216,7 +219,9 @@ def test_sync_resource_redirects_browser_requests_with_error_message(
     assert module._messages_stub.calls == [("error", "connection refused")]
 
 
-def test_sync_full_update_runs_devices_then_virtual_machines(monkeypatch, fastapi_endpoint):
+def test_sync_full_update_runs_devices_then_virtual_machines(
+    monkeypatch, fastapi_endpoint
+):
     module = load_plugin_module(
         "netbox_proxbox.views.sync",
         monkeypatch=monkeypatch,
@@ -355,7 +360,9 @@ def test_sync_resource_prefers_backend_message_over_generic_internal_server_erro
     assert response.payload["detail"] == "Error while syncing virtual machines."
 
 
-def test_sync_full_update_surfaces_structured_backend_type_error(monkeypatch, fastapi_endpoint):
+def test_sync_full_update_surfaces_structured_backend_type_error(
+    monkeypatch, fastapi_endpoint
+):
     module = load_plugin_module(
         "netbox_proxbox.views.sync",
         monkeypatch=monkeypatch,
@@ -394,3 +401,47 @@ def test_sync_full_update_surfaces_structured_backend_type_error(monkeypatch, fa
     assert response.payload["detail"] == (
         "'async for' requires an object with __aiter__ method, got PluginsApp"
     )
+
+
+def test_sync_stream_response_returns_sse(monkeypatch, fastapi_endpoint):
+    module = load_plugin_module(
+        "netbox_proxbox.views.sync",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+    )
+
+    class _Response:
+        status_code = 200
+
+        def raise_for_status(self):
+            return None
+
+        def iter_lines(self, decode_unicode=True):
+            del decode_unicode
+            return iter(
+                [
+                    "event: step",
+                    'data: {"step":"devices","status":"started","message":"Starting."}',
+                    "",
+                    "event: complete",
+                    'data: {"ok":true,"message":"Done."}',
+                    "",
+                ]
+            )
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            del exc_type, exc, tb
+            return False
+
+    monkeypatch.setattr(module.requests, "get", lambda *args, **kwargs: _Response())
+
+    response = module.sync_devices_stream(_json_request(method="GET"))
+    chunks = list(response.streaming_content)
+
+    assert response.status_code == 200
+    assert response["Cache-Control"] == "no-cache"
+    assert any("event: step" in chunk for chunk in chunks)
+    assert any("event: complete" in chunk for chunk in chunks)

@@ -15,6 +15,13 @@ class HttpResponse:
     def __init__(self, status: int = 200, content: str | None = None):
         self.status_code = status
         self.content = content
+        self._headers = {}
+
+    def __setitem__(self, key, value):
+        self._headers[key] = value
+
+    def __getitem__(self, key):
+        return self._headers[key]
 
 
 class JsonResponse(HttpResponse):
@@ -25,6 +32,15 @@ class JsonResponse(HttpResponse):
 
     def json(self):
         return self.payload
+
+
+class StreamingHttpResponse(HttpResponse):
+    def __init__(
+        self, streaming_content=None, status: int = 200, content_type: str | None = None
+    ):
+        super().__init__(status=status)
+        self.streaming_content = streaming_content
+        self.content_type = content_type
 
 
 class HttpRequest:
@@ -107,6 +123,7 @@ def load_plugin_module(
     django_http.HttpRequest = HttpRequest
     django_http.HttpResponse = HttpResponse
     django_http.JsonResponse = JsonResponse
+    django_http.StreamingHttpResponse = StreamingHttpResponse
 
     django_shortcuts = types.ModuleType("django.shortcuts")
     django_shortcuts.render = lambda request, template_name, context=None: {
@@ -121,7 +138,7 @@ def load_plugin_module(
     django_views_decorators = types.ModuleType("django.views.decorators")
     django_views_http = types.ModuleType("django.views.decorators.http")
     django_views_http.require_GET = lambda func: func
-    django_views_http.require_http_methods = lambda methods: (lambda func: func)
+    django_views_http.require_http_methods = lambda methods: lambda func: func
 
     django_urls = types.ModuleType("django.urls")
     django_urls.reverse = lambda *args, **kwargs: "/dummy/"
