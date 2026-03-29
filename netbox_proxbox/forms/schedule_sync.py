@@ -4,7 +4,8 @@ from django import forms
 from django.utils.translation import gettext_lazy as _
 
 from utilities.datetime import local_now
-from utilities.forms.widgets import DateTimePicker, Select2MultipleChoice
+from utilities.forms.fields import DynamicModelMultipleChoiceField
+from utilities.forms.widgets import DateTimePicker
 
 from netbox_proxbox.choices import ScheduleIntervalUnitChoices, SyncTypeChoices
 from netbox_proxbox.models import NetBoxEndpoint, ProxmoxEndpoint
@@ -19,23 +20,21 @@ class ScheduleSyncForm(forms.Form):
         label=_("Sync Type"),
         help_text=_("Which sync operation to run."),
     )
-    proxmox_endpoints = forms.ModelMultipleChoiceField(
+    proxmox_endpoints = DynamicModelMultipleChoiceField(
         queryset=ProxmoxEndpoint.objects.all(),
         required=False,
         label=_("Proxmox Endpoints"),
         help_text=_(
             "Select specific Proxmox endpoints to sync. Leave empty to sync all."
         ),
-        widget=Select2MultipleChoice,
     )
-    netbox_endpoints = forms.ModelMultipleChoiceField(
+    netbox_endpoints = DynamicModelMultipleChoiceField(
         queryset=NetBoxEndpoint.objects.all(),
         required=False,
         label=_("NetBox Endpoints"),
         help_text=_(
             "Select specific NetBox endpoints to sync to. Leave empty to sync all."
         ),
-        widget=Select2MultipleChoice,
     )
     schedule_at = forms.DateTimeField(
         required=False,
