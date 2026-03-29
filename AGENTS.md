@@ -26,3 +26,4 @@ Read [`CLAUDE.md`](./CLAUDE.md) first for the plugin architecture and the full d
 - [`netbox_proxbox/templates/netbox_proxbox/test/CLAUDE.md`](./netbox_proxbox/templates/netbox_proxbox/test/CLAUDE.md)
 - [`netbox_proxbox/views/CLAUDE.md`](./netbox_proxbox/views/CLAUDE.md)
 - [`netbox_proxbox/views/endpoints/CLAUDE.md`](./netbox_proxbox/views/endpoints/CLAUDE.md)
+- [`tests/CLAUDE.md`](./tests/CLAUDE.md)

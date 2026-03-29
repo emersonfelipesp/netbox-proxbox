@@ -9,7 +9,10 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
 - `ProxmoxEndpoint`, `NetBoxEndpoint`, `FastAPIEndpoint`, `SyncProcess`, and `VMBackup` are the plugin's main persisted models.
 - NetBox UI routes live in [`netbox_proxbox/urls.py`](./netbox_proxbox/urls.py) and are implemented primarily in `netbox_proxbox/views/`.
 - The plugin also exposes a NetBox plugin API under `netbox_proxbox/api/`, using serializers, filtersets, and standard `NetBoxModelViewSet` classes.
-- Sync actions do not perform the sync themselves inside NetBox. They enqueue or trigger work on the external ProxBox FastAPI service over HTTP, and optional browser updates can flow over WebSocket.
+- Sync actions do not perform the sync themselves inside NetBox. They trigger work on the external ProxBox FastAPI service over HTTP. Two modes are supported:
+  - **POST polling**: traditional request/response where the plugin waits for the backend to finish and returns a single JSON payload.
+  - **GET SSE stream**: the plugin proxies the backend's `text/event-stream` response back to the browser as a Django `StreamingHttpResponse`. The browser parses SSE frames in real time via `EventSource`-style fetching and renders granular per-object progress. Stream endpoints are at `sync/<kind>/stream/`.
+- Browser updates can flow over SSE streams or the existing WebSocket channel.
 - Templates and static assets are conventional Django plugin assets under `netbox_proxbox/templates/` and `netbox_proxbox/static/`.
 
 ## How To Navigate
@@ -19,6 +22,7 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
 - Use `forms`, `filtersets`, and `tables` when changing how plugin objects are edited or listed in NetBox.
 - Use `templates` and `static` together when adjusting UI behavior, page structure, or browser-side interactions.
 - Check `migrations` before changing any model field or constraint.
+- For sync streaming changes, see `views/CLAUDE.md` (SSE proxy), `static/netbox_proxbox/js/CLAUDE.md` (browser SSE parsing), and `templates/netbox_proxbox/CLAUDE.md` (stream URL wiring).
 
 ## Index
 
@@ -43,3 +47,4 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
 - [`netbox_proxbox/templates/netbox_proxbox/test/CLAUDE.md`](./netbox_proxbox/templates/netbox_proxbox/test/CLAUDE.md)
 - [`netbox_proxbox/views/CLAUDE.md`](./netbox_proxbox/views/CLAUDE.md)
 - [`netbox_proxbox/views/endpoints/CLAUDE.md`](./netbox_proxbox/views/endpoints/CLAUDE.md)
+- [`tests/CLAUDE.md`](./tests/CLAUDE.md)
