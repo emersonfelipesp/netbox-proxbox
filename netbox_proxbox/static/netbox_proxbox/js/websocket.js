@@ -14,6 +14,7 @@ export default class WebSocketClient {
         this.reconnectAttempts = 0;
         this.maxReconnectAttempts = 5;
         this.reconnectDelay = 2000;
+        this.syncEndListeners = new Set();
         this.connect();
     }
 
@@ -68,6 +69,10 @@ export default class WebSocketClient {
             });
         }
 
+        if (jsonMessage.end === true) {
+            this.notifySyncEnd(jsonMessage.object);
+        }
+
         this.displayMessage(event.data);
     }
 
@@ -103,6 +108,17 @@ export default class WebSocketClient {
         }
     }
 
+    onSyncEnd(listener) {
+        this.syncEndListeners.add(listener);
+        return () => this.syncEndListeners.delete(listener);
+    }
+
+    notifySyncEnd(syncObject) {
+        for (const listener of this.syncEndListeners) {
+            listener(syncObject);
+        }
+    }
+
     syncNodes() {
         this.send("Sync Nodes");
     }
@@ -112,6 +128,6 @@ export default class WebSocketClient {
     }
 
     sendFullUpdate() {
-        this.send("Full Update");
+        this.send("Full Update Sync");
     }
 }

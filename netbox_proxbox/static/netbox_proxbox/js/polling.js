@@ -1,6 +1,8 @@
 import { populateTable } from "./table.js";
 
-export async function poll(objectType) {
+export async function poll(objectType, callbacks = {}) {
+    const { onComplete = () => {}, onError = () => {} } = callbacks;
+
     while (true) {
         let data = [];
         try {
@@ -10,10 +12,12 @@ export async function poll(objectType) {
             data = await response.json();
         } catch (error) {
             console.error("Polling failed:", error);
+            onError(error);
             break;
         }
 
         if (!Array.isArray(data) || data.length === 0) {
+            onComplete();
             break;
         }
 
