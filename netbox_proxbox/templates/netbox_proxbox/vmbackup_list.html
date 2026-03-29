@@ -2,13 +2,20 @@
 {% load buttons %}
 {% load helpers %}
 {% load i18n %}
+{% load static %}
+
+{% block javascript %}
+<script type="module" src="{% static 'netbox_proxbox/js/home.js' %}"></script>
+{{ block.super }}
+{% endblock %}
 
 {% block controls %}
-  <div class="btn-group" role="group">
-    <a href="{% url 'plugins:netbox_proxbox:sync_vm_backups' %}" class="btn btn-primary">
+  <form class="btn-group" method="post" data-sync-url="{% url 'plugins:netbox_proxbox:sync_vm_backups' %}" data-sync-stream-url="{% url 'plugins:netbox_proxbox:sync_vm_backups_stream' %}" data-sync-kind="backups">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-primary" data-sync-url="{% url 'plugins:netbox_proxbox:sync_vm_backups' %}" data-sync-stream-url="{% url 'plugins:netbox_proxbox:sync_vm_backups_stream' %}" data-sync-kind="backups">
       <i class="mdi mdi-sync" aria-hidden="true"></i> {% trans "Sync Backups" %}
-    </a>
-  </div>
+    </button>
+  </form>
 {% endblock %}
 {% block bulk_buttons %}
   <div class="btn-group" role="group">
