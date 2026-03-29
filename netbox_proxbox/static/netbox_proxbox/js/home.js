@@ -1,5 +1,4 @@
 import { fetchJson, getCsrfToken, setBadgeState } from "./common.js";
-import { poll } from "./polling.js";
 import WebSocketClient from "./websocket.js";
 
 function initializeWebSocket() {
@@ -106,7 +105,56 @@ function appendLogMessage(message) {
     }
 }
 
-function wireSyncForms(websocketClient) {
+function syncLabel(syncKind) {
+    if (syncKind === "devices") {
+        return "Sync Nodes";
+    }
+    if (syncKind === "virtual-machines") {
+        return "Sync Virtual Machines";
+    }
+    if (syncKind === "full-update") {
+        return "Full Update Sync";
+    }
+    return "Sync";
+}
+
+function startSyncProgress(syncKind) {
+    const progressContainer = document.getElementById("sync-progress-container");
+    const progressLabel = document.getElementById("sync-progress-label");
+    const progressState = document.getElementById("sync-progress-state");
+    if (!progressContainer || !progressLabel || !progressState) {
+        return;
+    }
+
+    progressLabel.textContent = `${syncLabel(syncKind)} in progress`;
+    progressState.textContent = "Working...";
+    progressContainer.classList.remove("d-none");
+}
+
+function stopSyncProgress(status = "idle", detail = "") {
+    const progressContainer = document.getElementById("sync-progress-container");
+    const progressLabel = document.getElementById("sync-progress-label");
+    const progressState = document.getElementById("sync-progress-state");
+    if (!progressContainer || !progressLabel || !progressState) {
+        return;
+    }
+
+    if (status === "error") {
+        progressLabel.textContent = "Sync failed";
+        progressState.textContent = detail || "The backend returned an error.";
+    } else {
+        progressLabel.textContent = "Sync complete";
+        progressState.textContent = detail || "Finished.";
+    }
+
+    window.setTimeout(() => {
+        progressContainer.classList.add("d-none");
+        progressLabel.textContent = "Sync in progress";
+        progressState.textContent = "Working...";
+    }, 1200);
+}
+
+function wireSyncForms() {
     const syncForms = document.querySelectorAll("form[data-sync-url][data-sync-kind]");
     for (const form of syncForms) {
         form.addEventListener("submit", async (event) => {
@@ -117,6 +165,8 @@ function wireSyncForms(websocketClient) {
                 return;
             }
             button.disabled = true;
+            startSyncProgress(syncKind);
+            appendLogMessage(`${syncKind}: request started`);
 
             try {
                 const payload = await fetchJson(syncUrl, {
@@ -126,28 +176,19 @@ function wireSyncForms(websocketClient) {
                         "X-Requested-With": "XMLHttpRequest",
                     },
                 });
-                appendLogMessage(`${syncKind}: request accepted`);
-
-                if (syncKind === "devices" || syncKind === "virtual-machines" || syncKind === "full-update") {
-                    if (websocketClient && websocketClient.isConnected()) {
-                        if (syncKind === "devices") {
-                            websocketClient.syncNodes();
-                        } else if (syncKind === "virtual-machines") {
-                            websocketClient.syncVirtualMachines();
-                        } else {
-                            websocketClient.sendFullUpdate();
-                        }
-                    } else {
-                        const pollingKind = syncKind === "virtual-machines" ? "virtual-machines" : syncKind;
-                        poll(pollingKind);
-                    }
-                }
+                appendLogMessage(`${syncKind}: request completed`);
 
                 if (payload?.detail) {
                     appendLogMessage(payload.detail);
                 }
+                if (payload?.response?.status) {
+                    appendLogMessage(`${syncKind}: ${payload.response.status}`);
+                }
+                await Promise.all([refreshStatusBadges(), hydrateProxmoxCards()]);
+                stopSyncProgress("success", payload?.detail || "");
             } catch (error) {
                 appendLogMessage(`${syncKind}: ${error.message}`);
+                stopSyncProgress("error", error.message || "Request failed.");
             } finally {
                 button.disabled = false;
             }
@@ -156,7 +197,7 @@ function wireSyncForms(websocketClient) {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
-    const websocketClient = initializeWebSocket();
-    wireSyncForms(websocketClient);
+    initializeWebSocket();
+    wireSyncForms();
     await Promise.all([refreshStatusBadges(), hydrateProxmoxCards()]);
 });

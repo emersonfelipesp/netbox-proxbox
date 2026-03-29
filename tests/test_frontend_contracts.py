@@ -34,6 +34,10 @@ def test_home_template_uses_plugin_vanilla_js_entrypoint():
     contents = _read("netbox_proxbox/templates/netbox_proxbox/home.html")
     assert "netbox_proxbox/js/home.js" in contents
     assert "htmx.org" not in contents
+    assert 'id="sync-progress-container"' in contents
+    assert 'id="sync-progress-label"' in contents
+    assert 'id="sync-progress-state"' in contents
+    assert "progress-bar progress-bar-striped progress-bar-animated" in contents
     assert 'method="post"' in contents
     assert "{% csrf_token %}" in contents
     assert 'type="submit"' in contents
@@ -64,9 +68,15 @@ def test_home_javascript_passes_error_detail_to_badge_state():
     assert "proxmox-connection-error-" in contents
     assert "payload.detail && badge" in contents
     assert 'form.addEventListener("submit"' in contents
+    assert "function startSyncProgress(syncKind)" in contents
+    assert "function stopSyncProgress(status = \"idle\", detail = \"\")" in contents
+    assert "startSyncProgress(syncKind)" in contents
+    assert "stopSyncProgress(\"success\"" in contents
+    assert "stopSyncProgress(\"error\"" in contents
     assert 'method: "POST"' in contents
     assert '"X-CSRFToken": getCsrfToken()' in contents
     assert '"X-Requested-With": "XMLHttpRequest"' in contents
+    assert "request completed" in contents
 
 
 def test_common_badge_state_supports_hover_tooltip_details():
@@ -75,6 +85,18 @@ def test_common_badge_state_supports_hover_tooltip_details():
     assert "element.dataset.bsTitle = tooltip" in contents
     assert "export function getCsrfToken()" in contents
     assert 'querySelector("input[name=\'csrfmiddlewaretoken\']")' in contents
+
+
+def test_websocket_and_polling_modules_expose_sync_completion_hooks():
+    websocket_contents = _read("netbox_proxbox/static/netbox_proxbox/js/websocket.js")
+    polling_contents = _read("netbox_proxbox/static/netbox_proxbox/js/polling.js")
+
+    assert "onSyncEnd(listener)" in websocket_contents
+    assert "notifySyncEnd(syncObject)" in websocket_contents
+    assert 'this.send("Full Update Sync")' in websocket_contents
+    assert "callbacks = {}" in polling_contents
+    assert "onComplete" in polling_contents
+    assert "onError" in polling_contents
 
 
 def test_proxmox_list_template_exposes_import_export_controls_and_warning_modal():

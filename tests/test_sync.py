@@ -236,3 +236,40 @@ def test_sync_resource_surfaces_backend_error_detail(monkeypatch, fastapi_endpoi
 
     assert response.status_code == 503
     assert response.payload["detail"] == "backend token missing"
+
+
+def test_sync_resource_prefers_backend_message_over_generic_internal_server_error(
+    monkeypatch, fastapi_endpoint
+):
+    module = load_plugin_module(
+        "netbox_proxbox.views.sync",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+    )
+
+    class FailingResponse(ResponseStub):
+        text = '{"detail": "Internal Server Error", "message": "Error while syncing virtual machines."}'
+        headers = {"Content-Type": "application/json"}
+        url = "https://proxbox.local:8800/full-update"
+
+        def raise_for_status(self):
+            err = requests.exceptions.HTTPError("500")
+            err.response = self
+            raise err
+
+    monkeypatch.setattr(
+        module.requests,
+        "get",
+        lambda *args, **kwargs: FailingResponse(
+            {
+                "detail": "Internal Server Error",
+                "message": "Error while syncing virtual machines.",
+            },
+            status_code=500,
+        ),
+    )
+
+    response = module.sync_full_update(_json_request())
+
+    assert response.status_code == 503
+    assert response.payload["detail"] == "Error while syncing virtual machines."

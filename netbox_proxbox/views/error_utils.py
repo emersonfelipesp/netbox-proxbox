@@ -18,7 +18,20 @@ def extract_backend_error_detail(
     try:
         payload = response.json()
         if isinstance(payload, dict):
-            detail = payload.get("detail") or payload.get("message")
+            payload_detail = payload.get("detail")
+            payload_message = payload.get("message")
+            generic_detail = {
+                "internal server error",
+                "server error",
+            }
+            if (
+                isinstance(payload_detail, str)
+                and payload_detail.strip().lower() in generic_detail
+                and payload_message
+            ):
+                detail = payload_message
+            else:
+                detail = payload_detail or payload_message
             python_exception = payload.get("python_exception")
             if python_exception:
                 detail = (
