@@ -20,9 +20,11 @@ This package contains the actual NetBox plugin. It defines the plugin config, UR
 
 - Endpoint objects are created in NetBox through forms and model views.
 - List and detail pages are rendered by classes in `views/` using tables, filtersets, and templates.
-- Sync routes call the external ProxBox FastAPI backend using the configured `FastAPIEndpoint`.
+- Sync routes call the external ProxBox FastAPI backend using the configured `FastAPIEndpoint`. Two sync transport modes are available:
+  - POST polling (traditional): plugin waits for completion and returns a single JSON response.
+  - GET SSE streaming: plugin proxies `text/event-stream` from the FastAPI backend to the browser via `StreamingHttpResponse`. The browser JS parses SSE frames and renders granular per-object progress in real time.
 - The API layer exposes the same main models through NetBox plugin API endpoints.
-- Browser-side pages use templates plus JS from `static/netbox_proxbox/js/` for polling and WebSocket updates.
+- Browser-side pages use templates plus JS from `static/netbox_proxbox/js/` for polling, SSE streaming, and WebSocket updates.
 
 ## Dependencies
 
