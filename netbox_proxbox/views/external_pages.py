@@ -1,6 +1,5 @@
 """Redirect plugin users to external community and discussion pages."""
 
-from django.views import View
 from django.shortcuts import redirect
 
 def DiscussionsView(request):

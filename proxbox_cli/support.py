@@ -4,13 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import json
-import sys
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-import click
-import typer
 import yaml
 from rich.console import Console
 from rich.table import Table

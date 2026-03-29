@@ -3,10 +3,9 @@
 from django import forms
 from django.utils.translation import gettext_lazy as _
 
-from core.choices import JobIntervalChoices
 from utilities.datetime import local_now
 from utilities.forms.fields import DynamicModelMultipleChoiceField
-from utilities.forms.widgets import DateTimePicker, NumberWithOptions
+from utilities.forms.widgets import DateTimePicker
 
 from netbox_proxbox.choices import ScheduleIntervalUnitChoices, SyncTypeChoices
 from netbox_proxbox.models import NetBoxEndpoint, ProxmoxEndpoint
