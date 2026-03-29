@@ -6,6 +6,9 @@ import requests
 
 from tests.conftest import ResponseStub, load_plugin_module
 
+_SYNC_SHORT_TIMEOUT = 5
+_SYNC_BACKUP_TIMEOUT = (5, 3600)
+
 
 def _json_request(method: str = "POST"):
     return SimpleNamespace(
@@ -33,7 +36,7 @@ def test_sync_resource_uses_primary_fastapi_url(monkeypatch, fastapi_endpoint):
         module.requests,
         "get",
         lambda url, params=None, headers=None, verify=True, timeout=None: (
-            requested.append((url, params, headers, verify))
+            requested.append((url, params, headers, verify, timeout))
             or ResponseStub({"ok": True})
         ),
     )
@@ -47,6 +50,7 @@ def test_sync_resource_uses_primary_fastapi_url(monkeypatch, fastapi_endpoint):
             None,
             {"Authorization": "Bearer backend-token"},
             True,
+            _SYNC_SHORT_TIMEOUT,
         )
     ]
 
@@ -60,7 +64,7 @@ def test_sync_resource_falls_back_to_ip_url(monkeypatch, fastapi_endpoint):
     requested = []
 
     def fake_get(url, params=None, headers=None, verify=True, timeout=None):
-        requested.append((url, params, headers, verify))
+        requested.append((url, params, headers, verify, timeout))
         if "proxbox.local" in url:
             raise requests.exceptions.ConnectionError("primary failed")
         return ResponseStub({"ok": True})
@@ -76,12 +80,14 @@ def test_sync_resource_falls_back_to_ip_url(monkeypatch, fastapi_endpoint):
             {"delete_nonexistent_backup": True},
             {"Authorization": "Bearer backend-token"},
             True,
+            _SYNC_BACKUP_TIMEOUT,
         ),
         (
             "https://10.0.0.5:8800/virtualization/virtual-machines/backups/all/create",
             {"delete_nonexistent_backup": True},
             {"Authorization": "Bearer backend-token"},
             True,
+            _SYNC_BACKUP_TIMEOUT,
         ),
     ]
 
@@ -104,7 +110,7 @@ def test_sync_resource_uses_http_ip_fallback_when_ssl_verification_is_disabled(
     requested = []
 
     def fake_get(url, params=None, headers=None, verify=True, timeout=None):
-        requested.append((url, headers, verify))
+        requested.append((url, params, headers, verify, timeout))
         if "proxbox.local" in url:
             raise requests.exceptions.ConnectionError(
                 "dial tcp 10.0.0.5:8800: connect: refused"
@@ -119,33 +125,45 @@ def test_sync_resource_uses_http_ip_fallback_when_ssl_verification_is_disabled(
     assert requested == [
         (
             "http://proxbox.local:8800/dcim/devices/create",
+            None,
             {"Authorization": "Bearer backend-token"},
             False,
+            _SYNC_SHORT_TIMEOUT,
         ),
         (
             "http://10.0.0.5:8800/dcim/devices/create",
+            None,
             {"Authorization": "Bearer backend-token"},
             False,
+            _SYNC_SHORT_TIMEOUT,
         ),
         (
             "http://proxbox.local:8800/virtualization/virtual-machines/create",
+            None,
             {"Authorization": "Bearer backend-token"},
             False,
+            _SYNC_SHORT_TIMEOUT,
         ),
         (
             "http://10.0.0.5:8800/virtualization/virtual-machines/create",
+            None,
             {"Authorization": "Bearer backend-token"},
             False,
+            _SYNC_SHORT_TIMEOUT,
         ),
         (
             "http://proxbox.local:8800/virtualization/virtual-machines/backups/all/create",
+            {"delete_nonexistent_backup": True},
             {"Authorization": "Bearer backend-token"},
             False,
+            _SYNC_BACKUP_TIMEOUT,
         ),
         (
             "http://10.0.0.5:8800/virtualization/virtual-machines/backups/all/create",
+            {"delete_nonexistent_backup": True},
             {"Authorization": "Bearer backend-token"},
             False,
+            _SYNC_BACKUP_TIMEOUT,
         ),
     ]
 
@@ -169,7 +187,8 @@ def test_sync_resource_skips_duplicate_ip_fallback(monkeypatch, fastapi_endpoint
         module.requests,
         "get",
         lambda url, params=None, headers=None, verify=True, timeout=None: (
-            requested.append((url, headers, verify)) or ResponseStub({"ok": True})
+            requested.append((url, params, headers, verify, timeout))
+            or ResponseStub({"ok": True})
         ),
     )
 
@@ -179,8 +198,10 @@ def test_sync_resource_skips_duplicate_ip_fallback(monkeypatch, fastapi_endpoint
     assert requested == [
         (
             "https://10.0.0.5:8800/dcim/devices/create",
+            None,
             {"Authorization": "Bearer backend-token"},
             True,
+            _SYNC_SHORT_TIMEOUT,
         )
     ]
 
@@ -240,7 +261,7 @@ def test_sync_full_update_runs_devices_then_virtual_machines(
     requested = []
 
     def fake_get(url, params=None, headers=None, verify=True, timeout=None):
-        requested.append((url, headers, verify))
+        requested.append((url, params, headers, verify, timeout))
         return ResponseStub({"ok": True, "url": url})
 
     monkeypatch.setattr(module.requests, "get", fake_get)
@@ -251,18 +272,24 @@ def test_sync_full_update_runs_devices_then_virtual_machines(
     assert requested == [
         (
             "https://proxbox.local:8800/dcim/devices/create",
+            None,
             {"Authorization": "Bearer backend-token"},
             True,
+            _SYNC_SHORT_TIMEOUT,
         ),
         (
             "https://proxbox.local:8800/virtualization/virtual-machines/create",
+            None,
             {"Authorization": "Bearer backend-token"},
             True,
+            _SYNC_SHORT_TIMEOUT,
         ),
         (
             "https://proxbox.local:8800/virtualization/virtual-machines/backups/all/create",
+            {"delete_nonexistent_backup": True},
             {"Authorization": "Bearer backend-token"},
             True,
+            _SYNC_BACKUP_TIMEOUT,
         ),
     ]
     assert response.payload["path"] == "full-update"
