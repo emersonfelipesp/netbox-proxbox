@@ -1,5 +1,15 @@
 # netbox-proxbox Codebase Guide
 
+## Pre-commit Checklist
+
+**Before committing ANY change:**
+
+1. Run syntax check: `python -m compileall netbox_proxbox tests`
+2. Run linter: `ruff check .`
+3. Run tests: `pytest tests/`
+
+---
+
 This repository packages the `netbox_proxbox` NetBox plugin. The plugin adds endpoint inventory for Proxmox, NetBox, and the companion ProxBox FastAPI backend; UI pages for sync operations and status checks; REST API endpoints for those models; and a small amount of browser-side JavaScript and styling for the plugin pages.
 
 The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxbox/__init__.py). It declares plugin version `0.0.7` and NetBox compatibility `4.5.0` through `4.5.99`.

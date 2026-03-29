@@ -49,3 +49,15 @@ packages = ["netbox_proxbox", "proxbox_cli"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+exclude = ["tests/test_api_netbox_integration.py", "tests/test_proxmox_export_view.py", "docs/generate_proxbox_cli_docs.py", "netbox_proxbox/migrations"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = ["F403", "F401", "E501", "W293"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401", "F403"]
