@@ -128,7 +128,7 @@ class NodesView(View):
     def get(self, request):
         from dcim.models import Device
         from django.contrib.contenttypes.models import ContentType
-        from netbox.models import Tag
+        from extras.models import Tag
 
         from netbox_proxbox.models import FastAPIEndpoint
 
@@ -143,9 +143,9 @@ class NodesView(View):
         if proxbox_tag:
             device_content_type = ContentType.objects.get_for_model(Device)
             tagged_device_ids = list(
-                proxbox_tag.tagged_items.filter(
-                    content_type=device_content_type
-                ).values_list("object_id", flat=True)[:100]
+                proxbox_tag.tagged_items.filter(content_type=device_content_type).values_list(
+                    "object_id", flat=True
+                )[:100]
             )
             if tagged_device_ids:
                 devices = list(
@@ -173,7 +173,7 @@ class VirtualMachinesView(View):
 
     def get(self, request):
         from django.contrib.contenttypes.models import ContentType
-        from netbox.models import Tag
+        from extras.models import Tag
         from virtualization.models import VirtualMachine
 
         from netbox_proxbox.models import FastAPIEndpoint
@@ -189,16 +189,14 @@ class VirtualMachinesView(View):
         if proxbox_tag:
             vm_content_type = ContentType.objects.get_for_model(VirtualMachine)
             tagged_vm_ids = list(
-                proxbox_tag.tagged_items.filter(
-                    content_type=vm_content_type
-                ).values_list("object_id", flat=True)[:100]
+                proxbox_tag.tagged_items.filter(content_type=vm_content_type).values_list(
+                    "object_id", flat=True
+                )[:100]
             )
             if tagged_vm_ids:
                 virtual_machines = list(
                     VirtualMachine.objects.filter(id__in=tagged_vm_ids)
-                    .select_related(
-                        "cluster__site", "role", "tenant", "platform", "tenant"
-                    )
+                    .select_related("cluster__site", "role", "tenant", "platform", "tenant")
                     .prefetch_related("interfaces__ip_addresses")
                 )
 
