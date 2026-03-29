@@ -1,6 +1,7 @@
 """View for scheduling a ProxBox sync job."""
 
 from django.contrib import messages
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import redirect, render
 from django.views import View
 
@@ -13,7 +14,7 @@ __all__ = ("ScheduleSyncView",)
 _QUEUE_NAME = "netbox_proxbox.sync"
 
 
-class ScheduleSyncView(View):
+class ScheduleSyncView(LoginRequiredMixin, View):
     template_name = "netbox_proxbox/schedule_sync.html"
 
     def get(self, request):

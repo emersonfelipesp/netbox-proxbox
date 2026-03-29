@@ -10,6 +10,18 @@
 
 ---
 
+## Framework stack preference
+
+When implementing or changing behavior, prefer solutions in this order:
+
+1. **NetBox plugin idioms** — Patterns used in this plugin and in NetBox’s plugin framework (`netbox.plugins`, plugin models, views, tables, filtersets, serializers as NetBox documents them).
+2. **NetBox core** — Built-in modules such as `utilities.forms`, `utilities.views`, `netbox.*` model and API bases, and DRF usage aligned with upstream NetBox.
+3. **Django** — Standard `django.*` APIs when NetBox does not expose an equivalent.
+
+Do **not** add new third-party PyPI dependencies to replace what NetBox or Django already provides (forms, widgets, routing, auth, REST patterns). Existing runtime deps in `pyproject.toml` (for example `requests`, `websockets`, optional CLI extras) are fine; avoid piling on more libraries for the same problems.
+
+---
+
 Read [`CLAUDE.md`](./CLAUDE.md) first for the plugin architecture and the full documentation map. Use the lower-level `CLAUDE.md` files when working in a specific directory or when changing only one layer of the plugin.
 
 ## CLAUDE.md Index

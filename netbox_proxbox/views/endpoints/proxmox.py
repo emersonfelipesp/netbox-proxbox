@@ -14,7 +14,6 @@ import yaml
 # NetBox Imports
 from netbox.api.authentication import TokenAuthentication
 from netbox.views import generic
-from netbox.views.generic.bulk_views import BulkImportView
 from utilities.permissions import get_permission_for_model
 from utilities.query import reapply_model_ordering
 from utilities.views import register_model_view
@@ -116,7 +115,7 @@ class ProxmoxEndpointListView(generic.ObjectListView):
 
 
 @register_model_view(ProxmoxEndpoint, "bulk_import", path="import", detail=False)
-class ProxmoxEndpointBulkImportView(BulkImportView):
+class ProxmoxEndpointBulkImportView(generic.BulkImportView):
     queryset = ProxmoxEndpoint.objects.all()
     model_form = ProxmoxEndpointImportForm
 

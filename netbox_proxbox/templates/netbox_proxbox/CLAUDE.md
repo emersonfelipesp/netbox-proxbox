@@ -7,7 +7,7 @@ This is the main Django template namespace for the plugin.
 - Dashboard and informational pages: `home.html`, `community.html`, `contributing.html`, `devices.html`, `virtual_machines.html`.
 - Endpoint pages: `proxmoxendpoint.html`, `proxmox_endpoint.html`, `proxmox-endpoints.html`, `netboxendpoint.html`, `fastapiendpoint.html`, and corresponding `*_edit.html` files.
 - Sync and status pages: `sync_devices.html`, `sync_virtual_machines.html`, `sync_vm_backups.html`, `sync_full_update.html`, `syncprocess.html`, `proxbox-backend-status.html`, `status_badge.html`, `websocket_page.html`.
-- VM backup pages: `vmbackup.html`, `vmbackup_list.html`, `vmbackup_bulk_delete.html`, `virtual_machine_backups.html`.
+- VM backup pages: `vmbackup.html`, `vmbackup_list.html`, `vmbackup_bulk_delete.html` (VM backups on a virtual machine use NetBox `generic/object_children.html` via `ObjectChildrenView`).
 - Shared fragments: `footer.html`.
 - Child subdirectories: `base`, `fastapi`, `home`, `partials`, `proxmox`, `table`, and `test`.
 
