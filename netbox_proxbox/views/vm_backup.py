@@ -32,7 +32,6 @@ class VMBackupListView(generic.ObjectListView):
     actions = {
         "bulk_delete": {"delete"},
         "export": {"view"},
-        "sync_backups": {"view"},
     }
 
 
