@@ -6,9 +6,10 @@ from django.views import View
 
 from netbox import configuration
 
-from netbox_proxbox import ProxboxConfig, github
+from netbox_proxbox import github
 from netbox_proxbox.models import FastAPIEndpoint, NetBoxEndpoint, ProxmoxEndpoint
 from netbox_proxbox.utils import get_fastapi_url
+from netbox_proxbox.views.home_context import build_home_dashboard_context
 from netbox_proxbox.views.proxbox_access import (
     permission_view_fastapi_endpoint,
     user_may_access_proxbox_dashboard,
@@ -36,7 +37,7 @@ from .endpoints import (
 )
 from .external_pages import DiscordView, DiscussionsView, TelegramView
 from .keepalive_status import get_service_status
-from .schedule_sync import ScheduleSyncView
+from .schedule_sync import QuickScheduleSyncFromHomeView, ScheduleSyncView
 from .sync import (
     sync_devices,
     sync_devices_stream,
@@ -98,39 +99,10 @@ class HomeView(
 
     def get(self, request):
         """Render home with visible endpoint rows and resolved FastAPI HTTP/WebSocket URLs."""
-        default_config = getattr(ProxboxConfig, "default_settings", {})
-        fastapi_example_url = "https://example.fastapi.com"
-        fastapi_example_websocket_url = "wss://example.fastapi.com/ws"
-
-        proxmox_endpoint_obj = ProxmoxEndpoint.objects.restrict(request.user, "view")
-        netbox_endpoint_obj = NetBoxEndpoint.objects.restrict(request.user, "view")
-        fastapi_endpoint_obj = FastAPIEndpoint.objects.restrict(request.user, "view")
-
-        fastapi_info = {}
-        if fastapi_endpoint_obj.exists():
-            fastapi_info = get_fastapi_url(fastapi_endpoint_obj.first()) or {}
-            if not isinstance(fastapi_info, dict):
-                fastapi_info = {}
-
         return render(
             request,
             self.template_name,
-            {
-                "default_config": default_config,
-                "proxmox_endpoint_list": proxmox_endpoint_obj
-                if proxmox_endpoint_obj.exists()
-                else None,
-                "netbox_endpoint_list": netbox_endpoint_obj
-                if netbox_endpoint_obj.exists()
-                else None,
-                "fastapi_endpoint_list": fastapi_endpoint_obj
-                if fastapi_endpoint_obj.exists()
-                else None,
-                "fastapi_url": fastapi_info.get("http_url", fastapi_example_url),
-                "fastapi_websocket_url": fastapi_info.get(
-                    "websocket_url", fastapi_example_websocket_url
-                ),
-            },
+            build_home_dashboard_context(request),
         )
 
 

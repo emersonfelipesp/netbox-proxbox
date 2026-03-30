@@ -32,6 +32,7 @@ def test_runtime_code_no_longer_depends_on_django_htmx():
 
 def test_home_template_uses_plugin_vanilla_js_entrypoint():
     contents = _read("netbox_proxbox/templates/netbox_proxbox/home.html")
+    assert "netbox_proxbox/home/quick_schedule_banner.html" in contents
     assert "netbox_proxbox/js/home.js" in contents
     assert "htmx.org" not in contents
     assert 'id="sync-progress-container"' in contents
@@ -44,6 +45,12 @@ def test_home_template_uses_plugin_vanilla_js_entrypoint():
     assert "data-sync-url" in contents
     assert "data-sync-kind" in contents
     assert "data-sync-stream-url" in contents
+
+
+def test_home_quick_schedule_banner_posts_to_quick_schedule_url():
+    contents = _read("netbox_proxbox/templates/netbox_proxbox/home/quick_schedule_banner.html")
+    assert "plugins:netbox_proxbox:schedule_sync_quick" in contents
+    assert "netbox_proxbox/inc/schedule_sync_form_fields.html" in contents
 
 
 def test_netbox_endpoint_edit_template_supports_v1_and_v2_tokens():

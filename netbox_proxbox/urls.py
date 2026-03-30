@@ -113,6 +113,11 @@ urlpatterns = [
     ),
     path("sync/schedule/", views.ScheduleSyncView.as_view(), name="schedule_sync"),
     path(
+        "sync/schedule/quick/",
+        views.QuickScheduleSyncFromHomeView.as_view(),
+        name="schedule_sync_quick",
+    ),
+    path(
         "keepalive-status/<str:service>/<int:pk>/",
         views.get_service_status,
         name="keepalive_status",

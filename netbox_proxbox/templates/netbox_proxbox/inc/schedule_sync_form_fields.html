@@ -1,0 +1,95 @@
+{% load i18n %}
+{# Shared field markup for ``ScheduleSyncForm`` (full page + home quick schedule). #}
+<div class="mb-3">
+    <label class="form-label" for="{{ form.job_name.id_for_label }}">
+        {{ form.job_name.label }}
+    </label>
+    {{ form.job_name }}
+    {% if form.job_name.help_text %}
+        <div class="form-text text-muted">{{ form.job_name.help_text }}</div>
+    {% endif %}
+    {% for error in form.job_name.errors %}
+        <div class="invalid-feedback d-block">{{ error }}</div>
+    {% endfor %}
+</div>
+
+<div class="mb-3">
+    <label class="form-label">{{ form.sync_types.label }}</label>
+    {{ form.sync_types }}
+    {% if form.sync_types.help_text %}
+        <div class="form-text text-muted">{{ form.sync_types.help_text }}</div>
+    {% endif %}
+    {% for error in form.sync_types.errors %}
+        <div class="invalid-feedback d-block">{{ error }}</div>
+    {% endfor %}
+</div>
+
+<div class="mb-3">
+    <label class="form-label" for="{{ form.proxmox_endpoints.id_for_label }}">
+        {{ form.proxmox_endpoints.label }}
+    </label>
+    {{ form.proxmox_endpoints }}
+    {% if form.proxmox_endpoints.help_text %}
+        <div class="form-text text-muted">{{ form.proxmox_endpoints.help_text }}</div>
+    {% endif %}
+    {% for error in form.proxmox_endpoints.errors %}
+        <div class="invalid-feedback d-block">{{ error }}</div>
+    {% endfor %}
+</div>
+
+<div class="mb-3">
+    <label class="form-label" for="{{ form.netbox_endpoints.id_for_label }}">
+        {{ form.netbox_endpoints.label }}
+    </label>
+    {{ form.netbox_endpoints }}
+    {% if form.netbox_endpoints.help_text %}
+        <div class="form-text text-muted">{{ form.netbox_endpoints.help_text }}</div>
+    {% endif %}
+    {% for error in form.netbox_endpoints.errors %}
+        <div class="invalid-feedback d-block">{{ error }}</div>
+    {% endfor %}
+</div>
+
+<div class="mb-3">
+    <label class="form-label" for="{{ form.schedule_at.id_for_label }}">
+        {{ form.schedule_at.label }}
+    </label>
+    {{ form.schedule_at }}
+    {% if form.schedule_at.help_text %}
+        <div class="form-text text-muted">{{ form.schedule_at.help_text|safe }}</div>
+    {% endif %}
+    {% for error in form.schedule_at.errors %}
+        <div class="invalid-feedback d-block">{{ error }}</div>
+    {% endfor %}
+</div>
+
+<div class="mb-3">
+    <label class="form-label">
+        {{ form.interval_value.label }}
+    </label>
+    <div class="row g-2">
+        <div class="col-6">
+            {{ form.interval_value }}
+            {% for error in form.interval_value.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+        </div>
+        <div class="col-6">
+            {{ form.interval_unit }}
+            {% for error in form.interval_unit.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+        </div>
+    </div>
+    {% if form.interval_value.help_text %}
+        <div class="form-text text-muted">{{ form.interval_value.help_text }}</div>
+    {% endif %}
+</div>
+
+{% if form.non_field_errors %}
+    <div class="alert alert-danger">
+        {% for error in form.non_field_errors %}
+            <div>{{ error }}</div>
+        {% endfor %}
+    </div>
+{% endif %}

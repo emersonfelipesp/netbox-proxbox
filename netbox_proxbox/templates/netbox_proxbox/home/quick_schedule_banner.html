@@ -1,0 +1,51 @@
+{% load i18n %}
+{% if show_quick_full_sync_banner %}
+<div class="row mb-3 noprint">
+    <div class="col-12">
+        <div class="alert alert-info" role="status">
+            <strong>{% trans "No recurring full sync scheduled" %}</strong>
+            <p class="mb-2 mt-2">
+                {% blocktrans trimmed %}
+                We did not find an active recurring Proxbox Sync job (among jobs you can view) with sync type
+                <strong>All</strong>. You can create one below — defaults are daily at 3:00 local time — or use the full
+                schedule page.
+                {% endblocktrans %}
+            </p>
+            <p class="mb-0 small">
+                <a href="{% url 'core:job_list' %}" class="alert-link">{% trans "View jobs" %}</a>
+                &middot;
+                <a href="{% url 'plugins:netbox_proxbox:schedule_sync' %}" class="alert-link">{% trans "Open schedule form" %}</a>
+            </p>
+        </div>
+
+        {% if can_quick_schedule_sync and quick_schedule_form %}
+        <div class="card border-primary mb-0">
+            <div class="card-header py-2">
+                <strong><i class="mdi mdi-clock-plus-outline"></i> {% trans "Quick schedule: Proxbox Sync" %}</strong>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-3">
+                    {% blocktrans trimmed %}
+                    Defaults: sync type All, repeat every 1 day, first run at next local 03:00. Adjust before submitting.
+                    {% endblocktrans %}
+                </p>
+                <form method="post" action="{% url 'plugins:netbox_proxbox:schedule_sync_quick' %}">
+                    {% csrf_token %}
+                    {% include "netbox_proxbox/inc/schedule_sync_form_fields.html" with form=quick_schedule_form %}
+                    <button type="submit" class="btn btn-primary">
+                        <i class="mdi mdi-clock-plus-outline"></i>
+                        {% trans "Schedule" %}
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% elif not can_quick_schedule_sync %}
+        <div class="alert alert-secondary mb-0" role="note">
+            {% blocktrans trimmed %}
+            You do not have permission to queue sync jobs from here. An administrator can schedule a recurring job or grant you permission to add sync operations.
+            {% endblocktrans %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
