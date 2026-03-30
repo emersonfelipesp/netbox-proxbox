@@ -1,0 +1,23 @@
+/* Proxbox live job log widget + parsed message cells */
+.nb-job-live-log {
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.nb-job-live-log .table th,
+.nb-job-live-log .table td {
+  padding: 0.25rem 0.5rem;
+  vertical-align: top;
+}
+
+.nb-proxbox-parsed-msg .table {
+  margin-bottom: 0;
+}
+
+.nb-proxbox-parsed-msg .table .table {
+  font-size: 0.9em;
+}
+
+#page-content td .nb-proxbox-parsed-msg .table th {
+  width: 1%;
+}
