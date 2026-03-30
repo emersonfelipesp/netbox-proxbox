@@ -1,0 +1,53 @@
+{% load i18n %}
+{% trans "log lines" as nb_job_log_lines_suffix %}
+<div class="alert alert-info alert-dismissible" role="alert">
+  <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="{% trans "Close" %}"></button>
+  <strong>{% trans "Live job updates" %}</strong>
+  <span id="nb-job-live-status-{{ job.pk }}"></span>
+  <pre id="nb-job-live-log-{{ job.pk }}" class="mb-0 mt-2 small font-monospace" style="max-height: 220px; overflow: auto; white-space: pre-wrap;"></pre>
+</div>
+<script>
+(function () {
+  var pk = {{ job.pk|default:"0" }};
+  var statusEl = document.getElementById("nb-job-live-status-" + pk);
+  var logEl = document.getElementById("nb-job-live-log-" + pk);
+  if (!statusEl) return;
+  var terminal = { completed: 1, errored: 1, failed: 1 };
+  var timer = null;
+  function formatEntries(entries) {
+    if (!entries || !entries.length) return "";
+    var start = Math.max(0, entries.length - 50);
+    var lines = [];
+    for (var i = start; i < entries.length; i++) {
+      var e = entries[i];
+      var t = e.timestamp != null ? String(e.timestamp) : "";
+      var lvl = e.level != null ? String(e.level) : "";
+      var msg = e.message != null ? String(e.message) : "";
+      lines.push(t + " [" + lvl + "] " + msg);
+    }
+    return lines.join("\n");
+  }
+  function tick() {
+    fetch("/api/core/jobs/" + pk + "/", {
+      credentials: "same-origin",
+      headers: { Accept: "application/json" },
+    })
+      .then(function (r) {
+        if (!r.ok) throw new Error("poll failed");
+        return r.json();
+      })
+      .then(function (d) {
+        var n = d.log_entries ? d.log_entries.length : 0;
+        statusEl.textContent = " — " + (d.status || "") + " · " + n + " {{ nb_job_log_lines_suffix|escapejs }}";
+        if (logEl) logEl.textContent = formatEntries(d.log_entries || []);
+        if (terminal[d.status]) {
+          if (timer) clearInterval(timer);
+          timer = null;
+        }
+      })
+      .catch(function () {});
+  }
+  tick();
+  timer = setInterval(tick, 2500);
+})();
+</script>
