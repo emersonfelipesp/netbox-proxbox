@@ -8,7 +8,7 @@ from netbox_proxbox.choices import SyncTypeChoices
 from netbox_proxbox.forms.schedule_sync import ScheduleSyncForm
 from netbox_proxbox.jobs import PROXBOX_SYNC_QUEUE_NAME, ProxboxSyncJob
 from netbox_proxbox.views.home_context import build_home_dashboard_context
-from netbox_proxbox.views.proxbox_access import permission_add_sync_process
+from netbox_proxbox.views.proxbox_access import permission_enqueue_proxbox_sync
 from utilities.views import (
     ContentTypePermissionRequiredMixin,
     TokenConditionalLoginRequiredMixin,
@@ -80,8 +80,8 @@ class ScheduleSyncView(
     """Render and process the ProxBox background sync scheduling form."""
 
     def get_required_permission(self):
-        """Require ``add`` on ``SyncProcess`` to enqueue jobs."""
-        return permission_add_sync_process()
+        """Require ``add`` on core ``Job`` to enqueue jobs."""
+        return permission_enqueue_proxbox_sync()
 
     template_name = "netbox_proxbox/schedule_sync.html"
 
@@ -122,8 +122,8 @@ class QuickScheduleSyncFromHomeView(
     """POST-only: enqueue from the home quick-schedule card; re-render home on errors."""
 
     def get_required_permission(self):
-        """Require ``add`` on ``SyncProcess`` to enqueue jobs."""
-        return permission_add_sync_process()
+        """Require ``add`` on core ``Job`` to enqueue jobs."""
+        return permission_enqueue_proxbox_sync()
 
     def get(self, request):
         """Always send users to the plugin home."""

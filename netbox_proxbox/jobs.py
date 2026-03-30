@@ -29,6 +29,7 @@ _SYNC_STAGE_ORDER: tuple[str, ...] = (
     SyncTypeChoices.VIRTUAL_MACHINES,
     SyncTypeChoices.VIRTUAL_MACHINES_DISKS,
     SyncTypeChoices.VIRTUAL_MACHINES_BACKUPS,
+    SyncTypeChoices.VIRTUAL_MACHINES_SNAPSHOTS,
 )
 
 __all__ = (
@@ -47,11 +48,21 @@ _SYNC_TYPE_PATH: dict[str, str] = {
     SyncTypeChoices.VIRTUAL_MACHINES: "virtualization/virtual-machines/create",
     SyncTypeChoices.VIRTUAL_MACHINES_BACKUPS: "virtualization/virtual-machines/backups/all/create",
     SyncTypeChoices.VIRTUAL_MACHINES_DISKS: "virtualization/virtual-machines/virtual-disks/create",
+    SyncTypeChoices.VIRTUAL_MACHINES_SNAPSHOTS: (
+        "virtualization/virtual-machines/snapshots/all/create"
+    ),
 }
 
 _ALLOWED_SYNC_SLUGS = frozenset(_SYNC_TYPE_PATH) | {SyncTypeChoices.ALL}
 
 _STAGE_ORDER_INDEX = {t: i for i, t in enumerate(_SYNC_STAGE_ORDER)}
+
+
+def expanded_sync_stages(types: list[str]) -> list[str]:
+    """Turn ``[all]`` into every stage in dependency order; pass through explicit lists."""
+    if types == [SyncTypeChoices.ALL]:
+        return list(_SYNC_STAGE_ORDER)
+    return types
 
 
 def normalize_sync_types(selected: list[str]) -> list[str]:
@@ -73,8 +84,6 @@ def normalize_sync_types(selected: list[str]) -> list[str]:
 
 def _sync_stream_path(sync_type: str) -> str:
     """Return proxbox-api SSE path for a scheduled sync type."""
-    if sync_type == SyncTypeChoices.ALL:
-        return "full-update/stream"
     base = _SYNC_TYPE_PATH.get(sync_type)
     if not base:
         raise ValueError(f"Unknown sync_type: {sync_type!r}")
@@ -158,6 +167,8 @@ class ProxboxSyncJob(JobRunner):
         else:
             types = [SyncTypeChoices.ALL]
 
+        stages = expanded_sync_stages(types)
+
         params: dict[str, Any] = {
             "sync_types": types,
             "proxmox_endpoint_ids": list(proxmox_endpoint_ids or []),
@@ -166,7 +177,7 @@ class ProxboxSyncJob(JobRunner):
         self.job.data = {"proxbox_sync": {"params": params}}
         self.job.save(update_fields=["data"])
 
-        self.logger.info("Starting Proxbox sync stages: %s", ", ".join(types))
+        self.logger.info("Starting Proxbox sync stages: %s", ", ".join(stages))
         if proxmox_endpoint_ids:
             self.logger.info("Proxmox endpoints: %s", proxmox_endpoint_ids)
         if netbox_endpoint_ids:
@@ -198,28 +209,9 @@ class ProxboxSyncJob(JobRunner):
                 self.job.save(update_fields=["log_entries"])
                 last_flush = now
 
-        if types == [SyncTypeChoices.ALL]:
-            query_params = dict(base_query)
-            stream_path = _sync_stream_path(SyncTypeChoices.ALL)
-            self.logger.info("Starting stage: all (%s)", stream_path)
-            payload, status = run_sync_stream(
-                stream_path,
-                query_params=query_params or None,
-                on_frame=on_frame,
-            )
-            self.job.save(update_fields=["log_entries"])
-            if status >= 400:
-                detail = payload.get("detail", "Backend returned an error.")
-                self.logger.error("Sync failed (HTTP %s): %s", status, detail)
-                raise RuntimeError(detail)
-            self.logger.info("Stage completed: all (HTTP %s)", status)
-            self.job.data = {"proxbox_sync": {"params": params, "response": payload}}
-            self.job.save(update_fields=["data"])
-            self.logger.info("Sync completed successfully (HTTP %s)", status)
-            return
-
+        run_started = time.monotonic()
         stages_out: list[dict[str, Any]] = []
-        for st in types:
+        for st in stages:
             query_params = dict(base_query)
             if st == SyncTypeChoices.VIRTUAL_MACHINES_BACKUPS:
                 query_params["delete_nonexistent_backup"] = True
@@ -238,14 +230,20 @@ class ProxboxSyncJob(JobRunner):
             self.logger.info("Stage completed: %s (HTTP %s)", st, status)
             stages_out.append({"sync_type": st, "payload": payload})
 
+        runtime_seconds = round(time.monotonic() - run_started, 3)
         self.job.data = {
             "proxbox_sync": {
                 "params": params,
+                "runtime_seconds": runtime_seconds,
                 "response": {"stages": stages_out},
             }
         }
         self.job.save(update_fields=["data"])
-        self.logger.info("All sync stages completed (%s)", len(stages_out))
+        self.logger.info(
+            "All sync stages completed (%s), runtime %.3fs",
+            len(stages_out),
+            runtime_seconds,
+        )
 
 
 def is_proxbox_sync_job(job: Any) -> bool:

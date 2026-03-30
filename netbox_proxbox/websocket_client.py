@@ -31,7 +31,7 @@ websocket_task = None
 websocket_loop = None
 websocket_lock = threading.Lock()
 message_queue = Queue()
-sync_processes = {
+ws_sync_button_state = {
     "full-update": "not-started",
     "devices": "not-started",
     "virtual-machines": "not-started",
@@ -56,17 +56,17 @@ async def websocket_client(uri: str) -> None:
                             response_dict.get("object") == "device"
                             and response_dict.get("end") is True
                         ):
-                            sync_processes["devices"] = "not-started"
+                            ws_sync_button_state["devices"] = "not-started"
                         if (
                             response_dict.get("object") == "virtual_machine"
                             and response_dict.get("end") is True
                         ):
-                            sync_processes["virtual-machines"] = "not-started"
+                            ws_sync_button_state["virtual-machines"] = "not-started"
                         if (
                             response_dict.get("object") == "full-update"
                             and response_dict.get("end") is True
                         ):
-                            sync_processes["full-update"] = "not-started"
+                            ws_sync_button_state["full-update"] = "not-started"
                     except json.JSONDecodeError:
                         logger.debug(
                             "Non-JSON WebSocket message (first 200 chars): %r",
@@ -179,17 +179,17 @@ class WebSocketView(
 
         start_websocket(uri)
 
-        if message == "full-update" and sync_processes["full-update"] == "not-started":
-            sync_processes["full-update"] = "syncing"
+        if message == "full-update" and ws_sync_button_state["full-update"] == "not-started":
+            ws_sync_button_state["full-update"] = "syncing"
             send_message("Full Update")
-        elif message == "devices" and sync_processes["devices"] == "not-started":
-            sync_processes["devices"] = "syncing"
+        elif message == "devices" and ws_sync_button_state["devices"] == "not-started":
+            ws_sync_button_state["devices"] = "syncing"
             send_message("Sync Nodes")
         elif (
             message == "virtual-machines"
-            and sync_processes["virtual-machines"] == "not-started"
+            and ws_sync_button_state["virtual-machines"] == "not-started"
         ):
-            sync_processes["virtual-machines"] = "syncing"
+            ws_sync_button_state["virtual-machines"] = "syncing"
             send_message("Sync Virtual Machines")
 
         if json_response:

@@ -1,608 +1,138 @@
 from __future__ import annotations
 
-import importlib
 from types import SimpleNamespace
 
-import requests
+from tests.conftest import load_plugin_module
 
-from tests.conftest import ResponseStub, load_plugin_module
-
-_SYNC_SHORT_TIMEOUT = 5
-
-
-def _sync_backend_proxy():
-    return importlib.import_module("netbox_proxbox.services.backend_proxy")
-
-
-_SYNC_BACKUP_TIMEOUT = (5, 3600)
+# Match ``SyncTypeChoices`` values without importing the plugin package at collection time.
+ST_DEVICES = "devices"
+ST_VMS = "virtual-machines"
+ST_BACKUPS = "vm-backups"
+ST_DISKS = "vm-disks"
+ST_SNAPSHOTS = "vm-snapshots"
+ST_ALL = "all"
 
 
-def _json_request(method: str = "POST"):
+def _post_request():
     return SimpleNamespace(
-        method=method,
-        headers={
-            "Accept": "application/json",
-            "X-Requested-With": "XMLHttpRequest",
-        },
+        method="POST",
+        headers={"Accept": "application/json", "X-Requested-With": "XMLHttpRequest"},
+        user=SimpleNamespace(
+            is_authenticated=True,
+            has_perms=lambda *a, **k: True,
+            has_perm=lambda *a, **k: True,
+        ),
     )
 
 
-def _browser_request(method: str = "POST"):
-    return SimpleNamespace(method=method, headers={"Accept": "text/html"})
+def _enqueue_spy(monkeypatch, module):
+    calls: list[dict] = []
+
+    class _FakeJob:
+        def get_absolute_url(self):
+            return "/core/jobs/1/"
+
+    class _FakeProxboxSyncJob:
+        @classmethod
+        def enqueue(cls, **kwargs):
+            calls.append(kwargs)
+            return _FakeJob()
+
+    monkeypatch.setattr(module, "ProxboxSyncJob", _FakeProxboxSyncJob)
+    return calls
 
 
-def test_sync_resource_uses_primary_fastapi_url(monkeypatch, fastapi_endpoint):
+def test_sync_devices_enqueues_job_with_device_stage(monkeypatch, fastapi_endpoint):
     module = load_plugin_module(
         "netbox_proxbox.views.sync",
         monkeypatch=monkeypatch,
         fastapi_endpoint=fastapi_endpoint,
     )
-    bp = _sync_backend_proxy()
-    requested = []
+    calls = _enqueue_spy(monkeypatch, module)
 
-    monkeypatch.setattr(
-        bp.requests,
-        "get",
-        lambda url, params=None, headers=None, verify=True, timeout=None: (
-            requested.append((url, params, headers, verify, timeout))
-            or ResponseStub({"ok": True})
-        ),
-    )
-
-    response = module.sync_devices(_json_request())
-    assert response.status_code == 202
-    assert response.payload["queued"] is True
-    assert requested == [
-        (
-            "https://proxbox.local:8800/dcim/devices/create",
-            None,
-            {"Authorization": "Bearer backend-token"},
-            True,
-            _SYNC_SHORT_TIMEOUT,
-        )
-    ]
-
-
-def test_sync_resource_falls_back_to_ip_url(monkeypatch, fastapi_endpoint):
-    module = load_plugin_module(
-        "netbox_proxbox.views.sync",
-        monkeypatch=monkeypatch,
-        fastapi_endpoint=fastapi_endpoint,
-    )
-    bp = _sync_backend_proxy()
-    requested = []
-
-    def fake_get(url, params=None, headers=None, verify=True, timeout=None):
-        requested.append((url, params, headers, verify, timeout))
-        if "proxbox.local" in url:
-            raise requests.exceptions.ConnectionError("primary failed")
-        return ResponseStub({"ok": True})
-
-    monkeypatch.setattr(bp.requests, "get", fake_get)
-
-    response = module.sync_vm_backups(_json_request())
-    assert response.status_code == 202
-    assert response.payload["queued"] is True
-    assert requested == [
-        (
-            "https://proxbox.local:8800/virtualization/virtual-machines/backups/all/create",
-            {"delete_nonexistent_backup": True},
-            {"Authorization": "Bearer backend-token"},
-            True,
-            _SYNC_BACKUP_TIMEOUT,
-        ),
-        (
-            "https://10.0.0.5:8800/virtualization/virtual-machines/backups/all/create",
-            {"delete_nonexistent_backup": True},
-            {"Authorization": "Bearer backend-token"},
-            True,
-            _SYNC_BACKUP_TIMEOUT,
-        ),
-    ]
-
-
-def test_sync_resource_uses_http_ip_fallback_when_ssl_verification_is_disabled(
-    monkeypatch, fastapi_endpoint
-):
-    endpoint = SimpleNamespace(**(fastapi_endpoint.__dict__ | {"verify_ssl": False}))
-    module = load_plugin_module(
-        "netbox_proxbox.views.sync",
-        monkeypatch=monkeypatch,
-        fastapi_endpoint=endpoint,
-        get_fastapi_url=lambda obj: {
-            "http_url": "http://proxbox.local:8800",
-            "ip_address_url": "http://10.0.0.5:8800",
-            "verify_ssl": False,
-            "websocket_url": "ws://proxbox.local:8801/ws",
-        },
-    )
-    bp = _sync_backend_proxy()
-    requested = []
-
-    def fake_get(url, params=None, headers=None, verify=True, timeout=None):
-        requested.append((url, params, headers, verify, timeout))
-        if "proxbox.local" in url:
-            raise requests.exceptions.ConnectionError(
-                "dial tcp 10.0.0.5:8800: connect: refused"
-            )
-        return ResponseStub({"ok": True})
-
-    monkeypatch.setattr(bp.requests, "get", fake_get)
-
-    response = module.sync_full_update(_json_request())
-
-    assert response.status_code == 202
-    assert requested == [
-        (
-            "http://proxbox.local:8800/dcim/devices/create",
-            None,
-            {"Authorization": "Bearer backend-token"},
-            False,
-            _SYNC_SHORT_TIMEOUT,
-        ),
-        (
-            "http://10.0.0.5:8800/dcim/devices/create",
-            None,
-            {"Authorization": "Bearer backend-token"},
-            False,
-            _SYNC_SHORT_TIMEOUT,
-        ),
-        (
-            "http://proxbox.local:8800/virtualization/virtual-machines/create",
-            None,
-            {"Authorization": "Bearer backend-token"},
-            False,
-            _SYNC_SHORT_TIMEOUT,
-        ),
-        (
-            "http://10.0.0.5:8800/virtualization/virtual-machines/create",
-            None,
-            {"Authorization": "Bearer backend-token"},
-            False,
-            _SYNC_SHORT_TIMEOUT,
-        ),
-        (
-            "http://proxbox.local:8800/virtualization/virtual-machines/backups/all/create",
-            {"delete_nonexistent_backup": True},
-            {"Authorization": "Bearer backend-token"},
-            False,
-            _SYNC_BACKUP_TIMEOUT,
-        ),
-        (
-            "http://10.0.0.5:8800/virtualization/virtual-machines/backups/all/create",
-            {"delete_nonexistent_backup": True},
-            {"Authorization": "Bearer backend-token"},
-            False,
-            _SYNC_BACKUP_TIMEOUT,
-        ),
-    ]
-
-
-def test_sync_resource_skips_duplicate_ip_fallback(monkeypatch, fastapi_endpoint):
-    endpoint = SimpleNamespace(**(fastapi_endpoint.__dict__ | {"domain": ""}))
-    module = load_plugin_module(
-        "netbox_proxbox.views.sync",
-        monkeypatch=monkeypatch,
-        fastapi_endpoint=endpoint,
-        get_fastapi_url=lambda obj: {
-            "http_url": "https://10.0.0.5:8800",
-            "ip_address_url": "https://10.0.0.5:8800",
-            "verify_ssl": True,
-            "websocket_url": "wss://10.0.0.5:8801/ws",
-        },
-    )
-    bp = _sync_backend_proxy()
-    requested = []
-
-    monkeypatch.setattr(
-        bp.requests,
-        "get",
-        lambda url, params=None, headers=None, verify=True, timeout=None: (
-            requested.append((url, params, headers, verify, timeout))
-            or ResponseStub({"ok": True})
-        ),
-    )
-
-    response = module.sync_devices(_json_request())
-
-    assert response.status_code == 202
-    assert requested == [
-        (
-            "https://10.0.0.5:8800/dcim/devices/create",
-            None,
-            {"Authorization": "Bearer backend-token"},
-            True,
-            _SYNC_SHORT_TIMEOUT,
-        )
-    ]
-
-
-def test_sync_resource_redirects_browser_requests_with_success_message(
-    monkeypatch, fastapi_endpoint
-):
-    module = load_plugin_module(
-        "netbox_proxbox.views.sync",
-        monkeypatch=monkeypatch,
-        fastapi_endpoint=fastapi_endpoint,
-    )
-    bp = _sync_backend_proxy()
-
-    monkeypatch.setattr(
-        bp.requests, "get", lambda *args, **kwargs: ResponseStub({"ok": True})
-    )
-
-    response = module.sync_virtual_machines(_browser_request())
+    response = module.sync_devices(_post_request())
 
     assert response == {"redirect": "plugins:netbox_proxbox:home"}
-    assert module._messages_stub.calls == [
-        ("success", "Virtual machines sync queued successfully.")
-    ]
+    assert len(calls) == 1
+    assert calls[0]["sync_types"] == [ST_DEVICES]
 
 
-def test_sync_resource_redirects_browser_requests_with_error_message(
-    monkeypatch, fastapi_endpoint
-):
+def test_sync_virtual_machines_enqueues_correct_types(monkeypatch, fastapi_endpoint):
     module = load_plugin_module(
         "netbox_proxbox.views.sync",
         monkeypatch=monkeypatch,
         fastapi_endpoint=fastapi_endpoint,
     )
-    bp = _sync_backend_proxy()
+    calls = _enqueue_spy(monkeypatch, module)
 
-    monkeypatch.setattr(
-        bp.requests,
-        "get",
-        lambda *args, **kwargs: (_ for _ in ()).throw(
-            requests.exceptions.ConnectionError("connection refused")
-        ),
-    )
+    module.sync_virtual_machines(_post_request())
 
-    response = module.sync_full_update(_browser_request())
-
-    assert response == {"redirect": "plugins:netbox_proxbox:home"}
-    assert module._messages_stub.calls == [("error", "connection refused")]
+    assert calls[0]["sync_types"] == [ST_VMS]
 
 
-def test_sync_full_update_runs_devices_then_virtual_machines(
-    monkeypatch, fastapi_endpoint
-):
+def test_sync_vm_backups_enqueues_backup_stage(monkeypatch, fastapi_endpoint):
     module = load_plugin_module(
         "netbox_proxbox.views.sync",
         monkeypatch=monkeypatch,
         fastapi_endpoint=fastapi_endpoint,
     )
-    bp = _sync_backend_proxy()
-    requested = []
+    calls = _enqueue_spy(monkeypatch, module)
 
-    def fake_get(url, params=None, headers=None, verify=True, timeout=None):
-        requested.append((url, params, headers, verify, timeout))
-        return ResponseStub({"ok": True, "url": url})
+    module.sync_vm_backups(_post_request())
 
-    monkeypatch.setattr(bp.requests, "get", fake_get)
-
-    response = module.sync_full_update(_json_request())
-
-    assert response.status_code == 202
-    assert requested == [
-        (
-            "https://proxbox.local:8800/dcim/devices/create",
-            None,
-            {"Authorization": "Bearer backend-token"},
-            True,
-            _SYNC_SHORT_TIMEOUT,
-        ),
-        (
-            "https://proxbox.local:8800/virtualization/virtual-machines/create",
-            None,
-            {"Authorization": "Bearer backend-token"},
-            True,
-            _SYNC_SHORT_TIMEOUT,
-        ),
-        (
-            "https://proxbox.local:8800/virtualization/virtual-machines/backups/all/create",
-            {"delete_nonexistent_backup": True},
-            {"Authorization": "Bearer backend-token"},
-            True,
-            _SYNC_BACKUP_TIMEOUT,
-        ),
-    ]
-    assert response.payload["path"] == "full-update"
-    assert response.payload["detail"] == "Full update sync completed successfully."
-    assert response.payload["response"]["devices"]["ok"] is True
-    assert response.payload["response"]["virtual-machines"]["ok"] is True
-    assert response.payload["response"]["backups"]["ok"] is True
+    assert calls[0]["sync_types"] == [ST_BACKUPS]
 
 
-def test_sync_full_update_stops_when_devices_step_fails(monkeypatch, fastapi_endpoint):
+def test_sync_virtual_disks_enqueues_disk_stage(monkeypatch, fastapi_endpoint):
     module = load_plugin_module(
         "netbox_proxbox.views.sync",
         monkeypatch=monkeypatch,
         fastapi_endpoint=fastapi_endpoint,
     )
-    bp = _sync_backend_proxy()
+    calls = _enqueue_spy(monkeypatch, module)
 
-    class FailingResponse(ResponseStub):
-        text = '{"detail": "devices failed"}'
-        headers = {"Content-Type": "application/json"}
-        url = "https://proxbox.local:8800/dcim/devices/create"
+    module.sync_virtual_disks(_post_request())
 
-        def raise_for_status(self):
-            err = requests.exceptions.HTTPError("500")
-            err.response = self
-            raise err
-
-    requested = []
-
-    def fake_get(url, params=None, headers=None, verify=True, timeout=None):
-        requested.append(url)
-        if url.endswith("/dcim/devices/create"):
-            return FailingResponse({"detail": "devices failed"}, status_code=500)
-        return ResponseStub({"ok": True})
-
-    monkeypatch.setattr(bp.requests, "get", fake_get)
-
-    response = module.sync_full_update(_json_request())
-
-    assert response.status_code == 503
-    assert requested == ["https://proxbox.local:8800/dcim/devices/create"]
-    assert response.payload["stage"] == "devices"
-    assert response.payload["detail"] == "devices failed"
+    assert calls[0]["sync_types"] == [ST_DISKS]
 
 
-def test_sync_resource_surfaces_backend_error_detail(monkeypatch, fastapi_endpoint):
+def test_sync_vm_snapshots_enqueues_snapshot_stage(monkeypatch, fastapi_endpoint):
     module = load_plugin_module(
         "netbox_proxbox.views.sync",
         monkeypatch=monkeypatch,
         fastapi_endpoint=fastapi_endpoint,
     )
-    bp = _sync_backend_proxy()
+    calls = _enqueue_spy(monkeypatch, module)
 
-    class FailingResponse(ResponseStub):
-        text = '{"detail": "backend token missing"}'
-        headers = {"Content-Type": "application/json"}
-        url = "https://proxbox.local:8800/full-update"
+    module.sync_vm_snapshots(_post_request())
 
-        def raise_for_status(self):
-            err = requests.exceptions.HTTPError("401")
-            err.response = self
-            raise err
-
-    monkeypatch.setattr(
-        bp.requests,
-        "get",
-        lambda *args, **kwargs: FailingResponse(
-            {"detail": "backend token missing"},
-            status_code=401,
-        ),
-    )
-
-    response = module.sync_devices(_json_request())
-
-    assert response.status_code == 503
-    assert response.payload["detail"] == "backend token missing"
+    assert calls[0]["sync_types"] == [ST_SNAPSHOTS]
 
 
-def test_sync_resource_prefers_backend_message_over_generic_internal_server_error(
-    monkeypatch, fastapi_endpoint
-):
+def test_sync_full_update_enqueues_all_stages(monkeypatch, fastapi_endpoint):
     module = load_plugin_module(
         "netbox_proxbox.views.sync",
         monkeypatch=monkeypatch,
         fastapi_endpoint=fastapi_endpoint,
     )
-    bp = _sync_backend_proxy()
+    calls = _enqueue_spy(monkeypatch, module)
 
-    class FailingResponse(ResponseStub):
-        text = '{"detail": "Internal Server Error", "message": "Error while syncing virtual machines."}'
-        headers = {"Content-Type": "application/json"}
-        url = "https://proxbox.local:8800/full-update"
+    module.sync_full_update(_post_request())
 
-        def raise_for_status(self):
-            err = requests.exceptions.HTTPError("500")
-            err.response = self
-            raise err
-
-    monkeypatch.setattr(
-        bp.requests,
-        "get",
-        lambda *args, **kwargs: FailingResponse(
-            {
-                "detail": "Internal Server Error",
-                "message": "Error while syncing virtual machines.",
-            },
-            status_code=500,
-        ),
-    )
-
-    response = module.sync_devices(_json_request())
-
-    assert response.status_code == 503
-    assert response.payload["detail"] == "Error while syncing virtual machines."
+    assert calls[0]["sync_types"] == [ST_ALL]
 
 
-def test_sync_full_update_surfaces_structured_backend_type_error(
-    monkeypatch, fastapi_endpoint
-):
+def test_sync_success_message_mentions_job_link(monkeypatch, fastapi_endpoint):
     module = load_plugin_module(
         "netbox_proxbox.views.sync",
         monkeypatch=monkeypatch,
         fastapi_endpoint=fastapi_endpoint,
     )
-    bp = _sync_backend_proxy()
+    _enqueue_spy(monkeypatch, module)
 
-    class FailingResponse(ResponseStub):
-        text = (
-            '{"detail": "\'async for\' requires an object with __aiter__ method, got PluginsApp", '
-            '"message": "Error ensuring Proxbox tag"}'
-        )
-        headers = {"Content-Type": "application/json"}
-        url = "https://proxbox.local:8800/dcim/devices/create"
+    module.sync_devices(_post_request())
 
-        def raise_for_status(self):
-            err = requests.exceptions.HTTPError("500")
-            err.response = self
-            raise err
-
-    monkeypatch.setattr(
-        bp.requests,
-        "get",
-        lambda *args, **kwargs: FailingResponse(
-            {
-                "detail": "'async for' requires an object with __aiter__ method, got PluginsApp",
-                "message": "Error ensuring Proxbox tag",
-            },
-            status_code=500,
-        ),
-    )
-
-    response = module.sync_full_update(_json_request())
-
-    assert response.status_code == 503
-    assert response.payload["stage"] == "devices"
-    assert response.payload["detail"] == (
-        "'async for' requires an object with __aiter__ method, got PluginsApp"
-    )
-
-
-def test_sync_stream_response_returns_sse(monkeypatch, fastapi_endpoint):
-    module = load_plugin_module(
-        "netbox_proxbox.views.sync",
-        monkeypatch=monkeypatch,
-        fastapi_endpoint=fastapi_endpoint,
-    )
-    bp = _sync_backend_proxy()
-
-    class _Response:
-        status_code = 200
-
-        def raise_for_status(self):
-            return None
-
-        def iter_lines(self, decode_unicode=True):
-            del decode_unicode
-            return iter(
-                [
-                    "event: step",
-                    'data: {"step":"devices","status":"started","message":"Starting."}',
-                    "",
-                    "event: complete",
-                    'data: {"ok":true,"message":"Done."}',
-                    "",
-                ]
-            )
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            del exc_type, exc, tb
-            return False
-
-    monkeypatch.setattr(bp.requests, "get", lambda *args, **kwargs: _Response())
-
-    response = module.sync_devices_stream(_json_request(method="GET"))
-    chunks = list(response.streaming_content)
-
-    assert response.status_code == 200
-    assert response["Cache-Control"] == "no-cache"
-    assert any("event: step" in chunk for chunk in chunks)
-    assert any("event: complete" in chunk for chunk in chunks)
-
-
-def test_sync_stream_response_handles_unexpected_generator_errors(
-    monkeypatch, fastapi_endpoint
-):
-    module = load_plugin_module(
-        "netbox_proxbox.views.sync",
-        monkeypatch=monkeypatch,
-        fastapi_endpoint=fastapi_endpoint,
-    )
-    bp = _sync_backend_proxy()
-
-    def _boom(*args, **kwargs):
-        del args, kwargs
-        raise RuntimeError("stream exploded")
-
-    monkeypatch.setattr(bp.requests, "get", _boom)
-
-    response = module.sync_full_update_stream(_json_request(method="GET"))
-    chunks = list(response.streaming_content)
-    payload = "".join(chunks)
-
-    assert response.status_code == 200
-    assert "event: error" in payload
-    assert "stream exploded" in payload
-    assert "event: complete" in payload
-
-
-def test_sync_stream_response_handles_missing_http_url(monkeypatch, fastapi_endpoint):
-    module = load_plugin_module(
-        "netbox_proxbox.views.sync",
-        monkeypatch=monkeypatch,
-        fastapi_endpoint=fastapi_endpoint,
-    )
-
-    monkeypatch.setattr(
-        module.backend_proxy,
-        "get_fastapi_request_context",
-        lambda: {"verify_ssl": True, "headers": {}},
-    )
-
-    response = module.sync_full_update_stream(_json_request(method="GET"))
-    payload = "".join(list(response.streaming_content))
-
-    assert response.status_code == 200
-    assert "No FastAPI URL found." in payload
-    assert "event: complete" in payload
-
-
-def test_sync_stream_response_handles_context_resolution_crash(
-    monkeypatch, fastapi_endpoint
-):
-    module = load_plugin_module(
-        "netbox_proxbox.views.sync",
-        monkeypatch=monkeypatch,
-        fastapi_endpoint=fastapi_endpoint,
-    )
-
-    def _crash():
-        raise RuntimeError("context failed")
-
-    monkeypatch.setattr(module.backend_proxy, "get_fastapi_request_context", _crash)
-
-    response = module.sync_full_update_stream(_json_request(method="GET"))
-    payload = "".join(list(response.streaming_content))
-
-    assert response.status_code == 200
-    assert "context failed" in payload
-    assert "event: complete" in payload
-
-
-def test_sync_resource_non_json_200_response_returns_503(monkeypatch, fastapi_endpoint):
-    module = load_plugin_module(
-        "netbox_proxbox.views.sync",
-        monkeypatch=monkeypatch,
-        fastapi_endpoint=fastapi_endpoint,
-    )
-    bp = _sync_backend_proxy()
-
-    class NonJsonOkResponse:
-        status_code = 200
-        url = "https://proxbox.local:8800/dcim/devices/create"
-        text = "<html>not json</html>"
-
-        def raise_for_status(self):
-            return None
-
-        def json(self):
-            raise requests.exceptions.JSONDecodeError(
-                "Expecting value", "<html>", 0
-            )
-
-    monkeypatch.setattr(bp.requests, "get", lambda *a, **k: NonJsonOkResponse())
-
-    response = module.sync_devices(_json_request())
-
-    assert response.status_code == 503
-    assert response.payload["queued"] is False
-    assert "not valid JSON" in response.payload["detail"]
+    assert module._messages_stub.calls
+    kind, message = module._messages_stub.calls[0]
+    assert kind == "success"
+    assert "/core/jobs/1/" in str(message)

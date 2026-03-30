@@ -16,7 +16,7 @@ from netbox_proxbox.jobs import (
     is_proxbox_sync_job,
     proxbox_sync_params_from_job,
 )
-from netbox_proxbox.views.proxbox_access import permission_add_sync_process
+from netbox_proxbox.views.proxbox_access import permission_enqueue_proxbox_sync
 from utilities.views import (
     ContentTypePermissionRequiredMixin,
     TokenConditionalLoginRequiredMixin,
@@ -37,8 +37,8 @@ class ProxboxJobRunNowView(
     http_method_names = ["post"]
 
     def get_required_permission(self):
-        """Require ``add`` on ``SyncProcess`` (same gate as the schedule form)."""
-        return permission_add_sync_process()
+        """Require ``add`` on core ``Job`` (same gate as the schedule form)."""
+        return permission_enqueue_proxbox_sync()
 
     def post(self, request, pk):
         """Clone sync parameters onto a new queued job and redirect to its detail page."""

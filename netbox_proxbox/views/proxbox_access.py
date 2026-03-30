@@ -1,30 +1,30 @@
 """NetBox-aligned permission helpers for ProxBox custom views."""
 
+from core.models import Job
 from utilities.permissions import get_permission_for_model
 
 from netbox_proxbox.models import (
     FastAPIEndpoint,
     NetBoxEndpoint,
     ProxmoxEndpoint,
-    SyncProcess,
 )
 
 __all__ = (
     "permission_change_fastapi_endpoint",
-    "permission_add_sync_process",
+    "permission_enqueue_proxbox_sync",
     "permission_view_fastapi_endpoint",
     "user_may_access_proxbox_dashboard",
 )
 
 
 def permission_change_fastapi_endpoint() -> str:
-    """Required to trigger sync against the ProxBox FastAPI backend."""
+    """Required to manage FastAPI endpoint configuration (CRUD)."""
     return get_permission_for_model(FastAPIEndpoint, "change")
 
 
-def permission_add_sync_process() -> str:
-    """Required to enqueue a ProxBox background sync job."""
-    return get_permission_for_model(SyncProcess, "add")
+def permission_enqueue_proxbox_sync() -> str:
+    """Required to enqueue Proxbox background sync jobs (including UI sync buttons)."""
+    return get_permission_for_model(Job, "add")
 
 
 def permission_view_fastapi_endpoint() -> str:

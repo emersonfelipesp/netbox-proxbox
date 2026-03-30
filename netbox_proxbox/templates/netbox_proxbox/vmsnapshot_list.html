@@ -29,9 +29,9 @@
 {% endblock %}
 
 {% block controls %}
-  <form class="btn-group" method="post" data-sync-url="{% url 'plugins:netbox_proxbox:sync_vm_snapshots' %}" data-sync-stream-url="{% url 'plugins:netbox_proxbox:sync_vm_snapshots_stream' %}" data-sync-kind="snapshots">
+  <form class="btn-group" method="post" action="{% url 'plugins:netbox_proxbox:sync_vm_snapshots' %}">
     {% csrf_token %}
-    <button type="submit" class="btn btn-primary" data-sync-url="{% url 'plugins:netbox_proxbox:sync_vm_snapshots' %}" data-sync-stream-url="{% url 'plugins:netbox_proxbox:sync_vm_snapshots_stream' %}" data-sync-kind="snapshots">
+    <button type="submit" class="btn btn-primary" data-sync-url="{% url 'plugins:netbox_proxbox:sync_vm_snapshots' %}" data-sync-kind="snapshots">
       <i class="mdi mdi-sync" aria-hidden="true"></i> {% trans "Sync Snapshots" %}
     </button>
   </form>

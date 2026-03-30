@@ -33,7 +33,8 @@ class ScheduleSyncForm(forms.Form):
         widget=forms.CheckboxSelectMultiple,
         help_text=_(
             "Select one or more operations. Stages always run in dependency order "
-            "(devices, then virtual machines, then VM disks, then VM backups). "
+            "(devices, then virtual machines, then VM disks, then VM backups, "
+            "then VM snapshots). "
             "You cannot combine “All” with other types."
         ),
     )

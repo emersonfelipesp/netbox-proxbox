@@ -176,15 +176,3 @@ def vms_backups_sync_all(
     print_response(resp, as_json=as_json, as_yaml=as_yaml)
 
 
-@vms_app.command("journal-test")
-def vms_journal_test(
-    as_json: JsonFlag = False,
-    as_yaml: YamlFlag = False,
-) -> None:
-    """Test endpoint: creates sync process and journal entries."""
-    resp = run_with_spinner(
-        _get_client().get(
-            "/virtualization/virtual-machines/sync-process/journal-entry/test/create"
-        )
-    )
-    print_response(resp, as_json=as_json, as_yaml=as_yaml)

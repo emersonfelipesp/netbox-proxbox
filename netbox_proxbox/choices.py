@@ -23,11 +23,12 @@ class ProxmoxModeChoices(ChoiceSet):
 class SyncTypeChoices(ChoiceSet):
     """Which ProxBox sync operation to run (devices, VMs, backups, full, etc.)."""
 
-    key = "SyncProcess.sync_type"
+    key = "ProxboxSync.sync_type"
 
     VIRTUAL_MACHINES = "virtual-machines"
     VIRTUAL_MACHINES_DISKS = "vm-disks"
     VIRTUAL_MACHINES_BACKUPS = "vm-backups"
+    VIRTUAL_MACHINES_SNAPSHOTS = "vm-snapshots"
     DEVICES = "devices"
     ALL = "all"
 
@@ -35,26 +36,9 @@ class SyncTypeChoices(ChoiceSet):
         (VIRTUAL_MACHINES, _("Virtual Machines"), "blue"),
         (VIRTUAL_MACHINES_DISKS, _("VM Disks"), "orange"),
         (VIRTUAL_MACHINES_BACKUPS, _("Virtual Machines Backups"), "purple"),
+        (VIRTUAL_MACHINES_SNAPSHOTS, _("VM Snapshots"), "cyan"),
         (DEVICES, _("Devices"), "green"),
         (ALL, _("All"), "red"),
-    ]
-
-
-class SyncStatusChoices(ChoiceSet):
-    """Lifecycle status of a recorded sync process."""
-
-    key = "SyncProcess.status"
-
-    NOT_STARTED = "not-started"
-    SYNCING = "syncing"
-    COMPLETED = "completed"
-    FAILED = "failed"
-
-    CHOICES = [
-        (NOT_STARTED, _("Not Started"), "gray"),
-        (SYNCING, _("Syncing"), "blue"),
-        (COMPLETED, _("Completed"), "green"),
-        (FAILED, _("Failed"), "red"),
     ]
 
 

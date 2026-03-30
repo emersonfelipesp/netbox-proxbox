@@ -14,7 +14,6 @@ from .serializers import (
     FastAPIEndpointSerializer,
     NetBoxEndpointSerializer,
     ProxmoxEndpointSerializer,
-    SyncProcessSerializer,
     VMBackupSerializer,
     VMSnapshotSerializer,
 )
@@ -55,13 +54,6 @@ class VMSnapshotViewSet(NetBoxModelViewSet):
     queryset = models.VMSnapshot.objects.all()
     serializer_class = VMSnapshotSerializer
     filterset_class = filtersets.VMSnapshotFilterSet
-
-
-class SyncProcessViewSet(NetBoxModelViewSet):
-    """REST API for recorded ProxBox sync process executions."""
-    queryset = models.SyncProcess.objects.all()
-    serializer_class = SyncProcessSerializer
-    filterset_class = filtersets.SyncProcessFilterSet
 
 
 class ProxmoxEndpointViewSet(NetBoxModelViewSet):

@@ -9,7 +9,7 @@ from netbox.plugins import PluginTemplateExtension
 from utilities.permissions import get_permission_for_model
 
 from netbox_proxbox.jobs import is_proxbox_sync_job
-from netbox_proxbox.views.proxbox_access import permission_add_sync_process
+from netbox_proxbox.views.proxbox_access import permission_enqueue_proxbox_sync
 
 __all__ = ("ProxboxJobTemplateExtension", "template_extensions")
 
@@ -45,7 +45,7 @@ class ProxboxJobTemplateExtension(PluginTemplateExtension):
         parts: list[str] = []
 
         if obj.status in JobStatusChoices.TERMINAL_STATE_CHOICES:
-            if user.has_perm(permission_add_sync_process()):
+            if user.has_perm(permission_enqueue_proxbox_sync()):
                 parts.append(
                     self.render(
                         "netbox_proxbox/inc/job_run_now_button.html",
@@ -63,6 +63,16 @@ class ProxboxJobTemplateExtension(PluginTemplateExtension):
                 )
 
         return mark_safe("".join(parts)) if parts else ""
+
+    def left_page(self):
+        """Show last Proxbox sync runtime and stage summary on Job detail."""
+        obj = self.context["object"]
+        if not isinstance(obj, Job) or not is_proxbox_sync_job(obj):
+            return ""
+        return self.render(
+            "netbox_proxbox/inc/job_runtime_panel.html",
+            {"job": obj},
+        )
 
 
 template_extensions = [ProxboxJobTemplateExtension]

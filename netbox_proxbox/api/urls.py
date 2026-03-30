@@ -1,4 +1,4 @@
-"""Register API routes for plugin endpoints, sync processes, and backups."""
+"""Register API routes for plugin endpoints and backups."""
 
 from django.urls import include, path
 
@@ -18,7 +18,6 @@ endpoints_router.register("fastapi", views.FastAPIEndpointViewSet, basename="fas
 
 router = NetBoxRouter()
 router.APIRootView = views.ProxBoxRootView
-router.register("sync-processes", views.SyncProcessViewSet)
 router.register("backups", views.VMBackupViewSet)
 router.register("snapshots", views.VMSnapshotViewSet)
 

@@ -9,33 +9,9 @@ from .models import (
     FastAPIEndpoint,
     NetBoxEndpoint,
     ProxmoxEndpoint,
-    SyncProcess,
     VMBackup,
     VMSnapshot,
 )
-
-
-@register_filterset
-class SyncProcessFilterSet(NetBoxModelFilterSet):
-    """Filter and search background sync process records."""
-
-    class Meta:
-        model = SyncProcess
-        fields = (
-            "id",
-            "name",
-            "sync_type",
-            "status",
-            "started_at",
-            "completed_at",
-            "runtime",
-        )
-
-    def search(self, queryset, name, value):
-        """Match the search term against sync process names (case-insensitive)."""
-        if not value.strip():
-            return queryset
-        return queryset.filter(Q(name__icontains=value))
 
 
 @register_filterset

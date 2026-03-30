@@ -132,32 +132,6 @@ def full_update(
     print_response(resp, as_json=as_json, as_yaml=as_yaml)
 
 
-# ── Sync processes sub-app ────────────────────────────────────────────────────
-
-sync_app = typer.Typer(no_args_is_help=True, help="Sync process commands.")
-app.add_typer(sync_app, name="sync-processes")
-
-
-@sync_app.command("list")
-def sync_processes_list(
-    as_json: Annotated[bool, typer.Option("--json", help="Output raw JSON.")] = False,
-    as_yaml: Annotated[bool, typer.Option("--yaml", help="Output YAML.")] = False,
-) -> None:
-    """List all sync processes from NetBox."""
-    resp = run_with_spinner(_get_client().get("/sync-processes"))
-    print_response(resp, as_json=as_json, as_yaml=as_yaml)
-
-
-@sync_app.command("create")
-def sync_processes_create(
-    as_json: Annotated[bool, typer.Option("--json", help="Output raw JSON.")] = False,
-    as_yaml: Annotated[bool, typer.Option("--yaml", help="Output YAML.")] = False,
-) -> None:
-    """Create a new sync process record in NetBox."""
-    resp = run_with_spinner(_get_client().post("/sync-processes"))
-    print_response(resp, as_json=as_json, as_yaml=as_yaml)
-
-
 @docs_app.command("generate-capture")
 def docs_generate_capture(
     output: Annotated[
