@@ -34,17 +34,18 @@
   }
 
   function renderRawJson(text) {
-    var pre = document.createElement("pre");
-    pre.className = "mb-0 small font-monospace";
-    pre.textContent = text;
-    return pre;
+    var span = document.createElement("span");
+    span.className = "mb-0 small font-monospace";
+    span.style.whiteSpace = "pre";
+    appendText(span, text);
+    return span;
   }
 
   function renderPlainLine(text) {
-    var p = document.createElement("p");
-    p.className = "mb-0 small";
-    appendText(p, text);
-    return p;
+    var span = document.createElement("span");
+    span.className = "mb-0 small";
+    appendText(span, text);
+    return span;
   }
 
   function filterStreamKeysForDisplay(obj) {
@@ -156,7 +157,7 @@
   }
 
   function renderParsedCompact(parsed) {
-    var wrap = document.createElement("div");
+    var wrap = document.createElement("span");
     wrap.className = "nb-proxbox-parsed-msg";
 
     var badge = document.createElement("span");
@@ -181,10 +182,14 @@
 
   function renderMessageContent(msg) {
     var parsed = parseProxboxMessage(msg);
+    var container = document.createElement("span");
+    container.className = "nb-job-live-log-message d-inline-flex align-items-center gap-1";
     if (parsed) {
-      return renderParsedCompact(parsed);
+      container.appendChild(renderParsedCompact(parsed));
+    } else {
+      container.appendChild(renderPlainLine(msg));
     }
-    return renderPlainLine(msg);
+    return container;
   }
 
   function renderLiveLog(container, entries) {
@@ -192,7 +197,7 @@
     container.replaceChildren();
 
     if (!Array.isArray(entries) || entries.length === 0) {
-      var empty = document.createElement("p");
+      var empty = document.createElement("span");
       empty.className = "mb-0 small text-muted";
       appendText(empty, "—");
       container.appendChild(empty);
@@ -205,18 +210,14 @@
       if (!e || typeof e !== "object") continue;
 
       var row = document.createElement("div");
-      row.className =
-        "nb-job-live-log-entry border-bottom pb-2 mb-2 border-secondary border-opacity-25";
-
-      var head = document.createElement("div");
-      head.className = "d-flex flex-wrap align-items-center gap-2 mb-1";
+      row.className = "nb-job-live-log-entry";
 
       var t = e.timestamp != null ? String(e.timestamp) : "";
       if (t) {
         var timeEl = document.createElement("span");
         timeEl.className = "text-muted small font-monospace";
         appendText(timeEl, t);
-        head.appendChild(timeEl);
+        row.appendChild(timeEl);
       }
 
       var lvl = e.level != null ? String(e.level) : "";
@@ -224,16 +225,11 @@
         var lvlSpan = document.createElement("span");
         lvlSpan.className = "badge text-bg-secondary text-uppercase";
         appendText(lvlSpan, lvl);
-        head.appendChild(lvlSpan);
+        row.appendChild(lvlSpan);
       }
 
-      row.appendChild(head);
-
       var msg = e.message != null ? String(e.message) : "";
-      var body = document.createElement("div");
-      body.className = "nb-job-live-log-body";
-      body.appendChild(renderMessageContent(msg));
-      row.appendChild(body);
+      row.appendChild(renderMessageContent(msg));
 
       container.appendChild(row);
     }
