@@ -5,8 +5,8 @@
 **Before committing ANY change:**
 
 1. Run syntax check: `python -m compileall netbox_proxbox tests`
-2. Run linter: `ruff check .`
-3. Run tests: `pytest tests/`
+2. Run linter: `rtk ruff check .`
+3. Run tests: `rtk pytest tests/`
 
 ---
 
