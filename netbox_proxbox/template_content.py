@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from core.choices import JobStatusChoices
 from core.models import Job
+from django.utils.safestring import mark_safe
 from netbox.plugins import PluginTemplateExtension
+from utilities.permissions import get_permission_for_model
 
 from netbox_proxbox.jobs import is_proxbox_sync_job
 from netbox_proxbox.views.proxbox_access import permission_add_sync_process
@@ -13,27 +15,37 @@ __all__ = ("ProxboxJobTemplateExtension", "template_extensions")
 
 
 class ProxboxJobTemplateExtension(PluginTemplateExtension):
-    """Inject a Run now control on core Job detail for Proxbox Sync jobs."""
+    """Inject Run now / Cancel controls on core Job detail for Proxbox Sync jobs."""
 
     models = ["core.job"]
 
     def buttons(self):
-        """Render the Run now POST form when the job is a re-runnable Proxbox sync."""
+        """Render Run now (not while running) and Cancel (pending/scheduled/running) as permitted."""
         obj = self.context["object"]
         if not isinstance(obj, Job) or not is_proxbox_sync_job(obj):
             return ""
-        if obj.status in (
-            JobStatusChoices.STATUS_PENDING,
-            JobStatusChoices.STATUS_RUNNING,
-        ):
-            return ""
         user = self.context["request"].user
-        if not user.has_perm(permission_add_sync_process()):
-            return ""
-        return self.render(
-            "netbox_proxbox/inc/job_run_now_button.html",
-            {"job": obj},
-        )
+        parts: list[str] = []
+
+        if obj.status != JobStatusChoices.STATUS_RUNNING:
+            if user.has_perm(permission_add_sync_process()):
+                parts.append(
+                    self.render(
+                        "netbox_proxbox/inc/job_run_now_button.html",
+                        {"job": obj},
+                    )
+                )
+
+        if obj.status in JobStatusChoices.ENQUEUED_STATE_CHOICES:
+            if user.has_perm(get_permission_for_model(Job, "delete")):
+                parts.append(
+                    self.render(
+                        "netbox_proxbox/inc/job_cancel_button.html",
+                        {"job": obj},
+                    )
+                )
+
+        return mark_safe("".join(parts)) if parts else ""
 
 
 template_extensions = [ProxboxJobTemplateExtension]
