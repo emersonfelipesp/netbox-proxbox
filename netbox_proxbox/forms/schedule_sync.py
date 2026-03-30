@@ -71,6 +71,13 @@ class ScheduleSyncForm(forms.Form):
         """Append current-time hint to schedule help; optionally seed interval fields."""
         self.initial_interval = kwargs.pop("initial_interval", None)
         super().__init__(*args, **kwargs)
+        # Singleton NetBox endpoint: pre-select the only row on fresh GET requests.
+        if not self.is_bound:
+            sole_nb_pks = list(
+                NetBoxEndpoint.objects.values_list("pk", flat=True)
+            )
+            if len(sole_nb_pks) == 1:
+                self.initial.setdefault("netbox_endpoints", sole_nb_pks)
         now = local_now().strftime("%Y-%m-%d %H:%M:%S %Z")
         self.fields["schedule_at"].help_text += _(
             " (current time: <strong>{now}</strong>)"
