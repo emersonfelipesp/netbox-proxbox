@@ -143,6 +143,49 @@ def test_proxbox_sync_params_from_job_stored(proxbox_sync_job_module):
     assert p["netbox_endpoint_ids"] == ["2"]
 
 
+def test_proxbox_sync_job_enqueue_default_job_timeout(
+    monkeypatch, proxbox_sync_job_module
+):
+    """enqueue() must pass a long RQ job_timeout so workers do not kill SSE reads at ~300s."""
+    captured: dict[str, object] = {}
+
+    @classmethod
+    def fake_enqueue(cls, *args, **kwargs):
+        captured.update(kwargs)
+        return MagicMock()
+
+    monkeypatch.setattr(
+        sys.modules["netbox.jobs"].JobRunner,
+        "enqueue",
+        fake_enqueue,
+        raising=False,
+    )
+    proxbox_sync_job_module.ProxboxSyncJob.enqueue(name="t", user=None, sync_type="all")
+    assert captured.get("job_timeout") == proxbox_sync_job_module.PROXBOX_SYNC_JOB_TIMEOUT
+
+
+def test_proxbox_sync_job_enqueue_respects_explicit_job_timeout(
+    monkeypatch, proxbox_sync_job_module
+):
+    captured: dict[str, object] = {}
+
+    @classmethod
+    def fake_enqueue(cls, *args, **kwargs):
+        captured.update(kwargs)
+        return MagicMock()
+
+    monkeypatch.setattr(
+        sys.modules["netbox.jobs"].JobRunner,
+        "enqueue",
+        fake_enqueue,
+        raising=False,
+    )
+    proxbox_sync_job_module.ProxboxSyncJob.enqueue(
+        name="t", user=None, sync_type="all", job_timeout=99999
+    )
+    assert captured.get("job_timeout") == 99999
+
+
 def test_proxbox_sync_job_run_raises_on_backend_error(monkeypatch, proxbox_sync_job_module):
     services_mod = types.ModuleType("netbox_proxbox.services")
     services_mod.run_sync_stream = lambda *a, **k: ({"detail": "unavailable"}, 503)

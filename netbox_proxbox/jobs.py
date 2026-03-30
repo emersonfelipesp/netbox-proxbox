@@ -10,8 +10,14 @@ from netbox_proxbox.choices import SyncTypeChoices
 
 PROXBOX_SYNC_QUEUE_NAME = "netbox_proxbox.sync"
 
+# RQ wall-clock limit for the whole job. Must exceed NetBox's default ``RQ_DEFAULT_TIMEOUT``
+# (often 300s) and the HTTP stream read budget between chunks (3600s in ``run_sync_stream``).
+# Override per enqueue via ``job_timeout=...`` if full syncs routinely run longer.
+PROXBOX_SYNC_JOB_TIMEOUT = 7200
+
 __all__ = (
     "PROXBOX_SYNC_QUEUE_NAME",
+    "PROXBOX_SYNC_JOB_TIMEOUT",
     "ProxboxSyncJob",
     "is_proxbox_sync_job",
     "proxbox_sync_params_from_job",
@@ -62,6 +68,12 @@ class ProxboxSyncJob(JobRunner):
 
     class Meta:
         name = "Proxbox Sync"
+
+    @classmethod
+    def enqueue(cls, *args, **kwargs):
+        """Enqueue like other ``JobRunner`` jobs, but with a long RQ ``job_timeout`` by default."""
+        kwargs.setdefault("job_timeout", PROXBOX_SYNC_JOB_TIMEOUT)
+        return super().enqueue(*args, **kwargs)
 
     def run(
         self,
