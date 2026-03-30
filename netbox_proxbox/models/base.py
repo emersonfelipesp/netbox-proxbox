@@ -5,9 +5,12 @@ from __future__ import annotations
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 
 from netbox.models import NetBoxModel
+
+from utilities.views import get_viewname
 
 from netbox_proxbox.fields import DomainField
 
@@ -60,6 +63,19 @@ class EndpointBase(CommonProperties, NetBoxModel):
     class Meta:
         abstract = True
         ordering = ("name", "pk")
+
+    @classmethod
+    def _get_action_url(cls, action, rest_api, kwargs):
+        """
+        Endpoint REST list URLs live under the nested ``endpoints`` include
+        (``plugins-api:netbox_proxbox-api:endpoints:{model}-list``), not the flat
+        name NetBox's get_viewname() builds. APISelect / DynamicModel* fields call
+        get_action_url(..., action=\"list\", rest_api=True).
+        """
+        if rest_api and action == "list":
+            mn = cls._meta.model_name
+            return reverse(f"plugins-api:netbox_proxbox-api:endpoints:{mn}-list")
+        return reverse(get_viewname(cls, action, rest_api), kwargs=kwargs or {})
 
     def __str__(self) -> str:
         return self.name or self.domain or self.ip or self.__class__.__name__
