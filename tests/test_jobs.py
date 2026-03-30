@@ -109,7 +109,7 @@ def test_proxbox_sync_params_from_job_defaults(proxbox_sync_job_module):
     fn = proxbox_sync_job_module.proxbox_sync_params_from_job
     st = proxbox_sync_job_module.SyncTypeChoices
     p = fn(SimpleNamespace(data=None))
-    assert p["sync_type"] == st.ALL
+    assert p["sync_types"] == [st.ALL]
     assert p["proxmox_endpoint_ids"] == []
     assert p["netbox_endpoint_ids"] == []
 
@@ -149,9 +149,54 @@ def test_proxbox_sync_params_from_job_stored(proxbox_sync_job_module):
         }
     )
     p = fn(job)
-    assert p["sync_type"] == st.DEVICES
+    assert p["sync_types"] == [st.DEVICES]
     assert p["proxmox_endpoint_ids"] == ["1"]
     assert p["netbox_endpoint_ids"] == ["2"]
+
+
+def test_proxbox_sync_params_from_job_stored_sync_types(proxbox_sync_job_module):
+    from types import SimpleNamespace
+
+    fn = proxbox_sync_job_module.proxbox_sync_params_from_job
+    st = proxbox_sync_job_module.SyncTypeChoices
+    job = SimpleNamespace(
+        data={
+            "proxbox_sync": {
+                "params": {
+                    "sync_types": [st.VIRTUAL_MACHINES, st.DEVICES],
+                    "proxmox_endpoint_ids": [],
+                    "netbox_endpoint_ids": [],
+                }
+            }
+        }
+    )
+    p = fn(job)
+    assert p["sync_types"] == [st.DEVICES, st.VIRTUAL_MACHINES]
+
+
+def test_normalize_sync_types_orders_and_dedupes(proxbox_sync_job_module):
+    st = proxbox_sync_job_module.SyncTypeChoices
+    norm = proxbox_sync_job_module.normalize_sync_types
+    out = norm(
+        [
+            st.VIRTUAL_MACHINES_BACKUPS,
+            st.DEVICES,
+            st.VIRTUAL_MACHINES,
+            st.DEVICES,
+        ]
+    )
+    assert out == [
+        st.DEVICES,
+        st.VIRTUAL_MACHINES,
+        st.VIRTUAL_MACHINES_BACKUPS,
+    ]
+
+
+def test_normalize_sync_types_all_collapses(proxbox_sync_job_module):
+    st = proxbox_sync_job_module.SyncTypeChoices
+    norm = proxbox_sync_job_module.normalize_sync_types
+    assert norm([st.ALL]) == [st.ALL]
+    assert norm([st.DEVICES, st.ALL]) == [st.ALL]
 
 
 def test_proxbox_sync_job_enqueue_default_job_timeout(
@@ -173,6 +218,7 @@ def test_proxbox_sync_job_enqueue_default_job_timeout(
     )
     proxbox_sync_job_module.ProxboxSyncJob.enqueue(name="t", user=None, sync_type="all")
     assert captured.get("job_timeout") == proxbox_sync_job_module.PROXBOX_SYNC_JOB_TIMEOUT
+    assert captured.get("sync_types") == ["all"]
 
 
 def test_proxbox_sync_job_enqueue_respects_explicit_job_timeout(
@@ -195,6 +241,32 @@ def test_proxbox_sync_job_enqueue_respects_explicit_job_timeout(
         name="t", user=None, sync_type="all", job_timeout=99999
     )
     assert captured.get("job_timeout") == 99999
+    assert captured.get("sync_types") == ["all"]
+
+
+def test_proxbox_sync_job_enqueue_accepts_sync_types_kwarg(
+    monkeypatch, proxbox_sync_job_module
+):
+    captured: dict[str, object] = {}
+
+    @classmethod
+    def fake_enqueue(cls, *args, **kwargs):
+        captured.update(kwargs)
+        return MagicMock()
+
+    monkeypatch.setattr(
+        sys.modules["netbox.jobs"].JobRunner,
+        "enqueue",
+        fake_enqueue,
+        raising=False,
+    )
+    st = proxbox_sync_job_module.SyncTypeChoices
+    proxbox_sync_job_module.ProxboxSyncJob.enqueue(
+        name="t",
+        user=None,
+        sync_types=[st.VIRTUAL_MACHINES_DISKS, st.DEVICES],
+    )
+    assert captured.get("sync_types") == [st.DEVICES, st.VIRTUAL_MACHINES_DISKS]
 
 
 def test_proxbox_sync_job_run_raises_on_backend_error(monkeypatch, proxbox_sync_job_module):
@@ -210,3 +282,69 @@ def test_proxbox_sync_job_run_raises_on_backend_error(monkeypatch, proxbox_sync_
     st = proxbox_sync_job_module.SyncTypeChoices
     with pytest.raises(RuntimeError, match="unavailable"):
         ProxboxSyncJob.run(job, sync_type=st.DEVICES)
+
+
+def test_proxbox_sync_job_run_multi_stage_in_dependency_order(
+    monkeypatch, proxbox_sync_job_module
+):
+    """Subset stages run sequentially: devices before vm-disks even if passed reversed."""
+    paths: list[str] = []
+
+    services_mod = types.ModuleType("netbox_proxbox.services")
+
+    def run_sync_stream(path, query_params=None, **stream_kwargs):
+        paths.append(path)
+        return ({"stream": True, "response": {"ok": True}}, 200)
+
+    services_mod.run_sync_stream = run_sync_stream
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
+
+    views_sync = types.ModuleType("netbox_proxbox.views.sync")
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.views.sync", views_sync)
+
+    ProxboxSyncJob = proxbox_sync_job_module.ProxboxSyncJob
+    job = ProxboxSyncJob()
+    job.logger = logging.getLogger("test_proxbox_job")
+    job.job = MagicMock()
+    job.job.data = None
+
+    st = proxbox_sync_job_module.SyncTypeChoices
+    ProxboxSyncJob.run(
+        job,
+        sync_types=[st.VIRTUAL_MACHINES_DISKS, st.DEVICES],
+    )
+    assert paths == [
+        "dcim/devices/create/stream",
+        "virtualization/virtual-machines/virtual-disks/create/stream",
+    ]
+    saved = job.job.data
+    assert "stages" in saved["proxbox_sync"]["response"]
+    assert len(saved["proxbox_sync"]["response"]["stages"]) == 2
+
+
+def test_proxbox_sync_job_run_all_single_stream(monkeypatch, proxbox_sync_job_module):
+    calls = 0
+
+    services_mod = types.ModuleType("netbox_proxbox.services")
+
+    def run_sync_stream(path, query_params=None, **stream_kwargs):
+        nonlocal calls
+        calls += 1
+        return ({"full": True}, 200)
+
+    services_mod.run_sync_stream = run_sync_stream
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
+
+    views_sync = types.ModuleType("netbox_proxbox.views.sync")
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.views.sync", views_sync)
+
+    ProxboxSyncJob = proxbox_sync_job_module.ProxboxSyncJob
+    job = ProxboxSyncJob()
+    job.logger = logging.getLogger("test_proxbox_job")
+    job.job = MagicMock()
+    job.job.data = None
+
+    st = proxbox_sync_job_module.SyncTypeChoices
+    ProxboxSyncJob.run(job, sync_types=[st.ALL])
+    assert calls == 1
+    assert job.job.data["proxbox_sync"]["response"] == {"full": True}

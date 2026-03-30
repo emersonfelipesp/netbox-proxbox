@@ -48,11 +48,14 @@ sudo systemctl enable --now netbox-rq
 ## Scheduling a Sync
 
 1. In NetBox, navigate to **Proxbox > Schedule Sync**.
-2. Choose a **Sync Type**:
-    - **All** — sync both devices (nodes) and virtual machines (full update).
+2. Choose one or more **Sync types** (checkboxes):
+    - **All** — full update in one backend stream (devices, VMs, disks, backups). Do not combine with other types.
     - **Devices** — sync Proxmox nodes as NetBox devices.
     - **Virtual Machines** — sync Proxmox VMs as NetBox virtual machines.
+    - **VM Disks** — sync VM virtual disks (run after VMs exist in NetBox).
     - **VM Backups** — sync all VM backup records.
+
+    When you pick several types (not **All**), the job runs them **in order**: devices → virtual machines → VM disks → VM backups, skipping any type you did not select.
 3. Optionally set a **Schedule at** time. Leave blank to run immediately.
 4. Optionally set a **Recurs every** interval in minutes. Common values:
     - `1` — every minute
@@ -88,14 +91,14 @@ Each job record shows:
 | **Scheduled** | When the job is/was scheduled to run |
 | **Started / Completed** | Execution timestamps |
 | **Interval** | Recurrence interval in minutes (blank for one-time jobs) |
-| **Data** | JSON response from the ProxBox backend on success |
+| **Data** | JSON from the ProxBox backend: single payload for **All**, or a `stages` list when multiple types ran |
 | **Error** | Error message if the job failed |
 
 ### Structured Logs
 
 Click on a job and open the **Log** tab to see structured log entries recorded during execution. These include:
 
-- `INFO: Starting Proxbox sync: <sync_type>` — when the job begins
+- `INFO: Starting Proxbox sync stages: ...` — when the job begins (listed stages)
 - `INFO: Sync completed successfully (HTTP 202)` — on success
 - `ERROR: Sync failed (HTTP <status>): <detail>` — on failure, with the backend error message
 

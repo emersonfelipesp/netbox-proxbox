@@ -4,6 +4,7 @@ from django.contrib import messages
 from django.shortcuts import redirect, render
 from django.views import View
 
+from netbox_proxbox.choices import SyncTypeChoices
 from netbox_proxbox.forms.schedule_sync import ScheduleSyncForm
 from netbox_proxbox.jobs import PROXBOX_SYNC_QUEUE_NAME, ProxboxSyncJob
 from netbox_proxbox.views.proxbox_access import permission_add_sync_process
@@ -29,11 +30,18 @@ class ScheduleSyncView(
     template_name = "netbox_proxbox/schedule_sync.html"
 
     def get(self, request):
-        """Show the schedule form, optionally pre-selecting ``sync_type`` from query string."""
+        """Show the schedule form, optionally pre-selecting ``sync_types`` from query string."""
         initial = {}
-        sync_type = request.GET.get("sync_type")
-        if sync_type:
-            initial["sync_type"] = sync_type
+        valid_slugs = {c[0] for c in SyncTypeChoices.CHOICES}
+        multi = request.GET.getlist("sync_types")
+        if multi:
+            picked = [x for x in multi if x in valid_slugs]
+            if picked:
+                initial["sync_types"] = picked
+        else:
+            single = request.GET.get("sync_type")
+            if single and single in valid_slugs:
+                initial["sync_types"] = [single]
 
         return render(
             request, self.template_name, {"form": ScheduleSyncForm(initial=initial)}
@@ -43,7 +51,7 @@ class ScheduleSyncView(
         """Validate the form, enqueue ``ProxboxSyncJob``, then redirect to the job list."""
         form = ScheduleSyncForm(request.POST)
         if form.is_valid():
-            sync_type = form.cleaned_data["sync_type"]
+            sync_types = form.cleaned_data["sync_types"]
             schedule_at = form.cleaned_data.get("schedule_at")
             interval = form.cleaned_data.get("interval")
             proxmox_endpoint_ids = form.cleaned_data.get("proxmox_endpoint_ids", [])
@@ -56,7 +64,7 @@ class ScheduleSyncView(
                 schedule_at=schedule_at,
                 interval=interval,
                 queue_name=PROXBOX_SYNC_QUEUE_NAME,
-                sync_type=sync_type,
+                sync_types=sync_types,
                 proxmox_endpoint_ids=proxmox_endpoint_ids,
                 netbox_endpoint_ids=netbox_endpoint_ids,
             )
