@@ -12,7 +12,10 @@ import requests
 from netbox_proxbox.models import FastAPIEndpoint
 from netbox_proxbox.type_defs import BackendRequestContext
 from netbox_proxbox.utils import get_backend_auth_headers, get_fastapi_url
-from netbox_proxbox.views.error_utils import extract_backend_error_detail
+from netbox_proxbox.views.error_utils import (
+    extract_backend_error_detail,
+    parse_requests_response_json,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +105,18 @@ def request_backend_resource(
                 timeout=timeout,
             )
             response.raise_for_status()
-            payload = response.json() if hasattr(response, "json") else {}
+            payload, json_err = parse_requests_response_json(
+                response, log_label=f"sync:{path}"
+            )
+            if json_err:
+                last_detail = json_err
+                logger.error(
+                    "Sync request returned non-JSON for %s via %s: %s",
+                    path,
+                    url,
+                    json_err,
+                )
+                continue
             return {
                 "queued": True,
                 "path": path,

@@ -576,3 +576,33 @@ def test_sync_stream_response_handles_context_resolution_crash(
     assert response.status_code == 200
     assert "context failed" in payload
     assert "event: complete" in payload
+
+
+def test_sync_resource_non_json_200_response_returns_503(monkeypatch, fastapi_endpoint):
+    module = load_plugin_module(
+        "netbox_proxbox.views.sync",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+    )
+    bp = _sync_backend_proxy()
+
+    class NonJsonOkResponse:
+        status_code = 200
+        url = "https://proxbox.local:8800/dcim/devices/create"
+        text = "<html>not json</html>"
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            raise requests.exceptions.JSONDecodeError(
+                "Expecting value", "<html>", 0
+            )
+
+    monkeypatch.setattr(bp.requests, "get", lambda *a, **k: NonJsonOkResponse())
+
+    response = module.sync_devices(_json_request())
+
+    assert response.status_code == 503
+    assert response.payload["queued"] is False
+    assert "not valid JSON" in response.payload["detail"]

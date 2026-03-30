@@ -44,6 +44,18 @@ def get_service_status_impl(
             payload["detail"] = fastapi_response["detail"]
         return JsonResponse(payload)
 
+    if service not in ("netbox", "proxmox"):
+        return JsonResponse(
+            {
+                "status": "error",
+                "detail": (
+                    f"Unknown service {service!r}. "
+                    "Expected fastapi, netbox, or proxmox."
+                ),
+            },
+            status=400,
+        )
+
     if service == "netbox":
         get_object_or_404(
             NetBoxEndpoint.objects.restrict(request.user, "view"),

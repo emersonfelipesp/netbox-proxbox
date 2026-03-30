@@ -18,6 +18,7 @@ from netbox_proxbox.views.backend_sync import sync_proxmox_endpoint_to_backend
 from netbox_proxbox.views.error_utils import (
     extract_backend_error_detail,
     extract_proxmox_backend_error_detail,
+    parse_requests_response_json,
 )
 
 logger = logging.getLogger(__name__)
@@ -224,7 +225,27 @@ class ServiceStatus:
                     timeout=self.request_timeout,
                 )
                 response.raise_for_status()
-                endpoints = list(response.json())
+                endpoints_data, json_err = parse_requests_response_json(
+                    response, log_label="netbox/endpoint"
+                )
+                if json_err:
+                    self._set_error(json_err)
+                    logger.error(
+                        "NetBox endpoint list returned non-JSON on attempt %s: %s",
+                        attempt + 1,
+                        json_err,
+                    )
+                    if attempt < max_retries - 1:
+                        time.sleep(retry_delay)
+                    continue
+                if not isinstance(endpoints_data, list):
+                    self._set_error(
+                        "ProxBox backend returned invalid NetBox endpoint list payload."
+                    )
+                    if attempt < max_retries - 1:
+                        time.sleep(retry_delay)
+                    continue
+                endpoints = endpoints_data
 
                 if not endpoints:
                     create_response = requests.post(

@@ -28,7 +28,7 @@ class ProxboxSyncJob(JobRunner):
         **kwargs,
     ):
         # Import here to avoid circular imports at module load time
-        from netbox_proxbox.views.sync import sync_full_update_resource, sync_resource
+        from netbox_proxbox.services import sync_full_update_resource, sync_resource
 
         self.logger.info("Starting Proxbox sync: %s", sync_type)
         if proxmox_endpoint_ids:

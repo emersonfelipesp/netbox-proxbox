@@ -47,6 +47,11 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
 - Browser updates can flow over SSE streams or the existing WebSocket channel.
 - Templates and static assets are conventional Django plugin assets under `netbox_proxbox/templates/` and `netbox_proxbox/static/`.
 
+## Backend integration notes
+
+- **Single FastAPI row:** HTTP and WebSocket helpers such as `get_fastapi_request_context()` in [`netbox_proxbox/services/backend_proxy.py`](./netbox_proxbox/services/backend_proxy.py), `websocket_client`, and several dashboard views resolve the backend via `FastAPIEndpoint.objects.first()` (or the first row from a restricted queryset). If multiple FastAPI endpoints exist, whichever row sorts first is used; plan automation and operator docs accordingly.
+- **Full update stages:** [`sync_full_update_resource`](./netbox_proxbox/services/backend_proxy.py) calls proxbox-api for devices, then virtual machines, then backups. Failure in a later stage leaves earlier stages already applied on the backend; the plugin response includes the failing `stage` and `detail`.
+
 ## How To Navigate
 
 - Start with [`netbox_proxbox/CLAUDE.md`](./netbox_proxbox/CLAUDE.md) for the package-level map.
