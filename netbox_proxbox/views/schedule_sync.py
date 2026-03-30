@@ -131,7 +131,10 @@ class QuickScheduleSyncFromHomeView(
 
     def post(self, request):
         """Validate the quick form and enqueue like ``ScheduleSyncView``; stay on home."""
-        form = ScheduleSyncForm(request.POST)
+        form = ScheduleSyncForm(
+            request.POST,
+            use_bootstrap_sync_checkboxes=True,
+        )
         if form.is_valid():
             enqueue_proxbox_sync_from_valid_form(request, form)
             messages.success(request, schedule_sync_success_message(form))

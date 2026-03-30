@@ -1,0 +1,12 @@
+{# One option for CheckboxSelectMultiple: Bootstrap form-check, browser-default checkbox size. #}
+<div class="form-check me-2 mb-1">
+    <input
+        type="checkbox"
+        name="{{ widget.name }}"
+        value="{{ widget.value|stringformat:'s' }}"
+        {% include "django/forms/widgets/attrs.html" %}
+    >
+    {% if widget.attrs.id %}
+        <label class="form-check-label" for="{{ widget.attrs.id }}">{{ widget.label }}</label>
+    {% endif %}
+</div>

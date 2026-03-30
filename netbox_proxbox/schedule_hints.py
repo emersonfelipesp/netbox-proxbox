@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, time, timedelta
 
 from django.db.models import Q
+from django.utils.translation import gettext_lazy as _
 
 from core.choices import JobStatusChoices
 from core.models import Job
@@ -18,7 +19,10 @@ from netbox_proxbox.jobs import (
     proxbox_sync_params_from_job,
 )
 
+QUICK_SCHEDULE_DEFAULT_JOB_NAME = _("Proxbox Full Sync")
+
 __all__ = (
+    "QUICK_SCHEDULE_DEFAULT_JOB_NAME",
     "has_recurring_proxbox_sync_all",
     "next_local_3am",
     "quick_schedule_home_form_kwargs",
@@ -67,6 +71,8 @@ def quick_schedule_home_form_kwargs() -> dict:
         "initial": {
             "sync_types": [SyncTypeChoices.ALL],
             "schedule_at": next_local_3am(),
+            "job_name": QUICK_SCHEDULE_DEFAULT_JOB_NAME,
         },
         "initial_interval": 60 * 24,
+        "use_bootstrap_sync_checkboxes": True,
     }
