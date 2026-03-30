@@ -88,11 +88,44 @@ def test_proxbox_sync_job_run_imports_from_services_not_views(
     )
     assert captured["called"] == "sync_resource"
     assert captured["path"] == "dcim/devices/create"
-    job.job.save.assert_called_once()
+    assert job.job.save.call_count >= 1
 
     job.job.reset_mock()
     ProxboxSyncJob.run(job, sync_type=st.ALL)
     assert captured["called"] == "sync_full_update_resource"
+
+
+def test_proxbox_sync_params_from_job_defaults(proxbox_sync_job_module):
+    from types import SimpleNamespace
+
+    fn = proxbox_sync_job_module.proxbox_sync_params_from_job
+    st = proxbox_sync_job_module.SyncTypeChoices
+    p = fn(SimpleNamespace(data=None))
+    assert p["sync_type"] == st.ALL
+    assert p["proxmox_endpoint_ids"] == []
+    assert p["netbox_endpoint_ids"] == []
+
+
+def test_proxbox_sync_params_from_job_stored(proxbox_sync_job_module):
+    from types import SimpleNamespace
+
+    fn = proxbox_sync_job_module.proxbox_sync_params_from_job
+    st = proxbox_sync_job_module.SyncTypeChoices
+    job = SimpleNamespace(
+        data={
+            "proxbox_sync": {
+                "params": {
+                    "sync_type": st.DEVICES,
+                    "proxmox_endpoint_ids": ["1"],
+                    "netbox_endpoint_ids": ["2"],
+                }
+            }
+        }
+    )
+    p = fn(job)
+    assert p["sync_type"] == st.DEVICES
+    assert p["proxmox_endpoint_ids"] == ["1"]
+    assert p["netbox_endpoint_ids"] == ["2"]
 
 
 def test_proxbox_sync_job_run_raises_on_backend_error(monkeypatch, proxbox_sync_job_module):

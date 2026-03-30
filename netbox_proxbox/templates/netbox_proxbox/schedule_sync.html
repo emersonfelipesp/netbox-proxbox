@@ -127,29 +127,37 @@
                 {% trans "Sync Types" %}
             </h5>
             <div class="card-body">
-                <table class="table table-hover">
+                <table class="table table-hover attr-table">
                     <thead>
                         <tr>
-                            <th>{% trans "Type" %}</th>
+                            <th class="text-nowrap" style="width: 1%">{% trans "Type" %}</th>
                             <th>{% trans "Description" %}</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr>
-                            <td><span class="badge bg-danger">All</span></td>
-                            <td>{% trans "Sync both devices (nodes) and virtual machines." %}</td>
+                            <td class="text-nowrap align-middle">
+                                <span class="badge rounded-pill text-bg-red fw-normal">{% trans "All" %}</span>
+                            </td>
+                            <td class="align-middle">{% trans "Sync both devices (nodes) and virtual machines." %}</td>
                         </tr>
                         <tr>
-                            <td><span class="badge bg-success">Devices</span></td>
-                            <td>{% trans "Sync Proxmox nodes as NetBox devices." %}</td>
+                            <td class="text-nowrap align-middle">
+                                <span class="badge rounded-pill text-bg-green fw-normal">{% trans "Devices" %}</span>
+                            </td>
+                            <td class="align-middle">{% trans "Sync Proxmox nodes as NetBox devices." %}</td>
                         </tr>
                         <tr>
-                            <td><span class="badge bg-primary">Virtual Machines</span></td>
-                            <td>{% trans "Sync Proxmox VMs as NetBox virtual machines." %}</td>
+                            <td class="text-nowrap align-middle">
+                                <span class="badge rounded-pill text-bg-blue fw-normal">{% trans "Virtual Machines" %}</span>
+                            </td>
+                            <td class="align-middle">{% trans "Sync Proxmox VMs as NetBox virtual machines." %}</td>
                         </tr>
                         <tr>
-                            <td><span class="badge bg-purple">VM Backups</span></td>
-                            <td>{% trans "Sync all VM backup records." %}</td>
+                            <td class="text-nowrap align-middle">
+                                <span class="badge rounded-pill text-bg-purple fw-normal">{% trans "VM Backups" %}</span>
+                            </td>
+                            <td class="align-middle">{% trans "Sync all VM backup records." %}</td>
                         </tr>
                     </tbody>
                 </table>

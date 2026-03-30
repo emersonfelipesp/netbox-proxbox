@@ -20,6 +20,7 @@ class ProxboxConfig(PluginConfig):
     def ready(self):
         super().ready()
         from . import jobs  # noqa: F401 — registers ProxboxSyncJob with the NetBox job system
+        from .views import job_run  # noqa: F401 — core Job detail: proxbox-run + template button
 
 
 config = ProxboxConfig
