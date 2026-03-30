@@ -1,9 +1,24 @@
 {% load i18n %}
 {% trans "log lines" as nb_job_log_lines_suffix %}
+{% trans "Copy logs" as nb_copy_logs_label %}
+{% trans "Copied!" as nb_copied_label %}
 <div class="alert alert-info alert-dismissible" role="alert">
   <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="{% trans "Close" %}"></button>
-  <strong>{% trans "Live job updates" %}</strong>
-  <span id="nb-job-live-status-{{ job.pk }}"></span>
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+    <div class="d-flex flex-wrap align-items-center gap-2">
+      <strong>{% trans "Live job updates" %}</strong>
+      <span id="nb-job-live-status-{{ job.pk }}"></span>
+    </div>
+    <button
+      type="button"
+      class="btn btn-sm btn-outline-secondary"
+      id="nb-job-copy-logs-{{ job.pk }}"
+      data-label-copy="{{ nb_copy_logs_label|escape }}"
+      data-label-copied="{{ nb_copied_label|escape }}"
+    >
+      {{ nb_copy_logs_label }}
+    </button>
+  </div>
   <div id="nb-job-live-log-{{ job.pk }}" class="nb-job-live-log mt-2"></div>
 </div>
 <script>
@@ -11,10 +26,12 @@
   var pk = {{ job.pk|default:"0" }};
   var statusEl = document.getElementById("nb-job-live-status-" + pk);
   var logEl = document.getElementById("nb-job-live-log-" + pk);
+  var copyBtn = document.getElementById("nb-job-copy-logs-" + pk);
   if (!statusEl) return;
   var terminal = { completed: 1, errored: 1, failed: 1 };
   var timer = null;
   var logSuffix = " {{ nb_job_log_lines_suffix|escapejs }}";
+  var lastEntries = [];
 
   function jobStatusParts(status) {
     if (status && typeof status === "object") {
@@ -48,6 +65,7 @@
       .then(function (d) {
         var st = jobStatusParts(d.status);
         var entries = Array.isArray(d.log_entries) ? d.log_entries : [];
+        lastEntries = entries;
         var n = entries.length;
         var display = st.label || st.value || "—";
         var detail =
@@ -69,6 +87,55 @@
       return;
     }
     setTimeout(startPolling, 40);
+  }
+
+  if (copyBtn) {
+    copyBtn.addEventListener("click", function () {
+      var api = window.NbProxboxJobLogView;
+      var text =
+        api && typeof api.formatLogEntriesForClipboard === "function"
+          ? api.formatLogEntriesForClipboard(lastEntries)
+          : "";
+      var labelCopy = copyBtn.getAttribute("data-label-copy") || "Copy logs";
+      var labelCopied = copyBtn.getAttribute("data-label-copied") || "Copied!";
+
+      function restoreLabel() {
+        copyBtn.textContent = labelCopy;
+      }
+
+      function ok() {
+        copyBtn.textContent = labelCopied;
+        window.setTimeout(restoreLabel, 2000);
+      }
+
+      if (!text) {
+        return;
+      }
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(ok).catch(function () {
+          fallbackCopy(text, ok);
+        });
+      } else {
+        fallbackCopy(text, ok);
+      }
+    });
+  }
+
+  function fallbackCopy(text, onOk) {
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      if (document.execCommand("copy")) {
+        onOk();
+      }
+    } catch (e) {}
+    document.body.removeChild(ta);
   }
 
   if (document.readyState === "loading") {

@@ -1,23 +1,55 @@
-/* Proxbox live job log widget + parsed message cells */
+/* Proxbox live job log widget + compact inline parsed messages */
 .nb-job-live-log {
   max-height: 280px;
   overflow-y: auto;
 }
 
-.nb-job-live-log .table th,
-.nb-job-live-log .table td {
-  padding: 0.25rem 0.5rem;
-  vertical-align: top;
+.nb-proxbox-parsed-msg {
+  line-height: 1.45;
 }
 
-.nb-proxbox-parsed-msg .table {
-  margin-bottom: 0;
+.nb-proxbox-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.65rem;
+  margin-top: 0.15rem;
 }
 
-.nb-proxbox-parsed-msg .table .table {
-  font-size: 0.9em;
+.nb-proxbox-inline-kv {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem;
+  max-width: 100%;
 }
 
-#page-content td .nb-proxbox-parsed-msg .table th {
-  width: 1%;
+.nb-proxbox-inline-key {
+  color: var(--bs-secondary-color);
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.nb-proxbox-inline-val {
+  font-size: 0.875rem;
+  word-break: break-word;
+}
+
+.nb-proxbox-inline-array {
+  word-break: break-word;
+}
+
+.nb-proxbox-inline .nb-proxbox-inline {
+  margin-top: 0;
+  padding-left: 0.5rem;
+  border-left: 2px solid var(--bs-border-color);
+  flex-basis: 100%;
+}
+
+.nb-job-live-log-body .nb-proxbox-parsed-msg {
+  margin-top: 0.1rem;
+}
+
+#page-content td .nb-proxbox-inline {
+  max-width: 36rem;
 }

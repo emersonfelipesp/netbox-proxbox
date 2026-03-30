@@ -1,11 +1,10 @@
 /**
- * Parse and render Proxbox stream log lines as NetBox-like Bootstrap tables (textContent only).
+ * Parse and render Proxbox stream log lines (compact inline KV, textContent only).
  */
 (function (global) {
   "use strict";
 
-  var MAX_DEPTH = 6;
-  var STREAM_PREFIX = "[proxbox-stream]";
+  var INLINE_MAX_DEPTH = 4;
   var STREAM_RE = /^\[proxbox-stream\]\s+(\S+):\s*(.+)$/;
 
   function parseProxboxMessage(msg) {
@@ -48,13 +47,33 @@
     return p;
   }
 
-  function renderKeyValueTable(value, depth) {
+  function filterStreamKeysForDisplay(obj) {
+    if (!obj || typeof obj !== "object" || Array.isArray(obj)) {
+      return obj;
+    }
+    var out = {};
+    var k;
+    for (k in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, k)) {
+        out[k] = obj[k];
+      }
+    }
+    delete out.step;
+    if (Object.prototype.hasOwnProperty.call(out, "status")) {
+      if (String(out.status) === "progress") {
+        delete out.status;
+      }
+    }
+    return out;
+  }
+
+  function renderInlineValue(value, depth) {
     depth = depth || 0;
-    if (depth > MAX_DEPTH) {
-      var fallback = document.createElement("span");
-      fallback.className = "small text-muted";
-      appendText(fallback, "[max depth]");
-      return fallback;
+    if (depth > INLINE_MAX_DEPTH) {
+      var cap = document.createElement("span");
+      cap.className = "small text-muted";
+      appendText(cap, "…");
+      return cap;
     }
 
     if (value === null || value === undefined) {
@@ -73,84 +92,97 @@
 
     if (Array.isArray(value)) {
       if (value.length === 0) {
-        var empty = document.createElement("em");
-        empty.className = "text-muted small";
+        var empty = document.createElement("span");
+        empty.className = "small text-muted";
         appendText(empty, "[]");
         return empty;
       }
-      var arrTable = document.createElement("table");
-      arrTable.className =
-        "table table-sm table-bordered table-hover mb-0 align-middle";
-      var arrBody = document.createElement("tbody");
+      var wrap = document.createElement("span");
+      wrap.className = "nb-proxbox-inline nb-proxbox-inline-array small";
+      appendText(wrap, "[");
       for (var i = 0; i < value.length; i++) {
-        var tr = document.createElement("tr");
-        var th = document.createElement("th");
-        th.className = "text-muted small";
-        th.scope = "row";
-        appendText(th, String(i));
-        var td = document.createElement("td");
-        td.appendChild(renderKeyValueTable(value[i], depth + 1));
-        tr.appendChild(th);
-        tr.appendChild(td);
-        arrBody.appendChild(tr);
+        if (i > 0) appendText(wrap, ", ");
+        wrap.appendChild(renderInlineValue(value[i], depth + 1));
       }
-      arrTable.appendChild(arrBody);
-      return arrTable;
+      appendText(wrap, "]");
+      return wrap;
     }
 
-    var keys = Object.keys(value);
+    return renderInlineObject(value, depth);
+  }
+
+  function renderInlineObject(obj, depth) {
+    depth = depth || 0;
+    if (depth > INLINE_MAX_DEPTH) {
+      var cap2 = document.createElement("span");
+      cap2.className = "small text-muted";
+      appendText(cap2, "{…}");
+      return cap2;
+    }
+
+    var filtered = filterStreamKeysForDisplay(obj);
+    var keys = Object.keys(filtered);
     if (keys.length === 0) {
-      var objEmpty = document.createElement("em");
-      objEmpty.className = "text-muted small";
+      var objEmpty = document.createElement("span");
+      objEmpty.className = "small text-muted";
       appendText(objEmpty, "{}");
       return objEmpty;
     }
 
-    var table = document.createElement("table");
-    table.className =
-      "table table-sm table-bordered table-hover mb-0 align-middle object-list";
-    var tbody = document.createElement("tbody");
+    var root = document.createElement("div");
+    root.className = "nb-proxbox-inline";
+
     for (var k = 0; k < keys.length; k++) {
       var key = keys[k];
-      var row = document.createElement("tr");
-      var thKey = document.createElement("th");
-      thKey.className = "text-muted small text-nowrap";
-      thKey.scope = "row";
-      appendText(thKey, key);
-      var tdVal = document.createElement("td");
-      tdVal.className = "small";
-      tdVal.appendChild(renderKeyValueTable(value[key], depth + 1));
-      row.appendChild(thKey);
-      row.appendChild(tdVal);
-      tbody.appendChild(row);
+      var kv = document.createElement("span");
+      kv.className = "nb-proxbox-inline-kv";
+
+      var keyEl = document.createElement("span");
+      keyEl.className = "nb-proxbox-inline-key";
+      appendText(keyEl, key);
+
+      kv.appendChild(keyEl);
+      appendText(kv, " ");
+
+      var valWrap = document.createElement("span");
+      valWrap.className = "nb-proxbox-inline-val";
+      valWrap.appendChild(renderInlineValue(filtered[key], depth + 1));
+      kv.appendChild(valWrap);
+
+      root.appendChild(kv);
     }
-    table.appendChild(tbody);
-    return table;
+
+    return root;
   }
 
-  function renderParsed(parsed) {
+  function renderParsedCompact(parsed) {
     var wrap = document.createElement("div");
     wrap.className = "nb-proxbox-parsed-msg";
 
     var badge = document.createElement("span");
-    badge.className = "badge bg-secondary me-2";
+    badge.className = "badge bg-secondary me-2 align-middle";
     appendText(badge, parsed.event);
     wrap.appendChild(badge);
 
     if (parsed.parseError || parsed.data === null) {
-      var raw = parsed.rawSuffix || "";
-      wrap.appendChild(renderRawJson(raw));
+      wrap.appendChild(renderRawJson(parsed.rawSuffix || ""));
       return wrap;
     }
 
-    wrap.appendChild(renderKeyValueTable(parsed.data, 0));
+    var data = parsed.data;
+    if (typeof data === "object" && !Array.isArray(data) && data !== null) {
+      wrap.appendChild(renderInlineObject(data, 0));
+    } else {
+      wrap.appendChild(renderInlineValue(data, 0));
+    }
+
     return wrap;
   }
 
   function renderMessageContent(msg) {
     var parsed = parseProxboxMessage(msg);
     if (parsed) {
-      return renderParsed(parsed);
+      return renderParsedCompact(parsed);
     }
     return renderPlainLine(msg);
   }
@@ -205,6 +237,20 @@
 
       container.appendChild(row);
     }
+  }
+
+  function formatLogEntriesForClipboard(entries) {
+    if (!Array.isArray(entries)) return "";
+    var lines = [];
+    for (var i = 0; i < entries.length; i++) {
+      var e = entries[i];
+      if (!e || typeof e !== "object") continue;
+      var ts = e.timestamp != null ? String(e.timestamp) : "";
+      var lv = e.level != null ? String(e.level) : "";
+      var ms = e.message != null ? String(e.message) : "";
+      lines.push(ts + " [" + lv + "] " + ms);
+    }
+    return lines.join("\n");
   }
 
   function findMessageColumnIndex(table) {
@@ -271,6 +317,7 @@
     renderLiveLog: renderLiveLog,
     renderMessageContent: renderMessageContent,
     enhanceJobLogTable: enhanceJobLogTable,
+    formatLogEntriesForClipboard: formatLogEntriesForClipboard,
   };
 
   if (document.readyState === "loading") {
