@@ -1,4 +1,5 @@
 {% extends 'base/layout.html' %}
+{% load i18n %}
 {% load static %}
 
 {% block head %}
@@ -9,9 +10,12 @@
         };
     </script>
     <script type="module" src="{% static 'netbox_proxbox/js/home.js' %}"></script>
+    {% if quick_schedule_form %}{{ quick_schedule_form.media }}{% endif %}
 {% endblock %}
 
 {% block content %}
+    {% include "netbox_proxbox/home/quick_schedule_banner.html" %}
+
     <div class="row mb-3">
         <div id="sync-progress-container" class="d-none sticky-top pt-2 mb-3" style="z-index: 1030;">
             <div class="col-12">
