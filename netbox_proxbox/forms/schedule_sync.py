@@ -8,6 +8,7 @@ from utilities.forms.fields import DynamicModelMultipleChoiceField
 from utilities.forms.widgets import DateTimePicker
 
 from netbox_proxbox.choices import ScheduleIntervalUnitChoices, SyncTypeChoices
+from netbox_proxbox.forms.widgets import BootstrapCheckboxSelectMultiple
 from netbox_proxbox.models import NetBoxEndpoint, ProxmoxEndpoint
 
 __all__ = ("ScheduleSyncForm",)
@@ -75,7 +76,12 @@ class ScheduleSyncForm(forms.Form):
     def __init__(self, *args, **kwargs):
         """Append current-time hint to schedule help; optionally seed interval fields."""
         self.initial_interval = kwargs.pop("initial_interval", None)
+        use_bootstrap_sync_checkboxes = kwargs.pop(
+            "use_bootstrap_sync_checkboxes", False
+        )
         super().__init__(*args, **kwargs)
+        if use_bootstrap_sync_checkboxes:
+            self.fields["sync_types"].widget = BootstrapCheckboxSelectMultiple()
         # Singleton NetBox endpoint: pre-select the only row on fresh GET requests.
         if not self.is_bound:
             sole_nb_pks = list(
@@ -102,6 +108,10 @@ class ScheduleSyncForm(forms.Form):
                     SyncTypeChoices.ALL
                 ]
             self.initial.setdefault("sync_types", [SyncTypeChoices.ALL])
+            if use_bootstrap_sync_checkboxes:
+                self.fields["sync_types"].initial = self.initial.get(
+                    "sync_types", [SyncTypeChoices.ALL]
+                )
 
     def clean_sync_types(self):
         """Disallow mixing ``all`` with other slugs; require at least one type."""

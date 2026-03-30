@@ -46,6 +46,15 @@ def schedule_hints(monkeypatch):
     django_models.Q = Q
     monkeypatch.setitem(sys.modules, "django.db.models", django_models)
 
+    django_utils = types.ModuleType("django.utils")
+    django_utils_translation = types.ModuleType("django.utils.translation")
+    django_utils_translation.gettext_lazy = lambda s: s
+    django_utils.translation = django_utils_translation
+    monkeypatch.setitem(sys.modules, "django.utils", django_utils)
+    monkeypatch.setitem(
+        sys.modules, "django.utils.translation", django_utils_translation
+    )
+
     netbox_constants = types.ModuleType("netbox.constants")
     netbox_constants.RQ_QUEUE_DEFAULT = "default"
     monkeypatch.setitem(sys.modules, "netbox.constants", netbox_constants)
@@ -194,4 +203,6 @@ def test_quick_schedule_home_form_kwargs(schedule_hints, monkeypatch):
     assert kw["initial"]["schedule_at"] == datetime(
         2026, 6, 16, 3, 0, 0, tzinfo=timezone.utc
     )
+    assert kw["initial"]["job_name"] == "Proxbox Full Sync"
+    assert kw["use_bootstrap_sync_checkboxes"] is True
     assert kw["initial_interval"] == 60 * 24
