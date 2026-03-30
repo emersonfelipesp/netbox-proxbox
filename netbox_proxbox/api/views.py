@@ -10,6 +10,7 @@ from .serializers import (
     ProxmoxEndpointSerializer,
     SyncProcessSerializer,
     VMBackupSerializer,
+    VMSnapshotSerializer,
 )
 
 
@@ -33,6 +34,12 @@ class VMBackupViewSet(NetBoxModelViewSet):
     queryset = models.VMBackup.objects.all()
     serializer_class = VMBackupSerializer
     filterset_class = filtersets.VMBackupFilterSet
+
+
+class VMSnapshotViewSet(NetBoxModelViewSet):
+    queryset = models.VMSnapshot.objects.all()
+    serializer_class = VMSnapshotSerializer
+    filterset_class = filtersets.VMSnapshotFilterSet
 
 
 class SyncProcessViewSet(NetBoxModelViewSet):

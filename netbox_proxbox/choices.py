@@ -106,6 +106,30 @@ class ProxmoxBackupFormatChoices(ChoiceSet):
     ]
 
 
+class ProxmoxSnapshotSubtypeChoices(ChoiceSet):
+    key = "VMSnapshot.subtype"
+
+    SNAPSHOT_SUBTYPE_QEMU = "qemu"
+    SNAPSHOT_SUBTYPE_LXC = "lxc"
+
+    CHOICES = [
+        (SNAPSHOT_SUBTYPE_QEMU, _("QEMU"), "green"),
+        (SNAPSHOT_SUBTYPE_LXC, _("LXC"), "blue"),
+    ]
+
+
+class ProxmoxSnapshotStatusChoices(ChoiceSet):
+    key = "VMSnapshot.status"
+
+    SNAPSHOT_STATUS_ACTIVE = "active"
+    SNAPSHOT_STATUS_STALE = "stale"
+
+    CHOICES = [
+        (SNAPSHOT_STATUS_ACTIVE, _("Active"), "green"),
+        (SNAPSHOT_STATUS_STALE, _("Stale"), "red"),
+    ]
+
+
 class ScheduleIntervalUnitChoices(ChoiceSet):
     key = "ScheduleSync.interval_unit"
 

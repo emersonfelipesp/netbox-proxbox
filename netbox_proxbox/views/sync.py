@@ -27,11 +27,16 @@ logger = logging.getLogger(__name__)
 
 # proxbox-api awaits the full backup sync in one GET; allow long read like the stream proxy.
 _LONG_RUNNING_BACKUP_PATH_MARKER = "virtualization/virtual-machines/backups/all/create"
+_LONG_RUNNING_SNAPSHOT_PATH_MARKER = (
+    "virtualization/virtual-machines/snapshots/all/create"
+)
 _LONG_HTTP_READ_TIMEOUT = (5, 3600)
 
 
 def _http_timeout_for_sync_path(path: str) -> float | tuple[int, int]:
     if _LONG_RUNNING_BACKUP_PATH_MARKER in path:
+        return _LONG_HTTP_READ_TIMEOUT
+    if _LONG_RUNNING_SNAPSHOT_PATH_MARKER in path:
         return _LONG_HTTP_READ_TIMEOUT
     return 5
 
@@ -362,6 +367,11 @@ class SyncVirtualDisksView(_ProxboxSyncActionView):
     action_label = "Virtual disks"
 
 
+class SyncVmSnapshotsView(_ProxboxSyncActionView):
+    sync_path = "virtualization/virtual-machines/snapshots/all/create"
+    action_label = "VM snapshots"
+
+
 class _ProxboxSyncStreamView(
     TokenConditionalLoginRequiredMixin,
     ContentTypePermissionRequiredMixin,
@@ -401,6 +411,10 @@ class SyncVirtualDisksStreamView(_ProxboxSyncStreamView):
     stream_path = "virtualization/virtual-machines/virtual-disks/create"
 
 
+class SyncVmSnapshotsStreamView(_ProxboxSyncStreamView):
+    stream_path = "virtualization/virtual-machines/snapshots/all/create"
+
+
 class SyncFullUpdateStreamView(_ProxboxSyncStreamView):
     stream_path = "full-update"
 
@@ -409,9 +423,11 @@ sync_devices = SyncDevicesView.as_view()
 sync_virtual_machines = SyncVirtualMachinesView.as_view()
 sync_full_update = SyncFullUpdateView.as_view()
 sync_vm_backups = SyncVmBackupsView.as_view()
+sync_vm_snapshots = SyncVmSnapshotsView.as_view()
 sync_virtual_disks = SyncVirtualDisksView.as_view()
 sync_devices_stream = SyncDevicesStreamView.as_view()
 sync_virtual_machines_stream = SyncVirtualMachinesStreamView.as_view()
 sync_vm_backups_stream = SyncVmBackupsStreamView.as_view()
+sync_vm_snapshots_stream = SyncVmSnapshotsStreamView.as_view()
 sync_virtual_disks_stream = SyncVirtualDisksStreamView.as_view()
 sync_full_update_stream = SyncFullUpdateStreamView.as_view()

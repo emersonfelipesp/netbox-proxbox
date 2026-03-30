@@ -16,6 +16,7 @@ from netbox_proxbox.choices import (
 )
 from netbox_proxbox.fields import DomainField
 from netbox_proxbox.models.vm_backup import VMBackup
+from netbox_proxbox.models.vm_snapshot import VMSnapshot
 
 
 PORT_VALIDATORS = (MinValueValidator(1), MaxValueValidator(65535))
@@ -416,4 +417,5 @@ __all__ = (
     "ProxmoxEndpoint",
     "SyncProcess",
     "VMBackup",
+    "VMSnapshot",
 )
