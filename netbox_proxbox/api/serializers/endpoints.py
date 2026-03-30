@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from django.utils.translation import gettext as _
+
 from netbox.api.fields import ChoiceField
 from netbox.api.serializers import NetBoxModelSerializer, WritableNestedSerializer
 from ipam.api.serializers_.nested import NestedIPAddressSerializer
@@ -62,7 +64,19 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
             "token_value": {"write_only": True, "required": False, "allow_blank": True},
         }
 
+    def get_display(self, obj):
+        """Label for list APIs and APISelect (e.g. schedule sync): ``Name (IP)``."""
+        name_part = (obj.name or "").strip() or _("Proxmox endpoint")
+        ip_part = obj.ip
+        if ip_part:
+            return f"{name_part} ({ip_part})"
+        domain_part = (obj.domain or "").strip()
+        if domain_part:
+            return f"{name_part} ({domain_part})"
+        return name_part
+
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        """Require at least one of domain or IP address for reachability."""
         attrs = super().validate(attrs)
         domain = (
             attrs.get("domain", getattr(self.instance, "domain", "")) or ""
@@ -119,6 +133,7 @@ class NetBoxEndpointSerializer(NetBoxModelSerializer):
         }
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        """Enforce host target plus consistent v1 token vs v2 key/secret auth rules."""
         attrs = super().validate(attrs)
 
         domain = (
@@ -230,6 +245,7 @@ class FastAPIEndpointSerializer(NetBoxModelSerializer):
         brief_fields = ("id", "url", "display", "name", "domain", "port")
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        """Require at least one of domain or IP address for the backend URL."""
         attrs = super().validate(attrs)
         domain = (
             attrs.get("domain", getattr(self.instance, "domain", "")) or ""

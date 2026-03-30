@@ -5,6 +5,8 @@ from utilities.choices import ChoiceSet
 
 
 class ProxmoxModeChoices(ChoiceSet):
+    """Proxmox VE deployment mode (standalone vs cluster)."""
+
     key = "ProxmoxEndpoint.mode"
 
     PROXMOX_MODE_UNDEFINED = "undefined"
@@ -19,6 +21,8 @@ class ProxmoxModeChoices(ChoiceSet):
 
 
 class SyncTypeChoices(ChoiceSet):
+    """Which ProxBox sync operation to run (devices, VMs, backups, full, etc.)."""
+
     key = "SyncProcess.sync_type"
 
     VIRTUAL_MACHINES = "virtual-machines"
@@ -37,6 +41,8 @@ class SyncTypeChoices(ChoiceSet):
 
 
 class SyncStatusChoices(ChoiceSet):
+    """Lifecycle status of a recorded sync process."""
+
     key = "SyncProcess.status"
 
     NOT_STARTED = "not-started"
@@ -53,6 +59,8 @@ class SyncStatusChoices(ChoiceSet):
 
 
 class NetBoxTokenVersionChoices(ChoiceSet):
+    """NetBox REST API token style for remote endpoint authentication."""
+
     key = "NetBoxEndpoint.token_version"
 
     V1 = "v1"
@@ -65,6 +73,8 @@ class NetBoxTokenVersionChoices(ChoiceSet):
 
 
 class ProxmoxBackupSubtypeChoices(ChoiceSet):
+    """Hypervisor subtype for a VM backup row (QEMU vs LXC)."""
+
     key = "VMBackup.subtype"
 
     BACKUP_SUBTYPE_UNDEFINED = "undefined"
@@ -79,6 +89,8 @@ class ProxmoxBackupSubtypeChoices(ChoiceSet):
 
 
 class ProxmoxBackupFormatChoices(ChoiceSet):
+    """Backup image or archive format as reported by Proxmox."""
+
     key = "VMBackup.format"
 
     BACKUP_FORMAT_UNDEFINED = "undefined"
@@ -107,6 +119,8 @@ class ProxmoxBackupFormatChoices(ChoiceSet):
 
 
 class ProxmoxSnapshotSubtypeChoices(ChoiceSet):
+    """Hypervisor subtype for a VM snapshot (QEMU vs LXC)."""
+
     key = "VMSnapshot.subtype"
 
     SNAPSHOT_SUBTYPE_QEMU = "qemu"
@@ -119,6 +133,8 @@ class ProxmoxSnapshotSubtypeChoices(ChoiceSet):
 
 
 class ProxmoxSnapshotStatusChoices(ChoiceSet):
+    """Whether a snapshot is considered current or stale."""
+
     key = "VMSnapshot.status"
 
     SNAPSHOT_STATUS_ACTIVE = "active"
@@ -131,6 +147,8 @@ class ProxmoxSnapshotStatusChoices(ChoiceSet):
 
 
 class ScheduleIntervalUnitChoices(ChoiceSet):
+    """Time unit for recurring ProxBox sync schedules (converted to minutes for jobs)."""
+
     key = "ScheduleSync.interval_unit"
 
     MINUTES = "minutes"
@@ -154,11 +172,13 @@ class ScheduleIntervalUnitChoices(ChoiceSet):
 
     @classmethod
     def to_minutes(cls, value: int, unit: str) -> int:
+        """Convert an interval value and unit to total minutes."""
         multiplier = cls.MINUTE_MULTIPLIERS.get(unit, 1)
         return value * multiplier
 
     @classmethod
     def from_minutes(cls, minutes: int) -> tuple[int, str]:
+        """Pick the largest whole unit (weeks down to minutes) for a minute count."""
         if minutes >= 60 * 24 * 7 and minutes % (60 * 24 * 7) == 0:
             return minutes // (60 * 24 * 7), cls.WEEKS
         elif minutes >= 60 * 24 and minutes % (60 * 24) == 0:

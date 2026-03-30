@@ -25,6 +25,8 @@ __all__ = (
 
 @register_model_view(VMSnapshot, "list", path="", detail=False)
 class VMSnapshotListView(generic.ObjectListView):
+    """Global list of VM snapshots with export and bulk delete actions."""
+
     queryset = VMSnapshot.objects.all()
     table = VMSnapshotTable
     filterset = VMSnapshotFilterSet
@@ -38,11 +40,15 @@ class VMSnapshotListView(generic.ObjectListView):
 
 @register_model_view(VMSnapshot)
 class VMSnapshotView(generic.ObjectView):
+    """Detail view for one VM snapshot."""
+
     queryset = VMSnapshot.objects.all()
 
 
 @register_model_view(VMSnapshot, "edit")
 class VMSnapshotEditView(generic.ObjectEditView):
+    """Create or edit a VM snapshot record."""
+
     queryset = VMSnapshot.objects.all()
     form = VMSnapshotForm
     default_return_url = "plugins:netbox_proxbox:vmsnapshot_list"
@@ -50,12 +56,14 @@ class VMSnapshotEditView(generic.ObjectEditView):
 
 @register_model_view(VMSnapshot, "delete")
 class VMSnapshotDeleteView(generic.ObjectDeleteView):
+    """Delete a single VM snapshot."""
     queryset = VMSnapshot.objects.all()
     default_return_url = "plugins:netbox_proxbox:vmsnapshot_list"
 
 
 @register_model_view(VMSnapshot, "bulk_delete", detail=False)
 class VMSnapshotBulkDeleteView(generic.BulkDeleteView):
+    """Bulk delete VM snapshots from the global list."""
     queryset = VMSnapshot.objects.all()
     filterset = VMSnapshotFilterSet
     table = VMSnapshotTable
@@ -64,6 +72,8 @@ class VMSnapshotBulkDeleteView(generic.BulkDeleteView):
 
 @register_model_view(VirtualMachine, "snapshots", path="snapshots")
 class VMSnapshotTabView(generic.ObjectChildrenView):
+    """VM detail tab listing snapshots for that virtual machine."""
+
     queryset = VirtualMachine.objects.all()
     child_model = VMSnapshot
     table = VMSnapshotTable
@@ -81,14 +91,17 @@ class VMSnapshotTabView(generic.ObjectChildrenView):
     )
 
     def get_queryset(self, request):
+        """Restrict parent VMs to those the user may view."""
         return VirtualMachine.objects.restrict(request.user, "view")
 
     def get_children(self, request, parent):
+        """Return snapshots for ``parent`` visible to the current user."""
         return VMSnapshot.objects.restrict(request.user, "view").filter(
             virtual_machine=parent
         )
 
     def get_table(self, data, request, bulk_actions=True):
+        """Build the child table, honoring optional ``tableconfig_id`` column overrides."""
         if tableconfig_id := request.GET.get("tableconfig_id"):
             tableconfig = get_object_or_404(TableConfig, pk=tableconfig_id)
             if request.user.is_authenticated:

@@ -5,6 +5,8 @@ from netbox.plugins import PluginConfig
 
 
 class ProxboxConfig(PluginConfig):
+    """Django app config for the Proxbox NetBox plugin (URLs, queues, job registration)."""
+
     name = "netbox_proxbox"
     verbose_name = "Proxbox"
     description = "Integrates Proxmox and Netbox"
@@ -18,6 +20,7 @@ class ProxboxConfig(PluginConfig):
     queues = ["sync"]
 
     def ready(self):
+        """Register models, then import job modules so runners and core Job views hook in."""
         super().ready()
         from . import jobs  # noqa: F401 — registers ProxboxSyncJob with the NetBox job system
         from .views import job_run  # noqa: F401 — core Job detail: proxbox-run + template button

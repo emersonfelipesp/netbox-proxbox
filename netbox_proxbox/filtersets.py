@@ -17,6 +17,8 @@ from .models import (
 
 @register_filterset
 class SyncProcessFilterSet(NetBoxModelFilterSet):
+    """Filter and search background sync process records."""
+
     class Meta:
         model = SyncProcess
         fields = (
@@ -30,6 +32,7 @@ class SyncProcessFilterSet(NetBoxModelFilterSet):
         )
 
     def search(self, queryset, name, value):
+        """Match the search term against sync process names (case-insensitive)."""
         if not value.strip():
             return queryset
         return queryset.filter(Q(name__icontains=value))
@@ -37,11 +40,14 @@ class SyncProcessFilterSet(NetBoxModelFilterSet):
 
 @register_filterset
 class ProxmoxEndpointFilterSet(NetBoxModelFilterSet):
+    """Filter Proxmox VE endpoint records for list and API views."""
+
     class Meta:
         model = ProxmoxEndpoint
         fields = ("id", "name", "domain", "ip_address", "mode")
 
     def search(self, queryset, name, value):
+        """Match the search term against endpoint name or domain."""
         if not value.strip():
             return queryset
         return queryset.filter(Q(name__icontains=value) | Q(domain__icontains=value))
@@ -49,11 +55,14 @@ class ProxmoxEndpointFilterSet(NetBoxModelFilterSet):
 
 @register_filterset
 class NetBoxEndpointFilterSet(NetBoxModelFilterSet):
+    """Filter remote NetBox API endpoint records."""
+
     class Meta:
         model = NetBoxEndpoint
         fields = ("id", "name", "domain", "ip_address")
 
     def search(self, queryset, name, value):
+        """Match the search term against endpoint name or domain."""
         if not value.strip():
             return queryset
         return queryset.filter(Q(name__icontains=value) | Q(domain__icontains=value))
@@ -61,11 +70,14 @@ class NetBoxEndpointFilterSet(NetBoxModelFilterSet):
 
 @register_filterset
 class FastAPIEndpointFilterSet(NetBoxModelFilterSet):
+    """Filter ProxBox FastAPI backend endpoint records."""
+
     class Meta:
         model = FastAPIEndpoint
         fields = ("id", "name", "domain", "ip_address")
 
     def search(self, queryset, name, value):
+        """Match the search term against endpoint name or domain."""
         if not value.strip():
             return queryset
         return queryset.filter(Q(name__icontains=value) | Q(domain__icontains=value))
@@ -73,6 +85,8 @@ class FastAPIEndpointFilterSet(NetBoxModelFilterSet):
 
 @register_filterset
 class VMBackupFilterSet(NetBoxModelFilterSet):
+    """Filter VM backup records synced from Proxmox."""
+
     class Meta:
         model = VMBackup
         fields = (
@@ -89,6 +103,7 @@ class VMBackupFilterSet(NetBoxModelFilterSet):
         )
 
     def search(self, queryset, name, value):
+        """Match VM name, storage, or volume id (case-insensitive)."""
         if not value.strip():
             return queryset
         return queryset.filter(
@@ -100,6 +115,8 @@ class VMBackupFilterSet(NetBoxModelFilterSet):
 
 @register_filterset
 class VMSnapshotFilterSet(NetBoxModelFilterSet):
+    """Filter VM snapshot records synced from Proxmox."""
+
     class Meta:
         model = VMSnapshot
         fields = (
@@ -115,6 +132,7 @@ class VMSnapshotFilterSet(NetBoxModelFilterSet):
         )
 
     def search(self, queryset, name, value):
+        """Match VM name, snapshot name, node, or description."""
         if not value.strip():
             return queryset
         return queryset.filter(

@@ -66,6 +66,7 @@ def get(**kwargs: object) -> str | None:
 
 
 def _safe_github_error_message(response: requests.Response) -> str:
+    """Return a short error string from a failed GitHub API response body."""
     try:
         body = response.json()
         if isinstance(body, dict) and body.get("message"):

@@ -20,6 +20,8 @@ from netbox_proxbox.tables.vm_snapshot import VMSnapshotTable
 
 
 class SyncProcessTable(NetBoxTable):
+    """django-tables2 layout for sync process history list views."""
+
     name = tables.Column(linkify=True)
     sync_type = ChoiceFieldColumn(
         verbose_name=_("Sync Type"),
@@ -69,6 +71,8 @@ class SyncProcessTable(NetBoxTable):
 
 
 class ProxmoxEndpointTable(NetBoxTable):
+    """django-tables2 layout for Proxmox endpoint inventory."""
+
     name = tables.Column(linkify=True)
     ip_address = tables.Column(linkify=True)
     mode = ChoiceFieldColumn()
@@ -105,6 +109,8 @@ class ProxmoxEndpointTable(NetBoxTable):
 
 
 class NetBoxEndpointTable(NetBoxTable):
+    """django-tables2 layout for remote NetBox API endpoint inventory."""
+
     name = tables.Column(linkify=True)
     ip_address = tables.Column(linkify=True)
     verify_ssl = BooleanColumn()
@@ -127,6 +133,8 @@ class NetBoxEndpointTable(NetBoxTable):
 
 
 class FastAPIEndpointTable(NetBoxTable):
+    """django-tables2 layout for ProxBox FastAPI backend endpoint inventory."""
+
     name = tables.Column(linkify=True)
     ip_address = tables.Column(linkify=True)
     verify_ssl = BooleanColumn()

@@ -97,4 +97,5 @@ class ProxmoxEndpoint(EndpointBase):
         )
 
     def get_absolute_url(self) -> str:
+        """Plugin UI URL for this Proxmox endpoint detail view."""
         return reverse("plugins:netbox_proxbox:proxmoxendpoint", args=[self.pk])

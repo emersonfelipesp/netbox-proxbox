@@ -14,6 +14,8 @@ __all__ = ("ScheduleSyncForm",)
 
 
 class ScheduleSyncForm(forms.Form):
+    """Collect options for enqueueing a ProxboxSyncJob (immediate or recurring)."""
+
     job_name = forms.CharField(
         required=False,
         max_length=200,
@@ -66,6 +68,7 @@ class ScheduleSyncForm(forms.Form):
     )
 
     def __init__(self, *args, **kwargs):
+        """Append current-time hint to schedule help; optionally seed interval fields."""
         self.initial_interval = kwargs.pop("initial_interval", None)
         super().__init__(*args, **kwargs)
         now = local_now().strftime("%Y-%m-%d %H:%M:%S %Z")
@@ -81,10 +84,12 @@ class ScheduleSyncForm(forms.Form):
             self.fields["interval_unit"].initial = unit
 
     def clean_job_name(self):
+        """Normalize optional custom job label to stripped text."""
         name = (self.cleaned_data.get("job_name") or "").strip()
         return name or ""
 
     def clean(self):
+        """Validate schedule time, derive interval minutes, and flatten endpoint id lists."""
         super().clean()
         cleaned_data = self.cleaned_data
         schedule_at = cleaned_data.get("schedule_at")

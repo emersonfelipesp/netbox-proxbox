@@ -90,9 +90,11 @@ class FastAPIEndpoint(EndpointBase):
 
     @property
     def websocket_url(self) -> str:
+        """``ws(s)://`` URL for browser or server WebSocket clients."""
         protocol = "wss" if self.verify_ssl else "ws"
         host = self.websocket_domain or self.domain or self.ip
         return f"{protocol}://{host}:{self.websocket_port}" if host else ""
 
     def get_absolute_url(self) -> str:
+        """Plugin UI URL for this FastAPI endpoint detail view."""
         return reverse("plugins:netbox_proxbox:fastapiendpoint", args=[self.pk])

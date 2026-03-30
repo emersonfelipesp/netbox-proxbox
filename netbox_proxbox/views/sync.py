@@ -124,9 +124,11 @@ class _ProxboxSyncActionView(
     sync_query_params: dict[str, Any] | None = None
 
     def get_required_permission(self) -> str:
+        """Require ``change`` on ``FastAPIEndpoint`` (backend integration)."""
         return permission_change_fastapi_endpoint()
 
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Trigger a backend sync GET and return JSON or redirect with flash messages."""
         return sync_response(
             request,
             path=self.sync_path,
@@ -135,36 +137,49 @@ class _ProxboxSyncActionView(
         )
 
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Same behavior as GET (form posts from the plugin home)."""
         return self.get(request, *args, **kwargs)
 
 
 class SyncDevicesView(_ProxboxSyncActionView):
+    """POST/GET hook: sync Proxmox nodes into NetBox devices."""
+
     sync_path = "dcim/devices/create"
     action_label = "Devices"
 
 
 class SyncVirtualMachinesView(_ProxboxSyncActionView):
+    """POST/GET hook: sync Proxmox VMs into NetBox virtualization."""
+
     sync_path = "virtualization/virtual-machines/create"
     action_label = "Virtual machines"
 
 
 class SyncFullUpdateView(_ProxboxSyncActionView):
+    """POST/GET hook: run the full multi-stage ProxBox update."""
+
     sync_path = "full-update"
     action_label = "Full update"
 
 
 class SyncVmBackupsView(_ProxboxSyncActionView):
+    """POST/GET hook: sync VM backups from Proxmox."""
+
     sync_path = "virtualization/virtual-machines/backups/all/create"
     action_label = "VM backups"
     sync_query_params = {"delete_nonexistent_backup": True}
 
 
 class SyncVirtualDisksView(_ProxboxSyncActionView):
+    """POST/GET hook: sync virtual disk records for VMs."""
+
     sync_path = "virtualization/virtual-machines/virtual-disks/create"
     action_label = "Virtual disks"
 
 
 class SyncVmSnapshotsView(_ProxboxSyncActionView):
+    """POST/GET hook: sync VM snapshots from Proxmox."""
+
     sync_path = "virtualization/virtual-machines/snapshots/all/create"
     action_label = "VM snapshots"
 
@@ -181,9 +196,11 @@ class _ProxboxSyncStreamView(
     stream_query_params: dict[str, Any] | None = None
 
     def get_required_permission(self) -> str:
+        """Require ``change`` on ``FastAPIEndpoint`` (same as non-streaming sync)."""
         return permission_change_fastapi_endpoint()
 
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Proxy Server-Sent Events from proxbox-api for this sync path."""
         return sync_stream_response(
             request,
             path=self.stream_path,
@@ -192,27 +209,39 @@ class _ProxboxSyncStreamView(
 
 
 class SyncDevicesStreamView(_ProxboxSyncStreamView):
+    """SSE stream for device sync progress."""
+
     stream_path = "dcim/devices/create"
 
 
 class SyncVirtualMachinesStreamView(_ProxboxSyncStreamView):
+    """SSE stream for virtual machine sync progress."""
+
     stream_path = "virtualization/virtual-machines/create"
 
 
 class SyncVmBackupsStreamView(_ProxboxSyncStreamView):
+    """SSE stream for VM backup sync progress."""
+
     stream_path = "virtualization/virtual-machines/backups/all/create"
     stream_query_params = {"delete_nonexistent_backup": True}
 
 
 class SyncVirtualDisksStreamView(_ProxboxSyncStreamView):
+    """SSE stream for virtual disk sync progress."""
+
     stream_path = "virtualization/virtual-machines/virtual-disks/create"
 
 
 class SyncVmSnapshotsStreamView(_ProxboxSyncStreamView):
+    """SSE stream for VM snapshot sync progress."""
+
     stream_path = "virtualization/virtual-machines/snapshots/all/create"
 
 
 class SyncFullUpdateStreamView(_ProxboxSyncStreamView):
+    """SSE stream for full-update orchestration."""
+
     stream_path = "full-update"
 
 

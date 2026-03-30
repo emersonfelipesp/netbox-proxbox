@@ -118,6 +118,7 @@ async def websocket_client(uri: str) -> None:
 
 
 def start_websocket(uri):
+    """Start a daemon thread and asyncio loop running ``websocket_client`` for ``uri`` if not already running."""
     global websocket_task, websocket_loop
     if websocket_task is not None and not websocket_task.done():
         return
@@ -136,6 +137,7 @@ def start_websocket(uri):
 
 
 def send_message(message):
+    """Enqueue a string command for the background WebSocket client to send upstream."""
     message_queue.put(message)
 
 
@@ -144,12 +146,16 @@ class WebSocketView(
     ContentTypePermissionRequiredMixin,
     View,
 ):
+    """Poll recent backend WebSocket messages or trigger sync commands via the shared client."""
+
     template_name = "netbox_proxbox/websocket_page.html"
 
     def get_required_permission(self):
+        """Require FastAPI endpoint view permission to read backend stream state."""
         return permission_view_fastapi_endpoint()
 
     def get(self, request, message):
+        """Drain buffered messages, ensure the WS client is running, optionally kick off a sync kind."""
         json_response = request.GET.get("json_response", "false").lower() == "true"
         bulk_messages_count = 20
 

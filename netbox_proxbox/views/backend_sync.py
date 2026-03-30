@@ -13,6 +13,7 @@ from netbox_proxbox.views.error_utils import (
 
 
 def proxmox_backend_name(endpoint: ProxmoxEndpoint) -> str:
+    """Stable display name for proxbox-api including the NetBox primary key suffix."""
     base_name = (
         getattr(endpoint, "name", "") or "Proxmox Endpoint"
     ).strip() or "Proxmox Endpoint"
@@ -21,6 +22,7 @@ def proxmox_backend_name(endpoint: ProxmoxEndpoint) -> str:
 
 
 def _proxmox_backend_payload(endpoint: ProxmoxEndpoint) -> dict[str, object]:
+    """JSON body for POST/PUT ``/proxmox/endpoints`` from a ``ProxmoxEndpoint`` row."""
     return {
         "name": proxmox_backend_name(endpoint),
         "ip_address": get_ip_address_host(getattr(endpoint, "ip_address", None)),

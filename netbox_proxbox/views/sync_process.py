@@ -19,11 +19,14 @@ __all__ = (
 
 @register_model_view(SyncProcess)
 class SyncProcessView(generic.ObjectView):
+    """Detail view for a single ProxBox sync process log row."""
+
     queryset = SyncProcess.objects.all()
 
 
 @register_model_view(SyncProcess, "list", path="", detail=False)
 class SyncProcessListView(generic.ObjectListView):
+    """Filterable list of sync process records."""
     queryset = SyncProcess.objects.all()
     table = SyncProcessTable
     filterset = SyncProcessFilterSet
@@ -32,10 +35,13 @@ class SyncProcessListView(generic.ObjectListView):
 
 @register_model_view(SyncProcess, "edit")
 class SyncProcessEditView(generic.ObjectEditView):
+    """Edit an existing sync process record (administrative correction)."""
+
     queryset = SyncProcess.objects.all()
     form = SyncProcessForm
 
 
 @register_model_view(SyncProcess, "delete")
 class SyncProcessDeleteView(generic.ObjectDeleteView):
+    """Delete a sync process record."""
     queryset = SyncProcess.objects.all()

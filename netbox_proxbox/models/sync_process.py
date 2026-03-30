@@ -45,7 +45,9 @@ class SyncProcess(NetBoxModel):
         ordering = ("-created", "-pk")
 
     def __str__(self) -> str:
+        """Name and sync type for tables and log context."""
         return f"{self.name} ({self.sync_type})"
 
     def get_absolute_url(self) -> str:
+        """Plugin UI URL for this sync process record."""
         return reverse("plugins:netbox_proxbox:syncprocess", args=[self.pk])

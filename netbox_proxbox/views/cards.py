@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 
 
 def _merge_cluster_payloads(version_payload, cluster_payload) -> dict:
+    """Combine proxbox-api version and cluster session responses for the home card."""
     version_data = {}
     cluster_data = {}
 
@@ -57,9 +58,11 @@ class ProxboxProxmoxCardView(
     http_method_names = ["get", "head", "options"]
 
     def get_required_permission(self):
+        """Require model-level view permission on ``ProxmoxEndpoint``."""
         return get_permission_for_model(ProxmoxEndpoint, "view")
 
     def get(self, request, pk: int, *args, **kwargs) -> JsonResponse:
+        """Fetch version/cluster JSON from proxbox-api after syncing the endpoint row."""
         proxmox_object = get_object_or_404(
             ProxmoxEndpoint.objects.restrict(request.user, "view"),
             pk=pk,

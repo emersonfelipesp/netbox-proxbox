@@ -20,12 +20,16 @@ class ScheduleSyncView(
     ContentTypePermissionRequiredMixin,
     View,
 ):
+    """Render and process the ProxBox background sync scheduling form."""
+
     def get_required_permission(self):
+        """Require ``add`` on ``SyncProcess`` to enqueue jobs."""
         return permission_add_sync_process()
 
     template_name = "netbox_proxbox/schedule_sync.html"
 
     def get(self, request):
+        """Show the schedule form, optionally pre-selecting ``sync_type`` from query string."""
         initial = {}
         sync_type = request.GET.get("sync_type")
         if sync_type:
@@ -36,6 +40,7 @@ class ScheduleSyncView(
         )
 
     def post(self, request):
+        """Validate the form, enqueue ``ProxboxSyncJob``, then redirect to the job list."""
         form = ScheduleSyncForm(request.POST)
         if form.is_valid():
             sync_type = form.cleaned_data["sync_type"]

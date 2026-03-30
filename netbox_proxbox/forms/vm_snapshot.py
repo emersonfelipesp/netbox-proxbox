@@ -13,6 +13,8 @@ from netbox_proxbox.choices import (
 
 
 class VMSnapshotForm(NetBoxModelForm):
+    """Edit a Proxmox-backed snapshot row attached to a NetBox VM."""
+
     class Meta:
         model = VMSnapshot
         fields = (
@@ -54,6 +56,8 @@ class VMSnapshotForm(NetBoxModelForm):
 
 
 class VMSnapshotFilterForm(NetBoxModelFilterSetForm):
+    """Filter controls for the VM snapshot list view."""
+
     model = VMSnapshot
 
     virtual_machine = forms.ModelMultipleChoiceField(

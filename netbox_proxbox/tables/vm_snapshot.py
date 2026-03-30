@@ -9,6 +9,8 @@ from netbox_proxbox.models import VMSnapshot
 
 
 class VMSnapshotTable(NetBoxTable):
+    """django-tables2 layout for VM snapshot list views."""
+
     virtual_machine = tables.Column(linkify=True)
     subtype = ChoiceFieldColumn(
         verbose_name=_("Subtype"),

@@ -55,9 +55,7 @@ contributing_item = PluginMenuItem(
     link_text="Contributing!",
 )
 
-"""
-    Endpoints Navigation Buttons.
-"""
+# Endpoints navigation entries (Proxmox / NetBox / FastAPI targets).
 proxmox_endpoints_item = PluginMenuItem(
     link="plugins:netbox_proxbox:proxmoxendpoint_list",
     link_text="Proxmox API",

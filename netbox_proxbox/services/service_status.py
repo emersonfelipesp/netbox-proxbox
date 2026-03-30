@@ -30,6 +30,7 @@ class ServiceStatus:
     request_timeout = 5
 
     def __init__(self) -> None:
+        """Initialize mutable state used while probing the ProxBox backend."""
         self.connected_url: str | None = None
         self.connected_verify_ssl: bool = True
         self.last_error_detail: str | None = None
@@ -49,6 +50,7 @@ class ServiceStatus:
     def _extract_error_detail(
         exc: requests.exceptions.RequestException,
     ) -> tuple[str, int | None]:
+        """Normalize ``requests`` errors into a user-facing string and HTTP code."""
         return extract_backend_error_detail(exc)
 
     @staticmethod
@@ -58,12 +60,14 @@ class ServiceStatus:
 
     @staticmethod
     def _compact_payload(payload: dict[str, Any]) -> dict[str, Any]:
+        """Drop null/empty values before POST/PUT to the backend."""
         return {k: v for k, v in payload.items() if v not in (None, "")}
 
     @staticmethod
     def _effective_netbox_backend_credentials(
         endpoint: NetBoxEndpoint,
     ) -> dict[str, str | None]:
+        """Build token_version/token/token_key payload for backend NetBox registration."""
         token_version = (
             (getattr(endpoint, "effective_token_version", "") or "v1").strip().lower()
         )

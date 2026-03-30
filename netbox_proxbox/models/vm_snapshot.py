@@ -13,6 +13,8 @@ from netbox_proxbox.choices import (
 
 
 class VMSnapshot(NetBoxModel):
+    """Proxmox snapshot row linked to a NetBox ``VirtualMachine``."""
+
     virtual_machine = models.ForeignKey(
         to="virtualization.VirtualMachine",
         on_delete=models.CASCADE,
@@ -71,7 +73,9 @@ class VMSnapshot(NetBoxModel):
         unique_together = ("vmid", "name", "node")
 
     def __str__(self):
+        """VM and snapshot name for list displays."""
         return f"{self.virtual_machine} - {self.name}"
 
     def get_absolute_url(self):
+        """Plugin UI URL for this snapshot's detail page."""
         return reverse("plugins:netbox_proxbox:vmsnapshot", args=[self.pk])

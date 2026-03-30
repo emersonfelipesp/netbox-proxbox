@@ -22,6 +22,7 @@ class GetServiceStatusView(TokenConditionalLoginRequiredMixin, View):
     http_method_names = ["get", "head", "options"]
 
     def get(self, request: HttpRequest, service: str, pk: int) -> JsonResponse:
+        """Dispatch to ``get_service_status_impl`` for the requested service slug."""
         return get_service_status_impl(request, service, pk)
 
 
