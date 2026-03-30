@@ -7,21 +7,38 @@ from django import forms
 from utilities.forms.fields import DynamicModelChoiceField, CommentField
 from netbox.forms import NetBoxModelForm, NetBoxModelFilterSetForm
 from virtualization.models import VirtualMachine
+
 # Proxbox Imports
 from netbox_proxbox.models import VMBackup
-from netbox_proxbox.choices import ProxmoxBackupSubtypeChoices, ProxmoxBackupFormatChoices
+from netbox_proxbox.choices import (
+    ProxmoxBackupSubtypeChoices,
+    ProxmoxBackupFormatChoices,
+)
 
 
 class VMBackupForm(NetBoxModelForm):
     """
     Form for VMBackup model.
     """
+
     class Meta:
         model = VMBackup
         fields = (
-            'storage', 'virtual_machine', 'subtype', 'format', 'creation_time',
-            'size', 'notes', 'volume_id', 'vmid', 'used', 'encrypted',
-            'verification_state', 'verification_upid', 'tags', 'comments'
+            "storage",
+            "virtual_machine",
+            "subtype",
+            "format",
+            "creation_time",
+            "size",
+            "notes",
+            "volume_id",
+            "vmid",
+            "used",
+            "encrypted",
+            "verification_state",
+            "verification_upid",
+            "tags",
+            "comments",
         )
 
     comments = CommentField()
@@ -29,22 +46,22 @@ class VMBackupForm(NetBoxModelForm):
     virtual_machine = DynamicModelChoiceField(
         queryset=VirtualMachine.objects.all(),
         required=True,
-        help_text='Select a Virtual Machine',
-        label='Virtual Machine',
+        help_text="Select a Virtual Machine",
+        label="Virtual Machine",
     )
-    
+
     subtype = forms.ChoiceField(
         choices=ProxmoxBackupSubtypeChoices,
         required=False,
-        help_text='Select a Backup Subtype',
-        label='Backup Subtype',
+        help_text="Select a Backup Subtype",
+        label="Backup Subtype",
     )
-    
+
     format = forms.ChoiceField(
         choices=ProxmoxBackupFormatChoices,
         required=False,
-        help_text='Select a Backup Format',
-        label='Backup Format',
+        help_text="Select a Backup Format",
+        label="Backup Format",
     )
 
 

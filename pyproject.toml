@@ -62,3 +62,6 @@ ignore = ["F403", "F401", "E501", "W293"]
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401", "F403"]
+
+[tool.ruff.format]
+quote-style = "double"

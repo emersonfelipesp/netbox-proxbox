@@ -57,6 +57,7 @@ class VMSnapshotEditView(generic.ObjectEditView):
 @register_model_view(VMSnapshot, "delete")
 class VMSnapshotDeleteView(generic.ObjectDeleteView):
     """Delete a single VM snapshot."""
+
     queryset = VMSnapshot.objects.all()
     default_return_url = "plugins:netbox_proxbox:vmsnapshot_list"
 
@@ -64,6 +65,7 @@ class VMSnapshotDeleteView(generic.ObjectDeleteView):
 @register_model_view(VMSnapshot, "bulk_delete", detail=False)
 class VMSnapshotBulkDeleteView(generic.BulkDeleteView):
     """Bulk delete VM snapshots from the global list."""
+
     queryset = VMSnapshot.objects.all()
     filterset = VMSnapshotFilterSet
     table = VMSnapshotTable

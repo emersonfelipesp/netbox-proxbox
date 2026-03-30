@@ -23,7 +23,12 @@ from proxbox_cli.docgen.models import (
 class CaptureEngine:
     """Run Proxbox CLI capture specs and persist their artifacts."""
 
-    def __init__(self, *, log: Any = None, timeout_seconds: float = DEFAULT_CAPTURE_TIMEOUT_SECONDS) -> None:
+    def __init__(
+        self,
+        *,
+        log: Any = None,
+        timeout_seconds: float = DEFAULT_CAPTURE_TIMEOUT_SECONDS,
+    ) -> None:
         self._log = log or sys.stderr
         self._timeout_seconds = timeout_seconds
 
@@ -45,7 +50,11 @@ class CaptureEngine:
         output = completed.stdout or ""
         stderr = completed.stderr or ""
         if stderr.strip():
-            output = f"{output}\n--- stderr ---\n{stderr}" if output.strip() else f"--- stderr ---\n{stderr}"
+            output = (
+                f"{output}\n--- stderr ---\n{stderr}"
+                if output.strip()
+                else f"--- stderr ---\n{stderr}"
+            )
         return CaptureResult(
             section=spec.section,
             title=spec.title,
@@ -119,11 +128,17 @@ def _example_for(command: click.Command, path: list[str]) -> str:
                 tokens.append(f"<{label}>")
             continue
         if isinstance(param, click.Option) and param.required:
-            option_name = param.opts[0] if param.opts else f"--{(param.name or 'value').replace('_', '-')}"
+            option_name = (
+                param.opts[0]
+                if param.opts
+                else f"--{(param.name or 'value').replace('_', '-')}"
+            )
             if param.is_flag:
                 tokens.append(option_name)
             else:
-                tokens.extend([option_name, f"<{_placeholder_for(param.name or 'value')}>"])
+                tokens.extend(
+                    [option_name, f"<{_placeholder_for(param.name or 'value')}>"]
+                )
 
     return " ".join(tokens)
 

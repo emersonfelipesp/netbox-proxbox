@@ -57,6 +57,7 @@ class VMBackupEditView(generic.ObjectEditView):
 @register_model_view(VMBackup, "delete")
 class VMBackupDeleteView(generic.ObjectDeleteView):
     """Delete a single VM backup."""
+
     queryset = VMBackup.objects.all()
     default_return_url = "plugins:netbox_proxbox:vmbackup_list"
 
@@ -64,6 +65,7 @@ class VMBackupDeleteView(generic.ObjectDeleteView):
 @register_model_view(VMBackup, "bulk_delete", detail=False)
 class VMBackupBulkDeleteView(generic.BulkDeleteView):
     """Bulk delete VM backups from the global list."""
+
     queryset = VMBackup.objects.all()
     filterset = VMBackupFilterSet
     table = VMBackupTable

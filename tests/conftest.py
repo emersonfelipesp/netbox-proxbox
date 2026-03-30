@@ -286,7 +286,9 @@ def load_plugin_module(
             return super().dispatch(request, *args, **kwargs)
 
     utilities_views.ConditionalLoginRequiredMixin = ConditionalLoginRequiredMixin
-    utilities_views.TokenConditionalLoginRequiredMixin = TokenConditionalLoginRequiredMixin
+    utilities_views.TokenConditionalLoginRequiredMixin = (
+        TokenConditionalLoginRequiredMixin
+    )
     utilities_views.ContentTypePermissionRequiredMixin = (
         ContentTypePermissionRequiredMixin
     )

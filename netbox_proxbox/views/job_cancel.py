@@ -66,9 +66,7 @@ def cancel_rq_job_for_netbox_job(netbox_job: Job) -> bool:
             except Http404:
                 logger.info("stop_rq_job: RQ job %s not found (may have finished)", jid)
                 return False
-        logger.info(
-            "RQ job %s in state %s; nothing to cancel", jid, status
-        )
+        logger.info("RQ job %s in state %s; nothing to cancel", jid, status)
         return False
 
     try:

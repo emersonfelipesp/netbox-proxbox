@@ -7,7 +7,10 @@ from netbox.api.serializers import NetBoxModelSerializer
 from rest_framework import serializers
 from virtualization.api.serializers_.nested import NestedVirtualMachineSerializer
 
-from netbox_proxbox.choices import ProxmoxBackupFormatChoices, ProxmoxBackupSubtypeChoices
+from netbox_proxbox.choices import (
+    ProxmoxBackupFormatChoices,
+    ProxmoxBackupSubtypeChoices,
+)
 from netbox_proxbox.models import VMBackup
 
 

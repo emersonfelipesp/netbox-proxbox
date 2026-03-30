@@ -91,9 +91,7 @@ class ScheduleSyncForm(forms.Form):
             sync_field.widget.choices = sync_field.choices
         # Singleton NetBox endpoint: pre-select the only row on fresh GET requests.
         if not self.is_bound:
-            sole_nb_pks = list(
-                NetBoxEndpoint.objects.values_list("pk", flat=True)
-            )
+            sole_nb_pks = list(NetBoxEndpoint.objects.values_list("pk", flat=True))
             if len(sole_nb_pks) == 1:
                 self.initial.setdefault("netbox_endpoints", sole_nb_pks)
         now = local_now().strftime("%Y-%m-%d %H:%M:%S %Z")
@@ -111,9 +109,9 @@ class ScheduleSyncForm(forms.Form):
         if not self.is_bound:
             if "sync_types" not in self.initial and "sync_type" in self.initial:
                 legacy = self.initial.pop("sync_type")
-                self.initial["sync_types"] = [legacy] if legacy else [
-                    SyncTypeChoices.ALL
-                ]
+                self.initial["sync_types"] = (
+                    [legacy] if legacy else [SyncTypeChoices.ALL]
+                )
             self.initial.setdefault("sync_types", [SyncTypeChoices.ALL])
             if use_bootstrap_sync_checkboxes:
                 self.fields["sync_types"].initial = self.initial.get(
@@ -127,11 +125,7 @@ class ScheduleSyncForm(forms.Form):
             raise forms.ValidationError(_("Select at least one sync type."))
         if SyncTypeChoices.ALL in values and len(values) > 1:
             all_label = next(
-                (
-                    c[1]
-                    for c in SyncTypeChoices.CHOICES
-                    if c[0] == SyncTypeChoices.ALL
-                ),
+                (c[1] for c in SyncTypeChoices.CHOICES if c[0] == SyncTypeChoices.ALL),
                 _("All"),
             )
             raise forms.ValidationError(

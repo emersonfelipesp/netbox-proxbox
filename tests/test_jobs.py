@@ -217,7 +217,9 @@ def test_proxbox_sync_job_enqueue_default_job_timeout(
         raising=False,
     )
     proxbox_sync_job_module.ProxboxSyncJob.enqueue(name="t", user=None, sync_type="all")
-    assert captured.get("job_timeout") == proxbox_sync_job_module.PROXBOX_SYNC_JOB_TIMEOUT
+    assert (
+        captured.get("job_timeout") == proxbox_sync_job_module.PROXBOX_SYNC_JOB_TIMEOUT
+    )
     assert captured.get("sync_types") == ["all"]
 
 
@@ -269,7 +271,9 @@ def test_proxbox_sync_job_enqueue_accepts_sync_types_kwarg(
     assert captured.get("sync_types") == [st.DEVICES, st.VIRTUAL_MACHINES_DISKS]
 
 
-def test_proxbox_sync_job_run_raises_on_backend_error(monkeypatch, proxbox_sync_job_module):
+def test_proxbox_sync_job_run_raises_on_backend_error(
+    monkeypatch, proxbox_sync_job_module
+):
     services_mod = types.ModuleType("netbox_proxbox.services")
     services_mod.run_sync_stream = lambda *a, **k: ({"detail": "unavailable"}, 503)
     monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)

@@ -9,7 +9,9 @@ import typer
 from proxbox_cli.runtime import _get_client
 from proxbox_cli.support import print_response, run_with_spinner
 
-extras_app = typer.Typer(no_args_is_help=True, help="Extras commands (custom fields, etc.).")
+extras_app = typer.Typer(
+    no_args_is_help=True, help="Extras commands (custom fields, etc.)."
+)
 
 JsonFlag = Annotated[bool, typer.Option("--json", help="Output raw JSON.")]
 YamlFlag = Annotated[bool, typer.Option("--yaml", help="Output YAML.")]

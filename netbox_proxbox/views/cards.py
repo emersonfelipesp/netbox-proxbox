@@ -68,9 +68,7 @@ class ProxboxProxmoxCardView(
             pk=pk,
         )
 
-        fastapi_object = FastAPIEndpoint.objects.restrict(
-            request.user, "view"
-        ).first()
+        fastapi_object = FastAPIEndpoint.objects.restrict(request.user, "view").first()
         if fastapi_object is None:
             return JsonResponse(
                 {
@@ -187,14 +185,14 @@ class ProxboxProxmoxCardView(
                 proxmox_port=proxmox_object.port,
                 backend_url=failed_endpoint,
             )
-            logger.error(
-                "Unable to hydrate Proxmox card for endpoint %s: %s", pk, exc
-            )
+            logger.error("Unable to hydrate Proxmox card for endpoint %s: %s", pk, exc)
 
         payload: dict = {
             "cluster_data": _merge_cluster_payloads(version_data, cluster_data),
             "object": {
-                "pk": getattr(proxmox_object, "pk", getattr(proxmox_object, "id", None)),
+                "pk": getattr(
+                    proxmox_object, "pk", getattr(proxmox_object, "id", None)
+                ),
                 "name": proxmox_object.name,
                 "domain": proxmox_object.domain,
                 "ip_address": str(proxmox_object.ip_address)

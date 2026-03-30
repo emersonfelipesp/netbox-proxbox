@@ -19,6 +19,7 @@ YamlFlag = Annotated[bool, typer.Option("--yaml", help="Output YAML.")]
 
 # ── Top-level virtualization commands ─────────────────────────────────────────
 
+
 @virtualization_app.command("cluster-types-create")
 def cluster_types_create(
     as_json: JsonFlag = False,
@@ -41,6 +42,7 @@ def clusters_create(
 
 # ── Virtual Machine commands ──────────────────────────────────────────────────
 
+
 @vms_app.command("list")
 def vms_list(
     as_json: JsonFlag = False,
@@ -58,7 +60,9 @@ def vms_get(
     as_yaml: YamlFlag = False,
 ) -> None:
     """Get a single VM by ID."""
-    resp = run_with_spinner(_get_client().get(f"/virtualization/virtual-machines/{vm_id}"))
+    resp = run_with_spinner(
+        _get_client().get(f"/virtualization/virtual-machines/{vm_id}")
+    )
     print_response(resp, as_json=as_json, as_yaml=as_yaml)
 
 
@@ -68,7 +72,9 @@ def vms_create(
     as_yaml: YamlFlag = False,
 ) -> None:
     """Sync VMs from Proxmox to NetBox (creates VMs, interfaces, IPs). [NOTE: triggers full sync]"""
-    resp = run_with_spinner(_get_client().get("/virtualization/virtual-machines/create"))
+    resp = run_with_spinner(
+        _get_client().get("/virtualization/virtual-machines/create")
+    )
     print_response(resp, as_json=as_json, as_yaml=as_yaml)
 
 
@@ -78,7 +84,9 @@ def vms_create_test(
     as_yaml: YamlFlag = False,
 ) -> None:
     """Create a hardcoded test VM in NetBox."""
-    resp = run_with_spinner(_get_client().get("/virtualization/virtual-machines/create-test"))
+    resp = run_with_spinner(
+        _get_client().get("/virtualization/virtual-machines/create-test")
+    )
     print_response(resp, as_json=as_json, as_yaml=as_yaml)
 
 
@@ -88,7 +96,9 @@ def vms_summary_example(
     as_yaml: YamlFlag = False,
 ) -> None:
     """Return an example VirtualMachineSummary response."""
-    resp = run_with_spinner(_get_client().get("/virtualization/virtual-machines/summary/example"))
+    resp = run_with_spinner(
+        _get_client().get("/virtualization/virtual-machines/summary/example")
+    )
     print_response(resp, as_json=as_json, as_yaml=as_yaml)
 
 
@@ -99,7 +109,9 @@ def vms_summary(
     as_yaml: YamlFlag = False,
 ) -> None:
     """Get summary for a specific VM by ID."""
-    resp = run_with_spinner(_get_client().get(f"/virtualization/virtual-machines/{vm_id}/summary"))
+    resp = run_with_spinner(
+        _get_client().get(f"/virtualization/virtual-machines/{vm_id}/summary")
+    )
     print_response(resp, as_json=as_json, as_yaml=as_yaml)
 
 
@@ -109,7 +121,9 @@ def vms_interfaces_create(
     as_yaml: YamlFlag = False,
 ) -> None:
     """Create VM interfaces in NetBox. [NOTE: triggers sync]"""
-    resp = run_with_spinner(_get_client().get("/virtualization/virtual-machines/interfaces/create"))
+    resp = run_with_spinner(
+        _get_client().get("/virtualization/virtual-machines/interfaces/create")
+    )
     print_response(resp, as_json=as_json, as_yaml=as_yaml)
 
 
@@ -120,7 +134,9 @@ def vms_ip_address_create(
 ) -> None:
     """Create IP addresses for VM interfaces in NetBox. [NOTE: triggers sync]"""
     resp = run_with_spinner(
-        _get_client().get("/virtualization/virtual-machines/interfaces/ip-address/create")
+        _get_client().get(
+            "/virtualization/virtual-machines/interfaces/ip-address/create"
+        )
     )
     print_response(resp, as_json=as_json, as_yaml=as_yaml)
 
@@ -140,7 +156,9 @@ def vms_disks_create(
 @vms_app.command("backups-create")
 def vms_backups_create(
     node: Annotated[Optional[str], typer.Option("--node", help="Node name.")] = None,
-    storage: Annotated[Optional[str], typer.Option("--storage", help="Storage ID.")] = None,
+    storage: Annotated[
+        Optional[str], typer.Option("--storage", help="Storage ID.")
+    ] = None,
     vmid: Annotated[Optional[str], typer.Option("--vmid", help="VM ID filter.")] = None,
     as_json: JsonFlag = False,
     as_yaml: YamlFlag = False,
@@ -164,15 +182,17 @@ def vms_backups_create(
 
 @vms_app.command("backups-sync-all")
 def vms_backups_sync_all(
-    delete_stale: Annotated[bool, typer.Option("--delete-stale", help="Delete stale backup records.")] = False,
+    delete_stale: Annotated[
+        bool, typer.Option("--delete-stale", help="Delete stale backup records.")
+    ] = False,
     as_json: JsonFlag = False,
     as_yaml: YamlFlag = False,
 ) -> None:
     """Sync ALL backups across all clusters/nodes/storages. [NOTE: long-running sync]"""
     query = {"delete_stale": "true"} if delete_stale else None
     resp = run_with_spinner(
-        _get_client().get("/virtualization/virtual-machines/backups/all/create", query=query)
+        _get_client().get(
+            "/virtualization/virtual-machines/backups/all/create", query=query
+        )
     )
     print_response(resp, as_json=as_json, as_yaml=as_yaml)
-
-
