@@ -50,7 +50,8 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
 ## Backend integration notes
 
 - **Single FastAPI row:** HTTP and WebSocket helpers such as `get_fastapi_request_context()` in [`netbox_proxbox/services/backend_proxy.py`](./netbox_proxbox/services/backend_proxy.py), `websocket_client`, and several dashboard views resolve the backend via `FastAPIEndpoint.objects.first()` (or the first row from a restricted queryset). If multiple FastAPI endpoints exist, whichever row sorts first is used; plan automation and operator docs accordingly.
-- **Full update stages:** [`sync_full_update_resource`](./netbox_proxbox/services/backend_proxy.py) calls proxbox-api for devices, then virtual machines, then backups. Failure in a later stage leaves earlier stages already applied on the backend; the plugin response includes the failing `stage` and `detail`.
+- **Background Proxbox sync jobs (RQ):** `ProxboxSyncJob` enqueues on the NetBox core Job queue **`netbox_proxbox.sync`** (plugin queue name `sync` under app `netbox_proxbox`). If jobs stay **pending**, ensure an RQ worker is running that consumes **`netbox_proxbox.sync`** (not only `high` or `default`). Jobs call proxbox-api **SSE** routes via [`run_sync_stream`](./netbox_proxbox/services/backend_proxy.py) until a terminal `complete` event (long read timeout), matching the browser stream proxy behavior.
+- **Full update (UI vs jobs):** The plugin home may still use non-streaming helpers such as [`sync_full_update_resource`](./netbox_proxbox/services/backend_proxy.py) for JSON/redirect flows. Scheduled or immediate **Proxbox Sync** jobs use **`full-update/stream`** on proxbox-api (devices then VMs in one stream; no backups in that stream). Run a **VM backups** sync type when backups are required.
 
 ## How To Navigate
 

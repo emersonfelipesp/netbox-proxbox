@@ -38,12 +38,23 @@ def proxbox_sync_params_from_job(job: Any) -> dict[str, Any]:
     }
 
 
-# Maps sync_type choices to the FastAPI backend path
+# Maps sync_type choices to the FastAPI backend base path (before ``/stream``).
 _SYNC_TYPE_PATH = {
     SyncTypeChoices.DEVICES: "dcim/devices/create",
     SyncTypeChoices.VIRTUAL_MACHINES: "virtualization/virtual-machines/create",
     SyncTypeChoices.VIRTUAL_MACHINES_BACKUPS: "virtualization/virtual-machines/backups/all/create",
+    SyncTypeChoices.VIRTUAL_MACHINES_DISKS: "virtualization/virtual-machines/virtual-disks/create",
 }
+
+
+def _sync_stream_path(sync_type: str) -> str:
+    """Return proxbox-api SSE path for a scheduled sync type."""
+    if sync_type == SyncTypeChoices.ALL:
+        return "full-update/stream"
+    base = _SYNC_TYPE_PATH.get(sync_type)
+    if not base:
+        raise ValueError(f"Unknown sync_type: {sync_type!r}")
+    return f"{base.rstrip('/')}/stream"
 
 
 class ProxboxSyncJob(JobRunner):
@@ -59,9 +70,9 @@ class ProxboxSyncJob(JobRunner):
         netbox_endpoint_ids: list[str] | None = None,
         **kwargs,
     ):
-        """Execute the configured sync against the ProxBox backend and store result on ``job.data``."""
+        """Run sync by consuming proxbox-api SSE until ``complete``; store params and response on ``job.data``."""
         # Import here to avoid circular imports at module load time
-        from netbox_proxbox.services import sync_full_update_resource, sync_resource
+        from netbox_proxbox.services import run_sync_stream
 
         params = {
             "sync_type": sync_type,
@@ -85,15 +96,11 @@ class ProxboxSyncJob(JobRunner):
         if sync_type == SyncTypeChoices.VIRTUAL_MACHINES_BACKUPS:
             query_params["delete_nonexistent_backup"] = True
 
-        if sync_type == SyncTypeChoices.ALL:
-            payload, status = sync_full_update_resource(
-                query_params=query_params or None
-            )
-        else:
-            path = _SYNC_TYPE_PATH.get(sync_type)
-            if not path:
-                raise ValueError(f"Unknown sync_type: {sync_type!r}")
-            payload, status = sync_resource(path, query_params=query_params or None)
+        stream_path = _sync_stream_path(sync_type)
+        payload, status = run_sync_stream(
+            stream_path,
+            query_params=query_params or None,
+        )
 
         if status >= 400:
             detail = payload.get("detail", "Backend returned an error.")

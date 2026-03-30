@@ -3,6 +3,7 @@
 from netbox_proxbox.services.backend_proxy import (
     get_fastapi_request_context,
     iter_backend_sse_lines,
+    run_sync_stream,
     sse_error_frames,
     sync_full_update_resource,
     sync_resource,
@@ -13,6 +14,7 @@ __all__ = (
     "ServiceStatus",
     "get_fastapi_request_context",
     "iter_backend_sse_lines",
+    "run_sync_stream",
     "sse_error_frames",
     "sync_full_update_resource",
     "sync_resource",
