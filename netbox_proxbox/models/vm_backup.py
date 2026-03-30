@@ -12,6 +12,8 @@ from netbox.models import NetBoxModel
 from netbox_proxbox.choices import ProxmoxBackupSubtypeChoices, ProxmoxBackupFormatChoices
 
 class VMBackup(NetBoxModel):
+    """Proxmox backup metadata attached to a NetBox ``VirtualMachine``."""
+
     storage = models.CharField(
         max_length=255,
         null=True,
@@ -100,9 +102,11 @@ class VMBackup(NetBoxModel):
         unique_together = ('storage', 'virtual_machine', 'subtype', 'format', 'creation_time', 'volume_id', 'vmid')
         
     def __str__(self):
+        """VM and backup creation timestamp for list displays."""
         return f"{self.virtual_machine} - {self.creation_time}"
     
     def get_absolute_url(self):
+        """Plugin UI URL for this backup's detail page."""
         return reverse('plugins:netbox_proxbox:vmbackup', args=[self.pk])
 
     

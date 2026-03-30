@@ -59,6 +59,7 @@ class ProxboxSyncJob(JobRunner):
         netbox_endpoint_ids: list[str] | None = None,
         **kwargs,
     ):
+        """Execute the configured sync against the ProxBox backend and store result on ``job.data``."""
         # Import here to avoid circular imports at module load time
         from netbox_proxbox.services import sync_full_update_resource, sync_resource
 

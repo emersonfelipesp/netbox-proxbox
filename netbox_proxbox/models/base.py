@@ -22,10 +22,12 @@ class CommonProperties:
 
     @property
     def ip(self) -> str | None:
+        """Dotted IPv4/IPv6 host string from the linked ``IPAddress``, if any."""
         return str(self.ip_address.address.ip) if self.ip_address else None
 
     @property
     def url(self) -> str:
+        """Synthetic ``http(s)://`` base URL using domain or IP and the model port."""
         protocol = "https" if self.verify_ssl else "http"
         host = self.domain or self.ip
         return f"{protocol}://{host}:{self.port}" if host else ""
@@ -78,9 +80,11 @@ class EndpointBase(CommonProperties, NetBoxModel):
         return reverse(get_viewname(cls, action, rest_api), kwargs=kwargs or {})
 
     def __str__(self) -> str:
+        """Prefer name, then domain, then IP, then class label."""
         return self.name or self.domain or self.ip or self.__class__.__name__
 
     def clean(self) -> None:
+        """Ensure at least one resolvable host (domain or IP object) is configured."""
         super().clean()
         if not (self.domain or self.ip_address_id):
             raise ValidationError(

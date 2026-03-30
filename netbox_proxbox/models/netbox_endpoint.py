@@ -91,6 +91,7 @@ class NetBoxEndpoint(EndpointBase):
 
     @property
     def effective_token_version(self) -> str:
+        """Resolved v1 vs v2 from linked ``Token`` when present, else ``token_version`` field."""
         token_obj = getattr(self, "token", None)
         if token_obj is not None:
             return (
@@ -102,6 +103,7 @@ class NetBoxEndpoint(EndpointBase):
 
     @property
     def effective_token_value(self) -> str | None:
+        """Best-effort credential string for API calls (FK token or v2 key field)."""
         token_obj = getattr(self, "token", None)
         if token_obj is not None:
             if self.effective_token_version == NetBoxTokenVersionChoices.V2:
@@ -116,6 +118,7 @@ class NetBoxEndpoint(EndpointBase):
 
     @property
     def has_configured_token(self) -> bool:
+        """True if a selectable token or a complete v2 key/secret pair is stored."""
         if self.token is not None:
             return True
         if self.effective_token_version == NetBoxTokenVersionChoices.V2:
@@ -124,6 +127,7 @@ class NetBoxEndpoint(EndpointBase):
 
     @property
     def token_version_label(self) -> str:
+        """Short UI label for the effective token style."""
         return (
             "v2 Token"
             if self.effective_token_version == NetBoxTokenVersionChoices.V2
@@ -131,4 +135,5 @@ class NetBoxEndpoint(EndpointBase):
         )
 
     def get_absolute_url(self) -> str:
+        """Plugin UI URL for this NetBox endpoint detail view."""
         return reverse("plugins:netbox_proxbox:netboxendpoint", args=[self.pk])

@@ -61,6 +61,7 @@ class ProxmoxEndpointForm(NetBoxModelForm):
         )
 
     def clean(self):
+        """Require domain or IP before save (matches model validation)."""
         super().clean()
         cleaned_data = self.cleaned_data
         domain = (cleaned_data.get("domain") or "").strip()
@@ -88,6 +89,8 @@ class ProxmoxEndpointFilterForm(NetBoxModelFilterSetForm):
 
 
 class ProxmoxEndpointImportForm(NetBoxModelImportForm):
+    """CSV import mapping for bulk Proxmox endpoint creation."""
+
     ip_address = CSVModelChoiceField(
         queryset=IPAddress.objects.all(),
         required=False,

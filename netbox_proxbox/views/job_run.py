@@ -37,9 +37,11 @@ class ProxboxJobRunNowView(
     http_method_names = ["post"]
 
     def get_required_permission(self):
+        """Require ``add`` on ``SyncProcess`` (same gate as the schedule form)."""
         return permission_add_sync_process()
 
     def post(self, request, pk):
+        """Clone sync parameters onto a new queued job and redirect to its detail page."""
         job = get_object_or_404(Job.objects.restrict(request.user, "view"), pk=pk)
         if not is_proxbox_sync_job(job):
             messages.error(

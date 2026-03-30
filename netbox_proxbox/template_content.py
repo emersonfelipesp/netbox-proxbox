@@ -18,6 +18,7 @@ class ProxboxJobTemplateExtension(PluginTemplateExtension):
     models = ["core.job"]
 
     def buttons(self):
+        """Render the Run now POST form when the job is a re-runnable Proxbox sync."""
         obj = self.context["object"]
         if not isinstance(obj, Job) or not is_proxbox_sync_job(obj):
             return ""

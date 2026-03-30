@@ -79,6 +79,7 @@ class RequireProxboxDashboardEndpointViewMixin(AccessMixin):
     """Require view permission on at least one plugin endpoint model when logged in."""
 
     def dispatch(self, request, *args, **kwargs):
+        """Block authenticated users who cannot see any ProxBox endpoint inventory."""
         if request.user.is_authenticated and not user_may_access_proxbox_dashboard(
             request.user
         ):
@@ -91,9 +92,12 @@ class HomeView(
     RequireProxboxDashboardEndpointViewMixin,
     View,
 ):
+    """Plugin dashboard with endpoint lists and example FastAPI URLs for the UI."""
+
     template_name = "netbox_proxbox/home.html"
 
     def get(self, request):
+        """Render home with visible endpoint rows and resolved FastAPI HTTP/WebSocket URLs."""
         default_config = getattr(ProxboxConfig, "default_settings", {})
         fastapi_example_url = "https://example.fastapi.com"
         fastapi_example_websocket_url = "wss://example.fastapi.com/ws"
@@ -135,12 +139,16 @@ class TestWebSocketView(
     ContentTypePermissionRequiredMixin,
     View,
 ):
+    """Developer page to exercise backend WebSocket connectivity from the browser."""
+
     template_name = "netbox_proxbox/test/websocket.html"
 
     def get_required_permission(self):
+        """Require ``view`` on ``FastAPIEndpoint``."""
         return permission_view_fastapi_endpoint()
 
     def get(self, request):
+        """Render the test template with HTTP and WS base URLs from the first endpoint."""
         fastapi_object = FastAPIEndpoint.objects.restrict(request.user, "view").first()
         if fastapi_object is None:
             return render(request, self.template_name, {})
@@ -168,9 +176,12 @@ class TestWebSocketView(
 
 
 class NodesView(ConditionalLoginRequiredMixin, View):
+    """List NetBox devices tagged ``proxbox`` (synced nodes) for operational review."""
+
     template = "netbox_proxbox/devices.html"
 
     def get(self, request):
+        """Load tagged devices and FastAPI URL hints for the devices template."""
         from dcim.models import Device
         from django.contrib.contenttypes.models import ContentType
         from extras.models import Tag, TaggedItem
@@ -217,9 +228,12 @@ class NodesView(ConditionalLoginRequiredMixin, View):
 
 
 class VirtualMachinesView(ConditionalLoginRequiredMixin, View):
+    """List VMs tagged ``proxbox`` for quick visibility alongside backend URLs."""
+
     template = "netbox_proxbox/virtual_machines.html"
 
     def get(self, request):
+        """Load tagged VMs and FastAPI URL hints for the virtual machines template."""
         from django.contrib.contenttypes.models import ContentType
         from extras.models import Tag, TaggedItem
         from virtualization.models import VirtualMachine
@@ -264,9 +278,12 @@ class VirtualMachinesView(ConditionalLoginRequiredMixin, View):
 
 
 class ContributingView(ConditionalLoginRequiredMixin, View):
+    """Render CONTRIBUTING.md from GitHub for in-app contributor guidance."""
+
     template_name = "netbox_proxbox/contributing.html"
 
     def get(self, request):
+        """Fetch markdown from ``github.get`` and pass HTML to the template."""
         return render(
             request,
             self.template_name,
@@ -278,7 +295,10 @@ class ContributingView(ConditionalLoginRequiredMixin, View):
 
 
 class CommunityView(ConditionalLoginRequiredMixin, View):
+    """Static community landing page for the plugin."""
+
     template_name = "netbox_proxbox/community.html"
 
     def get(self, request):
+        """Render the community template with a page title."""
         return render(request, self.template_name, {"title": "Join our Community!"})
