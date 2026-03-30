@@ -25,11 +25,16 @@ class ScheduleSyncForm(forms.Form):
             "Leave blank to use the default name (Proxbox Sync)."
         ),
     )
-    sync_type = forms.ChoiceField(
+    sync_types = forms.MultipleChoiceField(
         choices=SyncTypeChoices,
-        initial=SyncTypeChoices.ALL,
-        label=_("Sync Type"),
-        help_text=_("Which sync operation to run."),
+        initial=[SyncTypeChoices.ALL],
+        label=_("Sync types"),
+        widget=forms.CheckboxSelectMultiple,
+        help_text=_(
+            "Select one or more operations. Stages always run in dependency order "
+            "(devices, then virtual machines, then VM disks, then VM backups). "
+            "You cannot combine “All” with other types."
+        ),
     )
     proxmox_endpoints = DynamicModelMultipleChoiceField(
         queryset=ProxmoxEndpoint.objects.all(),
@@ -89,6 +94,34 @@ class ScheduleSyncForm(forms.Form):
             )
             self.fields["interval_value"].initial = value
             self.fields["interval_unit"].initial = unit
+
+        if not self.is_bound:
+            if "sync_types" not in self.initial and "sync_type" in self.initial:
+                legacy = self.initial.pop("sync_type")
+                self.initial["sync_types"] = [legacy] if legacy else [
+                    SyncTypeChoices.ALL
+                ]
+            self.initial.setdefault("sync_types", [SyncTypeChoices.ALL])
+
+    def clean_sync_types(self):
+        """Disallow mixing ``all`` with other slugs; require at least one type."""
+        values = list(self.cleaned_data.get("sync_types") or [])
+        if not values:
+            raise forms.ValidationError(_("Select at least one sync type."))
+        if SyncTypeChoices.ALL in values and len(values) > 1:
+            all_label = next(
+                (
+                    c[1]
+                    for c in SyncTypeChoices.CHOICES
+                    if c[0] == SyncTypeChoices.ALL
+                ),
+                _("All"),
+            )
+            raise forms.ValidationError(
+                _('Cannot combine "%(all_label)s" with other sync types.')
+                % {"all_label": all_label}
+            )
+        return values
 
     def clean_job_name(self):
         """Normalize optional custom job label to stripped text."""

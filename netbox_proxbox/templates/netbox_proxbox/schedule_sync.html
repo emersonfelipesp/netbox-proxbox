@@ -36,14 +36,12 @@
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label" for="{{ form.sync_type.id_for_label }}">
-                            {{ form.sync_type.label }}
-                        </label>
-                        {{ form.sync_type }}
-                        {% if form.sync_type.help_text %}
-                            <div class="form-text text-muted">{{ form.sync_type.help_text }}</div>
+                        <label class="form-label">{{ form.sync_types.label }}</label>
+                        {{ form.sync_types }}
+                        {% if form.sync_types.help_text %}
+                            <div class="form-text text-muted">{{ form.sync_types.help_text }}</div>
                         {% endif %}
-                        {% for error in form.sync_type.errors %}
+                        {% for error in form.sync_types.errors %}
                             <div class="invalid-feedback d-block">{{ error }}</div>
                         {% endfor %}
                     </div>
@@ -165,6 +163,12 @@
                                 <span class="badge rounded-pill text-bg-blue fw-normal">{% trans "Virtual Machines" %}</span>
                             </td>
                             <td class="align-middle">{% trans "Sync Proxmox VMs as NetBox virtual machines." %}</td>
+                        </tr>
+                        <tr>
+                            <td class="text-nowrap align-middle">
+                                <span class="badge rounded-pill text-bg-orange fw-normal">{% trans "VM Disks" %}</span>
+                            </td>
+                            <td class="align-middle">{% trans "Sync VM virtual disks (run after virtual machines)." %}</td>
                         </tr>
                         <tr>
                             <td class="text-nowrap align-middle">
