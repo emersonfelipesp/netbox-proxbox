@@ -1,168 +1,111 @@
 # Proxbox
 
-Proxbox is a NetBox plugin that integrates Proxmox with NetBox through a separate FastAPI backend.
+Proxbox is a NetBox plugin that synchronizes Proxmox infrastructure data into NetBox. It keeps your DCIM up-to-date with real Proxmox clusters, nodes, virtual machines, containers, and backups.
 
-The current repository code is `v0.0.7` and declares support for NetBox `4.5.x`:
+## What It Does
 
-- `min_version = "4.5.0"`
-- `max_version = "4.5.99"`
+Proxbox discovers and syncs the following from Proxmox into NetBox:
 
-The latest upstream NetBox release I verified for this docs refresh is `v4.5.5`, published on `2026-03-17`.
+- **Clusters and Nodes** — Proxmox cluster and node information
+- **Virtual Machines** — VM status, resources, and configuration
+- **Containers (LXC)** — Container details and settings
+- **VM Snapshots** — Point-in-time snapshots for recovery
+- **VM Backups** — Backup jobs and restore points
+- **Storage** — Datastores and storage content
+- **Networking** — VLANs, bridges, and IP assignments
 
-## Current Status
+Sync runs on-demand from the NetBox UI or scheduled automatically via NetBox's job system.
 
-This repository is ahead of the latest published PyPI release of `netbox-proxbox`.
+## Requirements
 
-- If you want the code documented in this repository, install from source.
-- If you install the older PyPI prerelease, its compatibility notes from the old docs do not apply to the current `main` branch anymore.
+- NetBox 4.5.x
+- Python 3.12+
+- Proxmox VE 7.x or 8.x
+- Proxbox API backend (see below)
 
-Proxbox remains read-oriented toward Proxmox. The plugin triggers synchronization through the backend and does not directly manage Proxmox resources from NetBox.
+## Quick Start
 
-## Architecture
+1. **Install the plugin** into your NetBox virtual environment:
 
-Proxbox has two parts:
+   ```bash
+   cd /opt/netbox/netbox
+   git clone https://github.com/netdevopsbr/netbox-proxbox.git
+   source /opt/netbox/venv/bin/activate
+   pip install -e ./netbox-proxbox
+   ```
 
-1. The NetBox plugin in this repository.
-2. A separate FastAPI backend service (`proxbox-api`) that talks to Proxmox and NetBox.
+2. **Enable the plugin** in `netbox/netbox/configuration.py`:
 
-Inside NetBox, the plugin currently manages:
+   ```python
+   PLUGINS = ["netbox_proxbox"]
+   ```
 
-- `ProxmoxEndpoint`
-- `NetBoxEndpoint`
-- `FastAPIEndpoint`
-- `SyncProcess`
-- `VMBackup`
+3. **Run migrations and collect static files:**
 
-The UI exposes sync actions for:
+   ```bash
+   python3 manage.py migrate netbox_proxbox
+   python3 manage.py collectstatic --no-input
+   sudo systemctl restart netbox
+   ```
 
-- devices
-- virtual machines
-- full update
-- VM backups
+4. **Install the Proxbox API backend:**
 
-## Supported Workflow
+   ```bash
+   mkdir -p /opt/proxbox-api
+   cd /opt/proxbox-api
+   python3 -m venv venv
+   source venv/bin/activate
+   pip install proxbox-api
+   uvicorn proxbox_api.main:app --host 0.0.0.0 --port 8800
+   ```
 
-For the current codebase, the recommended install path is:
+   Or use Docker:
 
-1. Install the plugin from this repository into the NetBox virtual environment.
-2. Run migrations and collect static files.
-3. Install and start the `proxbox-api` backend separately.
-4. In NetBox, create at least one endpoint object for:
-   - Proxmox API
-   - NetBox API
-   - ProxBox API (FastAPI)
-5. Run `Full Update` from the Proxbox home page.
+   ```bash
+   docker run -d --name proxbox-api -p 8800:8800 emersonfelipesp/proxbox-api:latest
+   ```
 
-## Install From Source
+5. **Configure endpoints in NetBox:**
 
-```bash
-cd /opt/netbox/netbox
-git clone https://github.com/netdevopsbr/netbox-proxbox.git
+   - Go to **Plugins > Proxbox**
+   - Create a **Proxmox API** endpoint (your Proxmox host URL and token)
+   - Create a **NetBox API** endpoint (your NetBox URL and token)
+   - Create a **ProxBox API** endpoint (the backend from step 4)
 
-source /opt/netbox/venv/bin/activate
-pip install -e /opt/netbox/netbox/netbox-proxbox
+6. **Run your first sync:**
 
-cd /opt/netbox/netbox
-python3 manage.py migrate netbox_proxbox
-python3 manage.py collectstatic --no-input
-sudo systemctl restart netbox
-```
-
-Enable the plugin in `/opt/netbox/netbox/netbox/configuration.py`:
-
-```python
-PLUGINS = ["netbox_proxbox"]
-```
-
-### RQ Worker (required for scheduled sync)
-
-Scheduled and recurring sync jobs run through NetBox's Redis Queue system. Start a worker that includes the plugin's queue alongside the standard NetBox queues:
-
-```bash
-cd /opt/netbox/netbox
-source /opt/netbox/venv/bin/activate
-python3 manage.py rqworker high default low netbox_proxbox.sync
-```
-
-For production, add a systemd unit so the worker starts automatically. See [Scheduled Sync — systemd unit](./docs/features/scheduled-sync.md#systemd-unit) for an example service file.
-
-> Manual sync (clicking the sync buttons in the UI) does **not** require the RQ worker. The worker is only needed for scheduled and recurring jobs.
-
-## Backend Setup
-
-The plugin requires a running `proxbox-api` service. The simplest backend install is a separate virtual environment:
-
-```bash
-mkdir -p /opt/proxbox-api
-cd /opt/proxbox-api
-python3 -m venv venv
-source venv/bin/activate
-pip install proxbox-api==0.0.2.post3
-
-/opt/proxbox-api/venv/bin/uvicorn proxbox_api.main:app --host 0.0.0.0 --port 8800 --app-dir /opt/proxbox-api
-```
-
-Docker is also supported for the backend itself:
-
-```bash
-docker pull emersonfelipesp/proxbox-api:latest
-docker run -d --name proxbox-api -p 8800:8800 emersonfelipesp/proxbox-api:latest
-```
-
-The repository also ships sample systemd units in [`contrib/proxbox.service`](./contrib/proxbox.service) and [`contrib/proxbox-https.service`](./contrib/proxbox-https.service).
-
-## Initial Configuration
-
-After both services are running, configure the plugin through the NetBox UI:
-
-1. Open `Plugins > Proxbox`.
-2. Create a `Proxmox API` endpoint.
-3. Create a `NetBox API` endpoint.
-4. Create a `ProxBox API (FastAPI)` endpoint.
-5. Return to the Proxbox home page and run a sync.
-
-If you enable WebSocket support on the FastAPI endpoint, the sync pages can display real-time messages from the backend.
+   Click **Full Update** on the Proxbox home page. Progress appears in real-time.
 
 ## Scheduled Sync
 
-Proxbox supports scheduling sync operations to run automatically on a recurring interval (e.g. daily at 02:00).
+To run sync automatically on a schedule:
 
-1. Start the RQ worker (see [Install From Source](#install-from-source) above).
-2. In NetBox, go to **Proxbox > Schedule Sync**.
-3. Choose a sync type (All, Devices, Virtual Machines, VM Backups).
-4. Set an optional schedule time and recurrence interval (in minutes).
-5. Click **Schedule**.
+1. Start the NetBox RQ worker with the Proxbox queue:
 
-After the job is queued, view its status, structured logs, and any error details under **Proxbox > Sync Jobs** or **Operations > Background Jobs**.
+   ```bash
+   cd /opt/netbox/netbox
+   source /opt/netbox/venv/bin/activate
+   python3 manage.py rqworker
+   ```
 
-Common intervals:
-
-| Minutes | Frequency |
-|---------|-----------|
-| `60` | Every hour |
-| `1440` | Every day (daily) |
-| `10080` | Every week (weekly) |
-
-Recurring jobs re-schedule automatically after each execution. To stop recurrence, delete the scheduled job from the NetBox job list.
-
-See [docs/features/scheduled-sync.md](./docs/features/scheduled-sync.md) for full details.
-
-## Notes
-
-- The current code requires Python `>=3.12` for the plugin itself.
-- HTMX navigation in NetBox can still affect the Proxbox UI; see the pre-installation note in the docs.
-- Containerized NetBox/plugin installation is not documented as a supported workflow yet.
+2. In NetBox, go to **Proxbox > Schedule Sync** and configure your schedule.
 
 ## Documentation
 
-The MkDocs site lives under [`docs/`](./docs). The main entry points are:
+Full documentation is available at [proxbox.readthedocs.io](https://proxbox.readthedocs.io/).
 
-- [`docs/index.md`](./docs/index.md)
-- [`docs/installation/2-installing-plugin-git.md`](./docs/installation/2-installing-plugin-git.md)
-- [`docs/installation/backend-setup.md`](./docs/installation/backend-setup.md)
+Key pages:
+
+- [Installation Guide](https://proxbox.readthedocs.io/en/latest/installation/2-installing-plugin-git.html)
+- [Backend Setup](https://proxbox.readthedocs.io/en/latest/installation/backend-setup.html)
+- [Scheduled Sync](https://proxbox.readthedocs.io/en/latest/features/scheduled-sync.html)
 
 ## Community
 
-- GitHub Discussions: <https://github.com/orgs/netdevopsbr/discussions>
-- Discord: <https://discord.gg/X6FudvXW>
-- Telegram: <https://t.me/netboxbr>
+- GitHub Discussions: https://github.com/orgs/netdevopsbr/discussions
+- Discord: https://discord.gg/X6FudvXW
+- Telegram: https://t.me/netboxbr
+
+## Contributing
+
+See [DEVELOP.md](./DEVELOP.md) for development setup and contribution guidelines.

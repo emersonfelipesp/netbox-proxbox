@@ -19,11 +19,15 @@ __all__ = (
 
 @register_model_view(NetBoxEndpoint)
 class NetBoxEndpointView(generic.ObjectView):
+    """Detail view for a remote NetBox API endpoint configuration."""
+
     queryset = NetBoxEndpoint.objects.all()
 
 
 @register_model_view(NetBoxEndpoint, "list", path="", detail=False)
 class NetBoxEndpointListView(generic.ObjectListView):
+    """Filterable list of NetBox endpoint records."""
+
     queryset = NetBoxEndpoint.objects.all()
     table = NetBoxEndpointTable
     filterset = NetBoxEndpointFilterSet
@@ -33,10 +37,14 @@ class NetBoxEndpointListView(generic.ObjectListView):
 @register_model_view(NetBoxEndpoint, "add", detail=False)
 @register_model_view(NetBoxEndpoint, "edit")
 class NetBoxEndpointEditView(generic.ObjectEditView):
+    """Create or edit a NetBox endpoint (token and URL settings)."""
+
     queryset = NetBoxEndpoint.objects.all()
     form = NetBoxEndpointForm
 
 
 @register_model_view(NetBoxEndpoint, "delete")
 class NetBoxEndpointDeleteView(generic.ObjectDeleteView):
+    """Delete a NetBox endpoint record."""
+
     queryset = NetBoxEndpoint.objects.all()

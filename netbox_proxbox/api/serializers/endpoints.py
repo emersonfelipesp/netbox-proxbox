@@ -1,105 +1,35 @@
-"""Serialize ProxBox plugin models for the NetBox plugin API."""
+"""API serializers for Proxmox, NetBox, and FastAPI endpoint plugin models."""
 
-from rest_framework import serializers
+from __future__ import annotations
 
-from ipam.api.serializers_.nested import NestedIPAddressSerializer
+from typing import Any
+
+from django.utils.translation import gettext as _
+
 from netbox.api.fields import ChoiceField
 from netbox.api.serializers import NetBoxModelSerializer, WritableNestedSerializer
+from ipam.api.serializers_.nested import NestedIPAddressSerializer
+from rest_framework import serializers
 from users.models import Token
-from virtualization.api.serializers_.nested import NestedVirtualMachineSerializer
 
-from netbox_proxbox.choices import (
-    NetBoxTokenVersionChoices,
-    ProxmoxBackupFormatChoices,
-    ProxmoxBackupSubtypeChoices,
-    ProxmoxModeChoices,
-    SyncStatusChoices,
-    SyncTypeChoices,
-)
-from netbox_proxbox.models import (
-    FastAPIEndpoint,
-    NetBoxEndpoint,
-    ProxmoxEndpoint,
-    SyncProcess,
-    VMBackup,
-)
+from netbox_proxbox.choices import NetBoxTokenVersionChoices, ProxmoxModeChoices
+from netbox_proxbox.models import FastAPIEndpoint, NetBoxEndpoint, ProxmoxEndpoint
 
 
 class NestedTokenSerializer(WritableNestedSerializer):
+    """Minimal token shape for nested NetBox endpoint writes."""
+
     class Meta:
         model = Token
         fields = ["id", "url", "display", "key"]
         brief_fields = ("id", "url", "display", "key")
 
 
-class VMBackupSerializer(NetBoxModelSerializer):
-    url = serializers.HyperlinkedIdentityField(
-        view_name="plugins-api:netbox_proxbox-api:vmbackup-detail",
-    )
-    virtual_machine = NestedVirtualMachineSerializer()
-    subtype = ChoiceField(choices=ProxmoxBackupSubtypeChoices)
-    format = ChoiceField(choices=ProxmoxBackupFormatChoices)
-
-    class Meta:
-        model = VMBackup
-        fields = (
-            "id",
-            "url",
-            "display",
-            "virtual_machine",
-            "storage",
-            "subtype",
-            "format",
-            "creation_time",
-            "size",
-            "notes",
-            "volume_id",
-            "vmid",
-            "used",
-            "encrypted",
-            "verification_state",
-            "verification_upid",
-            "tags",
-            "custom_fields",
-            "created",
-            "last_updated",
-        )
-        brief_fields = ("id", "url", "display", "storage", "creation_time")
-
-
-class SyncProcessSerializer(NetBoxModelSerializer):
-    url = serializers.HyperlinkedIdentityField(
-        view_name="plugins-api:netbox_proxbox-api:syncprocess-detail",
-    )
-    sync_type = ChoiceField(choices=SyncTypeChoices)
-    status = ChoiceField(choices=SyncStatusChoices)
-    runtime = serializers.FloatField(required=False, allow_null=True)
-    started_at = serializers.DateTimeField(required=False, allow_null=True)
-    completed_at = serializers.DateTimeField(required=False, allow_null=True)
-
-    class Meta:
-        model = SyncProcess
-        fields = (
-            "id",
-            "url",
-            "display",
-            "name",
-            "sync_type",
-            "status",
-            "started_at",
-            "completed_at",
-            "runtime",
-            "tags",
-            "custom_fields",
-            "created",
-            "last_updated",
-        )
-        brief_fields = ("id", "url", "display", "name", "status")
-
-
 class ProxmoxEndpointSerializer(NetBoxModelSerializer):
+    """Proxmox endpoint including secrets as write-only fields."""
+
     url = serializers.HyperlinkedIdentityField(
-        view_name="plugins-api:netbox_proxbox-api:endpoints:proxmox-endpoint-detail",
+        view_name="plugins-api:netbox_proxbox-api:endpoints:proxmoxendpoint-detail",
     )
     ip_address = NestedIPAddressSerializer(required=False, allow_null=True)
     domain = serializers.CharField(required=False, allow_null=True, allow_blank=True)
@@ -134,7 +64,19 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
             "token_value": {"write_only": True, "required": False, "allow_blank": True},
         }
 
-    def validate(self, attrs):
+    def get_display(self, obj):
+        """Label for list APIs and APISelect (e.g. schedule sync): ``Name (IP)``."""
+        name_part = (obj.name or "").strip() or _("Proxmox endpoint")
+        ip_part = obj.ip
+        if ip_part:
+            return f"{name_part} ({ip_part})"
+        domain_part = (obj.domain or "").strip()
+        if domain_part:
+            return f"{name_part} ({domain_part})"
+        return name_part
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        """Require at least one of domain or IP address for reachability."""
         attrs = super().validate(attrs)
         domain = (
             attrs.get("domain", getattr(self.instance, "domain", "")) or ""
@@ -153,8 +95,10 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
 
 
 class NetBoxEndpointSerializer(NetBoxModelSerializer):
+    """Remote NetBox API endpoint with v1 token or v2 key/secret validation."""
+
     url = serializers.HyperlinkedIdentityField(
-        view_name="plugins-api:netbox_proxbox-api:endpoints:netbox-endpoint-detail",
+        view_name="plugins-api:netbox_proxbox-api:endpoints:netboxendpoint-detail",
     )
     ip_address = NestedIPAddressSerializer(required=False, allow_null=True)
     token = NestedTokenSerializer(required=False, allow_null=True)
@@ -188,7 +132,8 @@ class NetBoxEndpointSerializer(NetBoxModelSerializer):
             },
         }
 
-    def validate(self, attrs):
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        """Enforce host target plus consistent v1 token vs v2 key/secret auth rules."""
         attrs = super().validate(attrs)
 
         domain = (
@@ -269,8 +214,10 @@ class NetBoxEndpointSerializer(NetBoxModelSerializer):
 
 
 class FastAPIEndpointSerializer(NetBoxModelSerializer):
+    """ProxBox backend HTTP/WebSocket endpoint."""
+
     url = serializers.HyperlinkedIdentityField(
-        view_name="plugins-api:netbox_proxbox-api:endpoints:fastapi-endpoint-detail",
+        view_name="plugins-api:netbox_proxbox-api:endpoints:fastapiendpoint-detail",
     )
     ip_address = NestedIPAddressSerializer(required=False, allow_null=True)
 
@@ -297,7 +244,8 @@ class FastAPIEndpointSerializer(NetBoxModelSerializer):
         )
         brief_fields = ("id", "url", "display", "name", "domain", "port")
 
-    def validate(self, attrs):
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        """Require at least one of domain or IP address for the backend URL."""
         attrs = super().validate(attrs)
         domain = (
             attrs.get("domain", getattr(self.instance, "domain", "")) or ""

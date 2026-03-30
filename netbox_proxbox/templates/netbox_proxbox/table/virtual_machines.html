@@ -1,35 +1,106 @@
+{% load helpers %}
 <div id="virtual-machines-div" class="form form-horizontal">
     <h2 id="proxmox-virtual-machines-table" class="text-center">Virtual Machines</h2>
-    <h3>Synced Virtual Machines: <span id='synced-vm-count'>0</span> / <span id='total-vm-count'>0</span> (<span id='sync-percentage-ratio'>0</span>)</h3>
+    <h3>Synced Virtual Machines: <span id='synced-vm-count'>{% if virtual_machines %}{{ virtual_machines|length }}{% else %}0{% endif %}</span></h3>
     <div class="card">
-        <div class="table-responsive" id="object_list">
-            <div class="table-responsive">
-                <table class="table table-hover object-list">
-                    <thead>
+        <div class="table-responsive">
+            <table class="table table-hover object-list">
+                <thead>
+                    <tr>
+                        <th class="text-center text-nowrap"><span class="mdi mdi-check-bold" title="Status"></span></th>
+                        <th class="text-center text-nowrap">ID</th>
+                        <th class="text-nowrap">Name</th>
+                        <th class="text-nowrap">Status</th>
+                        <th class="text-nowrap">Cluster</th>
+                        <th class="text-nowrap">Site</th>
+                        <th class="text-nowrap">Role</th>
+                        <th class="text-nowrap">Tenant</th>
+                        <th class="text-nowrap">Platform</th>
+                        <th class="text-nowrap text-center">VCPU</th>
+                        <th class="text-nowrap text-end">Memory (MiB)</th>
+                        <th class="text-end text-nowrap noprint">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="virtual-machine-table-data">
+                    {% if virtual_machines %}
+                        {% for vm in virtual_machines %}
+                            <tr>
+                                <td class="text-center">
+                                    {% if vm.status == 'active' %}
+                                        <span class="mdi mdi-check-circle text-success" title="Active"></span>
+                                    {% elif vm.status == 'offline' %}
+                                        <span class="mdi mdi-close-circle text-danger" title="Offline"></span>
+                                    {% elif vm.status == 'planned' %}
+                                        <span class="mdi text-info" title="Planned">—</span>
+                                    {% else %}
+                                        <span class="mdi text-secondary" title="{{ vm.get_status_display }}">—</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center text-muted">{{ vm.pk }}</td>
+                                <td>
+                                    <a href="{% url 'virtualization:virtualmachine' vm.pk %}" class="text-body text-decoration-none">
+                                        <span class="mdi mdi-monitor"></span> {{ vm.name }}
+                                    </a>
+                                </td>
+                                <td>
+                                    <span class="badge text-bg-{{ vm.status_color }}">{{ vm.get_status_display }}</span>
+                                </td>
+                                <td>
+                                    {% if vm.cluster %}
+                                        <a href="{% url 'virtualization:cluster' vm.cluster.pk %}" class="text-decoration-none">{{ vm.cluster }}</a>
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if vm.site %}
+                                        <a href="{% url 'dcim:site' vm.site.pk %}" class="text-decoration-none">{{ vm.site }}</a>
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if vm.role %}
+                                        <a href="{% url 'dcim:devicerole' vm.role.pk %}" class="text-decoration-none">{{ vm.role }}</a>
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if vm.tenant %}
+                                        <a href="{% url 'tenancy:tenant' vm.tenant.pk %}" class="text-decoration-none">{{ vm.tenant }}</a>
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if vm.platform %}
+                                        <a href="{% url 'dcim:platform' vm.platform.pk %}" class="text-decoration-none">{{ vm.platform }}</a>
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">{{ vm.vcpus|default:"—" }}</td>
+                                <td class="text-end">{{ vm.memory|default:"—" }}</td>
+                                <td class="text-end text-nowrap noprint">
+                                    <a href="{% url 'virtualization:virtualmachine' vm.pk %}" class="btn btn-sm btn-outline-dark" title="View">
+                                        <span class="mdi mdi-eye" aria-hidden="true"></span>
+                                    </a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    {% else %}
                         <tr>
-                            <th>Status</th>
-                            <th>NetBox ID</th>
-                            <th>Name</th>
-                            <th>VM/CT Status</th>
-                            <th>Device</th>
-                            <th>Cluster</th>
-                            <th>VM Interfaces</th>
-                            <th>Role</th>
-                            <th>Virtual CPUs</th>
-                            <th>Memory (MB)</th>
-                            <th>Disk Space (GB)</th>
-                            <th>IP Address</th>
-                            <th></th>
+                            <td colspan="12" class="text-center text-muted p-4">
+                                <span class="mdi mdi-information-outline mdi-24px d-block mb-2"></span>
+                                No virtual machines synced with Proxbox yet.
+                                <br>
+                                <small>Click "Sync Virtual Machines" to synchronize Proxmox VMs with NetBox.</small>
+                            </td>
                         </tr>
-                    </thead>
-                    <tbody id="virtual-machine-table-data">
-                        <!-- Show it if no virtual machines synced. -->
-                        <tr id='virtual-machines-table-default-td'>
-                            <td colspan="12" class="text-center text-muted">— No virtual machines could be synced with Proxmox —</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+                    {% endif %}
+                </tbody>
+            </table>
         </div>
     </div>
 </div>

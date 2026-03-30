@@ -1,0 +1,50 @@
+/* Home quick-schedule: sync types use Bootstrap row + form-check (see BootstrapCheckboxSelectMultiple attrs). */
+.nb-proxbox-quick-schedule .proxbox-quick-sync-type-widgets {
+  width: 100%;
+}
+
+.nb-proxbox-quick-schedule .proxbox-quick-sync-type-widgets .form-check {
+  margin-bottom: 0;
+  min-height: 0;
+}
+
+.nb-proxbox-quick-schedule .proxbox-quick-sync-type-widgets .form-check-label {
+  font-weight: normal;
+}
+
+/* Legacy ul-based CheckboxSelectMultiple if used elsewhere */
+.nb-proxbox-quick-schedule .proxbox-quick-sync-type-widgets ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.nb-proxbox-quick-schedule .proxbox-quick-sync-type-widgets li {
+  margin: 0;
+  list-style: none;
+}
+
+.nb-proxbox-quick-card .quick-schedule-collapse-toggle .mdi-chevron-down {
+  transition: transform 0.15s ease;
+  vertical-align: middle;
+}
+
+.nb-proxbox-quick-card .quick-schedule-collapse-toggle:not(.collapsed) .mdi-chevron-down {
+  transform: rotate(-180deg);
+}
+
+.nb-proxbox-quick-card button.card-header {
+  min-height: auto;
+  box-shadow: none;
+}
+
+.nb-proxbox-quick-card button.card-header:hover {
+  filter: brightness(0.98);
+}
+
+.nb-proxbox-quick-card button.card-header:focus-visible {
+  outline: 2px solid var(--bs-primary, #0d6efd);
+  outline-offset: -2px;
+  z-index: 1;
+  position: relative;
+}

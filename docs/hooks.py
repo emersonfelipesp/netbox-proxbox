@@ -70,7 +70,9 @@ def _build_command_examples() -> None:
 
     for section in sections:
         slug = _slug(section)
-        section_lines.append(f"- [{section}](./{slug}.md) — {len(sections[section])} captures")
+        section_lines.append(
+            f"- [{section}](./{slug}.md) — {len(sections[section])} captures"
+        )
         _write_example_section(section, sections[section], meta)
 
     section_lines.append("")
@@ -101,7 +103,9 @@ def _write_example_section(section: str, runs: list[dict], meta: dict) -> None:
             lines.extend([notes, ""])
         lines.extend(["```text", run.get("stdout") or "(empty)", "```", ""])
 
-    (_EXAMPLES_DIR / f"{_slug(section)}.md").write_text("\n".join(lines), encoding="utf-8")
+    (_EXAMPLES_DIR / f"{_slug(section)}.md").write_text(
+        "\n".join(lines), encoding="utf-8"
+    )
 
 
 def _build_command_catalog() -> None:

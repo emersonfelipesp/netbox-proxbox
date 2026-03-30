@@ -78,6 +78,7 @@ class NetBoxEndpointForm(NetBoxModelForm):
         )
 
     def __init__(self, *args, **kwargs):
+        """Pre-select token version when editing an endpoint with a linked token."""
         super().__init__(*args, **kwargs)
 
         token = getattr(self.instance, "token", None)
@@ -86,6 +87,7 @@ class NetBoxEndpointForm(NetBoxModelForm):
 
     @staticmethod
     def _token_version_from_token(token: Token) -> str:
+        """Map a NetBox ``Token`` row to v1 or v2 choice value."""
         return (
             NetBoxTokenVersionChoices.V2
             if getattr(token, "version", None) == 2
@@ -93,6 +95,7 @@ class NetBoxEndpointForm(NetBoxModelForm):
         )
 
     def clean(self):
+        """Validate host target and mutually consistent token / key-secret auth."""
         super().clean()
         cleaned_data = self.cleaned_data
         domain = (cleaned_data.get("domain") or "").strip()

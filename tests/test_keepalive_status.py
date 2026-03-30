@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 from types import SimpleNamespace
 
 import requests
@@ -7,15 +8,20 @@ import requests
 from tests.conftest import ResponseStub, load_plugin_module
 
 
+def _service_status_module():
+    return importlib.import_module("netbox_proxbox.services.service_status")
+
+
 def test_fastapi_status_falls_back_to_ip_after_ssl_error(
     monkeypatch,
     fastapi_endpoint,
 ):
-    module = load_plugin_module(
+    load_plugin_module(
         "netbox_proxbox.views.keepalive_status",
         monkeypatch=monkeypatch,
         fastapi_endpoint=fastapi_endpoint,
     )
+    ss = _service_status_module()
     calls = []
 
     def fake_get(url, verify=True, timeout=None):
@@ -24,9 +30,9 @@ def test_fastapi_status_falls_back_to_ip_after_ssl_error(
             raise requests.exceptions.SSLError("bad cert")
         return ResponseStub({"ok": True})
 
-    monkeypatch.setattr(module.requests, "get", fake_get)
+    monkeypatch.setattr(ss.requests, "get", fake_get)
 
-    status = module.ServiceStatus().fastapi_status(1)
+    status = ss.ServiceStatus().fastapi_status(1)
     assert status["connected"] is True
     assert status["connected_verify_ssl"] is False
     assert calls == [
@@ -40,13 +46,14 @@ def test_netbox_status_creates_endpoint_and_checks_status(
     fastapi_endpoint,
     netbox_endpoint,
 ):
-    module = load_plugin_module(
+    load_plugin_module(
         "netbox_proxbox.views.keepalive_status",
         monkeypatch=monkeypatch,
         fastapi_endpoint=fastapi_endpoint,
         netbox_endpoint=netbox_endpoint,
     )
-    monkeypatch.setattr(module.time, "sleep", lambda seconds: None)
+    ss = _service_status_module()
+    monkeypatch.setattr(ss.time, "sleep", lambda seconds: None)
 
     created_payloads = []
     endpoint_checks = {"count": 0}
@@ -68,10 +75,10 @@ def test_netbox_status_creates_endpoint_and_checks_status(
         created_payloads.append((url, json))
         return ResponseStub({"id": 1})
 
-    monkeypatch.setattr(module.requests, "get", fake_get)
-    monkeypatch.setattr(module.requests, "post", fake_post)
+    monkeypatch.setattr(ss.requests, "get", fake_get)
+    monkeypatch.setattr(ss.requests, "post", fake_post)
 
-    status = module.ServiceStatus().netbox_status(
+    status = ss.ServiceStatus().netbox_status(
         1,
         "https://proxbox.local:8800",
         auth_headers={"Authorization": "Bearer backend-token"},
@@ -100,15 +107,16 @@ def test_netbox_status_v2_without_secret_fails_backend_validation(
         token_secret="",
         verify_ssl=True,
     )
-    module = load_plugin_module(
+    load_plugin_module(
         "netbox_proxbox.views.keepalive_status",
         monkeypatch=monkeypatch,
         fastapi_endpoint=fastapi_endpoint,
         netbox_endpoint=netbox_endpoint,
     )
-    monkeypatch.setattr(module.time, "sleep", lambda seconds: None)
+    ss = _service_status_module()
+    monkeypatch.setattr(ss.time, "sleep", lambda seconds: None)
 
-    service_status = module.ServiceStatus()
+    service_status = ss.ServiceStatus()
     status = service_status.netbox_status(
         1,
         "https://proxbox.local:8800",
@@ -137,13 +145,14 @@ def test_netbox_status_builds_full_v2_token_from_key_and_secret(
         token_secret="v2-token-secret",
         verify_ssl=False,
     )
-    module = load_plugin_module(
+    load_plugin_module(
         "netbox_proxbox.views.keepalive_status",
         monkeypatch=monkeypatch,
         fastapi_endpoint=fastapi_endpoint,
         netbox_endpoint=netbox_endpoint,
     )
-    monkeypatch.setattr(module.time, "sleep", lambda seconds: None)
+    ss = _service_status_module()
+    monkeypatch.setattr(ss.time, "sleep", lambda seconds: None)
 
     created_payloads = []
 
@@ -158,10 +167,10 @@ def test_netbox_status_builds_full_v2_token_from_key_and_secret(
         created_payloads.append((url, json))
         return ResponseStub({"id": 1})
 
-    monkeypatch.setattr(module.requests, "get", fake_get)
-    monkeypatch.setattr(module.requests, "post", fake_post)
+    monkeypatch.setattr(ss.requests, "get", fake_get)
+    monkeypatch.setattr(ss.requests, "post", fake_post)
 
-    status = module.ServiceStatus().netbox_status(
+    status = ss.ServiceStatus().netbox_status(
         1,
         "https://proxbox.local:8800",
         auth_headers={"Authorization": "Bearer backend-token"},
@@ -178,21 +187,22 @@ def test_backend_auth_headers_accepts_prefixed_and_bare_tokens(
     monkeypatch,
     fastapi_endpoint,
 ):
-    module = load_plugin_module(
+    load_plugin_module(
         "netbox_proxbox.views.keepalive_status",
         monkeypatch=monkeypatch,
         fastapi_endpoint=fastapi_endpoint,
     )
+    ss = _service_status_module()
 
-    assert module.ServiceStatus._backend_auth_headers(None) == {}
-    assert module.ServiceStatus._backend_auth_headers(SimpleNamespace(token="")) == {}
-    assert module.ServiceStatus._backend_auth_headers(
+    assert ss.ServiceStatus.backend_auth_headers(None) == {}
+    assert ss.ServiceStatus.backend_auth_headers(SimpleNamespace(token="")) == {}
+    assert ss.ServiceStatus.backend_auth_headers(
         SimpleNamespace(token="Bearer abc")
     ) == {"Authorization": "Bearer abc"}
-    assert module.ServiceStatus._backend_auth_headers(
+    assert ss.ServiceStatus.backend_auth_headers(
         SimpleNamespace(token="Token abc")
     ) == {"Authorization": "Token abc"}
-    assert module.ServiceStatus._backend_auth_headers(SimpleNamespace(token="abc")) == {
+    assert ss.ServiceStatus.backend_auth_headers(SimpleNamespace(token="abc")) == {
         "Authorization": "Bearer abc"
     }
 
@@ -202,13 +212,14 @@ def test_netbox_status_exposes_error_detail_on_backend_failure(
     fastapi_endpoint,
     netbox_endpoint,
 ):
-    module = load_plugin_module(
+    load_plugin_module(
         "netbox_proxbox.views.keepalive_status",
         monkeypatch=monkeypatch,
         fastapi_endpoint=fastapi_endpoint,
         netbox_endpoint=netbox_endpoint,
     )
-    monkeypatch.setattr(module.time, "sleep", lambda seconds: None)
+    ss = _service_status_module()
+    monkeypatch.setattr(ss.time, "sleep", lambda seconds: None)
 
     class FailingResponse(ResponseStub):
         text = '{"detail": "token is required for NetBox API token v1", "python_exception": "ValidationError"}'
@@ -232,10 +243,10 @@ def test_netbox_status_exposes_error_detail_on_backend_failure(
             status_code=400,
         )
 
-    monkeypatch.setattr(module.requests, "get", fake_get)
-    monkeypatch.setattr(module.requests, "post", fake_post)
+    monkeypatch.setattr(ss.requests, "get", fake_get)
+    monkeypatch.setattr(ss.requests, "post", fake_post)
 
-    service_status = module.ServiceStatus()
+    service_status = ss.ServiceStatus()
     status = service_status.netbox_status(
         1,
         "https://proxbox.local:8800",
@@ -253,11 +264,12 @@ def test_extract_error_detail_identifies_html_404_from_wrong_backend_target(
     monkeypatch,
     fastapi_endpoint,
 ):
-    module = load_plugin_module(
+    load_plugin_module(
         "netbox_proxbox.views.keepalive_status",
         monkeypatch=monkeypatch,
         fastapi_endpoint=fastapi_endpoint,
     )
+    ss = _service_status_module()
 
     class Html404Response(ResponseStub):
         def __init__(self):
@@ -269,7 +281,7 @@ def test_extract_error_detail_identifies_html_404_from_wrong_backend_target(
     err = requests.exceptions.HTTPError("404")
     err.response = Html404Response()
 
-    detail, status = module.ServiceStatus._extract_error_detail(err)
+    detail, status = ss.ServiceStatus._extract_error_detail(err)
 
     assert status == 404
     assert "Backend returned HTML instead of ProxBox API JSON" in detail
@@ -281,15 +293,16 @@ def test_proxmox_status_uses_domain_query_when_available(
     fastapi_endpoint,
     proxmox_endpoint,
 ):
-    module = load_plugin_module(
+    load_plugin_module(
         "netbox_proxbox.views.keepalive_status",
         monkeypatch=monkeypatch,
         fastapi_endpoint=fastapi_endpoint,
         proxmox_endpoint=proxmox_endpoint,
     )
-    monkeypatch.setattr(module.time, "sleep", lambda seconds: None)
+    ss = _service_status_module()
+    monkeypatch.setattr(ss.time, "sleep", lambda seconds: None)
     monkeypatch.setattr(
-        module,
+        ss,
         "sync_proxmox_endpoint_to_backend",
         lambda *args, **kwargs: (True, None, None),
     )
@@ -299,9 +312,9 @@ def test_proxmox_status_uses_domain_query_when_available(
         requested.append((url, params, headers, verify))
         return ResponseStub([{"pve01": {"version": "8.3.0"}}])
 
-    monkeypatch.setattr(module.requests, "get", fake_get)
+    monkeypatch.setattr(ss.requests, "get", fake_get)
 
-    status = module.ServiceStatus().proxmox_status(
+    status = ss.ServiceStatus().proxmox_status(
         1,
         "https://proxbox.local:8800",
         auth_headers={"Authorization": "Bearer backend-token"},
@@ -330,14 +343,15 @@ def test_proxmox_status_uses_ip_query_when_domain_missing(
         port=8006,
         verify_ssl=False,
     )
-    module = load_plugin_module(
+    load_plugin_module(
         "netbox_proxbox.views.keepalive_status",
         monkeypatch=monkeypatch,
         fastapi_endpoint=fastapi_endpoint,
         proxmox_endpoint=proxmox_endpoint,
     )
+    ss = _service_status_module()
     monkeypatch.setattr(
-        module,
+        ss,
         "sync_proxmox_endpoint_to_backend",
         lambda *args, **kwargs: (True, None, None),
     )
@@ -347,9 +361,9 @@ def test_proxmox_status_uses_ip_query_when_domain_missing(
         requested.append((url, params, headers, verify))
         return ResponseStub([{"pve01": {"version": "8.3.0"}}])
 
-    monkeypatch.setattr(module.requests, "get", fake_get)
+    monkeypatch.setattr(ss.requests, "get", fake_get)
 
-    status = module.ServiceStatus().proxmox_status(
+    status = ss.ServiceStatus().proxmox_status(
         1,
         "https://proxbox.local:8800",
         auth_headers={"Authorization": "Bearer backend-token"},
@@ -371,15 +385,16 @@ def test_proxmox_status_normalizes_backend_connection_refused(
     fastapi_endpoint,
     proxmox_endpoint,
 ):
-    module = load_plugin_module(
+    load_plugin_module(
         "netbox_proxbox.views.keepalive_status",
         monkeypatch=monkeypatch,
         fastapi_endpoint=fastapi_endpoint,
         proxmox_endpoint=proxmox_endpoint,
     )
-    monkeypatch.setattr(module.time, "sleep", lambda seconds: None)
+    ss = _service_status_module()
+    monkeypatch.setattr(ss.time, "sleep", lambda seconds: None)
     monkeypatch.setattr(
-        module,
+        ss,
         "sync_proxmox_endpoint_to_backend",
         lambda *args, **kwargs: (True, None, None),
     )
@@ -392,9 +407,9 @@ def test_proxmox_status_normalizes_backend_connection_refused(
             '[Errno 111] Connection refused"))'
         )
 
-    monkeypatch.setattr(module.requests, "get", fake_get)
+    monkeypatch.setattr(ss.requests, "get", fake_get)
 
-    service_status = module.ServiceStatus()
+    service_status = ss.ServiceStatus()
     status = service_status.proxmox_status(
         1,
         "https://proxbox.local:8800",
@@ -420,15 +435,16 @@ def test_proxmox_status_returns_sync_error_before_backend_version_call(
     fastapi_endpoint,
     proxmox_endpoint,
 ):
-    module = load_plugin_module(
+    load_plugin_module(
         "netbox_proxbox.views.keepalive_status",
         monkeypatch=monkeypatch,
         fastapi_endpoint=fastapi_endpoint,
         proxmox_endpoint=proxmox_endpoint,
     )
+    ss = _service_status_module()
 
     monkeypatch.setattr(
-        module,
+        ss,
         "sync_proxmox_endpoint_to_backend",
         lambda *args, **kwargs: (False, "sync failed", 503),
     )
@@ -439,9 +455,9 @@ def test_proxmox_status_returns_sync_error_before_backend_version_call(
         calls.append(url)
         return ResponseStub([{"pve01": {"version": "8.3.0"}}])
 
-    monkeypatch.setattr(module.requests, "get", fake_get)
+    monkeypatch.setattr(ss.requests, "get", fake_get)
 
-    service_status = module.ServiceStatus()
+    service_status = ss.ServiceStatus()
     status = service_status.proxmox_status(
         1,
         "https://proxbox.local:8800",
@@ -453,3 +469,24 @@ def test_proxmox_status_returns_sync_error_before_backend_version_call(
     assert service_status.last_error_detail == "sync failed"
     assert service_status.last_error_http_status == 503
     assert calls == []
+
+
+def test_get_service_status_unknown_service_returns_400(monkeypatch, fastapi_endpoint):
+    module = load_plugin_module(
+        "netbox_proxbox.views.keepalive_status",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+    )
+    request = SimpleNamespace(
+        user=SimpleNamespace(
+            is_authenticated=True,
+            has_perms=lambda *a, **k: True,
+            has_perm=lambda *a, **k: True,
+        ),
+        method="GET",
+    )
+    resp = module.get_service_status_impl(request, "not-a-service", 1)
+    assert resp.status_code == 400
+    assert resp.payload["status"] == "error"
+    assert "not-a-service" in resp.payload["detail"]
+    assert "fastapi" in resp.payload["detail"]

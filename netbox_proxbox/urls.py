@@ -46,40 +46,43 @@ urlpatterns = [
         "endpoints/fastapi/",
         include(get_model_urls("netbox_proxbox", "fastapiendpoint", detail=False)),
     ),
-    path(
-        "sync-processes/<int:pk>/",
-        include(get_model_urls("netbox_proxbox", "syncprocess")),
-    ),
-    path(
-        "sync-processes/",
-        include(get_model_urls("netbox_proxbox", "syncprocess", detail=False)),
-    ),
     path("backups/<int:pk>/", include(get_model_urls("netbox_proxbox", "vmbackup"))),
     path(
         "backups/", include(get_model_urls("netbox_proxbox", "vmbackup", detail=False))
     ),
+    path(
+        "snapshots/<int:pk>/", include(get_model_urls("netbox_proxbox", "vmsnapshot"))
+    ),
+    path(
+        "snapshots/",
+        include(get_model_urls("netbox_proxbox", "vmsnapshot", detail=False)),
+    ),
     path("sync/devices/", views.sync_devices, name="sync_devices"),
-    path("sync/devices/stream/", views.sync_devices_stream, name="sync_devices_stream"),
     path(
         "sync/virtual-machines/",
         views.sync_virtual_machines,
         name="sync_virtual_machines",
     ),
     path(
-        "sync/virtual-machines/stream/",
-        views.sync_virtual_machines_stream,
-        name="sync_virtual_machines_stream",
-    ),
-    path(
         "sync/virtual-machines/backups/", views.sync_vm_backups, name="sync_vm_backups"
     ),
-    path("sync/full-update/", views.sync_full_update, name="sync_full_update"),
     path(
-        "sync/full-update/stream/",
-        views.sync_full_update_stream,
-        name="sync_full_update_stream",
+        "sync/virtual-machines/snapshots/",
+        views.sync_vm_snapshots,
+        name="sync_vm_snapshots",
     ),
+    path(
+        "sync/virtual-machines/virtual-disks/",
+        views.sync_virtual_disks,
+        name="sync_virtual_disks",
+    ),
+    path("sync/full-update/", views.sync_full_update, name="sync_full_update"),
     path("sync/schedule/", views.ScheduleSyncView.as_view(), name="schedule_sync"),
+    path(
+        "sync/schedule/quick/",
+        views.QuickScheduleSyncFromHomeView.as_view(),
+        name="schedule_sync_quick",
+    ),
     path(
         "keepalive-status/<str:service>/<int:pk>/",
         views.get_service_status,

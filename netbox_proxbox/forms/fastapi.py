@@ -70,6 +70,7 @@ class FastAPIEndpointForm(NetBoxModelForm):
         )
 
     def clean(self):
+        """Require domain or IP for HTTP/WebSocket base URLs."""
         super().clean()
         cleaned_data = self.cleaned_data
         domain = (cleaned_data.get("domain") or "").strip()

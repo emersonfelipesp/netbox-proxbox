@@ -1,0 +1,16 @@
+{% load i18n %}
+{% with block=job.data.proxbox_sync %}
+    {% if block %}
+        <div class="card">
+            <h5 class="card-header">{% trans "Proxbox sync" %}</h5>
+            <div class="card-body">
+                {% if block.runtime_seconds is not None %}
+                    <p class="mb-2"><strong>{% trans "Runtime" %}:</strong> {{ block.runtime_seconds }}s</p>
+                {% endif %}
+                {% if block.params.sync_types %}
+                    <p class="mb-0"><strong>{% trans "Sync types" %}:</strong> {{ block.params.sync_types|join:", " }}</p>
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
+{% endwith %}

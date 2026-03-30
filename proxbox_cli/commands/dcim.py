@@ -9,7 +9,9 @@ import typer
 from proxbox_cli.runtime import _get_client
 from proxbox_cli.support import print_response, run_with_spinner
 
-dcim_app = typer.Typer(no_args_is_help=True, help="DCIM (datacenter infrastructure) commands.")
+dcim_app = typer.Typer(
+    no_args_is_help=True, help="DCIM (datacenter infrastructure) commands."
+)
 
 JsonFlag = Annotated[bool, typer.Option("--json", help="Output raw JSON.")]
 YamlFlag = Annotated[bool, typer.Option("--yaml", help="Output YAML.")]
@@ -42,7 +44,9 @@ def interfaces_create(
     as_yaml: YamlFlag = False,
 ) -> None:
     """Create interfaces and IPs for a specific node device."""
-    resp = run_with_spinner(_get_client().get(f"/dcim/devices/{node}/interfaces/create"))
+    resp = run_with_spinner(
+        _get_client().get(f"/dcim/devices/{node}/interfaces/create")
+    )
     print_response(resp, as_json=as_json, as_yaml=as_yaml)
 
 

@@ -56,7 +56,9 @@ class ProxboxApiClient:
                 headers = dict(resp.headers)
                 return ApiResponse(status=resp.status, text=text, headers=headers)
 
-    async def get(self, path: str, *, query: dict[str, Any] | None = None) -> ApiResponse:
+    async def get(
+        self, path: str, *, query: dict[str, Any] | None = None
+    ) -> ApiResponse:
         return await self.request("GET", path, query=query)
 
     async def post(self, path: str, *, payload: Any | None = None) -> ApiResponse:

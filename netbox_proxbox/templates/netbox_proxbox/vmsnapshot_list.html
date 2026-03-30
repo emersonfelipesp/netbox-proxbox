@@ -1,0 +1,47 @@
+{% extends 'generic/object_list.html' %}
+{% load buttons %}
+{% load helpers %}
+{% load i18n %}
+{% load static %}
+
+{% block javascript %}
+<script type="module" src="{% static 'netbox_proxbox/js/home.js' %}"></script>
+{{ block.super }}
+{% endblock %}
+
+{% block content %}
+<div id="sync-progress-container" class="d-none sticky-top pt-2 mb-3" style="z-index: 1030;">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col">
+                <strong id="sync-progress-label">Sync in progress</strong>
+                <span id="sync-progress-state" class="text-muted small">Working...</span>
+            </div>
+        </div>
+        <div class="progress mt-2" role="progressbar" aria-label="Sync progress indicator" aria-valuemin="0" aria-valuemax="100">
+            <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 100%;"></div>
+        </div>
+    </div>
+</div>
+{{ block.super }}
+
+{% include "netbox_proxbox/home/log_messages.html" %}
+{% endblock %}
+
+{% block controls %}
+  <form class="btn-group" method="post" action="{% url 'plugins:netbox_proxbox:sync_vm_snapshots' %}">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-primary" data-sync-url="{% url 'plugins:netbox_proxbox:sync_vm_snapshots' %}" data-sync-kind="snapshots">
+      <i class="mdi mdi-sync" aria-hidden="true"></i> {% trans "Sync Snapshots" %}
+    </button>
+  </form>
+{% endblock %}
+{% block bulk_buttons %}
+  <div class="btn-group" role="group">
+    {% if 'bulk_delete' in actions %}
+      <button type="submit" name="_delete" {% formaction %}="{% url 'plugins:netbox_proxbox:vmsnapshot_bulk_delete' %}" class="btn btn-danger">
+        <i class="mdi mdi-trash-can-outline" aria-hidden="true"></i> {% trans "Delete Selected" %}
+      </button>
+    {% endif %}
+  </div>
+{% endblock %}
