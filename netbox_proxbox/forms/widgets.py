@@ -8,7 +8,10 @@ __all__ = ("BootstrapCheckboxSelectMultiple",)
 
 
 class BootstrapCheckboxSelectMultiple(forms.CheckboxSelectMultiple):
-    """Checkbox list with ``form-check`` / ``form-check-input`` / ``form-check-label`` per option."""
+    """
+    Checkbox list using NetBox ``form-check`` / ``form-check-input`` / ``form-check-label``
+    pattern (same as core templates such as ``object_list.html``).
+    """
 
     option_template_name = "netbox_proxbox/widgets/bootstrap_checkbox_option.html"
 
