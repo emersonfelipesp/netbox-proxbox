@@ -10,7 +10,10 @@
         };
     </script>
     <script type="module" src="{% static 'netbox_proxbox/js/home.js' %}"></script>
-    {% if quick_schedule_form %}{{ quick_schedule_form.media }}{% endif %}
+    {% if quick_schedule_form %}
+        <link rel="stylesheet" href="{% static 'netbox_proxbox/css/quick_schedule_home.css' %}">
+        {{ quick_schedule_form.media }}
+    {% endif %}
 {% endblock %}
 
 {% block content %}

@@ -1,49 +1,70 @@
 {% load i18n %}
 {% if show_quick_full_sync_banner %}
-<div class="row mb-3 noprint">
+<div class="row mb-2 noprint">
     <div class="col-12">
-        <div class="alert alert-info" role="status">
-            <strong>{% trans "No recurring full sync scheduled" %}</strong>
-            <p class="mb-2 mt-2">
-                {% blocktrans trimmed %}
-                We did not find an active recurring Proxbox Sync job (among jobs you can view) with sync type
-                <strong>All</strong>. You can create one below — defaults are daily at 3:00 local time — or use the full
-                schedule page.
-                {% endblocktrans %}
-            </p>
-            <p class="mb-0 small">
-                <a href="{% url 'core:job_list' %}" class="alert-link">{% trans "View jobs" %}</a>
-                &middot;
-                <a href="{% url 'plugins:netbox_proxbox:schedule_sync' %}" class="alert-link">{% trans "Open schedule form" %}</a>
-            </p>
+        <div class="alert alert-info py-2 px-3 mb-2" role="status">
+            <div class="d-flex flex-column flex-md-row flex-md-wrap align-items-start gap-2">
+                <strong class="text-nowrap">{% trans "No recurring full sync scheduled" %}</strong>
+                <span class="small flex-grow-1">
+                    {% blocktrans trimmed %}
+                    No active recurring Proxbox Sync job (among jobs you can view) uses sync type <strong>All</strong>.
+                    {% endblocktrans %}
+                </span>
+                <span class="small text-nowrap">
+                    <a href="{% url 'core:job_list' %}" class="alert-link">{% trans "View jobs" %}</a>
+                    <span class="text-muted">&middot;</span>
+                    <a href="{% url 'plugins:netbox_proxbox:schedule_sync' %}" class="alert-link">{% trans "Open schedule form" %}</a>
+                </span>
+            </div>
         </div>
 
         {% if can_quick_schedule_sync and quick_schedule_form %}
-        <div class="card border-primary mb-0">
-            <div class="card-header py-2">
-                <strong><i class="mdi mdi-clock-plus-outline"></i> {% trans "Quick schedule: Proxbox Sync" %}</strong>
-            </div>
-            <div class="card-body">
-                <p class="text-muted small mb-3">
-                    {% blocktrans trimmed %}
-                    Defaults: sync type All, repeat every 1 day, first run at next local 03:00. Adjust before submitting.
-                    {% endblocktrans %}
-                </p>
-                <form method="post" action="{% url 'plugins:netbox_proxbox:schedule_sync_quick' %}">
-                    {% csrf_token %}
-                    {% include "netbox_proxbox/inc/schedule_sync_form_fields.html" with form=quick_schedule_form %}
-                    <button type="submit" class="btn btn-primary">
-                        <i class="mdi mdi-clock-plus-outline"></i>
-                        {% trans "Schedule" %}
+        <div class="card border-primary mb-0 nb-proxbox-quick-card shadow-sm">
+            <div class="card-header py-2 px-3 bg-body-secondary">
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                    <button
+                        class="btn btn-link btn-sm text-start text-decoration-none p-0 fw-semibold quick-schedule-collapse-toggle {% if not quick_schedule_form.is_bound %}collapsed{% endif %}"
+                        type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#proxboxQuickScheduleBody"
+                        aria-expanded="{% if quick_schedule_form.is_bound %}true{% else %}false{% endif %}"
+                        aria-controls="proxboxQuickScheduleBody"
+                    >
+                        <i class="mdi mdi-chevron-down" aria-hidden="true"></i>
+                        {% trans "Quick schedule: Proxbox Sync" %}
                     </button>
-                </form>
+                    <span class="small text-muted text-md-end">
+                        {% trans "Defaults:" %}
+                        {% trans "All" %} · {% trans "1 day" %} · {% trans "03:00 local" %}
+                    </span>
+                </div>
+            </div>
+            <div
+                id="proxboxQuickScheduleBody"
+                class="collapse {% if quick_schedule_form.is_bound %}show{% endif %}"
+            >
+                <div class="card-body py-2 px-3">
+                    <form method="post" action="{% url 'plugins:netbox_proxbox:schedule_sync_quick' %}" class="mb-0">
+                        {% csrf_token %}
+                        {% include "netbox_proxbox/inc/schedule_sync_form_fields_quick.html" with form=quick_schedule_form %}
+                        <div class="d-flex flex-wrap align-items-center gap-2 mt-2 pt-2 border-top">
+                            <button type="submit" class="btn btn-primary btn-sm">
+                                <i class="mdi mdi-clock-plus-outline" aria-hidden="true"></i>
+                                {% trans "Schedule" %}
+                            </button>
+                            <span class="small text-muted">{% trans "Change options above, then submit." %}</span>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
         {% elif not can_quick_schedule_sync %}
-        <div class="alert alert-secondary mb-0" role="note">
-            {% blocktrans trimmed %}
-            You do not have permission to queue sync jobs from here. An administrator can schedule a recurring job or grant you permission to add sync operations.
-            {% endblocktrans %}
+        <div class="alert alert-secondary py-2 px-3 mb-0" role="note">
+            <span class="small">
+                {% blocktrans trimmed %}
+                You do not have permission to queue sync jobs from here. An administrator can schedule a recurring job or grant you permission to add sync operations.
+                {% endblocktrans %}
+            </span>
         </div>
         {% endif %}
     </div>
