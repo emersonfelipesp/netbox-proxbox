@@ -105,6 +105,28 @@ def test_websocket_and_polling_modules_expose_sync_completion_hooks():
     assert "onError" in polling_contents
 
 
+def _ensure_endpoint_template_has_status(template_path: str, service_slug: str) -> None:
+    contents = _read(template_path)
+    assert "data-service-status-url" in contents
+    assert "endpoint-status.js" in contents
+    assert service_slug in contents
+
+
+def test_endpoint_templates_expose_live_badges():
+    _ensure_endpoint_template_has_status(
+        "netbox_proxbox/templates/netbox_proxbox/proxmoxendpoint.html",
+        "proxmox",
+    )
+    _ensure_endpoint_template_has_status(
+        "netbox_proxbox/templates/netbox_proxbox/netboxendpoint.html",
+        "netbox",
+    )
+    _ensure_endpoint_template_has_status(
+        "netbox_proxbox/templates/netbox_proxbox/fastapiendpoint.html",
+        "fastapi",
+    )
+
+
 def test_proxmox_list_template_exposes_import_export_controls_and_warning_modal():
     contents = _read(
         "netbox_proxbox/templates/netbox_proxbox/proxmoxendpoint_list.html"
