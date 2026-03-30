@@ -1,10 +1,35 @@
 """Background job for triggering ProxBox sync operations via the FastAPI backend."""
 
+from __future__ import annotations
+
+from typing import Any
+
 from netbox.jobs import JobRunner
 
 from netbox_proxbox.choices import SyncTypeChoices
 
-__all__ = ("ProxboxSyncJob",)
+__all__ = ("ProxboxSyncJob", "proxbox_sync_params_from_job")
+
+
+def proxbox_sync_params_from_job(job: Any) -> dict[str, Any]:
+    """Rebuild ProxboxSyncJob.enqueue kwargs from job.data (with safe fallbacks)."""
+    data = job.data if isinstance(getattr(job, "data", None), dict) else {}
+    block = data.get("proxbox_sync")
+    if not isinstance(block, dict):
+        block = {}
+    params = block.get("params")
+    if not isinstance(params, dict):
+        return {
+            "sync_type": SyncTypeChoices.ALL,
+            "proxmox_endpoint_ids": [],
+            "netbox_endpoint_ids": [],
+        }
+    return {
+        "sync_type": params.get("sync_type") or SyncTypeChoices.ALL,
+        "proxmox_endpoint_ids": list(params.get("proxmox_endpoint_ids") or []),
+        "netbox_endpoint_ids": list(params.get("netbox_endpoint_ids") or []),
+    }
+
 
 # Maps sync_type choices to the FastAPI backend path
 _SYNC_TYPE_PATH = {
@@ -29,6 +54,14 @@ class ProxboxSyncJob(JobRunner):
     ):
         # Import here to avoid circular imports at module load time
         from netbox_proxbox.services import sync_full_update_resource, sync_resource
+
+        params = {
+            "sync_type": sync_type,
+            "proxmox_endpoint_ids": list(proxmox_endpoint_ids or []),
+            "netbox_endpoint_ids": list(netbox_endpoint_ids or []),
+        }
+        self.job.data = {"proxbox_sync": {"params": params}}
+        self.job.save(update_fields=["data"])
 
         self.logger.info("Starting Proxbox sync: %s", sync_type)
         if proxmox_endpoint_ids:
@@ -60,5 +93,5 @@ class ProxboxSyncJob(JobRunner):
             raise RuntimeError(detail)
 
         self.logger.info("Sync completed successfully (HTTP %s)", status)
-        self.job.data = payload
-        self.job.save()
+        self.job.data = {"proxbox_sync": {"params": params, "response": payload}}
+        self.job.save(update_fields=["data"])

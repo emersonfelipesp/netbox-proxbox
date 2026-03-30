@@ -1,0 +1,8 @@
+{% load i18n %}
+<form method="post" action="{% url 'core:job_proxbox_run' pk=job.pk %}" class="d-inline">
+  {% csrf_token %}
+  <button type="submit" class="btn btn-sm btn-outline-primary">
+    <i class="mdi mdi-play" aria-hidden="true"></i>
+    {% trans "Run now" %}
+  </button>
+</form>
