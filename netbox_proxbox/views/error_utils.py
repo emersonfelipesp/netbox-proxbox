@@ -2,12 +2,55 @@
 
 from __future__ import annotations
 
+import json
+import logging
+from typing import Any
+
 import requests
+
+logger = logging.getLogger(__name__)
+
+try:
+    _JSON_DECODE_ERROR: type[BaseException] = requests.exceptions.JSONDecodeError
+except AttributeError:
+    _JSON_DECODE_ERROR = json.JSONDecodeError
+
+
+def parse_requests_response_json(
+    response: requests.Response,
+    *,
+    log_label: str = "backend",
+) -> tuple[Any | None, str | None]:
+    """Parse JSON from an HTTP response after ``raise_for_status``.
+
+    Returns ``(data, None)`` on success, or ``(None, user_facing_detail)`` when the body
+    is not valid JSON (avoids uncaught decode errors in Django views).
+    """
+    try:
+        return response.json(), None
+    except _JSON_DECODE_ERROR as exc:
+        url = getattr(response, "url", "") or ""
+        snippet = (getattr(response, "text", "") or "")[:200].replace("\n", " ")
+        logger.warning(
+            "Non-JSON HTTP %s body from %s (%s): %s",
+            getattr(response, "status_code", "?"),
+            log_label,
+            url,
+            exc,
+        )
+        detail = (
+            "ProxBox backend returned a response that is not valid JSON. "
+            "Check that the FastAPI URL points to proxbox-api, not another service."
+        )
+        if snippet:
+            detail += f" Body starts with: {snippet!r}"
+        return None, detail
 
 
 def extract_backend_error_detail(
     exc: requests.exceptions.RequestException,
 ) -> tuple[str, int | None]:
+    """Normalize a requests error into a user-facing message and HTTP status if known."""
     response = getattr(exc, "response", None)
     if response is None:
         return str(exc), None
@@ -75,6 +118,7 @@ def extract_proxmox_backend_error_detail(
     proxmox_port: int | None,
     backend_url: str,
 ) -> tuple[str, int | None]:
+    """Like extract_backend_error_detail, but adds Proxmox target context when there is no response."""
     response = getattr(exc, "response", None)
     if response is not None:
         return extract_backend_error_detail(exc)

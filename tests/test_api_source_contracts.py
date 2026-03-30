@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-SERIALIZERS_PATH = REPO_ROOT / "netbox_proxbox" / "api" / "serializers.py"
+SERIALIZERS_PACKAGE = REPO_ROOT / "netbox_proxbox" / "api" / "serializers"
 VIEWS_PATH = REPO_ROOT / "netbox_proxbox" / "api" / "views.py"
 FILTERS_PATH = REPO_ROOT / "netbox_proxbox" / "api" / "filters.py"
 URLS_PATH = REPO_ROOT / "netbox_proxbox" / "api" / "urls.py"
@@ -16,6 +16,24 @@ PROXMOX_ENDPOINT_VIEWS_PATH = (
 
 def _parse_module(path: Path) -> ast.Module:
     return ast.parse(path.read_text(), filename=str(path))
+
+
+def _serializer_module_paths() -> list[Path]:
+    return sorted(
+        p for p in SERIALIZERS_PACKAGE.glob("*.py") if p.name != "__init__.py"
+    )
+
+
+def _parse_serializers_package() -> ast.Module:
+    """Merge serializer submodules into one AST for class lookups."""
+    body: list[ast.stmt] = []
+    for path in _serializer_module_paths():
+        body.extend(_parse_module(path).body)
+    return ast.Module(body=body, type_ignores=[])
+
+
+def _serializers_package_source_text() -> str:
+    return "\n".join(p.read_text() for p in _serializer_module_paths())
 
 
 def _classdef(module: ast.Module, name: str) -> ast.ClassDef:
@@ -92,7 +110,7 @@ def _meta_brief_fields(class_node: ast.ClassDef) -> tuple[str, ...] | None:
 
 
 def test_endpoint_serializers_expose_supported_model_fields():
-    module = _parse_module(SERIALIZERS_PATH)
+    module = _parse_serializers_package()
 
     expected = {
         "ProxmoxEndpointSerializer": {
@@ -130,13 +148,23 @@ def test_endpoint_serializers_expose_supported_model_fields():
             "websocket_port",
             "server_side_websocket",
         },
-        "SyncProcessSerializer": {
+        "VMSnapshotSerializer": {
+            "id",
+            "url",
+            "display",
+            "virtual_machine",
             "name",
-            "sync_type",
+            "description",
+            "vmid",
+            "node",
+            "snaptime",
+            "parent",
+            "subtype",
             "status",
-            "started_at",
-            "completed_at",
-            "runtime",
+            "tags",
+            "custom_fields",
+            "created",
+            "last_updated",
         },
         "VMBackupSerializer": {
             "virtual_machine",
@@ -163,7 +191,7 @@ def test_endpoint_serializers_expose_supported_model_fields():
 
 
 def test_endpoint_serializers_do_not_override_create_semantics():
-    module = _parse_module(SERIALIZERS_PATH)
+    module = _parse_serializers_package()
 
     for serializer_name in ("NetBoxEndpointSerializer", "FastAPIEndpointSerializer"):
         class_node = _classdef(module, serializer_name)
@@ -171,22 +199,22 @@ def test_endpoint_serializers_do_not_override_create_semantics():
 
 
 def test_netbox_endpoint_serializer_rejects_selected_v2_token_objects():
-    contents = SERIALIZERS_PATH.read_text()
+    contents = _serializers_package_source_text()
     assert "Selected NetBox v2 token cannot be used by this endpoint" in contents
 
 
 def test_netbox_endpoint_serializer_rejects_unusable_v1_selected_token():
-    contents = SERIALIZERS_PATH.read_text()
+    contents = _serializers_package_source_text()
     assert "Selected NetBox v1 token does not expose a usable plaintext" in contents
 
 
 def test_endpoint_serializers_require_domain_or_ip_address():
-    contents = SERIALIZERS_PATH.read_text()
+    contents = _serializers_package_source_text()
     assert contents.count("Provide either a domain or an IP address.") >= 3
 
 
 def test_keepalive_builds_v2_token_and_compacts_payload():
-    keepalive_path = REPO_ROOT / "netbox_proxbox" / "views" / "keepalive_status.py"
+    keepalive_path = REPO_ROOT / "netbox_proxbox" / "services" / "service_status.py"
     contents = keepalive_path.read_text()
     assert "_effective_netbox_backend_credentials" in contents
     assert "_compact_payload" in contents
@@ -194,10 +222,11 @@ def test_keepalive_builds_v2_token_and_compacts_payload():
 
 
 def test_writable_nested_related_fields_are_declared():
-    module = _parse_module(SERIALIZERS_PATH)
+    module = _parse_serializers_package()
 
     expected_assignments = {
         "VMBackupSerializer": {"virtual_machine"},
+        "VMSnapshotSerializer": {"virtual_machine"},
         "ProxmoxEndpointSerializer": {"ip_address"},
         "NetBoxEndpointSerializer": {"ip_address", "token"},
         "FastAPIEndpointSerializer": {"ip_address"},
@@ -230,9 +259,10 @@ def _call_kwargs_for_assignment(
 
 
 def test_nested_serializers_do_not_pass_nested_keyword_argument():
-    module = _parse_module(SERIALIZERS_PATH)
+    module = _parse_serializers_package()
     assignments = [
         ("VMBackupSerializer", "virtual_machine"),
+        ("VMSnapshotSerializer", "virtual_machine"),
         ("ProxmoxEndpointSerializer", "ip_address"),
         ("NetBoxEndpointSerializer", "ip_address"),
         ("NetBoxEndpointSerializer", "token"),
@@ -248,7 +278,7 @@ def test_nested_serializers_do_not_pass_nested_keyword_argument():
 
 
 def test_proxmox_endpoint_serializer_marks_secrets_write_only():
-    module = _parse_module(SERIALIZERS_PATH)
+    module = _parse_serializers_package()
     class_node = _classdef(module, "ProxmoxEndpointSerializer")
     extra_kwargs = _meta_extra_kwargs(class_node)
     assert extra_kwargs["password"]["write_only"] is True
@@ -256,7 +286,7 @@ def test_proxmox_endpoint_serializer_marks_secrets_write_only():
 
 
 def test_netbox_endpoint_serializer_marks_token_secret_write_only():
-    module = _parse_module(SERIALIZERS_PATH)
+    module = _parse_serializers_package()
     class_node = _classdef(module, "NetBoxEndpointSerializer")
     extra_kwargs = _meta_extra_kwargs(class_node)
     assert extra_kwargs["token_secret"]["write_only"] is True
@@ -267,7 +297,7 @@ def test_all_viewsets_use_netbox_model_viewset_and_plugin_filtersets():
 
     expected_viewsets = {
         "VMBackupViewSet": "VMBackupFilterSet",
-        "SyncProcessViewSet": "SyncProcessFilterSet",
+        "VMSnapshotViewSet": "VMSnapshotFilterSet",
         "ProxmoxEndpointViewSet": "ProxmoxEndpointFilterSet",
         "NetBoxEndpointViewSet": "NetBoxEndpointFilterSet",
         "FastAPIEndpointViewSet": "FastAPIEndpointFilterSet",
@@ -314,13 +344,13 @@ def test_api_filters_module_reexports_all_plugin_filtersets():
         "FastAPIEndpointFilterSet",
         "NetBoxEndpointFilterSet",
         "ProxmoxEndpointFilterSet",
-        "SyncProcessFilterSet",
         "VMBackupFilterSet",
+        "VMSnapshotFilterSet",
     }
 
 
 def test_nested_writable_serializers_define_brief_fields():
-    module = _parse_module(SERIALIZERS_PATH)
+    module = _parse_serializers_package()
     class_node = _classdef(module, "NestedTokenSerializer")
     brief_fields = _meta_brief_fields(class_node)
     assert brief_fields is not None
@@ -352,7 +382,7 @@ def test_plugin_api_routes_register_all_plugin_objects():
             root_registers.append(route)
 
     assert set(endpoint_registers) == {"proxmox", "netbox", "fastapi"}
-    assert set(root_registers) == {"sync-processes", "backups"}
+    assert set(root_registers) == {"backups", "snapshots"}
 
 
 def test_proxmox_endpoint_views_register_bulk_import_and_csv_export():

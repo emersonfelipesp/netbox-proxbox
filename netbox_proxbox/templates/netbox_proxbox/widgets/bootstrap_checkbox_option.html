@@ -1,0 +1,13 @@
+{# CheckboxSelectMultiple option: NetBox attrs.html omits class; mirror netbox checkbox.html. #}
+<div class="form-check">
+    <input
+        type="checkbox"
+        name="{{ widget.name }}"
+        value="{{ widget.value|stringformat:'s' }}"
+        {% include "django/forms/widgets/attrs.html" %}
+        class="form-check-input{% if 'class' in widget.attrs %} {{ widget.attrs.class }}{% endif %}"
+    >
+    {% if widget.attrs.id %}
+        <label class="form-check-label" for="{{ widget.attrs.id }}">{{ widget.label }}</label>
+    {% endif %}
+</div>

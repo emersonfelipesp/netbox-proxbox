@@ -1,333 +1,112 @@
-"""Trigger sync operations on the external ProxBox backend over HTTP."""
+"""Enqueue Proxbox sync operations as NetBox background jobs (RQ)."""
 
 from __future__ import annotations
 
-import logging
-import json
-from collections.abc import Generator
+from typing import Any, ClassVar
 
-import requests
 from django.contrib import messages
-from django.http import JsonResponse
-from django.http import StreamingHttpResponse
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect
-from django.views.decorators.http import require_http_methods
+from django.utils.html import format_html
+from django.utils.text import format_lazy
+from django.utils.translation import gettext_lazy as _
+from django.views import View
 
-from netbox_proxbox.models import FastAPIEndpoint
-from netbox_proxbox.utils import get_backend_auth_headers, get_fastapi_url
-from netbox_proxbox.views.error_utils import extract_backend_error_detail
-
-
-logger = logging.getLogger(__name__)
-
-
-def _sse_error_frames(message: str, *, final_message: str = "Stream request failed."):
-    yield "event: error\n"
-    yield f"data: {json.dumps({'step': 'stream', 'status': 'failed', 'error': message})}\n\n"
-    yield "event: complete\n"
-    yield f"data: {json.dumps({'ok': False, 'message': final_message})}\n\n"
+from netbox_proxbox.choices import SyncTypeChoices
+from netbox_proxbox.jobs import PROXBOX_SYNC_QUEUE_NAME, ProxboxSyncJob
+from netbox_proxbox.views.proxbox_access import permission_enqueue_proxbox_sync
+from utilities.views import (
+    ContentTypePermissionRequiredMixin,
+    TokenConditionalLoginRequiredMixin,
+)
 
 
-def _wants_json_response(request) -> bool:
-    if request is None:
-        return True
-
-    requested_with = ""
-    headers = getattr(request, "headers", {}) or {}
-    if isinstance(headers, dict):
-        requested_with = headers.get("X-Requested-With", "")
-        accept = headers.get("Accept", "")
-    else:
-        requested_with = getattr(headers, "get", lambda *args, **kwargs: "")(
-            "X-Requested-With", ""
-        )
-        accept = getattr(headers, "get", lambda *args, **kwargs: "")("Accept", "")
-
-    return requested_with == "XMLHttpRequest" or "application/json" in accept
-
-
-def _get_fastapi_request_context():
-    fastapi_service_obj = FastAPIEndpoint.objects.first()
-    if fastapi_service_obj is None:
-        return None
-
-    fastapi_detail = get_fastapi_url(fastapi_service_obj) or {}
-    if not isinstance(fastapi_detail, dict):
-        fastapi_detail = {}
-    return {
-        "detail": fastapi_detail,
-        "http_url": fastapi_detail.get("http_url"),
-        "ip_address_url": fastapi_detail.get("ip_address_url"),
-        "verify_ssl": fastapi_detail.get("verify_ssl", True),
-        "headers": get_backend_auth_headers(fastapi_service_obj),
-    }
-
-
-def _request_backend_resource(
-    context: dict,
-    path: str,
-    query_params: dict | None = None,
-) -> tuple[dict, int]:
-    fastapi_path = f"{context['http_url']}/{path}"
-    requested_urls = []
-    backend_headers = context.get("headers") or {}
-    last_detail = None
-
-    request_candidates = [(fastapi_path, context["verify_ssl"])]
-    fallback_url = context.get("ip_address_url")
-    if fallback_url:
-        fallback_path = f"{fallback_url}/{path}"
-        if fallback_path != fastapi_path:
-            request_candidates.append((fallback_path, context["verify_ssl"]))
-
-    for url, verify in request_candidates:
-        try:
-            requested_urls.append(url)
-            response = requests.get(
-                url,
-                params=query_params,
-                headers=backend_headers,
-                verify=verify,
-                timeout=5,
-            )
-            response.raise_for_status()
-            payload = response.json() if hasattr(response, "json") else {}
-            return {
-                "queued": True,
-                "path": path,
-                "requested_urls": requested_urls,
-                "response": payload,
-            }, 202
-        except requests.exceptions.RequestException as exc:
-            last_detail, _ = extract_backend_error_detail(exc)
-            logger.error("Sync request failed for %s via %s: %s", path, url, exc)
-            if getattr(exc, "response", None) is not None:
-                break
-        except Exception as exc:  # pragma: no cover
-            last_detail = str(exc)
-            logger.error("Unexpected sync error for %s via %s: %s", path, url, exc)
-
-    return {
-        "queued": False,
-        "path": path,
-        "requested_urls": requested_urls,
-        "detail": last_detail or "Unable to reach the ProxBox backend.",
-    }, 503
-
-
-def _iter_backend_sse_lines(
-    context: dict,
-    path: str,
-    query_params: dict | None = None,
-) -> Generator[str, None, None]:
-    try:
-        backend_headers = context.get("headers") or {}
-        http_url = context.get("http_url")
-        if not http_url:
-            yield from _sse_error_frames("No FastAPI URL found.")
-            return
-
-        verify_ssl = bool(context.get("verify_ssl", True))
-        request_candidates = [
-            (f"{http_url}/{path}", verify_ssl),
-        ]
-        fallback_url = context.get("ip_address_url")
-        if fallback_url:
-            fallback_path = f"{fallback_url}/{path}"
-            if fallback_path != request_candidates[0][0]:
-                request_candidates.append((fallback_path, verify_ssl))
-
-        last_error = None
-        for url, verify in request_candidates:
-            try:
-                with requests.get(
-                    url,
-                    params=query_params,
-                    headers=backend_headers,
-                    verify=verify,
-                    timeout=(5, 3600),
-                    stream=True,
-                ) as response:
-                    response.raise_for_status()
-                    for raw_line in response.iter_lines(decode_unicode=True):
-                        if raw_line is None:
-                            continue
-                        line = str(raw_line)
-                        yield f"{line}\n"
-                    return
-            except requests.exceptions.RequestException as exc:
-                detail, _ = extract_backend_error_detail(exc)
-                last_error = detail
-                logger.exception("Sync stream request failed for %s via %s", path, url)
-                if getattr(exc, "response", None) is not None:
-                    break
-            except Exception as exc:  # pragma: no cover
-                last_error = str(exc)
-                logger.exception(
-                    "Unexpected sync stream error for %s via %s", path, url
-                )
-
-        payload = last_error or "Unable to reach the ProxBox backend stream."
-        yield from _sse_error_frames(payload)
-    except Exception as exc:  # pragma: no cover
-        logger.exception("Stream proxy crashed while handling %s", path)
-        yield from _sse_error_frames(str(exc), final_message="Stream proxy failed.")
-
-
-def sync_resource(path: str, query_params: dict | None = None) -> tuple[dict, int]:
-    context = _get_fastapi_request_context()
-    if context is None or not context["http_url"]:
-        return {"queued": False, "detail": "No FastAPI URL found."}, 404
-
-    return _request_backend_resource(context, path, query_params=query_params)
-
-
-def sync_full_update_resource() -> tuple[dict, int]:
-    context = _get_fastapi_request_context()
-    if context is None or not context["http_url"]:
-        return {"queued": False, "detail": "No FastAPI URL found."}, 404
-
-    requested_urls = []
-    steps = [
-        ("devices", "dcim/devices/create"),
-        ("virtual-machines", "virtualization/virtual-machines/create"),
-    ]
-    responses: dict[str, dict] = {}
-
-    for stage, path in steps:
-        payload, status = _request_backend_resource(context, path)
-        requested_urls.extend(payload.get("requested_urls", []))
-        if status >= 400:
-            return {
-                "queued": False,
-                "path": "full-update",
-                "stage": stage,
-                "requested_urls": requested_urls,
-                "detail": payload.get("detail", "Unable to reach the ProxBox backend."),
-            }, status
-        responses[stage] = payload.get("response", {})
-
-    return {
-        "queued": True,
-        "path": "full-update",
-        "requested_urls": requested_urls,
-        "detail": "Full update sync completed successfully.",
-        "response": responses,
-    }, 202
-
-
-def _sync_response(
-    request, *, path: str, action_label: str, query_params: dict | None = None
+class _ProxboxSyncEnqueueView(
+    TokenConditionalLoginRequiredMixin,
+    ContentTypePermissionRequiredMixin,
+    View,
 ):
-    if path == "full-update":
-        payload, status = sync_full_update_resource()
-    else:
-        payload, status = sync_resource(path, query_params=query_params)
-    if _wants_json_response(request):
-        return JsonResponse(payload, status=status)
+    """POST: enqueue ``ProxboxSyncJob`` for a fixed sync type set."""
 
-    detail = payload.get("detail")
-    if status < 400:
-        messages.success(request, detail or f"{action_label} sync queued successfully.")
-    else:
-        messages.error(request, detail or f"{action_label} sync failed.")
-    return redirect("plugins:netbox_proxbox:home")
+    http_method_names = ["post", "head", "options"]
+    sync_types: ClassVar[list[str]] = [SyncTypeChoices.ALL]
+    action_label: ClassVar = ""
 
+    def get_required_permission(self) -> str:
+        return permission_enqueue_proxbox_sync()
 
-def _sync_stream_response(
-    request,
-    *,
-    path: str,
-    query_params: dict | None = None,
-):
-    try:
-        context = _get_fastapi_request_context()
-        if context is None:
-            stream_iter = _sse_error_frames("No FastAPI endpoint configured.")
-        else:
-            stream_path = f"{path.rstrip('/')}/stream"
-            stream_iter = _iter_backend_sse_lines(
-                context,
-                stream_path,
-                query_params=query_params,
-            )
+    def _job_name(self) -> str:
+        if self.action_label:
+            return str(format_lazy("{}: {}", _("Proxbox Sync"), self.action_label))
+        return str(_("Proxbox Sync"))
 
-        response = StreamingHttpResponse(
-            stream_iter,
-            content_type="text/event-stream",
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        job = ProxboxSyncJob.enqueue(
+            instance=None,
+            user=request.user,
+            queue_name=PROXBOX_SYNC_QUEUE_NAME,
+            name=self._job_name(),
+            sync_types=list(self.sync_types),
         )
-        response["Cache-Control"] = "no-cache"
-        response["X-Accel-Buffering"] = "no"
-        return response
-    except Exception as exc:  # pragma: no cover
-        logger.exception("Failed to build stream response for %s", path)
-        response = StreamingHttpResponse(
-            _sse_error_frames(
-                str(exc), final_message="Stream response bootstrap failed."
+        messages.success(
+            request,
+            format_html(
+                '{} <a href="{}">{}</a>',
+                _(
+                    "A Proxbox sync job has been queued. Open the job to follow progress."
+                ),
+                job.get_absolute_url(),
+                _("View job"),
             ),
-            content_type="text/event-stream",
         )
-        response["Cache-Control"] = "no-cache"
-        response["X-Accel-Buffering"] = "no"
-        return response
+        return redirect("plugins:netbox_proxbox:home")
 
 
-@require_http_methods(["GET", "POST"])
-def sync_devices(request):
-    return _sync_response(
-        request,
-        path="dcim/devices/create",
-        action_label="Devices",
-    )
+class SyncDevicesView(_ProxboxSyncEnqueueView):
+    """POST: queue device sync."""
+
+    sync_types = [SyncTypeChoices.DEVICES]
+    action_label = _("Devices")
 
 
-@require_http_methods(["GET", "POST"])
-def sync_virtual_machines(request):
-    return _sync_response(
-        request,
-        path="virtualization/virtual-machines/create",
-        action_label="Virtual machines",
-    )
+class SyncVirtualMachinesView(_ProxboxSyncEnqueueView):
+    """POST: queue virtual machine sync."""
+
+    sync_types = [SyncTypeChoices.VIRTUAL_MACHINES]
+    action_label = _("Virtual machines")
 
 
-@require_http_methods(["GET", "POST"])
-def sync_full_update(request):
-    return _sync_response(
-        request,
-        path="full-update",
-        action_label="Full update",
-    )
+class SyncFullUpdateView(_ProxboxSyncEnqueueView):
+    """POST: queue full multi-stage sync."""
+
+    sync_types = [SyncTypeChoices.ALL]
+    action_label = _("Full update")
 
 
-@require_http_methods(["GET", "POST"])
-def sync_vm_backups(request):
-    return _sync_response(
-        request,
-        path="virtualization/virtual-machines/backups/all/create",
-        action_label="VM backups",
-        query_params={"delete_nonexistent_backup": True},
-    )
+class SyncVmBackupsView(_ProxboxSyncEnqueueView):
+    """POST: queue VM backup sync."""
+
+    sync_types = [SyncTypeChoices.VIRTUAL_MACHINES_BACKUPS]
+    action_label = _("VM backups")
 
 
-@require_http_methods(["GET"])
-def sync_devices_stream(request):
-    return _sync_stream_response(
-        request,
-        path="dcim/devices/create",
-    )
+class SyncVirtualDisksView(_ProxboxSyncEnqueueView):
+    """POST: queue virtual disk sync."""
+
+    sync_types = [SyncTypeChoices.VIRTUAL_MACHINES_DISKS]
+    action_label = _("Virtual disks")
 
 
-@require_http_methods(["GET"])
-def sync_virtual_machines_stream(request):
-    return _sync_stream_response(
-        request,
-        path="virtualization/virtual-machines/create",
-    )
+class SyncVmSnapshotsView(_ProxboxSyncEnqueueView):
+    """POST: queue VM snapshot sync."""
+
+    sync_types = [SyncTypeChoices.VIRTUAL_MACHINES_SNAPSHOTS]
+    action_label = _("VM snapshots")
 
 
-@require_http_methods(["GET"])
-def sync_full_update_stream(request):
-    return _sync_stream_response(
-        request,
-        path="full-update",
-    )
+sync_devices = SyncDevicesView.as_view()
+sync_virtual_machines = SyncVirtualMachinesView.as_view()
+sync_full_update = SyncFullUpdateView.as_view()
+sync_vm_backups = SyncVmBackupsView.as_view()
+sync_vm_snapshots = SyncVmSnapshotsView.as_view()
+sync_virtual_disks = SyncVirtualDisksView.as_view()

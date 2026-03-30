@@ -47,8 +47,55 @@ class HttpRequest:
     pass
 
 
-class View:
+class Http404(Exception):
     pass
+
+
+class View:
+    """Minimal Django CBV stub for plugin view tests."""
+
+    http_method_names = [
+        "get",
+        "post",
+        "put",
+        "patch",
+        "delete",
+        "head",
+        "options",
+        "trace",
+    ]
+
+    @classmethod
+    def as_view(cls, **initkwargs):
+        def view(request, *args, **kwargs):
+            self = cls(**initkwargs)
+            self.request = request
+            self.args = args
+            self.kwargs = kwargs
+            return self.dispatch(request, *args, **kwargs)
+
+        view.view_class = cls
+        view.view_initkwargs = initkwargs
+        return view
+
+    def dispatch(self, request, *args, **kwargs):
+        if request is None:
+            request = SimpleNamespace(
+                method="GET",
+                user=SimpleNamespace(
+                    is_authenticated=True,
+                    has_perms=lambda *a, **k: True,
+                    has_perm=lambda *a, **k: True,
+                ),
+            )
+        method = (getattr(request, "method", "GET") or "GET").lower()
+        if method in self.http_method_names:
+            handler = getattr(self, method, self.http_method_not_allowed)
+            return handler(request, *args, **kwargs)
+        return self.http_method_not_allowed(request, *args, **kwargs)
+
+    def http_method_not_allowed(self, request, *args, **kwargs):
+        return HttpResponse(status=405)
 
 
 class DummyPluginConfig:
@@ -87,10 +134,22 @@ def _manager(*, first=None, objects_by_pk=None, does_not_exist=None):
     objects_by_pk = objects_by_pk or {}
 
     class Manager:
+        def restrict(self, user, action):
+            return self
+
         def first(self):
             return first
 
-        def get(self, pk):
+        def exists(self):
+            return first is not None or bool(objects_by_pk)
+
+        def filter(self, *args, **kwargs):
+            return self
+
+        def get(self, *args, **kwargs):
+            pk = kwargs.get("pk")
+            if pk is None and args:
+                pk = args[0]
             if pk in objects_by_pk:
                 return objects_by_pk[pk]
             raise does_not_exist()
@@ -101,6 +160,12 @@ def _manager(*, first=None, objects_by_pk=None, does_not_exist=None):
 def _make_model_class(name: str, *, first=None, objects_by_pk=None):
     does_not_exist = type("DoesNotExist", (Exception,), {})
     cls = type(name, (), {"DoesNotExist": does_not_exist})
+    _mn = {
+        "FastAPIEndpoint": "fastapiendpoint",
+        "NetBoxEndpoint": "netboxendpoint",
+        "ProxmoxEndpoint": "proxmoxendpoint",
+    }.get(name, name.lower())
+    cls._meta = SimpleNamespace(app_label="netbox_proxbox", model_name=_mn)
     cls.objects = _manager(
         first=first,
         objects_by_pk=objects_by_pk,
@@ -124,6 +189,7 @@ def load_plugin_module(
     django_http.HttpResponse = HttpResponse
     django_http.JsonResponse = JsonResponse
     django_http.StreamingHttpResponse = StreamingHttpResponse
+    django_http.Http404 = Http404
 
     django_shortcuts = types.ModuleType("django.shortcuts")
     django_shortcuts.render = lambda request, template_name, context=None: {
@@ -131,6 +197,18 @@ def load_plugin_module(
         "context": context or {},
     }
     django_shortcuts.redirect = lambda name: {"redirect": name}
+
+    def get_object_or_404(klass, *args, **kwargs):
+        try:
+            if hasattr(klass, "get"):
+                return klass.get(*args, **kwargs)
+        except Exception as exc:
+            if type(exc).__name__ == "DoesNotExist":
+                raise Http404 from exc
+            raise
+        raise Http404()
+
+    django_shortcuts.get_object_or_404 = get_object_or_404
 
     django_views = types.ModuleType("django.views")
     django_views.View = View
@@ -146,6 +224,74 @@ def load_plugin_module(
     django_contrib = types.ModuleType("django.contrib")
     django_messages = MessagesStub()
     django_contrib.messages = django_messages
+
+    django_utils = types.ModuleType("django.utils")
+    django_utils_html = types.ModuleType("django.utils.html")
+
+    def _format_html(*args, **kwargs):
+        return "".join(str(a) for a in args)
+
+    django_utils_html.format_html = _format_html
+
+    django_utils_text = types.ModuleType("django.utils.text")
+    django_utils_text.format_lazy = lambda *parts: "".join(str(p) for p in parts)
+
+    django_utils_translation = types.ModuleType("django.utils.translation")
+    django_utils_translation.gettext_lazy = lambda x: x
+
+    django_auth = types.ModuleType("django.contrib.auth")
+    django_auth_decorators = types.ModuleType("django.contrib.auth.decorators")
+    django_auth_decorators.login_required = lambda func: func
+    django_auth_mixins = types.ModuleType("django.contrib.auth.mixins")
+
+    class AccessMixin:
+        def handle_no_permission(self):
+            return HttpResponse(status=403)
+
+    class LoginRequiredMixin:
+        pass
+
+    django_auth_mixins.AccessMixin = AccessMixin
+    django_auth_mixins.LoginRequiredMixin = LoginRequiredMixin
+    django_contrib.auth = django_auth
+
+    utilities_permissions = types.ModuleType("utilities.permissions")
+    utilities_permissions.get_permission_for_model = lambda model, action: (
+        f"{getattr(model._meta, 'app_label', 'stub')}.{action}_"
+        f"{getattr(model._meta, 'model_name', 'stub')}"
+    )
+
+    utilities_views = types.ModuleType("utilities.views")
+
+    class ConditionalLoginRequiredMixin:
+        def dispatch(self, request, *args, **kwargs):
+            return super().dispatch(request, *args, **kwargs)
+
+    class TokenConditionalLoginRequiredMixin:
+        def dispatch(self, request, *args, **kwargs):
+            return super().dispatch(request, *args, **kwargs)
+
+    class ContentTypePermissionRequiredMixin:
+        additional_permissions = []
+
+        def get_required_permission(self):
+            return "stub.view_stub"
+
+        def has_permission(self):
+            return True
+
+        def dispatch(self, request, *args, **kwargs):
+            if not self.has_permission():
+                return HttpResponse(status=403)
+            return super().dispatch(request, *args, **kwargs)
+
+    utilities_views.ConditionalLoginRequiredMixin = ConditionalLoginRequiredMixin
+    utilities_views.TokenConditionalLoginRequiredMixin = (
+        TokenConditionalLoginRequiredMixin
+    )
+    utilities_views.ContentTypePermissionRequiredMixin = (
+        ContentTypePermissionRequiredMixin
+    )
 
     netbox_module = types.ModuleType("netbox")
     netbox_plugins = types.ModuleType("netbox.plugins")
@@ -167,7 +313,6 @@ def load_plugin_module(
         first=proxmox_endpoint,
         objects_by_pk={1: proxmox_endpoint} if proxmox_endpoint is not None else {},
     )
-
     utils_module = types.ModuleType("netbox_proxbox.utils")
     utils_module.get_fastapi_url = get_fastapi_url or (
         lambda obj: {
@@ -200,25 +345,81 @@ def load_plugin_module(
         "django.views.decorators": django_views_decorators,
         "django.views.decorators.http": django_views_http,
         "django.urls": django_urls,
+        "django.utils": django_utils,
+        "django.utils.html": django_utils_html,
+        "django.utils.text": django_utils_text,
+        "django.utils.translation": django_utils_translation,
         "django.contrib": django_contrib,
+        "django.contrib.auth": django_auth,
+        "django.contrib.auth.decorators": django_auth_decorators,
+        "django.contrib.auth.mixins": django_auth_mixins,
         "django.contrib.messages": django_messages,
         "netbox": netbox_module,
         "netbox.plugins": netbox_plugins,
         "netbox_proxbox.models": models_module,
         "netbox_proxbox.utils": utils_module,
+        "utilities.permissions": utilities_permissions,
+        "utilities.views": utilities_views,
     }
 
     for name, module in stub_modules.items():
         monkeypatch.setitem(sys.modules, name, module)
 
+    repo = Path(__file__).resolve().parents[1]
+
+    utilities_root = types.ModuleType("utilities")
+    monkeypatch.setitem(sys.modules, "utilities", utilities_root)
+    utilities_choices_mod = types.ModuleType("utilities.choices")
+
+    class _StubChoiceSet:
+        pass
+
+    utilities_choices_mod.ChoiceSet = _StubChoiceSet
+    monkeypatch.setitem(sys.modules, "utilities.choices", utilities_choices_mod)
+
+    nbp_root = types.ModuleType("netbox_proxbox")
+    nbp_root.__path__ = [str(repo / "netbox_proxbox")]
+    monkeypatch.setitem(sys.modules, "netbox_proxbox", nbp_root)
+
+    nbp_choices = types.ModuleType("netbox_proxbox.choices")
+
+    class _SyncTypeChoices(_StubChoiceSet):
+        VIRTUAL_MACHINES = "virtual-machines"
+        VIRTUAL_MACHINES_DISKS = "vm-disks"
+        VIRTUAL_MACHINES_BACKUPS = "vm-backups"
+        VIRTUAL_MACHINES_SNAPSHOTS = "vm-snapshots"
+        DEVICES = "devices"
+        ALL = "all"
+
+    nbp_choices.SyncTypeChoices = _SyncTypeChoices
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.choices", nbp_choices)
+
+    nbp_jobs = types.ModuleType("netbox_proxbox.jobs")
+
+    class _ProxboxSyncJob:
+        @classmethod
+        def enqueue(cls, **kwargs):
+            raise RuntimeError("ProxboxSyncJob.enqueue must be patched in tests")
+
+    nbp_jobs.ProxboxSyncJob = _ProxboxSyncJob
+    nbp_jobs.PROXBOX_SYNC_QUEUE_NAME = "default"
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.jobs", nbp_jobs)
+
     package_name = "netbox_proxbox.views"
     package_module = types.ModuleType(package_name)
-    package_module.__path__ = [
-        str(Path(__file__).resolve().parents[1] / "netbox_proxbox" / "views")
-    ]
+    package_module.__path__ = [str(repo / "netbox_proxbox" / "views")]
     monkeypatch.setitem(sys.modules, package_name, package_module)
 
+    proxbox_access = types.ModuleType("netbox_proxbox.views.proxbox_access")
+    proxbox_access.permission_enqueue_proxbox_sync = lambda: "stub.enqueue_proxbox_sync"
+    monkeypatch.setitem(
+        sys.modules, "netbox_proxbox.views.proxbox_access", proxbox_access
+    )
+
     sys.modules.pop(module_name, None)
+    sys.modules.pop("netbox_proxbox.services.service_status", None)
+    sys.modules.pop("netbox_proxbox.services.backend_proxy", None)
+    sys.modules.pop("netbox_proxbox.services", None)
     relative_parts = module_name.split(".")[2:]
     module_path = (
         Path(__file__).resolve().parents[1]

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 from typing import Annotated, Optional
 
@@ -26,7 +25,12 @@ from proxbox_cli.commands.proxmox import proxmox_app
 from proxbox_cli.commands.virtualization import virtualization_app
 from proxbox_cli.config import Config, load_config, normalize_base_url, save_config
 from proxbox_cli.runtime import _cache_config, _ensure_config, _get_client
-from proxbox_cli.support import console, emit_cli_error, print_response, run_with_spinner
+from proxbox_cli.support import (
+    console,
+    emit_cli_error,
+    print_response,
+    run_with_spinner,
+)
 
 app = typer.Typer(
     add_completion=False,
@@ -47,13 +51,16 @@ app.add_typer(docs_app, name="docs")
 
 # ── Root commands ─────────────────────────────────────────────────────────────
 
+
 @app.command()
 def init() -> None:
     """Interactively configure the proxbox-api base URL."""
     existing = load_config()
     console.print(f"Current base URL: [bold]{existing.base_url}[/bold]")
     raw = typer.prompt("proxbox-api base URL", default=existing.base_url)
-    timeout_str = typer.prompt("Request timeout (seconds)", default=str(existing.timeout))
+    timeout_str = typer.prompt(
+        "Request timeout (seconds)", default=str(existing.timeout)
+    )
 
     try:
         timeout = float(timeout_str)
@@ -125,43 +132,24 @@ def full_update(
     print_response(resp, as_json=as_json, as_yaml=as_yaml)
 
 
-# ── Sync processes sub-app ────────────────────────────────────────────────────
-
-sync_app = typer.Typer(no_args_is_help=True, help="Sync process commands.")
-app.add_typer(sync_app, name="sync-processes")
-
-
-@sync_app.command("list")
-def sync_processes_list(
-    as_json: Annotated[bool, typer.Option("--json", help="Output raw JSON.")] = False,
-    as_yaml: Annotated[bool, typer.Option("--yaml", help="Output YAML.")] = False,
-) -> None:
-    """List all sync processes from NetBox."""
-    resp = run_with_spinner(_get_client().get("/sync-processes"))
-    print_response(resp, as_json=as_json, as_yaml=as_yaml)
-
-
-@sync_app.command("create")
-def sync_processes_create(
-    as_json: Annotated[bool, typer.Option("--json", help="Output raw JSON.")] = False,
-    as_yaml: Annotated[bool, typer.Option("--yaml", help="Output YAML.")] = False,
-) -> None:
-    """Create a new sync process record in NetBox."""
-    resp = run_with_spinner(_get_client().post("/sync-processes"))
-    print_response(resp, as_json=as_json, as_yaml=as_yaml)
-
-
 @docs_app.command("generate-capture")
 def docs_generate_capture(
-    output: Annotated[Optional[str], typer.Option("--output", help="Markdown snapshot output path.")] = None,
-    raw_dir: Annotated[Optional[str], typer.Option("--raw-dir", help="Raw JSON artifact directory.")] = None,
+    output: Annotated[
+        Optional[str], typer.Option("--output", help="Markdown snapshot output path.")
+    ] = None,
+    raw_dir: Annotated[
+        Optional[str], typer.Option("--raw-dir", help="Raw JSON artifact directory.")
+    ] = None,
     catalog_output: Annotated[
         Optional[str],
         typer.Option("--catalog-output", help="Command catalog JSON output path."),
     ] = None,
 ) -> None:
     """Generate machine-readable CLI docs artifacts for the MkDocs site."""
-    from proxbox_cli.docgen_capture import generate_command_capture_docs, resolve_capture_paths
+    from proxbox_cli.docgen_capture import (
+        generate_command_capture_docs,
+        resolve_capture_paths,
+    )
 
     output_path, raw_dir_path, catalog_path = resolve_capture_paths(
         Path(output) if output else None,
@@ -178,6 +166,7 @@ def docs_generate_capture(
 
 
 # ── Entrypoint ────────────────────────────────────────────────────────────────
+
 
 def main(argv: list[str] | None = None) -> int:
     command = typer.main.get_command(app)

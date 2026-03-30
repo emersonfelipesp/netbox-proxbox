@@ -2,17 +2,39 @@
 {% load buttons %}
 {% load helpers %}
 {% load i18n %}
+{% load static %}
+
+{% block javascript %}
+<script type="module" src="{% static 'netbox_proxbox/js/home.js' %}"></script>
+{{ block.super }}
+{% endblock %}
+
+{% block content %}
+<div id="sync-progress-container" class="d-none sticky-top pt-2 mb-3" style="z-index: 1030;">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col">
+                <strong id="sync-progress-label">Sync in progress</strong>
+                <span id="sync-progress-state" class="text-muted small">Working...</span>
+            </div>
+        </div>
+        <div class="progress mt-2" role="progressbar" aria-label="Sync progress indicator" aria-valuemin="0" aria-valuemax="100">
+            <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 100%;"></div>
+        </div>
+    </div>
+</div>
+{{ block.super }}
+
+{% include "netbox_proxbox/home/log_messages.html" %}
+{% endblock %}
 
 {% block controls %}
-  <div class="btn-group" role="group">
-    {% if 'sync_backups' in actions %}
-      <a href="{% url 'plugins:netbox_proxbox:sync_vm_backups' %}">
-        <button type="submit" name="_sync_backups" {% formaction %}="{% url 'plugins:netbox_proxbox:sync_vm_backups' %}" class="btn btn-primary">
-            <i class="mdi mdi-sync" aria-hidden="true"></i> {% trans "Sync Backups" %}
-        </button>
-      </a>
-    {% endif %}
-  </div>
+  <form class="btn-group" method="post" data-sync-url="{% url 'plugins:netbox_proxbox:sync_vm_backups' %}" data-sync-stream-url="{% url 'plugins:netbox_proxbox:sync_vm_backups_stream' %}" data-sync-kind="backups">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-primary" data-sync-url="{% url 'plugins:netbox_proxbox:sync_vm_backups' %}" data-sync-stream-url="{% url 'plugins:netbox_proxbox:sync_vm_backups_stream' %}" data-sync-kind="backups">
+      <i class="mdi mdi-sync" aria-hidden="true"></i> {% trans "Sync Backups" %}
+    </button>
+  </form>
 {% endblock %}
 {% block bulk_buttons %}
   <div class="btn-group" role="group">

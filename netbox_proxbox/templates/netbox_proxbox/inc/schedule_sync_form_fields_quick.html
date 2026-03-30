@@ -1,0 +1,78 @@
+{% load i18n %}
+{# Compact layout for the home quick-schedule collapse (full page uses schedule_sync_form_fields.html). #}
+<div class="nb-proxbox-quick-schedule">
+    <div class="row g-2 align-items-start mb-2">
+        <div class="col-12 col-lg-4">
+            <label class="form-label small mb-0" for="{{ form.job_name.id_for_label }}">{{ form.job_name.label }}</label>
+            {{ form.job_name }}
+            {% for error in form.job_name.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+        </div>
+        <div class="col-12 col-sm-6 col-lg-4">
+            <label class="form-label small mb-0" for="{{ form.schedule_at.id_for_label }}">{{ form.schedule_at.label }}</label>
+            {{ form.schedule_at }}
+            {% if form.schedule_at.help_text %}
+                <div class="form-text text-muted small">{{ form.schedule_at.help_text|safe }}</div>
+            {% endif %}
+            {% for error in form.schedule_at.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+        </div>
+        <div class="col-12 col-sm-6 col-lg-4">
+            <label class="form-label small mb-0 d-block" for="{{ form.interval_value.id_for_label }}">{{ form.interval_value.label }}</label>
+            <div class="row g-2 align-items-center">
+                <div class="col-4 col-sm-3 col-lg-4">{{ form.interval_value }}</div>
+                <div class="col-8 col-sm-9 col-lg-8">{{ form.interval_unit }}</div>
+            </div>
+            {% if form.interval_value.help_text %}
+                <div class="form-text text-muted small">{{ form.interval_value.help_text }}</div>
+            {% endif %}
+            {% if form.interval_unit.help_text %}
+                <div class="form-text text-muted small">{{ form.interval_unit.help_text }}</div>
+            {% endif %}
+            {% for error in form.interval_value.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+            {% for error in form.interval_unit.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="row g-2 mb-2">
+        <div class="col-12 col-md-6">
+            <label class="form-label small mb-0" for="{{ form.proxmox_endpoints.id_for_label }}">{{ form.proxmox_endpoints.label }}</label>
+            {{ form.proxmox_endpoints }}
+            {% for error in form.proxmox_endpoints.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+        </div>
+        <div class="col-12 col-md-6">
+            <label class="form-label small mb-0" for="{{ form.netbox_endpoints.id_for_label }}">{{ form.netbox_endpoints.label }}</label>
+            {{ form.netbox_endpoints }}
+            {% for error in form.netbox_endpoints.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="mb-2 pt-2 mt-1 border-top border-secondary-subtle">
+        <label class="form-label small mb-1">{{ form.sync_types.label }}</label>
+        <div class="proxbox-quick-sync-type-widgets w-100">{{ form.sync_types }}</div>
+        {% if form.sync_types.help_text %}
+            <div class="form-text text-muted small mt-1">{{ form.sync_types.help_text }}</div>
+        {% endif %}
+        {% for error in form.sync_types.errors %}
+            <div class="invalid-feedback d-block">{{ error }}</div>
+        {% endfor %}
+    </div>
+
+    {% if form.non_field_errors %}
+        <div class="alert alert-danger py-2 mb-2">
+            {% for error in form.non_field_errors %}
+                <div>{{ error }}</div>
+            {% endfor %}
+        </div>
+    {% endif %}
+</div>

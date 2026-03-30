@@ -1,70 +1,107 @@
 import { createTdElement } from './common.js'
 
 export function populateVirtualMachinesTable(jsonMessage) {
-    // Populate Virtual Machines Table with data from Websocket JSON message
     if (!jsonMessage) {
-        return
+        return;
     }
 
-    // Get Virtual Machine Table
-    let virtualMachineTable = document.getElementById('virtual-machine-table-data')
-
-    let virtualMachinesDiv = document.getElementById('virtual-machines-div')
-    virtualMachinesDiv.style.display = "block"
-
+    const virtualMachineTable = document.getElementById('virtual-machine-table-data');
     if (!virtualMachineTable) {
-        return
+        return;
     }
 
-    let jsonDataName = undefined
-
-    try {
-        jsonDataName = jsonMessage.data.name
-    } catch (error) {
-        console.log(`ERROR: ${error}`)
+    const virtualMachinesDiv = document.getElementById('virtual-machines-div');
+    if (virtualMachinesDiv) {
+        virtualMachinesDiv.style.display = "block";
     }
 
-    // JSON message is parsed. Now, let's check if it's a Virtual Machine message.
-    try {
-        let undefinedHtml = `<span class='badge text-bg-grey' title='Proxmox VM ID'><strong></strong>undefined</strong></span>`
-
-        virtualMachinesDiv.style.display = "block"
-
-        let vmTableDefaultTd = document.getElementById('virtual-machines-table-default-td')
-        vmTableDefaultTd.style.display = "none"
-        
-        // Create Table Row
-        let vmTableRowID = jsonMessage.data.rowid
-        let vmTableRow = document.getElementById(vmTableRowID)
-        
-        if (!vmTableRow) {
-            vmTableRow = document.createElement('tr')
-            vmTableRow.id = vmTableRowID
-        } else {
-            // Clear Table Row
-            vmTableRow.innerHTML = ""
-        }
-        
-
-        let vmStatusDataHtml = undefinedHtml
-
-        // Populate Table Row with Table Data parsed from Websocket JSON message
-        vmTableRow.appendChild(createTdElement(type=jsonMessage.object, name=jsonDataName, field=`status`, jsonMessage.data.sync_status))
-        vmTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `netbox-id`, jsonMessage.data.netbox_id))
-        vmTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `name`, jsonMessage.data.name))
-        vmTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `status`, jsonMessage.data.status))
-        vmTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `device`, jsonMessage.data.device))
-        vmTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `cluster`, jsonMessage.data.cluster))
-        vmTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `vm-interfaces`, jsonMessage.data.vm_interfaces))
-        vmTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `role`, jsonMessage.data.role))
-        vmTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `vcpus`, jsonMessage.data.vcpus))
-        vmTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `memory`, jsonMessage.data.memory))
-        vmTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `disk-space`, jsonMessage.data.disk))
-        vmTableRow.appendChild(createTdElement(jsonMessage.object, jsonDataName, `ip-address`, undefinedHtml))
-        
-        virtualMachineTable.appendChild(vmTableRow)
-
-        } catch (error) {
-        console.log(`ERROR: ${error}`)
+    const vmTableDefaultTd = document.getElementById('virtual-machines-table-default-td');
+    if (vmTableDefaultTd) {
+        vmTableDefaultTd.style.display = "none";
     }
+
+    const data = jsonMessage.data || {};
+    const rowId = data.rowid || data.name;
+    if (!rowId) {
+        return;
+    }
+
+    let row = document.getElementById(rowId);
+    if (!row) {
+        row = document.createElement('tr');
+        row.id = rowId;
+    } else {
+        row.innerHTML = "";
+    }
+
+    const jsonDataName = data.name;
+    const undefinedHtml = '<span class="badge text-bg-grey"><strong>undefined</strong></span>';
+
+    const status = data.sync_status || data.status || 'unknown';
+    const statusClass = getStatusClass(status);
+
+    row.appendChild(createTdElement('virtual_machine', jsonDataName, 'status', `<span class="badge text-bg-${statusClass}">${status}</span>`));
+    row.appendChild(createTdElement('virtual_machine', jsonDataName, 'netbox-id', data.netbox_id || undefinedHtml));
+    row.appendChild(createTdElement('virtual_machine', jsonDataName, 'name', data.name || undefinedHtml));
+    row.appendChild(createTdElement('virtual_machine', jsonDataName, 'vm-status', `<span class="badge text-bg-${statusClass}">${status}</span>`));
+    row.appendChild(createTdElement('virtual_machine', jsonDataName, 'cluster', data.cluster || undefinedHtml));
+    row.appendChild(createTdElement('virtual_machine', jsonDataName, 'site', data.site || undefinedHtml));
+    row.appendChild(createTdElement('virtual_machine', jsonDataName, 'role', data.role || undefinedHtml));
+    row.appendChild(createTdElement('virtual_machine', jsonDataName, 'tenant', data.tenant || undefinedHtml));
+    row.appendChild(createTdElement('virtual_machine', jsonDataName, 'vcpus', data.vcpus || undefinedHtml));
+    row.appendChild(createTdElement('virtual_machine', jsonDataName, 'memory', data.memory || undefinedHtml));
+    row.appendChild(createTdElement('virtual_machine', jsonDataName, 'disk', data.disk || undefinedHtml));
+    row.appendChild(createTdElement('virtual_machine', jsonDataName, 'actions', ''));
+
+    virtualMachineTable.appendChild(row);
+}
+
+function getStatusClass(status) {
+    const statusMap = {
+        active: 'green',
+        offline: 'red',
+        planned: 'blue',
+        staged: 'yellow',
+        running: 'green',
+        stopped: 'red',
+        suspended: 'yellow',
+        failed: 'red',
+    };
+    return statusMap[status] || 'grey';
+}
+
+export function handleVMSSEEvent(sseData) {
+    const normalized = normalizeVMMessage(sseData);
+    if (normalized) {
+        populateVirtualMachinesTable(normalized);
+    }
+}
+
+function normalizeVMMessage(sseData) {
+    if (!sseData || typeof sseData !== 'object') {
+        return null;
+    }
+    const payload = sseData.payload;
+    if (!payload || typeof payload !== 'object') {
+        return null;
+    }
+    const payloadData = payload.data || {};
+    return {
+        object: payload.object || 'virtual_machine',
+        data: {
+            ...payloadData,
+            rowid: sseData.rowid || payloadData.rowid || payloadData.name,
+            netbox_id: payloadData.netbox_id,
+            name: payloadData.name,
+            sync_status: payloadData.sync_status || sseData.status,
+            status: payloadData.status,
+            cluster: payloadData.cluster,
+            site: payloadData.site,
+            role: payloadData.role,
+            tenant: payloadData.tenant,
+            vcpus: payloadData.vcpus,
+            memory: payloadData.memory,
+            disk: payloadData.disk,
+        },
+    };
 }

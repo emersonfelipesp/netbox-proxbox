@@ -7,21 +7,19 @@ Proxbox is a NetBox plugin that integrates Proxmox with NetBox through a separat
 The current repository code declares support for:
 
 - NetBox `4.5.x`
-- Plugin version `0.0.7` in source
+- Plugin version `0.0.8` in source
 
 That support comes directly from the plugin config in this repository:
 
 - `min_version = "4.5.0"`
 - `max_version = "4.5.99"`
 
-The latest upstream NetBox release verified during this docs update was `v4.5.5`, published on `2026-03-17`.
-
 ## Important Packaging Note
 
 The repository is ahead of the latest published PyPI release of `netbox-proxbox`.
 
 - Use the Git/source installation path if you want the code documented here.
-- Do not assume older `0.0.6` prerelease installation instructions apply to the current branch.
+- Do not assume older prerelease installation instructions apply to the current branch.
 
 ## What The Plugin Contains
 
@@ -30,15 +28,18 @@ The current codebase includes NetBox models for:
 - Proxmox endpoints
 - NetBox endpoints
 - FastAPI endpoints
-- sync processes
+- Sync processes
 - VM backups
+- VM snapshots
 
 The plugin UI exposes sync actions for:
 
 - devices
 - virtual machines
+- containers
 - full update
 - VM backups
+- VM snapshots
 
 ## Architecture
 

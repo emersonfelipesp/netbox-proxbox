@@ -1,0 +1,33 @@
+repos:
+  - repo: local
+    hooks:
+      - id: compileall
+        name: compileall
+        entry: python -m compileall
+        language: system
+        pass_filenames: true
+        types: [python]
+        args: ["netbox_proxbox", "tests"]
+
+      - id: ruff
+        name: ruff
+        entry: ruff
+        language: system
+        pass_filenames: true
+        types: [python]
+        args: ["check", "."]
+
+      - id: ruff-format
+        name: ruff-format
+        entry: ruff
+        language: system
+        pass_filenames: true
+        types: [python]
+        args: ["format", "--check", "."]
+
+      - id: pytest
+        name: pytest
+        entry: pytest
+        language: system
+        pass_filenames: false
+        args: ["tests/"]

@@ -45,14 +45,11 @@ from netbox_proxbox.choices import (
     ProxmoxBackupFormatChoices,
     ProxmoxBackupSubtypeChoices,
     ProxmoxModeChoices,
-    SyncStatusChoices,
-    SyncTypeChoices,
 )
 from netbox_proxbox.models import (
     FastAPIEndpoint,
     NetBoxEndpoint,
     ProxmoxEndpoint,
-    SyncProcess,
     VMBackup,
 )
 
@@ -324,39 +321,6 @@ class FastAPIEndpointAPITest(APIViewTestCases.APIViewTestCase):
         self.assertHttpStatus(response, 400)
         assert "domain" in response.data
         assert "ip_address" in response.data
-
-
-class SyncProcessAPITest(APIViewTestCases.APIViewTestCase):
-    model = SyncProcess
-    brief_fields = ["display", "id", "name", "status", "url"]
-    bulk_update_data = {"status": SyncStatusChoices.COMPLETED}
-
-    @classmethod
-    def setUpTestData(cls):
-        for idx in range(3):
-            SyncProcess.objects.create(
-                name=f"sync-{idx}",
-                sync_type=SyncTypeChoices.ALL,
-                status=SyncStatusChoices.NOT_STARTED,
-            )
-
-        cls.create_data = [
-            {
-                "name": "sync-3",
-                "sync_type": SyncTypeChoices.VIRTUAL_MACHINES,
-                "status": SyncStatusChoices.NOT_STARTED,
-            },
-            {
-                "name": "sync-4",
-                "sync_type": SyncTypeChoices.VIRTUAL_MACHINES_BACKUPS,
-                "status": SyncStatusChoices.SYNCING,
-            },
-            {
-                "name": "sync-5",
-                "sync_type": SyncTypeChoices.DEVICES,
-                "status": SyncStatusChoices.FAILED,
-            },
-        ]
 
 
 class VMBackupAPITest(APIViewTestCases.APIViewTestCase):

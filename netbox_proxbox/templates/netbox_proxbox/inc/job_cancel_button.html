@@ -1,0 +1,9 @@
+{% load i18n %}
+<form method="post" action="{% url 'core:job_proxbox_cancel' pk=job.pk %}" class="d-inline ms-1">
+  {% csrf_token %}
+  <button type="submit" class="btn btn-sm btn-outline-danger"
+          onclick="return confirm('{% filter escapejs %}{% trans "Cancel this Proxbox sync job? The worker will stop when possible." %}{% endfilter %}');">
+    <i class="mdi mdi-stop-circle-outline" aria-hidden="true"></i>
+    {% trans "Cancel job" %}
+  </button>
+</form>

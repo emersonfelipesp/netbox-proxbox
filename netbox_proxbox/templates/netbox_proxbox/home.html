@@ -1,4 +1,5 @@
 {% extends 'base/layout.html' %}
+{% load i18n %}
 {% load static %}
 
 {% block head %}
@@ -9,9 +10,15 @@
         };
     </script>
     <script type="module" src="{% static 'netbox_proxbox/js/home.js' %}"></script>
+    {% if quick_schedule_form %}
+        <link rel="stylesheet" href="{% static 'netbox_proxbox/css/quick_schedule_home.css' %}">
+        {{ quick_schedule_form.media }}
+    {% endif %}
 {% endblock %}
 
 {% block content %}
+    {% include "netbox_proxbox/home/quick_schedule_banner.html" %}
+
     <div class="row mb-3">
         <div id="sync-progress-container" class="d-none sticky-top pt-2 mb-3" style="z-index: 1030;">
             <div class="col-12">
@@ -43,7 +50,10 @@
                                     <p>Using WebSocket (Client-Server)</p>
                                 {% endif %}
                             {% else %}
-                                <p>Using Simple HTTP Request (Server-Only)</p>
+                                <p>
+                                    {% trans "Using HTTP" %}
+                                    <a href="https://fastapi.tiangolo.com/advanced/stream-data/#use-cases" target="_blank" rel="noopener noreferrer">{% trans "Streaming" %}</a>
+                                </p>
                             {% endif %}
                         </div>
                         <div
@@ -51,17 +61,29 @@
                             data-use-websocket="{% if object.use_websocket %}true{% else %}false{% endif %}"
                             data-server-side-websocket="{% if object.server_side_websocket %}true{% else %}false{% endif %}"
                         >
-                            <form class="m-2" method="post" action="{% url 'plugins:netbox_proxbox:sync_devices' %}" data-sync-url="{% url 'plugins:netbox_proxbox:sync_devices' %}" data-sync-kind="devices">
+                            <form class="m-2" method="post" action="{% url 'plugins:netbox_proxbox:sync_devices' %}">
                                 {% csrf_token %}
-                                <button id="sync-nodes-button" type="submit" class="btn btn-primary" data-sync-url="{% url 'plugins:netbox_proxbox:sync_devices' %}" data-sync-stream-url="{% url 'plugins:netbox_proxbox:sync_devices_stream' %}" data-sync-kind="devices">Sync Nodes</button>
+                                <button id="sync-nodes-button" type="submit" class="btn btn-primary" data-sync-url="{% url 'plugins:netbox_proxbox:sync_devices' %}" data-sync-kind="devices">Sync Nodes</button>
                             </form>
-                            <form class="m-2" method="post" action="{% url 'plugins:netbox_proxbox:sync_virtual_machines' %}" data-sync-url="{% url 'plugins:netbox_proxbox:sync_virtual_machines' %}" data-sync-kind="virtual-machines">
+                            <form class="m-2" method="post" action="{% url 'plugins:netbox_proxbox:sync_virtual_machines' %}">
                                 {% csrf_token %}
-                                <button id="sync-virtual-machines-button" type="submit" class="btn btn-primary" data-sync-url="{% url 'plugins:netbox_proxbox:sync_virtual_machines' %}" data-sync-stream-url="{% url 'plugins:netbox_proxbox:sync_virtual_machines_stream' %}" data-sync-kind="virtual-machines">Sync Virtual Machines</button>
+                                <button id="sync-virtual-machines-button" type="submit" class="btn btn-primary" data-sync-url="{% url 'plugins:netbox_proxbox:sync_virtual_machines' %}" data-sync-kind="virtual-machines">Sync Virtual Machines</button>
                             </form>
-                            <form class="m-2" method="post" action="{% url 'plugins:netbox_proxbox:sync_full_update' %}" data-sync-url="{% url 'plugins:netbox_proxbox:sync_full_update' %}" data-sync-kind="full-update">
+                            <form class="m-2" method="post" action="{% url 'plugins:netbox_proxbox:sync_virtual_disks' %}">
                                 {% csrf_token %}
-                                <button id="sync-full-update-button" type="submit" class="btn btn-primary" data-sync-url="{% url 'plugins:netbox_proxbox:sync_full_update' %}" data-sync-stream-url="{% url 'plugins:netbox_proxbox:sync_full_update_stream' %}" data-sync-kind="full-update">Full Update Sync</button>
+                                <button id="sync-virtual-disks-button" type="submit" class="btn btn-primary" data-sync-url="{% url 'plugins:netbox_proxbox:sync_virtual_disks' %}" data-sync-kind="virtual-disks">Sync Virtual Disks</button>
+                            </form>
+                            <form class="m-2" method="post" action="{% url 'plugins:netbox_proxbox:sync_vm_backups' %}">
+                                {% csrf_token %}
+                                <button id="sync-backups-button" type="submit" class="btn btn-primary" data-sync-url="{% url 'plugins:netbox_proxbox:sync_vm_backups' %}" data-sync-kind="backups">Sync Backups</button>
+                            </form>
+                            <form class="m-2" method="post" action="{% url 'plugins:netbox_proxbox:sync_vm_snapshots' %}">
+                                {% csrf_token %}
+                                <button id="sync-snapshots-button" type="submit" class="btn btn-primary" data-sync-url="{% url 'plugins:netbox_proxbox:sync_vm_snapshots' %}" data-sync-kind="snapshots">Sync Snapshots</button>
+                            </form>
+                            <form class="m-2" method="post" action="{% url 'plugins:netbox_proxbox:sync_full_update' %}">
+                                {% csrf_token %}
+                                <button id="sync-full-update-button" type="submit" class="btn btn-primary" data-sync-url="{% url 'plugins:netbox_proxbox:sync_full_update' %}" data-sync-kind="full-update">Full Update Sync</button>
                             </form>
                         </div>
                     </div>

@@ -4,13 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import json
-import sys
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-import click
-import typer
 import yaml
 from rich.console import Console
 from rich.table import Table
@@ -20,11 +17,21 @@ stderr = Console(stderr=True)
 
 # Fields shown by default in list tables (ordered by priority).
 _LIST_PRIORITY = [
-    "id", "name", "display", "status", "type", "role",
-    "ip_address", "domain", "port", "username",
+    "id",
+    "name",
+    "display",
+    "status",
+    "type",
+    "role",
+    "ip_address",
+    "domain",
+    "port",
+    "username",
 ]
 
-OUTPUT_FORMAT_CONFLICT_MESSAGE = "Options --json and --yaml are mutually exclusive; pick one."
+OUTPUT_FORMAT_CONFLICT_MESSAGE = (
+    "Options --json and --yaml are mutually exclusive; pick one."
+)
 
 
 class OutputFormat(StrEnum):
@@ -75,6 +82,7 @@ def load_json_payload(
 
 
 # ── Output rendering ──────────────────────────────────────────────────────────
+
 
 def print_response(
     resp: Any,  # ApiResponse

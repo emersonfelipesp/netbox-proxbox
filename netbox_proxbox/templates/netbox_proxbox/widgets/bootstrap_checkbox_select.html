@@ -1,0 +1,11 @@
+{# Outer wrapper: NetBox attrs.html skips class, so id lives in attrs while grid classes are explicit here (never on each input). #}
+<div {% include "django/forms/widgets/attrs.html" %} class="proxbox-sync-types-grid row row-cols-1 row-cols-md-2 g-1 align-items-start{% if 'class' in widget.attrs %} {{ widget.attrs.class }}{% endif %}">
+{% for group, options, index in widget.optgroups %}
+{% if group %}
+<div class="col-12 text-body-secondary small fw-semibold mt-2 mb-1">{{ group }}</div>
+{% endif %}
+{% for option in options %}
+{% include option.template_name with widget=option %}
+{% endfor %}
+{% endfor %}
+</div>

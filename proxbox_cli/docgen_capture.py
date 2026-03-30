@@ -21,7 +21,9 @@ def resolve_capture_paths(
     """Resolve default artifact paths under `docs/generated/proxbox-cli/`."""
     docs_dir = _repo_root() / "docs"
     generated_dir = docs_dir / "generated" / "proxbox-cli"
-    resolved_output = output or (docs_dir / "generated" / "proxbox-cli-command-capture.md")
+    resolved_output = output or (
+        docs_dir / "generated" / "proxbox-cli-command-capture.md"
+    )
     resolved_raw = raw_dir or (generated_dir / "raw")
     resolved_catalog = catalog_output or (generated_dir / "catalog.json")
     return resolved_output, resolved_raw, resolved_catalog

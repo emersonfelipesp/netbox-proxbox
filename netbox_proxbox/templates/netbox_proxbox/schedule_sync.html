@@ -15,59 +15,14 @@
                 <p class="text-muted">
                     {% blocktrans trimmed %}
                     Schedule a ProxBox sync operation to run at a specific time. Set a recurrence interval
-                    to repeat the sync automatically (e.g. every 1440 minutes = daily).
+                    to repeat the sync automatically (e.g. every 4 hours, daily, weekly).
                     Leave <strong>Schedule at</strong> blank to run immediately.
                     {% endblocktrans %}
                 </p>
 
                 <form method="post">
                     {% csrf_token %}
-                    <div class="mb-3">
-                        <label class="form-label" for="{{ form.sync_type.id_for_label }}">
-                            {{ form.sync_type.label }}
-                        </label>
-                        {{ form.sync_type }}
-                        {% if form.sync_type.help_text %}
-                            <div class="form-text text-muted">{{ form.sync_type.help_text }}</div>
-                        {% endif %}
-                        {% for error in form.sync_type.errors %}
-                            <div class="invalid-feedback d-block">{{ error }}</div>
-                        {% endfor %}
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label" for="{{ form.schedule_at.id_for_label }}">
-                            {{ form.schedule_at.label }}
-                        </label>
-                        {{ form.schedule_at }}
-                        {% if form.schedule_at.help_text %}
-                            <div class="form-text text-muted">{{ form.schedule_at.help_text|safe }}</div>
-                        {% endif %}
-                        {% for error in form.schedule_at.errors %}
-                            <div class="invalid-feedback d-block">{{ error }}</div>
-                        {% endfor %}
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label" for="{{ form.interval.id_for_label }}">
-                            {{ form.interval.label }}
-                        </label>
-                        {{ form.interval }}
-                        {% if form.interval.help_text %}
-                            <div class="form-text text-muted">{{ form.interval.help_text }}</div>
-                        {% endif %}
-                        {% for error in form.interval.errors %}
-                            <div class="invalid-feedback d-block">{{ error }}</div>
-                        {% endfor %}
-                    </div>
-
-                    {% if form.non_field_errors %}
-                        <div class="alert alert-danger">
-                            {% for error in form.non_field_errors %}
-                                <div>{{ error }}</div>
-                            {% endfor %}
-                        </div>
-                    {% endif %}
+                    {% include "netbox_proxbox/inc/schedule_sync_form_fields.html" %}
 
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-primary">
@@ -91,29 +46,43 @@
                 {% trans "Sync Types" %}
             </h5>
             <div class="card-body">
-                <table class="table table-hover">
+                <table class="table table-hover attr-table">
                     <thead>
                         <tr>
-                            <th>{% trans "Type" %}</th>
+                            <th class="text-nowrap" style="width: 1%">{% trans "Type" %}</th>
                             <th>{% trans "Description" %}</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr>
-                            <td><span class="badge bg-danger">All</span></td>
-                            <td>{% trans "Sync both devices (nodes) and virtual machines." %}</td>
+                            <td class="text-nowrap align-middle">
+                                <span class="badge rounded-pill text-bg-red fw-normal">{% trans "All" %}</span>
+                            </td>
+                            <td class="align-middle">{% trans "Sync both devices (nodes) and virtual machines." %}</td>
                         </tr>
                         <tr>
-                            <td><span class="badge bg-success">Devices</span></td>
-                            <td>{% trans "Sync Proxmox nodes as NetBox devices." %}</td>
+                            <td class="text-nowrap align-middle">
+                                <span class="badge rounded-pill text-bg-green fw-normal">{% trans "Devices" %}</span>
+                            </td>
+                            <td class="align-middle">{% trans "Sync Proxmox nodes as NetBox devices." %}</td>
                         </tr>
                         <tr>
-                            <td><span class="badge bg-primary">Virtual Machines</span></td>
-                            <td>{% trans "Sync Proxmox VMs as NetBox virtual machines." %}</td>
+                            <td class="text-nowrap align-middle">
+                                <span class="badge rounded-pill text-bg-blue fw-normal">{% trans "Virtual Machines" %}</span>
+                            </td>
+                            <td class="align-middle">{% trans "Sync Proxmox VMs as NetBox virtual machines." %}</td>
                         </tr>
                         <tr>
-                            <td><span class="badge bg-purple">VM Backups</span></td>
-                            <td>{% trans "Sync all VM backup records." %}</td>
+                            <td class="text-nowrap align-middle">
+                                <span class="badge rounded-pill text-bg-orange fw-normal">{% trans "VM Disks" %}</span>
+                            </td>
+                            <td class="align-middle">{% trans "Sync VM virtual disks (run after virtual machines)." %}</td>
+                        </tr>
+                        <tr>
+                            <td class="text-nowrap align-middle">
+                                <span class="badge rounded-pill text-bg-purple fw-normal">{% trans "VM Backups" %}</span>
+                            </td>
+                            <td class="align-middle">{% trans "Sync all VM backup records." %}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -129,15 +98,17 @@
                 <table class="table table-hover">
                     <thead>
                         <tr>
-                            <th>{% trans "Minutes" %}</th>
+                            <th>{% trans "Example" %}</th>
                             <th>{% trans "Frequency" %}</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr><td>1</td><td>{% trans "Every minute" %}</td></tr>
-                        <tr><td>60</td><td>{% trans "Every hour" %}</td></tr>
-                        <tr><td>1440</td><td>{% trans "Every day (daily)" %}</td></tr>
-                        <tr><td>10080</td><td>{% trans "Every week (weekly)" %}</td></tr>
+                        <tr><td><strong>15 minutes</strong></td><td>{% trans "Frequent sync" %}</td></tr>
+                        <tr><td><strong>1 hour</strong></td><td>{% trans "Hourly sync" %}</td></tr>
+                        <tr><td><strong>4 hours</strong></td><td>{% trans "Regular sync" %}</td></tr>
+                        <tr><td><strong>12 hours</strong></td><td>{% trans "Twice daily" %}</td></tr>
+                        <tr><td><strong>1 day</strong></td><td>{% trans "Daily sync" %}</td></tr>
+                        <tr><td><strong>1 week</strong></td><td>{% trans "Weekly sync" %}</td></tr>
                     </tbody>
                 </table>
             </div>
