@@ -78,6 +78,16 @@ urlpatterns = [
         views.sync_vm_backups_stream,
         name="sync_vm_backups_stream",
     ),
+    path(
+        "sync/virtual-machines/virtual-disks/",
+        views.sync_virtual_disks,
+        name="sync_virtual_disks",
+    ),
+    path(
+        "sync/virtual-machines/virtual-disks/stream/",
+        views.sync_virtual_disks_stream,
+        name="sync_virtual_disks_stream",
+    ),
     path("sync/full-update/", views.sync_full_update, name="sync_full_update"),
     path(
         "sync/full-update/stream/",
