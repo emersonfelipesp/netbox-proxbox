@@ -17,11 +17,21 @@ stderr = Console(stderr=True)
 
 # Fields shown by default in list tables (ordered by priority).
 _LIST_PRIORITY = [
-    "id", "name", "display", "status", "type", "role",
-    "ip_address", "domain", "port", "username",
+    "id",
+    "name",
+    "display",
+    "status",
+    "type",
+    "role",
+    "ip_address",
+    "domain",
+    "port",
+    "username",
 ]
 
-OUTPUT_FORMAT_CONFLICT_MESSAGE = "Options --json and --yaml are mutually exclusive; pick one."
+OUTPUT_FORMAT_CONFLICT_MESSAGE = (
+    "Options --json and --yaml are mutually exclusive; pick one."
+)
 
 
 class OutputFormat(StrEnum):
@@ -72,6 +82,7 @@ def load_json_payload(
 
 
 # ── Output rendering ──────────────────────────────────────────────────────────
+
 
 def print_response(
     resp: Any,  # ApiResponse

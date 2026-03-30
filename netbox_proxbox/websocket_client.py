@@ -179,7 +179,10 @@ class WebSocketView(
 
         start_websocket(uri)
 
-        if message == "full-update" and ws_sync_button_state["full-update"] == "not-started":
+        if (
+            message == "full-update"
+            and ws_sync_button_state["full-update"] == "not-started"
+        ):
             ws_sync_button_state["full-update"] = "syncing"
             send_message("Full Update")
         elif message == "devices" and ws_sync_button_state["devices"] == "not-started":

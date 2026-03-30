@@ -44,6 +44,7 @@ class ProxBoxEndpointsView(APIRootView):
 
 class VMBackupViewSet(NetBoxModelViewSet):
     """REST API for VM backup rows synced from Proxmox."""
+
     queryset = models.VMBackup.objects.all()
     serializer_class = VMBackupSerializer
     filterset_class = filtersets.VMBackupFilterSet
@@ -51,6 +52,7 @@ class VMBackupViewSet(NetBoxModelViewSet):
 
 class VMSnapshotViewSet(NetBoxModelViewSet):
     """REST API for VM snapshot rows synced from Proxmox."""
+
     queryset = models.VMSnapshot.objects.all()
     serializer_class = VMSnapshotSerializer
     filterset_class = filtersets.VMSnapshotFilterSet
@@ -58,6 +60,7 @@ class VMSnapshotViewSet(NetBoxModelViewSet):
 
 class ProxmoxEndpointViewSet(NetBoxModelViewSet):
     """REST API for Proxmox VE API endpoint credentials and targets."""
+
     queryset = models.ProxmoxEndpoint.objects.select_related("ip_address")
     serializer_class = ProxmoxEndpointSerializer
     filterset_class = filtersets.ProxmoxEndpointFilterSet
@@ -65,6 +68,7 @@ class ProxmoxEndpointViewSet(NetBoxModelViewSet):
 
 class NetBoxEndpointViewSet(NetBoxModelViewSet):
     """REST API for remote NetBox API endpoint configuration."""
+
     queryset = models.NetBoxEndpoint.objects.all()
     serializer_class = NetBoxEndpointSerializer
     filterset_class = filtersets.NetBoxEndpointFilterSet
@@ -72,6 +76,7 @@ class NetBoxEndpointViewSet(NetBoxModelViewSet):
 
 class FastAPIEndpointViewSet(NetBoxModelViewSet):
     """REST API for ProxBox FastAPI backend (HTTP/WebSocket) endpoints."""
+
     queryset = models.FastAPIEndpoint.objects.all()
     serializer_class = FastAPIEndpointSerializer
     filterset_class = filtersets.FastAPIEndpointFilterSet

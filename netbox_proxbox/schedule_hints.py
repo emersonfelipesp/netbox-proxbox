@@ -35,9 +35,7 @@ def next_local_3am():
     tz = now.tzinfo
     today_3am = datetime.combine(now.date(), time(3, 0), tzinfo=tz)
     if now >= today_3am:
-        return datetime.combine(
-            now.date() + timedelta(days=1), time(3, 0), tzinfo=tz
-        )
+        return datetime.combine(now.date() + timedelta(days=1), time(3, 0), tzinfo=tz)
     return today_3am
 
 

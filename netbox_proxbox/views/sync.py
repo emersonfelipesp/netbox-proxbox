@@ -52,7 +52,9 @@ class _ProxboxSyncEnqueueView(
             request,
             format_html(
                 '{} <a href="{}">{}</a>',
-                _("A Proxbox sync job has been queued. Open the job to follow progress."),
+                _(
+                    "A Proxbox sync job has been queued. Open the job to follow progress."
+                ),
                 job.get_absolute_url(),
                 _("View job"),
             ),

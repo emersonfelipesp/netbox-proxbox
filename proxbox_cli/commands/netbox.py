@@ -22,6 +22,7 @@ YamlFlag = Annotated[bool, typer.Option("--yaml", help="Output YAML.")]
 
 # ── Direct commands ───────────────────────────────────────────────────────────
 
+
 @netbox_app.command()
 def status(
     as_json: JsonFlag = False,
@@ -43,6 +44,7 @@ def openapi(
 
 
 # ── Endpoint CRUD ─────────────────────────────────────────────────────────────
+
 
 @endpoint_app.command("list")
 def endpoint_list(
@@ -67,8 +69,12 @@ def endpoint_get(
 
 @endpoint_app.command("create")
 def endpoint_create(
-    body_json: Annotated[Optional[str], typer.Option("--body-json", help="JSON payload string.")] = None,
-    body_file: Annotated[Optional[Path], typer.Option("--body-file", help="Path to JSON payload file.")] = None,
+    body_json: Annotated[
+        Optional[str], typer.Option("--body-json", help="JSON payload string.")
+    ] = None,
+    body_file: Annotated[
+        Optional[Path], typer.Option("--body-file", help="Path to JSON payload file.")
+    ] = None,
     as_json: JsonFlag = False,
     as_yaml: YamlFlag = False,
 ) -> None:
@@ -81,21 +87,29 @@ def endpoint_create(
 @endpoint_app.command("update")
 def endpoint_update(
     netbox_id: Annotated[int, typer.Argument(help="NetBox endpoint ID.")],
-    body_json: Annotated[Optional[str], typer.Option("--body-json", help="JSON payload string.")] = None,
-    body_file: Annotated[Optional[Path], typer.Option("--body-file", help="Path to JSON payload file.")] = None,
+    body_json: Annotated[
+        Optional[str], typer.Option("--body-json", help="JSON payload string.")
+    ] = None,
+    body_file: Annotated[
+        Optional[Path], typer.Option("--body-file", help="Path to JSON payload file.")
+    ] = None,
     as_json: JsonFlag = False,
     as_yaml: YamlFlag = False,
 ) -> None:
     """Update a NetBox endpoint record."""
     payload = load_json_payload(body_json, body_file)
-    resp = run_with_spinner(_get_client().put(f"/netbox/endpoint/{netbox_id}", payload=payload))
+    resp = run_with_spinner(
+        _get_client().put(f"/netbox/endpoint/{netbox_id}", payload=payload)
+    )
     print_response(resp, as_json=as_json, as_yaml=as_yaml)
 
 
 @endpoint_app.command("delete")
 def endpoint_delete(
     netbox_id: Annotated[int, typer.Argument(help="NetBox endpoint ID.")],
-    confirm: Annotated[bool, typer.Option("--confirm", help="Skip confirmation prompt.")] = False,
+    confirm: Annotated[
+        bool, typer.Option("--confirm", help="Skip confirmation prompt.")
+    ] = False,
 ) -> None:
     """Delete a NetBox endpoint record."""
     if not confirm:

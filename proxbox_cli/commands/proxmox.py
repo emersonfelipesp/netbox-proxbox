@@ -13,8 +13,12 @@ from proxbox_cli.support import load_json_payload, print_response, run_with_spin
 proxmox_app = typer.Typer(no_args_is_help=True, help="Proxmox integration commands.")
 
 # Nested sub-apps
-endpoints_app = typer.Typer(no_args_is_help=True, help="Proxmox endpoint CRUD (local DB).")
-viewer_app = typer.Typer(no_args_is_help=True, help="Proxmox API codegen and viewer commands.")
+endpoints_app = typer.Typer(
+    no_args_is_help=True, help="Proxmox endpoint CRUD (local DB)."
+)
+viewer_app = typer.Typer(
+    no_args_is_help=True, help="Proxmox API codegen and viewer commands."
+)
 cluster_app = typer.Typer(no_args_is_help=True, help="Proxmox cluster commands.")
 nodes_app = typer.Typer(no_args_is_help=True, help="Proxmox node commands.")
 
@@ -30,6 +34,7 @@ YamlFlag = Annotated[bool, typer.Option("--yaml", help="Output YAML.")]
 
 
 # ── Direct proxmox commands ───────────────────────────────────────────────────
+
 
 @proxmox_app.command()
 def overview(
@@ -75,8 +80,12 @@ def storage(
 def storage_content(
     node: Annotated[str, typer.Argument(help="Node name.")],
     storage_id: Annotated[str, typer.Argument(help="Storage ID.")],
-    vmid: Annotated[Optional[str], typer.Option("--vmid", help="Filter by VM ID.")] = None,
-    content: Annotated[Optional[str], typer.Option("--content", help="Filter by content type.")] = None,
+    vmid: Annotated[
+        Optional[str], typer.Option("--vmid", help="Filter by VM ID.")
+    ] = None,
+    content: Annotated[
+        Optional[str], typer.Option("--content", help="Filter by content type.")
+    ] = None,
     as_json: JsonFlag = False,
     as_yaml: YamlFlag = False,
 ) -> None:
@@ -97,7 +106,12 @@ def storage_content(
 
 @proxmox_app.command("top-level")
 def top_level(
-    path: Annotated[str, typer.Argument(help="Top-level Proxmox path (access/cluster/nodes/storage/version).")],
+    path: Annotated[
+        str,
+        typer.Argument(
+            help="Top-level Proxmox path (access/cluster/nodes/storage/version)."
+        ),
+    ],
     as_json: JsonFlag = False,
     as_yaml: YamlFlag = False,
 ) -> None:
@@ -115,11 +129,14 @@ def vm_config(
     as_yaml: YamlFlag = False,
 ) -> None:
     """Get VM config for a specific VM."""
-    resp = run_with_spinner(_get_client().get(f"/proxmox/{node}/{vm_type}/{vmid}/config"))
+    resp = run_with_spinner(
+        _get_client().get(f"/proxmox/{node}/{vm_type}/{vmid}/config")
+    )
     print_response(resp, as_json=as_json, as_yaml=as_yaml)
 
 
 # ── Proxmox Endpoints CRUD ────────────────────────────────────────────────────
+
 
 @endpoints_app.command("list")
 def pxendpoint_list(
@@ -144,8 +161,12 @@ def pxendpoint_get(
 
 @endpoints_app.command("create")
 def pxendpoint_create(
-    body_json: Annotated[Optional[str], typer.Option("--body-json", help="JSON payload string.")] = None,
-    body_file: Annotated[Optional[Path], typer.Option("--body-file", help="Path to JSON payload file.")] = None,
+    body_json: Annotated[
+        Optional[str], typer.Option("--body-json", help="JSON payload string.")
+    ] = None,
+    body_file: Annotated[
+        Optional[Path], typer.Option("--body-file", help="Path to JSON payload file.")
+    ] = None,
     as_json: JsonFlag = False,
     as_yaml: YamlFlag = False,
 ) -> None:
@@ -158,21 +179,29 @@ def pxendpoint_create(
 @endpoints_app.command("update")
 def pxendpoint_update(
     endpoint_id: Annotated[int, typer.Argument(help="Proxmox endpoint ID.")],
-    body_json: Annotated[Optional[str], typer.Option("--body-json", help="JSON payload string.")] = None,
-    body_file: Annotated[Optional[Path], typer.Option("--body-file", help="Path to JSON payload file.")] = None,
+    body_json: Annotated[
+        Optional[str], typer.Option("--body-json", help="JSON payload string.")
+    ] = None,
+    body_file: Annotated[
+        Optional[Path], typer.Option("--body-file", help="Path to JSON payload file.")
+    ] = None,
     as_json: JsonFlag = False,
     as_yaml: YamlFlag = False,
 ) -> None:
     """Update a Proxmox endpoint record."""
     payload = load_json_payload(body_json, body_file)
-    resp = run_with_spinner(_get_client().put(f"/proxmox/endpoints/{endpoint_id}", payload=payload))
+    resp = run_with_spinner(
+        _get_client().put(f"/proxmox/endpoints/{endpoint_id}", payload=payload)
+    )
     print_response(resp, as_json=as_json, as_yaml=as_yaml)
 
 
 @endpoints_app.command("delete")
 def pxendpoint_delete(
     endpoint_id: Annotated[int, typer.Argument(help="Proxmox endpoint ID.")],
-    confirm: Annotated[bool, typer.Option("--confirm", help="Skip confirmation prompt.")] = False,
+    confirm: Annotated[
+        bool, typer.Option("--confirm", help="Skip confirmation prompt.")
+    ] = False,
 ) -> None:
     """Delete a Proxmox endpoint record."""
     if not confirm:
@@ -183,16 +212,23 @@ def pxendpoint_delete(
 
 # ── Viewer / Codegen ──────────────────────────────────────────────────────────
 
+
 @viewer_app.command("generate")
 def viewer_generate(
-    body_json: Annotated[Optional[str], typer.Option("--body-json", help="JSON config string.")] = None,
-    body_file: Annotated[Optional[Path], typer.Option("--body-file", help="Path to JSON config file.")] = None,
+    body_json: Annotated[
+        Optional[str], typer.Option("--body-json", help="JSON config string.")
+    ] = None,
+    body_file: Annotated[
+        Optional[Path], typer.Option("--body-file", help="Path to JSON config file.")
+    ] = None,
     as_json: JsonFlag = False,
     as_yaml: YamlFlag = False,
 ) -> None:
     """Run the Proxmox API Viewer crawl and code generation pipeline."""
     payload = load_json_payload(body_json, body_file)
-    resp = run_with_spinner(_get_client().post("/proxmox/viewer/generate", payload=payload))
+    resp = run_with_spinner(
+        _get_client().post("/proxmox/viewer/generate", payload=payload)
+    )
     print_response(resp, as_json=as_json, as_yaml=as_yaml)
 
 
@@ -230,12 +266,14 @@ def viewer_contracts(
 def viewer_pydantic() -> None:
     """Print the generated Pydantic v2 model source code."""
     from proxbox_cli.support import console
+
     resp = run_with_spinner(_get_client().get("/proxmox/viewer/pydantic"))
     console.print(f"Status: {resp.status}")
     console.print(resp.text)
 
 
 # ── Cluster ───────────────────────────────────────────────────────────────────
+
 
 @cluster_app.command("status")
 def cluster_status(
@@ -249,17 +287,22 @@ def cluster_status(
 
 @cluster_app.command("resources")
 def cluster_resources(
-    resource_type: Annotated[Optional[str], typer.Option("--type", help="Filter: vm, storage, node, sdn.")] = None,
+    resource_type: Annotated[
+        Optional[str], typer.Option("--type", help="Filter: vm, storage, node, sdn.")
+    ] = None,
     as_json: JsonFlag = False,
     as_yaml: YamlFlag = False,
 ) -> None:
     """Get cluster resources, optionally filtered by type."""
     query = {"type": resource_type} if resource_type else None
-    resp = run_with_spinner(_get_client().get("/proxmox/cluster/resources", query=query))
+    resp = run_with_spinner(
+        _get_client().get("/proxmox/cluster/resources", query=query)
+    )
     print_response(resp, as_json=as_json, as_yaml=as_yaml)
 
 
 # ── Nodes ─────────────────────────────────────────────────────────────────────
+
 
 @nodes_app.command("list")
 def nodes_list(
@@ -274,13 +317,17 @@ def nodes_list(
 @nodes_app.command("network")
 def nodes_network(
     node: Annotated[str, typer.Argument(help="Node name.")],
-    interface_type: Annotated[Optional[str], typer.Option("--type", help="Filter by interface type.")] = None,
+    interface_type: Annotated[
+        Optional[str], typer.Option("--type", help="Filter by interface type.")
+    ] = None,
     as_json: JsonFlag = False,
     as_yaml: YamlFlag = False,
 ) -> None:
     """Get network interfaces for a node."""
     query = {"type": interface_type} if interface_type else None
-    resp = run_with_spinner(_get_client().get(f"/proxmox/nodes/{node}/network", query=query))
+    resp = run_with_spinner(
+        _get_client().get(f"/proxmox/nodes/{node}/network", query=query)
+    )
     print_response(resp, as_json=as_json, as_yaml=as_yaml)
 
 

@@ -15,7 +15,9 @@ from netbox_proxbox.views.proxbox_access import permission_enqueue_proxbox_sync
 __all__ = ("build_home_dashboard_context",)
 
 
-def build_home_dashboard_context(request, quick_schedule_form: ScheduleSyncForm | None = None):
+def build_home_dashboard_context(
+    request, quick_schedule_form: ScheduleSyncForm | None = None
+):
     """
     Build the context dict for ``home.html`` (endpoint lists, URLs, quick schedule card).
     """

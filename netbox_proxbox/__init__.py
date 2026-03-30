@@ -5,7 +5,14 @@ from netbox.plugins import PluginConfig
 
 
 class ProxboxConfig(PluginConfig):
-    """Django app config for the Proxbox NetBox plugin (URLs, queues, job registration)."""
+    """Django app config for the Proxbox NetBox plugin (URLs, queues, job registration).
+
+    Proxbox sync work is enqueued as core NetBox Jobs (see ``jobs.ProxboxSyncJob``) on
+    ``netbox.constants.RQ_QUEUE_DEFAULT`` (``jobs.PROXBOX_SYNC_QUEUE_NAME``), so the stock
+    ``manage.py rqworker`` without extra queue flags picks them up. We intentionally do not
+    register a dedicated plugin RQ queue here (``queues`` empty); legacy jobs may still show
+    ``queue_name`` ``netbox_proxbox.sync`` from older releases.
+    """
 
     name = "netbox_proxbox"
     verbose_name = "Proxbox"
@@ -17,7 +24,7 @@ class ProxboxConfig(PluginConfig):
     max_version = "4.5.99"
     base_url = "proxbox"
     required_settings = []
-    queues = ["sync"]
+    queues = []
 
     def ready(self):
         """Register models, then import job modules so runners and core Job views hook in."""

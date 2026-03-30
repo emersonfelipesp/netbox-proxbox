@@ -149,7 +149,9 @@ def test_has_recurring_proxbox_sync_all_finds_all_sync(schedule_hints, monkeypat
     assert schedule_hints.has_recurring_proxbox_sync_all(object()) is True
 
 
-def test_has_recurring_proxbox_sync_all_ignores_devices_only(schedule_hints, monkeypatch):
+def test_has_recurring_proxbox_sync_all_ignores_devices_only(
+    schedule_hints, monkeypatch
+):
     job = _make_job(
         interval=1440,
         status="scheduled",
