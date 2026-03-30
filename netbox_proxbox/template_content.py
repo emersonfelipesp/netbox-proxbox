@@ -20,14 +20,14 @@ class ProxboxJobTemplateExtension(PluginTemplateExtension):
     models = ["core.job"]
 
     def buttons(self):
-        """Render Run now (not while running) and Cancel (pending/scheduled/running) as permitted."""
+        """Render Run now (finished jobs only) and Cancel (pending/scheduled/running) as permitted."""
         obj = self.context["object"]
         if not isinstance(obj, Job) or not is_proxbox_sync_job(obj):
             return ""
         user = self.context["request"].user
         parts: list[str] = []
 
-        if obj.status != JobStatusChoices.STATUS_RUNNING:
+        if obj.status in JobStatusChoices.TERMINAL_STATE_CHOICES:
             if user.has_perm(permission_add_sync_process()):
                 parts.append(
                     self.render(
