@@ -6,7 +6,8 @@ from django.core.exceptions import ValidationError
 from django.db import models
 
 
-def validate_domain(value):
+def validate_domain(value: object) -> None:
+    """Reject values that are not empty, ``localhost``, or a simple DNS-like hostname."""
     if value in (None, ""):
         return
 
@@ -21,7 +22,9 @@ def validate_domain(value):
 
 
 class DomainField(models.CharField):
-    def __init__(self, *args, **kwargs):
+    """CharField with RFC-ish domain validation (plus ``localhost``)."""
+
+    def __init__(self, *args, **kwargs) -> None:
         kwargs["max_length"] = 253  # Maximum length of a domain name is 253 characters
         super().__init__(*args, **kwargs)
         self.validators.append(validate_domain)

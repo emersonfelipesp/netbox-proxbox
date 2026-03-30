@@ -1,9 +1,12 @@
 """Fetch repository markdown content from GitHub for plugin pages."""
 
+from __future__ import annotations
+
 import requests
 
-def get(**kwargs):
-    
+
+def get(**kwargs: object) -> str | None:
+    """Download markdown text for ``filename`` from the upstream netbox-proxbox repo."""
     owner = "netdevopsbr"
     repo = "netbox-proxbox"
     #branch = "develop"

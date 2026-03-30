@@ -57,6 +57,7 @@ exclude = ["tests/test_api_netbox_integration.py", "tests/test_proxmox_export_vi
 
 [tool.ruff.lint]
 select = ["E", "F", "W"]
+# Enable ANN201/D103 incrementally on subpackages (e.g. netbox_proxbox/services/) when ready.
 ignore = ["F403", "F401", "E501", "W293"]
 
 [tool.ruff.lint.per-file-ignores]

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 from types import SimpleNamespace
 
 import requests
@@ -7,6 +8,12 @@ import requests
 from tests.conftest import ResponseStub, load_plugin_module
 
 _SYNC_SHORT_TIMEOUT = 5
+
+
+def _sync_backend_proxy():
+    return importlib.import_module("netbox_proxbox.services.backend_proxy")
+
+
 _SYNC_BACKUP_TIMEOUT = (5, 3600)
 
 
@@ -30,10 +37,11 @@ def test_sync_resource_uses_primary_fastapi_url(monkeypatch, fastapi_endpoint):
         monkeypatch=monkeypatch,
         fastapi_endpoint=fastapi_endpoint,
     )
+    bp = _sync_backend_proxy()
     requested = []
 
     monkeypatch.setattr(
-        module.requests,
+        bp.requests,
         "get",
         lambda url, params=None, headers=None, verify=True, timeout=None: (
             requested.append((url, params, headers, verify, timeout))
@@ -61,6 +69,7 @@ def test_sync_resource_falls_back_to_ip_url(monkeypatch, fastapi_endpoint):
         monkeypatch=monkeypatch,
         fastapi_endpoint=fastapi_endpoint,
     )
+    bp = _sync_backend_proxy()
     requested = []
 
     def fake_get(url, params=None, headers=None, verify=True, timeout=None):
@@ -69,7 +78,7 @@ def test_sync_resource_falls_back_to_ip_url(monkeypatch, fastapi_endpoint):
             raise requests.exceptions.ConnectionError("primary failed")
         return ResponseStub({"ok": True})
 
-    monkeypatch.setattr(module.requests, "get", fake_get)
+    monkeypatch.setattr(bp.requests, "get", fake_get)
 
     response = module.sync_vm_backups(_json_request())
     assert response.status_code == 202
@@ -107,6 +116,7 @@ def test_sync_resource_uses_http_ip_fallback_when_ssl_verification_is_disabled(
             "websocket_url": "ws://proxbox.local:8801/ws",
         },
     )
+    bp = _sync_backend_proxy()
     requested = []
 
     def fake_get(url, params=None, headers=None, verify=True, timeout=None):
@@ -117,7 +127,7 @@ def test_sync_resource_uses_http_ip_fallback_when_ssl_verification_is_disabled(
             )
         return ResponseStub({"ok": True})
 
-    monkeypatch.setattr(module.requests, "get", fake_get)
+    monkeypatch.setattr(bp.requests, "get", fake_get)
 
     response = module.sync_full_update(_json_request())
 
@@ -181,10 +191,11 @@ def test_sync_resource_skips_duplicate_ip_fallback(monkeypatch, fastapi_endpoint
             "websocket_url": "wss://10.0.0.5:8801/ws",
         },
     )
+    bp = _sync_backend_proxy()
     requested = []
 
     monkeypatch.setattr(
-        module.requests,
+        bp.requests,
         "get",
         lambda url, params=None, headers=None, verify=True, timeout=None: (
             requested.append((url, params, headers, verify, timeout))
@@ -214,9 +225,10 @@ def test_sync_resource_redirects_browser_requests_with_success_message(
         monkeypatch=monkeypatch,
         fastapi_endpoint=fastapi_endpoint,
     )
+    bp = _sync_backend_proxy()
 
     monkeypatch.setattr(
-        module.requests, "get", lambda *args, **kwargs: ResponseStub({"ok": True})
+        bp.requests, "get", lambda *args, **kwargs: ResponseStub({"ok": True})
     )
 
     response = module.sync_virtual_machines(_browser_request())
@@ -235,9 +247,10 @@ def test_sync_resource_redirects_browser_requests_with_error_message(
         monkeypatch=monkeypatch,
         fastapi_endpoint=fastapi_endpoint,
     )
+    bp = _sync_backend_proxy()
 
     monkeypatch.setattr(
-        module.requests,
+        bp.requests,
         "get",
         lambda *args, **kwargs: (_ for _ in ()).throw(
             requests.exceptions.ConnectionError("connection refused")
@@ -258,13 +271,14 @@ def test_sync_full_update_runs_devices_then_virtual_machines(
         monkeypatch=monkeypatch,
         fastapi_endpoint=fastapi_endpoint,
     )
+    bp = _sync_backend_proxy()
     requested = []
 
     def fake_get(url, params=None, headers=None, verify=True, timeout=None):
         requested.append((url, params, headers, verify, timeout))
         return ResponseStub({"ok": True, "url": url})
 
-    monkeypatch.setattr(module.requests, "get", fake_get)
+    monkeypatch.setattr(bp.requests, "get", fake_get)
 
     response = module.sync_full_update(_json_request())
 
@@ -305,6 +319,7 @@ def test_sync_full_update_stops_when_devices_step_fails(monkeypatch, fastapi_end
         monkeypatch=monkeypatch,
         fastapi_endpoint=fastapi_endpoint,
     )
+    bp = _sync_backend_proxy()
 
     class FailingResponse(ResponseStub):
         text = '{"detail": "devices failed"}'
@@ -324,7 +339,7 @@ def test_sync_full_update_stops_when_devices_step_fails(monkeypatch, fastapi_end
             return FailingResponse({"detail": "devices failed"}, status_code=500)
         return ResponseStub({"ok": True})
 
-    monkeypatch.setattr(module.requests, "get", fake_get)
+    monkeypatch.setattr(bp.requests, "get", fake_get)
 
     response = module.sync_full_update(_json_request())
 
@@ -340,6 +355,7 @@ def test_sync_resource_surfaces_backend_error_detail(monkeypatch, fastapi_endpoi
         monkeypatch=monkeypatch,
         fastapi_endpoint=fastapi_endpoint,
     )
+    bp = _sync_backend_proxy()
 
     class FailingResponse(ResponseStub):
         text = '{"detail": "backend token missing"}'
@@ -352,7 +368,7 @@ def test_sync_resource_surfaces_backend_error_detail(monkeypatch, fastapi_endpoi
             raise err
 
     monkeypatch.setattr(
-        module.requests,
+        bp.requests,
         "get",
         lambda *args, **kwargs: FailingResponse(
             {"detail": "backend token missing"},
@@ -374,6 +390,7 @@ def test_sync_resource_prefers_backend_message_over_generic_internal_server_erro
         monkeypatch=monkeypatch,
         fastapi_endpoint=fastapi_endpoint,
     )
+    bp = _sync_backend_proxy()
 
     class FailingResponse(ResponseStub):
         text = '{"detail": "Internal Server Error", "message": "Error while syncing virtual machines."}'
@@ -386,7 +403,7 @@ def test_sync_resource_prefers_backend_message_over_generic_internal_server_erro
             raise err
 
     monkeypatch.setattr(
-        module.requests,
+        bp.requests,
         "get",
         lambda *args, **kwargs: FailingResponse(
             {
@@ -411,6 +428,7 @@ def test_sync_full_update_surfaces_structured_backend_type_error(
         monkeypatch=monkeypatch,
         fastapi_endpoint=fastapi_endpoint,
     )
+    bp = _sync_backend_proxy()
 
     class FailingResponse(ResponseStub):
         text = (
@@ -426,7 +444,7 @@ def test_sync_full_update_surfaces_structured_backend_type_error(
             raise err
 
     monkeypatch.setattr(
-        module.requests,
+        bp.requests,
         "get",
         lambda *args, **kwargs: FailingResponse(
             {
@@ -452,6 +470,7 @@ def test_sync_stream_response_returns_sse(monkeypatch, fastapi_endpoint):
         monkeypatch=monkeypatch,
         fastapi_endpoint=fastapi_endpoint,
     )
+    bp = _sync_backend_proxy()
 
     class _Response:
         status_code = 200
@@ -479,7 +498,7 @@ def test_sync_stream_response_returns_sse(monkeypatch, fastapi_endpoint):
             del exc_type, exc, tb
             return False
 
-    monkeypatch.setattr(module.requests, "get", lambda *args, **kwargs: _Response())
+    monkeypatch.setattr(bp.requests, "get", lambda *args, **kwargs: _Response())
 
     response = module.sync_devices_stream(_json_request(method="GET"))
     chunks = list(response.streaming_content)
@@ -498,12 +517,13 @@ def test_sync_stream_response_handles_unexpected_generator_errors(
         monkeypatch=monkeypatch,
         fastapi_endpoint=fastapi_endpoint,
     )
+    bp = _sync_backend_proxy()
 
     def _boom(*args, **kwargs):
         del args, kwargs
         raise RuntimeError("stream exploded")
 
-    monkeypatch.setattr(module.requests, "get", _boom)
+    monkeypatch.setattr(bp.requests, "get", _boom)
 
     response = module.sync_full_update_stream(_json_request(method="GET"))
     chunks = list(response.streaming_content)
@@ -523,8 +543,8 @@ def test_sync_stream_response_handles_missing_http_url(monkeypatch, fastapi_endp
     )
 
     monkeypatch.setattr(
-        module,
-        "_get_fastapi_request_context",
+        module.backend_proxy,
+        "get_fastapi_request_context",
         lambda: {"verify_ssl": True, "headers": {}},
     )
 
@@ -548,7 +568,7 @@ def test_sync_stream_response_handles_context_resolution_crash(
     def _crash():
         raise RuntimeError("context failed")
 
-    monkeypatch.setattr(module, "_get_fastapi_request_context", _crash)
+    monkeypatch.setattr(module.backend_proxy, "get_fastapi_request_context", _crash)
 
     response = module.sync_full_update_stream(_json_request(method="GET"))
     payload = "".join(list(response.streaming_content))

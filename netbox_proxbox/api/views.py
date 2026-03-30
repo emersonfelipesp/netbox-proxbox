@@ -1,6 +1,12 @@
 """Provide NetBox API root views and model viewsets for the plugin."""
 
+from __future__ import annotations
+
+from typing import Any
+
 from netbox.api.viewsets import NetBoxModelViewSet
+from rest_framework.request import Request
+from rest_framework.response import Response
 from rest_framework.routers import APIRootView
 
 from .. import filtersets, models
@@ -15,10 +21,12 @@ from .serializers import (
 
 
 class ProxBoxRootView(APIRootView):
-    def get_view_name(self):
+    """Plugin API root with a link to nested endpoint routes."""
+
+    def get_view_name(self) -> str:
         return "ProxBox"
 
-    def get(self, request, *args, **kwargs):
+    def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         response = super().get(request, *args, **kwargs)
         base_url = request.build_absolute_uri("/").rstrip("/")
         response.data["endpoints"] = f"{base_url}/api/plugins/proxbox/endpoints/"
@@ -26,7 +34,9 @@ class ProxBoxRootView(APIRootView):
 
 
 class ProxBoxEndpointsView(APIRootView):
-    def get_view_name(self):
+    """Nested root for Proxmox / NetBox / FastAPI endpoint viewsets."""
+
+    def get_view_name(self) -> str:
         return "Endpoints"
 
 
