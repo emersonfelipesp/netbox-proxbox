@@ -73,6 +73,7 @@ def schedule_hints(monkeypatch):
         VIRTUAL_MACHINES="virtual-machines",
         VIRTUAL_MACHINES_BACKUPS="vm-backups",
         VIRTUAL_MACHINES_DISKS="vm-disks",
+        VIRTUAL_MACHINES_SNAPSHOTS="vm-snapshots",
         ALL="all",
     )
     monkeypatch.setitem(sys.modules, "netbox_proxbox.choices", choices_mod)
