@@ -4,14 +4,14 @@ from netbox_proxbox.filtersets import (
     FastAPIEndpointFilterSet,
     NetBoxEndpointFilterSet,
     ProxmoxEndpointFilterSet,
-    SyncProcessFilterSet,
     VMBackupFilterSet,
+    VMSnapshotFilterSet,
 )
 
 __all__ = (
     "FastAPIEndpointFilterSet",
     "NetBoxEndpointFilterSet",
     "ProxmoxEndpointFilterSet",
-    "SyncProcessFilterSet",
     "VMBackupFilterSet",
+    "VMSnapshotFilterSet",
 )

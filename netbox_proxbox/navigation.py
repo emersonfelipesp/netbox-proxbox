@@ -18,11 +18,6 @@ virtual_machines_item = PluginMenuItem(
     link_text="Virtual Machines",
 )
 
-sync_processes_item = PluginMenuItem(
-    link="plugins:netbox_proxbox:syncprocess_list",
-    link_text="Sync Processes",
-)
-
 schedule_sync_item = PluginMenuItem(
     link="plugins:netbox_proxbox:schedule_sync",
     link_text="Schedule Sync",
@@ -129,7 +124,6 @@ menu = PluginMenu(
                 virtual_machines_item,
                 backups_item,
                 snapshots_item,
-                sync_processes_item,
                 schedule_sync_item,
                 sync_jobs_item,
             ),

@@ -10,7 +10,7 @@ from netbox_proxbox.schedule_hints import (
     quick_schedule_home_form_kwargs,
 )
 from netbox_proxbox.utils import get_fastapi_url
-from netbox_proxbox.views.proxbox_access import permission_add_sync_process
+from netbox_proxbox.views.proxbox_access import permission_enqueue_proxbox_sync
 
 __all__ = ("build_home_dashboard_context",)
 
@@ -35,7 +35,7 @@ def build_home_dashboard_context(request, quick_schedule_form: ScheduleSyncForm 
 
     show_quick_full_sync_banner = not has_recurring_proxbox_sync_all(request.user)
     can_quick_schedule_sync = show_quick_full_sync_banner and request.user.has_perm(
-        permission_add_sync_process()
+        permission_enqueue_proxbox_sync()
     )
     if can_quick_schedule_sync:
         if quick_schedule_form is None:

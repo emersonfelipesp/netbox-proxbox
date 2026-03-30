@@ -225,6 +225,20 @@ def load_plugin_module(
     django_messages = MessagesStub()
     django_contrib.messages = django_messages
 
+    django_utils = types.ModuleType("django.utils")
+    django_utils_html = types.ModuleType("django.utils.html")
+
+    def _format_html(*args, **kwargs):
+        return "".join(str(a) for a in args)
+
+    django_utils_html.format_html = _format_html
+
+    django_utils_text = types.ModuleType("django.utils.text")
+    django_utils_text.format_lazy = lambda *parts: "".join(str(p) for p in parts)
+
+    django_utils_translation = types.ModuleType("django.utils.translation")
+    django_utils_translation.gettext_lazy = lambda x: x
+
     django_auth = types.ModuleType("django.contrib.auth")
     django_auth_decorators = types.ModuleType("django.contrib.auth.decorators")
     django_auth_decorators.login_required = lambda func: func
@@ -297,8 +311,6 @@ def load_plugin_module(
         first=proxmox_endpoint,
         objects_by_pk={1: proxmox_endpoint} if proxmox_endpoint is not None else {},
     )
-    models_module.SyncProcess = _make_model_class("SyncProcess")
-
     utils_module = types.ModuleType("netbox_proxbox.utils")
     utils_module.get_fastapi_url = get_fastapi_url or (
         lambda obj: {
@@ -331,6 +343,10 @@ def load_plugin_module(
         "django.views.decorators": django_views_decorators,
         "django.views.decorators.http": django_views_http,
         "django.urls": django_urls,
+        "django.utils": django_utils,
+        "django.utils.html": django_utils_html,
+        "django.utils.text": django_utils_text,
+        "django.utils.translation": django_utils_translation,
         "django.contrib": django_contrib,
         "django.contrib.auth": django_auth,
         "django.contrib.auth.decorators": django_auth_decorators,
@@ -347,12 +363,56 @@ def load_plugin_module(
     for name, module in stub_modules.items():
         monkeypatch.setitem(sys.modules, name, module)
 
+    repo = Path(__file__).resolve().parents[1]
+
+    utilities_root = types.ModuleType("utilities")
+    monkeypatch.setitem(sys.modules, "utilities", utilities_root)
+    utilities_choices_mod = types.ModuleType("utilities.choices")
+
+    class _StubChoiceSet:
+        pass
+
+    utilities_choices_mod.ChoiceSet = _StubChoiceSet
+    monkeypatch.setitem(sys.modules, "utilities.choices", utilities_choices_mod)
+
+    nbp_root = types.ModuleType("netbox_proxbox")
+    nbp_root.__path__ = [str(repo / "netbox_proxbox")]
+    monkeypatch.setitem(sys.modules, "netbox_proxbox", nbp_root)
+
+    nbp_choices = types.ModuleType("netbox_proxbox.choices")
+
+    class _SyncTypeChoices(_StubChoiceSet):
+        VIRTUAL_MACHINES = "virtual-machines"
+        VIRTUAL_MACHINES_DISKS = "vm-disks"
+        VIRTUAL_MACHINES_BACKUPS = "vm-backups"
+        VIRTUAL_MACHINES_SNAPSHOTS = "vm-snapshots"
+        DEVICES = "devices"
+        ALL = "all"
+
+    nbp_choices.SyncTypeChoices = _SyncTypeChoices
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.choices", nbp_choices)
+
+    nbp_jobs = types.ModuleType("netbox_proxbox.jobs")
+
+    class _ProxboxSyncJob:
+        @classmethod
+        def enqueue(cls, **kwargs):
+            raise RuntimeError("ProxboxSyncJob.enqueue must be patched in tests")
+
+    nbp_jobs.ProxboxSyncJob = _ProxboxSyncJob
+    nbp_jobs.PROXBOX_SYNC_QUEUE_NAME = "default"
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.jobs", nbp_jobs)
+
     package_name = "netbox_proxbox.views"
     package_module = types.ModuleType(package_name)
-    package_module.__path__ = [
-        str(Path(__file__).resolve().parents[1] / "netbox_proxbox" / "views")
-    ]
+    package_module.__path__ = [str(repo / "netbox_proxbox" / "views")]
     monkeypatch.setitem(sys.modules, package_name, package_module)
+
+    proxbox_access = types.ModuleType("netbox_proxbox.views.proxbox_access")
+    proxbox_access.permission_enqueue_proxbox_sync = lambda: "stub.enqueue_proxbox_sync"
+    monkeypatch.setitem(
+        sys.modules, "netbox_proxbox.views.proxbox_access", proxbox_access
+    )
 
     sys.modules.pop(module_name, None)
     sys.modules.pop("netbox_proxbox.services.service_status", None)

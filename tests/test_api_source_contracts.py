@@ -148,13 +148,23 @@ def test_endpoint_serializers_expose_supported_model_fields():
             "websocket_port",
             "server_side_websocket",
         },
-        "SyncProcessSerializer": {
+        "VMSnapshotSerializer": {
+            "id",
+            "url",
+            "display",
+            "virtual_machine",
             "name",
-            "sync_type",
+            "description",
+            "vmid",
+            "node",
+            "snaptime",
+            "parent",
+            "subtype",
             "status",
-            "started_at",
-            "completed_at",
-            "runtime",
+            "tags",
+            "custom_fields",
+            "created",
+            "last_updated",
         },
         "VMBackupSerializer": {
             "virtual_machine",
@@ -216,6 +226,7 @@ def test_writable_nested_related_fields_are_declared():
 
     expected_assignments = {
         "VMBackupSerializer": {"virtual_machine"},
+        "VMSnapshotSerializer": {"virtual_machine"},
         "ProxmoxEndpointSerializer": {"ip_address"},
         "NetBoxEndpointSerializer": {"ip_address", "token"},
         "FastAPIEndpointSerializer": {"ip_address"},
@@ -251,6 +262,7 @@ def test_nested_serializers_do_not_pass_nested_keyword_argument():
     module = _parse_serializers_package()
     assignments = [
         ("VMBackupSerializer", "virtual_machine"),
+        ("VMSnapshotSerializer", "virtual_machine"),
         ("ProxmoxEndpointSerializer", "ip_address"),
         ("NetBoxEndpointSerializer", "ip_address"),
         ("NetBoxEndpointSerializer", "token"),
@@ -285,7 +297,7 @@ def test_all_viewsets_use_netbox_model_viewset_and_plugin_filtersets():
 
     expected_viewsets = {
         "VMBackupViewSet": "VMBackupFilterSet",
-        "SyncProcessViewSet": "SyncProcessFilterSet",
+        "VMSnapshotViewSet": "VMSnapshotFilterSet",
         "ProxmoxEndpointViewSet": "ProxmoxEndpointFilterSet",
         "NetBoxEndpointViewSet": "NetBoxEndpointFilterSet",
         "FastAPIEndpointViewSet": "FastAPIEndpointFilterSet",
@@ -332,8 +344,8 @@ def test_api_filters_module_reexports_all_plugin_filtersets():
         "FastAPIEndpointFilterSet",
         "NetBoxEndpointFilterSet",
         "ProxmoxEndpointFilterSet",
-        "SyncProcessFilterSet",
         "VMBackupFilterSet",
+        "VMSnapshotFilterSet",
     }
 
 
@@ -370,7 +382,7 @@ def test_plugin_api_routes_register_all_plugin_objects():
             root_registers.append(route)
 
     assert set(endpoint_registers) == {"proxmox", "netbox", "fastapi"}
-    assert set(root_registers) == {"sync-processes", "backups", "snapshots"}
+    assert set(root_registers) == {"backups", "snapshots"}
 
 
 def test_proxmox_endpoint_views_register_bulk_import_and_csv_export():

@@ -1,4 +1,4 @@
-"""Define NetBox table classes for endpoint and sync-process list views."""
+"""Define NetBox table classes for endpoint list views."""
 
 # Django Imports
 import django_tables2 as tables
@@ -13,61 +13,9 @@ from netbox_proxbox.models import (
     ProxmoxEndpoint,
     NetBoxEndpoint,
     FastAPIEndpoint,
-    SyncProcess,
 )
 from netbox_proxbox.tables.vm_backup import VMBackupTable
 from netbox_proxbox.tables.vm_snapshot import VMSnapshotTable
-
-
-class SyncProcessTable(NetBoxTable):
-    """django-tables2 layout for sync process history list views."""
-
-    name = tables.Column(linkify=True)
-    sync_type = ChoiceFieldColumn(
-        verbose_name=_("Sync Type"),
-    )
-    status = ChoiceFieldColumn(
-        verbose_name=_("Status"),
-    )
-    started_at = tables.Column(
-        verbose_name=_("Started At"),
-    )
-    completed_at = tables.Column(
-        verbose_name=_("Completed At"),
-    )
-    last_updated = tables.Column(
-        verbose_name=_("Last Updated"),
-    )
-    runtime = tables.Column(
-        verbose_name=_("Runtime"),
-    )
-
-    class Meta(NetBoxTable.Meta):
-        model = SyncProcess
-        fields = (
-            "pk",
-            "id",
-            "name",
-            "sync_type",
-            "status",
-            "started_at",
-            "completed_at",
-            "last_updated",
-            "runtime",
-            "actions",
-        )
-
-        default_columns = (
-            "pk",
-            "name",
-            "sync_type",
-            "status",
-            "started_at",
-            "completed_at",
-            "runtime",
-        )
-
-        order_by = ("-id",)
 
 
 class ProxmoxEndpointTable(NetBoxTable):

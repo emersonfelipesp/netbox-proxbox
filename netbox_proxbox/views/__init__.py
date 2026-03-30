@@ -40,23 +40,11 @@ from .keepalive_status import get_service_status
 from .schedule_sync import QuickScheduleSyncFromHomeView, ScheduleSyncView
 from .sync import (
     sync_devices,
-    sync_devices_stream,
     sync_full_update,
-    sync_full_update_stream,
     sync_virtual_machines,
-    sync_virtual_machines_stream,
     sync_virtual_disks,
-    sync_virtual_disks_stream,
     sync_vm_backups,
-    sync_vm_backups_stream,
     sync_vm_snapshots,
-    sync_vm_snapshots_stream,
-)
-from .sync_process import (
-    SyncProcessDeleteView,
-    SyncProcessEditView,
-    SyncProcessListView,
-    SyncProcessView,
 )
 from .vm_backup import (
     VMBackupBulkDeleteView,

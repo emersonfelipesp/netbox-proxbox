@@ -1,4 +1,5 @@
 {% extends 'base/layout.html' %}
+{% load i18n %}
 
 {% block content %}
     <div class="row mb-3">
@@ -7,7 +8,7 @@
                 <h5 class="card-header">Sync Virtual Machines</h5>
                 <div class="card-body">
                     <p>Syncing virtual machines...</p>
-                    <p>To view Sync Process, please go to <a href="{% url 'plugins:netbox_proxbox:syncprocess_list' %}">Sync Process</a> page.</p>
+                    <p>{% trans "Track Proxbox sync runs in" %} <a href="{% url 'core:job_list' %}">{% trans "NetBox jobs" %}</a>.</p>
                     <p>If you want real-time updates of the sync process, consider enabling WebSocket in the <a href="{% url 'plugins:netbox_proxbox:fastapiendpoint_list' %}">FastAPI Endpoint</a> configuration.</p>
                 </div>
             </div>

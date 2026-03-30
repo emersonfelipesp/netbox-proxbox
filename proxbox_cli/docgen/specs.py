@@ -26,9 +26,9 @@ def load_specs() -> list[CaptureSpec]:
         ),
         CaptureSpec(
             section="Core Commands",
-            title="Sync Processes Help",
-            argv=["sync-processes", "--help"],
-            notes="Shows the sync-process subcommands exposed by the backend.",
+            title="Extras Help",
+            argv=["extras", "--help"],
+            notes="Shows extras-related CLI commands (custom fields, etc.).",
         ),
         CaptureSpec(
             section="NetBox Commands",
