@@ -19,6 +19,9 @@ from netbox_proxbox.views.error_utils import (
 
 logger = logging.getLogger(__name__)
 
+# Long read timeout for consuming proxbox-api SSE sync streams from background jobs.
+_SYNC_STREAM_READ_TIMEOUT = (5, 3600)
+
 # proxbox-api awaits the full backup sync in one GET; allow long read like the stream proxy.
 _LONG_RUNNING_BACKUP_PATH_MARKER = "virtualization/virtual-machines/backups/all/create"
 _LONG_RUNNING_SNAPSHOT_PATH_MARKER = (
@@ -140,6 +143,168 @@ def request_backend_resource(
     }, 503
 
 
+def _iter_sse_frames(
+    line_iter: Any,
+) -> Generator[tuple[str, dict[str, Any]], None, None]:
+    """Parse newline-delimited SSE from ``iter_lines``-style input into (event, data_dict) pairs."""
+    event_name = ""
+    data_lines: list[str] = []
+
+    def flush() -> Generator[tuple[str, dict[str, Any]], None, None]:
+        nonlocal event_name, data_lines
+        if not data_lines:
+            event_name = ""
+            return
+        payload_str = "\n".join(data_lines)
+        try:
+            data_obj: dict[str, Any] = json.loads(payload_str)
+        except json.JSONDecodeError:
+            data_obj = {"raw": payload_str}
+        ev = event_name or "message"
+        yield (ev, data_obj)
+        event_name = ""
+        data_lines = []
+
+    for raw in line_iter:
+        if raw is None:
+            continue
+        line = str(raw)
+        if line == "":
+            yield from flush()
+            continue
+        if line.startswith(":"):
+            continue
+        if line.startswith("event:"):
+            yield from flush()
+            event_name = line[6:].strip()
+        elif line.startswith("data:"):
+            data_lines.append(line[5:].lstrip())
+        else:
+            data_lines.append(line)
+
+    yield from flush()
+
+
+def _consume_sse_until_complete(response: requests.Response) -> tuple[dict[str, Any], int]:
+    """Read an SSE body to the final ``complete`` event; return (payload, http_status_hint)."""
+    last_complete: dict[str, Any] | None = None
+    try:
+        for _event, data in _iter_sse_frames(response.iter_lines(decode_unicode=True)):
+            if _event == "complete":
+                last_complete = data
+    except requests.exceptions.RequestException as exc:
+        detail, _ = extract_backend_error_detail(exc)
+        return {
+            "stream": True,
+            "detail": detail,
+        }, 502
+
+    if last_complete is None:
+        return {
+            "stream": True,
+            "detail": "ProxBox backend stream ended without a complete event.",
+        }, 502
+
+    if last_complete.get("ok") is False:
+        msg = last_complete.get("message") or "Sync failed."
+        errors = last_complete.get("errors")
+        if isinstance(errors, list) and errors:
+            first = errors[0]
+            if isinstance(first, dict) and first.get("detail"):
+                msg = str(first["detail"])
+        return {"stream": True, "detail": msg, "response": last_complete}, 503
+
+    return {
+        "stream": True,
+        "response": last_complete,
+    }, 200
+
+
+def run_sync_stream(
+    path: str,
+    query_params: dict | None = None,
+) -> tuple[dict, int]:
+    """GET a backend SSE sync URL to completion (for NetBox background jobs).
+
+    ``path`` must be the stream route (e.g. ``full-update/stream`` or
+    ``dcim/devices/create/stream``). Uses the same URL fallback as
+    :func:`iter_backend_sse_lines` and a long read timeout.
+    """
+    context = get_fastapi_request_context()
+    if context is None or not context.get("http_url"):
+        return {"stream": False, "detail": "No FastAPI URL found."}, 404
+
+    backend_headers = context.get("headers") or {}
+    http_url = context.get("http_url")
+    assert http_url
+    verify_ssl = bool(context.get("verify_ssl", True))
+    request_candidates = [(f"{http_url}/{path}", verify_ssl)]
+    fallback_url = context.get("ip_address_url")
+    if fallback_url:
+        fallback_path = f"{fallback_url}/{path}"
+        if fallback_path != request_candidates[0][0]:
+            request_candidates.append((fallback_path, verify_ssl))
+
+    requested_urls: list[str] = []
+    last_detail: str | None = None
+
+    for url, verify in request_candidates:
+        try:
+            requested_urls.append(url)
+            with requests.get(
+                url,
+                params=query_params,
+                headers=backend_headers,
+                verify=verify,
+                timeout=_SYNC_STREAM_READ_TIMEOUT,
+                stream=True,
+            ) as response:
+                if response.status_code >= 400:
+                    last_detail = f"HTTP {response.status_code}"
+                    try:
+                        payload, json_err = parse_requests_response_json(
+                            response, log_label=f"sync-stream:{path}"
+                        )
+                        if not json_err and isinstance(payload, dict):
+                            d = payload.get("detail") or payload.get("message")
+                            if d:
+                                last_detail = str(d)
+                    except Exception:
+                        pass
+                    logger.error(
+                        "Sync stream HTTP %s for %s via %s: %s",
+                        response.status_code,
+                        path,
+                        url,
+                        last_detail,
+                    )
+                    if response.status_code < 500:
+                        break
+                    continue
+
+                payload, status = _consume_sse_until_complete(response)
+                payload = {
+                    **payload,
+                    "path": path,
+                    "requested_urls": requested_urls,
+                }
+                return payload, status
+        except requests.exceptions.RequestException as exc:
+            last_detail, http_st = extract_backend_error_detail(exc)
+            logger.exception("Sync stream request failed for %s via %s", path, url)
+            if getattr(exc, "response", None) is not None:
+                break
+            if http_st and http_st >= 500:
+                continue
+
+    return {
+        "stream": True,
+        "path": path,
+        "requested_urls": requested_urls,
+        "detail": last_detail or "Unable to reach the ProxBox backend stream.",
+    }, 503
+
+
 def iter_backend_sse_lines(
     context: BackendRequestContext,
     path: str,
@@ -171,7 +336,7 @@ def iter_backend_sse_lines(
                     params=query_params,
                     headers=backend_headers,
                     verify=verify,
-                    timeout=(5, 3600),
+                    timeout=_SYNC_STREAM_READ_TIMEOUT,
                     stream=True,
                 ) as response:
                     response.raise_for_status()

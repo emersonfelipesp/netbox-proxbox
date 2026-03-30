@@ -29,6 +29,7 @@ def proxbox_sync_job_module(monkeypatch):
         DEVICES="devices",
         VIRTUAL_MACHINES="virtual-machines",
         VIRTUAL_MACHINES_BACKUPS="vm-backups",
+        VIRTUAL_MACHINES_DISKS="vm-disks",
         ALL="all",
     )
     monkeypatch.setitem(sys.modules, "netbox_proxbox.choices", choices_mod)
@@ -51,22 +52,18 @@ def proxbox_sync_job_module(monkeypatch):
 def test_proxbox_sync_job_run_imports_from_services_not_views(
     monkeypatch, proxbox_sync_job_module
 ):
-    """run() must resolve sync helpers from netbox_proxbox.services (views.sync has no exports)."""
+    """run() must call ``run_sync_stream`` with proxbox-api SSE paths."""
     captured: dict[str, object] = {}
 
     services_mod = types.ModuleType("netbox_proxbox.services")
 
-    def sync_resource(path, query_params=None):
-        captured["called"] = "sync_resource"
+    def run_sync_stream(path, query_params=None):
+        captured["called"] = "run_sync_stream"
         captured["path"] = path
-        return ({"detail": "ok"}, 202)
+        captured["query_params"] = query_params
+        return ({"stream": True, "response": {"ok": True, "message": "ok"}}, 200)
 
-    def sync_full_update_resource(query_params=None):
-        captured["called"] = "sync_full_update_resource"
-        return ({"detail": "ok"}, 202)
-
-    services_mod.sync_resource = sync_resource
-    services_mod.sync_full_update_resource = sync_full_update_resource
+    services_mod.run_sync_stream = run_sync_stream
     monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
 
     views_sync = types.ModuleType("netbox_proxbox.views.sync")
@@ -86,13 +83,20 @@ def test_proxbox_sync_job_run_imports_from_services_not_views(
         proxmox_endpoint_ids=None,
         netbox_endpoint_ids=None,
     )
-    assert captured["called"] == "sync_resource"
-    assert captured["path"] == "dcim/devices/create"
+    assert captured["called"] == "run_sync_stream"
+    assert captured["path"] == "dcim/devices/create/stream"
     assert job.job.save.call_count >= 1
 
     job.job.reset_mock()
     ProxboxSyncJob.run(job, sync_type=st.ALL)
-    assert captured["called"] == "sync_full_update_resource"
+    assert captured["called"] == "run_sync_stream"
+    assert captured["path"] == "full-update/stream"
+
+    job.job.reset_mock()
+    ProxboxSyncJob.run(job, sync_type=st.VIRTUAL_MACHINES_DISKS)
+    assert captured["path"] == (
+        "virtualization/virtual-machines/virtual-disks/create/stream"
+    )
 
 
 def test_proxbox_sync_params_from_job_defaults(proxbox_sync_job_module):
@@ -141,8 +145,7 @@ def test_proxbox_sync_params_from_job_stored(proxbox_sync_job_module):
 
 def test_proxbox_sync_job_run_raises_on_backend_error(monkeypatch, proxbox_sync_job_module):
     services_mod = types.ModuleType("netbox_proxbox.services")
-    services_mod.sync_resource = lambda *a, **k: ({"detail": "unavailable"}, 503)
-    services_mod.sync_full_update_resource = lambda *a, **k: ({}, 202)
+    services_mod.run_sync_stream = lambda *a, **k: ({"detail": "unavailable"}, 503)
     monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
 
     ProxboxSyncJob = proxbox_sync_job_module.ProxboxSyncJob
