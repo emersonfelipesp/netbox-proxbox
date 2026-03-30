@@ -16,7 +16,7 @@ def test_fastapi_status_falls_back_to_ip_after_ssl_error(
     monkeypatch,
     fastapi_endpoint,
 ):
-    module = load_plugin_module(
+    load_plugin_module(
         "netbox_proxbox.views.keepalive_status",
         monkeypatch=monkeypatch,
         fastapi_endpoint=fastapi_endpoint,
@@ -46,7 +46,7 @@ def test_netbox_status_creates_endpoint_and_checks_status(
     fastapi_endpoint,
     netbox_endpoint,
 ):
-    module = load_plugin_module(
+    load_plugin_module(
         "netbox_proxbox.views.keepalive_status",
         monkeypatch=monkeypatch,
         fastapi_endpoint=fastapi_endpoint,
@@ -107,7 +107,7 @@ def test_netbox_status_v2_without_secret_fails_backend_validation(
         token_secret="",
         verify_ssl=True,
     )
-    module = load_plugin_module(
+    load_plugin_module(
         "netbox_proxbox.views.keepalive_status",
         monkeypatch=monkeypatch,
         fastapi_endpoint=fastapi_endpoint,
@@ -145,7 +145,7 @@ def test_netbox_status_builds_full_v2_token_from_key_and_secret(
         token_secret="v2-token-secret",
         verify_ssl=False,
     )
-    module = load_plugin_module(
+    load_plugin_module(
         "netbox_proxbox.views.keepalive_status",
         monkeypatch=monkeypatch,
         fastapi_endpoint=fastapi_endpoint,
@@ -187,7 +187,7 @@ def test_backend_auth_headers_accepts_prefixed_and_bare_tokens(
     monkeypatch,
     fastapi_endpoint,
 ):
-    module = load_plugin_module(
+    load_plugin_module(
         "netbox_proxbox.views.keepalive_status",
         monkeypatch=monkeypatch,
         fastapi_endpoint=fastapi_endpoint,
@@ -212,7 +212,7 @@ def test_netbox_status_exposes_error_detail_on_backend_failure(
     fastapi_endpoint,
     netbox_endpoint,
 ):
-    module = load_plugin_module(
+    load_plugin_module(
         "netbox_proxbox.views.keepalive_status",
         monkeypatch=monkeypatch,
         fastapi_endpoint=fastapi_endpoint,
@@ -264,7 +264,7 @@ def test_extract_error_detail_identifies_html_404_from_wrong_backend_target(
     monkeypatch,
     fastapi_endpoint,
 ):
-    module = load_plugin_module(
+    load_plugin_module(
         "netbox_proxbox.views.keepalive_status",
         monkeypatch=monkeypatch,
         fastapi_endpoint=fastapi_endpoint,
@@ -293,7 +293,7 @@ def test_proxmox_status_uses_domain_query_when_available(
     fastapi_endpoint,
     proxmox_endpoint,
 ):
-    module = load_plugin_module(
+    load_plugin_module(
         "netbox_proxbox.views.keepalive_status",
         monkeypatch=monkeypatch,
         fastapi_endpoint=fastapi_endpoint,
@@ -343,7 +343,7 @@ def test_proxmox_status_uses_ip_query_when_domain_missing(
         port=8006,
         verify_ssl=False,
     )
-    module = load_plugin_module(
+    load_plugin_module(
         "netbox_proxbox.views.keepalive_status",
         monkeypatch=monkeypatch,
         fastapi_endpoint=fastapi_endpoint,
@@ -385,7 +385,7 @@ def test_proxmox_status_normalizes_backend_connection_refused(
     fastapi_endpoint,
     proxmox_endpoint,
 ):
-    module = load_plugin_module(
+    load_plugin_module(
         "netbox_proxbox.views.keepalive_status",
         monkeypatch=monkeypatch,
         fastapi_endpoint=fastapi_endpoint,
@@ -435,7 +435,7 @@ def test_proxmox_status_returns_sync_error_before_backend_version_call(
     fastapi_endpoint,
     proxmox_endpoint,
 ):
-    module = load_plugin_module(
+    load_plugin_module(
         "netbox_proxbox.views.keepalive_status",
         monkeypatch=monkeypatch,
         fastapi_endpoint=fastapi_endpoint,
