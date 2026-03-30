@@ -357,6 +357,11 @@ class SyncVmBackupsView(_ProxboxSyncActionView):
     sync_query_params = {"delete_nonexistent_backup": True}
 
 
+class SyncVirtualDisksView(_ProxboxSyncActionView):
+    sync_path = "virtualization/virtual-machines/virtual-disks/create"
+    action_label = "Virtual disks"
+
+
 class _ProxboxSyncStreamView(
     TokenConditionalLoginRequiredMixin,
     ContentTypePermissionRequiredMixin,
@@ -392,6 +397,10 @@ class SyncVmBackupsStreamView(_ProxboxSyncStreamView):
     stream_query_params = {"delete_nonexistent_backup": True}
 
 
+class SyncVirtualDisksStreamView(_ProxboxSyncStreamView):
+    stream_path = "virtualization/virtual-machines/virtual-disks/create"
+
+
 class SyncFullUpdateStreamView(_ProxboxSyncStreamView):
     stream_path = "full-update"
 
@@ -400,7 +409,9 @@ sync_devices = SyncDevicesView.as_view()
 sync_virtual_machines = SyncVirtualMachinesView.as_view()
 sync_full_update = SyncFullUpdateView.as_view()
 sync_vm_backups = SyncVmBackupsView.as_view()
+sync_virtual_disks = SyncVirtualDisksView.as_view()
 sync_devices_stream = SyncDevicesStreamView.as_view()
 sync_virtual_machines_stream = SyncVirtualMachinesStreamView.as_view()
 sync_vm_backups_stream = SyncVmBackupsStreamView.as_view()
+sync_virtual_disks_stream = SyncVirtualDisksStreamView.as_view()
 sync_full_update_stream = SyncFullUpdateStreamView.as_view()
