@@ -6,11 +6,17 @@ import json
 import time
 from typing import Any
 
+from netbox.constants import RQ_QUEUE_DEFAULT
 from netbox.jobs import JobRunner
 
 from netbox_proxbox.choices import SyncTypeChoices
 
-PROXBOX_SYNC_QUEUE_NAME = "netbox_proxbox.sync"
+# Use NetBox's default RQ queue so a stock ``manage.py rqworker`` (no args) picks up jobs.
+# Plugin-only queues such as ``netbox_proxbox.sync`` are not in that default worker list.
+PROXBOX_SYNC_QUEUE_NAME = RQ_QUEUE_DEFAULT
+
+# Rows created before this change may still have ``queue_name`` set to the legacy queue.
+LEGACY_PROXBOX_RQ_QUEUE = "netbox_proxbox.sync"
 
 # RQ wall-clock limit for the whole job. Must exceed NetBox's default ``RQ_DEFAULT_TIMEOUT``
 # (often 300s) and the HTTP stream read budget between chunks (3600s in ``run_sync_stream``).
@@ -18,6 +24,7 @@ PROXBOX_SYNC_QUEUE_NAME = "netbox_proxbox.sync"
 PROXBOX_SYNC_JOB_TIMEOUT = 7200
 
 __all__ = (
+    "LEGACY_PROXBOX_RQ_QUEUE",
     "PROXBOX_SYNC_QUEUE_NAME",
     "PROXBOX_SYNC_JOB_TIMEOUT",
     "ProxboxSyncJob",
@@ -75,7 +82,15 @@ class ProxboxSyncJob(JobRunner):
     def enqueue(cls, *args, **kwargs):
         """Enqueue like other ``JobRunner`` jobs, but with a long RQ ``job_timeout`` by default."""
         kwargs.setdefault("job_timeout", PROXBOX_SYNC_JOB_TIMEOUT)
-        return super().enqueue(*args, **kwargs)
+        params = {
+            "sync_type": kwargs.get("sync_type", SyncTypeChoices.ALL),
+            "proxmox_endpoint_ids": list(kwargs.get("proxmox_endpoint_ids") or []),
+            "netbox_endpoint_ids": list(kwargs.get("netbox_endpoint_ids") or []),
+        }
+        job = super().enqueue(*args, **kwargs)
+        job.data = {"proxbox_sync": {"params": params}}
+        job.save(update_fields=["data"])
+        return job
 
     def run(
         self,
@@ -151,8 +166,11 @@ class ProxboxSyncJob(JobRunner):
 
 def is_proxbox_sync_job(job: Any) -> bool:
     """True if this core Job row is a Proxbox sync (including user-defined job names)."""
+    data = getattr(job, "data", None)
+    if isinstance(data, dict) and "proxbox_sync" in data:
+        return True
     qn = getattr(job, "queue_name", None) or ""
-    if qn == PROXBOX_SYNC_QUEUE_NAME:
+    if qn == LEGACY_PROXBOX_RQ_QUEUE:
         return True
     # Legacy rows: queue may be unset while the job still used the default display name.
     default_label = getattr(ProxboxSyncJob.Meta, "name", "Proxbox Sync")

@@ -16,6 +16,10 @@ import pytest
 @pytest.fixture
 def proxbox_sync_job_module(monkeypatch):
     """Load jobs.py with stubs for netbox.jobs and netbox_proxbox.choices."""
+    netbox_constants = types.ModuleType("netbox.constants")
+    netbox_constants.RQ_QUEUE_DEFAULT = "default"
+    monkeypatch.setitem(sys.modules, "netbox.constants", netbox_constants)
+
     netbox_jobs = types.ModuleType("netbox.jobs")
 
     class JobRunner:
@@ -57,7 +61,7 @@ def test_proxbox_sync_job_run_imports_from_services_not_views(
 
     services_mod = types.ModuleType("netbox_proxbox.services")
 
-    def run_sync_stream(path, query_params=None):
+    def run_sync_stream(path, query_params=None, **stream_kwargs):
         captured["called"] = "run_sync_stream"
         captured["path"] = path
         captured["query_params"] = query_params
@@ -115,10 +119,17 @@ def test_is_proxbox_sync_job_by_queue_and_legacy_name(proxbox_sync_job_module):
 
     fn = proxbox_sync_job_module.is_proxbox_sync_job
     qn = proxbox_sync_job_module.PROXBOX_SYNC_QUEUE_NAME
-    assert fn(SimpleNamespace(queue_name=qn, name="Nightly DC1"))
-    assert not fn(SimpleNamespace(queue_name="other", name="Proxbox Sync"))
-    assert fn(SimpleNamespace(queue_name="", name="Proxbox Sync"))
-    assert fn(SimpleNamespace(queue_name=None, name="Proxbox Sync"))
+    legacy = proxbox_sync_job_module.LEGACY_PROXBOX_RQ_QUEUE
+    assert fn(
+        SimpleNamespace(
+            queue_name=qn, name="Nightly DC1", data={"proxbox_sync": {"params": {}}}
+        )
+    )
+    assert not fn(SimpleNamespace(queue_name=qn, name="Nightly DC1", data={}))
+    assert not fn(SimpleNamespace(queue_name="other", name="Proxbox Sync", data={}))
+    assert fn(SimpleNamespace(queue_name=legacy, name="Other", data={}))
+    assert fn(SimpleNamespace(queue_name="", name="Proxbox Sync", data={}))
+    assert fn(SimpleNamespace(queue_name=None, name="Proxbox Sync", data={}))
 
 
 def test_proxbox_sync_params_from_job_stored(proxbox_sync_job_module):
