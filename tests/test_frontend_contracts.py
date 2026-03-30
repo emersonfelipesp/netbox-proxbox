@@ -50,7 +50,15 @@ def test_home_template_uses_plugin_vanilla_js_entrypoint():
 def test_home_quick_schedule_banner_posts_to_quick_schedule_url():
     contents = _read("netbox_proxbox/templates/netbox_proxbox/home/quick_schedule_banner.html")
     assert "plugins:netbox_proxbox:schedule_sync_quick" in contents
-    assert "netbox_proxbox/inc/schedule_sync_form_fields.html" in contents
+    assert "netbox_proxbox/inc/schedule_sync_form_fields_quick.html" in contents
+    assert "proxboxQuickScheduleBody" in contents
+    assert 'class="collapse' in contents
+    assert "data-bs-toggle=\"collapse\"" in contents
+
+
+def test_home_loads_quick_schedule_css_with_form_media():
+    contents = _read("netbox_proxbox/templates/netbox_proxbox/home.html")
+    assert "quick_schedule_home.css" in contents
 
 
 def test_netbox_endpoint_edit_template_supports_v1_and_v2_tokens():

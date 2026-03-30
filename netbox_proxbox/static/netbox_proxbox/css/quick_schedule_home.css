@@ -1,0 +1,40 @@
+/* Home quick-schedule collapse: tight checkbox groups + chevron */
+.nb-proxbox-quick-schedule .proxbox-quick-sync-type-widgets ul,
+.nb-proxbox-quick-schedule .proxbox-quick-sync-type-widgets div#id_sync_types {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  align-items: baseline;
+}
+
+.nb-proxbox-quick-schedule .proxbox-quick-sync-type-widgets li,
+.nb-proxbox-quick-schedule .proxbox-quick-sync-type-widgets div#id_sync_types > div {
+  margin: 0;
+}
+
+.nb-proxbox-quick-schedule .proxbox-quick-sync-type-widgets li label,
+.nb-proxbox-quick-schedule .proxbox-quick-sync-type-widgets div#id_sync_types label {
+  margin: 0;
+  font-weight: normal;
+  white-space: nowrap;
+}
+
+.nb-proxbox-quick-card .quick-schedule-collapse-toggle .mdi-chevron-down {
+  transition: transform 0.15s ease;
+  vertical-align: middle;
+}
+
+.nb-proxbox-quick-card .quick-schedule-collapse-toggle:not(.collapsed) .mdi-chevron-down {
+  transform: rotate(-180deg);
+}
+
+.nb-proxbox-quick-card .card-header {
+  min-height: auto;
+}
+
+.nb-proxbox-quick-schedule details summary {
+  cursor: pointer;
+}
