@@ -8,7 +8,14 @@ from netbox.jobs import JobRunner
 
 from netbox_proxbox.choices import SyncTypeChoices
 
-__all__ = ("ProxboxSyncJob", "proxbox_sync_params_from_job")
+PROXBOX_SYNC_QUEUE_NAME = "netbox_proxbox.sync"
+
+__all__ = (
+    "PROXBOX_SYNC_QUEUE_NAME",
+    "ProxboxSyncJob",
+    "is_proxbox_sync_job",
+    "proxbox_sync_params_from_job",
+)
 
 
 def proxbox_sync_params_from_job(job: Any) -> dict[str, Any]:
@@ -95,3 +102,13 @@ class ProxboxSyncJob(JobRunner):
         self.logger.info("Sync completed successfully (HTTP %s)", status)
         self.job.data = {"proxbox_sync": {"params": params, "response": payload}}
         self.job.save(update_fields=["data"])
+
+
+def is_proxbox_sync_job(job: Any) -> bool:
+    """True if this core Job row is a Proxbox sync (including user-defined job names)."""
+    qn = getattr(job, "queue_name", None) or ""
+    if qn == PROXBOX_SYNC_QUEUE_NAME:
+        return True
+    # Legacy rows: queue may be unset while the job still used the default display name.
+    default_label = getattr(ProxboxSyncJob.Meta, "name", "Proxbox Sync")
+    return not qn and getattr(job, "name", None) == default_label
