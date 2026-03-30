@@ -23,6 +23,19 @@
                 <form method="post">
                     {% csrf_token %}
                     <div class="mb-3">
+                        <label class="form-label" for="{{ form.job_name.id_for_label }}">
+                            {{ form.job_name.label }}
+                        </label>
+                        {{ form.job_name }}
+                        {% if form.job_name.help_text %}
+                            <div class="form-text text-muted">{{ form.job_name.help_text }}</div>
+                        {% endif %}
+                        {% for error in form.job_name.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="mb-3">
                         <label class="form-label" for="{{ form.sync_type.id_for_label }}">
                             {{ form.sync_type.label }}
                         </label>

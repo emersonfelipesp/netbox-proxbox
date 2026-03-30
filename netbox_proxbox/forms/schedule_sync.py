@@ -14,6 +14,15 @@ __all__ = ("ScheduleSyncForm",)
 
 
 class ScheduleSyncForm(forms.Form):
+    job_name = forms.CharField(
+        required=False,
+        max_length=200,
+        label=_("Job name"),
+        help_text=_(
+            "Optional label for this job in the job list. "
+            "Leave blank to use the default name (Proxbox Sync)."
+        ),
+    )
     sync_type = forms.ChoiceField(
         choices=SyncTypeChoices,
         initial=SyncTypeChoices.ALL,
@@ -70,6 +79,10 @@ class ScheduleSyncForm(forms.Form):
             )
             self.fields["interval_value"].initial = value
             self.fields["interval_unit"].initial = unit
+
+    def clean_job_name(self):
+        name = (self.cleaned_data.get("job_name") or "").strip()
+        return name or ""
 
     def clean(self):
         super().clean()

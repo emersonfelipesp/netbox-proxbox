@@ -106,6 +106,17 @@ def test_proxbox_sync_params_from_job_defaults(proxbox_sync_job_module):
     assert p["netbox_endpoint_ids"] == []
 
 
+def test_is_proxbox_sync_job_by_queue_and_legacy_name(proxbox_sync_job_module):
+    from types import SimpleNamespace
+
+    fn = proxbox_sync_job_module.is_proxbox_sync_job
+    qn = proxbox_sync_job_module.PROXBOX_SYNC_QUEUE_NAME
+    assert fn(SimpleNamespace(queue_name=qn, name="Nightly DC1"))
+    assert not fn(SimpleNamespace(queue_name="other", name="Proxbox Sync"))
+    assert fn(SimpleNamespace(queue_name="", name="Proxbox Sync"))
+    assert fn(SimpleNamespace(queue_name=None, name="Proxbox Sync"))
+
+
 def test_proxbox_sync_params_from_job_stored(proxbox_sync_job_module):
     from types import SimpleNamespace
 

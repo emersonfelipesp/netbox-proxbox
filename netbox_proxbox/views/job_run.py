@@ -10,7 +10,12 @@ from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext as _
 from django.views import View
 
-from netbox_proxbox.jobs import ProxboxSyncJob, proxbox_sync_params_from_job
+from netbox_proxbox.jobs import (
+    PROXBOX_SYNC_QUEUE_NAME,
+    ProxboxSyncJob,
+    is_proxbox_sync_job,
+    proxbox_sync_params_from_job,
+)
 from netbox_proxbox.views.proxbox_access import permission_add_sync_process
 from utilities.views import (
     ContentTypePermissionRequiredMixin,
@@ -19,8 +24,6 @@ from utilities.views import (
 )
 
 __all__ = ("ProxboxJobRunNowView",)
-
-_QUEUE_NAME = "netbox_proxbox.sync"
 
 
 @register_model_view(Job, "proxbox_run", path="proxbox-run")
@@ -38,7 +41,7 @@ class ProxboxJobRunNowView(
 
     def post(self, request, pk):
         job = get_object_or_404(Job.objects.restrict(request.user, "view"), pk=pk)
-        if job.name != ProxboxSyncJob.name:
+        if not is_proxbox_sync_job(job):
             messages.error(
                 request,
                 _("This action only applies to Proxbox Sync jobs."),
@@ -58,7 +61,8 @@ class ProxboxJobRunNowView(
         new_job = ProxboxSyncJob.enqueue(
             instance=None,
             user=request.user,
-            queue_name=_QUEUE_NAME,
+            queue_name=PROXBOX_SYNC_QUEUE_NAME,
+            name=job.name,
             **enqueue_kwargs,
         )
         messages.success(

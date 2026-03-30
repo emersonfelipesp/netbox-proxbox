@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from core.choices import JobStatusChoices
 from core.models import Job
-from django.utils.translation import gettext as _
 from netbox.plugins import PluginTemplateExtension
 
-from netbox_proxbox.jobs import ProxboxSyncJob
+from netbox_proxbox.jobs import is_proxbox_sync_job
 from netbox_proxbox.views.proxbox_access import permission_add_sync_process
 
 __all__ = ("ProxboxJobTemplateExtension", "template_extensions")
@@ -20,7 +19,7 @@ class ProxboxJobTemplateExtension(PluginTemplateExtension):
 
     def buttons(self):
         obj = self.context["object"]
-        if not isinstance(obj, Job) or obj.name != ProxboxSyncJob.name:
+        if not isinstance(obj, Job) or not is_proxbox_sync_job(obj):
             return ""
         if obj.status in (
             JobStatusChoices.STATUS_PENDING,
