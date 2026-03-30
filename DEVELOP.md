@@ -155,7 +155,7 @@ For scheduled sync jobs, start the RQ worker:
 ```bash
 cd /opt/netbox/netbox
 source venv/bin/activate
-python3 manage.py rqworker high default low netbox_proxbox.sync
+python3 manage.py rqworker
 ```
 
 ## Project Structure

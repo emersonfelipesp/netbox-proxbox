@@ -85,7 +85,7 @@ To run sync automatically on a schedule:
    ```bash
    cd /opt/netbox/netbox
    source /opt/netbox/venv/bin/activate
-   python3 manage.py rqworker high default low netbox_proxbox.sync
+   python3 manage.py rqworker
    ```
 
 2. In NetBox, go to **Proxbox > Schedule Sync** and configure your schedule.

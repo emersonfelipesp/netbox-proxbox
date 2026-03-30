@@ -4,26 +4,26 @@ Proxbox supports scheduled and recurring sync operations using NetBox's built-in
 
 ## Prerequisites
 
-Scheduled sync requires a running **NetBox RQ worker** that listens on the plugin's queue. Without the worker, jobs will remain in `scheduled` or `pending` state and never execute.
+Scheduled sync requires a running **NetBox RQ worker**. Proxbox sync jobs use NetBox’s **`default`** queue, so the stock worker command (no queue arguments) is enough. Without any worker, jobs stay **`pending`** or **`scheduled`**.
 
 Start the worker alongside your other NetBox services:
 
 ```bash
 cd /opt/netbox/netbox
 source /opt/netbox/venv/bin/activate
-python3 manage.py rqworker high default low netbox_proxbox.sync
+python3 manage.py rqworker
 ```
 
 !!! tip
-    The standard `python3 manage.py rqworker` command (without explicit queue names) listens on the built-in `high`, `default`, and `low` queues. To also process Proxbox sync jobs, you must either add `netbox_proxbox.sync` to the queue list or run a separate worker dedicated to it.
+    This is the same worker NetBox uses for other background tasks (`high`, `default`, `low`). Older deployments may still have systemd units that only listen on `netbox_proxbox.sync`; those jobs will not run until you use a worker that includes **`default`** (or re-queue jobs after upgrading the plugin).
 
 ### systemd Unit
 
-For production, add a dedicated systemd unit or extend the existing NetBox worker unit. Example `/etc/systemd/system/netbox-rqworker-proxbox.service`:
+Use your existing NetBox RQ worker unit if one is already enabled (`netbox-rq` or similar). If you maintain a custom unit, ensure **`ExecStart`** runs `manage.py rqworker` with no queue list **or** explicitly includes **`default`**. Example:
 
 ```ini
 [Unit]
-Description=NetBox RQ Worker (Proxbox Sync)
+Description=NetBox RQ Worker
 After=redis.service netbox.service
 Requires=redis.service
 
@@ -32,7 +32,7 @@ Type=simple
 User=netbox
 Group=netbox
 WorkingDirectory=/opt/netbox/netbox
-ExecStart=/opt/netbox/venv/bin/python3 manage.py rqworker netbox_proxbox.sync
+ExecStart=/opt/netbox/venv/bin/python3 manage.py rqworker
 Restart=on-failure
 RestartSec=30
 
@@ -42,7 +42,7 @@ WantedBy=multi-user.target
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now netbox-rqworker-proxbox
+sudo systemctl enable --now netbox-rq
 ```
 
 ## Scheduling a Sync
