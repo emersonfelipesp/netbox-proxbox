@@ -44,6 +44,8 @@ from .sync import (
     sync_full_update_stream,
     sync_virtual_machines,
     sync_virtual_machines_stream,
+    sync_virtual_disks,
+    sync_virtual_disks_stream,
     sync_vm_backups,
     sync_vm_backups_stream,
 )
@@ -129,9 +131,7 @@ class TestWebSocketView(
         return permission_view_fastapi_endpoint()
 
     def get(self, request):
-        fastapi_object = FastAPIEndpoint.objects.restrict(
-            request.user, "view"
-        ).first()
+        fastapi_object = FastAPIEndpoint.objects.restrict(request.user, "view").first()
         if fastapi_object is None:
             return render(request, self.template_name, {})
 
