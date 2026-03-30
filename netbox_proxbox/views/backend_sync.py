@@ -6,7 +6,10 @@ import requests
 
 from netbox_proxbox.models import ProxmoxEndpoint
 from netbox_proxbox.utils import get_ip_address_host
-from netbox_proxbox.views.error_utils import extract_backend_error_detail
+from netbox_proxbox.views.error_utils import (
+    extract_backend_error_detail,
+    parse_requests_response_json,
+)
 
 
 def proxmox_backend_name(endpoint: ProxmoxEndpoint) -> str:
@@ -54,7 +57,15 @@ def sync_proxmox_endpoint_to_backend(
             timeout=timeout,
         )
         list_response.raise_for_status()
-        endpoints = list_response.json()
+        endpoints, json_err = parse_requests_response_json(
+            list_response, log_label="proxmox/endpoints"
+        )
+        if json_err:
+            return (
+                False,
+                f"Failed to sync Proxmox endpoint to ProxBox backend: {json_err}",
+                None,
+            )
         if not isinstance(endpoints, list):
             return (
                 False,

@@ -16,7 +16,10 @@ from netbox_proxbox.utils import (
     get_ip_address_host,
 )
 from netbox_proxbox.views.backend_sync import sync_proxmox_endpoint_to_backend
-from netbox_proxbox.views.error_utils import extract_proxmox_backend_error_detail
+from netbox_proxbox.views.error_utils import (
+    extract_proxmox_backend_error_detail,
+    parse_requests_response_json,
+)
 from utilities.permissions import get_permission_for_model
 from utilities.views import (
     ContentTypePermissionRequiredMixin,
@@ -149,8 +152,21 @@ class ProxboxProxmoxCardView(
             )
             version_response.raise_for_status()
             cluster_response.raise_for_status()
-            version_data = version_response.json()
-            cluster_data = cluster_response.json()
+            version_parsed, ver_err = parse_requests_response_json(
+                version_response, log_label="proxmox/version"
+            )
+            cluster_parsed, cl_err = parse_requests_response_json(
+                cluster_response, log_label="proxmox/sessions"
+            )
+            if ver_err or cl_err:
+                detail = ver_err or cl_err
+                http_status = 502
+                logger.error(
+                    "Unable to hydrate Proxmox card for endpoint %s: %s", pk, detail
+                )
+            else:
+                version_data = version_parsed if version_parsed is not None else []
+                cluster_data = cluster_parsed if cluster_parsed is not None else []
         except requests.exceptions.RequestException as exc:
             failed_endpoint = version_endpoint
             response = getattr(exc, "response", None)

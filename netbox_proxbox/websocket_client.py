@@ -4,22 +4,27 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import threading
 from queue import Queue
 
 import websockets
+import websockets.exceptions
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.views import View
 
 from netbox_proxbox.models import FastAPIEndpoint
+from netbox_proxbox.utils import get_fastapi_url
 from netbox_proxbox.views.proxbox_access import permission_view_fastapi_endpoint
 from utilities.views import (
     ContentTypePermissionRequiredMixin,
     TokenConditionalLoginRequiredMixin,
 )
-from netbox_proxbox.utils import get_fastapi_url
 
+logger = logging.getLogger(__name__)
+
+_RECONNECT_DELAY_SEC = 5
 
 GLOBAL_WEBSOCKET_MESSAGES = []
 websocket_task = None
@@ -33,40 +38,83 @@ sync_processes = {
 }
 
 
-async def websocket_client(uri):
-    try:
-        async with websockets.connect(uri) as websocket:
-            while True:
-                if not message_queue.empty():
-                    new_message = message_queue.get()
-                    await websocket.send(new_message)
+async def websocket_client(uri: str) -> None:
+    """Maintain a long-lived WebSocket to the ProxBox backend; reconnect with backoff."""
+    while True:
+        try:
+            async with websockets.connect(uri) as websocket:
+                logger.info("Proxbox plugin WebSocket connected: %s", uri)
+                while True:
+                    if not message_queue.empty():
+                        new_message = message_queue.get()
+                        await websocket.send(new_message)
 
-                response = await websocket.recv()
-                try:
-                    response_dict = json.loads(response)
-                    if (
-                        response_dict.get("object") == "device"
-                        and response_dict.get("end") is True
-                    ):
-                        sync_processes["devices"] = "not-started"
-                    if (
-                        response_dict.get("object") == "virtual_machine"
-                        and response_dict.get("end") is True
-                    ):
-                        sync_processes["virtual-machines"] = "not-started"
-                    if (
-                        response_dict.get("object") == "full-update"
-                        and response_dict.get("end") is True
-                    ):
-                        sync_processes["full-update"] = "not-started"
-                except json.JSONDecodeError:
-                    pass
+                    response = await websocket.recv()
+                    try:
+                        response_dict = json.loads(response)
+                        if (
+                            response_dict.get("object") == "device"
+                            and response_dict.get("end") is True
+                        ):
+                            sync_processes["devices"] = "not-started"
+                        if (
+                            response_dict.get("object") == "virtual_machine"
+                            and response_dict.get("end") is True
+                        ):
+                            sync_processes["virtual-machines"] = "not-started"
+                        if (
+                            response_dict.get("object") == "full-update"
+                            and response_dict.get("end") is True
+                        ):
+                            sync_processes["full-update"] = "not-started"
+                    except json.JSONDecodeError:
+                        logger.debug(
+                            "Non-JSON WebSocket message (first 200 chars): %r",
+                            (response[:200] if isinstance(response, str) else response),
+                        )
 
-                with websocket_lock:
-                    GLOBAL_WEBSOCKET_MESSAGES.append(response)
-    except Exception:
-        await asyncio.sleep(5)
-        await websocket_client(uri)
+                    with websocket_lock:
+                        GLOBAL_WEBSOCKET_MESSAGES.append(response)
+        except websockets.exceptions.ConnectionClosed as exc:
+            logger.warning(
+                "WebSocket closed (code=%s reason=%r); reconnecting in %ss",
+                getattr(exc, "code", None),
+                getattr(exc, "reason", ""),
+                _RECONNECT_DELAY_SEC,
+            )
+            await asyncio.sleep(_RECONNECT_DELAY_SEC)
+        except websockets.exceptions.InvalidStatus as exc:
+            response = getattr(exc, "response", None)
+            status_code = getattr(response, "status_code", None)
+            if status_code in (401, 403):
+                logger.error(
+                    "WebSocket handshake refused (HTTP %s) for %s; stopping retries.",
+                    status_code,
+                    uri,
+                )
+                return
+            logger.warning(
+                "WebSocket handshake failed (HTTP %s) for %s; retrying in %ss",
+                status_code,
+                uri,
+                _RECONNECT_DELAY_SEC,
+            )
+            await asyncio.sleep(_RECONNECT_DELAY_SEC)
+        except OSError as exc:
+            logger.warning(
+                "WebSocket connect error for %s: %s; retrying in %ss",
+                uri,
+                exc,
+                _RECONNECT_DELAY_SEC,
+            )
+            await asyncio.sleep(_RECONNECT_DELAY_SEC)
+        except Exception:
+            logger.exception(
+                "Unexpected WebSocket error for %s; retrying in %ss",
+                uri,
+                _RECONNECT_DELAY_SEC,
+            )
+            await asyncio.sleep(_RECONNECT_DELAY_SEC)
 
 
 def start_websocket(uri):

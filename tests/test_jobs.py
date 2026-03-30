@@ -1,0 +1,111 @@
+"""Tests for ProxboxSyncJob (imports and run path)."""
+
+from __future__ import annotations
+
+import importlib.util
+import logging
+import sys
+import types
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import MagicMock
+
+import pytest
+
+
+@pytest.fixture
+def proxbox_sync_job_module(monkeypatch):
+    """Load jobs.py with stubs for netbox.jobs and netbox_proxbox.choices."""
+    netbox_jobs = types.ModuleType("netbox.jobs")
+
+    class JobRunner:
+        pass
+
+    netbox_jobs.JobRunner = JobRunner
+    monkeypatch.setitem(sys.modules, "netbox.jobs", netbox_jobs)
+
+    choices_mod = types.ModuleType("netbox_proxbox.choices")
+    choices_mod.SyncTypeChoices = SimpleNamespace(
+        DEVICES="devices",
+        VIRTUAL_MACHINES="virtual-machines",
+        VIRTUAL_MACHINES_BACKUPS="vm-backups",
+        ALL="all",
+    )
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.choices", choices_mod)
+
+    root = Path(__file__).resolve().parents[1]
+    pkg = types.ModuleType("netbox_proxbox")
+    pkg.__path__ = [str(root / "netbox_proxbox")]
+    monkeypatch.setitem(sys.modules, "netbox_proxbox", pkg)
+
+    sys.modules.pop("netbox_proxbox.jobs", None)
+    path = root / "netbox_proxbox" / "jobs.py"
+    spec = importlib.util.spec_from_file_location("netbox_proxbox.jobs", path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec and spec.loader
+    sys.modules["netbox_proxbox.jobs"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_proxbox_sync_job_run_imports_from_services_not_views(
+    monkeypatch, proxbox_sync_job_module
+):
+    """run() must resolve sync helpers from netbox_proxbox.services (views.sync has no exports)."""
+    captured: dict[str, object] = {}
+
+    services_mod = types.ModuleType("netbox_proxbox.services")
+
+    def sync_resource(path, query_params=None):
+        captured["called"] = "sync_resource"
+        captured["path"] = path
+        return ({"detail": "ok"}, 202)
+
+    def sync_full_update_resource(query_params=None):
+        captured["called"] = "sync_full_update_resource"
+        return ({"detail": "ok"}, 202)
+
+    services_mod.sync_resource = sync_resource
+    services_mod.sync_full_update_resource = sync_full_update_resource
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
+
+    views_sync = types.ModuleType("netbox_proxbox.views.sync")
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.views.sync", views_sync)
+
+    ProxboxSyncJob = proxbox_sync_job_module.ProxboxSyncJob
+    job = ProxboxSyncJob()
+    job.logger = logging.getLogger("test_proxbox_job")
+    job.job = MagicMock()
+    job.job.data = None
+
+    st = proxbox_sync_job_module.SyncTypeChoices
+
+    ProxboxSyncJob.run(
+        job,
+        sync_type=st.DEVICES,
+        proxmox_endpoint_ids=None,
+        netbox_endpoint_ids=None,
+    )
+    assert captured["called"] == "sync_resource"
+    assert captured["path"] == "dcim/devices/create"
+    job.job.save.assert_called_once()
+
+    job.job.reset_mock()
+    ProxboxSyncJob.run(job, sync_type=st.ALL)
+    assert captured["called"] == "sync_full_update_resource"
+
+
+def test_proxbox_sync_job_run_raises_on_backend_error(monkeypatch, proxbox_sync_job_module):
+    services_mod = types.ModuleType("netbox_proxbox.services")
+    services_mod.sync_resource = lambda *a, **k: ({"detail": "unavailable"}, 503)
+    services_mod.sync_full_update_resource = lambda *a, **k: ({}, 202)
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
+
+    ProxboxSyncJob = proxbox_sync_job_module.ProxboxSyncJob
+    job = ProxboxSyncJob()
+    job.logger = logging.getLogger("test_proxbox_job")
+    job.job = MagicMock()
+
+    st = proxbox_sync_job_module.SyncTypeChoices
+    with pytest.raises(RuntimeError, match="unavailable"):
+        ProxboxSyncJob.run(job, sync_type=st.DEVICES)

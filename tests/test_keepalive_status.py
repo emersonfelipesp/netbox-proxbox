@@ -469,3 +469,24 @@ def test_proxmox_status_returns_sync_error_before_backend_version_call(
     assert service_status.last_error_detail == "sync failed"
     assert service_status.last_error_http_status == 503
     assert calls == []
+
+
+def test_get_service_status_unknown_service_returns_400(monkeypatch, fastapi_endpoint):
+    module = load_plugin_module(
+        "netbox_proxbox.views.keepalive_status",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+    )
+    request = SimpleNamespace(
+        user=SimpleNamespace(
+            is_authenticated=True,
+            has_perms=lambda *a, **k: True,
+            has_perm=lambda *a, **k: True,
+        ),
+        method="GET",
+    )
+    resp = module.get_service_status_impl(request, "not-a-service", 1)
+    assert resp.status_code == 400
+    assert resp.payload["status"] == "error"
+    assert "not-a-service" in resp.payload["detail"]
+    assert "fastapi" in resp.payload["detail"]
