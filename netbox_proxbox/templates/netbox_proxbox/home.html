@@ -50,7 +50,10 @@
                                     <p>Using WebSocket (Client-Server)</p>
                                 {% endif %}
                             {% else %}
-                                <p>Using Simple HTTP Request (Server-Only)</p>
+                                <p>
+                                    {% trans "Using HTTP" %}
+                                    <a href="https://fastapi.tiangolo.com/advanced/stream-data/#use-cases" target="_blank" rel="noopener noreferrer">{% trans "Streaming" %}</a>
+                                </p>
                             {% endif %}
                         </div>
                         <div
