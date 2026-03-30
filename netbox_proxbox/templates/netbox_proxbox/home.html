@@ -67,6 +67,10 @@
                                 {% csrf_token %}
                                 <button id="sync-backups-button" type="submit" class="btn btn-primary" data-sync-url="{% url 'plugins:netbox_proxbox:sync_vm_backups' %}" data-sync-stream-url="{% url 'plugins:netbox_proxbox:sync_vm_backups_stream' %}" data-sync-kind="backups">Sync Backups</button>
                             </form>
+                            <form class="m-2" method="post" action="{% url 'plugins:netbox_proxbox:sync_vm_snapshots' %}" data-sync-url="{% url 'plugins:netbox_proxbox:sync_vm_snapshots' %}" data-sync-stream-url="{% url 'plugins:netbox_proxbox:sync_vm_snapshots_stream' %}" data-sync-kind="snapshots">
+                                {% csrf_token %}
+                                <button id="sync-snapshots-button" type="submit" class="btn btn-primary" data-sync-url="{% url 'plugins:netbox_proxbox:sync_vm_snapshots' %}" data-sync-stream-url="{% url 'plugins:netbox_proxbox:sync_vm_snapshots_stream' %}" data-sync-kind="snapshots">Sync Snapshots</button>
+                            </form>
                             <form class="m-2" method="post" action="{% url 'plugins:netbox_proxbox:sync_full_update' %}" data-sync-url="{% url 'plugins:netbox_proxbox:sync_full_update' %}" data-sync-kind="full-update">
                                 {% csrf_token %}
                                 <button id="sync-full-update-button" type="submit" class="btn btn-primary" data-sync-url="{% url 'plugins:netbox_proxbox:sync_full_update' %}" data-sync-stream-url="{% url 'plugins:netbox_proxbox:sync_full_update_stream' %}" data-sync-kind="full-update">Full Update Sync</button>

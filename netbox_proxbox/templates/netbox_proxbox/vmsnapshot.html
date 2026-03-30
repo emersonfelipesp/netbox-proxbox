@@ -1,0 +1,57 @@
+{% extends 'generic/object.html' %}
+{% load buttons %}
+{% load helpers %}
+{% load i18n %}
+
+{% block content %}
+<div class="row">
+	<div class="col-md-6">
+		<div class="card">
+			<h5 class="card-header">{% trans "VM Snapshot" %}</h5>
+			<table class="table table-hover attr-table">
+				<tr>
+					<th scope="row">{% trans "Virtual Machine" %}</th>
+					<td>{{ object.virtual_machine|hyperlinked_object }}</td>
+				</tr>
+				<tr>
+					<th scope="row">{% trans "Name" %}</th>
+					<td>{{ object.name }}</td>
+				</tr>
+				<tr>
+					<th scope="row">{% trans "Description" %}</th>
+					<td>{{ object.description|placeholder }}</td>
+				</tr>
+				<tr>
+					<th scope="row">{% trans "VM ID" %}</th>
+					<td>{{ object.vmid }}</td>
+				</tr>
+				<tr>
+					<th scope="row">{% trans "Node" %}</th>
+					<td>{{ object.node }}</td>
+				</tr>
+				<tr>
+					<th scope="row">{% trans "Snapshot Time" %}</th>
+					<td>{{ object.snaptime|placeholder }}</td>
+				</tr>
+				<tr>
+					<th scope="row">{% trans "Parent Snapshot" %}</th>
+					<td>{{ object.parent|placeholder }}</td>
+				</tr>
+				<tr>
+					<th scope="row">{% trans "Subtype" %}</th>
+					<td>{% badge object.get_subtype_display bg_color=object.subtype|get_bg_color %}</td>
+				</tr>
+				<tr>
+					<th scope="row">{% trans "Status" %}</th>
+					<td>{% badge object.get_status_display bg_color=object.status|get_bg_color %}</td>
+				</tr>
+			</table>
+		</div>
+	</div>
+	<div class="col-md-6">
+		{% include 'inc/panels/tags.html' %}
+		{% include 'inc/panels/custom_fields.html' %}
+		{% include 'inc/panels/comments.html' %}
+	</div>
+</div>
+{% endblock %}

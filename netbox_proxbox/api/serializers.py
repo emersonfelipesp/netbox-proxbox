@@ -13,6 +13,8 @@ from netbox_proxbox.choices import (
     ProxmoxBackupFormatChoices,
     ProxmoxBackupSubtypeChoices,
     ProxmoxModeChoices,
+    ProxmoxSnapshotStatusChoices,
+    ProxmoxSnapshotSubtypeChoices,
     SyncStatusChoices,
     SyncTypeChoices,
 )
@@ -22,6 +24,7 @@ from netbox_proxbox.models import (
     ProxmoxEndpoint,
     SyncProcess,
     VMBackup,
+    VMSnapshot,
 )
 
 
@@ -65,6 +68,37 @@ class VMBackupSerializer(NetBoxModelSerializer):
             "last_updated",
         )
         brief_fields = ("id", "url", "display", "storage", "creation_time")
+
+
+class VMSnapshotSerializer(NetBoxModelSerializer):
+    url = serializers.HyperlinkedIdentityField(
+        view_name="plugins-api:netbox_proxbox-api:vmsnapshot-detail",
+    )
+    virtual_machine = NestedVirtualMachineSerializer()
+    subtype = ChoiceField(choices=ProxmoxSnapshotSubtypeChoices)
+    status = ChoiceField(choices=ProxmoxSnapshotStatusChoices)
+
+    class Meta:
+        model = VMSnapshot
+        fields = (
+            "id",
+            "url",
+            "display",
+            "virtual_machine",
+            "name",
+            "description",
+            "vmid",
+            "node",
+            "snaptime",
+            "parent",
+            "subtype",
+            "status",
+            "tags",
+            "custom_fields",
+            "created",
+            "last_updated",
+        )
+        brief_fields = ("id", "url", "display", "name", "virtual_machine", "status")
 
 
 class SyncProcessSerializer(NetBoxModelSerializer):

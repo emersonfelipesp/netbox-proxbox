@@ -48,6 +48,8 @@ from .sync import (
     sync_virtual_disks_stream,
     sync_vm_backups,
     sync_vm_backups_stream,
+    sync_vm_snapshots,
+    sync_vm_snapshots_stream,
 )
 from .sync_process import (
     SyncProcessDeleteView,
@@ -62,6 +64,14 @@ from .vm_backup import (
     VMBackupListView,
     VMBackupTabView,
     VMBackupView,
+)
+from .vm_snapshot import (
+    VMSnapshotBulkDeleteView,
+    VMSnapshotDeleteView,
+    VMSnapshotEditView,
+    VMSnapshotListView,
+    VMSnapshotTabView,
+    VMSnapshotView,
 )
 
 
