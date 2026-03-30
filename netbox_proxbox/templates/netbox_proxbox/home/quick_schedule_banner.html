@@ -20,25 +20,23 @@
 
         {% if can_quick_schedule_sync and quick_schedule_form %}
         <div class="card border-primary mb-0 nb-proxbox-quick-card shadow-sm">
-            <div class="card-header py-2 px-3 bg-body-secondary">
-                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
-                    <button
-                        class="btn btn-link btn-sm text-start text-decoration-none p-0 fw-semibold quick-schedule-collapse-toggle {% if not quick_schedule_form.is_bound %}collapsed{% endif %}"
-                        type="button"
-                        data-bs-toggle="collapse"
-                        data-bs-target="#proxboxQuickScheduleBody"
-                        aria-expanded="{% if quick_schedule_form.is_bound %}true{% else %}false{% endif %}"
-                        aria-controls="proxboxQuickScheduleBody"
-                    >
-                        <i class="mdi mdi-chevron-down" aria-hidden="true"></i>
-                        {% trans "Quick schedule: Proxbox Sync" %}
-                    </button>
-                    <span class="small text-muted text-md-end">
-                        {% trans "Defaults:" %}
-                        {% trans "All" %} · {% trans "1 day" %} · {% trans "03:00 local" %}
-                    </span>
-                </div>
-            </div>
+            <button
+                type="button"
+                class="card-header py-2 px-3 bg-body-secondary w-100 border-0 text-body text-start d-flex flex-wrap align-items-center justify-content-between gap-2 quick-schedule-collapse-toggle {% if not quick_schedule_form.is_bound %}collapsed{% endif %}"
+                data-bs-toggle="collapse"
+                data-bs-target="#proxboxQuickScheduleBody"
+                aria-expanded="{% if quick_schedule_form.is_bound %}true{% else %}false{% endif %}"
+                aria-controls="proxboxQuickScheduleBody"
+            >
+                <span class="d-inline-flex align-items-center gap-1 fw-semibold">
+                    <i class="mdi mdi-chevron-down" aria-hidden="true"></i>
+                    {% trans "Quick schedule: Proxbox Sync" %}
+                </span>
+                <span class="small text-muted text-md-end ms-md-auto">
+                    {% trans "Defaults:" %}
+                    {% trans "All" %} · {% trans "1 day" %} · {% trans "03:00 local" %}
+                </span>
+            </button>
             <div
                 id="proxboxQuickScheduleBody"
                 class="collapse {% if quick_schedule_form.is_bound %}show{% endif %}"

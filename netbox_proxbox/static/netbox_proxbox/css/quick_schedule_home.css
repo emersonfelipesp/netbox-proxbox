@@ -39,8 +39,20 @@
   transform: rotate(-180deg);
 }
 
-.nb-proxbox-quick-card .card-header {
+.nb-proxbox-quick-card button.card-header {
   min-height: auto;
+  box-shadow: none;
+}
+
+.nb-proxbox-quick-card button.card-header:hover {
+  filter: brightness(0.98);
+}
+
+.nb-proxbox-quick-card button.card-header:focus-visible {
+  outline: 2px solid var(--bs-primary, #0d6efd);
+  outline-offset: -2px;
+  z-index: 1;
+  position: relative;
 }
 
 .nb-proxbox-quick-schedule details summary {
