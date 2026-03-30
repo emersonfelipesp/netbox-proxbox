@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from typing import Any
 
 import requests
@@ -185,11 +185,17 @@ def _iter_sse_frames(
     yield from flush()
 
 
-def _consume_sse_until_complete(response: requests.Response) -> tuple[dict[str, Any], int]:
+def _consume_sse_until_complete(
+    response: requests.Response,
+    *,
+    on_frame: Callable[[str, dict[str, Any]], None] | None = None,
+) -> tuple[dict[str, Any], int]:
     """Read an SSE body to the final ``complete`` event; return (payload, http_status_hint)."""
     last_complete: dict[str, Any] | None = None
     try:
         for _event, data in _iter_sse_frames(response.iter_lines(decode_unicode=True)):
+            if on_frame is not None:
+                on_frame(_event, data)
             if _event == "complete":
                 last_complete = data
     except requests.exceptions.RequestException as exc:
@@ -223,6 +229,8 @@ def _consume_sse_until_complete(response: requests.Response) -> tuple[dict[str, 
 def run_sync_stream(
     path: str,
     query_params: dict | None = None,
+    *,
+    on_frame: Callable[[str, dict[str, Any]], None] | None = None,
 ) -> tuple[dict, int]:
     """GET a backend SSE sync URL to completion (for NetBox background jobs).
 
@@ -282,7 +290,9 @@ def run_sync_stream(
                         break
                     continue
 
-                payload, status = _consume_sse_until_complete(response)
+                payload, status = _consume_sse_until_complete(
+                    response, on_frame=on_frame
+                )
                 payload = {
                     **payload,
                     "path": path,

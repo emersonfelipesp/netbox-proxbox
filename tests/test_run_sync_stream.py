@@ -77,10 +77,17 @@ def test_run_sync_stream_success(backend_proxy_module, monkeypatch):
 
     monkeypatch.setattr(bp.requests, "get", fake_get)
 
+    frames: list[tuple[str, dict]] = []
+
+    def on_frame(ev: str, data: dict) -> None:
+        frames.append((ev, data))
+
     payload, status = bp.run_sync_stream(
         "dcim/devices/create/stream",
         query_params={"proxmox_endpoint_ids": "1,2"},
+        on_frame=on_frame,
     )
+    assert [f[0] for f in frames] == ["step", "complete"]
     assert status == 200
     assert payload["stream"] is True
     assert payload["response"]["ok"] is True

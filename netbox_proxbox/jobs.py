@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import time
 from typing import Any
 
 from netbox.jobs import JobRunner
@@ -109,10 +111,33 @@ class ProxboxSyncJob(JobRunner):
             query_params["delete_nonexistent_backup"] = True
 
         stream_path = _sync_stream_path(sync_type)
+        flush_interval = 2.0
+        log_throttle = 1.5
+        last_flush = time.monotonic()
+        last_progress_log = time.monotonic()
+
+        def on_frame(event: str, data: dict[str, Any]) -> None:
+            nonlocal last_flush, last_progress_log
+            if event == "complete":
+                return
+            now = time.monotonic()
+            line = json.dumps(data, default=str)
+            if len(line) > 600:
+                line = line[:600] + "…"
+            # Single string so JobLogEntry.message is not a bare %-format template.
+            if event == "error" or now - last_progress_log >= log_throttle:
+                self.logger.info("[proxbox-stream] {}: {}".format(event, line))
+                last_progress_log = now
+            if now - last_flush >= flush_interval:
+                self.job.save(update_fields=["log_entries"])
+                last_flush = now
+
         payload, status = run_sync_stream(
             stream_path,
             query_params=query_params or None,
+            on_frame=on_frame,
         )
+        self.job.save(update_fields=["log_entries"])
 
         if status >= 400:
             detail = payload.get("detail", "Backend returned an error.")
