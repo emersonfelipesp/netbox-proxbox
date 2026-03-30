@@ -27,7 +27,7 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
     """Proxmox endpoint including secrets as write-only fields."""
 
     url = serializers.HyperlinkedIdentityField(
-        view_name="plugins-api:netbox_proxbox-api:endpoints:proxmox-endpoint-detail",
+        view_name="plugins-api:netbox_proxbox-api:endpoints:proxmoxendpoint-detail",
     )
     ip_address = NestedIPAddressSerializer(required=False, allow_null=True)
     domain = serializers.CharField(required=False, allow_null=True, allow_blank=True)
@@ -84,7 +84,7 @@ class NetBoxEndpointSerializer(NetBoxModelSerializer):
     """Remote NetBox API endpoint with v1 token or v2 key/secret validation."""
 
     url = serializers.HyperlinkedIdentityField(
-        view_name="plugins-api:netbox_proxbox-api:endpoints:netbox-endpoint-detail",
+        view_name="plugins-api:netbox_proxbox-api:endpoints:netboxendpoint-detail",
     )
     ip_address = NestedIPAddressSerializer(required=False, allow_null=True)
     token = NestedTokenSerializer(required=False, allow_null=True)
@@ -202,7 +202,7 @@ class FastAPIEndpointSerializer(NetBoxModelSerializer):
     """ProxBox backend HTTP/WebSocket endpoint."""
 
     url = serializers.HyperlinkedIdentityField(
-        view_name="plugins-api:netbox_proxbox-api:endpoints:fastapi-endpoint-detail",
+        view_name="plugins-api:netbox_proxbox-api:endpoints:fastapiendpoint-detail",
     )
     ip_address = NestedIPAddressSerializer(required=False, allow_null=True)
 
