@@ -49,10 +49,13 @@ class ProxboxJobRunNowView(
                 _("This action only applies to Proxbox Sync jobs."),
             )
             return HttpResponseRedirect(job.get_absolute_url())
-        if job.status == JobStatusChoices.STATUS_RUNNING:
+        if job.status not in JobStatusChoices.TERMINAL_STATE_CHOICES:
             messages.warning(
                 request,
-                _("Cannot run again while this job is still running."),
+                _(
+                    "Run now is only available after the job has finished, failed, or been "
+                    "cancelled."
+                ),
             )
             return HttpResponseRedirect(job.get_absolute_url())
 
