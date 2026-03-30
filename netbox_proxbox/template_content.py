@@ -20,18 +20,21 @@ class ProxboxJobTemplateExtension(PluginTemplateExtension):
     models = ["core.job"]
 
     def alerts(self):
-        """Poll the Job REST API while pending/scheduled/running to refresh status and log lines."""
+        """Load job log DOM helpers for any Proxbox job; live poll only while non-terminal."""
         obj = self.context["object"]
         if not isinstance(obj, Job):
             return ""
-        if obj.status not in JobStatusChoices.ENQUEUED_STATE_CHOICES:
+        if not is_proxbox_sync_job(obj):
             return ""
-        return mark_safe(
-            self.render(
-                "netbox_proxbox/inc/job_live_poll_alert.html",
-                {"job": obj},
+        parts = [self.render("netbox_proxbox/inc/job_log_assets.html")]
+        if obj.status in JobStatusChoices.ENQUEUED_STATE_CHOICES:
+            parts.append(
+                self.render(
+                    "netbox_proxbox/inc/job_live_poll_alert.html",
+                    {"job": obj},
+                )
             )
-        )
+        return mark_safe("".join(parts))
 
     def buttons(self):
         """Render Run now (finished jobs only) and Cancel (pending/scheduled/running) as permitted."""
