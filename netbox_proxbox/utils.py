@@ -1,18 +1,25 @@
-"""Provide helper functions for backend host resolution and URL construction."""
+"""Helpers for backend host resolution, URL construction, and auth headers."""
 
 from __future__ import annotations
 
 import os
 import subprocess
+from typing import Any
+
+from netbox_proxbox.type_defs import FastAPIAuthSource, FastAPIUrlDict, FastAPIUrlSource
 
 
-def get_ip_address_host(value) -> str:
+def get_ip_address_host(value: Any) -> str:
+    """Return dotted host part from an IPAddress-like value or default loopback."""
     if value is None:
         return "127.0.0.1"
     return str(value).split("/")[0]
 
 
-def get_backend_auth_headers(endpoint) -> dict[str, str]:
+def get_backend_auth_headers(endpoint: FastAPIAuthSource | None) -> dict[str, str]:
+    """Build Authorization header dict for ProxBox backend requests."""
+    if endpoint is None:
+        return {}
     token = (getattr(endpoint, "token", "") or "").strip()
     if not token:
         return {}
@@ -23,7 +30,8 @@ def get_backend_auth_headers(endpoint) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
-def get_fastapi_url(endpoint):
+def get_fastapi_url(endpoint: FastAPIUrlSource) -> FastAPIUrlDict:
+    """Compute HTTP/WebSocket URLs and TLS settings for a FastAPI endpoint model."""
     ip = get_ip_address_host(getattr(endpoint, "ip_address", None))
     domain = getattr(endpoint, "domain", None) or ip
     websocket_domain = getattr(endpoint, "websocket_domain", None) or ip
@@ -35,7 +43,9 @@ def get_fastapi_url(endpoint):
     websocket_url = f"{websocket_scheme}://{websocket_domain}:{endpoint.websocket_port}/ws"
     ip_address_url = f"{scheme}://{ip}:{endpoint.port}"
 
-    if verify_ssl and any(host in http_url for host in ("proxbox.backend.local", "localhost", "127.0.0.1")):
+    if verify_ssl and any(
+        host in http_url for host in ("proxbox.backend.local", "localhost", "127.0.0.1")
+    ):
         try:
             ca_root_folder = subprocess.run(
                 ["mkcert", "-CAROOT"],

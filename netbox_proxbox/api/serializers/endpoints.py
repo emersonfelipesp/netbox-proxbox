@@ -1,137 +1,31 @@
-"""Serialize ProxBox plugin models for the NetBox plugin API."""
+"""API serializers for Proxmox, NetBox, and FastAPI endpoint plugin models."""
 
-from rest_framework import serializers
+from __future__ import annotations
 
-from ipam.api.serializers_.nested import NestedIPAddressSerializer
+from typing import Any
+
 from netbox.api.fields import ChoiceField
 from netbox.api.serializers import NetBoxModelSerializer, WritableNestedSerializer
+from ipam.api.serializers_.nested import NestedIPAddressSerializer
+from rest_framework import serializers
 from users.models import Token
-from virtualization.api.serializers_.nested import NestedVirtualMachineSerializer
 
-from netbox_proxbox.choices import (
-    NetBoxTokenVersionChoices,
-    ProxmoxBackupFormatChoices,
-    ProxmoxBackupSubtypeChoices,
-    ProxmoxModeChoices,
-    ProxmoxSnapshotStatusChoices,
-    ProxmoxSnapshotSubtypeChoices,
-    SyncStatusChoices,
-    SyncTypeChoices,
-)
-from netbox_proxbox.models import (
-    FastAPIEndpoint,
-    NetBoxEndpoint,
-    ProxmoxEndpoint,
-    SyncProcess,
-    VMBackup,
-    VMSnapshot,
-)
+from netbox_proxbox.choices import NetBoxTokenVersionChoices, ProxmoxModeChoices
+from netbox_proxbox.models import FastAPIEndpoint, NetBoxEndpoint, ProxmoxEndpoint
 
 
 class NestedTokenSerializer(WritableNestedSerializer):
+    """Minimal token shape for nested NetBox endpoint writes."""
+
     class Meta:
         model = Token
         fields = ["id", "url", "display", "key"]
         brief_fields = ("id", "url", "display", "key")
 
 
-class VMBackupSerializer(NetBoxModelSerializer):
-    url = serializers.HyperlinkedIdentityField(
-        view_name="plugins-api:netbox_proxbox-api:vmbackup-detail",
-    )
-    virtual_machine = NestedVirtualMachineSerializer()
-    subtype = ChoiceField(choices=ProxmoxBackupSubtypeChoices)
-    format = ChoiceField(choices=ProxmoxBackupFormatChoices)
-
-    class Meta:
-        model = VMBackup
-        fields = (
-            "id",
-            "url",
-            "display",
-            "virtual_machine",
-            "storage",
-            "subtype",
-            "format",
-            "creation_time",
-            "size",
-            "notes",
-            "volume_id",
-            "vmid",
-            "used",
-            "encrypted",
-            "verification_state",
-            "verification_upid",
-            "tags",
-            "custom_fields",
-            "created",
-            "last_updated",
-        )
-        brief_fields = ("id", "url", "display", "storage", "creation_time")
-
-
-class VMSnapshotSerializer(NetBoxModelSerializer):
-    url = serializers.HyperlinkedIdentityField(
-        view_name="plugins-api:netbox_proxbox-api:vmsnapshot-detail",
-    )
-    virtual_machine = NestedVirtualMachineSerializer()
-    subtype = ChoiceField(choices=ProxmoxSnapshotSubtypeChoices)
-    status = ChoiceField(choices=ProxmoxSnapshotStatusChoices)
-
-    class Meta:
-        model = VMSnapshot
-        fields = (
-            "id",
-            "url",
-            "display",
-            "virtual_machine",
-            "name",
-            "description",
-            "vmid",
-            "node",
-            "snaptime",
-            "parent",
-            "subtype",
-            "status",
-            "tags",
-            "custom_fields",
-            "created",
-            "last_updated",
-        )
-        brief_fields = ("id", "url", "display", "name", "virtual_machine", "status")
-
-
-class SyncProcessSerializer(NetBoxModelSerializer):
-    url = serializers.HyperlinkedIdentityField(
-        view_name="plugins-api:netbox_proxbox-api:syncprocess-detail",
-    )
-    sync_type = ChoiceField(choices=SyncTypeChoices)
-    status = ChoiceField(choices=SyncStatusChoices)
-    runtime = serializers.FloatField(required=False, allow_null=True)
-    started_at = serializers.DateTimeField(required=False, allow_null=True)
-    completed_at = serializers.DateTimeField(required=False, allow_null=True)
-
-    class Meta:
-        model = SyncProcess
-        fields = (
-            "id",
-            "url",
-            "display",
-            "name",
-            "sync_type",
-            "status",
-            "started_at",
-            "completed_at",
-            "runtime",
-            "tags",
-            "custom_fields",
-            "created",
-            "last_updated",
-        )
-        brief_fields = ("id", "url", "display", "name", "status")
-
-
 class ProxmoxEndpointSerializer(NetBoxModelSerializer):
+    """Proxmox endpoint including secrets as write-only fields."""
+
     url = serializers.HyperlinkedIdentityField(
         view_name="plugins-api:netbox_proxbox-api:endpoints:proxmox-endpoint-detail",
     )
@@ -168,7 +62,7 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
             "token_value": {"write_only": True, "required": False, "allow_blank": True},
         }
 
-    def validate(self, attrs):
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         attrs = super().validate(attrs)
         domain = (
             attrs.get("domain", getattr(self.instance, "domain", "")) or ""
@@ -187,6 +81,8 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
 
 
 class NetBoxEndpointSerializer(NetBoxModelSerializer):
+    """Remote NetBox API endpoint with v1 token or v2 key/secret validation."""
+
     url = serializers.HyperlinkedIdentityField(
         view_name="plugins-api:netbox_proxbox-api:endpoints:netbox-endpoint-detail",
     )
@@ -222,7 +118,7 @@ class NetBoxEndpointSerializer(NetBoxModelSerializer):
             },
         }
 
-    def validate(self, attrs):
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         attrs = super().validate(attrs)
 
         domain = (
@@ -303,6 +199,8 @@ class NetBoxEndpointSerializer(NetBoxModelSerializer):
 
 
 class FastAPIEndpointSerializer(NetBoxModelSerializer):
+    """ProxBox backend HTTP/WebSocket endpoint."""
+
     url = serializers.HyperlinkedIdentityField(
         view_name="plugins-api:netbox_proxbox-api:endpoints:fastapi-endpoint-detail",
     )
@@ -331,7 +229,7 @@ class FastAPIEndpointSerializer(NetBoxModelSerializer):
         )
         brief_fields = ("id", "url", "display", "name", "domain", "port")
 
-    def validate(self, attrs):
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         attrs = super().validate(attrs)
         domain = (
             attrs.get("domain", getattr(self.instance, "domain", "")) or ""

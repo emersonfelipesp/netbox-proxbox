@@ -355,6 +355,9 @@ def load_plugin_module(
     monkeypatch.setitem(sys.modules, package_name, package_module)
 
     sys.modules.pop(module_name, None)
+    sys.modules.pop("netbox_proxbox.services.service_status", None)
+    sys.modules.pop("netbox_proxbox.services.backend_proxy", None)
+    sys.modules.pop("netbox_proxbox.services", None)
     relative_parts = module_name.split(".")[2:]
     module_path = (
         Path(__file__).resolve().parents[1]

@@ -8,6 +8,7 @@ import requests
 def extract_backend_error_detail(
     exc: requests.exceptions.RequestException,
 ) -> tuple[str, int | None]:
+    """Normalize a requests error into a user-facing message and HTTP status if known."""
     response = getattr(exc, "response", None)
     if response is None:
         return str(exc), None
@@ -75,6 +76,7 @@ def extract_proxmox_backend_error_detail(
     proxmox_port: int | None,
     backend_url: str,
 ) -> tuple[str, int | None]:
+    """Like extract_backend_error_detail, but adds Proxmox target context when there is no response."""
     response = getattr(exc, "response", None)
     if response is not None:
         return extract_backend_error_detail(exc)
