@@ -81,7 +81,13 @@ class ScheduleSyncForm(forms.Form):
         )
         super().__init__(*args, **kwargs)
         if use_bootstrap_sync_checkboxes:
-            self.fields["sync_types"].widget = BootstrapCheckboxSelectMultiple()
+            sync_field = self.fields["sync_types"]
+            old_widget = sync_field.widget
+            sync_field.widget = BootstrapCheckboxSelectMultiple(
+                attrs=old_widget.attrs.copy(),
+            )
+            # Replacing the widget drops choice tuples; without this, optgroups is empty.
+            sync_field.widget.choices = sync_field.choices
         # Singleton NetBox endpoint: pre-select the only row on fresh GET requests.
         if not self.is_bound:
             sole_nb_pks = list(
