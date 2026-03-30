@@ -44,7 +44,6 @@ def test_home_template_uses_plugin_vanilla_js_entrypoint():
     assert 'type="submit"' in contents
     assert "data-sync-url" in contents
     assert "data-sync-kind" in contents
-    assert "data-sync-stream-url" in contents
 
 
 def test_home_quick_schedule_banner_posts_to_quick_schedule_url():
@@ -80,26 +79,17 @@ def test_netbox_endpoint_home_card_uses_configured_token_state():
 
 
 def test_home_javascript_passes_error_detail_to_badge_state():
+    """Sync buttons POST via native forms; home.js handles status badges and Proxmox cards."""
     contents = _read("netbox_proxbox/static/netbox_proxbox/js/home.js")
     assert "setBadgeState(element, payload.status, payload.detail" in contents
     assert 'setBadgeState(element, "error", error.message' in contents
     assert "proxmox-connection-error-" in contents
     assert "payload.detail && badge" in contents
-    assert 'form.addEventListener("submit"' in contents
-    assert "function startSyncProgress(syncKind)" in contents
-    assert 'function stopSyncProgress(status = "idle", detail = "")' in contents
-    assert "startSyncProgress(syncKind)" in contents
-    assert 'stopSyncProgress("success"' in contents
-    assert 'stopSyncProgress("error"' in contents
-    assert 'method: "POST"' in contents
-    assert '"X-CSRFToken": getCsrfToken()' in contents
-    assert '"X-Requested-With": "XMLHttpRequest"' in contents
-    assert "request completed" in contents
-    assert "streamSyncEvents" in contents
-    assert 'Accept: "text/event-stream"' in contents
-    assert "await response.text()" in contents
-    assert "function formatStreamMessage(syncKind, data, event)" in contents
-    assert "payload.data" in contents
+    assert 'document.addEventListener("DOMContentLoaded"' in contents
+    assert "refreshStatusBadges" in contents
+    assert "hydrateProxmoxCards" in contents
+    assert "fetchJson" in contents
+    assert "initializeWebSocket" in contents
 
 
 def test_common_badge_state_supports_hover_tooltip_details():

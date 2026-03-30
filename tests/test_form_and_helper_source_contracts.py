@@ -44,7 +44,6 @@ def test_runtime_code_validates_fastapi_url_helper_payload_shape():
         "netbox_proxbox/views/home_context.py",
         "netbox_proxbox/views/cards.py",
         "netbox_proxbox/services/service_status.py",
-        "netbox_proxbox/views/sync.py",
         "netbox_proxbox/websocket_client.py",
     ]
 

@@ -34,6 +34,7 @@ def proxbox_sync_job_module(monkeypatch):
         VIRTUAL_MACHINES="virtual-machines",
         VIRTUAL_MACHINES_BACKUPS="vm-backups",
         VIRTUAL_MACHINES_DISKS="vm-disks",
+        VIRTUAL_MACHINES_SNAPSHOTS="vm-snapshots",
         ALL="all",
     )
     monkeypatch.setitem(sys.modules, "netbox_proxbox.choices", choices_mod)
@@ -94,7 +95,9 @@ def test_proxbox_sync_job_run_imports_from_services_not_views(
     job.job.reset_mock()
     ProxboxSyncJob.run(job, sync_type=st.ALL)
     assert captured["called"] == "run_sync_stream"
-    assert captured["path"] == "full-update/stream"
+    assert captured["path"] == (
+        "virtualization/virtual-machines/snapshots/all/create/stream"
+    )
 
     job.job.reset_mock()
     ProxboxSyncJob.run(job, sync_type=st.VIRTUAL_MACHINES_DISKS)
@@ -326,7 +329,9 @@ def test_proxbox_sync_job_run_multi_stage_in_dependency_order(
     assert len(saved["proxbox_sync"]["response"]["stages"]) == 2
 
 
-def test_proxbox_sync_job_run_all_single_stream(monkeypatch, proxbox_sync_job_module):
+def test_proxbox_sync_job_run_all_invokes_each_stage_stream(
+    monkeypatch, proxbox_sync_job_module
+):
     calls = 0
 
     services_mod = types.ModuleType("netbox_proxbox.services")
@@ -334,7 +339,7 @@ def test_proxbox_sync_job_run_all_single_stream(monkeypatch, proxbox_sync_job_mo
     def run_sync_stream(path, query_params=None, **stream_kwargs):
         nonlocal calls
         calls += 1
-        return ({"full": True}, 200)
+        return ({"stage": calls, "ok": True}, 200)
 
     services_mod.run_sync_stream = run_sync_stream
     monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
@@ -350,5 +355,13 @@ def test_proxbox_sync_job_run_all_single_stream(monkeypatch, proxbox_sync_job_mo
 
     st = proxbox_sync_job_module.SyncTypeChoices
     ProxboxSyncJob.run(job, sync_types=[st.ALL])
-    assert calls == 1
-    assert job.job.data["proxbox_sync"]["response"] == {"full": True}
+    assert calls == 5
+    stages = job.job.data["proxbox_sync"]["response"]["stages"]
+    assert len(stages) == 5
+    assert {s["sync_type"] for s in stages} == {
+        st.DEVICES,
+        st.VIRTUAL_MACHINES,
+        st.VIRTUAL_MACHINES_DISKS,
+        st.VIRTUAL_MACHINES_BACKUPS,
+        st.VIRTUAL_MACHINES_SNAPSHOTS,
+    }
