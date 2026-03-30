@@ -1,9 +1,6 @@
-/* Home quick-schedule: sync types = vertical NetBox-style form-check list */
+/* Home quick-schedule: sync types use Bootstrap row + form-check (see BootstrapCheckboxSelectMultiple attrs). */
 .nb-proxbox-quick-schedule .proxbox-quick-sync-type-widgets {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0.25rem;
+  width: 100%;
 }
 
 .nb-proxbox-quick-schedule .proxbox-quick-sync-type-widgets .form-check {
@@ -15,15 +12,11 @@
   font-weight: normal;
 }
 
-/* Legacy wrappers (ul / div#id_sync_types) from some Django versions */
-.nb-proxbox-quick-schedule .proxbox-quick-sync-type-widgets ul,
-.nb-proxbox-quick-schedule .proxbox-quick-sync-type-widgets div#id_sync_types {
+/* Legacy ul-based CheckboxSelectMultiple if used elsewhere */
+.nb-proxbox-quick-schedule .proxbox-quick-sync-type-widgets ul {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
 }
 
 .nb-proxbox-quick-schedule .proxbox-quick-sync-type-widgets li {
@@ -54,8 +47,4 @@
   outline-offset: -2px;
   z-index: 1;
   position: relative;
-}
-
-.nb-proxbox-quick-schedule details summary {
-  cursor: pointer;
 }
