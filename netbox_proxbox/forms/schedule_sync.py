@@ -83,9 +83,23 @@ class ScheduleSyncForm(forms.Form):
         if use_bootstrap_sync_checkboxes:
             sync_field = self.fields["sync_types"]
             old_widget = sync_field.widget
-            sync_field.widget = BootstrapCheckboxSelectMultiple(
-                attrs=old_widget.attrs.copy(),
-            )
+            sync_attrs = old_widget.attrs.copy()
+            _classes = sync_attrs.get("class", "")
+            if isinstance(_classes, (list, tuple)):
+                _parts = [str(c) for c in _classes if c]
+            else:
+                _parts = [_classes] if _classes else []
+            for _c in (
+                "row",
+                "row-cols-1",
+                "row-cols-md-2",
+                "g-1",
+                "align-items-start",
+            ):
+                if _c not in _parts:
+                    _parts.append(_c)
+            sync_attrs["class"] = " ".join(_parts)
+            sync_field.widget = BootstrapCheckboxSelectMultiple(attrs=sync_attrs)
             # Replacing the widget drops choice tuples; without this, optgroups is empty.
             sync_field.widget.choices = sync_field.choices
         # Singleton NetBox endpoint: pre-select the only row on fresh GET requests.

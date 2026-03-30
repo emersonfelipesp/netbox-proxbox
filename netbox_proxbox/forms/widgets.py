@@ -13,6 +13,7 @@ class BootstrapCheckboxSelectMultiple(forms.CheckboxSelectMultiple):
     pattern (same as core templates such as ``object_list.html``).
     """
 
+    template_name = "netbox_proxbox/widgets/bootstrap_checkbox_select.html"
     option_template_name = "netbox_proxbox/widgets/bootstrap_checkbox_option.html"
 
     def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):

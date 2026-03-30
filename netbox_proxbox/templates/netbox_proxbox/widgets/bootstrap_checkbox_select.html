@@ -1,0 +1,11 @@
+{# CheckboxSelectMultiple: one outer container (id/class from attrs); options are direct children — no per-option wrapper div. #}
+<div{% include "django/forms/widgets/attrs.html" %}>
+{% for group, options, index in widget.optgroups %}
+{% if group %}
+<div class="col-12 text-body-secondary small fw-semibold mt-2 mb-1">{{ group }}</div>
+{% endif %}
+{% for option in options %}
+{% include option.template_name with widget=option %}
+{% endfor %}
+{% endfor %}
+</div>

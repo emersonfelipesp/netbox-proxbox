@@ -3,25 +3,34 @@
 <div class="nb-proxbox-quick-schedule">
     <div class="row g-2 align-items-end mb-2">
         <div class="col-12 col-lg-4">
-            <label class="form-label small mb-0 text-muted" for="{{ form.job_name.id_for_label }}">{{ form.job_name.label }}</label>
+            <label class="form-label small mb-0" for="{{ form.job_name.id_for_label }}">{{ form.job_name.label }}</label>
             {{ form.job_name }}
             {% for error in form.job_name.errors %}
                 <div class="invalid-feedback d-block">{{ error }}</div>
             {% endfor %}
         </div>
         <div class="col-12 col-sm-6 col-lg-4">
-            <label class="form-label small mb-0 text-muted" for="{{ form.schedule_at.id_for_label }}">{{ form.schedule_at.label }}</label>
+            <label class="form-label small mb-0" for="{{ form.schedule_at.id_for_label }}">{{ form.schedule_at.label }}</label>
             {{ form.schedule_at }}
+            {% if form.schedule_at.help_text %}
+                <div class="form-text text-muted small">{{ form.schedule_at.help_text|safe }}</div>
+            {% endif %}
             {% for error in form.schedule_at.errors %}
                 <div class="invalid-feedback d-block">{{ error }}</div>
             {% endfor %}
         </div>
         <div class="col-12 col-sm-6 col-lg-4">
-            <label class="form-label small mb-0 text-muted d-block">{{ form.interval_value.label }}</label>
-            <div class="d-flex flex-wrap align-items-center gap-2">
-                <div style="max-width: 5rem;">{{ form.interval_value }}</div>
-                <div class="flex-grow-1" style="min-width: 7rem;">{{ form.interval_unit }}</div>
+            <label class="form-label small mb-0 d-block" for="{{ form.interval_value.id_for_label }}">{{ form.interval_value.label }}</label>
+            <div class="row g-2 align-items-center">
+                <div class="col-4 col-sm-3 col-lg-4">{{ form.interval_value }}</div>
+                <div class="col-8 col-sm-9 col-lg-8">{{ form.interval_unit }}</div>
             </div>
+            {% if form.interval_value.help_text %}
+                <div class="form-text text-muted small">{{ form.interval_value.help_text }}</div>
+            {% endif %}
+            {% if form.interval_unit.help_text %}
+                <div class="form-text text-muted small">{{ form.interval_unit.help_text }}</div>
+            {% endif %}
             {% for error in form.interval_value.errors %}
                 <div class="invalid-feedback d-block">{{ error }}</div>
             {% endfor %}
@@ -33,14 +42,14 @@
 
     <div class="row g-2 mb-2">
         <div class="col-12 col-md-6">
-            <label class="form-label small mb-0 text-muted" for="{{ form.proxmox_endpoints.id_for_label }}">{{ form.proxmox_endpoints.label }}</label>
+            <label class="form-label small mb-0" for="{{ form.proxmox_endpoints.id_for_label }}">{{ form.proxmox_endpoints.label }}</label>
             {{ form.proxmox_endpoints }}
             {% for error in form.proxmox_endpoints.errors %}
                 <div class="invalid-feedback d-block">{{ error }}</div>
             {% endfor %}
         </div>
         <div class="col-12 col-md-6">
-            <label class="form-label small mb-0 text-muted" for="{{ form.netbox_endpoints.id_for_label }}">{{ form.netbox_endpoints.label }}</label>
+            <label class="form-label small mb-0" for="{{ form.netbox_endpoints.id_for_label }}">{{ form.netbox_endpoints.label }}</label>
             {{ form.netbox_endpoints }}
             {% for error in form.netbox_endpoints.errors %}
                 <div class="invalid-feedback d-block">{{ error }}</div>
@@ -48,26 +57,16 @@
         </div>
     </div>
 
-    <div class="mb-2">
-        <label class="form-label small mb-1 text-muted">{{ form.sync_types.label }}</label>
-        <div class="proxbox-quick-sync-type-widgets border rounded px-2 py-2 bg-body-tertiary">{{ form.sync_types }}</div>
+    <div class="mb-2 pt-2 mt-1 border-top border-secondary-subtle">
+        <label class="form-label small mb-1">{{ form.sync_types.label }}</label>
+        <div class="proxbox-quick-sync-type-widgets w-100">{{ form.sync_types }}</div>
         {% if form.sync_types.help_text %}
-            <details class="small text-muted mt-1">
-                <summary>{% trans "Sync type details" %}</summary>
-                <div class="mt-1">{{ form.sync_types.help_text }}</div>
-            </details>
+            <div class="form-text text-muted small mt-1">{{ form.sync_types.help_text }}</div>
         {% endif %}
         {% for error in form.sync_types.errors %}
             <div class="invalid-feedback d-block">{{ error }}</div>
         {% endfor %}
     </div>
-
-    {% if form.schedule_at.help_text %}
-        <p class="form-text text-muted small mb-2">{{ form.schedule_at.help_text|safe }}</p>
-    {% endif %}
-    {% if form.interval_value.help_text %}
-        <p class="form-text text-muted small mb-2">{{ form.interval_value.help_text }}</p>
-    {% endif %}
 
     {% if form.non_field_errors %}
         <div class="alert alert-danger py-2 mb-2">
