@@ -120,3 +120,9 @@ Key pages:
 ## Contributing
 
 See [DEVELOP.md](./DEVELOP.md) for development setup and contribution guidelines.
+
+## Support the Project
+
+If Proxbox has been useful for you, consider supporting the project on GitHub Sponsors:
+
+[Sponsor Me!](https://github.com/sponsors/emersonfelipesp)
