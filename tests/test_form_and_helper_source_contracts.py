@@ -147,3 +147,11 @@ def test_proxmox_import_form_exists_with_csv_fields():
     assert "NetBoxModelImportForm" in contents
     assert "CSVModelChoiceField" in contents
     assert "CSVChoiceField" in contents
+
+
+def test_proxmox_endpoint_form_hides_secret_fields_and_preserves_existing_values():
+    contents = _read("netbox_proxbox/forms/proxmox.py")
+    assert 'forms.PasswordInput(render_value=False' in contents
+    assert "Leave blank to keep the current value." in contents
+    assert 'cleaned_data["password"] = self.instance.password' in contents
+    assert 'cleaned_data["token_value"] = self.instance.token_value' in contents
