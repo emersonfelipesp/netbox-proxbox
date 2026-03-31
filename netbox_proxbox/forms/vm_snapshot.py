@@ -18,7 +18,7 @@ class VMSnapshotForm(NetBoxModelForm):
     class Meta:
         model = VMSnapshot
         fields = (
-            "storage",
+            "proxmox_storage",
             "virtual_machine",
             "name",
             "description",
@@ -34,18 +34,17 @@ class VMSnapshotForm(NetBoxModelForm):
 
     comments = CommentField()
 
-    storage = DynamicModelChoiceField(
-        queryset=ProxmoxStorage.objects.all(),
-        required=False,
-        help_text="Select a Storage",
-        label="Storage",
-    )
-
     virtual_machine = DynamicModelChoiceField(
         queryset=VirtualMachine.objects.all(),
         required=True,
         help_text="Select a Virtual Machine",
         label="Virtual Machine",
+    )
+    proxmox_storage = DynamicModelChoiceField(
+        queryset=ProxmoxStorage.objects.all(),
+        required=False,
+        help_text="Select related Proxmox storage object.",
+        label="Proxmox Storage",
     )
 
     subtype = forms.ChoiceField(
@@ -67,8 +66,7 @@ class VMSnapshotFilterForm(NetBoxModelFilterSetForm):
     """Filter controls for the VM snapshot list view."""
 
     model = VMSnapshot
-
-    storage = forms.ModelMultipleChoiceField(
+    proxmox_storage = forms.ModelMultipleChoiceField(
         queryset=ProxmoxStorage.objects.all(),
         required=False,
     )

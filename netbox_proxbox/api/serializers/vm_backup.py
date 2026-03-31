@@ -7,6 +7,7 @@ from netbox.api.serializers import NetBoxModelSerializer
 from rest_framework import serializers
 from virtualization.api.serializers_.nested import NestedVirtualMachineSerializer
 
+from netbox_proxbox.api.serializers.storage import NestedProxmoxStorageSerializer
 from netbox_proxbox.choices import (
     ProxmoxBackupFormatChoices,
     ProxmoxBackupSubtypeChoices,
@@ -20,6 +21,7 @@ class VMBackupSerializer(NetBoxModelSerializer):
     url = serializers.HyperlinkedIdentityField(
         view_name="plugins-api:netbox_proxbox-api:vmbackup-detail",
     )
+    proxmox_storage = NestedProxmoxStorageSerializer(required=False, allow_null=True)
     virtual_machine = NestedVirtualMachineSerializer()
     subtype = ChoiceField(choices=ProxmoxBackupSubtypeChoices)
     format = ChoiceField(choices=ProxmoxBackupFormatChoices)
@@ -30,6 +32,7 @@ class VMBackupSerializer(NetBoxModelSerializer):
             "id",
             "url",
             "display",
+            "proxmox_storage",
             "virtual_machine",
             "storage",
             "subtype",
@@ -48,4 +51,11 @@ class VMBackupSerializer(NetBoxModelSerializer):
             "created",
             "last_updated",
         )
-        brief_fields = ("id", "url", "display", "storage", "creation_time")
+        brief_fields = (
+            "id",
+            "url",
+            "display",
+            "proxmox_storage",
+            "storage",
+            "creation_time",
+        )

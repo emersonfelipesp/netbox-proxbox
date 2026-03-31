@@ -331,7 +331,14 @@ class FastAPIEndpointAPITest(APIViewTestCases.APIViewTestCase):
 
 class VMBackupAPITest(APIViewTestCases.APIViewTestCase):
     model = VMBackup
-    brief_fields = ["creation_time", "display", "id", "storage", "url"]
+    brief_fields = [
+        "creation_time",
+        "display",
+        "id",
+        "proxmox_storage",
+        "storage",
+        "url",
+    ]
     bulk_update_data = {"encrypted": True}
     validation_excluded_fields = ["virtual_machine"]
 

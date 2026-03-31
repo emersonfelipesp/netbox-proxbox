@@ -152,6 +152,7 @@ def test_endpoint_serializers_expose_supported_model_fields():
             "id",
             "url",
             "display",
+            "proxmox_storage",
             "virtual_machine",
             "storage",
             "name",
@@ -192,6 +193,7 @@ def test_endpoint_serializers_expose_supported_model_fields():
             "last_updated",
         },
         "VMBackupSerializer": {
+            "proxmox_storage",
             "virtual_machine",
             "storage",
             "subtype",
@@ -260,8 +262,8 @@ def test_writable_nested_related_fields_are_declared():
     module = _parse_serializers_package()
 
     expected_assignments = {
-        "VMBackupSerializer": {"virtual_machine"},
-        "VMSnapshotSerializer": {"virtual_machine"},
+        "VMBackupSerializer": {"proxmox_storage", "virtual_machine"},
+        "VMSnapshotSerializer": {"proxmox_storage", "virtual_machine"},
         "ProxmoxEndpointSerializer": {"ip_address"},
         "NetBoxEndpointSerializer": {"ip_address", "token"},
         "FastAPIEndpointSerializer": {"ip_address"},
@@ -297,7 +299,9 @@ def test_nested_serializers_do_not_pass_nested_keyword_argument():
     module = _parse_serializers_package()
     assignments = [
         ("VMBackupSerializer", "virtual_machine"),
+        ("VMBackupSerializer", "proxmox_storage"),
         ("VMSnapshotSerializer", "virtual_machine"),
+        ("VMSnapshotSerializer", "proxmox_storage"),
         ("ProxmoxEndpointSerializer", "ip_address"),
         ("NetBoxEndpointSerializer", "ip_address"),
         ("NetBoxEndpointSerializer", "token"),
