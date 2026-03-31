@@ -40,7 +40,13 @@ def get_service_status_impl(
         )
         fastapi_response = service_status.fastapi_status(pk)
         status = "success" if fastapi_response.get("connected") else "error"
-        payload: dict[str, Any] = {"status": status}
+        payload: dict[str, Any] = {
+            "status": status,
+            "target_address": fastapi_response.get("target_address"),
+            "target_port": fastapi_response.get("target_port"),
+            "authentication": fastapi_response.get("authentication"),
+            "api_access": fastapi_response.get("api_access"),
+        }
         if fastapi_response.get("detail"):
             payload["detail"] = fastapi_response["detail"]
         return JsonResponse(payload)
@@ -107,20 +113,26 @@ def get_service_status_impl(
     connected_url = service_status.connected_url
 
     if service == "netbox":
-        status = service_status.netbox_status(
+        status, details = service_status.netbox_status(
             pk=pk,
             base_url=connected_url,
             auth_headers=auth_headers,
         )
     elif service == "proxmox":
-        status = service_status.proxmox_status(
+        status, details = service_status.proxmox_status(
             pk=pk,
             base_url=connected_url,
             auth_headers=auth_headers,
             backend_verify_ssl=service_status.connected_verify_ssl,
         )
 
-    payload = {"status": status}
+    payload: dict[str, Any] = {
+        "status": status,
+        "target_address": details.get("target_address"),
+        "target_port": details.get("target_port"),
+        "authentication": details.get("authentication"),
+        "api_access": details.get("api_access"),
+    }
     if status != "success" and service_status.last_error_detail:
         payload["detail"] = service_status.last_error_detail
     if status != "success" and service_status.last_error_http_status is not None:
