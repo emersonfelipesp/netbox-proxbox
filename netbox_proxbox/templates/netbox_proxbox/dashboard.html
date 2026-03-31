@@ -1,0 +1,184 @@
+{% extends 'base/layout.html' %}
+{% load i18n %}
+
+{% block content %}
+  <div class="row mb-3">
+    <div class="col-12">
+      <h2>{% trans "Proxmox Dashboard" %}</h2>
+      <p class="text-muted mb-0">
+        {% trans "Cluster and node summaries from the configured ProxBox backend." %}
+      </p>
+    </div>
+  </div>
+
+  {% if dashboards %}
+    {% for item in dashboards %}
+      <div class="row mb-3">
+        <div class="col-12">
+          <div class="card">
+            <h5 class="card-header d-flex justify-content-between align-items-center">
+              <span>
+                {% trans "Endpoint" %}:
+                {% if item.endpoint.get_absolute_url %}
+                  <a href="{{ item.endpoint.get_absolute_url }}">{{ item.endpoint.name|default:"—" }}</a>
+                {% else %}
+                  {{ item.endpoint.name|default:"—" }}
+                {% endif %}
+              </span>
+            </h5>
+
+            <div class="card-body">
+              {% if item.detail %}
+                <div class="alert alert-warning" role="alert">{{ item.detail }}</div>
+              {% else %}
+                <div class="row g-3">
+                  <div class="col-12 col-lg-6">
+                    <div class="card h-100">
+                      <h6 class="card-header">{% trans "Cluster Summary" %}</h6>
+                      <div class="card-body">
+                        <table class="table table-hover attr-table mb-0">
+                          <tr>
+                            <th scope="row">{% trans "Cluster" %}</th>
+                            <td>{{ item.cluster_summary.name|default:"—" }}</td>
+                          </tr>
+                          <tr>
+                            <th scope="row">{% trans "Mode" %}</th>
+                            <td>{{ item.cluster_summary.mode|default:"—" }}</td>
+                          </tr>
+                          <tr>
+                            <th scope="row">{% trans "Quorum" %}</th>
+                            <td>
+                              {% if item.cluster_summary.quorate %}
+                                <span class="badge text-bg-green">{% trans "Yes" %}</span>
+                              {% else %}
+                                <span class="badge text-bg-red">{% trans "No" %}</span>
+                              {% endif %}
+                            </td>
+                          </tr>
+                          <tr>
+                            <th scope="row">{% trans "Nodes" %}</th>
+                            <td>{{ item.cluster_summary.nodes_total }}</td>
+                          </tr>
+                          <tr>
+                            <th scope="row">{% trans "Online" %}</th>
+                            <td><span class="badge text-bg-green">{{ item.cluster_summary.nodes_online }}</span></td>
+                          </tr>
+                          <tr>
+                            <th scope="row">{% trans "Offline" %}</th>
+                            <td><span class="badge text-bg-red">{{ item.cluster_summary.nodes_offline }}</span></td>
+                          </tr>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="col-12 col-lg-6">
+                    <div class="card h-100">
+                      <h6 class="card-header">{% trans "Guests Summary" %}</h6>
+                      <div class="card-body">
+                        <table class="table table-hover attr-table mb-0">
+                          <tr>
+                            <th scope="row">{% trans "VMs Running" %}</th>
+                            <td>{{ item.guest_summary.virtual_machines.running }}</td>
+                          </tr>
+                          <tr>
+                            <th scope="row">{% trans "VMs Stopped" %}</th>
+                            <td>{{ item.guest_summary.virtual_machines.stopped }}</td>
+                          </tr>
+                          <tr>
+                            <th scope="row">{% trans "VM Templates" %}</th>
+                            <td>{{ item.guest_summary.virtual_machines.templates }}</td>
+                          </tr>
+                          <tr>
+                            <th scope="row">{% trans "LXC Running" %}</th>
+                            <td>{{ item.guest_summary.lxc_containers.running }}</td>
+                          </tr>
+                          <tr>
+                            <th scope="row">{% trans "LXC Stopped" %}</th>
+                            <td>{{ item.guest_summary.lxc_containers.stopped }}</td>
+                          </tr>
+                          <tr>
+                            <th scope="row">{% trans "LXC Templates" %}</th>
+                            <td>{{ item.guest_summary.lxc_containers.templates }}</td>
+                          </tr>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="col-12">
+                    <div class="card">
+                      <h6 class="card-header">{% trans "Nodes Summary" %}</h6>
+                      <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                          <thead>
+                            <tr>
+                              <th>{% trans "Node" %}</th>
+                              <th>{% trans "Status" %}</th>
+                              <th>{% trans "Uptime" %}</th>
+                              <th>{% trans "CPU" %}</th>
+                              <th>{% trans "Load Avg" %}</th>
+                              <th>{% trans "Memory" %}</th>
+                              <th>{% trans "Disk" %}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {% for node in item.nodes %}
+                              <tr>
+                                <td>{{ node.name }}</td>
+                                <td>
+                                  {% if node.status == "online" %}
+                                    <span class="badge text-bg-green">{% trans "Online" %}</span>
+                                  {% else %}
+                                    <span class="badge text-bg-red">{{ node.status }}</span>
+                                  {% endif %}
+                                </td>
+                                <td>{{ node.uptime }}</td>
+                                <td>
+                                  <div>{{ node.cpu_label }}</div>
+                                  <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ node.cpu_pct|floatformat:0 }}">
+                                    <div class="progress-bar" style="width: {{ node.cpu_pct }}%;"></div>
+                                  </div>
+                                </td>
+                                <td>{{ node.loadavg }}</td>
+                                <td>
+                                  <div>{{ node.memory_label }}</div>
+                                  <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ node.memory_pct|floatformat:0 }}">
+                                    <div class="progress-bar bg-info" style="width: {{ node.memory_pct }}%;"></div>
+                                  </div>
+                                </td>
+                                <td>
+                                  <div>{{ node.disk_label }}</div>
+                                  <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ node.disk_pct|floatformat:0 }}">
+                                    <div class="progress-bar bg-warning" style="width: {{ node.disk_pct }}%;"></div>
+                                  </div>
+                                </td>
+                              </tr>
+                            {% empty %}
+                              <tr>
+                                <td colspan="7" class="text-muted">{% trans "No node data returned." %}</td>
+                              </tr>
+                            {% endfor %}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  {% else %}
+    <div class="alert alert-info" role="alert">
+      {% trans "No Proxmox endpoints are visible to your account." %}
+    </div>
+  {% endif %}
+{% endblock %}
+
+{% block footer_links %}
+  {{ block.super }}
+  {% include "netbox_proxbox/footer.html" %}
+{% endblock %}

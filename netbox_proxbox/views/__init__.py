@@ -21,6 +21,7 @@ from utilities.views import (
 )
 
 from .cards import get_proxmox_card
+from .dashboard import DashboardView
 from .endpoints import (
     FastAPIEndpointDeleteView,
     FastAPIEndpointEditView,

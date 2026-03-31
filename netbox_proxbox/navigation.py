@@ -8,6 +8,11 @@ fullupdate_item = PluginMenuItem(
     link_text="Homepage",
 )
 
+dashboard_item = PluginMenuItem(
+    link="plugins:netbox_proxbox:dashboard",
+    link_text="Dashboard",
+)
+
 nodes_item = PluginMenuItem(
     link="plugins:netbox_proxbox:nodes",
     link_text="Nodes (Devices)",
@@ -135,6 +140,7 @@ menu = PluginMenu(
             "Proxmox Plugin",
             (
                 fullupdate_item,
+                dashboard_item,
                 nodes_item,
                 virtual_machines_item,
                 lxc_containers_item,
