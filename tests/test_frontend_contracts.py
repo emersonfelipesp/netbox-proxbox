@@ -124,7 +124,7 @@ def test_vm_sync_now_view_contract():
         'register_model_view(VirtualMachine, "proxbox_sync_now", path="proxbox-sync-now")'
         in contents
     )
-    assert "sync_types=[SyncTypeChoices.VIRTUAL_MACHINES]" in contents
+    assert "SyncTypeChoices.VIRTUAL_MACHINES_DISKS" in contents
     assert "netbox_vm_ids=[str(vm.pk)]" in contents
 
 
