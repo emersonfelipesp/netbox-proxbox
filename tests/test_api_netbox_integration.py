@@ -41,6 +41,7 @@ from utilities.testing import (
     create_test_user,
     create_test_virtualmachine,
 )
+from virtualization.models import Cluster, ClusterType
 
 from netbox_proxbox.choices import (
     ProxmoxBackupFormatChoices,
@@ -344,11 +345,30 @@ class VMBackupAPITest(APIViewTestCases.APIViewTestCase):
 
     @classmethod
     def setUpTestData(cls):
+        # Create cluster type and clusters for storage FK
+        cluster_type, _ = ClusterType.objects.get_or_create(
+            name="Proxmox", defaults={"slug": "proxmox"}
+        )
+        cls.clusters = [
+            Cluster.objects.create(
+                name=f"cluster-{idx}",
+                type=cluster_type,
+            )
+            for idx in range(6)
+        ]
         cls.virtual_machines = [
             create_test_virtualmachine(f"vm-{idx}") for idx in range(6)
         ]
         cls.storages = [
-            ProxmoxStorage.objects.create(cluster=f"cluster-{idx}", name=f"storage-{idx}")
+            ProxmoxStorage.objects.create(
+                cluster=cls.clusters[idx], name=f"storage-{idx}"
+            )
+            for idx in range(6)
+        ]
+        cls.storages = [
+            ProxmoxStorage.objects.create(
+                cluster=f"cluster-{idx}", name=f"storage-{idx}"
+            )
             for idx in range(6)
         ]
 
@@ -397,11 +417,30 @@ class VMSnapshotAPITest(APIViewTestCases.APIViewTestCase):
 
     @classmethod
     def setUpTestData(cls):
+        # Create cluster type and clusters for storage FK
+        cluster_type, _ = ClusterType.objects.get_or_create(
+            name="Proxmox", defaults={"slug": "proxmox"}
+        )
+        cls.clusters = [
+            Cluster.objects.create(
+                name=f"snapshot-cluster-{idx}",
+                type=cluster_type,
+            )
+            for idx in range(6)
+        ]
         cls.virtual_machines = [
             create_test_virtualmachine(f"snapshot-vm-{idx}") for idx in range(6)
         ]
         cls.storages = [
-            ProxmoxStorage.objects.create(cluster=f"cluster-{idx}", name=f"storage-{idx}")
+            ProxmoxStorage.objects.create(
+                cluster=cls.clusters[idx], name=f"storage-{idx}"
+            )
+            for idx in range(6)
+        ]
+        cls.storages = [
+            ProxmoxStorage.objects.create(
+                cluster=f"cluster-{idx}", name=f"storage-{idx}"
+            )
             for idx in range(6)
         ]
 

@@ -178,6 +178,7 @@ class ProxmoxStorageFilterSet(NetBoxModelFilterSet):
         fields = (
             "id",
             "cluster",
+            "cluster__name",
             "name",
             "storage_type",
             "content",
@@ -193,6 +194,6 @@ class ProxmoxStorageFilterSet(NetBoxModelFilterSet):
             return queryset
         return queryset.filter(
             Q(name__icontains=value)
-            | Q(cluster__icontains=value)
+            | Q(cluster__name__icontains=value)
             | Q(path__icontains=value)
         )

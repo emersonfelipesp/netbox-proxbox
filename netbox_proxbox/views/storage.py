@@ -196,7 +196,10 @@ class ProxmoxStorageView(generic.ObjectView):
                             record_cluster = str(record.get("cluster") or "")
                             if record_name != instance.name:
                                 continue
-                            if record_cluster and record_cluster != instance.cluster:
+                            if (
+                                record_cluster
+                                and record_cluster != instance.cluster.name
+                            ):
                                 continue
                             usage = self._usage_from_record(record)
                             break

@@ -12,6 +12,7 @@ from netbox_proxbox.models import ProxmoxStorage
 class ProxmoxStorageTable(NetBoxTable):
     """django-tables2 layout for Proxmox storage list views."""
 
+    cluster = tables.Column(linkify=True)
     name = tables.Column(linkify=True)
     shared = BooleanColumn(verbose_name=_("Shared"))
     enabled = BooleanColumn(verbose_name=_("Enabled"))
