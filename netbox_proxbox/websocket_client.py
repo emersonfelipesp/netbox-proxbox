@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import threading
+from collections import deque
 from queue import Queue
 
 import websockets
@@ -26,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 _RECONNECT_DELAY_SEC = 5
 
-GLOBAL_WEBSOCKET_MESSAGES = []
+GLOBAL_WEBSOCKET_MESSAGES = deque(maxlen=500)
 websocket_task = None
 websocket_loop = None
 websocket_lock = threading.Lock()
@@ -162,8 +163,10 @@ class WebSocketView(
         global GLOBAL_WEBSOCKET_MESSAGES
 
         with websocket_lock:
-            messages_to_render = GLOBAL_WEBSOCKET_MESSAGES[:bulk_messages_count]
-            GLOBAL_WEBSOCKET_MESSAGES = GLOBAL_WEBSOCKET_MESSAGES[bulk_messages_count:]
+            drain_count = min(bulk_messages_count, len(GLOBAL_WEBSOCKET_MESSAGES))
+            messages_to_render = [
+                GLOBAL_WEBSOCKET_MESSAGES.popleft() for _ in range(drain_count)
+            ]
 
         fastapi_object = FastAPIEndpoint.objects.first()
         if fastapi_object is None:
