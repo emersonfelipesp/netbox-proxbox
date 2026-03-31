@@ -76,6 +76,7 @@ from .vm_task_history import (
     VMTaskHistoryTabView,
     VMTaskHistoryView,
 )
+
 # Task History tab and detail views live in ``vm_task_history``.
 from .vm_config import ProxmoxVMConfigTabView
 from .vm_sync_now import VirtualMachineSyncNowView

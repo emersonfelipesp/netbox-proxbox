@@ -228,7 +228,9 @@ def test_task_history_route_and_viewset_are_registered():
     urls_contents = URLS_PATH.read_text()
 
     assert "VMTaskHistoryViewSet" in views_contents
-    assert 'router.register("task-history", views.VMTaskHistoryViewSet)' in urls_contents
+    assert (
+        'router.register("task-history", views.VMTaskHistoryViewSet)' in urls_contents
+    )
 
 
 def test_netbox_endpoint_serializer_rejects_selected_v2_token_objects():
