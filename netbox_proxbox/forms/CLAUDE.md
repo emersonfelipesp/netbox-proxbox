@@ -8,8 +8,14 @@ This directory contains Django/NetBox forms for plugin models and the filter for
 - [`proxmox.py`](./proxmox.py): create/edit and filter forms for `ProxmoxEndpoint`.
 - [`netbox.py`](./netbox.py): create/edit and filter forms for `NetBoxEndpoint`, including local validation for token version selection.
 - [`fastapi.py`](./fastapi.py): create/edit and filter forms for `FastAPIEndpoint`, including WebSocket and backend token fields.
-- [`sync_process.py`](./sync_process.py): create/edit and filter forms for `SyncProcess`.
+- [`schedule_sync.py`](./schedule_sync.py): scheduling form for `ProxboxSyncJob` (sync types,
+  endpoint filters, run-now/scheduled/recurring fields).
+- [`settings.py`](./settings.py): plugin settings form (`ProxboxPluginSettings` singleton).
+- [`storage.py`](./storage.py): create/edit and filter forms for `ProxmoxStorage`.
 - [`vm_backup.py`](./vm_backup.py): create/edit and filter forms for `VMBackup`.
+- [`vm_snapshot.py`](./vm_snapshot.py): create/edit and filter forms for `VMSnapshot`.
+- [`vm_task_history.py`](./vm_task_history.py): create/edit and filter forms for `VMTaskHistory`.
+- [`widgets.py`](./widgets.py): custom widgets used by forms (including bootstrap checkbox styles).
 
 ## Dependencies
 

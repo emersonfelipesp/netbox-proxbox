@@ -20,7 +20,7 @@ This is the main Django template namespace for the plugin.
 
 - There is some historical naming overlap in endpoint templates; keep the Python view/template binding in mind before removing or renaming files.
 - Any template with dynamic status cards or sync output is likely coupled to the JS files under `static/netbox_proxbox/js/`.
-- Sync buttons in `home.html` carry `data-sync-url` (POST polling) and `data-sync-stream-url` (GET SSE streaming) attributes. The JS in `home.js` prefers the stream URL when present.
+- Sync buttons in `home.html` carry `data-sync-url` for job-enqueue POST actions; status/progress is followed on NetBox Job pages.
 
 ## Links
 

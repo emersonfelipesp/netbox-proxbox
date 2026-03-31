@@ -4,12 +4,16 @@ This directory defines `django_tables2`/NetBox tables for plugin list and tabula
 
 ## Files And Ownership
 
-- [`__init__.py`](./__init__.py): tables for `SyncProcess`, `ProxmoxEndpoint`, `NetBoxEndpoint`, and `FastAPIEndpoint`.
+- [`__init__.py`](./__init__.py): tables for endpoint models plus exports for storage/backup/
+  snapshot/task-history tables.
+- [`storage.py`](./storage.py): table for `ProxmoxStorage`.
 - [`vm_backup.py`](./vm_backup.py): table for `VMBackup`.
+- [`vm_snapshot.py`](./vm_snapshot.py): table for `VMSnapshot`.
+- [`vm_task_history.py`](./vm_task_history.py): table for `VMTaskHistory`.
 
 ## Dependencies
 
-- Inbound: list views and the `VMBackup` tab view use these table classes.
+- Inbound: list views and VM detail tabs use these table classes.
 - Outbound: `netbox_proxbox.models`, NetBox table base classes, and `django_tables2`.
 
 ## Notes

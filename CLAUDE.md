@@ -26,7 +26,7 @@ Follow the same dependency order agents use (see [`AGENTS.md`](./AGENTS.md)):
 
 - **Registered CRUD** (via `register_model_view` and `netbox.views.generic`) inherits NetBox `ObjectPermissionRequiredMixin`: model permissions plus `queryset.restrict()` for object-level rules.
 - **Custom views** should use `utilities.views.ConditionalLoginRequiredMixin` (respects `LOGIN_REQUIRED`) instead of Django’s unconditional `login_required`, and `TokenConditionalLoginRequiredMixin` where REST tokens should authenticate browser-style endpoints.
-- **Operational endpoints** (sync, SSE streams, schedule job, WebSocket bridge): `ContentTypePermissionRequiredMixin` with permissions defined in [`netbox_proxbox/views/proxbox_access.py`](./netbox_proxbox/views/proxbox_access.py) — typically `change` on `FastAPIEndpoint` for backend sync, `add` on `SyncProcess` for queued jobs, `view` on `FastAPIEndpoint` for read-only WebSocket test UI.
+- **Operational endpoints** (sync actions, schedule job, WebSocket bridge): `ContentTypePermissionRequiredMixin` with permissions defined in [`netbox_proxbox/views/proxbox_access.py`](./netbox_proxbox/views/proxbox_access.py) — typically `add` on core `Job` for queueing sync work, `delete` on core `Job` for cancel actions, and `view` on `FastAPIEndpoint` for read-only WebSocket test UI.
 - **Dashboard and JSON helpers**: plugin home requires at least one of `view` on `ProxmoxEndpoint` / `NetBoxEndpoint` / `FastAPIEndpoint` when the user is authenticated; endpoint lists use `.restrict(request.user, "view")`. Proxmox card and keepalive JSON resolve objects through restricted querysets (`get_object_or_404(...restrict(...))`). Tagged devices and VMs use `Device.objects.restrict` / `VirtualMachine.objects.restrict` before listing.
 - **Plugin REST API** remains on `NetBoxModelViewSet` with standard NetBox/DRF permission classes.
 
@@ -38,12 +38,10 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
 
 ## Architecture Summary
 
-- `ProxmoxEndpoint`, `NetBoxEndpoint`, `FastAPIEndpoint`, `SyncProcess`, and `VMBackup` are the plugin's main persisted models.
+- `ProxmoxEndpoint`, `NetBoxEndpoint`, `FastAPIEndpoint`, `ProxmoxStorage`, `VMBackup`, `VMSnapshot`, `VMTaskHistory`, and `ProxboxPluginSettings` are the plugin's main persisted models.
 - NetBox UI routes live in [`netbox_proxbox/urls.py`](./netbox_proxbox/urls.py) and are implemented primarily in `netbox_proxbox/views/`.
 - The plugin also exposes a NetBox plugin API under `netbox_proxbox/api/`, using serializers, filtersets, and standard `NetBoxModelViewSet` classes.
-- Sync actions do not perform the sync themselves inside NetBox. They trigger work on the external ProxBox FastAPI service over HTTP. Two modes are supported:
-  - **POST polling**: traditional request/response where the plugin waits for the backend to finish and returns a single JSON payload.
-  - **GET SSE stream**: the plugin proxies the backend's `text/event-stream` response back to the browser as a Django `StreamingHttpResponse`. The browser parses SSE frames in real time via `EventSource`-style fetching and renders granular per-object progress. Stream endpoints are at `sync/<kind>/stream/`.
+- Sync actions enqueue NetBox background jobs (`ProxboxSyncJob`) that call the external ProxBox FastAPI SSE endpoints and record progress/result on the Job row.
 - Browser updates can flow over SSE streams or the existing WebSocket channel.
 - Templates and static assets are conventional Django plugin assets under `netbox_proxbox/templates/` and `netbox_proxbox/static/`.
 
