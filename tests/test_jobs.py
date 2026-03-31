@@ -31,6 +31,7 @@ def proxbox_sync_job_module(monkeypatch):
     choices_mod = types.ModuleType("netbox_proxbox.choices")
     choices_mod.SyncTypeChoices = SimpleNamespace(
         DEVICES="devices",
+        STORAGE="storage",
         VIRTUAL_MACHINES="virtual-machines",
         VIRTUAL_MACHINES_BACKUPS="vm-backups",
         VIRTUAL_MACHINES_DISKS="vm-disks",
@@ -43,6 +44,18 @@ def proxbox_sync_job_module(monkeypatch):
     pkg = types.ModuleType("netbox_proxbox")
     pkg.__path__ = [str(root / "netbox_proxbox")]
     monkeypatch.setitem(sys.modules, "netbox_proxbox", pkg)
+    models_mod = types.ModuleType("netbox_proxbox.models")
+
+    class _ProxboxPluginSettings:
+        @classmethod
+        def get_solo(cls):
+            return SimpleNamespace(
+                use_guest_agent_interface_name=True,
+                proxbox_fetch_max_concurrency=8,
+            )
+
+    models_mod.ProxboxPluginSettings = _ProxboxPluginSettings
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.models", models_mod)
 
     sys.modules.pop("netbox_proxbox.jobs", None)
     path = root / "netbox_proxbox" / "jobs.py"
@@ -90,6 +103,7 @@ def test_proxbox_sync_job_run_imports_from_services_not_views(
     )
     assert captured["called"] == "run_sync_stream"
     assert captured["path"] == "dcim/devices/create/stream"
+    assert captured["query_params"]["use_guest_agent_interface_name"] == "true"
     assert job.job.save.call_count >= 1
 
     job.job.reset_mock()
@@ -115,6 +129,7 @@ def test_proxbox_sync_params_from_job_defaults(proxbox_sync_job_module):
     assert p["sync_types"] == [st.ALL]
     assert p["proxmox_endpoint_ids"] == []
     assert p["netbox_endpoint_ids"] == []
+    assert p["netbox_vm_ids"] == []
 
 
 def test_is_proxbox_sync_job_by_queue_and_legacy_name(proxbox_sync_job_module):
@@ -147,6 +162,7 @@ def test_proxbox_sync_params_from_job_stored(proxbox_sync_job_module):
                     "sync_type": st.DEVICES,
                     "proxmox_endpoint_ids": ["1"],
                     "netbox_endpoint_ids": ["2"],
+                    "netbox_vm_ids": ["248"],
                 }
             }
         }
@@ -155,6 +171,7 @@ def test_proxbox_sync_params_from_job_stored(proxbox_sync_job_module):
     assert p["sync_types"] == [st.DEVICES]
     assert p["proxmox_endpoint_ids"] == ["1"]
     assert p["netbox_endpoint_ids"] == ["2"]
+    assert p["netbox_vm_ids"] == ["248"]
 
 
 def test_proxbox_sync_params_from_job_stored_sync_types(proxbox_sync_job_module):
@@ -329,6 +346,127 @@ def test_proxbox_sync_job_run_multi_stage_in_dependency_order(
     assert len(saved["proxbox_sync"]["response"]["stages"]) == 2
 
 
+def test_proxbox_sync_job_run_targets_single_vm_route_when_requested(
+    monkeypatch, proxbox_sync_job_module
+):
+    paths: list[str] = []
+
+    services_mod = types.ModuleType("netbox_proxbox.services")
+
+    def run_sync_stream(path, query_params=None, **stream_kwargs):
+        paths.append(path)
+        return ({"stream": True, "response": {"ok": True}}, 200)
+
+    services_mod.run_sync_stream = run_sync_stream
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
+
+    ProxboxSyncJob = proxbox_sync_job_module.ProxboxSyncJob
+    job = ProxboxSyncJob()
+    job.logger = logging.getLogger("test_proxbox_job")
+    job.job = MagicMock()
+    job.job.data = None
+
+    st = proxbox_sync_job_module.SyncTypeChoices
+    ProxboxSyncJob.run(
+        job,
+        sync_types=[st.VIRTUAL_MACHINES],
+        netbox_vm_ids=["248"],
+    )
+    assert paths == ["virtualization/virtual-machines/248/create/stream"]
+
+
+def test_proxbox_sync_job_run_targets_each_requested_vm_route(
+    monkeypatch, proxbox_sync_job_module
+):
+    paths: list[str] = []
+
+    services_mod = types.ModuleType("netbox_proxbox.services")
+
+    def run_sync_stream(path, query_params=None, **stream_kwargs):
+        paths.append(path)
+        return ({"stream": True, "response": {"ok": True}}, 200)
+
+    services_mod.run_sync_stream = run_sync_stream
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
+
+    ProxboxSyncJob = proxbox_sync_job_module.ProxboxSyncJob
+    job = ProxboxSyncJob()
+    job.logger = logging.getLogger("test_proxbox_job")
+    job.job = MagicMock()
+    job.job.data = None
+
+    st = proxbox_sync_job_module.SyncTypeChoices
+    ProxboxSyncJob.run(
+        job,
+        sync_types=[st.VIRTUAL_MACHINES],
+        netbox_vm_ids=["248", "512", "777"],
+    )
+    assert paths == [
+        "virtualization/virtual-machines/248/create/stream",
+        "virtualization/virtual-machines/512/create/stream",
+        "virtualization/virtual-machines/777/create/stream",
+    ]
+
+
+def test_proxbox_sync_job_query_flag_tracks_plugin_setting(
+    monkeypatch, proxbox_sync_job_module
+):
+    captured: dict[str, object] = {}
+    services_mod = types.ModuleType("netbox_proxbox.services")
+
+    def run_sync_stream(path, query_params=None, **stream_kwargs):
+        captured["query_params"] = query_params
+        return ({"stream": True, "response": {"ok": True}}, 200)
+
+    services_mod.run_sync_stream = run_sync_stream
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
+    monkeypatch.setattr(
+        proxbox_sync_job_module,
+        "_use_guest_agent_interface_name_setting",
+        lambda: False,
+    )
+
+    ProxboxSyncJob = proxbox_sync_job_module.ProxboxSyncJob
+    job = ProxboxSyncJob()
+    job.logger = logging.getLogger("test_proxbox_job")
+    job.job = MagicMock()
+    job.job.data = None
+
+    st = proxbox_sync_job_module.SyncTypeChoices
+    ProxboxSyncJob.run(job, sync_type=st.DEVICES)
+    assert captured["query_params"]["use_guest_agent_interface_name"] == "false"
+    assert captured["query_params"]["fetch_max_concurrency"] == "8"
+
+
+def test_proxbox_sync_job_query_uses_fetch_concurrency_setting(
+    monkeypatch, proxbox_sync_job_module
+):
+    captured: dict[str, object] = {}
+    services_mod = types.ModuleType("netbox_proxbox.services")
+
+    def run_sync_stream(path, query_params=None, **stream_kwargs):
+        captured["query_params"] = query_params
+        return ({"stream": True, "response": {"ok": True}}, 200)
+
+    services_mod.run_sync_stream = run_sync_stream
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
+    monkeypatch.setattr(
+        proxbox_sync_job_module,
+        "_proxbox_fetch_max_concurrency_setting",
+        lambda: 17,
+    )
+
+    ProxboxSyncJob = proxbox_sync_job_module.ProxboxSyncJob
+    job = ProxboxSyncJob()
+    job.logger = logging.getLogger("test_proxbox_job")
+    job.job = MagicMock()
+    job.job.data = None
+
+    st = proxbox_sync_job_module.SyncTypeChoices
+    ProxboxSyncJob.run(job, sync_type=st.DEVICES)
+    assert captured["query_params"]["fetch_max_concurrency"] == "17"
+
+
 def test_proxbox_sync_job_run_all_invokes_each_stage_stream(
     monkeypatch, proxbox_sync_job_module
 ):
@@ -355,11 +493,12 @@ def test_proxbox_sync_job_run_all_invokes_each_stage_stream(
 
     st = proxbox_sync_job_module.SyncTypeChoices
     ProxboxSyncJob.run(job, sync_types=[st.ALL])
-    assert calls == 5
+    assert calls == 6
     stages = job.job.data["proxbox_sync"]["response"]["stages"]
-    assert len(stages) == 5
+    assert len(stages) == 6
     assert {s["sync_type"] for s in stages} == {
         st.DEVICES,
+        st.STORAGE,
         st.VIRTUAL_MACHINES,
         st.VIRTUAL_MACHINES_DISKS,
         st.VIRTUAL_MACHINES_BACKUPS,

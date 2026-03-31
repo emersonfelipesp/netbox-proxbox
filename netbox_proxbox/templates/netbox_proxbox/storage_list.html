@@ -1,0 +1,11 @@
+{% extends 'generic/object_list.html' %}
+{% load i18n %}
+
+{% block controls %}
+  <form class="btn-group" method="post" action="{% url 'plugins:netbox_proxbox:sync_storage' %}" data-sync-url="{% url 'plugins:netbox_proxbox:sync_storage' %}" data-sync-kind="storage">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-primary" data-sync-url="{% url 'plugins:netbox_proxbox:sync_storage' %}" data-sync-kind="storage">
+      <i class="mdi mdi-sync" aria-hidden="true"></i> {% trans "Sync Storage" %}
+    </button>
+  </form>
+{% endblock %}

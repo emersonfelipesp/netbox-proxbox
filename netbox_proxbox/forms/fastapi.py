@@ -1,6 +1,7 @@
 """Define NetBox forms for configuring and filtering FastAPI backend endpoints."""
 
 # Django Imports
+import socket
 from django import forms
 
 # NetBox Imports
@@ -70,7 +71,7 @@ class FastAPIEndpointForm(NetBoxModelForm):
         )
 
     def clean(self):
-        """Require domain or IP for HTTP/WebSocket base URLs."""
+        """Require domain or IP for HTTP/WebSocket base URLs, check port reachability."""
         super().clean()
         cleaned_data = self.cleaned_data
         domain = (cleaned_data.get("domain") or "").strip()
@@ -80,7 +81,37 @@ class FastAPIEndpointForm(NetBoxModelForm):
             self.add_error("domain", "Provide either a domain or an IP address.")
             self.add_error("ip_address", "Provide either a domain or an IP address.")
 
+        port = cleaned_data.get("port") or 8800
+
+        host = domain or (str(ip_address.address).split("/")[0] if ip_address else None)
+        if host:
+            reachable, error_msg = self._check_port_reachable(host, port)
+            if not reachable:
+                self.add_error(
+                    "port",
+                    f"Port {port} on {host} is not reachable. {error_msg}. "
+                    "Make sure the ProxBox backend is running and accessible.",
+                )
+
         return cleaned_data
+
+    @staticmethod
+    def _check_port_reachable(host: str, port: int) -> tuple[bool, str]:
+        """Check if a host:port is reachable (TCP connection test)."""
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(5)
+            result = sock.connect_ex((host, port))
+            sock.close()
+            if result == 0:
+                return True, "Port is open"
+            return False, "Connection refused"
+        except socket.gaierror:
+            return False, "Hostname could not be resolved"
+        except socket.timeout:
+            return False, "Connection timed out"
+        except OSError as e:
+            return False, f"Error: {e}"
 
 
 class FastAPIEndpointFilterForm(NetBoxModelFilterSetForm):

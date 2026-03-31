@@ -43,6 +43,26 @@ class ProxmoxEndpointForm(NetBoxModelForm):
         ),
         label=_("Verify SSL"),
     )
+    password = forms.CharField(
+        required=False,
+        widget=forms.PasswordInput(
+            render_value=False, attrs={"autocomplete": "new-password"}
+        ),
+        help_text=_(
+            "Password for the Proxmox endpoint. Leave blank to keep the current value."
+        ),
+        label=_("Password"),
+    )
+    token_value = forms.CharField(
+        required=False,
+        widget=forms.PasswordInput(
+            render_value=False, attrs={"autocomplete": "new-password"}
+        ),
+        help_text=_(
+            "Secret value for the Proxmox API token. Leave blank to keep the current value."
+        ),
+        label=_("Token value"),
+    )
     comments = CommentField()
 
     class Meta:
@@ -70,6 +90,13 @@ class ProxmoxEndpointForm(NetBoxModelForm):
         if not domain and ip_address is None:
             self.add_error("domain", "Provide either a domain or an IP address.")
             self.add_error("ip_address", "Provide either a domain or an IP address.")
+
+        # Keep stored secrets on edit when user submits blank masked fields.
+        if self.instance and self.instance.pk:
+            if not cleaned_data.get("password"):
+                cleaned_data["password"] = self.instance.password
+            if not cleaned_data.get("token_value"):
+                cleaned_data["token_value"] = self.instance.token_value
 
         return cleaned_data
 
