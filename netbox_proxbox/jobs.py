@@ -102,9 +102,11 @@ def proxbox_sync_params_from_job(job: Any) -> dict[str, Any]:
             "sync_types": [SyncTypeChoices.ALL],
             "proxmox_endpoint_ids": [],
             "netbox_endpoint_ids": [],
+            "netbox_vm_ids": [],
         }
     proxmox = list(params.get("proxmox_endpoint_ids") or [])
     netbox = list(params.get("netbox_endpoint_ids") or [])
+    netbox_vms = [str(x) for x in list(params.get("netbox_vm_ids") or []) if str(x)]
     raw_list = params.get("sync_types")
     if isinstance(raw_list, list) and len(raw_list) > 0:
         sync_types = normalize_sync_types([str(x) for x in raw_list])
@@ -115,6 +117,7 @@ def proxbox_sync_params_from_job(job: Any) -> dict[str, Any]:
         "sync_types": sync_types,
         "proxmox_endpoint_ids": proxmox,
         "netbox_endpoint_ids": netbox,
+        "netbox_vm_ids": netbox_vms,
     }
 
 
@@ -144,6 +147,7 @@ class ProxboxSyncJob(JobRunner):
             "sync_types": normalized,
             "proxmox_endpoint_ids": list(kwargs.get("proxmox_endpoint_ids") or []),
             "netbox_endpoint_ids": list(kwargs.get("netbox_endpoint_ids") or []),
+            "netbox_vm_ids": [str(x) for x in list(kwargs.get("netbox_vm_ids") or []) if str(x)],
         }
         job.data = {"proxbox_sync": {"params": params}}
         job.save(update_fields=["data"])
@@ -155,6 +159,7 @@ class ProxboxSyncJob(JobRunner):
         sync_type: str | None = None,
         proxmox_endpoint_ids: list[str] | None = None,
         netbox_endpoint_ids: list[str] | None = None,
+        netbox_vm_ids: list[str] | None = None,
         **kwargs,
     ):
         """Run one or more proxbox-api SSE streams in dependency order."""
@@ -173,6 +178,7 @@ class ProxboxSyncJob(JobRunner):
             "sync_types": types,
             "proxmox_endpoint_ids": list(proxmox_endpoint_ids or []),
             "netbox_endpoint_ids": list(netbox_endpoint_ids or []),
+            "netbox_vm_ids": [str(x) for x in list(netbox_vm_ids or []) if str(x)],
         }
         self.job.data = {"proxbox_sync": {"params": params}}
         self.job.save(update_fields=["data"])
@@ -182,6 +188,8 @@ class ProxboxSyncJob(JobRunner):
             self.logger.info("Proxmox endpoints: %s", proxmox_endpoint_ids)
         if netbox_endpoint_ids:
             self.logger.info("NetBox endpoints: %s", netbox_endpoint_ids)
+        if netbox_vm_ids:
+            self.logger.info("NetBox virtual machines: %s", netbox_vm_ids)
 
         base_query: dict[str, str] = {}
         if proxmox_endpoint_ids:
@@ -215,7 +223,13 @@ class ProxboxSyncJob(JobRunner):
             query_params = dict(base_query)
             if st == SyncTypeChoices.VIRTUAL_MACHINES_BACKUPS:
                 query_params["delete_nonexistent_backup"] = True
-            stream_path = _sync_stream_path(st)
+            target_vm_ids = params.get("netbox_vm_ids", [])
+            if st == SyncTypeChoices.VIRTUAL_MACHINES and target_vm_ids:
+                stream_path = (
+                    f"virtualization/virtual-machines/{target_vm_ids[0]}/create/stream"
+                )
+            else:
+                stream_path = _sync_stream_path(st)
             self.logger.info("Starting stage: %s (%s)", st, stream_path)
             payload, status = run_sync_stream(
                 stream_path,
