@@ -39,7 +39,7 @@ class VirtualMachineSyncNowView(
             VirtualMachine.objects.restrict(request.user, "view"),
             pk=pk,
         )
-        job = ProxboxSyncJob.enqueue(
+        ProxboxSyncJob.enqueue(
             instance=None,
             user=request.user,
             queue_name=PROXBOX_SYNC_QUEUE_NAME,

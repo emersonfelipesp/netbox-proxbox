@@ -64,7 +64,9 @@ def test_home_loads_quick_schedule_css_with_form_media():
 
 def test_vm_and_backup_templates_do_not_reference_removed_stream_routes():
     vm_template = _read("netbox_proxbox/templates/netbox_proxbox/virtual_machines.html")
-    backup_template = _read("netbox_proxbox/templates/netbox_proxbox/vmbackup_list.html")
+    backup_template = _read(
+        "netbox_proxbox/templates/netbox_proxbox/vmbackup_list.html"
+    )
 
     assert "sync_virtual_machines_stream" not in vm_template
     assert "sync_vm_backups_stream" not in backup_template
@@ -104,7 +106,9 @@ def test_home_javascript_passes_error_detail_to_badge_state():
 
 def test_vm_detail_sync_now_button_contract():
     extension_contents = _read("netbox_proxbox/template_content.py")
-    button_contents = _read("netbox_proxbox/templates/netbox_proxbox/inc/vm_sync_now_button.html")
+    button_contents = _read(
+        "netbox_proxbox/templates/netbox_proxbox/inc/vm_sync_now_button.html"
+    )
 
     assert "virtualization.virtualmachine" in extension_contents
     assert "vm_sync_now_button.html" in extension_contents
@@ -116,7 +120,10 @@ def test_vm_detail_sync_now_button_contract():
 
 def test_vm_sync_now_view_contract():
     contents = _read("netbox_proxbox/views/vm_sync_now.py")
-    assert 'register_model_view(VirtualMachine, "proxbox_sync_now", path="proxbox-sync-now")' in contents
+    assert (
+        'register_model_view(VirtualMachine, "proxbox_sync_now", path="proxbox-sync-now")'
+        in contents
+    )
     assert "sync_types=[SyncTypeChoices.VIRTUAL_MACHINES]" in contents
     assert "netbox_vm_ids=[str(vm.pk)]" in contents
 
