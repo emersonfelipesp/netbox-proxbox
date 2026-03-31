@@ -59,11 +59,22 @@ Sync runs on-demand from the NetBox UI or scheduled automatically via NetBox's j
    uvicorn proxbox_api.main:app --host 0.0.0.0 --port 8800
    ```
 
-   Or use Docker:
+   Or use Docker (the published image runs **nginx** on port **8000** inside the container, in front of **uvicorn**):
 
    ```bash
-   docker run -d --name proxbox-api -p 8800:8800 emersonfelipesp/proxbox-api:latest
+   docker run -d --name proxbox-api -p 8800:8000 emersonfelipesp/proxbox-api:latest
    ```
+
+   **HTTPS with mkcert (optional):** the backend also publishes **`emersonfelipesp/proxbox-api:latest-mkcert`** (and `:<version>-mkcert`). **nginx** terminates **TLS** there (mkcert certs) on **`PORT`** (default **8000**); add more certificate names or IPs with **`MKCERT_EXTRA_NAMES`** (comma- or space-separated). Example:
+
+   ```bash
+   docker run -d --name proxbox-api-tls \
+     -p 8800:8000 \
+     -e MKCERT_EXTRA_NAMES='proxbox.backend.local' \
+     emersonfelipesp/proxbox-api:latest-mkcert
+   ```
+
+   Point your NetBox **ProxBox API** endpoint at `https://<host>:8800` (or your mapped port). Trust the mkcert root on clients if needed; see the [proxbox-api README](https://github.com/emersonfelipesp/proxbox-api/blob/main/README.md) for build flags, `CAROOT`, and details.
 
 5. **Configure endpoints in NetBox:**
 
