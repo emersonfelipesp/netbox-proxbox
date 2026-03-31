@@ -62,6 +62,16 @@ def test_home_loads_quick_schedule_css_with_form_media():
     assert "quick_schedule_home.css" in contents
 
 
+def test_vm_and_backup_templates_do_not_reference_removed_stream_routes():
+    vm_template = _read("netbox_proxbox/templates/netbox_proxbox/virtual_machines.html")
+    backup_template = _read("netbox_proxbox/templates/netbox_proxbox/vmbackup_list.html")
+
+    assert "sync_virtual_machines_stream" not in vm_template
+    assert "sync_vm_backups_stream" not in backup_template
+    assert "plugins:netbox_proxbox:sync_virtual_machines" in vm_template
+    assert "plugins:netbox_proxbox:sync_vm_backups" in backup_template
+
+
 def test_netbox_endpoint_edit_template_supports_v1_and_v2_tokens():
     contents = _read("netbox_proxbox/templates/netbox_proxbox/netboxendpoint_edit.html")
     assert "id_token_version" in contents
