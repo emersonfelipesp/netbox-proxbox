@@ -11,6 +11,7 @@ from netbox_proxbox.models import VMSnapshot
 class VMSnapshotTable(NetBoxTable):
     """django-tables2 layout for VM snapshot list views."""
 
+    name = tables.Column(linkify=True)
     storage = tables.Column(linkify=True)
     virtual_machine = tables.Column(linkify=True)
     proxmox_storage = tables.Column(linkify=True)
