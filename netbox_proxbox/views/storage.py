@@ -76,7 +76,9 @@ class ProxmoxStorageView(generic.ObjectView):
             "snapshots": snapshots,
             "storage_summary": {
                 "virtual_disks_count": virtual_disks.count(),
-                "virtual_disks_size": virtual_disks.aggregate(total=Sum("size"))["total"]
+                "virtual_disks_size": virtual_disks.aggregate(total=Sum("size"))[
+                    "total"
+                ]
                 or 0,
                 "backups_count": backups.count(),
                 "backups_size": backups.aggregate(total=Sum("size"))["total"] or 0,
