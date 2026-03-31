@@ -77,7 +77,7 @@ class VMBackup(NetBoxModel):
         help_text=_("Volume Identifier of the backup."),
     )
 
-    vmid = models.IntegerField(
+    vmid = models.PositiveIntegerField(
         null=True,
         blank=True,
         help_text=_("VM ID of the backup."),
@@ -117,7 +117,6 @@ class VMBackup(NetBoxModel):
             "virtual_machine",
             "subtype",
             "format",
-            "creation_time",
             "volume_id",
             "vmid",
         )

@@ -41,7 +41,7 @@ class VMSnapshot(NetBoxModel):
         help_text=_("Snapshot description."),
     )
 
-    vmid = models.IntegerField(
+    vmid = models.PositiveIntegerField(
         help_text=_("Proxmox VM ID."),
     )
 

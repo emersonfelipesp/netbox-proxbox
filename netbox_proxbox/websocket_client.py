@@ -53,21 +53,22 @@ async def websocket_client(uri: str) -> None:
                     response = await websocket.recv()
                     try:
                         response_dict = json.loads(response)
-                        if (
-                            response_dict.get("object") == "device"
-                            and response_dict.get("end") is True
-                        ):
-                            ws_sync_button_state["devices"] = "not-started"
-                        if (
-                            response_dict.get("object") == "virtual_machine"
-                            and response_dict.get("end") is True
-                        ):
-                            ws_sync_button_state["virtual-machines"] = "not-started"
-                        if (
-                            response_dict.get("object") == "full-update"
-                            and response_dict.get("end") is True
-                        ):
-                            ws_sync_button_state["full-update"] = "not-started"
+                        with websocket_lock:
+                            if (
+                                response_dict.get("object") == "device"
+                                and response_dict.get("end") is True
+                            ):
+                                ws_sync_button_state["devices"] = "not-started"
+                            if (
+                                response_dict.get("object") == "virtual_machine"
+                                and response_dict.get("end") is True
+                            ):
+                                ws_sync_button_state["virtual-machines"] = "not-started"
+                            if (
+                                response_dict.get("object") == "full-update"
+                                and response_dict.get("end") is True
+                            ):
+                                ws_sync_button_state["full-update"] = "not-started"
                     except json.JSONDecodeError:
                         logger.debug(
                             "Non-JSON WebSocket message (first 200 chars): %r",
@@ -121,20 +122,21 @@ async def websocket_client(uri: str) -> None:
 def start_websocket(uri):
     """Start a daemon thread and asyncio loop running ``websocket_client`` for ``uri`` if not already running."""
     global websocket_task, websocket_loop
-    if websocket_task is not None and not websocket_task.done():
-        return
+    with websocket_lock:
+        if websocket_task is not None and not websocket_task.done():
+            return
 
-    websocket_loop = asyncio.new_event_loop()
+        websocket_loop = asyncio.new_event_loop()
 
-    def run_loop():
-        asyncio.set_event_loop(websocket_loop)
-        websocket_loop.run_forever()
+        def run_loop():
+            asyncio.set_event_loop(websocket_loop)
+            websocket_loop.run_forever()
 
-    thread = threading.Thread(target=run_loop, daemon=True)
-    thread.start()
-    websocket_task = asyncio.run_coroutine_threadsafe(
-        websocket_client(uri), websocket_loop
-    )
+        thread = threading.Thread(target=run_loop, daemon=True)
+        thread.start()
+        websocket_task = asyncio.run_coroutine_threadsafe(
+            websocket_client(uri), websocket_loop
+        )
 
 
 def send_message(message):
@@ -182,21 +184,25 @@ class WebSocketView(
 
         start_websocket(uri)
 
-        if (
-            message == "full-update"
-            and ws_sync_button_state["full-update"] == "not-started"
-        ):
-            ws_sync_button_state["full-update"] = "syncing"
-            send_message("Full Update")
-        elif message == "devices" and ws_sync_button_state["devices"] == "not-started":
-            ws_sync_button_state["devices"] = "syncing"
-            send_message("Sync Nodes")
-        elif (
-            message == "virtual-machines"
-            and ws_sync_button_state["virtual-machines"] == "not-started"
-        ):
-            ws_sync_button_state["virtual-machines"] = "syncing"
-            send_message("Sync Virtual Machines")
+        with websocket_lock:
+            if (
+                message == "full-update"
+                and ws_sync_button_state["full-update"] == "not-started"
+            ):
+                ws_sync_button_state["full-update"] = "syncing"
+                send_message("Full Update")
+            elif (
+                message == "devices"
+                and ws_sync_button_state["devices"] == "not-started"
+            ):
+                ws_sync_button_state["devices"] = "syncing"
+                send_message("Sync Nodes")
+            elif (
+                message == "virtual-machines"
+                and ws_sync_button_state["virtual-machines"] == "not-started"
+            ):
+                ws_sync_button_state["virtual-machines"] = "syncing"
+                send_message("Sync Virtual Machines")
 
         if json_response:
             return JsonResponse(messages_to_render, safe=False)
