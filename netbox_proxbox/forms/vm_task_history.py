@@ -2,10 +2,44 @@
 
 from django import forms
 
-from netbox.forms import NetBoxModelFilterSetForm
+from netbox.forms import NetBoxModelFilterSetForm, NetBoxModelForm
+from utilities.forms.fields import CommentField, DynamicModelChoiceField
 from virtualization.models import VirtualMachine
 
 from netbox_proxbox.models import VMTaskHistory
+
+
+class VMTaskHistoryForm(NetBoxModelForm):
+    """Create or edit a VM task history record."""
+
+    comments = CommentField()
+    virtual_machine = DynamicModelChoiceField(
+        queryset=VirtualMachine.objects.all(),
+        required=True,
+        label="Virtual Machine",
+    )
+
+    class Meta:
+        model = VMTaskHistory
+        fields = (
+            "virtual_machine",
+            "vm_type",
+            "upid",
+            "node",
+            "pid",
+            "pstart",
+            "task_id",
+            "task_type",
+            "username",
+            "start_time",
+            "end_time",
+            "description",
+            "status",
+            "task_state",
+            "exitstatus",
+            "tags",
+            "comments",
+        )
 
 
 class VMTaskHistoryFilterForm(NetBoxModelFilterSetForm):
