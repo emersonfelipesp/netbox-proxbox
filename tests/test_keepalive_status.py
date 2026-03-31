@@ -78,12 +78,13 @@ def test_netbox_status_creates_endpoint_and_checks_status(
     monkeypatch.setattr(ss.requests, "get", fake_get)
     monkeypatch.setattr(ss.requests, "post", fake_post)
 
-    status = ss.ServiceStatus().netbox_status(
+    status, details = ss.ServiceStatus().netbox_status(
         1,
         "https://proxbox.local:8800",
         auth_headers={"Authorization": "Bearer backend-token"},
     )
     assert status == "success"
+    assert details["api_access"] == "success"
     assert created_payloads[0][0].endswith("/netbox/endpoint")
     assert created_payloads[0][1]["token"] == "token-1"
     assert created_payloads[0][1]["token_version"] == "v1"
@@ -117,12 +118,13 @@ def test_netbox_status_v2_without_secret_fails_backend_validation(
     monkeypatch.setattr(ss.time, "sleep", lambda seconds: None)
 
     service_status = ss.ServiceStatus()
-    status = service_status.netbox_status(
+    status, details = service_status.netbox_status(
         1,
         "https://proxbox.local:8800",
         auth_headers={"Authorization": "Bearer backend-token"},
     )
     assert status == "error"
+    assert details["api_access"] == "error"
     assert service_status.last_error_detail == (
         "NetBox v2 credentials are incomplete. Provide both token key and token secret."
     )
@@ -170,12 +172,13 @@ def test_netbox_status_builds_full_v2_token_from_key_and_secret(
     monkeypatch.setattr(ss.requests, "get", fake_get)
     monkeypatch.setattr(ss.requests, "post", fake_post)
 
-    status = ss.ServiceStatus().netbox_status(
+    status, details = ss.ServiceStatus().netbox_status(
         1,
         "https://proxbox.local:8800",
         auth_headers={"Authorization": "Bearer backend-token"},
     )
     assert status == "success"
+    assert details["api_access"] == "success"
     assert created_payloads[0][1]["token"] == "v2-token-secret"
     assert created_payloads[0][1]["token_version"] == "v2"
     assert created_payloads[0][1]["token_key"] == "v2-token-key"
@@ -247,13 +250,14 @@ def test_netbox_status_exposes_error_detail_on_backend_failure(
     monkeypatch.setattr(ss.requests, "post", fake_post)
 
     service_status = ss.ServiceStatus()
-    status = service_status.netbox_status(
+    status, details = service_status.netbox_status(
         1,
         "https://proxbox.local:8800",
         auth_headers={"Authorization": "Bearer backend-token"},
     )
 
     assert status == "error"
+    assert details["api_access"] == "error"
     assert "token is required for NetBox API token v1" in (
         service_status.last_error_detail or ""
     )
@@ -314,13 +318,14 @@ def test_proxmox_status_uses_domain_query_when_available(
 
     monkeypatch.setattr(ss.requests, "get", fake_get)
 
-    status = ss.ServiceStatus().proxmox_status(
+    status, details = ss.ServiceStatus().proxmox_status(
         1,
         "https://proxbox.local:8800",
         auth_headers={"Authorization": "Bearer backend-token"},
         backend_verify_ssl=True,
     )
     assert status == "success"
+    assert details["api_access"] == "success"
     assert requested == [
         (
             "https://proxbox.local:8800/proxmox/version",
@@ -363,13 +368,14 @@ def test_proxmox_status_uses_ip_query_when_domain_missing(
 
     monkeypatch.setattr(ss.requests, "get", fake_get)
 
-    status = ss.ServiceStatus().proxmox_status(
+    status, details = ss.ServiceStatus().proxmox_status(
         1,
         "https://proxbox.local:8800",
         auth_headers={"Authorization": "Bearer backend-token"},
         backend_verify_ssl=False,
     )
     assert status == "success"
+    assert details["api_access"] == "success"
     assert requested == [
         (
             "https://proxbox.local:8800/proxmox/version",
@@ -410,7 +416,7 @@ def test_proxmox_status_normalizes_backend_connection_refused(
     monkeypatch.setattr(ss.requests, "get", fake_get)
 
     service_status = ss.ServiceStatus()
-    status = service_status.proxmox_status(
+    status, details = service_status.proxmox_status(
         1,
         "https://proxbox.local:8800",
         auth_headers={"Authorization": "Bearer backend-token"},
@@ -418,6 +424,7 @@ def test_proxmox_status_normalizes_backend_connection_refused(
     )
 
     assert status == "error"
+    assert details["api_access"] == "error"
     assert service_status.last_error_http_status is None
     assert (
         service_status.last_error_detail
@@ -458,7 +465,7 @@ def test_proxmox_status_returns_sync_error_before_backend_version_call(
     monkeypatch.setattr(ss.requests, "get", fake_get)
 
     service_status = ss.ServiceStatus()
-    status = service_status.proxmox_status(
+    status, details = service_status.proxmox_status(
         1,
         "https://proxbox.local:8800",
         auth_headers={"Authorization": "Bearer backend-token"},
@@ -466,6 +473,7 @@ def test_proxmox_status_returns_sync_error_before_backend_version_call(
     )
 
     assert status == "error"
+    assert details["api_access"] == "error"
     assert service_status.last_error_detail == "sync failed"
     assert service_status.last_error_http_status == 503
     assert calls == []
