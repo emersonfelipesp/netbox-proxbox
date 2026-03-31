@@ -1,0 +1,52 @@
+{% extends 'generic/object.html' %}
+{% load i18n %}
+{% load helpers %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <h5 class="card-header">{% trans "Proxmox Storage" %}</h5>
+            <table class="table table-hover attr-table">
+                <tr>
+                    <th scope="row">{% trans "Cluster" %}</th>
+                    <td>{{ object.cluster }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">{% trans "Name" %}</th>
+                    <td>{{ object.name }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">{% trans "Storage Type" %}</th>
+                    <td>{{ object.storage_type|placeholder }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">{% trans "Content" %}</th>
+                    <td>{{ object.content|placeholder }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">{% trans "Path" %}</th>
+                    <td>{{ object.path|placeholder }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">{% trans "Nodes" %}</th>
+                    <td>{{ object.nodes|placeholder }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">{% trans "Shared" %}</th>
+                    <td>{{ object.shared|yesno|capfirst }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">{% trans "Enabled" %}</th>
+                    <td>{{ object.enabled|yesno|capfirst }}</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+    <div class="col-md-6">
+        {% include 'inc/panels/tags.html' %}
+        {% include 'inc/panels/custom_fields.html' %}
+        {% include 'inc/panels/comments.html' %}
+    </div>
+</div>
+{% endblock %}

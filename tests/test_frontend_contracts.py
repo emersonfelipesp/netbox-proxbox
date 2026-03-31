@@ -226,3 +226,10 @@ def test_lxc_and_storage_pages_are_wired_in_urls_navigation_and_templates():
     assert "sync_storage" in storage_template
     assert "class LXCContainersView(" in views_module
     assert "class SyncStorageView(" in sync_view
+
+
+def test_proxmox_storage_detail_template_exists():
+    detail_template = _read("netbox_proxbox/templates/netbox_proxbox/proxmoxstorage.html")
+    assert "Proxmox Storage" in detail_template
+    assert "inc/panels/tags.html" in detail_template
+    assert "inc/panels/custom_fields.html" in detail_template
