@@ -1,13 +1,17 @@
 # `netbox_proxbox.api`
 
-This directory contains the NetBox plugin API surface for ProxBox. It exposes root API endpoints plus model-backed viewsets and serializers for the plugin's main objects.
+This directory contains the NetBox plugin API surface for ProxBox. It exposes root API
+endpoints plus model-backed viewsets and serializers for the plugin's main objects.
 
 ## Files And Ownership
 
 - [`__init__.py`](./__init__.py): package marker.
 - [`urls.py`](./urls.py): API routing for the plugin root, endpoint namespace, and model viewsets.
-- [`views.py`](./views.py): `APIRootView` subclasses and `NetBoxModelViewSet` classes for `VMBackup`, `SyncProcess`, `ProxmoxEndpoint`, `NetBoxEndpoint`, and `FastAPIEndpoint`.
-- [`serializers.py`](./serializers.py): API serializers, nested token/IP/VM references, write-only secret fields, and v1/v2 NetBox token validation rules.
+- [`views.py`](./views.py): `APIRootView` subclasses and `NetBoxModelViewSet` classes for
+  `ProxmoxEndpoint`, `NetBoxEndpoint`, `FastAPIEndpoint`, `ProxmoxStorage`, `VMBackup`,
+  `VMSnapshot`, and `VMTaskHistory`.
+- [`serializers/`](./serializers): package of API serializers (endpoints, storage, backups,
+  snapshots, task history), including write-only secret fields and v1/v2 NetBox token rules.
 - [`filters.py`](./filters.py): additional filter utilities used by the API router if needed.
 
 ## Dependencies
