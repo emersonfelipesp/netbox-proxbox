@@ -27,7 +27,11 @@ class ProxmoxStorageVirtualDisk(models.Model):
 class ProxmoxStorage(NetBoxModel):
     """Storage definition synced from Proxmox clusters."""
 
-    cluster = models.CharField(max_length=255)
+    cluster = models.ForeignKey(
+        to="virtualization.Cluster",
+        on_delete=models.CASCADE,
+        related_name="proxmox_storages",
+    )
     name = models.CharField(max_length=255)
     storage_type = models.CharField(max_length=100, null=True, blank=True)
     content = models.CharField(max_length=255, null=True, blank=True)
@@ -43,14 +47,14 @@ class ProxmoxStorage(NetBoxModel):
     )
 
     class Meta:
-        ordering = ("cluster", "name")
+        ordering = ("cluster__name", "name")
         unique_together = ("cluster", "name")
         verbose_name = "Proxmox Storage"
         verbose_name_plural = "Proxmox Storages"
 
     def __str__(self):
         """Cluster-qualified storage label for list displays."""
-        return f"{self.cluster}/{self.name}"
+        return f"{self.cluster.name}/{self.name}"
 
     def get_absolute_url(self):
         """Plugin UI URL for this storage row."""

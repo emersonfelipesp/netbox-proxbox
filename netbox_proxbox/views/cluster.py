@@ -37,7 +37,7 @@ class ClusterStoragesTabView(generic.ObjectChildrenView):
     }
     tab = ViewTab(
         label="Storages",
-        badge=lambda obj: ProxmoxStorage.objects.filter(cluster=obj.name).count(),
+        badge=lambda obj: ProxmoxStorage.objects.filter(cluster=obj).count(),
         permission="netbox_proxbox.view_proxmoxstorage",
         weight=1000,
     )
@@ -49,7 +49,7 @@ class ClusterStoragesTabView(generic.ObjectChildrenView):
     def get_children(self, request, parent):
         """Return storages for ``parent`` visible to the current user."""
         return ProxmoxStorage.objects.restrict(request.user, "view").filter(
-            cluster=parent.name
+            cluster=parent
         )
 
     def get_table(self, data, request, bulk_actions=True):
@@ -94,7 +94,7 @@ class ClusterSummaryTabView(generic.ObjectView):
 
         # Get storage summary
         storages = ProxmoxStorage.objects.restrict(request.user, "view").filter(
-            cluster=instance.name
+            cluster=instance
         )
         context["storage_count"] = storages.count()
         context["storages"] = storages[:10]  # Show first 10 for preview

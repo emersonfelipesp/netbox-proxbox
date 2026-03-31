@@ -3,7 +3,8 @@
 from django import forms
 
 from netbox.forms import NetBoxModelFilterSetForm, NetBoxModelForm
-from utilities.forms.fields import CommentField
+from utilities.forms.fields import CommentField, DynamicModelChoiceField
+from virtualization.models import Cluster
 
 from netbox_proxbox.models import ProxmoxStorage
 
@@ -11,6 +12,10 @@ from netbox_proxbox.models import ProxmoxStorage
 class ProxmoxStorageForm(NetBoxModelForm):
     """Create/edit form for synced Proxmox storage rows."""
 
+    cluster = DynamicModelChoiceField(
+        queryset=Cluster.objects.all(),
+        required=True,
+    )
     comments = CommentField()
 
     class Meta:
@@ -34,7 +39,10 @@ class ProxmoxStorageFilterForm(NetBoxModelFilterSetForm):
 
     model = ProxmoxStorage
 
-    cluster = forms.CharField(required=False)
+    cluster = DynamicModelChoiceField(
+        queryset=Cluster.objects.all(),
+        required=False,
+    )
     name = forms.CharField(required=False)
     storage_type = forms.CharField(required=False)
     shared = forms.BooleanField(required=False)
