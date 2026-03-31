@@ -22,7 +22,7 @@ from netbox_proxbox.tables.vm_snapshot import VMSnapshotTable
 
 STATUS_BADGE_TEMPLATE = """
 <span class="badge text-bg-grey"
-      data-service-status-url="{% url 'plugins:netbox_proxbox:keepalive_status' '{{ service }}' pk %}">
+      data-service-status-url="{% url 'plugins:netbox_proxbox:keepalive_status' '{{ service }}' record.pk %}">
     <span class="spinner-border spinner-border-sm" role="status"></span>
 </span>
 """
