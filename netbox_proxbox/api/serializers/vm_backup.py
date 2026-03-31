@@ -23,8 +23,12 @@ class VMBackupSerializer(NetBoxModelSerializer):
     )
     proxmox_storage = NestedProxmoxStorageSerializer(required=False, allow_null=True)
     virtual_machine = NestedVirtualMachineSerializer()
-    subtype = ChoiceField(choices=ProxmoxBackupSubtypeChoices)
-    format = ChoiceField(choices=ProxmoxBackupFormatChoices)
+    subtype = ChoiceField(
+        choices=ProxmoxBackupSubtypeChoices, required=False, allow_null=True
+    )
+    format = ChoiceField(
+        choices=ProxmoxBackupFormatChoices, required=False, allow_null=True
+    )
 
     class Meta:
         model = VMBackup

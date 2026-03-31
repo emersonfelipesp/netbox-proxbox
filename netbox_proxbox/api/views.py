@@ -47,7 +47,9 @@ class ProxBoxEndpointsView(APIRootView):
 class VMBackupViewSet(NetBoxModelViewSet):
     """REST API for VM backup rows synced from Proxmox."""
 
-    queryset = models.VMBackup.objects.all()
+    queryset = models.VMBackup.objects.select_related(
+        "virtual_machine", "proxmox_storage"
+    )
     serializer_class = VMBackupSerializer
     filterset_class = filtersets.VMBackupFilterSet
 
@@ -55,7 +57,9 @@ class VMBackupViewSet(NetBoxModelViewSet):
 class VMSnapshotViewSet(NetBoxModelViewSet):
     """REST API for VM snapshot rows synced from Proxmox."""
 
-    queryset = models.VMSnapshot.objects.all()
+    queryset = models.VMSnapshot.objects.select_related(
+        "virtual_machine", "proxmox_storage"
+    )
     serializer_class = VMSnapshotSerializer
     filterset_class = filtersets.VMSnapshotFilterSet
 

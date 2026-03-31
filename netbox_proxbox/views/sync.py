@@ -41,24 +41,34 @@ class _ProxboxSyncEnqueueView(
         return str(_("Proxbox Sync"))
 
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-        job = ProxboxSyncJob.enqueue(
-            instance=None,
-            user=request.user,
-            queue_name=PROXBOX_SYNC_QUEUE_NAME,
-            name=self._job_name(),
-            sync_types=list(self.sync_types),
-        )
-        messages.success(
-            request,
-            format_html(
-                '{} <a href="{}">{}</a>',
-                _(
-                    "A Proxbox sync job has been queued. Open the job to follow progress."
+        try:
+            job = ProxboxSyncJob.enqueue(
+                instance=None,
+                user=request.user,
+                queue_name=PROXBOX_SYNC_QUEUE_NAME,
+                name=self._job_name(),
+                sync_types=list(self.sync_types),
+            )
+            messages.success(
+                request,
+                format_html(
+                    '{} <a href="{}">{}</a>',
+                    _(
+                        "A Proxbox sync job has been queued. Open the job to follow progress."
+                    ),
+                    job.get_absolute_url(),
+                    _("View job"),
                 ),
-                job.get_absolute_url(),
-                _("View job"),
-            ),
-        )
+            )
+        except Exception as e:
+            messages.error(
+                request,
+                format_html(
+                    "{} <strong>{}</strong>",
+                    _("Failed to enqueue sync job:"),
+                    str(e),
+                ),
+            )
         return redirect("plugins:netbox_proxbox:home")
 
 

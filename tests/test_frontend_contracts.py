@@ -126,6 +126,8 @@ def test_vm_sync_now_view_contract():
     )
     assert "SyncTypeChoices.VIRTUAL_MACHINES" in contents
     assert "SyncTypeChoices.VIRTUAL_MACHINES_DISKS" in contents
+    assert "SyncTypeChoices.VIRTUAL_MACHINES_BACKUPS" in contents
+    assert "SyncTypeChoices.VIRTUAL_MACHINES_SNAPSHOTS" in contents
     assert "netbox_vm_ids=[str(vm.pk)]" in contents
 
 

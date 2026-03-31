@@ -6,6 +6,8 @@ from django.utils.translation import gettext_lazy as _
 
 from netbox.models import NetBoxModel
 
+DEFAULT_VM_TYPE = "unknown"
+
 
 class VMTaskHistory(NetBoxModel):
     """Archived Proxmox task metadata attached to a NetBox ``VirtualMachine``."""
@@ -18,7 +20,7 @@ class VMTaskHistory(NetBoxModel):
 
     vm_type = models.CharField(
         max_length=16,
-        default="unknown",
+        default=DEFAULT_VM_TYPE,
         help_text=_("Proxmox guest type, such as qemu or lxc."),
     )
 

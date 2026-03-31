@@ -55,6 +55,23 @@ _SYNC_TYPE_PATH: dict[str, str] = {
     ),
 }
 
+# Per-VM path templates used when ``netbox_vm_ids`` is set.  ``{vm_id}`` is
+# substituted with each target VM's NetBox primary key before appending ``/stream``.
+_VM_SCOPED_PATH_TEMPLATES: dict[str, str] = {
+    SyncTypeChoices.VIRTUAL_MACHINES: (
+        "virtualization/virtual-machines/{vm_id}/create"
+    ),
+    SyncTypeChoices.VIRTUAL_MACHINES_DISKS: (
+        "virtualization/virtual-machines/{vm_id}/virtual-disks/create"
+    ),
+    SyncTypeChoices.VIRTUAL_MACHINES_BACKUPS: (
+        "virtualization/virtual-machines/{vm_id}/backups/create"
+    ),
+    SyncTypeChoices.VIRTUAL_MACHINES_SNAPSHOTS: (
+        "virtualization/virtual-machines/{vm_id}/snapshots/create"
+    ),
+}
+
 _ALLOWED_SYNC_SLUGS = frozenset(_SYNC_TYPE_PATH) | {SyncTypeChoices.ALL}
 
 _STAGE_ORDER_INDEX = {t: i for i, t in enumerate(_SYNC_STAGE_ORDER)}
@@ -256,9 +273,10 @@ class ProxboxSyncJob(JobRunner):
                 query_params["delete_nonexistent_backup"] = True
             target_vm_ids = params.get("netbox_vm_ids", [])
             stage_paths: list[str]
-            if st == SyncTypeChoices.VIRTUAL_MACHINES and target_vm_ids:
+            if st in _VM_SCOPED_PATH_TEMPLATES and target_vm_ids:
+                template = _VM_SCOPED_PATH_TEMPLATES[st]
                 stage_paths = [
-                    f"virtualization/virtual-machines/{vm_id}/create/stream"
+                    f"{template.format(vm_id=vm_id)}/stream"
                     for vm_id in target_vm_ids
                 ]
             else:

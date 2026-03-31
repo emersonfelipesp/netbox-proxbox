@@ -106,6 +106,7 @@ class VMSnapshotFilterSet(NetBoxModelFilterSet):
             "subtype",
             "status",
             "name",
+            "description",
             "vmid",
             "node",
             "parent",

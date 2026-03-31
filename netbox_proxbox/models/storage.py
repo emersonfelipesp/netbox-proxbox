@@ -23,6 +23,9 @@ class ProxmoxStorageVirtualDisk(models.Model):
     class Meta:
         unique_together = ("proxmox_storage", "virtual_disk")
 
+    def __str__(self):
+        return f"{self.proxmox_storage} - {self.virtual_disk}"
+
 
 class ProxmoxStorage(NetBoxModel):
     """Storage definition synced from Proxmox clusters."""
