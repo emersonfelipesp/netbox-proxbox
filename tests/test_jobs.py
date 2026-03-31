@@ -372,6 +372,39 @@ def test_proxbox_sync_job_run_targets_single_vm_route_when_requested(
     assert paths == ["virtualization/virtual-machines/248/create/stream"]
 
 
+def test_proxbox_sync_job_run_targets_each_requested_vm_route(
+    monkeypatch, proxbox_sync_job_module
+):
+    paths: list[str] = []
+
+    services_mod = types.ModuleType("netbox_proxbox.services")
+
+    def run_sync_stream(path, query_params=None, **stream_kwargs):
+        paths.append(path)
+        return ({"stream": True, "response": {"ok": True}}, 200)
+
+    services_mod.run_sync_stream = run_sync_stream
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
+
+    ProxboxSyncJob = proxbox_sync_job_module.ProxboxSyncJob
+    job = ProxboxSyncJob()
+    job.logger = logging.getLogger("test_proxbox_job")
+    job.job = MagicMock()
+    job.job.data = None
+
+    st = proxbox_sync_job_module.SyncTypeChoices
+    ProxboxSyncJob.run(
+        job,
+        sync_types=[st.VIRTUAL_MACHINES],
+        netbox_vm_ids=["248", "512", "777"],
+    )
+    assert paths == [
+        "virtualization/virtual-machines/248/create/stream",
+        "virtualization/virtual-machines/512/create/stream",
+        "virtualization/virtual-machines/777/create/stream",
+    ]
+
+
 def test_proxbox_sync_job_query_flag_tracks_plugin_setting(
     monkeypatch, proxbox_sync_job_module
 ):
