@@ -3,6 +3,7 @@
 # Django Imports
 import django_tables2 as tables
 from django.utils.translation import gettext as _
+from django.utils.html import format_html
 
 # NetBox Imports
 from netbox.tables import NetBoxTable, ChoiceFieldColumn
@@ -18,6 +19,14 @@ from netbox_proxbox.tables.vm_backup import VMBackupTable
 from netbox_proxbox.tables.vm_snapshot import VMSnapshotTable
 
 
+STATUS_BADGE_TEMPLATE = """
+<span class="badge text-bg-grey"
+      data-service-status-url="{% url 'plugins:netbox_proxbox:keepalive_status' '{{ service }}' pk %}">
+    <span class="spinner-border spinner-border-sm" role="status"></span>
+</span>
+"""
+
+
 class ProxmoxEndpointTable(NetBoxTable):
     """django-tables2 layout for Proxmox endpoint inventory."""
 
@@ -25,6 +34,11 @@ class ProxmoxEndpointTable(NetBoxTable):
     ip_address = tables.Column(linkify=True)
     mode = ChoiceFieldColumn()
     verify_ssl = BooleanColumn()
+    status = tables.TemplateColumn(
+        template_code=STATUS_BADGE_TEMPLATE.replace("{{ service }}", "proxmox"),
+        verbose_name=_("Status"),
+        orderable=False,
+    )
 
     class Meta(NetBoxTable.Meta):
         model = ProxmoxEndpoint
@@ -41,6 +55,7 @@ class ProxmoxEndpointTable(NetBoxTable):
             "username",
             "token_name",
             "verify_ssl",
+            "status",
             "actions",
         )
 
@@ -52,6 +67,7 @@ class ProxmoxEndpointTable(NetBoxTable):
             "port",
             "mode",
             "version",
+            "status",
             "verify_ssl",
         )
 
@@ -63,6 +79,11 @@ class NetBoxEndpointTable(NetBoxTable):
     ip_address = tables.Column(linkify=True)
     verify_ssl = BooleanColumn()
     token = tables.Column(linkify=True)
+    status = tables.TemplateColumn(
+        template_code=STATUS_BADGE_TEMPLATE.replace("{{ service }}", "netbox"),
+        verbose_name=_("Status"),
+        orderable=False,
+    )
 
     class Meta(NetBoxTable.Meta):
         model = NetBoxEndpoint
@@ -74,10 +95,19 @@ class NetBoxEndpointTable(NetBoxTable):
             "port",
             "verify_ssl",
             "token",
+            "status",
             "actions",
         )
 
-        default_columns = ("pk", "name", "ip_address", "port", "verify_ssl", "token")
+        default_columns = (
+            "pk",
+            "name",
+            "ip_address",
+            "port",
+            "status",
+            "verify_ssl",
+            "token",
+        )
 
 
 class FastAPIEndpointTable(NetBoxTable):
@@ -86,6 +116,11 @@ class FastAPIEndpointTable(NetBoxTable):
     name = tables.Column(linkify=True)
     ip_address = tables.Column(linkify=True)
     verify_ssl = BooleanColumn()
+    status = tables.TemplateColumn(
+        template_code=STATUS_BADGE_TEMPLATE.replace("{{ service }}", "fastapi"),
+        verbose_name=_("Status"),
+        orderable=False,
+    )
 
     class Meta(NetBoxTable.Meta):
         model = FastAPIEndpoint
@@ -102,6 +137,7 @@ class FastAPIEndpointTable(NetBoxTable):
             "websocket_port",
             "server_side_websocket",
             "token",
+            "status",
             "actions",
         )
 
@@ -111,6 +147,7 @@ class FastAPIEndpointTable(NetBoxTable):
             "domain",
             "ip_address",
             "port",
+            "status",
             "verify_ssl",
             "use_websocket",
             "websocket_domain",

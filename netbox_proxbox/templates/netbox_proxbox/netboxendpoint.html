@@ -61,6 +61,24 @@
                                 {% endif %}
                             </td>
                         </tr>
+                        <tr>
+                            <th scope="row">Target</th>
+                            <td>
+                                <span id="netbox-target-{{ object.pk }}">Loading...</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Authentication</th>
+                            <td>
+                                <span id="netbox-auth-{{ object.pk }}">Loading...</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">API Access</th>
+                            <td>
+                                <span id="netbox-api-{{ object.pk }}">Loading...</span>
+                            </td>
+                        </tr>
                     </table>
                 </div>
             </div>
@@ -72,4 +90,30 @@
         </div>
     </div>
     <script type="module" src="{% static 'netbox_proxbox/js/endpoint-status.js' %}"></script>
+    <script type="module">
+        import { fetchJson } from "{% static 'netbox_proxbox/js/common.js' %}";
+
+        (async function() {
+            const badge = document.getElementById("netbox-status-badge-{{ object.pk }}");
+            if (!badge) return;
+            const url = badge.dataset.serviceStatusUrl;
+            try {
+                const data = await fetchJson(url);
+                const targetCell = document.getElementById("netbox-target-{{ object.pk }}");
+                const authCell = document.getElementById("netbox-auth-{{ object.pk }}");
+                const apiCell = document.getElementById("netbox-api-{{ object.pk }}");
+                if (targetCell && data.target_address) {
+                    targetCell.textContent = data.target_address + ":" + (data.target_port || "");
+                }
+                if (authCell) {
+                    authCell.textContent = data.authentication === "success" ? "Success" : "Failed";
+                    authCell.className = data.authentication === "success" ? "text-success" : "text-danger";
+                }
+                if (apiCell) {
+                    apiCell.textContent = data.api_access === "success" ? "Success" : "Failed";
+                    apiCell.className = data.api_access === "success" ? "text-success" : "text-danger";
+                }
+            } catch (e) {}
+        })();
+    </script>
 {% endblock %}
