@@ -1,5 +1,6 @@
 """Squash plugin settings/storage additions introduced after 0009."""
 
+import django.db.models.deletion
 import taggit.managers
 import utilities.json
 from django.db import migrations, models
@@ -10,12 +11,16 @@ class Migration(migrations.Migration):
         ("netbox_proxbox", "0010_proxbox_plugin_settings"),
         ("netbox_proxbox", "0011_proxmoxstorage"),
         ("netbox_proxbox", "0012_proxboxpluginsettings_proxbox_fetch_max_concurrency"),
+        ("netbox_proxbox", "0011_storage_relations"),
+        ("netbox_proxbox", "0011_storage_relationship_foreignkeys"),
+        ("netbox_proxbox", "0012_vmtaskhistory"),
     ]
 
     dependencies = [
         ("extras", "0134_owner"),
         ("netbox_proxbox", "0009_squashed_post_v006b2_to_v008"),
         ("users", "0015_owner"),
+        ("virtualization", "0052_gfk_indexes"),
     ]
 
     operations = [
@@ -128,6 +133,130 @@ class Migration(migrations.Migration):
                 "verbose_name_plural": "Proxmox Storages",
                 "ordering": ("cluster", "name"),
                 "unique_together": {("cluster", "name")},
+            },
+        ),
+        migrations.CreateModel(
+            name="ProxmoxStorageVirtualDisk",
+            fields=[
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "proxmox_storage",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="virtual_disk_links",
+                        to="netbox_proxbox.proxmoxstorage",
+                    ),
+                ),
+                (
+                    "virtual_disk",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="proxmox_storage_links",
+                        to="virtualization.virtualdisk",
+                    ),
+                ),
+            ],
+            options={
+                "unique_together": {("proxmox_storage", "virtual_disk")},
+            },
+        ),
+        migrations.AddField(
+            model_name="proxmoxstorage",
+            name="virtual_disks",
+            field=models.ManyToManyField(
+                blank=True,
+                related_name="proxmox_storages",
+                through="netbox_proxbox.ProxmoxStorageVirtualDisk",
+                to="virtualization.virtualdisk",
+            ),
+        ),
+        migrations.AddField(
+            model_name="vmbackup",
+            name="proxmox_storage",
+            field=models.ForeignKey(
+                blank=True,
+                help_text="Related Proxmox storage object.",
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="vm_backups",
+                to="netbox_proxbox.proxmoxstorage",
+            ),
+        ),
+        migrations.AddField(
+            model_name="vmsnapshot",
+            name="proxmox_storage",
+            field=models.ForeignKey(
+                blank=True,
+                help_text="Related Proxmox storage object.",
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="vm_snapshots",
+                to="netbox_proxbox.proxmoxstorage",
+            ),
+        ),
+        migrations.CreateModel(
+            name="VMTaskHistory",
+            fields=[
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                    ),
+                ),
+                ("created", models.DateTimeField(auto_now_add=True, null=True)),
+                ("last_updated", models.DateTimeField(auto_now=True, null=True)),
+                (
+                    "custom_field_data",
+                    models.JSONField(
+                        blank=True,
+                        default=dict,
+                        encoder=utilities.json.CustomFieldJSONEncoder,
+                    ),
+                ),
+                ("vm_type", models.CharField(default="unknown", max_length=16)),
+                ("upid", models.CharField(max_length=255, unique=True)),
+                ("node", models.CharField(max_length=255)),
+                ("pid", models.IntegerField(blank=True, null=True)),
+                ("pstart", models.IntegerField(blank=True, null=True)),
+                ("task_id", models.CharField(blank=True, max_length=255, null=True)),
+                ("task_type", models.CharField(max_length=255)),
+                ("username", models.CharField(max_length=255)),
+                ("start_time", models.DateTimeField()),
+                ("end_time", models.DateTimeField(blank=True, null=True)),
+                ("description", models.TextField()),
+                ("status", models.CharField(max_length=255)),
+                ("task_state", models.CharField(blank=True, max_length=255, null=True)),
+                ("exitstatus", models.CharField(blank=True, max_length=255, null=True)),
+                (
+                    "tags",
+                    taggit.managers.TaggableManager(
+                        through="extras.TaggedItem",
+                        to="extras.Tag",
+                    ),
+                ),
+                (
+                    "virtual_machine",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="task_histories",
+                        to="virtualization.virtualmachine",
+                    ),
+                ),
+            ],
+            options={
+                "verbose_name": "VM Task History",
+                "verbose_name_plural": "VM Task Histories",
+                "ordering": ("-start_time", "virtual_machine", "node"),
             },
         ),
     ]
