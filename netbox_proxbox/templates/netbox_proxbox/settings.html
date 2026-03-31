@@ -21,6 +21,7 @@
                 <form method="post">
                     {% csrf_token %}
                     {% render_field form.use_guest_agent_interface_name %}
+                    {% render_field form.proxbox_fetch_max_concurrency %}
                     <div class="mt-3">
                         <button type="submit" class="btn btn-primary">
                             <i class="mdi mdi-content-save"></i>

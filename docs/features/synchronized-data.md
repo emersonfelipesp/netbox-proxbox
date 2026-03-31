@@ -21,7 +21,7 @@ The plugin prefers SSE streaming when available. Each sync button carries both a
 | `sync/devices/stream/` | `GET /dcim/devices/create/stream` | Stream device synchronization progress |
 | `sync/storage/` | `GET /virtualization/virtual-machines/storage/create/stream` | Sync Proxmox storage definitions into plugin storage records |
 | `sync/virtual-machines/stream/` | `GET /virtualization/virtual-machines/create/stream` | Stream VM synchronization progress |
-| `sync/full-update/stream/` | `GET /full-update/stream` | Stream full update (devices + VMs) progress |
+| `sync/full-update/stream/` | `GET /full-update/stream` | Stream full update (devices, storage, VMs, disks, backups, snapshots) progress |
 
 ## Progress Messages
 

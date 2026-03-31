@@ -31,7 +31,8 @@ class SettingsView(
         settings_obj = ProxboxPluginSettings.get_solo()
         form = ProxboxPluginSettingsForm(
             initial={
-                "use_guest_agent_interface_name": settings_obj.use_guest_agent_interface_name
+                "use_guest_agent_interface_name": settings_obj.use_guest_agent_interface_name,
+                "proxbox_fetch_max_concurrency": settings_obj.proxbox_fetch_max_concurrency,
             }
         )
         return render(request, self.template_name, {"form": form})
@@ -43,7 +44,15 @@ class SettingsView(
             settings_obj.use_guest_agent_interface_name = form.cleaned_data[
                 "use_guest_agent_interface_name"
             ]
-            settings_obj.save(update_fields=["use_guest_agent_interface_name"])
+            settings_obj.proxbox_fetch_max_concurrency = form.cleaned_data[
+                "proxbox_fetch_max_concurrency"
+            ]
+            settings_obj.save(
+                update_fields=[
+                    "use_guest_agent_interface_name",
+                    "proxbox_fetch_max_concurrency",
+                ]
+            )
             messages.success(request, "Proxbox plugin settings updated.")
             return redirect("plugins:netbox_proxbox:settings")
         return render(request, self.template_name, {"form": form})
