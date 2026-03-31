@@ -5,7 +5,7 @@ from netbox.plugins import PluginMenuButton, PluginMenuItem, PluginMenu
 
 fullupdate_item = PluginMenuItem(
     link="plugins:netbox_proxbox:home",
-    link_text="Full Update",
+    link_text="Homepage",
 )
 
 nodes_item = PluginMenuItem(
@@ -16,6 +16,16 @@ nodes_item = PluginMenuItem(
 virtual_machines_item = PluginMenuItem(
     link="plugins:netbox_proxbox:virtual_machines",
     link_text="Virtual Machines",
+)
+
+lxc_containers_item = PluginMenuItem(
+    link="plugins:netbox_proxbox:lxc_containers",
+    link_text="LXC Containers",
+)
+
+storage_item = PluginMenuItem(
+    link="plugins:netbox_proxbox:proxmoxstorage_list",
+    link_text="Storage",
 )
 
 schedule_sync_item = PluginMenuItem(
@@ -33,6 +43,11 @@ schedule_sync_item = PluginMenuItem(
 sync_jobs_item = PluginMenuItem(
     link="core:job_list",
     link_text="Sync Jobs",
+)
+
+settings_item = PluginMenuItem(
+    link="plugins:netbox_proxbox:settings",
+    link_text="Settings",
 )
 
 backups_item = PluginMenuItem(
@@ -122,10 +137,13 @@ menu = PluginMenu(
                 fullupdate_item,
                 nodes_item,
                 virtual_machines_item,
+                lxc_containers_item,
+                storage_item,
                 backups_item,
                 snapshots_item,
                 schedule_sync_item,
                 sync_jobs_item,
+                settings_item,
             ),
         ),
         (

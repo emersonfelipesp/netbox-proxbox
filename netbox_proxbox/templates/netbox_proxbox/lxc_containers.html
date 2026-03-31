@@ -35,14 +35,14 @@
         <div style="margin-bottom: 15px;" class="container noprint">
             <form class="m-2" method="post" action="{% url 'plugins:netbox_proxbox:sync_virtual_machines' %}" data-sync-url="{% url 'plugins:netbox_proxbox:sync_virtual_machines' %}" data-sync-kind="virtual-machines">
                 {% csrf_token %}
-                <button id="sync-virtual-machines-button" type="submit" class="btn btn-primary" data-sync-url="{% url 'plugins:netbox_proxbox:sync_virtual_machines' %}" data-sync-kind="virtual-machines">Sync Virtual Machines</button>
+                <button id="sync-virtual-machines-button" type="submit" class="btn btn-primary" data-sync-url="{% url 'plugins:netbox_proxbox:sync_virtual_machines' %}" data-sync-kind="virtual-machines">Sync LXC Containers</button>
             </form>
             <a href="{% url 'plugins:netbox_proxbox:schedule_sync' %}?sync_type=virtual-machines" class="btn btn-outline-primary m-2">
                 <i class="mdi mdi-clock-outline"></i> Schedule Sync
             </a>
         </div>
 
-        {% include "netbox_proxbox/table/virtual_machines.html" %}
+        {% include "netbox_proxbox/table/lxc_containers.html" %}
 
         {% include "netbox_proxbox/home/log_messages.html" %}
     </div>

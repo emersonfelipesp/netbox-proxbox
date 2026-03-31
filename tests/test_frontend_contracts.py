@@ -62,6 +62,18 @@ def test_home_loads_quick_schedule_css_with_form_media():
     assert "quick_schedule_home.css" in contents
 
 
+def test_vm_and_backup_templates_do_not_reference_removed_stream_routes():
+    vm_template = _read("netbox_proxbox/templates/netbox_proxbox/virtual_machines.html")
+    backup_template = _read(
+        "netbox_proxbox/templates/netbox_proxbox/vmbackup_list.html"
+    )
+
+    assert "sync_virtual_machines_stream" not in vm_template
+    assert "sync_vm_backups_stream" not in backup_template
+    assert "plugins:netbox_proxbox:sync_virtual_machines" in vm_template
+    assert "plugins:netbox_proxbox:sync_vm_backups" in backup_template
+
+
 def test_netbox_endpoint_edit_template_supports_v1_and_v2_tokens():
     contents = _read("netbox_proxbox/templates/netbox_proxbox/netboxendpoint_edit.html")
     assert "id_token_version" in contents
@@ -90,6 +102,30 @@ def test_home_javascript_passes_error_detail_to_badge_state():
     assert "hydrateProxmoxCards" in contents
     assert "fetchJson" in contents
     assert "initializeWebSocket" in contents
+
+
+def test_vm_detail_sync_now_button_contract():
+    extension_contents = _read("netbox_proxbox/template_content.py")
+    button_contents = _read(
+        "netbox_proxbox/templates/netbox_proxbox/inc/vm_sync_now_button.html"
+    )
+
+    assert "virtualization.virtualmachine" in extension_contents
+    assert "vm_sync_now_button.html" in extension_contents
+    assert "proxbox-sync-now/" in extension_contents
+    assert 'method="post"' in button_contents
+    assert "{% csrf_token %}" in button_contents
+    assert "Sync Now" in button_contents
+
+
+def test_vm_sync_now_view_contract():
+    contents = _read("netbox_proxbox/views/vm_sync_now.py")
+    assert (
+        'register_model_view(VirtualMachine, "proxbox_sync_now", path="proxbox-sync-now")'
+        in contents
+    )
+    assert "sync_types=[SyncTypeChoices.VIRTUAL_MACHINES]" in contents
+    assert "netbox_vm_ids=[str(vm.pk)]" in contents
 
 
 def test_common_badge_state_supports_hover_tooltip_details():
@@ -134,6 +170,27 @@ def test_endpoint_templates_expose_live_badges():
     )
 
 
+def test_endpoint_tables_use_record_pk_for_keepalive_reverse():
+    contents = _read("netbox_proxbox/tables/__init__.py")
+    assert "keepalive_status" in contents
+    assert "record.pk" in contents
+
+
+def test_settings_page_is_wired_in_urls_navigation_and_template():
+    urls = _read("netbox_proxbox/urls.py")
+    navigation = _read("netbox_proxbox/navigation.py")
+    template = _read("netbox_proxbox/templates/netbox_proxbox/settings.html")
+    view = _read("netbox_proxbox/views/settings.py")
+
+    assert 'path("settings/", views.SettingsView.as_view(), name="settings")' in urls
+    assert 'link="plugins:netbox_proxbox:settings"' in navigation
+    assert "Plugin Settings" in template
+    assert "use_guest_agent_interface_name" in template
+    assert "proxbox_fetch_max_concurrency" in template
+    assert "inc/field.html" not in template
+    assert "class SettingsView(" in view
+
+
 def test_proxmox_list_template_exposes_import_export_controls_and_warning_modal():
     contents = _read(
         "netbox_proxbox/templates/netbox_proxbox/proxmoxendpoint_list.html"
@@ -149,3 +206,23 @@ def test_proxmox_list_template_exposes_import_export_controls_and_warning_modal(
         in contents
     )
     assert 'name="netbox_token"' in contents
+
+
+def test_lxc_and_storage_pages_are_wired_in_urls_navigation_and_templates():
+    urls = _read("netbox_proxbox/urls.py")
+    navigation = _read("netbox_proxbox/navigation.py")
+    lxc_template = _read("netbox_proxbox/templates/netbox_proxbox/lxc_containers.html")
+    storage_template = _read(
+        "netbox_proxbox/templates/netbox_proxbox/storage_list.html"
+    )
+    views_module = _read("netbox_proxbox/views/__init__.py")
+    sync_view = _read("netbox_proxbox/views/sync.py")
+
+    assert 'name="lxc_containers"' in urls
+    assert 'path("sync/storage/", views.sync_storage, name="sync_storage")' in urls
+    assert 'link="plugins:netbox_proxbox:lxc_containers"' in navigation
+    assert 'link="plugins:netbox_proxbox:proxmoxstorage_list"' in navigation
+    assert "Sync LXC Containers" in lxc_template
+    assert "sync_storage" in storage_template
+    assert "class LXCContainersView(" in views_module
+    assert "class SyncStorageView(" in sync_view

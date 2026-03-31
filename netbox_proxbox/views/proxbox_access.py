@@ -6,11 +6,13 @@ from utilities.permissions import get_permission_for_model
 from netbox_proxbox.models import (
     FastAPIEndpoint,
     NetBoxEndpoint,
+    ProxboxPluginSettings,
     ProxmoxEndpoint,
 )
 
 __all__ = (
     "permission_change_fastapi_endpoint",
+    "permission_change_proxbox_plugin_settings",
     "permission_enqueue_proxbox_sync",
     "permission_view_fastapi_endpoint",
     "user_may_access_proxbox_dashboard",
@@ -20,6 +22,11 @@ __all__ = (
 def permission_change_fastapi_endpoint() -> str:
     """Required to manage FastAPI endpoint configuration (CRUD)."""
     return get_permission_for_model(FastAPIEndpoint, "change")
+
+
+def permission_change_proxbox_plugin_settings() -> str:
+    """Required to manage ProxBox plugin behavior settings."""
+    return get_permission_for_model(ProxboxPluginSettings, "change")
 
 
 def permission_enqueue_proxbox_sync() -> str:

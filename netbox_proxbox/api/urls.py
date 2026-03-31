@@ -24,6 +24,7 @@ endpoints_router.register(
 
 router = NetBoxRouter()
 router.APIRootView = views.ProxBoxRootView
+router.register("storage", views.ProxmoxStorageViewSet, basename="storage")
 router.register("backups", views.VMBackupViewSet)
 router.register("snapshots", views.VMSnapshotViewSet)
 

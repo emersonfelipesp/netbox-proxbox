@@ -6,6 +6,7 @@ from netbox_proxbox.api.serializers.endpoints import (
     NetBoxEndpointSerializer,
     ProxmoxEndpointSerializer,
 )
+from netbox_proxbox.api.serializers.storage import ProxmoxStorageSerializer
 from netbox_proxbox.api.serializers.vm_backup import VMBackupSerializer
 from netbox_proxbox.api.serializers.vm_snapshot import VMSnapshotSerializer
 
@@ -14,6 +15,7 @@ __all__ = (
     "NestedTokenSerializer",
     "NetBoxEndpointSerializer",
     "ProxmoxEndpointSerializer",
+    "ProxmoxStorageSerializer",
     "VMBackupSerializer",
     "VMSnapshotSerializer",
 )

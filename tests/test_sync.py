@@ -6,6 +6,7 @@ from tests.conftest import load_plugin_module
 
 # Match ``SyncTypeChoices`` values without importing the plugin package at collection time.
 ST_DEVICES = "devices"
+ST_STORAGE = "storage"
 ST_VMS = "virtual-machines"
 ST_BACKUPS = "vm-backups"
 ST_DISKS = "vm-disks"
@@ -68,6 +69,19 @@ def test_sync_virtual_machines_enqueues_correct_types(monkeypatch, fastapi_endpo
     module.sync_virtual_machines(_post_request())
 
     assert calls[0]["sync_types"] == [ST_VMS]
+
+
+def test_sync_storage_enqueues_storage_stage(monkeypatch, fastapi_endpoint):
+    module = load_plugin_module(
+        "netbox_proxbox.views.sync",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+    )
+    calls = _enqueue_spy(monkeypatch, module)
+
+    module.sync_storage(_post_request())
+
+    assert calls[0]["sync_types"] == [ST_STORAGE]
 
 
 def test_sync_vm_backups_enqueues_backup_stage(monkeypatch, fastapi_endpoint):

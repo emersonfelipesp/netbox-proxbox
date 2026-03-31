@@ -17,6 +17,11 @@ urlpatterns = [
         views.VirtualMachinesView.as_view(),
         name="virtual_machines",
     ),
+    path(
+        "lxc_containers/",
+        views.LXCContainersView.as_view(),
+        name="lxc_containers",
+    ),
     path("contributing/", views.ContributingView.as_view(), name="contributing"),
     path("community/", views.CommunityView.as_view(), name="community"),
     path("discussions/", views.DiscussionsView, name="discussions"),
@@ -46,6 +51,14 @@ urlpatterns = [
         "endpoints/fastapi/",
         include(get_model_urls("netbox_proxbox", "fastapiendpoint", detail=False)),
     ),
+    path(
+        "storage/<int:pk>/",
+        include(get_model_urls("netbox_proxbox", "proxmoxstorage")),
+    ),
+    path(
+        "storage/",
+        include(get_model_urls("netbox_proxbox", "proxmoxstorage", detail=False)),
+    ),
     path("backups/<int:pk>/", include(get_model_urls("netbox_proxbox", "vmbackup"))),
     path(
         "backups/", include(get_model_urls("netbox_proxbox", "vmbackup", detail=False))
@@ -58,6 +71,7 @@ urlpatterns = [
         include(get_model_urls("netbox_proxbox", "vmsnapshot", detail=False)),
     ),
     path("sync/devices/", views.sync_devices, name="sync_devices"),
+    path("sync/storage/", views.sync_storage, name="sync_storage"),
     path(
         "sync/virtual-machines/",
         views.sync_virtual_machines,
@@ -78,6 +92,7 @@ urlpatterns = [
     ),
     path("sync/full-update/", views.sync_full_update, name="sync_full_update"),
     path("sync/schedule/", views.ScheduleSyncView.as_view(), name="schedule_sync"),
+    path("settings/", views.SettingsView.as_view(), name="settings"),
     path(
         "sync/schedule/quick/",
         views.QuickScheduleSyncFromHomeView.as_view(),

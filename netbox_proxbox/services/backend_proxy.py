@@ -244,7 +244,8 @@ def run_sync_stream(
 
     backend_headers = context.get("headers") or {}
     http_url = context.get("http_url")
-    assert http_url
+    if not http_url:
+        return {"stream": False, "detail": "No FastAPI URL found."}, 404
     verify_ssl = bool(context.get("verify_ssl", True))
     request_candidates = [(f"{http_url}/{path}", verify_ssl)]
     fallback_url = context.get("ip_address_url")
