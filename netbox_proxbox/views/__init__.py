@@ -62,6 +62,7 @@ from .vm_snapshot import (
     VMSnapshotTabView,
     VMSnapshotView,
 )
+from .vm_sync_now import VirtualMachineSyncNowView
 
 
 class RequireProxboxDashboardEndpointViewMixin(AccessMixin):

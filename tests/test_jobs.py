@@ -115,6 +115,7 @@ def test_proxbox_sync_params_from_job_defaults(proxbox_sync_job_module):
     assert p["sync_types"] == [st.ALL]
     assert p["proxmox_endpoint_ids"] == []
     assert p["netbox_endpoint_ids"] == []
+    assert p["netbox_vm_ids"] == []
 
 
 def test_is_proxbox_sync_job_by_queue_and_legacy_name(proxbox_sync_job_module):
@@ -147,6 +148,7 @@ def test_proxbox_sync_params_from_job_stored(proxbox_sync_job_module):
                     "sync_type": st.DEVICES,
                     "proxmox_endpoint_ids": ["1"],
                     "netbox_endpoint_ids": ["2"],
+                    "netbox_vm_ids": ["248"],
                 }
             }
         }
@@ -155,6 +157,7 @@ def test_proxbox_sync_params_from_job_stored(proxbox_sync_job_module):
     assert p["sync_types"] == [st.DEVICES]
     assert p["proxmox_endpoint_ids"] == ["1"]
     assert p["netbox_endpoint_ids"] == ["2"]
+    assert p["netbox_vm_ids"] == ["248"]
 
 
 def test_proxbox_sync_params_from_job_stored_sync_types(proxbox_sync_job_module):
@@ -327,6 +330,35 @@ def test_proxbox_sync_job_run_multi_stage_in_dependency_order(
     saved = job.job.data
     assert "stages" in saved["proxbox_sync"]["response"]
     assert len(saved["proxbox_sync"]["response"]["stages"]) == 2
+
+
+def test_proxbox_sync_job_run_targets_single_vm_route_when_requested(
+    monkeypatch, proxbox_sync_job_module
+):
+    paths: list[str] = []
+
+    services_mod = types.ModuleType("netbox_proxbox.services")
+
+    def run_sync_stream(path, query_params=None, **stream_kwargs):
+        paths.append(path)
+        return ({"stream": True, "response": {"ok": True}}, 200)
+
+    services_mod.run_sync_stream = run_sync_stream
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
+
+    ProxboxSyncJob = proxbox_sync_job_module.ProxboxSyncJob
+    job = ProxboxSyncJob()
+    job.logger = logging.getLogger("test_proxbox_job")
+    job.job = MagicMock()
+    job.job.data = None
+
+    st = proxbox_sync_job_module.SyncTypeChoices
+    ProxboxSyncJob.run(
+        job,
+        sync_types=[st.VIRTUAL_MACHINES],
+        netbox_vm_ids=["248"],
+    )
+    assert paths == ["virtualization/virtual-machines/248/create/stream"]
 
 
 def test_proxbox_sync_job_run_all_invokes_each_stage_stream(

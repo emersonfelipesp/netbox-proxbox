@@ -102,6 +102,25 @@ def test_home_javascript_passes_error_detail_to_badge_state():
     assert "initializeWebSocket" in contents
 
 
+def test_vm_detail_sync_now_button_contract():
+    extension_contents = _read("netbox_proxbox/template_content.py")
+    button_contents = _read("netbox_proxbox/templates/netbox_proxbox/inc/vm_sync_now_button.html")
+
+    assert "virtualization.virtualmachine" in extension_contents
+    assert "vm_sync_now_button.html" in extension_contents
+    assert "proxbox-sync-now/" in extension_contents
+    assert 'method="post"' in button_contents
+    assert "{% csrf_token %}" in button_contents
+    assert "Sync Now" in button_contents
+
+
+def test_vm_sync_now_view_contract():
+    contents = _read("netbox_proxbox/views/vm_sync_now.py")
+    assert 'register_model_view(VirtualMachine, "proxbox_sync_now", path="proxbox-sync-now")' in contents
+    assert "sync_types=[SyncTypeChoices.VIRTUAL_MACHINES]" in contents
+    assert "netbox_vm_ids=[str(vm.pk)]" in contents
+
+
 def test_common_badge_state_supports_hover_tooltip_details():
     contents = _read("netbox_proxbox/static/netbox_proxbox/js/common.js")
     assert 'element.dataset.bsToggle = "tooltip"' in contents

@@ -7,11 +7,16 @@ from core.models import Job
 from django.utils.safestring import mark_safe
 from netbox.plugins import PluginTemplateExtension
 from utilities.permissions import get_permission_for_model
+from virtualization.models import VirtualMachine
 
 from netbox_proxbox.jobs import is_proxbox_sync_job
 from netbox_proxbox.views.proxbox_access import permission_enqueue_proxbox_sync
 
-__all__ = ("ProxboxJobTemplateExtension", "template_extensions")
+__all__ = (
+    "ProxboxJobTemplateExtension",
+    "ProxboxVirtualMachineTemplateExtension",
+    "template_extensions",
+)
 
 
 class ProxboxJobTemplateExtension(PluginTemplateExtension):
@@ -75,4 +80,25 @@ class ProxboxJobTemplateExtension(PluginTemplateExtension):
         )
 
 
-template_extensions = [ProxboxJobTemplateExtension]
+class ProxboxVirtualMachineTemplateExtension(PluginTemplateExtension):
+    """Inject Sync Now action on VirtualMachine detail pages."""
+
+    models = ["virtualization.virtualmachine"]
+
+    def buttons(self):
+        obj = self.context["object"]
+        if not isinstance(obj, VirtualMachine):
+            return ""
+        user = self.context["request"].user
+        if not user.has_perm(permission_enqueue_proxbox_sync()):
+            return ""
+        return self.render(
+            "netbox_proxbox/inc/vm_sync_now_button.html",
+            {
+                "vm": obj,
+                "action_url": f"{obj.get_absolute_url()}proxbox-sync-now/",
+            },
+        )
+
+
+template_extensions = [ProxboxJobTemplateExtension, ProxboxVirtualMachineTemplateExtension]
