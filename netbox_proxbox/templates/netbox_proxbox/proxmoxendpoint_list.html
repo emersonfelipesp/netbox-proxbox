@@ -62,11 +62,16 @@
             </div>
           </div>
           <div class="modal-footer">
-            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">{% trans "Cancel" %}</button>
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">{% trans 'Cancel' %}</button>
             <button type="submit" class="btn btn-danger">{% trans "Export with secrets" %}</button>
           </div>
         </form>
       </div>
     </div>
   </div>
+{% endblock %}
+
+{% block javascript %}
+  {{ block.super }}
+  <script type="module" src="{% static 'netbox_proxbox/js/endpoint-status.js' %}"></script>
 {% endblock %}

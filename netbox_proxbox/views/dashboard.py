@@ -9,6 +9,7 @@ import requests
 from django.contrib.auth.mixins import AccessMixin
 from django.shortcuts import render
 from django.views import View
+from virtualization.models import Cluster
 
 from netbox_proxbox.models import FastAPIEndpoint, ProxmoxEndpoint
 from netbox_proxbox.utils import get_backend_auth_headers, get_fastapi_url
@@ -93,6 +94,15 @@ def _loadavg_text(value: Any) -> str:
         return ", ".join(f"{_to_float(v):.2f}" for v in value[:3])
     if isinstance(value, str) and value.strip():
         return value.strip()
+    return "—"
+
+
+def _get_endpoint_display_ip(endpoint: ProxmoxEndpoint) -> str:
+    """Return the display IP address for an endpoint."""
+    if endpoint.domain:
+        return endpoint.domain
+    if endpoint.ip_address:
+        return str(endpoint.ip_address.address).split("/")[0]
     return "—"
 
 
@@ -294,6 +304,23 @@ class DashboardView(
                         resources_payload
                     )
                     dashboard["nodes"] = self._build_node_rows(nodes_payload)
+
+                    # Add endpoint IP for display
+                    dashboard["endpoint_ip"] = _get_endpoint_display_ip(endpoint)
+
+                    # Try to match with NetBox Cluster
+                    cluster_name = (
+                        dashboard["cluster_summary"].get("name", "")
+                        if dashboard["cluster_summary"]
+                        else ""
+                    )
+                    if cluster_name and cluster_name != "—":
+                        netbox_cluster = Cluster.objects.filter(
+                            name=cluster_name
+                        ).first()
+                    else:
+                        netbox_cluster = None
+                    dashboard["netbox_cluster"] = netbox_cluster
             except requests.exceptions.RequestException as exc:
                 detail, _ = extract_proxmox_backend_error_detail(
                     exc,

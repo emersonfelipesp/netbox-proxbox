@@ -75,6 +75,11 @@ urlpatterns = [
         "task-history/<int:pk>/",
         include(get_model_urls("netbox_proxbox", "vmtaskhistory")),
     ),
+    path(
+        "task-history/",
+        views.VMTaskHistoryListView.as_view(),
+        name="vmtaskhistory_list",
+    ),
     path("sync/devices/", views.sync_devices, name="sync_devices"),
     path("sync/storage/", views.sync_storage, name="sync_storage"),
     path(

@@ -21,8 +21,9 @@
                 {% trans "Endpoint" %}:
                 {% if item.endpoint.get_absolute_url %}
                   <a href="{{ item.endpoint.get_absolute_url }}">{{ item.endpoint.name|default:"—" }}</a>
+                  <span class="text-muted">({{ item.endpoint_ip }})</span>
                 {% else %}
-                  {{ item.endpoint.name|default:"—" }}
+                  {{ item.endpoint.name|default:"—" }}<span class="text-muted">({{ item.endpoint_ip }})</span>
                 {% endif %}
               </span>
             </h5>
@@ -57,7 +58,15 @@
                           </tr>
                           <tr>
                             <th scope="row">{% trans "Nodes" %}</th>
-                            <td>{{ item.cluster_summary.nodes_total }}</td>
+                            <td>
+                              {% if item.netbox_cluster %}
+                                <a href="{% url 'dcim:device_list' %}?cluster_id={{ item.netbox_cluster.pk }}">
+                                  {{ item.cluster_summary.nodes_total }}
+                                </a>
+                              {% else %}
+                                {{ item.cluster_summary.nodes_total }}
+                              {% endif %}
+                            </td>
                           </tr>
                           <tr>
                             <th scope="row">{% trans "Online" %}</th>
@@ -79,11 +88,23 @@
                         <table class="table table-hover attr-table mb-0">
                           <tr>
                             <th scope="row">{% trans "VMs Running" %}</th>
-                            <td>{{ item.guest_summary.virtual_machines.running }}</td>
+                            <td>
+                              {% if item.netbox_cluster %}
+                                <a href="{% url 'virtualization:virtualmachine_list' %}?cluster_id={{ item.netbox_cluster.pk }}&cf_proxmox_vm_type=qemu&status=active">{{ item.guest_summary.virtual_machines.running }}</a>
+                              {% else %}
+                                {{ item.guest_summary.virtual_machines.running }}
+                              {% endif %}
+                            </td>
                           </tr>
                           <tr>
                             <th scope="row">{% trans "VMs Stopped" %}</th>
-                            <td>{{ item.guest_summary.virtual_machines.stopped }}</td>
+                            <td>
+                              {% if item.netbox_cluster %}
+                                <a href="{% url 'virtualization:virtualmachine_list' %}?cluster_id={{ item.netbox_cluster.pk }}&cf_proxmox_vm_type=qemu&status=offline">{{ item.guest_summary.virtual_machines.stopped }}</a>
+                              {% else %}
+                                {{ item.guest_summary.virtual_machines.stopped }}
+                              {% endif %}
+                            </td>
                           </tr>
                           <tr>
                             <th scope="row">{% trans "VM Templates" %}</th>
@@ -91,11 +112,23 @@
                           </tr>
                           <tr>
                             <th scope="row">{% trans "LXC Running" %}</th>
-                            <td>{{ item.guest_summary.lxc_containers.running }}</td>
+                            <td>
+                              {% if item.netbox_cluster %}
+                                <a href="{% url 'virtualization:virtualmachine_list' %}?cluster_id={{ item.netbox_cluster.pk }}&cf_proxmox_vm_type=lxc&status=active">{{ item.guest_summary.lxc_containers.running }}</a>
+                              {% else %}
+                                {{ item.guest_summary.lxc_containers.running }}
+                              {% endif %}
+                            </td>
                           </tr>
                           <tr>
                             <th scope="row">{% trans "LXC Stopped" %}</th>
-                            <td>{{ item.guest_summary.lxc_containers.stopped }}</td>
+                            <td>
+                              {% if item.netbox_cluster %}
+                                <a href="{% url 'virtualization:virtualmachine_list' %}?cluster_id={{ item.netbox_cluster.pk }}&cf_proxmox_vm_type=lxc&status=offline">{{ item.guest_summary.lxc_containers.stopped }}</a>
+                              {% else %}
+                                {{ item.guest_summary.lxc_containers.stopped }}
+                              {% endif %}
+                            </td>
                           </tr>
                           <tr>
                             <th scope="row">{% trans "LXC Templates" %}</th>
@@ -125,7 +158,15 @@
                           <tbody>
                             {% for node in item.nodes %}
                               <tr>
-                                <td>{{ node.name }}</td>
+                                <td>
+                                  {% if item.netbox_cluster %}
+                                    <a href="{% url 'dcim:device_list' %}?cluster_id={{ item.netbox_cluster.pk }}&name={{ node.name }}">
+                                      {{ node.name }}
+                                    </a>
+                                  {% else %}
+                                    {{ node.name }}
+                                  {% endif %}
+                                </td>
                                 <td>
                                   {% if node.status == "online" %}
                                     <span class="badge text-bg-green">{% trans "Online" %}</span>

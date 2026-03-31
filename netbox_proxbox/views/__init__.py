@@ -21,6 +21,10 @@ from utilities.views import (
 )
 
 from .cards import get_proxmox_card
+from .cluster import (
+    ClusterStoragesTabView,
+    ClusterSummaryTabView,
+)
 from .dashboard import DashboardView
 from .endpoints import (
     FastAPIEndpointDeleteView,
@@ -73,6 +77,7 @@ from .vm_snapshot import (
     VMSnapshotView,
 )
 from .vm_task_history import (
+    VMTaskHistoryListView,
     VMTaskHistoryTabView,
     VMTaskHistoryView,
 )

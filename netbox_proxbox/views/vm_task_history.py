@@ -15,6 +15,7 @@ from netbox_proxbox.tables import VMTaskHistoryTable
 
 __all__ = (
     "VMTaskHistoryView",
+    "VMTaskHistoryListView",
     "VMTaskHistoryTabView",
 )
 
@@ -74,3 +75,15 @@ class VMTaskHistoryTabView(generic.ObjectChildrenView):
         table = self.table(data, exclude=("virtual_machine",))
         table.configure(request)
         return table
+
+
+class VMTaskHistoryListView(generic.ObjectListView):
+    """List view for all VM task history records with filtering."""
+
+    queryset = VMTaskHistory.objects.all()
+    table = VMTaskHistoryTable
+    filterset = VMTaskHistoryFilterSet
+    filterset_form = VMTaskHistoryFilterForm
+    actions = {
+        "export": {"view"},
+    }

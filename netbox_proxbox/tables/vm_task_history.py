@@ -12,13 +12,11 @@ class VMTaskHistoryTable(NetBoxTable):
     """django-tables2 layout for VM task history list and tab views."""
 
     virtual_machine = tables.Column(linkify=True)
-    start_time = tables.DateTimeColumn(
+    start_time = tables.Column(
         verbose_name=_("Start Time"),
-        format="M d H:i:s",
     )
-    end_time = tables.DateTimeColumn(
+    end_time = tables.Column(
         verbose_name=_("End Time"),
-        format="M d H:i:s",
     )
 
     class Meta(NetBoxTable.Meta):

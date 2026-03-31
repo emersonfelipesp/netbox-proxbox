@@ -1,0 +1,1078 @@
+# netbox-proxbox: LLM Context File
+
+> This file provides comprehensive context for LLMs working with the netbox-proxbox codebase.
+
+## Project Overview
+
+netbox-proxbox is a NetBox plugin that synchronizes Proxmox infrastructure data into NetBox. It keeps DCIM data up-to-date with real Proxmox clusters, nodes, virtual machines, containers (LXC), backups, and snapshots.
+
+### What It Does
+
+- **Clusters and Nodes** — Proxmox cluster and node information
+- **Virtual Machines** — VM status, resources, and configuration
+- **Containers (LXC)** — Container details and settings
+- **VM Snapshots** — Point-in-time snapshots for recovery
+- **VM Backups** — Backup jobs and restore points
+- **Storage** — Datastores and storage content
+- **Networking** — VLANs, bridges, and IP assignments
+
+### Requirements
+
+- NetBox 4.5.x
+- Python 3.12+
+- Proxmox VE 7.x or 8.x
+- proxbox-api backend (FastAPI service)
+
+### Version
+
+- Plugin version: `0.0.8`
+- NetBox compatibility: `4.5.0` through `4.5.99`
+
+---
+
+## Architecture Summary
+
+### High-Level Architecture
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│   Proxmox VE    │────▶│   proxbox-api   │◀────│  netbox-proxbox │
+│   (Cluster)     │     │   (FastAPI)     │     │   (NetBox Plugin)│
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+                               │                       │
+                               ▼                       ▼
+                        ┌─────────────────────────────────┐
+                        │           NetBox                │
+                        │   (DCIM/IPAM Database)          │
+                        └─────────────────────────────────┘
+```
+
+### Data Flow
+
+1. **Endpoint Configuration**: Users create ProxmoxEndpoint, NetBoxEndpoint, and FastAPIEndpoint objects in NetBox UI
+2. **Sync Trigger**: User clicks "Full Update" or schedules a sync job
+3. **Job Enqueue**: `ProxboxSyncJob` is enqueued to NetBox's RQ worker (default queue)
+4. **Backend Call**: Job calls proxbox-api SSE endpoints via `run_sync_stream()`
+5. **Data Collection**: proxbox-api fetches data from Proxmox and NetBox
+6. **Object Creation**: proxbox-api creates/updates NetBox objects via REST API
+7. **Progress Streaming**: SSE events stream back to browser for real-time progress
+
+### Key Components
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| Models | `netbox_proxbox/models/` | Persistent data models |
+| Views | `netbox_proxbox/views/` | UI pages and sync actions |
+| API | `netbox_proxbox/api/` | REST API endpoints |
+| Services | `netbox_proxbox/services/` | Backend proxy, SSE streaming |
+| Jobs | `netbox_proxbox/jobs.py` | RQ background jobs |
+| Forms | `netbox_proxbox/forms/` | Django forms for models |
+| Tables | `netbox_proxbox/tables/` | NetBox table definitions |
+| Templates | `netbox_proxbox/templates/` | HTML templates |
+| Static | `netbox_proxbox/static/` | JS, CSS assets |
+
+---
+
+## Core Data Models
+
+### ProxmoxEndpoint
+
+Stores Proxmox API connection settings.
+
+```python
+# Location: netbox_proxbox/models/proxmox_endpoint.py
+class ProxmoxEndpoint(EndpointBase):
+    name = models.CharField(max_length=100, unique=True)
+    domain = models.CharField(max_length=255, blank=True)
+    ip_address = models.ForeignKey(ContentType, on_delete=models.PROTECT)  # ipam.IPAddress
+    port = models.PositiveIntegerField(default=8006)
+    mode = models.CharField(choices=ProxmoxModeChoices)  # standalone, cluster
+    version = models.CharField(blank=True)
+    username = models.CharField(max_length=100)  # typically root@pam
+    password = models.CharField(max_length=255, blank=True)
+    token_name = models.CharField(max_length=100, blank=True)
+    token_value = models.CharField(max_length=255, write_only=True)
+    verify_ssl = models.BooleanField(default=True)
+```
+
+### NetBoxEndpoint
+
+Stores the remote NetBox API target.
+
+```python
+# Location: netbox_proxbox/models/netbox_endpoint.py
+class NetBoxEndpoint(EndpointBase):
+    name = models.CharField(max_length=100, unique=True)
+    domain = models.CharField(max_length=255, blank=True)
+    ip_address = models.ForeignKey(ContentType, on_delete=models.PROTECT)
+    port = models.PositiveIntegerField(default=443)
+    token_version = models.CharField(choices=NetBoxTokenVersionChoices)  # v1, v2
+    token = models.ForeignKey(users.Token, on_delete=models.PROTECT)
+    token_key = models.CharField(max_length=255, blank=True)
+    token_secret = models.CharField(max_length=255, blank=True, write_only=True)
+    verify_ssl = models.BooleanField(default=True)
+
+    @property
+    def effective_token_version(self) -> str: ...
+    @property
+    def effective_token_value(self) -> str: ...
+```
+
+### FastAPIEndpoint
+
+Stores the ProxBox backend HTTP/WebSocket target.
+
+```python
+# Location: netbox_proxbox/models/fastapi_endpoint.py
+class FastAPIEndpoint(EndpointBase):
+    name = models.CharField(max_length=100, unique=True)
+    domain = models.CharField(max_length=255, blank=True)
+    ip_address = models.ForeignKey(ContentType, on_delete=models.PROTECT)
+    port = models.PositiveIntegerField(default=8800)
+    verify_ssl = models.BooleanField(default=True)
+    token = models.CharField(max_length=255, blank=True)
+    websocket_domain = models.CharField(max_length=255, blank=True)
+    websocket_port = models.PositiveIntegerField(default=8800)
+    use_websocket = models.BooleanField(default=True)
+```
+
+### ProxmoxStorage
+
+Stores Proxmox storage inventory synchronized from backend.
+
+```python
+# Location: netbox_proxbox/models/storage.py
+class ProxmoxStorage(NetBoxModel):
+    name = models.CharField(max_length=255)
+    storage_id = models.CharField(max_length=255)
+    node = models.CharField(max_length=255)
+    storage_type = models.CharField(max_length=50)
+    status = models.CharField(max_length=50, blank=True)
+    content_types = models.CharField(max_length=255, blank=True)
+    proxmox_endpoint = models.ForeignKey(ProxmoxEndpoint, on_delete=models.PROTECT)
+```
+
+### VMBackup
+
+Stores backup inventory for NetBox virtual machines.
+
+```python
+# Location: netbox_proxbox/models/vm_backup.py
+class VMBackup(NetBoxModel):
+    name = models.CharField(max_length=255)
+    backup_id = models.CharField(max_length=255)
+    vm = models.ForeignKey(virtualization.VirtualMachine, on_delete=models.CASCADE)
+    storage = models.CharField(max_length=255)
+    size = models.BigIntegerField()
+    ctime = models.DateTimeField()
+    status = models.CharField(choices=ProxmoxBackupStatusChoices)
+    subtype = models.CharField(choices=ProxmoxBackupSubtypeChoices)  # qemu, lxc
+    format = models.CharField(choices=ProxmoxBackupFormatChoices)
+    vm_id_on_proxmox = models.PositiveIntegerField()
+    proxmox_endpoint = models.ForeignKey(ProxmoxEndpoint, on_delete=models.CASCADE)
+```
+
+### VMSnapshot
+
+Stores snapshot inventory for NetBox virtual machines.
+
+```python
+# Location: netbox_proxbox/models/vm_snapshot.py
+class VMSnapshot(NetBoxModel):
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    vm = models.ForeignKey(virtualization.VirtualMachine, on_delete=models.CASCADE)
+    snapshot_id = models.CharField(max_length=255)
+    snaptime = models.FloatField()
+    parent_snapshot = models.CharField(max_length=255, blank=True)
+    status = models.CharField(choices=ProxmoxSnapshotStatusChoices)  # active, stale
+    subtype = models.CharField(choices=ProxmoxSnapshotSubtypeChoices)  # qemu, lxc
+    vm_id_on_proxmox = models.PositiveIntegerField()
+    proxmox_endpoint = models.ForeignKey(ProxmoxEndpoint, on_delete=models.CASCADE)
+```
+
+### VMTaskHistory
+
+Stores VM task history records linked to NetBox virtual machines.
+
+```python
+# Location: netbox_proxbox/models/vm_task_history.py
+class VMTaskHistory(NetBoxModel):
+    vm = models.ForeignKey(virtualization.VirtualMachine, on_delete=models.CASCADE)
+    task_type = models.CharField(max_length=100)
+    start_time = models.DateTimeField(auto_now_add=True)
+    end_time = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=50)
+    result = models.TextField(blank=True)
+    proxmox_endpoint = models.ForeignKey(ProxmoxEndpoint, on_delete=models.CASCADE)
+```
+
+### ProxboxPluginSettings
+
+Singleton plugin settings for runtime behavior.
+
+```python
+# Location: netbox_proxbox/models/plugin_settings.py
+class ProxboxPluginSettings(NetBoxModel):
+    use_guest_agent_interface_name = models.BooleanField(default=True)
+    proxbox_fetch_max_concurrency = models.PositiveIntegerField(default=8)
+```
+
+---
+
+## Sync Operation Flow
+
+### Sync Types and Paths
+
+The plugin supports multiple sync types, each mapping to a proxbox-api endpoint:
+
+| SyncType | Backend Path | Description |
+|----------|--------------|-------------|
+| `devices` | `dcim/devices/create/stream` | Sync Proxmox nodes as NetBox devices |
+| `storage` | `virtualization/virtual-machines/storage/create/stream` | Sync storage content |
+| `virtual-machines` | `virtualization/virtual-machines/create/stream` | Sync VMs and LXC containers |
+| `vm-disks` | `virtualization/virtual-machines/virtual-disks/create/stream` | Sync virtual disks |
+| `vm-backups` | `virtualization/virtual-machines/backups/all/create/stream` | Sync backup records |
+| `vm-snapshots` | `virtualization/virtual-machines/snapshots/all/create/stream` | Sync snapshot records |
+| `all` | (runs all above in order) | Full sync |
+
+### Stage Execution Order
+
+When running `all` or multiple sync types, stages execute in dependency order:
+
+```python
+_SYNC_STAGE_ORDER = (
+    "devices",           # First: create nodes
+    "storage",           # Second: create storage
+    "virtual-machines",  # Third: create VMs (depends on nodes)
+    "vm-disks",          # Fourth: create virtual disks
+    "vm-backups",        # Fifth: create backup records
+    "vm-snapshots",      # Sixth: create snapshot records
+)
+```
+
+### Background Job Flow
+
+```python
+# Location: netbox_proxbox/jobs.py
+
+class ProxboxSyncJob(JobRunner):
+    """Trigger a ProxBox sync operation against the FastAPI backend."""
+    
+    Meta.name = "Proxbox Sync"
+    
+    # Job timeout: 7200 seconds (2 hours)
+    # Uses NetBox's default RQ queue
+```
+
+**Job Lifecycle:**
+
+1. User clicks "Full Update" (UI) or job is scheduled
+2. `ProxboxSyncJob.enqueue()` is called with sync types and endpoint IDs
+3. Job is stored in NetBox's RQ queue (`default` queue)
+4. RQ worker picks up the job and calls `run()`
+5. `run()` iterates through sync stages
+6. Each stage calls `run_sync_stream()` to connect to proxbox-api
+7. SSE frames are parsed and logged to job `log_entries`
+8. On completion, job data is saved with results
+
+### SSE Stream Contract
+
+The plugin consumes Server-Sent Events from proxbox-api:
+
+```
+event: step
+data: {"step": "devices", "status": "syncing", "message": "Creating device pve01"}
+
+event: step
+data: {"step": "devices", "status": "completed", "message": "Created 3 devices"}
+
+event: complete
+data: {"ok": true, "message": "Sync completed successfully"}
+```
+
+**Event Types:**
+- `step`: Progress updates during sync
+- `complete`: Final completion event (required)
+- `error`: Error event with failure details
+
+---
+
+## Backend Integration
+
+### FastAPI Request Context
+
+```python
+# Location: netbox_proxbox/services/backend_proxy.py
+
+@dataclass
+class BackendRequestContext:
+    http_url: str | None
+    ip_address_url: str | None
+    verify_ssl: bool
+    headers: dict[str, str]
+```
+
+### HTTP Communication
+
+```python
+# Key functions in backend_proxy.py:
+
+def get_fastapi_request_context() -> BackendRequestContext | None:
+    """Build auth headers and URLs for the configured FastAPI endpoint."""
+
+def run_sync_stream(
+    stream_path: str,
+    query_params: dict[str, str] | None = None,
+    on_frame: Callable[[str, dict], None] | None = None,
+) -> tuple[dict[str, Any], int]:
+    """Consume SSE stream from proxbox-api backend."""
+```
+
+### Query Parameters Passed to Backend
+
+| Parameter | Description |
+|-----------|-------------|
+| `use_guest_agent_interface_name` | Use QEMU guest agent for VM interface naming |
+| `fetch_max_concurrency` | Max concurrent operations in backend (default: 8) |
+| `proxmox_endpoint_ids` | Comma-separated ProxmoxEndpoint IDs |
+| `netbox_endpoint_ids` | Comma-separated NetBoxEndpoint IDs |
+| `delete_nonexistent_backup` | Delete backup records not found in Proxmox |
+
+### WebSocket Integration
+
+The plugin includes a WebSocket client for real-time updates:
+
+```python
+# Location: netbox_proxbox/websocket_client.py
+
+class WebSocketClient:
+    """Long-lived WebSocket client for proxbox-api messages."""
+    
+    async def connect(self, url: str) -> None: ...
+    async def listen(self) -> None: ...
+    async def close(self) -> None: ...
+```
+
+---
+
+## API Reference
+
+### Plugin API Root
+
+```
+/api/plugins/proxbox/
+```
+
+### Endpoint CRUD
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/plugins/proxbox/` | API root |
+| GET/POST | `/api/plugins/proxbox/proxmox-endpoints/` | List/create Proxmox endpoints |
+| GET/PUT/PATCH/DELETE | `/api/plugins/proxbox/proxmox-endpoints/{id}/` | CRUD single endpoint |
+| GET/POST | `/api/plugins/proxbox/netbox-endpoints/` | List/create NetBox endpoints |
+| GET/PUT/PATCH/DELETE | `/api/plugins/proxbox/netbox-endpoints/{id}/` | CRUD single endpoint |
+| GET/POST | `/api/plugins/proxbox/fastapi-endpoints/` | List/create FastAPI endpoints |
+| GET/PUT/PATCH/DELETE | `/api/plugins/proxbox/fastapi-endpoints/{id}/` | CRUD single endpoint |
+
+### Storage and VM Objects
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/plugins/proxbox/storages/` | List ProxmoxStorage |
+| GET | `/api/plugins/proxbox/vm-backups/` | List VMBackup |
+| GET | `/api/plugins/proxbox/vm-snapshots/` | List VMSnapshot |
+| GET | `/api/plugins/proxbox/vm-task-history/` | List VMTaskHistory |
+
+### Serializers
+
+All endpoints use nested serializers from NetBox core:
+- `NestedVirtualMachineSerializer` for VM references
+- `NestedIPAddressSerializer` for IP references
+- `NestedTokenSerializer` for user token references
+
+---
+
+## URL Routes
+
+### Plugin URL Prefix
+
+All plugin routes are under `/plugins/proxbox/`.
+
+### UI Routes
+
+| Pattern | View | Description |
+|---------|------|-------------|
+| `/` | `HomeView` | Plugin home dashboard |
+| `/proxmox/` | `ProxmoxEndpointListView` | List Proxmox endpoints |
+| `/proxmox/add/` | `ProxmoxEndpointEditView` | Create Proxmox endpoint |
+| `/proxmox/{id}/` | `ProxmoxEndpointView` | View Proxmox endpoint |
+| `/proxmox/{id}/edit/` | `ProxmoxEndpointEditView` | Edit Proxmox endpoint |
+| `/proxmox/{id}/delete/` | `ProxmoxEndpointDeleteView` | Delete Proxmox endpoint |
+| `/netbox/` | `NetBoxEndpointListView` | List NetBox endpoints |
+| `/netbox/add/` | `NetBoxEndpointEditView` | Create NetBox endpoint |
+| `/netbox/{id}/` | `NetBoxEndpointView` | View NetBox endpoint |
+| `/netbox/{id}/edit/` | `NetBoxEndpointEditView` | Edit NetBox endpoint |
+| `/netbox/{id}/delete/` | `NetBoxEndpointDeleteView` | Delete NetBox endpoint |
+| `/fastapi/` | `FastAPIEndpointListView` | List FastAPI endpoints |
+| `/fastapi/add/` | `FastAPIEndpointEditView` | Create FastAPI endpoint |
+| `/fastapi/{id}/` | `FastAPIEndpointView` | View FastAPI endpoint |
+| `/fastapi/{id}/edit/` | `FastAPIEndpointEditView` | Edit FastAPI endpoint |
+| `/fastapi/{id}/delete/` | `FastAPIEndpointDeleteView` | Delete FastAPI endpoint |
+| `/storage/` | `ProxmoxStorageListView` | List storage |
+| `/vm-backups/` | `VMBackupListView` | List VM backups |
+| `/vm-snapshots/` | `VMSnapshotListView` | List VM snapshots |
+| `/vm-task-history/` | `VMTaskHistoryListView` | List task history |
+
+### Sync Routes
+
+| Pattern | View | Description |
+|---------|------|-------------|
+| `/sync/devices/` | `sync_devices` | Sync Proxmox nodes |
+| `/sync/storage/` | `sync_storage` | Sync storage |
+| `/sync/virtual-machines/` | `sync_virtual_machines` | Sync VMs |
+| `/sync/vm-backups/` | `sync_vm_backups` | Sync backups |
+| `/sync/vm-snapshots/` | `sync_vm_snapshots` | Sync snapshots |
+| `/sync/full-update/` | `sync_full_update` | Full sync |
+
+### Keepalive Routes
+
+| Pattern | View | Description |
+|---------|------|-------------|
+| `/keepalive/fastapi/` | `keepalive_fastapi` | Check FastAPI backend |
+| `/keepalive/proxmox/` | `keepalive_proxmox` | Check Proxmox |
+| `/keepalive/netbox/` | `keepalive_netbox` | Check remote NetBox |
+
+### Job Integration Routes
+
+| Pattern | View | Description |
+|---------|------|-------------|
+| `/job/{id}/run/` | `job_run` | Rerun completed job |
+| `/job/{id}/cancel/` | `job_cancel` | Cancel pending/running job |
+
+---
+
+## Key Files by Task
+
+### Adding a New Model
+
+1. Create model in `netbox_proxbox/models/<model_name>.py`
+2. Add to `netbox_proxbox/models/__init__.py`
+3. Create form in `netbox_proxbox/forms/<model_name>.py`
+4. Create table in `netbox_proxbox/tables/<model_name>.py`
+5. Add filterset in `netbox_proxbox/filtersets.py`
+6. Create view in `netbox_proxbox/views/<model_name>.py`
+7. Add to `netbox_proxbox/views/__init__.py`
+8. Add URL pattern in `netbox_proxbox/urls.py`
+9. Add navigation in `netbox_proxbox/navigation.py`
+10. Create API serializer in `netbox_proxbox/api/serializers/<model_name>.py`
+11. Add to API viewset in `netbox_proxbox/api/views.py`
+12. Add API URL in `netbox_proxbox/api/urls.py`
+13. Create migration: `python manage.py makemigrations netbox_proxbox`
+
+### Adding a New Sync Type
+
+1. Add choice to `SyncTypeChoices` in `netbox_proxbox/choices.py`
+2. Map sync type to path in `_SYNC_TYPE_PATH` in `netbox_proxbox/jobs.py`
+3. Add to `_SYNC_STAGE_ORDER` if needed for dependency order
+4. Create sync view in `netbox_proxbox/views/sync.py`
+5. Add URL pattern in `netbox_proxbox/urls.py`
+6. Add button in home template `netbox_proxbox/templates/netbox_proxbox/home/`
+
+### Changing Backend Communication
+
+1. Update `netbox_proxbox/services/backend_proxy.py`
+2. Update SSE parsing in `netbox_proxbox/services/backend_proxy.py` (`_iter_sse_frames`, `_consume_sse_until_complete`)
+3. Update job SSE handling in `netbox_proxbox/jobs.py` (`on_frame` callback)
+4. Update browser SSE handling in `netbox_proxbox/static/netbox_proxbox/js/sync.js`
+
+### Adding a New View/Page
+
+1. Create view in appropriate `netbox_proxbox/views/` module
+2. Add to `netbox_proxbox/views/__init__.py` exports
+3. Add URL pattern in `netbox_proxbox/urls.py`
+4. Create templates in `netbox_proxbox/templates/netbox_proxbox/`
+5. Add navigation button in `netbox_proxbox/navigation.py` if needed
+
+---
+
+## Testing Guide
+
+### Running Tests
+
+```bash
+cd /path/to/netbox-proxbox
+source .venv/bin/activate  # if using virtual environment
+
+# Run all tests
+pytest tests/
+
+# Run specific test file
+pytest tests/test_sync.py
+
+# Run with coverage
+pytest tests/ --cov=netbox_proxbox --cov-report=html
+```
+
+### Test Structure
+
+```
+tests/
+├── conftest.py                      # Django/NetBox mock fixtures
+├── test_sync.py                     # Sync view tests
+├── test_run_sync_stream.py          # SSE stream tests
+├── test_jobs.py                     # RQ job tests
+├── test_frontend_contracts.py       # UI/JS contract tests
+├── test_cards.py                    # Dashboard card tests
+├── test_keepalive_status.py         # Keepalive tests
+├── test_utils.py                    # Utility function tests
+├── test_api_source_contracts.py     # API contract tests
+├── test_form_and_helper_source_contracts.py  # Form tests
+├── test_sse_contracts.py            # SSE parsing tests
+├── test_backend_integration.py      # Backend integration tests
+└── netbox_test_configuration.py     # NetBox settings stub
+```
+
+### Test Patterns
+
+Tests use heavy mocking via `conftest.py` to avoid requiring a live NetBox:
+
+```python
+# Example test pattern
+def test_sync_enqueues_job(monkeypatch):
+    load_plugin_module("netbox_proxbox.views.sync", monkeypatch=monkeypatch)
+    # Mock Django/NetBox imports
+    # Test behavior
+```
+
+### Key Test Fixtures
+
+- `fastapi_endpoint`: Mock FastAPIEndpoint object
+- `netbox_endpoint`: Mock NetBoxEndpoint object
+- `proxmox_endpoint`: Mock ProxmoxEndpoint object
+- `load_plugin_module()`: Helper to load plugin modules with mocked dependencies
+
+---
+
+## Development Workflow
+
+### Pre-commit Checklist
+
+**Before committing ANY change:**
+
+1. Run syntax check:
+   ```bash
+   python -m compileall netbox_proxbox tests
+   ```
+
+2. Run linter:
+   ```bash
+   ruff check .
+   ```
+
+3. Run tests:
+   ```bash
+   pytest tests/
+   ```
+
+### Linting and Formatting
+
+The project uses Ruff for linting:
+
+```toml
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = ["F403", "F401", "E501", "W293"]
+```
+
+### Dependency Policy
+
+**Prefer this order:**
+
+1. **NetBox plugin idioms** — Patterns from NetBox's plugin framework
+2. **NetBox core** — Built-in `utilities.*`, `netbox.*` modules
+3. **Django** — Standard Django APIs
+
+**Do NOT introduce new third-party dependencies** for capabilities NetBox/Django already provide.
+
+Existing dependencies in `pyproject.toml`:
+- `requests` (HTTP client)
+- `websockets` (WebSocket client)
+- Optional CLI dependencies (`aiohttp`, `click`, `rich`, `typer`)
+
+---
+
+## Common Patterns
+
+### NetBox Model Pattern
+
+```python
+from netbox.models import NetBoxModel
+from utilities.choices import ChoiceSet
+
+class MyModel(NetBoxModel):
+    name = models.CharField(max_length=100)
+    status = models.CharField(choices=MyStatusChoices)
+    
+    class Meta:
+        ordering = ("name",)
+    
+    def __str__(self):
+        return self.name
+    
+    def get_status_color(self):
+        return MyStatusChoices.colors.get(self.status)
+```
+
+### NetBox View Pattern
+
+```python
+from netbox.views import generic
+from netbox_proxbox.models import MyModel
+from netbox_proxbox.forms import MyModelForm
+from netbox_proxbox.tables import MyModelTable
+
+class MyModelView(generic.ObjectView):
+    queryset = MyModel.objects.all()
+
+class MyModelListView(generic.ObjectListView):
+    queryset = MyModel.objects.all()
+    table = MyModelTable
+    filterset = MyModelFilterSet
+
+class MyModelEditView(generic.ObjectEditView):
+    queryset = MyModel.objects.all()
+    form = MyModelForm
+
+class MyModelDeleteView(generic.ObjectDeleteView):
+    queryset = MyModel.objects.all()
+```
+
+### NetBox API Pattern
+
+```python
+from netbox.api.viewsets import NetBoxModelViewSet
+from netbox_proxbox.models import MyModel
+from netbox_proxbox.api.serializers import MyModelSerializer
+
+class MyModelViewSet(NetBoxModelViewSet):
+    queryset = MyModel.objects.all()
+    serializer_class = MyModelSerializer
+```
+
+### Permission Pattern
+
+```python
+from utilities.views import ContentTypePermissionRequiredMixin
+
+class MyCustomView(ContentTypePermissionRequiredMixin, View):
+    def get_required_permission(self):
+        return "netbox_proxbox.view_mymodel"
+```
+
+### SSE Stream Pattern
+
+```python
+from netbox_proxbox.services.backend_proxy import run_sync_stream
+
+def on_frame(event: str, data: dict) -> None:
+    if event == "error":
+        logger.error(f"Stream error: {data}")
+    elif event == "step":
+        logger.info(f"[{data['step']}] {data['message']}")
+
+payload, status = run_sync_stream(
+    "dcim/devices/create/stream",
+    query_params={"use_guest_agent_interface_name": "true"},
+    on_frame=on_frame,
+)
+```
+
+---
+
+## Security & Permissions
+
+### Permission Model
+
+The plugin uses NetBox's permission system:
+
+| Permission | Model | Description |
+|------------|-------|-------------|
+| `view_proxmoxendpoint` | ProxmoxEndpoint | View Proxmox endpoints |
+| `add_proxmoxendpoint` | ProxmoxEndpoint | Create Proxmox endpoints |
+| `change_proxmoxendpoint` | ProxmoxEndpoint | Edit Proxmox endpoints |
+| `delete_proxmoxendpoint` | ProxmoxEndpoint | Delete Proxmox endpoints |
+| (same pattern for NetBoxEndpoint, FastAPIEndpoint) | | |
+| `view_proxmoxstorage` | ProxmoxStorage | View storage |
+| `view_vmbackup` | VMBackup | View VM backups |
+| `view_vmsnapshot` | VMSnapshot | View VM snapshots |
+| `view_vmtaskhistory` | VMTaskHistory | View task history |
+
+### Custom Permissions
+
+Located in `netbox_proxbox/views/proxbox_access.py`:
+
+```python
+def permission_enqueue_proxbox_sync():
+    return "netbox_proxbox.enqueue_proxbox_sync"
+
+def permission_cancel_job():
+    return "core.delete_job"  # Requires delete permission on core Job model
+```
+
+### View Mixins
+
+Use these mixins for custom views:
+
+- `ConditionalLoginRequiredMixin`: Respects `LOGIN_REQUIRED` setting
+- `TokenConditionalLoginRequiredMixin`: Allows REST token auth on browser endpoints
+- `ContentTypePermissionRequiredMixin`: Model-based permissions
+
+### Object Visibility
+
+Always use `QuerySet.restrict()` for object-level permissions:
+
+```python
+# Correct
+devices = Device.objects.restrict(request.user, "view")
+
+# Incorrect - bypasses object permissions
+devices = Device.objects.all()
+```
+
+---
+
+## Directory Structure
+
+```
+netbox-proxbox/
+├── netbox_proxbox/
+│   ├── __init__.py              # Plugin configuration
+│   ├── urls.py                  # URL routing
+│   ├── navigation.py            # Menu configuration
+│   ├── choices.py               # ChoiceSet definitions
+│   ├── fields.py                # Custom model fields
+│   ├── filtersets.py            # List view filters
+│   ├── utils.py                 # URL/host helpers
+│   ├── github.py                # GitHub content fetcher
+│   ├── websocket_client.py      # WebSocket client
+│   ├── jobs.py                  # RQ background jobs
+│   ├── schedule_hints.py        # Schedule hints
+│   ├── type_defs.py             # Type definitions
+│   ├── template_content.py      # Template content
+│   │
+│   ├── models/                  # Data models
+│   │   ├── __init__.py
+│   │   ├── base.py              # EndpointBase, CommonProperties
+│   │   ├── proxmox_endpoint.py
+│   │   ├── netbox_endpoint.py
+│   │   ├── fastapi_endpoint.py
+│   │   ├── plugin_settings.py
+│   │   ├── storage.py
+│   │   ├── vm_backup.py
+│   │   ├── vm_snapshot.py
+│   │   └── vm_task_history.py
+│   │
+│   ├── forms/                   # Django forms
+│   │   ├── __init__.py
+│   │   ├── proxmox.py
+│   │   ├── netbox.py
+│   │   ├── fastapi.py
+│   │   ├── storage.py
+│   │   ├── vm_backup.py
+│   │   ├── vm_snapshot.py
+│   │   ├── vm_task_history.py
+│   │   ├── schedule_sync.py
+│   │   ├── settings.py
+│   │   └── widgets.py
+│   │
+│   ├── tables/                  # NetBox tables
+│   │   ├── __init__.py
+│   │   ├── storage.py
+│   │   ├── vm_backup.py
+│   │   ├── vm_snapshot.py
+│   │   └── vm_task_history.py
+│   │
+│   ├── views/                   # UI views
+│   │   ├── __init__.py
+│   │   ├── sync.py
+│   │   ├── schedule_sync.py
+│   │   ├── keepalive_status.py
+│   │   ├── cards.py
+│   │   ├── storage.py
+│   │   ├── vm_backup.py
+│   │   ├── vm_snapshot.py
+│   │   ├── vm_task_history.py
+│   │   ├── vm_config.py
+│   │   ├── vm_sync_now.py
+│   │   ├── job_run.py
+│   │   ├── job_cancel.py
+│   │   ├── backend_sync.py
+│   │   ├── home_context.py
+│   │   ├── external_pages.py
+│   │   ├── error_utils.py
+│   │   ├── proxbox_access.py
+│   │   └── endpoints/
+│   │       ├── __init__.py
+│   │       ├── proxmox.py
+│   │       ├── netbox.py
+│   │       └── fastapi.py
+│   │
+│   ├── api/                     # REST API
+│   │   ├── __init__.py
+│   │   ├── urls.py
+│   │   ├── views.py
+│   │   ├── filters.py
+│   │   └── serializers/
+│   │       ├── __init__.py
+│   │       ├── endpoints.py
+│   │       ├── storage.py
+│   │       ├── vm_backup.py
+│   │       ├── vm_snapshot.py
+│   │       └── vm_task_history.py
+│   │
+│   ├── services/                # Business logic
+│   │   ├── __init__.py
+│   │   ├── backend_proxy.py     # HTTP/SSE to proxbox-api
+│   │   └── service_status.py    # Keepalive checks
+│   │
+│   ├── templates/               # HTML templates
+│   │   └── netbox_proxbox/
+│   │       ├── base/
+│   │       ├── fastapi/
+│   │       ├── home/
+│   │       ├── partials/
+│   │       ├── proxmox/
+│   │       ├── storage/
+│   │       ├── table/
+│   │       ├── test/
+│   │       ├── vm_backup/
+│   │       ├── vm_snapshot/
+│   │       └── vm_task_history/
+│   │
+│   ├── static/                  # Static assets
+│   │   └── netbox_proxbox/
+│   │       ├── js/
+│   │       │   ├── sync.js
+│   │       │   └── proxbox.js
+│   │       └── styles/
+│   │           └── proxbox.css
+│   │
+│   └── migrations/              # Database migrations
+│       ├── 0001_initial.py
+│       ├── ...
+│       └── 0010_squashed_plugin_settings_and_storage.py
+│
+├── tests/                       # Test suite
+│   ├── conftest.py
+│   ├── test_sync.py
+│   ├── test_run_sync_stream.py
+│   ├── test_jobs.py
+│   ├── test_frontend_contracts.py
+│   ├── test_cards.py
+│   ├── test_keepalive_status.py
+│   ├── test_utils.py
+│   ├── test_api_source_contracts.py
+│   ├── test_form_and_helper_source_contracts.py
+│   ├── test_sse_contracts.py
+│   └── test_backend_integration.py
+│
+├── proxbox_cli/                 # Optional CLI tool
+│
+├── pyproject.toml               # Project configuration
+├── README.md                   # Quick start guide
+├── CLAUDE.md                    # Claude Code guide
+├── AGENTS.md                    # Agent entry points
+├── DEVELOP.md                   # Development guide
+├── CONTRIBUTING.md              # Contribution guide
+└── llms.txt                     # This file
+```
+
+---
+
+## RQ Worker Configuration
+
+The plugin uses NetBox's default RQ queue for background jobs.
+
+### Starting Workers
+
+```bash
+# Standard NetBox RQ worker (picks up jobs from 'default' queue)
+cd /opt/netbox/netbox
+source /opt/netbox/venv/bin/activate
+python manage.py rqworker
+```
+
+### Job Timeout
+
+Default job timeout: **7200 seconds (2 hours)**
+
+Override per-job:
+```python
+job = ProxboxSyncJob.enqueue(sync_types=["all"], job_timeout=10800)
+```
+
+### Troubleshooting
+
+| Symptom | Cause | Solution |
+|---------|-------|----------|
+| Job stuck in "pending" | No RQ worker running | Start `rqworker` |
+| Job stuck in "running" | Backend slow or buffered stream | Wait or check proxbox-api logs |
+| Job shows "JobTimeoutException" | RQ timeout exceeded | Increase `job_timeout` parameter |
+| Job shows "cancelled by user" | User canceled | Normal behavior |
+
+---
+
+## NetBox Integration Notes
+
+### Plugin Registration
+
+```python
+# netbox_proxbox/__init__.py
+
+class ProxboxPluginConfig(PluginConfig):
+    name = "netbox-proxbox"
+    verbose_name = "Proxbox"
+    description = "NetBox plugin for Proxmox integration"
+    version = "0.0.8"
+    author = "Emerson Felipe"
+    author_email = "emersonfelipe.2003@gmail.com"
+    min_version = "4.5.0"
+    max_version = "4.5.99"
+    required_settings = []
+    default_settings = {}
+    queues = ["netbox_proxbox.sync"]  # Legacy queue (not used for enqueue)
+```
+
+### Navigation Menu
+
+```python
+# netbox_proxbox/navigation.py
+
+menu_items = (
+    PluginMenuButton(
+        link="plugins:netbox_proxbox:home",
+        permissions=["netbox_proxbox.view_proxmoxendpoint"],
+    ),
+)
+
+menu_tabs = (
+    PluginMenuItem(
+        link="plugins:netbox_proxbox:home",
+        permissions=["netbox_proxbox.view_proxmoxendpoint"],
+    ),
+)
+```
+
+### Template Inheritance
+
+Templates extend NetBox's base templates:
+
+```html
+<!-- templates/netbox_proxbox/home.html -->
+{% extends "netbox_proxbox/base/proxbox.html" %}
+
+{% block content %}
+  <!-- Plugin-specific content -->
+{% endblock %}
+```
+
+---
+
+## Backend (proxbox-api) Contract
+
+The plugin expects proxbox-api to implement these endpoints:
+
+### Sync Endpoints (SSE)
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/dcim/devices/create/stream` | GET | Sync Proxmox nodes as devices |
+| `/virtualization/virtual-machines/create/stream` | GET | Sync VMs |
+| `/virtualization/virtual-machines/storage/create/stream` | GET | Sync storage |
+| `/virtualization/virtual-machines/virtual-disks/create/stream` | GET | Sync virtual disks |
+| `/virtualization/virtual-machines/backups/all/create/stream` | GET | Sync backups |
+| `/virtualization/virtual-machines/snapshots/all/create/stream` | GET | Sync snapshots |
+| `/full-update/stream` | GET | Full sync (all stages) |
+
+### Expected Response Format
+
+All sync endpoints return `text/event-stream`:
+
+```
+event: step
+data: {"step": "<stage>", "status": "<status>", "message": "<message>"}
+
+event: complete
+data: {"ok": true, "message": "Sync completed"}
+```
+
+### Query Parameters
+
+Backend should accept these query parameters:
+- `use_guest_agent_interface_name` (bool)
+- `fetch_max_concurrency` (int)
+- `proxmox_endpoint_ids` (comma-separated IDs)
+- `netbox_endpoint_ids` (comma-separated IDs)
+- `delete_nonexistent_backup` (bool)
+
+---
+
+## Frequently Asked Questions
+
+### How do I add a new field to a model?
+
+1. Add field to model in `netbox_proxbox/models/<model>.py`
+2. Update form in `netbox_proxbox/forms/<model>.py`
+3. Update table in `netbox_proxbox/tables/<model>.py`
+4. Update serializer in `netbox_proxbox/api/serializers/<model>.py`
+5. Create migration: `python manage.py makemigrations netbox_proxbox`
+6. Run migration: `python manage.py migrate`
+
+### How do I change the sync order?
+
+Edit `_SYNC_STAGE_ORDER` in `netbox_proxbox/jobs.py`.
+
+### How do I debug a sync job?
+
+1. Check NetBox job status in UI (Plugins > Proxbox > Jobs)
+2. View job `log_entries` field
+3. Check RQ worker logs
+4. Enable debug logging: `logging.getLogger("netbox_proxbox").setLevel(logging.DEBUG)`
+
+### How do I add a custom sync type?
+
+1. Add choice to `SyncTypeChoices` in `choices.py`
+2. Add path mapping in `_SYNC_TYPE_PATH` in `jobs.py`
+3. Create view in `views/sync.py`
+4. Add URL pattern
+5. Add button to home template
+
+### How do I access endpoint credentials in views?
+
+```python
+from netbox_proxbox.models import FastAPIEndpoint
+
+fastapi = FastAPIEndpoint.objects.first()
+context = get_fastapi_request_context()  # Returns URLs and headers
+```
+
+---
+
+## Related Documentation
+
+- **NetBox Documentation**: https://netbox.readthedocs.io/
+- **NetBox Plugin Development**: https://netbox.readthedocs.io/en/stable/plugins/development/
+- **Proxbox API Documentation**: https://proxbox-api.readthedocs.io/
+- **Project README**: ./README.md
+- **Development Guide**: ./DEVELOP.md
+- **Contributing Guide**: ./CONTRIBUTING.md
+
+---
+
+*This file is designed for LLM context. For human-readable documentation, see README.md and DEVELOP.md.*
