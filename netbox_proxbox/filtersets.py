@@ -8,6 +8,7 @@ from utilities.filtersets import register_filterset
 from .models import (
     FastAPIEndpoint,
     NetBoxEndpoint,
+    ProxmoxStorage,
     ProxmoxEndpoint,
     VMBackup,
     VMSnapshot,
@@ -116,4 +117,33 @@ class VMSnapshotFilterSet(NetBoxModelFilterSet):
             | Q(name__icontains=value)
             | Q(node__icontains=value)
             | Q(description__icontains=value)
+        )
+
+
+@register_filterset
+class ProxmoxStorageFilterSet(NetBoxModelFilterSet):
+    """Filter Proxmox storage rows synced by the plugin."""
+
+    class Meta:
+        model = ProxmoxStorage
+        fields = (
+            "id",
+            "cluster",
+            "name",
+            "storage_type",
+            "content",
+            "path",
+            "nodes",
+            "shared",
+            "enabled",
+        )
+
+    def search(self, queryset, name, value):
+        """Match storage name, cluster, or storage path."""
+        if not value.strip():
+            return queryset
+        return queryset.filter(
+            Q(name__icontains=value)
+            | Q(cluster__icontains=value)
+            | Q(path__icontains=value)
         )

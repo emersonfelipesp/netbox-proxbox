@@ -26,6 +26,7 @@ PROXBOX_SYNC_JOB_TIMEOUT = 7200
 # Dependency order for multi-stage syncs (subset runs in this order regardless of UI selection).
 _SYNC_STAGE_ORDER: tuple[str, ...] = (
     SyncTypeChoices.DEVICES,
+    SyncTypeChoices.STORAGE,
     SyncTypeChoices.VIRTUAL_MACHINES,
     SyncTypeChoices.VIRTUAL_MACHINES_DISKS,
     SyncTypeChoices.VIRTUAL_MACHINES_BACKUPS,
@@ -45,6 +46,7 @@ __all__ = (
 # Maps sync_type choices to the FastAPI backend base path (before ``/stream``).
 _SYNC_TYPE_PATH: dict[str, str] = {
     SyncTypeChoices.DEVICES: "dcim/devices/create",
+    SyncTypeChoices.STORAGE: "virtualization/virtual-machines/storage/create",
     SyncTypeChoices.VIRTUAL_MACHINES: "virtualization/virtual-machines/create",
     SyncTypeChoices.VIRTUAL_MACHINES_BACKUPS: "virtualization/virtual-machines/backups/all/create",
     SyncTypeChoices.VIRTUAL_MACHINES_DISKS: "virtualization/virtual-machines/virtual-disks/create",

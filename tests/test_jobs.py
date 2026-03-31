@@ -31,6 +31,7 @@ def proxbox_sync_job_module(monkeypatch):
     choices_mod = types.ModuleType("netbox_proxbox.choices")
     choices_mod.SyncTypeChoices = SimpleNamespace(
         DEVICES="devices",
+        STORAGE="storage",
         VIRTUAL_MACHINES="virtual-machines",
         VIRTUAL_MACHINES_BACKUPS="vm-backups",
         VIRTUAL_MACHINES_DISKS="vm-disks",
@@ -426,11 +427,12 @@ def test_proxbox_sync_job_run_all_invokes_each_stage_stream(
 
     st = proxbox_sync_job_module.SyncTypeChoices
     ProxboxSyncJob.run(job, sync_types=[st.ALL])
-    assert calls == 5
+    assert calls == 6
     stages = job.job.data["proxbox_sync"]["response"]["stages"]
-    assert len(stages) == 5
+    assert len(stages) == 6
     assert {s["sync_type"] for s in stages} == {
         st.DEVICES,
+        st.STORAGE,
         st.VIRTUAL_MACHINES,
         st.VIRTUAL_MACHINES_DISKS,
         st.VIRTUAL_MACHINES_BACKUPS,

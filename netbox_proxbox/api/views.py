@@ -13,6 +13,7 @@ from .. import filtersets, models
 from .serializers import (
     FastAPIEndpointSerializer,
     NetBoxEndpointSerializer,
+    ProxmoxStorageSerializer,
     ProxmoxEndpointSerializer,
     VMBackupSerializer,
     VMSnapshotSerializer,
@@ -56,6 +57,14 @@ class VMSnapshotViewSet(NetBoxModelViewSet):
     queryset = models.VMSnapshot.objects.all()
     serializer_class = VMSnapshotSerializer
     filterset_class = filtersets.VMSnapshotFilterSet
+
+
+class ProxmoxStorageViewSet(NetBoxModelViewSet):
+    """REST API for Proxmox storage rows synced from Proxmox endpoints."""
+
+    queryset = models.ProxmoxStorage.objects.all()
+    serializer_class = ProxmoxStorageSerializer
+    filterset_class = filtersets.ProxmoxStorageFilterSet
 
 
 class ProxmoxEndpointViewSet(NetBoxModelViewSet):

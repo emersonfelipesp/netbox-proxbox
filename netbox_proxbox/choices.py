@@ -26,6 +26,7 @@ class SyncTypeChoices(ChoiceSet):
     key = "ProxboxSync.sync_type"
 
     VIRTUAL_MACHINES = "virtual-machines"
+    STORAGE = "storage"
     VIRTUAL_MACHINES_DISKS = "vm-disks"
     VIRTUAL_MACHINES_BACKUPS = "vm-backups"
     VIRTUAL_MACHINES_SNAPSHOTS = "vm-snapshots"
@@ -34,6 +35,7 @@ class SyncTypeChoices(ChoiceSet):
 
     CHOICES = [
         (VIRTUAL_MACHINES, _("Virtual Machines"), "blue"),
+        (STORAGE, _("Storage"), "teal"),
         (VIRTUAL_MACHINES_DISKS, _("VM Disks"), "orange"),
         (VIRTUAL_MACHINES_BACKUPS, _("Virtual Machines Backups"), "purple"),
         (VIRTUAL_MACHINES_SNAPSHOTS, _("VM Snapshots"), "cyan"),
