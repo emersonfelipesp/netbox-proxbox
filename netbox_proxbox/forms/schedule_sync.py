@@ -30,12 +30,12 @@ class ScheduleSyncForm(forms.Form):
         choices=SyncTypeChoices,
         initial=[SyncTypeChoices.ALL],
         label=_("Sync types"),
-        widget=forms.CheckboxSelectMultiple,
+        widget=BootstrapCheckboxSelectMultiple,
         help_text=_(
             "Select one or more operations. Stages always run in dependency order "
             "(devices, then storage, then virtual machines, then VM disks, then VM backups, "
             "then VM snapshots). "
-            "You cannot combine “All” with other types."
+            'You cannot combine "All" with other types.'
         ),
     )
     proxmox_endpoints = DynamicModelMultipleChoiceField(
