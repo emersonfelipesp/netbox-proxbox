@@ -159,7 +159,9 @@ class ProxmoxStorageView(generic.ObjectView):
         usage_detail = None
         content_records: list[dict[str, Any]] = []
 
-        fastapi_endpoint = FastAPIEndpoint.objects.restrict(request.user, "view").first()
+        fastapi_endpoint = FastAPIEndpoint.objects.restrict(
+            request.user, "view"
+        ).first()
         if fastapi_endpoint:
             fastapi_info = get_fastapi_url(fastapi_endpoint) or {}
             fastapi_url = fastapi_info.get("http_url")
@@ -178,7 +180,9 @@ class ProxmoxStorageView(generic.ObjectView):
                         usage_detail = storage_err
                     else:
                         for record in self._iter_scalar_records(storage_payload):
-                            record_name = str(record.get("storage") or record.get("name") or "")
+                            record_name = str(
+                                record.get("storage") or record.get("name") or ""
+                            )
                             record_cluster = str(record.get("cluster") or "")
                             if record_name != instance.name:
                                 continue

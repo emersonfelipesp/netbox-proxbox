@@ -237,7 +237,9 @@ def test_lxc_and_storage_pages_are_wired_in_urls_navigation_and_templates():
 
 
 def test_proxmox_storage_detail_template_exists():
-    detail_template = _read("netbox_proxbox/templates/netbox_proxbox/proxmoxstorage.html")
+    detail_template = _read(
+        "netbox_proxbox/templates/netbox_proxbox/proxmoxstorage.html"
+    )
     assert "Proxmox Storage" in detail_template
     assert "Storage Usage (Live)" in detail_template
     assert "Virtual Disks on this Storage" in detail_template
