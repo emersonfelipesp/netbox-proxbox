@@ -191,6 +191,26 @@ def test_settings_page_is_wired_in_urls_navigation_and_template():
     assert "class SettingsView(" in view
 
 
+def test_dashboard_page_is_wired_in_urls_navigation_and_template():
+    urls = _read("netbox_proxbox/urls.py")
+    navigation = _read("netbox_proxbox/navigation.py")
+    template = _read("netbox_proxbox/templates/netbox_proxbox/dashboard.html")
+    views_module = _read("netbox_proxbox/views/__init__.py")
+    dashboard_view_module = _read("netbox_proxbox/views/dashboard.py")
+
+    assert 'path("dashboard/", views.DashboardView.as_view(), name="dashboard")' in urls
+    assert 'link="plugins:netbox_proxbox:dashboard"' in navigation
+    assert "dashboard_item" in navigation
+    assert "fullupdate_item," in navigation
+    assert "dashboard_item," in navigation
+    assert "nodes_item," in navigation
+    assert "Proxmox Dashboard" in template
+    assert "Cluster Summary" in template
+    assert "Nodes Summary" in template
+    assert "from .dashboard import DashboardView" in views_module
+    assert "class DashboardView(" in dashboard_view_module
+
+
 def test_proxmox_list_template_exposes_import_export_controls_and_warning_modal():
     contents = _read(
         "netbox_proxbox/templates/netbox_proxbox/proxmoxendpoint_list.html"
