@@ -8,7 +8,7 @@ from utilities.views import ViewTab, register_model_view
 from virtualization.models import VirtualMachine
 
 from netbox_proxbox.filtersets import VMTaskHistoryFilterSet
-from netbox_proxbox.forms import VMTaskHistoryFilterForm
+from netbox_proxbox.forms import VMTaskHistoryFilterForm, VMTaskHistoryForm
 from netbox_proxbox.models import VMTaskHistory
 from netbox_proxbox.tables import VMTaskHistoryTable
 
@@ -16,6 +16,9 @@ from netbox_proxbox.tables import VMTaskHistoryTable
 __all__ = (
     "VMTaskHistoryView",
     "VMTaskHistoryListView",
+    "VMTaskHistoryEditView",
+    "VMTaskHistoryDeleteView",
+    "VMTaskHistoryBulkDeleteView",
     "VMTaskHistoryTabView",
 )
 
@@ -77,6 +80,7 @@ class VMTaskHistoryTabView(generic.ObjectChildrenView):
         return table
 
 
+@register_model_view(VMTaskHistory, "list", path="", detail=False)
 class VMTaskHistoryListView(generic.ObjectListView):
     """List view for all VM task history records with filtering."""
 
@@ -85,5 +89,33 @@ class VMTaskHistoryListView(generic.ObjectListView):
     filterset = VMTaskHistoryFilterSet
     filterset_form = VMTaskHistoryFilterForm
     actions = {
+        "bulk_delete": {"delete"},
         "export": {"view"},
     }
+
+
+@register_model_view(VMTaskHistory, "edit")
+class VMTaskHistoryEditView(generic.ObjectEditView):
+    """Create or edit a VM task history record."""
+
+    queryset = VMTaskHistory.objects.all()
+    form = VMTaskHistoryForm
+    default_return_url = "plugins:netbox_proxbox:vmtaskhistory_list"
+
+
+@register_model_view(VMTaskHistory, "delete")
+class VMTaskHistoryDeleteView(generic.ObjectDeleteView):
+    """Delete a single VM task history record."""
+
+    queryset = VMTaskHistory.objects.all()
+    default_return_url = "plugins:netbox_proxbox:vmtaskhistory_list"
+
+
+@register_model_view(VMTaskHistory, "bulk_delete", detail=False)
+class VMTaskHistoryBulkDeleteView(generic.BulkDeleteView):
+    """Bulk delete VM task history records."""
+
+    queryset = VMTaskHistory.objects.all()
+    filterset = VMTaskHistoryFilterSet
+    table = VMTaskHistoryTable
+    default_return_url = "plugins:netbox_proxbox:vmtaskhistory_list"

@@ -77,6 +77,9 @@ from .vm_snapshot import (
     VMSnapshotView,
 )
 from .vm_task_history import (
+    VMTaskHistoryBulkDeleteView,
+    VMTaskHistoryDeleteView,
+    VMTaskHistoryEditView,
     VMTaskHistoryListView,
     VMTaskHistoryTabView,
     VMTaskHistoryView,
