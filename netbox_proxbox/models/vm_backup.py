@@ -18,10 +18,12 @@ from netbox_proxbox.choices import (
 class VMBackup(NetBoxModel):
     """Proxmox backup metadata attached to a NetBox ``VirtualMachine``."""
 
-    storage = models.CharField(
-        max_length=255,
+    storage = models.ForeignKey(
+        to="netbox_proxbox.ProxmoxStorage",
+        on_delete=models.SET_NULL,
         null=True,
-        blank=False,
+        blank=True,
+        related_name="storage_backups",
         help_text=_("Storage of the backup."),
     )
 

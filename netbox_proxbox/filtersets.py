@@ -12,6 +12,7 @@ from .models import (
     ProxmoxEndpoint,
     VMBackup,
     VMSnapshot,
+    VMTaskHistory,
 )
 
 
@@ -68,6 +69,7 @@ class VMBackupFilterSet(NetBoxModelFilterSet):
         model = VMBackup
         fields = (
             "id",
+            "storage",
             "virtual_machine",
             "subtype",
             "format",
@@ -85,7 +87,8 @@ class VMBackupFilterSet(NetBoxModelFilterSet):
             return queryset
         return queryset.filter(
             Q(virtual_machine__name__icontains=value)
-            | Q(storage__icontains=value)
+            | Q(storage__name__icontains=value)
+            | Q(storage__cluster__icontains=value)
             | Q(volume_id__icontains=value)
         )
 
@@ -98,6 +101,7 @@ class VMSnapshotFilterSet(NetBoxModelFilterSet):
         model = VMSnapshot
         fields = (
             "id",
+            "storage",
             "virtual_machine",
             "subtype",
             "status",
@@ -114,9 +118,54 @@ class VMSnapshotFilterSet(NetBoxModelFilterSet):
             return queryset
         return queryset.filter(
             Q(virtual_machine__name__icontains=value)
+            | Q(storage__name__icontains=value)
             | Q(name__icontains=value)
             | Q(node__icontains=value)
             | Q(description__icontains=value)
+        )
+
+
+@register_filterset
+class VMTaskHistoryFilterSet(NetBoxModelFilterSet):
+    """Filter VM task history records synced from Proxmox."""
+
+    class Meta:
+        model = VMTaskHistory
+        fields = (
+            "id",
+            "virtual_machine",
+            "vm_type",
+            "upid",
+            "node",
+            "pid",
+            "pstart",
+            "task_id",
+            "task_type",
+            "username",
+            "start_time",
+            "end_time",
+            "description",
+            "status",
+            "task_state",
+            "exitstatus",
+        )
+
+    def search(self, queryset, name, value):
+        """Match VM name, task metadata, user name, or task result text."""
+        if not value.strip():
+            return queryset
+        return queryset.filter(
+            Q(virtual_machine__name__icontains=value)
+            | Q(vm_type__icontains=value)
+            | Q(upid__icontains=value)
+            | Q(node__icontains=value)
+            | Q(task_id__icontains=value)
+            | Q(task_type__icontains=value)
+            | Q(username__icontains=value)
+            | Q(description__icontains=value)
+            | Q(status__icontains=value)
+            | Q(task_state__icontains=value)
+            | Q(exitstatus__icontains=value)
         )
 
 

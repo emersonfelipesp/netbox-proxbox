@@ -8,6 +8,7 @@ from netbox_proxbox.models.proxmox_endpoint import ProxmoxEndpoint
 from netbox_proxbox.models.storage import ProxmoxStorage
 from netbox_proxbox.models.vm_backup import VMBackup
 from netbox_proxbox.models.vm_snapshot import VMSnapshot
+from netbox_proxbox.models.vm_task_history import VMTaskHistory
 
 __all__ = (
     "FastAPIEndpoint",
@@ -17,4 +18,5 @@ __all__ = (
     "ProxmoxStorage",
     "VMBackup",
     "VMSnapshot",
+    "VMTaskHistory",
 )

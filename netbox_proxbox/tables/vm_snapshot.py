@@ -11,6 +11,7 @@ from netbox_proxbox.models import VMSnapshot
 class VMSnapshotTable(NetBoxTable):
     """django-tables2 layout for VM snapshot list views."""
 
+    storage = tables.Column(linkify=True)
     virtual_machine = tables.Column(linkify=True)
     subtype = ChoiceFieldColumn(
         verbose_name=_("Subtype"),
@@ -28,6 +29,7 @@ class VMSnapshotTable(NetBoxTable):
             "pk",
             "id",
             "name",
+            "storage",
             "virtual_machine",
             "vmid",
             "node",
@@ -41,6 +43,7 @@ class VMSnapshotTable(NetBoxTable):
         default_columns = (
             "pk",
             "name",
+            "storage",
             "virtual_machine",
             "vmid",
             "node",

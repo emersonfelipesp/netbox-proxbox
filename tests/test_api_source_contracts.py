@@ -153,6 +153,7 @@ def test_endpoint_serializers_expose_supported_model_fields():
             "url",
             "display",
             "virtual_machine",
+            "storage",
             "name",
             "description",
             "vmid",
@@ -161,6 +162,30 @@ def test_endpoint_serializers_expose_supported_model_fields():
             "parent",
             "subtype",
             "status",
+            "tags",
+            "custom_fields",
+            "created",
+            "last_updated",
+        },
+        "VMTaskHistorySerializer": {
+            "id",
+            "url",
+            "display",
+            "virtual_machine",
+            "vm_type",
+            "upid",
+            "node",
+            "pid",
+            "pstart",
+            "task_id",
+            "task_type",
+            "username",
+            "start_time",
+            "end_time",
+            "description",
+            "status",
+            "task_state",
+            "exitstatus",
             "tags",
             "custom_fields",
             "created",
@@ -196,6 +221,14 @@ def test_endpoint_serializers_do_not_override_create_semantics():
     for serializer_name in ("NetBoxEndpointSerializer", "FastAPIEndpointSerializer"):
         class_node = _classdef(module, serializer_name)
         assert "create" not in _class_methods(class_node)
+
+
+def test_task_history_route_and_viewset_are_registered():
+    views_contents = VIEWS_PATH.read_text()
+    urls_contents = URLS_PATH.read_text()
+
+    assert "VMTaskHistoryViewSet" in views_contents
+    assert 'router.register("task-history", views.VMTaskHistoryViewSet)' in urls_contents
 
 
 def test_netbox_endpoint_serializer_rejects_selected_v2_token_objects():
@@ -382,7 +415,7 @@ def test_plugin_api_routes_register_all_plugin_objects():
             root_registers.append(route)
 
     assert set(endpoint_registers) == {"proxmox", "netbox", "fastapi"}
-    assert set(root_registers) == {"storage", "backups", "snapshots"}
+    assert set(root_registers) == {"storage", "backups", "snapshots", "task-history"}
 
 
 def test_proxmox_endpoint_views_register_bulk_import_and_csv_export():

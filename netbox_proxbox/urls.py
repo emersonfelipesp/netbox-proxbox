@@ -70,6 +70,10 @@ urlpatterns = [
         "snapshots/",
         include(get_model_urls("netbox_proxbox", "vmsnapshot", detail=False)),
     ),
+    path(
+        "task-history/<int:pk>/",
+        include(get_model_urls("netbox_proxbox", "vmtaskhistory")),
+    ),
     path("sync/devices/", views.sync_devices, name="sync_devices"),
     path("sync/storage/", views.sync_storage, name="sync_storage"),
     path(

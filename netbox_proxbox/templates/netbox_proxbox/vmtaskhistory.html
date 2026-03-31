@@ -1,0 +1,82 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load i18n %}
+
+{% block content %}
+    <div class="row mb-3">
+        <div class="col col-md-6">
+            <div class="card">
+                <h5 class="card-header">{% trans "VM Task History" %}</h5>
+                <div class="card-body">
+                    <table class="table table-hover attr-table">
+                        <tr>
+                            <th scope="row">{% trans "Virtual Machine" %}</th>
+                            <td>{{ object.virtual_machine|hyperlinked_object }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "VM Type" %}</th>
+                            <td>{{ object.vm_type|placeholder }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Description" %}</th>
+                            <td>{{ object.description|placeholder }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Status" %}</th>
+                            <td>{{ object.status|placeholder }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Task State" %}</th>
+                            <td>{{ object.task_state|placeholder }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Exit Status" %}</th>
+                            <td>{{ object.exitstatus|placeholder }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Start Time" %}</th>
+                            <td>{{ object.start_time }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "End Time" %}</th>
+                            <td>{{ object.end_time|placeholder }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Username" %}</th>
+                            <td>{{ object.username }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">UPID</th>
+                            <td>{{ object.upid }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Node" %}</th>
+                            <td>{{ object.node }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">PID</th>
+                            <td>{{ object.pid|placeholder }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">PSTART</th>
+                            <td>{{ object.pstart|placeholder }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Task Type" %}</th>
+                            <td>{{ object.task_type }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Task ID" %}</th>
+                            <td>{{ object.task_id|placeholder }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+            {% include 'inc/panels/custom_fields.html' %}
+        </div>
+        <div class="col col-md-6">
+            {% include 'inc/panels/tags.html' %}
+            {% include 'inc/panels/comments.html' %}
+        </div>
+    </div>
+{% endblock %}

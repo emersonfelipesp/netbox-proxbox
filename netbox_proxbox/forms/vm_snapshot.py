@@ -5,7 +5,7 @@ from django import forms
 from utilities.forms.fields import DynamicModelChoiceField, CommentField
 from netbox.forms import NetBoxModelForm, NetBoxModelFilterSetForm
 from virtualization.models import VirtualMachine
-from netbox_proxbox.models import VMSnapshot
+from netbox_proxbox.models import ProxmoxStorage, VMSnapshot
 from netbox_proxbox.choices import (
     ProxmoxSnapshotSubtypeChoices,
     ProxmoxSnapshotStatusChoices,
@@ -18,6 +18,7 @@ class VMSnapshotForm(NetBoxModelForm):
     class Meta:
         model = VMSnapshot
         fields = (
+            "storage",
             "virtual_machine",
             "name",
             "description",
@@ -32,6 +33,13 @@ class VMSnapshotForm(NetBoxModelForm):
         )
 
     comments = CommentField()
+
+    storage = DynamicModelChoiceField(
+        queryset=ProxmoxStorage.objects.all(),
+        required=False,
+        help_text="Select a Storage",
+        label="Storage",
+    )
 
     virtual_machine = DynamicModelChoiceField(
         queryset=VirtualMachine.objects.all(),
@@ -59,6 +67,11 @@ class VMSnapshotFilterForm(NetBoxModelFilterSetForm):
     """Filter controls for the VM snapshot list view."""
 
     model = VMSnapshot
+
+    storage = forms.ModelMultipleChoiceField(
+        queryset=ProxmoxStorage.objects.all(),
+        required=False,
+    )
 
     virtual_machine = forms.ModelMultipleChoiceField(
         queryset=VirtualMachine.objects.all(),

@@ -31,6 +31,7 @@ class VMSnapshotSerializer(NetBoxModelSerializer):
             "url",
             "display",
             "virtual_machine",
+            "storage",
             "name",
             "description",
             "vmid",
@@ -44,4 +45,12 @@ class VMSnapshotSerializer(NetBoxModelSerializer):
             "created",
             "last_updated",
         )
-        brief_fields = ("id", "url", "display", "name", "virtual_machine", "status")
+        brief_fields = (
+            "id",
+            "url",
+            "display",
+            "name",
+            "virtual_machine",
+            "storage",
+            "status",
+        )

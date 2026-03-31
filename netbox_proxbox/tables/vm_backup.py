@@ -15,6 +15,7 @@ from netbox_proxbox.models import VMBackup
 class VMBackupTable(NetBoxTable):
     """django-tables2 layout for VM backup list views."""
 
+    storage = tables.Column(linkify=True)
     virtual_machine = tables.Column(linkify=True)
     subtype = ChoiceFieldColumn(
         verbose_name=_("Subtype"),

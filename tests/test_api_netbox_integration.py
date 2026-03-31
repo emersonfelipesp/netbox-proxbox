@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -45,12 +46,17 @@ from netbox_proxbox.choices import (
     ProxmoxBackupFormatChoices,
     ProxmoxBackupSubtypeChoices,
     ProxmoxModeChoices,
+    ProxmoxSnapshotStatusChoices,
+    ProxmoxSnapshotSubtypeChoices,
 )
 from netbox_proxbox.models import (
     FastAPIEndpoint,
     NetBoxEndpoint,
+    ProxmoxStorage,
     ProxmoxEndpoint,
     VMBackup,
+    VMSnapshot,
+    VMTaskHistory,
 )
 
 
@@ -334,10 +340,14 @@ class VMBackupAPITest(APIViewTestCases.APIViewTestCase):
         cls.virtual_machines = [
             create_test_virtualmachine(f"vm-{idx}") for idx in range(6)
         ]
+        cls.storages = [
+            ProxmoxStorage.objects.create(cluster=f"cluster-{idx}", name=f"storage-{idx}")
+            for idx in range(6)
+        ]
 
         for idx in range(3):
             VMBackup.objects.create(
-                storage=f"storage-{idx}",
+                storage=cls.storages[idx],
                 virtual_machine=cls.virtual_machines[idx],
                 subtype=ProxmoxBackupSubtypeChoices.BACKUP_SUBTYPE_QEMU,
                 format=ProxmoxBackupFormatChoices.BACKUP_FORMAT_TZST,
@@ -347,7 +357,7 @@ class VMBackupAPITest(APIViewTestCases.APIViewTestCase):
 
         cls.create_data = [
             {
-                "storage": "storage-3",
+                "storage": cls.storages[3].pk,
                 "virtual_machine": {"id": cls.virtual_machines[3].pk},
                 "subtype": ProxmoxBackupSubtypeChoices.BACKUP_SUBTYPE_QEMU,
                 "format": ProxmoxBackupFormatChoices.BACKUP_FORMAT_TZST,
@@ -355,7 +365,7 @@ class VMBackupAPITest(APIViewTestCases.APIViewTestCase):
                 "encrypted": False,
             },
             {
-                "storage": "storage-4",
+                "storage": cls.storages[4].pk,
                 "virtual_machine": {"id": cls.virtual_machines[4].pk},
                 "subtype": ProxmoxBackupSubtypeChoices.BACKUP_SUBTYPE_LXC,
                 "format": ProxmoxBackupFormatChoices.BACKUP_FORMAT_TGZ,
@@ -363,11 +373,157 @@ class VMBackupAPITest(APIViewTestCases.APIViewTestCase):
                 "encrypted": True,
             },
             {
-                "storage": "storage-5",
+                "storage": cls.storages[5].pk,
                 "virtual_machine": {"id": cls.virtual_machines[5].pk},
                 "subtype": ProxmoxBackupSubtypeChoices.BACKUP_SUBTYPE_QEMU,
                 "format": ProxmoxBackupFormatChoices.BACKUP_FORMAT_RAW,
                 "vmid": 105,
                 "encrypted": False,
+            },
+        ]
+
+
+class VMSnapshotAPITest(APIViewTestCases.APIViewTestCase):
+    model = VMSnapshot
+    brief_fields = ["display", "id", "name", "storage", "url"]
+    validation_excluded_fields = ["virtual_machine"]
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.virtual_machines = [
+            create_test_virtualmachine(f"snapshot-vm-{idx}") for idx in range(6)
+        ]
+        cls.storages = [
+            ProxmoxStorage.objects.create(cluster=f"cluster-{idx}", name=f"storage-{idx}")
+            for idx in range(6)
+        ]
+
+        for idx in range(3):
+            VMSnapshot.objects.create(
+                storage=cls.storages[idx],
+                virtual_machine=cls.virtual_machines[idx],
+                name=f"snapshot-{idx}",
+                description="Snapshot description",
+                vmid=200 + idx,
+                node=f"pve0{idx}",
+                subtype=ProxmoxSnapshotSubtypeChoices.SNAPSHOT_SUBTYPE_QEMU,
+                status=ProxmoxSnapshotStatusChoices.SNAPSHOT_STATUS_ACTIVE,
+            )
+
+        cls.create_data = [
+            {
+                "storage": cls.storages[3].pk,
+                "virtual_machine": {"id": cls.virtual_machines[3].pk},
+                "name": "snapshot-3",
+                "description": "Snapshot description",
+                "vmid": 203,
+                "node": "pve03",
+                "subtype": ProxmoxSnapshotSubtypeChoices.SNAPSHOT_SUBTYPE_QEMU,
+                "status": ProxmoxSnapshotStatusChoices.SNAPSHOT_STATUS_ACTIVE,
+            },
+            {
+                "storage": cls.storages[4].pk,
+                "virtual_machine": {"id": cls.virtual_machines[4].pk},
+                "name": "snapshot-4",
+                "description": "Snapshot description",
+                "vmid": 204,
+                "node": "pve04",
+                "subtype": ProxmoxSnapshotSubtypeChoices.SNAPSHOT_SUBTYPE_QEMU,
+                "status": ProxmoxSnapshotStatusChoices.SNAPSHOT_STATUS_ACTIVE,
+            },
+            {
+                "storage": cls.storages[5].pk,
+                "virtual_machine": {"id": cls.virtual_machines[5].pk},
+                "name": "snapshot-5",
+                "description": "Snapshot description",
+                "vmid": 205,
+                "node": "pve05",
+                "subtype": ProxmoxSnapshotSubtypeChoices.SNAPSHOT_SUBTYPE_QEMU,
+                "status": ProxmoxSnapshotStatusChoices.SNAPSHOT_STATUS_ACTIVE,
+            },
+        ]
+
+
+class VMTaskHistoryAPITest(APIViewTestCases.APIViewTestCase):
+    model = VMTaskHistory
+    brief_fields = ["display", "id", "start_time", "status", "url", "username"]
+    validation_excluded_fields = ["virtual_machine"]
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.virtual_machines = [
+            create_test_virtualmachine(f"task-vm-{idx}") for idx in range(6)
+        ]
+
+        for idx in range(3):
+            VMTaskHistory.objects.create(
+                virtual_machine=cls.virtual_machines[idx],
+                vm_type="qemu" if idx % 2 == 0 else "lxc",
+                upid=f"UPID:pve0{idx}:{idx}",
+                node=f"pve0{idx}",
+                pid=2000 + idx,
+                pstart=3000 + idx,
+                task_id=str(100 + idx),
+                task_type="qmstart" if idx % 2 == 0 else "vzstart",
+                username="root@pam",
+                start_time=datetime(2024, 3, 9, 17, 16, 10 + idx, tzinfo=timezone.utc),
+                end_time=datetime(2024, 3, 9, 17, 16, 20 + idx, tzinfo=timezone.utc),
+                description=f"VM {100 + idx} - Start",
+                status="OK",
+                task_state="stopped",
+                exitstatus="OK",
+            )
+
+        cls.create_data = [
+            {
+                "virtual_machine": {"id": cls.virtual_machines[3].pk},
+                "vm_type": "qemu",
+                "upid": "UPID:pve03:3",
+                "node": "pve03",
+                "pid": 2003,
+                "pstart": 3003,
+                "task_id": "103",
+                "task_type": "qmstart",
+                "username": "root@pam",
+                "start_time": datetime(2024, 3, 9, 17, 16, 13, tzinfo=timezone.utc),
+                "end_time": datetime(2024, 3, 9, 17, 16, 23, tzinfo=timezone.utc),
+                "description": "VM 103 - Start",
+                "status": "OK",
+                "task_state": "stopped",
+                "exitstatus": "OK",
+            },
+            {
+                "virtual_machine": {"id": cls.virtual_machines[4].pk},
+                "vm_type": "lxc",
+                "upid": "UPID:pve04:4",
+                "node": "pve04",
+                "pid": 2004,
+                "pstart": 3004,
+                "task_id": "104",
+                "task_type": "vzcreate",
+                "username": "root@pam",
+                "start_time": datetime(2024, 3, 9, 17, 16, 14, tzinfo=timezone.utc),
+                "end_time": datetime(2024, 3, 9, 17, 16, 24, tzinfo=timezone.utc),
+                "description": "CT 104 - Create",
+                "status": "OK",
+                "task_state": "stopped",
+                "exitstatus": "OK",
+            },
+            {
+                "virtual_machine": {"id": cls.virtual_machines[5].pk},
+                "vm_type": "qemu",
+                "upid": "UPID:pve05:5",
+                "node": "pve05",
+                "pid": 2005,
+                "pstart": 3005,
+                "task_id": "105",
+                "task_type": "qmsnapshot",
+                "username": "root@pam",
+                "start_time": datetime(2024, 3, 9, 17, 16, 15, tzinfo=timezone.utc),
+                "end_time": datetime(2024, 3, 9, 17, 16, 25, tzinfo=timezone.utc),
+                "description": "VM 105 - Snapshot",
+                "status": "OK",
+                "task_state": "stopped",
+                "exitstatus": "OK",
             },
         ]
