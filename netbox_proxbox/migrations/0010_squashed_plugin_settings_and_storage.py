@@ -10,6 +10,7 @@ class Migration(migrations.Migration):
     replaces = [
         ("netbox_proxbox", "0010_proxbox_plugin_settings"),
         ("netbox_proxbox", "0011_proxmoxstorage"),
+        ("netbox_proxbox", "0011_alter_vmbackup_storage"),
         ("netbox_proxbox", "0012_proxboxpluginsettings_proxbox_fetch_max_concurrency"),
         ("netbox_proxbox", "0011_storage_relations"),
         ("netbox_proxbox", "0011_storage_relationship_foreignkeys"),
@@ -201,6 +202,11 @@ class Migration(migrations.Migration):
                 related_name="vm_snapshots",
                 to="netbox_proxbox.proxmoxstorage",
             ),
+        ),
+        migrations.AlterField(
+            model_name="vmbackup",
+            name="storage",
+            field=models.CharField(blank=True, max_length=255, null=True),
         ),
         migrations.CreateModel(
             name="VMTaskHistory",
