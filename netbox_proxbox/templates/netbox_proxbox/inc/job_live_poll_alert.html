@@ -19,6 +19,19 @@
       {{ nb_copy_logs_label }}
     </button>
   </div>
+  <div class="nb-job-progress-wrap mt-2 mb-1" style="display:none">
+    <div class="progress" style="height: 1.35rem;" role="progressbar"
+         aria-label="{% trans "Sync progress" %}"
+         aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+      <div
+        id="nb-job-progress-bar-{{ job.pk }}"
+        class="progress-bar bg-info progress-bar-striped progress-bar-animated"
+        style="width: 0%; min-width: 2rem; transition: width 0.6s ease;"
+      >
+        <span class="nb-job-progress-label small fw-semibold text-white"></span>
+      </div>
+    </div>
+  </div>
   <div id="nb-job-live-log-{{ job.pk }}" class="nb-job-live-log mt-2"></div>
 </div>
 <script>
@@ -32,6 +45,7 @@
   var timer = null;
   var logSuffix = " {{ nb_job_log_lines_suffix|escapejs }}";
   var lastEntries = [];
+  var progressBarEl = document.getElementById("nb-job-progress-bar-" + pk);
 
   function jobStatusParts(status) {
     if (status && typeof status === "object") {
@@ -72,9 +86,20 @@
           st.value && st.label && st.label !== st.value ? " (" + st.value + ")" : "";
         statusEl.textContent = " — " + display + detail + " · " + n + logSuffix;
         applyLog(entries);
+        var api = window.NbProxboxJobLogView;
+        if (api && typeof api.applyProgress === "function") {
+          api.applyProgress(progressBarEl, d, entries);
+        }
         if (terminal[st.value]) {
           if (timer) clearInterval(timer);
           timer = null;
+          if (progressBarEl) {
+            progressBarEl.classList.remove("progress-bar-striped", "progress-bar-animated");
+            if (st.value === "errored" || st.value === "failed") {
+              progressBarEl.classList.remove("bg-info", "bg-success");
+              progressBarEl.classList.add("bg-danger");
+            }
+          }
         }
       })
       .catch(function () {});

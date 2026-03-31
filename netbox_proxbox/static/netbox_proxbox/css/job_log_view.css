@@ -83,3 +83,14 @@
 #page-content td .nb-proxbox-inline {
   max-width: 36rem;
 }
+
+/* Label text inside the Proxbox job progress bar */
+.nb-job-progress-label {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: middle;
+  line-height: 1.35rem;
+}
