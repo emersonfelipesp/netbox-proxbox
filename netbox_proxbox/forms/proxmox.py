@@ -45,7 +45,9 @@ class ProxmoxEndpointForm(NetBoxModelForm):
     )
     password = forms.CharField(
         required=False,
-        widget=forms.PasswordInput(render_value=False, attrs={"autocomplete": "new-password"}),
+        widget=forms.PasswordInput(
+            render_value=False, attrs={"autocomplete": "new-password"}
+        ),
         help_text=_(
             "Password for the Proxmox endpoint. Leave blank to keep the current value."
         ),
@@ -53,7 +55,9 @@ class ProxmoxEndpointForm(NetBoxModelForm):
     )
     token_value = forms.CharField(
         required=False,
-        widget=forms.PasswordInput(render_value=False, attrs={"autocomplete": "new-password"}),
+        widget=forms.PasswordInput(
+            render_value=False, attrs={"autocomplete": "new-password"}
+        ),
         help_text=_(
             "Secret value for the Proxmox API token. Leave blank to keep the current value."
         ),
