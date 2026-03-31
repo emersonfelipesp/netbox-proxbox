@@ -186,6 +186,7 @@ def test_settings_page_is_wired_in_urls_navigation_and_template():
     assert 'link="plugins:netbox_proxbox:settings"' in navigation
     assert "Plugin Settings" in template
     assert "use_guest_agent_interface_name" in template
+    assert "proxbox_fetch_max_concurrency" in template
     assert "inc/field.html" not in template
     assert "class SettingsView(" in view
 

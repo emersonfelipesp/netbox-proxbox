@@ -26,6 +26,14 @@ class ProxboxPluginSettings(NetBoxModel):
             "(for example ens18) instead of generic Proxmox labels (for example net0/nic0)."
         ),
     )
+    proxbox_fetch_max_concurrency = models.PositiveSmallIntegerField(
+        default=8,
+        verbose_name=_("Proxmox fetch max concurrency"),
+        help_text=_(
+            "Maximum number of parallel Proxmox fetch operations per sync stage. "
+            "Higher values can speed up multi-cluster discovery but may increase load."
+        ),
+    )
 
     class Meta:
         verbose_name = _("Proxbox plugin settings")
