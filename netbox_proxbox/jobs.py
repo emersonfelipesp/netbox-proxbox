@@ -58,6 +58,16 @@ _ALLOWED_SYNC_SLUGS = frozenset(_SYNC_TYPE_PATH) | {SyncTypeChoices.ALL}
 _STAGE_ORDER_INDEX = {t: i for i, t in enumerate(_SYNC_STAGE_ORDER)}
 
 
+def _use_guest_agent_interface_name_setting() -> bool:
+    """Return current plugin setting for guest-agent VM interface naming."""
+    try:
+        from netbox_proxbox.models import ProxboxPluginSettings
+
+        return bool(ProxboxPluginSettings.get_solo().use_guest_agent_interface_name)
+    except Exception:
+        return True
+
+
 def expanded_sync_stages(types: list[str]) -> list[str]:
     """Turn ``[all]`` into every stage in dependency order; pass through explicit lists."""
     if types == [SyncTypeChoices.ALL]:
@@ -194,6 +204,9 @@ class ProxboxSyncJob(JobRunner):
             self.logger.info("NetBox virtual machines: %s", netbox_vm_ids)
 
         base_query: dict[str, str] = {}
+        base_query["use_guest_agent_interface_name"] = (
+            "true" if _use_guest_agent_interface_name_setting() else "false"
+        )
         if proxmox_endpoint_ids:
             base_query["proxmox_endpoint_ids"] = ",".join(proxmox_endpoint_ids)
         if netbox_endpoint_ids:

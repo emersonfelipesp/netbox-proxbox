@@ -38,6 +38,7 @@ from .endpoints import (
 from .external_pages import DiscordView, DiscussionsView, TelegramView
 from .keepalive_status import get_service_status
 from .schedule_sync import QuickScheduleSyncFromHomeView, ScheduleSyncView
+from .settings import SettingsView
 from .sync import (
     sync_devices,
     sync_full_update,

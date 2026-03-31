@@ -4,5 +4,6 @@ from .fastapi import *
 from .netbox import *
 from .proxmox import *
 from .schedule_sync import *
+from .settings import *
 from .vm_backup import *
 from .vm_snapshot import *
