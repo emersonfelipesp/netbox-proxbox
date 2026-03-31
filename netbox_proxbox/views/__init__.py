@@ -39,9 +39,17 @@ from .external_pages import DiscordView, DiscussionsView, TelegramView
 from .keepalive_status import get_service_status
 from .schedule_sync import QuickScheduleSyncFromHomeView, ScheduleSyncView
 from .settings import SettingsView
+from .storage import (
+    ProxmoxStorageBulkDeleteView,
+    ProxmoxStorageDeleteView,
+    ProxmoxStorageEditView,
+    ProxmoxStorageListView,
+    ProxmoxStorageView,
+)
 from .sync import (
     sync_devices,
     sync_full_update,
+    sync_storage,
     sync_virtual_machines,
     sync_virtual_disks,
     sync_vm_backups,
@@ -223,6 +231,7 @@ class VirtualMachinesView(ConditionalLoginRequiredMixin, View):
                 virtual_machines = list(
                     VirtualMachine.objects.restrict(request.user, "view")
                     .filter(id__in=tagged_vm_ids)
+                    .filter(custom_field_data__proxmox_vm_type="qemu")
                     .select_related("site", "cluster", "role", "tenant", "platform")
                     .prefetch_related("interfaces__ip_addresses")
                 )
@@ -235,6 +244,57 @@ class VirtualMachinesView(ConditionalLoginRequiredMixin, View):
                 "fastapi_url": fastapi_info.get("http_url", ""),
                 "fastapi_websocket_url": fastapi_info.get("websocket_url", ""),
                 "virtual_machines": virtual_machines,
+            },
+        )
+
+
+class LXCContainersView(ConditionalLoginRequiredMixin, View):
+    """List LXC containers tagged ``proxbox`` for quick visibility."""
+
+    template = "netbox_proxbox/lxc_containers.html"
+
+    def get(self, request):
+        """Load tagged LXC containers and FastAPI URL hints for the template."""
+        from django.contrib.contenttypes.models import ContentType
+        from extras.models import Tag, TaggedItem
+        from virtualization.models import VirtualMachine
+
+        from netbox_proxbox.models import FastAPIEndpoint
+
+        plugin_configuration = getattr(configuration, "PLUGINS_CONFIG", {})
+        fastapi_endpoint = FastAPIEndpoint.objects.restrict(
+            request.user, "view"
+        ).first()
+        fastapi_info = {}
+        if fastapi_endpoint:
+            fastapi_info = get_fastapi_url(fastapi_endpoint) or {}
+
+        proxbox_tag = Tag.objects.filter(slug="proxbox").first()
+        lxc_containers = []
+        if proxbox_tag:
+            vm_content_type = ContentType.objects.get_for_model(VirtualMachine)
+            tagged_vm_ids = list(
+                TaggedItem.objects.filter(
+                    tag=proxbox_tag, content_type=vm_content_type
+                ).values_list("object_id", flat=True)[:100]
+            )
+            if tagged_vm_ids:
+                lxc_containers = list(
+                    VirtualMachine.objects.restrict(request.user, "view")
+                    .filter(id__in=tagged_vm_ids)
+                    .filter(custom_field_data__proxmox_vm_type="lxc")
+                    .select_related("site", "cluster", "role", "tenant", "platform")
+                    .prefetch_related("interfaces__ip_addresses")
+                )
+
+        return render(
+            request,
+            self.template,
+            {
+                "configuration": plugin_configuration,
+                "fastapi_url": fastapi_info.get("http_url", ""),
+                "fastapi_websocket_url": fastapi_info.get("websocket_url", ""),
+                "lxc_containers": lxc_containers,
             },
         )
 

@@ -70,6 +70,7 @@ def schedule_hints(monkeypatch):
     choices_mod = types.ModuleType("netbox_proxbox.choices")
     choices_mod.SyncTypeChoices = SimpleNamespace(
         DEVICES="devices",
+        STORAGE="storage",
         VIRTUAL_MACHINES="virtual-machines",
         VIRTUAL_MACHINES_BACKUPS="vm-backups",
         VIRTUAL_MACHINES_DISKS="vm-disks",

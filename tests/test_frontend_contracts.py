@@ -198,3 +198,23 @@ def test_proxmox_list_template_exposes_import_export_controls_and_warning_modal(
         in contents
     )
     assert 'name="netbox_token"' in contents
+
+
+def test_lxc_and_storage_pages_are_wired_in_urls_navigation_and_templates():
+    urls = _read("netbox_proxbox/urls.py")
+    navigation = _read("netbox_proxbox/navigation.py")
+    lxc_template = _read("netbox_proxbox/templates/netbox_proxbox/lxc_containers.html")
+    storage_template = _read(
+        "netbox_proxbox/templates/netbox_proxbox/storage_list.html"
+    )
+    views_module = _read("netbox_proxbox/views/__init__.py")
+    sync_view = _read("netbox_proxbox/views/sync.py")
+
+    assert 'name="lxc_containers"' in urls
+    assert 'path("sync/storage/", views.sync_storage, name="sync_storage")' in urls
+    assert 'link="plugins:netbox_proxbox:lxc_containers"' in navigation
+    assert 'link="plugins:netbox_proxbox:proxmoxstorage_list"' in navigation
+    assert "Sync LXC Containers" in lxc_template
+    assert "sync_storage" in storage_template
+    assert "class LXCContainersView(" in views_module
+    assert "class SyncStorageView(" in sync_view

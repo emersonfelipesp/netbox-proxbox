@@ -76,6 +76,13 @@ class SyncVirtualMachinesView(_ProxboxSyncEnqueueView):
     action_label = _("Virtual machines")
 
 
+class SyncStorageView(_ProxboxSyncEnqueueView):
+    """POST: queue storage sync."""
+
+    sync_types = [SyncTypeChoices.STORAGE]
+    action_label = _("Storage")
+
+
 class SyncFullUpdateView(_ProxboxSyncEnqueueView):
     """POST: queue full multi-stage sync."""
 
@@ -105,6 +112,7 @@ class SyncVmSnapshotsView(_ProxboxSyncEnqueueView):
 
 
 sync_devices = SyncDevicesView.as_view()
+sync_storage = SyncStorageView.as_view()
 sync_virtual_machines = SyncVirtualMachinesView.as_view()
 sync_full_update = SyncFullUpdateView.as_view()
 sync_vm_backups = SyncVmBackupsView.as_view()

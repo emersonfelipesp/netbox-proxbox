@@ -18,6 +18,16 @@ virtual_machines_item = PluginMenuItem(
     link_text="Virtual Machines",
 )
 
+lxc_containers_item = PluginMenuItem(
+    link="plugins:netbox_proxbox:lxc_containers",
+    link_text="LXC Containers",
+)
+
+storage_item = PluginMenuItem(
+    link="plugins:netbox_proxbox:proxmoxstorage_list",
+    link_text="Storage",
+)
+
 schedule_sync_item = PluginMenuItem(
     link="plugins:netbox_proxbox:schedule_sync",
     link_text="Schedule Sync",
@@ -127,6 +137,8 @@ menu = PluginMenu(
                 fullupdate_item,
                 nodes_item,
                 virtual_machines_item,
+                lxc_containers_item,
+                storage_item,
                 backups_item,
                 snapshots_item,
                 schedule_sync_item,
