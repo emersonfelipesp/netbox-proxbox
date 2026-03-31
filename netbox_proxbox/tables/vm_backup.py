@@ -17,6 +17,7 @@ class VMBackupTable(NetBoxTable):
 
     storage = tables.Column(linkify=True)
     virtual_machine = tables.Column(linkify=True)
+    proxmox_storage = tables.Column(linkify=True)
     subtype = ChoiceFieldColumn(
         verbose_name=_("Subtype"),
     )
@@ -47,6 +48,7 @@ class VMBackupTable(NetBoxTable):
         fields = (
             "pk",
             "id",
+            "proxmox_storage",
             "vmid",
             "storage",
             "virtual_machine",
@@ -64,6 +66,7 @@ class VMBackupTable(NetBoxTable):
 
         default_columns = (
             "pk",
+            "proxmox_storage",
             "storage",
             "id",
             "virtual_machine",

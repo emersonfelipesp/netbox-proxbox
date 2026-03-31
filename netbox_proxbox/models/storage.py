@@ -6,6 +6,24 @@ from django.urls import reverse
 from netbox.models import NetBoxModel
 
 
+class ProxmoxStorageVirtualDisk(models.Model):
+    """Link a NetBox VirtualDisk to a ProxmoxStorage row."""
+
+    proxmox_storage = models.ForeignKey(
+        to="netbox_proxbox.ProxmoxStorage",
+        on_delete=models.CASCADE,
+        related_name="virtual_disk_links",
+    )
+    virtual_disk = models.ForeignKey(
+        to="virtualization.VirtualDisk",
+        on_delete=models.CASCADE,
+        related_name="proxmox_storage_links",
+    )
+
+    class Meta:
+        unique_together = ("proxmox_storage", "virtual_disk")
+
+
 class ProxmoxStorage(NetBoxModel):
     """Storage definition synced from Proxmox clusters."""
 
@@ -17,6 +35,12 @@ class ProxmoxStorage(NetBoxModel):
     nodes = models.CharField(max_length=255, null=True, blank=True)
     shared = models.BooleanField(default=False)
     enabled = models.BooleanField(default=True)
+    virtual_disks = models.ManyToManyField(
+        to="virtualization.VirtualDisk",
+        related_name="proxmox_storages",
+        blank=True,
+        through="netbox_proxbox.ProxmoxStorageVirtualDisk",
+    )
 
     class Meta:
         ordering = ("cluster", "name")

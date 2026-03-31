@@ -69,7 +69,7 @@ class VMBackupFilterSet(NetBoxModelFilterSet):
         model = VMBackup
         fields = (
             "id",
-            "storage",
+            "proxmox_storage",
             "virtual_machine",
             "subtype",
             "format",
@@ -87,8 +87,8 @@ class VMBackupFilterSet(NetBoxModelFilterSet):
             return queryset
         return queryset.filter(
             Q(virtual_machine__name__icontains=value)
-            | Q(storage__name__icontains=value)
-            | Q(storage__cluster__icontains=value)
+            | Q(proxmox_storage__name__icontains=value)
+            | Q(storage__icontains=value)
             | Q(volume_id__icontains=value)
         )
 
@@ -101,7 +101,7 @@ class VMSnapshotFilterSet(NetBoxModelFilterSet):
         model = VMSnapshot
         fields = (
             "id",
-            "storage",
+            "proxmox_storage",
             "virtual_machine",
             "subtype",
             "status",
@@ -118,7 +118,7 @@ class VMSnapshotFilterSet(NetBoxModelFilterSet):
             return queryset
         return queryset.filter(
             Q(virtual_machine__name__icontains=value)
-            | Q(storage__name__icontains=value)
+            | Q(proxmox_storage__name__icontains=value)
             | Q(name__icontains=value)
             | Q(node__icontains=value)
             | Q(description__icontains=value)

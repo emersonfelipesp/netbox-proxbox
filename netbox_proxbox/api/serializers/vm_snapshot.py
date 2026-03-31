@@ -7,6 +7,7 @@ from netbox.api.serializers import NetBoxModelSerializer
 from rest_framework import serializers
 from virtualization.api.serializers_.nested import NestedVirtualMachineSerializer
 
+from netbox_proxbox.api.serializers.storage import NestedProxmoxStorageSerializer
 from netbox_proxbox.choices import (
     ProxmoxSnapshotStatusChoices,
     ProxmoxSnapshotSubtypeChoices,
@@ -20,6 +21,7 @@ class VMSnapshotSerializer(NetBoxModelSerializer):
     url = serializers.HyperlinkedIdentityField(
         view_name="plugins-api:netbox_proxbox-api:vmsnapshot-detail",
     )
+    proxmox_storage = NestedProxmoxStorageSerializer(required=False, allow_null=True)
     virtual_machine = NestedVirtualMachineSerializer()
     subtype = ChoiceField(choices=ProxmoxSnapshotSubtypeChoices)
     status = ChoiceField(choices=ProxmoxSnapshotStatusChoices)
@@ -30,6 +32,7 @@ class VMSnapshotSerializer(NetBoxModelSerializer):
             "id",
             "url",
             "display",
+            "proxmox_storage",
             "virtual_machine",
             "storage",
             "name",
@@ -49,8 +52,8 @@ class VMSnapshotSerializer(NetBoxModelSerializer):
             "id",
             "url",
             "display",
+            "proxmox_storage",
             "name",
             "virtual_machine",
-            "storage",
             "status",
         )

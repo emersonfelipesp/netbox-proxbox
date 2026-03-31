@@ -13,6 +13,7 @@ class VMSnapshotTable(NetBoxTable):
 
     storage = tables.Column(linkify=True)
     virtual_machine = tables.Column(linkify=True)
+    proxmox_storage = tables.Column(linkify=True)
     subtype = ChoiceFieldColumn(
         verbose_name=_("Subtype"),
     )
@@ -28,6 +29,7 @@ class VMSnapshotTable(NetBoxTable):
         fields = (
             "pk",
             "id",
+            "proxmox_storage",
             "name",
             "storage",
             "virtual_machine",
@@ -42,6 +44,7 @@ class VMSnapshotTable(NetBoxTable):
 
         default_columns = (
             "pk",
+            "proxmox_storage",
             "name",
             "storage",
             "virtual_machine",

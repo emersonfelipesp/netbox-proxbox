@@ -24,6 +24,7 @@ class VMBackupForm(NetBoxModelForm):
     class Meta:
         model = VMBackup
         fields = (
+            "proxmox_storage",
             "storage",
             "virtual_machine",
             "subtype",
@@ -43,18 +44,17 @@ class VMBackupForm(NetBoxModelForm):
 
     comments = CommentField()
 
-    storage = DynamicModelChoiceField(
-        queryset=ProxmoxStorage.objects.all(),
-        required=False,
-        help_text="Select a Storage",
-        label="Storage",
-    )
-
     virtual_machine = DynamicModelChoiceField(
         queryset=VirtualMachine.objects.all(),
         required=True,
         help_text="Select a Virtual Machine",
         label="Virtual Machine",
+    )
+    proxmox_storage = DynamicModelChoiceField(
+        queryset=ProxmoxStorage.objects.all(),
+        required=False,
+        help_text="Select related Proxmox storage object.",
+        label="Proxmox Storage",
     )
 
     subtype = forms.ChoiceField(
@@ -79,7 +79,7 @@ class VMBackupFilterForm(NetBoxModelFilterSetForm):
 
     model = VMBackup
 
-    storage = forms.ModelMultipleChoiceField(
+    proxmox_storage = forms.ModelMultipleChoiceField(
         queryset=ProxmoxStorage.objects.all(),
         required=False,
     )

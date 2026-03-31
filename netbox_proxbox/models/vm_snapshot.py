@@ -15,13 +15,13 @@ from netbox_proxbox.choices import (
 class VMSnapshot(NetBoxModel):
     """Proxmox snapshot row linked to a NetBox ``VirtualMachine``."""
 
-    storage = models.ForeignKey(
+    proxmox_storage = models.ForeignKey(
         to="netbox_proxbox.ProxmoxStorage",
         on_delete=models.SET_NULL,
+        related_name="vm_snapshots",
         null=True,
         blank=True,
-        related_name="storage_snapshots",
-        help_text=_("Storage associated with the snapshot."),
+        help_text=_("Related Proxmox storage object."),
     )
 
     virtual_machine = models.ForeignKey(
