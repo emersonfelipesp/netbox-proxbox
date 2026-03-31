@@ -192,6 +192,131 @@
     return container;
   }
 
+  // --- Stage progress parsing ---
+
+  var ALL_STAGES = [
+    "devices",
+    "storage",
+    "virtual-machines",
+    "vm-disks",
+    "vm-backups",
+    "vm-snapshots"
+  ];
+
+  function resolveSyncTypes(apiData, entries) {
+    var block = apiData && typeof apiData === "object" ? apiData.proxbox_sync : null;
+    var params = block && typeof block === "object" ? block.params : null;
+    var rawTypes = params && Array.isArray(params.sync_types) ? params.sync_types : null;
+
+    if (rawTypes && rawTypes.length > 0) {
+      if (rawTypes.length === 1 && rawTypes[0] === "all") {
+        return ALL_STAGES.slice();
+      }
+      return rawTypes.slice();
+    }
+
+    // Fallback: scan log entries for the "Starting Proxbox sync stages: …" line
+    var RE_STAGES = /^Starting Proxbox sync stages:\s*(.+)$/;
+    if (Array.isArray(entries)) {
+      for (var i = 0; i < entries.length; i++) {
+        var e = entries[i];
+        if (!e || typeof e !== "object") continue;
+        var msg = e.message != null ? String(e.message) : "";
+        var m = msg.match(RE_STAGES);
+        if (m) {
+          var stages = [];
+          var parts = m[1].split(",");
+          for (var j = 0; j < parts.length; j++) {
+            var s = parts[j].trim();
+            if (s) stages.push(s);
+          }
+          if (stages.length > 0) return stages;
+        }
+      }
+    }
+    return [];
+  }
+
+  function parseJobProgress(entries, syncTypes) {
+    var total = Array.isArray(syncTypes) ? syncTypes.length : 0;
+    if (total === 0) {
+      return { completed: 0, total: 0, currentStage: null, percent: 0, done: false };
+    }
+    if (!Array.isArray(entries)) {
+      return { completed: 0, total: total, currentStage: null, percent: 0, done: false };
+    }
+
+    var RE_STARTING  = /^Starting stage:\s*(\S+)\s+\(/;
+    var RE_COMPLETED = /^Stage completed:\s*(\S+)\s+\(HTTP/;
+    var RE_ALL_DONE  = /^All sync stages completed\s*\(/;
+
+    var completed = 0;
+    var currentStage = null;
+    var done = false;
+
+    for (var i = 0; i < entries.length; i++) {
+      var e = entries[i];
+      if (!e || typeof e !== "object") continue;
+      var msg = e.message != null ? String(e.message) : "";
+
+      if (RE_ALL_DONE.test(msg)) {
+        done = true;
+        completed = total;
+        currentStage = null;
+        break;
+      }
+      var mC = msg.match(RE_COMPLETED);
+      if (mC) { completed++; currentStage = null; continue; }
+      var mS = msg.match(RE_STARTING);
+      if (mS) { currentStage = mS[1]; continue; }
+    }
+
+    var percent = total > 0 ? Math.min(100, Math.round((completed / total) * 100)) : 0;
+    if (done) percent = 100;
+
+    return { completed: completed, total: total, currentStage: currentStage, percent: percent, done: done };
+  }
+
+  function applyProgress(barEl, d, entries) {
+    if (!barEl) return;
+    var apiData = d && typeof d === "object" && d.data ? d.data : null;
+    var syncTypes = resolveSyncTypes(apiData, entries);
+    var prog = parseJobProgress(entries, syncTypes);
+
+    var wrapper = barEl.parentElement;
+    while (wrapper && !wrapper.classList.contains("nb-job-progress-wrap")) {
+      wrapper = wrapper.parentElement;
+    }
+
+    if (prog.total === 0) {
+      if (wrapper) wrapper.style.display = "none";
+      return;
+    }
+    if (wrapper && wrapper.style.display === "none") wrapper.style.display = "";
+
+    barEl.style.width = prog.percent + "%";
+    barEl.setAttribute("aria-valuenow", String(prog.percent));
+    var outer = barEl.parentElement;
+    if (outer) outer.setAttribute("aria-valuenow", String(prog.percent));
+
+    var label = barEl.querySelector(".nb-job-progress-label");
+    if (label) {
+      label.textContent = prog.done
+        ? "Done"
+        : prog.currentStage
+          ? prog.currentStage + " (" + prog.completed + "/" + prog.total + ")"
+          : prog.completed + "/" + prog.total;
+    }
+
+    if (prog.done) {
+      barEl.classList.remove("progress-bar-striped", "progress-bar-animated", "bg-info");
+      barEl.classList.add("bg-success");
+    } else {
+      barEl.classList.remove("bg-success");
+      barEl.classList.add("bg-info", "progress-bar-striped", "progress-bar-animated");
+    }
+  }
+
   function renderLiveLog(container, entries) {
     if (!container) return;
     container.replaceChildren();
@@ -314,6 +439,8 @@
     renderMessageContent: renderMessageContent,
     enhanceJobLogTable: enhanceJobLogTable,
     formatLogEntriesForClipboard: formatLogEntriesForClipboard,
+    parseJobProgress: parseJobProgress,
+    applyProgress: applyProgress,
   };
 
   if (document.readyState === "loading") {
