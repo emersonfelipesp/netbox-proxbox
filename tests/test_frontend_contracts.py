@@ -128,6 +128,25 @@ def test_vm_sync_now_view_contract():
     assert "netbox_vm_ids=[str(vm.pk)]" in contents
 
 
+def test_vm_proxmox_config_tab_contract():
+    view_contents = _read("netbox_proxbox/views/vm_config.py")
+    template_contents = _read(
+        "netbox_proxbox/templates/netbox_proxbox/vm_proxmox_config.html"
+    )
+    exports_contents = _read("netbox_proxbox/views/__init__.py")
+
+    assert '@register_model_view(VirtualMachine, "proxmox_config", path="proxmox-config")' in view_contents
+    assert "label=\"Proxmox Config\"" in view_contents
+    assert "/proxmox/{node}/{vm_type}/{vmid}/config" in view_contents
+    assert "/proxmox/nodes/{node}/qemu/{vmid}/firewall" in view_contents
+    assert "class _LiveVMConfig(BaseModel)" in view_contents
+    assert "from pydantic import BaseModel, ConfigDict, ValidationError" in view_contents
+    assert "from .vm_config import ProxmoxVMConfigTabView" in exports_contents
+    assert "Proxmox VM Config" in template_contents
+    assert "QEMU Firewall (Raw)" in template_contents
+    assert "Disk Devices" in template_contents
+
+
 def test_common_badge_state_supports_hover_tooltip_details():
     contents = _read("netbox_proxbox/static/netbox_proxbox/js/common.js")
     assert 'element.dataset.bsToggle = "tooltip"' in contents
