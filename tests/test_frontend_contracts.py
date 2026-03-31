@@ -215,6 +215,9 @@ def test_lxc_and_storage_pages_are_wired_in_urls_navigation_and_templates():
     storage_template = _read(
         "netbox_proxbox/templates/netbox_proxbox/storage_list.html"
     )
+    storage_detail_template = _read(
+        "netbox_proxbox/templates/netbox_proxbox/proxmoxstorage.html"
+    )
     views_module = _read("netbox_proxbox/views/__init__.py")
     sync_view = _read("netbox_proxbox/views/sync.py")
 
@@ -224,5 +227,39 @@ def test_lxc_and_storage_pages_are_wired_in_urls_navigation_and_templates():
     assert 'link="plugins:netbox_proxbox:proxmoxstorage_list"' in navigation
     assert "Sync LXC Containers" in lxc_template
     assert "sync_storage" in storage_template
+    assert "Storage Summary" in storage_detail_template
+    assert "Related Virtual Disks" in storage_detail_template
+    assert "Related Backups" in storage_detail_template
+    assert "Related Snapshots" in storage_detail_template
     assert "class LXCContainersView(" in views_module
     assert "class SyncStorageView(" in sync_view
+
+
+def test_storage_and_snapshot_detail_pages_expose_storage_relationships():
+    storage_detail = _read("netbox_proxbox/templates/netbox_proxbox/proxmoxstorage.html")
+    vmbackup_detail = _read("netbox_proxbox/templates/netbox_proxbox/vmbackup.html")
+    vmsnapshot_detail = _read("netbox_proxbox/templates/netbox_proxbox/vmsnapshot.html")
+    storage_view = _read("netbox_proxbox/views/storage.py")
+
+    assert "storage_summary" in storage_view
+    assert "VirtualDisk.objects.restrict" in storage_view
+    assert "filter(storage=storage)" in storage_view
+    assert "object.storage|hyperlinked_object" in vmbackup_detail
+    assert "object.storage|hyperlinked_object" in vmsnapshot_detail
+    assert "Related Snapshots" in storage_detail
+
+
+def test_task_history_tab_and_detail_page_are_wired_in_urls_views_and_template():
+    urls = _read("netbox_proxbox/urls.py")
+    views_module = _read("netbox_proxbox/views/__init__.py")
+    task_history_view = _read("netbox_proxbox/views/vm_task_history.py")
+    task_history_template = _read("netbox_proxbox/templates/netbox_proxbox/vmtaskhistory.html")
+
+    assert 'task-history/<int:pk>' in urls
+    assert "class VMTaskHistoryView(" in task_history_view
+    assert "class VMTaskHistoryTabView(" in task_history_view
+    assert "Task History" in task_history_view
+    assert "Task History" in views_module
+    assert "VM Task History" in task_history_template
+    assert "Start Time" in task_history_template
+    assert "Exit Status" in task_history_template

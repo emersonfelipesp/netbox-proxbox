@@ -17,6 +17,7 @@ from .serializers import (
     ProxmoxEndpointSerializer,
     VMBackupSerializer,
     VMSnapshotSerializer,
+    VMTaskHistorySerializer,
 )
 
 
@@ -57,6 +58,15 @@ class VMSnapshotViewSet(NetBoxModelViewSet):
     queryset = models.VMSnapshot.objects.all()
     serializer_class = VMSnapshotSerializer
     filterset_class = filtersets.VMSnapshotFilterSet
+
+
+class VMTaskHistoryViewSet(NetBoxModelViewSet):
+    """REST API for VM task history rows synced from Proxmox."""
+
+    http_method_names = ["get", "post", "patch", "head", "options"]
+    queryset = models.VMTaskHistory.objects.select_related("virtual_machine")
+    serializer_class = VMTaskHistorySerializer
+    filterset_class = filtersets.VMTaskHistoryFilterSet
 
 
 class ProxmoxStorageViewSet(NetBoxModelViewSet):

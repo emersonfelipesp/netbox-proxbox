@@ -71,6 +71,11 @@ from .vm_snapshot import (
     VMSnapshotTabView,
     VMSnapshotView,
 )
+from .vm_task_history import (
+    VMTaskHistoryTabView,
+    VMTaskHistoryView,
+)
+# Task History tab and detail views live in ``vm_task_history``.
 from .vm_sync_now import VirtualMachineSyncNowView
 
 

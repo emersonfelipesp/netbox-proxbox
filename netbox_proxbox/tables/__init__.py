@@ -18,6 +18,7 @@ from netbox_proxbox.models import (
 from netbox_proxbox.tables.storage import ProxmoxStorageTable
 from netbox_proxbox.tables.vm_backup import VMBackupTable
 from netbox_proxbox.tables.vm_snapshot import VMSnapshotTable
+from netbox_proxbox.tables.vm_task_history import VMTaskHistoryTable
 
 
 STATUS_BADGE_TEMPLATE = """

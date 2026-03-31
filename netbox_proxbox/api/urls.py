@@ -27,6 +27,7 @@ router.APIRootView = views.ProxBoxRootView
 router.register("storage", views.ProxmoxStorageViewSet, basename="storage")
 router.register("backups", views.VMBackupViewSet)
 router.register("snapshots", views.VMSnapshotViewSet)
+router.register("task-history", views.VMTaskHistoryViewSet)
 
 urlpatterns = [
     path(

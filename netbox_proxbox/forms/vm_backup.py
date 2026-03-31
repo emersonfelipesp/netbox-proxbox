@@ -9,7 +9,7 @@ from netbox.forms import NetBoxModelForm, NetBoxModelFilterSetForm
 from virtualization.models import VirtualMachine
 
 # Proxbox Imports
-from netbox_proxbox.models import VMBackup
+from netbox_proxbox.models import ProxmoxStorage, VMBackup
 from netbox_proxbox.choices import (
     ProxmoxBackupSubtypeChoices,
     ProxmoxBackupFormatChoices,
@@ -43,6 +43,13 @@ class VMBackupForm(NetBoxModelForm):
 
     comments = CommentField()
 
+    storage = DynamicModelChoiceField(
+        queryset=ProxmoxStorage.objects.all(),
+        required=False,
+        help_text="Select a Storage",
+        label="Storage",
+    )
+
     virtual_machine = DynamicModelChoiceField(
         queryset=VirtualMachine.objects.all(),
         required=True,
@@ -71,6 +78,11 @@ class VMBackupFilterForm(NetBoxModelFilterSetForm):
     """
 
     model = VMBackup
+
+    storage = forms.ModelMultipleChoiceField(
+        queryset=ProxmoxStorage.objects.all(),
+        required=False,
+    )
 
     virtual_machine = forms.ModelMultipleChoiceField(
         queryset=VirtualMachine.objects.all(),

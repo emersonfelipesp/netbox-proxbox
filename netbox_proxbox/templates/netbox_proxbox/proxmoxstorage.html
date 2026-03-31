@@ -1,0 +1,187 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load humanize %}
+{% load i18n %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-lg-6">
+        <div class="card mb-3">
+            <h5 class="card-header">{% trans "Proxmox Storage" %}</h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
+                    <tr>
+                        <th scope="row">{% trans "Cluster" %}</th>
+                        <td>{{ object.cluster }}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">{% trans "Name" %}</th>
+                        <td>{{ object.name }}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">{% trans "Storage Type" %}</th>
+                        <td>{{ object.storage_type|placeholder }}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">{% trans "Content" %}</th>
+                        <td>{{ object.content|placeholder }}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">{% trans "Path" %}</th>
+                        <td>{{ object.path|placeholder }}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">{% trans "Nodes" %}</th>
+                        <td>{{ object.nodes|placeholder }}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">{% trans "Shared" %}</th>
+                        <td>{{ object.shared|yesno:"Yes,No" }}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">{% trans "Enabled" %}</th>
+                        <td>{{ object.enabled|yesno:"Yes,No" }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <h5 class="card-header">{% trans "Storage Summary" %}</h5>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-sm-4">
+                        <div class="border rounded p-3 h-100">
+                            <div class="text-muted small">{% trans "Virtual Disks" %}</div>
+                            <div class="fw-semibold">{{ storage_summary.virtual_disks_count|default:0 }}</div>
+                            <div class="text-muted small">{{ storage_summary.virtual_disks_size|default:0|filesizeformat }}</div>
+                        </div>
+                    </div>
+                    <div class="col-sm-4">
+                        <div class="border rounded p-3 h-100">
+                            <div class="text-muted small">{% trans "Backups" %}</div>
+                            <div class="fw-semibold">{{ storage_summary.backups_count|default:0 }}</div>
+                            <div class="text-muted small">{{ storage_summary.backups_size|default:0|filesizeformat }}</div>
+                        </div>
+                    </div>
+                    <div class="col-sm-4">
+                        <div class="border rounded p-3 h-100">
+                            <div class="text-muted small">{% trans "Snapshots" %}</div>
+                            <div class="fw-semibold">{{ storage_summary.snapshots_count|default:0 }}</div>
+                            <div class="text-muted small">{% trans "Linked to this storage" %}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <h5 class="card-header">{% trans "Related Virtual Disks" %}</h5>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th>{% trans "Virtual Machine" %}</th>
+                                <th>{% trans "Name" %}</th>
+                                <th>{% trans "Description" %}</th>
+                                <th class="text-end">{% trans "Size" %}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for disk in virtual_disks %}
+                                <tr>
+                                    <td>{{ disk.virtual_machine|hyperlinked_object }}</td>
+                                    <td>{{ disk|hyperlinked_object }}</td>
+                                    <td>{{ disk.description|placeholder }}</td>
+                                    <td class="text-end">{{ disk.size|default:0|filesizeformat }}</td>
+                                </tr>
+                            {% empty %}
+                                <tr>
+                                    <td colspan="4" class="text-center text-muted p-4">
+                                        {% trans "No related virtual disks were found for this storage." %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card mb-3">
+            <h5 class="card-header">{% trans "Related Backups" %}</h5>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th>{% trans "Virtual Machine" %}</th>
+                                <th>{% trans "Creation Time" %}</th>
+                                <th>{% trans "Volume ID" %}</th>
+                                <th class="text-end">{% trans "Size" %}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for backup in backups %}
+                                <tr>
+                                    <td>{{ backup.virtual_machine|hyperlinked_object }}</td>
+                                    <td>{{ backup.creation_time|placeholder }}</td>
+                                    <td>{{ backup.volume_id|placeholder }}</td>
+                                    <td class="text-end">{{ backup.size|default:0|filesizeformat }}</td>
+                                </tr>
+                            {% empty %}
+                                <tr>
+                                    <td colspan="4" class="text-center text-muted p-4">
+                                        {% trans "No related backups were found for this storage." %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <h5 class="card-header">{% trans "Related Snapshots" %}</h5>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th>{% trans "Virtual Machine" %}</th>
+                                <th>{% trans "Name" %}</th>
+                                <th>{% trans "Node" %}</th>
+                                <th>{% trans "Snapshot Time" %}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for snapshot in snapshots %}
+                                <tr>
+                                    <td>{{ snapshot.virtual_machine|hyperlinked_object }}</td>
+                                    <td>{{ snapshot|hyperlinked_object }}</td>
+                                    <td>{{ snapshot.node }}</td>
+                                    <td>{{ snapshot.snaptime|placeholder }}</td>
+                                </tr>
+                            {% empty %}
+                                <tr>
+                                    <td colspan="4" class="text-center text-muted p-4">
+                                        {% trans "No related snapshots were found for this storage." %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        {% include 'inc/panels/tags.html' %}
+        {% include 'inc/panels/custom_fields.html' %}
+        {% include 'inc/panels/comments.html' %}
+    </div>
+</div>
+{% endblock %}
