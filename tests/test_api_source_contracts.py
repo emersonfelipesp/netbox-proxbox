@@ -154,7 +154,6 @@ def test_endpoint_serializers_expose_supported_model_fields():
             "display",
             "proxmox_storage",
             "virtual_machine",
-            "storage",
             "name",
             "description",
             "vmid",

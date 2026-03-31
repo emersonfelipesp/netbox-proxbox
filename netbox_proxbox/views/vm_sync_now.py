@@ -47,6 +47,8 @@ class VirtualMachineSyncNowView(
             sync_types=[
                 SyncTypeChoices.VIRTUAL_MACHINES,
                 SyncTypeChoices.VIRTUAL_MACHINES_DISKS,
+                SyncTypeChoices.VIRTUAL_MACHINES_BACKUPS,
+                SyncTypeChoices.VIRTUAL_MACHINES_SNAPSHOTS,
             ],
             netbox_vm_ids=[str(vm.pk)],
         )

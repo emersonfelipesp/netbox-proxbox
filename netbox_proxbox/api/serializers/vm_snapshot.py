@@ -34,7 +34,6 @@ class VMSnapshotSerializer(NetBoxModelSerializer):
             "display",
             "proxmox_storage",
             "virtual_machine",
-            "storage",
             "name",
             "description",
             "vmid",
