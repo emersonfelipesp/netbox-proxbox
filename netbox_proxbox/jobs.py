@@ -70,6 +70,17 @@ def _use_guest_agent_interface_name_setting() -> bool:
         return True
 
 
+def _proxbox_fetch_max_concurrency_setting() -> int:
+    """Return fetch concurrency setting for proxbox-api data collection."""
+    try:
+        from netbox_proxbox.models import ProxboxPluginSettings
+
+        value = int(ProxboxPluginSettings.get_solo().proxbox_fetch_max_concurrency)
+        return max(1, value)
+    except Exception:
+        return 8
+
+
 def expanded_sync_stages(types: list[str]) -> list[str]:
     """Turn ``[all]`` into every stage in dependency order; pass through explicit lists."""
     if types == [SyncTypeChoices.ALL]:
@@ -209,6 +220,7 @@ class ProxboxSyncJob(JobRunner):
         base_query["use_guest_agent_interface_name"] = (
             "true" if _use_guest_agent_interface_name_setting() else "false"
         )
+        base_query["fetch_max_concurrency"] = str(_proxbox_fetch_max_concurrency_setting())
         if proxmox_endpoint_ids:
             base_query["proxmox_endpoint_ids"] = ",".join(proxmox_endpoint_ids)
         if netbox_endpoint_ids:
