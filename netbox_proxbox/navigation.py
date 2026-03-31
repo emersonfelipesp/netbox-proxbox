@@ -65,6 +65,11 @@ snapshots_item = PluginMenuItem(
     link_text="Snapshots",
 )
 
+task_history_item = PluginMenuItem(
+    link="plugins:netbox_proxbox:vmtaskhistory_list",
+    link_text="Task History",
+)
+
 contributing_item = PluginMenuItem(
     link="plugins:netbox_proxbox:contributing",
     link_text="Contributing!",
@@ -147,6 +152,7 @@ menu = PluginMenu(
                 storage_item,
                 backups_item,
                 snapshots_item,
+                task_history_item,
                 schedule_sync_item,
                 sync_jobs_item,
                 settings_item,

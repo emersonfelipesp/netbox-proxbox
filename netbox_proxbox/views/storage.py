@@ -6,6 +6,7 @@ from collections.abc import Iterable
 from typing import Any
 
 import requests
+from django.db import ProgrammingError
 from netbox.views import generic
 from utilities.views import register_model_view
 
@@ -146,14 +147,23 @@ class ProxmoxStorageView(generic.ObjectView):
             .select_related("virtual_machine", "proxmox_storage")
             .order_by("-snaptime", "virtual_machine__name")
         )
-        disk_qs = instance.virtual_disks.all()
-        if hasattr(disk_qs, "restrict"):
-            disk_qs = disk_qs.restrict(request.user, "view")
-        virtual_disks = list(
-            disk_qs.select_related("virtual_machine").order_by(
-                "virtual_machine__name", "name"
+        disk_relation_warning = None
+        try:
+            disk_qs = instance.virtual_disks.all()
+            if hasattr(disk_qs, "restrict"):
+                disk_qs = disk_qs.restrict(request.user, "view")
+            virtual_disks = list(
+                disk_qs.select_related("virtual_machine").order_by(
+                    "virtual_machine__name", "name"
+                )
             )
-        )
+        except ProgrammingError:
+            # Keep page usable if the through-table migration is missing.
+            virtual_disks = []
+            disk_relation_warning = (
+                "Virtual disk mapping table is unavailable. "
+                "Run NetBox migrations to enable storage-to-disk relationships."
+            )
 
         usage = None
         usage_detail = None
@@ -219,6 +229,7 @@ class ProxmoxStorageView(generic.ObjectView):
             "vm_backups": vm_backups,
             "vm_snapshots": vm_snapshots,
             "virtual_disks": virtual_disks,
+            "disk_relation_warning": disk_relation_warning,
             "storage_usage": usage,
             "storage_usage_detail": usage_detail,
             "storage_content_count": len(content_records),

@@ -1,0 +1,123 @@
+{% extends 'generic/object.html' %}
+{% load i18n %}
+{% load helpers %}
+
+{% block content %}
+  <div class="row mb-3">
+    <div class="col col-md-6">
+      <div class="card">
+        <h5 class="card-header">
+          {% trans "Proxmox Cluster Summary" %}
+        </h5>
+        <div class="card-body">
+          <table class="table table-hover attr-table">
+            <tr>
+              <th scope="row">{% trans "Cluster Name" %}</th>
+              <td>{{ object.name }}</td>
+            </tr>
+            <tr>
+              <th scope="row">{% trans "Proxmox Endpoint" %}</th>
+              <td>
+                {% if proxmox_endpoint %}
+                  <a href="{{ proxmox_endpoint.get_absolute_url }}">{{ proxmox_endpoint }}</a>
+                {% else %}
+                  <span class="text-muted">{% trans "Not configured" %}</span>
+                {% endif %}
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">{% trans "Storage Count" %}</th>
+              <td>
+                {% if storage_count %}
+                  <a href="{% url 'plugins:netbox_proxbox:cluster_proxbox-storages' pk=object.pk %}">
+                    {{ storage_count }}
+                  </a>
+                {% else %}
+                  0
+                {% endif %}
+              </td>
+            </tr>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="col col-md-6">
+      <div class="card">
+        <h5 class="card-header">
+          {% trans "Quick Actions" %}
+        </h5>
+        <div class="card-body">
+          <div class="d-grid gap-2">
+            <a href="{% url 'plugins:netbox_proxbox:cluster_proxbox-storages' pk=object.pk %}" class="btn btn-outline-primary">
+              <i class="mdi mdi-harddisk" aria-hidden="true"></i> {% trans "View Storages" %}
+            </a>
+            {% if proxmox_endpoint %}
+              <a href="{{ proxmox_endpoint.get_absolute_url }}" class="btn btn-outline-secondary">
+                <i class="mdi mdi-server" aria-hidden="true"></i> {% trans "View Proxmox Endpoint" %}
+              </a>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% if storages %}
+    <div class="row">
+      <div class="col col-md-12">
+        <div class="card">
+          <h5 class="card-header">
+            {% trans "Recent Storages" %}
+            <div class="card-actions">
+              <a href="{% url 'plugins:netbox_proxbox:cluster_proxbox-storages' pk=object.pk %}" class="btn btn-sm btn-primary">
+                {% trans "View All" %}
+              </a>
+            </div>
+          </h5>
+          <div class="card-body">
+            <table class="table table-hover">
+              <thead>
+                <tr>
+                  <th>{% trans "Name" %}</th>
+                  <th>{% trans "Type" %}</th>
+                  <th>{% trans "Content" %}</th>
+                  <th>{% trans "Path" %}</th>
+                  <th>{% trans "Nodes" %}</th>
+                  <th>{% trans "Shared" %}</th>
+                  <th>{% trans "Enabled" %}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for storage in storages %}
+                  <tr>
+                    <td>
+                      <a href="{{ storage.get_absolute_url }}">{{ storage.name }}</a>
+                    </td>
+                    <td>{{ storage.storage_type|default:"—" }}</td>
+                    <td>{{ storage.content|default:"—" }}</td>
+                    <td>{{ storage.path|default:"—" }}</td>
+                    <td>{{ storage.nodes|default:"—" }}</td>
+                    <td>
+                      {% if storage.shared %}
+                        <span class="badge text-bg-success">{% trans "Yes" %}</span>
+                      {% else %}
+                        <span class="badge text-bg-secondary">{% trans "No" %}</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% if storage.enabled %}
+                        <span class="badge text-bg-success">{% trans "Yes" %}</span>
+                      {% else %}
+                        <span class="badge text-bg-danger">{% trans "No" %}</span>
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+{% endblock %}

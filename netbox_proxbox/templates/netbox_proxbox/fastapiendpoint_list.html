@@ -1,0 +1,8 @@
+{% extends 'generic/object_list.html' %}
+{% load i18n %}
+{% load static %}
+
+{% block javascript %}
+  {{ block.super }}
+  <script type="module" src="{% static 'netbox_proxbox/js/endpoint-status.js' %}"></script>
+{% endblock %}
