@@ -147,7 +147,9 @@ class ProxboxSyncJob(JobRunner):
             "sync_types": normalized,
             "proxmox_endpoint_ids": list(kwargs.get("proxmox_endpoint_ids") or []),
             "netbox_endpoint_ids": list(kwargs.get("netbox_endpoint_ids") or []),
-            "netbox_vm_ids": [str(x) for x in list(kwargs.get("netbox_vm_ids") or []) if str(x)],
+            "netbox_vm_ids": [
+                str(x) for x in list(kwargs.get("netbox_vm_ids") or []) if str(x)
+            ],
         }
         job.data = {"proxbox_sync": {"params": params}}
         job.save(update_fields=["data"])

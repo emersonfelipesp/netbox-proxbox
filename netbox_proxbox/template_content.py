@@ -101,4 +101,7 @@ class ProxboxVirtualMachineTemplateExtension(PluginTemplateExtension):
         )
 
 
-template_extensions = [ProxboxJobTemplateExtension, ProxboxVirtualMachineTemplateExtension]
+template_extensions = [
+    ProxboxJobTemplateExtension,
+    ProxboxVirtualMachineTemplateExtension,
+]
