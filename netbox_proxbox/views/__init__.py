@@ -72,6 +72,7 @@ from .vm_snapshot import (
     VMSnapshotTabView,
     VMSnapshotView,
 )
+from .vm_config import ProxmoxVMConfigTabView
 from .vm_sync_now import VirtualMachineSyncNowView
 
 
