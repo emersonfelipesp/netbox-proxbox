@@ -220,7 +220,9 @@ class ProxboxSyncJob(JobRunner):
         base_query["use_guest_agent_interface_name"] = (
             "true" if _use_guest_agent_interface_name_setting() else "false"
         )
-        base_query["fetch_max_concurrency"] = str(_proxbox_fetch_max_concurrency_setting())
+        base_query["fetch_max_concurrency"] = str(
+            _proxbox_fetch_max_concurrency_setting()
+        )
         if proxmox_endpoint_ids:
             base_query["proxmox_endpoint_ids"] = ",".join(proxmox_endpoint_ids)
         if netbox_endpoint_ids:
