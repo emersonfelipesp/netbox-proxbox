@@ -124,7 +124,8 @@ def test_vm_sync_now_view_contract():
         'register_model_view(VirtualMachine, "proxbox_sync_now", path="proxbox-sync-now")'
         in contents
     )
-    assert "sync_types=[SyncTypeChoices.VIRTUAL_MACHINES]" in contents
+    assert "SyncTypeChoices.VIRTUAL_MACHINES" in contents
+    assert "SyncTypeChoices.VIRTUAL_MACHINES_DISKS" in contents
     assert "netbox_vm_ids=[str(vm.pk)]" in contents
 
 
@@ -236,7 +237,9 @@ def test_lxc_and_storage_pages_are_wired_in_urls_navigation_and_templates():
 
 
 def test_storage_and_snapshot_detail_pages_expose_storage_relationships():
-    storage_detail = _read("netbox_proxbox/templates/netbox_proxbox/proxmoxstorage.html")
+    storage_detail = _read(
+        "netbox_proxbox/templates/netbox_proxbox/proxmoxstorage.html"
+    )
     vmbackup_detail = _read("netbox_proxbox/templates/netbox_proxbox/vmbackup.html")
     vmsnapshot_detail = _read("netbox_proxbox/templates/netbox_proxbox/vmsnapshot.html")
     storage_view = _read("netbox_proxbox/views/storage.py")
@@ -253,9 +256,11 @@ def test_task_history_tab_and_detail_page_are_wired_in_urls_views_and_template()
     urls = _read("netbox_proxbox/urls.py")
     views_module = _read("netbox_proxbox/views/__init__.py")
     task_history_view = _read("netbox_proxbox/views/vm_task_history.py")
-    task_history_template = _read("netbox_proxbox/templates/netbox_proxbox/vmtaskhistory.html")
+    task_history_template = _read(
+        "netbox_proxbox/templates/netbox_proxbox/vmtaskhistory.html"
+    )
 
-    assert 'task-history/<int:pk>' in urls
+    assert "task-history/<int:pk>" in urls
     assert "class VMTaskHistoryView(" in task_history_view
     assert "class VMTaskHistoryTabView(" in task_history_view
     assert "Task History" in task_history_view

@@ -21,6 +21,7 @@ from utilities.views import (
 )
 
 from .cards import get_proxmox_card
+from .dashboard import DashboardView
 from .endpoints import (
     FastAPIEndpointDeleteView,
     FastAPIEndpointEditView,
@@ -76,6 +77,7 @@ from .vm_task_history import (
     VMTaskHistoryView,
 )
 # Task History tab and detail views live in ``vm_task_history``.
+from .vm_config import ProxmoxVMConfigTabView
 from .vm_sync_now import VirtualMachineSyncNowView
 
 
