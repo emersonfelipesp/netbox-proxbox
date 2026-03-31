@@ -49,13 +49,15 @@ sudo systemctl enable --now netbox-rq
 
 1. In NetBox, navigate to **Proxbox > Schedule Sync**.
 2. Choose one or more **Sync types** (checkboxes):
-    - **All** — full update in one backend stream (devices, VMs, disks, backups). Do not combine with other types.
+    - **All** — full update in one backend stream (devices, storage, VMs, disks, backups, snapshots). Do not combine with other types.
     - **Devices** — sync Proxmox nodes as NetBox devices.
+    - **Storage** — sync Proxmox storage records.
     - **Virtual Machines** — sync Proxmox VMs as NetBox virtual machines.
     - **VM Disks** — sync VM virtual disks (run after VMs exist in NetBox).
     - **VM Backups** — sync all VM backup records.
+    - **VM Snapshots** — sync all VM snapshot records.
 
-    When you pick several types (not **All**), the job runs them **in order**: devices → virtual machines → VM disks → VM backups, skipping any type you did not select.
+    When you pick several types (not **All**), the job runs them **in order**: devices → storage → virtual machines → VM disks → VM backups → VM snapshots, skipping any type you did not select.
 3. Optionally set a **Schedule at** time. Leave blank to run immediately.
 4. Optionally set a **Recurs every** interval in minutes. Common values:
     - `1` — every minute

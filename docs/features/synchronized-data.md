@@ -1,27 +1,28 @@
 # Synchronized Data
 
-Proxbox synchronizes data between Proxmox clusters and NetBox using a dual-mode sync architecture. The NetBox plugin triggers sync requests against the ProxBox FastAPI backend, which performs the actual object creation and updates.
+Proxbox synchronizes data between Proxmox clusters and NetBox via NetBox background jobs.
+The NetBox plugin triggers `ProxboxSyncJob` runs, and each job consumes streaming backend
+SSE endpoints from ProxBox FastAPI to perform object creation and updates.
 
-## Sync Modes
+## Sync Mode
 
-### POST Polling (Traditional)
+The current plugin path is job-based and stream-backed:
 
-When you click a sync button, the plugin sends a POST request to the backend and waits for a single JSON response containing the final result. This is the simplest mode and works well for quick syncs.
+- UI/API sync actions enqueue a NetBox background job.
+- The job reads backend SSE (`text/event-stream`) until completion.
+- Progress and terminal state are recorded on the NetBox Job row.
 
-### GET SSE Streaming (Real-Time Progress)
+## Sync Endpoints
 
-For longer sync operations, the plugin uses Server-Sent Events (SSE) to stream progress updates in real time. When you click a sync button, the browser fetches a streaming endpoint, and the plugin proxies the backend's `text/event-stream` response back to the page. Progress updates appear immediately in the sync log without waiting for the entire operation to finish.
-
-The plugin prefers SSE streaming when available. Each sync button carries both a POST URL (`data-sync-url`) and a stream URL (`data-sync-stream-url`). The browser JavaScript uses the stream URL when present.
-
-## Stream Endpoints
-
-| Plugin Path | Backend Path | Description |
-|-------------|--------------|-------------|
-| `sync/devices/stream/` | `GET /dcim/devices/create/stream` | Stream device synchronization progress |
-| `sync/storage/` | `GET /virtualization/virtual-machines/storage/create/stream` | Sync Proxmox storage definitions into plugin storage records |
-| `sync/virtual-machines/stream/` | `GET /virtualization/virtual-machines/create/stream` | Stream VM synchronization progress |
-| `sync/full-update/stream/` | `GET /full-update/stream` | Stream full update (devices, storage, VMs, disks, backups, snapshots) progress |
+| Plugin Path | Backend Path Used By Job | Description |
+|-------------|--------------------------|-------------|
+| `sync/devices/` | `GET /dcim/devices/create/stream` | Queue device synchronization |
+| `sync/storage/` | `GET /virtualization/virtual-machines/storage/create/stream` | Queue storage synchronization |
+| `sync/virtual-machines/` | `GET /virtualization/virtual-machines/create/stream` | Queue VM synchronization |
+| `sync/virtual-machines/virtual-disks/` | `GET /virtualization/virtual-machines/virtual-disks/create/stream` | Queue virtual disk synchronization |
+| `sync/virtual-machines/backups/` | `GET /virtualization/virtual-machines/backups/all/create/stream` | Queue backup synchronization |
+| `sync/virtual-machines/snapshots/` | `GET /virtualization/virtual-machines/snapshots/all/create/stream` | Queue snapshot synchronization |
+| `sync/full-update/` | `GET /full-update/stream` | Queue full update (devices, storage, VMs, disks, backups, snapshots) |
 
 ## Progress Messages
 
@@ -42,9 +43,9 @@ full-update: Full update sync completed.
 full-update: stream completed
 ```
 
-## SSE Event Format
+## SSE Event Format (Backend Stream)
 
-All stream endpoints return `Content-Type: text/event-stream` and emit three event types:
+Backend stream endpoints return `Content-Type: text/event-stream` and emit three event types:
 
 - **step**: Progress frame with `step` (object kind), `status` (`started`, `progress`, `completed`), `message` (human-readable text), and `rowid` (object name/ID).
 - **error**: Error frame when an object fails to sync. Contains `step`, `error`, and `detail`.
@@ -52,9 +53,9 @@ All stream endpoints return `Content-Type: text/event-stream` and emit three eve
 
 ## Failure Handling
 
-- If the backend returns an error during streaming, the plugin emits an SSE `error` frame with the failure details and continues with a `complete` frame.
-- If the stream proxy itself encounters an error (e.g., backend unreachable), it emits a fallback SSE error frame instead of returning a Django 500 page.
-- The browser JavaScript displays error details from both `error` frames and non-200 HTTP responses.
+- If the backend returns an error while the job is consuming the stream, the job is marked failed/errored with backend detail.
+- If the stream read fails (e.g., backend unreachable), the job records the connection/read failure and exits with a non-success status.
+- Use NetBox Job logs and `error` fields for diagnosis.
 
 ## WebSocket Mode (Legacy)
 
