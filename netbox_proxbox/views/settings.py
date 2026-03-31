@@ -6,7 +6,9 @@ from django.views import View
 
 from netbox_proxbox.forms.settings import ProxboxPluginSettingsForm
 from netbox_proxbox.models import ProxboxPluginSettings
-from netbox_proxbox.views.proxbox_access import permission_change_proxbox_plugin_settings
+from netbox_proxbox.views.proxbox_access import (
+    permission_change_proxbox_plugin_settings,
+)
 from utilities.views import (
     ContentTypePermissionRequiredMixin,
     TokenConditionalLoginRequiredMixin,
