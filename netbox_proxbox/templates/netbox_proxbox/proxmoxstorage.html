@@ -108,6 +108,39 @@
                 </div>
             </div>
         </div>
+
+        <div class="card mt-3">
+            <h5 class="card-header">{% trans "Storage Usage (Live)" %}</h5>
+            <div class="card-body">
+                {% if storage_usage %}
+                    <table class="table table-hover attr-table mb-2">
+                        <tr>
+                            <th scope="row">{% trans "Used" %}</th>
+                            <td>{{ storage_usage.used_label }} / {{ storage_usage.total_label }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Available" %}</th>
+                            <td>{{ storage_usage.avail_label }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Usage" %}</th>
+                            <td>{{ storage_usage.used_pct }}%</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Proxmox Content Rows" %}</th>
+                            <td>{{ storage_content_count }}</td>
+                        </tr>
+                    </table>
+                    <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ storage_usage.used_pct|floatformat:0 }}">
+                        <div class="progress-bar bg-warning" style="width: {{ storage_usage.used_pct }}%;"></div>
+                    </div>
+                {% elif storage_usage_detail %}
+                    <div class="alert alert-warning mb-0" role="alert">{{ storage_usage_detail }}</div>
+                {% else %}
+                    <div class="text-muted">{% trans "No storage usage data returned from Proxmox API." %}</div>
+                {% endif %}
+            </div>
+        </div>
     </div>
 
     <div class="col-lg-6">
@@ -182,6 +215,112 @@
         {% include 'inc/panels/tags.html' %}
         {% include 'inc/panels/custom_fields.html' %}
         {% include 'inc/panels/comments.html' %}
+    </div>
+</div>
+
+<div class="row mt-3">
+    <div class="col-12">
+        <div class="card">
+            <h5 class="card-header">{% trans "Virtual Disks on this Storage" %}</h5>
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>{% trans "Virtual Machine" %}</th>
+                            <th>{% trans "Name" %}</th>
+                            <th>{% trans "Size" %}</th>
+                            <th>{% trans "Description" %}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for disk in virtual_disks %}
+                            <tr>
+                                <td>{{ disk.virtual_machine|hyperlinked_object }}</td>
+                                <td>{{ disk.name|placeholder }}</td>
+                                <td>{{ disk.size|placeholder }}</td>
+                                <td>{{ disk.description|placeholder }}</td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-muted">{% trans "No virtual disks mapped to this storage." %}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-3">
+    <div class="col-12">
+        <div class="card">
+            <h5 class="card-header">{% trans "Backups on this Storage" %}</h5>
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>{% trans "Virtual Machine" %}</th>
+                            <th>{% trans "VMID" %}</th>
+                            <th>{% trans "Created" %}</th>
+                            <th>{% trans "Volume ID" %}</th>
+                            <th>{% trans "Format" %}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for backup in vm_backups %}
+                            <tr>
+                                <td>{{ backup.virtual_machine|hyperlinked_object }}</td>
+                                <td>{{ backup.vmid|placeholder }}</td>
+                                <td>{{ backup.creation_time|placeholder }}</td>
+                                <td>{{ backup.volume_id|placeholder }}</td>
+                                <td>{{ backup.get_format_display|placeholder }}</td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-muted">{% trans "No backups found for this storage." %}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-3">
+    <div class="col-12">
+        <div class="card">
+            <h5 class="card-header">{% trans "Snapshots on this Storage" %}</h5>
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>{% trans "Virtual Machine" %}</th>
+                            <th>{% trans "VMID" %}</th>
+                            <th>{% trans "Name" %}</th>
+                            <th>{% trans "Node" %}</th>
+                            <th>{% trans "Snapshot Time" %}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for snapshot in vm_snapshots %}
+                            <tr>
+                                <td>{{ snapshot.virtual_machine|hyperlinked_object }}</td>
+                                <td>{{ snapshot.vmid }}</td>
+                                <td>{{ snapshot.name }}</td>
+                                <td>{{ snapshot.node }}</td>
+                                <td>{{ snapshot.snaptime|placeholder }}</td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-muted">{% trans "No snapshots found for this storage." %}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}
