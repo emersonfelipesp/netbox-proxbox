@@ -1,0 +1,133 @@
+{% extends 'generic/object.html' %}
+{% load i18n %}
+
+{% block content %}
+  <div class="row">
+    <div class="col-12 col-xl-8">
+      <div class="card">
+        <h5 class="card-header">{% trans "Proxmox VM Config" %}</h5>
+        <div class="card-body">
+          {% if detail %}
+            <div class="alert alert-warning" role="alert">{{ detail }}</div>
+          {% else %}
+            <table class="table table-hover attr-table">
+              <tr><th scope="row">{% trans "VM Type" %}</th><td>{{ vm_type|upper }}</td></tr>
+              <tr><th scope="row">{% trans "Node" %}</th><td>{{ node }}</td></tr>
+              <tr><th scope="row">{% trans "VMID" %}</th><td>{{ vmid }}</td></tr>
+              <tr><th scope="row">{% trans "Name" %}</th><td>{{ normalized.name }}</td></tr>
+              <tr><th scope="row">{% trans "CPU Cores" %}</th><td>{{ normalized.cores|default:"—" }}</td></tr>
+              <tr><th scope="row">{% trans "CPU Sockets" %}</th><td>{{ normalized.sockets|default:"—" }}</td></tr>
+              <tr><th scope="row">{% trans "Memory" %}</th><td>{{ normalized.memory }}</td></tr>
+              <tr><th scope="row">{% trans "OS Type" %}</th><td>{{ normalized.ostype }}</td></tr>
+              <tr><th scope="row">{% trans "Boot Order" %}</th><td>{{ normalized.boot }}</td></tr>
+              <tr><th scope="row">{% trans "Startup" %}</th><td>{{ normalized.startup }}</td></tr>
+              <tr><th scope="row">{% trans "Search Domain" %}</th><td>{{ normalized.searchdomain }}</td></tr>
+              <tr>
+                <th scope="row">{% trans "Start at Boot" %}</th>
+                <td>
+                  {% if normalized.start_at_boot is True %}
+                    <span class="badge text-bg-green">{% trans "Enabled" %}</span>
+                  {% elif normalized.start_at_boot is False %}
+                    <span class="badge text-bg-grey">{% trans "Disabled" %}</span>
+                  {% else %}
+                    <span class="badge text-bg-grey">—</span>
+                  {% endif %}
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">{% trans "Guest Agent" %}</th>
+                <td>
+                  {% if normalized.qemu_agent is True %}
+                    <span class="badge text-bg-green">{% trans "Enabled" %}</span>
+                  {% elif normalized.qemu_agent is False %}
+                    <span class="badge text-bg-grey">{% trans "Disabled" %}</span>
+                  {% else %}
+                    <span class="badge text-bg-grey">—</span>
+                  {% endif %}
+                </td>
+              </tr>
+              <tr><th scope="row">{% trans "Tags" %}</th><td>{{ normalized.tags }}</td></tr>
+              <tr><th scope="row">{% trans "Description" %}</th><td>{{ normalized.description }}</td></tr>
+            </table>
+          {% endif %}
+        </div>
+      </div>
+
+      {% if not detail %}
+        <div class="card mt-3">
+          <h5 class="card-header">{% trans "Disk Devices" %}</h5>
+          <div class="card-body">
+            <table class="table table-hover">
+              <thead><tr><th>{% trans "Key" %}</th><th>{% trans "Value" %}</th></tr></thead>
+              <tbody>
+                {% for key, value in config_sections.disks %}
+                  <tr><td><code>{{ key }}</code></td><td><code>{{ value }}</code></td></tr>
+                {% empty %}
+                  <tr><td colspan="2" class="text-muted">{% trans "No disk entries." %}</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card mt-3">
+          <h5 class="card-header">{% trans "Network Devices" %}</h5>
+          <div class="card-body">
+            <table class="table table-hover">
+              <thead><tr><th>{% trans "Key" %}</th><th>{% trans "Value" %}</th></tr></thead>
+              <tbody>
+                {% for key, value in config_sections.networks %}
+                  <tr><td><code>{{ key }}</code></td><td><code>{{ value }}</code></td></tr>
+                {% empty %}
+                  <tr><td colspan="2" class="text-muted">{% trans "No network entries." %}</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+
+    <div class="col-12 col-xl-4">
+      <div class="card">
+        <h5 class="card-header">{% trans "Advanced Raw Config" %}</h5>
+        <div class="card-body">
+          {% if detail %}
+            <p class="text-muted mb-0">{% trans "No config available." %}</p>
+          {% else %}
+            <table class="table table-hover">
+              <thead><tr><th>{% trans "Key" %}</th><th>{% trans "Value" %}</th></tr></thead>
+              <tbody>
+                {% for key, value in config_sections.advanced %}
+                  <tr><td><code>{{ key }}</code></td><td><code>{{ value }}</code></td></tr>
+                {% empty %}
+                  <tr><td colspan="2" class="text-muted">{% trans "No extra config keys." %}</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% endif %}
+        </div>
+      </div>
+
+      {% if vm_type == "qemu" %}
+        <div class="card mt-3">
+          <h5 class="card-header">{% trans "QEMU Firewall (Raw)" %}</h5>
+          <div class="card-body">
+            {% if firewall_payload_json %}
+              <pre class="mb-0"><code>{{ firewall_payload_json }}</code></pre>
+            {% else %}
+              <p class="text-muted mb-0">{% trans "Firewall data unavailable." %}</p>
+            {% endif %}
+          </div>
+        </div>
+      {% endif %}
+
+      <div class="card mt-3">
+        <h5 class="card-header">{% trans "Config JSON (Raw)" %}</h5>
+        <div class="card-body">
+          <pre class="mb-0"><code>{{ config_payload_json }}</code></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

@@ -11,6 +11,7 @@ app_name = "netbox_proxbox"
 
 urlpatterns = [
     path("", views.HomeView.as_view(), name="home"),
+    path("dashboard/", views.DashboardView.as_view(), name="dashboard"),
     path("nodes/", views.NodesView.as_view(), name="nodes"),
     path(
         "virtual_machines/",
