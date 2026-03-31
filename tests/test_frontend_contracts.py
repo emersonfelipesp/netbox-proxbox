@@ -170,6 +170,12 @@ def test_endpoint_templates_expose_live_badges():
     )
 
 
+def test_endpoint_tables_use_record_pk_for_keepalive_reverse():
+    contents = _read("netbox_proxbox/tables/__init__.py")
+    assert "keepalive_status" in contents
+    assert "record.pk" in contents
+
+
 def test_settings_page_is_wired_in_urls_navigation_and_template():
     urls = _read("netbox_proxbox/urls.py")
     navigation = _read("netbox_proxbox/navigation.py")
@@ -180,6 +186,7 @@ def test_settings_page_is_wired_in_urls_navigation_and_template():
     assert 'link="plugins:netbox_proxbox:settings"' in navigation
     assert "Plugin Settings" in template
     assert "use_guest_agent_interface_name" in template
+    assert "inc/field.html" not in template
     assert "class SettingsView(" in view
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any
 
 import requests
@@ -13,14 +14,16 @@ _REQUEST_TIMEOUT = (5, 30)
 
 
 def get(**kwargs: object) -> str | None:
-    """Download markdown text for ``filename`` from the upstream netbox-proxbox repo."""
-    owner = "netdevopsbr"
-    repo = "netbox-proxbox"
-
     filename = kwargs.get("filename")
     if not filename:
         return None
 
+    local_markdown = _read_local_markdown(str(filename))
+    if local_markdown:
+        return local_markdown
+
+    owner = "netdevopsbr"
+    repo = "netbox-proxbox"
     url = f"https://api.github.com/repos/{owner}/{repo}/contents/{filename}"
 
     try:
@@ -63,6 +66,18 @@ def get(**kwargs: object) -> str | None:
         content_url,
     )
     return None
+
+
+def _read_local_markdown(filename: str) -> str | None:
+    """Return local markdown content when available in the plugin source tree."""
+    local_path = Path(__file__).resolve().parents[1] / filename
+    if not local_path.exists():
+        return None
+    try:
+        text = local_path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    return text or None
 
 
 def _safe_github_error_message(response: requests.Response) -> str:
