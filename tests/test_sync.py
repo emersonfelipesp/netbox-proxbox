@@ -68,7 +68,7 @@ def test_sync_virtual_machines_enqueues_correct_types(monkeypatch, fastapi_endpo
 
     module.sync_virtual_machines(_post_request())
 
-    assert calls[0]["sync_types"] == [ST_VMS]
+    assert calls[0]["sync_types"] == [ST_VMS, ST_DISKS]
 
 
 def test_sync_storage_enqueues_storage_stage(monkeypatch, fastapi_endpoint):

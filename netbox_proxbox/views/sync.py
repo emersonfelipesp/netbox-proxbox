@@ -70,9 +70,12 @@ class SyncDevicesView(_ProxboxSyncEnqueueView):
 
 
 class SyncVirtualMachinesView(_ProxboxSyncEnqueueView):
-    """POST: queue virtual machine sync."""
+    """POST: queue virtual machine + virtual disk sync."""
 
-    sync_types = [SyncTypeChoices.VIRTUAL_MACHINES]
+    sync_types = [
+        SyncTypeChoices.VIRTUAL_MACHINES,
+        SyncTypeChoices.VIRTUAL_MACHINES_DISKS,
+    ]
     action_label = _("Virtual machines")
 
 
