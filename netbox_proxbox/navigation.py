@@ -5,7 +5,7 @@ from netbox.plugins import PluginMenuButton, PluginMenuItem, PluginMenu
 
 fullupdate_item = PluginMenuItem(
     link="plugins:netbox_proxbox:home",
-    link_text="Full Update",
+    link_text="Homepage",
 )
 
 nodes_item = PluginMenuItem(
