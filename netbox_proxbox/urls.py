@@ -78,6 +78,7 @@ urlpatterns = [
     ),
     path("sync/full-update/", views.sync_full_update, name="sync_full_update"),
     path("sync/schedule/", views.ScheduleSyncView.as_view(), name="schedule_sync"),
+    path("settings/", views.SettingsView.as_view(), name="settings"),
     path(
         "sync/schedule/quick/",
         views.QuickScheduleSyncFromHomeView.as_view(),

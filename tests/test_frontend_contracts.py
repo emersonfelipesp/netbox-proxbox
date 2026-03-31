@@ -170,6 +170,19 @@ def test_endpoint_templates_expose_live_badges():
     )
 
 
+def test_settings_page_is_wired_in_urls_navigation_and_template():
+    urls = _read("netbox_proxbox/urls.py")
+    navigation = _read("netbox_proxbox/navigation.py")
+    template = _read("netbox_proxbox/templates/netbox_proxbox/settings.html")
+    view = _read("netbox_proxbox/views/settings.py")
+
+    assert 'path("settings/", views.SettingsView.as_view(), name="settings")' in urls
+    assert 'link="plugins:netbox_proxbox:settings"' in navigation
+    assert "Plugin Settings" in template
+    assert "use_guest_agent_interface_name" in template
+    assert "class SettingsView(" in view
+
+
 def test_proxmox_list_template_exposes_import_export_controls_and_warning_modal():
     contents = _read(
         "netbox_proxbox/templates/netbox_proxbox/proxmoxendpoint_list.html"

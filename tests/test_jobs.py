@@ -43,6 +43,15 @@ def proxbox_sync_job_module(monkeypatch):
     pkg = types.ModuleType("netbox_proxbox")
     pkg.__path__ = [str(root / "netbox_proxbox")]
     monkeypatch.setitem(sys.modules, "netbox_proxbox", pkg)
+    models_mod = types.ModuleType("netbox_proxbox.models")
+
+    class _ProxboxPluginSettings:
+        @classmethod
+        def get_solo(cls):
+            return SimpleNamespace(use_guest_agent_interface_name=True)
+
+    models_mod.ProxboxPluginSettings = _ProxboxPluginSettings
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.models", models_mod)
 
     sys.modules.pop("netbox_proxbox.jobs", None)
     path = root / "netbox_proxbox" / "jobs.py"
@@ -90,6 +99,7 @@ def test_proxbox_sync_job_run_imports_from_services_not_views(
     )
     assert captured["called"] == "run_sync_stream"
     assert captured["path"] == "dcim/devices/create/stream"
+    assert captured["query_params"]["use_guest_agent_interface_name"] == "true"
     assert job.job.save.call_count >= 1
 
     job.job.reset_mock()
@@ -359,6 +369,35 @@ def test_proxbox_sync_job_run_targets_single_vm_route_when_requested(
         netbox_vm_ids=["248"],
     )
     assert paths == ["virtualization/virtual-machines/248/create/stream"]
+
+
+def test_proxbox_sync_job_query_flag_tracks_plugin_setting(
+    monkeypatch, proxbox_sync_job_module
+):
+    captured: dict[str, object] = {}
+    services_mod = types.ModuleType("netbox_proxbox.services")
+
+    def run_sync_stream(path, query_params=None, **stream_kwargs):
+        captured["query_params"] = query_params
+        return ({"stream": True, "response": {"ok": True}}, 200)
+
+    services_mod.run_sync_stream = run_sync_stream
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
+    monkeypatch.setattr(
+        proxbox_sync_job_module,
+        "_use_guest_agent_interface_name_setting",
+        lambda: False,
+    )
+
+    ProxboxSyncJob = proxbox_sync_job_module.ProxboxSyncJob
+    job = ProxboxSyncJob()
+    job.logger = logging.getLogger("test_proxbox_job")
+    job.job = MagicMock()
+    job.job.data = None
+
+    st = proxbox_sync_job_module.SyncTypeChoices
+    ProxboxSyncJob.run(job, sync_type=st.DEVICES)
+    assert captured["query_params"]["use_guest_agent_interface_name"] == "false"
 
 
 def test_proxbox_sync_job_run_all_invokes_each_stage_stream(

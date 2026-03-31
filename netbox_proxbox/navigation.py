@@ -35,6 +35,11 @@ sync_jobs_item = PluginMenuItem(
     link_text="Sync Jobs",
 )
 
+settings_item = PluginMenuItem(
+    link="plugins:netbox_proxbox:settings",
+    link_text="Settings",
+)
+
 backups_item = PluginMenuItem(
     link="plugins:netbox_proxbox:vmbackup_list",
     link_text="Backups",
@@ -126,6 +131,7 @@ menu = PluginMenu(
                 snapshots_item,
                 schedule_sync_item,
                 sync_jobs_item,
+                settings_item,
             ),
         ),
         (
