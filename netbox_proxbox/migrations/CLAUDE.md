@@ -10,6 +10,11 @@ This directory contains Django schema migrations for the plugin models.
   fields, endpoint identity constraints, optional domains, `VMSnapshot`, and removes
   `SyncProcess`. Use `python manage.py migrate netbox_proxbox` after upgrading from
   v0.0.6b2.post1 or any release that had only applied through **0008**.
+- **0010_squashed_plugin_settings_and_storage:** Single squashed migration (replaces
+  `0010_proxbox_plugin_settings`, `0011_proxmoxstorage`,
+  `0012_proxboxpluginsettings_proxbox_fetch_max_concurrency`). It creates the
+  `ProxboxPluginSettings` singleton model (including `proxbox_fetch_max_concurrency`) and
+  `ProxmoxStorage`.
 
 ## Squashing and upgrades
 
