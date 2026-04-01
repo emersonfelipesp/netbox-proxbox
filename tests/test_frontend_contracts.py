@@ -231,9 +231,9 @@ def test_lxc_and_storage_pages_are_wired_in_urls_navigation_and_templates():
     assert "Sync LXC Containers" in lxc_template
     assert "sync_storage" in storage_template
     assert "Storage Summary" in storage_detail_template
-    assert "Related Virtual Disks" in storage_detail_template
-    assert "Related Backups" in storage_detail_template
-    assert "Related Snapshots" in storage_detail_template
+    assert "Virtual Disks on this Storage" in storage_detail_template
+    assert "Backups on this Storage" in storage_detail_template
+    assert "Snapshots on this Storage" in storage_detail_template
     assert "class LXCContainersView(" in views_module
     assert "class SyncStorageView(" in sync_view
 
