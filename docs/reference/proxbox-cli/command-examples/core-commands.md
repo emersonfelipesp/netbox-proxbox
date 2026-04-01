@@ -2,7 +2,7 @@
 
 Representative command help output captured automatically from the local checkout.
 
-Generated: `2026-04-01T15:39:42.389783+00:00`
+Generated: `2026-04-01T19:39:49.416217+00:00`
 
 ## Root Help
 
@@ -23,6 +23,7 @@ Top-level entrypoint and root command groups.
 │ init            Interactively configure the proxbox-api base URL.            │
 │ config          Show the current CLI configuration.                          │
 │ test            Test connectivity to the proxbox-api server.                 │
+│ version         Show the proxbox-api backend version.                        │
 │ info            Show proxbox-api project info.                               │
 │ cache           Show the in-memory cache contents.                           │
 │ clear-cache     Clear the in-memory cache on the proxbox-api server.         │
@@ -30,6 +31,7 @@ Top-level entrypoint and root command groups.
 │                 long-running operation]                                      │
 │ netbox          NetBox integration commands.                                 │
 │ proxmox         Proxmox integration commands.                                │
+│ proxbox         Proxbox plugin and backend info commands.                    │
 │ dcim            DCIM (datacenter infrastructure) commands.                   │
 │ virtualization  Virtualization commands.                                     │
 │ extras          Extras commands (custom fields, etc.).                       │
@@ -92,5 +94,27 @@ Shows extras-related CLI commands (custom fields, etc.).
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
 │ custom-fields-create  Create predefined Proxbox custom fields in NetBox      │
 │                       (proxmox_vm_id, start_at_boot, etc.).                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+```
+
+## Proxbox Help
+
+Command: `pxb proxbox --help`
+
+Plugin configuration and backend info commands.
+
+```text
+Usage: python -m proxbox_cli proxbox [OPTIONS] COMMAND [ARGS]...
+
+Proxbox plugin and backend info commands.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ settings          Show resolved Proxbox plugin configuration from NetBox.    │
+│ plugins-config    Show plugin configuration from NetBox PLUGINS_CONFIG.      │
+│ default-settings  Show Proxbox default settings from the NetBox plugin       │
+│                   config.                                                    │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ```

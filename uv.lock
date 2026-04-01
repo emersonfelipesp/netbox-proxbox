@@ -691,7 +691,7 @@ wheels = [
 
 [[package]]
 name = "netbox-proxbox"
-version = "0.0.9.post4"
+version = "0.0.10"
 source = { editable = "." }
 dependencies = [
     { name = "pydantic" },

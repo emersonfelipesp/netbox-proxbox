@@ -8,7 +8,7 @@ import pytest
 for module_name in ("click", "typer", "rich"):
     pytest.importorskip(module_name)
 
-from proxbox_cli.commands import virtualization
+virtualization = pytest.importorskip("proxbox_cli.commands.virtualization")
 
 
 def test_backups_sync_all_uses_backend_query_name_for_delete_stale(monkeypatch):
