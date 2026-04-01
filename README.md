@@ -141,13 +141,13 @@ To run sync automatically on a schedule:
 
 ## Documentation
 
-Full documentation is available at [proxbox.readthedocs.io](https://proxbox.readthedocs.io/).
+Full documentation is available at [emersonfelipesp.github.io/netbox-proxbox](https://emersonfelipesp.github.io/netbox-proxbox/).
 
 Key pages:
 
-- [Installation Guide](https://proxbox.readthedocs.io/en/latest/installation/2-installing-plugin-git.html)
-- [Backend Setup](https://proxbox.readthedocs.io/en/latest/installation/backend-setup.html)
-- [Scheduled Sync](https://proxbox.readthedocs.io/en/latest/features/scheduled-sync.html)
+- [Installation Guide](https://emersonfelipesp.github.io/netbox-proxbox/en/latest/installation/2-installing-plugin-git.html)
+- [Backend Setup](https://emersonfelipesp.github.io/netbox-proxbox/en/latest/installation/backend-setup.html)
+- [Scheduled Sync](https://emersonfelipesp.github.io/netbox-proxbox/en/latest/features/scheduled-sync.html)
 
 ## Community
 

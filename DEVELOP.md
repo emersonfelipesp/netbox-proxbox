@@ -218,4 +218,4 @@ The project uses semantic versioning. Version is defined in:
 ## Additional Resources
 
 - [CONTRIBUTING.md](./CONTRIBUTING.md) — Community guidelines
-- [MkDocs documentation](https://proxbox.readthedocs.io/)
+- [MkDocs documentation](https://emersonfelipesp.github.io/netbox-proxbox/)
