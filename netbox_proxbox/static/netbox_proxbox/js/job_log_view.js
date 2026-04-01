@@ -268,13 +268,10 @@
         var msg = e.message != null ? String(e.message) : "";
         var m = msg.match(RE_STAGES);
         if (m) {
-          var stages = [];
-          var parts = m[1].split(",");
-          for (var j = 0; j < parts.length; j++) {
-            var s = parts[j].trim();
-            if (s) stages.push(s);
+          var count = parseInt(m[1], 10);
+          if (count > 0 && count <= ALL_STAGES.length) {
+            return ALL_STAGES.slice(0, count);
           }
-          if (stages.length > 0) return stages;
         }
       }
     }

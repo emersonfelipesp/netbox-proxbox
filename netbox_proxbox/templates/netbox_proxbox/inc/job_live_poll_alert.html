@@ -253,6 +253,10 @@
       updateProgress(payload.progress);
     }
 
+    if (entries.length > 0 && api && typeof api.applyProgress === "function") {
+      api.applyProgress(progressBarEl, { data: payload }, entries);
+    }
+
     if (status) {
       lastStatusValue = status;
     }
