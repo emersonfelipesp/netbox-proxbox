@@ -31,8 +31,10 @@ Start it manually:
 
 ```bash
 docker pull emersonfelipesp/proxbox-api:latest
-docker run -d --name proxbox-api -p 8800:8800 emersonfelipesp/proxbox-api:latest
+docker run -d --name proxbox-api -p 8800:8000 emersonfelipesp/proxbox-api:latest
 ```
+
+The image serves on container port `8000` (nginx), so keep `8800:8000` if you want the backend reachable as `http://<host>:8800`.
 
 ## Option 3: Run It As A systemd Service
 

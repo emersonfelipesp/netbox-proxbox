@@ -31,6 +31,11 @@ This package contains the actual NetBox plugin. It defines the plugin config, UR
 - Inbound: NetBox plugin loader imports `config`, NetBox route registration imports `urls.py`, and the menu system imports `navigation.py`.
 - Outbound: Django/NetBox APIs, `requests`, `websockets`, the external ProxBox FastAPI service, GitHub raw content for the contributing page, and standard NetBox core models like `users.Token`, `ipam.IPAddress`, and `virtualization.VirtualMachine`.
 
+## Installation docs pointers
+
+- Docker-based NetBox installation guidance is documented at [`../docs/installation/3-installing-plugin-docker.md`](../docs/installation/3-installing-plugin-docker.md).
+- Traditional host/venv installation remains documented in [`../docs/installation/2-installing-plugin-git.md`](../docs/installation/2-installing-plugin-git.md).
+
 ## Child Docs
 
 - [`../CLAUDE.md`](../CLAUDE.md)

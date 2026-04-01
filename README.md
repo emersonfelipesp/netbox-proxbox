@@ -25,7 +25,12 @@ Sync runs on-demand from the NetBox UI or scheduled automatically via NetBox's j
 
 ## Quick Start
 
-1. **Install the plugin** into your NetBox virtual environment:
+Choose the installation path that matches your NetBox deployment:
+
+- **Standard NetBox install (venv on host):** follow steps below.
+- **NetBox Docker install (`netbox-docker`):** use the Docker-specific workflow in [Installing the Plugin in Docker-Based NetBox Deployments](./docs/installation/3-installing-plugin-docker.md).
+
+1. **Install the plugin** into your NetBox virtual environment (host/venv deployment):
 
    ```bash
    cd /opt/netbox/netbox
@@ -85,7 +90,40 @@ Sync runs on-demand from the NetBox UI or scheduled automatically via NetBox's j
 
 6. **Run your first sync:**
 
-   Click **Full Update** on the Proxbox home page. Progress appears in real-time.
+    Click **Full Update** on the Proxbox home page. Progress appears in real-time.
+
+## NetBox Docker Install Option
+
+If your NetBox runs with `netbox-community/netbox-docker`, install the plugin through the Docker plugin files in your NetBox Docker project:
+
+1. Add plugin requirements to `plugin_requirements.txt` (PyPI or Git):
+
+   ```txt
+   netbox-proxbox
+   # or
+   # netbox-proxbox @ git+https://github.com/netdevopsbr/netbox-proxbox.git
+   ```
+
+2. Enable the plugin in `configuration/plugins.py`:
+
+   ```python
+   PLUGINS = ["netbox_proxbox"]
+   ```
+
+3. Rebuild and restart NetBox:
+
+   ```bash
+   docker compose build
+   docker compose up -d
+   ```
+
+4. Run migrations in the NetBox container:
+
+   ```bash
+   docker compose exec netbox /opt/netbox/netbox/manage.py migrate
+   ```
+
+For complete Docker installation instructions, validation checks, and Git/source install examples, see [docs/installation/3-installing-plugin-docker.md](./docs/installation/3-installing-plugin-docker.md).
 
 ## Scheduled Sync
 

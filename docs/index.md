@@ -7,7 +7,7 @@ Proxbox is a NetBox plugin that integrates Proxmox with NetBox through a separat
 The current repository code declares support for:
 
 - NetBox `4.5.x`
-- Plugin version `0.0.9.post1` in source
+- Plugin version `0.0.9.post4` in source
 
 That support comes directly from the plugin config in this repository:
 
@@ -64,6 +64,7 @@ See:
 
 - [Pre-Installation](./installation/pre-installation.md)
 - [Installing the Plugin Using Git](./installation/2-installing-plugin-git.md)
+- [Installing the Plugin in Docker-Based NetBox Deployments](./installation/3-installing-plugin-docker.md)
 - [Backend Setup](./installation/backend-setup.md)
 - [Proxbox CLI Overview](./cli/index.md)
 
