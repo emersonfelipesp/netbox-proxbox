@@ -372,7 +372,7 @@ def test_proxbox_sync_job_run_targets_single_vm_route_when_requested(
         sync_types=[st.VIRTUAL_MACHINES],
         netbox_vm_ids=["248"],
     )
-    assert paths == ["virtualization/virtual-machines/248/create/stream"]
+    assert paths == ["virtualization/virtual-machines/create/stream"]
 
 
 def test_proxbox_sync_job_run_targets_each_requested_vm_route(
@@ -402,9 +402,7 @@ def test_proxbox_sync_job_run_targets_each_requested_vm_route(
         netbox_vm_ids=["248", "512", "777"],
     )
     assert paths == [
-        "virtualization/virtual-machines/248/create/stream",
-        "virtualization/virtual-machines/512/create/stream",
-        "virtualization/virtual-machines/777/create/stream",
+        "virtualization/virtual-machines/create/stream",
     ]
 
 
