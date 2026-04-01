@@ -164,7 +164,7 @@
     wrap.className = "nb-proxbox-parsed-msg";
 
     var badge = document.createElement("span");
-    badge.className = "badge d-inline-flex bg-secondary me-2 align-middle";
+    badge.className = "badge d-inline-flex text-bg-secondary text-uppercase nb-job-badge-fixed";
     appendText(badge, parsed.event);
     wrap.appendChild(badge);
 
@@ -191,7 +191,7 @@
       normalized === "done" ||
       normalized === "ok"
     ) {
-      return "badge d-inline-flex text-bg-success text-uppercase";
+      return "badge d-inline-flex text-bg-success text-uppercase nb-job-badge-fixed";
     }
     if (
       normalized === "started" ||
@@ -199,10 +199,10 @@
       normalized === "running" ||
       normalized === "pending"
     ) {
-      return "badge d-inline-flex text-bg-blue text-uppercase";
+      return "badge d-inline-flex text-bg-blue text-uppercase nb-job-badge-fixed";
     }
     if (normalized === "progress") {
-      return "badge d-inline-flex text-bg-warning text-uppercase";
+      return "badge d-inline-flex text-bg-warning text-uppercase nb-job-badge-fixed";
     }
     if (
       normalized === "error" ||
@@ -210,9 +210,9 @@
       normalized === "failed" ||
       normalized === "failure"
     ) {
-      return "badge d-inline-flex text-bg-danger text-uppercase";
+      return "badge d-inline-flex text-bg-danger text-uppercase nb-job-badge-fixed";
     }
-    return "badge d-inline-flex text-bg-secondary text-uppercase";
+    return "badge d-inline-flex text-bg-secondary text-uppercase nb-job-badge-fixed";
   }
 
   function getProgressLabelClass(statusValue, done) {
@@ -259,8 +259,8 @@
       return rawTypes.slice();
     }
 
-    // Fallback: scan log entries for the "Starting Proxbox sync stages: …" line
-    var RE_STAGES = /^Starting Proxbox sync stages:\s*(.+)$/;
+    // Fallback: scan log entries for the "Proxbox sync started for N stages" line
+    var RE_STAGES = /^Proxbox sync started for (\d+) stages?$/;
     if (Array.isArray(entries)) {
       for (var i = 0; i < entries.length; i++) {
         var e = entries[i];
@@ -290,8 +290,8 @@
       return { completed: 0, total: total, currentStage: null, percent: 0, done: false };
     }
 
-    var RE_STARTING  = /^Starting stage:\s*(\S+)\s+\(/;
-    var RE_COMPLETED = /^Stage completed:\s*(\S+)\s+\(HTTP/;
+    var RE_STARTING  = /^Starting stage \d+\/\d+:\s*(\S+)$/;
+    var RE_COMPLETED = /^Stage (\S+) completed$/;
     var RE_ALL_DONE  = /^All sync stages completed\s*\(/;
 
     var completed = 0;

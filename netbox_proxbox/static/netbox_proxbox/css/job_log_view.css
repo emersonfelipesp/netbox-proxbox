@@ -13,6 +13,13 @@
   overflow-y: auto;
 }
 
+.nb-job-badge-fixed {
+  min-width: 5rem;
+  justify-content: center;
+  text-align: center;
+  flex-shrink: 0;
+}
+
 .nb-job-live-log-entry {
   display: flex;
   flex-wrap: nowrap;
