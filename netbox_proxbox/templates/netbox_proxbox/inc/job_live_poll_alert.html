@@ -135,7 +135,7 @@
 
   function startSSE() {
     if (isStreaming) return;
-    var streamUrl = "{% url 'netbox_proxbox:job_stream' pk=job.pk|default:0 %}";
+    var streamUrl = "{% url 'plugins:netbox_proxbox:job_stream' pk=job.pk|default:0 %}";
     if (!pk || streamUrl.indexOf("0") > -1) {
       startPollingFallback();
       return;
