@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import argparse
+
 from fastapi import FastAPI, Query
 from pydantic import BaseModel
 
@@ -230,3 +232,18 @@ def lxc_snapshot(node: str, vmid: int):
             }
         ]
     )
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Run local Proxmox mock API service")
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=8006)
+    args = parser.parse_args()
+
+    import uvicorn
+
+    uvicorn.run(app, host=args.host, port=args.port)
+
+
+if __name__ == "__main__":
+    main()

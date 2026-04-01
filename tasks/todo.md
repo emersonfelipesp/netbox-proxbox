@@ -5,6 +5,8 @@
 - [x] Add scheduled + manual GitHub Actions workflow that boots stack and runs e2e checks.
 - [x] Document e2e architecture and workflow with Mermaid diagrams.
 - [x] Extend e2e to validate update behavior by mutating mocked VM status and asserting NetBox status transition.
+- [x] Add developer documentation for running Proxmox mock locally without Docker.
+- [x] Make mock service executable directly with Python CLI arguments.
 
 ## Review
 
@@ -13,3 +15,5 @@
 - On failures, workflow emits container logs for NetBox, worker, proxbox-api, mock Proxmox, Postgres, and Redis.
 - Added docs page with architecture and sequence diagrams for the e2e stack and data flow.
 - Added update-path validation: changing mocked Proxmox VM status now triggers a NetBox VM status transition assertion (`active` to `offline`) after re-sync.
+- Added developer guide for local Proxmox mock execution and route testing without Docker.
+- Added direct Python entrypoint in mock service plus `e2e` optional dependency group for reproducible local setup.

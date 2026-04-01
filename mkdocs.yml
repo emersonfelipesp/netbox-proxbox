@@ -85,6 +85,7 @@ nav:
       - Infrastructure Commands: 'reference/proxbox-cli/command-examples/infrastructure-commands.md'
   - Developer:
     - Proxbox CLI Docgen: 'developer/proxbox-cli-docgen.md'
+    - Local Proxmox Mock: 'developer/proxmox-mock-local.md'
     - Raw CLI Capture: 'generated/proxbox-cli-command-capture.md'
   - Features:
     - E2E Docker Testing: 'features/e2e-docker-testing.md'

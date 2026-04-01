@@ -38,6 +38,11 @@ test = [
     "pytest>=9.0.2",
     "pytest-cov>=7.1.0",
 ]
+e2e = [
+    "fastapi>=0.116.1",
+    "uvicorn>=0.35.0",
+    "pydantic>=2.11.7",
+]
 
 [build-system]
 requires = ["hatchling"]
