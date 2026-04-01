@@ -216,6 +216,14 @@ def test_endpoint_serializers_expose_supported_model_fields():
         assert not missing, f"{serializer_name} missing fields: {sorted(missing)}"
 
 
+def test_cluster_serializer_uses_supported_netbox_virtualization_import():
+    contents = (REPO_ROOT / "netbox_proxbox" / "api" / "serializers" / "cluster.py").read_text()
+
+    assert "virtualization.api.serializers_.clusters import ClusterSerializer" in contents
+    assert "NestedClusterSerializer" not in contents
+    assert "netbox_cluster = ClusterSerializer(nested=True, required=False, allow_null=True)" in contents
+
+
 def test_endpoint_serializers_do_not_override_create_semantics():
     module = _parse_serializers_package()
 

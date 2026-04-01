@@ -5,7 +5,7 @@ from __future__ import annotations
 from netbox.api.fields import ChoiceField
 from netbox.api.serializers import NetBoxModelSerializer
 from rest_framework import serializers
-from virtualization.api.serializers_.nested import NestedClusterSerializer
+from virtualization.api.serializers_.clusters import ClusterSerializer
 from dcim.api.serializers_.nested import NestedDeviceSerializer
 
 from netbox_proxbox.choices import ProxmoxModeChoices
@@ -48,7 +48,7 @@ class ProxmoxClusterSerializer(NetBoxModelSerializer):
         view_name="plugins-api:netbox_proxbox-api:proxmoxcluster-detail",
     )
     endpoint = NestedProxmoxEndpointSerializer()
-    netbox_cluster = NestedClusterSerializer(required=False, allow_null=True)
+    netbox_cluster = ClusterSerializer(nested=True, required=False, allow_null=True)
     mode = ChoiceField(choices=ProxmoxModeChoices)
     node_count = serializers.IntegerField(source="nodes_count", read_only=True)
 
