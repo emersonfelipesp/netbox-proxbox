@@ -27,9 +27,9 @@ jobs:
       - name: Build NetBox image with plugin
         run: |
           cat > Dockerfile.netbox-e2e <<'EOF'
-          FROM netboxcommunity/netbox:v4.5-2.4.0
+          FROM netboxcommunity/netbox:v4.5
           COPY . /tmp/netbox-proxbox
-          RUN /opt/netbox/venv/bin/pip install --no-cache-dir /tmp/netbox-proxbox
+          RUN uv pip install --python /opt/netbox/venv/bin/python --system /tmp/netbox-proxbox
           RUN mkdir -p /etc/netbox/config
           RUN printf 'PLUGINS = ["netbox_proxbox"]\n' > /etc/netbox/config/plugins.py
           EOF
