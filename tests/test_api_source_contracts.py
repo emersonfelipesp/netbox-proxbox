@@ -420,7 +420,14 @@ def test_plugin_api_routes_register_all_plugin_objects():
             root_registers.append(route)
 
     assert set(endpoint_registers) == {"proxmox", "netbox", "fastapi"}
-    assert set(root_registers) == {"storage", "backups", "snapshots", "task-history"}
+    assert set(root_registers) == {
+        "clusters",
+        "nodes",
+        "storage",
+        "backups",
+        "snapshots",
+        "task-history",
+    }
 
 
 def test_proxmox_endpoint_views_register_bulk_import_and_csv_export():

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from django.shortcuts import get_object_or_404
 from extras.models import TableConfig
 from netbox.views import generic
@@ -88,7 +86,7 @@ class ClusterSummaryTabView(generic.ObjectView):
 
     def get_extra_context(self, request, instance):
         """Gather Proxmox-related data for this cluster."""
-        context: dict[str, Any] = {
+        context: dict[str, object] = {
             "cluster": instance,
         }
 

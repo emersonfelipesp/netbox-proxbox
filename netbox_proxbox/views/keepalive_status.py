@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from django.http import HttpRequest, JsonResponse
 from django.shortcuts import get_object_or_404
@@ -39,16 +38,16 @@ def get_service_status_impl(
             pk=pk,
         )
         fastapi_response = service_status.fastapi_status(pk)
-        status = "success" if fastapi_response.get("connected") else "error"
-        payload: dict[str, Any] = {
+        status = "success" if fastapi_response.connected else "error"
+        payload = {
             "status": status,
-            "target_address": fastapi_response.get("target_address"),
-            "target_port": fastapi_response.get("target_port"),
-            "authentication": fastapi_response.get("authentication"),
-            "api_access": fastapi_response.get("api_access"),
+            "target_address": fastapi_response.target_address,
+            "target_port": fastapi_response.target_port,
+            "authentication": fastapi_response.authentication,
+            "api_access": fastapi_response.api_access,
         }
-        if fastapi_response.get("detail"):
-            payload["detail"] = fastapi_response["detail"]
+        if fastapi_response.detail:
+            payload["detail"] = fastapi_response.detail
         return JsonResponse(payload)
 
     if service not in ("netbox", "proxmox"):
@@ -126,12 +125,12 @@ def get_service_status_impl(
             backend_verify_ssl=service_status.connected_verify_ssl,
         )
 
-    payload: dict[str, Any] = {
+    payload = {
         "status": status,
-        "target_address": details.get("target_address"),
-        "target_port": details.get("target_port"),
-        "authentication": details.get("authentication"),
-        "api_access": details.get("api_access"),
+        "target_address": details.target_address,
+        "target_port": details.target_port,
+        "authentication": details.authentication,
+        "api_access": details.api_access,
     }
     if status != "success" and service_status.last_error_detail:
         payload["detail"] = service_status.last_error_detail

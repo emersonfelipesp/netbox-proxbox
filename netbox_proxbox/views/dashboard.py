@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
-from typing import Any
-
 import requests
 from django.contrib.auth.mixins import AccessMixin
 from django.shortcuts import render
@@ -12,6 +9,15 @@ from django.views import View
 from virtualization.models import Cluster
 
 from netbox_proxbox.models import FastAPIEndpoint, ProxmoxEndpoint
+from netbox_proxbox.schemas import (
+    ProxmoxClusterStatusResponse,
+    ProxmoxClusterSummary,
+    ProxmoxGuestSummary,
+    ProxmoxNodeDetail,
+    ProxmoxNodeRow,
+    ProxmoxResourceRecord,
+)
+from netbox_proxbox.schemas._formatters import iter_scalar_records
 from netbox_proxbox.utils import get_backend_auth_headers, get_fastapi_url
 from netbox_proxbox.views.backend_sync import sync_proxmox_endpoint_to_backend
 from netbox_proxbox.views.error_utils import (
@@ -22,79 +28,6 @@ from netbox_proxbox.views.proxbox_access import user_may_access_proxbox_dashboar
 from utilities.views import ConditionalLoginRequiredMixin
 
 __all__ = ("DashboardView",)
-
-
-def _iter_scalar_records(payload: Any) -> Iterable[dict[str, Any]]:
-    """Yield flattened dictionary records from nested list/dict payloads."""
-    if isinstance(payload, list):
-        for item in payload:
-            yield from _iter_scalar_records(item)
-        return
-
-    if isinstance(payload, dict):
-        has_nested = any(isinstance(v, (dict, list)) for v in payload.values())
-        if not has_nested:
-            yield payload
-            return
-        for value in payload.values():
-            yield from _iter_scalar_records(value)
-
-
-def _to_int(value: Any, default: int = 0) -> int:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default
-
-
-def _to_float(value: Any, default: float = 0.0) -> float:
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return default
-
-
-def _percent(value: Any, max_value: Any) -> float:
-    val = _to_float(value)
-    max_val = _to_float(max_value)
-    if max_val <= 0:
-        return 0.0
-    return round((val / max_val) * 100.0, 2)
-
-
-def _cpu_percent(value: Any) -> float:
-    cpu = _to_float(value)
-    if cpu <= 1:
-        return round(cpu * 100.0, 2)
-    return round(cpu, 2)
-
-
-def _format_bytes(value: Any) -> str:
-    size = float(_to_int(value))
-    units = ("B", "KiB", "MiB", "GiB", "TiB")
-    unit_idx = 0
-    while size >= 1024 and unit_idx < len(units) - 1:
-        size /= 1024
-        unit_idx += 1
-    return f"{size:.2f} {units[unit_idx]}"
-
-
-def _format_uptime(seconds: Any) -> str:
-    total = _to_int(seconds)
-    if total <= 0:
-        return "—"
-    days, rem = divmod(total, 86400)
-    hours, rem = divmod(rem, 3600)
-    minutes, secs = divmod(rem, 60)
-    return f"{days}d {hours:02}:{minutes:02}:{secs:02}"
-
-
-def _loadavg_text(value: Any) -> str:
-    if isinstance(value, (list, tuple)) and value:
-        return ", ".join(f"{_to_float(v):.2f}" for v in value[:3])
-    if isinstance(value, str) and value.strip():
-        return value.strip()
-    return "—"
 
 
 def _get_endpoint_display_ip(endpoint: ProxmoxEndpoint) -> str:
@@ -144,7 +77,7 @@ class DashboardView(
         verify_ssl: bool,
         route: str,
         query_params: dict[str, str],
-    ) -> tuple[Any | None, str | None]:
+    ) -> tuple[object | None, str | None]:
         response = requests.get(
             f"{base_url}{route}",
             params=query_params,
@@ -156,76 +89,23 @@ class DashboardView(
         payload, json_err = parse_requests_response_json(response, log_label=route)
         return payload, json_err
 
-    def _build_cluster_summary(self, cluster_payload: Any) -> dict[str, Any]:
-        records = list(_iter_scalar_records(cluster_payload))
-        cluster_record = next((r for r in records if r.get("type") == "cluster"), {})
-        node_records = [r for r in records if r.get("type") == "node"]
+    def _build_cluster_summary(self, cluster_payload: object) -> dict[str, object]:
+        response = ProxmoxClusterStatusResponse.model_validate(cluster_payload)
+        return ProxmoxClusterSummary.from_status_response(response).model_dump()
 
-        total_nodes = _to_int(cluster_record.get("nodes"), default=len(node_records))
-        online_nodes = sum(_to_int(r.get("online")) for r in node_records)
-        if online_nodes == 0:
-            online_nodes = sum(
-                1 for r in node_records if str(r.get("status")) == "online"
-            )
-        offline_nodes = max(total_nodes - online_nodes, 0)
+    def _build_guest_summary(self, resources_payload: object) -> dict[str, object]:
+        resource_records = [
+            ProxmoxResourceRecord.model_validate(record)
+            for record in iter_scalar_records(resources_payload)
+        ]
+        return ProxmoxGuestSummary.from_resources(resource_records).model_dump()
 
-        return {
-            "name": cluster_record.get("name") or "—",
-            "mode": cluster_record.get("level") or cluster_record.get("type") or "—",
-            "quorate": bool(cluster_record.get("quorate")),
-            "nodes_total": total_nodes,
-            "nodes_online": online_nodes,
-            "nodes_offline": offline_nodes,
-        }
-
-    def _build_guest_summary(self, resources_payload: Any) -> dict[str, dict[str, int]]:
-        records = list(_iter_scalar_records(resources_payload))
-        qemu_records = [r for r in records if str(r.get("type")) == "qemu"]
-        lxc_records = [r for r in records if str(r.get("type")) == "lxc"]
-
-        def _count(items: list[dict[str, Any]]) -> dict[str, int]:
-            running = sum(1 for r in items if str(r.get("status")) == "running")
-            templates = sum(1 for r in items if bool(r.get("template")))
-            stopped = max(len(items) - running - templates, 0)
-            return {
-                "running": running,
-                "stopped": stopped,
-                "templates": templates,
-            }
-
-        return {
-            "virtual_machines": _count(qemu_records),
-            "lxc_containers": _count(lxc_records),
-        }
-
-    def _build_node_rows(self, nodes_payload: Any) -> list[dict[str, Any]]:
-        rows: list[dict[str, Any]] = []
-        for record in _iter_scalar_records(nodes_payload):
-            node_name = record.get("node") or record.get("name")
-            if not node_name:
-                continue
-            mem_used = _to_int(record.get("mem"))
-            mem_total = _to_int(record.get("maxmem"))
-            disk_used = _to_int(record.get("disk"))
-            disk_total = _to_int(record.get("maxdisk"))
-            cpu_pct = _cpu_percent(record.get("cpu"))
-            mem_pct = _percent(mem_used, mem_total)
-            disk_pct = _percent(disk_used, disk_total)
-            rows.append(
-                {
-                    "name": str(node_name),
-                    "status": str(record.get("status") or "unknown"),
-                    "uptime": _format_uptime(record.get("uptime")),
-                    "cpu_pct": cpu_pct,
-                    "cpu_label": f"{cpu_pct:.2f}% ({_to_int(record.get('maxcpu'))} CPUs)",
-                    "loadavg": _loadavg_text(record.get("loadavg")),
-                    "memory_pct": mem_pct,
-                    "memory_label": f"{_format_bytes(mem_used)} / {_format_bytes(mem_total)}",
-                    "disk_pct": disk_pct,
-                    "disk_label": f"{_format_bytes(disk_used)} / {_format_bytes(disk_total)}",
-                }
-            )
-        return sorted(rows, key=lambda row: row["name"])
+    def _build_node_rows(self, nodes_payload: object) -> list[dict[str, object]]:
+        rows = [
+            ProxmoxNodeRow.from_node_detail(ProxmoxNodeDetail.model_validate(record)).model_dump()
+            for record in iter_scalar_records(nodes_payload)
+        ]
+        return sorted(rows, key=lambda row: str(row["name"]))
 
     def get(self, request):
         proxmox_endpoints = list(ProxmoxEndpoint.objects.restrict(request.user, "view"))
@@ -233,7 +113,7 @@ class DashboardView(
             request.user, "view"
         ).first()
 
-        dashboards: list[dict[str, Any]] = []
+        dashboards: list[dict[str, object]] = []
         if fastapi_endpoint:
             fastapi_info = get_fastapi_url(fastapi_endpoint) or {}
             fastapi_url = fastapi_info.get("http_url")
@@ -245,7 +125,7 @@ class DashboardView(
             backend_headers = {}
 
         for endpoint in proxmox_endpoints:
-            dashboard: dict[str, Any] = {
+            dashboard: dict[str, object] = {
                 "endpoint": endpoint,
                 "cluster_summary": None,
                 "guest_summary": None,

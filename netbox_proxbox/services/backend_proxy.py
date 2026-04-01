@@ -4,13 +4,17 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Callable, Generator
-from typing import Any
+from collections.abc import Callable, Generator, Iterable
 
 import requests
 
 from netbox_proxbox.models import FastAPIEndpoint
-from netbox_proxbox.type_defs import BackendRequestContext
+from netbox_proxbox.schemas.backend_proxy import (
+    BackendRequestContext,
+    SseCompletePayload,
+    SseErrorPayload,
+    SseFrame,
+)
 from netbox_proxbox.utils import get_backend_auth_headers, get_fastapi_url
 from netbox_proxbox.views.error_utils import (
     extract_backend_error_detail,
@@ -44,9 +48,12 @@ def sse_error_frames(
 ) -> Generator[str, None, None]:
     """Yield SSE error and complete events for stream consumers."""
     yield "event: error\n"
-    yield f"data: {json.dumps({'step': 'stream', 'status': 'failed', 'error': message})}\n\n"
+    yield (
+        "data: "
+        f"{SseErrorPayload(step='stream', status='failed', error=message).model_dump_json()}\n\n"
+    )
     yield "event: complete\n"
-    yield f"data: {json.dumps({'ok': False, 'message': final_message})}\n\n"
+    yield f"data: {SseCompletePayload(ok=False, message=final_message).model_dump_json()}\n\n"
 
 
 def get_fastapi_request_context() -> BackendRequestContext | None:
@@ -55,16 +62,16 @@ def get_fastapi_request_context() -> BackendRequestContext | None:
     if fastapi_service_obj is None:
         return None
 
-    raw: dict[str, Any] = get_fastapi_url(fastapi_service_obj) or {}
+    raw = get_fastapi_url(fastapi_service_obj) or {}
     if not isinstance(raw, dict):
         raw = {}
-    return {
-        "detail": raw,
-        "http_url": raw.get("http_url"),
-        "ip_address_url": raw.get("ip_address_url"),
-        "verify_ssl": bool(raw.get("verify_ssl", True)),
-        "headers": get_backend_auth_headers(fastapi_service_obj),
-    }
+    return BackendRequestContext(
+        detail=dict(raw),
+        http_url=raw.get("http_url"),
+        ip_address_url=raw.get("ip_address_url"),
+        verify_ssl=bool(raw.get("verify_ssl", True)),
+        headers=get_backend_auth_headers(fastapi_service_obj),
+    )
 
 
 def request_backend_resource(
@@ -73,9 +80,9 @@ def request_backend_resource(
     query_params: dict | None = None,
     *,
     timeout: float | tuple[int, int] = 5,
-) -> tuple[dict, int]:
+) -> tuple[dict[str, object], int]:
     """GET a JSON resource from the backend, trying primary URL then IP fallback."""
-    http_url = context.get("http_url")
+    http_url = context.http_url
     if not http_url:
         return {
             "queued": False,
@@ -86,12 +93,12 @@ def request_backend_resource(
 
     fastapi_path = f"{http_url}/{path}"
     requested_urls: list[str] = []
-    backend_headers = context.get("headers") or {}
+    backend_headers = context.headers or {}
     last_detail = None
 
-    verify_ssl = bool(context.get("verify_ssl", True))
+    verify_ssl = bool(context.verify_ssl)
     request_candidates = [(fastapi_path, verify_ssl)]
-    fallback_url = context.get("ip_address_url")
+    fallback_url = context.ip_address_url
     if fallback_url:
         fallback_path = f"{fallback_url}/{path}"
         if fallback_path != fastapi_path:
@@ -146,24 +153,26 @@ def request_backend_resource(
 
 
 def _iter_sse_frames(
-    line_iter: Any,
-) -> Generator[tuple[str, dict[str, Any]], None, None]:
+    line_iter: Iterable[str | bytes | None],
+) -> Generator[SseFrame, None, None]:
     """Parse newline-delimited SSE from ``iter_lines``-style input into (event, data_dict) pairs."""
     event_name = ""
     data_lines: list[str] = []
 
-    def flush() -> Generator[tuple[str, dict[str, Any]], None, None]:
+    def flush() -> Generator[SseFrame, None, None]:
         nonlocal event_name, data_lines
         if not data_lines:
             event_name = ""
             return
         payload_str = "\n".join(data_lines)
         try:
-            data_obj: dict[str, Any] = json.loads(payload_str)
+            data_obj = json.loads(payload_str)
         except json.JSONDecodeError:
             data_obj = {"raw": payload_str}
         ev = event_name or "message"
-        yield (ev, data_obj)
+        if not isinstance(data_obj, dict):
+            data_obj = {"raw": data_obj}
+        yield SseFrame(event=ev, data=data_obj)
         event_name = ""
         data_lines = []
 
@@ -190,16 +199,18 @@ def _iter_sse_frames(
 def _consume_sse_until_complete(
     response: requests.Response,
     *,
-    on_frame: Callable[[str, dict[str, Any]], None] | None = None,
-) -> tuple[dict[str, Any], int]:
+    on_frame: Callable[[str, dict[str, object]], None] | None = None,
+) -> tuple[dict[str, object], int]:
     """Read an SSE body to the final ``complete`` event; return (payload, http_status_hint)."""
-    last_complete: dict[str, Any] | None = None
+    last_complete: SseCompletePayload | None = None
     try:
-        for _event, data in _iter_sse_frames(response.iter_lines(decode_unicode=True)):
+        for frame in _iter_sse_frames(response.iter_lines(decode_unicode=True)):
+            _event = frame.event
+            data = frame.data
             if on_frame is not None:
                 on_frame(_event, data)
             if _event == "complete":
-                last_complete = data
+                last_complete = SseCompletePayload.model_validate(data)
     except requests.exceptions.RequestException as exc:
         detail, _ = extract_backend_error_detail(exc)
         return {
@@ -213,18 +224,17 @@ def _consume_sse_until_complete(
             "detail": "ProxBox backend stream ended without a complete event.",
         }, 502
 
-    if last_complete.get("ok") is False:
-        msg = last_complete.get("message") or "Sync failed."
-        errors = last_complete.get("errors")
-        if isinstance(errors, list) and errors:
-            first = errors[0]
-            if isinstance(first, dict) and first.get("detail"):
-                msg = str(first["detail"])
-        return {"stream": True, "detail": msg, "response": last_complete}, 503
+    if last_complete.ok is False:
+        msg = last_complete.message or "Sync failed."
+        if last_complete.errors:
+            first_error = last_complete.errors[0]
+            if first_error.get("detail"):
+                msg = str(first_error["detail"])
+        return {"stream": True, "detail": msg, "response": last_complete.model_dump()}, 503
 
     return {
         "stream": True,
-        "response": last_complete,
+        "response": last_complete.model_dump(),
     }, 200
 
 
@@ -232,8 +242,8 @@ def run_sync_stream(
     path: str,
     query_params: dict | None = None,
     *,
-    on_frame: Callable[[str, dict[str, Any]], None] | None = None,
-) -> tuple[dict, int]:
+    on_frame: Callable[[str, dict[str, object]], None] | None = None,
+) -> tuple[dict[str, object], int]:
     """GET a backend SSE sync URL to completion (for NetBox background jobs).
 
     ``path`` must be the stream route (e.g. ``full-update/stream`` or
@@ -241,16 +251,16 @@ def run_sync_stream(
     :func:`iter_backend_sse_lines` and a long read timeout.
     """
     context = get_fastapi_request_context()
-    if context is None or not context.get("http_url"):
+    if context is None or not context.http_url:
         return {"stream": False, "detail": "No FastAPI URL found."}, 404
 
-    backend_headers = context.get("headers") or {}
-    http_url = context.get("http_url")
+    backend_headers = context.headers or {}
+    http_url = context.http_url
     if not http_url:
         return {"stream": False, "detail": "No FastAPI URL found."}, 404
-    verify_ssl = bool(context.get("verify_ssl", True))
+    verify_ssl = bool(context.verify_ssl)
     request_candidates = [(f"{http_url}/{path}", verify_ssl)]
-    fallback_url = context.get("ip_address_url")
+    fallback_url = context.ip_address_url
     if fallback_url:
         fallback_path = f"{fallback_url}/{path}"
         if fallback_path != request_candidates[0][0]:
@@ -330,17 +340,17 @@ def iter_backend_sse_lines(
 ) -> Generator[str, None, None]:
     """Stream newline-terminated SSE lines from the backend, with URL fallback."""
     try:
-        backend_headers = context.get("headers") or {}
-        http_url = context.get("http_url")
+        backend_headers = context.headers or {}
+        http_url = context.http_url
         if not http_url:
             yield from sse_error_frames("No FastAPI URL found.")
             return
 
-        verify_ssl = bool(context.get("verify_ssl", True))
+        verify_ssl = bool(context.verify_ssl)
         request_candidates = [
             (f"{http_url}/{path}", verify_ssl),
         ]
-        fallback_url = context.get("ip_address_url")
+        fallback_url = context.ip_address_url
         if fallback_url:
             fallback_path = f"{fallback_url}/{path}"
             if fallback_path != request_candidates[0][0]:
@@ -387,10 +397,10 @@ def iter_backend_sse_lines(
         yield from sse_error_frames(str(exc), final_message="Stream proxy failed.")
 
 
-def sync_resource(path: str, query_params: dict | None = None) -> tuple[dict, int]:
+def sync_resource(path: str, query_params: dict | None = None) -> tuple[dict[str, object], int]:
     """Queue a single backend sync path (GET) using the default FastAPI endpoint."""
     context = get_fastapi_request_context()
-    if context is None or not context.get("http_url"):
+    if context is None or not context.http_url:
         return {"queued": False, "detail": "No FastAPI URL found."}, 404
 
     return request_backend_resource(
@@ -401,10 +411,12 @@ def sync_resource(path: str, query_params: dict | None = None) -> tuple[dict, in
     )
 
 
-def sync_full_update_resource(query_params: dict | None = None) -> tuple[dict, int]:
+def sync_full_update_resource(
+    query_params: dict | None = None,
+) -> tuple[dict[str, object], int]:
     """Run devices, VMs, then backups stages against the backend in sequence."""
     context = get_fastapi_request_context()
-    if context is None or not context.get("http_url"):
+    if context is None or not context.http_url:
         return {"queued": False, "detail": "No FastAPI URL found."}, 404
 
     requested_urls: list[str] = []
