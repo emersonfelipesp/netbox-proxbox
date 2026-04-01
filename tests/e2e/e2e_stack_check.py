@@ -247,6 +247,64 @@ def _assert_synced_data(netbox_base_url: str, netbox_token: str) -> None:
             raise AssertionError(f"Expected synced {label} records, got count={count}")
 
 
+def _extract_status_value(raw_status) -> str:
+    if isinstance(raw_status, dict):
+        value = raw_status.get("value")
+        if value:
+            return str(value).strip().lower()
+        label = raw_status.get("label")
+        if label:
+            return str(label).strip().lower()
+    return str(raw_status or "").strip().lower()
+
+
+def _get_vm_by_proxmox_vmid(netbox_base_url: str, netbox_token: str, vmid: int) -> dict:
+    headers = {"Authorization": f"Token {netbox_token}"}
+    response = requests.get(
+        f"{netbox_base_url}/api/virtualization/virtual-machines/",
+        headers=headers,
+        params={"cf_proxmox_vm_id": vmid, "limit": 5},
+        timeout=30,
+    )
+    payload = _assert_ok(response, context=f"lookup vm cf_proxmox_vm_id={vmid}")
+    results = payload.get("results", [])
+    if not isinstance(results, list) or not results:
+        raise AssertionError(f"No NetBox VM found with cf_proxmox_vm_id={vmid}")
+    return results[0]
+
+
+def _set_mock_vm_status(mock_base_url: str, vmid: int, status: str) -> None:
+    response = requests.post(
+        f"{mock_base_url}/__admin/vm/{vmid}/status",
+        json={"status": status},
+        timeout=15,
+    )
+    payload = _assert_ok(response, context=f"set proxmox mock vm status vmid={vmid}")
+    if payload.get("ok") is not True:
+        raise AssertionError(f"Failed updating proxmox mock VM status: {payload}")
+
+
+def _assert_vm_status_transition(
+    netbox_base_url: str, netbox_token: str, proxmox_mock_base_url: str
+) -> None:
+    vm = _get_vm_by_proxmox_vmid(netbox_base_url, netbox_token, 101)
+    initial_status = _extract_status_value(vm.get("status"))
+    if initial_status != "active":
+        raise AssertionError(
+            f"Expected initial VM status active for vmid=101, got {initial_status!r}"
+        )
+
+    _set_mock_vm_status(proxmox_mock_base_url, 101, "stopped")
+    _trigger_and_wait_sync(netbox_base_url, netbox_token)
+
+    updated_vm = _get_vm_by_proxmox_vmid(netbox_base_url, netbox_token, 101)
+    updated_status = _extract_status_value(updated_vm.get("status"))
+    if updated_status != "offline":
+        raise AssertionError(
+            f"Expected updated VM status offline for vmid=101, got {updated_status!r}"
+        )
+
+
 def _assert_backend_stream(proxbox_base_url: str) -> None:
     complete_payload: dict | None = None
     with requests.get(
@@ -284,6 +342,7 @@ def _assert_backend_stream(proxbox_base_url: str) -> None:
 def main() -> None:
     netbox_base_url = _must_getenv("NETBOX_BASE_URL")
     proxbox_base_url = _must_getenv("PROXBOX_BASE_URL")
+    proxmox_mock_base_url = _must_getenv("PROXMOX_MOCK_BASE_URL")
     netbox_public_url = _must_getenv("NETBOX_PUBLIC_URL")
     netbox_token = _must_getenv("NETBOX_API_TOKEN")
     netbox_token_id = int(_must_getenv("NETBOX_TOKEN_ID"))
@@ -298,6 +357,7 @@ def main() -> None:
     _assert_plugin_routes(netbox_base_url, netbox_token, endpoint_ids)
     _trigger_and_wait_sync(netbox_base_url, netbox_token)
     _assert_synced_data(netbox_base_url, netbox_token)
+    _assert_vm_status_transition(netbox_base_url, netbox_token, proxmox_mock_base_url)
     _assert_backend_stream(proxbox_base_url)
     print("E2E stack test succeeded")
 

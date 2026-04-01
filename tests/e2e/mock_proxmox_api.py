@@ -1,8 +1,37 @@
 from __future__ import annotations
 
 from fastapi import FastAPI, Query
+from pydantic import BaseModel
 
 app = FastAPI(title="proxmox-mock")
+
+
+VM_RESOURCES: dict[int, dict] = {
+    101: {
+        "type": "qemu",
+        "vmid": 101,
+        "name": "e2e-qemu-101",
+        "node": "pve01",
+        "status": "running",
+        "maxcpu": 2,
+        "maxmem": 2147483648,
+        "maxdisk": 21474836480,
+    },
+    102: {
+        "type": "lxc",
+        "vmid": 102,
+        "name": "e2e-lxc-102",
+        "node": "pve01",
+        "status": "running",
+        "maxcpu": 1,
+        "maxmem": 1073741824,
+        "maxdisk": 10737418240,
+    },
+}
+
+
+class VmStatusUpdate(BaseModel):
+    status: str
 
 
 def _ok(data):
@@ -34,31 +63,18 @@ def cluster_status():
 
 @app.get("/api2/json/cluster/resources")
 def cluster_resources():
-    return _ok(
-        [
-            {"type": "node", "node": "pve01", "status": "online", "maxcpu": 8},
-            {
-                "type": "qemu",
-                "vmid": 101,
-                "name": "e2e-qemu-101",
-                "node": "pve01",
-                "status": "running",
-                "maxcpu": 2,
-                "maxmem": 2147483648,
-                "maxdisk": 21474836480,
-            },
-            {
-                "type": "lxc",
-                "vmid": 102,
-                "name": "e2e-lxc-102",
-                "node": "pve01",
-                "status": "running",
-                "maxcpu": 1,
-                "maxmem": 1073741824,
-                "maxdisk": 10737418240,
-            },
-        ]
-    )
+    resources = [{"type": "node", "node": "pve01", "status": "online", "maxcpu": 8}]
+    resources.extend(VM_RESOURCES.values())
+    return _ok(resources)
+
+
+@app.post("/__admin/vm/{vmid}/status")
+def set_vm_status(vmid: int, body: VmStatusUpdate):
+    vm = VM_RESOURCES.get(vmid)
+    if vm is None:
+        return {"ok": False, "detail": "vmid not found"}
+    vm["status"] = body.status.strip().lower()
+    return {"ok": True, "vmid": vmid, "status": vm["status"]}
 
 
 @app.get("/api2/json/storage")

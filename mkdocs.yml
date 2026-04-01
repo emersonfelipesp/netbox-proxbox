@@ -87,6 +87,7 @@ nav:
     - Proxbox CLI Docgen: 'developer/proxbox-cli-docgen.md'
     - Raw CLI Capture: 'generated/proxbox-cli-command-capture.md'
   - Features:
+    - E2E Docker Testing: 'features/e2e-docker-testing.md'
     - Synchronized Data: 'features/synchronized-data.md'
     - Scheduled Sync: 'features/scheduled-sync.md'
     - Background Jobs: 'features/background-jobs.md'

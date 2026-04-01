@@ -51,7 +51,7 @@ jobs:
           docker run -d --name netbox-e2e-redis --network proxbox-e2e \
             redis:7-alpine
 
-          docker run -d --name proxmox-e2e-mock --network proxbox-e2e \
+          docker run -d --name proxmox-e2e-mock --network proxbox-e2e -p 18006:8006 \
             -v "$PWD/tests/e2e:/e2e:ro" \
             python:3.12-slim sh -c "pip install --no-cache-dir fastapi uvicorn && uvicorn mock_proxmox_api:app --app-dir /e2e --host 0.0.0.0 --port 8006"
 
@@ -128,6 +128,7 @@ jobs:
         env:
           NETBOX_BASE_URL: http://127.0.0.1:18080
           PROXBOX_BASE_URL: http://127.0.0.1:18800
+          PROXMOX_MOCK_BASE_URL: http://127.0.0.1:18006
           NETBOX_PUBLIC_URL: http://netbox:8080
           NETBOX_TOKEN_ID: ${{ env.NETBOX_TOKEN_ID }}
           NETBOX_API_TOKEN: ${{ env.NETBOX_API_TOKEN }}
