@@ -25,7 +25,7 @@ netbox-proxbox is a NetBox plugin that synchronizes Proxmox infrastructure data 
 
 ### Version
 
-- Plugin version: `0.0.8`
+- Plugin version: `0.0.9.post1`
 - NetBox compatibility: `4.5.0` through `4.5.99`
 
 ---
@@ -939,7 +939,7 @@ class ProxboxPluginConfig(PluginConfig):
     name = "netbox-proxbox"
     verbose_name = "Proxbox"
     description = "NetBox plugin for Proxmox integration"
-    version = "0.0.8"
+    version = "0.0.9.post1"
     author = "Emerson Felipe"
     author_email = "emersonfelipe.2003@gmail.com"
     min_version = "4.5.0"
