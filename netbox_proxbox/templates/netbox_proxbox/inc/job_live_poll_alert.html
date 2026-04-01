@@ -160,7 +160,7 @@
     var payload = data && typeof data === "object" ? data : {};
     var message = getFrameMessage(payload, eventType);
     var status = payload.status ? String(payload.status) : "";
-    var isTerminal = eventType === "complete" || status === "completed" || status === "failed" || eventType === "error";
+    var isTerminal = eventType === "complete" || status === "failed" || status === "errored" || eventType === "error";
 
     if (message && !isTerminal) {
       appendLog(
@@ -178,10 +178,6 @@
 
     if (eventType === "complete") {
       finishStream(payload.ok === false ? "failed" : "completed", message || payload.message || "");
-      return;
-    }
-    if (status === "completed") {
-      finishStream("completed", message || payload.message || "");
       return;
     }
     if (status === "failed" || eventType === "error") {
