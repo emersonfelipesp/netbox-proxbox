@@ -12,7 +12,11 @@ import requests
 from django.db import transaction
 
 from netbox_proxbox.models import ProxmoxCluster, ProxmoxEndpoint, ProxmoxNode
-from netbox_proxbox.schemas import ClusterSyncResult, ProxmoxClusterStatusResponse, ProxmoxNodeDetail
+from netbox_proxbox.schemas import (
+    ClusterSyncResult,
+    ProxmoxClusterStatusResponse,
+    ProxmoxNodeDetail,
+)
 from netbox_proxbox.schemas._formatters import iter_scalar_records
 from netbox_proxbox.services.backend_proxy import get_fastapi_request_context
 
@@ -109,7 +113,9 @@ def sync_cluster_and_nodes(
         with transaction.atomic():
             # Track existing node names to detect deletions.
             existing_node_names = set(
-                ProxmoxNode.objects.filter(endpoint=endpoint).values_list("name", flat=True)
+                ProxmoxNode.objects.filter(endpoint=endpoint).values_list(
+                    "name", flat=True
+                )
             )
             synced_node_names: set[str] = set()
 
@@ -148,10 +154,14 @@ def sync_cluster_and_nodes(
                 )
                 if created:
                     result.clusters_created += 1
-                    logger.info("Created cluster %s for endpoint %s", cluster_name, endpoint_id)
+                    logger.info(
+                        "Created cluster %s for endpoint %s", cluster_name, endpoint_id
+                    )
                 else:
                     result.clusters_updated += 1
-                    logger.info("Updated cluster %s for endpoint %s", cluster_name, endpoint_id)
+                    logger.info(
+                        "Updated cluster %s for endpoint %s", cluster_name, endpoint_id
+                    )
 
             # Build a lookup of detailed node metrics from the pre-fetched response.
             node_details_by_name: dict[str, ProxmoxNodeDetail] = {
@@ -194,7 +204,9 @@ def sync_cluster_and_nodes(
                 )
                 if created:
                     result.nodes_created += 1
-                    logger.info("Created node %s for endpoint %s", node_name, endpoint_id)
+                    logger.info(
+                        "Created node %s for endpoint %s", node_name, endpoint_id
+                    )
                 else:
                     result.nodes_updated += 1
 
@@ -205,7 +217,9 @@ def sync_cluster_and_nodes(
                     endpoint=endpoint, name__in=stale_names
                 ).delete()
                 result.nodes_deleted = deleted_count
-                logger.info("Deleted %s stale nodes for endpoint %s", deleted_count, endpoint_id)
+                logger.info(
+                    "Deleted %s stale nodes for endpoint %s", deleted_count, endpoint_id
+                )
 
         result.success = True
         logger.info("Successfully synced cluster/nodes for endpoint %s", endpoint_id)

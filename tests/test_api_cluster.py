@@ -16,6 +16,7 @@ def _read(path: str) -> str:
 # Serializer contracts
 # ---------------------------------------------------------------------------
 
+
 def test_cluster_serializer_file_exists():
     path = REPO_ROOT / "netbox_proxbox/api/serializers/cluster.py"
     assert path.exists()
@@ -52,6 +53,7 @@ def test_serializers_init_exports_cluster_serializers():
 # ViewSet contracts
 # ---------------------------------------------------------------------------
 
+
 def test_cluster_viewsets_defined_in_views():
     content = _read("netbox_proxbox/api/views.py")
     assert "ProxmoxClusterViewSet" in content
@@ -67,6 +69,7 @@ def test_cluster_viewsets_registered_in_urls():
 # ---------------------------------------------------------------------------
 # FilterSet contracts
 # ---------------------------------------------------------------------------
+
 
 def test_cluster_filtersets_defined():
     content = _read("netbox_proxbox/filtersets.py")
@@ -87,6 +90,7 @@ def test_cluster_filterset_filters_nodes_by_online_status():
 # ---------------------------------------------------------------------------
 # Table contracts
 # ---------------------------------------------------------------------------
+
 
 def test_cluster_tables_file_exists():
     path = REPO_ROOT / "netbox_proxbox/tables/cluster.py"
@@ -113,6 +117,7 @@ def test_tables_init_exports_cluster_tables():
 # Tab view contracts
 # ---------------------------------------------------------------------------
 
+
 def test_cluster_nodes_tab_view_file_exists():
     path = REPO_ROOT / "netbox_proxbox/views/cluster_nodes_tab.py"
     assert path.exists()
@@ -127,4 +132,7 @@ def test_cluster_nodes_tab_view_registered_on_endpoint():
 
 def test_views_init_exports_tab_view():
     content = _read("netbox_proxbox/views/__init__.py")
-    assert "ProxmoxEndpointClusterNodesTabView" in content or "cluster_nodes_tab" in content
+    assert (
+        "ProxmoxEndpointClusterNodesTabView" in content
+        or "cluster_nodes_tab" in content
+    )

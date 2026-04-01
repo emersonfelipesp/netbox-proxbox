@@ -18,6 +18,7 @@ def _read(path: str) -> str:
 # These verify the calculation formulas without needing a real Django ORM.
 # ---------------------------------------------------------------------------
 
+
 def _memory_usage_percent(memory_usage, max_memory):
     """Mirror of ProxmoxNode.memory_usage_percent property."""
     if not memory_usage or not max_memory:
@@ -32,7 +33,7 @@ def _cpu_usage_percent(cpu_usage):
 
 def test_memory_usage_percent_calculation():
     """8 GB used / 16 GB total = 50.0 %."""
-    mem_used = 8_589_934_592   # 8 GiB
+    mem_used = 8_589_934_592  # 8 GiB
     mem_total = 17_179_869_184  # 16 GiB
     assert _memory_usage_percent(mem_used, mem_total) == 50.0
 
@@ -60,6 +61,7 @@ def test_cpu_usage_percent_passes_through():
 # ---------------------------------------------------------------------------
 # Mode detection logic tests (mirrors sync_cluster.py mode detection)
 # ---------------------------------------------------------------------------
+
 
 def _detect_mode(cluster_record, node_records):
     """Mirror of mode detection logic in sync_cluster.sync_cluster_and_nodes."""
@@ -94,6 +96,7 @@ def test_mode_detection_cluster_with_two_nodes():
 # ---------------------------------------------------------------------------
 # File / template existence contracts
 # ---------------------------------------------------------------------------
+
 
 def test_proxmox_cluster_model_file_exists():
     path = REPO_ROOT / "netbox_proxbox/models/proxmox_cluster.py"
@@ -137,7 +140,10 @@ def test_proxmox_cluster_model_links_to_netbox_cluster():
 
 
 def test_cluster_nodes_template_exists():
-    path = REPO_ROOT / "netbox_proxbox/templates/netbox_proxbox/proxmoxendpoint_cluster_nodes.html"
+    path = (
+        REPO_ROOT
+        / "netbox_proxbox/templates/netbox_proxbox/proxmoxendpoint_cluster_nodes.html"
+    )
     assert path.exists()
 
 
@@ -150,9 +156,7 @@ def test_cluster_nodes_template_renders_node_table():
 
 
 def test_proxmoxendpoint_template_has_mode_badges():
-    content = _read(
-        "netbox_proxbox/templates/netbox_proxbox/proxmoxendpoint.html"
-    )
+    content = _read("netbox_proxbox/templates/netbox_proxbox/proxmoxendpoint.html")
     # Mode badges should now exist (not just "undefined")
     assert "cluster" in content.lower()
     assert "standalone" in content.lower()

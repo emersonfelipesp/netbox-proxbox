@@ -22,7 +22,7 @@ class NestedProxmoxEndpointSerializer(NetBoxModelSerializer):
 
     class Meta:
         from netbox_proxbox.models import ProxmoxEndpoint
-        
+
         model = ProxmoxEndpoint
         fields = ["id", "url", "display", "name"]
         brief_fields = ("id", "url", "display", "name")

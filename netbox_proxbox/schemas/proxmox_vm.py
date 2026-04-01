@@ -11,10 +11,22 @@ from netbox_proxbox.schemas._base import ProxboxBaseModel, ProxboxLenientModel
 from netbox_proxbox.schemas._formatters import format_bytes
 
 
-_CORE_VM_FIELDS = frozenset({
-    "name", "cores", "sockets", "memory", "onboot", "agent",
-    "ostype", "boot", "startup", "searchdomain", "description", "tags",
-})
+_CORE_VM_FIELDS = frozenset(
+    {
+        "name",
+        "cores",
+        "sockets",
+        "memory",
+        "onboot",
+        "agent",
+        "ostype",
+        "boot",
+        "startup",
+        "searchdomain",
+        "description",
+        "tags",
+    }
+)
 
 
 class ProxmoxVMConfig(ProxboxLenientModel):
@@ -71,7 +83,9 @@ class ProxmoxVMConfig(ProxboxLenientModel):
     def flatten_sections(
         self,
         raw: dict[str, object],
-    ) -> tuple[list[tuple[str, object]], list[tuple[str, object]], list[tuple[str, object]]]:
+    ) -> tuple[
+        list[tuple[str, object]], list[tuple[str, object]], list[tuple[str, object]]
+    ]:
         """Categorise raw config keys into (disks, networks, advanced).
 
         Replaces ``_flatten_sections()`` in ``views/vm_config.py``.
@@ -142,8 +156,12 @@ class ProxmoxGuestSummary(ProxboxBaseModel):
     lxc_containers: GuestTypeCounts = Field(default_factory=GuestTypeCounts)
 
     @classmethod
-    def from_resources(cls, records: list[ProxmoxResourceRecord]) -> ProxmoxGuestSummary:
-        def _count(items: list[ProxmoxResourceRecord]) -> ProxmoxGuestSummary.GuestTypeCounts:
+    def from_resources(
+        cls, records: list[ProxmoxResourceRecord]
+    ) -> ProxmoxGuestSummary:
+        def _count(
+            items: list[ProxmoxResourceRecord],
+        ) -> ProxmoxGuestSummary.GuestTypeCounts:
             running = sum(1 for r in items if r.status == "running")
             templates = sum(1 for r in items if bool(r.template))
             return cls.GuestTypeCounts(

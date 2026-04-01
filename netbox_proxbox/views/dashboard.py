@@ -102,7 +102,9 @@ class DashboardView(
 
     def _build_node_rows(self, nodes_payload: object) -> list[dict[str, object]]:
         rows = [
-            ProxmoxNodeRow.from_node_detail(ProxmoxNodeDetail.model_validate(record)).model_dump()
+            ProxmoxNodeRow.from_node_detail(
+                ProxmoxNodeDetail.model_validate(record)
+            ).model_dump()
             for record in iter_scalar_records(nodes_payload)
         ]
         return sorted(rows, key=lambda row: str(row["name"]))

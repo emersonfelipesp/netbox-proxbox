@@ -150,7 +150,10 @@ class ProxmoxStorageView(generic.ObjectView):
                             typed_record = ProxmoxStorageRecord.model_validate(record)
                             if typed_record.effective_name != instance.name:
                                 continue
-                            if typed_record.cluster and typed_record.cluster != instance.cluster.name:
+                            if (
+                                typed_record.cluster
+                                and typed_record.cluster != instance.cluster.name
+                            ):
                                 continue
                             usage = typed_record.to_usage_dict().model_dump()
                             break

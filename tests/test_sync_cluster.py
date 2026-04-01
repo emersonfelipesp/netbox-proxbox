@@ -16,6 +16,7 @@ def _read(path: str) -> str:
 # File existence / structure contracts
 # ---------------------------------------------------------------------------
 
+
 def test_sync_cluster_service_file_exists():
     path = REPO_ROOT / "netbox_proxbox/services/sync_cluster.py"
     assert path.exists()
@@ -86,6 +87,7 @@ def test_sync_cluster_calls_proxmox_nodes_endpoint():
 # Mode detection logic (isolated from Django ORM)
 # ---------------------------------------------------------------------------
 
+
 def _detect_mode(cluster_record, node_records):
     """Mirror of the mode detection logic in sync_cluster_and_nodes."""
     if cluster_record and len(node_records) > 1:
@@ -125,6 +127,7 @@ def test_cluster_record_with_single_node_detects_standalone():
 # ---------------------------------------------------------------------------
 # Node data extraction logic (isolated from ORM)
 # ---------------------------------------------------------------------------
+
 
 def _extract_node_name(node_record):
     """Mirror of node name extraction logic."""

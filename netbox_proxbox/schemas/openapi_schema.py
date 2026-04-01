@@ -7,8 +7,14 @@ from pydantic import ConfigDict, Field, field_validator
 from netbox_proxbox.schemas._base import ProxboxBaseModel
 
 _METHOD_ORDER: dict[str, int] = {
-    "get": 10, "post": 20, "put": 30, "patch": 40,
-    "delete": 50, "options": 60, "head": 70, "trace": 80,
+    "get": 10,
+    "post": 20,
+    "put": 30,
+    "patch": 40,
+    "delete": 50,
+    "options": 60,
+    "head": 70,
+    "trace": 80,
 }
 
 
@@ -27,7 +33,9 @@ class OpenAPISecurityScheme(ProxboxBaseModel):
     scheme: str = ""
     location: str = Field("", alias="in")
 
-    model_config = ConfigDict(populate_by_name=True, extra="ignore", str_strip_whitespace=True)
+    model_config = ConfigDict(
+        populate_by_name=True, extra="ignore", str_strip_whitespace=True
+    )
 
 
 class OpenAPIOperation(ProxboxBaseModel):
@@ -83,7 +91,11 @@ class OpenAPISummary(ProxboxBaseModel):
             raise ValueError("OpenAPI response is not a JSON object.")
 
         info = payload.get("info") if isinstance(payload.get("info"), dict) else {}
-        components = payload.get("components") if isinstance(payload.get("components"), dict) else {}
+        components = (
+            payload.get("components")
+            if isinstance(payload.get("components"), dict)
+            else {}
+        )
         servers_raw = payload.get("servers") or []
         tags_raw = payload.get("tags") or []
         paths_raw = payload.get("paths") or {}
@@ -98,10 +110,12 @@ class OpenAPISummary(ProxboxBaseModel):
                     continue
                 url = str(item.get("url") or "").strip()
                 if url:
-                    servers.append(OpenAPIServer(
-                        url=url,
-                        description=str(item.get("description") or "").strip(),
-                    ))
+                    servers.append(
+                        OpenAPIServer(
+                            url=url,
+                            description=str(item.get("description") or "").strip(),
+                        )
+                    )
 
         # Normalise tags
         tags: list[str] = []
@@ -118,12 +132,14 @@ class OpenAPISummary(ProxboxBaseModel):
             for name, defn in schemes_raw.items():
                 if not isinstance(defn, dict):
                     continue
-                schemes.append(OpenAPISecurityScheme(
-                    name=str(name),
-                    type=str(defn.get("type") or ""),
-                    scheme=str(defn.get("scheme") or ""),
-                    **{"in": str(defn.get("in") or "")},
-                ))
+                schemes.append(
+                    OpenAPISecurityScheme(
+                        name=str(name),
+                        type=str(defn.get("type") or ""),
+                        scheme=str(defn.get("scheme") or ""),
+                        **{"in": str(defn.get("in") or "")},
+                    )
+                )
         schemes.sort(key=lambda s: s.name.lower())
 
         # Normalise operations
@@ -144,16 +160,24 @@ class OpenAPISummary(ProxboxBaseModel):
                     )
                     responses = op.get("responses")
                     parameters = op.get("parameters")
-                    operations.append(OpenAPIOperation(
-                        path=str(path),
-                        method=method_lower.upper(),
-                        method_order=_METHOD_ORDER[method_lower],
-                        summary=str(op.get("summary") or op.get("description") or "").strip(),
-                        operation_id=str(op.get("operationId") or "").strip(),
-                        tags=tags_str,
-                        parameters_count=len(parameters) if isinstance(parameters, list) else 0,
-                        responses_count=len(responses) if isinstance(responses, dict) else 0,
-                    ))
+                    operations.append(
+                        OpenAPIOperation(
+                            path=str(path),
+                            method=method_lower.upper(),
+                            method_order=_METHOD_ORDER[method_lower],
+                            summary=str(
+                                op.get("summary") or op.get("description") or ""
+                            ).strip(),
+                            operation_id=str(op.get("operationId") or "").strip(),
+                            tags=tags_str,
+                            parameters_count=len(parameters)
+                            if isinstance(parameters, list)
+                            else 0,
+                            responses_count=len(responses)
+                            if isinstance(responses, dict)
+                            else 0,
+                        )
+                    )
         operations.sort(key=lambda o: (o.path, o.method_order))
 
         stats = OpenAPIStats(

@@ -42,8 +42,17 @@ class ProxmoxStorageRecord(ProxboxLenientModel):
     free: int | None = None
 
     @field_validator(
-        "total", "used", "avail", "maxdisk", "disk",
-        "max_size", "size", "available", "free", "shared", "enabled",
+        "total",
+        "used",
+        "avail",
+        "maxdisk",
+        "disk",
+        "max_size",
+        "size",
+        "available",
+        "free",
+        "shared",
+        "enabled",
         mode="before",
     )
     @classmethod
@@ -75,7 +84,14 @@ class ProxmoxStorageRecord(ProxboxLenientModel):
 
     @property
     def effective_avail(self) -> int:
-        avail = next((value for value in (self.avail, self.available, self.free) if value is not None), None)
+        avail = next(
+            (
+                value
+                for value in (self.avail, self.available, self.free)
+                if value is not None
+            ),
+            None,
+        )
         if avail is not None:
             return avail
         return max(self.effective_total - self.effective_used, 0)

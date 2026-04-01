@@ -230,7 +230,11 @@ def _consume_sse_until_complete(
             first_error = last_complete.errors[0]
             if first_error.get("detail"):
                 msg = str(first_error["detail"])
-        return {"stream": True, "detail": msg, "response": last_complete.model_dump()}, 503
+        return {
+            "stream": True,
+            "detail": msg,
+            "response": last_complete.model_dump(),
+        }, 503
 
     return {
         "stream": True,
@@ -397,7 +401,9 @@ def iter_backend_sse_lines(
         yield from sse_error_frames(str(exc), final_message="Stream proxy failed.")
 
 
-def sync_resource(path: str, query_params: dict | None = None) -> tuple[dict[str, object], int]:
+def sync_resource(
+    path: str, query_params: dict | None = None
+) -> tuple[dict[str, object], int]:
     """Queue a single backend sync path (GET) using the default FastAPI endpoint."""
     context = get_fastapi_request_context()
     if context is None or not context.http_url:

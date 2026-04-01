@@ -127,7 +127,9 @@ class ServiceStatus:
             fastapi_detail = {}
         fastapi_url = fastapi_detail.get("http_url")
         fastapi_verify_ssl = fastapi_detail.get("verify_ssl", True)
-        target_address = fastapi_detail.get("domain") or fastapi_detail.get("ip_address")
+        target_address = fastapi_detail.get("domain") or fastapi_detail.get(
+            "ip_address"
+        )
         if not target_address:
             target_address = "unknown"
         target_port = fastapi_service_obj.port or 8080

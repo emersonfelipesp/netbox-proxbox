@@ -119,7 +119,9 @@ def test_openapi_summary_rejects_non_object_payload():
 
 def test_sync_job_data_from_job_reads_nested_params():
     job = SimpleNamespace(
-        data={"proxbox_sync": {"params": {"sync_types": ["all"], "netbox_vm_ids": ["1"]}}}
+        data={
+            "proxbox_sync": {"params": {"sync_types": ["all"], "netbox_vm_ids": ["1"]}}
+        }
     )
 
     data = SyncJobData.from_job(job)

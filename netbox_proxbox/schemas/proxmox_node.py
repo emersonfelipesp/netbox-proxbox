@@ -112,7 +112,9 @@ class ProxmoxNodeDetail(ProxboxLenientModel):
         except (TypeError, ValueError):
             return None
 
-    @field_validator("mem", "maxmem", "disk", "maxdisk", "uptime", "maxcpu", mode="before")
+    @field_validator(
+        "mem", "maxmem", "disk", "maxdisk", "uptime", "maxcpu", mode="before"
+    )
     @classmethod
     def _coerce_int(cls, v: object) -> int | None:
         if v is None:
@@ -155,7 +157,9 @@ class ProxmoxClusterSummary(ProxboxBaseModel):
     nodes_offline: int = 0
 
     @classmethod
-    def from_status_response(cls, response: ProxmoxClusterStatusResponse) -> ProxmoxClusterSummary:
+    def from_status_response(
+        cls, response: ProxmoxClusterStatusResponse
+    ) -> ProxmoxClusterSummary:
         cr = response.cluster_record
         nr = response.node_records
         total = (cr.nodes if cr and cr.nodes is not None else len(nr)) or len(nr)

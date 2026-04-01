@@ -169,7 +169,9 @@ class ProxmoxVMConfigTabView(generic.ObjectView):
 
             try:
                 validated = ProxmoxVMConfig.model_validate(parsed)
-                normalized = validated.to_normalized_context(vm_name=instance.name or "")
+                normalized = validated.to_normalized_context(
+                    vm_name=instance.name or ""
+                )
             except ValidationError as exc:
                 context["detail"] = f"Config validation failed: {exc}"
                 return context
