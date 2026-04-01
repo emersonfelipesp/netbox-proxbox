@@ -137,6 +137,12 @@ def test_combined_interface_views_import_vm_interface_directly():
     assert "from virtualization.models import Interface as VMInterface" not in contents
 
 
+def test_ip_address_view_prefetches_generic_assigned_objects():
+    contents = _read("netbox_proxbox/views/__init__.py")
+    assert 'prefetch_related("assigned_object")' in contents
+    assert 'select_related("assigned_object")' not in contents
+
+
 def test_vm_sync_now_view_contract():
     contents = _read("netbox_proxbox/views/vm_sync_now.py")
     assert (

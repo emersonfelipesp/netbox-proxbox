@@ -488,7 +488,7 @@ class IPAddressesView(ConditionalLoginRequiredMixin, View):
                         assigned_object_type__model="interface",
                         assigned_object_id__in=node_interface_ids,
                     )
-                    .select_related("assigned_object")
+                    .prefetch_related("assigned_object")
                     .order_by("address")
                 )
 
@@ -511,7 +511,7 @@ class IPAddressesView(ConditionalLoginRequiredMixin, View):
                         assigned_object_type__model="vminterface",
                         assigned_object_id__in=vm_interface_ids,
                     )
-                    .select_related("assigned_object")
+                    .prefetch_related("assigned_object")
                     .order_by("address")
                 )
 
