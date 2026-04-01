@@ -1,5 +1,5 @@
 # Squashes netbox_proxbox migrations from v0.0.6b2.post1 (after 0008) through v0.0.8.
-# Replaces: 0009_vmbackup through 0015_remove_syncprocess (inclusive of merge migrations).
+# Replaces the historical 0009-0013 chain that shipped in v0.0.7.
 
 import django.db.models.deletion
 import netbox.models.deletion
@@ -18,8 +18,6 @@ class Migration(migrations.Migration):
         ("netbox_proxbox", "0011_merge_20260328_1454"),
         ("netbox_proxbox", "0012_merge_0011_merge_0010_heads_0011_merge_20260328_1454"),
         ("netbox_proxbox", "0013_make_domains_optional_and_require_host_target"),
-        ("netbox_proxbox", "0014_vmsnapshot"),
-        ("netbox_proxbox", "0015_remove_syncprocess"),
     ]
 
     dependencies = [
