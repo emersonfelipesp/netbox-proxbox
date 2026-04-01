@@ -186,6 +186,12 @@ def test_endpoint_templates_expose_live_badges():
     )
 
 
+def test_proxmox_endpoint_list_template_loads_static_for_status_script():
+    contents = _read("netbox_proxbox/templates/netbox_proxbox/proxmoxendpoint_list.html")
+    assert "{% load static %}" in contents
+    assert "endpoint-status.js" in contents
+
+
 def test_fastapi_openapi_tab_view_and_template_contract():
     view_contents = _read("netbox_proxbox/views/endpoints/fastapi.py")
     template_contents = _read(
