@@ -131,6 +131,12 @@ def test_vm_detail_sync_now_button_contract():
     assert "Sync Now" in button_contents
 
 
+def test_combined_interface_views_import_vm_interface_directly():
+    contents = _read("netbox_proxbox/views/__init__.py")
+    assert "from virtualization.models import VMInterface, VirtualMachine" in contents
+    assert "from virtualization.models import Interface as VMInterface" not in contents
+
+
 def test_vm_sync_now_view_contract():
     contents = _read("netbox_proxbox/views/vm_sync_now.py")
     assert (

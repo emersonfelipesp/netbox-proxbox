@@ -360,7 +360,7 @@ class InterfacesView(ConditionalLoginRequiredMixin, View):
         from dcim.models import Device, Interface as DCIMInterface
         from django.contrib.contenttypes.models import ContentType
         from extras.models import Tag, TaggedItem
-        from virtualization.models import Interface as VMInterface, VirtualMachine
+        from virtualization.models import VMInterface, VirtualMachine
 
         from netbox_proxbox.models import FastAPIEndpoint
 
@@ -451,7 +451,7 @@ class IPAddressesView(ConditionalLoginRequiredMixin, View):
         from django.contrib.contenttypes.models import ContentType
         from extras.models import Tag, TaggedItem
         from ipam.models import IPAddress
-        from virtualization.models import Interface as VMInterface, VirtualMachine
+        from virtualization.models import VMInterface, VirtualMachine
 
         from netbox_proxbox.models import FastAPIEndpoint
 
