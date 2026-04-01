@@ -24,6 +24,13 @@ class HttpResponse:
         return self._headers[key]
 
 
+class HttpResponseRedirect(HttpResponse):
+    def __init__(self, redirect_to: str, status: int = 302):
+        super().__init__(status=status)
+        self.url = redirect_to
+        self["Location"] = redirect_to
+
+
 class JsonResponse(HttpResponse):
     def __init__(self, payload=None, status: int = 200, safe: bool = True):
         super().__init__(status=status, content=payload)
@@ -187,6 +194,7 @@ def load_plugin_module(
     django_http = types.ModuleType("django.http")
     django_http.HttpRequest = HttpRequest
     django_http.HttpResponse = HttpResponse
+    django_http.HttpResponseRedirect = HttpResponseRedirect
     django_http.JsonResponse = JsonResponse
     django_http.StreamingHttpResponse = StreamingHttpResponse
     django_http.Http404 = Http404
@@ -285,6 +293,12 @@ def load_plugin_module(
                 return HttpResponse(status=403)
             return super().dispatch(request, *args, **kwargs)
 
+    def register_model_view(*args, **kwargs):
+        def decorator(view_cls):
+            return view_cls
+
+        return decorator
+
     utilities_views.ConditionalLoginRequiredMixin = ConditionalLoginRequiredMixin
     utilities_views.TokenConditionalLoginRequiredMixin = (
         TokenConditionalLoginRequiredMixin
@@ -292,6 +306,7 @@ def load_plugin_module(
     utilities_views.ContentTypePermissionRequiredMixin = (
         ContentTypePermissionRequiredMixin
     )
+    utilities_views.register_model_view = register_model_view
 
     netbox_module = types.ModuleType("netbox")
     netbox_plugins = types.ModuleType("netbox.plugins")
@@ -313,6 +328,10 @@ def load_plugin_module(
         first=proxmox_endpoint,
         objects_by_pk={1: proxmox_endpoint} if proxmox_endpoint is not None else {},
     )
+    virtualization_module = types.ModuleType("virtualization")
+    virtualization_models_module = types.ModuleType("virtualization.models")
+    virtualization_models_module.VirtualMachine = _make_model_class("VirtualMachine")
+    virtualization_module.models = virtualization_models_module
     utils_module = types.ModuleType("netbox_proxbox.utils")
     utils_module.get_fastapi_url = get_fastapi_url or (
         lambda obj: {
@@ -357,6 +376,8 @@ def load_plugin_module(
         "netbox": netbox_module,
         "netbox.plugins": netbox_plugins,
         "netbox_proxbox.models": models_module,
+        "virtualization": virtualization_module,
+        "virtualization.models": virtualization_models_module,
         "netbox_proxbox.utils": utils_module,
         "utilities.permissions": utilities_permissions,
         "utilities.views": utilities_views,

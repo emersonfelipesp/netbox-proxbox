@@ -27,7 +27,7 @@ class VirtualMachineSyncNowView(
     ContentTypePermissionRequiredMixin,
     View,
 ):
-    """POST: enqueue VM + disk sync job targeting exactly one NetBox VM id."""
+    """POST: enqueue a targeted per-VM sync job."""
 
     http_method_names = ["post"]
 
@@ -46,7 +46,6 @@ class VirtualMachineSyncNowView(
             name=str(_("Proxbox Sync: Virtual machine {}")).format(vm.pk),
             sync_types=[
                 SyncTypeChoices.VIRTUAL_MACHINES,
-                SyncTypeChoices.VIRTUAL_MACHINES_DISKS,
                 SyncTypeChoices.VIRTUAL_MACHINES_BACKUPS,
                 SyncTypeChoices.VIRTUAL_MACHINES_SNAPSHOTS,
             ],

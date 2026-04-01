@@ -144,6 +144,22 @@ def _sync_stream_path(sync_type: str) -> str:
     return f"{base.rstrip('/')}/stream"
 
 
+def _sync_stream_paths_for_stage(sync_type: str, netbox_vm_ids: list[str]) -> list[str]:
+    """Return one or more SSE paths for a stage, expanding targeted VM runs per VM id."""
+    if not netbox_vm_ids:
+        return [_sync_stream_path(sync_type)]
+
+    template = _VM_SCOPED_PATH_TEMPLATES.get(sync_type)
+    if not template:
+        return [_sync_stream_path(sync_type)]
+
+    return [
+        f"{template.format(vm_id=vm_id).rstrip('/')}/stream"
+        for vm_id in netbox_vm_ids
+        if str(vm_id)
+    ]
+
+
 def proxbox_sync_params_from_job(job: object) -> dict[str, object]:
     """Rebuild ProxboxSyncJob.enqueue kwargs from job.data (with safe fallbacks)."""
     raw_data = getattr(job, "data", None)
@@ -283,25 +299,29 @@ class ProxboxSyncJob(JobRunner):
             if st == SyncTypeChoices.VIRTUAL_MACHINES_BACKUPS:
                 query_params["delete_nonexistent_backup"] = True
 
-            target_vm_ids = params.get("netbox_vm_ids", [])
+            target_vm_ids = [
+                str(x) for x in list(params.get("netbox_vm_ids") or []) if str(x)
+            ]
             if target_vm_ids:
                 query_params["netbox_vm_ids"] = ",".join(target_vm_ids)
 
-            stream_path = _sync_stream_path(st)
-
-            self.logger.info("Starting stage: %s (%s)", st, stream_path)
-            payload, status = run_sync_stream(
-                stream_path,
-                query_params=query_params or None,
-                on_frame=on_frame,
-            )
-            self.job.save(update_fields=["log_entries"])
-            if status >= 400:
-                detail = payload.get("detail", "Backend returned an error.")
-                self.logger.error("Stage %s failed (HTTP %s): %s", st, status, detail)
-                raise RuntimeError(detail)
-            self.logger.info("Stage completed: %s (HTTP %s)", st, status)
-            stages_out.append({"sync_type": st, "payload": payload})
+            stage_paths = _sync_stream_paths_for_stage(st, target_vm_ids)
+            for stream_path in stage_paths:
+                self.logger.info("Starting stage: %s (%s)", st, stream_path)
+                payload, status = run_sync_stream(
+                    stream_path,
+                    query_params=query_params or None,
+                    on_frame=on_frame,
+                )
+                self.job.save(update_fields=["log_entries"])
+                if status >= 400:
+                    detail = payload.get("detail", "Backend returned an error.")
+                    self.logger.error(
+                        "Stage %s failed (HTTP %s): %s", st, status, detail
+                    )
+                    raise RuntimeError(detail)
+                self.logger.info("Stage completed: %s (HTTP %s)", st, status)
+                stages_out.append({"sync_type": st, "payload": payload})
 
         runtime_seconds = round(time.monotonic() - run_started, 3)
         self.job.data = {
