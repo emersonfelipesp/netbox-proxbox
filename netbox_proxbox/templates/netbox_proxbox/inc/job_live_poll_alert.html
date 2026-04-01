@@ -26,7 +26,7 @@
       <div
         id="nb-job-progress-bar-{{ job.pk }}"
         class="progress-bar bg-info progress-bar-striped progress-bar-animated"
-        style="width: 0%; min-width: 2rem; transition: width 0.6s ease;"
+        style="width: 0%; min-width: 2rem; transition: width 0.3s ease;"
       >
         <span class="nb-job-progress-label small fw-semibold text-white"></span>
       </div>
@@ -46,6 +46,8 @@
   var logSuffix = " {{ nb_job_log_lines_suffix|escapejs }}";
   var lastEntries = [];
   var progressBarEl = document.getElementById("nb-job-progress-bar-" + pk);
+  var sseSource = null;
+  var isStreaming = false;
 
   function jobStatusParts(status) {
     if (status && typeof status === "object") {
@@ -57,11 +59,126 @@
     return { value: s, label: s };
   }
 
+  function appendLog(message, eventType, data) {
+    if (!logEl) return;
+    var api = window.NbProxboxJobLogView;
+    var entry = {
+      timestamp: new Date().toISOString(),
+      level: eventType || "info",
+      message: message
+    };
+    if (!lastEntries) lastEntries = [];
+    lastEntries.push(entry);
+    if (lastEntries.length > 200) lastEntries.shift();
+      if (api && typeof api.renderLiveLog === "function") {
+      logEl.replaceChildren();
+      api.renderLiveLog(logEl, lastEntries);
+    } else {
+      var span = document.createElement("div");
+      span.className = "nb-job-live-log-entry";
+      span.textContent = entry.timestamp + " [" + entry.level + "] " + entry.message;
+      logEl.appendChild(span);
+    }
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function updateProgress(progress) {
+    if (!progressBarEl) return;
+    var wrap = progressBarEl.parentElement.parentElement;
+    if (wrap && wrap.classList.contains("nb-job-progress-wrap")) {
+      wrap.style.display = "";
+    }
+    var pct = progress.percent !== undefined ? progress.percent : 0;
+    progressBarEl.style.width = pct + "%";
+    progressBarEl.setAttribute("aria-valuenow", pct);
+    var label = progressBarEl.querySelector(".nb-job-progress-label");
+    if (label) {
+      if (progress.stage) {
+        label.textContent = progress.stage + " (" + progress.current + "/" + progress.total + ")";
+      } else {
+        label.textContent = progress.current + "/" + progress.total;
+      }
+    }
+  }
+
+  function handleSSEProgress(data) {
+    var progress = data.progress;
+    var message = data.message || "";
+    var status = data.status || "";
+    
+    appendLog(message, "info", data);
+    
+    if (progress) {
+      updateProgress(progress);
+    }
+    
+    if (status === "completed" || status === "failed") {
+      if (progressBarEl) {
+        progressBarEl.classList.remove("progress-bar-striped", "progress-bar-animated");
+        if (status === "completed") {
+          progressBarEl.classList.remove("bg-info");
+          progressBarEl.classList.add("bg-success");
+          var label = progressBarEl.querySelector(".nb-job-progress-label");
+          if (label) label.textContent = "Done";
+        } else {
+          progressBarEl.classList.remove("bg-info");
+          progressBarEl.classList.add("bg-danger");
+        }
+      }
+      if (sseSource) {
+        sseSource.close();
+        sseSource = null;
+      }
+      isStreaming = false;
+    }
+  }
+
+  function startSSE() {
+    if (isStreaming) return;
+    var streamUrl = "{% url 'netbox_proxbox:job_stream' pk=job.pk|default:0 %}";
+    if (!pk || streamUrl.indexOf("0") > -1) {
+      startPollingFallback();
+      return;
+    }
+    isStreaming = true;
+    try {
+      sseSource = new EventSource(streamUrl);
+      sseSource.addEventListener("step", function(e) {
+        try {
+          var data = JSON.parse(e.data);
+          if (data.step === "progress" || data.step === "job") {
+            handleSSEProgress(data);
+          }
+        } catch (err) {}
+      });
+      sseSource.addEventListener("error", function(e) {
+        isStreaming = false;
+        if (sseSource) {
+          sseSource.close();
+          sseSource = null;
+        }
+        startPollingFallback();
+      });
+      sseSource.addEventListener("complete", function(e) {
+        isStreaming = false;
+        if (sseSource) {
+          sseSource.close();
+          sseSource = null;
+        }
+      });
+      statusEl.textContent = " — Streaming...";
+    } catch (err) {
+      isStreaming = false;
+      startPollingFallback();
+    }
+  }
+
   function applyLog(entries) {
     if (!logEl) return;
     var api = window.NbProxboxJobLogView;
-    if (api && typeof api.renderLiveLog === "function") {
-      api.renderLiveLog(logEl, entries);
+    lastEntries = entries;
+      if (api && typeof api.renderLiveLog === "function") {
+      api.renderLiveLog(logEl, lastEntries);
     } else {
       logEl.textContent = "";
     }
@@ -105,13 +222,16 @@
       .catch(function () {});
   }
 
+  function startPollingFallback() {
+    tick();
+    timer = setInterval(tick, 2500);
+  }
+
   function startPolling() {
-    if (window.NbProxboxJobLogView) {
-      tick();
-      timer = setInterval(tick, 2500);
-      return;
-    }
-    setTimeout(startPolling, 40);
+    startSSE();
+    setTimeout(function() {
+      if (!isStreaming) startPollingFallback();
+    }, 1000);
   }
 
   if (copyBtn) {

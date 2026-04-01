@@ -10,6 +10,7 @@ from netbox_proxbox import github
 from netbox_proxbox.models import FastAPIEndpoint, NetBoxEndpoint, ProxmoxEndpoint
 from netbox_proxbox.utils import get_fastapi_url
 from netbox_proxbox.views.home_context import build_home_dashboard_context
+from netbox_proxbox.views.job_stream import JobStreamSSEView
 from netbox_proxbox.views.proxbox_access import (
     permission_view_fastapi_endpoint,
     user_may_access_proxbox_dashboard,
