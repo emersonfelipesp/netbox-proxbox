@@ -12,10 +12,7 @@ The backend:
 - supports SSE streaming (`text/event-stream`) for real-time per-object sync progress
 - can optionally provide WebSocket updates for sync progress
 
-The NetBox plugin stores and manages endpoint records, then triggers sync requests against the backend. Sync can run in two modes:
-
-- **POST polling**: traditional request/response that waits for completion.
-- **GET SSE stream**: the plugin proxies the backend's streaming response to the browser, rendering granular progress (e.g., `Processing device pve01`, `Synced virtual_machine vm101`) in real time.
+The NetBox plugin stores and manages endpoint records, then triggers sync requests against the backend. Current user-facing sync flows are job-driven and primarily consume backend SSE endpoints. Legacy WebSocket/browser integrations still exist for compatibility, but background jobs plus SSE are the main path in current code.
 
 ## Sync Endpoints
 

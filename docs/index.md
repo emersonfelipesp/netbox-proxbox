@@ -62,6 +62,7 @@ For the current repository state, the recommended path is:
 
 See:
 
+- [Installation Overview](./installation/index.md)
 - [Pre-Installation](./installation/pre-installation.md)
 - [Installing the Plugin Using Git](./installation/2-installing-plugin-git.md)
 - [Installing the Plugin in Docker-Based NetBox Deployments](./installation/3-installing-plugin-docker.md)
@@ -71,6 +72,12 @@ See:
 ## Read-Only Proxmox Behavior
 
 Proxbox currently focuses on synchronization and discovery. The plugin does not directly manage Proxmox resources from NetBox.
+
+## Documentation Notes
+
+- The published docs site is generated with MkDocs and uses site-relative URLs such as `/installation/2-installing-plugin-git/`.
+- Generated CLI reference pages are rebuilt from the current `proxbox_cli` command tree.
+- Historical pages that describe older workflows are retained only when clearly labeled as legacy.
 
 ## Stars History
 

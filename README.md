@@ -145,9 +145,9 @@ Full documentation is available at [emersonfelipesp.github.io/netbox-proxbox](ht
 
 Key pages:
 
-- [Installation Guide](https://emersonfelipesp.github.io/netbox-proxbox/en/latest/installation/2-installing-plugin-git.html)
-- [Backend Setup](https://emersonfelipesp.github.io/netbox-proxbox/en/latest/installation/backend-setup.html)
-- [Scheduled Sync](https://emersonfelipesp.github.io/netbox-proxbox/en/latest/features/scheduled-sync.html)
+- [Installation Guide](https://emersonfelipesp.github.io/netbox-proxbox/installation/2-installing-plugin-git/)
+- [Backend Setup](https://emersonfelipesp.github.io/netbox-proxbox/installation/backend-setup/)
+- [Scheduled Sync](https://emersonfelipesp.github.io/netbox-proxbox/features/scheduled-sync/)
 
 ## Community
 

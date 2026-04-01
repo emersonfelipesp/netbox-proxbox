@@ -18,7 +18,7 @@ mkdir -p /opt/proxbox-api
 cd /opt/proxbox-api
 python3 -m venv venv
 source venv/bin/activate
-pip install proxbox-api==0.0.2.post3
+pip install --upgrade proxbox-api
 ```
 
 Start it manually:
@@ -59,6 +59,22 @@ The sample unit expects the backend virtual environment under `/opt/proxbox-api/
 ```
 
 Adjust the service file if your backend lives somewhere else.
+
+## Option 4: Run The Backend From Source
+
+Use the source workflow when you want the latest backend code or need to patch the backend itself:
+
+```bash
+cd /opt
+git clone https://github.com/emersonfelipesp/proxbox-api.git
+cd /opt/proxbox-api
+
+python3 -m venv venv
+source venv/bin/activate
+pip install -e .
+
+/opt/proxbox-api/venv/bin/uvicorn proxbox_api.main:app --host 0.0.0.0 --port 8800 --app-dir /opt/proxbox-api
+```
 
 ## TLS Notes
 

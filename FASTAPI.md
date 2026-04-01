@@ -1,22 +1,30 @@
-# Deploy FastAPI
+# Proxbox Backend Notes
 
-Using **[uvicorn](https://www.uvicorn.org/)** to deploy Proxbox backend using **[FastAPI](https://fastapi.tiangolo.com/)** on port **9000** using development mode with --reload.
+Proxbox no longer ships an in-repo experimental FastAPI app under the NetBox plugin package. The current backend is the separate [`proxbox-api`](https://github.com/emersonfelipesp/proxbox-api) service consumed by this plugin.
 
-### It's not ready for PRODUCTION!
+Use one of these current paths instead:
 
-FastAPI was chosen to replace the current Django Backend, but it's not fully implemented and tested.
+- Published package or source checkout of `proxbox-api`
+- Docker image `emersonfelipesp/proxbox-api:latest`
+- TLS Docker image `emersonfelipesp/proxbox-api:latest-mkcert`
 
+Typical local run commands are:
+
+```bash
+uvicorn proxbox_api.main:app --host 0.0.0.0 --port 8800
 ```
-cd /opt/netbox/netbox
-uvicorn netbox-proxbox.netbox_proxbox.api.main:app --reload --port 9000
+
+or, from a source checkout of the backend repository:
+
+```bash
+uv run fastapi run proxbox_api.main:app --host 0.0.0.0 --port 8000
 ```
 
-## Testing FastAPI
+For current installation and deployment guidance, use:
 
-Access the following URL **http://HOST:PORT/proxmox/cluster/resources** to view all VMs/Nodes/Storages of your environment.
-Docs: **http://HOST:PORT/docs** or **http://HOST:PORT/redoc**
+- `docs/installation/backend-setup.md`
+- `docs/backend/using-pip.md`
+- `docs/backend/using-git.md`
+- `docs/backend/using-docker.md`
 
-## Security
-
-The password is not securely stored yet, but I will fix it.
-About the integration, we only use **GET HTTP methods** and we do not modify anything of your environment using **POST / PUT** methods, even though the token allows it or not.
+This file is kept only as a compatibility note for older references to `FASTAPI.md`.

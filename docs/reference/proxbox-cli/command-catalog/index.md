@@ -3,9 +3,9 @@
 Machine-generated command inventory for the `proxbox_cli` package.
 
 !!! info "Generated"
-    Last updated: `2026-03-28T14:49:37.241515+00:00`
-    Command groups: `14`
-    Leaf commands: `58`
+    Last updated: `2026-04-01T15:39:42.389783+00:00`
+    Command groups: `13`
+    Leaf commands: `55`
 
 | Command | Kind | Summary | Example |
 |---------|------|---------|---------|
@@ -61,9 +61,6 @@ Machine-generated command inventory for the `proxbox_cli` package.
 | `pxb proxmox viewer openapi-embedded` | `command` | Return the Proxmox OpenAPI as embedded in the FastAPI custom schema. | `pxb proxmox viewer openapi-embedded` |
 | `pxb proxmox viewer pydantic` | `command` | Print the generated Pydantic v2 model source code. | `pxb proxmox viewer pydantic` |
 | `pxb proxmox vm-config` | `command` | Get VM config for a specific VM. | `pxb proxmox vm-config <NODE> <VM-TYPE> <VMID>` |
-| `pxb sync-processes` | `group` | Sync process commands. | `pxb sync-processes --help` |
-| `pxb sync-processes create` | `command` | Create a new sync process record in NetBox. | `pxb sync-processes create` |
-| `pxb sync-processes list` | `command` | List all sync processes from NetBox. | `pxb sync-processes list` |
 | `pxb test` | `command` | Test connectivity to the proxbox-api server. | `pxb test` |
 | `pxb virtualization` | `group` | Virtualization commands. | `pxb virtualization --help` |
 | `pxb virtualization cluster-types-create` | `command` | Create cluster types in NetBox. | `pxb virtualization cluster-types-create` |
@@ -77,7 +74,6 @@ Machine-generated command inventory for the `proxbox_cli` package.
 | `pxb virtualization vms get` | `command` | Get a single VM by ID. | `pxb virtualization vms get <VM-ID>` |
 | `pxb virtualization vms interfaces-create` | `command` | Create VM interfaces in NetBox. [NOTE: triggers sync] | `pxb virtualization vms interfaces-create` |
 | `pxb virtualization vms ip-address-create` | `command` | Create IP addresses for VM interfaces in NetBox. [NOTE: triggers sync] | `pxb virtualization vms ip-address-create` |
-| `pxb virtualization vms journal-test` | `command` | Test endpoint: creates sync process and journal entries. | `pxb virtualization vms journal-test` |
 | `pxb virtualization vms list` | `command` | List all virtual machines from NetBox. | `pxb virtualization vms list` |
 | `pxb virtualization vms summary` | `command` | Get summary for a specific VM by ID. | `pxb virtualization vms summary <VM-ID>` |
 | `pxb virtualization vms summary-example` | `command` | Return an example VirtualMachineSummary response. | `pxb virtualization vms summary-example` |

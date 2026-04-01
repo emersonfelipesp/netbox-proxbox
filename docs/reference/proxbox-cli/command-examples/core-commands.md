@@ -2,7 +2,7 @@
 
 Representative command help output captured automatically from the local checkout.
 
-Generated: `2026-03-28T14:49:37.241515+00:00`
+Generated: `2026-04-01T15:39:42.389783+00:00`
 
 ## Root Help
 
@@ -34,7 +34,6 @@ Top-level entrypoint and root command groups.
 │ virtualization  Virtualization commands.                                     │
 │ extras          Extras commands (custom fields, etc.).                       │
 │ docs            Documentation generation commands.                           │
-│ sync-processes  Sync process commands.                                       │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ```
 
@@ -75,23 +74,23 @@ Regenerates the machine-generated CLI reference artifacts used by MkDocs.
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ```
 
-## Sync Processes Help
+## Extras Help
 
-Command: `pxb sync-processes --help`
+Command: `pxb extras --help`
 
-Shows the sync-process subcommands exposed by the backend.
+Shows extras-related CLI commands (custom fields, etc.).
 
 ```text
                                                                                 
- Usage: python -m proxbox_cli sync-processes [OPTIONS] COMMAND [ARGS]...        
+ Usage: python -m proxbox_cli extras [OPTIONS] COMMAND [ARGS]...                
                                                                                 
- Sync process commands.                                                         
+ Extras commands (custom fields, etc.).                                         
                                                                                 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ list    List all sync processes from NetBox.                                 │
-│ create  Create a new sync process record in NetBox.                          │
+│ custom-fields-create  Create predefined Proxbox custom fields in NetBox      │
+│                       (proxmox_vm_id, start_at_boot, etc.).                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ```

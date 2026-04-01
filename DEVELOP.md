@@ -92,6 +92,12 @@ Install docs dependencies:
 pip install -r requirements-docs.txt
 ```
 
+Refresh the generated CLI reference pages before a docs build when command help has changed:
+
+```bash
+python docs/generate_proxbox_cli_docs.py
+```
+
 Serve documentation locally:
 
 ```bash
@@ -101,7 +107,7 @@ mkdocs serve
 Build static site:
 
 ```bash
-mkdocs build
+mkdocs build --strict
 ```
 
 The built site is output to `./site/`.
@@ -144,7 +150,7 @@ mkdir -p /opt/proxbox-api
 cd /opt/proxbox-api
 python3 -m venv venv
 source venv/bin/activate
-pip install proxbox-api
+pip install --upgrade proxbox-api
 uvicorn proxbox_api.main:app --host 0.0.0.0 --port 8800
 ```
 
@@ -197,17 +203,18 @@ The project uses semantic versioning. Version is defined in:
 ## Release Process
 
 1. Update version in `pyproject.toml` and `netbox_proxbox/__init__.py`
-2. Update release notes in `docs/release-notes/`
-3. Run tests and linting
-4. Build and verify documentation
-5. Create a git tag:
+2. Regenerate CLI docs with `python docs/generate_proxbox_cli_docs.py`
+3. Update release notes in `docs/release-notes/`
+4. Run tests and linting
+5. Build and verify documentation with `mkdocs build --strict`
+6. Create a git tag:
 
    ```bash
    git tag -a v0.0.x -m "Release v0.0.x"
    git push origin v0.0.x
    ```
 
-6. Build and publish to PyPI:
+7. Build and publish to PyPI:
 
    ```bash
    pip install build

@@ -1,12 +1,12 @@
 {
   "meta": {
-    "generated_at": "2026-03-28T14:49:37.241515+00:00",
+    "generated_at": "2026-04-01T15:39:42.389783+00:00",
     "python": "3.13.3",
     "platform": "Linux-6.8.12-4-pve-x86_64-with-glibc2.41"
   },
   "generated_by": "proxbox_cli.docgen",
-  "command_count": 58,
-  "group_count": 14,
+  "command_count": 55,
+  "group_count": 13,
   "commands": [
     {
       "path": [],
@@ -536,35 +536,6 @@
     },
     {
       "path": [
-        "sync-processes"
-      ],
-      "command": "pxb sync-processes",
-      "kind": "group",
-      "summary": "Sync process commands.",
-      "example": "pxb sync-processes --help"
-    },
-    {
-      "path": [
-        "sync-processes",
-        "create"
-      ],
-      "command": "pxb sync-processes create",
-      "kind": "command",
-      "summary": "Create a new sync process record in NetBox.",
-      "example": "pxb sync-processes create"
-    },
-    {
-      "path": [
-        "sync-processes",
-        "list"
-      ],
-      "command": "pxb sync-processes list",
-      "kind": "command",
-      "summary": "List all sync processes from NetBox.",
-      "example": "pxb sync-processes list"
-    },
-    {
-      "path": [
         "test"
       ],
       "command": "pxb test",
@@ -698,17 +669,6 @@
       "kind": "command",
       "summary": "Create IP addresses for VM interfaces in NetBox. [NOTE: triggers sync]",
       "example": "pxb virtualization vms ip-address-create"
-    },
-    {
-      "path": [
-        "virtualization",
-        "vms",
-        "journal-test"
-      ],
-      "command": "pxb virtualization vms journal-test",
-      "kind": "command",
-      "summary": "Test endpoint: creates sync process and journal entries.",
-      "example": "pxb virtualization vms journal-test"
     },
     {
       "path": [
