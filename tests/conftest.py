@@ -390,6 +390,8 @@ def load_plugin_module(
         VIRTUAL_MACHINES_BACKUPS = "vm-backups"
         VIRTUAL_MACHINES_SNAPSHOTS = "vm-snapshots"
         DEVICES = "devices"
+        NETWORK_INTERFACES = "network-interfaces"
+        IP_ADDRESSES = "ip-addresses"
         ALL = "all"
 
     nbp_choices.SyncTypeChoices = _SyncTypeChoices

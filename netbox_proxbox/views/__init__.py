@@ -360,7 +360,6 @@ class InterfacesView(ConditionalLoginRequiredMixin, View):
         from dcim.models import Device, Interface as DCIMInterface
         from django.contrib.contenttypes.models import ContentType
         from extras.models import Tag, TaggedItem
-        from ipam.models import IPAddress
         from virtualization.models import Interface as VMInterface, VirtualMachine
 
         from netbox_proxbox.models import FastAPIEndpoint
@@ -385,7 +384,7 @@ class InterfacesView(ConditionalLoginRequiredMixin, View):
             tagged_device_ids = list(
                 TaggedItem.objects.filter(
                     tag=proxbox_tag, content_type=device_content_type
-                ).values_list("object_id", flat=True)[:500]
+                ).values_list("object_id", flat=True)
             )
             if tagged_device_ids:
                 node_interfaces = list(
@@ -393,7 +392,7 @@ class InterfacesView(ConditionalLoginRequiredMixin, View):
                     .filter(device_id__in=tagged_device_ids)
                     .select_related("device")
                     .prefetch_related("ip_addresses")
-                    .order_by("device__name", "name")[:500]
+                    .order_by("device__name", "name")
                 )
                 for iface in node_interfaces:
                     if iface.enabled:
@@ -405,7 +404,7 @@ class InterfacesView(ConditionalLoginRequiredMixin, View):
             tagged_vm_ids = list(
                 TaggedItem.objects.filter(
                     tag=proxbox_tag, content_type=vm_content_type
-                ).values_list("object_id", flat=True)[:500]
+                ).values_list("object_id", flat=True)
             )
             if tagged_vm_ids:
                 vm_interfaces = list(
@@ -413,7 +412,7 @@ class InterfacesView(ConditionalLoginRequiredMixin, View):
                     .filter(virtual_machine_id__in=tagged_vm_ids)
                     .select_related("virtual_machine")
                     .prefetch_related("ip_addresses")
-                    .order_by("virtual_machine__name", "name")[:500]
+                    .order_by("virtual_machine__name", "name")
                 )
                 for iface in vm_interfaces:
                     if iface.enabled:
@@ -474,53 +473,47 @@ class IPAddressesView(ConditionalLoginRequiredMixin, View):
             tagged_device_ids = list(
                 TaggedItem.objects.filter(
                     tag=proxbox_tag, content_type=device_content_type
-                ).values_list("object_id", flat=True)[:500]
+                ).values_list("object_id", flat=True)
             )
             if tagged_device_ids:
                 node_interface_ids = list(
                     DCIMInterface.objects.filter(
                         device_id__in=tagged_device_ids
-                    ).values_list("id", flat=True)[:500]
+                    ).values_list("id", flat=True)
                 )
-                if node_interface_ids:
-                    vm_content_type = ContentType.objects.get_for_model(VirtualMachine)
-                    tagged_vm_ids = list(
-                        TaggedItem.objects.filter(
-                            tag=proxbox_tag, content_type=vm_content_type
-                        ).values_list("object_id", flat=True)[:500]
+                node_ips = list(
+                    IPAddress.objects.restrict(request.user, "view")
+                    .filter(
+                        assigned_object_type__app_label="dcim",
+                        assigned_object_type__model="interface",
+                        assigned_object_id__in=node_interface_ids,
                     )
-                    vm_interface_ids = []
-                    if tagged_vm_ids:
-                        vm_interface_ids = list(
-                            VMInterface.objects.filter(
-                                virtual_machine_id__in=tagged_vm_ids
-                            ).values_list("id", flat=True)[:500]
-                        )
+                    .select_related("assigned_object")
+                    .order_by("address")
+                )
 
-                    all_interface_ids = list(node_interface_ids) + list(
-                        vm_interface_ids
+            vm_content_type = ContentType.objects.get_for_model(VirtualMachine)
+            tagged_vm_ids = list(
+                TaggedItem.objects.filter(
+                    tag=proxbox_tag, content_type=vm_content_type
+                ).values_list("object_id", flat=True)
+            )
+            if tagged_vm_ids:
+                vm_interface_ids = list(
+                    VMInterface.objects.filter(
+                        virtual_machine_id__in=tagged_vm_ids
+                    ).values_list("id", flat=True)
+                )
+                vm_ips = list(
+                    IPAddress.objects.restrict(request.user, "view")
+                    .filter(
+                        assigned_object_type__app_label="virtualization",
+                        assigned_object_type__model="vminterface",
+                        assigned_object_id__in=vm_interface_ids,
                     )
-                    if all_interface_ids:
-                        node_ips = list(
-                            IPAddress.objects.restrict(request.user, "view")
-                            .filter(
-                                assigned_object_type__app_label="dcim",
-                                assigned_object_type__model="interface",
-                                assigned_object_id__in=node_interface_ids,
-                            )
-                            .select_related("assigned_object")
-                            .order_by("address")[:500]
-                        )
-                        vm_ips = list(
-                            IPAddress.objects.restrict(request.user, "view")
-                            .filter(
-                                assigned_object_type__app_label="virtualization",
-                                assigned_object_type__model="vminterface",
-                                assigned_object_id__in=vm_interface_ids,
-                            )
-                            .select_related("assigned_object")
-                            .order_by("address")[:500]
-                        )
+                    .select_related("assigned_object")
+                    .order_by("address")
+                )
 
         return render(
             request,

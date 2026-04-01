@@ -23,9 +23,7 @@ __all__ = ("build_home_dashboard_context",)
 def _build_add_url(view_name: str, params: dict[str, object]) -> str:
     """Return an endpoint add URL with query-string defaults."""
     query_params = {
-        key: value
-        for key, value in params.items()
-        if value not in (None, "")
+        key: value for key, value in params.items() if value not in (None, "")
     }
     url = reverse(view_name)
     if not query_params:

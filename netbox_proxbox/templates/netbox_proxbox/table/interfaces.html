@@ -56,7 +56,7 @@
                                 {% endif %}
                             </td>
                             <td>
-                                <a href="{% url 'virtualization:virtualmachine' iface.virtual_machine.pk %}" class="text-body text-decoration-none">
+                                <a href="{% url 'virtualization:vminterface' iface.pk %}" class="text-body text-decoration-none">
                                     {{ iface.name }}
                                 </a>
                             </td>
@@ -122,7 +122,11 @@
                                     <span class="mdi mdi-close-circle text-danger" title="Disabled"></span>
                                 {% endif %}
                             </td>
-                            <td>{{ iface.name }}</td>
+                            <td>
+                                <a href="{% url 'dcim:interface' iface.pk %}" class="text-body text-decoration-none">
+                                    {{ iface.name }}
+                                </a>
+                            </td>
                             <td>{{ iface.get_type_display|default:"—" }}</td>
                             <td>{{ iface.mode|default:"—" }}</td>
                             <td>

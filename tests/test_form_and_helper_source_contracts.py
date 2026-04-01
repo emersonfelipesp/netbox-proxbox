@@ -33,12 +33,12 @@ def test_endpoint_forms_resolve_loopback_ip_initial_values():
     fastapi_contents = _read("netbox_proxbox/forms/fastapi.py")
 
     assert 'self.initial["ip_address"]' in netbox_contents
-    assert 'IPAddress.objects.filter(pk=candidate).first()' in netbox_contents
-    assert 'IPAddress.objects.filter(address=candidate).first()' in netbox_contents
+    assert "IPAddress.objects.filter(pk=candidate).first()" in netbox_contents
+    assert "IPAddress.objects.filter(address=candidate).first()" in netbox_contents
 
     assert 'self.initial["ip_address"]' in fastapi_contents
-    assert 'IPAddress.objects.filter(pk=candidate).first()' in fastapi_contents
-    assert 'IPAddress.objects.filter(address=candidate).first()' in fastapi_contents
+    assert "IPAddress.objects.filter(pk=candidate).first()" in fastapi_contents
+    assert "IPAddress.objects.filter(address=candidate).first()" in fastapi_contents
 
 
 def test_runtime_code_does_not_chain_get_fastapi_url_dict_access():

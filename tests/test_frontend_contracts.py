@@ -274,6 +274,46 @@ def test_lxc_and_storage_pages_are_wired_in_urls_navigation_and_templates():
     assert "class SyncStorageView(" in sync_view
 
 
+def test_interface_and_ip_pages_are_wired_in_urls_navigation_and_templates():
+    urls = _read("netbox_proxbox/urls.py")
+    navigation = _read("netbox_proxbox/navigation.py")
+    views_module = _read("netbox_proxbox/views/__init__.py")
+    interfaces_page = _read("netbox_proxbox/templates/netbox_proxbox/interfaces.html")
+    ip_addresses_page = _read(
+        "netbox_proxbox/templates/netbox_proxbox/ip_addresses.html"
+    )
+    interfaces_template = _read(
+        "netbox_proxbox/templates/netbox_proxbox/table/interfaces.html"
+    )
+    ip_addresses_template = _read(
+        "netbox_proxbox/templates/netbox_proxbox/table/ip_addresses.html"
+    )
+    sync_view = _read("netbox_proxbox/views/sync.py")
+
+    assert (
+        'path("interfaces/", views.InterfacesView.as_view(), name="interfaces")' in urls
+    )
+    assert (
+        'path("ip-addresses/", views.IPAddressesView.as_view(), name="ip_addresses")'
+        in urls
+    )
+    assert "sync/network-interfaces/" in urls
+    assert "sync/ip-addresses/" in urls
+    assert 'link="plugins:netbox_proxbox:interfaces"' in navigation
+    assert 'link="plugins:netbox_proxbox:ip_addresses"' in navigation
+    assert "class InterfacesView(" in views_module
+    assert "class IPAddressesView(" in views_module
+    assert 'values_list("object_id", flat=True)[:500]' not in views_module
+    assert "virtualization:vminterface" in interfaces_template
+    assert "dcim:interface" in interfaces_template
+    assert "if node_interface_ids:" not in views_module
+    assert "class SyncNetworkInterfacesView(" in sync_view
+    assert "class SyncIPAddressesView(" in sync_view
+    assert "Sync Interfaces" in interfaces_page
+    assert "Sync IP Addresses" in ip_addresses_page
+    assert "Total IPs" in ip_addresses_template
+
+
 def test_proxmox_storage_detail_template_exists():
     detail_template = _read(
         "netbox_proxbox/templates/netbox_proxbox/proxmoxstorage.html"

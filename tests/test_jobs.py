@@ -36,6 +36,8 @@ def proxbox_sync_job_module(monkeypatch):
         VIRTUAL_MACHINES_BACKUPS="vm-backups",
         VIRTUAL_MACHINES_DISKS="vm-disks",
         VIRTUAL_MACHINES_SNAPSHOTS="vm-snapshots",
+        NETWORK_INTERFACES="network-interfaces",
+        IP_ADDRESSES="ip-addresses",
         ALL="all",
     )
     monkeypatch.setitem(sys.modules, "netbox_proxbox.choices", choices_mod)
@@ -110,13 +112,23 @@ def test_proxbox_sync_job_run_imports_from_services_not_views(
     ProxboxSyncJob.run(job, sync_type=st.ALL)
     assert captured["called"] == "run_sync_stream"
     assert captured["path"] == (
-        "virtualization/virtual-machines/snapshots/all/create/stream"
+        "virtualization/virtual-machines/interfaces/ip-address/create/stream"
     )
 
     job.job.reset_mock()
     ProxboxSyncJob.run(job, sync_type=st.VIRTUAL_MACHINES_DISKS)
     assert captured["path"] == (
         "virtualization/virtual-machines/virtual-disks/create/stream"
+    )
+
+    job.job.reset_mock()
+    ProxboxSyncJob.run(job, sync_type=st.NETWORK_INTERFACES)
+    assert captured["path"] == "dcim/devices/interfaces/create/stream"
+
+    job.job.reset_mock()
+    ProxboxSyncJob.run(job, sync_type=st.IP_ADDRESSES)
+    assert captured["path"] == (
+        "virtualization/virtual-machines/interfaces/ip-address/create/stream"
     )
 
 
@@ -522,9 +534,9 @@ def test_proxbox_sync_job_run_all_invokes_each_stage_stream(
 
     st = proxbox_sync_job_module.SyncTypeChoices
     ProxboxSyncJob.run(job, sync_types=[st.ALL])
-    assert calls == 6
+    assert calls == 8
     stages = job.job.data["proxbox_sync"]["response"]["stages"]
-    assert len(stages) == 6
+    assert len(stages) == 8
     assert {s["sync_type"] for s in stages} == {
         st.DEVICES,
         st.STORAGE,
@@ -532,4 +544,6 @@ def test_proxbox_sync_job_run_all_invokes_each_stage_stream(
         st.VIRTUAL_MACHINES_DISKS,
         st.VIRTUAL_MACHINES_BACKUPS,
         st.VIRTUAL_MACHINES_SNAPSHOTS,
+        st.NETWORK_INTERFACES,
+        st.IP_ADDRESSES,
     }
