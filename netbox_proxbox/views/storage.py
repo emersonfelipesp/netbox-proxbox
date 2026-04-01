@@ -165,6 +165,21 @@ class ProxmoxStorageView(generic.ObjectView):
                 "Run NetBox migrations to enable storage-to-disk relationships."
             )
 
+        # Calculate storage summary statistics
+        virtual_disks_count = len(virtual_disks)
+        virtual_disks_size = sum(disk.size or 0 for disk in virtual_disks)
+        backups_count = vm_backups.count()
+        backups_size = sum(backup.size or 0 for backup in vm_backups)
+        snapshots_count = vm_snapshots.count()
+
+        storage_summary = {
+            "virtual_disks_count": virtual_disks_count,
+            "virtual_disks_size": virtual_disks_size,
+            "backups_count": backups_count,
+            "backups_size": backups_size,
+            "snapshots_count": snapshots_count,
+        }
+
         usage = None
         usage_detail = None
         content_records: list[dict[str, Any]] = []
@@ -233,6 +248,7 @@ class ProxmoxStorageView(generic.ObjectView):
             "vm_snapshots": vm_snapshots,
             "virtual_disks": virtual_disks,
             "disk_relation_warning": disk_relation_warning,
+            "storage_summary": storage_summary,
             "storage_usage": usage,
             "storage_usage_detail": usage_detail,
             "storage_content_count": len(content_records),
