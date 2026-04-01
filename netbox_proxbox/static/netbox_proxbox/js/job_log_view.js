@@ -191,12 +191,14 @@
       return "badge text-bg-success text-uppercase";
     }
     if (
-      normalized === "progress" ||
       normalized === "started" ||
       normalized === "streaming" ||
       normalized === "running" ||
       normalized === "pending"
     ) {
+      return "badge text-bg-blue text-uppercase";
+    }
+    if (normalized === "progress") {
       return "badge text-bg-warning text-uppercase";
     }
     if (
@@ -237,7 +239,9 @@
     "virtual-machines",
     "vm-disks",
     "vm-backups",
-    "vm-snapshots"
+    "vm-snapshots",
+    "network-interfaces",
+    "ip-addresses"
   ];
 
   function resolveSyncTypes(apiData, entries) {
