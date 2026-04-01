@@ -276,8 +276,7 @@ class ProxboxSyncJob(JobRunner):
             if st in _VM_SCOPED_PATH_TEMPLATES and target_vm_ids:
                 template = _VM_SCOPED_PATH_TEMPLATES[st]
                 stage_paths = [
-                    f"{template.format(vm_id=vm_id)}/stream"
-                    for vm_id in target_vm_ids
+                    f"{template.format(vm_id=vm_id)}/stream" for vm_id in target_vm_ids
                 ]
             else:
                 stage_paths = [_sync_stream_path(st)]
