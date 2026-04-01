@@ -1,7 +1,21 @@
 """Register the ProxBox NetBox plugin and declare its compatibility metadata."""
 
+from importlib import util as importlib_util
+import logging
+
 # Netbox plugin related import
 from netbox.plugins import PluginConfig
+
+
+logger = logging.getLogger(__name__)
+
+
+def _runtime_dependencies_available() -> bool:
+    """Return True when the Pydantic-backed runtime modules can be imported."""
+    return all(
+        importlib_util.find_spec(module_name) is not None
+        for module_name in ("pydantic", "pydantic_core")
+    )
 
 
 class ProxboxConfig(PluginConfig):
@@ -29,6 +43,11 @@ class ProxboxConfig(PluginConfig):
     def ready(self):
         """Register models, then import job modules so runners and core Job views hook in."""
         super().ready()
+        if not _runtime_dependencies_available():
+            logger.warning(
+                "Skipping ProxBox job and view registration because Pydantic is not installed."
+            )
+            return
         from . import jobs  # noqa: F401 — registers ProxboxSyncJob with the NetBox job system
         from .views import job_cancel, job_run  # noqa: F401 — core Job: proxbox-run / proxbox-cancel
 

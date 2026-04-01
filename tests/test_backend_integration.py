@@ -9,6 +9,7 @@ HTTP status codes, error formats, and query parameter passing.
 from __future__ import annotations
 
 import importlib
+import importlib.util
 import sys
 import types
 from pathlib import Path
@@ -172,6 +173,46 @@ class TestRequestBackendResource:
         assert payload["requested_urls"] == [
             "https://proxbox.local:8800/proxmox/version"
         ]
+
+
+def test_proxbox_config_ready_skips_runtime_registration_without_pydantic(
+    monkeypatch, caplog
+):
+    repo_root = Path(__file__).resolve().parents[1]
+
+    netbox_module = types.ModuleType("netbox")
+    netbox_plugins = types.ModuleType("netbox.plugins")
+
+    class PluginConfig:
+        def ready(self):
+            return None
+
+    netbox_plugins.PluginConfig = PluginConfig
+    monkeypatch.setitem(sys.modules, "netbox", netbox_module)
+    monkeypatch.setitem(sys.modules, "netbox.plugins", netbox_plugins)
+
+    original_find_spec = importlib.util.find_spec
+
+    def fake_find_spec(name, package=None):
+        if name in {"pydantic", "pydantic_core"}:
+            return None
+        return original_find_spec(name, package)
+
+    monkeypatch.setattr(importlib.util, "find_spec", fake_find_spec)
+
+    sys.modules.pop("netbox_proxbox", None)
+    spec = importlib.util.spec_from_file_location(
+        "netbox_proxbox", repo_root / "netbox_proxbox" / "__init__.py"
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["netbox_proxbox"] = module
+    spec.loader.exec_module(module)
+
+    with caplog.at_level("WARNING"):
+        module.ProxboxConfig().ready()
+
+    assert "Skipping ProxBox job and view registration" in caplog.text
 
 
 class TestIterSSEFrames:
