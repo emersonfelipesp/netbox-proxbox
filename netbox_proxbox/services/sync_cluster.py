@@ -17,7 +17,7 @@ from netbox_proxbox.schemas import (
     ProxmoxClusterStatusResponse,
     ProxmoxNodeDetail,
 )
-from netbox_proxbox.schemas._formatters import iter_scalar_records
+from netbox_proxbox.schemas._formatters import iter_node_records, iter_scalar_records
 from netbox_proxbox.services.backend_proxy import get_fastapi_request_context
 
 logger = logging.getLogger(__name__)
@@ -91,7 +91,7 @@ def sync_cluster_and_nodes(
             timeout=30,
         )
         if node_detail_resp.ok:
-            for record in iter_scalar_records(node_detail_resp.json()):
+            for record in iter_node_records(node_detail_resp.json()):
                 node_detail_data.append(ProxmoxNodeDetail.model_validate(record))
         else:
             logger.warning(

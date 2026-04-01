@@ -8,7 +8,7 @@ from django.shortcuts import render
 from django.views import View
 from virtualization.models import Cluster
 
-from netbox_proxbox.models import FastAPIEndpoint, ProxmoxEndpoint
+from netbox_proxbox.models import FastAPIEndpoint, ProxmoxEndpoint, ProxmoxNode
 from netbox_proxbox.schemas import (
     ProxmoxClusterStatusResponse,
     ProxmoxClusterSummary,
@@ -17,7 +17,7 @@ from netbox_proxbox.schemas import (
     ProxmoxNodeRow,
     ProxmoxResourceRecord,
 )
-from netbox_proxbox.schemas._formatters import iter_scalar_records
+from netbox_proxbox.schemas._formatters import iter_node_records, iter_scalar_records
 from netbox_proxbox.utils import get_backend_auth_headers, get_fastapi_url
 from netbox_proxbox.views.backend_sync import sync_proxmox_endpoint_to_backend
 from netbox_proxbox.views.error_utils import (
@@ -100,14 +100,42 @@ class DashboardView(
         ]
         return ProxmoxGuestSummary.from_resources(resource_records).model_dump()
 
-    def _build_node_rows(self, nodes_payload: object) -> list[dict[str, object]]:
+    def _build_local_node_rows(
+        self, endpoint: ProxmoxEndpoint
+    ) -> list[dict[str, object]]:
+        nodes = (
+            ProxmoxNode.objects.filter(endpoint=endpoint)
+            .select_related("proxmox_cluster", "netbox_device")
+            .order_by("name")
+        )
+        rows = [ProxmoxNodeRow.from_node_model(node).model_dump() for node in nodes]
+        return rows
+
+    def _build_live_node_rows(self, nodes_payload: object) -> list[dict[str, object]]:
         rows = [
             ProxmoxNodeRow.from_node_detail(
                 ProxmoxNodeDetail.model_validate(record)
             ).model_dump()
-            for record in iter_scalar_records(nodes_payload)
+            for record in iter_node_records(nodes_payload)
         ]
         return sorted(rows, key=lambda row: str(row["name"]))
+
+    def _merge_node_rows(
+        self,
+        local_rows: list[dict[str, object]],
+        live_rows: list[dict[str, object]],
+    ) -> list[dict[str, object]]:
+        live_rows_by_name = {
+            str(row.get("name", "")): row for row in live_rows if row.get("name")
+        }
+        merged_rows: list[dict[str, object]] = []
+        for row in local_rows:
+            live_row = live_rows_by_name.get(str(row.get("name", "")))
+            if live_row:
+                merged_rows.append(row | live_row)
+            else:
+                merged_rows.append(row)
+        return merged_rows
 
     def get(self, request):
         proxmox_endpoints = list(ProxmoxEndpoint.objects.restrict(request.user, "view"))
@@ -169,40 +197,6 @@ class DashboardView(
                     route="/proxmox/cluster/resources",
                     query_params=query_params,
                 )
-                nodes_payload, nodes_err = self._fetch_json(
-                    base_url=fastapi_url,
-                    auth_headers=backend_headers,
-                    verify_ssl=backend_verify_ssl,
-                    route="/proxmox/nodes/",
-                    query_params=query_params,
-                )
-                if cluster_err or resources_err or nodes_err:
-                    dashboard["detail"] = cluster_err or resources_err or nodes_err
-                else:
-                    dashboard["cluster_summary"] = self._build_cluster_summary(
-                        cluster_payload
-                    )
-                    dashboard["guest_summary"] = self._build_guest_summary(
-                        resources_payload
-                    )
-                    dashboard["nodes"] = self._build_node_rows(nodes_payload)
-
-                    # Add endpoint IP for display
-                    dashboard["endpoint_ip"] = _get_endpoint_display_ip(endpoint)
-
-                    # Try to match with NetBox Cluster
-                    cluster_name = (
-                        dashboard["cluster_summary"].get("name", "")
-                        if dashboard["cluster_summary"]
-                        else ""
-                    )
-                    if cluster_name and cluster_name != "—":
-                        netbox_cluster = Cluster.objects.filter(
-                            name=cluster_name
-                        ).first()
-                    else:
-                        netbox_cluster = None
-                    dashboard["netbox_cluster"] = netbox_cluster
             except requests.exceptions.RequestException as exc:
                 detail, _ = extract_proxmox_backend_error_detail(
                     exc,
@@ -212,6 +206,67 @@ class DashboardView(
                     backend_url=f"{fastapi_url}/proxmox",
                 )
                 dashboard["detail"] = detail
+                dashboards.append(dashboard)
+                continue
+
+            local_node_rows = self._build_local_node_rows(endpoint)
+            live_node_rows: list[dict[str, object]] = []
+            nodes_err = None
+            try:
+                nodes_payload, nodes_err = self._fetch_json(
+                    base_url=fastapi_url,
+                    auth_headers=backend_headers,
+                    verify_ssl=backend_verify_ssl,
+                    route="/proxmox/nodes/",
+                    query_params=query_params,
+                )
+                if not nodes_err:
+                    live_node_rows = self._build_live_node_rows(nodes_payload)
+            except requests.exceptions.RequestException as exc:
+                if not local_node_rows:
+                    detail, _ = extract_proxmox_backend_error_detail(
+                        exc,
+                        proxmox_host=endpoint.domain
+                        or str(endpoint.ip_address).split("/")[0],
+                        proxmox_port=endpoint.port,
+                        backend_url=f"{fastapi_url}/proxmox",
+                    )
+                    dashboard["detail"] = detail
+                    dashboards.append(dashboard)
+                    continue
+
+            if cluster_err or resources_err:
+                dashboard["detail"] = cluster_err or resources_err
+            elif nodes_err and not local_node_rows:
+                dashboard["detail"] = nodes_err
+            else:
+                dashboard["cluster_summary"] = self._build_cluster_summary(
+                    cluster_payload
+                )
+                dashboard["guest_summary"] = self._build_guest_summary(
+                    resources_payload
+                )
+                if local_node_rows:
+                    dashboard["nodes"] = self._merge_node_rows(
+                        local_node_rows, live_node_rows
+                    )
+                else:
+                    dashboard["nodes"] = live_node_rows
+
+                # Add endpoint IP for display
+                dashboard["endpoint_ip"] = _get_endpoint_display_ip(endpoint)
+
+                # Try to match with NetBox Cluster
+                cluster_name = (
+                    dashboard["cluster_summary"].get("name", "")
+                    if dashboard["cluster_summary"]
+                    else ""
+                )
+                if cluster_name and cluster_name != "—":
+                    netbox_cluster = Cluster.objects.filter(name=cluster_name).first()
+                else:
+                    netbox_cluster = None
+                dashboard["netbox_cluster"] = netbox_cluster
 
             dashboards.append(dashboard)
 

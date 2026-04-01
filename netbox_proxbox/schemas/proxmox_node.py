@@ -191,6 +191,35 @@ class ProxmoxNodeRow(ProxboxBaseModel):
     disk_label: str = ""
 
     @classmethod
+    def _from_values(
+        cls,
+        *,
+        name: str,
+        status: str,
+        uptime: str,
+        cpu_pct: float,
+        cpu_label: str,
+        loadavg: str,
+        memory_pct: float,
+        memory_label: str,
+        disk_pct: float,
+        disk_label: str,
+    ) -> ProxmoxNodeRow:
+        """Build a dashboard row from already-normalised values."""
+        return cls(
+            name=name,
+            status=status,
+            uptime=uptime,
+            cpu_pct=cpu_pct,
+            cpu_label=cpu_label,
+            loadavg=loadavg,
+            memory_pct=memory_pct,
+            memory_label=memory_label,
+            disk_pct=disk_pct,
+            disk_label=disk_label,
+        )
+
+    @classmethod
     def from_node_detail(cls, detail: ProxmoxNodeDetail) -> ProxmoxNodeRow:
         mem_used = detail.mem or 0
         mem_total = detail.maxmem or 0
@@ -210,4 +239,42 @@ class ProxmoxNodeRow(ProxboxBaseModel):
             memory_label=f"{format_bytes(mem_used)} / {format_bytes(mem_total)}",
             disk_pct=disk_pct,
             disk_label=f"{format_bytes(disk_used)} / {format_bytes(disk_total)}",
+        )
+
+    @classmethod
+    def from_node_model(cls, node: object) -> ProxmoxNodeRow:
+        """Render a persisted ``ProxmoxNode`` row for the dashboard card."""
+        name = str(getattr(node, "name", "") or "—")
+        online = bool(getattr(node, "online", False))
+        cpu_value = getattr(node, "cpu_usage_percent", None)
+        if cpu_value is None:
+            cpu_value = getattr(node, "cpu_usage", None)
+        cpu_pct = cpu_percent(cpu_value)
+        max_cpu = int(getattr(node, "max_cpu", 0) or 0)
+
+        memory_used = getattr(node, "memory_usage", None)
+        memory_total = getattr(node, "max_memory", None)
+        if memory_used is None and memory_total is None:
+            memory_pct = 0.0
+            memory_label = "—"
+        else:
+            memory_used = memory_used or 0
+            memory_total = memory_total or 0
+            memory_pct = percent(memory_used, memory_total)
+            memory_label = f"{format_bytes(memory_used)} / {format_bytes(memory_total)}"
+
+        cpu_label = f"{cpu_pct:.2f}% ({max_cpu} CPUs)" if cpu_value is not None else "—"
+        status = "online" if online else "offline"
+
+        return cls._from_values(
+            name=name,
+            status=status,
+            uptime="—",
+            cpu_pct=cpu_pct,
+            cpu_label=cpu_label,
+            loadavg="—",
+            memory_pct=memory_pct,
+            memory_label=memory_label,
+            disk_pct=0.0,
+            disk_label="—",
         )

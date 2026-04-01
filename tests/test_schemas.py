@@ -31,6 +31,7 @@ OpenAPISummary = schemas.OpenAPISummary
 ProxmoxClusterStatusResponse = schemas.ProxmoxClusterStatusResponse
 ProxmoxStorageRecord = schemas.ProxmoxStorageRecord
 ProxmoxVMConfig = schemas.ProxmoxVMConfig
+ProxmoxNodeRow = schemas.ProxmoxNodeRow
 SyncJobData = schemas.SyncJobData
 
 
@@ -73,6 +74,29 @@ def test_cluster_status_response_wraps_list_payload():
     assert response.cluster_record is not None
     assert response.cluster_record.name == "pve"
     assert len(response.node_records) == 2
+
+
+def test_proxmox_node_row_builds_from_persisted_node_model():
+    node = SimpleNamespace(
+        name="pve-02",
+        online=True,
+        cpu_usage=0.125,
+        max_cpu=8,
+        memory_usage=16 * 1024**3,
+        max_memory=64 * 1024**3,
+        support_level="enterprise",
+    )
+
+    row = ProxmoxNodeRow.from_node_model(node)
+
+    assert row.name == "pve-02"
+    assert row.status == "online"
+    assert row.cpu_pct == 12.5
+    assert row.cpu_label == "12.50% (8 CPUs)"
+    assert row.uptime == "—"
+    assert row.loadavg == "—"
+    assert row.memory_label == "16.00 GiB / 64.00 GiB"
+    assert row.disk_label == "—"
 
 
 def test_storage_record_computes_effective_usage():

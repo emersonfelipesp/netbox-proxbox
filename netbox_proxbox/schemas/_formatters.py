@@ -82,3 +82,34 @@ def iter_scalar_records(payload: object) -> Iterable[dict[str, object]]:
             return
         for value in payload.values():
             yield from iter_scalar_records(value)
+
+
+def iter_node_records(payload: object) -> Iterable[dict[str, object]]:
+    """Recursively yield Proxmox node detail records from backend payloads.
+
+    Node payloads can include list-valued fields such as ``loadavg``. Treat dicts that
+    carry the node metric fields as records even when they are not scalar-only.
+    """
+
+    node_record_keys = {
+        "cpu",
+        "disk",
+        "loadavg",
+        "maxcpu",
+        "maxdisk",
+        "maxmem",
+        "mem",
+        "node",
+        "uptime",
+    }
+
+    if isinstance(payload, list):
+        for item in payload:
+            yield from iter_node_records(item)
+        return
+    if isinstance(payload, dict):
+        if any(key in payload for key in node_record_keys):
+            yield payload
+            return
+        for value in payload.values():
+            yield from iter_node_records(value)
