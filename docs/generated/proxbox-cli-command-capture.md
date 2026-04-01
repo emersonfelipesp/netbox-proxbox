@@ -10,7 +10,7 @@ python docs/generate_proxbox_cli_docs.py
 
 ## Metadata
 
-- Generated at: `2026-04-01T15:39:42.389783+00:00`
+- Generated at: `2026-04-01T19:39:49.416217+00:00`
 - Python: `3.13.3`
 - Platform: `Linux-6.8.12-4-pve-x86_64-with-glibc2.41`
 
@@ -35,6 +35,7 @@ Top-level entrypoint and root command groups.
 │ init            Interactively configure the proxbox-api base URL.            │
 │ config          Show the current CLI configuration.                          │
 │ test            Test connectivity to the proxbox-api server.                 │
+│ version         Show the proxbox-api backend version.                        │
 │ info            Show proxbox-api project info.                               │
 │ cache           Show the in-memory cache contents.                           │
 │ clear-cache     Clear the in-memory cache on the proxbox-api server.         │
@@ -42,6 +43,7 @@ Top-level entrypoint and root command groups.
 │                 long-running operation]                                      │
 │ netbox          NetBox integration commands.                                 │
 │ proxmox         Proxmox integration commands.                                │
+│ proxbox         Proxbox plugin and backend info commands.                    │
 │ dcim            DCIM (datacenter infrastructure) commands.                   │
 │ virtualization  Virtualization commands.                                     │
 │ extras          Extras commands (custom fields, etc.).                       │
@@ -104,6 +106,29 @@ Shows extras-related CLI commands (custom fields, etc.).
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
 │ custom-fields-create  Create predefined Proxbox custom fields in NetBox      │
 │                       (proxmox_vm_id, start_at_boot, etc.).                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+```
+
+### Proxbox Help
+
+Command: `pxb proxbox --help`
+
+Plugin configuration and backend info commands.
+
+```text
+                                                                                
+ Usage: python -m proxbox_cli proxbox [OPTIONS] COMMAND [ARGS]...               
+                                                                                
+ Proxbox plugin and backend info commands.                                      
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ settings          Show resolved Proxbox plugin configuration from NetBox.    │
+│ plugins-config    Show plugin configuration from NetBox PLUGINS_CONFIG.      │
+│ default-settings  Show Proxbox default settings from the NetBox plugin       │
+│                   config.                                                    │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ```
 
@@ -232,6 +257,28 @@ Example of a command with required arguments and optional filters.
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ```
 
+### Proxmox Nodes LXC Help
+
+Command: `pxb proxmox nodes lxc --help`
+
+LXC container listing on a specific node.
+
+```text
+                                                                                
+ Usage: python -m proxbox_cli proxmox nodes lxc [OPTIONS] NODE                  
+                                                                                
+ List LXC containers on a specific node.                                        
+                                                                                
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    node      TEXT  Node name. [required]                                   │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --json          Output raw JSON.                                             │
+│ --yaml          Output YAML.                                                 │
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+```
+
 ## Infrastructure Commands
 
 ### DCIM Help
@@ -262,7 +309,7 @@ Node device and interface sync commands.
 
 Command: `pxb virtualization --help`
 
-Cluster and virtual-machine sync commands.
+Cluster, VM, storage, snapshot, and backup sync commands.
 
 ```text
                                                                                 
@@ -276,7 +323,29 @@ Cluster and virtual-machine sync commands.
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
 │ cluster-types-create  Create cluster types in NetBox.                        │
 │ clusters-create       Create clusters in NetBox.                             │
+│ storage-create        Sync Proxmox storage definitions into NetBox. [NOTE:   │
+│                       triggers sync]                                         │
 │ vms                   Virtual machine commands.                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+```
+
+### Virtualization Storage Create Help
+
+Command: `pxb virtualization storage-create --help`
+
+Sync Proxmox storage definitions into NetBox.
+
+```text
+                                                                                
+ Usage: python -m proxbox_cli virtualization storage-create                     
+            [OPTIONS]                                                           
+                                                                                
+ Sync Proxmox storage definitions into NetBox. [NOTE: triggers sync]            
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --json          Output raw JSON.                                             │
+│ --yaml          Output YAML.                                                 │
+│ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ```
 
@@ -298,6 +367,26 @@ Long-running VM backup synchronization command.
 │ --json                  Output raw JSON.                                     │
 │ --yaml                  Output YAML.                                         │
 │ --help                  Show this message and exit.                          │
+╰──────────────────────────────────────────────────────────────────────────────╯
+```
+
+### Virtualization Snapshots Sync Help
+
+Command: `pxb virtualization vms snapshots-sync-all --help`
+
+Long-running VM snapshot synchronization command.
+
+```text
+                                                                                
+ Usage: python -m proxbox_cli virtualization vms snapshots-sync-all             
+            [OPTIONS]                                                           
+                                                                                
+ Sync ALL VM snapshots across all clusters/nodes. [NOTE: long-running sync]     
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --json          Output raw JSON.                                             │
+│ --yaml          Output YAML.                                                 │
+│ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ```
 

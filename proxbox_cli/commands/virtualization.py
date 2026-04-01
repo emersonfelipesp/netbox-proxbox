@@ -196,3 +196,61 @@ def vms_backups_sync_all(
         )
     )
     print_response(resp, as_json=as_json, as_yaml=as_yaml)
+
+
+# ── Storage sync ────────────────────────────────────────────────────────────────
+
+
+@virtualization_app.command("storage-create")
+def storage_create(
+    as_json: JsonFlag = False,
+    as_yaml: YamlFlag = False,
+) -> None:
+    """Sync Proxmox storage definitions into NetBox. [NOTE: triggers sync]"""
+    resp = run_with_spinner(
+        _get_client().get("/virtualization/virtual-machines/storage/create")
+    )
+    print_response(resp, as_json=as_json, as_yaml=as_yaml)
+
+
+# ── Snapshot sync ──────────────────────────────────────────────────────────────
+
+
+@vms_app.command("snapshots-create")
+def vms_snapshots_create(
+    vmid: Annotated[
+        Optional[str], typer.Option("--vmid", help="Proxmox VM ID filter.")
+    ] = None,
+    node: Annotated[
+        Optional[str], typer.Option("--node", help="Node name filter.")
+    ] = None,
+    as_json: JsonFlag = False,
+    as_yaml: YamlFlag = False,
+) -> None:
+    """Sync VM snapshots for all VMs or a specific VM. [NOTE: triggers sync]"""
+    query: dict = {}
+    if vmid:
+        query["vmid"] = vmid
+    if node:
+        query["node"] = node
+    resp = run_with_spinner(
+        _get_client().get(
+            "/virtualization/virtual-machines/snapshots/create",
+            query=query or None,
+        )
+    )
+    print_response(resp, as_json=as_json, as_yaml=as_yaml)
+
+
+@vms_app.command("snapshots-sync-all")
+def vms_snapshots_sync_all(
+    as_json: JsonFlag = False,
+    as_yaml: YamlFlag = False,
+) -> None:
+    """Sync ALL VM snapshots across all clusters/nodes. [NOTE: long-running sync]"""
+    resp = run_with_spinner(
+        _get_client().get(
+            "/virtualization/virtual-machines/snapshots/all/create",
+        )
+    )
+    print_response(resp, as_json=as_json, as_yaml=as_yaml)
