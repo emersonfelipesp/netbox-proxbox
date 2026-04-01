@@ -131,6 +131,24 @@ def test_vm_detail_sync_now_button_contract():
     assert "Sync Now" in button_contents
 
 
+def test_job_live_poll_alert_spans_the_card_width_and_keeps_streaming_messages():
+    contents = _read(
+        "netbox_proxbox/templates/netbox_proxbox/inc/job_live_poll_alert.html"
+    )
+
+    assert "card border-info shadow-sm nb-job-live-card" in contents
+    assert 'class="card-body d-flex flex-column gap-2"' in contents
+    assert 'class="nb-job-progress-wrap w-100"' in contents
+    assert 'class="progress nb-job-progress-track w-100"' in contents
+    assert 'style="width: 100%; transition: width 0.3s ease;"' in contents
+    assert "min-width: 2rem" not in contents
+    assert 'role="log"' in contents
+    assert 'aria-live="polite"' in contents
+    assert "EventSource(streamUrl)" in contents
+    assert 'addEventListener("message"' in contents
+    assert 'handleSSEFrame("message", data)' in contents
+
+
 def test_combined_interface_views_import_vm_interface_directly():
     contents = _read("netbox_proxbox/views/__init__.py")
     assert "from virtualization.models import VMInterface, VirtualMachine" in contents
