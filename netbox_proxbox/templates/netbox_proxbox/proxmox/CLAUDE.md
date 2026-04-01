@@ -4,7 +4,7 @@ This directory contains Proxmox-specific template fragments.
 
 ## Files And Ownership
 
-- [`cluster.html`](./cluster.html): Proxmox cluster-specific markup used when rendering cluster details.
+- [`cluster.html`](./cluster.html): Proxmox cluster-specific markup used when rendering cluster details and cluster summary tabs.
 
 ## Dependencies
 

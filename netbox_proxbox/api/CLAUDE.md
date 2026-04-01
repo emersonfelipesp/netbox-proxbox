@@ -1,7 +1,8 @@
 # `netbox_proxbox.api`
 
-This directory contains the NetBox plugin API surface for ProxBox. It exposes root API
-endpoints plus model-backed viewsets and serializers for the plugin's main objects.
+This directory contains the NetBox plugin API surface for ProxBox. It exposes the API root,
+the nested plugin endpoint namespace, and model-backed viewsets and serializers for the
+plugin's main persisted objects.
 
 ## Files And Ownership
 
