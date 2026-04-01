@@ -164,7 +164,7 @@
     wrap.className = "nb-proxbox-parsed-msg";
 
     var badge = document.createElement("span");
-    badge.className = "badge bg-secondary me-2 align-middle";
+    badge.className = "badge d-inline-flex bg-secondary me-2 align-middle";
     appendText(badge, parsed.event);
     wrap.appendChild(badge);
 
@@ -191,7 +191,7 @@
       normalized === "done" ||
       normalized === "ok"
     ) {
-      return "badge text-bg-success text-uppercase";
+      return "badge d-inline-flex text-bg-success text-uppercase";
     }
     if (
       normalized === "started" ||
@@ -199,10 +199,10 @@
       normalized === "running" ||
       normalized === "pending"
     ) {
-      return "badge text-bg-blue text-uppercase";
+      return "badge d-inline-flex text-bg-blue text-uppercase";
     }
     if (normalized === "progress") {
-      return "badge text-bg-warning text-uppercase";
+      return "badge d-inline-flex text-bg-warning text-uppercase";
     }
     if (
       normalized === "error" ||
@@ -210,9 +210,9 @@
       normalized === "failed" ||
       normalized === "failure"
     ) {
-      return "badge text-bg-danger text-uppercase";
+      return "badge d-inline-flex text-bg-danger text-uppercase";
     }
-    return "badge text-bg-secondary text-uppercase";
+    return "badge d-inline-flex text-bg-secondary text-uppercase";
   }
 
   function getProgressLabelClass(statusValue, done) {
