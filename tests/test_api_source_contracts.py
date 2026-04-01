@@ -240,6 +240,8 @@ def test_task_history_route_and_viewset_are_registered():
     assert (
         'router.register("task-history", views.VMTaskHistoryViewSet)' in urls_contents
     )
+    assert "serializer.instance = existing" in views_contents
+    assert 'models.VMTaskHistory.objects.filter(upid=upid).first()' in views_contents
 
 
 def test_netbox_endpoint_serializer_rejects_selected_v2_token_objects():

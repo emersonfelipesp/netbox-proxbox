@@ -74,6 +74,15 @@ class VMTaskHistoryViewSet(NetBoxModelViewSet):
     serializer_class = VMTaskHistorySerializer
     filterset_class = filtersets.VMTaskHistoryFilterSet
 
+    def perform_create(self, serializer):
+        """Upsert by Proxmox UPID so task reconciliation can replay safely."""
+        upid = serializer.validated_data.get("upid")
+        if upid:
+            existing = models.VMTaskHistory.objects.filter(upid=upid).first()
+            if existing is not None:
+                serializer.instance = existing
+        serializer.save()
+
 
 class ProxmoxStorageViewSet(NetBoxModelViewSet):
     """REST API for Proxmox storage rows synced from Proxmox endpoints."""
