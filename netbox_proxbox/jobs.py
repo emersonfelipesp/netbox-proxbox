@@ -271,32 +271,26 @@ class ProxboxSyncJob(JobRunner):
             query_params = dict(base_query)
             if st == SyncTypeChoices.VIRTUAL_MACHINES_BACKUPS:
                 query_params["delete_nonexistent_backup"] = True
-            target_vm_ids = params.get("netbox_vm_ids", [])
-            stage_paths: list[str]
-            if st in _VM_SCOPED_PATH_TEMPLATES and target_vm_ids:
-                template = _VM_SCOPED_PATH_TEMPLATES[st]
-                stage_paths = [
-                    f"{template.format(vm_id=vm_id)}/stream" for vm_id in target_vm_ids
-                ]
-            else:
-                stage_paths = [_sync_stream_path(st)]
 
-            for stream_path in stage_paths:
-                self.logger.info("Starting stage: %s (%s)", st, stream_path)
-                payload, status = run_sync_stream(
-                    stream_path,
-                    query_params=query_params or None,
-                    on_frame=on_frame,
-                )
-                self.job.save(update_fields=["log_entries"])
-                if status >= 400:
-                    detail = payload.get("detail", "Backend returned an error.")
-                    self.logger.error(
-                        "Stage %s failed (HTTP %s): %s", st, status, detail
-                    )
-                    raise RuntimeError(detail)
-                self.logger.info("Stage completed: %s (HTTP %s)", st, status)
-                stages_out.append({"sync_type": st, "payload": payload})
+            target_vm_ids = params.get("netbox_vm_ids", [])
+            if target_vm_ids:
+                query_params["netbox_vm_ids"] = ",".join(target_vm_ids)
+
+            stream_path = _sync_stream_path(st)
+
+            self.logger.info("Starting stage: %s (%s)", st, stream_path)
+            payload, status = run_sync_stream(
+                stream_path,
+                query_params=query_params or None,
+                on_frame=on_frame,
+            )
+            self.job.save(update_fields=["log_entries"])
+            if status >= 400:
+                detail = payload.get("detail", "Backend returned an error.")
+                self.logger.error("Stage %s failed (HTTP %s): %s", st, status, detail)
+                raise RuntimeError(detail)
+            self.logger.info("Stage completed: %s (HTTP %s)", st, status)
+            stages_out.append({"sync_type": st, "payload": payload})
 
         runtime_seconds = round(time.monotonic() - run_started, 3)
         self.job.data = {
