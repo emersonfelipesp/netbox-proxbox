@@ -181,11 +181,11 @@ class JobStreamSSEView(View):
         if progress:
             payload["progress"] = progress
 
-        yield f"event: step\n"
+        yield "event: step\n"
         yield f"data: {json.dumps(payload)}\n\n"
 
     def _emit_error(self, message: str) -> Generator[str, None, None]:
-        yield f"event: error\n"
+        yield "event: error\n"
         yield f"data: {json.dumps({'step': 'job', 'status': 'failed', 'message': message})}\n\n"
 
     def _emit_complete(self, ok: bool, message: str) -> str:
