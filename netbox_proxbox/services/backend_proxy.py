@@ -131,6 +131,8 @@ def request_backend_resource(
             logger.error("Sync request failed for %s via %s: %s", path, url, exc)
             if getattr(exc, "response", None) is not None:
                 break
+        except (KeyboardInterrupt, SystemExit, GeneratorExit):
+            raise
         except Exception as exc:  # pragma: no cover
             last_detail = str(exc)
             logger.error("Unexpected sync error for %s via %s: %s", path, url, exc)
@@ -278,8 +280,8 @@ def run_sync_stream(
                             d = payload.get("detail") or payload.get("message")
                             if d:
                                 last_detail = str(d)
-                    except Exception:
-                        pass
+                    except Exception:  # pragma: no cover
+                        logger.debug("Could not parse error JSON for %s", path)
                     logger.error(
                         "Sync stream HTTP %s for %s via %s: %s",
                         response.status_code,
@@ -307,6 +309,11 @@ def run_sync_stream(
                 break
             if http_st and http_st >= 500:
                 continue
+        except (KeyboardInterrupt, SystemExit, GeneratorExit):
+            raise
+        except Exception as exc:  # pragma: no cover
+            last_detail = str(exc)
+            logger.exception("Unexpected sync stream error for %s via %s", path, url)
 
     return {
         "stream": True,
@@ -363,6 +370,8 @@ def iter_backend_sse_lines(
                 logger.exception("Sync stream request failed for %s via %s", path, url)
                 if getattr(exc, "response", None) is not None:
                     break
+            except (KeyboardInterrupt, SystemExit, GeneratorExit):
+                raise
             except Exception as exc:  # pragma: no cover
                 last_error = str(exc)
                 logger.exception(
@@ -371,6 +380,8 @@ def iter_backend_sse_lines(
 
         payload = last_error or "Unable to reach the ProxBox backend stream."
         yield from sse_error_frames(payload)
+    except (KeyboardInterrupt, SystemExit, GeneratorExit):
+        raise
     except Exception as exc:  # pragma: no cover
         logger.exception("Stream proxy crashed while handling %s", path)
         yield from sse_error_frames(str(exc), final_message="Stream proxy failed.")

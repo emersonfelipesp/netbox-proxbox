@@ -26,6 +26,9 @@ from utilities.views import (
 logger = logging.getLogger(__name__)
 
 _RECONNECT_DELAY_SEC = 5
+_RECONNECT_MAX_DELAY_SEC = 60
+_WS_CONNECTION_TIMEOUT = 10
+_MAX_MESSAGE_QUEUE_SIZE = 1000
 
 GLOBAL_WEBSOCKET_MESSAGES = deque(maxlen=500)
 websocket_task = None
@@ -41,9 +44,12 @@ ws_sync_button_state = {
 
 async def websocket_client(uri: str) -> None:
     """Maintain a long-lived WebSocket to the ProxBox backend; reconnect with backoff."""
+    reconnect_delay = _RECONNECT_DELAY_SEC
     while True:
         try:
-            async with websockets.connect(uri) as websocket:
+            async with websockets.connect(
+                uri, open_timeout=_WS_CONNECTION_TIMEOUT
+            ) as websocket:
                 logger.info("Proxbox plugin WebSocket connected: %s", uri)
                 while True:
                     if not message_queue.empty():
@@ -82,9 +88,10 @@ async def websocket_client(uri: str) -> None:
                 "WebSocket closed (code=%s reason=%r); reconnecting in %ss",
                 getattr(exc, "code", None),
                 getattr(exc, "reason", ""),
-                _RECONNECT_DELAY_SEC,
+                reconnect_delay,
             )
-            await asyncio.sleep(_RECONNECT_DELAY_SEC)
+            await asyncio.sleep(reconnect_delay)
+            reconnect_delay = min(reconnect_delay * 2, _RECONNECT_MAX_DELAY_SEC)
         except websockets.exceptions.InvalidStatus as exc:
             response = getattr(exc, "response", None)
             status_code = getattr(response, "status_code", None)
@@ -99,24 +106,29 @@ async def websocket_client(uri: str) -> None:
                 "WebSocket handshake failed (HTTP %s) for %s; retrying in %ss",
                 status_code,
                 uri,
-                _RECONNECT_DELAY_SEC,
+                reconnect_delay,
             )
-            await asyncio.sleep(_RECONNECT_DELAY_SEC)
+            await asyncio.sleep(reconnect_delay)
+            reconnect_delay = min(reconnect_delay * 2, _RECONNECT_MAX_DELAY_SEC)
         except OSError as exc:
             logger.warning(
                 "WebSocket connect error for %s: %s; retrying in %ss",
                 uri,
                 exc,
-                _RECONNECT_DELAY_SEC,
+                reconnect_delay,
             )
-            await asyncio.sleep(_RECONNECT_DELAY_SEC)
+            await asyncio.sleep(reconnect_delay)
+            reconnect_delay = min(reconnect_delay * 2, _RECONNECT_MAX_DELAY_SEC)
+        except (KeyboardInterrupt, SystemExit, GeneratorExit):
+            raise
         except Exception:
             logger.exception(
                 "Unexpected WebSocket error for %s; retrying in %ss",
                 uri,
-                _RECONNECT_DELAY_SEC,
+                reconnect_delay,
             )
-            await asyncio.sleep(_RECONNECT_DELAY_SEC)
+            await asyncio.sleep(reconnect_delay)
+            reconnect_delay = min(reconnect_delay * 2, _RECONNECT_MAX_DELAY_SEC)
 
 
 def start_websocket(uri):
@@ -141,6 +153,11 @@ def start_websocket(uri):
 
 def send_message(message):
     """Enqueue a string command for the background WebSocket client to send upstream."""
+    if message_queue.qsize() >= _MAX_MESSAGE_QUEUE_SIZE:
+        logger.warning(
+            "Message queue full (%d), dropping message", _MAX_MESSAGE_QUEUE_SIZE
+        )
+        return
     message_queue.put(message)
 
 
