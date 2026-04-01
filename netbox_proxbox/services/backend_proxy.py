@@ -412,6 +412,7 @@ def sync_full_update_resource(query_params: dict | None = None) -> tuple[dict, i
         ("devices", "dcim/devices/create"),
         ("virtual-machines", "virtualization/virtual-machines/create"),
         ("backups", "virtualization/virtual-machines/backups/all/create"),
+        ("snapshots", "virtualization/virtual-machines/snapshots/all/create"),
     ]
     responses: dict[str, dict] = {}
 
