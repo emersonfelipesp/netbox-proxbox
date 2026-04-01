@@ -173,6 +173,28 @@ def test_endpoint_templates_expose_live_badges():
     )
 
 
+def test_fastapi_openapi_tab_view_and_template_contract():
+    view_contents = _read("netbox_proxbox/views/endpoints/fastapi.py")
+    template_contents = _read(
+        "netbox_proxbox/templates/netbox_proxbox/fastapiendpoint_openapi.html"
+    )
+
+    assert (
+        'register_model_view(FastAPIEndpoint, "openapi", path="openapi")'
+        in view_contents
+    )
+    assert 'label="OpenAPI"' in view_contents
+    assert "get_cached_openapi_schema" in view_contents
+    assert 'request.GET.get("refresh", "")' in view_contents
+
+    assert "OpenAPI Schema" in template_contents
+    assert "Endpoints" in template_contents
+    assert "openapi_data.schema.operations" in template_contents
+    assert "?refresh=1" in template_contents
+    assert "Forced Refresh" in template_contents
+    assert "Last Refreshed" in template_contents
+
+
 def test_endpoint_tables_use_record_pk_for_keepalive_reverse():
     contents = _read("netbox_proxbox/tables/__init__.py")
     assert "keepalive_status" in contents

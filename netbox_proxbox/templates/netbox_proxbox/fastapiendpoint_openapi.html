@@ -1,0 +1,173 @@
+{% extends 'generic/object.html' %}
+{% load i18n %}
+
+{% block content %}
+  <div class="row mb-3">
+    <div class="col col-md-8">
+      <div class="card">
+        <h5 class="card-header">{% trans "OpenAPI Schema" %}</h5>
+        <div class="card-body">
+          <div class="d-flex justify-content-end mb-3">
+            <a href="?refresh=1" class="btn btn-sm btn-outline-primary">{% trans "Refresh Schema" %}</a>
+          </div>
+
+          {% if openapi_data.error %}
+            <div class="alert alert-warning mb-0" role="alert">{{ openapi_data.error }}</div>
+          {% else %}
+            <table class="table table-hover attr-table mb-0">
+              <tr>
+                <th scope="row">{% trans "Title" %}</th>
+                <td>{{ openapi_data.schema.title }}</td>
+              </tr>
+              <tr>
+                <th scope="row">{% trans "Schema Version" %}</th>
+                <td>{{ openapi_data.schema.version }}</td>
+              </tr>
+              <tr>
+                <th scope="row">{% trans "Backend Version" %}</th>
+                <td>{{ openapi_data.backend_version|default:"unknown" }}</td>
+              </tr>
+              <tr>
+                <th scope="row">{% trans "Cache" %}</th>
+                <td>
+                  {% if openapi_data.cache_hit %}
+                    <span class="badge text-bg-green">{% trans "Hit" %}</span>
+                  {% elif openapi_data.cache_forced %}
+                    <span class="badge text-bg-blue">{% trans "Forced Refresh" %}</span>
+                  {% else %}
+                    <span class="badge text-bg-blue">{% trans "Refreshed" %}</span>
+                  {% endif %}
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">{% trans "Last Refreshed" %}</th>
+                <td>{{ openapi_data.refreshed_at|default:"—" }}</td>
+              </tr>
+              <tr>
+                <th scope="row">{% trans "Paths" %}</th>
+                <td>{{ openapi_data.schema.stats.paths }}</td>
+              </tr>
+              <tr>
+                <th scope="row">{% trans "Operations" %}</th>
+                <td>{{ openapi_data.schema.stats.operations }}</td>
+              </tr>
+              <tr>
+                <th scope="row">{% trans "Schemas" %}</th>
+                <td>{{ openapi_data.schema.stats.schemas }}</td>
+              </tr>
+              <tr>
+                <th scope="row">{% trans "Security Schemes" %}</th>
+                <td>{{ openapi_data.schema.stats.security_schemes }}</td>
+              </tr>
+            </table>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    <div class="col col-md-4">
+      {% if not openapi_data.error and openapi_data.schema.tags %}
+        <div class="card mb-3">
+          <h5 class="card-header">{% trans "Tags" %}</h5>
+          <div class="card-body">
+            {% for tag in openapi_data.schema.tags %}
+              <span class="badge text-bg-grey me-1 mb-1">{{ tag }}</span>
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
+
+      {% if not openapi_data.error and openapi_data.schema.security_schemes %}
+        <div class="card">
+          <h5 class="card-header">{% trans "Auth Schemes" %}</h5>
+          <div class="card-body">
+            <table class="table table-hover mb-0">
+              <thead>
+                <tr>
+                  <th>{% trans "Name" %}</th>
+                  <th>{% trans "Type" %}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for item in openapi_data.schema.security_schemes %}
+                  <tr>
+                    <td><code>{{ item.name }}</code></td>
+                    <td>{{ item.type|default:"—" }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if not openapi_data.error and openapi_data.schema.description %}
+    <div class="card mb-3">
+      <h5 class="card-header">{% trans "Description" %}</h5>
+      <div class="card-body">
+        <p class="mb-0">{{ openapi_data.schema.description }}</p>
+      </div>
+    </div>
+  {% endif %}
+
+  {% if not openapi_data.error and openapi_data.schema.servers %}
+    <div class="card mb-3">
+      <h5 class="card-header">{% trans "Servers" %}</h5>
+      <div class="card-body">
+        <table class="table table-hover mb-0">
+          <thead>
+            <tr>
+              <th>{% trans "URL" %}</th>
+              <th>{% trans "Description" %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for server in openapi_data.schema.servers %}
+              <tr>
+                <td><code>{{ server.url }}</code></td>
+                <td>{{ server.description|default:"—" }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% endif %}
+
+  {% if not openapi_data.error %}
+    <div class="card">
+      <h5 class="card-header">{% trans "Endpoints" %}</h5>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead>
+              <tr>
+                <th>{% trans "Method" %}</th>
+                <th>{% trans "Path" %}</th>
+                <th>{% trans "Summary" %}</th>
+                <th>{% trans "Operation ID" %}</th>
+                <th>{% trans "Tags" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for op in openapi_data.schema.operations %}
+                <tr>
+                  <td><code>{{ op.method }}</code></td>
+                  <td><code>{{ op.path }}</code></td>
+                  <td>{{ op.summary|default:"—" }}</td>
+                  <td><code>{{ op.operation_id|default:"—" }}</code></td>
+                  <td>{{ op.tags|default:"—" }}</td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="5" class="text-muted">{% trans "No operations found in schema." %}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+{% endblock %}

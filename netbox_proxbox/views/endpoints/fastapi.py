@@ -1,16 +1,18 @@
-"""Provide NetBox CRUD views for FastAPI backend endpoint records."""
+"""Provide NetBox CRUD and OpenAPI tab views for FastAPI endpoint records."""
 
 from netbox.views import generic
-from utilities.views import register_model_view
+from utilities.views import ViewTab, register_model_view
 
 from netbox_proxbox.filtersets import FastAPIEndpointFilterSet
 from netbox_proxbox.forms import FastAPIEndpointFilterForm, FastAPIEndpointForm
 from netbox_proxbox.models import FastAPIEndpoint
+from netbox_proxbox.services.openapi_schema import get_cached_openapi_schema
 from netbox_proxbox.tables import FastAPIEndpointTable
 
 
 __all__ = (
     "FastAPIEndpointView",
+    "FastAPIOpenAPIView",
     "FastAPIEndpointListView",
     "FastAPIEndpointEditView",
     "FastAPIEndpointDeleteView",
@@ -22,6 +24,31 @@ class FastAPIEndpointView(generic.ObjectView):
     """Detail view for a proxbox-api (FastAPI) backend endpoint."""
 
     queryset = FastAPIEndpoint.objects.all()
+
+
+@register_model_view(FastAPIEndpoint, "openapi", path="openapi")
+class FastAPIOpenAPIView(generic.ObjectView):
+    """Detail tab that renders backend OpenAPI schema metadata and endpoints."""
+
+    queryset = FastAPIEndpoint.objects.all()
+    template_name = "netbox_proxbox/fastapiendpoint_openapi.html"
+    tab = ViewTab(
+        label="OpenAPI",
+        permission="netbox_proxbox.view_fastapiendpoint",
+        weight=1050,
+    )
+
+    def get_extra_context(self, request, instance):
+        force_refresh = str(request.GET.get("refresh", "")).strip().lower() in {
+            "1",
+            "true",
+            "yes",
+        }
+        openapi_data = get_cached_openapi_schema(instance, force_refresh=force_refresh)
+        return {
+            "openapi_data": openapi_data,
+            "openapi_force_refresh": force_refresh,
+        }
 
 
 @register_model_view(FastAPIEndpoint, "list", path="", detail=False)
