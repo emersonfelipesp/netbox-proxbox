@@ -7,7 +7,7 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
     dependencies = [
         ("netbox_proxbox", "0015_alter_vmbackup_unique_together_alter_vmbackup_vmid_and_more"),
-        ("dcim", "0201_cable_termination_types_and_more"),
+        ("dcim", "0226_modulebay_rebuild_tree"),
         ("virtualization", "0052_gfk_indexes"),
     ]
 

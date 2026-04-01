@@ -171,6 +171,8 @@ def test_migration_0016_creates_both_tables():
     content = _read("netbox_proxbox/migrations/0016_proxmox_cluster_node_models.py")
     assert "proxmoxcluster" in content.lower()
     assert "proxmoxnode" in content.lower()
+    assert "0226_modulebay_rebuild_tree" in content
+    assert "0201_cable_termination_types_and_more" not in content
 
 
 def test_models_init_exports_cluster_and_node():
