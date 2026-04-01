@@ -130,10 +130,13 @@
       return objEmpty;
     }
 
-    var root = document.createElement("div");
+    var root = document.createElement("span");
     root.className = "nb-proxbox-inline";
 
     for (var k = 0; k < keys.length; k++) {
+      if (k > 0) {
+        appendText(root, " · ");
+      }
       var key = keys[k];
       var kv = document.createElement("span");
       kv.className = "nb-proxbox-inline-kv";
@@ -377,6 +380,21 @@
     }
   }
 
+  function formatTimestamp(ts) {
+    if (!ts) return "";
+    try {
+      var d = new Date(ts);
+      if (isNaN(d.getTime())) return ts;
+      var h = String(d.getHours()).padStart(2, "0");
+      var m = String(d.getMinutes()).padStart(2, "0");
+      var s = String(d.getSeconds()).padStart(2, "0");
+      var ms = String(d.getMilliseconds()).padStart(3, "0");
+      return h + ":" + m + ":" + s + "." + ms;
+    } catch (e) {
+      return ts;
+    }
+  }
+
   function renderLiveLog(container, entries) {
     if (!container) return;
     container.replaceChildren();
@@ -397,15 +415,21 @@
       var row = document.createElement("div");
       row.className = "nb-job-live-log-entry";
 
-      var t = e.timestamp != null ? String(e.timestamp) : "";
-      if (t) {
+      var rawTs = e.timestamp != null ? String(e.timestamp) : "";
+      var lvl = e.level != null ? String(e.level) : "";
+      var msg = e.message != null ? String(e.message) : "";
+
+      row.dataset.timestamp = rawTs;
+      row.dataset.level = lvl;
+      row.dataset.raw = msg;
+
+      if (rawTs) {
         var timeEl = document.createElement("span");
-        timeEl.className = "text-muted small font-monospace";
-        appendText(timeEl, t);
+        timeEl.className = "text-muted small font-monospace nb-job-live-log-time";
+        appendText(timeEl, formatTimestamp(rawTs));
         row.appendChild(timeEl);
       }
 
-      var lvl = e.level != null ? String(e.level) : "";
       if (lvl) {
         var lvlSpan = document.createElement("span");
         lvlSpan.className = getLevelBadgeClass(lvl);
@@ -413,7 +437,6 @@
         row.appendChild(lvlSpan);
       }
 
-      var msg = e.message != null ? String(e.message) : "";
       row.appendChild(renderMessageContent(msg));
 
       container.appendChild(row);
