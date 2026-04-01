@@ -31,6 +31,8 @@ class SyncTypeChoices(ChoiceSet):
     VIRTUAL_MACHINES_BACKUPS = "vm-backups"
     VIRTUAL_MACHINES_SNAPSHOTS = "vm-snapshots"
     DEVICES = "devices"
+    NETWORK_INTERFACES = "network-interfaces"
+    IP_ADDRESSES = "ip-addresses"
     ALL = "all"
 
     CHOICES = [
@@ -40,6 +42,8 @@ class SyncTypeChoices(ChoiceSet):
         (VIRTUAL_MACHINES_BACKUPS, _("Virtual Machines Backups"), "purple"),
         (VIRTUAL_MACHINES_SNAPSHOTS, _("VM Snapshots"), "cyan"),
         (DEVICES, _("Devices"), "green"),
+        (NETWORK_INTERFACES, _("Network Interfaces"), "indigo"),
+        (IP_ADDRESSES, _("IP Addresses"), "violet"),
         (ALL, _("All"), "red"),
     ]
 

@@ -1,0 +1,136 @@
+{% load helpers %}
+<div id="ip-addresses-div" class="form form-horizontal">
+    <div class="row mb-3">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h5 class="mb-1">Total IPs</h5>
+                    <h2 class="mb-0">{{ total_ips|default:0 }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h5 class="mb-1">VM IPs</h5>
+                    <h2 class="mb-0">{{ vm_ips_count|default:0 }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h5 class="mb-1">Node IPs</h5>
+                    <h2 class="mb-0">{{ node_ips_count|default:0 }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if vm_ips or node_ips %}
+    <h3 class="mt-3">IP Addresses Assigned to VM Interfaces ({{ vm_ips|length }})</h3>
+    <div class="card mb-3">
+        <div class="table-responsive">
+            <table class="table table-hover object-list">
+                <thead>
+                    <tr>
+                        <th class="text-nowrap">IP Address</th>
+                        <th class="text-nowrap">VRF</th>
+                        <th class="text-nowrap">Status</th>
+                        <th class="text-nowrap">Interface</th>
+                        <th class="text-nowrap">DNS Name</th>
+                        <th class="text-nowrap">Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ip in vm_ips %}
+                        <tr>
+                            <td>
+                                <a href="{% url 'ipam:ipaddress' ip.pk %}" class="text-body text-decoration-none">
+                                    {{ ip.address }}
+                                </a>
+                            </td>
+                            <td>
+                                {% if ip.vrf %}
+                                    <a href="{% url 'ipam:vrf' ip.vrf.pk %}" class="text-decoration-none">{{ ip.vrf }}</a>
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                            <td><span class="badge text-bg-{{ ip.status_color }}">{{ ip.get_status_display }}</span></td>
+                            <td>
+                                {% if ip.assigned_object %}
+                                    <a href="{% url 'virtualization:vminterface' ip.assigned_object.pk %}" class="text-decoration-none">
+                                        {{ ip.assigned_object.name }}
+                                    </a>
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                            <td>{{ ip.dns_name|default:"—" }}</td>
+                            <td>{{ ip.description|default:"—"|truncatechars:40 }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <h3 class="mt-3">IP Addresses Assigned to Node Interfaces ({{ node_ips|length }})</h3>
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-hover object-list">
+                <thead>
+                    <tr>
+                        <th class="text-nowrap">IP Address</th>
+                        <th class="text-nowrap">VRF</th>
+                        <th class="text-nowrap">Status</th>
+                        <th class="text-nowrap">Interface</th>
+                        <th class="text-nowrap">DNS Name</th>
+                        <th class="text-nowrap">Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ip in node_ips %}
+                        <tr>
+                            <td>
+                                <a href="{% url 'ipam:ipaddress' ip.pk %}" class="text-body text-decoration-none">
+                                    {{ ip.address }}
+                                </a>
+                            </td>
+                            <td>
+                                {% if ip.vrf %}
+                                    <a href="{% url 'ipam:vrf' ip.vrf.pk %}" class="text-decoration-none">{{ ip.vrf }}</a>
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                            <td><span class="badge text-bg-{{ ip.status_color }}">{{ ip.get_status_display }}</span></td>
+                            <td>
+                                {% if ip.assigned_object %}
+                                    <a href="{% url 'dcim:interface' ip.assigned_object.pk %}" class="text-decoration-none">
+                                        {{ ip.assigned_object.name }}
+                                    </a>
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                            <td>{{ ip.dns_name|default:"—" }}</td>
+                            <td>{{ ip.description|default:"—"|truncatechars:40 }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    <div class="card">
+        <div class="card-body text-center text-muted p-4">
+            <span class="mdi mdi-ip-network-outline mdi-24px d-block mb-2"></span>
+            No IP addresses synced with Proxbox yet.
+            <br>
+            <small>Click "Sync IP Addresses" to synchronize Proxmox IP addresses with NetBox.</small>
+        </div>
+    </div>
+    {% endif %}
+</div>

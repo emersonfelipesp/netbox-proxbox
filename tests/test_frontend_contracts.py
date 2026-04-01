@@ -46,6 +46,19 @@ def test_home_template_uses_plugin_vanilla_js_entrypoint():
     assert "data-sync-kind" in contents
 
 
+def test_home_template_exposes_prefilled_endpoint_quick_add_buttons():
+    contents = _read("netbox_proxbox/templates/netbox_proxbox/home.html")
+
+    assert "netbox_quick_add_url" in contents
+    assert "fastapi_quick_add_url" in contents
+    assert "Quick add NetBox Endpoint" in contents
+    assert "Quick add FastAPI Endpoint" in contents
+    assert "Open blank form" in contents
+    assert "localhost" in contents
+    assert "127.0.0.1/32" in contents
+    assert "token mode" in contents
+
+
 def test_home_quick_schedule_banner_posts_to_quick_schedule_url():
     contents = _read(
         "netbox_proxbox/templates/netbox_proxbox/home/quick_schedule_banner.html"

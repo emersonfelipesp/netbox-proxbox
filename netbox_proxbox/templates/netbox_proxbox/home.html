@@ -109,10 +109,14 @@
                 {% include "netbox_proxbox/home/netbox_card.html" %}
             {% endfor %}
         {% else %}
-            <div class="d-flex flex-column align-items-center" style="margin-bottom: 15px;">
+            <div class="d-flex flex-column align-items-center gap-2" style="margin-bottom: 15px;">
                 <div><h2>There is no NetBox Endpoint configured.</h2></div>
-                <div class="justify-content-center">
-                    <a href="{% url 'plugins:netbox_proxbox:netboxendpoint_add' %}" class="btn btn-primary">Create new NetBox Endpoint</a>
+                <p class="small text-muted text-center mb-0">
+                    Quick add starts with localhost, 127.0.0.1/32, and v1 token mode. Change any value before saving.
+                </p>
+                <div class="d-flex flex-wrap justify-content-center gap-2">
+                    <a href="{{ netbox_quick_add_url }}" class="btn btn-primary">Quick add NetBox Endpoint</a>
+                    <a href="{% url 'plugins:netbox_proxbox:netboxendpoint_add' %}" class="btn btn-outline-secondary">Open blank form</a>
                 </div>
             </div>
             <hr>
@@ -123,10 +127,14 @@
                 {% include "netbox_proxbox/home/fastapi_card.html" %}
             {% endfor %}
         {% else %}
-            <div class="d-flex flex-column align-items-center" style="margin-bottom: 15px;">
+            <div class="d-flex flex-column align-items-center gap-2" style="margin-bottom: 15px;">
                 <div><h2>There is no FastAPI Endpoint configured.</h2></div>
-                <div class="justify-content-center">
-                    <a href="{% url 'plugins:netbox_proxbox:fastapiendpoint_add' %}" class="btn btn-primary">Create new FastAPI Endpoint</a>
+                <p class="small text-muted text-center mb-0">
+                    Quick add starts with localhost and 127.0.0.1/32. Change the host or IP before saving.
+                </p>
+                <div class="d-flex flex-wrap justify-content-center gap-2">
+                    <a href="{{ fastapi_quick_add_url }}" class="btn btn-primary">Quick add FastAPI Endpoint</a>
+                    <a href="{% url 'plugins:netbox_proxbox:fastapiendpoint_add' %}" class="btn btn-outline-secondary">Open blank form</a>
                 </div>
             </div>
             <hr>

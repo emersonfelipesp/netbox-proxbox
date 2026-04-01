@@ -124,6 +124,20 @@ class SyncVmSnapshotsView(_ProxboxSyncEnqueueView):
     action_label = _("VM snapshots")
 
 
+class SyncNetworkInterfacesView(_ProxboxSyncEnqueueView):
+    """POST: queue network interfaces sync (VM + node interfaces)."""
+
+    sync_types = [SyncTypeChoices.NETWORK_INTERFACES]
+    action_label = _("Network Interfaces")
+
+
+class SyncIPAddressesView(_ProxboxSyncEnqueueView):
+    """POST: queue IP addresses sync (depends on interfaces being synced first)."""
+
+    sync_types = [SyncTypeChoices.IP_ADDRESSES]
+    action_label = _("IP Addresses")
+
+
 sync_devices = SyncDevicesView.as_view()
 sync_storage = SyncStorageView.as_view()
 sync_virtual_machines = SyncVirtualMachinesView.as_view()
@@ -131,3 +145,5 @@ sync_full_update = SyncFullUpdateView.as_view()
 sync_vm_backups = SyncVmBackupsView.as_view()
 sync_vm_snapshots = SyncVmSnapshotsView.as_view()
 sync_virtual_disks = SyncVirtualDisksView.as_view()
+sync_network_interfaces = SyncNetworkInterfacesView.as_view()
+sync_ip_addresses = SyncIPAddressesView.as_view()

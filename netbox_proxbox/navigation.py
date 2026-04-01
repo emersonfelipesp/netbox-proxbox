@@ -28,6 +28,16 @@ lxc_containers_item = PluginMenuItem(
     link_text="LXC Containers",
 )
 
+interfaces_item = PluginMenuItem(
+    link="plugins:netbox_proxbox:interfaces",
+    link_text="Interfaces",
+)
+
+ip_addresses_item = PluginMenuItem(
+    link="plugins:netbox_proxbox:ip_addresses",
+    link_text="IP Addresses",
+)
+
 storage_item = PluginMenuItem(
     link="plugins:netbox_proxbox:proxmoxstorage_list",
     link_text="Storage",
@@ -149,6 +159,8 @@ menu = PluginMenu(
                 nodes_item,
                 virtual_machines_item,
                 lxc_containers_item,
+                interfaces_item,
+                ip_addresses_item,
                 storage_item,
                 backups_item,
                 snapshots_item,
