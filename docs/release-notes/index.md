@@ -4,12 +4,13 @@ This section tracks the release line represented by this repository and keeps ol
 
 ## Current Release Line
 
-The plugin source in this repository is currently `0.0.9.post4`.
+The plugin source in this repository is currently `0.0.10`.
 
 ## Highlights By Version
 
 | Version | Summary |
 |---------|---------|
+| `0.0.10` | Cluster and node tracking with NetBox Cluster/Device links; Mode field fix on endpoint detail |
 | `0.0.9.post4` | Follow-up migration fixes for upgrade paths and storage schema issues |
 | `0.0.9` | Storage relationships, task history, per-VM sync, settings, dashboard, and richer live job UX |
 | `0.0.8` | NetBox Jobs-based scheduling, SSE-backed sync jobs, VM snapshots, virtual disk sync, and NetBox 4.5 alignment |

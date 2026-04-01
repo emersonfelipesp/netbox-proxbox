@@ -31,6 +31,7 @@ The current codebase includes NetBox models for:
 - Sync processes
 - VM backups
 - VM snapshots
+- Proxmox clusters and hypervisor nodes (with links to NetBox Cluster and Device objects)
 
 The plugin UI exposes sync actions for:
 

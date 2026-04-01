@@ -87,6 +87,8 @@ nav:
     - Proxbox CLI Docgen: 'developer/proxbox-cli-docgen.md'
     - Local Proxmox Mock: 'developer/proxmox-mock-local.md'
     - Raw CLI Capture: 'generated/proxbox-cli-command-capture.md'
+  - User Guide:
+    - Cluster and Node Tracking: 'user-guide/cluster-nodes.md'
   - Features:
     - E2E Docker Testing: 'features/e2e-docker-testing.md'
     - Synchronized Data: 'features/synchronized-data.md'
@@ -106,6 +108,7 @@ nav:
     - Other Models: 'models/others.md'
   - Release Notes:
     - Summary: 'release-notes/index.md'
+    - Version 0.0.10: 'release-notes/version-0.0.10.md'
     - Version 0.0.9.post4: 'release-notes/version-0.0.9.post4.md'
     - Version 0.0.9: 'release-notes/version-0.0.9.md'
     - Version 0.0.8: 'release-notes/version-0.0.8.md'

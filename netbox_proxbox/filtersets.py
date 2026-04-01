@@ -8,6 +8,8 @@ from utilities.filtersets import register_filterset
 from .models import (
     FastAPIEndpoint,
     NetBoxEndpoint,
+    ProxmoxCluster,
+    ProxmoxNode,
     ProxmoxStorage,
     ProxmoxEndpoint,
     VMBackup,
@@ -197,4 +199,49 @@ class ProxmoxStorageFilterSet(NetBoxModelFilterSet):
             Q(name__icontains=value)
             | Q(cluster__name__icontains=value)
             | Q(path__icontains=value)
+        )
+
+
+@register_filterset
+class ProxmoxClusterFilterSet(NetBoxModelFilterSet):
+    """Filter Proxmox cluster records tracked by the plugin."""
+
+    class Meta:
+        model = ProxmoxCluster
+        fields = ("id", "endpoint", "netbox_cluster", "name", "mode", "quorate")
+
+    def search(self, queryset, name, value):
+        """Match cluster name or cluster ID."""
+        if not value.strip():
+            return queryset
+        return queryset.filter(
+            Q(name__icontains=value) | Q(cluster_id__icontains=value)
+        )
+
+
+@register_filterset
+class ProxmoxNodeFilterSet(NetBoxModelFilterSet):
+    """Filter Proxmox node records tracked by the plugin."""
+
+    class Meta:
+        model = ProxmoxNode
+        fields = (
+            "id",
+            "endpoint",
+            "proxmox_cluster",
+            "netbox_device",
+            "name",
+            "ip_address",
+            "online",
+            "local",
+        )
+
+    def search(self, queryset, name, value):
+        """Match node name, IP address, or SSL fingerprint."""
+        if not value.strip():
+            return queryset
+        return queryset.filter(
+            Q(name__icontains=value)
+            | Q(ip_address__icontains=value)
+            | Q(ssl_fingerprint__icontains=value)
         )

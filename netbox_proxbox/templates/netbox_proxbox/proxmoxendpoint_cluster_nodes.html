@@ -1,0 +1,106 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load i18n %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        {% if not has_data %}
+            <div class="alert alert-info" role="alert">
+                <h5 class="alert-heading">{% trans "No Cluster or Node Data" %}</h5>
+                <p>
+                    {% trans "This Proxmox endpoint has not been synced yet, or no cluster/node information is available." %}
+                </p>
+                <p class="mb-0">
+                    {% trans "Run a sync operation to discover cluster and node information from this endpoint." %}
+                </p>
+            </div>
+        {% else %}
+            {% if clusters %}
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <strong>{% trans "Cluster Information" %}</strong>
+                    </div>
+                    <div class="card-body">
+                        {% for cluster in clusters %}
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <table class="table table-hover attr-table">
+                                        <tr>
+                                            <th scope="row">{% trans "Name" %}</th>
+                                            <td>{{ cluster.name }}</td>
+                                        </tr>
+                                        <tr>
+                                            <th scope="row">{% trans "Cluster ID" %}</th>
+                                            <td>{{ cluster.cluster_id|placeholder }}</td>
+                                        </tr>
+                                        <tr>
+                                            <th scope="row">{% trans "Mode" %}</th>
+                                            <td>
+                                                {% if cluster.mode == 'cluster' %}
+                                                    <span class="badge text-bg-success">{% trans "Cluster" %}</span>
+                                                {% elif cluster.mode == 'standalone' %}
+                                                    <span class="badge text-bg-info">{% trans "Standalone" %}</span>
+                                                {% else %}
+                                                    <span class="badge text-bg-secondary">{{ cluster.get_mode_display }}</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <th scope="row">{% trans "Nodes" %}</th>
+                                            <td>{{ cluster.nodes_count }}</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                                <div class="col-md-6">
+                                    <table class="table table-hover attr-table">
+                                        <tr>
+                                            <th scope="row">{% trans "Quorum" %}</th>
+                                            <td>
+                                                {% if cluster.quorate %}
+                                                    <span class="badge text-bg-success"><i class="mdi mdi-check"></i> {% trans "Yes" %}</span>
+                                                {% else %}
+                                                    <span class="badge text-bg-danger"><i class="mdi mdi-close"></i> {% trans "No" %}</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <th scope="row">{% trans "Corosync Version" %}</th>
+                                            <td>{{ cluster.version|placeholder }}</td>
+                                        </tr>
+                                        <tr>
+                                            <th scope="row">{% trans "NetBox Cluster" %}</th>
+                                            <td>
+                                                {% if cluster.netbox_cluster %}
+                                                    <a href="{{ cluster.netbox_cluster.get_absolute_url }}">{{ cluster.netbox_cluster }}</a>
+                                                {% else %}
+                                                    {{ ''|placeholder }}
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% endif %}
+
+            <div class="card">
+                <div class="card-header">
+                    <strong>{% trans "Nodes" %}</strong>
+                </div>
+                <div class="card-body p-0">
+                    {% if nodes %}
+                        {% render_table node_table %}
+                    {% else %}
+                        <div class="p-3 text-muted">
+                            {% trans "No nodes found for this endpoint." %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock content %}

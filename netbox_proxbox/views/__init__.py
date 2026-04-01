@@ -26,6 +26,7 @@ from .cluster import (
     ClusterStoragesTabView,
     ClusterSummaryTabView,
 )
+from .cluster_nodes_tab import ProxmoxEndpointClusterNodesTabView
 from .dashboard import DashboardView
 from .endpoints import (
     FastAPIEndpointDeleteView,
