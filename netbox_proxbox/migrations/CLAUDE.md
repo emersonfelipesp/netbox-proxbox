@@ -15,7 +15,8 @@ This directory contains Django schema migrations for the plugin models.
   `0010_proxbox_plugin_settings`, `0011_proxmoxstorage`,
   `0012_proxboxpluginsettings_proxbox_fetch_max_concurrency`). It creates the
   `ProxboxPluginSettings` singleton model (including `proxbox_fetch_max_concurrency`) and
-  `ProxmoxStorage`.
+  `ProxmoxStorage`. On upgrades from the old `v0.0.7` chain, it also backfills the missing
+  `VMSnapshot` table before adding storage relations.
 - **0011_storage_relations:** Adds endpoint and virtualization relations to storage records.
 - **0012_fix_missing_storage_tables:** Repair migration that backfills storage and task-history
   tables or columns when older upgrade paths left them missing.

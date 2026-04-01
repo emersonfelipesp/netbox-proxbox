@@ -25,6 +25,37 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        migrations.RunSQL(
+            sql="""
+                CREATE TABLE IF NOT EXISTS netbox_proxbox_vmsnapshot (
+                    id bigint NOT NULL PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+                    created timestamp with time zone NULL,
+                    last_updated timestamp with time zone NULL,
+                    custom_field_data jsonb NOT NULL DEFAULT '{}'::jsonb,
+                    name varchar(255) NOT NULL,
+                    description text NULL,
+                    vmid integer NOT NULL,
+                    node varchar(255) NOT NULL,
+                    snaptime timestamp with time zone NULL,
+                    parent varchar(255) NULL,
+                    subtype varchar(255) NOT NULL DEFAULT 'qemu',
+                    status varchar(255) NOT NULL DEFAULT 'active',
+                    virtual_machine_id bigint NOT NULL
+                        REFERENCES virtualization_virtualmachine(id)
+                        DEFERRABLE INITIALLY DEFERRED,
+                    CONSTRAINT netbox_proxbox_vmsnapshot_unique_vmid_name_node
+                        UNIQUE (vmid, name, node)
+                );
+                CREATE INDEX IF NOT EXISTS
+                    netbox_proxbox_vmsnapshot_virtual_machine_id_idx
+                ON netbox_proxbox_vmsnapshot (virtual_machine_id);
+                DROP TABLE IF EXISTS netbox_proxbox_syncprocess CASCADE;
+            """,
+            reverse_sql="""
+                DROP INDEX IF EXISTS netbox_proxbox_vmsnapshot_virtual_machine_id_idx;
+                DROP TABLE IF EXISTS netbox_proxbox_vmsnapshot CASCADE;
+            """,
+        ),
         migrations.CreateModel(
             name="ProxboxPluginSettings",
             fields=[
