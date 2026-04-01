@@ -189,7 +189,7 @@ def vms_backups_sync_all(
     as_yaml: YamlFlag = False,
 ) -> None:
     """Sync ALL backups across all clusters/nodes/storages. [NOTE: long-running sync]"""
-    query = {"delete_stale": "true"} if delete_stale else None
+    query = {"delete_nonexistent_backup": "true"} if delete_stale else None
     resp = run_with_spinner(
         _get_client().get(
             "/virtualization/virtual-machines/backups/all/create", query=query
