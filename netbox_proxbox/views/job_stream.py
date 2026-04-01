@@ -46,6 +46,7 @@ class JobStreamSSEView(View):
             _VM_SCOPED_PATH_TEMPLATES,
             _use_guest_agent_interface_name_setting,
             _proxbox_fetch_max_concurrency_setting,
+            _ignore_ipv6_link_local_addresses_setting,
             SyncTypeChoices,
         )
 
@@ -74,6 +75,9 @@ class JobStreamSSEView(View):
         )
         base_query["fetch_max_concurrency"] = str(
             _proxbox_fetch_max_concurrency_setting()
+        )
+        base_query["ignore_ipv6_link_local_addresses"] = (
+            "true" if _ignore_ipv6_link_local_addresses_setting() else "false"
         )
         if proxmox_endpoint_ids:
             base_query["proxmox_endpoint_ids"] = ",".join(proxmox_endpoint_ids)

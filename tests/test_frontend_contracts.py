@@ -212,6 +212,7 @@ def test_settings_page_is_wired_in_urls_navigation_and_template():
     assert "Plugin Settings" in template
     assert "use_guest_agent_interface_name" in template
     assert "proxbox_fetch_max_concurrency" in template
+    assert "ignore_ipv6_link_local_addresses" in template
     assert "inc/field.html" not in template
     assert "class SettingsView(" in view
 

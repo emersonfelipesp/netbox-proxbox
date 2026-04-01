@@ -434,6 +434,7 @@ def test_proxbox_sync_job_query_flag_tracks_plugin_setting(
     ProxboxSyncJob.run(job, sync_type=st.DEVICES)
     assert captured["query_params"]["use_guest_agent_interface_name"] == "false"
     assert captured["query_params"]["fetch_max_concurrency"] == "8"
+    assert captured["query_params"]["ignore_ipv6_link_local_addresses"] == "true"
 
 
 def test_proxbox_sync_job_query_uses_fetch_concurrency_setting(
@@ -463,6 +464,36 @@ def test_proxbox_sync_job_query_uses_fetch_concurrency_setting(
     st = proxbox_sync_job_module.SyncTypeChoices
     ProxboxSyncJob.run(job, sync_type=st.DEVICES)
     assert captured["query_params"]["fetch_max_concurrency"] == "17"
+    assert captured["query_params"]["ignore_ipv6_link_local_addresses"] == "true"
+
+
+def test_proxbox_sync_job_query_flag_ignore_ipv6_link_local_setting(
+    monkeypatch, proxbox_sync_job_module
+):
+    captured: dict[str, object] = {}
+    services_mod = types.ModuleType("netbox_proxbox.services")
+
+    def run_sync_stream(path, query_params=None, **stream_kwargs):
+        captured["query_params"] = query_params
+        return ({"stream": True, "response": {"ok": True}}, 200)
+
+    services_mod.run_sync_stream = run_sync_stream
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
+    monkeypatch.setattr(
+        proxbox_sync_job_module,
+        "_ignore_ipv6_link_local_addresses_setting",
+        lambda: False,
+    )
+
+    ProxboxSyncJob = proxbox_sync_job_module.ProxboxSyncJob
+    job = ProxboxSyncJob()
+    job.logger = logging.getLogger("test_proxbox_job")
+    job.job = MagicMock()
+    job.job.data = None
+
+    st = proxbox_sync_job_module.SyncTypeChoices
+    ProxboxSyncJob.run(job, sync_type=st.DEVICES)
+    assert captured["query_params"]["ignore_ipv6_link_local_addresses"] == "false"
 
 
 def test_proxbox_sync_job_run_all_invokes_each_stage_stream(

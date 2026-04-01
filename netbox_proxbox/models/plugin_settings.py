@@ -34,6 +34,15 @@ class ProxboxPluginSettings(NetBoxModel):
             "Higher values can speed up multi-cluster discovery but may increase load."
         ),
     )
+    ignore_ipv6_link_local_addresses = models.BooleanField(
+        default=True,
+        verbose_name=_("Ignore IPv6 link-local addresses"),
+        help_text=_(
+            "When enabled, IPv6 link-local addresses (fe80::/64) are ignored during "
+            "VM interface IP address selection. Disable this only if you need link-local "
+            "addresses to be included."
+        ),
+    )
 
     class Meta:
         verbose_name = _("Proxbox plugin settings")
