@@ -55,6 +55,19 @@ _SYNC_TYPE_PATH: dict[str, str] = {
     ),
 }
 
+_TARGETED_VM_STAGE_PATHS: dict[str, str] = {
+    SyncTypeChoices.VIRTUAL_MACHINES: "virtualization/virtual-machines/{vm_id}/create/stream",
+    SyncTypeChoices.VIRTUAL_MACHINES_DISKS: (
+        "virtualization/virtual-machines/{vm_id}/virtual-disks/create/stream"
+    ),
+    SyncTypeChoices.VIRTUAL_MACHINES_BACKUPS: (
+        "virtualization/virtual-machines/{vm_id}/backups/create/stream"
+    ),
+    SyncTypeChoices.VIRTUAL_MACHINES_SNAPSHOTS: (
+        "virtualization/virtual-machines/{vm_id}/snapshots/create/stream"
+    ),
+}
+
 _ALLOWED_SYNC_SLUGS = frozenset(_SYNC_TYPE_PATH) | {SyncTypeChoices.ALL}
 
 _STAGE_ORDER_INDEX = {t: i for i, t in enumerate(_SYNC_STAGE_ORDER)}
@@ -111,6 +124,18 @@ def _sync_stream_path(sync_type: str) -> str:
     if not base:
         raise ValueError(f"Unknown sync_type: {sync_type!r}")
     return f"{base.rstrip('/')}/stream"
+
+
+def _sync_stream_paths_for_stage(sync_type: str, netbox_vm_ids: list[str] | None) -> list[str]:
+    """Return one or more SSE paths for a stage, expanding targeted VM runs per VM id."""
+    if not netbox_vm_ids:
+        return [_sync_stream_path(sync_type)]
+
+    targeted_path = _TARGETED_VM_STAGE_PATHS.get(sync_type)
+    if not targeted_path:
+        return [_sync_stream_path(sync_type)]
+
+    return [targeted_path.format(vm_id=vm_id) for vm_id in netbox_vm_ids if str(vm_id)]
 
 
 def proxbox_sync_params_from_job(job: Any) -> dict[str, Any]:
@@ -255,14 +280,7 @@ class ProxboxSyncJob(JobRunner):
             if st == SyncTypeChoices.VIRTUAL_MACHINES_BACKUPS:
                 query_params["delete_nonexistent_backup"] = True
             target_vm_ids = params.get("netbox_vm_ids", [])
-            stage_paths: list[str]
-            if st == SyncTypeChoices.VIRTUAL_MACHINES and target_vm_ids:
-                stage_paths = [
-                    f"virtualization/virtual-machines/{vm_id}/create/stream"
-                    for vm_id in target_vm_ids
-                ]
-            else:
-                stage_paths = [_sync_stream_path(st)]
+            stage_paths = _sync_stream_paths_for_stage(st, target_vm_ids)
 
             for stream_path in stage_paths:
                 self.logger.info("Starting stage: %s (%s)", st, stream_path)
