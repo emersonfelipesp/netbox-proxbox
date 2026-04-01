@@ -180,6 +180,43 @@
     return wrap;
   }
 
+  function getLevelBadgeClass(level) {
+    var normalized = level != null ? String(level).trim().toLowerCase() : "";
+    if (
+      normalized === "completed" ||
+      normalized === "success" ||
+      normalized === "done" ||
+      normalized === "ok"
+    ) {
+      return "badge text-bg-success text-uppercase";
+    }
+    if (
+      normalized === "progress" ||
+      normalized === "started" ||
+      normalized === "streaming" ||
+      normalized === "running" ||
+      normalized === "pending"
+    ) {
+      return "badge text-bg-warning text-uppercase";
+    }
+    if (
+      normalized === "error" ||
+      normalized === "errored" ||
+      normalized === "failed" ||
+      normalized === "failure"
+    ) {
+      return "badge text-bg-danger text-uppercase";
+    }
+    return "badge text-bg-secondary text-uppercase";
+  }
+
+  function getProgressLabelClass(statusValue, done) {
+    if (statusValue === "failed" || statusValue === "errored" || done) {
+      return "nb-job-progress-label small fw-semibold text-white";
+    }
+    return "nb-job-progress-label small fw-semibold text-dark";
+  }
+
   function renderMessageContent(msg) {
     var parsed = parseProxboxMessage(msg);
     var container = document.createElement("span");
@@ -282,6 +319,13 @@
     var apiData = d && typeof d === "object" && d.data ? d.data : null;
     var syncTypes = resolveSyncTypes(apiData, entries);
     var prog = parseJobProgress(entries, syncTypes);
+    var statusValue = apiData && apiData.status != null ? apiData.status : "";
+    if (statusValue && typeof statusValue === "object") {
+      statusValue = statusValue.value != null ? String(statusValue.value) : "";
+    } else {
+      statusValue = String(statusValue);
+    }
+    statusValue = statusValue.trim().toLowerCase();
 
     var wrapper = barEl.parentElement;
     while (wrapper && !wrapper.classList.contains("nb-job-progress-wrap")) {
@@ -301,19 +345,31 @@
 
     var label = barEl.querySelector(".nb-job-progress-label");
     if (label) {
-      label.textContent = prog.done
-        ? "Done"
-        : prog.currentStage
-          ? prog.currentStage + " (" + prog.completed + "/" + prog.total + ")"
-          : prog.completed + "/" + prog.total;
+      label.textContent = (statusValue === "failed" || statusValue === "errored")
+        ? "Failed"
+        : prog.done
+          ? "Done"
+          : prog.currentStage
+            ? prog.currentStage + " (" + prog.completed + "/" + prog.total + ")"
+            : prog.completed + "/" + prog.total;
+      label.className = getProgressLabelClass(statusValue, prog.done);
     }
 
-    if (prog.done) {
-      barEl.classList.remove("progress-bar-striped", "progress-bar-animated", "bg-info");
+    barEl.classList.remove(
+      "progress-bar-striped",
+      "progress-bar-animated",
+      "bg-info",
+      "bg-warning",
+      "bg-success",
+      "bg-danger"
+    );
+
+    if (statusValue === "failed" || statusValue === "errored") {
+      barEl.classList.add("bg-danger");
+    } else if (prog.done || statusValue === "completed") {
       barEl.classList.add("bg-success");
     } else {
-      barEl.classList.remove("bg-success");
-      barEl.classList.add("bg-info", "progress-bar-striped", "progress-bar-animated");
+      barEl.classList.add("bg-warning", "progress-bar-striped", "progress-bar-animated");
     }
   }
 
@@ -348,7 +404,7 @@
       var lvl = e.level != null ? String(e.level) : "";
       if (lvl) {
         var lvlSpan = document.createElement("span");
-        lvlSpan.className = "badge text-bg-secondary text-uppercase";
+        lvlSpan.className = getLevelBadgeClass(lvl);
         appendText(lvlSpan, lvl);
         row.appendChild(lvlSpan);
       }
@@ -441,6 +497,8 @@
     formatLogEntriesForClipboard: formatLogEntriesForClipboard,
     parseJobProgress: parseJobProgress,
     applyProgress: applyProgress,
+    getLevelBadgeClass: getLevelBadgeClass,
+    getProgressLabelClass: getProgressLabelClass,
   };
 
   if (document.readyState === "loading") {

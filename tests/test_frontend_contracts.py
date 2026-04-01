@@ -149,6 +149,17 @@ def test_job_live_poll_alert_spans_the_card_width_and_keeps_streaming_messages()
     assert 'handleSSEFrame("message", data)' in contents
     assert 'if (status === "completed")' not in contents
     assert 'status === "errored"' in contents
+    assert "sessionStorage" in contents
+    assert "bg-warning" in contents
+
+
+def test_job_log_view_uses_netbox_status_colors():
+    contents = _read("netbox_proxbox/static/netbox_proxbox/js/job_log_view.js")
+    assert "text-bg-success text-uppercase" in contents
+    assert "text-bg-warning text-uppercase" in contents
+    assert "text-bg-danger text-uppercase" in contents
+    assert "bg-warning" in contents
+    assert "bg-danger" in contents
 
 
 def test_combined_interface_views_import_vm_interface_directly():
