@@ -10,11 +10,25 @@ from utilities.permissions import get_permission_for_model
 from virtualization.models import VirtualMachine
 
 from netbox_proxbox.jobs import is_proxbox_sync_job
+from netbox_proxbox.models import (
+    ProxmoxCluster,
+    ProxmoxNode,
+    ProxmoxStorage,
+    VMBackup,
+    VMSnapshot,
+    VMTaskHistory,
+)
 from netbox_proxbox.views.proxbox_access import permission_enqueue_proxbox_sync
 
 __all__ = (
     "ProxboxJobTemplateExtension",
     "ProxboxVirtualMachineTemplateExtension",
+    "ProxmoxClusterTemplateExtension",
+    "ProxmoxNodeTemplateExtension",
+    "ProxmoxStorageTemplateExtension",
+    "VMBackupTemplateExtension",
+    "VMSnapshotTemplateExtension",
+    "VMTaskHistoryTemplateExtension",
     "template_extensions",
 )
 
@@ -101,7 +115,141 @@ class ProxboxVirtualMachineTemplateExtension(PluginTemplateExtension):
         )
 
 
+class ProxmoxClusterTemplateExtension(PluginTemplateExtension):
+    """Inject Sync Now action on virtualization.Cluster detail pages."""
+
+    models = ["virtualization.cluster"]
+
+    def buttons(self):
+        obj = self.context["object"]
+        user = self.context["request"].user
+        if not user.has_perm(permission_enqueue_proxbox_sync()):
+            return ""
+        proxbox_cluster = obj.proxmox_cluster_tracking.first()
+        if not proxbox_cluster:
+            return ""
+        return self.render(
+            "netbox_proxbox/inc/cluster_sync_now_button.html",
+            {
+                "cluster": obj,
+                "action_url": f"{proxbox_cluster.get_absolute_url()}proxbox-sync-now/",
+            },
+        )
+
+
+class ProxmoxNodeTemplateExtension(PluginTemplateExtension):
+    """Inject Sync Now action on dcim.Device detail pages for Proxmox nodes."""
+
+    models = ["dcim.device"]
+
+    def buttons(self):
+        obj = self.context["object"]
+        user = self.context["request"].user
+        if not user.has_perm(permission_enqueue_proxbox_sync()):
+            return ""
+        proxbox_node = obj.proxmox_node_tracking.first()
+        if not proxbox_node:
+            return ""
+        return self.render(
+            "netbox_proxbox/inc/node_sync_now_button.html",
+            {
+                "device": obj,
+                "action_url": f"{proxbox_node.get_absolute_url()}proxbox-sync-now/",
+            },
+        )
+
+
+class ProxmoxStorageTemplateExtension(PluginTemplateExtension):
+    """Inject Sync Now action on ProxmoxStorage detail pages."""
+
+    models = ["netbox_proxbox.proxmoxstorage"]
+
+    def buttons(self):
+        obj = self.context["object"]
+        if not isinstance(obj, ProxmoxStorage):
+            return ""
+        user = self.context["request"].user
+        if not user.has_perm(permission_enqueue_proxbox_sync()):
+            return ""
+        return self.render(
+            "netbox_proxbox/inc/storage_sync_now_button.html",
+            {
+                "storage": obj,
+                "action_url": f"{obj.get_absolute_url()}proxbox-sync-now/",
+            },
+        )
+
+
+class VMBackupTemplateExtension(PluginTemplateExtension):
+    """Inject Sync Now action on VMBackup detail pages."""
+
+    models = ["netbox_proxbox.vmbackup"]
+
+    def buttons(self):
+        obj = self.context["object"]
+        if not isinstance(obj, VMBackup):
+            return ""
+        user = self.context["request"].user
+        if not user.has_perm(permission_enqueue_proxbox_sync()):
+            return ""
+        return self.render(
+            "netbox_proxbox/inc/vm_backup_sync_now_button.html",
+            {
+                "backup": obj,
+                "action_url": f"{obj.get_absolute_url()}proxbox-sync-now/",
+            },
+        )
+
+
+class VMSnapshotTemplateExtension(PluginTemplateExtension):
+    """Inject Sync Now action on VMSnapshot detail pages."""
+
+    models = ["netbox_proxbox.vmsnapshot"]
+
+    def buttons(self):
+        obj = self.context["object"]
+        if not isinstance(obj, VMSnapshot):
+            return ""
+        user = self.context["request"].user
+        if not user.has_perm(permission_enqueue_proxbox_sync()):
+            return ""
+        return self.render(
+            "netbox_proxbox/inc/vm_snapshot_sync_now_button.html",
+            {
+                "snapshot": obj,
+                "action_url": f"{obj.get_absolute_url()}proxbox-sync-now/",
+            },
+        )
+
+
+class VMTaskHistoryTemplateExtension(PluginTemplateExtension):
+    """Inject Sync Now action on VMTaskHistory detail pages."""
+
+    models = ["netbox_proxbox.vmtaskhistory"]
+
+    def buttons(self):
+        obj = self.context["object"]
+        if not isinstance(obj, VMTaskHistory):
+            return ""
+        user = self.context["request"].user
+        if not user.has_perm(permission_enqueue_proxbox_sync()):
+            return ""
+        return self.render(
+            "netbox_proxbox/inc/task_history_sync_now_button.html",
+            {
+                "task_history": obj,
+                "action_url": f"{obj.get_absolute_url()}proxbox-sync-now/",
+            },
+        )
+
+
 template_extensions = [
     ProxboxJobTemplateExtension,
     ProxboxVirtualMachineTemplateExtension,
+    ProxmoxClusterTemplateExtension,
+    ProxmoxNodeTemplateExtension,
+    ProxmoxStorageTemplateExtension,
+    VMBackupTemplateExtension,
+    VMSnapshotTemplateExtension,
+    VMTaskHistoryTemplateExtension,
 ]
