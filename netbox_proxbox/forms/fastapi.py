@@ -13,6 +13,23 @@ from ipam.models import IPAddress
 from ..models import FastAPIEndpoint
 
 
+def _resolve_ip_address_initial(value: object) -> IPAddress | None:
+    """Best-effort resolve a query-string IP address to an existing NetBox object."""
+    if value is None:
+        return None
+    if isinstance(value, IPAddress):
+        return value
+
+    candidate = str(value).strip()
+    if not candidate:
+        return None
+
+    ip_address = IPAddress.objects.filter(pk=candidate).first()
+    if ip_address is None:
+        ip_address = IPAddress.objects.filter(address=candidate).first()
+    return ip_address
+
+
 class FastAPIEndpointForm(NetBoxModelForm):
     """
     Form for FastAPIEndpoint model.
@@ -69,6 +86,14 @@ class FastAPIEndpointForm(NetBoxModelForm):
             "token",
             "tags",
         )
+
+    def __init__(self, *args, **kwargs):
+        """Pre-fill loopback IP input when the add view is launched with a default."""
+        super().__init__(*args, **kwargs)
+
+        ip_address = _resolve_ip_address_initial(self.initial.get("ip_address"))
+        if ip_address is not None:
+            self.initial["ip_address"] = ip_address
 
     def clean(self):
         """Require domain or IP for HTTP/WebSocket base URLs, check port reachability."""

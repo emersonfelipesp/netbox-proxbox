@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+from urllib.parse import urlencode
+
+from django.urls import reverse
+
 from netbox_proxbox import ProxboxConfig
+from netbox_proxbox.choices import NetBoxTokenVersionChoices
 from netbox_proxbox.forms.schedule_sync import ScheduleSyncForm
 from netbox_proxbox.models import FastAPIEndpoint, NetBoxEndpoint, ProxmoxEndpoint
 from netbox_proxbox.schedule_hints import (
@@ -13,6 +18,17 @@ from netbox_proxbox.utils import get_fastapi_url
 from netbox_proxbox.views.proxbox_access import permission_enqueue_proxbox_sync
 
 __all__ = ("build_home_dashboard_context",)
+
+
+def _build_add_url(view_name: str, params: dict[str, object]) -> str:
+    """Return an endpoint add URL with query-string defaults."""
+    query_params = {
+        key: value for key, value in params.items() if value not in (None, "")
+    }
+    url = reverse(view_name)
+    if not query_params:
+        return url
+    return f"{url}?{urlencode(query_params)}"
 
 
 def build_home_dashboard_context(
@@ -28,6 +44,22 @@ def build_home_dashboard_context(
     proxmox_endpoint_obj = ProxmoxEndpoint.objects.restrict(request.user, "view")
     netbox_endpoint_obj = NetBoxEndpoint.objects.restrict(request.user, "view")
     fastapi_endpoint_obj = FastAPIEndpoint.objects.restrict(request.user, "view")
+
+    netbox_quick_add_url = _build_add_url(
+        "plugins:netbox_proxbox:netboxendpoint_add",
+        {
+            "domain": "localhost",
+            "ip_address": "127.0.0.1/32",
+            "token_version": NetBoxTokenVersionChoices.V1,
+        },
+    )
+    fastapi_quick_add_url = _build_add_url(
+        "plugins:netbox_proxbox:fastapiendpoint_add",
+        {
+            "domain": "localhost",
+            "ip_address": "127.0.0.1/32",
+        },
+    )
 
     fastapi_info = {}
     if fastapi_endpoint_obj.exists():
@@ -56,6 +88,8 @@ def build_home_dashboard_context(
         "fastapi_endpoint_list": fastapi_endpoint_obj
         if fastapi_endpoint_obj.exists()
         else None,
+        "netbox_quick_add_url": netbox_quick_add_url,
+        "fastapi_quick_add_url": fastapi_quick_add_url,
         "fastapi_url": fastapi_info.get("http_url", fastapi_example_url),
         "fastapi_websocket_url": fastapi_info.get(
             "websocket_url", fastapi_example_websocket_url

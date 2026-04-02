@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import json
+import re
 import time
-from typing import Any
 
 from netbox.constants import RQ_QUEUE_DEFAULT
 from netbox.jobs import JobRunner
 
 from netbox_proxbox.choices import SyncTypeChoices
+from netbox_proxbox.schemas import SyncJobData
 
 # Use NetBox's default RQ queue so a stock ``manage.py rqworker`` (no args) picks up jobs.
 # Plugin-only queues such as ``netbox_proxbox.sync`` are not in that default worker list.
@@ -31,6 +32,8 @@ _SYNC_STAGE_ORDER: tuple[str, ...] = (
     SyncTypeChoices.VIRTUAL_MACHINES_DISKS,
     SyncTypeChoices.VIRTUAL_MACHINES_BACKUPS,
     SyncTypeChoices.VIRTUAL_MACHINES_SNAPSHOTS,
+    SyncTypeChoices.NETWORK_INTERFACES,
+    SyncTypeChoices.IP_ADDRESSES,
 )
 
 __all__ = (
@@ -53,6 +56,8 @@ _SYNC_TYPE_PATH: dict[str, str] = {
     SyncTypeChoices.VIRTUAL_MACHINES_SNAPSHOTS: (
         "virtualization/virtual-machines/snapshots/all/create"
     ),
+    SyncTypeChoices.NETWORK_INTERFACES: "dcim/devices/interfaces/create",
+    SyncTypeChoices.IP_ADDRESSES: "virtualization/virtual-machines/interfaces/ip-address/create",
 }
 
 # Per-VM path templates used when ``netbox_vm_ids`` is set.  ``{vm_id}`` is
@@ -76,6 +81,14 @@ _ALLOWED_SYNC_SLUGS = frozenset(_SYNC_TYPE_PATH) | {SyncTypeChoices.ALL}
 
 _STAGE_ORDER_INDEX = {t: i for i, t in enumerate(_SYNC_STAGE_ORDER)}
 
+_TARGETED_VM_JOB_NAME_RE = re.compile(r"^Proxbox Sync: Virtual machine (\d+)$")
+
+_TARGETED_VM_SYNC_TYPES: tuple[str, ...] = (
+    SyncTypeChoices.VIRTUAL_MACHINES,
+    SyncTypeChoices.VIRTUAL_MACHINES_BACKUPS,
+    SyncTypeChoices.VIRTUAL_MACHINES_SNAPSHOTS,
+)
+
 
 def _use_guest_agent_interface_name_setting() -> bool:
     """Return current plugin setting for guest-agent VM interface naming."""
@@ -96,6 +109,16 @@ def _proxbox_fetch_max_concurrency_setting() -> int:
         return max(1, value)
     except Exception:
         return 8
+
+
+def _ignore_ipv6_link_local_addresses_setting() -> bool:
+    """Return current plugin setting for ignoring IPv6 link-local addresses."""
+    try:
+        from netbox_proxbox.models import ProxboxPluginSettings
+
+        return bool(ProxboxPluginSettings.get_solo().ignore_ipv6_link_local_addresses)
+    except Exception:
+        return True
 
 
 def expanded_sync_stages(types: list[str]) -> list[str]:
@@ -130,35 +153,91 @@ def _sync_stream_path(sync_type: str) -> str:
     return f"{base.rstrip('/')}/stream"
 
 
-def proxbox_sync_params_from_job(job: Any) -> dict[str, Any]:
-    """Rebuild ProxboxSyncJob.enqueue kwargs from job.data (with safe fallbacks)."""
-    data = job.data if isinstance(getattr(job, "data", None), dict) else {}
-    block = data.get("proxbox_sync")
-    if not isinstance(block, dict):
-        block = {}
-    params = block.get("params")
-    if not isinstance(params, dict):
-        return {
-            "sync_types": [SyncTypeChoices.ALL],
-            "proxmox_endpoint_ids": [],
-            "netbox_endpoint_ids": [],
-            "netbox_vm_ids": [],
-        }
-    proxmox = list(params.get("proxmox_endpoint_ids") or [])
-    netbox = list(params.get("netbox_endpoint_ids") or [])
-    netbox_vms = [str(x) for x in list(params.get("netbox_vm_ids") or []) if str(x)]
-    raw_list = params.get("sync_types")
-    if isinstance(raw_list, list) and len(raw_list) > 0:
-        sync_types = normalize_sync_types([str(x) for x in raw_list])
-    else:
-        legacy = params.get("sync_type") or SyncTypeChoices.ALL
-        sync_types = normalize_sync_types([str(legacy)])
+def _sync_stream_paths_for_stage(sync_type: str, netbox_vm_ids: list[str]) -> list[str]:
+    """Return one or more SSE paths for a stage, expanding targeted VM runs per VM id."""
+    if not netbox_vm_ids:
+        return [_sync_stream_path(sync_type)]
+
+    template = _VM_SCOPED_PATH_TEMPLATES.get(sync_type)
+    if not template:
+        return [_sync_stream_path(sync_type)]
+
+    return [
+        f"{template.format(vm_id=vm_id).rstrip('/')}/stream"
+        for vm_id in netbox_vm_ids
+        if str(vm_id)
+    ]
+
+
+def _serialize_sync_params(
+    *,
+    sync_types: list[str],
+    proxmox_endpoint_ids: list[str],
+    netbox_endpoint_ids: list[str],
+    netbox_vm_ids: list[str],
+) -> dict[str, object]:
+    """Return a backward-compatible params block for Job.data."""
     return {
-        "sync_types": sync_types,
-        "proxmox_endpoint_ids": proxmox,
-        "netbox_endpoint_ids": netbox,
-        "netbox_vm_ids": netbox_vms,
+        "sync_types": list(sync_types),
+        # Keep the legacy singular field for older readers that still expect it.
+        "sync_type": (
+            sync_types[0]
+            if len(sync_types) == 1
+            else (
+                SyncTypeChoices.VIRTUAL_MACHINES
+                if netbox_vm_ids
+                else SyncTypeChoices.ALL
+            )
+        ),
+        "proxmox_endpoint_ids": list(proxmox_endpoint_ids),
+        "netbox_endpoint_ids": list(netbox_endpoint_ids),
+        "netbox_vm_ids": list(netbox_vm_ids),
     }
+
+
+def _infer_targeted_vm_job_params(job: object) -> dict[str, object] | None:
+    """Infer targeted VM params from a legacy job row name when explicit params are absent."""
+    name = str(getattr(job, "name", "") or "").strip()
+    match = _TARGETED_VM_JOB_NAME_RE.match(name)
+    if not match:
+        return None
+    vm_id = match.group(1)
+    return {
+        "sync_types": list(_TARGETED_VM_SYNC_TYPES),
+        "proxmox_endpoint_ids": [],
+        "netbox_endpoint_ids": [],
+        "netbox_vm_ids": [vm_id],
+    }
+
+
+def proxbox_sync_params_from_job(job: object) -> dict[str, object]:
+    """Rebuild ProxboxSyncJob.enqueue kwargs from job.data (with safe fallbacks)."""
+    raw_data = getattr(job, "data", None)
+    raw_params = {}
+    if isinstance(raw_data, dict):
+        raw_block = raw_data.get("proxbox_sync")
+        if isinstance(raw_block, dict) and isinstance(raw_block.get("params"), dict):
+            raw_params = raw_block["params"]
+
+    data = SyncJobData.from_job(job)
+    params = data.params
+    if params.sync_types:
+        sync_types = normalize_sync_types(params.sync_types)
+    elif isinstance(raw_params, dict) and raw_params.get("sync_type"):
+        sync_types = normalize_sync_types([str(raw_params.get("sync_type"))])
+    else:
+        sync_types = [SyncTypeChoices.ALL]
+    params = {
+        "sync_types": sync_types,
+        "proxmox_endpoint_ids": params.proxmox_endpoint_ids,
+        "netbox_endpoint_ids": params.netbox_endpoint_ids,
+        "netbox_vm_ids": params.netbox_vm_ids,
+    }
+    if params["sync_types"] == [SyncTypeChoices.ALL] and not params["netbox_vm_ids"]:
+        inferred = _infer_targeted_vm_job_params(job)
+        if inferred is not None:
+            return inferred
+    return params
 
 
 class ProxboxSyncJob(JobRunner):
@@ -191,7 +270,11 @@ class ProxboxSyncJob(JobRunner):
                 str(x) for x in list(kwargs.get("netbox_vm_ids") or []) if str(x)
             ],
         }
-        job.data = {"proxbox_sync": {"params": params}}
+        job.data = {
+            "proxbox_sync": {
+                "params": _serialize_sync_params(**params),
+            }
+        }
         job.save(update_fields=["data"])
         return job
 
@@ -216,13 +299,17 @@ class ProxboxSyncJob(JobRunner):
 
         stages = expanded_sync_stages(types)
 
-        params: dict[str, Any] = {
+        params: dict[str, object] = {
             "sync_types": types,
             "proxmox_endpoint_ids": list(proxmox_endpoint_ids or []),
             "netbox_endpoint_ids": list(netbox_endpoint_ids or []),
             "netbox_vm_ids": [str(x) for x in list(netbox_vm_ids or []) if str(x)],
         }
-        self.job.data = {"proxbox_sync": {"params": params}}
+        self.job.data = {
+            "proxbox_sync": {
+                "params": _serialize_sync_params(**params),
+            }
+        }
         self.job.save(update_fields=["data"])
 
         self.logger.info("Starting Proxbox sync stages: %s", ", ".join(stages))
@@ -240,6 +327,9 @@ class ProxboxSyncJob(JobRunner):
         base_query["fetch_max_concurrency"] = str(
             _proxbox_fetch_max_concurrency_setting()
         )
+        base_query["ignore_ipv6_link_local_addresses"] = (
+            "true" if _ignore_ipv6_link_local_addresses_setting() else "false"
+        )
         if proxmox_endpoint_ids:
             base_query["proxmox_endpoint_ids"] = ",".join(proxmox_endpoint_ids)
         if netbox_endpoint_ids:
@@ -250,7 +340,7 @@ class ProxboxSyncJob(JobRunner):
         last_flush = time.monotonic()
         last_progress_log = time.monotonic()
 
-        def on_frame(event: str, data: dict[str, Any]) -> None:
+        def on_frame(event: str, data: dict[str, object]) -> None:
             nonlocal last_flush, last_progress_log
             if event == "complete":
                 return
@@ -266,31 +356,37 @@ class ProxboxSyncJob(JobRunner):
                 last_flush = now
 
         run_started = time.monotonic()
-        stages_out: list[dict[str, Any]] = []
+        stages_out: list[dict[str, object]] = []
         for st in stages:
             query_params = dict(base_query)
             if st == SyncTypeChoices.VIRTUAL_MACHINES_BACKUPS:
                 query_params["delete_nonexistent_backup"] = True
+            if st == SyncTypeChoices.VIRTUAL_MACHINES_SNAPSHOTS:
+                query_params["delete_nonexistent_snapshot"] = True
 
-            target_vm_ids = params.get("netbox_vm_ids", [])
+            target_vm_ids = [
+                str(x) for x in list(params.get("netbox_vm_ids") or []) if str(x)
+            ]
             if target_vm_ids:
                 query_params["netbox_vm_ids"] = ",".join(target_vm_ids)
 
-            stream_path = _sync_stream_path(st)
-
-            self.logger.info("Starting stage: %s (%s)", st, stream_path)
-            payload, status = run_sync_stream(
-                stream_path,
-                query_params=query_params or None,
-                on_frame=on_frame,
-            )
-            self.job.save(update_fields=["log_entries"])
-            if status >= 400:
-                detail = payload.get("detail", "Backend returned an error.")
-                self.logger.error("Stage %s failed (HTTP %s): %s", st, status, detail)
-                raise RuntimeError(detail)
-            self.logger.info("Stage completed: %s (HTTP %s)", st, status)
-            stages_out.append({"sync_type": st, "payload": payload})
+            stage_paths = _sync_stream_paths_for_stage(st, target_vm_ids)
+            for stream_path in stage_paths:
+                self.logger.info("Starting stage: %s (%s)", st, stream_path)
+                payload, status = run_sync_stream(
+                    stream_path,
+                    query_params=query_params or None,
+                    on_frame=on_frame,
+                )
+                self.job.save(update_fields=["log_entries"])
+                if status >= 400:
+                    detail = payload.get("detail", "Backend returned an error.")
+                    self.logger.error(
+                        "Stage %s failed (HTTP %s): %s", st, status, detail
+                    )
+                    raise RuntimeError(detail)
+                self.logger.info("Stage completed: %s (HTTP %s)", st, status)
+                stages_out.append({"sync_type": st, "payload": payload})
 
         runtime_seconds = round(time.monotonic() - run_started, 3)
         self.job.data = {
@@ -308,7 +404,7 @@ class ProxboxSyncJob(JobRunner):
         )
 
 
-def is_proxbox_sync_job(job: Any) -> bool:
+def is_proxbox_sync_job(job: object) -> bool:
     """True if this core Job row is a Proxbox sync (including user-defined job names)."""
     data = getattr(job, "data", None)
     if isinstance(data, dict) and "proxbox_sync" in data:

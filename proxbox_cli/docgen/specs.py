@@ -31,6 +31,12 @@ def load_specs() -> list[CaptureSpec]:
             notes="Shows extras-related CLI commands (custom fields, etc.).",
         ),
         CaptureSpec(
+            section="Core Commands",
+            title="Proxbox Help",
+            argv=["proxbox", "--help"],
+            notes="Plugin configuration and backend info commands.",
+        ),
+        CaptureSpec(
             section="NetBox Commands",
             title="NetBox Help",
             argv=["netbox", "--help"],
@@ -61,6 +67,12 @@ def load_specs() -> list[CaptureSpec]:
             notes="Example of a command with required arguments and optional filters.",
         ),
         CaptureSpec(
+            section="Proxmox Commands",
+            title="Proxmox Nodes LXC Help",
+            argv=["proxmox", "nodes", "lxc", "--help"],
+            notes="LXC container listing on a specific node.",
+        ),
+        CaptureSpec(
             section="Infrastructure Commands",
             title="DCIM Help",
             argv=["dcim", "--help"],
@@ -70,13 +82,25 @@ def load_specs() -> list[CaptureSpec]:
             section="Infrastructure Commands",
             title="Virtualization Help",
             argv=["virtualization", "--help"],
-            notes="Cluster and virtual-machine sync commands.",
+            notes="Cluster, VM, storage, snapshot, and backup sync commands.",
+        ),
+        CaptureSpec(
+            section="Infrastructure Commands",
+            title="Virtualization Storage Create Help",
+            argv=["virtualization", "storage-create", "--help"],
+            notes="Sync Proxmox storage definitions into NetBox.",
         ),
         CaptureSpec(
             section="Infrastructure Commands",
             title="Virtualization Backups Sync Help",
             argv=["virtualization", "vms", "backups-sync-all", "--help"],
             notes="Long-running VM backup synchronization command.",
+        ),
+        CaptureSpec(
+            section="Infrastructure Commands",
+            title="Virtualization Snapshots Sync Help",
+            argv=["virtualization", "vms", "snapshots-sync-all", "--help"],
+            notes="Long-running VM snapshot synchronization command.",
         ),
         CaptureSpec(
             section="Infrastructure Commands",

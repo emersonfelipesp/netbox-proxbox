@@ -1,11 +1,11 @@
 {
   "meta": {
-    "generated_at": "2026-03-28T14:49:37.241515+00:00",
+    "generated_at": "2026-04-01T19:39:49.416217+00:00",
     "python": "3.13.3",
     "platform": "Linux-6.8.12-4-pve-x86_64-with-glibc2.41"
   },
   "generated_by": "proxbox_cli.docgen",
-  "command_count": 58,
+  "command_count": 63,
   "group_count": 14,
   "commands": [
     {
@@ -252,6 +252,45 @@
     },
     {
       "path": [
+        "proxbox"
+      ],
+      "command": "pxb proxbox",
+      "kind": "group",
+      "summary": "Proxbox plugin and backend info commands.",
+      "example": "pxb proxbox --help"
+    },
+    {
+      "path": [
+        "proxbox",
+        "default-settings"
+      ],
+      "command": "pxb proxbox default-settings",
+      "kind": "command",
+      "summary": "Show Proxbox default settings from the NetBox plugin config.",
+      "example": "pxb proxbox default-settings"
+    },
+    {
+      "path": [
+        "proxbox",
+        "plugins-config"
+      ],
+      "command": "pxb proxbox plugins-config",
+      "kind": "command",
+      "summary": "Show plugin configuration from NetBox PLUGINS_CONFIG.",
+      "example": "pxb proxbox plugins-config"
+    },
+    {
+      "path": [
+        "proxbox",
+        "settings"
+      ],
+      "command": "pxb proxbox settings",
+      "kind": "command",
+      "summary": "Show resolved Proxbox plugin configuration from NetBox.",
+      "example": "pxb proxbox settings"
+    },
+    {
+      "path": [
         "proxmox"
       ],
       "command": "pxb proxmox",
@@ -376,6 +415,17 @@
       "kind": "command",
       "summary": "Get node info (cpu, mem, status, fingerprint) from all sessions.",
       "example": "pxb proxmox nodes list"
+    },
+    {
+      "path": [
+        "proxmox",
+        "nodes",
+        "lxc"
+      ],
+      "command": "pxb proxmox nodes lxc",
+      "kind": "command",
+      "summary": "List LXC containers on a specific node.",
+      "example": "pxb proxmox nodes lxc <NODE>"
     },
     {
       "path": [
@@ -536,41 +586,21 @@
     },
     {
       "path": [
-        "sync-processes"
-      ],
-      "command": "pxb sync-processes",
-      "kind": "group",
-      "summary": "Sync process commands.",
-      "example": "pxb sync-processes --help"
-    },
-    {
-      "path": [
-        "sync-processes",
-        "create"
-      ],
-      "command": "pxb sync-processes create",
-      "kind": "command",
-      "summary": "Create a new sync process record in NetBox.",
-      "example": "pxb sync-processes create"
-    },
-    {
-      "path": [
-        "sync-processes",
-        "list"
-      ],
-      "command": "pxb sync-processes list",
-      "kind": "command",
-      "summary": "List all sync processes from NetBox.",
-      "example": "pxb sync-processes list"
-    },
-    {
-      "path": [
         "test"
       ],
       "command": "pxb test",
       "kind": "command",
       "summary": "Test connectivity to the proxbox-api server.",
       "example": "pxb test"
+    },
+    {
+      "path": [
+        "version"
+      ],
+      "command": "pxb version",
+      "kind": "command",
+      "summary": "Show the proxbox-api backend version.",
+      "example": "pxb version"
     },
     {
       "path": [
@@ -600,6 +630,16 @@
       "kind": "command",
       "summary": "Create clusters in NetBox.",
       "example": "pxb virtualization clusters-create"
+    },
+    {
+      "path": [
+        "virtualization",
+        "storage-create"
+      ],
+      "command": "pxb virtualization storage-create",
+      "kind": "command",
+      "summary": "Sync Proxmox storage definitions into NetBox. [NOTE: triggers sync]",
+      "example": "pxb virtualization storage-create"
     },
     {
       "path": [
@@ -703,23 +743,34 @@
       "path": [
         "virtualization",
         "vms",
-        "journal-test"
-      ],
-      "command": "pxb virtualization vms journal-test",
-      "kind": "command",
-      "summary": "Test endpoint: creates sync process and journal entries.",
-      "example": "pxb virtualization vms journal-test"
-    },
-    {
-      "path": [
-        "virtualization",
-        "vms",
         "list"
       ],
       "command": "pxb virtualization vms list",
       "kind": "command",
       "summary": "List all virtual machines from NetBox.",
       "example": "pxb virtualization vms list"
+    },
+    {
+      "path": [
+        "virtualization",
+        "vms",
+        "snapshots-create"
+      ],
+      "command": "pxb virtualization vms snapshots-create",
+      "kind": "command",
+      "summary": "Sync VM snapshots for all VMs or a specific VM. [NOTE: triggers sync]",
+      "example": "pxb virtualization vms snapshots-create"
+    },
+    {
+      "path": [
+        "virtualization",
+        "vms",
+        "snapshots-sync-all"
+      ],
+      "command": "pxb virtualization vms snapshots-sync-all",
+      "kind": "command",
+      "summary": "Sync ALL VM snapshots across all clusters/nodes. [NOTE: long-running sync]",
+      "example": "pxb virtualization vms snapshots-sync-all"
     },
     {
       "path": [

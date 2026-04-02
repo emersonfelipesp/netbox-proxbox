@@ -57,56 +57,69 @@ hooks:
 
 nav:
   - Proxbox: index.md
+  - Installation:
+    - Overview: 'installation/index.md'
+    - Pre-Installation: 'installation/pre-installation.md'
+    - Installing the Plugin:
+      - Using pip: 'installation/1-installing-plugin.md'
+      - Using git (recommended): 'installation/2-installing-plugin-git.md'
+      - Using Docker: 'installation/3-installing-plugin-docker.md'
+    - Backend Setup: 'installation/backend-setup.md'
+    - Upgrading: 'installation/upgrading.md'
+  - Backend:
+    - Overview: 'backend/index.md'
+    - Using pip: 'backend/using-pip.md'
+    - Using git: 'backend/using-git.md'
+    - Using Docker: 'backend/using-docker.md'
+  - Configuration:
+    - Overview: 'configuration/index.md'
+    - Required Parameters: 'configuration/required-parameters.md'
   - CLI:
     - Overview: 'cli/index.md'
     - Command Reference: 'reference/proxbox-cli/command-catalog/index.md'
-    - Command Examples: 'reference/proxbox-cli/command-examples/index.md'
-  - Installation:
-    - Pre-Installation: 'installation/pre-installation.md'
-    - Installing the Plugin:
-      - Using pip (recommended): 'installation/1-installing-plugin.md'
-      - Using git: 'installation/2-installing-plugin-git.md'
-      - Using Docker: 'installation/3-installing-plugin-docker.md'
-    - Backend Setup:
-      - Using pip (recommended): 'backend/using-pip.md'
-      - Using git: 'backend/using-git.md'
-      - Using Docker: 'backend/using-docker.md'
+    - Command Examples:
+      - Overview: 'reference/proxbox-cli/command-examples/index.md'
+      - Core Commands: 'reference/proxbox-cli/command-examples/core-commands.md'
+      - NetBox Commands: 'reference/proxbox-cli/command-examples/netbox-commands.md'
+      - Proxmox Commands: 'reference/proxbox-cli/command-examples/proxmox-commands.md'
+      - Infrastructure Commands: 'reference/proxbox-cli/command-examples/infrastructure-commands.md'
   - Developer:
     - Proxbox CLI Docgen: 'developer/proxbox-cli-docgen.md'
+    - Local Proxmox Mock: 'developer/proxmox-mock-local.md'
+    - Raw CLI Capture: 'generated/proxbox-cli-command-capture.md'
+  - User Guide:
+    - Cluster and Node Tracking: 'user-guide/cluster-nodes.md'
   - Features:
+    - E2E Docker Testing: 'features/e2e-docker-testing.md'
     - Synchronized Data: 'features/synchronized-data.md'
     - Scheduled Sync: 'features/scheduled-sync.md'
     - Background Jobs: 'features/background-jobs.md'
-  # - Backend (FastAPI): 'backend/index.md'
-  # - Source Code:
-  #   - 'src/netboxbasic.md'
-  # - Installing & Upgrade:
-  #   - Installing Proxbox: 'installation/index.md'
-  #   - Upgrading Proxbox: 'installation/upgrading.md'
-  # - Features (extended):
-  #   - Virtual Machine (VM): 'features/virtual-machine.md'
-  #   - Containers (LXC): 'features/containers.md'
-  #   - Network (IPAM): 'features/network.md'
-  #   - VLAN Management: 'features/vlan-management.md'
-  #   - Storage: 'features/storage.md'
-  #   - Backup: 'features/backup.md'
-  #   - Monitoring: 'features/monitoring.md'
-  #   - API & Integration: 'features/api-integration.md'
-  # - Configuration:
-  #     - Configuring ProxBox: 'configuration/index.md'
-  #     - Required Parameters: 'configuration/required-parameters.md'
-  # - Data Model:
-  #   - Virtual Machine (VM): 'models/virtual-machine.md'
-  #   - Containers (LXC): 'models/containers.md'
-  #   - Others: 'models/others.md'
-  # - Release Notes:
-  #   - Summary: 'release-notes/index.md'
-  #   - Version 0.0.6: 'release-notes/version-0.0.1.md'
-  #   - Version 0.0.5: 'release-notes/version-0.0.1.md'
-  #   - Version 0.0.4: 'release-notes/version-0.0.1.md'
-  #   - Version 0.0.3: 'release-notes/version-0.0.1.md'
-  #   - Version 0.0.2: 'release-notes/version-0.0.1.md'
-  #   - Version 0.0.1: 'release-notes/version-0.0.1.md'
+    - Virtual Machine: 'features/virtual-machine.md'
+    - Containers: 'features/containers.md'
+    - Network: 'features/network.md'
+    - VLAN Management: 'features/vlan-management.md'
+    - Storage: 'features/storage.md'
+    - Backup: 'features/backup.md'
+    - Monitoring: 'features/monitoring.md'
+    - API Integration: 'features/api-integration.md'
+  - Data Model:
+    - Virtual Machine: 'models/virtual-machine.md'
+    - Containers: 'models/containers.md'
+    - Other Models: 'models/others.md'
+  - Release Notes:
+    - Summary: 'release-notes/index.md'
+    - Version 0.0.10: 'release-notes/version-0.0.10.md'
+    - Version 0.0.9.post4: 'release-notes/version-0.0.9.post4.md'
+    - Version 0.0.9: 'release-notes/version-0.0.9.md'
+    - Version 0.0.8: 'release-notes/version-0.0.8.md'
+    - Version 0.0.7: 'release-notes/version-0.0.7.md'
+    - Version 0.0.6: 'release-notes/version-0.0.6.md'
+    - Version 0.0.5: 'release-notes/version-0.0.5.md'
+    - Version 0.0.4: 'release-notes/version-0.0.4.md'
+    - Version 0.0.3: 'release-notes/version-0.0.3.md'
+    - Version 0.0.2: 'release-notes/version-0.0.2.md'
+    - Version 0.0.1: 'release-notes/version-0.0.1.md'
+  - Roadmap: 'roadmap.md'
 extra:
   homepage: https://netboxlabs.com
 extra_css:

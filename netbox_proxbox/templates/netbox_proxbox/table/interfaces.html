@@ -1,0 +1,174 @@
+{% load helpers %}
+<div id="interfaces-div" class="form form-horizontal">
+    <div class="row mb-3">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h5 class="mb-1">Total Interfaces</h5>
+                    <h2 class="mb-0">{{ interfaces_total|default:0 }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h5 class="mb-1 text-success">Up</h5>
+                    <h2 class="mb-0 text-success">{{ interfaces_up|default:0 }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h5 class="mb-1 text-danger">Down</h5>
+                    <h2 class="mb-0 text-danger">{{ interfaces_down|default:0 }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if vm_interfaces or node_interfaces %}
+    <h3 class="mt-3">VM Interfaces ({{ vm_interfaces|length }})</h3>
+    <div class="card mb-3">
+        <div class="table-responsive">
+            <table class="table table-hover object-list">
+                <thead>
+                    <tr>
+                        <th class="text-center text-nowrap"><span class="mdi mdi-check-bold" title="Status"></span></th>
+                        <th class="text-nowrap">Interface</th>
+                        <th class="text-nowrap">Type</th>
+                        <th class="text-nowrap">MAC Address</th>
+                        <th class="text-nowrap">Mode</th>
+                        <th class="text-nowrap">VLAN</th>
+                        <th class="text-nowrap">Parent VM</th>
+                        <th class="text-nowrap">IP Addresses</th>
+                        <th class="text-nowrap">Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for iface in vm_interfaces %}
+                        <tr>
+                            <td class="text-center">
+                                {% if iface.enabled %}
+                                    <span class="mdi mdi-check-circle text-success" title="Enabled"></span>
+                                {% else %}
+                                    <span class="mdi mdi-close-circle text-danger" title="Disabled"></span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{% url 'virtualization:vminterface' iface.pk %}" class="text-body text-decoration-none">
+                                    {{ iface.name }}
+                                </a>
+                            </td>
+                            <td>{{ iface.get_type_display|default:"—" }}</td>
+                            <td>{{ iface.mac_address|default:"—" }}</td>
+                            <td>{{ iface.mode|default:"—" }}</td>
+                            <td>
+                                {% if iface.untagged_vlan %}
+                                    <a href="{% url 'ipam:vlan' iface.untagged_vlan.pk %}" class="text-decoration-none">
+                                        {{ iface.untagged_vlan }}
+                                    </a>
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if iface.virtual_machine %}
+                                    <a href="{% url 'virtualization:virtualmachine' iface.virtual_machine.pk %}" class="text-decoration-none">
+                                        {{ iface.virtual_machine.name }}
+                                    </a>
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% for ip in iface.ip_addresses.all %}
+                                    <a href="{% url 'ipam:ipaddress' ip.pk %}" class="text-decoration-none">{{ ip.address }}</a><br>
+                                {% empty %}
+                                    —
+                                {% endfor %}
+                            </td>
+                            <td>{{ iface.description|default:"—"|truncatechars:40 }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <h3 class="mt-3">Node Interfaces ({{ node_interfaces|length }})</h3>
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-hover object-list">
+                <thead>
+                    <tr>
+                        <th class="text-center text-nowrap"><span class="mdi mdi-check-bold" title="Status"></span></th>
+                        <th class="text-nowrap">Interface</th>
+                        <th class="text-nowrap">Type</th>
+                        <th class="text-nowrap">Mode</th>
+                        <th class="text-nowrap">VLAN</th>
+                        <th class="text-nowrap">Device</th>
+                        <th class="text-nowrap">IP Addresses</th>
+                        <th class="text-nowrap">Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for iface in node_interfaces %}
+                        <tr>
+                            <td class="text-center">
+                                {% if iface.enabled %}
+                                    <span class="mdi mdi-check-circle text-success" title="Enabled"></span>
+                                {% else %}
+                                    <span class="mdi mdi-close-circle text-danger" title="Disabled"></span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{% url 'dcim:interface' iface.pk %}" class="text-body text-decoration-none">
+                                    {{ iface.name }}
+                                </a>
+                            </td>
+                            <td>{{ iface.get_type_display|default:"—" }}</td>
+                            <td>{{ iface.mode|default:"—" }}</td>
+                            <td>
+                                {% if iface.untagged_vlan %}
+                                    <a href="{% url 'ipam:vlan' iface.untagged_vlan.pk %}" class="text-decoration-none">
+                                        {{ iface.untagged_vlan }}
+                                    </a>
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if iface.device %}
+                                    <a href="{% url 'dcim:device' iface.device.pk %}" class="text-decoration-none">
+                                        {{ iface.device.name }}
+                                    </a>
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% for ip in iface.ip_addresses.all %}
+                                    <a href="{% url 'ipam:ipaddress' ip.pk %}" class="text-decoration-none">{{ ip.address }}</a><br>
+                                {% empty %}
+                                    —
+                                {% endfor %}
+                            </td>
+                            <td>{{ iface.description|default:"—"|truncatechars:40 }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    <div class="card">
+        <div class="card-body text-center text-muted p-4">
+            <span class="mdi mdi-network-outline mdi-24px d-block mb-2"></span>
+            No interfaces synced with Proxbox yet.
+            <br>
+            <small>Click "Sync Interfaces" to synchronize Proxmox interfaces with NetBox.</small>
+        </div>
+    </div>
+    {% endif %}
+</div>

@@ -1,5 +1,6 @@
 {% extends 'generic/object_list.html' %}
 {% load i18n %}
+{% load static %}
 
 {% block extra_controls %}
   <a class="btn btn-outline-primary" href="{% url 'plugins:netbox_proxbox:proxmoxendpoint_bulk_import' %}">

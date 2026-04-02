@@ -340,3 +340,14 @@ def nodes_qemu(
     """List QEMU VMs on a specific node."""
     resp = run_with_spinner(_get_client().get(f"/proxmox/nodes/{node}/qemu"))
     print_response(resp, as_json=as_json, as_yaml=as_yaml)
+
+
+@nodes_app.command("lxc")
+def nodes_lxc(
+    node: Annotated[str, typer.Argument(help="Node name.")],
+    as_json: JsonFlag = False,
+    as_yaml: YamlFlag = False,
+) -> None:
+    """List LXC containers on a specific node."""
+    resp = run_with_spinner(_get_client().get(f"/proxmox/nodes/{node}/lxc"))
+    print_response(resp, as_json=as_json, as_yaml=as_yaml)

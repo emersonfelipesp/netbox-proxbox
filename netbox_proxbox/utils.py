@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import os
 import subprocess
-from typing import Any
 
-from netbox_proxbox.type_defs import FastAPIAuthSource, FastAPIUrlDict, FastAPIUrlSource
+from netbox_proxbox.schemas.backend_proxy import FastAPIUrlDict
+from netbox_proxbox.type_defs import FastAPIAuthSource, FastAPIUrlSource
 
 
-def get_ip_address_host(value: Any) -> str:
+def get_ip_address_host(value: object | None) -> str:
     """Return dotted host part from an IPAddress-like value or default loopback."""
     if value is None:
         return "127.0.0.1"
@@ -62,8 +62,8 @@ def get_fastapi_url(endpoint: FastAPIUrlSource) -> FastAPIUrlDict:
             pass
 
     return {
-        "domain": getattr(endpoint, "domain", None),
-        "ip_address": getattr(endpoint, "ip_address", None),
+        "domain": getattr(endpoint, "domain", None) or None,
+        "ip_address": ip,
         "ip_address_url": ip_address_url,
         "http_url": http_url,
         "websocket_url": websocket_url,

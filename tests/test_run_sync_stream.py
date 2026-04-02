@@ -4,20 +4,50 @@ from __future__ import annotations
 
 import importlib
 import json
+import sys
+import types
+from pathlib import Path
 
 import pytest
 
-from tests.conftest import load_plugin_module
-
 
 @pytest.fixture
-def backend_proxy_module(monkeypatch, fastapi_endpoint):
-    """Load Django/NetBox stubs then import ``backend_proxy`` (same bootstrap as ``test_sync``)."""
-    load_plugin_module(
-        "netbox_proxbox.views.sync",
-        monkeypatch=monkeypatch,
-        fastapi_endpoint=fastapi_endpoint,
-    )
+def backend_proxy_module(monkeypatch):
+    """Load backend proxy helpers with the minimum NetBox stubs."""
+    repo_root = Path(__file__).resolve().parents[1]
+
+    netbox_module = types.ModuleType("netbox")
+    netbox_plugins = types.ModuleType("netbox.plugins")
+    netbox_plugins.PluginConfig = type("PluginConfig", (), {})
+    monkeypatch.setitem(sys.modules, "netbox", netbox_module)
+    monkeypatch.setitem(sys.modules, "netbox.plugins", netbox_plugins)
+
+    nbp_root = types.ModuleType("netbox_proxbox")
+    nbp_root.__path__ = [str(repo_root / "netbox_proxbox")]
+    monkeypatch.setitem(sys.modules, "netbox_proxbox", nbp_root)
+
+    nbp_views = types.ModuleType("netbox_proxbox.views")
+    nbp_views.__path__ = [str(repo_root / "netbox_proxbox" / "views")]
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.views", nbp_views)
+
+    nbp_schemas = types.ModuleType("netbox_proxbox.schemas")
+    nbp_schemas.__path__ = [str(repo_root / "netbox_proxbox" / "schemas")]
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.schemas", nbp_schemas)
+
+    nbp_services = types.ModuleType("netbox_proxbox.services")
+    nbp_services.__path__ = [str(repo_root / "netbox_proxbox" / "services")]
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", nbp_services)
+
+    models_stub = types.ModuleType("netbox_proxbox.models")
+    models_stub.FastAPIEndpoint = type("FastAPIEndpoint", (), {})
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.models", models_stub)
+
+    sys.modules.pop("netbox_proxbox.services.backend_proxy", None)
+    sys.modules.pop("netbox_proxbox.utils", None)
+    sys.modules.pop("netbox_proxbox.views.error_utils", None)
+    sys.modules.pop("netbox_proxbox.schemas.backend_proxy", None)
+    sys.modules.pop("netbox_proxbox.schemas._base", None)
+
     return importlib.import_module("netbox_proxbox.services.backend_proxy")
 
 
@@ -66,6 +96,15 @@ def _sse_complete_ok() -> list[str]:
     ]
 
 
+def _stream_context(bp):
+    return bp.BackendRequestContext(
+        http_url="https://proxbox.local:8800",
+        ip_address_url="https://10.0.0.5:8800",
+        verify_ssl=True,
+        headers={"Authorization": "Bearer backend-token"},
+    )
+
+
 def test_run_sync_stream_success(backend_proxy_module, monkeypatch):
     bp = backend_proxy_module
     urls: list[str] = []
@@ -73,9 +112,11 @@ def test_run_sync_stream_success(backend_proxy_module, monkeypatch):
     def fake_get(url, **kwargs):
         urls.append(url)
         assert kwargs.get("stream") is True
+        assert kwargs.get("verify") is True
         return _StreamResponse(_sse_complete_ok())
 
     monkeypatch.setattr(bp.requests, "get", fake_get)
+    monkeypatch.setattr(bp, "get_fastapi_request_context", lambda: _stream_context(bp))
 
     frames: list[tuple[str, dict]] = []
 
@@ -111,6 +152,7 @@ def test_run_sync_stream_complete_ok_false(backend_proxy_module, monkeypatch):
         "get",
         lambda *a, **k: _StreamResponse(lines),
     )
+    monkeypatch.setattr(bp, "get_fastapi_request_context", lambda: _stream_context(bp))
     payload, status = bp.run_sync_stream("full-update/stream")
     assert status == 503
     assert "boom" in (payload.get("detail") or "")
@@ -128,6 +170,7 @@ def test_run_sync_stream_missing_complete(backend_proxy_module, monkeypatch):
         "get",
         lambda *a, **k: _StreamResponse(lines),
     )
+    monkeypatch.setattr(bp, "get_fastapi_request_context", lambda: _stream_context(bp))
     payload, status = bp.run_sync_stream("dcim/devices/create/stream")
     assert status == 502
     assert "without a complete" in payload["detail"]
@@ -140,6 +183,7 @@ def test_run_sync_stream_http_error_json(backend_proxy_module, monkeypatch):
         "get",
         lambda *a, **k: _ErrorBodyResponse(502, {"detail": "bad gateway"}),
     )
+    monkeypatch.setattr(bp, "get_fastapi_request_context", lambda: _stream_context(bp))
     payload, status = bp.run_sync_stream("dcim/devices/create/stream")
     assert status == 503
     assert payload["detail"] == "bad gateway"

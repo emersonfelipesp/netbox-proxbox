@@ -25,3 +25,11 @@ class ProxboxPluginSettingsForm(forms.Form):
             "Use lower values to reduce backend/API pressure."
         ),
     )
+    ignore_ipv6_link_local_addresses = forms.BooleanField(
+        required=False,
+        label="Ignore IPv6 link-local addresses",
+        help_text=(
+            "When enabled, IPv6 link-local addresses (fe80::/64) are ignored during "
+            "VM interface IP address selection. Disable only if you need link-local addresses included."
+        ),
+    )

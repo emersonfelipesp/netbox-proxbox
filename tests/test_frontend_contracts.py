@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -44,6 +43,19 @@ def test_home_template_uses_plugin_vanilla_js_entrypoint():
     assert 'type="submit"' in contents
     assert "data-sync-url" in contents
     assert "data-sync-kind" in contents
+
+
+def test_home_template_exposes_prefilled_endpoint_quick_add_buttons():
+    contents = _read("netbox_proxbox/templates/netbox_proxbox/home.html")
+
+    assert "netbox_quick_add_url" in contents
+    assert "fastapi_quick_add_url" in contents
+    assert "Quick add NetBox Endpoint" in contents
+    assert "Quick add FastAPI Endpoint" in contents
+    assert "Open blank form" in contents
+    assert "localhost" in contents
+    assert "127.0.0.1/32" in contents
+    assert "token mode" in contents
 
 
 def test_home_quick_schedule_banner_posts_to_quick_schedule_url():
@@ -118,6 +130,52 @@ def test_vm_detail_sync_now_button_contract():
     assert "Sync Now" in button_contents
 
 
+def test_job_live_poll_alert_spans_the_card_width_and_keeps_streaming_messages():
+    contents = _read(
+        "netbox_proxbox/templates/netbox_proxbox/inc/job_live_poll_alert.html"
+    )
+
+    assert "card border-info shadow-sm nb-job-live-card" in contents
+    assert 'class="card-body d-flex flex-column gap-2"' in contents
+    assert 'class="nb-job-progress-wrap w-100"' in contents
+    assert 'class="progress nb-job-progress-track w-100"' in contents
+    assert 'style="width: 100%; transition: width 0.3s ease;"' in contents
+    assert "min-width: 2rem" not in contents
+    assert 'role="log"' in contents
+    assert 'aria-live="polite"' in contents
+    assert "EventSource(streamUrl)" in contents
+    assert 'addEventListener("message"' in contents
+    assert 'handleSSEFrame("message", data)' in contents
+    assert 'if (status === "completed")' not in contents
+    assert 'status === "errored"' in contents
+    assert "sessionStorage" in contents
+    assert "bg-warning" in contents
+
+
+def test_job_log_view_uses_netbox_status_colors():
+    contents = _read("netbox_proxbox/static/netbox_proxbox/js/job_log_view.js")
+    assert "text-bg-success text-uppercase" in contents
+    assert "text-bg-blue text-uppercase" in contents
+    assert "text-bg-warning text-uppercase" in contents
+    assert "text-bg-danger text-uppercase" in contents
+    assert "bg-warning" in contents
+    assert "bg-danger" in contents
+    assert "network-interfaces" in contents
+    assert "ip-addresses" in contents
+
+
+def test_combined_interface_views_import_vm_interface_directly():
+    contents = _read("netbox_proxbox/views/__init__.py")
+    assert "from virtualization.models import VMInterface, VirtualMachine" in contents
+    assert "from virtualization.models import Interface as VMInterface" not in contents
+
+
+def test_ip_address_view_prefetches_generic_assigned_objects():
+    contents = _read("netbox_proxbox/views/__init__.py")
+    assert 'prefetch_related("assigned_object")' in contents
+    assert 'select_related("assigned_object")' not in contents
+
+
 def test_vm_sync_now_view_contract():
     contents = _read("netbox_proxbox/views/vm_sync_now.py")
     assert (
@@ -125,7 +183,6 @@ def test_vm_sync_now_view_contract():
         in contents
     )
     assert "SyncTypeChoices.VIRTUAL_MACHINES" in contents
-    assert "SyncTypeChoices.VIRTUAL_MACHINES_DISKS" in contents
     assert "SyncTypeChoices.VIRTUAL_MACHINES_BACKUPS" in contents
     assert "SyncTypeChoices.VIRTUAL_MACHINES_SNAPSHOTS" in contents
     assert "netbox_vm_ids=[str(vm.pk)]" in contents
@@ -173,6 +230,36 @@ def test_endpoint_templates_expose_live_badges():
     )
 
 
+def test_proxmox_endpoint_list_template_loads_static_for_status_script():
+    contents = _read(
+        "netbox_proxbox/templates/netbox_proxbox/proxmoxendpoint_list.html"
+    )
+    assert "{% load static %}" in contents
+    assert "endpoint-status.js" in contents
+
+
+def test_fastapi_openapi_tab_view_and_template_contract():
+    view_contents = _read("netbox_proxbox/views/endpoints/fastapi.py")
+    template_contents = _read(
+        "netbox_proxbox/templates/netbox_proxbox/fastapiendpoint_openapi.html"
+    )
+
+    assert (
+        'register_model_view(FastAPIEndpoint, "openapi", path="openapi")'
+        in view_contents
+    )
+    assert 'label="OpenAPI"' in view_contents
+    assert "get_cached_openapi_schema" in view_contents
+    assert 'request.GET.get("refresh", "")' in view_contents
+
+    assert "OpenAPI Schema" in template_contents
+    assert "Endpoints" in template_contents
+    assert "openapi_data.schema.operations" in template_contents
+    assert "?refresh=1" in template_contents
+    assert "Forced Refresh" in template_contents
+    assert "Last Refreshed" in template_contents
+
+
 def test_endpoint_tables_use_record_pk_for_keepalive_reverse():
     contents = _read("netbox_proxbox/tables/__init__.py")
     assert "keepalive_status" in contents
@@ -190,6 +277,7 @@ def test_settings_page_is_wired_in_urls_navigation_and_template():
     assert "Plugin Settings" in template
     assert "use_guest_agent_interface_name" in template
     assert "proxbox_fetch_max_concurrency" in template
+    assert "ignore_ipv6_link_local_addresses" in template
     assert "inc/field.html" not in template
     assert "class SettingsView(" in view
 
@@ -236,6 +324,46 @@ def test_lxc_and_storage_pages_are_wired_in_urls_navigation_and_templates():
     assert "Snapshots on this Storage" in storage_detail_template
     assert "class LXCContainersView(" in views_module
     assert "class SyncStorageView(" in sync_view
+
+
+def test_interface_and_ip_pages_are_wired_in_urls_navigation_and_templates():
+    urls = _read("netbox_proxbox/urls.py")
+    navigation = _read("netbox_proxbox/navigation.py")
+    views_module = _read("netbox_proxbox/views/__init__.py")
+    interfaces_page = _read("netbox_proxbox/templates/netbox_proxbox/interfaces.html")
+    ip_addresses_page = _read(
+        "netbox_proxbox/templates/netbox_proxbox/ip_addresses.html"
+    )
+    interfaces_template = _read(
+        "netbox_proxbox/templates/netbox_proxbox/table/interfaces.html"
+    )
+    ip_addresses_template = _read(
+        "netbox_proxbox/templates/netbox_proxbox/table/ip_addresses.html"
+    )
+    sync_view = _read("netbox_proxbox/views/sync.py")
+
+    assert (
+        'path("interfaces/", views.InterfacesView.as_view(), name="interfaces")' in urls
+    )
+    assert (
+        'path("ip-addresses/", views.IPAddressesView.as_view(), name="ip_addresses")'
+        in urls
+    )
+    assert "sync/network-interfaces/" in urls
+    assert "sync/ip-addresses/" in urls
+    assert 'link="plugins:netbox_proxbox:interfaces"' in navigation
+    assert 'link="plugins:netbox_proxbox:ip_addresses"' in navigation
+    assert "class InterfacesView(" in views_module
+    assert "class IPAddressesView(" in views_module
+    assert 'values_list("object_id", flat=True)[:500]' not in views_module
+    assert "virtualization:vminterface" in interfaces_template
+    assert "dcim:interface" in interfaces_template
+    assert "if node_interface_ids:" not in views_module
+    assert "class SyncNetworkInterfacesView(" in sync_view
+    assert "class SyncIPAddressesView(" in sync_view
+    assert "Sync Interfaces" in interfaces_page
+    assert "Sync IP Addresses" in ip_addresses_page
+    assert "Total IPs" in ip_addresses_template
 
 
 def test_proxmox_storage_detail_template_exists():

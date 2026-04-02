@@ -2,7 +2,7 @@
 
 Representative command help output captured automatically from the local checkout.
 
-Generated: `2026-03-28T14:49:37.241515+00:00`
+Generated: `2026-04-01T19:39:49.416217+00:00`
 
 ## DCIM Help
 
@@ -32,21 +32,40 @@ Node device and interface sync commands.
 
 Command: `pxb virtualization --help`
 
-Cluster and virtual-machine sync commands.
+Cluster, VM, storage, snapshot, and backup sync commands.
 
 ```text
-                                                                                
- Usage: python -m proxbox_cli virtualization [OPTIONS] COMMAND [ARGS]...        
-                                                                                
- Virtualization commands.                                                       
-                                                                                
+Usage: python -m proxbox_cli virtualization [OPTIONS] COMMAND [ARGS]...
+
+Virtualization commands.
+
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
 │ cluster-types-create  Create cluster types in NetBox.                        │
 │ clusters-create       Create clusters in NetBox.                             │
+│ storage-create        Sync Proxmox storage definitions into NetBox. [NOTE:   │
+│                       triggers sync]                                          │
 │ vms                   Virtual machine commands.                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+```
+
+## Virtualization Storage Create Help
+
+Command: `pxb virtualization storage-create --help`
+
+Sync Proxmox storage definitions into NetBox.
+
+```text
+Usage: python -m proxbox_cli virtualization storage-create [OPTIONS]
+
+Sync Proxmox storage definitions into NetBox. [NOTE: triggers sync]
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --json          Output raw JSON.                                             │
+│ --yaml          Output YAML.                                                 │
+│ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ```
 
@@ -57,17 +76,33 @@ Command: `pxb virtualization vms backups-sync-all --help`
 Long-running VM backup synchronization command.
 
 ```text
-                                                                                
- Usage: python -m proxbox_cli virtualization vms backups-sync-all               
-            [OPTIONS]                                                           
-                                                                                
- Sync ALL backups across all clusters/nodes/storages. [NOTE: long-running sync] 
-                                                                                
+Usage: python -m proxbox_cli virtualization vms backups-sync-all [OPTIONS]
+
+Sync ALL backups across all clusters/nodes/storages. [NOTE: long-running sync]
+
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --delete-stale          Delete stale backup records.                         │
 │ --json                  Output raw JSON.                                     │
 │ --yaml                  Output YAML.                                         │
 │ --help                  Show this message and exit.                          │
+╰──────────────────────────────────────────────────────────────────────────────╯
+```
+
+## Virtualization Snapshots Sync Help
+
+Command: `pxb virtualization vms snapshots-sync-all --help`
+
+Long-running VM snapshot synchronization command.
+
+```text
+Usage: python -m proxbox_cli virtualization vms snapshots-sync-all [OPTIONS]
+
+Sync ALL VM snapshots across all clusters/nodes. [NOTE: long-running sync]
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --json          Output raw JSON.                                             │
+│ --yaml          Output YAML.                                                 │
+│ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ```
 

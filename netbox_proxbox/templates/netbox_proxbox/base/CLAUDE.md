@@ -5,7 +5,7 @@ This directory contains shared layout templates for the plugin.
 ## Files And Ownership
 
 - [`base.html`](./base.html): plugin base template wrapper.
-- [`layout.html`](./layout.html): shared page layout scaffold.
+- [`layout.html`](./layout.html): shared page layout scaffold for the dashboard, detail, and action pages.
 - [`sidenav.html`](./sidenav.html): plugin side navigation markup.
 - [`40x.html`](./40x.html): error-page template.
 

@@ -6,7 +6,7 @@ Use this path if you want to work on the backend itself rather than consume the 
 
 ```bash
 cd /opt
-git clone https://github.com/emersonfelipesp/proxbox-api.git
+git clone https://github.com/emersonfelipesp/proxbox-api.git proxbox-api
 cd /opt/proxbox-api
 
 python3 -m venv venv

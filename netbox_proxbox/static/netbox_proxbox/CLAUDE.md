@@ -5,6 +5,7 @@ This directory holds the actual static assets referenced by plugin templates.
 ## Contents
 
 - Image and branding assets such as Proxmox, FastAPI, GitHub, Telegram, Discord, and NetBox logos/banners.
+- [`css/`](./css/): compiled page-specific CSS used by plugin templates.
 - [`js/`](./js/): browser-side interaction code for plugin pages.
 - [`styles/`](./styles/): SCSS sources and compiled CSS/JS theme assets.
 

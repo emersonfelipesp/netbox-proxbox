@@ -4,12 +4,13 @@
 
 It is a Typer application with top-level operational commands plus grouped command trees for:
 
-- `netbox`
-- `proxmox`
-- `dcim`
-- `virtualization`
-- `extras`
-- `sync-processes`
+- `netbox` — remote NetBox endpoint management
+- `proxmox` — Proxmox session inspection, cluster/node queries, and Proxmox endpoint CRUD
+- `proxbox` — plugin configuration and backend info
+- `dcim` — device and interface sync from Proxmox nodes to NetBox
+- `virtualization` — VM, storage, snapshot, and backup sync operations
+- `extras` — custom fields initialization in NetBox
+- `docs` — documentation generation utilities
 
 ## Installation
 
@@ -36,6 +37,74 @@ pxb test
 ```
 
 The CLI stores its config under `~/.config/proxbox-cli/config.json` unless `XDG_CONFIG_HOME` overrides that path.
+
+## Quick Reference
+
+### Root-level commands
+
+| Command | Description |
+|---------|-------------|
+| `pxb init` | Interactively configure the backend URL and timeout |
+| `pxb config` | Show the current CLI configuration |
+| `pxb test` | Test connectivity to the backend |
+| `pxb version` | Show the backend version |
+| `pxb info` | Show backend project info |
+| `pxb cache` | Show in-memory cache contents |
+| `pxb clear-cache` | Clear the backend cache |
+| `pxb full-update` | Run a full multi-stage sync |
+
+### Endpoint management
+
+```bash
+# NetBox remote endpoints
+pxb netbox endpoint list|get|create|update|delete
+
+# Proxmox endpoint records (local DB)
+pxb proxmox endpoints list|get|create|update|delete
+
+# Backend plugin settings
+pxb proxbox settings
+pxb proxbox plugins-config
+pxb proxbox default-settings
+```
+
+### Sync operations
+
+```bash
+# Device and interface sync
+pxb dcim devices
+pxb dcim devices-create
+pxb dcim interfaces-create <node>
+pxb dcim interfaces-create-all
+
+# Virtual machine sync
+pxb virtualization vms list
+pxb virtualization vms create
+pxb virtualization vms interfaces-create
+pxb virtualization vms disks-create
+pxb virtualization vms backups-sync-all
+pxb virtualization vms snapshots-sync-all
+
+# Storage sync
+pxb virtualization storage-create
+
+# Cluster and node inspection
+pxb proxmox cluster status
+pxb proxmox cluster resources
+pxb proxmox nodes list
+pxb proxmox nodes network <node>
+pxb proxmox nodes qemu <node>
+pxb proxmox nodes lxc <node>
+```
+
+## Output Formats
+
+All commands that fetch data support `--json` and `--yaml` output flags:
+
+```bash
+pxb virtualization vms list --json
+pxb proxmox cluster status --yaml
+```
 
 ## Generated Reference
 

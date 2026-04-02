@@ -28,6 +28,19 @@ def test_netbox_endpoint_form_reads_from_self_cleaned_data():
     assert "cleaned_data = self.cleaned_data" in contents
 
 
+def test_endpoint_forms_resolve_loopback_ip_initial_values():
+    netbox_contents = _read("netbox_proxbox/forms/netbox.py")
+    fastapi_contents = _read("netbox_proxbox/forms/fastapi.py")
+
+    assert 'self.initial["ip_address"]' in netbox_contents
+    assert "IPAddress.objects.filter(pk=candidate).first()" in netbox_contents
+    assert "IPAddress.objects.filter(address=candidate).first()" in netbox_contents
+
+    assert 'self.initial["ip_address"]' in fastapi_contents
+    assert "IPAddress.objects.filter(pk=candidate).first()" in fastapi_contents
+    assert "IPAddress.objects.filter(address=candidate).first()" in fastapi_contents
+
+
 def test_runtime_code_does_not_chain_get_fastapi_url_dict_access():
     plugin_dir = REPO_ROOT / "netbox_proxbox"
     chained_get_pattern = re.compile(r"get_fastapi_url\([^\n]*\)\.get\(")
@@ -139,6 +152,17 @@ def test_endpoint_forms_require_domain_or_ip_address():
     for path in files:
         contents = _read(path)
         assert "Provide either a domain or an IP address." in contents
+
+
+def test_home_context_builds_prefilled_quick_add_urls():
+    contents = _read("netbox_proxbox/views/home_context.py")
+
+    assert "_build_add_url" in contents
+    assert "netboxendpoint_add" in contents
+    assert "fastapiendpoint_add" in contents
+    assert 'domain": "localhost"' in contents
+    assert 'ip_address": "127.0.0.1/32"' in contents
+    assert 'token_version": NetBoxTokenVersionChoices.V1' in contents
 
 
 def test_proxmox_import_form_exists_with_csv_fields():

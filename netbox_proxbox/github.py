@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any
 
 import requests
 
@@ -43,7 +42,7 @@ def get(**kwargs: object) -> str | None:
         return None
 
     try:
-        payload: dict[str, Any] = response.json()
+        payload: dict[str, object] = response.json()
     except (ValueError, requests.exceptions.JSONDecodeError):
         logger.warning("GitHub API returned non-JSON for %s", url)
         return None

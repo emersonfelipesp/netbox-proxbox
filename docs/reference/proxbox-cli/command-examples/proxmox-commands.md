@@ -2,7 +2,7 @@
 
 Representative command help output captured automatically from the local checkout.
 
-Generated: `2026-03-28T14:49:37.241515+00:00`
+Generated: `2026-04-01T19:39:49.416217+00:00`
 
 ## Proxmox Help
 
@@ -79,5 +79,26 @@ Example of a command with required arguments and optional filters.
 │ --json                 Output raw JSON.                                      │
 │ --yaml                 Output YAML.                                          │
 │ --help                 Show this message and exit.                           │
+╰──────────────────────────────────────────────────────────────────────────────╯
+```
+
+## Proxmox Nodes LXC Help
+
+Command: `pxb proxmox nodes lxc --help`
+
+LXC container listing on a specific node.
+
+```text
+Usage: python -m proxbox_cli proxmox nodes lxc [OPTIONS] NODE
+
+List LXC containers on a specific node.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    node      TEXT  Node name. [required]                                   │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --json          Output raw JSON.                                             │
+│ --yaml          Output YAML.                                                 │
+│ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ```

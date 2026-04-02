@@ -13,6 +13,8 @@ from .. import filtersets, models
 from .serializers import (
     FastAPIEndpointSerializer,
     NetBoxEndpointSerializer,
+    ProxmoxClusterSerializer,
+    ProxmoxNodeSerializer,
     ProxmoxStorageSerializer,
     ProxmoxEndpointSerializer,
     VMBackupSerializer,
@@ -72,6 +74,15 @@ class VMTaskHistoryViewSet(NetBoxModelViewSet):
     serializer_class = VMTaskHistorySerializer
     filterset_class = filtersets.VMTaskHistoryFilterSet
 
+    def perform_create(self, serializer):
+        """Upsert by Proxmox UPID so task reconciliation can replay safely."""
+        upid = serializer.validated_data.get("upid")
+        if upid:
+            existing = models.VMTaskHistory.objects.filter(upid=upid).first()
+            if existing is not None:
+                serializer.instance = existing
+        serializer.save()
+
 
 class ProxmoxStorageViewSet(NetBoxModelViewSet):
     """REST API for Proxmox storage rows synced from Proxmox endpoints."""
@@ -103,3 +114,23 @@ class FastAPIEndpointViewSet(NetBoxModelViewSet):
     queryset = models.FastAPIEndpoint.objects.all()
     serializer_class = FastAPIEndpointSerializer
     filterset_class = filtersets.FastAPIEndpointFilterSet
+
+
+class ProxmoxClusterViewSet(NetBoxModelViewSet):
+    """REST API for Proxmox cluster tracking linked to NetBox clusters."""
+
+    queryset = models.ProxmoxCluster.objects.select_related(
+        "endpoint", "netbox_cluster"
+    )
+    serializer_class = ProxmoxClusterSerializer
+    filterset_class = filtersets.ProxmoxClusterFilterSet
+
+
+class ProxmoxNodeViewSet(NetBoxModelViewSet):
+    """REST API for Proxmox node tracking linked to NetBox devices."""
+
+    queryset = models.ProxmoxNode.objects.select_related(
+        "endpoint", "proxmox_cluster", "netbox_device"
+    )
+    serializer_class = ProxmoxNodeSerializer
+    filterset_class = filtersets.ProxmoxNodeFilterSet

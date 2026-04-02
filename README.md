@@ -6,13 +6,15 @@ Proxbox is a NetBox plugin that synchronizes Proxmox infrastructure data into Ne
 
 Proxbox discovers and syncs the following from Proxmox into NetBox:
 
-- **Clusters and Nodes** — Proxmox cluster and node information
+- **Clusters and Nodes** — Proxmox cluster and node information with resource monitoring
 - **Virtual Machines** — VM status, resources, and configuration
 - **Containers (LXC)** — Container details and settings
 - **VM Snapshots** — Point-in-time snapshots for recovery
 - **VM Backups** — Backup jobs and restore points
 - **Storage** — Datastores and storage content
 - **Networking** — VLANs, bridges, and IP assignments
+
+**New in v0.0.10:** Cluster and node tracking with links to NetBox's native Cluster and Device objects, including quorum status and resource usage monitoring.
 
 Sync runs on-demand from the NetBox UI or scheduled automatically via NetBox's job system.
 
@@ -25,7 +27,12 @@ Sync runs on-demand from the NetBox UI or scheduled automatically via NetBox's j
 
 ## Quick Start
 
-1. **Install the plugin** into your NetBox virtual environment:
+Choose the installation path that matches your NetBox deployment:
+
+- **Standard NetBox install (venv on host):** follow steps below.
+- **NetBox Docker install (`netbox-docker`):** use the Docker-specific workflow in [Installing the Plugin in Docker-Based NetBox Deployments](./docs/installation/3-installing-plugin-docker.md).
+
+1. **Install the plugin** into your NetBox virtual environment (host/venv deployment):
 
    ```bash
    cd /opt/netbox/netbox
@@ -85,7 +92,40 @@ Sync runs on-demand from the NetBox UI or scheduled automatically via NetBox's j
 
 6. **Run your first sync:**
 
-   Click **Full Update** on the Proxbox home page. Progress appears in real-time.
+    Click **Full Update** on the Proxbox home page. Progress appears in real-time.
+
+## NetBox Docker Install Option
+
+If your NetBox runs with `netbox-community/netbox-docker`, install the plugin through the Docker plugin files in your NetBox Docker project:
+
+1. Add plugin requirements to `plugin_requirements.txt` (PyPI or Git):
+
+   ```txt
+   netbox-proxbox
+   # or
+   # netbox-proxbox @ git+https://github.com/netdevopsbr/netbox-proxbox.git
+   ```
+
+2. Enable the plugin in `configuration/plugins.py`:
+
+   ```python
+   PLUGINS = ["netbox_proxbox"]
+   ```
+
+3. Rebuild and restart NetBox:
+
+   ```bash
+   docker compose build
+   docker compose up -d
+   ```
+
+4. Run migrations in the NetBox container:
+
+   ```bash
+   docker compose exec netbox /opt/netbox/netbox/manage.py migrate
+   ```
+
+For complete Docker installation instructions, validation checks, and Git/source install examples, see [docs/installation/3-installing-plugin-docker.md](./docs/installation/3-installing-plugin-docker.md).
 
 ## Scheduled Sync
 
@@ -103,13 +143,13 @@ To run sync automatically on a schedule:
 
 ## Documentation
 
-Full documentation is available at [proxbox.readthedocs.io](https://proxbox.readthedocs.io/).
+Full documentation is available at [emersonfelipesp.github.io/netbox-proxbox](https://emersonfelipesp.github.io/netbox-proxbox/).
 
 Key pages:
 
-- [Installation Guide](https://proxbox.readthedocs.io/en/latest/installation/2-installing-plugin-git.html)
-- [Backend Setup](https://proxbox.readthedocs.io/en/latest/installation/backend-setup.html)
-- [Scheduled Sync](https://proxbox.readthedocs.io/en/latest/features/scheduled-sync.html)
+- [Installation Guide](https://emersonfelipesp.github.io/netbox-proxbox/installation/2-installing-plugin-git/)
+- [Backend Setup](https://emersonfelipesp.github.io/netbox-proxbox/installation/backend-setup/)
+- [Scheduled Sync](https://emersonfelipesp.github.io/netbox-proxbox/features/scheduled-sync/)
 
 ## Community
 

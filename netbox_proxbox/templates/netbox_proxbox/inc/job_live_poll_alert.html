@@ -2,9 +2,8 @@
 {% trans "log lines" as nb_job_log_lines_suffix %}
 {% trans "Copy logs" as nb_copy_logs_label %}
 {% trans "Copied!" as nb_copied_label %}
-<div class="alert alert-info alert-dismissible" role="alert">
-  <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="{% trans "Close" %}"></button>
-  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+<div class="card border-info shadow-sm nb-job-live-card" role="alert">
+  <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
     <div class="d-flex flex-wrap align-items-center gap-2">
       <strong>{% trans "Live job updates" %}</strong>
       <span id="nb-job-live-status-{{ job.pk }}"></span>
@@ -19,20 +18,28 @@
       {{ nb_copy_logs_label }}
     </button>
   </div>
-  <div class="nb-job-progress-wrap mt-2" style="display:none">
-    <div class="progress" style="height: 1.35rem;" role="progressbar"
-         aria-label="{% trans "Sync progress" %}"
-         aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-      <div
-        id="nb-job-progress-bar-{{ job.pk }}"
-        class="progress-bar bg-info progress-bar-striped progress-bar-animated"
-        style="width: 0%; min-width: 2rem; transition: width 0.3s ease;"
-      >
-        <span class="nb-job-progress-label small fw-semibold text-white"></span>
+  <div class="card-body d-flex flex-column gap-2">
+    <div class="nb-job-progress-wrap w-100" style="display:none">
+      <div class="progress nb-job-progress-track w-100" role="progressbar"
+           aria-label="{% trans "Sync progress" %}"
+           aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <div
+          id="nb-job-progress-bar-{{ job.pk }}"
+          class="progress-bar bg-warning progress-bar-striped progress-bar-animated d-flex align-items-center justify-content-center"
+          style="width: 100%; transition: width 0.3s ease;"
+        >
+          <span class="nb-job-progress-label small fw-semibold text-dark"></span>
+        </div>
       </div>
     </div>
+    <div
+      id="nb-job-live-log-{{ job.pk }}"
+      class="nb-job-live-log"
+      role="log"
+      aria-live="polite"
+      aria-atomic="false"
+    ></div>
   </div>
-  <div id="nb-job-live-log-{{ job.pk }}" class="nb-job-live-log mt-2"></div>
 </div>
 <script>
 (function () {
@@ -48,6 +55,75 @@
   var progressBarEl = document.getElementById("nb-job-progress-bar-" + pk);
   var sseSource = null;
   var isStreaming = false;
+  var stateStorageKey = "netbox-proxbox.job-live-state:" + pk;
+  var lastStatusValue = "";
+
+  function getSessionStorage() {
+    try {
+      return window.sessionStorage;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function readStoredState() {
+    var storage = getSessionStorage();
+    if (!storage) return null;
+    try {
+      var raw = storage.getItem(stateStorageKey);
+      if (!raw) return null;
+      var parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : null;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function writeStoredState(extra) {
+    var storage = getSessionStorage();
+    if (!storage) return;
+    var payload = {
+      entries: Array.isArray(lastEntries) ? lastEntries : [],
+      statusText: statusEl ? statusEl.textContent : "",
+      statusValue: lastStatusValue,
+      updatedAt: new Date().toISOString(),
+    };
+    if (extra && typeof extra === "object") {
+      Object.keys(extra).forEach(function (key) {
+        payload[key] = extra[key];
+      });
+    }
+    try {
+      storage.setItem(stateStorageKey, JSON.stringify(payload));
+    } catch (err) {}
+  }
+
+  function restoreStoredState() {
+    var stored = readStoredState();
+    if (!stored) return;
+
+    if (Array.isArray(stored.entries) && stored.entries.length > 0) {
+      lastEntries = stored.entries.slice();
+      applyLog(lastEntries);
+    }
+
+    if (stored.statusValue != null) {
+      lastStatusValue = String(stored.statusValue);
+    }
+
+    if (stored.statusText && statusEl) {
+      statusEl.textContent = String(stored.statusText);
+    }
+
+    var api = window.NbProxboxJobLogView;
+    if (api && typeof api.applyProgress === "function") {
+      api.applyProgress(
+        progressBarEl,
+        { data: { status: stored.statusValue || "" } },
+        lastEntries
+      );
+    }
+  }
 
   function jobStatusParts(status) {
     if (status && typeof status === "object") {
@@ -70,7 +146,7 @@
     if (!lastEntries) lastEntries = [];
     lastEntries.push(entry);
     if (lastEntries.length > 200) lastEntries.shift();
-      if (api && typeof api.renderLiveLog === "function") {
+    if (api && typeof api.renderLiveLog === "function") {
       logEl.replaceChildren();
       api.renderLiveLog(logEl, lastEntries);
     } else {
@@ -80,6 +156,29 @@
       logEl.appendChild(span);
     }
     logEl.scrollTop = logEl.scrollHeight;
+    writeStoredState();
+  }
+
+  function getFrameMessage(data, eventType) {
+    if (typeof data === "string") {
+      return data;
+    }
+    if (!data || typeof data !== "object") {
+      return "";
+    }
+    if (typeof data.message === "string" && data.message.trim()) {
+      return data.message;
+    }
+    if (typeof data.detail === "string" && data.detail.trim()) {
+      return data.detail;
+    }
+    if (typeof data.error === "string" && data.error.trim()) {
+      return data.error;
+    }
+    if (eventType === "complete" && data.ok === true) {
+      return data.message || "Completed";
+    }
+    return "";
   }
 
   function updateProgress(progress) {
@@ -88,7 +187,7 @@
     if (wrap && wrap.classList.contains("nb-job-progress-wrap")) {
       wrap.style.display = "";
     }
-    var pct = progress.percent !== undefined ? progress.percent : 0;
+    var pct = progress.percent !== undefined ? progress.percent : 100;
     progressBarEl.style.width = pct + "%";
     progressBarEl.setAttribute("aria-valuenow", pct);
     var label = progressBarEl.querySelector(".nb-job-progress-label");
@@ -98,45 +197,84 @@
       } else {
         label.textContent = progress.current + "/" + progress.total;
       }
+      label.className = "nb-job-progress-label small fw-semibold text-dark";
     }
+    progressBarEl.classList.remove("bg-info", "bg-warning", "bg-success", "bg-danger");
+    progressBarEl.classList.add("bg-warning", "progress-bar-striped", "progress-bar-animated");
+    lastStatusValue = "progress";
   }
 
-  function handleSSEProgress(data) {
-    var progress = data.progress;
-    var message = data.message || "";
-    var status = data.status || "";
-    
-    appendLog(message, "info", data);
-    
-    if (progress) {
-      updateProgress(progress);
+  function finishStream(status, message) {
+    lastStatusValue = status;
+    if (progressBarEl) {
+      progressBarEl.classList.remove("progress-bar-striped", "progress-bar-animated");
+      progressBarEl.classList.remove("bg-info", "bg-warning", "bg-success", "bg-danger");
+      progressBarEl.classList.add(status === "completed" ? "bg-success" : "bg-danger");
+      var label = progressBarEl.querySelector(".nb-job-progress-label");
+      if (label) {
+        label.textContent = status === "completed" ? "Done" : "Failed";
+        label.className = "nb-job-progress-label small fw-semibold text-white";
+      }
     }
-    
-    if (status === "completed" || status === "failed") {
-      if (progressBarEl) {
-        progressBarEl.classList.remove("progress-bar-striped", "progress-bar-animated");
-        if (status === "completed") {
-          progressBarEl.classList.remove("bg-info");
-          progressBarEl.classList.add("bg-success");
-          var label = progressBarEl.querySelector(".nb-job-progress-label");
-          if (label) label.textContent = "Done";
-        } else {
-          progressBarEl.classList.remove("bg-info");
-          progressBarEl.classList.add("bg-danger");
-        }
-      }
-      if (sseSource) {
-        sseSource.close();
-        sseSource = null;
-      }
-      isStreaming = false;
+    if (message) {
+      appendLog(message, status === "completed" ? "success" : "error", {
+        status: status,
+        message: message,
+      });
+    }
+    if (statusEl) {
+      statusEl.textContent = status === "completed" ? " — Completed" : " — Failed";
+    }
+    if (sseSource) {
+      sseSource.close();
+      sseSource = null;
+    }
+    isStreaming = false;
+    writeStoredState();
+  }
+
+  function handleSSEFrame(eventType, data) {
+    var payload = data && typeof data === "object" ? data : {};
+    var message = getFrameMessage(payload, eventType);
+    var status = payload.status ? String(payload.status) : "";
+    var isTerminal = eventType === "complete" || status === "failed" || status === "errored" || eventType === "error";
+
+    if (message && !isTerminal) {
+      appendLog(
+        message,
+        eventType === "error"
+          ? "error"
+          : (eventType === "message" ? "info" : (status || eventType || "info")),
+        payload
+      );
+    }
+
+    if (payload.progress) {
+      updateProgress(payload.progress);
+    }
+
+    if (entries.length > 0 && api && typeof api.applyProgress === "function") {
+      api.applyProgress(progressBarEl, { data: payload }, entries);
+    }
+
+    if (status) {
+      lastStatusValue = status;
+    }
+    writeStoredState();
+
+    if (eventType === "complete") {
+      finishStream(payload.ok === false ? "failed" : "completed", message || payload.message || "");
+      return;
+    }
+    if (status === "failed" || eventType === "error") {
+      finishStream("failed", message || payload.detail || payload.error || "");
     }
   }
 
   function startSSE() {
     if (isStreaming) return;
     var streamUrl = "{% url 'plugins:netbox_proxbox:job_stream' pk=job.pk|default:0 %}";
-    if (!pk || streamUrl.indexOf("0") > -1) {
+    if (!pk) {
       startPollingFallback();
       return;
     }
@@ -146,12 +284,19 @@
       sseSource.addEventListener("step", function(e) {
         try {
           var data = JSON.parse(e.data);
-          if (data.step === "progress" || data.step === "job") {
-            handleSSEProgress(data);
-          }
+          handleSSEFrame("step", data);
+        } catch (err) {}
+      });
+      sseSource.addEventListener("message", function(e) {
+        try {
+          var data = JSON.parse(e.data);
+          handleSSEFrame("message", data);
         } catch (err) {}
       });
       sseSource.addEventListener("error", function(e) {
+        if (!isStreaming) {
+          return;
+        }
         isStreaming = false;
         if (sseSource) {
           sseSource.close();
@@ -160,13 +305,16 @@
         startPollingFallback();
       });
       sseSource.addEventListener("complete", function(e) {
-        isStreaming = false;
-        if (sseSource) {
-          sseSource.close();
-          sseSource = null;
+        try {
+          var data = JSON.parse(e.data);
+          handleSSEFrame("complete", data);
+        } catch (err) {
+          finishStream("completed", "");
         }
       });
       statusEl.textContent = " — Streaming...";
+      lastStatusValue = "running";
+      writeStoredState();
     } catch (err) {
       isStreaming = false;
       startPollingFallback();
@@ -177,7 +325,7 @@
     if (!logEl) return;
     var api = window.NbProxboxJobLogView;
     lastEntries = entries;
-      if (api && typeof api.renderLiveLog === "function") {
+    if (api && typeof api.renderLiveLog === "function") {
       api.renderLiveLog(logEl, lastEntries);
     } else {
       logEl.textContent = "";
@@ -197,6 +345,7 @@
         var st = jobStatusParts(d.status);
         var entries = Array.isArray(d.log_entries) ? d.log_entries : [];
         lastEntries = entries;
+        lastStatusValue = st.value;
         var n = entries.length;
         var display = st.label || st.value || "—";
         var detail =
@@ -213,11 +362,15 @@
           if (progressBarEl) {
             progressBarEl.classList.remove("progress-bar-striped", "progress-bar-animated");
             if (st.value === "errored" || st.value === "failed") {
-              progressBarEl.classList.remove("bg-info", "bg-success");
+              progressBarEl.classList.remove("bg-info", "bg-warning", "bg-success");
               progressBarEl.classList.add("bg-danger");
+            } else if (st.value === "completed") {
+              progressBarEl.classList.remove("bg-info", "bg-warning", "bg-danger");
+              progressBarEl.classList.add("bg-success");
             }
           }
         }
+        writeStoredState();
       })
       .catch(function () {});
   }
@@ -228,6 +381,7 @@
   }
 
   function startPolling() {
+    restoreStoredState();
     startSSE();
     setTimeout(function() {
       if (!isStreaming) startPollingFallback();

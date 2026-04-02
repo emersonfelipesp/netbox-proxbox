@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any
 
 import requests
 
 from netbox_proxbox.models import FastAPIEndpoint, NetBoxEndpoint, ProxmoxEndpoint
+from netbox_proxbox.schemas.service_status import (
+    FastAPIStatusResult,
+    ServiceCheckResult,
+)
 from netbox_proxbox.utils import (
     get_backend_auth_headers,
     get_fastapi_url,
@@ -59,7 +62,7 @@ class ServiceStatus:
         return get_backend_auth_headers(fastapi_obj)
 
     @staticmethod
-    def _compact_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    def _compact_payload(payload: dict[str, object]) -> dict[str, object]:
         """Drop null/empty values before POST/PUT to the backend."""
         return {k: v for k, v in payload.items() if v not in (None, "")}
 
@@ -95,7 +98,7 @@ class ServiceStatus:
             "token_key": None,
         }
 
-    def fastapi_status(self, pk: int) -> dict[str, Any]:
+    def fastapi_status(self, pk: int) -> FastAPIStatusResult:
         """Return connectivity info for the FastAPI endpoint primary key."""
         connected = False
         fastapi_url = None
@@ -109,22 +112,26 @@ class ServiceStatus:
         except FastAPIEndpoint.DoesNotExist:
             logger.warning("FastAPI endpoint with pk=%s not found", pk)
             self._set_error(f"FastAPI endpoint with id={pk} not found.")
-            return {
-                "url": None,
-                "connected": False,
-                "target_address": None,
-                "target_port": None,
-                "authentication": "error",
-                "api_access": "error",
-                "detail": self.last_error_detail,
-            }
+            return FastAPIStatusResult(
+                url=None,
+                connected=False,
+                target_address=None,
+                target_port=None,
+                authentication="error",
+                api_access="error",
+                detail=self.last_error_detail,
+            )
 
-        fastapi_detail: dict[str, Any] = get_fastapi_url(fastapi_service_obj) or {}
+        fastapi_detail: dict[str, object] = get_fastapi_url(fastapi_service_obj) or {}
         if not isinstance(fastapi_detail, dict):
             fastapi_detail = {}
         fastapi_url = fastapi_detail.get("http_url")
         fastapi_verify_ssl = fastapi_detail.get("verify_ssl", True)
-        target_address = fastapi_detail.get("host") or "unknown"
+        target_address = fastapi_detail.get("domain") or fastapi_detail.get(
+            "ip_address"
+        )
+        if not target_address:
+            target_address = "unknown"
         target_port = fastapi_service_obj.port or 8080
 
         if fastapi_url:
@@ -150,7 +157,7 @@ class ServiceStatus:
                         self.connected_verify_ssl = False
                         connected_verify_ssl = False
                         target_address = (
-                            fastapi_detail.get("ip_address_host") or target_address
+                            fastapi_detail.get("ip_address") or target_address
                         )
                     except requests.exceptions.RequestException as exc:
                         detail, http_status = self._extract_error_detail(exc)
@@ -171,24 +178,24 @@ class ServiceStatus:
                 )
                 logger.error("Error connecting to FastAPI at %s: %s", fastapi_url, exc)
 
-        return {
-            "url": fastapi_url,
-            "connected": connected,
-            "connected_verify_ssl": connected_verify_ssl,
-            "target_address": target_address if connected else None,
-            "target_port": target_port if connected else None,
-            "authentication": "success" if connected else "error",
-            "api_access": "success" if connected else "error",
-            "detail": self.last_error_detail,
-            "http_status": self.last_error_http_status,
-        }
+        return FastAPIStatusResult(
+            url=fastapi_url,
+            connected=connected,
+            connected_verify_ssl=connected_verify_ssl,
+            target_address=target_address if connected else None,
+            target_port=target_port if connected else None,
+            authentication="success" if connected else "error",
+            api_access="success" if connected else "error",
+            detail=self.last_error_detail,
+            http_status=self.last_error_http_status,
+        )
 
     def netbox_status(
         self,
         pk: int,
         base_url: str,
         auth_headers: dict[str, str] | None = None,
-    ) -> tuple[str, dict[str, Any]]:
+    ) -> tuple[str, ServiceCheckResult]:
         """Sync NetBox endpoint metadata to the backend and return success or error."""
         status = "error"
         max_retries = 3
@@ -204,13 +211,13 @@ class ServiceStatus:
         except NetBoxEndpoint.DoesNotExist:
             logger.error("NetBox endpoint with pk=%s not found", pk)
             self._set_error(f"NetBox endpoint with id={pk} not found.")
-            return status, {
-                "target_address": None,
-                "target_port": None,
-                "authentication": "error",
-                "api_access": "error",
-                "detail": self.last_error_detail,
-            }
+            return status, ServiceCheckResult(
+                target_address=None,
+                target_port=None,
+                authentication="error",
+                api_access="error",
+                detail=self.last_error_detail,
+            )
 
         ip_address = get_ip_address_host(
             getattr(netbox_service_obj, "ip_address", None)
@@ -220,7 +227,7 @@ class ServiceStatus:
         target_port = netbox_service_obj.port or 443
         credentials = self._effective_netbox_backend_credentials(netbox_service_obj)
 
-        current_netbox: dict[str, Any] = {
+        current_netbox: dict[str, object] = {
             "id": pk,
             "name": netbox_service_obj.name or None,
             "ip_address": ip_address,
@@ -238,26 +245,26 @@ class ServiceStatus:
             self._set_error(
                 "NetBox v1 token is missing. Select a v1 token with a retrievable plaintext value, or switch to v2 key/secret credentials."
             )
-            return status, {
-                "target_address": target_address,
-                "target_port": target_port,
-                "authentication": "error",
-                "api_access": "error",
-                "detail": self.last_error_detail,
-            }
+            return status, ServiceCheckResult(
+                target_address=target_address,
+                target_port=target_port,
+                authentication="error",
+                api_access="error",
+                detail=self.last_error_detail,
+            )
         if token_version == "v2" and (
             not current_netbox.get("token") or not current_netbox.get("token_key")
         ):
             self._set_error(
                 "NetBox v2 credentials are incomplete. Provide both token key and token secret."
             )
-            return status, {
-                "target_address": target_address,
-                "target_port": target_port,
-                "authentication": "error",
-                "api_access": "error",
-                "detail": self.last_error_detail,
-            }
+            return status, ServiceCheckResult(
+                target_address=target_address,
+                target_port=target_port,
+                authentication="error",
+                api_access="error",
+                detail=self.last_error_detail,
+            )
 
         netbox_endpoint_url = f"{base_url}/netbox/endpoint"
         netbox_status_route = f"{base_url}/netbox/status"
@@ -355,13 +362,13 @@ class ServiceStatus:
                 if attempt < max_retries - 1:
                     time.sleep(retry_delay)
 
-        return status, {
-            "target_address": target_address,
-            "target_port": target_port,
-            "authentication": status if status == "success" else "error",
-            "api_access": status,
-            "detail": self.last_error_detail,
-        }
+        return status, ServiceCheckResult(
+            target_address=target_address,
+            target_port=target_port,
+            authentication=status if status == "success" else "error",
+            api_access=status,
+            detail=self.last_error_detail,
+        )
 
     def proxmox_status(
         self,
@@ -369,7 +376,7 @@ class ServiceStatus:
         base_url: str,
         auth_headers: dict[str, str] | None = None,
         backend_verify_ssl: bool = True,
-    ) -> tuple[str, dict[str, Any]]:
+    ) -> tuple[str, ServiceCheckResult]:
         """Push Proxmox endpoint to the backend and verify version endpoint."""
         status = "error"
         max_retries = 3
@@ -387,13 +394,13 @@ class ServiceStatus:
         except ProxmoxEndpoint.DoesNotExist:
             logger.error("Proxmox endpoint with pk=%s not found", pk)
             self._set_error(f"Proxmox endpoint with id={pk} not found.")
-            return status, {
-                "target_address": None,
-                "target_port": None,
-                "authentication": "error",
-                "api_access": "error",
-                "detail": self.last_error_detail,
-            }
+            return status, ServiceCheckResult(
+                target_address=None,
+                target_port=None,
+                authentication="error",
+                api_access="error",
+                detail=self.last_error_detail,
+            )
 
         proxmox_ip_address = get_ip_address_host(
             getattr(proxmox_service_obj, "ip_address", None)
@@ -412,13 +419,13 @@ class ServiceStatus:
         )
         if not sync_ok:
             self._set_error(sync_detail, http_status=sync_http_status)
-            return status, {
-                "target_address": target_address,
-                "target_port": target_port,
-                "authentication": "error",
-                "api_access": "error",
-                "detail": self.last_error_detail,
-            }
+            return status, ServiceCheckResult(
+                target_address=target_address,
+                target_port=target_port,
+                authentication="error",
+                api_access="error",
+                detail=self.last_error_detail,
+            )
         authentication = "success"
 
         url = f"{base_url}/proxmox/version"
@@ -456,10 +463,10 @@ class ServiceStatus:
                     time.sleep(retry_delay)
 
         api_access = status
-        return status, {
-            "target_address": target_address,
-            "target_port": target_port,
-            "authentication": authentication,
-            "api_access": api_access,
-            "detail": self.last_error_detail,
-        }
+        return status, ServiceCheckResult(
+            target_address=target_address,
+            target_port=target_port,
+            authentication=authentication,
+            api_access=api_access,
+            detail=self.last_error_detail,
+        )

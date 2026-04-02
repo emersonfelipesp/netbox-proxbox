@@ -1,6 +1,6 @@
 # `netbox_proxbox.forms`
 
-This directory contains Django/NetBox forms for plugin models and the filter forms used by list views.
+This directory contains Django/NetBox forms for plugin models, plugin settings, and the filter forms used by list views.
 
 ## Files And Ownership
 
@@ -9,7 +9,7 @@ This directory contains Django/NetBox forms for plugin models and the filter for
 - [`netbox.py`](./netbox.py): create/edit and filter forms for `NetBoxEndpoint`, including local validation for token version selection.
 - [`fastapi.py`](./fastapi.py): create/edit and filter forms for `FastAPIEndpoint`, including WebSocket and backend token fields.
 - [`schedule_sync.py`](./schedule_sync.py): scheduling form for `ProxboxSyncJob` (sync types,
-  endpoint filters, run-now/scheduled/recurring fields).
+  endpoint filters, run-now/scheduled/recurring fields, and quick-schedule defaults).
 - [`settings.py`](./settings.py): plugin settings form (`ProxboxPluginSettings` singleton).
 - [`storage.py`](./storage.py): create/edit and filter forms for `ProxmoxStorage`.
 - [`vm_backup.py`](./vm_backup.py): create/edit and filter forms for `VMBackup`.
@@ -26,7 +26,7 @@ This directory contains Django/NetBox forms for plugin models and the filter for
 
 - `NetBoxEndpointForm.clean()` mirrors the API serializer's credential validation and clears unused token fields depending on token version.
 - Endpoint forms use `DynamicModelChoiceField` for NetBox-managed related objects.
-- These forms define how plugin fields are presented in the NetBox UI; model constraints still remain the source of truth for persistence.
+- These forms define how plugin fields are presented in the NetBox UI; model constraints and the API serializers still remain the source of truth for persistence and credential rules.
 
 ## Links
 
