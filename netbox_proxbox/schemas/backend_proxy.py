@@ -62,7 +62,7 @@ class SseCompletePayload(ProxboxLenientModel):
 
     ok: bool = True
     message: str | None = None
-    result: dict[str, object] | None = None
+    result: dict[str, object] | list[object] | None = None
     errors: list[dict[str, object]] = Field(default_factory=list)
 
     @property

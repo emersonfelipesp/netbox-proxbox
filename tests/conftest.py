@@ -340,7 +340,9 @@ def load_plugin_module(
     virtualization_models_module.Cluster = _make_model_class("Cluster")
     virtualization_models_module.VirtualMachine = _make_model_class("VirtualMachine")
     virtualization_module.models = virtualization_models_module
+    models_module.ProxmoxCluster = _make_model_class("ProxmoxCluster")
     models_module.ProxmoxNode = _make_model_class("ProxmoxNode")
+    models_module.ProxmoxStorage = _make_model_class("ProxmoxStorage")
     utils_module = types.ModuleType("netbox_proxbox.utils")
     utils_module.get_fastapi_url = get_fastapi_url or (
         lambda obj: {

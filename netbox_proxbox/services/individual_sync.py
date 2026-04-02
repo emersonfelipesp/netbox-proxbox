@@ -12,6 +12,7 @@ from netbox_proxbox.utils import get_backend_auth_headers, get_fastapi_url
 logger = logging.getLogger(__name__)
 
 _INDIVIDUAL_SYNC_TIMEOUT = 30
+_CONTEXT_KEYS = ("cluster_name", "node", "type", "vmid", "storage_name")
 
 
 def get_fastapi_context() -> dict | None:
@@ -90,10 +91,28 @@ def sync_individual(
     return {"error": last_error or "Unable to reach the ProxBox backend."}, 503
 
 
+def _build_cache_key(path: str, query_params: dict | None) -> str:
+    """Build a deterministic key for recursion cycle detection."""
+    normalized = query_params or {}
+    sorted_items = tuple(sorted((str(k), str(v)) for k, v in normalized.items()))
+    return f"{path}:{sorted_items}"
+
+
+def _merge_context(base: dict | None, update: dict | None) -> dict:
+    """Merge dependency context while ignoring empty values."""
+    merged: dict[str, object] = dict(base or {})
+    for key in _CONTEXT_KEYS:
+        value = (update or {}).get(key)
+        if value not in (None, ""):
+            merged[key] = value
+    return merged
+
+
 def sync_individual_with_dependencies(
     path: str,
     query_params: dict | None = None,
     _visited: set | None = None,
+    _context: dict | None = None,
 ) -> tuple[dict, int, list[dict]]:
     """Call an individual sync endpoint and recursively sync dependencies.
 
@@ -108,12 +127,18 @@ def sync_individual_with_dependencies(
     if _visited is None:
         _visited = set()
 
-    cache_key = f"{path}:{str(query_params)}"
+    params = dict(query_params or {})
+    context = _merge_context(_context, params)
+    for key in _CONTEXT_KEYS:
+        if key not in params and key in context:
+            params[key] = context[key]
+
+    cache_key = _build_cache_key(path, params)
     if cache_key in _visited:
         return {}, 200, []
     _visited.add(cache_key)
 
-    response, status = sync_individual(path, query_params)
+    response, status = sync_individual(path, params)
     all_synced = []
 
     if status == 200 and isinstance(response, dict):
@@ -122,7 +147,7 @@ def sync_individual_with_dependencies(
             dep_type = dep.get("object_type")
             action = dep.get("action")
             if action in ("created", "updated"):
-                dep_response, dep_status, dep_synced = _sync_dependency(dep, _visited)
+                dep_response, dep_status, dep_synced = _sync_dependency(dep, _visited, context)
                 all_synced.extend(dep_synced)
                 if dep_response:
                     all_synced.append(
@@ -136,34 +161,35 @@ def sync_individual_with_dependencies(
     return response, status, all_synced
 
 
-def _sync_dependency(dep: dict, _visited: set) -> tuple[dict, int, list[dict]]:
+def _sync_dependency(dep: dict, _visited: set, parent_context: dict | None) -> tuple[dict, int, list[dict]]:
     """Sync a single dependency from a dependencies_synced entry."""
     dep_type = dep.get("object_type")
+    context = _merge_context(parent_context, dep)
 
     if dep_type == "cluster":
         path = "sync/individual/cluster"
-        params = {"cluster_name": dep.get("name")}
+        params = {"cluster_name": dep.get("name") or context.get("cluster_name", "")}
     elif dep_type == "node":
         path = "sync/individual/node"
         params = {
-            "cluster_name": dep.get("cluster_name", ""),
+            "cluster_name": dep.get("cluster_name") or context.get("cluster_name", ""),
             "node_name": dep.get("name"),
         }
     elif dep_type == "vm":
         path = "sync/individual/vm"
         params = {
-            "cluster_name": dep.get("cluster_name", ""),
-            "node": dep.get("node", ""),
-            "type": dep.get("type", "qemu"),
-            "vmid": dep.get("vmid"),
+            "cluster_name": dep.get("cluster_name") or context.get("cluster_name", ""),
+            "node": dep.get("node") or context.get("node", ""),
+            "type": dep.get("type") or context.get("type", "qemu"),
+            "vmid": dep.get("vmid") or context.get("vmid"),
         }
     elif dep_type == "storage":
         path = "sync/individual/storage"
         params = {
-            "cluster_name": dep.get("cluster_name", ""),
-            "storage_name": dep.get("name"),
+            "cluster_name": dep.get("cluster_name") or context.get("cluster_name", ""),
+            "storage_name": dep.get("name") or context.get("storage_name", ""),
         }
     else:
         return {}, 200, []
 
-    return sync_individual_with_dependencies(path, params, _visited)
+    return sync_individual_with_dependencies(path, params, _visited, _context=context)
