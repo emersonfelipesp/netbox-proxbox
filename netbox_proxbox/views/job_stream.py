@@ -9,6 +9,7 @@ import threading
 import time
 from typing import Generator
 
+from core.choices import JobStatusChoices
 from django.http import Http404, HttpRequest, StreamingHttpResponse
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -16,6 +17,90 @@ from django.views.decorators.csrf import csrf_exempt
 from netbox.jobs import Job as JobModel
 
 logger = logging.getLogger(__name__)
+
+SYNC_OWNER_SSE = "sse_stream"
+SYNC_OWNER_RQ = "rq_job"
+
+SYNC_WAIT_TIMEOUT = 60
+SYNC_WAIT_POLL_INTERVAL = 0.5
+
+
+def _claim_sync_ownership(job: JobModel, owner: str) -> bool:
+    """Atomically claim sync ownership on a job. Returns True if claimed, False if already taken."""
+    import datetime as dt
+
+    data = getattr(job, "data", None) or {}
+    if isinstance(data, str):
+        try:
+            data = json.loads(data) if data else {}
+        except (json.JSONDecodeError, TypeError):
+            data = {}
+    proxbox_sync = data.get("proxbox_sync", {})
+    current_owner = proxbox_sync.get("sync_owner")
+    if current_owner and current_owner != owner:
+        return False
+    proxbox_sync["sync_owner"] = owner
+    proxbox_sync["sync_owner_claimed_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
+    data["proxbox_sync"] = proxbox_sync
+    job.data = data
+    job.save(update_fields=["data"])
+    return True
+
+
+def _get_sync_ownership(job: JobModel) -> str | None:
+    """Return the current sync owner for a job, or None if not claimed."""
+    data = getattr(job, "data", None)
+    if isinstance(data, str):
+        try:
+            data = json.loads(data) if data else {}
+        except (json.JSONDecodeError, TypeError):
+            data = {}
+    return data.get("proxbox_sync", {}).get("sync_owner")
+
+
+def _release_sync_ownership(job: JobModel, owner: str) -> None:
+    """Release sync ownership if we are the owner."""
+    data = getattr(job, "data", None)
+    if isinstance(data, str):
+        try:
+            data = json.loads(data) if data else {}
+        except (json.JSONDecodeError, TypeError):
+            data = {}
+    proxbox_sync = data.get("proxbox_sync", {})
+    if proxbox_sync.get("sync_owner") == owner:
+        del proxbox_sync["sync_owner"]
+        if proxbox_sync.get("sync_owner_claimed_at"):
+            del proxbox_sync["sync_owner_claimed_at"]
+        data["proxbox_sync"] = proxbox_sync
+        job.data = data
+        job.save(update_fields=["data"])
+
+
+def _wait_for_job_status(
+    job: JobModel,
+    target_status: str,
+    timeout: float = SYNC_WAIT_TIMEOUT,
+    poll_interval: float = SYNC_WAIT_POLL_INTERVAL,
+) -> str:
+    """Wait for job to reach target status, returning the final status."""
+    start = time.monotonic()
+    job.refresh_from_db()
+    current = getattr(job, "status", None)
+    while current != target_status:
+        elapsed = time.monotonic() - start
+        if elapsed >= timeout:
+            logger.warning(
+                "Timed out waiting for job %s to reach status %s (current: %s, elapsed: %.1fs)",
+                getattr(job, "pk", "?"),
+                target_status,
+                current,
+                elapsed,
+            )
+            return current
+        time.sleep(poll_interval)
+        job.refresh_from_db()
+        current = getattr(job, "status", None)
+    return current
 
 
 @method_decorator(csrf_exempt, name="dispatch")
@@ -69,6 +154,79 @@ class JobStreamSSEView(View):
                     emit_error("Not a Proxbox sync job")
                     emit_complete(False, "Not a Proxbox sync job")
                     return
+
+                job.refresh_from_db()
+                status = getattr(job, "status", None)
+
+                if status in JobStatusChoices.TERMINAL_STATE_CHOICES:
+                    emit(
+                        "step",
+                        {
+                            "step": "job",
+                            "status": status,
+                            "message": f"Job is already {status}",
+                        },
+                    )
+                    emit_complete(
+                        status == JobStatusChoices.STATUS_COMPLETED,
+                        f"Job is already {status}",
+                    )
+                    return
+
+                if status in (
+                    JobStatusChoices.STATUS_PENDING,
+                    JobStatusChoices.STATUS_SCHEDULED,
+                ):
+                    emit(
+                        "step",
+                        {
+                            "step": "job",
+                            "status": "waiting",
+                            "message": f"Job is {status}, waiting for worker to start...",
+                        },
+                    )
+                    status = _wait_for_job_status(job, JobStatusChoices.STATUS_RUNNING)
+                    if status != JobStatusChoices.STATUS_RUNNING:
+                        emit(
+                            "step",
+                            {
+                                "step": "job",
+                                "status": status or "unknown",
+                                "message": f"Job is no longer pending (status: {status})",
+                            },
+                        )
+                        emit_complete(
+                            status == JobStatusChoices.STATUS_COMPLETED,
+                            f"Job status changed to {status}",
+                        )
+                        return
+
+                if not _claim_sync_ownership(job, SYNC_OWNER_SSE):
+                    existing_owner = _get_sync_ownership(job)
+                    logger.info(
+                        "Job %s sync ownership already claimed by %s, skipping SSE sync",
+                        getattr(job, "pk", "?"),
+                        existing_owner,
+                    )
+                    emit(
+                        "step",
+                        {
+                            "step": "job",
+                            "status": "running",
+                            "message": "Job sync is being handled by another process",
+                        },
+                    )
+                    emit_complete(False, "Job sync is being handled by another process")
+                    return
+
+                emit(
+                    "step",
+                    {
+                        "step": "job",
+                        "status": "started",
+                        "message": "SSE stream has claimed sync ownership",
+                    },
+                )
 
                 params = proxbox_sync_params_from_job(job)
                 sync_types = params.get("sync_types", [SyncTypeChoices.ALL])
@@ -209,6 +367,7 @@ class JobStreamSSEView(View):
                 emit_error(f"Job stream failed unexpectedly: {exc}")
                 emit_complete(False, "Job stream failed unexpectedly.")
             finally:
+                _release_sync_ownership(job, SYNC_OWNER_SSE)
                 event_queue.put(queue_sentinel)
 
         stream_thread = threading.Thread(target=worker, daemon=True)
