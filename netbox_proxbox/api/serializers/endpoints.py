@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from django.utils.translation import gettext as _
 
 from netbox.api.fields import ChoiceField
@@ -75,7 +73,7 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
             return f"{name_part} ({domain_part})"
         return name_part
 
-    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+    def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         """Require at least one of domain or IP address for reachability."""
         attrs = super().validate(attrs)
         domain = (
@@ -132,7 +130,7 @@ class NetBoxEndpointSerializer(NetBoxModelSerializer):
             },
         }
 
-    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+    def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         """Enforce host target plus consistent v1 token vs v2 key/secret auth rules."""
         attrs = super().validate(attrs)
 
@@ -244,7 +242,7 @@ class FastAPIEndpointSerializer(NetBoxModelSerializer):
         )
         brief_fields = ("id", "url", "display", "name", "domain", "port")
 
-    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+    def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         """Require at least one of domain or IP address for the backend URL."""
         attrs = super().validate(attrs)
         domain = (

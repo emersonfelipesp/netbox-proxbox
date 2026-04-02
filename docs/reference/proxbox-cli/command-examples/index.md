@@ -3,11 +3,11 @@
 Machine-generated help captures for representative `pxb` commands.
 
 !!! info "Generated"
-    Last updated: `2026-03-28T14:49:37.241515+00:00`
+    Last updated: `2026-04-01T19:39:49.416217+00:00`
 
 ## Sections
 
-- [Core Commands](./core-commands.md) — 4 captures
+- [Core Commands](./core-commands.md) — 5 captures
 - [NetBox Commands](./netbox-commands.md) — 2 captures
-- [Proxmox Commands](./proxmox-commands.md) — 3 captures
-- [Infrastructure Commands](./infrastructure-commands.md) — 4 captures
+- [Proxmox Commands](./proxmox-commands.md) — 4 captures
+- [Infrastructure Commands](./infrastructure-commands.md) — 6 captures

@@ -4,12 +4,12 @@ This directory is the top-level container for plugin static files served by Djan
 
 ## Structure
 
-- [`netbox_proxbox/`](./netbox_proxbox/): plugin-specific static namespace containing images, JavaScript, and stylesheets.
+- [`netbox_proxbox/`](./netbox_proxbox/): plugin-specific static namespace containing images, JavaScript, compiled CSS, and stylesheets.
 
 ## Notes
 
 - Keep static assets under the namespaced `netbox_proxbox/` subtree so they do not collide with other NetBox plugins.
-- Browser-side behavior is implemented in the `js/` subtree; CSS and SCSS sources are in `styles/`.
+- Browser-side behavior is implemented in the `js/` subtree; CSS sources and generated theme assets live under `css/` and `styles/`.
 
 ## Links
 

@@ -1,0 +1,14 @@
+{
+  "section": "Infrastructure Commands",
+  "title": "Virtualization Snapshots Sync Help",
+  "argv": [
+    "virtualization",
+    "vms",
+    "snapshots-sync-all",
+    "--help"
+  ],
+  "exit_code": 0,
+  "elapsed_seconds": 0.606,
+  "stdout": "                                                                                \n Usage: python -m proxbox_cli virtualization vms snapshots-sync-all             \n            [OPTIONS]                                                           \n                                                                                \n Sync ALL VM snapshots across all clusters/nodes. [NOTE: long-running sync]     \n                                                                                \n\u256d\u2500 Options \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256e\n\u2502 --json          Output raw JSON.                                             \u2502\n\u2502 --yaml          Output YAML.                                                 \u2502\n\u2502 --help          Show this message and exit.                                  \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f",
+  "notes": "Long-running VM snapshot synchronization command."
+}

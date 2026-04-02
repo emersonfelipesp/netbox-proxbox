@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
 
 import requests
 
@@ -20,7 +19,7 @@ def parse_requests_response_json(
     response: requests.Response,
     *,
     log_label: str = "backend",
-) -> tuple[Any | None, str | None]:
+) -> tuple[object | None, str | None]:
     """Parse JSON from an HTTP response after ``raise_for_status``.
 
     Returns ``(data, None)`` on success, or ``(None, user_facing_detail)`` when the body

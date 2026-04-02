@@ -9,7 +9,7 @@ mkdir -p /opt/proxbox-api
 cd /opt/proxbox-api
 python3 -m venv venv
 source venv/bin/activate
-pip install proxbox-api==0.0.2.post3
+pip install --upgrade proxbox-api
 ```
 
 ## Start Manually
@@ -19,6 +19,8 @@ pip install proxbox-api==0.0.2.post3
 ```
 
 Once started, the backend should answer on `http://<host>:8800`.
+
+If you want to stay on repository head instead of the latest published package, use [Installing The Backend From Source](./using-git.md).
 
 ## Run With systemd
 

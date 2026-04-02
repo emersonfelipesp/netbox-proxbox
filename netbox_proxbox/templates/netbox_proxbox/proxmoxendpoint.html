@@ -39,7 +39,20 @@
                         </tr>
                         <tr>
                             <th scope="row">Mode</th>
-                            <td>{{ object.mode }}</td>
+                            <td>
+                                {% if object.mode == 'cluster' %}
+                                    <span class="badge text-bg-success">Cluster</span>
+                                {% elif object.mode == 'standalone' %}
+                                    <span class="badge text-bg-info">Standalone</span>
+                                {% elif object.mode == 'undefined' %}
+                                    <span class="badge text-bg-secondary">Undefined</span>
+                                    <small class="text-muted d-block mt-1">
+                                        Sync this endpoint to discover cluster mode.
+                                    </small>
+                                {% else %}
+                                    {{ object.get_mode_display }}
+                                {% endif %}
+                            </td>
                         </tr>
                         <tr>
                             <th scope="row">Target</th>

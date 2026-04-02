@@ -130,10 +130,13 @@
       return objEmpty;
     }
 
-    var root = document.createElement("div");
+    var root = document.createElement("span");
     root.className = "nb-proxbox-inline";
 
     for (var k = 0; k < keys.length; k++) {
+      if (k > 0) {
+        appendText(root, " · ");
+      }
       var key = keys[k];
       var kv = document.createElement("span");
       kv.className = "nb-proxbox-inline-kv";
@@ -161,7 +164,7 @@
     wrap.className = "nb-proxbox-parsed-msg";
 
     var badge = document.createElement("span");
-    badge.className = "badge bg-secondary me-2 align-middle";
+    badge.className = "badge d-inline-flex text-bg-secondary text-uppercase nb-job-badge-fixed";
     appendText(badge, parsed.event);
     wrap.appendChild(badge);
 
@@ -178,6 +181,45 @@
     }
 
     return wrap;
+  }
+
+  function getLevelBadgeClass(level) {
+    var normalized = level != null ? String(level).trim().toLowerCase() : "";
+    if (
+      normalized === "completed" ||
+      normalized === "success" ||
+      normalized === "done" ||
+      normalized === "ok"
+    ) {
+      return "badge d-inline-flex text-bg-success text-uppercase nb-job-badge-fixed";
+    }
+    if (
+      normalized === "started" ||
+      normalized === "streaming" ||
+      normalized === "running" ||
+      normalized === "pending"
+    ) {
+      return "badge d-inline-flex text-bg-blue text-uppercase nb-job-badge-fixed";
+    }
+    if (normalized === "progress") {
+      return "badge d-inline-flex text-bg-warning text-uppercase nb-job-badge-fixed";
+    }
+    if (
+      normalized === "error" ||
+      normalized === "errored" ||
+      normalized === "failed" ||
+      normalized === "failure"
+    ) {
+      return "badge d-inline-flex text-bg-danger text-uppercase nb-job-badge-fixed";
+    }
+    return "badge d-inline-flex text-bg-secondary text-uppercase nb-job-badge-fixed";
+  }
+
+  function getProgressLabelClass(statusValue, done) {
+    if (statusValue === "failed" || statusValue === "errored" || done) {
+      return "nb-job-progress-label small fw-semibold text-white";
+    }
+    return "nb-job-progress-label small fw-semibold text-dark";
   }
 
   function renderMessageContent(msg) {
@@ -200,7 +242,9 @@
     "virtual-machines",
     "vm-disks",
     "vm-backups",
-    "vm-snapshots"
+    "vm-snapshots",
+    "network-interfaces",
+    "ip-addresses"
   ];
 
   function resolveSyncTypes(apiData, entries) {
@@ -215,8 +259,8 @@
       return rawTypes.slice();
     }
 
-    // Fallback: scan log entries for the "Starting Proxbox sync stages: …" line
-    var RE_STAGES = /^Starting Proxbox sync stages:\s*(.+)$/;
+    // Fallback: scan log entries for the "Proxbox sync started for N stages" line
+    var RE_STAGES = /^Proxbox sync started for (\d+) stages?$/;
     if (Array.isArray(entries)) {
       for (var i = 0; i < entries.length; i++) {
         var e = entries[i];
@@ -224,13 +268,10 @@
         var msg = e.message != null ? String(e.message) : "";
         var m = msg.match(RE_STAGES);
         if (m) {
-          var stages = [];
-          var parts = m[1].split(",");
-          for (var j = 0; j < parts.length; j++) {
-            var s = parts[j].trim();
-            if (s) stages.push(s);
+          var count = parseInt(m[1], 10);
+          if (count > 0 && count <= ALL_STAGES.length) {
+            return ALL_STAGES.slice(0, count);
           }
-          if (stages.length > 0) return stages;
         }
       }
     }
@@ -246,8 +287,8 @@
       return { completed: 0, total: total, currentStage: null, percent: 0, done: false };
     }
 
-    var RE_STARTING  = /^Starting stage:\s*(\S+)\s+\(/;
-    var RE_COMPLETED = /^Stage completed:\s*(\S+)\s+\(HTTP/;
+    var RE_STARTING  = /^Starting stage \d+\/\d+:\s*(\S+)$/;
+    var RE_COMPLETED = /^Stage (\S+) completed$/;
     var RE_ALL_DONE  = /^All sync stages completed\s*\(/;
 
     var completed = 0;
@@ -282,6 +323,13 @@
     var apiData = d && typeof d === "object" && d.data ? d.data : null;
     var syncTypes = resolveSyncTypes(apiData, entries);
     var prog = parseJobProgress(entries, syncTypes);
+    var statusValue = apiData && apiData.status != null ? apiData.status : "";
+    if (statusValue && typeof statusValue === "object") {
+      statusValue = statusValue.value != null ? String(statusValue.value) : "";
+    } else {
+      statusValue = String(statusValue);
+    }
+    statusValue = statusValue.trim().toLowerCase();
 
     var wrapper = barEl.parentElement;
     while (wrapper && !wrapper.classList.contains("nb-job-progress-wrap")) {
@@ -301,19 +349,46 @@
 
     var label = barEl.querySelector(".nb-job-progress-label");
     if (label) {
-      label.textContent = prog.done
-        ? "Done"
-        : prog.currentStage
-          ? prog.currentStage + " (" + prog.completed + "/" + prog.total + ")"
-          : prog.completed + "/" + prog.total;
+      label.textContent = (statusValue === "failed" || statusValue === "errored")
+        ? "Failed"
+        : prog.done
+          ? "Done"
+          : prog.currentStage
+            ? prog.currentStage + " (" + prog.completed + "/" + prog.total + ")"
+            : prog.completed + "/" + prog.total;
+      label.className = getProgressLabelClass(statusValue, prog.done);
     }
 
-    if (prog.done) {
-      barEl.classList.remove("progress-bar-striped", "progress-bar-animated", "bg-info");
+    barEl.classList.remove(
+      "progress-bar-striped",
+      "progress-bar-animated",
+      "bg-info",
+      "bg-warning",
+      "bg-success",
+      "bg-danger"
+    );
+
+    if (statusValue === "failed" || statusValue === "errored") {
+      barEl.classList.add("bg-danger");
+    } else if (prog.done || statusValue === "completed") {
       barEl.classList.add("bg-success");
     } else {
-      barEl.classList.remove("bg-success");
-      barEl.classList.add("bg-info", "progress-bar-striped", "progress-bar-animated");
+      barEl.classList.add("bg-warning", "progress-bar-striped", "progress-bar-animated");
+    }
+  }
+
+  function formatTimestamp(ts) {
+    if (!ts) return "";
+    try {
+      var d = new Date(ts);
+      if (isNaN(d.getTime())) return ts;
+      var h = String(d.getHours()).padStart(2, "0");
+      var m = String(d.getMinutes()).padStart(2, "0");
+      var s = String(d.getSeconds()).padStart(2, "0");
+      var ms = String(d.getMilliseconds()).padStart(3, "0");
+      return h + ":" + m + ":" + s + "." + ms;
+    } catch (e) {
+      return ts;
     }
   }
 
@@ -337,23 +412,28 @@
       var row = document.createElement("div");
       row.className = "nb-job-live-log-entry";
 
-      var t = e.timestamp != null ? String(e.timestamp) : "";
-      if (t) {
+      var rawTs = e.timestamp != null ? String(e.timestamp) : "";
+      var lvl = e.level != null ? String(e.level) : "";
+      var msg = e.message != null ? String(e.message) : "";
+
+      row.dataset.timestamp = rawTs;
+      row.dataset.level = lvl;
+      row.dataset.raw = msg;
+
+      if (rawTs) {
         var timeEl = document.createElement("span");
-        timeEl.className = "text-muted small font-monospace";
-        appendText(timeEl, t);
+        timeEl.className = "text-muted small font-monospace nb-job-live-log-time";
+        appendText(timeEl, formatTimestamp(rawTs));
         row.appendChild(timeEl);
       }
 
-      var lvl = e.level != null ? String(e.level) : "";
       if (lvl) {
         var lvlSpan = document.createElement("span");
-        lvlSpan.className = "badge text-bg-secondary text-uppercase";
+        lvlSpan.className = getLevelBadgeClass(lvl);
         appendText(lvlSpan, lvl);
         row.appendChild(lvlSpan);
       }
 
-      var msg = e.message != null ? String(e.message) : "";
       row.appendChild(renderMessageContent(msg));
 
       container.appendChild(row);
@@ -441,6 +521,8 @@
     formatLogEntriesForClipboard: formatLogEntriesForClipboard,
     parseJobProgress: parseJobProgress,
     applyProgress: applyProgress,
+    getLevelBadgeClass: getLevelBadgeClass,
+    getProgressLabelClass: getProgressLabelClass,
   };
 
   if (document.readyState === "loading") {

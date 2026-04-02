@@ -33,6 +33,7 @@ class SettingsView(
             initial={
                 "use_guest_agent_interface_name": settings_obj.use_guest_agent_interface_name,
                 "proxbox_fetch_max_concurrency": settings_obj.proxbox_fetch_max_concurrency,
+                "ignore_ipv6_link_local_addresses": settings_obj.ignore_ipv6_link_local_addresses,
             }
         )
         return render(request, self.template_name, {"form": form})
@@ -47,10 +48,14 @@ class SettingsView(
             settings_obj.proxbox_fetch_max_concurrency = form.cleaned_data[
                 "proxbox_fetch_max_concurrency"
             ]
+            settings_obj.ignore_ipv6_link_local_addresses = form.cleaned_data[
+                "ignore_ipv6_link_local_addresses"
+            ]
             settings_obj.save(
                 update_fields=[
                     "use_guest_agent_interface_name",
                     "proxbox_fetch_max_concurrency",
+                    "ignore_ipv6_link_local_addresses",
                 ]
             )
             messages.success(request, "Proxbox plugin settings updated.")

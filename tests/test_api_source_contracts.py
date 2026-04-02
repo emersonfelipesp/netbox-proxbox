@@ -3,7 +3,6 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SERIALIZERS_PACKAGE = REPO_ROOT / "netbox_proxbox" / "api" / "serializers"
 VIEWS_PATH = REPO_ROOT / "netbox_proxbox" / "api" / "views.py"
@@ -216,6 +215,21 @@ def test_endpoint_serializers_expose_supported_model_fields():
         assert not missing, f"{serializer_name} missing fields: {sorted(missing)}"
 
 
+def test_cluster_serializer_uses_supported_netbox_virtualization_import():
+    contents = (
+        REPO_ROOT / "netbox_proxbox" / "api" / "serializers" / "cluster.py"
+    ).read_text()
+
+    assert (
+        "virtualization.api.serializers_.clusters import ClusterSerializer" in contents
+    )
+    assert "NestedClusterSerializer" not in contents
+    assert (
+        "netbox_cluster = ClusterSerializer(nested=True, required=False, allow_null=True)"
+        in contents
+    )
+
+
 def test_endpoint_serializers_do_not_override_create_semantics():
     module = _parse_serializers_package()
 
@@ -232,6 +246,8 @@ def test_task_history_route_and_viewset_are_registered():
     assert (
         'router.register("task-history", views.VMTaskHistoryViewSet)' in urls_contents
     )
+    assert "serializer.instance = existing" in views_contents
+    assert "models.VMTaskHistory.objects.filter(upid=upid).first()" in views_contents
 
 
 def test_netbox_endpoint_serializer_rejects_selected_v2_token_objects():
@@ -420,7 +436,14 @@ def test_plugin_api_routes_register_all_plugin_objects():
             root_registers.append(route)
 
     assert set(endpoint_registers) == {"proxmox", "netbox", "fastapi"}
-    assert set(root_registers) == {"storage", "backups", "snapshots", "task-history"}
+    assert set(root_registers) == {
+        "clusters",
+        "nodes",
+        "storage",
+        "backups",
+        "snapshots",
+        "task-history",
+    }
 
 
 def test_proxmox_endpoint_views_register_bulk_import_and_csv_export():

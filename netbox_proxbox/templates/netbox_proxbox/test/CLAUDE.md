@@ -4,7 +4,7 @@ This directory contains development or diagnostic templates.
 
 ## Files And Ownership
 
-- [`websocket.html`](./websocket.html): manual test page for the plugin WebSocket integration.
+- [`websocket.html`](./websocket.html): manual test page for the plugin WebSocket integration and FastAPI endpoint reachability.
 
 ## Dependencies
 

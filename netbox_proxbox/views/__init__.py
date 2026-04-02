@@ -26,6 +26,7 @@ from .cluster import (
     ClusterStoragesTabView,
     ClusterSummaryTabView,
 )
+from .cluster_nodes_tab import ProxmoxEndpointClusterNodesTabView
 from .dashboard import DashboardView
 from .endpoints import (
     FastAPIEndpointDeleteView,
@@ -55,6 +56,8 @@ from .storage import (
 from .sync import (
     sync_devices,
     sync_full_update,
+    sync_network_interfaces,
+    sync_ip_addresses,
     sync_storage,
     sync_virtual_machines,
     sync_virtual_disks,
@@ -341,3 +344,188 @@ class CommunityView(ConditionalLoginRequiredMixin, View):
     def get(self, request):
         """Render the community template with a page title."""
         return render(request, self.template_name, {"title": "Join our Community!"})
+
+
+class InterfacesView(ConditionalLoginRequiredMixin, View):
+    """List all Proxbox-related interfaces (VM virtualization.Interfaces + node dcim.Interfaces).
+
+    Shows a combined view of both VM and node interfaces that were synced from Proxmox,
+    with summary counts for total, up, and down interfaces.
+    """
+
+    template_name = "netbox_proxbox/interfaces.html"
+
+    def get(self, request):
+        """Load proxbox-tagged VM interfaces and device interfaces."""
+        from dcim.models import Device, Interface as DCIMInterface
+        from django.contrib.contenttypes.models import ContentType
+        from extras.models import Tag, TaggedItem
+        from virtualization.models import VMInterface, VirtualMachine
+
+        from netbox_proxbox.models import FastAPIEndpoint
+
+        plugin_configuration = getattr(configuration, "PLUGINS_CONFIG", {})
+        fastapi_endpoint = FastAPIEndpoint.objects.restrict(
+            request.user, "view"
+        ).first()
+        fastapi_info = {}
+        if fastapi_endpoint:
+            fastapi_info = get_fastapi_url(fastapi_endpoint) or {}
+
+        proxbox_tag = Tag.objects.filter(slug="proxbox").first()
+
+        vm_interfaces = []
+        node_interfaces = []
+        interfaces_up = 0
+        interfaces_down = 0
+
+        if proxbox_tag:
+            device_content_type = ContentType.objects.get_for_model(Device)
+            tagged_device_ids = list(
+                TaggedItem.objects.filter(
+                    tag=proxbox_tag, content_type=device_content_type
+                ).values_list("object_id", flat=True)
+            )
+            if tagged_device_ids:
+                node_interfaces = list(
+                    DCIMInterface.objects.restrict(request.user, "view")
+                    .filter(device_id__in=tagged_device_ids)
+                    .select_related("device")
+                    .prefetch_related("ip_addresses")
+                    .order_by("device__name", "name")
+                )
+                for iface in node_interfaces:
+                    if iface.enabled:
+                        interfaces_up += 1
+                    else:
+                        interfaces_down += 1
+
+            vm_content_type = ContentType.objects.get_for_model(VirtualMachine)
+            tagged_vm_ids = list(
+                TaggedItem.objects.filter(
+                    tag=proxbox_tag, content_type=vm_content_type
+                ).values_list("object_id", flat=True)
+            )
+            if tagged_vm_ids:
+                vm_interfaces = list(
+                    VMInterface.objects.restrict(request.user, "view")
+                    .filter(virtual_machine_id__in=tagged_vm_ids)
+                    .select_related("virtual_machine")
+                    .prefetch_related("ip_addresses")
+                    .order_by("virtual_machine__name", "name")
+                )
+                for iface in vm_interfaces:
+                    if iface.enabled:
+                        interfaces_up += 1
+                    else:
+                        interfaces_down += 1
+
+        return render(
+            request,
+            self.template_name,
+            {
+                "configuration": plugin_configuration,
+                "fastapi_url": fastapi_info.get("http_url", ""),
+                "fastapi_websocket_url": fastapi_info.get("websocket_url", ""),
+                "vm_interfaces": vm_interfaces,
+                "node_interfaces": node_interfaces,
+                "interfaces_up": interfaces_up,
+                "interfaces_down": interfaces_down,
+                "interfaces_total": len(vm_interfaces) + len(node_interfaces),
+            },
+        )
+
+
+class IPAddressesView(ConditionalLoginRequiredMixin, View):
+    """List all Proxbox-related IP addresses (linked to VM interfaces or node interfaces).
+
+    Shows a combined view of IP addresses that were synced from Proxmox and assigned
+    to Proxbox-managed interfaces, with summary counts.
+    """
+
+    template_name = "netbox_proxbox/ip_addresses.html"
+
+    def get(self, request):
+        """Load proxbox-tagged IP addresses assigned to proxbox interfaces."""
+        from dcim.models import Device, Interface as DCIMInterface
+        from django.contrib.contenttypes.models import ContentType
+        from extras.models import Tag, TaggedItem
+        from ipam.models import IPAddress
+        from virtualization.models import VMInterface, VirtualMachine
+
+        from netbox_proxbox.models import FastAPIEndpoint
+
+        plugin_configuration = getattr(configuration, "PLUGINS_CONFIG", {})
+        fastapi_endpoint = FastAPIEndpoint.objects.restrict(
+            request.user, "view"
+        ).first()
+        fastapi_info = {}
+        if fastapi_endpoint:
+            fastapi_info = get_fastapi_url(fastapi_endpoint) or {}
+
+        proxbox_tag = Tag.objects.filter(slug="proxbox").first()
+
+        vm_ips = []
+        node_ips = []
+
+        if proxbox_tag:
+            device_content_type = ContentType.objects.get_for_model(Device)
+            tagged_device_ids = list(
+                TaggedItem.objects.filter(
+                    tag=proxbox_tag, content_type=device_content_type
+                ).values_list("object_id", flat=True)
+            )
+            if tagged_device_ids:
+                node_interface_ids = list(
+                    DCIMInterface.objects.filter(
+                        device_id__in=tagged_device_ids
+                    ).values_list("id", flat=True)
+                )
+                node_ips = list(
+                    IPAddress.objects.restrict(request.user, "view")
+                    .filter(
+                        assigned_object_type__app_label="dcim",
+                        assigned_object_type__model="interface",
+                        assigned_object_id__in=node_interface_ids,
+                    )
+                    .prefetch_related("assigned_object")
+                    .order_by("address")
+                )
+
+            vm_content_type = ContentType.objects.get_for_model(VirtualMachine)
+            tagged_vm_ids = list(
+                TaggedItem.objects.filter(
+                    tag=proxbox_tag, content_type=vm_content_type
+                ).values_list("object_id", flat=True)
+            )
+            if tagged_vm_ids:
+                vm_interface_ids = list(
+                    VMInterface.objects.filter(
+                        virtual_machine_id__in=tagged_vm_ids
+                    ).values_list("id", flat=True)
+                )
+                vm_ips = list(
+                    IPAddress.objects.restrict(request.user, "view")
+                    .filter(
+                        assigned_object_type__app_label="virtualization",
+                        assigned_object_type__model="vminterface",
+                        assigned_object_id__in=vm_interface_ids,
+                    )
+                    .prefetch_related("assigned_object")
+                    .order_by("address")
+                )
+
+        return render(
+            request,
+            self.template_name,
+            {
+                "configuration": plugin_configuration,
+                "fastapi_url": fastapi_info.get("http_url", ""),
+                "fastapi_websocket_url": fastapi_info.get("websocket_url", ""),
+                "vm_ips": vm_ips,
+                "node_ips": node_ips,
+                "vm_ips_count": len(vm_ips),
+                "node_ips_count": len(node_ips),
+                "total_ips": len(vm_ips) + len(node_ips),
+            },
+        )

@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
-from typing import Any
-
 import requests
 from django.db import ProgrammingError
 from netbox.views import generic
@@ -13,6 +10,8 @@ from utilities.views import register_model_view
 from netbox_proxbox.filtersets import ProxmoxStorageFilterSet
 from netbox_proxbox.forms import ProxmoxStorageFilterForm, ProxmoxStorageForm
 from netbox_proxbox.models import FastAPIEndpoint, ProxmoxStorage
+from netbox_proxbox.schemas import ProxmoxStorageRecord, StorageContentRecord
+from netbox_proxbox.schemas._formatters import iter_scalar_records
 from netbox_proxbox.utils import get_backend_auth_headers, get_fastapi_url
 from netbox_proxbox.views.error_utils import (
     extract_proxmox_backend_error_detail,
@@ -53,67 +52,10 @@ class ProxmoxStorageView(generic.ObjectView):
     request_timeout = 8
 
     @staticmethod
-    def _iter_scalar_records(payload: Any) -> Iterable[dict[str, Any]]:
-        """Yield flattened dictionary records from nested list/dict payloads."""
-        if isinstance(payload, list):
-            for item in payload:
-                yield from ProxmoxStorageView._iter_scalar_records(item)
-            return
-
-        if isinstance(payload, dict):
-            has_nested = any(isinstance(v, (dict, list)) for v in payload.values())
-            if not has_nested:
-                yield payload
-                return
-            for value in payload.values():
-                yield from ProxmoxStorageView._iter_scalar_records(value)
-
-    @staticmethod
-    def _to_int(value: Any, default: int = 0) -> int:
-        try:
-            return int(value)
-        except (TypeError, ValueError):
-            return default
-
-    @staticmethod
-    def _format_bytes(value: Any) -> str:
-        size = float(ProxmoxStorageView._to_int(value))
-        units = ("B", "KiB", "MiB", "GiB", "TiB")
-        unit_idx = 0
-        while size >= 1024 and unit_idx < len(units) - 1:
-            size /= 1024
-            unit_idx += 1
-        return f"{size:.2f} {units[unit_idx]}"
-
-    @staticmethod
-    def _usage_from_record(record: dict[str, Any]) -> dict[str, Any]:
-        total = (
-            record.get("total")
-            or record.get("maxdisk")
-            or record.get("max_size")
-            or record.get("size")
-        )
-        used = record.get("used") or record.get("disk")
-        avail = record.get("avail") or record.get("available") or record.get("free")
-        total_i = ProxmoxStorageView._to_int(total)
-        used_i = ProxmoxStorageView._to_int(used)
-        avail_i = ProxmoxStorageView._to_int(avail, max(total_i - used_i, 0))
-        used_pct = round((used_i / total_i) * 100.0, 2) if total_i > 0 else 0.0
-        return {
-            "used_bytes": used_i,
-            "total_bytes": total_i,
-            "avail_bytes": avail_i,
-            "used_pct": used_pct,
-            "used_label": ProxmoxStorageView._format_bytes(used_i),
-            "total_label": ProxmoxStorageView._format_bytes(total_i),
-            "avail_label": ProxmoxStorageView._format_bytes(avail_i),
-        }
-
-    @staticmethod
     def _parse_nodes(value: str | None) -> list[str]:
         if not value:
             return []
-        return [part.strip() for part in str(value).split(",") if part.strip()]
+        return ProxmoxStorageRecord(nodes=value).node_list()
 
     def _fetch_backend_json(
         self,
@@ -123,7 +65,7 @@ class ProxmoxStorageView(generic.ObjectView):
         verify_ssl: bool,
         route: str,
         query_params: dict[str, str] | None = None,
-    ) -> tuple[Any | None, str | None]:
+    ) -> tuple[object | None, str | None]:
         response = requests.get(
             f"{base_url}{route}",
             params=query_params or None,
@@ -182,7 +124,7 @@ class ProxmoxStorageView(generic.ObjectView):
 
         usage = None
         usage_detail = None
-        content_records: list[dict[str, Any]] = []
+        content_records: list[dict[str, object]] = []
 
         fastapi_endpoint = FastAPIEndpoint.objects.restrict(
             request.user, "view"
@@ -204,19 +146,16 @@ class ProxmoxStorageView(generic.ObjectView):
                     if storage_err:
                         usage_detail = storage_err
                     else:
-                        for record in self._iter_scalar_records(storage_payload):
-                            record_name = str(
-                                record.get("storage") or record.get("name") or ""
-                            )
-                            record_cluster = str(record.get("cluster") or "")
-                            if record_name != instance.name:
+                        for record in iter_scalar_records(storage_payload):
+                            typed_record = ProxmoxStorageRecord.model_validate(record)
+                            if typed_record.effective_name != instance.name:
                                 continue
                             if (
-                                record_cluster
-                                and record_cluster != instance.cluster.name
+                                typed_record.cluster
+                                and typed_record.cluster != instance.cluster.name
                             ):
                                 continue
-                            usage = self._usage_from_record(record)
+                            usage = typed_record.to_usage_dict().model_dump()
                             break
 
                     for node in self._parse_nodes(instance.nodes):
@@ -229,8 +168,10 @@ class ProxmoxStorageView(generic.ObjectView):
                         )
                         if content_err:
                             continue
-                        for record in self._iter_scalar_records(content_payload):
-                            content_records.append(record)
+                        for record in iter_scalar_records(content_payload):
+                            content_records.append(
+                                StorageContentRecord.model_validate(record).model_dump()
+                            )
 
                 except requests.exceptions.RequestException as exc:
                     detail, _ = extract_proxmox_backend_error_detail(

@@ -1,6 +1,6 @@
 [project]
 name = "netbox-proxbox"
-version = "0.0.9.post4"
+version = "0.0.10"
 description = "Netbox Plugin - Integrate Proxmox and Netbox"
 readme = "README.md"
 authors = [
@@ -9,6 +9,7 @@ authors = [
 license = "Apache-2.0"
 requires-python = ">=3.12"
 dependencies = [
+    "pydantic>=2.11.7",
     "requests>=2.33.0",
     "websockets>=16.0",
 ]
@@ -20,7 +21,6 @@ pxb = "proxbox_cli:main"
 cli = [
     "aiohttp>=3.12.15",
     "click>=8.3.0",
-    "pydantic>=2.11.7",
     "PyYAML>=6.0.3",
     "rich>=14.1.0",
     "typer>=0.19.2",
@@ -37,6 +37,10 @@ dev = [
 test = [
     "pytest>=9.0.2",
     "pytest-cov>=7.1.0",
+]
+e2e = [
+    "fastapi>=0.116.1",
+    "uvicorn>=0.35.0",
 ]
 
 [build-system]

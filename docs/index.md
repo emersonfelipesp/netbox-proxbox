@@ -7,7 +7,7 @@ Proxbox is a NetBox plugin that integrates Proxmox with NetBox through a separat
 The current repository code declares support for:
 
 - NetBox `4.5.x`
-- Plugin version `0.0.9.post1` in source
+- Plugin version `0.0.10` in source
 
 That support comes directly from the plugin config in this repository:
 
@@ -31,6 +31,7 @@ The current codebase includes NetBox models for:
 - Sync processes
 - VM backups
 - VM snapshots
+- Proxmox clusters and hypervisor nodes (with links to NetBox Cluster and Device objects)
 
 The plugin UI exposes sync actions for:
 
@@ -62,14 +63,22 @@ For the current repository state, the recommended path is:
 
 See:
 
+- [Installation Overview](./installation/index.md)
 - [Pre-Installation](./installation/pre-installation.md)
 - [Installing the Plugin Using Git](./installation/2-installing-plugin-git.md)
+- [Installing the Plugin in Docker-Based NetBox Deployments](./installation/3-installing-plugin-docker.md)
 - [Backend Setup](./installation/backend-setup.md)
 - [Proxbox CLI Overview](./cli/index.md)
 
 ## Read-Only Proxmox Behavior
 
 Proxbox currently focuses on synchronization and discovery. The plugin does not directly manage Proxmox resources from NetBox.
+
+## Documentation Notes
+
+- The published docs site is generated with MkDocs and uses site-relative URLs such as `/installation/2-installing-plugin-git/`.
+- Generated CLI reference pages are rebuilt from the current `proxbox_cli` command tree.
+- Historical pages that describe older workflows are retained only when clearly labeled as legacy.
 
 ## Stars History
 

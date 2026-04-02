@@ -4,7 +4,7 @@ This directory currently contains FastAPI-specific plugin page fragments.
 
 ## Files And Ownership
 
-- [`home.html`](./home.html): FastAPI-oriented home/dashboard content.
+- [`home.html`](./home.html): FastAPI-oriented home/dashboard content that is included from the main plugin home page.
 
 ## Dependencies
 
