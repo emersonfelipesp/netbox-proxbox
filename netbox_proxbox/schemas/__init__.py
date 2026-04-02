@@ -40,13 +40,21 @@ from netbox_proxbox.schemas.sync_result import (
     SyncJobData,
     SyncJobParams,
 )
+from netbox_proxbox.schemas.backup_routine import (
+    BackupRoutineSchema,
+    GetClusterBackupIdResponse,
+    GetClusterBackupResponseItem,
+)
 
 __all__ = [
     "AuthStatusLiteral",
     "BackendRequestContext",
+    "BackupRoutineSchema",
     "ClusterSyncResult",
     "FastAPIStatusResult",
     "FastAPIUrlDict",
+    "GetClusterBackupIdResponse",
+    "GetClusterBackupResponseItem",
     "KeepalivePayload",
     "OpenAPISummary",
     "ProxmoxClusterStatusRecord",

@@ -67,6 +67,14 @@ urlpatterns = [
         "backups/", include(get_model_urls("netbox_proxbox", "vmbackup", detail=False))
     ),
     path(
+        "backup-routines/<int:pk>/",
+        include(get_model_urls("netbox_proxbox", "backuproutine")),
+    ),
+    path(
+        "backup-routines/",
+        include(get_model_urls("netbox_proxbox", "backuproutine", detail=False)),
+    ),
+    path(
         "snapshots/<int:pk>/", include(get_model_urls("netbox_proxbox", "vmsnapshot"))
     ),
     path(
@@ -95,6 +103,11 @@ urlpatterns = [
         "sync/virtual-machines/snapshots/",
         views.sync_vm_snapshots,
         name="sync_vm_snapshots",
+    ),
+    path(
+        "sync/backup-routines/",
+        views.sync_backup_routines,
+        name="sync_backup_routines",
     ),
     path(
         "sync/virtual-machines/virtual-disks/",

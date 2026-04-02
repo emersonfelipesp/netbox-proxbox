@@ -70,6 +70,11 @@ backups_item = PluginMenuItem(
     link_text="Backups",
 )
 
+backup_routines_item = PluginMenuItem(
+    link="plugins:netbox_proxbox:backuproutine_list",
+    link_text="Backup Routines",
+)
+
 snapshots_item = PluginMenuItem(
     link="plugins:netbox_proxbox:vmsnapshot_list",
     link_text="Snapshots",
@@ -163,6 +168,7 @@ menu = PluginMenu(
                 ip_addresses_item,
                 storage_item,
                 backups_item,
+                backup_routines_item,
                 snapshots_item,
                 task_history_item,
                 schedule_sync_item,

@@ -11,6 +11,7 @@ from rest_framework.routers import APIRootView
 
 from .. import filtersets, models
 from .serializers import (
+    BackupRoutineSerializer,
     FastAPIEndpointSerializer,
     NetBoxEndpointSerializer,
     ProxmoxClusterSerializer,
@@ -134,3 +135,13 @@ class ProxmoxNodeViewSet(NetBoxModelViewSet):
     )
     serializer_class = ProxmoxNodeSerializer
     filterset_class = filtersets.ProxmoxNodeFilterSet
+
+
+class BackupRoutineViewSet(NetBoxModelViewSet):
+    """REST API for Proxmox backup routine schedules synced from Proxmox."""
+
+    queryset = models.BackupRoutine.objects.select_related(
+        "endpoint", "node", "storage", "fleecing_storage"
+    )
+    serializer_class = BackupRoutineSerializer
+    filterset_class = filtersets.BackupRoutineFilterSet

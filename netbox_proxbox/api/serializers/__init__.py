@@ -1,5 +1,9 @@
 """Re-export plugin API serializers for `netbox_proxbox.api.serializers`."""
 
+from netbox_proxbox.api.serializers.backup_routine import (
+    BackupRoutineSerializer,
+    NestedBackupRoutineSerializer,
+)
 from netbox_proxbox.api.serializers.cluster import (
     NestedProxmoxClusterSerializer,
     NestedProxmoxEndpointSerializer,
@@ -21,7 +25,9 @@ from netbox_proxbox.api.serializers.vm_snapshot import VMSnapshotSerializer
 from netbox_proxbox.api.serializers.vm_task_history import VMTaskHistorySerializer
 
 __all__ = (
+    "BackupRoutineSerializer",
     "FastAPIEndpointSerializer",
+    "NestedBackupRoutineSerializer",
     "NestedProxmoxClusterSerializer",
     "NestedProxmoxEndpointSerializer",
     "NestedTokenSerializer",

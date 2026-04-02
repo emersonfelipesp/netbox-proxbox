@@ -27,6 +27,13 @@ from .cluster import (
     ClusterSummaryTabView,
 )
 from .cluster_nodes_tab import ProxmoxEndpointClusterNodesTabView
+from .backup_routine import (
+    BackupRoutineBulkDeleteView,
+    BackupRoutineDeleteView,
+    BackupRoutineEditView,
+    BackupRoutineListView,
+    BackupRoutineView,
+)
 from .dashboard import DashboardView
 from .endpoints import (
     FastAPIEndpointDeleteView,
@@ -54,6 +61,7 @@ from .storage import (
     ProxmoxStorageView,
 )
 from .sync import (
+    sync_backup_routines,
     sync_devices,
     sync_full_update,
     sync_network_interfaces,
