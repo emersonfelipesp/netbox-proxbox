@@ -7,6 +7,13 @@
             <table class="table table-hover object-list">
                 <thead>
                     <tr>
+                        <th class="text-center text-nowrap">
+                            <input
+                                type="checkbox"
+                                aria-label="Select all virtual machines"
+                                data-proxbox-select-all="[data-proxbox-vm-select]"
+                            >
+                        </th>
                         <th class="text-center text-nowrap"><span class="mdi mdi-check-bold" title="Status"></span></th>
                         <th class="text-center text-nowrap">ID</th>
                         <th class="text-nowrap">Name</th>
@@ -25,6 +32,15 @@
                     {% if virtual_machines %}
                         {% for vm in virtual_machines %}
                             <tr>
+                                <td class="text-center">
+                                    <input
+                                        type="checkbox"
+                                        name="pk"
+                                        value="{{ vm.pk }}"
+                                        aria-label="Select virtual machine {{ vm.name }}"
+                                        data-proxbox-vm-select
+                                    >
+                                </td>
                                 <td class="text-center">
                                     {% if vm.status == 'active' %}
                                         <span class="mdi mdi-check-circle text-success" title="Active"></span>
@@ -91,7 +107,7 @@
                         {% endfor %}
                     {% else %}
                         <tr>
-                            <td colspan="12" class="text-center text-muted p-4">
+                            <td colspan="13" class="text-center text-muted p-4">
                                 <span class="mdi mdi-information-outline mdi-24px d-block mb-2"></span>
                                 No virtual machines synced with Proxbox yet.
                                 <br>

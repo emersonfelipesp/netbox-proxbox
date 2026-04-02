@@ -1,6 +1,26 @@
 import { fetchJson, setBadgeState } from "./common.js";
 import WebSocketClient from "./websocket.js";
 
+function wireSelectAllCheckboxes() {
+    for (const selectAll of document.querySelectorAll("[data-proxbox-select-all]")) {
+        if (selectAll.dataset.proxboxBound === "true") {
+            continue;
+        }
+        selectAll.dataset.proxboxBound = "true";
+        selectAll.addEventListener("change", () => {
+            const targetSelector = selectAll.dataset.proxboxSelectAll;
+            if (!targetSelector) {
+                return;
+            }
+            for (const checkbox of document.querySelectorAll(targetSelector)) {
+                if (checkbox instanceof HTMLInputElement) {
+                    checkbox.checked = selectAll.checked;
+                }
+            }
+        });
+    }
+}
+
 function initializeWebSocket() {
     const websocketEndpoint = window.proxboxConfig?.websocketEndpoint;
     const syncContainer = document.querySelector("[data-use-websocket='true'][data-server-side-websocket='false']");
@@ -90,5 +110,6 @@ async function hydrateProxmoxCards() {
 
 document.addEventListener("DOMContentLoaded", async () => {
     initializeWebSocket();
+    wireSelectAllCheckboxes();
     await Promise.all([refreshStatusBadges(), hydrateProxmoxCards()]);
 });
