@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 import time
@@ -177,6 +178,8 @@ def _serialize_sync_params(
     proxmox_endpoint_ids: list[str],
     netbox_endpoint_ids: list[str],
     netbox_vm_ids: list[str],
+    batch_object_type: str | None = None,
+    batch_object_ids: list[str] | None = None,
 ) -> dict[str, object]:
     """Return a backward-compatible params block for Job.data."""
     return {
@@ -194,6 +197,8 @@ def _serialize_sync_params(
         "proxmox_endpoint_ids": list(proxmox_endpoint_ids),
         "netbox_endpoint_ids": list(netbox_endpoint_ids),
         "netbox_vm_ids": list(netbox_vm_ids),
+        "batch_object_type": batch_object_type,
+        "batch_object_ids": list(batch_object_ids or []),
     }
 
 
@@ -234,12 +239,298 @@ def proxbox_sync_params_from_job(job: object) -> dict[str, object]:
         "proxmox_endpoint_ids": params.proxmox_endpoint_ids,
         "netbox_endpoint_ids": params.netbox_endpoint_ids,
         "netbox_vm_ids": params.netbox_vm_ids,
+        "batch_object_type": params.batch_object_type,
+        "batch_object_ids": params.batch_object_ids,
     }
     if params["sync_types"] == [SyncTypeChoices.ALL] and not params["netbox_vm_ids"]:
         inferred = _infer_targeted_vm_job_params(job)
         if inferred is not None:
             return inferred
     return params
+
+
+def _normalize_batch_object_ids(object_ids: list[str] | None) -> list[str]:
+    """Return a cleaned list of selected object IDs."""
+    return [str(object_id) for object_id in list(object_ids or []) if str(object_id)]
+
+
+def _resolve_vm_cluster_name(vm: object) -> str:
+    """Derive a Proxmox cluster name from a NetBox VM record."""
+    from netbox_proxbox.models import ProxmoxCluster
+
+    cluster = getattr(vm, "cluster", None)
+    if cluster is None:
+        return ""
+    proxmox_cluster = ProxmoxCluster.objects.filter(netbox_cluster=cluster).first()
+    if proxmox_cluster is not None:
+        return str(proxmox_cluster.name)
+    return str(getattr(cluster, "name", "") or "")
+
+
+def _resolve_vm_node(vm: object) -> str:
+    """Derive the best-effort Proxmox node name for a NetBox VM."""
+    device = getattr(vm, "device", None)
+    if device is not None and getattr(device, "name", None):
+        return str(device.name)
+
+    custom_field_data = getattr(vm, "custom_field_data", None) or {}
+    node = custom_field_data.get("proxmox_node") or custom_field_data.get(
+        "cf_proxmox_node", ""
+    )
+    return str(node or "")
+
+
+def _resolve_vm_type(vm: object) -> str:
+    custom_field_data = getattr(vm, "custom_field_data", None) or {}
+    return str(
+        custom_field_data.get("proxmox_vm_type")
+        or custom_field_data.get("cf_proxmox_vm_type")
+        or "qemu"
+    )
+
+
+def _resolve_vm_vmid(vm: object) -> str:
+    custom_field_data = getattr(vm, "custom_field_data", None) or {}
+    vmid = custom_field_data.get("proxmox_vm_id") or custom_field_data.get(
+        "cf_proxmox_vm_id"
+    )
+    return str(vmid or "")
+
+
+def _resolve_storage_nodes(storage: object) -> str:
+    """Return a best-effort Proxmox node name for a storage-backed row."""
+    nodes = getattr(storage, "nodes", None)
+    if not nodes:
+        return ""
+    first = str(nodes).split(",", 1)[0].strip()
+    return first
+
+
+def _resolve_vm_batch_params(vm: object) -> dict[str, object]:
+    """Build individual VM sync parameters."""
+    cluster_name = _resolve_vm_cluster_name(vm)
+    node = _resolve_vm_node(vm)
+    vm_type = _resolve_vm_type(vm)
+    vmid = _resolve_vm_vmid(vm)
+    if not cluster_name or not node or not vmid:
+        return {"error": "Missing VM sync context.", "status": 422}
+    return {
+        "path": "sync/individual/vm",
+        "query_params": {
+            "cluster_name": cluster_name,
+            "node": node,
+            "type": vm_type,
+            "vmid": vmid,
+        },
+    }
+
+
+def _resolve_vm_backup_batch_params(backup: object) -> dict[str, object]:
+    """Build individual backup sync parameters."""
+    storage_obj = getattr(backup, "proxmox_storage", None)
+    vm_obj = getattr(backup, "virtual_machine", None)
+    if storage_obj is None or vm_obj is None:
+        return {"error": "Missing backup sync context.", "status": 422}
+
+    cluster_name = str(getattr(getattr(storage_obj, "cluster", None), "name", "") or "")
+    node = _resolve_storage_nodes(storage_obj) or _resolve_vm_node(vm_obj)
+    vmid = str(
+        getattr(backup, "vmid", None)
+        or getattr(getattr(vm_obj, "custom_field_data", None), "get", lambda *_: None)("proxmox_vm_id")
+        or _resolve_vm_vmid(vm_obj)
+        or ""
+    )
+    volume_id = str(getattr(backup, "volume_id", None) or "")
+    storage_name = str(getattr(backup, "storage", None) or getattr(storage_obj, "name", "") or "")
+
+    if not cluster_name or not node or not vmid or not storage_name or not volume_id:
+        return {"error": "Missing backup sync context.", "status": 422}
+
+    return {
+        "path": "sync/individual/backup",
+        "query_params": {
+            "cluster_name": cluster_name,
+            "node": node,
+            "storage": storage_name,
+            "vmid": vmid,
+            "volid": volume_id,
+        },
+    }
+
+
+def _resolve_vm_snapshot_batch_params(snapshot: object) -> dict[str, object]:
+    """Build individual snapshot sync parameters."""
+    vm_obj = getattr(snapshot, "virtual_machine", None)
+    if vm_obj is None:
+        return {"error": "Missing snapshot sync context.", "status": 422}
+
+    cluster_name = _resolve_vm_cluster_name(vm_obj)
+    node = str(getattr(snapshot, "node", None) or _resolve_vm_node(vm_obj) or "")
+    vm_type = _resolve_vm_type(vm_obj)
+    vmid = str(getattr(snapshot, "vmid", None) or _resolve_vm_vmid(vm_obj) or "")
+    snapshot_name = str(getattr(snapshot, "name", None) or "")
+
+    if not cluster_name or not node or not vmid or not snapshot_name:
+        return {"error": "Missing snapshot sync context.", "status": 422}
+
+    query_params: dict[str, object] = {
+        "cluster_name": cluster_name,
+        "node": node,
+        "type": vm_type,
+        "vmid": vmid,
+        "snapshot_name": snapshot_name,
+    }
+    storage_obj = getattr(snapshot, "proxmox_storage", None)
+    if storage_obj is not None and getattr(storage_obj, "name", None):
+        query_params["storage_name"] = str(storage_obj.name)
+
+    return {"path": "sync/individual/snapshot", "query_params": query_params}
+
+
+def _resolve_storage_batch_params(storage: object) -> dict[str, object]:
+    """Build individual storage sync parameters."""
+    cluster = getattr(storage, "cluster", None)
+    cluster_name = str(getattr(cluster, "name", "") or "")
+    storage_name = str(getattr(storage, "name", None) or "")
+    if not cluster_name or not storage_name:
+        return {"error": "Missing storage sync context.", "status": 422}
+
+    return {
+        "path": "sync/individual/storage",
+        "query_params": {
+            "cluster_name": cluster_name,
+            "storage_name": storage_name,
+        },
+    }
+
+
+def _resolve_task_history_batch_params(task_history: object) -> dict[str, object]:
+    """Build individual task history sync parameters."""
+    vm_obj = getattr(task_history, "virtual_machine", None)
+    if vm_obj is None:
+        return {"error": "Missing task-history sync context.", "status": 422}
+
+    node = str(getattr(task_history, "node", None) or _resolve_vm_node(vm_obj) or "")
+    vm_type = str(getattr(task_history, "vm_type", None) or _resolve_vm_type(vm_obj) or "qemu")
+    vmid = str(getattr(task_history, "vmid", None) or _resolve_vm_vmid(vm_obj) or "")
+    upid = str(getattr(task_history, "upid", None) or "")
+    cluster_name = _resolve_vm_cluster_name(vm_obj)
+
+    if not node or not vmid:
+        return {"error": "Missing task-history sync context.", "status": 422}
+
+    query_params: dict[str, object] = {
+        "node": node,
+        "vm_type": vm_type,
+        "vmid": vmid,
+    }
+    if upid:
+        query_params["upid"] = upid
+    if cluster_name:
+        query_params["cluster_name"] = cluster_name
+
+    return {"path": "sync/individual/task-history", "query_params": query_params}
+
+
+async def _run_batch_selected_sync(
+    self,
+    *,
+    batch_object_type: str,
+    batch_object_ids: list[str],
+) -> dict[str, object]:
+    """Run selected object syncs concurrently with asyncio.gather."""
+    from netbox_proxbox.models import ProxmoxStorage, VMBackup, VMTaskHistory, VMSnapshot
+    from virtualization.models import VirtualMachine
+    from netbox_proxbox.services.individual_sync import sync_individual_with_dependencies
+
+    model_map = {
+        "virtual-machine": VirtualMachine.objects.select_related(
+            "cluster", "device", "site", "role", "tenant", "platform"
+        ),
+        "vm-backup": VMBackup.objects.select_related(
+            "virtual_machine", "proxmox_storage", "proxmox_storage__cluster"
+        ),
+        "vm-snapshot": VMSnapshot.objects.select_related(
+            "virtual_machine", "proxmox_storage", "proxmox_storage__cluster"
+        ),
+        "proxmox-storage": ProxmoxStorage.objects.select_related("cluster"),
+        "vm-task-history": VMTaskHistory.objects.select_related("virtual_machine"),
+    }
+
+    queryset = model_map.get(batch_object_type)
+    if queryset is None:
+        raise ValueError(f"Unsupported batch object type: {batch_object_type!r}")
+
+    object_ids = _normalize_batch_object_ids(batch_object_ids)
+    objects = list(queryset.filter(pk__in=object_ids))
+    object_by_id = {str(getattr(obj, "pk", "")): obj for obj in objects}
+
+    semaphore = asyncio.Semaphore(_proxbox_fetch_max_concurrency_setting())
+
+    async def run_one(object_id: str) -> dict[str, object]:
+        async with semaphore:
+            obj = object_by_id.get(str(object_id))
+            if obj is None:
+                return {
+                    "batch_object_type": batch_object_type,
+                    "object_id": str(object_id),
+                    "status": 404,
+                    "error": "Selected object was not found.",
+                }
+
+            if batch_object_type == "virtual-machine":
+                params = _resolve_vm_batch_params(obj)
+            elif batch_object_type == "vm-backup":
+                params = _resolve_vm_backup_batch_params(obj)
+            elif batch_object_type == "vm-snapshot":
+                params = _resolve_vm_snapshot_batch_params(obj)
+            elif batch_object_type == "proxmox-storage":
+                params = _resolve_storage_batch_params(obj)
+            elif batch_object_type == "vm-task-history":
+                params = _resolve_task_history_batch_params(obj)
+            else:
+                return {
+                    "batch_object_type": batch_object_type,
+                    "object_id": str(object_id),
+                    "status": 422,
+                    "error": f"Unsupported batch object type: {batch_object_type}",
+                }
+
+            if params.get("error"):
+                return {
+                    "batch_object_type": batch_object_type,
+                    "object_id": str(object_id),
+                    "status": int(params.get("status") or 422),
+                    "error": str(params.get("error")),
+                }
+
+            path = str(params["path"])
+            query_params = dict(params.get("query_params") or {})
+
+            def _call_sync() -> tuple[dict, int, list[dict]]:
+                return sync_individual_with_dependencies(path, query_params)
+
+            response, status, dependencies = await asyncio.to_thread(_call_sync)
+            return {
+                "batch_object_type": batch_object_type,
+                "object_id": str(object_id),
+                "status": status,
+                "response": response,
+                "dependencies": dependencies,
+                "error": response.get("error") if isinstance(response, dict) else None,
+            }
+
+    results = await asyncio.gather(*(run_one(object_id) for object_id in object_ids))
+    succeeded = sum(1 for item in results if int(item.get("status", 500)) < 400)
+    failed = len(results) - succeeded
+    return {
+        "batch_object_type": batch_object_type,
+        "batch_object_label": batch_object_type.replace("-", " ").title(),
+        "total": len(results),
+        "succeeded": succeeded,
+        "failed": failed,
+        "results": results,
+    }
 
 
 SYNC_OWNER_RQ = "rq_job"
@@ -305,6 +596,8 @@ class ProxboxSyncJob(JobRunner):
         kwargs.setdefault("job_timeout", PROXBOX_SYNC_JOB_TIMEOUT)
         sync_types_kw = kwargs.pop("sync_types", None)
         sync_type_kw = kwargs.pop("sync_type", None)
+        batch_object_type_kw = kwargs.pop("batch_object_type", None)
+        batch_object_ids_kw = kwargs.pop("batch_object_ids", None)
         if sync_types_kw is not None:
             normalized = normalize_sync_types(list(sync_types_kw))
         elif sync_type_kw is not None:
@@ -312,6 +605,12 @@ class ProxboxSyncJob(JobRunner):
         else:
             normalized = [SyncTypeChoices.ALL]
         kwargs["sync_types"] = normalized
+
+        batch_object_ids = _normalize_batch_object_ids(batch_object_ids_kw)
+        if batch_object_type_kw is not None:
+            kwargs["batch_object_type"] = str(batch_object_type_kw)
+        if batch_object_ids:
+            kwargs["batch_object_ids"] = batch_object_ids
 
         job = super().enqueue(*args, **kwargs)
 
@@ -321,6 +620,10 @@ class ProxboxSyncJob(JobRunner):
             "netbox_endpoint_ids": list(kwargs.get("netbox_endpoint_ids") or []),
             "netbox_vm_ids": [
                 str(x) for x in list(kwargs.get("netbox_vm_ids") or []) if str(x)
+            ],
+            "batch_object_type": kwargs.get("batch_object_type"),
+            "batch_object_ids": [
+                str(x) for x in list(kwargs.get("batch_object_ids") or []) if str(x)
             ],
         }
         job.data = {
@@ -338,6 +641,8 @@ class ProxboxSyncJob(JobRunner):
         proxmox_endpoint_ids: list[str] | None = None,
         netbox_endpoint_ids: list[str] | None = None,
         netbox_vm_ids: list[str] | None = None,
+        batch_object_type: str | None = None,
+        batch_object_ids: list[str] | None = None,
         **kwargs,
     ):
         """Run one or more proxbox-api SSE streams in dependency order."""
@@ -357,6 +662,10 @@ class ProxboxSyncJob(JobRunner):
             else:
                 types = [SyncTypeChoices.ALL]
 
+            batch_object_type = str(batch_object_type).strip() if batch_object_type else None
+            batch_object_ids = _normalize_batch_object_ids(batch_object_ids)
+            run_started = time.monotonic()
+
             stages = expanded_sync_stages(types)
 
             params: dict[str, object] = {
@@ -364,6 +673,8 @@ class ProxboxSyncJob(JobRunner):
                 "proxmox_endpoint_ids": list(proxmox_endpoint_ids or []),
                 "netbox_endpoint_ids": list(netbox_endpoint_ids or []),
                 "netbox_vm_ids": [str(x) for x in list(netbox_vm_ids or []) if str(x)],
+                "batch_object_type": batch_object_type,
+                "batch_object_ids": batch_object_ids,
             }
             self.job.data = {
                 "proxbox_sync": {
@@ -371,6 +682,37 @@ class ProxboxSyncJob(JobRunner):
                 }
             }
             self.job.save(update_fields=["data"])
+
+            if batch_object_type and batch_object_ids:
+                self.logger.info(
+                    "Starting batch sync for %s selected %s records",
+                    len(batch_object_ids),
+                    batch_object_type,
+                )
+                batch_result = asyncio.run(
+                    _run_batch_selected_sync(
+                        self,
+                        batch_object_type=batch_object_type,
+                        batch_object_ids=batch_object_ids,
+                    )
+                )
+                runtime_seconds = round(time.monotonic() - run_started, 3)
+                self.job.data = {
+                    "proxbox_sync": {
+                        "params": params,
+                        "runtime_seconds": runtime_seconds,
+                        "response": {"batch": batch_result},
+                    }
+                }
+                self.job.save(update_fields=["data"])
+                self.logger.info(
+                    "Batch sync completed for %s (%s total, %s succeeded, %s failed)",
+                    batch_result["batch_object_label"],
+                    batch_result["total"],
+                    batch_result["succeeded"],
+                    batch_result["failed"],
+                )
+                return
 
             self.logger.info("Starting Proxbox sync stages: %s", ", ".join(stages))
             if proxmox_endpoint_ids:
@@ -415,7 +757,6 @@ class ProxboxSyncJob(JobRunner):
                     self.job.save(update_fields=["log_entries"])
                     last_flush = now
 
-            run_started = time.monotonic()
             stages_out: list[dict[str, object]] = []
             for st in stages:
                 query_params = dict(base_query)

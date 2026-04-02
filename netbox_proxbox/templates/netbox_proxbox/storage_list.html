@@ -1,4 +1,5 @@
 {% extends 'generic/object_list.html' %}
+{% load buttons %}
 {% load i18n %}
 
 {% block controls %}
@@ -8,4 +9,17 @@
       <i class="mdi mdi-sync" aria-hidden="true"></i> {% trans "Sync Storage" %}
     </button>
   </form>
+{% endblock %}
+
+{% block bulk_buttons %}
+  <div class="btn-group" role="group">
+    <button type="submit" formaction="{% url 'plugins:netbox_proxbox:sync_selected_storage' %}" class="btn btn-primary">
+      <i class="mdi mdi-sync" aria-hidden="true"></i> {% trans "Sync Selected" %}
+    </button>
+    {% if 'bulk_delete' in actions %}
+      <button type="submit" name="_delete" {% formaction %}="{% url 'plugins:netbox_proxbox:proxmoxstorage_bulk_delete' %}" class="btn btn-danger">
+        <i class="mdi mdi-trash-can-outline" aria-hidden="true"></i> {% trans "Delete Selected" %}
+      </button>
+    {% endif %}
+  </div>
 {% endblock %}

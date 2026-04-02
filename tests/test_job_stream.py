@@ -84,6 +84,7 @@ def job_stream_module(monkeypatch):
     nbp_jobs = types.ModuleType("netbox_proxbox.jobs")
     nbp_jobs.SyncTypeChoices = SimpleNamespace(
         ALL="all",
+        BACKUP_ROUTINES="backup-routines",
         DEVICES="devices",
         STORAGE="storage",
         VIRTUAL_MACHINES="virtual-machines",
@@ -99,6 +100,8 @@ def job_stream_module(monkeypatch):
         "proxmox_endpoint_ids": [],
         "netbox_endpoint_ids": [],
         "netbox_vm_ids": [],
+        "batch_object_type": None,
+        "batch_object_ids": [],
     }
     nbp_jobs.expanded_sync_stages = lambda types: ["devices"]
     nbp_jobs.normalize_sync_types = lambda selected: selected

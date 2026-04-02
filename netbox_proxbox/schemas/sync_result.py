@@ -14,6 +14,8 @@ class SyncJobParams(ProxboxBaseModel):
     proxmox_endpoint_ids: list[str] = Field(default_factory=list)
     netbox_endpoint_ids: list[str] = Field(default_factory=list)
     netbox_vm_ids: list[str] = Field(default_factory=list)
+    batch_object_type: str | None = None
+    batch_object_ids: list[str] = Field(default_factory=list)
 
 
 class SyncJobData(ProxboxBaseModel):

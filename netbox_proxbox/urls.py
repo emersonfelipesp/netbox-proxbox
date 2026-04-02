@@ -92,6 +92,31 @@ urlpatterns = [
     path("sync/devices/", views.sync_devices, name="sync_devices"),
     path("sync/storage/", views.sync_storage, name="sync_storage"),
     path(
+        "sync/selected/virtual-machines/",
+        views.sync_selected_virtual_machines,
+        name="sync_selected_virtual_machines",
+    ),
+    path(
+        "sync/selected/backups/",
+        views.sync_selected_vm_backups,
+        name="sync_selected_vm_backups",
+    ),
+    path(
+        "sync/selected/snapshots/",
+        views.sync_selected_vm_snapshots,
+        name="sync_selected_vm_snapshots",
+    ),
+    path(
+        "sync/selected/storage/",
+        views.sync_selected_storage,
+        name="sync_selected_storage",
+    ),
+    path(
+        "sync/selected/task-history/",
+        views.sync_selected_vm_task_history,
+        name="sync_selected_vm_task_history",
+    ),
+    path(
         "sync/virtual-machines/",
         views.sync_virtual_machines,
         name="sync_virtual_machines",

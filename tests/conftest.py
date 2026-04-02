@@ -416,6 +416,7 @@ def load_plugin_module(
     nbp_choices = types.ModuleType("netbox_proxbox.choices")
 
     class _SyncTypeChoices(_StubChoiceSet):
+        BACKUP_ROUTINES = "backup-routines"
         VIRTUAL_MACHINES = "virtual-machines"
         STORAGE = "storage"
         VIRTUAL_MACHINES_DISKS = "vm-disks"

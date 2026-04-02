@@ -42,6 +42,14 @@
             </a>
         </div>
 
-        {% include "netbox_proxbox/table/virtual_machines.html" %}
+        <form method="post" action="{% url 'plugins:netbox_proxbox:sync_selected_virtual_machines' %}">
+            {% csrf_token %}
+            {% include "netbox_proxbox/table/virtual_machines.html" %}
+            <div class="container mt-3 mb-2 noprint">
+                <button type="submit" class="btn btn-primary">
+                    <i class="mdi mdi-sync" aria-hidden="true"></i> Sync Selected
+                </button>
+            </div>
+        </form>
     </div>
 {% endblock %}
