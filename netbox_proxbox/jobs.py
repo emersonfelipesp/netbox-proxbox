@@ -240,6 +240,57 @@ def proxbox_sync_params_from_job(job: object) -> dict[str, object]:
     return params
 
 
+SYNC_OWNER_RQ = "rq_job"
+
+
+def _claim_rq_sync_ownership(job: object) -> bool:
+    """Atomically claim sync ownership for RQ job. Returns True if claimed, False if already taken."""
+    import datetime as dt
+
+    raw_data = getattr(job, "data", None)
+    if raw_data is None or isinstance(raw_data, dict):
+        data = raw_data if raw_data is not None else {}
+    elif isinstance(raw_data, str):
+        try:
+            data = json.loads(raw_data) if raw_data else {}
+        except (json.JSONDecodeError, TypeError):
+            data = {}
+    else:
+        data = {}
+    proxbox_sync = data.get("proxbox_sync", {})
+    current_owner = proxbox_sync.get("sync_owner")
+    if current_owner and current_owner != SYNC_OWNER_RQ:
+        return False
+    proxbox_sync["sync_owner"] = SYNC_OWNER_RQ
+    proxbox_sync["sync_owner_claimed_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
+    data["proxbox_sync"] = proxbox_sync
+    job.data = data
+    job.save(update_fields=["data"])
+    return True
+
+
+def _release_rq_sync_ownership(job: object) -> None:
+    """Release RQ sync ownership if we are the owner."""
+    raw_data = getattr(job, "data", None)
+    if raw_data is None or isinstance(raw_data, dict):
+        data = raw_data if raw_data is not None else {}
+    elif isinstance(raw_data, str):
+        try:
+            data = json.loads(raw_data) if raw_data else {}
+        except (json.JSONDecodeError, TypeError):
+            data = {}
+    else:
+        return
+    proxbox_sync = data.get("proxbox_sync", {})
+    if proxbox_sync.get("sync_owner") == SYNC_OWNER_RQ:
+        del proxbox_sync["sync_owner"]
+        if proxbox_sync.get("sync_owner_claimed_at"):
+            del proxbox_sync["sync_owner_claimed_at"]
+        data["proxbox_sync"] = proxbox_sync
+        job.data = data
+        job.save(update_fields=["data"])
+
+
 class ProxboxSyncJob(JobRunner):
     """Trigger a ProxBox sync operation against the FastAPI backend."""
 
@@ -290,118 +341,127 @@ class ProxboxSyncJob(JobRunner):
         """Run one or more proxbox-api SSE streams in dependency order."""
         from netbox_proxbox.services import run_sync_stream
 
-        if sync_types:
-            types = normalize_sync_types([str(x) for x in sync_types])
-        elif sync_type is not None:
-            types = normalize_sync_types([str(sync_type)])
-        else:
-            types = [SyncTypeChoices.ALL]
+        if not _claim_rq_sync_ownership(self.job):
+            self.logger.info(
+                "Sync ownership already claimed by SSE stream, RQ job skipping sync execution"
+            )
+            return
 
-        stages = expanded_sync_stages(types)
+        try:
+            if sync_types:
+                types = normalize_sync_types([str(x) for x in sync_types])
+            elif sync_type is not None:
+                types = normalize_sync_types([str(sync_type)])
+            else:
+                types = [SyncTypeChoices.ALL]
 
-        params: dict[str, object] = {
-            "sync_types": types,
-            "proxmox_endpoint_ids": list(proxmox_endpoint_ids or []),
-            "netbox_endpoint_ids": list(netbox_endpoint_ids or []),
-            "netbox_vm_ids": [str(x) for x in list(netbox_vm_ids or []) if str(x)],
-        }
-        self.job.data = {
-            "proxbox_sync": {
-                "params": _serialize_sync_params(**params),
+            stages = expanded_sync_stages(types)
+
+            params: dict[str, object] = {
+                "sync_types": types,
+                "proxmox_endpoint_ids": list(proxmox_endpoint_ids or []),
+                "netbox_endpoint_ids": list(netbox_endpoint_ids or []),
+                "netbox_vm_ids": [str(x) for x in list(netbox_vm_ids or []) if str(x)],
             }
-        }
-        self.job.save(update_fields=["data"])
+            self.job.data = {
+                "proxbox_sync": {
+                    "params": _serialize_sync_params(**params),
+                }
+            }
+            self.job.save(update_fields=["data"])
 
-        self.logger.info("Starting Proxbox sync stages: %s", ", ".join(stages))
-        if proxmox_endpoint_ids:
-            self.logger.info("Proxmox endpoints: %s", proxmox_endpoint_ids)
-        if netbox_endpoint_ids:
-            self.logger.info("NetBox endpoints: %s", netbox_endpoint_ids)
-        if netbox_vm_ids:
-            self.logger.info("NetBox virtual machines: %s", netbox_vm_ids)
+            self.logger.info("Starting Proxbox sync stages: %s", ", ".join(stages))
+            if proxmox_endpoint_ids:
+                self.logger.info("Proxmox endpoints: %s", proxmox_endpoint_ids)
+            if netbox_endpoint_ids:
+                self.logger.info("NetBox endpoints: %s", netbox_endpoint_ids)
+            if netbox_vm_ids:
+                self.logger.info("NetBox virtual machines: %s", netbox_vm_ids)
 
-        base_query: dict[str, str] = {}
-        base_query["use_guest_agent_interface_name"] = (
-            "true" if _use_guest_agent_interface_name_setting() else "false"
-        )
-        base_query["fetch_max_concurrency"] = str(
-            _proxbox_fetch_max_concurrency_setting()
-        )
-        base_query["ignore_ipv6_link_local_addresses"] = (
-            "true" if _ignore_ipv6_link_local_addresses_setting() else "false"
-        )
-        if proxmox_endpoint_ids:
-            base_query["proxmox_endpoint_ids"] = ",".join(proxmox_endpoint_ids)
-        if netbox_endpoint_ids:
-            base_query["netbox_endpoint_ids"] = ",".join(netbox_endpoint_ids)
+            base_query: dict[str, str] = {}
+            base_query["use_guest_agent_interface_name"] = (
+                "true" if _use_guest_agent_interface_name_setting() else "false"
+            )
+            base_query["fetch_max_concurrency"] = str(
+                _proxbox_fetch_max_concurrency_setting()
+            )
+            base_query["ignore_ipv6_link_local_addresses"] = (
+                "true" if _ignore_ipv6_link_local_addresses_setting() else "false"
+            )
+            if proxmox_endpoint_ids:
+                base_query["proxmox_endpoint_ids"] = ",".join(proxmox_endpoint_ids)
+            if netbox_endpoint_ids:
+                base_query["netbox_endpoint_ids"] = ",".join(netbox_endpoint_ids)
 
-        flush_interval = 2.0
-        log_throttle = 1.5
-        last_flush = time.monotonic()
-        last_progress_log = time.monotonic()
+            flush_interval = 2.0
+            log_throttle = 1.5
+            last_flush = time.monotonic()
+            last_progress_log = time.monotonic()
 
-        def on_frame(event: str, data: dict[str, object]) -> None:
-            nonlocal last_flush, last_progress_log
-            if event == "complete":
-                return
-            now = time.monotonic()
-            line = json.dumps(data, default=str)
-            if len(line) > 600:
-                line = line[:600] + "…"
-            if event == "error" or now - last_progress_log >= log_throttle:
-                self.logger.info("[proxbox-stream] {}: {}".format(event, line))
-                last_progress_log = now
-            if now - last_flush >= flush_interval:
-                self.job.save(update_fields=["log_entries"])
-                last_flush = now
+            def on_frame(event: str, data: dict[str, object]) -> None:
+                nonlocal last_flush, last_progress_log
+                if event == "complete":
+                    return
+                now = time.monotonic()
+                line = json.dumps(data, default=str)
+                if len(line) > 600:
+                    line = line[:600] + "…"
+                if event == "error" or now - last_progress_log >= log_throttle:
+                    self.logger.info("[proxbox-stream] {}: {}".format(event, line))
+                    last_progress_log = now
+                if now - last_flush >= flush_interval:
+                    self.job.save(update_fields=["log_entries"])
+                    last_flush = now
 
-        run_started = time.monotonic()
-        stages_out: list[dict[str, object]] = []
-        for st in stages:
-            query_params = dict(base_query)
-            if st == SyncTypeChoices.VIRTUAL_MACHINES_BACKUPS:
-                query_params["delete_nonexistent_backup"] = True
-            if st == SyncTypeChoices.VIRTUAL_MACHINES_SNAPSHOTS:
-                query_params["delete_nonexistent_snapshot"] = True
+            run_started = time.monotonic()
+            stages_out: list[dict[str, object]] = []
+            for st in stages:
+                query_params = dict(base_query)
+                if st == SyncTypeChoices.VIRTUAL_MACHINES_BACKUPS:
+                    query_params["delete_nonexistent_backup"] = True
+                if st == SyncTypeChoices.VIRTUAL_MACHINES_SNAPSHOTS:
+                    query_params["delete_nonexistent_snapshot"] = True
 
-            target_vm_ids = [
-                str(x) for x in list(params.get("netbox_vm_ids") or []) if str(x)
-            ]
-            if target_vm_ids:
-                query_params["netbox_vm_ids"] = ",".join(target_vm_ids)
+                target_vm_ids = [
+                    str(x) for x in list(params.get("netbox_vm_ids") or []) if str(x)
+                ]
+                if target_vm_ids:
+                    query_params["netbox_vm_ids"] = ",".join(target_vm_ids)
 
-            stage_paths = _sync_stream_paths_for_stage(st, target_vm_ids)
-            for stream_path in stage_paths:
-                self.logger.info("Starting stage: %s (%s)", st, stream_path)
-                payload, status = run_sync_stream(
-                    stream_path,
-                    query_params=query_params or None,
-                    on_frame=on_frame,
-                )
-                self.job.save(update_fields=["log_entries"])
-                if status >= 400:
-                    detail = payload.get("detail", "Backend returned an error.")
-                    self.logger.error(
-                        "Stage %s failed (HTTP %s): %s", st, status, detail
+                stage_paths = _sync_stream_paths_for_stage(st, target_vm_ids)
+                for stream_path in stage_paths:
+                    self.logger.info("Starting stage: %s (%s)", st, stream_path)
+                    payload, status = run_sync_stream(
+                        stream_path,
+                        query_params=query_params or None,
+                        on_frame=on_frame,
                     )
-                    raise RuntimeError(detail)
-                self.logger.info("Stage completed: %s (HTTP %s)", st, status)
-                stages_out.append({"sync_type": st, "payload": payload})
+                    self.job.save(update_fields=["log_entries"])
+                    if status >= 400:
+                        detail = payload.get("detail", "Backend returned an error.")
+                        self.logger.error(
+                            "Stage %s failed (HTTP %s): %s", st, status, detail
+                        )
+                        raise RuntimeError(detail)
+                    self.logger.info("Stage completed: %s (HTTP %s)", st, status)
+                    stages_out.append({"sync_type": st, "payload": payload})
 
-        runtime_seconds = round(time.monotonic() - run_started, 3)
-        self.job.data = {
-            "proxbox_sync": {
-                "params": params,
-                "runtime_seconds": runtime_seconds,
-                "response": {"stages": stages_out},
+            runtime_seconds = round(time.monotonic() - run_started, 3)
+            self.job.data = {
+                "proxbox_sync": {
+                    "params": params,
+                    "runtime_seconds": runtime_seconds,
+                    "response": {"stages": stages_out},
+                }
             }
-        }
-        self.job.save(update_fields=["data"])
-        self.logger.info(
-            "All sync stages completed (%s), runtime %.3fs",
-            len(stages_out),
-            runtime_seconds,
-        )
+            self.job.save(update_fields=["data"])
+            self.logger.info(
+                "All sync stages completed (%s), runtime %.3fs",
+                len(stages_out),
+                runtime_seconds,
+            )
+        finally:
+            _release_rq_sync_ownership(self.job)
 
 
 def is_proxbox_sync_job(job: object) -> bool:

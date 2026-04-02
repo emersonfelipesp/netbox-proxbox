@@ -61,6 +61,22 @@ def job_stream_module(monkeypatch):
     netbox_jobs.Job = Job
     netbox_module.jobs = netbox_jobs
 
+    core_module = types.ModuleType("core")
+    core_choices = types.ModuleType("core.choices")
+
+    class JobStatusChoices:
+        STATUS_PENDING = "pending"
+        STATUS_SCHEDULED = "scheduled"
+        STATUS_RUNNING = "running"
+        STATUS_COMPLETED = "completed"
+        STATUS_ERRORED = "errored"
+        STATUS_FAILED = "failed"
+        ENQUEUED_STATE_CHOICES = (STATUS_PENDING, STATUS_SCHEDULED, STATUS_RUNNING)
+        TERMINAL_STATE_CHOICES = (STATUS_COMPLETED, STATUS_ERRORED, STATUS_FAILED)
+
+    core_choices.JobStatusChoices = JobStatusChoices
+    core_module.choices = core_choices
+
     nbp_root = types.ModuleType("netbox_proxbox")
     nbp_root.__path__ = [str(repo_root / "netbox_proxbox")]
     nbp_views = types.ModuleType("netbox_proxbox.views")
@@ -109,6 +125,8 @@ def job_stream_module(monkeypatch):
     monkeypatch.setitem(sys.modules, "django.utils.decorators", django_utils_decorators)
     monkeypatch.setitem(sys.modules, "netbox", netbox_module)
     monkeypatch.setitem(sys.modules, "netbox.jobs", netbox_jobs)
+    monkeypatch.setitem(sys.modules, "core", core_module)
+    monkeypatch.setitem(sys.modules, "core.choices", core_choices)
     monkeypatch.setitem(sys.modules, "netbox_proxbox", nbp_root)
     monkeypatch.setitem(sys.modules, "netbox_proxbox.views", nbp_views)
     monkeypatch.setitem(sys.modules, "netbox_proxbox.jobs", nbp_jobs)
@@ -154,7 +172,11 @@ def test_job_stream_forwards_backend_message_frames(job_stream_module, monkeypat
     monkeypatch.setattr(services_mod, "run_sync_stream", fake_run_sync_stream)
 
     job = SimpleNamespace(
-        pk=54, data={"proxbox_sync": {"params": {}}}, save=lambda **kwargs: None
+        pk=54,
+        status="running",
+        data={"proxbox_sync": {"params": {}}},
+        save=lambda **kwargs: None,
+        refresh_from_db=lambda: None,
     )
     view = module.JobStreamSSEView()
     chunks = list(view._stream_job_events(job))
