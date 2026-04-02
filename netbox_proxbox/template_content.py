@@ -114,6 +114,54 @@ class ProxboxVirtualMachineTemplateExtension(PluginTemplateExtension):
             },
         )
 
+    def console_button(self):
+        obj = self.context["object"]
+        if not isinstance(obj, VirtualMachine):
+            return ""
+        user = self.context["request"].user
+        if not user.has_perm(permission_enqueue_proxbox_sync()):
+            return ""
+
+        vmid = obj.custom_field_data.get("proxmox_vm_id") or obj.custom_field_data.get(
+            "cf_proxmox_vm_id"
+        )
+        vm_type = obj.custom_field_data.get(
+            "proxmox_vm_type"
+        ) or obj.custom_field_data.get("cf_proxmox_vm_type", "qemu")
+
+        node = ""
+        if hasattr(obj, "device") and obj.device:
+            node = obj.device.name
+        else:
+            node = obj.custom_field_data.get(
+                "proxmox_node"
+            ) or obj.custom_field_data.get("cf_proxmox_node", "")
+
+        endpoint_url = ""
+        if obj.cluster:
+            proxbox_cluster = obj.cluster.proxmox_cluster_tracking.first()
+            if proxbox_cluster and proxbox_cluster.endpoint:
+                endpoint_url = proxbox_cluster.endpoint.url
+
+        if not all([vmid, node, endpoint_url]):
+            return ""
+
+        if vm_type == "lxc":
+            console_url = (
+                f"{endpoint_url}/?console=lxc&xtermjs=1&vmid={vmid}"
+                f"&vmname={obj.name}&node={node}&cmd="
+            )
+        else:
+            console_url = (
+                f"{endpoint_url}/?console=kvm&novnc=1&vmid={vmid}"
+                f"&vmname={obj.name}&node={node}&resize=off&cmd="
+            )
+
+        return self.render(
+            "netbox_proxbox/inc/vm_console_button.html",
+            {"console_url": console_url},
+        )
+
 
 class ProxmoxClusterTemplateExtension(PluginTemplateExtension):
     """Inject Sync Now action on virtualization.Cluster detail pages."""
