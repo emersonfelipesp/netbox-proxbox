@@ -1,0 +1,8 @@
+{% load i18n %}
+<form method="post" action="{{ action_url }}" class="d-inline">
+  {% csrf_token %}
+  <button type="submit" class="btn btn-primary">
+    <i class="mdi mdi-sync" aria-hidden="true"></i>
+    {% trans "Sync Now" %}
+  </button>
+</form>
