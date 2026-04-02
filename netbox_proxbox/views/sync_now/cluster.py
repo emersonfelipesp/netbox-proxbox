@@ -48,6 +48,10 @@ class ProxmoxClusterSyncNowView(
                     else ""
                 ),
             )
+        elif status == 422:
+            messages.error(request, _("Invalid parameters for cluster sync."))
+        elif status == 503:
+            messages.error(request, _("Proxbox backend is unavailable for cluster sync."))
         else:
             error = response.get("error", "Unknown error")
             messages.error(request, _(f"Failed to sync cluster: {error}"))

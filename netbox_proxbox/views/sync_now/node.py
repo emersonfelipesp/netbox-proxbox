@@ -38,6 +38,10 @@ class ProxmoxNodeSyncNowView(
         elif node.netbox_device and node.netbox_device.cluster:
             cluster_name = node.netbox_device.cluster.name
 
+        if not cluster_name:
+            messages.error(request, _("Node is not linked to a Proxmox cluster."))
+            return HttpResponseRedirect(node.get_absolute_url())
+
         response, status, dependencies = sync_individual_with_dependencies(
             "sync/individual/node",
             {"cluster_name": cluster_name, "node_name": node_name},
@@ -54,6 +58,10 @@ class ProxmoxNodeSyncNowView(
                     else ""
                 ),
             )
+        elif status == 422:
+            messages.error(request, _("Invalid parameters for node sync."))
+        elif status == 503:
+            messages.error(request, _("Proxbox backend is unavailable for node sync."))
         else:
             error = response.get("error", "Unknown error")
             messages.error(request, _(f"Failed to sync node: {error}"))

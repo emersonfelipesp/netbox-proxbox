@@ -137,6 +137,30 @@ def test_run_sync_stream_success(backend_proxy_module, monkeypatch):
     assert urls[0].startswith("https://proxbox.local:8800/dcim/devices/create/stream")
 
 
+def test_run_sync_stream_success_with_list_result(backend_proxy_module, monkeypatch):
+    bp = backend_proxy_module
+
+    lines = [
+        "event: complete",
+        f"data: {json.dumps({'ok': True, 'message': 'done', 'result': [{'id': 18}, {'id': 19}]})}",
+        "",
+    ]
+
+    monkeypatch.setattr(
+        bp.requests,
+        "get",
+        lambda *a, **k: _StreamResponse(lines),
+    )
+    monkeypatch.setattr(bp, "get_fastapi_request_context", lambda: _stream_context(bp))
+
+    payload, status = bp.run_sync_stream("dcim/devices/create/stream")
+
+    assert status == 200
+    assert payload["response"]["ok"] is True
+    assert isinstance(payload["response"]["result"], list)
+    assert payload["response"]["result"][0]["id"] == 18
+
+
 def test_run_sync_stream_complete_ok_false(backend_proxy_module, monkeypatch):
     bp = backend_proxy_module
     lines = [

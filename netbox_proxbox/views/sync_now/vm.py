@@ -11,6 +11,7 @@ from utilities.views import (
 )
 from virtualization.models import VirtualMachine
 
+from netbox_proxbox.models import ProxmoxCluster
 from netbox_proxbox.services.individual_sync import sync_individual_with_dependencies
 from netbox_proxbox.views.proxbox_access import permission_enqueue_proxbox_sync
 
@@ -37,7 +38,8 @@ class VirtualMachineSyncNowView(
         vm_type = vm.custom_field_data.get(
             "proxmox_vm_type"
         ) or vm.custom_field_data.get("cf_proxmox_vm_type", "qemu")
-        cluster_name = vm.cluster.name if vm.cluster else ""
+        proxmox_cluster = ProxmoxCluster.objects.filter(netbox_cluster=vm.cluster).first()
+        cluster_name = proxmox_cluster.name if proxmox_cluster else (vm.cluster.name if vm.cluster else "")
 
         node = ""
         if hasattr(vm, "device") and vm.device:
@@ -49,6 +51,13 @@ class VirtualMachineSyncNowView(
 
         if not vmid:
             messages.error(request, _("Virtual machine does not have a Proxmox VM ID."))
+            return HttpResponseRedirect(vm.get_absolute_url())
+
+        if not cluster_name:
+            messages.error(
+                request,
+                _("Virtual machine is not linked to a Proxmox cluster."),
+            )
             return HttpResponseRedirect(vm.get_absolute_url())
 
         response, status, dependencies = sync_individual_with_dependencies(
@@ -72,6 +81,10 @@ class VirtualMachineSyncNowView(
                     else ""
                 ),
             )
+        elif status == 422:
+            messages.error(request, _("Invalid parameters for virtual machine sync."))
+        elif status == 503:
+            messages.error(request, _("Proxbox backend is unavailable for virtual machine sync."))
         else:
             error = response.get("error", "Unknown error")
             messages.error(request, _(f"Failed to sync virtual machine: {error}"))

@@ -10,7 +10,7 @@ from utilities.views import (
     register_model_view,
 )
 
-from netbox_proxbox.models import ProxmoxStorage
+from netbox_proxbox.models import ProxmoxCluster, ProxmoxStorage
 from netbox_proxbox.services.individual_sync import sync_individual_with_dependencies
 from netbox_proxbox.views.proxbox_access import permission_enqueue_proxbox_sync
 
@@ -31,7 +31,14 @@ class ProxmoxStorageSyncNowView(
     def post(self, request, pk):
         storage = ProxmoxStorage.objects.get(pk=pk)
         storage_name = storage.name
-        cluster_name = storage.cluster.name if storage.cluster else ""
+        proxmox_cluster = ProxmoxCluster.objects.filter(netbox_cluster=storage.cluster).first()
+        cluster_name = (
+            proxmox_cluster.name if proxmox_cluster else (storage.cluster.name if storage.cluster else "")
+        )
+
+        if not cluster_name:
+            messages.error(request, _("Storage is not linked to a Proxmox cluster."))
+            return HttpResponseRedirect(storage.get_absolute_url())
 
         response, status, dependencies = sync_individual_with_dependencies(
             "sync/individual/storage",
@@ -49,6 +56,10 @@ class ProxmoxStorageSyncNowView(
                     else ""
                 ),
             )
+        elif status == 422:
+            messages.error(request, _("Invalid parameters for storage sync."))
+        elif status == 503:
+            messages.error(request, _("Proxbox backend is unavailable for storage sync."))
         else:
             error = response.get("error", "Unknown error")
             messages.error(request, _(f"Failed to sync storage: {error}"))
