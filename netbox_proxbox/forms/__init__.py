@@ -1,5 +1,6 @@
 """Re-export the plugin's model and filter form classes."""
 
+from .backup_routine import *
 from .fastapi import *
 from .netbox import *
 from .proxmox import *

@@ -147,7 +147,9 @@ def sync_individual_with_dependencies(
             dep_type = dep.get("object_type")
             action = dep.get("action")
             if action in ("created", "updated"):
-                dep_response, dep_status, dep_synced = _sync_dependency(dep, _visited, context)
+                dep_response, dep_status, dep_synced = _sync_dependency(
+                    dep, _visited, context
+                )
                 all_synced.extend(dep_synced)
                 if dep_response:
                     all_synced.append(
@@ -161,7 +163,9 @@ def sync_individual_with_dependencies(
     return response, status, all_synced
 
 
-def _sync_dependency(dep: dict, _visited: set, parent_context: dict | None) -> tuple[dict, int, list[dict]]:
+def _sync_dependency(
+    dep: dict, _visited: set, parent_context: dict | None
+) -> tuple[dict, int, list[dict]]:
     """Sync a single dependency from a dependencies_synced entry."""
     dep_type = dep.get("object_type")
     context = _merge_context(parent_context, dep)
@@ -193,3 +197,20 @@ def _sync_dependency(dep: dict, _visited: set, parent_context: dict | None) -> t
         return {}, 200, []
 
     return sync_individual_with_dependencies(path, params, _visited, _context=context)
+
+
+def sync_backup_routines_individual(
+    cluster_name: str | None = None,
+) -> tuple[dict, int]:
+    """Sync backup routines for a specific cluster.
+
+    Args:
+        cluster_name: Optional cluster name to filter routines.
+
+    Returns:
+        Tuple of (response_dict, status_code)
+    """
+    query_params = {}
+    if cluster_name:
+        query_params["cluster_name"] = cluster_name
+    return sync_individual("sync/individual/backup-routines", query_params)

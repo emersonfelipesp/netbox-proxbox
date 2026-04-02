@@ -6,6 +6,7 @@ from netbox.filtersets import NetBoxModelFilterSet
 from utilities.filtersets import register_filterset
 
 from .models import (
+    BackupRoutine,
     FastAPIEndpoint,
     NetBoxEndpoint,
     ProxmoxCluster,
@@ -245,3 +246,30 @@ class ProxmoxNodeFilterSet(NetBoxModelFilterSet):
             | Q(ip_address__icontains=value)
             | Q(ssl_fingerprint__icontains=value)
         )
+
+
+@register_filterset
+class BackupRoutineFilterSet(NetBoxModelFilterSet):
+    """Filter backup routine records synced from Proxmox."""
+
+    class Meta:
+        model = BackupRoutine
+        fields = (
+            "id",
+            "endpoint",
+            "job_id",
+            "enabled",
+            "node",
+            "storage",
+            "status",
+            "keep_last",
+            "keep_daily",
+            "keep_weekly",
+            "keep_monthly",
+        )
+
+    def search(self, queryset, name, value):
+        """Match job ID or comment."""
+        if not value.strip():
+            return queryset
+        return queryset.filter(Q(job_id__icontains=value) | Q(comment__icontains=value))

@@ -33,6 +33,7 @@ class SyncTypeChoices(ChoiceSet):
     DEVICES = "devices"
     NETWORK_INTERFACES = "network-interfaces"
     IP_ADDRESSES = "ip-addresses"
+    BACKUP_ROUTINES = "backup-routines"
     ALL = "all"
 
     CHOICES = [
@@ -44,6 +45,7 @@ class SyncTypeChoices(ChoiceSet):
         (DEVICES, _("Devices"), "green"),
         (NETWORK_INTERFACES, _("Network Interfaces"), "indigo"),
         (IP_ADDRESSES, _("IP Addresses"), "violet"),
+        (BACKUP_ROUTINES, _("Backup Routines"), "yellow"),
         (ALL, _("All"), "red"),
     ]
 
@@ -176,3 +178,17 @@ class ScheduleIntervalUnitChoices(ChoiceSet):
         elif minutes >= 60 and minutes % 60 == 0:
             return minutes // 60, cls.HOURS
         return minutes, cls.MINUTES
+
+
+class BackupRoutineStatusChoices(ChoiceSet):
+    """Whether a backup routine is currently active or stale (no longer exists in Proxmox)."""
+
+    key = "BackupRoutine.status"
+
+    ACTIVE = "active"
+    STALE = "stale"
+
+    CHOICES = [
+        (ACTIVE, _("Active"), "green"),
+        (STALE, _("Stale"), "red"),
+    ]

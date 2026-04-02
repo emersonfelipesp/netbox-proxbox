@@ -28,6 +28,7 @@ router.register("clusters", views.ProxmoxClusterViewSet, basename="proxmoxcluste
 router.register("nodes", views.ProxmoxNodeViewSet, basename="proxmoxnode")
 router.register("storage", views.ProxmoxStorageViewSet, basename="storage")
 router.register("backups", views.VMBackupViewSet)
+router.register("backup-routines", views.BackupRoutineViewSet, basename="backuproutine")
 router.register("snapshots", views.VMSnapshotViewSet)
 router.register("task-history", views.VMTaskHistoryViewSet)
 

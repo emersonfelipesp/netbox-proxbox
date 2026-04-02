@@ -138,6 +138,13 @@ class SyncIPAddressesView(_ProxboxSyncEnqueueView):
     action_label = _("IP Addresses")
 
 
+class SyncBackupRoutinesView(_ProxboxSyncEnqueueView):
+    """POST: queue backup routines sync."""
+
+    sync_types = [SyncTypeChoices.BACKUP_ROUTINES]
+    action_label = _("Backup Routines")
+
+
 sync_devices = SyncDevicesView.as_view()
 sync_storage = SyncStorageView.as_view()
 sync_virtual_machines = SyncVirtualMachinesView.as_view()
@@ -147,3 +154,4 @@ sync_vm_snapshots = SyncVmSnapshotsView.as_view()
 sync_virtual_disks = SyncVirtualDisksView.as_view()
 sync_network_interfaces = SyncNetworkInterfacesView.as_view()
 sync_ip_addresses = SyncIPAddressesView.as_view()
+sync_backup_routines = SyncBackupRoutinesView.as_view()

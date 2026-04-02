@@ -34,6 +34,7 @@ _SYNC_STAGE_ORDER: tuple[str, ...] = (
     SyncTypeChoices.VIRTUAL_MACHINES_SNAPSHOTS,
     SyncTypeChoices.NETWORK_INTERFACES,
     SyncTypeChoices.IP_ADDRESSES,
+    SyncTypeChoices.BACKUP_ROUTINES,
 )
 
 __all__ = (
@@ -58,6 +59,7 @@ _SYNC_TYPE_PATH: dict[str, str] = {
     ),
     SyncTypeChoices.NETWORK_INTERFACES: "dcim/devices/interfaces/create",
     SyncTypeChoices.IP_ADDRESSES: "virtualization/virtual-machines/interfaces/ip-address/create",
+    SyncTypeChoices.BACKUP_ROUTINES: "cluster/backup",
 }
 
 # Per-VM path templates used when ``netbox_vm_ids`` is set.  ``{vm_id}`` is

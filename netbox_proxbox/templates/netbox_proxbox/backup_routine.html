@@ -1,0 +1,163 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load i18n %}
+
+{% block content %}
+    <div class="row mb-3">
+        {# Left column: General and Retention cards #}
+        <div class="col col-md-6">
+            {# General Card #}
+            <div class="card mb-3">
+                <h5 class="card-header">{% trans "General" %}</h5>
+                <div class="card-body">
+                    <table class="table table-hover attr-table">
+                        <tr>
+                            <th scope="row">{% trans "Job ID" %}</th>
+                            <td>{{ object.job_id|hyperlinked_object }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Enabled" %}</th>
+                            <td>
+                                {% if object.enabled %}
+                                    <span class="text-success"><i class="mdi mdi-check"></i> {% trans "Yes" %}</span>
+                                {% else %}
+                                    <span class="text-danger"><i class="mdi mdi-close"></i> {% trans "No" %}</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Status" %}</th>
+                            <td>{{ object.status|hyperlinked_object }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Node" %}</th>
+                            <td>{{ object.node|hyperlinked_object|placeholder:"All Nodes" }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Schedule" %}</th>
+                            <td>{{ object.schedule|placeholder:"—" }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Next Run" %}</th>
+                            <td>{{ object.next_run|placeholder:"—" }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Storage" %}</th>
+                            <td>{{ object.storage|hyperlinked_object|placeholder }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Selection" %}</th>
+                            <td>{{ object.selection_display|placeholder:"All VMs" }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Comment" %}</th>
+                            <td>{{ object.comment|placeholder:"—" }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+
+            {# Retention Card #}
+            <div class="card mb-3">
+                <h5 class="card-header">{% trans "Retention" %}</h5>
+                <div class="card-body">
+                    <table class="table table-hover attr-table">
+                        <tr>
+                            <th scope="row">{% trans "Keep All" %}</th>
+                            <td>
+                                {% if object.keep_all %}
+                                    <span class="text-success"><i class="mdi mdi-check"></i> {% trans "Yes" %}</span>
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Keep Last" %}</th>
+                            <td>{{ object.keep_last|default:"—" }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Keep Daily" %}</th>
+                            <td>{{ object.keep_daily|default:"—" }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Keep Weekly" %}</th>
+                            <td>{{ object.keep_weekly|default:"—" }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Keep Monthly" %}</th>
+                            <td>{{ object.keep_monthly|default:"—" }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Keep Yearly" %}</th>
+                            <td>{{ object.keep_yearly|default:"—" }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        {# Right column: Note Template and Advanced cards #}
+        <div class="col col-md-6">
+            {# Note Template Card #}
+            <div class="card mb-3">
+                <h5 class="card-header">{% trans "Note Template" %}</h5>
+                <div class="card-body">
+                    {% if object.notes_template %}
+                        <pre class="mb-0"><code>{{ object.notes_template }}</code></pre>
+                    {% else %}
+                        <span class="text-muted">—</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            {# Advanced Card #}
+            <div class="card mb-3">
+                <h5 class="card-header">{% trans "Advanced" %}</h5>
+                <div class="card-body">
+                    <table class="table table-hover attr-table">
+                        <tr>
+                            <th scope="row">{% trans "Bandwidth Limit" %}</th>
+                            <td>{{ object.bwlimit|default:"—" }} <span class="text-muted">KiB/s</span></td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Zstd Threads" %}</th>
+                            <td>{{ object.zstd|default:"—" }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "IO Workers" %}</th>
+                            <td>{{ object.io_workers|default:"—" }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Fleecing" %}</th>
+                            <td>{{ object.fleecing|placeholder:"—" }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Fleecing Storage" %}</th>
+                            <td>{{ object.fleecing_storage|hyperlinked_object|placeholder }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Repeat Missed" %}</th>
+                            <td>
+                                {% if object.repeat_missed %}
+                                    <span class="text-success"><i class="mdi mdi-check"></i> {% trans "Yes" %}</span>
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "PBS Change Detection Mode" %}</th>
+                            <td>{{ object.pbs_change_detection_mode|placeholder:"—" }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+
+            {# Right column panels #}
+            {% include 'inc/panels/tags.html' %}
+            {% include 'inc/panels/comments.html' %}
+            {% include 'inc/panels/custom_fields.html' %}
+        </div>
+    </div>
+{% endblock %}
