@@ -25,7 +25,7 @@ netbox-proxbox is a NetBox plugin that synchronizes Proxmox infrastructure data 
 
 ### Version
 
-- Plugin version: `0.0.9.post1`
+- Plugin version: `0.0.10`
 - NetBox compatibility: `4.5.0` through `4.5.99`
 
 ---
@@ -935,12 +935,12 @@ job = ProxboxSyncJob.enqueue(sync_types=["all"], job_timeout=10800)
 ```python
 # netbox_proxbox/__init__.py
 
-class ProxboxPluginConfig(PluginConfig):
-    name = "netbox-proxbox"
+class ProxboxConfig(PluginConfig):
+    name = "netbox_proxbox"
     verbose_name = "Proxbox"
     description = "NetBox plugin for Proxmox integration"
-    version = "0.0.9.post1"
-    author = "Emerson Felipe"
+    version = "0.0.10"
+    author = "Emerson Felipe (@emersonfelipesp)"
     author_email = "emersonfelipe.2003@gmail.com"
     min_version = "4.5.0"
     max_version = "4.5.99"

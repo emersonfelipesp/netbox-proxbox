@@ -36,7 +36,7 @@ Choose the installation path that matches your NetBox deployment:
 
    ```bash
    cd /opt/netbox/netbox
-   git clone https://github.com/netdevopsbr/netbox-proxbox.git
+   git clone https://github.com/emersonfelipesp/netbox-proxbox.git
    source /opt/netbox/venv/bin/activate
    pip install -e ./netbox-proxbox
    ```
@@ -103,7 +103,7 @@ If your NetBox runs with `netbox-community/netbox-docker`, install the plugin th
    ```txt
    netbox-proxbox
    # or
-   # netbox-proxbox @ git+https://github.com/netdevopsbr/netbox-proxbox.git
+   # netbox-proxbox @ git+https://github.com/emersonfelipesp/netbox-proxbox.git
    ```
 
 2. Enable the plugin in `configuration/plugins.py`:
@@ -153,7 +153,7 @@ Key pages:
 
 ## Community
 
-- GitHub Discussions: https://github.com/orgs/netdevopsbr/discussions
+- GitHub Discussions: https://github.com/orgs/emersonfelipesp/discussions
 - Discord: https://discord.gg/X6FudvXW
 - Telegram: https://t.me/netboxbr
 

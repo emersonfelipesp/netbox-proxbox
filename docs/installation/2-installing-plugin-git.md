@@ -10,7 +10,7 @@ The code in this repository is `0.0.10` and targets NetBox `4.5.x`. That is the 
 
 ```bash
 cd /opt/netbox/netbox
-git clone https://github.com/netdevopsbr/netbox-proxbox.git
+git clone https://github.com/emersonfelipesp/netbox-proxbox.git
 
 source /opt/netbox/venv/bin/activate
 pip install -e /opt/netbox/netbox/netbox-proxbox

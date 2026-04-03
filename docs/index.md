@@ -88,4 +88,4 @@ Proxbox currently focuses on synchronization and discovery. The plugin does not 
 
 ## Stars History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=netdevopsbr/netbox-proxbox&type=Timeline)](https://star-history.com/#netdevopsbr/netbox-proxbox&Timeline)
+[![Star History Chart](https://api.star-history.com/svg?repos=emersonfelipesp/netbox-proxbox&type=Timeline)](https://star-history.com/#emersonfelipesp/netbox-proxbox&Timeline)

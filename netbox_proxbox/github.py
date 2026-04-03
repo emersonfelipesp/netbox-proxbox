@@ -21,7 +21,7 @@ def get(**kwargs: object) -> str | None:
     if local_markdown:
         return local_markdown
 
-    owner = "netdevopsbr"
+    owner = "emersonfelipesp"
     repo = "netbox-proxbox"
     url = f"https://api.github.com/repos/{owner}/{repo}/contents/{filename}"
 

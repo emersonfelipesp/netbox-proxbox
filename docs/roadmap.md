@@ -8,4 +8,4 @@
 - Translate more documentation to Brazilian Portuguese (`pt-BR`)
 - Improve multi-cluster operational workflows and validation
 
-If you wish to have another feature or functionality not present today and not mentioned here, checkout **[Issues](https://github.com/netdevopsbr/netbox-proxbox/issues)** and/or **[Discussions](https://github.com/orgs/netdevopsbr/discussions)** to view if there's already ongoing work. If not, feel free to start **opening a discussion** and expects feedback from community so that it is approved and transferred to GitHub Issues.
+If you wish to have another feature or functionality not present today and not mentioned here, checkout **[Issues](https://github.com/emersonfelipesp/netbox-proxbox/issues)** and/or **[Discussions](https://github.com/orgs/emersonfelipesp/discussions)** to view if there's already ongoing work. If not, feel free to start **opening a discussion** and expects feedback from community so that it is approved and transferred to GitHub Issues.
