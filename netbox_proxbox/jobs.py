@@ -33,6 +33,7 @@ _SYNC_STAGE_ORDER: tuple[str, ...] = (
     SyncTypeChoices.VIRTUAL_MACHINES_DISKS,
     SyncTypeChoices.VIRTUAL_MACHINES_BACKUPS,
     SyncTypeChoices.VIRTUAL_MACHINES_SNAPSHOTS,
+    SyncTypeChoices.REPLICATIONS,
     SyncTypeChoices.NETWORK_INTERFACES,
     SyncTypeChoices.IP_ADDRESSES,
     SyncTypeChoices.BACKUP_ROUTINES,
@@ -58,6 +59,7 @@ _SYNC_TYPE_PATH: dict[str, str] = {
     SyncTypeChoices.VIRTUAL_MACHINES_SNAPSHOTS: (
         "virtualization/virtual-machines/snapshots/all/create"
     ),
+    SyncTypeChoices.REPLICATIONS: "cluster/replication",
     SyncTypeChoices.NETWORK_INTERFACES: "dcim/devices/interfaces/create",
     SyncTypeChoices.IP_ADDRESSES: "virtualization/virtual-machines/interfaces/ip-address/create",
     SyncTypeChoices.BACKUP_ROUTINES: "cluster/backup",
@@ -445,13 +447,14 @@ async def _run_batch_selected_sync(
     batch_object_ids: list[str],
 ) -> dict[str, object]:
     """Run selected object syncs concurrently with asyncio.gather."""
+    from virtualization.models import VirtualMachine
+
     from netbox_proxbox.models import (
         ProxmoxStorage,
         VMBackup,
-        VMTaskHistory,
         VMSnapshot,
+        VMTaskHistory,
     )
-    from virtualization.models import VirtualMachine
     from netbox_proxbox.services.individual_sync import (
         sync_individual_with_dependencies,
     )

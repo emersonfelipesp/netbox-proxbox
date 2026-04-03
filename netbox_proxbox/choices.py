@@ -34,6 +34,7 @@ class SyncTypeChoices(ChoiceSet):
     NETWORK_INTERFACES = "network-interfaces"
     IP_ADDRESSES = "ip-addresses"
     BACKUP_ROUTINES = "backup-routines"
+    REPLICATIONS = "replications"
     ALL = "all"
 
     CHOICES = [
@@ -46,6 +47,7 @@ class SyncTypeChoices(ChoiceSet):
         (NETWORK_INTERFACES, _("Network Interfaces"), "indigo"),
         (IP_ADDRESSES, _("IP Addresses"), "violet"),
         (BACKUP_ROUTINES, _("Backup Routines"), "yellow"),
+        (REPLICATIONS, _("Replications"), "teal"),
         (ALL, _("All"), "red"),
     ]
 

@@ -440,6 +440,7 @@ def test_plugin_api_routes_register_all_plugin_objects():
         "backup-routines",
         "clusters",
         "nodes",
+        "replications",
         "storage",
         "backups",
         "snapshots",

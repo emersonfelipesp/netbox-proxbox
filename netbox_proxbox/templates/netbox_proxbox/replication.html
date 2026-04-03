@@ -1,0 +1,80 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load i18n %}
+
+{% block content %}
+    <div class="row mb-3">
+        <div class="col col-md-6">
+            <div class="card">
+                <h5 class="card-header">{% trans "Replication" %}</h5>
+                <div class="card-body">
+                    <table class="table table-hover attr-table">
+                        <tr>
+                            <th scope="row">{% trans "Replication ID" %}</th>
+                            <td>{{ object.replication_id }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Virtual Machine" %}</th>
+                            <td>{{ object.virtual_machine|hyperlinked_object }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Proxmox Node" %}</th>
+                            <td>{{ object.proxmox_node|hyperlinked_object|placeholder }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Guest" %}</th>
+                            <td>{{ object.guest }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Target" %}</th>
+                            <td>{{ object.target|placeholder }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Type" %}</th>
+                            <td>{{ object.get_job_type_display|placeholder }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Schedule" %}</th>
+                            <td>{{ object.schedule|placeholder:"—" }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Rate" %}</th>
+                            <td>{{ object.rate|placeholder:"—" }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Disabled" %}</th>
+                            <td>
+                                {% if object.disable %}
+                                    <span class="text-danger"><i class="mdi mdi-close"></i> {% trans "Yes" %}</span>
+                                {% else %}
+                                    <span class="text-success"><i class="mdi mdi-check"></i> {% trans "No" %}</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Source" %}</th>
+                            <td>{{ object.source|placeholder:"—" }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Job Number" %}</th>
+                            <td>{{ object.jobnum }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Remove Job" %}</th>
+                            <td>{{ object.get_remove_job_display|placeholder:"—" }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Comment" %}</th>
+                            <td>{{ object.comment|placeholder:"—" }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+            {% include 'inc/panels/custom_fields.html' %}
+        </div>
+        <div class="col col-md-6">
+            {% include 'inc/panels/tags.html' %}
+            {% include 'inc/panels/comments.html' %}
+        </div>
+    </div>
+{% endblock %}

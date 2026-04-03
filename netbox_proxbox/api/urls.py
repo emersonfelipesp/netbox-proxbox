@@ -1,7 +1,6 @@
 """Register API routes for plugin endpoints and backups."""
 
 from django.urls import include, path
-
 from netbox.api.routers import NetBoxRouter
 
 from . import views
@@ -29,6 +28,7 @@ router.register("nodes", views.ProxmoxNodeViewSet, basename="proxmoxnode")
 router.register("storage", views.ProxmoxStorageViewSet, basename="storage")
 router.register("backups", views.VMBackupViewSet)
 router.register("backup-routines", views.BackupRoutineViewSet, basename="backuproutine")
+router.register("replications", views.ReplicationViewSet, basename="replication")
 router.register("snapshots", views.VMSnapshotViewSet)
 router.register("task-history", views.VMTaskHistoryViewSet)
 

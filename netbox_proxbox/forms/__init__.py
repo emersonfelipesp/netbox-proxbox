@@ -4,6 +4,7 @@ from .backup_routine import *
 from .fastapi import *
 from .netbox import *
 from .proxmox import *
+from .replication import *
 from .schedule_sync import *
 from .settings import *
 from .storage import *

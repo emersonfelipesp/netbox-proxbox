@@ -1,6 +1,7 @@
 """Define the NetBox plugin navigation menu and shortcut buttons."""
 
-from netbox.plugins import PluginMenuButton, PluginMenuItem, PluginMenu
+from netbox.plugins import PluginMenu, PluginMenuButton, PluginMenuItem
+
 # from utilities.choices import ButtonColorChoices
 
 fullupdate_item = PluginMenuItem(
@@ -83,6 +84,11 @@ backup_routines_item = PluginMenuItem(
 snapshots_item = PluginMenuItem(
     link="plugins:netbox_proxbox:vmsnapshot_list",
     link_text="Snapshots",
+)
+
+replications_item = PluginMenuItem(
+    link="plugins:netbox_proxbox:replication_list",
+    link_text="Replications",
 )
 
 task_history_item = PluginMenuItem(
@@ -175,6 +181,7 @@ menu = PluginMenu(
                 backups_item,
                 backup_routines_item,
                 snapshots_item,
+                replications_item,
                 task_history_item,
                 schedule_sync_item,
                 sync_jobs_item,

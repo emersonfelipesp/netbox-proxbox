@@ -417,6 +417,7 @@ def load_plugin_module(
 
     class _SyncTypeChoices(_StubChoiceSet):
         BACKUP_ROUTINES = "backup-routines"
+        REPLICATIONS = "replications"
         VIRTUAL_MACHINES = "virtual-machines"
         STORAGE = "storage"
         VIRTUAL_MACHINES_DISKS = "vm-disks"
