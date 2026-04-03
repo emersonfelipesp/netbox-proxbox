@@ -164,7 +164,13 @@ class LogsPage {
 
         noLogsMessage.style.display = "none";
 
-        this.cachedLogs.forEach((log) => {
+        const sortedLogs = [...this.cachedLogs].sort((a, b) => {
+            const timeA = new Date(a.timestamp || 0).getTime();
+            const timeB = new Date(b.timestamp || 0).getTime();
+            return timeA - timeB;
+        });
+
+        sortedLogs.forEach((log) => {
             const row = document.createElement("tr");
             row.className = `log-entry log-level-${log.level.toLowerCase()}`;
             if (log.expandable) {
