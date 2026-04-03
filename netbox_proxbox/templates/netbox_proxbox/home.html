@@ -9,6 +9,9 @@
             websocketEndpoint: "{{ fastapi_websocket_url|default:''|escapejs }}"
         };
     </script>
+    {% if active_proxbox_job %}
+        {% include "netbox_proxbox/inc/job_log_assets.html" %}
+    {% endif %}
     <script type="module" src="{% static 'netbox_proxbox/js/home.js' %}"></script>
     {% if quick_schedule_form %}
         <link rel="stylesheet" href="{% static 'netbox_proxbox/css/quick_schedule_home.css' %}">
@@ -18,6 +21,9 @@
 
 {% block content %}
     {% include "netbox_proxbox/home/quick_schedule_banner.html" %}
+    {% if active_proxbox_job %}
+        {% include "netbox_proxbox/home/job_live_summary.html" with job=active_proxbox_job %}
+    {% endif %}
 
     <div class="row mb-3">
         <div id="sync-progress-container" class="d-none sticky-top pt-2 mb-3" style="z-index: 1030;">

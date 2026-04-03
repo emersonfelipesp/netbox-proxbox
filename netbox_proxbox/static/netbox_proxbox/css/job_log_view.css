@@ -3,6 +3,23 @@
   width: 100%;
 }
 
+.nb-proxbox-job-live-summary > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.nb-proxbox-job-live-summary > summary::-webkit-details-marker {
+  display: none;
+}
+
+.nb-proxbox-job-live-summary > summary .mdi-chevron-down {
+  transition: transform 0.15s ease;
+}
+
+.nb-proxbox-job-live-summary[open] > summary .mdi-chevron-down {
+  transform: rotate(-180deg);
+}
+
 .nb-job-live-card .card-body {
   gap: 0.75rem;
 }

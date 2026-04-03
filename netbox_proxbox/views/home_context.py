@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from urllib.parse import urlencode
 
+from core.choices import JobStatusChoices
+from core.models import Job
 from django.urls import reverse
 
 from netbox_proxbox import ProxboxConfig
 from netbox_proxbox.choices import NetBoxTokenVersionChoices
+from netbox_proxbox.jobs import is_proxbox_sync_job
 from netbox_proxbox.forms.schedule_sync import ScheduleSyncForm
 from netbox_proxbox.models import FastAPIEndpoint, NetBoxEndpoint, ProxmoxEndpoint
 from netbox_proxbox.schedule_hints import (
@@ -29,6 +32,19 @@ def _build_add_url(view_name: str, params: dict[str, object]) -> str:
     if not query_params:
         return url
     return f"{url}?{urlencode(query_params)}"
+
+
+def _get_latest_active_proxbox_job(request):
+    """Return the newest visible Proxbox sync job that is still running or queued."""
+    jobs = (
+        Job.objects.restrict(request.user, "view")
+        .filter(status__in=JobStatusChoices.ENQUEUED_STATE_CHOICES)
+        .order_by("-created")
+    )
+    for job in jobs:
+        if is_proxbox_sync_job(job):
+            return job
+    return None
 
 
 def build_home_dashboard_context(
@@ -77,6 +93,8 @@ def build_home_dashboard_context(
     else:
         quick_schedule_form = None
 
+    active_proxbox_job = _get_latest_active_proxbox_job(request)
+
     return {
         "default_config": default_config,
         "proxmox_endpoint_list": proxmox_endpoint_obj
@@ -97,4 +115,5 @@ def build_home_dashboard_context(
         "show_quick_full_sync_banner": show_quick_full_sync_banner,
         "can_quick_schedule_sync": can_quick_schedule_sync,
         "quick_schedule_form": quick_schedule_form,
+        "active_proxbox_job": active_proxbox_job,
     }
