@@ -493,6 +493,7 @@ def fastapi_endpoint():
 def netbox_endpoint():
     return SimpleNamespace(
         id=1,
+        pk=1,
         name="netbox",
         domain="netbox.local",
         ip_address=SimpleNamespace(address="10.0.0.20/24"),

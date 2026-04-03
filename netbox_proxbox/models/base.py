@@ -80,8 +80,13 @@ class EndpointBase(CommonProperties, NetBoxModel):
         return reverse(get_viewname(cls, action, rest_api), kwargs=kwargs or {})
 
     def __str__(self) -> str:
-        """Prefer name, then domain, then IP, then class label."""
-        return self.name or self.domain or self.ip or self.__class__.__name__
+        """Prefer name, then domain, then IP. Requires at least one identifier."""
+        return (
+            self.name
+            or self.domain
+            or self.ip
+            or f"{self.__class__.__name__}({self.pk})"
+        )
 
     def clean(self) -> None:
         """Ensure at least one resolvable host (domain or IP object) is configured."""
