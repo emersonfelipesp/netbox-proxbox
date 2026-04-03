@@ -249,7 +249,6 @@ class VirtualMachinesView(ConditionalLoginRequiredMixin, View):
         """Load tagged VMs and FastAPI URL hints for the virtual machines template."""
         from django.contrib.contenttypes.models import ContentType
         from extras.models import Tag, TaggedItem
-        from virtualization.models import VirtualMachine
 
         from netbox_proxbox.models import FastAPIEndpoint
 
@@ -300,7 +299,6 @@ class LXCContainersView(ConditionalLoginRequiredMixin, View):
         """Load tagged LXC containers and FastAPI URL hints for the template."""
         from django.contrib.contenttypes.models import ContentType
         from extras.models import Tag, TaggedItem
-        from virtualization.models import VirtualMachine
 
         from netbox_proxbox.models import FastAPIEndpoint
 
@@ -384,7 +382,6 @@ class InterfacesView(ConditionalLoginRequiredMixin, View):
         from dcim.models import Interface as DCIMInterface
         from django.contrib.contenttypes.models import ContentType
         from extras.models import Tag, TaggedItem
-        from virtualization.models import VirtualMachine, VMInterface
 
         from netbox_proxbox.models import FastAPIEndpoint
 
@@ -476,7 +473,6 @@ class IPAddressesView(ConditionalLoginRequiredMixin, View):
         from django.contrib.contenttypes.models import ContentType
         from extras.models import Tag, TaggedItem
         from ipam.models import IPAddress
-        from virtualization.models import VirtualMachine, VMInterface
 
         from netbox_proxbox.models import FastAPIEndpoint
 
