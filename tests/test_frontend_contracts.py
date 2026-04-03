@@ -178,7 +178,10 @@ def test_backend_logs_page_javascript_filters_levels_client_side_and_fetches_ope
 
 def test_combined_interface_views_import_vm_interface_directly():
     contents = _read("netbox_proxbox/views/__init__.py")
-    assert "from virtualization.models import VMInterface, VirtualMachine" in contents
+    assert (
+        "from virtualization.models import VMInterface, VirtualMachine" in contents
+        or "from virtualization.models import VirtualMachine, VMInterface" in contents
+    )
     assert "from virtualization.models import Interface as VMInterface" not in contents
 
 
@@ -336,6 +339,29 @@ def test_lxc_and_storage_pages_are_wired_in_urls_navigation_and_templates():
     assert "Snapshots on this Storage" in storage_detail_template
     assert "class LXCContainersView(" in views_module
     assert "class SyncStorageView(" in sync_view
+
+
+def test_replication_page_is_wired_in_urls_navigation_and_vm_tabs():
+    urls = _read("netbox_proxbox/urls.py")
+    navigation = _read("netbox_proxbox/navigation.py")
+    views_module = _read("netbox_proxbox/views/__init__.py")
+    replication_views = _read("netbox_proxbox/views/replication.py")
+    replication_template = _read(
+        "netbox_proxbox/templates/netbox_proxbox/replication_list.html"
+    )
+
+    assert "replications/<int:pk>/" in urls
+    assert 'replications/",' in urls
+    assert 'get_model_urls("netbox_proxbox", "replication")' in urls
+    assert 'get_model_urls("netbox_proxbox", "replication", detail=False)' in urls
+    assert 'link="plugins:netbox_proxbox:replication_list"' in navigation
+    assert "ReplicationTabView" in views_module
+    assert (
+        'register_model_view(VirtualMachine, "replications", path="replications")'
+        in replication_views
+    )
+    assert 'label="Replications"' in replication_views
+    assert "Sync Replications" in replication_template
 
 
 def test_interface_and_ip_pages_are_wired_in_urls_navigation_and_templates():

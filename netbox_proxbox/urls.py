@@ -1,7 +1,6 @@
 """Register plugin UI routes for pages, models, sync actions, and status checks."""
 
 from django.urls import include, path
-
 from utilities.urls import get_model_urls
 
 from netbox_proxbox import views
@@ -73,6 +72,14 @@ urlpatterns = [
     path(
         "backup-routines/",
         include(get_model_urls("netbox_proxbox", "backuproutine", detail=False)),
+    ),
+    path(
+        "replications/<int:pk>/",
+        include(get_model_urls("netbox_proxbox", "replication")),
+    ),
+    path(
+        "replications/",
+        include(get_model_urls("netbox_proxbox", "replication", detail=False)),
     ),
     path(
         "snapshots/<int:pk>/", include(get_model_urls("netbox_proxbox", "vmsnapshot"))

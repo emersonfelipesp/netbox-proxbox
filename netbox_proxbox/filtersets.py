@@ -1,7 +1,6 @@
 """Define NetBox filtersets for the plugin's list views and API queries."""
 
 from django.db.models import Q
-
 from netbox.filtersets import NetBoxModelFilterSet
 from utilities.filtersets import register_filterset
 
@@ -10,9 +9,10 @@ from .models import (
     FastAPIEndpoint,
     NetBoxEndpoint,
     ProxmoxCluster,
+    ProxmoxEndpoint,
     ProxmoxNode,
     ProxmoxStorage,
-    ProxmoxEndpoint,
+    Replication,
     VMBackup,
     VMSnapshot,
     VMTaskHistory,
@@ -273,3 +273,37 @@ class BackupRoutineFilterSet(NetBoxModelFilterSet):
         if not value.strip():
             return queryset
         return queryset.filter(Q(job_id__icontains=value) | Q(comment__icontains=value))
+
+
+@register_filterset
+class ReplicationFilterSet(NetBoxModelFilterSet):
+    """Filter Replication records synced from Proxmox."""
+
+    class Meta:
+        model = Replication
+        fields = (
+            "id",
+            "replication_id",
+            "virtual_machine",
+            "proxmox_node",
+            "guest",
+            "target",
+            "job_type",
+            "schedule",
+            "disable",
+            "source",
+            "jobnum",
+            "remove_job",
+        )
+
+    def search(self, queryset, name, value):
+        """Match replication ID, VM name, target, comment, or source."""
+        if not value.strip():
+            return queryset
+        return queryset.filter(
+            Q(replication_id__icontains=value)
+            | Q(virtual_machine__name__icontains=value)
+            | Q(target__icontains=value)
+            | Q(comment__icontains=value)
+            | Q(source__icontains=value)
+        )

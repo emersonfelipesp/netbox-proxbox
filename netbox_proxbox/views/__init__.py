@@ -3,8 +3,13 @@
 from django.contrib.auth.mixins import AccessMixin
 from django.shortcuts import render
 from django.views import View
-
 from netbox import configuration
+from utilities.views import (
+    ConditionalLoginRequiredMixin,
+    ContentTypePermissionRequiredMixin,
+    TokenConditionalLoginRequiredMixin,
+)
+from virtualization.models import VirtualMachine, VMInterface
 
 from netbox_proxbox import github
 from netbox_proxbox.models import FastAPIEndpoint, NetBoxEndpoint, ProxmoxEndpoint
@@ -15,18 +20,7 @@ from netbox_proxbox.views.proxbox_access import (
     permission_view_fastapi_endpoint,
     user_may_access_proxbox_dashboard,
 )
-from utilities.views import (
-    ConditionalLoginRequiredMixin,
-    ContentTypePermissionRequiredMixin,
-    TokenConditionalLoginRequiredMixin,
-)
 
-from .cards import get_proxmox_card
-from .cluster import (
-    ClusterStoragesTabView,
-    ClusterSummaryTabView,
-)
-from .cluster_nodes_tab import ProxmoxEndpointClusterNodesTabView
 from .backup_routine import (
     BackupRoutineBulkDeleteView,
     BackupRoutineDeleteView,
@@ -34,6 +28,12 @@ from .backup_routine import (
     BackupRoutineListView,
     BackupRoutineView,
 )
+from .cards import get_proxmox_card
+from .cluster import (
+    ClusterStoragesTabView,
+    ClusterSummaryTabView,
+)
+from .cluster_nodes_tab import ProxmoxEndpointClusterNodesTabView
 from .dashboard import DashboardView
 from .endpoints import (
     FastAPIEndpointDeleteView,
@@ -52,6 +52,14 @@ from .endpoints import (
 from .external_pages import DiscordView, DiscussionsView, TelegramView
 from .keepalive_status import get_service_status
 from .logs import BackendLogsView
+from .replication import (
+    ReplicationBulkDeleteView,
+    ReplicationDeleteView,
+    ReplicationEditView,
+    ReplicationListView,
+    ReplicationTabView,
+    ReplicationView,
+)
 from .schedule_sync import QuickScheduleSyncFromHomeView, ScheduleSyncView
 from .settings import SettingsView
 from .storage import (
@@ -65,16 +73,17 @@ from .sync import (
     sync_backup_routines,
     sync_devices,
     sync_full_update,
-    sync_network_interfaces,
     sync_ip_addresses,
+    sync_network_interfaces,
+    sync_replications,
     sync_selected_storage,
     sync_selected_virtual_machines,
     sync_selected_vm_backups,
     sync_selected_vm_snapshots,
     sync_selected_vm_task_history,
     sync_storage,
-    sync_virtual_machines,
     sync_virtual_disks,
+    sync_virtual_machines,
     sync_vm_backups,
     sync_vm_snapshots,
 )
@@ -86,6 +95,9 @@ from .vm_backup import (
     VMBackupTabView,
     VMBackupView,
 )
+
+# Task History tab and detail views live in ``vm_task_history``.
+from .vm_config import ProxmoxVMConfigTabView
 from .vm_snapshot import (
     VMSnapshotBulkDeleteView,
     VMSnapshotDeleteView,
@@ -94,6 +106,7 @@ from .vm_snapshot import (
     VMSnapshotTabView,
     VMSnapshotView,
 )
+from .vm_sync_now import VirtualMachineSyncNowView
 from .vm_task_history import (
     VMTaskHistoryBulkDeleteView,
     VMTaskHistoryDeleteView,
@@ -102,10 +115,6 @@ from .vm_task_history import (
     VMTaskHistoryTabView,
     VMTaskHistoryView,
 )
-
-# Task History tab and detail views live in ``vm_task_history``.
-from .vm_config import ProxmoxVMConfigTabView
-from .vm_sync_now import VirtualMachineSyncNowView
 
 
 class RequireProxboxDashboardEndpointViewMixin(AccessMixin):
@@ -371,10 +380,11 @@ class InterfacesView(ConditionalLoginRequiredMixin, View):
 
     def get(self, request):
         """Load proxbox-tagged VM interfaces and device interfaces."""
-        from dcim.models import Device, Interface as DCIMInterface
+        from dcim.models import Device
+        from dcim.models import Interface as DCIMInterface
         from django.contrib.contenttypes.models import ContentType
         from extras.models import Tag, TaggedItem
-        from virtualization.models import VMInterface, VirtualMachine
+        from virtualization.models import VirtualMachine, VMInterface
 
         from netbox_proxbox.models import FastAPIEndpoint
 
@@ -461,11 +471,12 @@ class IPAddressesView(ConditionalLoginRequiredMixin, View):
 
     def get(self, request):
         """Load proxbox-tagged IP addresses assigned to proxbox interfaces."""
-        from dcim.models import Device, Interface as DCIMInterface
+        from dcim.models import Device
+        from dcim.models import Interface as DCIMInterface
         from django.contrib.contenttypes.models import ContentType
         from extras.models import Tag, TaggedItem
         from ipam.models import IPAddress
-        from virtualization.models import VMInterface, VirtualMachine
+        from virtualization.models import VirtualMachine, VMInterface
 
         from netbox_proxbox.models import FastAPIEndpoint
 

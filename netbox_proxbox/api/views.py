@@ -15,9 +15,10 @@ from .serializers import (
     FastAPIEndpointSerializer,
     NetBoxEndpointSerializer,
     ProxmoxClusterSerializer,
+    ProxmoxEndpointSerializer,
     ProxmoxNodeSerializer,
     ProxmoxStorageSerializer,
-    ProxmoxEndpointSerializer,
+    ReplicationSerializer,
     VMBackupSerializer,
     VMSnapshotSerializer,
     VMTaskHistorySerializer,
@@ -145,3 +146,13 @@ class BackupRoutineViewSet(NetBoxModelViewSet):
     )
     serializer_class = BackupRoutineSerializer
     filterset_class = filtersets.BackupRoutineFilterSet
+
+
+class ReplicationViewSet(NetBoxModelViewSet):
+    """REST API for Proxmox replication schedules synced from Proxmox."""
+
+    queryset = models.Replication.objects.select_related(
+        "virtual_machine", "proxmox_node"
+    )
+    serializer_class = ReplicationSerializer
+    filterset_class = filtersets.ReplicationFilterSet

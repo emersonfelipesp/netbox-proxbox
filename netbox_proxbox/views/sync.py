@@ -11,14 +11,14 @@ from django.utils.html import format_html
 from django.utils.text import format_lazy
 from django.utils.translation import gettext_lazy as _
 from django.views import View
-
-from netbox_proxbox.choices import SyncTypeChoices
-from netbox_proxbox.jobs import PROXBOX_SYNC_QUEUE_NAME, ProxboxSyncJob
-from netbox_proxbox.views.proxbox_access import permission_enqueue_proxbox_sync
 from utilities.views import (
     ContentTypePermissionRequiredMixin,
     TokenConditionalLoginRequiredMixin,
 )
+
+from netbox_proxbox.choices import SyncTypeChoices
+from netbox_proxbox.jobs import PROXBOX_SYNC_QUEUE_NAME, ProxboxSyncJob
+from netbox_proxbox.views.proxbox_access import permission_enqueue_proxbox_sync
 
 
 class _ProxboxSyncEnqueueView(
@@ -145,6 +145,13 @@ class SyncBackupRoutinesView(_ProxboxSyncEnqueueView):
     action_label = _("Backup Routines")
 
 
+class SyncReplicationsView(_ProxboxSyncEnqueueView):
+    """POST: queue replications sync."""
+
+    sync_types = [SyncTypeChoices.REPLICATIONS]
+    action_label = _("Replications")
+
+
 class _ProxboxSelectedSyncView(
     TokenConditionalLoginRequiredMixin,
     ContentTypePermissionRequiredMixin,
@@ -253,6 +260,7 @@ sync_virtual_disks = SyncVirtualDisksView.as_view()
 sync_network_interfaces = SyncNetworkInterfacesView.as_view()
 sync_ip_addresses = SyncIPAddressesView.as_view()
 sync_backup_routines = SyncBackupRoutinesView.as_view()
+sync_replications = SyncReplicationsView.as_view()
 sync_selected_virtual_machines = SyncSelectedVirtualMachinesView.as_view()
 sync_selected_vm_backups = SyncSelectedVMBackupsView.as_view()
 sync_selected_vm_snapshots = SyncSelectedVMSnapshotsView.as_view()

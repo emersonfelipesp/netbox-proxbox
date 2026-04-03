@@ -2,26 +2,26 @@
 
 # Django Imports
 import django_tables2 as tables
-from django.utils.translation import gettext as _
 from django.utils.html import format_html
+from django.utils.translation import gettext as _
 
 # NetBox Imports
-from netbox.tables import NetBoxTable, ChoiceFieldColumn
+from netbox.tables import ChoiceFieldColumn, NetBoxTable
 from netbox.tables.columns import BooleanColumn
 
 # Proxbox Imports
 from netbox_proxbox.models import (
-    ProxmoxEndpoint,
-    NetBoxEndpoint,
     FastAPIEndpoint,
+    NetBoxEndpoint,
+    ProxmoxEndpoint,
 )
 from netbox_proxbox.tables.backup_routine import BackupRoutineTable
 from netbox_proxbox.tables.cluster import ProxmoxClusterTable, ProxmoxNodeTable
+from netbox_proxbox.tables.replication import ReplicationTable
 from netbox_proxbox.tables.storage import ProxmoxStorageTable
 from netbox_proxbox.tables.vm_backup import VMBackupTable
 from netbox_proxbox.tables.vm_snapshot import VMSnapshotTable
 from netbox_proxbox.tables.vm_task_history import VMTaskHistoryTable
-
 
 STATUS_BADGE_TEMPLATE = """
 <span class="badge text-bg-grey"
