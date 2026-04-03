@@ -137,7 +137,7 @@ jobs:
           done
 
           for i in $(seq 1 60); do
-            if curl -sS --max-time 5 http://127.0.0.1:18006/api2/json/version >/dev/null 2>&1; then
+            if curl -fsS --max-time 5 http://127.0.0.1:18006/api2/json/version >/dev/null 2>&1; then
               break
             fi
             sleep 2
@@ -149,7 +149,8 @@ jobs:
           done
 
           for i in $(seq 1 90); do
-            if curl -sS --max-time 5 http://127.0.0.1:18800/ >/dev/null 2>&1; then
+            http_code="$(curl -sS --max-time 5 -o /dev/null -w '%{http_code}' http://127.0.0.1:18800/ 2>/dev/null || true)"
+            if [ "$http_code" -ge 100 ] 2>/dev/null && [ "$http_code" -lt 500 ]; then
               break
             fi
             sleep 2
