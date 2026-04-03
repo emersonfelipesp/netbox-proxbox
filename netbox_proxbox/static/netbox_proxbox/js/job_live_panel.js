@@ -105,6 +105,18 @@
     }
   }
 
+  function isQueuedCompletion(payload) {
+    if (!payload || typeof payload !== "object") {
+      return false;
+    }
+    var status = String(payload.status || "").trim().toLowerCase();
+    if (status === "waiting" || status === "queued") {
+      return true;
+    }
+    var queuedStatus = String(payload.queued_status || "").trim().toLowerCase();
+    return queuedStatus === "pending" || queuedStatus === "scheduled";
+  }
+
   function setStatusValue(nextStatusValue, nextStatusLabel, previousStatusValue) {
     var normalizedNextStatus = String(nextStatusValue || "").trim().toLowerCase();
     var normalizedPreviousStatus = String(previousStatusValue || "").trim().toLowerCase();
@@ -355,6 +367,21 @@
     writeStoredState();
 
     if (eventType === "complete") {
+      if (isQueuedCompletion(payload)) {
+        setStatusValue("waiting", "Waiting", previousStatus);
+        if (statusEl) {
+          statusEl.textContent = " — Waiting";
+        }
+        if (sseSource) {
+          sseSource.close();
+          sseSource = null;
+        }
+        isStreaming = false;
+        updateSummaryDisplay();
+        writeStoredState();
+        startPollingFallback();
+        return;
+      }
       finishStream(payload.ok === false ? "failed" : "completed", message || payload.message || "");
       return;
     }
@@ -408,6 +435,7 @@
   }
 
   function startPollingFallback() {
+    if (timer) return;
     tick();
     timer = setInterval(tick, 2500);
   }
