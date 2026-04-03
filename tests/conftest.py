@@ -466,6 +466,7 @@ def load_plugin_module(
 
     nbp_root = types.ModuleType("netbox_proxbox")
     nbp_root.__path__ = [str(repo / "netbox_proxbox")]
+    nbp_root.ProxboxConfig = SimpleNamespace(default_settings={})
     monkeypatch.setitem(sys.modules, "netbox_proxbox", nbp_root)
 
     nbp_choices = types.ModuleType("netbox_proxbox.choices")
@@ -484,6 +485,7 @@ def load_plugin_module(
         ALL = "all"
 
     nbp_choices.SyncTypeChoices = _SyncTypeChoices
+    nbp_choices.NetBoxTokenVersionChoices = SimpleNamespace(V1="v1", V2="v2")
     monkeypatch.setitem(sys.modules, "netbox_proxbox.choices", nbp_choices)
 
     nbp_jobs = types.ModuleType("netbox_proxbox.jobs")
@@ -497,6 +499,25 @@ def load_plugin_module(
     nbp_jobs.PROXBOX_SYNC_QUEUE_NAME = "default"
     nbp_jobs.is_proxbox_sync_job = lambda job: True
     monkeypatch.setitem(sys.modules, "netbox_proxbox.jobs", nbp_jobs)
+
+    forms_package = types.ModuleType("netbox_proxbox.forms")
+    forms_package.__path__ = [str(repo / "netbox_proxbox" / "forms")]
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.forms", forms_package)
+
+    schedule_sync_stub = types.ModuleType("netbox_proxbox.forms.schedule_sync")
+
+    class ScheduleSyncForm:
+        def __init__(self, *args, **kwargs):
+            self.args = args
+            self.kwargs = kwargs
+
+    schedule_sync_stub.ScheduleSyncForm = ScheduleSyncForm
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.forms.schedule_sync", schedule_sync_stub)
+
+    schedule_hints_stub = types.ModuleType("netbox_proxbox.schedule_hints")
+    schedule_hints_stub.has_recurring_proxbox_sync_all = lambda user: True
+    schedule_hints_stub.quick_schedule_home_form_kwargs = lambda: {}
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.schedule_hints", schedule_hints_stub)
 
     package_name = "netbox_proxbox.views"
     package_module = types.ModuleType(package_name)

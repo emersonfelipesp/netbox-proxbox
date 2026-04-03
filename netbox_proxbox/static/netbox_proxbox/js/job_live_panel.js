@@ -77,6 +77,43 @@
     return { value: s, label: s };
   }
 
+  function isQueuedLikeStatus(statusValue) {
+    var normalized = String(statusValue || "").trim().toLowerCase();
+    return normalized === "pending" || normalized === "scheduled";
+  }
+
+  function isRunningLikeStatus(statusValue) {
+    var normalized = String(statusValue || "").trim().toLowerCase();
+    return normalized === "running" || normalized === "progress";
+  }
+
+  function expandSummaryIfNeeded(previousStatus, currentStatus) {
+    if (!summaryRoot || summaryRoot.open) {
+      return;
+    }
+    if (isQueuedLikeStatus(previousStatus) && isRunningLikeStatus(currentStatus)) {
+      summaryRoot.open = true;
+    }
+  }
+
+  function collapseSummaryIfNeeded(statusValue) {
+    if (!summaryRoot || !summaryRoot.open) {
+      return;
+    }
+    if (terminal[String(statusValue || "").trim().toLowerCase()]) {
+      summaryRoot.open = false;
+    }
+  }
+
+  function setStatusValue(nextStatusValue, nextStatusLabel, previousStatusValue) {
+    var normalizedNextStatus = String(nextStatusValue || "").trim().toLowerCase();
+    var normalizedPreviousStatus = String(previousStatusValue || "").trim().toLowerCase();
+
+    lastStatusValue = normalizedNextStatus;
+    lastStatusLabel = String(nextStatusLabel || "").trim() || normalizedNextStatus;
+    expandSummaryIfNeeded(normalizedPreviousStatus, normalizedNextStatus);
+  }
+
   function updateSummaryDisplay() {
     if (!summaryRoot) {
       return;
@@ -194,7 +231,7 @@
     return "";
   }
 
-  function updateProgress(progress) {
+  function updateProgress(progress, previousStatus) {
     if (!progressBarEl) return;
     var wrap = progressBarEl.parentElement ? progressBarEl.parentElement.parentElement : null;
     if (wrap && wrap.classList.contains("nb-job-progress-wrap")) {
@@ -214,14 +251,13 @@
     }
     progressBarEl.classList.remove("bg-info", "bg-warning", "bg-success", "bg-danger");
     progressBarEl.classList.add("bg-warning", "progress-bar-striped", "progress-bar-animated");
-    lastStatusValue = "progress";
-    lastStatusLabel = "Running";
+    setStatusValue("progress", "Running", previousStatus);
     updateSummaryDisplay();
   }
 
   function finishStream(status, message) {
-    lastStatusValue = status;
-    lastStatusLabel = status === "completed" ? "Completed" : "Failed";
+    setStatusValue(status, status === "completed" ? "Completed" : "Failed", lastStatusValue);
+    collapseSummaryIfNeeded(status);
     if (progressBarEl) {
       progressBarEl.classList.remove("progress-bar-striped", "progress-bar-animated");
       progressBarEl.classList.remove("bg-info", "bg-warning", "bg-success", "bg-danger");
@@ -279,6 +315,7 @@
     var payload = data && typeof data === "object" ? data : {};
     var message = getFrameMessage(payload, eventType);
     var status = payload.status ? String(payload.status) : "";
+    var previousStatus = lastStatusValue;
     var isTerminal =
       eventType === "complete" ||
       status === "failed" ||
@@ -298,7 +335,7 @@
     }
 
     if (payload.progress) {
-      updateProgress(payload.progress);
+      updateProgress(payload.progress, previousStatus);
     }
 
     var api = global.NbProxboxJobLogView;
@@ -308,10 +345,11 @@
     }
 
     if (status) {
-      lastStatusValue = status;
-      if (status !== "progress") {
-        lastStatusLabel = status.charAt(0).toUpperCase() + status.slice(1);
-      }
+      setStatusValue(
+        status,
+        status !== "progress" ? status.charAt(0).toUpperCase() + status.slice(1) : "Running",
+        previousStatus
+      );
     }
     updateSummaryDisplay();
     writeStoredState();
@@ -337,9 +375,9 @@
       .then(function (d) {
         var st = jobStatusParts(d.status);
         var entries = Array.isArray(d.log_entries) ? d.log_entries : [];
+        var previousStatus = lastStatusValue;
         lastEntries = entries;
-        lastStatusValue = st.value;
-        lastStatusLabel = st.label || st.value || "Unknown";
+        setStatusValue(st.value, st.label || st.value || "Unknown", previousStatus);
         if (statusEl) {
           statusEl.textContent = renderStatusLine(st, entries);
         }
@@ -348,9 +386,9 @@
         if (api && typeof api.applyProgress === "function") {
           api.applyProgress(progressBarEl, d, entries);
         }
-        if (terminal[st.value]) {
-          if (timer) clearInterval(timer);
-          timer = null;
+    if (terminal[st.value]) {
+      if (timer) clearInterval(timer);
+      timer = null;
           if (progressBarEl) {
             progressBarEl.classList.remove("progress-bar-striped", "progress-bar-animated");
             if (st.value === "errored" || st.value === "failed") {
@@ -362,6 +400,7 @@
             }
           }
         }
+        collapseSummaryIfNeeded(st.value);
         updateSummaryDisplay();
         writeStoredState();
       })
@@ -416,8 +455,7 @@
       if (statusEl) {
         statusEl.textContent = " — Streaming...";
       }
-      lastStatusValue = "running";
-      lastStatusLabel = "Streaming";
+      setStatusValue("running", "Streaming", lastStatusValue);
       updateSummaryDisplay();
       writeStoredState();
     } catch (error) {
