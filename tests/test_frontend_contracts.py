@@ -33,6 +33,9 @@ def test_home_template_uses_plugin_vanilla_js_entrypoint():
     contents = _read("netbox_proxbox/templates/netbox_proxbox/home.html")
     assert "netbox_proxbox/home/quick_schedule_banner.html" in contents
     assert "netbox_proxbox/partials/home_sync_actions_dropdown.html" in contents
+    assert "netbox_proxbox/home/job_live_summary.html" in contents
+    assert "active_proxbox_job" in contents
+    assert "job_log_assets.html" in contents
     assert "netbox_proxbox/js/home.js" in contents
     assert "htmx.org" not in contents
     assert 'id="sync-progress-container"' in contents
@@ -156,13 +159,51 @@ def test_job_live_poll_alert_spans_the_card_width_and_keeps_streaming_messages()
     assert "min-width: 2rem" not in contents
     assert 'role="log"' in contents
     assert 'aria-live="polite"' in contents
-    assert "EventSource(streamUrl)" in contents
-    assert 'addEventListener("message"' in contents
-    assert 'handleSSEFrame("message", data)' in contents
+    assert "data-proxbox-job-live-root" in contents
+    assert "data-proxbox-job-live-status" in contents
+    assert "data-proxbox-job-live-progress-bar" in contents
+    assert "data-proxbox-job-live-log" in contents
+    assert "EventSource(streamUrl)" not in contents
+    assert 'addEventListener("message"' not in contents
+    assert 'handleSSEFrame("message", data)' not in contents
     assert 'if (status === "completed")' not in contents
-    assert 'status === "errored"' in contents
-    assert "sessionStorage" in contents
+    assert 'status === "errored"' not in contents
+    assert "sessionStorage" not in contents
     assert "bg-warning" in contents
+
+
+def test_job_live_assets_loads_shared_panel_script():
+    contents = _read("netbox_proxbox/templates/netbox_proxbox/inc/job_log_assets.html")
+    assert "job_log_view.css" in contents
+    assert "job_log_view.js" in contents
+    assert "job_live_panel.js" in contents
+
+
+def test_job_live_panel_script_is_the_shared_runtime_controller():
+    contents = _read("netbox_proxbox/static/netbox_proxbox/js/job_live_panel.js")
+
+    assert "NbProxboxJobLivePanel" in contents
+    assert "localStorage" in contents
+    assert "storage" in contents
+    assert "summaryRoot.open = true" in contents
+    assert "summaryRoot.open = false" in contents
+    assert "isQueuedLikeStatus" in contents
+    assert "isRunningLikeStatus" in contents
+    assert "collapseSummaryIfNeeded" in contents
+    assert "EventSource(streamUrl)" in contents
+    assert "data-proxbox-job-live-summary-status" in contents
+    assert "data-proxbox-job-live-root" in contents
+
+
+def test_home_job_live_summary_wraps_the_shared_live_panel_in_a_details_element():
+    contents = _read("netbox_proxbox/templates/netbox_proxbox/home/job_live_summary.html")
+
+    assert "<details" in contents
+    assert "nb-proxbox-job-live-summary" in contents
+    assert "data-proxbox-job-live-summary-status" in contents
+    assert "data-proxbox-job-live-summary-detail" in contents
+    assert "Live job updates" not in contents
+    assert "job_live_poll_alert.html" in contents
 
 
 def test_job_log_view_uses_netbox_status_colors():
