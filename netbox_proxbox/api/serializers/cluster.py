@@ -41,6 +41,19 @@ class NestedProxmoxClusterSerializer(NetBoxModelSerializer):
         brief_fields = ("id", "url", "display", "name")
 
 
+class NestedProxmoxNodeSerializer(NetBoxModelSerializer):
+    """Minimal ProxmoxNode for nested references."""
+
+    url = serializers.HyperlinkedIdentityField(
+        view_name="plugins-api:netbox_proxbox-api:proxmoxnode-detail",
+    )
+
+    class Meta:
+        model = ProxmoxNode
+        fields = ["id", "url", "display", "name", "node_id", "online"]
+        brief_fields = ("id", "url", "display", "name", "node_id", "online")
+
+
 class ProxmoxClusterSerializer(NetBoxModelSerializer):
     """Full ProxmoxCluster serializer with nested relationships."""
 
