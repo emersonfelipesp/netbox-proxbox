@@ -62,7 +62,10 @@ def test_sync_individual_with_dependencies_propagates_cluster_context(monkeypatc
                 },
                 200,
             )
-        return ({"object_type": "node", "action": "updated", "dependencies_synced": []}, 200)
+        return (
+            {"object_type": "node", "action": "updated", "dependencies_synced": []},
+            200,
+        )
 
     monkeypatch.setattr(module, "sync_individual", fake_sync)
 
@@ -95,8 +98,14 @@ def test_vm_sync_now_view_fails_fast_without_cluster(monkeypatch):
     services_pkg.__path__ = []
     monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_pkg)
     service_stub = types.ModuleType("netbox_proxbox.services.individual_sync")
-    service_stub.sync_individual_with_dependencies = lambda *args, **kwargs: ({}, 200, [])
-    monkeypatch.setitem(sys.modules, "netbox_proxbox.services.individual_sync", service_stub)
+    service_stub.sync_individual_with_dependencies = lambda *args, **kwargs: (
+        {},
+        200,
+        [],
+    )
+    monkeypatch.setitem(
+        sys.modules, "netbox_proxbox.services.individual_sync", service_stub
+    )
 
     module = load_plugin_module(
         "netbox_proxbox.views.sync_now.vm",
@@ -126,7 +135,9 @@ def test_vm_sync_now_view_fails_fast_without_cluster(monkeypatch):
 
     assert called["count"] == 0
     assert response.url == "/virtualization/virtual-machines/101/"
-    assert any("not linked to a Proxmox cluster" in msg for level, msg in module.messages.calls)
+    assert any(
+        "not linked to a Proxmox cluster" in msg for level, msg in module.messages.calls
+    )
 
 
 def test_storage_sync_now_view_fails_fast_without_cluster(monkeypatch):
@@ -134,8 +145,14 @@ def test_storage_sync_now_view_fails_fast_without_cluster(monkeypatch):
     services_pkg.__path__ = []
     monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_pkg)
     service_stub = types.ModuleType("netbox_proxbox.services.individual_sync")
-    service_stub.sync_individual_with_dependencies = lambda *args, **kwargs: ({}, 200, [])
-    monkeypatch.setitem(sys.modules, "netbox_proxbox.services.individual_sync", service_stub)
+    service_stub.sync_individual_with_dependencies = lambda *args, **kwargs: (
+        {},
+        200,
+        [],
+    )
+    monkeypatch.setitem(
+        sys.modules, "netbox_proxbox.services.individual_sync", service_stub
+    )
 
     module = load_plugin_module(
         "netbox_proxbox.views.sync_now.storage",
@@ -163,4 +180,6 @@ def test_storage_sync_now_view_fails_fast_without_cluster(monkeypatch):
 
     assert called["count"] == 0
     assert response.url == "/plugins/netbox-proxbox/storage/1/"
-    assert any("not linked to a Proxmox cluster" in msg for level, msg in module.messages.calls)
+    assert any(
+        "not linked to a Proxmox cluster" in msg for level, msg in module.messages.calls
+    )

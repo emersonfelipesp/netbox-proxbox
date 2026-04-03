@@ -437,6 +437,7 @@ def test_plugin_api_routes_register_all_plugin_objects():
 
     assert set(endpoint_registers) == {"proxmox", "netbox", "fastapi"}
     assert set(root_registers) == {
+        "backup-routines",
         "clusters",
         "nodes",
         "storage",

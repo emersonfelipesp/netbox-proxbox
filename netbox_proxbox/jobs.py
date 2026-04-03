@@ -336,12 +336,16 @@ def _resolve_vm_backup_batch_params(backup: object) -> dict[str, object]:
     node = _resolve_storage_nodes(storage_obj) or _resolve_vm_node(vm_obj)
     vmid = str(
         getattr(backup, "vmid", None)
-        or getattr(getattr(vm_obj, "custom_field_data", None), "get", lambda *_: None)("proxmox_vm_id")
+        or getattr(getattr(vm_obj, "custom_field_data", None), "get", lambda *_: None)(
+            "proxmox_vm_id"
+        )
         or _resolve_vm_vmid(vm_obj)
         or ""
     )
     volume_id = str(getattr(backup, "volume_id", None) or "")
-    storage_name = str(getattr(backup, "storage", None) or getattr(storage_obj, "name", "") or "")
+    storage_name = str(
+        getattr(backup, "storage", None) or getattr(storage_obj, "name", "") or ""
+    )
 
     if not cluster_name or not node or not vmid or not storage_name or not volume_id:
         return {"error": "Missing backup sync context.", "status": 422}
@@ -411,7 +415,9 @@ def _resolve_task_history_batch_params(task_history: object) -> dict[str, object
         return {"error": "Missing task-history sync context.", "status": 422}
 
     node = str(getattr(task_history, "node", None) or _resolve_vm_node(vm_obj) or "")
-    vm_type = str(getattr(task_history, "vm_type", None) or _resolve_vm_type(vm_obj) or "qemu")
+    vm_type = str(
+        getattr(task_history, "vm_type", None) or _resolve_vm_type(vm_obj) or "qemu"
+    )
     vmid = str(getattr(task_history, "vmid", None) or _resolve_vm_vmid(vm_obj) or "")
     upid = str(getattr(task_history, "upid", None) or "")
     cluster_name = _resolve_vm_cluster_name(vm_obj)
@@ -439,9 +445,16 @@ async def _run_batch_selected_sync(
     batch_object_ids: list[str],
 ) -> dict[str, object]:
     """Run selected object syncs concurrently with asyncio.gather."""
-    from netbox_proxbox.models import ProxmoxStorage, VMBackup, VMTaskHistory, VMSnapshot
+    from netbox_proxbox.models import (
+        ProxmoxStorage,
+        VMBackup,
+        VMTaskHistory,
+        VMSnapshot,
+    )
     from virtualization.models import VirtualMachine
-    from netbox_proxbox.services.individual_sync import sync_individual_with_dependencies
+    from netbox_proxbox.services.individual_sync import (
+        sync_individual_with_dependencies,
+    )
 
     model_map = {
         "virtual-machine": VirtualMachine.objects.select_related(
@@ -662,7 +675,9 @@ class ProxboxSyncJob(JobRunner):
             else:
                 types = [SyncTypeChoices.ALL]
 
-            batch_object_type = str(batch_object_type).strip() if batch_object_type else None
+            batch_object_type = (
+                str(batch_object_type).strip() if batch_object_type else None
+            )
             batch_object_ids = _normalize_batch_object_ids(batch_object_ids)
             run_started = time.monotonic()
 
