@@ -101,7 +101,7 @@ def _use_guest_agent_interface_name_setting() -> bool:
         from netbox_proxbox.models import ProxboxPluginSettings
 
         return bool(ProxboxPluginSettings.get_solo().use_guest_agent_interface_name)
-    except Exception:
+    except (ImportError, RuntimeError):
         return True
 
 
@@ -112,7 +112,7 @@ def _proxbox_fetch_max_concurrency_setting() -> int:
 
         value = int(ProxboxPluginSettings.get_solo().proxbox_fetch_max_concurrency)
         return max(1, value)
-    except Exception:
+    except (ImportError, RuntimeError, ValueError):
         return 8
 
 
@@ -122,7 +122,7 @@ def _ignore_ipv6_link_local_addresses_setting() -> bool:
         from netbox_proxbox.models import ProxboxPluginSettings
 
         return bool(ProxboxPluginSettings.get_solo().ignore_ipv6_link_local_addresses)
-    except Exception:
+    except (ImportError, RuntimeError):
         return True
 
 

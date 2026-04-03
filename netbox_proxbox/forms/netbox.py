@@ -12,23 +12,7 @@ from users.models import Token
 # Proxbox Imports
 from ..choices import NetBoxTokenVersionChoices
 from ..models import NetBoxEndpoint
-
-
-def _resolve_ip_address_initial(value: object) -> IPAddress | None:
-    """Best-effort resolve a query-string IP address to an existing NetBox object."""
-    if value is None:
-        return None
-    if isinstance(value, IPAddress):
-        return value
-
-    candidate = str(value).strip()
-    if not candidate:
-        return None
-
-    ip_address = IPAddress.objects.filter(pk=candidate).first()
-    if ip_address is None:
-        ip_address = IPAddress.objects.filter(address=candidate).first()
-    return ip_address
+from ..utils import resolve_ip_address_initial
 
 
 class NetBoxEndpointForm(NetBoxModelForm):
@@ -98,7 +82,7 @@ class NetBoxEndpointForm(NetBoxModelForm):
         """Pre-select token version when editing an endpoint with a linked token."""
         super().__init__(*args, **kwargs)
 
-        ip_address = _resolve_ip_address_initial(self.initial.get("ip_address"))
+        ip_address = resolve_ip_address_initial(self.initial.get("ip_address"))
         if ip_address is not None:
             self.initial["ip_address"] = ip_address
 
