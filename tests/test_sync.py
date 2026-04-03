@@ -152,7 +152,9 @@ def test_sync_success_message_mentions_job_link(monkeypatch, fastapi_endpoint):
     assert "/core/jobs/1/" in str(message)
 
 
-def test_sync_selected_virtual_machines_enqueues_batch_job(monkeypatch, fastapi_endpoint):
+def test_sync_selected_virtual_machines_enqueues_batch_job(
+    monkeypatch, fastapi_endpoint
+):
     module = load_plugin_module(
         "netbox_proxbox.views.sync",
         monkeypatch=monkeypatch,
@@ -161,7 +163,9 @@ def test_sync_selected_virtual_machines_enqueues_batch_job(monkeypatch, fastapi_
     calls = _enqueue_spy(monkeypatch, module)
 
     request = _post_request()
-    request.POST = SimpleNamespace(getlist=lambda key: ["11", "22"] if key == "pk" else [])
+    request.POST = SimpleNamespace(
+        getlist=lambda key: ["11", "22"] if key == "pk" else []
+    )
 
     module.SyncSelectedVirtualMachinesView().post(request)
 

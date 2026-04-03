@@ -38,8 +38,14 @@ class VirtualMachineSyncNowView(
         vm_type = vm.custom_field_data.get(
             "proxmox_vm_type"
         ) or vm.custom_field_data.get("cf_proxmox_vm_type", "qemu")
-        proxmox_cluster = ProxmoxCluster.objects.filter(netbox_cluster=vm.cluster).first()
-        cluster_name = proxmox_cluster.name if proxmox_cluster else (vm.cluster.name if vm.cluster else "")
+        proxmox_cluster = ProxmoxCluster.objects.filter(
+            netbox_cluster=vm.cluster
+        ).first()
+        cluster_name = (
+            proxmox_cluster.name
+            if proxmox_cluster
+            else (vm.cluster.name if vm.cluster else "")
+        )
 
         node = ""
         if hasattr(vm, "device") and vm.device:
@@ -84,7 +90,9 @@ class VirtualMachineSyncNowView(
         elif status == 422:
             messages.error(request, _("Invalid parameters for virtual machine sync."))
         elif status == 503:
-            messages.error(request, _("Proxbox backend is unavailable for virtual machine sync."))
+            messages.error(
+                request, _("Proxbox backend is unavailable for virtual machine sync.")
+            )
         else:
             error = response.get("error", "Unknown error")
             messages.error(request, _(f"Failed to sync virtual machine: {error}"))

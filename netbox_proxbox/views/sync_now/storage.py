@@ -31,9 +31,13 @@ class ProxmoxStorageSyncNowView(
     def post(self, request, pk):
         storage = ProxmoxStorage.objects.get(pk=pk)
         storage_name = storage.name
-        proxmox_cluster = ProxmoxCluster.objects.filter(netbox_cluster=storage.cluster).first()
+        proxmox_cluster = ProxmoxCluster.objects.filter(
+            netbox_cluster=storage.cluster
+        ).first()
         cluster_name = (
-            proxmox_cluster.name if proxmox_cluster else (storage.cluster.name if storage.cluster else "")
+            proxmox_cluster.name
+            if proxmox_cluster
+            else (storage.cluster.name if storage.cluster else "")
         )
 
         if not cluster_name:
@@ -59,7 +63,9 @@ class ProxmoxStorageSyncNowView(
         elif status == 422:
             messages.error(request, _("Invalid parameters for storage sync."))
         elif status == 503:
-            messages.error(request, _("Proxbox backend is unavailable for storage sync."))
+            messages.error(
+                request, _("Proxbox backend is unavailable for storage sync.")
+            )
         else:
             error = response.get("error", "Unknown error")
             messages.error(request, _(f"Failed to sync storage: {error}"))

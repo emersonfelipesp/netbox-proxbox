@@ -164,7 +164,9 @@ class _ProxboxSelectedSyncView(
 
     def _job_name(self) -> str:
         if self.batch_object_label:
-            return str(format_lazy("{}: {}", _("Proxbox Sync"), self.batch_object_label))
+            return str(
+                format_lazy("{}: {}", _("Proxbox Sync"), self.batch_object_label)
+            )
         return str(_("Proxbox Sync"))
 
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
