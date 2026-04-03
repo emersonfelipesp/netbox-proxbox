@@ -35,4 +35,3 @@ def test_backend_logs_view_exposes_fastapi_and_logs_urls(monkeypatch):
     assert context["fastapi_url"] == "https://proxbox.local:8800"
     assert context["fastapi_websocket_url"] == "wss://proxbox.local:8801/ws"
     assert context["logs_api_url"] == "https://proxbox.local:8800/admin/logs"
-
