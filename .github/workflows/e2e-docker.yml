@@ -91,20 +91,20 @@ jobs:
           docker run -d --name netbox-e2e-redis --network proxbox-e2e \
             redis:7-alpine
 
-          docker run -d --name proxmox-e2e-mock --network proxbox-e2e -p 18006:8006 \
+          docker run -d --name proxmox-e2e-mock --network proxbox-e2e --network-alias proxmox-mock -p 18006:8006 \
             -v "$PWD/tests/e2e:/e2e:ro" \
             python:3.12-slim sh -c "pip install --no-cache-dir fastapi uvicorn && uvicorn mock_proxmox_api:app --app-dir /e2e --host 0.0.0.0 --port 8006"
 
           if [ "${{ matrix.install_source }}" = "local" ]; then
-            docker run -d --name proxbox-e2e-api --network proxbox-e2e -p 18800:8000 \
+            docker run -d --name proxbox-e2e-api --network proxbox-e2e --network-alias proxbox-api -p 18800:8000 \
               -v "$PWD/proxbox-api-source:/src:ro" \
               python:3.12-slim sh -c "pip install --no-cache-dir fastapi uvicorn /src && uvicorn proxbox_api.main:app --host 0.0.0.0 --port 8000 --app-dir /src"
           else
-            docker run -d --name proxbox-e2e-api --network proxbox-e2e -p 18800:8000 \
+            docker run -d --name proxbox-e2e-api --network proxbox-e2e --network-alias proxbox-api -p 18800:8000 \
               python:3.12-slim sh -c "pip install --no-cache-dir fastapi uvicorn proxbox-api && uvicorn proxbox_api.main:app --host 0.0.0.0 --port 8000"
           fi
 
-          docker run -d --name netbox-e2e --network proxbox-e2e -p 18080:8080 \
+          docker run -d --name netbox-e2e --network proxbox-e2e --network-alias netbox -p 18080:8080 \
             -e DB_HOST=netbox-e2e-postgres \
             -e DB_NAME=netbox \
             -e DB_USER=netbox \
@@ -137,11 +137,23 @@ jobs:
           done
 
           for i in $(seq 1 60); do
-            if curl -fsS --max-time 5 http://127.0.0.1:18800/ >/dev/null 2>&1; then
+            if curl -sS --max-time 5 http://127.0.0.1:18006/api2/json/version >/dev/null 2>&1; then
               break
             fi
             sleep 2
             if [ "$i" -eq 60 ]; then
+              echo "proxmox mock did not become ready"
+              docker logs proxmox-e2e-mock || true
+              exit 1
+            fi
+          done
+
+          for i in $(seq 1 90); do
+            if curl -sS --max-time 5 http://127.0.0.1:18800/ >/dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+            if [ "$i" -eq 90 ]; then
               echo "proxbox-api did not become ready"
               docker logs proxbox-e2e-api || true
               exit 1
