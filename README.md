@@ -6,15 +6,17 @@ Proxbox is a NetBox plugin that synchronizes Proxmox infrastructure data into Ne
 
 Proxbox discovers and syncs the following from Proxmox into NetBox:
 
-- **Clusters and Nodes** — Proxmox cluster and node information with resource monitoring
+- **Clusters and Nodes** — Proxmox cluster name, mode (cluster/standalone), quorum status, node count, and Proxmox VE version. Each node includes online status, IP address, CPU usage, memory usage, and uptime at sync time. Optionally link to NetBox Cluster and Device objects.
 - **Virtual Machines** — VM status, resources, and configuration
 - **Containers (LXC)** — Container details and settings
 - **VM Snapshots** — Point-in-time snapshots for recovery
 - **VM Backups** — Backup jobs and restore points
 - **Storage** — Datastores and storage content
-- **Networking** — VLANs, bridges, and IP assignments
+- **Network Interfaces and IPs** — Network interfaces and IP addresses assigned to VMs and containers
+- **Backup Routines** — Backup job definitions from Proxmox
+- **Replications** — Replication job status and configuration
 
-**New in v0.0.10:** Cluster and node tracking with links to NetBox's native Cluster and Device objects, including quorum status and resource usage monitoring.
+> **Note:** All metrics (CPU, memory, uptime, etc.) are captured as point-in-time snapshots at sync time, not continuous monitoring.
 
 Sync runs on-demand from the NetBox UI or scheduled automatically via NetBox's job system.
 
