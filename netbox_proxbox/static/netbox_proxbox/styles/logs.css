@@ -19,25 +19,29 @@
     background-color: rgba(var(--bs-primary-rgb), 0.05);
 }
 
-.log-entry.log-level-debug {
+.log-entry.log-level-debug td {
     color: #6c757d;
 }
 
-.log-entry.log-level-info {
+.log-entry.log-level-info td {
     color: #0d6efd;
 }
 
+.log-entry.log-level-warning td,
 .log-entry.log-level-warning {
     color: #fd7e14;
-    background-color: rgba(253, 126, 20, 0.05);
+    background-color: rgba(253, 126, 20, 0.1);
 }
 
+.log-entry.log-level-error td,
 .log-entry.log-level-error,
+.log-entry.log-level-critical td,
 .log-entry.log-level-critical {
     color: #dc3545;
-    background-color: rgba(220, 53, 69, 0.05);
+    background-color: rgba(220, 53, 69, 0.1);
 }
 
+.log-entry.log-level-critical td,
 .log-entry.log-level-critical {
     font-weight: 600;
 }
