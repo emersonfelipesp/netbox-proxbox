@@ -139,7 +139,7 @@ def request_backend_resource(
                 break
         except (KeyboardInterrupt, SystemExit, GeneratorExit):
             raise
-        except Exception as exc:  # pragma: no cover
+        except OSError as exc:  # pragma: no cover
             last_detail = str(exc)
             logger.error("Unexpected sync error for %s via %s: %s", path, url, exc)
 
@@ -324,9 +324,11 @@ def run_sync_stream(
                 continue
         except (KeyboardInterrupt, SystemExit, GeneratorExit):
             raise
-        except Exception as exc:  # pragma: no cover
+        except OSError as exc:  # pragma: no cover
             last_detail = str(exc)
-            logger.exception("Unexpected sync stream error for %s via %s", path, url)
+            logger.exception(
+                "Unexpected sync stream error for %s via %s: %s", path, url, exc
+            )
 
     return {
         "stream": True,
@@ -385,7 +387,7 @@ def iter_backend_sse_lines(
                     break
             except (KeyboardInterrupt, SystemExit, GeneratorExit):
                 raise
-            except Exception as exc:  # pragma: no cover
+            except OSError as exc:  # pragma: no cover
                 last_error = str(exc)
                 logger.exception(
                     "Unexpected sync stream error for %s via %s", path, url
@@ -395,7 +397,7 @@ def iter_backend_sse_lines(
         yield from sse_error_frames(payload)
     except (KeyboardInterrupt, SystemExit, GeneratorExit):
         raise
-    except Exception as exc:  # pragma: no cover
+    except OSError as exc:  # pragma: no cover
         logger.exception("Stream proxy crashed while handling %s", path)
         yield from sse_error_frames(str(exc), final_message="Stream proxy failed.")
 

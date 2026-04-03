@@ -5,8 +5,27 @@ from __future__ import annotations
 import os
 import subprocess
 
+from ipam.models import IPAddress
+
 from netbox_proxbox.schemas.backend_proxy import FastAPIUrlDict
 from netbox_proxbox.type_defs import FastAPIAuthSource, FastAPIUrlSource
+
+
+def resolve_ip_address_initial(value: object) -> IPAddress | None:
+    """Best-effort resolve a query-string IP address to an existing NetBox object."""
+    if value is None:
+        return None
+    if isinstance(value, IPAddress):
+        return value
+
+    candidate = str(value).strip()
+    if not candidate:
+        return None
+
+    ip_address = IPAddress.objects.filter(pk=candidate).first()
+    if ip_address is None:
+        ip_address = IPAddress.objects.filter(address=candidate).first()
+    return ip_address
 
 
 def get_ip_address_host(value: object | None) -> str:
