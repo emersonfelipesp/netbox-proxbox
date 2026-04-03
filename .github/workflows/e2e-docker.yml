@@ -2,7 +2,23 @@ name: E2E Docker
 
 on:
   workflow_call:
+    inputs:
+      install_source:
+        description: "Install source selection: both, pypi, or local"
+        required: false
+        type: string
+        default: both
   workflow_dispatch:
+    inputs:
+      install_source:
+        description: "Install source selection: both, pypi, or local"
+        required: false
+        type: choice
+        options:
+          - both
+          - pypi
+          - local
+        default: both
   schedule:
     - cron: "31 2 * * *"
 
@@ -14,7 +30,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        install_source: [pypi, local]
+        install_source: ${{ fromJSON((github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch') && inputs.install_source != 'both' && format('["{0}"]', inputs.install_source) || '["pypi","local"]') }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
