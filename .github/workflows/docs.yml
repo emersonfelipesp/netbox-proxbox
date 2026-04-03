@@ -38,11 +38,4 @@ jobs:
 
       - name: Deploy to gh-pages
         if: github.event_name == 'push'
-        env:
-          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_branch: gh-pages
-          publish_dir: ./site
-          force_orphan: true
+        run: ghp-import -n -p -f -m "Deploy docs for ${GITHUB_SHA}" site
