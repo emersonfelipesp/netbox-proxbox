@@ -145,9 +145,7 @@ class JobStreamSSEView(View):
                 {"step": "job", "status": "failed", "message": message},
             )
 
-        def emit_complete(
-            ok: bool, message: str, *, status: str | None = None
-        ) -> None:
+        def emit_complete(ok: bool, message: str, *, status: str | None = None) -> None:
             payload: dict[str, object] = {"ok": ok, "message": message}
             if status is not None:
                 payload["status"] = status
