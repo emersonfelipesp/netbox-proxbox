@@ -74,7 +74,7 @@ class LogsPage {
         }
     }
 
-    async fetchLogs() {
+    async fetchLogs(isAutoRefresh = false) {
         if (this.isLoading) return;
         if (!this.logsApiUrl) {
             this.showError("Logs API URL not configured");
@@ -104,7 +104,18 @@ class LogsPage {
             }
 
             const data = await response.json();
-            this.allLogs = data.logs || [];
+            const newLogs = data.logs || [];
+
+            if (isAutoRefresh && this.allLogs.length > 0) {
+                const existingIds = new Set(this.allLogs.map(l => l.id || `${l.timestamp}-${l.message}`));
+                const uniqueNewLogs = newLogs.filter(log => !existingIds.has(log.id || `${log.timestamp}-${log.message}`));
+                if (uniqueNewLogs.length > 0) {
+                    this.allLogs = [...uniqueNewLogs, ...this.allLogs];
+                }
+            } else {
+                this.allLogs = newLogs;
+            }
+
             this.total = data.total || this.allLogs.length;
             this.currentOffset = this.allLogs.length;
 
@@ -167,7 +178,7 @@ class LogsPage {
         const sortedLogs = [...this.cachedLogs].sort((a, b) => {
             const timeA = new Date(a.timestamp || 0).getTime();
             const timeB = new Date(b.timestamp || 0).getTime();
-            return timeA - timeB;
+            return timeB - timeA;
         });
 
         sortedLogs.forEach((log) => {
@@ -418,7 +429,7 @@ class LogsPage {
         this.stopAutoRefresh();
         if (this.isAutoRefreshEnabled) {
             this.autoRefreshTimer = setInterval(() => {
-                this.fetchLogs();
+                this.fetchLogs(true);
             }, this.autoRefreshInterval);
         }
     }
