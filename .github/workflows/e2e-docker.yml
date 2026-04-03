@@ -40,6 +40,7 @@ jobs:
         run: |
           set -eux
           docker network create proxbox-e2e || true
+          SECRET_KEY='proxbox-e2e-secret-key-proxbox-e2e-secret-key-proxbox-e2e-secret-key'
 
           docker rm -f netbox-e2e-postgres netbox-e2e-redis netbox-e2e netbox-e2e-rqworker proxbox-e2e-api proxmox-e2e-mock 2>/dev/null || true
 
@@ -70,7 +71,7 @@ jobs:
             -e REDIS_CACHE_DATABASE=1 \
             -e REDIS_TASK_HOST=netbox-e2e-redis \
             -e REDIS_TASK_DATABASE=2 \
-            -e SECRET_KEY=proxbox-e2e-secret-key \
+            -e SECRET_KEY="$SECRET_KEY" \
             -e SUPERUSER_NAME=admin \
             -e SUPERUSER_EMAIL=admin@example.com \
             -e SUPERUSER_PASSWORD=admin \
@@ -87,7 +88,7 @@ jobs:
             -e REDIS_CACHE_DATABASE=1 \
             -e REDIS_TASK_HOST=netbox-e2e-redis \
             -e REDIS_TASK_DATABASE=2 \
-            -e SECRET_KEY=proxbox-e2e-secret-key \
+            -e SECRET_KEY="$SECRET_KEY" \
             --entrypoint /opt/netbox/venv/bin/python \
             netbox-proxbox-e2e:local /opt/netbox/netbox/manage.py rqworker
 
