@@ -1,0 +1,125 @@
+{% extends 'base/layout.html' %}
+{% load i18n %}
+{% load static %}
+
+{% block title %}{% trans "Backend Logs" %}{% endblock %}
+
+{% block head %}
+    <script>
+        window.proxboxLogsConfig = {
+            logsApiUrl: "{{ logs_api_url|default:''|escapejs }}",
+            fastapiUrl: "{{ fastapi_url|default:''|escapejs }}"
+        };
+    </script>
+    <script type="module" src="{% static 'netbox_proxbox/js/logs.js' %}"></script>
+    <link rel="stylesheet" href="{% static 'netbox_proxbox/styles/logs.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="mdi mdi-file-document-outline"></i>
+                        {% trans "Backend Logs" %}
+                    </h5>
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input" type="checkbox" id="autoRefreshToggle" checked>
+                            <label class="form-check-label" for="autoRefreshToggle">
+                                {% trans "Auto-refresh" %}
+                            </label>
+                        </div>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="refreshBtn">
+                            <i class="mdi mdi-refresh"></i>
+                            {% trans "Refresh" %}
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="card-header">
+                <div class="row g-2 align-items-center">
+                    <div class="col-auto">
+                        <label for="levelFilter" class="col-form-label">{% trans "Level:" %}</label>
+                    </div>
+                    <div class="col-auto">
+                        <select class="form-select form-select-sm" id="levelFilter" style="width: auto;">
+                            <option value="">{% trans "All" %}</option>
+                            <option value="DEBUG">DEBUG</option>
+                            <option value="INFO">INFO</option>
+                            <option value="WARNING">WARNING</option>
+                            <option value="ERROR">ERROR</option>
+                            <option value="CRITICAL">CRITICAL</option>
+                        </select>
+                    </div>
+                    <div class="col-auto">
+                        <input type="text" class="form-control form-control-sm" id="operationIdFilter" placeholder="{% trans 'Operation ID' %}" style="width: 200px;">
+                    </div>
+                    <div class="col-auto">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="clearFiltersBtn">
+                            {% trans "Clear Filters" %}
+                        </button>
+                    </div>
+                    <div class="col-auto ms-auto" id="filterIndicator" style="display: none;">
+                        <span class="badge bg-info" id="activeFiltersBadge"></span>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm table-striped logs-table mb-0">
+                        <thead>
+                            <tr>
+                                <th style="width: 180px;">{% trans "Timestamp" %}</th>
+                                <th style="width: 80px;">{% trans "Level" %}</th>
+                                <th style="width: 150px;">{% trans "Module" %}</th>
+                                <th>{% trans "Message" %}</th>
+                                <th style="width: 120px;">{% trans "Operation" %}</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logsTableBody">
+                            <tr id="loadingRow">
+                                <td colspan="5" class="text-center text-muted py-4">
+                                    <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                    {% trans "Loading logs..." %}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div id="noLogsMessage" class="text-center py-4" style="display: none;">
+                    <p class="text-muted mb-0">{% trans "No logs to display" %}</p>
+                </div>
+                <div id="errorMessage" class="text-center py-4" style="display: none;">
+                    <p class="text-danger mb-0" id="errorText"></p>
+                </div>
+            </div>
+            <div class="card-footer">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="text-muted small">
+                        <span id="logCount">0</span> {% trans "logs" %}
+                        <span id="totalCount" class="text-muted" style="display: none;"></span>
+                    </div>
+                    <div>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="loadMoreBtn" style="display: none;">
+                            {% trans "Load More" %}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<template id="logRowTemplate">
+    <tr class="log-entry">
+        <td class="log-timestamp"></td>
+        <td class="log-level"></td>
+        <td class="log-module"></td>
+        <td class="log-message"></td>
+        <td class="log-operation"></td>
+    </tr>
+</template>
+{% endblock %}

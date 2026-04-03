@@ -165,4 +165,5 @@ urlpatterns = [
     path("proxmox-card/<int:pk>/", views.get_proxmox_card, name="proxmox_card"),
     path("websocket/<str:message>", WebSocketView.as_view(), name="websocket"),
     path("jobs/<int:pk>/stream/", views.JobStreamSSEView.as_view(), name="job_stream"),
+    path("logs/", views.BackendLogsView.as_view(), name="backend_logs"),
 ]

@@ -60,6 +60,11 @@ sync_jobs_item = PluginMenuItem(
     link_text="Sync Jobs",
 )
 
+backend_logs_item = PluginMenuItem(
+    link="plugins:netbox_proxbox:backend_logs",
+    link_text="Backend Logs",
+)
+
 settings_item = PluginMenuItem(
     link="plugins:netbox_proxbox:settings",
     link_text="Settings",
@@ -173,6 +178,7 @@ menu = PluginMenu(
                 task_history_item,
                 schedule_sync_item,
                 sync_jobs_item,
+                backend_logs_item,
                 settings_item,
             ),
         ),
