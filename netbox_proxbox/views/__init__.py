@@ -51,6 +51,7 @@ from .endpoints import (
 )
 from .external_pages import DiscordView, DiscussionsView, TelegramView
 from .keepalive_status import get_service_status
+from .logs import BackendLogsView
 from .schedule_sync import QuickScheduleSyncFromHomeView, ScheduleSyncView
 from .settings import SettingsView
 from .storage import (

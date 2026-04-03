@@ -164,6 +164,18 @@ def test_job_log_view_uses_netbox_status_colors():
     assert "ip-addresses" in contents
 
 
+def test_backend_logs_page_javascript_filters_levels_client_side_and_fetches_operation_id():
+    contents = _read("netbox_proxbox/static/netbox_proxbox/js/logs.js")
+
+    assert 'params.append("operation_id", this.currentOperationId);' in contents
+    assert 'params.append("level", this.currentLevel);' not in contents
+    assert "log.level !== this.currentLevel" in contents
+    assert "scheduleOperationFetch()" in contents
+    assert "Client: level=" in contents
+    assert "Backend: operation=" in contents
+    assert "getLogLevelPriority" not in contents
+
+
 def test_combined_interface_views_import_vm_interface_directly():
     contents = _read("netbox_proxbox/views/__init__.py")
     assert "from virtualization.models import VMInterface, VirtualMachine" in contents
