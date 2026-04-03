@@ -155,6 +155,8 @@ def test_job_live_poll_alert_spans_the_card_width_and_keeps_streaming_messages()
     )
 
     assert "card border-info shadow-sm nb-job-live-card" in contents
+    assert "Queued" in contents
+    assert "data-proxbox-job-live-state-pill" in contents
     assert 'class="card-body d-flex flex-column gap-2"' in contents
     assert 'class="nb-job-progress-wrap w-100"' in contents
     assert 'class="progress nb-job-progress-track w-100"' in contents
@@ -197,6 +199,7 @@ def test_job_live_panel_script_is_the_shared_runtime_controller():
     assert "EventSource(streamUrl)" in contents
     assert "data-proxbox-job-live-summary-status" in contents
     assert "data-proxbox-job-live-root" in contents
+    assert "data-proxbox-job-live-state-pill" in contents
 
 
 def test_job_live_panel_styles_make_queued_state_visually_distinct():

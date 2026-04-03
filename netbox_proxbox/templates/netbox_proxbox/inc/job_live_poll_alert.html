@@ -15,6 +15,13 @@
     <div class="d-flex flex-wrap align-items-center gap-2">
       <strong>{% trans "Live job updates" %}</strong>
       <span id="nb-job-live-status-{{ job.pk }}" data-proxbox-job-live-status></span>
+      <span
+        class="badge text-bg-warning d-none"
+        data-proxbox-job-live-state-pill
+        aria-hidden="true"
+      >
+        {% trans "Queued" %}
+      </span>
     </div>
     <button
       type="button"
