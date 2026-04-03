@@ -15,7 +15,7 @@ def ensure_proxbox_backend_endpoints(
     netbox_payload = {
         "name": "netbox",
         "ip_address": "netbox",
-        "domain": "netbox",
+        "domain": "netbox.local",
         "port": 8080,
         "token_version": "v1",
         "token": netbox_token,
@@ -35,7 +35,7 @@ def ensure_proxbox_backend_endpoints(
     proxmox_payload = {
         "name": "mock-proxmox",
         "ip_address": "proxmox-mock",
-        "domain": "proxmox-mock",
+        "domain": "proxmox-mock.local",
         "port": 8006,
         "username": "root@pam",
         "token_name": "e2e",
@@ -69,7 +69,7 @@ def ensure_netbox_plugin_endpoints(
         f"{netbox_base_url}/api/plugins/proxbox/endpoints/proxmox/",
         {
             "name": "mock-proxmox",
-            "domain": "proxmox-mock",
+            "domain": "proxmox-mock.local",
             "port": 8006,
             "mode": "cluster",
             "username": "root@pam",
@@ -84,7 +84,7 @@ def ensure_netbox_plugin_endpoints(
         f"{netbox_base_url}/api/plugins/proxbox/endpoints/netbox/",
         {
             "name": "local-netbox",
-            "domain": "netbox",
+            "domain": "netbox.local",
             "port": 8080,
             "token_version": "v1",
             "token": {"id": netbox_token_id},
@@ -97,7 +97,7 @@ def ensure_netbox_plugin_endpoints(
         f"{netbox_base_url}/api/plugins/proxbox/endpoints/fastapi/",
         {
             "name": "local-proxbox-api",
-            "domain": "proxbox-api",
+            "domain": "proxbox-api.local",
             "port": 8000,
             "verify_ssl": False,
             "token": "",
