@@ -512,12 +512,16 @@ def load_plugin_module(
             self.kwargs = kwargs
 
     schedule_sync_stub.ScheduleSyncForm = ScheduleSyncForm
-    monkeypatch.setitem(sys.modules, "netbox_proxbox.forms.schedule_sync", schedule_sync_stub)
+    monkeypatch.setitem(
+        sys.modules, "netbox_proxbox.forms.schedule_sync", schedule_sync_stub
+    )
 
     schedule_hints_stub = types.ModuleType("netbox_proxbox.schedule_hints")
     schedule_hints_stub.has_recurring_proxbox_sync_all = lambda user: True
     schedule_hints_stub.quick_schedule_home_form_kwargs = lambda: {}
-    monkeypatch.setitem(sys.modules, "netbox_proxbox.schedule_hints", schedule_hints_stub)
+    monkeypatch.setitem(
+        sys.modules, "netbox_proxbox.schedule_hints", schedule_hints_stub
+    )
 
     package_name = "netbox_proxbox.views"
     package_module = types.ModuleType(package_name)

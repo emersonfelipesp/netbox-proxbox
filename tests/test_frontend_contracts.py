@@ -42,7 +42,10 @@ def test_home_template_uses_plugin_vanilla_js_entrypoint():
     assert 'id="sync-progress-label"' in contents
     assert 'id="sync-progress-state"' in contents
     assert "progress-bar progress-bar-striped progress-bar-animated" in contents
-    assert "{% include \"netbox_proxbox/partials/home_sync_actions_dropdown.html\" %}" in contents
+    assert (
+        '{% include "netbox_proxbox/partials/home_sync_actions_dropdown.html" %}'
+        in contents
+    )
     assert "data-sync-url" not in contents
     assert "data-sync-kind" not in contents
 
@@ -196,7 +199,9 @@ def test_job_live_panel_script_is_the_shared_runtime_controller():
 
 
 def test_home_job_live_summary_wraps_the_shared_live_panel_in_a_details_element():
-    contents = _read("netbox_proxbox/templates/netbox_proxbox/home/job_live_summary.html")
+    contents = _read(
+        "netbox_proxbox/templates/netbox_proxbox/home/job_live_summary.html"
+    )
 
     assert "<details" in contents
     assert "nb-proxbox-job-live-summary" in contents

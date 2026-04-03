@@ -20,7 +20,9 @@ class _JobQuerySet(list):
 
 
 def test_home_context_exposes_latest_active_proxbox_job(monkeypatch):
-    module = load_plugin_module("netbox_proxbox.views.home_context", monkeypatch=monkeypatch)
+    module = load_plugin_module(
+        "netbox_proxbox.views.home_context", monkeypatch=monkeypatch
+    )
 
     proxbox_job = SimpleNamespace(
         pk=2,
