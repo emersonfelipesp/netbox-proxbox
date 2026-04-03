@@ -56,6 +56,8 @@ sudo systemctl enable --now netbox-rq
     - **VM Disks** — sync VM virtual disks (run after VMs exist in NetBox).
     - **VM Backups** — sync all VM backup records.
     - **VM Snapshots** — sync all VM snapshot records.
+    - **Backup Routines** — sync Proxmox vzdump backup schedules.
+    - **Replications** — sync Proxmox storage replication jobs.
 
     When you pick several types (not **All**), the job runs them **in order**: devices → storage → virtual machines → VM disks → VM backups → VM snapshots, skipping any type you did not select.
 3. Optionally set a **Schedule at** time. Leave blank to run immediately.

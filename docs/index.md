@@ -32,6 +32,8 @@ The current codebase includes NetBox models for:
 - VM backups
 - VM snapshots
 - Proxmox clusters and hypervisor nodes (with links to NetBox Cluster and Device objects)
+- Backup routines (Proxmox vzdump schedules with retention policies)
+- Replications (Proxmox storage replication metadata)
 
 The plugin UI exposes sync actions for:
 
@@ -41,6 +43,10 @@ The plugin UI exposes sync actions for:
 - full update
 - VM backups
 - VM snapshots
+- Backup routines
+- Replications
+
+The plugin also provides a Backend Logs page for real-time log viewing from the proxbox-api backend.
 
 ## Architecture
 
