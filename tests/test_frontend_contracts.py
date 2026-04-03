@@ -192,10 +192,18 @@ def test_job_live_panel_script_is_the_shared_runtime_controller():
     assert "summaryRoot.open = false" in contents
     assert "isQueuedLikeStatus" in contents
     assert "isRunningLikeStatus" in contents
+    assert "applyStatusPresentation" in contents
     assert "collapseSummaryIfNeeded" in contents
     assert "EventSource(streamUrl)" in contents
     assert "data-proxbox-job-live-summary-status" in contents
     assert "data-proxbox-job-live-root" in contents
+
+
+def test_job_live_panel_styles_make_queued_state_visually_distinct():
+    contents = _read("netbox_proxbox/static/netbox_proxbox/css/job_log_view.css")
+
+    assert "nb-job-live-card-queued" in contents
+    assert "bs-warning-rgb" in contents
 
 
 def test_home_job_live_summary_wraps_the_shared_live_panel_in_a_details_element():

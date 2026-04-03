@@ -3,6 +3,15 @@
   width: 100%;
 }
 
+.nb-job-live-card.nb-job-live-card-queued {
+  border-color: rgba(var(--bs-warning-rgb), 0.7) !important;
+  box-shadow: 0 0 0 0.08rem rgba(var(--bs-warning-rgb), 0.18);
+}
+
+.nb-job-live-card.nb-job-live-card-queued .card-header {
+  background: rgba(var(--bs-warning-rgb), 0.08);
+}
+
 .nb-proxbox-job-live-summary > summary {
   list-style: none;
   cursor: pointer;

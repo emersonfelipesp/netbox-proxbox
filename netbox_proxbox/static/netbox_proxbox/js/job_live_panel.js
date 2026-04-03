@@ -105,6 +105,37 @@
     }
   }
 
+  function applyStatusPresentation(statusValue) {
+    if (!statusEl) {
+      return;
+    }
+
+    var normalized = String(statusValue || "").trim().toLowerCase();
+    var classes = ["nb-job-live-status", "fw-semibold"];
+    if (normalized === "waiting" || normalized === "queued" || normalized === "pending" || normalized === "scheduled") {
+      classes.push("text-warning");
+    } else if (normalized === "running" || normalized === "progress" || normalized === "started" || normalized === "streaming") {
+      classes.push("text-info");
+    } else if (normalized === "completed") {
+      classes.push("text-success");
+    } else if (normalized === "failed" || normalized === "errored") {
+      classes.push("text-danger");
+    } else {
+      classes.push("text-body-secondary");
+    }
+    statusEl.className = classes.join(" ");
+
+    if (root) {
+      root.classList.toggle(
+        "nb-job-live-card-queued",
+        normalized === "waiting" ||
+          normalized === "queued" ||
+          normalized === "pending" ||
+          normalized === "scheduled"
+      );
+    }
+  }
+
   function isQueuedCompletion(payload) {
     if (!payload || typeof payload !== "object") {
       return false;
@@ -124,6 +155,7 @@
     lastStatusValue = normalizedNextStatus;
     lastStatusLabel = String(nextStatusLabel || "").trim() || normalizedNextStatus;
     expandSummaryIfNeeded(normalizedPreviousStatus, normalizedNextStatus);
+    applyStatusPresentation(normalizedNextStatus);
   }
 
   function updateSummaryDisplay() {
@@ -218,6 +250,7 @@
       );
     }
 
+    applyStatusPresentation(lastStatusValue);
     updateSummaryDisplay();
   }
 
