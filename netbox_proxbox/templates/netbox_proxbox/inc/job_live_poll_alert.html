@@ -2,16 +2,25 @@
 {% trans "log lines" as nb_job_log_lines_suffix %}
 {% trans "Copy logs" as nb_copy_logs_label %}
 {% trans "Copied!" as nb_copied_label %}
-<div class="card border-info shadow-sm nb-job-live-card" role="alert">
+<div
+  class="card border-info shadow-sm nb-job-live-card"
+  role="alert"
+  data-proxbox-job-live-root
+  data-job-pk="{{ job.pk|default:'0' }}"
+  data-job-stream-url="{% url 'plugins:netbox_proxbox:job_stream' pk=job.pk|default:0 %}"
+  data-job-api-url="/api/core/jobs/{{ job.pk|default:'0' }}/"
+  data-job-log-suffix="{{ nb_job_log_lines_suffix|escape }}"
+>
   <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
     <div class="d-flex flex-wrap align-items-center gap-2">
       <strong>{% trans "Live job updates" %}</strong>
-      <span id="nb-job-live-status-{{ job.pk }}"></span>
+      <span id="nb-job-live-status-{{ job.pk }}" data-proxbox-job-live-status></span>
     </div>
     <button
       type="button"
       class="btn btn-sm btn-outline-secondary"
       id="nb-job-copy-logs-{{ job.pk }}"
+      data-proxbox-job-live-copy
       data-label-copy="{{ nb_copy_logs_label|escape }}"
       data-label-copied="{{ nb_copied_label|escape }}"
     >
@@ -19,12 +28,13 @@
     </button>
   </div>
   <div class="card-body d-flex flex-column gap-2">
-    <div class="nb-job-progress-wrap w-100" style="display:none">
+    <div class="nb-job-progress-wrap w-100" data-proxbox-job-live-progress-wrap style="display:none">
       <div class="progress nb-job-progress-track w-100" role="progressbar"
            aria-label="{% trans "Sync progress" %}"
            aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
         <div
           id="nb-job-progress-bar-{{ job.pk }}"
+          data-proxbox-job-live-progress-bar
           class="progress-bar bg-warning progress-bar-striped progress-bar-animated d-flex align-items-center justify-content-center"
           style="width: 100%; transition: width 0.3s ease;"
         >
@@ -34,6 +44,7 @@
     </div>
     <div
       id="nb-job-live-log-{{ job.pk }}"
+      data-proxbox-job-live-log
       class="nb-job-live-log"
       role="log"
       aria-live="polite"
@@ -41,406 +52,3 @@
     ></div>
   </div>
 </div>
-<script>
-(function () {
-  var pk = {{ job.pk|default:"0" }};
-  var statusEl = document.getElementById("nb-job-live-status-" + pk);
-  var logEl = document.getElementById("nb-job-live-log-" + pk);
-  var copyBtn = document.getElementById("nb-job-copy-logs-" + pk);
-  if (!statusEl) return;
-  var terminal = { completed: 1, errored: 1, failed: 1 };
-  var timer = null;
-  var logSuffix = " {{ nb_job_log_lines_suffix|escapejs }}";
-  var lastEntries = [];
-  var progressBarEl = document.getElementById("nb-job-progress-bar-" + pk);
-  var sseSource = null;
-  var isStreaming = false;
-  var stateStorageKey = "netbox-proxbox.job-live-state:" + pk;
-  var lastStatusValue = "";
-
-  function getSessionStorage() {
-    try {
-      return window.sessionStorage;
-    } catch (err) {
-      return null;
-    }
-  }
-
-  function readStoredState() {
-    var storage = getSessionStorage();
-    if (!storage) return null;
-    try {
-      var raw = storage.getItem(stateStorageKey);
-      if (!raw) return null;
-      var parsed = JSON.parse(raw);
-      return parsed && typeof parsed === "object" ? parsed : null;
-    } catch (err) {
-      return null;
-    }
-  }
-
-  function writeStoredState(extra) {
-    var storage = getSessionStorage();
-    if (!storage) return;
-    var payload = {
-      entries: Array.isArray(lastEntries) ? lastEntries : [],
-      statusText: statusEl ? statusEl.textContent : "",
-      statusValue: lastStatusValue,
-      updatedAt: new Date().toISOString(),
-    };
-    if (extra && typeof extra === "object") {
-      Object.keys(extra).forEach(function (key) {
-        payload[key] = extra[key];
-      });
-    }
-    try {
-      storage.setItem(stateStorageKey, JSON.stringify(payload));
-    } catch (err) {}
-  }
-
-  function restoreStoredState() {
-    var stored = readStoredState();
-    if (!stored) return;
-
-    if (Array.isArray(stored.entries) && stored.entries.length > 0) {
-      lastEntries = stored.entries.slice();
-      applyLog(lastEntries);
-    }
-
-    if (stored.statusValue != null) {
-      lastStatusValue = String(stored.statusValue);
-    }
-
-    if (stored.statusText && statusEl) {
-      statusEl.textContent = String(stored.statusText);
-    }
-
-    var api = window.NbProxboxJobLogView;
-    if (api && typeof api.applyProgress === "function") {
-      api.applyProgress(
-        progressBarEl,
-        { data: { status: stored.statusValue || "" } },
-        lastEntries
-      );
-    }
-  }
-
-  function jobStatusParts(status) {
-    if (status && typeof status === "object") {
-      var v = status.value != null ? String(status.value) : "";
-      var lbl = status.label != null ? String(status.label) : v;
-      return { value: v, label: lbl };
-    }
-    var s = status != null ? String(status) : "";
-    return { value: s, label: s };
-  }
-
-  function appendLog(message, eventType, data) {
-    if (!logEl) return;
-    var api = window.NbProxboxJobLogView;
-    var entry = {
-      timestamp: new Date().toISOString(),
-      level: eventType || "info",
-      message: message
-    };
-    if (!lastEntries) lastEntries = [];
-    lastEntries.push(entry);
-    if (lastEntries.length > 200) lastEntries.shift();
-    if (api && typeof api.renderLiveLog === "function") {
-      logEl.replaceChildren();
-      api.renderLiveLog(logEl, lastEntries);
-    } else {
-      var span = document.createElement("div");
-      span.className = "nb-job-live-log-entry";
-      span.textContent = entry.timestamp + " [" + entry.level + "] " + entry.message;
-      logEl.appendChild(span);
-    }
-    logEl.scrollTop = logEl.scrollHeight;
-    writeStoredState();
-  }
-
-  function getFrameMessage(data, eventType) {
-    if (typeof data === "string") {
-      return data;
-    }
-    if (!data || typeof data !== "object") {
-      return "";
-    }
-    if (typeof data.message === "string" && data.message.trim()) {
-      return data.message;
-    }
-    if (typeof data.detail === "string" && data.detail.trim()) {
-      return data.detail;
-    }
-    if (typeof data.error === "string" && data.error.trim()) {
-      return data.error;
-    }
-    if (eventType === "complete" && data.ok === true) {
-      return data.message || "Completed";
-    }
-    return "";
-  }
-
-  function updateProgress(progress) {
-    if (!progressBarEl) return;
-    var wrap = progressBarEl.parentElement.parentElement;
-    if (wrap && wrap.classList.contains("nb-job-progress-wrap")) {
-      wrap.style.display = "";
-    }
-    var pct = progress.percent !== undefined ? progress.percent : 100;
-    progressBarEl.style.width = pct + "%";
-    progressBarEl.setAttribute("aria-valuenow", pct);
-    var label = progressBarEl.querySelector(".nb-job-progress-label");
-    if (label) {
-      if (progress.stage) {
-        label.textContent = progress.stage + " (" + progress.current + "/" + progress.total + ")";
-      } else {
-        label.textContent = progress.current + "/" + progress.total;
-      }
-      label.className = "nb-job-progress-label small fw-semibold text-dark";
-    }
-    progressBarEl.classList.remove("bg-info", "bg-warning", "bg-success", "bg-danger");
-    progressBarEl.classList.add("bg-warning", "progress-bar-striped", "progress-bar-animated");
-    lastStatusValue = "progress";
-  }
-
-  function finishStream(status, message) {
-    lastStatusValue = status;
-    if (progressBarEl) {
-      progressBarEl.classList.remove("progress-bar-striped", "progress-bar-animated");
-      progressBarEl.classList.remove("bg-info", "bg-warning", "bg-success", "bg-danger");
-      progressBarEl.classList.add(status === "completed" ? "bg-success" : "bg-danger");
-      var label = progressBarEl.querySelector(".nb-job-progress-label");
-      if (label) {
-        label.textContent = status === "completed" ? "Done" : "Failed";
-        label.className = "nb-job-progress-label small fw-semibold text-white";
-      }
-    }
-    if (message) {
-      appendLog(message, status === "completed" ? "success" : "error", {
-        status: status,
-        message: message,
-      });
-    }
-    if (statusEl) {
-      statusEl.textContent = status === "completed" ? " — Completed" : " — Failed";
-    }
-    if (sseSource) {
-      sseSource.close();
-      sseSource = null;
-    }
-    isStreaming = false;
-    writeStoredState();
-  }
-
-  function handleSSEFrame(eventType, data) {
-    var payload = data && typeof data === "object" ? data : {};
-    var message = getFrameMessage(payload, eventType);
-    var status = payload.status ? String(payload.status) : "";
-    var isTerminal = eventType === "complete" || status === "failed" || status === "errored" || eventType === "error";
-
-    if (message && !isTerminal) {
-      appendLog(
-        message,
-        eventType === "error"
-          ? "error"
-          : (eventType === "message" ? "info" : (status || eventType || "info")),
-        payload
-      );
-    }
-
-    if (payload.progress) {
-      updateProgress(payload.progress);
-    }
-
-    if (entries.length > 0 && api && typeof api.applyProgress === "function") {
-      api.applyProgress(progressBarEl, { data: payload }, entries);
-    }
-
-    if (status) {
-      lastStatusValue = status;
-    }
-    writeStoredState();
-
-    if (eventType === "complete") {
-      finishStream(payload.ok === false ? "failed" : "completed", message || payload.message || "");
-      return;
-    }
-    if (status === "failed" || eventType === "error") {
-      finishStream("failed", message || payload.detail || payload.error || "");
-    }
-  }
-
-  function startSSE() {
-    if (isStreaming) return;
-    var streamUrl = "{% url 'plugins:netbox_proxbox:job_stream' pk=job.pk|default:0 %}";
-    if (!pk) {
-      startPollingFallback();
-      return;
-    }
-    isStreaming = true;
-    try {
-      sseSource = new EventSource(streamUrl);
-      sseSource.addEventListener("step", function(e) {
-        try {
-          var data = JSON.parse(e.data);
-          handleSSEFrame("step", data);
-        } catch (err) {}
-      });
-      sseSource.addEventListener("message", function(e) {
-        try {
-          var data = JSON.parse(e.data);
-          handleSSEFrame("message", data);
-        } catch (err) {}
-      });
-      sseSource.addEventListener("error", function(e) {
-        if (!isStreaming) {
-          return;
-        }
-        isStreaming = false;
-        if (sseSource) {
-          sseSource.close();
-          sseSource = null;
-        }
-        startPollingFallback();
-      });
-      sseSource.addEventListener("complete", function(e) {
-        try {
-          var data = JSON.parse(e.data);
-          handleSSEFrame("complete", data);
-        } catch (err) {
-          finishStream("completed", "");
-        }
-      });
-      statusEl.textContent = " — Streaming...";
-      lastStatusValue = "running";
-      writeStoredState();
-    } catch (err) {
-      isStreaming = false;
-      startPollingFallback();
-    }
-  }
-
-  function applyLog(entries) {
-    if (!logEl) return;
-    var api = window.NbProxboxJobLogView;
-    lastEntries = entries;
-    if (api && typeof api.renderLiveLog === "function") {
-      api.renderLiveLog(logEl, lastEntries);
-    } else {
-      logEl.textContent = "";
-    }
-  }
-
-  function tick() {
-    fetch("/api/core/jobs/" + pk + "/", {
-      credentials: "same-origin",
-      headers: { Accept: "application/json" },
-    })
-      .then(function (r) {
-        if (!r.ok) throw new Error("poll failed");
-        return r.json();
-      })
-      .then(function (d) {
-        var st = jobStatusParts(d.status);
-        var entries = Array.isArray(d.log_entries) ? d.log_entries : [];
-        lastEntries = entries;
-        lastStatusValue = st.value;
-        var n = entries.length;
-        var display = st.label || st.value || "—";
-        var detail =
-          st.value && st.label && st.label !== st.value ? " (" + st.value + ")" : "";
-        statusEl.textContent = " — " + display + detail + " · " + n + logSuffix;
-        applyLog(entries);
-        var api = window.NbProxboxJobLogView;
-        if (api && typeof api.applyProgress === "function") {
-          api.applyProgress(progressBarEl, d, entries);
-        }
-        if (terminal[st.value]) {
-          if (timer) clearInterval(timer);
-          timer = null;
-          if (progressBarEl) {
-            progressBarEl.classList.remove("progress-bar-striped", "progress-bar-animated");
-            if (st.value === "errored" || st.value === "failed") {
-              progressBarEl.classList.remove("bg-info", "bg-warning", "bg-success");
-              progressBarEl.classList.add("bg-danger");
-            } else if (st.value === "completed") {
-              progressBarEl.classList.remove("bg-info", "bg-warning", "bg-danger");
-              progressBarEl.classList.add("bg-success");
-            }
-          }
-        }
-        writeStoredState();
-      })
-      .catch(function () {});
-  }
-
-  function startPollingFallback() {
-    tick();
-    timer = setInterval(tick, 2500);
-  }
-
-  function startPolling() {
-    restoreStoredState();
-    startSSE();
-    setTimeout(function() {
-      if (!isStreaming) startPollingFallback();
-    }, 1000);
-  }
-
-  if (copyBtn) {
-    copyBtn.addEventListener("click", function () {
-      var api = window.NbProxboxJobLogView;
-      var text =
-        api && typeof api.formatLogEntriesForClipboard === "function"
-          ? api.formatLogEntriesForClipboard(lastEntries)
-          : "";
-      var labelCopy = copyBtn.getAttribute("data-label-copy") || "Copy logs";
-      var labelCopied = copyBtn.getAttribute("data-label-copied") || "Copied!";
-
-      function restoreLabel() {
-        copyBtn.textContent = labelCopy;
-      }
-
-      function ok() {
-        copyBtn.textContent = labelCopied;
-        window.setTimeout(restoreLabel, 2000);
-      }
-
-      if (!text) {
-        return;
-      }
-
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(ok).catch(function () {
-          fallbackCopy(text, ok);
-        });
-      } else {
-        fallbackCopy(text, ok);
-      }
-    });
-  }
-
-  function fallbackCopy(text, onOk) {
-    var ta = document.createElement("textarea");
-    ta.value = text;
-    ta.setAttribute("readonly", "");
-    ta.style.position = "fixed";
-    ta.style.left = "-9999px";
-    document.body.appendChild(ta);
-    ta.select();
-    try {
-      if (document.execCommand("copy")) {
-        onOk();
-      }
-    } catch (e) {}
-    document.body.removeChild(ta);
-  }
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", startPolling);
-  } else {
-    startPolling();
-  }
-})();
-</script>

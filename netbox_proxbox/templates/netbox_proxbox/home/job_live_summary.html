@@ -1,0 +1,18 @@
+{% load i18n %}
+{% if job %}
+<div class="row mb-2 noprint">
+    <div class="col-12">
+        <details class="nb-proxbox-job-live-summary">
+            <summary class="alert alert-info py-2 px-3 mb-2 d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-2">
+                <span class="d-inline-flex flex-wrap align-items-center gap-2">
+                    <i class="mdi mdi-chevron-down" aria-hidden="true"></i>
+                    <strong>{% trans "Proxbox sync running" %}</strong>
+                    <span class="text-nowrap" data-proxbox-job-live-summary-status>{% trans "Loading…" %}</span>
+                </span>
+                <span class="small text-muted" data-proxbox-job-live-summary-detail>{% trans "Click to show live logs and progress" %}</span>
+            </summary>
+            {% include "netbox_proxbox/inc/job_live_poll_alert.html" with job=job %}
+        </details>
+    </div>
+</div>
+{% endif %}

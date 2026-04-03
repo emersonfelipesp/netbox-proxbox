@@ -153,6 +153,12 @@ def _manager(*, first=None, objects_by_pk=None, does_not_exist=None):
         def filter(self, *args, **kwargs):
             return self
 
+        def order_by(self, *args, **kwargs):
+            return self
+
+        def iterator(self, chunk_size=64):
+            return iter(self)
+
         def get(self, *args, **kwargs):
             pk = kwargs.get("pk")
             if pk is None and args:
@@ -254,6 +260,32 @@ def load_plugin_module(
     django_utils_translation = types.ModuleType("django.utils.translation")
     django_utils_translation.gettext_lazy = lambda x: x
 
+    django_db_models = types.ModuleType("django.db.models")
+
+    class Q:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __or__(self, other):
+            return self
+
+    django_db_models.Q = Q
+
+    utilities_datetime = types.ModuleType("utilities.datetime")
+    utilities_datetime.local_now = lambda: __import__("datetime").datetime(
+        2026, 1, 1, 1, 0, 0, tzinfo=__import__("datetime").timezone.utc
+    )
+
+    netbox_constants = types.ModuleType("netbox.constants")
+    netbox_constants.RQ_QUEUE_DEFAULT = "default"
+
+    netbox_jobs = types.ModuleType("netbox.jobs")
+
+    class JobRunner:
+        pass
+
+    netbox_jobs.JobRunner = JobRunner
+
     django_auth = types.ModuleType("django.contrib.auth")
     django_auth_decorators = types.ModuleType("django.contrib.auth.decorators")
     django_auth_decorators.login_required = lambda func: func
@@ -340,6 +372,22 @@ def load_plugin_module(
     virtualization_models_module.Cluster = _make_model_class("Cluster")
     virtualization_models_module.VirtualMachine = _make_model_class("VirtualMachine")
     virtualization_module.models = virtualization_models_module
+    core_module = types.ModuleType("core")
+    core_choices = types.ModuleType("core.choices")
+    core_choices.JobStatusChoices = SimpleNamespace(
+        ENQUEUED_STATE_CHOICES=("pending", "scheduled", "running"),
+        TERMINAL_STATE_CHOICES=("completed", "errored", "failed"),
+        STATUS_PENDING="pending",
+        STATUS_SCHEDULED="scheduled",
+        STATUS_RUNNING="running",
+        STATUS_COMPLETED="completed",
+        STATUS_ERRORED="errored",
+        STATUS_FAILED="failed",
+    )
+    core_models = types.ModuleType("core.models")
+    core_models.Job = _make_model_class("Job")
+    core_module.choices = core_choices
+    core_module.models = core_models
     models_module.ProxmoxCluster = _make_model_class("ProxmoxCluster")
     models_module.ProxmoxNode = _make_model_class("ProxmoxNode")
     models_module.ProxmoxStorage = _make_model_class("ProxmoxStorage")
@@ -379,11 +427,18 @@ def load_plugin_module(
         "django.utils.html": django_utils_html,
         "django.utils.text": django_utils_text,
         "django.utils.translation": django_utils_translation,
+        "django.db.models": django_db_models,
+        "utilities.datetime": utilities_datetime,
+        "netbox.constants": netbox_constants,
+        "netbox.jobs": netbox_jobs,
         "django.contrib": django_contrib,
         "django.contrib.auth": django_auth,
         "django.contrib.auth.decorators": django_auth_decorators,
         "django.contrib.auth.mixins": django_auth_mixins,
         "django.contrib.messages": django_messages,
+        "core": core_module,
+        "core.choices": core_choices,
+        "core.models": core_models,
         "netbox": netbox_module,
         "netbox.plugins": netbox_plugins,
         "netbox_proxbox.models": models_module,
@@ -440,6 +495,7 @@ def load_plugin_module(
 
     nbp_jobs.ProxboxSyncJob = _ProxboxSyncJob
     nbp_jobs.PROXBOX_SYNC_QUEUE_NAME = "default"
+    nbp_jobs.is_proxbox_sync_job = lambda job: True
     monkeypatch.setitem(sys.modules, "netbox_proxbox.jobs", nbp_jobs)
 
     package_name = "netbox_proxbox.views"
