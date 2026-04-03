@@ -198,14 +198,12 @@ class JobStreamSSEView(View):
                             {
                                 "step": "job",
                                 "status": "waiting",
-                                "message": (
-                                    f"Job is still {queued_status}; continuing to poll."
-                                ),
+                                "message": f"Job is still {queued_status}; waiting for a worker.",
                             },
                         )
                         emit_complete(
                             False,
-                            f"Job is still {queued_status}; continuing to poll.",
+                            f"Job is still {queued_status}; waiting for a worker.",
                             status="waiting",
                         )
                         return
