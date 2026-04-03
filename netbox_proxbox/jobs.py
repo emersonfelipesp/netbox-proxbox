@@ -184,18 +184,16 @@ def _serialize_sync_params(
     batch_object_ids: list[str] | None = None,
 ) -> dict[str, object]:
     """Return a backward-compatible params block for Job.data."""
+    if len(sync_types) == 1:
+        sync_type = sync_types[0]
+    elif netbox_vm_ids:
+        sync_type = SyncTypeChoices.VIRTUAL_MACHINES
+    else:
+        sync_type = SyncTypeChoices.ALL
+
     return {
         "sync_types": list(sync_types),
-        # Keep the legacy singular field for older readers that still expect it.
-        "sync_type": (
-            sync_types[0]
-            if len(sync_types) == 1
-            else (
-                SyncTypeChoices.VIRTUAL_MACHINES
-                if netbox_vm_ids
-                else SyncTypeChoices.ALL
-            )
-        ),
+        "sync_type": sync_type,
         "proxmox_endpoint_ids": list(proxmox_endpoint_ids),
         "netbox_endpoint_ids": list(netbox_endpoint_ids),
         "netbox_vm_ids": list(netbox_vm_ids),
