@@ -241,7 +241,7 @@ def test_backend_logs_page_javascript_supports_errors_tab_and_copy_button():
     assert 'params.append("newer_than_id", this.newestLoadedId);' in contents
     assert 'params.append("older_than_id", this.oldestLoadedId);' in contents
     assert 'params.append("level", this.currentLevel);' in contents
-    assert "this.currentTab === \"errors\"" in contents
+    assert 'this.currentTab === "errors"' in contents
     assert "copyLogsToClipboard()" in contents
     assert "navigator.clipboard.writeText(text)" in contents
     assert "this.displayedLogs" in contents
