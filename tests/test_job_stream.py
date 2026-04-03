@@ -219,7 +219,7 @@ def test_job_stream_reports_queued_waiting_state_instead_of_failure(
     chunks = list(view._stream_job_events(job))
 
     assert any(
-        "event: step" in chunk and "continuing to poll" in chunk for chunk in chunks
+        "event: step" in chunk and "waiting for a worker" in chunk for chunk in chunks
     )
     assert any(
         "event: complete" in chunk and '"status": "waiting"' in chunk for chunk in chunks

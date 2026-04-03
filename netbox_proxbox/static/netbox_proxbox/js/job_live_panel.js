@@ -368,9 +368,9 @@
 
     if (eventType === "complete") {
       if (isQueuedCompletion(payload)) {
-        setStatusValue("waiting", "Waiting", previousStatus);
+        setStatusValue("waiting", "Queued", previousStatus);
         if (statusEl) {
-          statusEl.textContent = " — Waiting";
+          statusEl.textContent = " — Queued";
         }
         if (sseSource) {
           sseSource.close();
