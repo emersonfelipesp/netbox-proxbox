@@ -6,7 +6,7 @@ from netbox.api.fields import ChoiceField
 from netbox.api.serializers import NetBoxModelSerializer
 from rest_framework import serializers
 
-from netbox_proxbox.api.serializers.endpoints import NestedProxmoxEndpointSerializer
+from netbox_proxbox.api.serializers.cluster import NestedProxmoxEndpointSerializer
 from netbox_proxbox.api.serializers.storage import NestedProxmoxStorageSerializer
 from netbox_proxbox.choices import BackupRoutineStatusChoices
 from netbox_proxbox.models import BackupRoutine, ProxmoxNode
