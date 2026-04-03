@@ -4,13 +4,12 @@ This directory contains the plugin's browser-side JavaScript.
 
 ## Files And Ownership
 
-- [`common.js`](./common.js): shared helpers used across plugin pages (badge state, tooltip setup, CSRF token retrieval).
+- [`common.js`](./common.js): shared helpers used across plugin pages, including badge state, tooltip setup, and CSRF token retrieval.
 - [`device.js`](./device.js): client behavior for device/node sync views.
 - [`endpoint-status.js`](./endpoint-status.js): periodic refresh for keepalive/status badges across dashboard and list pages.
-- [`home.js`](./home.js): home dashboard interactions and card/status updates. It initializes
-  websocket support (when enabled), refreshes keepalive status badges, and hydrates Proxmox
-  cards with cluster metadata and inline warning/error messages.
+- [`home.js`](./home.js): home dashboard interactions and card/status updates. It initializes websocket support when enabled, refreshes keepalive status badges, and hydrates Proxmox cards with cluster metadata and inline warning/error messages.
 - [`job_log_view.js`](./job_log_view.js): browser rendering helpers for the streamed Proxbox job log payloads shown on Job detail pages.
+- [`logs.js`](./logs.js): browser behavior for the backend logs page.
 - [`polling.js`](./polling.js): repeated polling helpers for status or sync progress.
 - [`sync.js`](./sync.js): shared DOM/SSE helpers used by sync pages and backend stream consumers.
 - [`table.js`](./table.js): table-specific dynamic behavior.
@@ -20,7 +19,7 @@ This directory contains the plugin's browser-side JavaScript.
 ## Dependencies
 
 - Inbound: page templates include these scripts.
-- Outbound: plugin routes in `urls.py`, especially sync, keepalive, card, and `websocket/<message>` endpoints.
+- Outbound: plugin routes in `urls.py`, especially sync, keepalive, card, log, and `websocket/<message>` endpoints.
 
 ## Notes
 

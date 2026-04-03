@@ -1,24 +1,19 @@
 # `netbox_proxbox.api`
 
-This directory contains the NetBox plugin API surface for ProxBox. It exposes the API root,
-the nested plugin endpoint namespace, and model-backed viewsets and serializers for the
-plugin's main persisted objects.
+This directory contains the NetBox plugin API surface for ProxBox. It exposes the API root, the nested plugin endpoint namespace, and model-backed viewsets and serializers for the plugin's persisted objects.
 
 ## Files And Ownership
 
 - [`__init__.py`](./__init__.py): package marker.
 - [`urls.py`](./urls.py): API routing for the plugin root, endpoint namespace, and model viewsets.
-- [`views.py`](./views.py): `APIRootView` subclasses and `NetBoxModelViewSet` classes for
-  `ProxmoxEndpoint`, `NetBoxEndpoint`, `FastAPIEndpoint`, `ProxmoxStorage`, `VMBackup`,
-  `VMSnapshot`, and `VMTaskHistory`.
-- [`serializers/`](./serializers): package of API serializers (endpoints, storage, backups,
-  snapshots, task history), including write-only secret fields and v1/v2 NetBox token rules.
+- [`views.py`](./views.py): `APIRootView` subclasses and `NetBoxModelViewSet` classes for `ProxmoxEndpoint`, `NetBoxEndpoint`, `FastAPIEndpoint`, `ProxmoxCluster`, `ProxmoxNode`, `ProxmoxStorage`, `VMBackup`, `VMSnapshot`, `VMTaskHistory`, `BackupRoutine`, and `Replication`.
 - [`filters.py`](./filters.py): additional filter utilities used by the API router if needed.
+- [`serializers/`](./serializers): package of API serializers for endpoints, clusters, storage, backups, snapshots, task history, backup routines, and replications, including write-only secret fields and v1/v2 NetBox token rules.
 
 ## Dependencies
 
-- Inbound: NetBox plugin API router imports this package to expose `/api/plugins/proxbox/...`.
-- Outbound: `netbox_proxbox.models`, `netbox_proxbox.filtersets`, NetBox serializer/viewset base classes, nested serializers from `ipam` and `virtualization`, and `users.Token`.
+- Inbound: the NetBox plugin API router imports this package to expose `/api/plugins/proxbox/...`.
+- Outbound: `netbox_proxbox.models`, `netbox_proxbox.filtersets`, NetBox serializer/viewset base classes, nested serializers from `ipam`, `dcim`, and `virtualization`, and `users.Token`.
 
 ## Notes
 

@@ -12,7 +12,9 @@ This directory defines the plugin's persisted data model.
 - [`proxmox_cluster.py`](./proxmox_cluster.py): discovered Proxmox cluster model linked to endpoint and NetBox cluster data.
 - [`proxmox_node.py`](./proxmox_node.py): discovered Proxmox node model linked to endpoint and NetBox device data.
 - [`plugin_settings.py`](./plugin_settings.py): singleton plugin settings model.
-- [`storage.py`](./storage.py): `ProxmoxStorage` model and relations.
+- [`storage.py`](./storage.py): `ProxmoxStorage` model and `ProxmoxStorageVirtualDisk` relation model.
+- [`backup_routine.py`](./backup_routine.py): backup routine inventory model.
+- [`replication.py`](./replication.py): replication inventory model.
 - [`vm_backup.py`](./vm_backup.py): `VMBackup` model.
 - [`vm_snapshot.py`](./vm_snapshot.py): `VMSnapshot` model.
 - [`vm_task_history.py`](./vm_task_history.py): `VMTaskHistory` model.
@@ -25,7 +27,10 @@ This directory defines the plugin's persisted data model.
 - `FastAPIEndpoint`: stores the ProxBox backend HTTP/WebSocket target and optional backend token.
 - `ProxmoxCluster`: stores synchronized cluster metadata and relationships to the source endpoint and NetBox cluster.
 - `ProxmoxNode`: stores synchronized hypervisor nodes and their relationships to the source endpoint and NetBox device.
-- `ProxmoxStorage`: stores Proxmox storage inventory synchronized from backend.
+- `ProxmoxStorage`: stores Proxmox storage inventory synchronized from the backend.
+- `ProxmoxStorageVirtualDisk`: links storage rows to virtual disks.
+- `BackupRoutine`: stores backup routine inventory for NetBox-backed ProxBox sync.
+- `Replication`: stores replication job inventory for NetBox-backed ProxBox sync.
 - `VMBackup`: stores backup inventory for NetBox virtual machines.
 - `VMSnapshot`: stores snapshot inventory for NetBox virtual machines.
 - `VMTaskHistory`: stores VM task history records linked to NetBox virtual machines.
@@ -34,7 +39,7 @@ This directory defines the plugin's persisted data model.
 ## Dependencies
 
 - Inbound: forms, tables, filtersets, views, serializers, and migrations all rely on these model definitions.
-- Outbound: NetBox core model base classes plus related objects in `ipam`, `users`, and `virtualization`.
+- Outbound: NetBox core model base classes plus related objects in `dcim`, `ipam`, `users`, and `virtualization`.
 
 ## Notes
 
