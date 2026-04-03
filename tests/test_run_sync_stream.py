@@ -68,6 +68,21 @@ class _StreamResponse:
         yield from self._lines
 
 
+class _HealthResponse:
+    """Successful backend readiness probe response."""
+
+    status_code = 200
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+    def json(self):
+        return {"init_ok": True, "status": "ready"}
+
+
 class _ErrorBodyResponse:
     """Non-stream error response with JSON body."""
 
@@ -105,15 +120,26 @@ def _stream_context(bp):
     )
 
 
+def _mock_backend_get(response):
+    def fake_get(url, **kwargs):
+        if url.endswith("/health"):
+            assert "stream" not in kwargs
+            assert kwargs.get("verify") is True
+            return _HealthResponse()
+        assert kwargs.get("stream") is True
+        assert kwargs.get("verify") is True
+        return response
+
+    return fake_get
+
+
 def test_run_sync_stream_success(backend_proxy_module, monkeypatch):
     bp = backend_proxy_module
     urls: list[str] = []
 
     def fake_get(url, **kwargs):
         urls.append(url)
-        assert kwargs.get("stream") is True
-        assert kwargs.get("verify") is True
-        return _StreamResponse(_sse_complete_ok())
+        return _mock_backend_get(_StreamResponse(_sse_complete_ok()))(url, **kwargs)
 
     monkeypatch.setattr(bp.requests, "get", fake_get)
     monkeypatch.setattr(bp, "get_fastapi_request_context", lambda: _stream_context(bp))
@@ -134,7 +160,8 @@ def test_run_sync_stream_success(backend_proxy_module, monkeypatch):
     assert payload["response"]["ok"] is True
     assert payload["response"]["result"]["n"] == 3
     assert payload["path"] == "dcim/devices/create/stream"
-    assert urls[0].startswith("https://proxbox.local:8800/dcim/devices/create/stream")
+    assert urls[0] == "https://proxbox.local:8800/health"
+    assert urls[1].startswith("https://proxbox.local:8800/dcim/devices/create/stream")
 
 
 def test_run_sync_stream_success_with_list_result(backend_proxy_module, monkeypatch):
@@ -149,7 +176,7 @@ def test_run_sync_stream_success_with_list_result(backend_proxy_module, monkeypa
     monkeypatch.setattr(
         bp.requests,
         "get",
-        lambda *a, **k: _StreamResponse(lines),
+        _mock_backend_get(_StreamResponse(lines)),
     )
     monkeypatch.setattr(bp, "get_fastapi_request_context", lambda: _stream_context(bp))
 
@@ -174,7 +201,7 @@ def test_run_sync_stream_complete_ok_false(backend_proxy_module, monkeypatch):
     monkeypatch.setattr(
         bp.requests,
         "get",
-        lambda *a, **k: _StreamResponse(lines),
+        _mock_backend_get(_StreamResponse(lines)),
     )
     monkeypatch.setattr(bp, "get_fastapi_request_context", lambda: _stream_context(bp))
     payload, status = bp.run_sync_stream("full-update/stream")
@@ -192,7 +219,7 @@ def test_run_sync_stream_missing_complete(backend_proxy_module, monkeypatch):
     monkeypatch.setattr(
         bp.requests,
         "get",
-        lambda *a, **k: _StreamResponse(lines),
+        _mock_backend_get(_StreamResponse(lines)),
     )
     monkeypatch.setattr(bp, "get_fastapi_request_context", lambda: _stream_context(bp))
     payload, status = bp.run_sync_stream("dcim/devices/create/stream")
@@ -205,7 +232,7 @@ def test_run_sync_stream_http_error_json(backend_proxy_module, monkeypatch):
     monkeypatch.setattr(
         bp.requests,
         "get",
-        lambda *a, **k: _ErrorBodyResponse(502, {"detail": "bad gateway"}),
+        _mock_backend_get(_ErrorBodyResponse(502, {"detail": "bad gateway"})),
     )
     monkeypatch.setattr(bp, "get_fastapi_request_context", lambda: _stream_context(bp))
     payload, status = bp.run_sync_stream("dcim/devices/create/stream")
