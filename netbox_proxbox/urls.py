@@ -142,6 +142,11 @@ urlpatterns = [
         name="sync_backup_routines",
     ),
     path(
+        "sync/replications/",
+        views.sync_replications,
+        name="sync_replications",
+    ),
+    path(
         "sync/virtual-machines/virtual-disks/",
         views.sync_virtual_disks,
         name="sync_virtual_disks",
