@@ -25,19 +25,37 @@
                         <i class="mdi mdi-file-document-outline"></i>
                         {% trans "Backend Logs" %}
                     </h5>
-                    <div class="d-flex align-items-center gap-2">
+                    <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
                         <div class="form-check form-switch mb-0">
                             <input class="form-check-input" type="checkbox" id="autoRefreshToggle" checked>
                             <label class="form-check-label" for="autoRefreshToggle">
                                 {% trans "Auto-refresh" %}
                             </label>
                         </div>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="copyLogsBtn" data-label-copy="{% trans 'Copy to clipboard' %}" data-label-copied="{% trans 'Copied' %}">
+                            <i class="mdi mdi-content-copy"></i>
+                            <span data-copy-label>{% trans "Copy to clipboard" %}</span>
+                        </button>
                         <button type="button" class="btn btn-outline-secondary btn-sm" id="refreshBtn">
                             <i class="mdi mdi-refresh"></i>
                             {% trans "Refresh" %}
                         </button>
                     </div>
                 </div>
+            </div>
+            <div class="card-header pb-0">
+                <ul class="nav nav-tabs card-header-tabs logs-tabs" id="logsTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button type="button" class="nav-link active" id="allLogsTab" data-log-tab="all" role="tab" aria-controls="logsTableBody" aria-selected="true">
+                            {% trans "All" %}
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button type="button" class="nav-link" id="errorsLogsTab" data-log-tab="errors" role="tab" aria-controls="logsTableBody" aria-selected="false">
+                            {% trans "Errors" %}
+                        </button>
+                    </li>
+                </ul>
             </div>
             <div class="card-header">
                 <div class="row g-2 align-items-center">
@@ -53,6 +71,18 @@
                             <option value="ERROR">ERROR</option>
                             <option value="CRITICAL">CRITICAL</option>
                         </select>
+                    </div>
+                    <div class="col-auto">
+                        <label for="fromDateFilter" class="col-form-label">{% trans "From:" %}</label>
+                    </div>
+                    <div class="col-auto">
+                        <input type="datetime-local" class="form-control form-control-sm" id="fromDateFilter" style="width: 200px;">
+                    </div>
+                    <div class="col-auto">
+                        <label for="toDateFilter" class="col-form-label">{% trans "To:" %}</label>
+                    </div>
+                    <div class="col-auto">
+                        <input type="datetime-local" class="form-control form-control-sm" id="toDateFilter" style="width: 200px;">
                     </div>
                     <div class="col-auto">
                         <input type="text" class="form-control form-control-sm" id="operationIdFilter" placeholder="{% trans 'Operation ID' %}" style="width: 200px;">
