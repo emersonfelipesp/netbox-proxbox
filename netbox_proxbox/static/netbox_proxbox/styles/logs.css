@@ -1,5 +1,17 @@
 /* Backend Logs page styles */
 
+.logs-tabs {
+    margin-bottom: -1px;
+}
+
+.logs-tabs .nav-link {
+    font-weight: 600;
+}
+
+#copyLogsBtn {
+    white-space: nowrap;
+}
+
 .logs-table {
     font-size: 0.875rem;
 }
