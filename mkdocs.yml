@@ -100,6 +100,9 @@ nav:
     - VLAN Management: 'features/vlan-management.md'
     - Storage: 'features/storage.md'
     - Backup: 'features/backup.md'
+    - Backup Routines: 'features/backup-routines.md'
+    - Replications: 'features/replications.md'
+    - Backend Logs: 'features/backend-logs.md'
     - Monitoring: 'features/monitoring.md'
     - API Integration: 'features/api-integration.md'
   - Data Model:
