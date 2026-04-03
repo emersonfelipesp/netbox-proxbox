@@ -56,6 +56,7 @@ def proxbox_sync_job_module(monkeypatch):
             return SimpleNamespace(
                 use_guest_agent_interface_name=True,
                 proxbox_fetch_max_concurrency=8,
+                ignore_ipv6_link_local_addresses=True,
             )
 
     models_mod.ProxboxPluginSettings = _ProxboxPluginSettings

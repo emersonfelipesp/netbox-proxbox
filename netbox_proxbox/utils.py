@@ -4,15 +4,20 @@ from __future__ import annotations
 
 import os
 import subprocess
-
-from ipam.models import IPAddress
+from typing import TYPE_CHECKING
 
 from netbox_proxbox.schemas.backend_proxy import FastAPIUrlDict
 from netbox_proxbox.type_defs import FastAPIAuthSource, FastAPIUrlSource
 
+if TYPE_CHECKING:
+    from ipam.models import IPAddress
 
-def resolve_ip_address_initial(value: object) -> IPAddress | None:
+
+def resolve_ip_address_initial(value: object) -> "IPAddress | None":  # type: ignore[return-type]
     """Best-effort resolve a query-string IP address to an existing NetBox object."""
+    """Best-effort resolve a query-string IP address to an existing NetBox object."""
+    from ipam.models import IPAddress
+
     if value is None:
         return None
     if isinstance(value, IPAddress):
