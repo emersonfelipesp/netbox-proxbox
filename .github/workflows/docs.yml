@@ -38,6 +38,8 @@ jobs:
 
       - name: Deploy to gh-pages
         if: github.event_name == 'push'
+        env:
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
