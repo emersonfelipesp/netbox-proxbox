@@ -97,6 +97,7 @@ def test_netbox_status_v2_without_secret_fails_backend_validation(
 ):
     netbox_endpoint = SimpleNamespace(
         id=1,
+        pk=1,
         name="netbox",
         domain="netbox.local",
         ip_address=SimpleNamespace(address="10.0.0.20/24"),
@@ -136,6 +137,7 @@ def test_netbox_status_builds_full_v2_token_from_key_and_secret(
 ):
     netbox_endpoint = SimpleNamespace(
         id=1,
+        pk=1,
         name="netbox",
         domain=None,
         ip_address="10.0.0.20/24",

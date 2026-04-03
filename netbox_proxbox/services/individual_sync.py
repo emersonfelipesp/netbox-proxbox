@@ -6,30 +6,12 @@ import logging
 
 import requests
 
-from netbox_proxbox.models import FastAPIEndpoint
-from netbox_proxbox.utils import get_backend_auth_headers, get_fastapi_url
+from netbox_proxbox.utils import get_first_fastapi_context
 
 logger = logging.getLogger(__name__)
 
 _INDIVIDUAL_SYNC_TIMEOUT = 30
 _CONTEXT_KEYS = ("cluster_name", "node", "type", "vmid", "storage_name")
-
-
-def get_fastapi_context() -> dict | None:
-    """Build auth headers and URLs for the first configured FastAPI endpoint."""
-    fastapi_service_obj = FastAPIEndpoint.objects.first()
-    if fastapi_service_obj is None:
-        return None
-
-    raw = get_fastapi_url(fastapi_service_obj) or {}
-    if not isinstance(raw, dict):
-        raw = {}
-    return {
-        "http_url": raw.get("http_url"),
-        "ip_address_url": raw.get("ip_address_url"),
-        "verify_ssl": bool(raw.get("verify_ssl", True)),
-        "headers": get_backend_auth_headers(fastapi_service_obj),
-    }
 
 
 def sync_individual(
@@ -45,7 +27,7 @@ def sync_individual(
     Returns:
         Tuple of (response_dict, status_code)
     """
-    context = get_fastapi_context()
+    context = get_first_fastapi_context()
     if context is None or not context.get("http_url"):
         return {"error": "No FastAPI endpoint configured."}, 503
 

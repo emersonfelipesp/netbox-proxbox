@@ -37,6 +37,7 @@ def _load_individual_sync_module(monkeypatch):
     utils_stub = types.ModuleType("netbox_proxbox.utils")
     utils_stub.get_fastapi_url = lambda obj: {}
     utils_stub.get_backend_auth_headers = lambda obj: {}
+    utils_stub.get_first_fastapi_context = lambda: None
     monkeypatch.setitem(sys.modules, "netbox_proxbox.utils", utils_stub)
 
     sys.modules.pop("netbox_proxbox.services.individual_sync", None)

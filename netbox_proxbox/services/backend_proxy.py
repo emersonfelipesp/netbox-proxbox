@@ -58,19 +58,18 @@ def sse_error_frames(
 
 def get_fastapi_request_context() -> BackendRequestContext | None:
     """Build auth headers and URLs for the first configured FastAPI endpoint, if any."""
-    fastapi_service_obj = FastAPIEndpoint.objects.first()
-    if fastapi_service_obj is None:
+    from netbox_proxbox.utils import get_first_fastapi_context
+
+    context = get_first_fastapi_context()
+    if context is None:
         return None
 
-    raw = get_fastapi_url(fastapi_service_obj) or {}
-    if not isinstance(raw, dict):
-        raw = {}
     return BackendRequestContext(
-        detail=dict(raw),
-        http_url=raw.get("http_url"),
-        ip_address_url=raw.get("ip_address_url"),
-        verify_ssl=bool(raw.get("verify_ssl", True)),
-        headers=get_backend_auth_headers(fastapi_service_obj),
+        detail=context,
+        http_url=context.get("http_url"),
+        ip_address_url=context.get("ip_address_url"),
+        verify_ssl=context.get("verify_ssl", True),
+        headers=context.get("headers", {}),
     )
 
 

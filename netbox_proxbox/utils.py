@@ -30,7 +30,37 @@ def get_backend_auth_headers(endpoint: FastAPIAuthSource | None) -> dict[str, st
     return {"Authorization": f"Bearer {token}"}
 
 
-def get_fastapi_url(endpoint: FastAPIUrlSource) -> FastAPIUrlDict:
+def get_fastapi_context(endpoint: FastAPIUrlSource) -> dict | None:
+    """Build auth headers and URLs for a FastAPI endpoint.
+
+    Returns a dict with http_url, ip_address_url, verify_ssl, and headers.
+    Returns None if endpoint is None or no FastAPI endpoint is configured.
+    """
+    if endpoint is None:
+        return None
+
+    url_dict = get_fastapi_url(endpoint)
+    raw = url_dict.model_dump() if hasattr(url_dict, "model_dump") else dict(url_dict)
+
+    return {
+        "http_url": raw.get("http_url"),
+        "ip_address_url": raw.get("ip_address_url"),
+        "verify_ssl": bool(raw.get("verify_ssl", True)),
+        "headers": get_backend_auth_headers(endpoint),
+    }
+
+
+def get_first_fastapi_context() -> dict | None:
+    """Get context for the first configured FastAPI endpoint, if any."""
+    from netbox_proxbox.models import FastAPIEndpoint
+
+    fastapi_obj = FastAPIEndpoint.objects.first()
+    if fastapi_obj is None:
+        return None
+    return get_fastapi_context(fastapi_obj)
+
+
+def get_fastapi_url(endpoint: FastAPIUrlSource) -> dict:
     """Compute HTTP/WebSocket URLs and TLS settings for a FastAPI endpoint model."""
     ip = get_ip_address_host(getattr(endpoint, "ip_address", None))
     domain = getattr(endpoint, "domain", None) or ip

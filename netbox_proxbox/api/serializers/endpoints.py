@@ -202,9 +202,7 @@ class NetBoxEndpointSerializer(NetBoxModelSerializer):
             attrs["token_key"] = token_key
             attrs["token_secret"] = token_secret
         else:
-            raise serializers.ValidationError(
-                {"token": "Select an existing API token to use v1 authentication."}
-            )
+            attrs["token_version"] = NetBoxTokenVersionChoices.V1
             attrs["token_key"] = ""
             attrs["token_secret"] = ""
 

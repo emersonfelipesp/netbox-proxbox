@@ -190,6 +190,167 @@ class ServiceStatus:
             http_status=self.last_error_http_status,
         )
 
+    def _build_netbox_payload(
+        self,
+        netbox_service_obj: NetBoxEndpoint,
+        ip_address: str,
+        domain: str,
+    ) -> dict[str, object] | None:
+        """Build compact NetBox endpoint payload for backend sync."""
+        credentials = self._effective_netbox_backend_credentials(netbox_service_obj)
+        payload: dict[str, object] = {
+            "id": netbox_service_obj.pk,
+            "name": netbox_service_obj.name or None,
+            "ip_address": ip_address,
+            "domain": domain,
+            "port": netbox_service_obj.port or None,
+            "token": credentials.get("token"),
+            "token_version": credentials.get("token_version"),
+            "token_key": credentials.get("token_key"),
+            "verify_ssl": bool(netbox_service_obj.verify_ssl),
+        }
+        return self._compact_payload(payload)
+
+    def _validate_netbox_payload(
+        self,
+        payload: dict[str, object],
+        target_address: str,
+        target_port: int,
+    ) -> ServiceCheckResult | None:
+        """Validate NetBox credentials and return error result if invalid."""
+        token_version = payload.get("token_version")
+        if token_version == "v1" and not payload.get("token"):
+            self._set_error(
+                "NetBox v1 token is missing. Select a v1 token with a retrievable plaintext value, or switch to v2 key/secret credentials."
+            )
+            return ServiceCheckResult(
+                target_address=target_address,
+                target_port=target_port,
+                authentication="error",
+                api_access="error",
+                detail=self.last_error_detail,
+            )
+        if token_version == "v2" and (
+            not payload.get("token") or not payload.get("token_key")
+        ):
+            self._set_error(
+                "NetBox v2 credentials are incomplete. Provide both token key and token secret."
+            )
+            return ServiceCheckResult(
+                target_address=target_address,
+                target_port=target_port,
+                authentication="error",
+                api_access="error",
+                detail=self.last_error_detail,
+            )
+        return None
+
+    def _sync_netbox_to_backend(
+        self,
+        base_url: str,
+        current_netbox: dict[str, object],
+        auth_headers: dict[str, str],
+    ) -> bool:
+        """Sync NetBox endpoint to backend (create/update/delete stale). Returns success."""
+        netbox_endpoint_url = f"{base_url}/netbox/endpoint"
+        max_retries = 3
+        retry_delay = 1
+
+        for attempt in range(max_retries):
+            try:
+                response = requests.get(
+                    netbox_endpoint_url,
+                    headers=auth_headers,
+                    timeout=self.request_timeout,
+                )
+                response.raise_for_status()
+                endpoints_data, json_err = parse_requests_response_json(
+                    response, log_label="netbox/endpoint"
+                )
+                if json_err or not isinstance(endpoints_data, list):
+                    if attempt < max_retries - 1:
+                        time.sleep(retry_delay)
+                    continue
+
+                if not endpoints_data:
+                    create_resp = requests.post(
+                        netbox_endpoint_url,
+                        json=current_netbox,
+                        headers=auth_headers,
+                        timeout=self.request_timeout,
+                    )
+                    create_resp.raise_for_status()
+                    time.sleep(retry_delay)
+                    return True
+
+                target = next(
+                    (
+                        ep
+                        for ep in endpoints_data
+                        if ep.get("id") == current_netbox.get("id")
+                    ),
+                    endpoints_data[0],
+                )
+                target_id = target["id"]
+                updated = target | current_netbox
+                updated["id"] = target_id
+
+                update_resp = requests.put(
+                    f"{netbox_endpoint_url}/{target_id}",
+                    json=updated,
+                    headers=auth_headers,
+                    timeout=self.request_timeout,
+                )
+                update_resp.raise_for_status()
+
+                for endpoint in endpoints_data:
+                    endpoint_id = endpoint.get("id")
+                    if endpoint_id and endpoint_id != target_id:
+                        requests.delete(
+                            f"{netbox_endpoint_url}/{endpoint_id}",
+                            headers=auth_headers,
+                            timeout=self.request_timeout,
+                        )
+                return True
+
+            except requests.exceptions.HTTPError as exc:
+                detail, http_status = self._extract_error_detail(exc)
+                self._set_error(detail, http_status=http_status)
+                logger.error("NetBox sync attempt %s failed: %s", attempt + 1, exc)
+                return False
+            except requests.exceptions.RequestException as exc:
+                logger.error("NetBox sync attempt %s failed: %s", attempt + 1, exc)
+                if attempt < max_retries - 1:
+                    time.sleep(retry_delay)
+        return False
+
+    def _check_netbox_backend_status(
+        self,
+        base_url: str,
+        auth_headers: dict[str, str],
+    ) -> bool:
+        """Check if backend can reach NetBox. Returns success."""
+        netbox_status_route = f"{base_url}/netbox/status"
+        max_retries = 3
+        retry_delay = 1
+
+        for attempt in range(max_retries):
+            try:
+                response = requests.get(
+                    netbox_status_route,
+                    headers=auth_headers,
+                    timeout=self.request_timeout,
+                )
+                response.raise_for_status()
+                return True
+            except requests.exceptions.RequestException as exc:
+                logger.error(
+                    "NetBox status check attempt %s failed: %s", attempt + 1, exc
+                )
+                if attempt < max_retries - 1:
+                    time.sleep(retry_delay)
+        return False
+
     def netbox_status(
         self,
         pk: int,
@@ -198,13 +359,9 @@ class ServiceStatus:
     ) -> tuple[str, ServiceCheckResult]:
         """Sync NetBox endpoint metadata to the backend and return success or error."""
         status = "error"
-        max_retries = 3
-        retry_delay = 1
         self._clear_error()
 
         request_headers = auth_headers or {}
-        target_address = None
-        target_port = None
 
         try:
             netbox_service_obj = NetBoxEndpoint.objects.get(pk=pk)
@@ -225,39 +382,29 @@ class ServiceStatus:
         domain = (netbox_service_obj.domain or "").strip() or ip_address
         target_address = domain
         target_port = netbox_service_obj.port or 443
-        credentials = self._effective_netbox_backend_credentials(netbox_service_obj)
 
-        current_netbox: dict[str, object] = {
-            "id": pk,
-            "name": netbox_service_obj.name or None,
-            "ip_address": ip_address,
-            "domain": domain,
-            "port": netbox_service_obj.port or None,
-            "token": credentials.get("token"),
-            "token_version": credentials.get("token_version"),
-            "token_key": credentials.get("token_key"),
-            "verify_ssl": bool(netbox_service_obj.verify_ssl),
-        }
-        current_netbox = self._compact_payload(current_netbox)
-
-        token_version = current_netbox.get("token_version")
-        if token_version == "v1" and not current_netbox.get("token"):
-            self._set_error(
-                "NetBox v1 token is missing. Select a v1 token with a retrievable plaintext value, or switch to v2 key/secret credentials."
-            )
+        current_netbox = self._build_netbox_payload(
+            netbox_service_obj, ip_address, domain
+        )
+        if current_netbox is None:
             return status, ServiceCheckResult(
                 target_address=target_address,
                 target_port=target_port,
                 authentication="error",
                 api_access="error",
-                detail=self.last_error_detail,
+                detail="Failed to build NetBox payload",
             )
-        if token_version == "v2" and (
-            not current_netbox.get("token") or not current_netbox.get("token_key")
-        ):
-            self._set_error(
-                "NetBox v2 credentials are incomplete. Provide both token key and token secret."
-            )
+
+        validation_error = self._validate_netbox_payload(
+            current_netbox, target_address, target_port
+        )
+        if validation_error:
+            return status, validation_error
+
+        sync_ok = self._sync_netbox_to_backend(
+            base_url, current_netbox, request_headers
+        )
+        if not sync_ok:
             return status, ServiceCheckResult(
                 target_address=target_address,
                 target_port=target_port,
@@ -266,101 +413,10 @@ class ServiceStatus:
                 detail=self.last_error_detail,
             )
 
-        netbox_endpoint_url = f"{base_url}/netbox/endpoint"
-        netbox_status_route = f"{base_url}/netbox/status"
-
-        for attempt in range(max_retries):
-            try:
-                response = requests.get(
-                    netbox_endpoint_url,
-                    headers=request_headers,
-                    timeout=self.request_timeout,
-                )
-                response.raise_for_status()
-                endpoints_data, json_err = parse_requests_response_json(
-                    response, log_label="netbox/endpoint"
-                )
-                if json_err:
-                    self._set_error(json_err)
-                    logger.error(
-                        "NetBox endpoint list returned non-JSON on attempt %s: %s",
-                        attempt + 1,
-                        json_err,
-                    )
-                    if attempt < max_retries - 1:
-                        time.sleep(retry_delay)
-                    continue
-                if not isinstance(endpoints_data, list):
-                    self._set_error(
-                        "ProxBox backend returned invalid NetBox endpoint list payload."
-                    )
-                    if attempt < max_retries - 1:
-                        time.sleep(retry_delay)
-                    continue
-                endpoints = endpoints_data
-
-                if not endpoints:
-                    create_response = requests.post(
-                        netbox_endpoint_url,
-                        json=current_netbox,
-                        headers=request_headers,
-                        timeout=self.request_timeout,
-                    )
-                    create_response.raise_for_status()
-                    time.sleep(retry_delay)
-                else:
-                    target = next(
-                        (ep for ep in endpoints if ep.get("id") == pk), endpoints[0]
-                    )
-                    target_id = target["id"]
-                    updated_endpoint = target | current_netbox
-                    updated_endpoint["id"] = target_id
-
-                    update_response = requests.put(
-                        f"{netbox_endpoint_url}/{target_id}",
-                        json=updated_endpoint,
-                        headers=request_headers,
-                        timeout=self.request_timeout,
-                    )
-                    update_response.raise_for_status()
-
-                    for endpoint in endpoints:
-                        endpoint_id = endpoint.get("id")
-                        if endpoint_id and endpoint_id != target_id:
-                            delete_response = requests.delete(
-                                f"{netbox_endpoint_url}/{endpoint_id}",
-                                headers=request_headers,
-                                timeout=self.request_timeout,
-                            )
-                            delete_response.raise_for_status()
-
-                status_response = requests.get(
-                    netbox_status_route,
-                    headers=request_headers,
-                    timeout=self.request_timeout,
-                )
-                status_response.raise_for_status()
-                self._clear_error()
-                status = "success"
-                break
-            except requests.exceptions.RequestException as exc:
-                detail, http_status = self._extract_error_detail(exc)
-                self._set_error(detail, http_status=http_status)
-                response = getattr(exc, "response", None)
-                if response is not None:
-                    response_text = getattr(response, "text", "") or ""
-                    response_body = response_text[:500]
-                    logger.error(
-                        "NetBox status request failed on attempt %s with HTTP %s: %s",
-                        attempt + 1,
-                        response.status_code,
-                        response_body,
-                    )
-                logger.error(
-                    "NetBox status request failed on attempt %s: %s", attempt + 1, exc
-                )
-                if attempt < max_retries - 1:
-                    time.sleep(retry_delay)
+        status_ok = self._check_netbox_backend_status(base_url, request_headers)
+        if status_ok:
+            self._clear_error()
+            status = "success"
 
         return status, ServiceCheckResult(
             target_address=target_address,
