@@ -124,10 +124,15 @@ jobs:
       - name: Run full test suite
         run: uv run pytest --cov=netbox_proxbox --cov-report=term-missing --cov-report=xml tests
 
+  e2e-docker:
+    name: E2E Docker
+    needs: [prepare-release, validate-testpypi]
+    uses: ./.github/workflows/e2e-docker.yml
+
   publish-pypi:
     name: publish to PyPI
     if: github.event_name == 'push'
-    needs: [prepare-release, validate-testpypi]
+    needs: [prepare-release, validate-testpypi, e2e-docker]
     runs-on: ubuntu-latest
     steps:
       - name: Set up Python 3.13

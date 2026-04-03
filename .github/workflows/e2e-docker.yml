@@ -1,6 +1,7 @@
 name: E2E Docker
 
 on:
+  workflow_call:
   workflow_dispatch:
   schedule:
     - cron: "31 2 * * *"
