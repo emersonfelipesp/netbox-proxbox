@@ -27,7 +27,7 @@
 {% endblock %}
 
 {% block controls %}
-  <form class="btn-group" method="post" data-sync-url="{% url 'plugins:netbox_proxbox:sync_vm_backups' %}" data-sync-kind="backups">
+  <form class="btn-group" method="post" action="{% url 'plugins:netbox_proxbox:sync_vm_backups' %}" data-sync-url="{% url 'plugins:netbox_proxbox:sync_vm_backups' %}" data-sync-kind="backups">
     {% csrf_token %}
     <button type="submit" class="btn btn-primary" data-sync-url="{% url 'plugins:netbox_proxbox:sync_vm_backups' %}" data-sync-kind="backups">
       <i class="mdi mdi-sync" aria-hidden="true"></i> {% trans "Sync Backups" %}
