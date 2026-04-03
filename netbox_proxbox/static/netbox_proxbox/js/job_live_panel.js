@@ -8,6 +8,7 @@
   var logEl = null;
   var copyBtn = null;
   var progressBarEl = null;
+  var statePillEl = null;
   var summaryRoot = null;
   var summaryStatusEl = null;
   var summaryDetailEl = null;
@@ -105,12 +106,27 @@
     }
   }
 
+  function setQueuedStatePill(isQueued) {
+    if (!statePillEl) {
+      return;
+    }
+    statePillEl.className = isQueued ? "badge text-bg-warning" : "badge text-bg-warning d-none";
+    statePillEl.setAttribute("aria-hidden", isQueued ? "false" : "true");
+  }
+
   function applyStatusPresentation(statusValue) {
+    var normalized = String(statusValue || "").trim().toLowerCase();
+    setQueuedStatePill(
+      normalized === "waiting" ||
+        normalized === "queued" ||
+        normalized === "pending" ||
+        normalized === "scheduled"
+    );
+
     if (!statusEl) {
       return;
     }
 
-    var normalized = String(statusValue || "").trim().toLowerCase();
     var classes = ["nb-job-live-status", "fw-semibold"];
     if (normalized === "waiting" || normalized === "queued" || normalized === "pending" || normalized === "scheduled") {
       classes.push("text-warning");
@@ -597,6 +613,7 @@
     logEl = root.querySelector("[data-proxbox-job-live-log]");
     copyBtn = root.querySelector("[data-proxbox-job-live-copy]");
     progressBarEl = root.querySelector("[data-proxbox-job-live-progress-bar]");
+    statePillEl = root.querySelector("[data-proxbox-job-live-state-pill]");
     summaryRoot = root.closest("[data-proxbox-job-live-summary]");
     summaryStatusEl = summaryRoot
       ? summaryRoot.querySelector("[data-proxbox-job-live-summary-status]")
