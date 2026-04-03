@@ -29,8 +29,7 @@ jobs:
         run: |
           cat > Dockerfile.netbox-e2e <<'EOF'
           FROM netboxcommunity/netbox:v4.5
-          COPY . /tmp/netbox-proxbox
-          RUN uv pip install --python /opt/netbox/venv/bin/python --system /tmp/netbox-proxbox
+          RUN uv pip install --python /opt/netbox/venv/bin/python --system --upgrade proxbox-api netbox-proxbox
           RUN mkdir -p /etc/netbox/config
           RUN printf 'PLUGINS = ["netbox_proxbox"]\n' > /etc/netbox/config/plugins.py
           EOF
@@ -77,21 +76,6 @@ jobs:
             -e SUPERUSER_PASSWORD=admin \
             netbox-proxbox-e2e:local
 
-          docker run -d --name netbox-e2e-rqworker --network proxbox-e2e \
-            -e DB_HOST=netbox-e2e-postgres \
-            -e DB_NAME=netbox \
-            -e DB_USER=netbox \
-            -e DB_PASSWORD=netbox \
-            -e REDIS_HOST=netbox-e2e-redis \
-            -e REDIS_DATABASE=0 \
-            -e REDIS_CACHE_HOST=netbox-e2e-redis \
-            -e REDIS_CACHE_DATABASE=1 \
-            -e REDIS_TASK_HOST=netbox-e2e-redis \
-            -e REDIS_TASK_DATABASE=2 \
-            -e SECRET_KEY="$SECRET_KEY" \
-            --entrypoint /opt/netbox/venv/bin/python \
-            netbox-proxbox-e2e:local /opt/netbox/netbox/manage.py rqworker
-
       - name: Wait for stack readiness and create NetBox API token
         run: |
           set -eux
@@ -125,6 +109,26 @@ jobs:
 
           echo "NETBOX_TOKEN_ID=$TOKEN_ID" >> "$GITHUB_ENV"
           echo "NETBOX_API_TOKEN=$TOKEN_VALUE" >> "$GITHUB_ENV"
+
+      - name: Start NetBox rqworker
+        run: |
+          set -eux
+          SECRET_KEY='proxbox-e2e-secret-key-proxbox-e2e-secret-key-proxbox-e2e-secret-key'
+
+          docker run -d --name netbox-e2e-rqworker --network proxbox-e2e \
+            -e DB_HOST=netbox-e2e-postgres \
+            -e DB_NAME=netbox \
+            -e DB_USER=netbox \
+            -e DB_PASSWORD=netbox \
+            -e REDIS_HOST=netbox-e2e-redis \
+            -e REDIS_DATABASE=0 \
+            -e REDIS_CACHE_HOST=netbox-e2e-redis \
+            -e REDIS_CACHE_DATABASE=1 \
+            -e REDIS_TASK_HOST=netbox-e2e-redis \
+            -e REDIS_TASK_DATABASE=2 \
+            -e SECRET_KEY="$SECRET_KEY" \
+            --entrypoint /opt/netbox/venv/bin/python \
+            netbox-proxbox-e2e:local /opt/netbox/netbox/manage.py rqworker
 
       - name: Run stack e2e checks
         env:
