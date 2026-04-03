@@ -1,0 +1,53 @@
+<div class="row mb-2">
+    <div class="col-12 d-flex justify-content-center noprint">
+        <div class="dropdown m-2">
+            <button
+                class="btn btn-primary dropdown-toggle"
+                type="button"
+                data-bs-toggle="dropdown"
+                aria-expanded="false"
+                aria-label="Sync actions"
+            >
+                <i class="mdi mdi-sync" aria-hidden="true"></i>
+                Sync Actions
+            </button>
+            <div class="dropdown-menu p-2 shadow-sm">
+                <div class="d-grid gap-2" style="min-width: 18rem;">
+                    <form class="m-0" method="post" action="{% url 'plugins:netbox_proxbox:sync_devices' %}">
+                        {% csrf_token %}
+                        <button id="sync-nodes-button" type="submit" class="btn btn-primary w-100 text-start" data-sync-url="{% url 'plugins:netbox_proxbox:sync_devices' %}" data-sync-kind="devices">Sync Nodes</button>
+                    </form>
+                    <form class="m-0" method="post" action="{% url 'plugins:netbox_proxbox:sync_virtual_machines' %}">
+                        {% csrf_token %}
+                        <button id="sync-virtual-machines-button" type="submit" class="btn btn-primary w-100 text-start" data-sync-url="{% url 'plugins:netbox_proxbox:sync_virtual_machines' %}" data-sync-kind="virtual-machines">Sync Virtual Machines</button>
+                    </form>
+                    <form class="m-0" method="post" action="{% url 'plugins:netbox_proxbox:sync_virtual_disks' %}">
+                        {% csrf_token %}
+                        <button id="sync-virtual-disks-button" type="submit" class="btn btn-primary w-100 text-start" data-sync-url="{% url 'plugins:netbox_proxbox:sync_virtual_disks' %}" data-sync-kind="virtual-disks">Sync Virtual Disks</button>
+                    </form>
+                    <form class="m-0" method="post" action="{% url 'plugins:netbox_proxbox:sync_vm_backups' %}">
+                        {% csrf_token %}
+                        <button id="sync-backups-button" type="submit" class="btn btn-primary w-100 text-start" data-sync-url="{% url 'plugins:netbox_proxbox:sync_vm_backups' %}" data-sync-kind="backups">Sync Backups</button>
+                    </form>
+                    <form class="m-0" method="post" action="{% url 'plugins:netbox_proxbox:sync_vm_snapshots' %}">
+                        {% csrf_token %}
+                        <button id="sync-snapshots-button" type="submit" class="btn btn-primary w-100 text-start" data-sync-url="{% url 'plugins:netbox_proxbox:sync_vm_snapshots' %}" data-sync-kind="snapshots">Sync Snapshots</button>
+                    </form>
+                    <form class="m-0" method="post" action="{% url 'plugins:netbox_proxbox:sync_backup_routines' %}">
+                        {% csrf_token %}
+                        <button id="sync-backup-routines-button" type="submit" class="btn btn-primary w-100 text-start" data-sync-url="{% url 'plugins:netbox_proxbox:sync_backup_routines' %}" data-sync-kind="backup-routines">Sync Backup Routines</button>
+                    </form>
+                    <form class="m-0" method="post" action="{% url 'plugins:netbox_proxbox:sync_replications' %}">
+                        {% csrf_token %}
+                        <button id="sync-replications-button" type="submit" class="btn btn-primary w-100 text-start" data-sync-url="{% url 'plugins:netbox_proxbox:sync_replications' %}" data-sync-kind="replications">Sync Replications</button>
+                    </form>
+                    <div class="dropdown-divider my-1"></div>
+                    <form class="m-0" method="post" action="{% url 'plugins:netbox_proxbox:sync_full_update' %}">
+                        {% csrf_token %}
+                        <button id="sync-full-update-button" type="submit" class="btn btn-primary w-100 text-start" data-sync-url="{% url 'plugins:netbox_proxbox:sync_full_update' %}" data-sync-kind="full-update">Full Update Sync</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

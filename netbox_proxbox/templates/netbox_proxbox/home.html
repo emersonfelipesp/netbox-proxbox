@@ -56,46 +56,9 @@
                                 </p>
                             {% endif %}
                         </div>
-                        <div
-                            class="d-flex justify-content-center noprint"
-                            data-use-websocket="{% if object.use_websocket %}true{% else %}false{% endif %}"
-                            data-server-side-websocket="{% if object.server_side_websocket %}true{% else %}false{% endif %}"
-                        >
-                            <form class="m-2" method="post" action="{% url 'plugins:netbox_proxbox:sync_devices' %}">
-                                {% csrf_token %}
-                                <button id="sync-nodes-button" type="submit" class="btn btn-primary" data-sync-url="{% url 'plugins:netbox_proxbox:sync_devices' %}" data-sync-kind="devices">Sync Nodes</button>
-                            </form>
-                            <form class="m-2" method="post" action="{% url 'plugins:netbox_proxbox:sync_virtual_machines' %}">
-                                {% csrf_token %}
-                                <button id="sync-virtual-machines-button" type="submit" class="btn btn-primary" data-sync-url="{% url 'plugins:netbox_proxbox:sync_virtual_machines' %}" data-sync-kind="virtual-machines">Sync Virtual Machines</button>
-                            </form>
-                            <form class="m-2" method="post" action="{% url 'plugins:netbox_proxbox:sync_virtual_disks' %}">
-                                {% csrf_token %}
-                                <button id="sync-virtual-disks-button" type="submit" class="btn btn-primary" data-sync-url="{% url 'plugins:netbox_proxbox:sync_virtual_disks' %}" data-sync-kind="virtual-disks">Sync Virtual Disks</button>
-                            </form>
-                            <form class="m-2" method="post" action="{% url 'plugins:netbox_proxbox:sync_vm_backups' %}">
-                                {% csrf_token %}
-                                <button id="sync-backups-button" type="submit" class="btn btn-primary" data-sync-url="{% url 'plugins:netbox_proxbox:sync_vm_backups' %}" data-sync-kind="backups">Sync Backups</button>
-                            </form>
-                            <form class="m-2" method="post" action="{% url 'plugins:netbox_proxbox:sync_vm_snapshots' %}">
-                                {% csrf_token %}
-                                <button id="sync-snapshots-button" type="submit" class="btn btn-primary" data-sync-url="{% url 'plugins:netbox_proxbox:sync_vm_snapshots' %}" data-sync-kind="snapshots">Sync Snapshots</button>
-                            </form>
-                            <form class="m-2" method="post" action="{% url 'plugins:netbox_proxbox:sync_backup_routines' %}">
-                                {% csrf_token %}
-                                <button id="sync-backup-routines-button" type="submit" class="btn btn-primary" data-sync-url="{% url 'plugins:netbox_proxbox:sync_backup_routines' %}" data-sync-kind="backup-routines">Sync Backup Routines</button>
-                            </form>
-                            <form class="m-2" method="post" action="{% url 'plugins:netbox_proxbox:sync_replications' %}">
-                                {% csrf_token %}
-                                <button id="sync-replications-button" type="submit" class="btn btn-primary" data-sync-url="{% url 'plugins:netbox_proxbox:sync_replications' %}" data-sync-kind="replications">Sync Replications</button>
-                            </form>
-                            <form class="m-2" method="post" action="{% url 'plugins:netbox_proxbox:sync_full_update' %}">
-                                {% csrf_token %}
-                                <button id="sync-full-update-button" type="submit" class="btn btn-primary" data-sync-url="{% url 'plugins:netbox_proxbox:sync_full_update' %}" data-sync-kind="full-update">Full Update Sync</button>
-                            </form>
-                        </div>
                     </div>
                 {% endfor %}
+                {% include "netbox_proxbox/partials/home_sync_actions_dropdown.html" %}
             {% endif %}
         </div>
 

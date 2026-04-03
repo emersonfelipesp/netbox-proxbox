@@ -32,17 +32,30 @@ def test_runtime_code_no_longer_depends_on_django_htmx():
 def test_home_template_uses_plugin_vanilla_js_entrypoint():
     contents = _read("netbox_proxbox/templates/netbox_proxbox/home.html")
     assert "netbox_proxbox/home/quick_schedule_banner.html" in contents
+    assert "netbox_proxbox/partials/home_sync_actions_dropdown.html" in contents
     assert "netbox_proxbox/js/home.js" in contents
     assert "htmx.org" not in contents
     assert 'id="sync-progress-container"' in contents
     assert 'id="sync-progress-label"' in contents
     assert 'id="sync-progress-state"' in contents
     assert "progress-bar progress-bar-striped progress-bar-animated" in contents
-    assert 'method="post"' in contents
-    assert "{% csrf_token %}" in contents
-    assert 'type="submit"' in contents
+    assert "{% include \"netbox_proxbox/partials/home_sync_actions_dropdown.html\" %}" in contents
+    assert "data-sync-url" not in contents
+    assert "data-sync-kind" not in contents
+
+
+def test_home_sync_actions_dropdown_partial_renders_single_control_block():
+    contents = _read(
+        "netbox_proxbox/templates/netbox_proxbox/partials/home_sync_actions_dropdown.html"
+    )
+
+    assert "dropdown-toggle" in contents
+    assert "dropdown-menu" in contents
+    assert "Sync Actions" in contents
+    assert contents.count("Sync Actions") == 1
     assert "data-sync-url" in contents
     assert "data-sync-kind" in contents
+    assert "sync-full-update-button" in contents
 
 
 def test_home_template_exposes_prefilled_endpoint_quick_add_buttons():
