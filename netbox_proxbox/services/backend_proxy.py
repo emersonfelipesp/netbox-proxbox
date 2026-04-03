@@ -421,48 +421,14 @@ def sync_resource(
 def sync_full_update_resource(
     query_params: dict | None = None,
 ) -> tuple[dict[str, object], int]:
-    """Run devices, VMs, then backups stages against the backend in sequence."""
+    """Run full update against the backend's dedicated /full-update endpoint."""
     context = get_fastapi_request_context()
     if context is None or not context.http_url:
         return {"queued": False, "detail": "No FastAPI URL found."}, 404
 
-    requested_urls: list[str] = []
-    steps = [
-        ("devices", "dcim/devices/create"),
-        ("virtual-machines", "virtualization/virtual-machines/create"),
-        ("backups", "virtualization/virtual-machines/backups/all/create"),
-        ("snapshots", "virtualization/virtual-machines/snapshots/all/create"),
-    ]
-    responses: dict[str, dict] = {}
-
-    for stage, path in steps:
-        step_params = dict(query_params or {})
-        if _LONG_RUNNING_BACKUP_PATH_MARKER in path:
-            step_params["delete_nonexistent_backup"] = True
-        if _LONG_RUNNING_SNAPSHOT_PATH_MARKER in path:
-            step_params["delete_nonexistent_snapshot"] = True
-        qp = step_params if step_params else None
-        payload, status = request_backend_resource(
-            context,
-            path,
-            query_params=qp,
-            timeout=http_timeout_for_sync_path(path),
-        )
-        requested_urls.extend(payload.get("requested_urls", []))
-        if status >= 400:
-            return {
-                "queued": False,
-                "path": "full-update",
-                "stage": stage,
-                "requested_urls": requested_urls,
-                "detail": payload.get("detail", "Unable to reach the ProxBox backend."),
-            }, status
-        responses[stage] = payload.get("response", {})
-
-    return {
-        "queued": True,
-        "path": "full-update",
-        "requested_urls": requested_urls,
-        "detail": "Full update sync completed successfully.",
-        "response": responses,
-    }, 202
+    return request_backend_resource(
+        context,
+        "full-update",
+        query_params=query_params,
+        timeout=http_timeout_for_sync_path("full-update"),
+    )

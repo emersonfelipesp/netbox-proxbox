@@ -22,7 +22,7 @@ The current plugin path is job-based and stream-backed:
 | `sync/virtual-machines/virtual-disks/` | `GET /virtualization/virtual-machines/virtual-disks/create/stream` | Queue virtual disk synchronization |
 | `sync/virtual-machines/backups/` | `GET /virtualization/virtual-machines/backups/all/create/stream` | Queue backup synchronization |
 | `sync/virtual-machines/snapshots/` | `GET /virtualization/virtual-machines/snapshots/all/create/stream` | Queue snapshot synchronization |
-| `sync/full-update/` | `GET /full-update/stream` | Queue full update (devices, storage, VMs, disks, backups, snapshots) |
+| `sync/full-update/` | `GET /full-update/stream` | Queue full update (devices, storage, VMs, disks, backups, snapshots, replications, backup routines) |
 
 ## Progress Messages
 
