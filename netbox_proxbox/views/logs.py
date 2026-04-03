@@ -1,14 +1,14 @@
 """Backend logs page view for viewing proxbox-api log buffer."""
 
-from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import render
 from django.views import View
 
 from netbox_proxbox.models import FastAPIEndpoint
 from netbox_proxbox.utils import get_fastapi_url
+from utilities.views import ConditionalLoginRequiredMixin
 
 
-class BackendLogsView(LoginRequiredMixin, View):
+class BackendLogsView(ConditionalLoginRequiredMixin, View):
     """Display backend logs from the proxbox-api log buffer."""
 
     template_name = "netbox_proxbox/logs.html"
@@ -23,12 +23,13 @@ class BackendLogsView(LoginRequiredMixin, View):
         if fastapi_endpoint:
             fastapi_info = get_fastapi_url(fastapi_endpoint) or {}
 
+        fastapi_url = fastapi_info.get("http_url", "")
         return render(
             request,
             self.template_name,
             {
-                "fastapi_url": fastapi_info.get("http_url", ""),
+                "fastapi_url": fastapi_url,
                 "fastapi_websocket_url": fastapi_info.get("websocket_url", ""),
-                "logs_api_url": f"{fastapi_info.get('http_url', '')}/admin/logs",
+                "logs_api_url": f"{fastapi_url}/admin/logs" if fastapi_url else "",
             },
         )

@@ -13,6 +13,7 @@ class LogsPage {
         this.currentOperationId = "";
         this.autoRefreshInterval = 5000;
         this.autoRefreshTimer = null;
+        this.operationIdFetchTimer = null;
         this.isAutoRefreshEnabled = true;
         this.currentOffset = 0;
         this.limit = 200;
@@ -60,7 +61,7 @@ class LogsPage {
         if (operationIdFilter) {
             operationIdFilter.addEventListener("input", (e) => {
                 this.currentOperationId = e.target.value.trim();
-                this.applyFilters();
+                this.scheduleOperationFetch();
             });
         }
 
@@ -80,13 +81,14 @@ class LogsPage {
             return;
         }
 
+        this.stopOperationFetch();
         this.isLoading = true;
         this.showLoading();
 
         try {
             const params = new URLSearchParams();
-            if (this.currentLevel) {
-                params.append("level", this.currentLevel);
+            if (this.currentOperationId) {
+                params.append("operation_id", this.currentOperationId);
             }
             params.append("limit", this.limit.toString());
 
@@ -131,16 +133,8 @@ class LogsPage {
 
     applyFilters() {
         this.cachedLogs = this.allLogs.filter((log) => {
-            if (this.currentLevel) {
-                const logLevel = this.getLogLevelPriority(log.level);
-                const filterLevel = this.getLogLevelPriority(this.currentLevel);
-                if (logLevel < filterLevel) return false;
-            }
-
-            if (this.currentOperationId) {
-                if (!log.operation_id || !log.operation_id.includes(this.currentOperationId)) {
-                    return false;
-                }
+            if (this.currentLevel && log.level !== this.currentLevel) {
+                return false;
             }
 
             return true;
@@ -150,39 +144,31 @@ class LogsPage {
         this.updateFilterIndicator();
     }
 
-    getLogLevelPriority(level) {
-        const priorities = {
-            DEBUG: 0,
-            INFO: 1,
-            WARNING: 2,
-            ERROR: 3,
-            CRITICAL: 4,
-        };
-        return priorities[level] ?? 0;
-    }
-
     renderLogs() {
         const tbody = document.getElementById("logsTableBody");
         const noLogsMessage = document.getElementById("noLogsMessage");
-        const template = document.getElementById("logRowTemplate");
 
         if (!tbody) return;
 
         tbody.innerHTML = "";
 
         if (this.cachedLogs.length === 0) {
-            this.hideLoadMore();
             noLogsMessage.style.display = "block";
+            if (this.allLogs.length < this.total) {
+                this.showLoadMore();
+            } else {
+                this.hideLoadMore();
+            }
             return;
         }
 
         noLogsMessage.style.display = "none";
 
-        this.cachedLogs.forEach((log, index) => {
+        this.cachedLogs.forEach((log) => {
             const row = document.createElement("tr");
             row.className = `log-entry log-level-${log.level.toLowerCase()}`;
             if (log.expandable) {
-                row.classList.add(" expandable");
+                row.classList.add("expandable");
                 row.dataset.expanded = "false";
             }
 
@@ -211,8 +197,6 @@ class LogsPage {
     }
 
     toggleExpand(row, log) {
-        const isExpanded = row.dataset.expanded === "true";
-
         const existingDetail = row.nextElementSibling;
         if (existingDetail && existingDetail.classList.contains("log-detail-row")) {
             existingDetail.remove();
@@ -301,15 +285,19 @@ class LogsPage {
         const filters = [];
 
         if (this.currentLevel) {
-            filters.push(`level=${this.currentLevel}`);
+            filters.push(`Client: level=${this.currentLevel}`);
         }
 
         if (this.currentOperationId) {
-            filters.push(`operation=${this.currentOperationId.substring(0, 8)}`);
+            filters.push(`Backend: operation=${this.currentOperationId.substring(0, 8)}`);
+        }
+
+        if (!this.currentOperationId && activeFilters && activeFilters.operation_id) {
+            filters.push(`Backend: operation=${String(activeFilters.operation_id).substring(0, 8)}`);
         }
 
         if (filters.length > 0) {
-            badge.textContent = `Filtered: ${filters.join(", ")}`;
+            badge.textContent = filters.join(" | ");
             indicator.style.display = "block";
         } else {
             indicator.style.display = "none";
@@ -326,7 +314,7 @@ class LogsPage {
         if (levelFilter) levelFilter.value = "";
         if (operationIdFilter) operationIdFilter.value = "";
 
-        this.applyFilters();
+        this.fetchLogs();
     }
 
     showLoading() {
@@ -384,8 +372,8 @@ class LogsPage {
 
         try {
             const params = new URLSearchParams();
-            if (this.currentLevel) {
-                params.append("level", this.currentLevel);
+            if (this.currentOperationId) {
+                params.append("operation_id", this.currentOperationId);
             }
             params.append("limit", this.limit.toString());
             params.append("offset", this.currentOffset.toString());
@@ -433,6 +421,23 @@ class LogsPage {
         if (this.autoRefreshTimer) {
             clearInterval(this.autoRefreshTimer);
             this.autoRefreshTimer = null;
+        }
+    }
+
+    scheduleOperationFetch() {
+        if (this.operationIdFetchTimer) {
+            clearTimeout(this.operationIdFetchTimer);
+        }
+        this.operationIdFetchTimer = setTimeout(() => {
+            this.operationIdFetchTimer = null;
+            this.fetchLogs();
+        }, 300);
+    }
+
+    stopOperationFetch() {
+        if (this.operationIdFetchTimer) {
+            clearTimeout(this.operationIdFetchTimer);
+            this.operationIdFetchTimer = null;
         }
     }
 }
