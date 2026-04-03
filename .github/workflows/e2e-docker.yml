@@ -119,13 +119,16 @@ jobs:
             -e SUPERUSER_NAME=admin \
             -e SUPERUSER_EMAIL=admin@example.com \
             -e SUPERUSER_PASSWORD=admin \
+            -e ALLOWED_HOSTS="* localhost 127.0.0.1 ::1 netbox" \
+            -e LOGIN_REQUIRED=False \
             netbox-proxbox-e2e:local
 
       - name: Wait for stack readiness and create NetBox API token
         run: |
           set -eux
           for i in $(seq 1 240); do
-            if curl -fsS --max-time 5 http://127.0.0.1:18080/api/ >/dev/null 2>&1; then
+            http_code="$(curl -sS --max-time 5 -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/api/ 2>/dev/null || true)"
+            if [ "$http_code" -ge 100 ] 2>/dev/null && [ "$http_code" -lt 500 ]; then
               break
             fi
             sleep 2
