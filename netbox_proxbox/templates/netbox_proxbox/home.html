@@ -81,6 +81,14 @@
                                 {% csrf_token %}
                                 <button id="sync-snapshots-button" type="submit" class="btn btn-primary" data-sync-url="{% url 'plugins:netbox_proxbox:sync_vm_snapshots' %}" data-sync-kind="snapshots">Sync Snapshots</button>
                             </form>
+                            <form class="m-2" method="post" action="{% url 'plugins:netbox_proxbox:sync_backup_routines' %}">
+                                {% csrf_token %}
+                                <button id="sync-backup-routines-button" type="submit" class="btn btn-primary" data-sync-url="{% url 'plugins:netbox_proxbox:sync_backup_routines' %}" data-sync-kind="backup-routines">Sync Backup Routines</button>
+                            </form>
+                            <form class="m-2" method="post" action="{% url 'plugins:netbox_proxbox:sync_replications' %}">
+                                {% csrf_token %}
+                                <button id="sync-replications-button" type="submit" class="btn btn-primary" data-sync-url="{% url 'plugins:netbox_proxbox:sync_replications' %}" data-sync-kind="replications">Sync Replications</button>
+                            </form>
                             <form class="m-2" method="post" action="{% url 'plugins:netbox_proxbox:sync_full_update' %}">
                                 {% csrf_token %}
                                 <button id="sync-full-update-button" type="submit" class="btn btn-primary" data-sync-url="{% url 'plugins:netbox_proxbox:sync_full_update' %}" data-sync-kind="full-update">Full Update Sync</button>
