@@ -145,8 +145,13 @@ class JobStreamSSEView(View):
                 {"step": "job", "status": "failed", "message": message},
             )
 
-        def emit_complete(ok: bool, message: str) -> None:
-            emit("complete", {"ok": ok, "message": message})
+        def emit_complete(
+            ok: bool, message: str, *, status: str | None = None
+        ) -> None:
+            payload: dict[str, object] = {"ok": ok, "message": message}
+            if status is not None:
+                payload["status"] = status
+            emit("complete", payload)
 
         def worker() -> None:
             try:
@@ -187,17 +192,21 @@ class JobStreamSSEView(View):
                     )
                     status = _wait_for_job_status(job, JobStatusChoices.STATUS_RUNNING)
                     if status != JobStatusChoices.STATUS_RUNNING:
+                        queued_status = str(status or "unknown")
                         emit(
                             "step",
                             {
                                 "step": "job",
-                                "status": status or "unknown",
-                                "message": f"Job is no longer pending (status: {status})",
+                                "status": "waiting",
+                                "message": (
+                                    f"Job is still {queued_status}; continuing to poll."
+                                ),
                             },
                         )
                         emit_complete(
-                            status == JobStatusChoices.STATUS_COMPLETED,
-                            f"Job status changed to {status}",
+                            False,
+                            f"Job is still {queued_status}; continuing to poll.",
+                            status="waiting",
                         )
                         return
 

@@ -193,3 +193,35 @@ def test_job_stream_forwards_backend_message_frames(job_stream_module, monkeypat
         for chunk in chunks
     )
     assert any("event: complete" in chunk and '"ok": true' in chunk for chunk in chunks)
+
+
+def test_job_stream_reports_queued_waiting_state_instead_of_failure(
+    job_stream_module, monkeypatch
+):
+    """Queued jobs should stay in a waiting state if the worker has not started yet."""
+    module = job_stream_module
+    services_mod = sys.modules["netbox_proxbox.services"]
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("Backend sync should not start while the job is still queued")
+
+    monkeypatch.setattr(module, "_wait_for_job_status", lambda *args, **kwargs: "scheduled")
+    monkeypatch.setattr(services_mod, "run_sync_stream", fail_if_called)
+
+    job = SimpleNamespace(
+        pk=55,
+        status="scheduled",
+        data={"proxbox_sync": {"params": {}}},
+        save=lambda **kwargs: None,
+        refresh_from_db=lambda: None,
+    )
+    view = module.JobStreamSSEView()
+    chunks = list(view._stream_job_events(job))
+
+    assert any(
+        "event: step" in chunk and "continuing to poll" in chunk for chunk in chunks
+    )
+    assert any(
+        "event: complete" in chunk and '"status": "waiting"' in chunk for chunk in chunks
+    )
+    assert any("event: complete" in chunk and '"ok": false' in chunk for chunk in chunks)
