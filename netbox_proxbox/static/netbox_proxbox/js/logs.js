@@ -1,6 +1,6 @@
 /**
  * Backend Logs page JavaScript
- * Handles fetching, filtering, tab switching, and copying logs from the proxbox-api backend.
+ * Handles fetching, filtering, tab switching, cursor-based pagination, and copying logs.
  */
 
 class LogsPage {
@@ -17,7 +17,9 @@ class LogsPage {
         this.autoRefreshTimer = null;
         this.operationIdFetchTimer = null;
         this.isAutoRefreshEnabled = true;
-        this.currentOffset = 0;
+        this.newestLoadedId = null;
+        this.oldestLoadedId = null;
+        this.canLoadMoreOlder = false;
         this.limit = 200;
         this.total = 0;
         this.isLoading = false;
@@ -29,7 +31,7 @@ class LogsPage {
         this.bindEvents();
         this.updateTabState();
         this.updateLevelFilterState();
-        this.fetchLogs();
+        this.fetchLogs({ reset: true });
     }
 
     bindEvents() {
@@ -50,7 +52,7 @@ class LogsPage {
         });
 
         if (refreshBtn) {
-            refreshBtn.addEventListener("click", () => this.fetchLogs());
+            refreshBtn.addEventListener("click", () => this.fetchLogs({ reset: true }));
         }
 
         if (copyBtn) {
@@ -74,21 +76,21 @@ class LogsPage {
                 if (this.currentTab !== "all") {
                     this.setTab("all", { refetch: false });
                 }
-                this.fetchLogs();
+                this.fetchLogs({ reset: true });
             });
         }
 
         if (fromDateFilter) {
             fromDateFilter.addEventListener("change", (e) => {
                 this.currentFromDate = e.target.value;
-                this.fetchLogs();
+                this.fetchLogs({ reset: true });
             });
         }
 
         if (toDateFilter) {
             toDateFilter.addEventListener("change", (e) => {
                 this.currentToDate = e.target.value;
-                this.fetchLogs();
+                this.fetchLogs({ reset: true });
             });
         }
 
@@ -122,7 +124,7 @@ class LogsPage {
             return;
         }
 
-        this.fetchLogs();
+        this.fetchLogs({ reset: true });
     }
 
     updateTabState() {
@@ -149,7 +151,7 @@ class LogsPage {
         return this.currentTab === "errors";
     }
 
-    buildRequestParams(offset = 0) {
+    buildRequestParams({ direction = "initial" } = {}) {
         const params = new URLSearchParams();
 
         if (this.isErrorsTab()) {
@@ -167,8 +169,15 @@ class LogsPage {
             params.append("since", fromDate.toISOString());
         }
 
+        if (direction === "newer" && this.newestLoadedId) {
+            params.append("newer_than_id", this.newestLoadedId);
+        }
+
+        if (direction === "older" && this.oldestLoadedId) {
+            params.append("older_than_id", this.oldestLoadedId);
+        }
+
         params.append("limit", this.limit.toString());
-        params.append("offset", offset.toString());
         return params;
     }
 
@@ -188,7 +197,49 @@ class LogsPage {
         });
     }
 
-    async fetchLogs(isAutoRefresh = false) {
+    setLoadedWindowFromLogs(rawLogs) {
+        if (!rawLogs.length) {
+            this.newestLoadedId = null;
+            this.oldestLoadedId = null;
+            return;
+        }
+
+        this.newestLoadedId = rawLogs[0].id || null;
+        this.oldestLoadedId = rawLogs[rawLogs.length - 1].id || null;
+    }
+
+    extendNewestCursor(rawLogs) {
+        if (!rawLogs.length) {
+            return;
+        }
+
+        this.newestLoadedId = rawLogs[0].id || this.newestLoadedId;
+    }
+
+    extendOldestCursor(rawLogs) {
+        if (!rawLogs.length) {
+            return;
+        }
+
+        this.oldestLoadedId = rawLogs[rawLogs.length - 1].id || this.oldestLoadedId;
+    }
+
+    sortLogsDescending(logs) {
+        return [...logs].sort((a, b) => {
+            const idA = Number.parseInt(a.id || "", 10);
+            const idB = Number.parseInt(b.id || "", 10);
+
+            if (!Number.isNaN(idA) && !Number.isNaN(idB) && idA !== idB) {
+                return idB - idA;
+            }
+
+            const timeA = new Date(a.timestamp || 0).getTime();
+            const timeB = new Date(b.timestamp || 0).getTime();
+            return timeB - timeA;
+        });
+    }
+
+    async fetchLogs({ reset = true, isAutoRefresh = false } = {}) {
         if (this.isLoading) return;
         if (!this.logsApiUrl) {
             this.showError("Logs API URL not configured");
@@ -201,7 +252,8 @@ class LogsPage {
         this.hideError();
 
         try {
-            const params = this.buildRequestParams(0);
+            const direction = isAutoRefresh ? "newer" : "initial";
+            const params = this.buildRequestParams({ direction });
             const response = await fetch(`${this.logsApiUrl}?${params.toString()}`, {
                 headers: {
                     Accept: "application/json",
@@ -213,25 +265,26 @@ class LogsPage {
             }
 
             const data = await response.json();
-            const newLogs = this.applyClientSideFilters(data.logs || []);
+            const rawLogs = data.logs || [];
+            const filteredLogs = this.applyClientSideFilters(rawLogs);
 
-            if (isAutoRefresh && this.displayedLogs.length > 0) {
-                const existingIds = new Set(
-                    this.displayedLogs.map((log) => log.id || `${log.timestamp}-${log.message}`)
-                );
-                const uniqueNewLogs = newLogs.filter(
-                    (log) => !existingIds.has(log.id || `${log.timestamp}-${log.message}`)
-                );
-
-                if (uniqueNewLogs.length > 0) {
-                    this.displayedLogs = [...uniqueNewLogs, ...this.displayedLogs];
+            if (reset) {
+                this.displayedLogs = filteredLogs;
+                this.setLoadedWindowFromLogs(rawLogs);
+                this.canLoadMoreOlder = Boolean(data.has_more);
+                this.total = data.total || this.displayedLogs.length;
+            } else if (isAutoRefresh) {
+                if (rawLogs.length > 0) {
+                    this.displayedLogs = [...filteredLogs, ...this.displayedLogs];
+                    this.extendNewestCursor(rawLogs);
+                    this.total += rawLogs.length;
                 }
             } else {
-                this.displayedLogs = newLogs;
+                this.displayedLogs = filteredLogs;
+                this.setLoadedWindowFromLogs(rawLogs);
+                this.canLoadMoreOlder = Boolean(data.has_more);
+                this.total = data.total || this.displayedLogs.length;
             }
-
-            this.total = data.total || this.displayedLogs.length;
-            this.currentOffset = this.displayedLogs.length;
 
             this.renderLogs();
             this.updateLogCount();
@@ -252,13 +305,15 @@ class LogsPage {
 
     async loadMore() {
         if (this.isLoading) return;
-        if (this.displayedLogs.length >= this.total) return;
+        if (!this.canLoadMoreOlder || !this.oldestLoadedId) return;
 
         this.isLoading = true;
         this.hideError();
 
         try {
-            const params = this.buildRequestParams(this.currentOffset);
+            const params = this.buildRequestParams({
+                direction: "older",
+            });
             const response = await fetch(`${this.logsApiUrl}?${params.toString()}`, {
                 headers: {
                     Accept: "application/json",
@@ -270,11 +325,13 @@ class LogsPage {
             }
 
             const data = await response.json();
-            const newLogs = this.applyClientSideFilters(data.logs || []);
+            const rawLogs = data.logs || [];
+            const filteredLogs = this.applyClientSideFilters(rawLogs);
 
-            this.displayedLogs = [...this.displayedLogs, ...newLogs];
+            this.displayedLogs = [...this.displayedLogs, ...filteredLogs];
+            this.extendOldestCursor(rawLogs);
+            this.canLoadMoreOlder = Boolean(data.has_more);
             this.total = data.total || this.displayedLogs.length;
-            this.currentOffset = this.displayedLogs.length;
 
             this.renderLogs();
             this.updateLogCount();
@@ -304,7 +361,8 @@ class LogsPage {
 
         noLogsMessage.style.display = "none";
 
-        const sortedLogs = this.getSortedLogs();
+        const sortedLogs = this.sortLogsDescending(this.displayedLogs);
+
         sortedLogs.forEach((log) => {
             const row = document.createElement("tr");
             const levelClass = String(log.level || "info").toLowerCase();
@@ -339,14 +397,6 @@ class LogsPage {
         });
 
         this.updateCopyButtonState();
-    }
-
-    getSortedLogs() {
-        return [...this.displayedLogs].sort((a, b) => {
-            const timeA = new Date(a.timestamp || 0).getTime();
-            const timeB = new Date(b.timestamp || 0).getTime();
-            return timeB - timeA;
-        });
     }
 
     toggleExpand(row, log) {
@@ -392,7 +442,7 @@ class LogsPage {
     }
 
     copyLogsToClipboard() {
-        const text = this.formatLogsForClipboard(this.getSortedLogs());
+        const text = this.formatLogsForClipboard(this.sortLogsDescending(this.displayedLogs));
         if (!text) {
             return;
         }
@@ -565,7 +615,8 @@ class LogsPage {
     }
 
     updateLoadMoreState() {
-        if (this.displayedLogs.length < this.total) {
+        const shouldShow = this.canLoadMoreOlder && Boolean(this.oldestLoadedId);
+        if (shouldShow) {
             this.showLoadMore();
         } else {
             this.hideLoadMore();
@@ -589,7 +640,7 @@ class LogsPage {
         if (toDateFilter) toDateFilter.value = "";
 
         this.updateLevelFilterState();
-        this.fetchLogs();
+        this.fetchLogs({ reset: true });
     }
 
     showLoading() {
@@ -645,7 +696,7 @@ class LogsPage {
         this.stopAutoRefresh();
         if (this.isAutoRefreshEnabled) {
             this.autoRefreshTimer = window.setInterval(() => {
-                this.fetchLogs(true);
+                this.fetchLogs({ reset: false, isAutoRefresh: true });
             }, this.autoRefreshInterval);
         }
     }
@@ -663,7 +714,7 @@ class LogsPage {
         }
         this.operationIdFetchTimer = window.setTimeout(() => {
             this.operationIdFetchTimer = null;
-            this.fetchLogs();
+            this.fetchLogs({ reset: true });
         }, 300);
     }
 
