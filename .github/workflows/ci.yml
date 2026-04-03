@@ -69,7 +69,7 @@ jobs:
         run: pytest --cov=netbox_proxbox --cov-report=term-missing --cov-report=xml tests
 
       - name: Upload coverage report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: netbox-proxbox-coverage
           path: coverage.xml
