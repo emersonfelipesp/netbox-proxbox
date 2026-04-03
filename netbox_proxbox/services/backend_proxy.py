@@ -43,6 +43,85 @@ def http_timeout_for_sync_path(path: str) -> float | tuple[int, int]:
     return 5
 
 
+def wait_for_backend_ready(
+    context: BackendRequestContext,
+    max_retries: int = 30,
+    initial_delay: float = 1.0,
+    max_delay: float = 30.0,
+) -> tuple[bool, str]:
+    """Wait for the FastAPI backend to be ready before starting sync.
+
+    Returns:
+        tuple of (success, message)
+    """
+    import time as time_module
+
+    if not context or not context.http_url:
+        return False, "No FastAPI URL configured"
+
+    backend_url = context.http_url.rstrip("/")
+    health_url = f"{backend_url}/health"
+    verify_ssl = bool(context.verify_ssl)
+    headers = context.headers or {}
+
+    delay = initial_delay
+    for attempt in range(max_retries):
+        try:
+            response = requests.get(
+                health_url,
+                headers=headers,
+                verify=verify_ssl,
+                timeout=5,
+            )
+            if response.status_code == 200:
+                try:
+                    data = response.json()
+                    init_ok = data.get("init_ok", False)
+                    if init_ok:
+                        return True, "Backend is ready"
+                    status = data.get("status", "unknown")
+                    if status == "ready":
+                        return True, "Backend is ready"
+                except Exception:
+                    pass
+                if attempt < max_retries - 1:
+                    logger.info(
+                        "Backend health check returned but init not complete (attempt %s/%s), retrying in %ss",
+                        attempt + 1,
+                        max_retries,
+                        delay,
+                    )
+                    time_module.sleep(delay)
+                    delay = min(delay * 1.5, max_delay)
+                    continue
+            else:
+                if attempt < max_retries - 1:
+                    logger.info(
+                        "Backend health check failed with HTTP %s (attempt %s/%s), retrying in %ss",
+                        response.status_code,
+                        attempt + 1,
+                        max_retries,
+                        delay,
+                    )
+                    time_module.sleep(delay)
+                    delay = min(delay * 1.5, max_delay)
+                    continue
+        except requests.exceptions.RequestException as exc:
+            if attempt < max_retries - 1:
+                logger.info(
+                    "Backend health check request failed (attempt %s/%s): %s, retrying in %ss",
+                    attempt + 1,
+                    max_retries,
+                    str(exc)[:100],
+                    delay,
+                )
+                time_module.sleep(delay)
+                delay = min(delay * 1.5, max_delay)
+                continue
+
+    return False, f"Backend not ready after {max_retries} attempts"
+
+
 def sse_error_frames(
     message: str, *, final_message: str = "Stream request failed."
 ) -> Generator[str, None, None]:
@@ -256,6 +335,11 @@ def run_sync_stream(
     context = get_fastapi_request_context()
     if context is None or not context.http_url:
         return {"stream": False, "detail": "No FastAPI URL found."}, 404
+
+    ready, ready_msg = wait_for_backend_ready(context)
+    if not ready:
+        logger.error("Backend not ready: %s", ready_msg)
+        return {"stream": False, "detail": f"Backend not ready: {ready_msg}"}, 503
 
     backend_headers = context.headers or {}
     http_url = context.http_url
