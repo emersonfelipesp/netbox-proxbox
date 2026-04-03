@@ -203,9 +203,13 @@ def test_job_stream_reports_queued_waiting_state_instead_of_failure(
     services_mod = sys.modules["netbox_proxbox.services"]
 
     def fail_if_called(*args, **kwargs):
-        raise AssertionError("Backend sync should not start while the job is still queued")
+        raise AssertionError(
+            "Backend sync should not start while the job is still queued"
+        )
 
-    monkeypatch.setattr(module, "_wait_for_job_status", lambda *args, **kwargs: "scheduled")
+    monkeypatch.setattr(
+        module, "_wait_for_job_status", lambda *args, **kwargs: "scheduled"
+    )
     monkeypatch.setattr(services_mod, "run_sync_stream", fail_if_called)
 
     job = SimpleNamespace(
@@ -222,6 +226,9 @@ def test_job_stream_reports_queued_waiting_state_instead_of_failure(
         "event: step" in chunk and "waiting for a worker" in chunk for chunk in chunks
     )
     assert any(
-        "event: complete" in chunk and '"status": "waiting"' in chunk for chunk in chunks
+        "event: complete" in chunk and '"status": "waiting"' in chunk
+        for chunk in chunks
     )
-    assert any("event: complete" in chunk and '"ok": false' in chunk for chunk in chunks)
+    assert any(
+        "event: complete" in chunk and '"ok": false' in chunk for chunk in chunks
+    )
