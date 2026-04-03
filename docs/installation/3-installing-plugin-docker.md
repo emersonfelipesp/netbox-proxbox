@@ -43,7 +43,7 @@ docker compose exec netbox /opt/netbox/netbox/manage.py migrate
 If you need the repository head instead of the latest published package, add this to `plugin_requirements.txt`:
 
 ```txt
-netbox-proxbox @ git+https://github.com/netdevopsbr/netbox-proxbox.git
+netbox-proxbox @ git+https://github.com/emersonfelipesp/netbox-proxbox.git
 ```
 
 Then use the same `configuration/plugins.py`, build, startup, and migration steps from Option 1.

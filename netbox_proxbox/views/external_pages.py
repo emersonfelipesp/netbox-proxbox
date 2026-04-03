@@ -14,7 +14,7 @@ def DiscussionsView(request):
     - **HttpResponseRedirect:** A redirect response to the external discussions URL.
     """
 
-    external_url = "https://github.com/orgs/netdevopsbr/discussions"
+    external_url = "https://github.com/orgs/emersonfelipesp/discussions"
     return redirect(external_url)
 
 
