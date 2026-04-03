@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import requests
+from urllib.parse import urlparse
 
 from stack_common import assert_ok, post_json
 
@@ -10,13 +11,15 @@ def ensure_proxbox_backend_endpoints(
     netbox_public_url: str,
     netbox_token: str,
 ) -> None:
-    _ = netbox_public_url
+    parsed_netbox = urlparse(netbox_public_url)
+    netbox_host = parsed_netbox.hostname or "netbox"
+    netbox_port = parsed_netbox.port or 8080
 
     netbox_payload = {
         "name": "netbox",
-        "ip_address": "netbox",
-        "domain": "netbox.local",
-        "port": 8080,
+        "ip_address": netbox_host,
+        "domain": netbox_host,
+        "port": netbox_port,
         "token_version": "v1",
         "token": netbox_token,
         "verify_ssl": False,
@@ -35,7 +38,7 @@ def ensure_proxbox_backend_endpoints(
     proxmox_payload = {
         "name": "mock-proxmox",
         "ip_address": "proxmox-mock",
-        "domain": "proxmox-mock.local",
+        "domain": "proxmox-mock",
         "port": 8006,
         "username": "root@pam",
         "token_name": "e2e",
@@ -58,6 +61,7 @@ def ensure_netbox_plugin_endpoints(
     netbox_base_url: str,
     netbox_token: str,
     netbox_token_id: int,
+    netbox_public_url: str = "",
 ) -> dict[str, int]:
     headers = {
         "Authorization": f"Token {netbox_token}",
@@ -65,11 +69,15 @@ def ensure_netbox_plugin_endpoints(
         "Accept": "application/json",
     }
 
+    parsed_netbox = urlparse(netbox_public_url) if netbox_public_url else None
+    netbox_host = (parsed_netbox.hostname if parsed_netbox else None) or "netbox"
+    netbox_port = (parsed_netbox.port if parsed_netbox else None) or 8080
+
     proxmox = post_json(
         f"{netbox_base_url}/api/plugins/proxbox/endpoints/proxmox/",
         {
             "name": "mock-proxmox",
-            "domain": "proxmox-mock.local",
+            "domain": "proxmox-mock",
             "port": 8006,
             "mode": "cluster",
             "username": "root@pam",
@@ -84,8 +92,8 @@ def ensure_netbox_plugin_endpoints(
         f"{netbox_base_url}/api/plugins/proxbox/endpoints/netbox/",
         {
             "name": "local-netbox",
-            "domain": "netbox.local",
-            "port": 8080,
+            "domain": netbox_host,
+            "port": netbox_port,
             "token_version": "v1",
             "token": {"id": netbox_token_id},
             "verify_ssl": False,
@@ -97,7 +105,7 @@ def ensure_netbox_plugin_endpoints(
         f"{netbox_base_url}/api/plugins/proxbox/endpoints/fastapi/",
         {
             "name": "local-proxbox-api",
-            "domain": "proxbox-api.local",
+            "domain": "proxbox-api",
             "port": 8000,
             "verify_ssl": False,
             "token": "",
