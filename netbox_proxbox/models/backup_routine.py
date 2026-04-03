@@ -7,12 +7,11 @@ from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 
 from netbox.models import NetBoxModel
-from netbox.models.features import BackupSyncMixin
 
 from netbox_proxbox.choices import BackupRoutineStatusChoices
 
 
-class BackupRoutine(NetBoxModel, BackupSyncMixin):
+class BackupRoutine(NetBoxModel):
     """
     Tracks a Proxmox vzdump backup schedule (backup routine) synced from a Proxmox endpoint.
 
