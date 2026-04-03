@@ -8,11 +8,23 @@ on:
 
 jobs:
   e2e-docker-stack:
+    name: E2E Docker / ${{ matrix.install_source }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        install_source: [pypi, local]
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v6
+
+      - name: Checkout proxbox-api source
+        if: matrix.install_source == 'local'
+        uses: actions/checkout@v6
+        with:
+          repository: emersonfelipesp/proxbox-api
+          path: proxbox-api-source
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -29,7 +41,18 @@ jobs:
         run: |
           cat > Dockerfile.netbox-e2e <<'EOF'
           FROM netboxcommunity/netbox:v4.5
-          RUN uv pip install --python /opt/netbox/venv/bin/python --system --upgrade proxbox-api netbox-proxbox
+          EOF
+          if [ "${{ matrix.install_source }}" = "local" ]; then
+            cat >> Dockerfile.netbox-e2e <<'EOF'
+          COPY . /tmp/netbox-proxbox
+          RUN uv pip install --python /opt/netbox/venv/bin/python --system --upgrade /tmp/netbox-proxbox
+          EOF
+          else
+            cat >> Dockerfile.netbox-e2e <<'EOF'
+          RUN uv pip install --python /opt/netbox/venv/bin/python --system --upgrade netbox-proxbox
+          EOF
+          fi
+          cat >> Dockerfile.netbox-e2e <<'EOF'
           RUN mkdir -p /etc/netbox/config
           RUN printf 'PLUGINS = ["netbox_proxbox"]\n' > /etc/netbox/config/plugins.py
           EOF
@@ -56,8 +79,14 @@ jobs:
             -v "$PWD/tests/e2e:/e2e:ro" \
             python:3.12-slim sh -c "pip install --no-cache-dir fastapi uvicorn && uvicorn mock_proxmox_api:app --app-dir /e2e --host 0.0.0.0 --port 8006"
 
-          docker run -d --name proxbox-e2e-api --network proxbox-e2e -p 18800:8000 \
-            emersonfelipesp/proxbox-api:latest
+          if [ "${{ matrix.install_source }}" = "local" ]; then
+            docker run -d --name proxbox-e2e-api --network proxbox-e2e -p 18800:8000 \
+              -v "$PWD/proxbox-api-source:/src:ro" \
+              python:3.12-slim sh -c "pip install --no-cache-dir fastapi uvicorn /src && uvicorn proxbox_api.main:app --host 0.0.0.0 --port 8000 --app-dir /src"
+          else
+            docker run -d --name proxbox-e2e-api --network proxbox-e2e -p 18800:8000 \
+              python:3.12-slim sh -c "pip install --no-cache-dir fastapi uvicorn proxbox-api && uvicorn proxbox_api.main:app --host 0.0.0.0 --port 8000"
+          fi
 
           docker run -d --name netbox-e2e --network proxbox-e2e -p 18080:8080 \
             -e DB_HOST=netbox-e2e-postgres \
