@@ -1,17 +1,50 @@
 name: E2E Docker
 
 on:
+  workflow_call:
+    inputs:
+      install_source:
+        description: "Install source selection: both, local, pypi, or container"
+        required: false
+        type: string
+        default: both
   workflow_dispatch:
+    inputs:
+      install_source:
+        description: "Install source selection: both, local, pypi, or container"
+        required: false
+        type: choice
+        options:
+          - both
+          - local
+          - pypi
+          - container
+        default: both
   schedule:
     - cron: "31 2 * * *"
 
+env:
+  PROXBOX_API_RELEASE_VERSION: 0.0.6.post5
+
 jobs:
   e2e-docker-stack:
+    name: E2E Docker / ${{ matrix.install_source }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        install_source: ${{ fromJSON((github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch') && inputs.install_source != 'both' && format('["{0}"]', inputs.install_source) || '["local","pypi","container"]') }}
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v6
+
+      - name: Checkout proxbox-api source
+        if: matrix.install_source == 'local'
+        uses: actions/checkout@v6
+        with:
+          repository: emersonfelipesp/proxbox-api
+          path: proxbox-api-source
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -28,17 +61,22 @@ jobs:
         run: |
           cat > Dockerfile.netbox-e2e <<'EOF'
           FROM netboxcommunity/netbox:v4.5
+          EOF
+          cat >> Dockerfile.netbox-e2e <<'EOF'
           COPY . /tmp/netbox-proxbox
-          RUN uv pip install --python /opt/netbox/venv/bin/python --system /tmp/netbox-proxbox
+          RUN uv pip install --python /opt/netbox/venv/bin/python --system --upgrade /tmp/netbox-proxbox
+          EOF
+          cat >> Dockerfile.netbox-e2e <<'EOF'
           RUN mkdir -p /etc/netbox/config
           RUN printf 'PLUGINS = ["netbox_proxbox"]\n' > /etc/netbox/config/plugins.py
           EOF
-          docker build -f Dockerfile.netbox-e2e -t netbox-proxbox-e2e:local .
+          docker build --no-cache -f Dockerfile.netbox-e2e -t netbox-proxbox-e2e:local .
 
       - name: Start E2E stack
         run: |
           set -eux
           docker network create proxbox-e2e || true
+          SECRET_KEY='proxbox-e2e-secret-key-proxbox-e2e-secret-key-proxbox-e2e-secret-key'
 
           docker rm -f netbox-e2e-postgres netbox-e2e-redis netbox-e2e netbox-e2e-rqworker proxbox-e2e-api proxmox-e2e-mock 2>/dev/null || true
 
@@ -51,12 +89,29 @@ jobs:
           docker run -d --name netbox-e2e-redis --network proxbox-e2e \
             redis:7-alpine
 
+          openssl req -x509 -newkey rsa:4096 -keyout /tmp/e2e-key.pem -out /tmp/e2e-cert.pem \
+            -days 1 -nodes -subj "/CN=proxmox-mock" 2>/dev/null
+
           docker run -d --name proxmox-e2e-mock --network proxbox-e2e -p 18006:8006 \
             -v "$PWD/tests/e2e:/e2e:ro" \
-            python:3.12-slim sh -c "pip install --no-cache-dir fastapi uvicorn && uvicorn mock_proxmox_api:app --app-dir /e2e --host 0.0.0.0 --port 8006"
+            -v "/tmp/e2e-key.pem:/tmp/key.pem:ro" \
+            -v "/tmp/e2e-cert.pem:/tmp/cert.pem:ro" \
+            python:3.12-slim sh -c "pip install --no-cache-dir fastapi uvicorn && uvicorn mock_proxmox_api:app --app-dir /e2e --host 0.0.0.0 --port 8006 --ssl-keyfile /tmp/key.pem --ssl-certfile /tmp/cert.pem"
 
-          docker run -d --name proxbox-e2e-api --network proxbox-e2e -p 18800:8000 \
-            emersonfelipesp/proxbox-api:latest
+          if [ "${{ matrix.install_source }}" = "local" ]; then
+            docker run -d --name proxbox-e2e-api --network proxbox-e2e -p 18800:8000 \
+              -e PROXBOX_SKIP_NETBOX_BOOTSTRAP=true \
+              -v "$PWD/proxbox-api-source:/src:ro" \
+              python:3.12-slim sh -c "cp -r /src /tmp/proxbox-api-src && pip install --no-cache-dir fastapi uvicorn requests /tmp/proxbox-api-src && uvicorn proxbox_api.main:app --host 0.0.0.0 --port 8000 --app-dir /tmp/proxbox-api-src"
+          elif [ "${{ matrix.install_source }}" = "pypi" ]; then
+            docker run -d --name proxbox-e2e-api --network proxbox-e2e -p 18800:8000 \
+              -e PROXBOX_SKIP_NETBOX_BOOTSTRAP=true \
+              python:3.12-slim sh -c "pip install --no-cache-dir fastapi uvicorn requests proxbox-api==${PROXBOX_API_RELEASE_VERSION} && uvicorn proxbox_api.main:app --host 0.0.0.0 --port 8000"
+          else
+            docker run -d --name proxbox-e2e-api --network proxbox-e2e -p 18800:8000 \
+              -e PROXBOX_SKIP_NETBOX_BOOTSTRAP=true \
+              emersonfelipesp/proxbox-api:${PROXBOX_API_RELEASE_VERSION}
+          fi
 
           docker run -d --name netbox-e2e --network proxbox-e2e -p 18080:8080 \
             -e DB_HOST=netbox-e2e-postgres \
@@ -69,36 +124,42 @@ jobs:
             -e REDIS_CACHE_DATABASE=1 \
             -e REDIS_TASK_HOST=netbox-e2e-redis \
             -e REDIS_TASK_DATABASE=2 \
-            -e SECRET_KEY=proxbox-e2e-secret-key \
+            -e SECRET_KEY="$SECRET_KEY" \
             -e SUPERUSER_NAME=admin \
             -e SUPERUSER_EMAIL=admin@example.com \
             -e SUPERUSER_PASSWORD=admin \
+            -e ALLOWED_HOSTS="* localhost 127.0.0.1 ::1 netbox" \
+            -e LOGIN_REQUIRED=True \
             netbox-proxbox-e2e:local
 
-          docker run -d --name netbox-e2e-rqworker --network proxbox-e2e \
-            -e DB_HOST=netbox-e2e-postgres \
-            -e DB_NAME=netbox \
-            -e DB_USER=netbox \
-            -e DB_PASSWORD=netbox \
-            -e REDIS_HOST=netbox-e2e-redis \
-            -e REDIS_DATABASE=0 \
-            -e REDIS_CACHE_HOST=netbox-e2e-redis \
-            -e REDIS_CACHE_DATABASE=1 \
-            -e REDIS_TASK_HOST=netbox-e2e-redis \
-            -e REDIS_TASK_DATABASE=2 \
-            -e SECRET_KEY=proxbox-e2e-secret-key \
-            --entrypoint /opt/netbox/venv/bin/python \
-            netbox-proxbox-e2e:local /opt/netbox/netbox/manage.py rqworker
+      - name: Get container IPs
+        run: |
+          set -eux
+          echo "Waiting for containers to get IPs..."
+          sleep 5
+          
+          PROXMOX_MOCK_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' proxmox-e2e-mock)
+          NETBOX_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' netbox-e2e)
+          PROXBOX_API_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' proxbox-e2e-api)
+          
+          echo "PROXMOX_MOCK_IP=$PROXMOX_MOCK_IP"
+          echo "NETBOX_IP=$NETBOX_IP"
+          echo "PROXBOX_API_IP=$PROXBOX_API_IP"
+          
+          echo "PROXMOX_MOCK_IP=$PROXMOX_MOCK_IP" >> "$GITHUB_ENV"
+          echo "NETBOX_IP=$NETBOX_IP" >> "$GITHUB_ENV"
+          echo "PROXBOX_API_IP=$PROXBOX_API_IP" >> "$GITHUB_ENV"
 
       - name: Wait for stack readiness and create NetBox API token
         run: |
           set -eux
-          for i in $(seq 1 90); do
-            if curl -fsS --max-time 5 http://127.0.0.1:18080/api/ >/dev/null 2>&1; then
+          for i in $(seq 1 240); do
+            http_code="$(curl -sS --max-time 5 -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/api/ 2>/dev/null || true)"
+            if [ "$http_code" -ge 100 ] 2>/dev/null && [ "$http_code" -lt 500 ]; then
               break
             fi
             sleep 2
-            if [ "$i" -eq 90 ]; then
+            if [ "$i" -eq 240 ]; then
               echo "NetBox did not become ready"
               docker logs netbox-e2e || true
               exit 1
@@ -106,11 +167,24 @@ jobs:
           done
 
           for i in $(seq 1 60); do
-            if curl -fsS --max-time 5 http://127.0.0.1:18800/ >/dev/null 2>&1; then
+            if curl -fsSk --max-time 5 https://127.0.0.1:18006/api2/json/version >/dev/null 2>&1; then
               break
             fi
             sleep 2
             if [ "$i" -eq 60 ]; then
+              echo "proxmox mock did not become ready"
+              docker logs proxmox-e2e-mock || true
+              exit 1
+            fi
+          done
+
+          for i in $(seq 1 90); do
+            http_code="$(curl -sS --max-time 5 -o /dev/null -w '%{http_code}' http://127.0.0.1:18800/ 2>/dev/null || true)"
+            if [ "$http_code" -ge 100 ] 2>/dev/null && [ "$http_code" -lt 500 ]; then
+              break
+            fi
+            sleep 2
+            if [ "$i" -eq 90 ]; then
               echo "proxbox-api did not become ready"
               docker logs proxbox-e2e-api || true
               exit 1
@@ -124,12 +198,35 @@ jobs:
           echo "NETBOX_TOKEN_ID=$TOKEN_ID" >> "$GITHUB_ENV"
           echo "NETBOX_API_TOKEN=$TOKEN_VALUE" >> "$GITHUB_ENV"
 
+      - name: Start NetBox rqworker
+        run: |
+          set -eux
+          SECRET_KEY='proxbox-e2e-secret-key-proxbox-e2e-secret-key-proxbox-e2e-secret-key'
+
+          docker run -d --name netbox-e2e-rqworker --network proxbox-e2e \
+            -e DB_HOST=netbox-e2e-postgres \
+            -e DB_NAME=netbox \
+            -e DB_USER=netbox \
+            -e DB_PASSWORD=netbox \
+            -e REDIS_HOST=netbox-e2e-redis \
+            -e REDIS_DATABASE=0 \
+            -e REDIS_CACHE_HOST=netbox-e2e-redis \
+            -e REDIS_CACHE_DATABASE=1 \
+            -e REDIS_TASK_HOST=netbox-e2e-redis \
+            -e REDIS_TASK_DATABASE=2 \
+            -e SECRET_KEY="$SECRET_KEY" \
+            --entrypoint /opt/netbox/venv/bin/python \
+            netbox-proxbox-e2e:local /opt/netbox/netbox/manage.py rqworker
+
       - name: Run stack e2e checks
         env:
           NETBOX_BASE_URL: http://127.0.0.1:18080
           PROXBOX_BASE_URL: http://127.0.0.1:18800
           PROXMOX_MOCK_BASE_URL: http://127.0.0.1:18006
-          NETBOX_PUBLIC_URL: http://netbox:8080
+          PROXMOX_MOCK_IP: ${{ env.PROXMOX_MOCK_IP }}
+          NETBOX_IP: ${{ env.NETBOX_IP }}
+          PROXBOX_API_IP: ${{ env.PROXBOX_API_IP }}
+          NETBOX_PUBLIC_URL: http://${{ env.NETBOX_IP }}:8080
           NETBOX_TOKEN_ID: ${{ env.NETBOX_TOKEN_ID }}
           NETBOX_API_TOKEN: ${{ env.NETBOX_API_TOKEN }}
         run: |
@@ -138,11 +235,17 @@ jobs:
       - name: Dump container logs on failure
         if: failure()
         run: |
+          echo "=== NetBox logs ==="
           docker logs netbox-e2e || true
+          echo "=== RQ Worker logs ==="
           docker logs netbox-e2e-rqworker || true
+          echo "=== Proxbox API logs ==="
           docker logs proxbox-e2e-api || true
+          echo "=== Proxmox Mock logs ==="
           docker logs proxmox-e2e-mock || true
+          echo "=== Postgres logs ==="
           docker logs netbox-e2e-postgres || true
+          echo "=== Redis logs ==="
           docker logs netbox-e2e-redis || true
 
       - name: Cleanup stack

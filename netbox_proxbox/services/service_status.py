@@ -31,6 +31,7 @@ class ServiceStatus:
     """Probe FastAPI, NetBox, and Proxmox integration through the configured backend."""
 
     request_timeout = 5
+    backend_status_timeout = 60
 
     def __init__(self) -> None:
         """Initialize mutable state used while probing the ProxBox backend."""
@@ -339,11 +340,16 @@ class ServiceStatus:
                 response = requests.get(
                     netbox_status_route,
                     headers=auth_headers,
-                    timeout=self.request_timeout,
+                    timeout=self.backend_status_timeout,
                 )
                 response.raise_for_status()
                 return True
             except requests.exceptions.RequestException as exc:
+                detail, http_status = self._extract_error_detail(exc)
+                self._set_error(
+                    f"NetBox backend status check failed: {detail}",
+                    http_status=http_status,
+                )
                 logger.error(
                     "NetBox status check attempt %s failed: %s", attempt + 1, exc
                 )
@@ -357,11 +363,9 @@ class ServiceStatus:
         base_url: str,
         auth_headers: dict[str, str] | None = None,
     ) -> tuple[str, ServiceCheckResult]:
-        """Sync NetBox endpoint metadata to the backend and return success or error."""
+        """Validate NetBox endpoint settings without re-entering NetBox via the backend."""
         status = "error"
         self._clear_error()
-
-        request_headers = auth_headers or {}
 
         try:
             netbox_service_obj = NetBoxEndpoint.objects.get(pk=pk)
@@ -401,22 +405,12 @@ class ServiceStatus:
         if validation_error:
             return status, validation_error
 
-        sync_ok = self._sync_netbox_to_backend(
-            base_url, current_netbox, request_headers
-        )
-        if not sync_ok:
-            return status, ServiceCheckResult(
-                target_address=target_address,
-                target_port=target_port,
-                authentication="error",
-                api_access="error",
-                detail=self.last_error_detail,
-            )
-
-        status_ok = self._check_netbox_backend_status(base_url, request_headers)
-        if status_ok:
-            self._clear_error()
-            status = "success"
+        # NetBox keepalive runs inside the NetBox request cycle. Calling the
+        # backend's `/netbox/status` route from here re-enters NetBox through
+        # proxbox-api and can deadlock a simple health probe.
+        _ = (base_url, auth_headers)
+        self._clear_error()
+        status = "success"
 
         return status, ServiceCheckResult(
             target_address=target_address,

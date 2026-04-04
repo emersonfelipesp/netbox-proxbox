@@ -41,7 +41,7 @@ def test_fastapi_status_falls_back_to_ip_after_ssl_error(
     ]
 
 
-def test_netbox_status_creates_endpoint_and_checks_status(
+def test_netbox_status_succeeds_without_backend_round_trip(
     monkeypatch,
     fastapi_endpoint,
     netbox_endpoint,
@@ -55,28 +55,13 @@ def test_netbox_status_creates_endpoint_and_checks_status(
     ss = _service_status_module()
     monkeypatch.setattr(ss.time, "sleep", lambda seconds: None)
 
-    created_payloads = []
-    endpoint_checks = {"count": 0}
-
-    def fake_get(url, verify=True, timeout=None, headers=None):
-        if url.endswith("/netbox/endpoint"):
-            assert headers == {"Authorization": "Bearer backend-token"}
-            endpoint_checks["count"] += 1
-            if endpoint_checks["count"] == 1:
-                return ResponseStub([])
-            return ResponseStub([created_payloads[0][1]])
-        if url.endswith("/netbox/status"):
-            assert headers == {"Authorization": "Bearer backend-token"}
-            return ResponseStub({"status": "ok"})
-        raise AssertionError(url)
-
-    def fake_post(url, json, timeout=None, headers=None):
-        assert headers == {"Authorization": "Bearer backend-token"}
-        created_payloads.append((url, json))
-        return ResponseStub({"id": 1})
-
-    monkeypatch.setattr(ss.requests, "get", fake_get)
-    monkeypatch.setattr(ss.requests, "post", fake_post)
+    monkeypatch.setattr(
+        ss.requests,
+        "get",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("netbox keepalive must not call the backend")
+        ),
+    )
 
     status, details = ss.ServiceStatus().netbox_status(
         1,
@@ -85,10 +70,9 @@ def test_netbox_status_creates_endpoint_and_checks_status(
     )
     assert status == "success"
     assert details["api_access"] == "success"
-    assert created_payloads[0][0].endswith("/netbox/endpoint")
-    assert created_payloads[0][1]["token"] == "token-1"
-    assert created_payloads[0][1]["token_version"] == "v1"
-    assert created_payloads[0][1]["domain"] == "netbox.local"
+    assert details["authentication"] == "success"
+    assert details["target_address"] == "netbox.local"
+    assert details["target_port"] == 443
 
 
 def test_netbox_status_v2_without_secret_fails_backend_validation(
@@ -158,21 +142,13 @@ def test_netbox_status_builds_full_v2_token_from_key_and_secret(
     ss = _service_status_module()
     monkeypatch.setattr(ss.time, "sleep", lambda seconds: None)
 
-    created_payloads = []
-
-    def fake_get(url, verify=True, timeout=None, headers=None):
-        if url.endswith("/netbox/endpoint"):
-            return ResponseStub([])
-        if url.endswith("/netbox/status"):
-            return ResponseStub({"status": "ok"})
-        raise AssertionError(url)
-
-    def fake_post(url, json, timeout=None, headers=None):
-        created_payloads.append((url, json))
-        return ResponseStub({"id": 1})
-
-    monkeypatch.setattr(ss.requests, "get", fake_get)
-    monkeypatch.setattr(ss.requests, "post", fake_post)
+    monkeypatch.setattr(
+        ss.requests,
+        "get",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("netbox keepalive must not call the backend")
+        ),
+    )
 
     status, details = ss.ServiceStatus().netbox_status(
         1,
@@ -181,11 +157,6 @@ def test_netbox_status_builds_full_v2_token_from_key_and_secret(
     )
     assert status == "success"
     assert details["api_access"] == "success"
-    assert created_payloads[0][1]["token"] == "v2-token-secret"
-    assert created_payloads[0][1]["token_version"] == "v2"
-    assert created_payloads[0][1]["token_key"] == "v2-token-key"
-    assert created_payloads[0][1]["ip_address"] == "10.0.0.20"
-    assert created_payloads[0][1]["domain"] == "10.0.0.20"
 
 
 def test_backend_auth_headers_accepts_prefixed_and_bare_tokens(
@@ -212,7 +183,7 @@ def test_backend_auth_headers_accepts_prefixed_and_bare_tokens(
     }
 
 
-def test_netbox_status_exposes_error_detail_on_backend_failure(
+def test_netbox_status_ignores_backend_auth_headers_for_local_validation(
     monkeypatch,
     fastapi_endpoint,
     netbox_endpoint,
@@ -225,45 +196,26 @@ def test_netbox_status_exposes_error_detail_on_backend_failure(
     )
     ss = _service_status_module()
     monkeypatch.setattr(ss.time, "sleep", lambda seconds: None)
-
-    class FailingResponse(ResponseStub):
-        text = '{"detail": "token is required for NetBox API token v1", "python_exception": "ValidationError"}'
-
-        def raise_for_status(self):
-            err = requests.exceptions.HTTPError("400")
-            err.response = self
-            raise err
-
-    def fake_get(url, verify=True, timeout=None, headers=None):
-        if url.endswith("/netbox/endpoint"):
-            return ResponseStub([])
-        raise AssertionError(url)
-
-    def fake_post(url, json, timeout=None, headers=None):
-        return FailingResponse(
-            {
-                "detail": "token is required for NetBox API token v1",
-                "python_exception": "ValidationError",
-            },
-            status_code=400,
-        )
-
-    monkeypatch.setattr(ss.requests, "get", fake_get)
-    monkeypatch.setattr(ss.requests, "post", fake_post)
+    monkeypatch.setattr(
+        ss.requests,
+        "get",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("netbox keepalive must not call the backend")
+        ),
+    )
 
     service_status = ss.ServiceStatus()
     status, details = service_status.netbox_status(
         1,
         "https://proxbox.local:8800",
-        auth_headers={"Authorization": "Bearer backend-token"},
+        auth_headers={"Authorization": "Bearer backend-token", "X-Test": "1"},
     )
 
-    assert status == "error"
-    assert details["api_access"] == "error"
-    assert "token is required for NetBox API token v1" in (
-        service_status.last_error_detail or ""
-    )
-    assert service_status.last_error_http_status == 400
+    assert status == "success"
+    assert details["api_access"] == "success"
+    assert details["authentication"] == "success"
+    assert service_status.last_error_detail is None
+    assert service_status.last_error_http_status is None
 
 
 def test_extract_error_detail_identifies_html_404_from_wrong_backend_target(

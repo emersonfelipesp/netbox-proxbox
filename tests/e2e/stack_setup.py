@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 import requests
+from urllib.parse import urlparse
 
 from stack_common import assert_ok, post_json
 
@@ -10,13 +12,16 @@ def ensure_proxbox_backend_endpoints(
     netbox_public_url: str,
     netbox_token: str,
 ) -> None:
-    _ = netbox_public_url
+    parsed_netbox = urlparse(netbox_public_url)
+    netbox_host = parsed_netbox.hostname
+    netbox_port = parsed_netbox.port or 8080
 
+    print(f"Configuring NetBox endpoint: host={netbox_host}, port={netbox_port}")
     netbox_payload = {
         "name": "netbox",
-        "ip_address": "netbox",
-        "domain": "netbox",
-        "port": 8080,
+        "ip_address": netbox_host,
+        "domain": netbox_host,
+        "port": netbox_port,
         "token_version": "v1",
         "token": netbox_token,
         "verify_ssl": False,
@@ -24,6 +29,7 @@ def ensure_proxbox_backend_endpoints(
     resp = requests.post(
         f"{proxbox_base_url}/netbox/endpoint", json=netbox_payload, timeout=30
     )
+    print(f"NetBox endpoint response: HTTP {resp.status_code} - {resp.text[:300]}")
     if (
         resp.status_code >= 400
         and "Only one NetBox endpoint is allowed" not in resp.text
@@ -32,32 +38,24 @@ def ensure_proxbox_backend_endpoints(
             f"Unable to configure proxbox-api NetBox endpoint: {resp.status_code} {resp.text}"
         )
 
-    proxmox_payload = {
-        "name": "mock-proxmox",
-        "ip_address": "proxmox-mock",
-        "domain": "proxmox-mock",
-        "port": 8006,
-        "username": "root@pam",
-        "token_name": "e2e",
-        "token_value": "e2e-secret",
-        "verify_ssl": False,
-    }
-    resp = requests.post(
-        f"{proxbox_base_url}/proxmox/endpoints", json=proxmox_payload, timeout=30
-    )
-    if resp.status_code >= 400 and "already exists" not in resp.text:
-        raise AssertionError(
-            f"Unable to configure proxbox-api Proxmox endpoint: {resp.status_code} {resp.text}"
-        )
-
+    print("Checking NetBox status on proxbox-api backend")
     status_resp = requests.get(f"{proxbox_base_url}/netbox/status", timeout=30)
+    print(
+        f"NetBox status response: HTTP {status_resp.status_code} - {status_resp.text[:300]}"
+    )
     assert_ok(status_resp, context="proxbox-api netbox status")
+
+    # Do not seed a standalone Proxmox endpoint directly into proxbox-api here.
+    # The NetBox plugin keepalive path synchronizes the NetBox-managed Proxmox
+    # endpoint into the backend, and creating another backend-only record here
+    # causes the same Proxmox host to be synced twice in E2E.
 
 
 def ensure_netbox_plugin_endpoints(
     netbox_base_url: str,
     netbox_token: str,
     netbox_token_id: int,
+    netbox_public_url: str = "",
 ) -> dict[str, int]:
     headers = {
         "Authorization": f"Token {netbox_token}",
@@ -65,11 +63,38 @@ def ensure_netbox_plugin_endpoints(
         "Accept": "application/json",
     }
 
+    parsed_netbox = urlparse(netbox_public_url) if netbox_public_url else None
+    netbox_host = (parsed_netbox.hostname if parsed_netbox else None) or "netbox"
+    netbox_port = (parsed_netbox.port if parsed_netbox else None) or 8080
+
+    proxmox_ip = os.environ.get("PROXMOX_MOCK_IP", "127.0.0.1")
+    proxbox_api_ip = os.environ.get("PROXBOX_API_IP", "127.0.0.1")
+
+    # ip_address fields are FKs to ipam.IPAddress — create the IPAM records first
+    netbox_ip_obj = post_json(
+        f"{netbox_base_url}/api/ipam/ip-addresses/",
+        {"address": f"{netbox_host}/32"},
+        headers,
+        context="create NetBox IPAddress in IPAM",
+    )
+    proxmox_ip_obj = post_json(
+        f"{netbox_base_url}/api/ipam/ip-addresses/",
+        {"address": f"{proxmox_ip}/32"},
+        headers,
+        context="create Proxmox mock IPAddress in IPAM",
+    )
+    proxbox_api_ip_obj = post_json(
+        f"{netbox_base_url}/api/ipam/ip-addresses/",
+        {"address": f"{proxbox_api_ip}/32"},
+        headers,
+        context="create ProxBox API IPAddress in IPAM",
+    )
+
     proxmox = post_json(
         f"{netbox_base_url}/api/plugins/proxbox/endpoints/proxmox/",
         {
             "name": "mock-proxmox",
-            "domain": "proxmox-mock",
+            "ip_address": proxmox_ip_obj["id"],
             "port": 8006,
             "mode": "cluster",
             "username": "root@pam",
@@ -84,8 +109,8 @@ def ensure_netbox_plugin_endpoints(
         f"{netbox_base_url}/api/plugins/proxbox/endpoints/netbox/",
         {
             "name": "local-netbox",
-            "domain": "netbox",
-            "port": 8080,
+            "ip_address": netbox_ip_obj["id"],
+            "port": netbox_port,
             "token_version": "v1",
             "token": {"id": netbox_token_id},
             "verify_ssl": False,
@@ -97,7 +122,7 @@ def ensure_netbox_plugin_endpoints(
         f"{netbox_base_url}/api/plugins/proxbox/endpoints/fastapi/",
         {
             "name": "local-proxbox-api",
-            "domain": "proxbox-api",
+            "ip_address": proxbox_api_ip_obj["id"],
             "port": 8000,
             "verify_ssl": False,
             "token": "",
@@ -142,7 +167,11 @@ def assert_plugin_routes(
         f"{netbox_base_url}/plugins/proxbox/keepalive-status/netbox/{endpoint_ids['netbox_pk']}/",
     ]
     for url in keepalive_checks:
+        print(f"Checking keepalive: {url}")
         response = requests.get(url, headers=headers, timeout=30)
+        print(
+            f"Keepalive response: HTTP {response.status_code} - {response.text[:500]}"
+        )
         payload = assert_ok(response, context=f"keepalive {url}")
         if payload.get("status") != "success":
             raise AssertionError(f"Keepalive failed for {url}: {payload}")
