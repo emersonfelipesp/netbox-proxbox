@@ -85,11 +85,11 @@ def get_service_status_impl(
         )
 
     fastapi_response = service_status.fastapi_status(fastapi_object.id)
-    if not fastapi_response.get("connected"):
+    if not fastapi_response.connected:
         return JsonResponse(
             {
                 "status": "error",
-                "detail": fastapi_response.get("detail")
+                "detail": fastapi_response.detail
                 or "Unable to connect to configured FastAPI endpoint.",
             },
             status=503,

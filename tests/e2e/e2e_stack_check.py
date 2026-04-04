@@ -29,6 +29,7 @@ def main() -> None:
         netbox_base_url,
         netbox_token,
         netbox_token_id,
+        netbox_public_url=netbox_public_url,
     )
     assert_plugin_routes(netbox_base_url, netbox_token, endpoint_ids)
     run_and_assert_all_sync_operations(

@@ -63,6 +63,21 @@ def cluster_status():
     )
 
 
+@app.get("/api2/json/cluster/config/join")
+def cluster_config_join():
+    return _ok(
+        {
+            "nodelist": [
+                {
+                    "name": "pve01",
+                    "nodeid": 1,
+                    "pve_fp": "AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99",
+                }
+            ]
+        }
+    )
+
+
 @app.get("/api2/json/cluster/resources")
 def cluster_resources():
     resources = [{"type": "node", "node": "pve01", "status": "online", "maxcpu": 8}]

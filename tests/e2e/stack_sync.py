@@ -31,9 +31,17 @@ def trigger_and_wait_sync(
     }
     seen_job_ids = snapshot_proxbox_job_ids(netbox_base_url, netbox_token)
 
+    # Django's CSRF middleware requires a CSRF token for POST to non-DRF views.
+    # Fetch the csrftoken cookie from the login page then echo it via X-CSRFToken.
+    _csrf = requests.get(f"{netbox_base_url}/login/", timeout=10)
+    csrftoken = _csrf.cookies.get("csrftoken", "")
+    trigger_headers = {**headers, "X-CSRFToken": csrftoken}
+    trigger_cookies = {"csrftoken": csrftoken} if csrftoken else {}
+
     trigger = requests.post(
         f"{netbox_base_url}{route}",
-        headers=headers,
+        headers=trigger_headers,
+        cookies=trigger_cookies,
         timeout=30,
         allow_redirects=False,
     )
@@ -63,7 +71,7 @@ def trigger_and_wait_sync(
             name = str(job.get("name", "")).lower()
             if expected_lower and expected_lower not in name:
                 continue
-            status = str(job.get("status", "")).lower()
+            status = extract_status_value(job.get("status"))
             if status in terminal_statuses:
                 if status != "completed":
                     raise AssertionError(

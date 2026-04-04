@@ -11,13 +11,16 @@ def validate_domain(value: object) -> None:
     if value in (None, ""):
         return
 
-    domain_regex = re.compile(
+    fqdn_regex = re.compile(
         r"^(?:[a-zA-Z0-9]"  # First character of the domain
         r"(?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)"  # Sub domain + hostname
-        r"+[a-zA-Z]{2,6}$"  # Top level domain
+        r"+[a-zA-Z0-9]{2,}$"  # Top level domain
+    )
+    simple_regex = re.compile(
+        r"^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$"  # Simple hostname
     )
     if value != "localhost":
-        if not domain_regex.match(value):
+        if not (fqdn_regex.match(value) or simple_regex.match(value)):
             raise ValidationError(f"{value} is not a valid domain name")
 
 

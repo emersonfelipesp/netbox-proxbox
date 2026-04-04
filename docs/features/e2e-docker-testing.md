@@ -7,6 +7,11 @@ The `E2E Docker` GitHub Action validates the real integration path between:
 - Proxbox backend (`proxbox-api` container)
 - A mocked Proxmox API service (no real Proxmox calls)
 
+The workflow runs in parallel in two variants:
+
+- `pypi` installs `netbox-proxbox` and `proxbox-api` from PyPI.
+- `local` installs `netbox-proxbox` from the current checkout and `proxbox-api` from a local checkout of the sibling repository.
+
 ## Architecture
 
 ```mermaid
@@ -14,9 +19,9 @@ flowchart LR
   A[GitHub Actions Runner]
 
   subgraph D[Docker network: proxbox-e2e]
-    NB[NetBox Container\nplugin installed]
+    NB[NetBox Container\nnetbox-proxbox from PyPI or source]
     RQ[NetBox rqworker\nmanage.py rqworker]
-    PB[Proxbox API Container\nemersonfelipesp/proxbox-api:latest]
+    PB[Proxbox API Container\nproxbox-api from PyPI or source]
     PM[Proxmox Mock Container\nFastAPI mock_proxmox_api.py]
     PG[(PostgreSQL)]
     RD[(Redis)]
