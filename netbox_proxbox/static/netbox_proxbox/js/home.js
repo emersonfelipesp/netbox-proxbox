@@ -31,10 +31,45 @@ function initializeWebSocket() {
     return new WebSocketClient(websocketEndpoint);
 }
 
+function isFastapiStatusElement(element) {
+    const statusUrl = element.dataset.serviceStatusUrl || "";
+    return statusUrl.includes("/keepalive-status/fastapi/");
+}
+
 async function refreshStatusBadges() {
-    const elements = document.querySelectorAll("[data-service-status-url]");
+    const elements = Array.from(document.querySelectorAll("[data-service-status-url]"));
+    const fastapiElements = elements.filter(isFastapiStatusElement);
+    const dependentElements = elements.filter((element) => !isFastapiStatusElement(element));
+
+    let fastapiConnected = fastapiElements.length === 0;
+
     await Promise.all(
-        Array.from(elements).map(async (element) => {
+        fastapiElements.map(async (element) => {
+            try {
+                const payload = await fetchJson(element.dataset.serviceStatusUrl);
+                setBadgeState(element, payload.status, payload.detail || "");
+                if (payload.status === "success") {
+                    fastapiConnected = true;
+                }
+            } catch (error) {
+                setBadgeState(element, "error", error.message || "Unknown error");
+            }
+        }),
+    );
+
+    if (!fastapiConnected) {
+        for (const element of dependentElements) {
+            setBadgeState(
+                element,
+                "error",
+                "Skipped because FastAPI backend keepalive is not successful.",
+            );
+        }
+        return false;
+    }
+
+    await Promise.all(
+        dependentElements.map(async (element) => {
             try {
                 const payload = await fetchJson(element.dataset.serviceStatusUrl);
                 setBadgeState(element, payload.status, payload.detail || "");
@@ -43,6 +78,8 @@ async function refreshStatusBadges() {
             }
         }),
     );
+
+    return true;
 }
 
 function renderProxmoxField(card, fieldName, value) {
@@ -111,5 +148,9 @@ async function hydrateProxmoxCards() {
 document.addEventListener("DOMContentLoaded", async () => {
     initializeWebSocket();
     wireSelectAllCheckboxes();
-    await Promise.all([refreshStatusBadges(), hydrateProxmoxCards()]);
+
+    const fastapiConnected = await refreshStatusBadges();
+    if (fastapiConnected) {
+        await hydrateProxmoxCards();
+    }
 });

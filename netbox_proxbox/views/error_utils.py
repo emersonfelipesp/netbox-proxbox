@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 
 import requests
 
@@ -13,6 +14,15 @@ try:
     _JSON_DECODE_ERROR: type[BaseException] = requests.exceptions.JSONDecodeError
 except AttributeError:
     _JSON_DECODE_ERROR = json.JSONDecodeError
+
+
+def _extract_host_port_from_request_error(message: str) -> tuple[str | None, str | None]:
+    """Best-effort parse of host/port from requests connection error strings."""
+    host_match = re.search(r"host='([^']+)'", message)
+    port_match = re.search(r"port=(\d+)", message)
+    host = host_match.group(1) if host_match else None
+    port = port_match.group(1) if port_match else None
+    return host, port
 
 
 def parse_requests_response_json(
@@ -52,7 +62,32 @@ def extract_backend_error_detail(
     """Normalize a requests error into a user-facing message and HTTP status if known."""
     response = getattr(exc, "response", None)
     if response is None:
-        return str(exc), None
+        error_text = str(exc)
+        lowered = error_text.lower()
+
+        if isinstance(exc, requests.exceptions.ConnectionError) or (
+            "connection refused" in lowered
+            or "failed to establish a new connection" in lowered
+            or "max retries exceeded" in lowered
+        ):
+            host, port = _extract_host_port_from_request_error(error_text)
+            target = f"{host}:{port}" if host and port else (host or "configured FastAPI endpoint")
+            return (
+                "Unable to reach ProxBox backend at "
+                f"{target}. Connection was refused. "
+                "Verify proxbox-api is running and listening on the configured host/port, "
+                "then confirm the plugin FastAPI endpoint settings."
+            ), None
+
+        if isinstance(exc, requests.exceptions.Timeout) or "timed out" in lowered:
+            host, port = _extract_host_port_from_request_error(error_text)
+            target = f"{host}:{port}" if host and port else "configured FastAPI endpoint"
+            return (
+                "Timed out while connecting to ProxBox backend at "
+                f"{target}. Verify network reachability and that proxbox-api is healthy."
+            ), None
+
+        return error_text, None
 
     status_code = getattr(response, "status_code", None)
     detail = None

@@ -246,6 +246,54 @@ def test_extract_error_detail_identifies_html_404_from_wrong_backend_target(
     assert "pointing to NetBox UI instead of proxbox-api" in detail
 
 
+def test_extract_error_detail_rewrites_connection_refused_to_clear_backend_message(
+    monkeypatch,
+    fastapi_endpoint,
+):
+    load_plugin_module(
+        "netbox_proxbox.views.keepalive_status",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+    )
+    ss = _service_status_module()
+
+    err = requests.exceptions.ConnectionError(
+        "HTTPConnectionPool(host='10.0.30.207', port=8000): Max retries exceeded "
+        "with url: / (Caused by NewConnectionError(\"Failed to establish a new "
+        "connection: [Errno 111] Connection refused\"))"
+    )
+
+    detail, status = ss.ServiceStatus._extract_error_detail(err)
+
+    assert status is None
+    assert "Unable to reach ProxBox backend at 10.0.30.207:8000" in detail
+    assert "Connection was refused" in detail
+    assert "Verify proxbox-api is running" in detail
+
+
+def test_extract_error_detail_rewrites_timeout_to_clear_backend_message(
+    monkeypatch,
+    fastapi_endpoint,
+):
+    load_plugin_module(
+        "netbox_proxbox.views.keepalive_status",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+    )
+    ss = _service_status_module()
+
+    err = requests.exceptions.ReadTimeout(
+        "HTTPConnectionPool(host='10.0.30.207', port=8000): Read timed out. "
+        "(read timeout=5)"
+    )
+
+    detail, status = ss.ServiceStatus._extract_error_detail(err)
+
+    assert status is None
+    assert "Timed out while connecting to ProxBox backend at 10.0.30.207:8000" in detail
+    assert "Verify network reachability" in detail
+
+
 def test_proxmox_status_uses_domain_query_when_available(
     monkeypatch,
     fastapi_endpoint,
