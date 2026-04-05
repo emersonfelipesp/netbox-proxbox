@@ -16,7 +16,9 @@ except AttributeError:
     _JSON_DECODE_ERROR = json.JSONDecodeError
 
 
-def _extract_host_port_from_request_error(message: str) -> tuple[str | None, str | None]:
+def _extract_host_port_from_request_error(
+    message: str,
+) -> tuple[str | None, str | None]:
     """Best-effort parse of host/port from requests connection error strings."""
     host_match = re.search(r"host='([^']+)'", message)
     port_match = re.search(r"port=(\d+)", message)
@@ -71,7 +73,11 @@ def extract_backend_error_detail(
             or "max retries exceeded" in lowered
         ):
             host, port = _extract_host_port_from_request_error(error_text)
-            target = f"{host}:{port}" if host and port else (host or "configured FastAPI endpoint")
+            target = (
+                f"{host}:{port}"
+                if host and port
+                else (host or "configured FastAPI endpoint")
+            )
             return (
                 "Unable to reach ProxBox backend at "
                 f"{target}. Connection was refused. "
@@ -81,7 +87,9 @@ def extract_backend_error_detail(
 
         if isinstance(exc, requests.exceptions.Timeout) or "timed out" in lowered:
             host, port = _extract_host_port_from_request_error(error_text)
-            target = f"{host}:{port}" if host and port else "configured FastAPI endpoint"
+            target = (
+                f"{host}:{port}" if host and port else "configured FastAPI endpoint"
+            )
             return (
                 "Timed out while connecting to ProxBox backend at "
                 f"{target}. Verify network reachability and that proxbox-api is healthy."

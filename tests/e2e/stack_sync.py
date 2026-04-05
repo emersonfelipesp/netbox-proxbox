@@ -419,7 +419,9 @@ def assert_vm_status_transition(
         )
 
     if not set_mock_vm_status(proxmox_mock_base_url, 101, "stopped"):
-        print("Skipping VM status mutation assertion: mock admin endpoint not available")
+        print(
+            "Skipping VM status mutation assertion: mock admin endpoint not available"
+        )
         return
     trigger_and_wait_sync(
         netbox_base_url,

@@ -259,8 +259,8 @@ def test_extract_error_detail_rewrites_connection_refused_to_clear_backend_messa
 
     err = requests.exceptions.ConnectionError(
         "HTTPConnectionPool(host='10.0.30.207', port=8000): Max retries exceeded "
-        "with url: / (Caused by NewConnectionError(\"Failed to establish a new "
-        "connection: [Errno 111] Connection refused\"))"
+        'with url: / (Caused by NewConnectionError("Failed to establish a new '
+        'connection: [Errno 111] Connection refused"))'
     )
 
     detail, status = ss.ServiceStatus._extract_error_detail(err)
