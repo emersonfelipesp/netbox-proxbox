@@ -441,7 +441,7 @@ def test_proxbox_sync_job_run_rewrites_postgres_slot_exhaustion_error(
     assert "no free PostgreSQL connections" in error_text
     assert "Wait for running jobs to finish" in error_text
     assert "remaining connection slots are reserved" not in error_text
-    assert "{\"error\"" not in error_text
+    assert '{"error"' not in error_text
 
 
 def test_proxbox_sync_job_run_multi_stage_in_dependency_order(
