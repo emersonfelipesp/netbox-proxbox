@@ -73,12 +73,16 @@ class ProxmoxBackupSubtypeChoices(ChoiceSet):
 
     BACKUP_SUBTYPE_UNDEFINED = "undefined"
     BACKUP_SUBTYPE_LXC = "lxc"
+    BACKUP_SUBTYPE_CT = "ct"
     BACKUP_SUBTYPE_QEMU = "qemu"
+    BACKUP_SUBTYPE_VM = "vm"
 
     CHOICES = [
         (BACKUP_SUBTYPE_UNDEFINED, _("Undefined"), "gray"),
         (BACKUP_SUBTYPE_LXC, _("LXC"), "blue"),
+        (BACKUP_SUBTYPE_CT, _("CT"), "blue"),
         (BACKUP_SUBTYPE_QEMU, _("QEMU"), "green"),
+        (BACKUP_SUBTYPE_VM, _("VM"), "green"),
     ]
 
 
@@ -90,6 +94,7 @@ class ProxmoxBackupFormatChoices(ChoiceSet):
     BACKUP_FORMAT_UNDEFINED = "undefined"
     BACKUP_FORMAT_PBS_VM = "pbs-vm"
     BACKUP_FORMAT_PBS_CT = "pbs-ct"
+    BACKUP_FORMAT_ZST = "zst"
     BACKUP_FORMAT_ISO = "iso"
     BACKUP_FORMAT_TZST = "tzst"
     BACKUP_FORMAT_TGZ = "tgz"
@@ -102,6 +107,7 @@ class ProxmoxBackupFormatChoices(ChoiceSet):
         (BACKUP_FORMAT_UNDEFINED, _("Undefined"), "gray"),
         (BACKUP_FORMAT_PBS_VM, _("PBS VM"), "blue"),
         (BACKUP_FORMAT_PBS_CT, _("PBS CT"), "green"),
+        (BACKUP_FORMAT_ZST, _("ZST"), "purple"),
         (BACKUP_FORMAT_ISO, _("ISO"), "yellow"),
         (BACKUP_FORMAT_TZST, _("TZST"), "purple"),
         (BACKUP_FORMAT_TGZ, _("TGZ"), "red"),
