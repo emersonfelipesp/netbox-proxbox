@@ -95,7 +95,7 @@ def ensure_netbox_plugin_endpoints(
         {
             "name": "mock-proxmox",
             "ip_address": proxmox_ip_obj["id"],
-            "port": 8006,
+            "port": 8000,
             "mode": "cluster",
             "username": "root@pam",
             "token_name": "e2e",
