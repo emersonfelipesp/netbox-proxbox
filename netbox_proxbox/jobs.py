@@ -95,6 +95,71 @@ _TARGETED_VM_SYNC_TYPES: tuple[str, ...] = (
 )
 
 
+def _coerce_backend_error_payload(value: object) -> dict[str, object] | None:
+    """Return a backend error payload dict when ``value`` is a JSON-encoded object."""
+    if isinstance(value, dict):
+        return value
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text.startswith("{"):
+        return None
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def _extract_backend_error_text(payload: dict[str, object]) -> str | None:
+    """Extract the most useful human-facing error text from backend payloads."""
+    detail = payload.get("detail") or payload.get("message") or payload.get("error")
+    if isinstance(detail, str) and detail.strip():
+        return detail.strip()
+    errors = payload.get("errors")
+    if isinstance(errors, list):
+        for item in errors:
+            if isinstance(item, dict):
+                nested = item.get("detail") or item.get("message")
+                if isinstance(nested, str) and nested.strip():
+                    return nested.strip()
+    return None
+
+
+def _format_stage_sync_error(
+    *,
+    sync_type: str,
+    status: int,
+    payload: dict[str, object],
+) -> str:
+    """Build a user-friendly sync error message for stage failures."""
+    raw_text = _extract_backend_error_text(payload) or f"HTTP {status}"
+    metadata_payload = _coerce_backend_error_payload(raw_text)
+    source_payload = metadata_payload or payload
+
+    backend_error = source_payload.get("error")
+    if isinstance(backend_error, str) and backend_error.strip():
+        raw_text = backend_error.strip()
+
+    lowered = raw_text.lower()
+    postgres_slot_marker = (
+        "remaining connection slots are reserved for roles with the superuser attribute"
+    )
+    if postgres_slot_marker in lowered:
+        return (
+            f"Stage '{sync_type}' failed (HTTP {status}): "
+            "NetBox database is overloaded and has no free PostgreSQL connections for this sync. "
+            "Wait for running jobs to finish, then retry. "
+            "If this keeps happening, increase PostgreSQL connection capacity or reduce concurrent sync jobs."
+        )
+
+    exception_name = source_payload.get("exception")
+    if isinstance(exception_name, str) and exception_name.strip():
+        raw_text = f"{raw_text} ({exception_name.strip()})"
+
+    return f"Stage '{sync_type}' failed (HTTP {status}): {raw_text}"
+
+
 def _use_guest_agent_interface_name_setting() -> bool:
     """Return current plugin setting for guest-agent VM interface naming."""
     try:
@@ -797,11 +862,16 @@ class ProxboxSyncJob(JobRunner):
                     )
                     self.job.save(update_fields=["log_entries"])
                     if status >= 400:
-                        detail = payload.get("detail", "Backend returned an error.")
+                        detail = _extract_backend_error_text(payload) or str(payload)
+                        user_detail = _format_stage_sync_error(
+                            sync_type=st,
+                            status=status,
+                            payload=payload,
+                        )
                         self.logger.error(
                             "Stage %s failed (HTTP %s): %s", st, status, detail
                         )
-                        raise RuntimeError(detail)
+                        raise RuntimeError(user_detail)
                     self.logger.info("Stage completed: %s (HTTP %s)", st, status)
                     stages_out.append({"sync_type": st, "payload": payload})
 

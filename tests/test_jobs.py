@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import importlib.util
 import logging
 import sys
@@ -402,6 +403,45 @@ def test_proxbox_sync_job_run_raises_on_backend_error(
     st = proxbox_sync_job_module.SyncTypeChoices
     with pytest.raises(RuntimeError, match="unavailable"):
         ProxboxSyncJob.run(job, sync_type=st.DEVICES)
+
+
+def test_proxbox_sync_job_run_rewrites_postgres_slot_exhaustion_error(
+    monkeypatch, proxbox_sync_job_module
+):
+    services_mod = types.ModuleType("netbox_proxbox.services")
+    services_mod.run_sync_stream = lambda *a, **k: (
+        {
+            "detail": json.dumps(
+                {
+                    "error": (
+                        'connection failed: connection to server at "127.0.0.1", '
+                        "port 5432 failed: FATAL: remaining connection slots are "
+                        "reserved for roles with the SUPERUSER attribute"
+                    ),
+                    "exception": "OperationalError",
+                    "netbox_version": "4.5.5",
+                    "python_version": "3.13.3",
+                }
+            )
+        },
+        500,
+    )
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
+
+    ProxboxSyncJob = proxbox_sync_job_module.ProxboxSyncJob
+    job = ProxboxSyncJob()
+    job.logger = logging.getLogger("test_proxbox_job")
+    job.job = MagicMock()
+
+    st = proxbox_sync_job_module.SyncTypeChoices
+    with pytest.raises(RuntimeError) as exc_info:
+        ProxboxSyncJob.run(job, sync_type=st.DEVICES)
+
+    error_text = str(exc_info.value)
+    assert "no free PostgreSQL connections" in error_text
+    assert "Wait for running jobs to finish" in error_text
+    assert "remaining connection slots are reserved" not in error_text
+    assert "{\"error\"" not in error_text
 
 
 def test_proxbox_sync_job_run_multi_stage_in_dependency_order(
