@@ -31,6 +31,9 @@ router.register("backup-routines", views.BackupRoutineViewSet, basename="backupr
 router.register("replications", views.ReplicationViewSet, basename="replication")
 router.register("snapshots", views.VMSnapshotViewSet)
 router.register("task-history", views.VMTaskHistoryViewSet)
+router.register(
+    "settings", views.ProxboxPluginSettingsViewSet, basename="proxboxpluginsettings"
+)
 
 urlpatterns = [
     path(

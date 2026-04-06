@@ -9,6 +9,13 @@ from django.utils.translation import gettext_lazy as _
 from netbox.models import NetBoxModel
 
 
+def parse_cidr_list(text: str) -> list:
+    """Parse newline-separated CIDR ranges into a list of strings."""
+    if not text:
+        return []
+    return [line.strip() for line in text.split("\n") if line.strip()]
+
+
 class ProxboxPluginSettings(NetBoxModel):
     """Singleton-style settings row used by plugin UI and sync jobs."""
 
@@ -43,6 +50,40 @@ class ProxboxPluginSettings(NetBoxModel):
             "addresses to be included."
         ),
     )
+    ssrf_protection_enabled = models.BooleanField(
+        default=True,
+        verbose_name=_("Enable SSRF protection"),
+        help_text=_(
+            "When enabled, validates that Proxmox/NetBox/FastAPI endpoints do not point to "
+            "reserved or internal IP addresses. Disable only in trusted environments."
+        ),
+    )
+    allow_private_ips = models.BooleanField(
+        default=True,
+        verbose_name=_("Allow private IP addresses"),
+        help_text=_(
+            "When enabled, allows endpoints with private IP addresses (10.0.0.0/8, "
+            "172.16.0.0/12, 192.168.0.0/16). Recommended for on-premises deployments."
+        ),
+    )
+    additional_allowed_ip_ranges = models.TextField(
+        blank=True,
+        default="",
+        verbose_name=_("Additional allowed IP CIDR ranges"),
+        help_text=_(
+            "One CIDR range per line (e.g., 10.30.0.0/16). IPs in these ranges are always allowed, "
+            "regardless of other SSRF settings."
+        ),
+    )
+    explicitly_blocked_ip_ranges = models.TextField(
+        blank=True,
+        default="",
+        verbose_name=_("Explicitly blocked IP CIDR ranges"),
+        help_text=_(
+            "One CIDR range per line. IPs in these ranges are always blocked, "
+            "even if they match allowed ranges above."
+        ),
+    )
 
     class Meta:
         verbose_name = _("Proxbox plugin settings")
@@ -62,3 +103,11 @@ class ProxboxPluginSettings(NetBoxModel):
     def get_solo(cls) -> "ProxboxPluginSettings":
         obj, _ = cls.objects.get_or_create(singleton_key="default")
         return obj
+
+    def get_allowed_ip_ranges(self) -> list[str]:
+        """Return list of additional allowed CIDR ranges."""
+        return parse_cidr_list(self.additional_allowed_ip_ranges)
+
+    def get_blocked_ip_ranges(self) -> list[str]:
+        """Return list of explicitly blocked CIDR ranges."""
+        return parse_cidr_list(self.explicitly_blocked_ip_ranges)

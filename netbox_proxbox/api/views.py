@@ -14,6 +14,7 @@ from .serializers import (
     BackupRoutineSerializer,
     FastAPIEndpointSerializer,
     NetBoxEndpointSerializer,
+    ProxboxPluginSettingsSerializer,
     ProxmoxClusterSerializer,
     ProxmoxEndpointSerializer,
     ProxmoxNodeSerializer,
@@ -37,6 +38,7 @@ class ProxBoxRootView(APIRootView):
         response = super().get(request, *args, **kwargs)
         base_url = request.build_absolute_uri("/").rstrip("/")
         response.data["endpoints"] = f"{base_url}/api/plugins/proxbox/endpoints/"
+        response.data["settings"] = f"{base_url}/api/plugins/proxbox/settings/"
         return response
 
 
@@ -46,6 +48,14 @@ class ProxBoxEndpointsView(APIRootView):
     def get_view_name(self) -> str:
         """Title for the nested endpoints API root."""
         return "Endpoints"
+
+
+class ProxboxPluginSettingsViewSet(NetBoxModelViewSet):
+    """REST API for ProxBox plugin settings (singleton)."""
+
+    queryset = models.ProxboxPluginSettings.objects.all()
+    serializer_class = ProxboxPluginSettingsSerializer
+    http_method_names = ["get", "patch", "head", "options"]
 
 
 class VMBackupViewSet(NetBoxModelViewSet):
