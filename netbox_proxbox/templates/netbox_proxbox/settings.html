@@ -6,32 +6,52 @@
 
 {% block content %}
 <div class="row">
-    <div class="col col-md-8">
-        <div class="card">
-            <h5 class="card-header">
-                <i class="mdi mdi-cog"></i>
-                {% trans "Plugin Settings" %}
-            </h5>
-            <div class="card-body">
-                <p class="text-muted">
-                    {% blocktrans trimmed %}
-                    Configure runtime behavior for Proxbox synchronization.
-                    {% endblocktrans %}
-                </p>
-                <form method="post">
-                    {% csrf_token %}
+    <div class="col col-md-12">
+        <form method="post">
+            {% csrf_token %}
+            {# Sync Settings Card #}
+            <div class="card mb-3">
+                <h5 class="card-header">
+                    <i class="mdi mdi-sync"></i>
+                    {% trans "Sync Settings" %}
+                </h5>
+                <div class="card-body">
+                    <p class="text-muted">
+                        {% blocktrans trimmed %}
+                        Configure runtime behavior for Proxbox synchronization.
+                        {% endblocktrans %}
+                    </p>
                     {% render_field form.use_guest_agent_interface_name %}
                     {% render_field form.proxbox_fetch_max_concurrency %}
                     {% render_field form.ignore_ipv6_link_local_addresses %}
-                    <div class="mt-3">
-                        <button type="submit" class="btn btn-primary">
-                            <i class="mdi mdi-content-save"></i>
-                            {% trans "Save" %}
-                        </button>
-                    </div>
-                </form>
+                </div>
             </div>
-        </div>
+            {# SSRF Protection Card #}
+            <div class="card mb-3">
+                <h5 class="card-header">
+                    <i class="mdi mdi-shield-check"></i>
+                    {% trans "SSRF Protection" %}
+                </h5>
+                <div class="card-body">
+                    <p class="text-muted">
+                        {% blocktrans trimmed %}
+                        Configure Server-Side Request Forgery (SSRF) protection for endpoint validation.
+                        Endpoints registered in the database are automatically allowed.
+                        {% endblocktrans %}
+                    </p>
+                    {% render_field form.ssrf_protection_enabled %}
+                    {% render_field form.allow_private_ips %}
+                    {% render_field form.additional_allowed_ip_ranges %}
+                    {% render_field form.explicitly_blocked_ip_ranges %}
+                </div>
+            </div>
+            <div class="mb-3">
+                <button type="submit" class="btn btn-primary">
+                    <i class="mdi mdi-content-save"></i>
+                    {% trans "Save Settings" %}
+                </button>
+            </div>
+        </form>
     </div>
 </div>
 {% endblock %}
