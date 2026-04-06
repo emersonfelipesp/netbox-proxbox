@@ -210,6 +210,9 @@ def test_job_live_panel_script_is_the_shared_runtime_controller():
     assert "handleItemProgressFrame" in contents
     assert "handlePhaseSummaryFrame" in contents
     assert "handleErrorDetailFrame" in contents
+    assert "isGenericProgressMessage" in contents
+    assert "describeStepProgress" in contents
+    assert 'msg === "sync progress"' in contents
 
 
 def test_job_live_panel_styles_make_queued_state_visually_distinct():

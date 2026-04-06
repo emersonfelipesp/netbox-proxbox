@@ -296,6 +296,40 @@
     return "";
   }
 
+  function isGenericProgressMessage(message, payload, eventType) {
+    var msg = String(message || "").trim().toLowerCase();
+    if (!msg) return false;
+    if (msg === "sync progress" || msg === "progress") {
+      return true;
+    }
+    if (eventType === "step" && String(payload && payload.step || "") === "progress" && msg.indexOf("stage") === -1) {
+      return true;
+    }
+    return false;
+  }
+
+  function describeStepProgress(payload) {
+    if (!payload || typeof payload !== "object") return "";
+    var step = String(payload.step || "");
+    if (step !== "progress") return "";
+    var progress = payload.progress && typeof payload.progress === "object" ? payload.progress : null;
+    if (!progress) return "";
+    var stage = progress.stage != null ? String(progress.stage) : "";
+    var current = progress.current != null ? String(progress.current) : "";
+    var total = progress.total != null ? String(progress.total) : "";
+    var status = String(payload.status || "").toLowerCase();
+    if (status === "started") {
+      if (stage && current && total) return "Starting stage " + stage + " (" + current + "/" + total + ")";
+      if (stage) return "Starting stage " + stage;
+    }
+    if (status === "completed") {
+      if (stage && current && total) return "Completed stage " + stage + " (" + current + "/" + total + ")";
+      if (stage) return "Completed stage " + stage;
+    }
+    if (stage && current && total) return "Stage " + stage + " in progress (" + current + "/" + total + ")";
+    return "";
+  }
+
   function updateProgress(progress, previousStatus) {
     if (!progressBarEl) return;
     var wrap = progressBarEl.parentElement ? progressBarEl.parentElement.parentElement : null;
@@ -504,7 +538,23 @@
 
   function handleSSEFrame(eventType, data) {
     var payload = data && typeof data === "object" ? data : {};
+    if (eventType === "discovery") {
+      handleDiscoveryFrame(payload);
+    } else if (eventType === "substep") {
+      handleSubstepFrame(payload);
+    } else if (eventType === "item_progress") {
+      handleItemProgressFrame(payload);
+    } else if (eventType === "phase_summary") {
+      handlePhaseSummaryFrame(payload);
+    } else if (eventType === "error_detail") {
+      handleErrorDetailFrame(payload);
+    }
+
     var message = getFrameMessage(payload, eventType);
+    var stepProgressText = describeStepProgress(payload);
+    if (stepProgressText) {
+      message = stepProgressText;
+    }
     var status = payload.status ? String(payload.status) : "";
     var previousStatus = lastStatusValue;
     var isTerminal =
@@ -513,7 +563,7 @@
       status === "errored" ||
       eventType === "error";
 
-    if (message && !isTerminal) {
+    if (message && !isTerminal && !isGenericProgressMessage(message, payload, eventType)) {
       appendLog(
         message,
         eventType === "error"
@@ -809,14 +859,3 @@
     bootstrap();
   }
 })(window);
-    if (eventType === "discovery") {
-      handleDiscoveryFrame(payload);
-    } else if (eventType === "substep") {
-      handleSubstepFrame(payload);
-    } else if (eventType === "item_progress") {
-      handleItemProgressFrame(payload);
-    } else if (eventType === "phase_summary") {
-      handlePhaseSummaryFrame(payload);
-    } else if (eventType === "error_detail") {
-      handleErrorDetailFrame(payload);
-    }
