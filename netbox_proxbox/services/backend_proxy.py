@@ -43,6 +43,55 @@ def http_timeout_for_sync_path(path: str) -> float | tuple[int, int]:
     return 5
 
 
+def _try_register_key(context: BackendRequestContext, token: str) -> tuple[bool, str]:
+    """Attempt to register the API key with the backend if not already registered.
+
+    Returns (success, message) tuple.
+    """
+    import requests
+
+    if not context or not context.http_url:
+        return False, "No FastAPI URL configured"
+
+    base_url = context.http_url.rstrip("/")
+    verify_ssl = bool(context.verify_ssl)
+
+    try:
+        status_response = requests.get(
+            f"{base_url}/auth/bootstrap-status",
+            verify=verify_ssl,
+            timeout=5,
+        )
+        if status_response.status_code != 200:
+            return (
+                False,
+                f"Bootstrap status check failed: HTTP {status_response.status_code}",
+            )
+
+        status_data = status_response.json()
+        if not status_data.get("needs_bootstrap", False):
+            return True, "Key already registered"
+
+    except requests.exceptions.RequestException as exc:
+        return False, f"Could not check bootstrap status: {exc}"
+
+    try:
+        register_response = requests.post(
+            f"{base_url}/auth/register-key",
+            json={"api_key": token, "label": "netbox-proxbox-plugin"},
+            verify=verify_ssl,
+            timeout=10,
+        )
+        if register_response.status_code == 201:
+            return True, "Key registered successfully"
+        if register_response.status_code == 409:
+            return True, "Key already exists"
+        return False, f"Registration failed: HTTP {register_response.status_code}"
+
+    except requests.exceptions.RequestException as exc:
+        return False, f"Could not register key: {exc}"
+
+
 def wait_for_backend_ready(
     context: BackendRequestContext,
     max_retries: int = 30,
@@ -152,6 +201,41 @@ def get_fastapi_request_context() -> BackendRequestContext | None:
     )
 
 
+def get_fastapi_endpoint_with_token() -> tuple[
+    object | None, BackendRequestContext | None
+]:
+    """Get the FastAPIEndpoint model and its request context.
+
+    Returns (endpoint, context) tuple. Either may be None.
+    """
+
+    endpoint = FastAPIEndpoint.objects.first()
+    if endpoint is None:
+        return None, None
+
+    context = get_fastapi_request_context()
+    return endpoint, context
+
+
+def ensure_backend_key_registered() -> tuple[bool, str]:
+    """Check if the API key is registered with the backend, register if needed.
+
+    Returns (success, message) tuple.
+    """
+    endpoint, context = get_fastapi_endpoint_with_token()
+    if endpoint is None:
+        return False, "No FastAPI endpoint configured"
+
+    if context is None or not context.http_url:
+        return False, "No FastAPI URL configured"
+
+    token = (getattr(endpoint, "token", "") or "").strip()
+    if not token:
+        return False, "No API token configured on FastAPI endpoint"
+
+    return _try_register_key(context, token)
+
+
 def request_backend_resource(
     context: BackendRequestContext,
     path: str,
@@ -173,6 +257,7 @@ def request_backend_resource(
     requested_urls: list[str] = []
     backend_headers = context.headers or {}
     last_detail = None
+    auth_register_attempted = False
 
     verify_ssl = bool(context.verify_ssl)
     request_candidates = [(fastapi_path, verify_ssl)]
@@ -192,7 +277,43 @@ def request_backend_resource(
                 verify=verify,
                 timeout=timeout,
             )
-            response.raise_for_status()
+            if response.status_code >= 400:
+                last_detail = f"HTTP {response.status_code}"
+                payload, json_err = parse_requests_response_json(
+                    response, log_label=f"sync:{path}"
+                )
+                if not json_err and isinstance(payload, dict):
+                    d = payload.get("detail") or payload.get("message")
+                    if d:
+                        last_detail = str(d)
+                    if (
+                        not auth_register_attempted
+                        and response.status_code == 401
+                        and "API key" in str(d)
+                    ):
+                        auth_register_attempted = True
+                        logger.info(
+                            "Backend returned 'no API key' error; attempting key registration"
+                        )
+                        reg_ok, reg_msg = ensure_backend_key_registered()
+                        if reg_ok:
+                            logger.info("Key registration succeeded: %s", reg_msg)
+                            new_context = get_fastapi_request_context()
+                            if new_context and new_context.headers:
+                                backend_headers = new_context.headers
+                                continue
+                        else:
+                            logger.warning("Key registration failed: %s", reg_msg)
+                logger.error(
+                    "Sync request failed for %s via %s: %s",
+                    path,
+                    url,
+                    last_detail,
+                )
+                if response.status_code < 500:
+                    break
+                continue
+
             payload, json_err = parse_requests_response_json(
                 response, log_label=f"sync:{path}"
             )
@@ -355,6 +476,7 @@ def run_sync_stream(
 
     requested_urls: list[str] = []
     last_detail: str | None = None
+    auth_register_attempted = False
 
     for url, verify in request_candidates:
         try:
@@ -377,6 +499,28 @@ def run_sync_stream(
                             d = payload.get("detail") or payload.get("message")
                             if d:
                                 last_detail = str(d)
+                            if (
+                                not auth_register_attempted
+                                and response.status_code == 401
+                                and "API key" in str(d)
+                            ):
+                                auth_register_attempted = True
+                                logger.info(
+                                    "Backend returned 'no API key' error; attempting key registration"
+                                )
+                                reg_ok, reg_msg = ensure_backend_key_registered()
+                                if reg_ok:
+                                    logger.info(
+                                        "Key registration succeeded: %s", reg_msg
+                                    )
+                                    context = get_fastapi_request_context()
+                                    if context and context.headers:
+                                        backend_headers = context.headers
+                                        continue
+                                else:
+                                    logger.warning(
+                                        "Key registration failed: %s", reg_msg
+                                    )
                     except Exception:  # pragma: no cover
                         logger.debug("Could not parse error JSON for %s", path)
                     logger.error(
