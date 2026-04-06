@@ -212,6 +212,7 @@ def test_job_live_panel_script_is_the_shared_runtime_controller():
     assert "handleErrorDetailFrame" in contents
     assert "isGenericProgressMessage" in contents
     assert "describeStepProgress" in contents
+    assert "isStepProgressPayload" in contents
     assert 'msg === "sync progress"' in contents
 
 

@@ -330,6 +330,14 @@
     return "";
   }
 
+  function isStepProgressPayload(payload) {
+    return !!(
+      payload &&
+      typeof payload === "object" &&
+      String(payload.step || "") === "progress"
+    );
+  }
+
   function updateProgress(progress, previousStatus) {
     if (!progressBarEl) return;
     var wrap = progressBarEl.parentElement ? progressBarEl.parentElement.parentElement : null;
@@ -563,7 +571,12 @@
       status === "errored" ||
       eventType === "error";
 
-    if (message && !isTerminal && !isGenericProgressMessage(message, payload, eventType)) {
+    if (
+      message &&
+      !isTerminal &&
+      !isStepProgressPayload(payload) &&
+      !isGenericProgressMessage(message, payload, eventType)
+    ) {
       appendLog(
         message,
         eventType === "error"
