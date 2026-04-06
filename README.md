@@ -23,6 +23,7 @@ Sync runs on-demand from the NetBox UI or scheduled automatically via NetBox's j
 ## Requirements
 
 - NetBox 4.5.x
+- Verified with NetBox v4.5.7 (django-rq 4.0 support line)
 - Python 3.12+
 - Proxmox VE 7.x or 8.x
 - Proxbox API backend (see below)
@@ -142,6 +143,12 @@ To run sync automatically on a schedule:
    ```
 
 2. In NetBox, go to **Proxbox > Schedule Sync** and configure your schedule.
+
+### NetBox v4.5.7 queue notes
+
+- Proxbox sync jobs use NetBox's `JobRunner` API and default queue selection.
+- In NetBox v4.5.7+, queue/backend behavior is governed by NetBox's `RQ` configuration.
+- Run workers using NetBox's command (`python3 manage.py rqworker`) so queue settings are applied consistently.
 
 ## Documentation
 

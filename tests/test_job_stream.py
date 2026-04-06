@@ -148,49 +148,72 @@ def job_stream_module(monkeypatch):
 
 
 def test_job_stream_forwards_backend_message_frames(job_stream_module, monkeypatch):
-    """The SSE bridge should stream backend frames, not just final stage markers."""
+    """The SSE stream should decode persisted proxbox-stream log entries."""
     module = job_stream_module
-    services_mod = sys.modules["netbox_proxbox.services"]
-    seen_paths: list[str] = []
 
-    def fake_run_sync_stream(path, query_params=None, on_frame=None):
-        seen_paths.append(path)
-        if on_frame is not None:
-            on_frame(
-                "step",
-                {
-                    "step": "devices",
-                    "status": "syncing",
-                    "message": "Creating device pve01",
-                },
-            )
-            on_frame(
-                "message",
-                {
-                    "message": "Backend message: imported host data",
-                },
-            )
-        return {"stream": True, "response": {"ok": True, "message": "done"}}, 200
+    log_entries = [
+        {
+            "message": '[proxbox-stream] discovery: {"event":"discovery","phase":"devices","count":1}',
+        },
+        {
+            "message": '[proxbox-stream] item_progress: {"event":"item_progress","phase":"devices","status":"completed","progress":{"current":1,"total":1}}',
+        },
+    ]
 
-    monkeypatch.setattr(services_mod, "run_sync_stream", fake_run_sync_stream)
+    status_state = {"calls": 0}
+
+    def refresh():
+        status_state["calls"] += 1
+        if status_state["calls"] >= 2:
+            job.status = "completed"
+
+    def save(**kwargs):
+        return None
 
     job = SimpleNamespace(
         pk=54,
         status="running",
         data={"proxbox_sync": {"params": {}}},
-        save=lambda **kwargs: None,
-        refresh_from_db=lambda: None,
+        save=save,
+        refresh_from_db=refresh,
+        log_entries=log_entries,
     )
     view = module.JobStreamSSEView()
     chunks = list(view._stream_job_events(job))
 
-    assert seen_paths == ["dcim/devices/create/stream"]
     assert any(
-        "event: step" in chunk and "Creating device pve01" in chunk for chunk in chunks
+        "event: discovery" in chunk and '"phase": "devices"' in chunk
+        for chunk in chunks
     )
     assert any(
-        "event: message" in chunk and "Backend message: imported host data" in chunk
-        for chunk in chunks
+        "event: item_progress" in chunk and '"current": 1' in chunk for chunk in chunks
+    )
+    assert any("event: complete" in chunk and '"ok": true' in chunk for chunk in chunks)
+
+
+def test_job_stream_does_not_execute_backend_sync(job_stream_module, monkeypatch):
+    """Observer stream must never call backend sync executors directly."""
+    module = job_stream_module
+    services_mod = sys.modules["netbox_proxbox.services"]
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("Observer stream must not call run_sync_stream")
+
+    monkeypatch.setattr(services_mod, "run_sync_stream", fail_if_called)
+
+    job = SimpleNamespace(
+        pk=56,
+        status="completed",
+        data={"proxbox_sync": {"params": {}}},
+        save=lambda **kwargs: None,
+        refresh_from_db=lambda: None,
+        log_entries=[],
+    )
+    view = module.JobStreamSSEView()
+    chunks = list(view._stream_job_events(job))
+
+    assert any(
+        "event: step" in chunk and "already completed" in chunk for chunk in chunks
     )
     assert any("event: complete" in chunk and '"ok": true' in chunk for chunk in chunks)
 

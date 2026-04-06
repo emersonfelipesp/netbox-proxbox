@@ -258,6 +258,7 @@ def load_plugin_module(
     django_utils_text.format_lazy = lambda *parts: "".join(str(p) for p in parts)
 
     django_utils_translation = types.ModuleType("django.utils.translation")
+    django_utils_translation.gettext = lambda x: x
     django_utils_translation.gettext_lazy = lambda x: x
 
     django_db_models = types.ModuleType("django.db.models")
@@ -386,6 +387,8 @@ def load_plugin_module(
     )
     core_models = types.ModuleType("core.models")
     core_models.Job = _make_model_class("Job")
+    core_utils = types.ModuleType("core.utils")
+    core_utils.stop_rq_job = lambda job_id: []
     core_module.choices = core_choices
     core_module.models = core_models
     models_module.ProxmoxCluster = _make_model_class("ProxmoxCluster")
@@ -439,6 +442,7 @@ def load_plugin_module(
         "core": core_module,
         "core.choices": core_choices,
         "core.models": core_models,
+        "core.utils": core_utils,
         "netbox": netbox_module,
         "netbox.plugins": netbox_plugins,
         "netbox_proxbox.models": models_module,
@@ -448,6 +452,41 @@ def load_plugin_module(
         "utilities.permissions": utilities_permissions,
         "utilities.views": utilities_views,
     }
+
+    django_rq_mod = types.ModuleType("django_rq")
+
+    class _QueueStub:
+        def fetch_job(self, jid):
+            return None
+
+    django_rq_mod.get_queue = lambda queue_name: _QueueStub()
+    stub_modules["django_rq"] = django_rq_mod
+
+    rq_root = types.ModuleType("rq")
+    rq_exceptions = types.ModuleType("rq.exceptions")
+
+    class InvalidJobOperation(Exception):
+        pass
+
+    rq_exceptions.InvalidJobOperation = InvalidJobOperation
+
+    rq_job_mod = types.ModuleType("rq.job")
+
+    class Job:
+        pass
+
+    class JobStatus:
+        QUEUED = "queued"
+        DEFERRED = "deferred"
+        SCHEDULED = "scheduled"
+        STARTED = "started"
+
+    rq_job_mod.Job = Job
+    rq_job_mod.JobStatus = JobStatus
+
+    stub_modules["rq"] = rq_root
+    stub_modules["rq.exceptions"] = rq_exceptions
+    stub_modules["rq.job"] = rq_job_mod
 
     for name, module in stub_modules.items():
         monkeypatch.setitem(sys.modules, name, module)

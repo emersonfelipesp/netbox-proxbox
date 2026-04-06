@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import queue
+import re
 import threading
 import time
 from typing import Generator
@@ -18,7 +19,6 @@ from netbox.jobs import Job as JobModel
 
 logger = logging.getLogger(__name__)
 
-SYNC_OWNER_SSE = "sse_stream"
 SYNC_OWNER_RQ = "rq_job"
 
 SYNC_WAIT_TIMEOUT = 60
@@ -76,6 +76,32 @@ def _release_sync_ownership(job: JobModel, owner: str) -> None:
         job.save(update_fields=["data"])
 
 
+_STREAM_LOG_RE = re.compile(r"^\[proxbox-stream\]\s+(\S+):\s*(.+)$")
+
+
+def _decode_stream_log_entry(entry: object) -> tuple[str, dict[str, object]] | None:
+    """Decode persisted ``[proxbox-stream] ...`` log entries into SSE frames."""
+    if not isinstance(entry, dict):
+        return None
+    raw = entry.get("message")
+    if not isinstance(raw, str):
+        return None
+    match = _STREAM_LOG_RE.match(raw.strip())
+    if not match:
+        return None
+    event = match.group(1).strip() or "message"
+    payload_raw = match.group(2).strip()
+    if not payload_raw:
+        return event, {"message": ""}
+    try:
+        payload = json.loads(payload_raw)
+    except json.JSONDecodeError:
+        return event, {"raw": payload_raw}
+    if isinstance(payload, dict):
+        return event, payload
+    return event, {"raw": payload}
+
+
 def _wait_for_job_status(
     job: JobModel,
     target_status: str,
@@ -120,18 +146,7 @@ class JobStreamSSEView(View):
         )
 
     def _stream_job_events(self, job: JobModel) -> Generator[str, None, None]:
-        from netbox_proxbox.jobs import (
-            _VM_SCOPED_PATH_TEMPLATES,
-            SyncTypeChoices,
-            _ignore_ipv6_link_local_addresses_setting,
-            _proxbox_fetch_max_concurrency_setting,
-            _sync_stream_path,
-            _use_guest_agent_interface_name_setting,
-            expanded_sync_stages,
-            is_proxbox_sync_job,
-            proxbox_sync_params_from_job,
-        )
-        from netbox_proxbox.services import run_sync_stream
+        from netbox_proxbox.jobs import is_proxbox_sync_job
 
         event_queue: queue.Queue[object] = queue.Queue()
         queue_sentinel = object()
@@ -206,165 +221,72 @@ class JobStreamSSEView(View):
                         )
                         return
 
-                if not _claim_sync_ownership(job, SYNC_OWNER_SSE):
-                    existing_owner = _get_sync_ownership(job)
-                    logger.info(
-                        "Job %s sync ownership already claimed by %s, skipping SSE sync",
-                        getattr(job, "pk", "?"),
-                        existing_owner,
-                    )
-                    emit(
-                        "step",
-                        {
-                            "step": "job",
-                            "status": "running",
-                            "message": "Job sync is being handled by another process",
-                        },
-                    )
-                    emit_complete(False, "Job sync is being handled by another process")
-                    return
-
+                sync_owner = _get_sync_ownership(job)
                 emit(
                     "step",
                     {
                         "step": "job",
                         "status": "started",
-                        "message": "SSE stream has claimed sync ownership",
+                        "message": (
+                            "Observing Proxbox sync job progress"
+                            if not sync_owner
+                            else f"Observing Proxbox sync handled by {sync_owner}"
+                        ),
                     },
                 )
 
-                params = proxbox_sync_params_from_job(job)
-                sync_types = params.get("sync_types", [SyncTypeChoices.ALL])
-                proxmox_endpoint_ids = params.get("proxmox_endpoint_ids", [])
-                netbox_endpoint_ids = params.get("netbox_endpoint_ids", [])
-                netbox_vm_ids = params.get("netbox_vm_ids", [])
+                last_status = status
+                emitted_terminal = False
+                seen_log_entries = 0
 
-                stages = expanded_sync_stages(sync_types)
+                while True:
+                    job.refresh_from_db()
+                    current_status = getattr(job, "status", None)
 
-                emit(
-                    "step",
-                    {
-                        "step": "job",
-                        "status": "started",
-                        "message": f"Proxbox sync started for {len(stages)} stages",
-                    },
-                )
-
-                total_stages = len(stages)
-                completed_stages = 0
-
-                base_query: dict = {}
-                base_query["use_guest_agent_interface_name"] = (
-                    "true" if _use_guest_agent_interface_name_setting() else "false"
-                )
-                base_query["fetch_max_concurrency"] = str(
-                    _proxbox_fetch_max_concurrency_setting()
-                )
-                base_query["ignore_ipv6_link_local_addresses"] = (
-                    "true" if _ignore_ipv6_link_local_addresses_setting() else "false"
-                )
-                if proxmox_endpoint_ids:
-                    base_query["proxmox_endpoint_ids"] = ",".join(proxmox_endpoint_ids)
-                if netbox_endpoint_ids:
-                    base_query["netbox_endpoint_ids"] = ",".join(netbox_endpoint_ids)
-
-                frame_callback = self._make_frame_callback(job)
-
-                for stage_idx, st in enumerate(stages):
-                    emit(
-                        "step",
-                        {
-                            "step": "progress",
-                            "status": "started",
-                            "message": f"Starting stage {stage_idx + 1}/{total_stages}: {st}",
-                            "progress": {
-                                "current": stage_idx,
-                                "total": total_stages,
-                                "stage": st,
+                    if current_status != last_status:
+                        emit(
+                            "step",
+                            {
+                                "step": "job",
+                                "status": current_status,
+                                "message": f"Job status changed to {current_status}",
                             },
-                        },
-                    )
-
-                    query_params = dict(base_query)
-                    if st == SyncTypeChoices.VIRTUAL_MACHINES_BACKUPS:
-                        query_params["delete_nonexistent_backup"] = True
-
-                    stage_paths: list[str]
-                    if st in _VM_SCOPED_PATH_TEMPLATES and netbox_vm_ids:
-                        template = _VM_SCOPED_PATH_TEMPLATES[st]
-                        stage_paths = [
-                            f"{template.format(vm_id=vm_id)}/stream"
-                            for vm_id in netbox_vm_ids
-                        ]
-                    else:
-                        stage_paths = [_sync_stream_path(st)]
-
-                    stage_ok = True
-                    for stream_path in stage_paths:
-
-                        def on_frame(event: str, data: dict[str, object]) -> None:
-                            frame_callback(event, data)
-                            if event == "complete":
-                                return
-                            emit(event, data)
-
-                        payload, status = run_sync_stream(
-                            stream_path,
-                            query_params=query_params or None,
-                            on_frame=on_frame,
                         )
+                        last_status = current_status
 
-                        if status >= 400:
-                            detail = payload.get("detail", "Backend returned an error.")
-                            emit_error(f"Stage {st} failed (HTTP {status}): {detail}")
-                            stage_ok = False
-                            break
+                    log_entries = getattr(job, "log_entries", None)
+                    if isinstance(log_entries, list):
+                        new_entries = log_entries[seen_log_entries:]
+                        for entry in new_entries:
+                            decoded = _decode_stream_log_entry(entry)
+                            if decoded is not None:
+                                event_name, payload = decoded
+                                if event_name != "complete":
+                                    emit(event_name, payload)
+                                continue
+                            if isinstance(entry, dict):
+                                msg = entry.get("message")
+                                if isinstance(msg, str) and msg.strip():
+                                    emit(
+                                        "message",
+                                        {
+                                            "step": "job",
+                                            "status": "progress",
+                                            "message": msg,
+                                        },
+                                    )
+                        seen_log_entries = len(log_entries)
 
-                    if not stage_ok:
+                    if current_status in JobStatusChoices.TERMINAL_STATE_CHOICES:
+                        ok = current_status == JobStatusChoices.STATUS_COMPLETED
+                        emit_complete(ok, f"Job finished with status {current_status}")
+                        emitted_terminal = True
                         break
 
-                    completed_stages += 1
-                    progress_percent = (
-                        int((completed_stages / total_stages) * 100)
-                        if total_stages > 0
-                        else 0
-                    )
-                    emit(
-                        "step",
-                        {
-                            "step": "progress",
-                            "status": "completed",
-                            "message": f"Stage {st} completed",
-                            "progress": {
-                                "current": completed_stages,
-                                "total": total_stages,
-                                "stage": st,
-                                "percent": progress_percent,
-                            },
-                        },
-                    )
+                    time.sleep(SYNC_WAIT_POLL_INTERVAL)
 
-                if completed_stages == total_stages:
-                    emit(
-                        "step",
-                        {
-                            "step": "job",
-                            "status": "completed",
-                            "message": f"All {total_stages} stages completed",
-                        },
-                    )
-                    emit_complete(
-                        True,
-                        f"All {total_stages} stages completed successfully",
-                    )
-                else:
-                    emit_error(
-                        f"Sync incomplete: {completed_stages}/{total_stages} stages"
-                    )
-                    emit_complete(
-                        False,
-                        f"Sync incomplete: {completed_stages}/{total_stages} stages",
-                    )
+                if not emitted_terminal:
+                    emit_complete(False, "Job stream ended unexpectedly")
             except Exception as exc:  # pragma: no cover - defensive stream guard
                 logger.exception(
                     "Unexpected error streaming job %s", getattr(job, "pk", "?")
@@ -372,7 +294,6 @@ class JobStreamSSEView(View):
                 emit_error(f"Job stream failed unexpectedly: {exc}")
                 emit_complete(False, "Job stream failed unexpectedly.")
             finally:
-                _release_sync_ownership(job, SYNC_OWNER_SSE)
                 event_queue.put(queue_sentinel)
 
         stream_thread = threading.Thread(target=worker, daemon=True)
@@ -386,17 +307,6 @@ class JobStreamSSEView(View):
                 yield str(item)
         finally:
             stream_thread.join(timeout=1)
-
-    def _make_frame_callback(self, job: JobModel):
-        last_flush = [time.monotonic()]
-
-        def on_frame(event: str, data: dict) -> None:
-            now = time.monotonic()
-            if now - last_flush[0] >= 2.0:
-                job.save(update_fields=["log_entries"])
-                last_flush[0] = now
-
-        return on_frame
 
     def _serialize_sse(self, event: str, payload: dict[str, object]) -> str:
         return f"event: {event}\ndata: {json.dumps(payload)}\n\n"
