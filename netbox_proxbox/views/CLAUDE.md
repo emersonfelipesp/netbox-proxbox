@@ -45,3 +45,4 @@ This directory implements the plugin's NetBox UI behavior, including dashboard p
 
 - Parent: [`../CLAUDE.md`](../CLAUDE.md)
 - Child: [`endpoints/CLAUDE.md`](./endpoints/CLAUDE.md)
+- Child: [`sync_now/CLAUDE.md`](./sync_now/CLAUDE.md)
