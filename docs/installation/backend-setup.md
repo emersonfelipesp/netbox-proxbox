@@ -113,12 +113,29 @@ That is convenient, but you should review the security impact for your environme
 
 The NetBox plugin and `proxbox-api` backend use database-backed API key authentication:
 
-1. When you create a `FastAPIEndpoint` in NetBox, the plugin auto-generates a 64-character secure token
-2. The plugin calls `/auth/bootstrap-status` to check if the backend needs initial setup
-3. If bootstrap is needed, the plugin registers the token via `/auth/register-key`
-4. All subsequent requests use the `X-Proxbox-API-Key` header with that token
+### Automatic Token Setup (v0.0.11+)
 
-### Manual Key Registration
+When you create or update endpoints, the plugin automatically:
+
+1. **FastAPIEndpoint creation** → Generates a secure 64-character token → Registers with backend
+2. **ProxmoxEndpoint creation** → Ensures FastAPIEndpoint has a token → Registers with backend
+3. **Migration from v0.0.10** → Generates tokens for existing endpoints → Attempts backend registration
+
+This happens without manual intervention in most cases.
+
+### Manual Token Management
+
+If automatic registration fails (e.g., backend was offline during setup), you can fix tokens:
+
+```bash
+# Check token status
+python manage.py proxbox_fix_tokens
+
+# Fix unregistered tokens
+python manage.py proxbox_fix_tokens --fix
+```
+
+### Manual Key Registration (Legacy)
 
 If the plugin cannot register the key automatically (e.g., backend not running during setup), you can register keys manually:
 
