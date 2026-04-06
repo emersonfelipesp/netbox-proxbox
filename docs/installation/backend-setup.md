@@ -109,6 +109,49 @@ sudo chmod +rx -R /etc/ssl/certs/
 
 That is convenient, but you should review the security impact for your environment before using it.
 
+## Authentication
+
+The NetBox plugin and `proxbox-api` backend use database-backed API key authentication:
+
+1. When you create a `FastAPIEndpoint` in NetBox, the plugin auto-generates a 64-character secure token
+2. The plugin calls `/auth/bootstrap-status` to check if the backend needs initial setup
+3. If bootstrap is needed, the plugin registers the token via `/auth/register-key`
+4. All subsequent requests use the `X-Proxbox-API-Key` header with that token
+
+### Manual Key Registration
+
+If the plugin cannot register the key automatically (e.g., backend not running during setup), you can register keys manually:
+
+```bash
+# Check if bootstrap is needed
+curl http://localhost:8800/auth/bootstrap-status
+
+# Register a key (only works when no keys exist)
+curl -X POST http://localhost:8800/auth/register-key \
+  -H "Content-Type: application/json" \
+  -d '{"api_key": "your-secure-api-key-at-least-32-characters", "label": "netbox-plugin"}'
+```
+
+Then set the `token` field on your `FastAPIEndpoint` in NetBox to match.
+
+### Key Management
+
+After the first key is registered, manage keys via the authenticated API:
+
+```bash
+# List keys (requires auth)
+curl http://localhost:8800/auth/keys \
+  -H "X-Proxbox-API-Key: your-key"
+
+# Create a new key
+curl -X POST http://localhost:8800/auth/keys \
+  -H "X-Proxbox-API-Key: your-key"
+
+# Delete a key
+curl -X DELETE http://localhost:8800/auth/keys/1 \
+  -H "X-Proxbox-API-Key: your-key"
+```
+
 ## Next Step In NetBox
 
 After the backend is reachable, create these objects in the Proxbox UI:
