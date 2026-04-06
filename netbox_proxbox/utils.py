@@ -41,17 +41,13 @@ def get_ip_address_host(value: object | None) -> str:
 
 
 def get_backend_auth_headers(endpoint: FastAPIAuthSource | None) -> dict[str, str]:
-    """Build Authorization header dict for ProxBox backend requests."""
+    """Build auth header dict for ProxBox backend requests."""
     if endpoint is None:
         return {}
     token = (getattr(endpoint, "token", "") or "").strip()
     if not token:
         return {}
-
-    if token.startswith("Bearer ") or token.startswith("Token "):
-        return {"Authorization": token}
-
-    return {"Authorization": f"Bearer {token}"}
+    return {"X-Proxbox-API-Key": token}
 
 
 def get_fastapi_context(endpoint: FastAPIUrlSource) -> dict | None:

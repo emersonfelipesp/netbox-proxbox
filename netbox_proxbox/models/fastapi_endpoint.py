@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import logging
+import secrets
+
+import requests as _requests
 from django.db import models
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 
 from netbox_proxbox.fields import DomainField
 from netbox_proxbox.models.base import PORT_VALIDATORS, EndpointBase
+
+logger = logging.getLogger(__name__)
 
 
 class FastAPIEndpoint(EndpointBase):
@@ -94,6 +100,42 @@ class FastAPIEndpoint(EndpointBase):
         protocol = "wss" if self.verify_ssl else "ws"
         host = self.websocket_domain or self.domain or self.ip
         return f"{protocol}://{host}:{self.websocket_port}" if host else ""
+
+    def save(self, *args, **kwargs):
+        is_new_token = not (self.token or "").strip()
+        if is_new_token:
+            self.token = secrets.token_urlsafe(48)
+        super().save(*args, **kwargs)
+        if is_new_token:
+            self._register_key_with_backend()
+
+    def _register_key_with_backend(self) -> None:
+        """Best-effort: register the auto-generated token with the proxbox-api backend."""
+        from netbox_proxbox.utils import get_fastapi_url
+
+        try:
+            url_info = get_fastapi_url(self)
+            base_url = url_info.get("http_url") or url_info.get("ip_address_url")
+            if not base_url:
+                return
+            response = _requests.post(
+                f"{base_url}/auth/register-key",
+                json={"api_key": self.token, "label": str(self)},
+                verify=self.verify_ssl,
+                timeout=10,
+            )
+            if response.status_code == 409:
+                logger.info(
+                    "proxbox-api already has an API key configured; skipping registration."
+                )
+            elif not response.ok:
+                logger.warning(
+                    "proxbox-api key registration returned %s: %s",
+                    response.status_code,
+                    response.text,
+                )
+        except Exception as exc:
+            logger.warning("Could not register API key with proxbox-api backend: %s", exc)
 
     def get_absolute_url(self) -> str:
         """Plugin UI URL for this FastAPI endpoint detail view."""
