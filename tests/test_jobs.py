@@ -134,6 +134,44 @@ def test_proxbox_sync_job_run_imports_from_services_not_views(
     )
 
 
+def test_proxbox_sync_job_logs_stage_lines_with_rendered_values(
+    monkeypatch, proxbox_sync_job_module, caplog
+):
+    """Stage logs should include concrete values (not '%s' placeholders)."""
+    services_mod = types.ModuleType("netbox_proxbox.services")
+
+    def run_sync_stream(path, query_params=None, **stream_kwargs):
+        on_frame = stream_kwargs.get("on_frame")
+        if on_frame:
+            on_frame("step", {"step": "storage", "status": "processing"})
+        return ({"stream": True, "response": {"ok": True}}, 200)
+
+    services_mod.run_sync_stream = run_sync_stream
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
+
+    ProxboxSyncJob = proxbox_sync_job_module.ProxboxSyncJob
+    job = ProxboxSyncJob()
+    job.logger = logging.getLogger("test_proxbox_job_logs")
+    job.job = MagicMock()
+    job.job.data = None
+
+    st = proxbox_sync_job_module.SyncTypeChoices
+
+    with caplog.at_level(logging.INFO):
+        ProxboxSyncJob.run(job, sync_type=st.STORAGE)
+
+    joined = "\n".join(record.message for record in caplog.records)
+    assert (
+        "Starting stage: storage (virtualization/virtual-machines/storage/create/stream)"
+        in joined
+    )
+    assert (
+        "Stage completed: storage (virtualization/virtual-machines/storage/create/stream) HTTP 200"
+        in joined
+    )
+    assert "%s" not in joined
+
+
 def test_proxbox_sync_params_from_job_defaults(proxbox_sync_job_module):
     from types import SimpleNamespace
 

@@ -6,6 +6,7 @@ import asyncio
 import json
 import re
 import time
+from typing import Callable
 
 from netbox.constants import RQ_QUEUE_DEFAULT
 from netbox.jobs import JobRunner
@@ -48,6 +49,8 @@ __all__ = (
     "normalize_sync_types",
     "proxbox_sync_params_from_job",
 )
+
+_HEARTBEAT_SECONDS = 20.0
 
 # Maps sync_type choices to the FastAPI backend base path (before ``/stream``).
 _SYNC_TYPE_PATH: dict[str, str] = {
@@ -237,6 +240,18 @@ def _sync_stream_paths_for_stage(sync_type: str, netbox_vm_ids: list[str]) -> li
         for vm_id in netbox_vm_ids
         if str(vm_id)
     ]
+
+
+def _format_seconds(seconds: float) -> str:
+    """Format elapsed seconds for human-readable stage telemetry."""
+    total = max(0, int(seconds))
+    mins, secs = divmod(total, 60)
+    hours, mins = divmod(mins, 60)
+    if hours:
+        return f"{hours}h{mins:02d}m{secs:02d}s"
+    if mins:
+        return f"{mins}m{secs:02d}s"
+    return f"{secs}s"
 
 
 def _serialize_sync_params(
@@ -795,7 +810,7 @@ class ProxboxSyncJob(JobRunner):
                 )
                 return
 
-            self.logger.info("Starting Proxbox sync stages: %s", ", ".join(stages))
+            self.logger.info(f"Starting Proxbox sync stages: {', '.join(stages)}")
             if proxmox_endpoint_ids:
                 self.logger.info("Proxmox endpoints: %s", proxmox_endpoint_ids)
             if netbox_endpoint_ids:
@@ -854,12 +869,35 @@ class ProxboxSyncJob(JobRunner):
 
                 stage_paths = _sync_stream_paths_for_stage(st, target_vm_ids)
                 for stream_path in stage_paths:
-                    self.logger.info("Starting stage: %s (%s)", st, stream_path)
+                    self.logger.info(f"Starting stage: {st} ({stream_path})")
+                    stage_started = time.monotonic()
+                    last_heartbeat = stage_started
+
+                    def _heartbeat() -> None:
+                        nonlocal last_heartbeat
+                        now = time.monotonic()
+                        if now - last_heartbeat < _HEARTBEAT_SECONDS:
+                            return
+                        elapsed = _format_seconds(now - stage_started)
+                        self.logger.info(
+                            f"Stage '{st}' still running on '{stream_path}' (elapsed {elapsed})"
+                        )
+                        last_heartbeat = now
+
+                    def _on_frame_with_heartbeat(
+                        event: str,
+                        data: dict[str, object],
+                        forward: Callable[[str, dict[str, object]], None],
+                    ) -> None:
+                        forward(event, data)
+                        _heartbeat()
+
                     payload, status = run_sync_stream(
                         stream_path,
                         query_params=query_params or None,
-                        on_frame=on_frame,
+                        on_frame=lambda e, d: _on_frame_with_heartbeat(e, d, on_frame),
                     )
+                    elapsed = _format_seconds(time.monotonic() - stage_started)
                     self.job.save(update_fields=["log_entries"])
                     if status >= 400:
                         detail = _extract_backend_error_text(payload) or str(payload)
@@ -872,7 +910,9 @@ class ProxboxSyncJob(JobRunner):
                             "Stage %s failed (HTTP %s): %s", st, status, detail
                         )
                         raise RuntimeError(user_detail)
-                    self.logger.info("Stage completed: %s (HTTP %s)", st, status)
+                    self.logger.info(
+                        f"Stage completed: {st} ({stream_path}) HTTP {status} in {elapsed}"
+                    )
                     stages_out.append({"sync_type": st, "payload": payload})
 
             runtime_seconds = round(time.monotonic() - run_started, 3)
