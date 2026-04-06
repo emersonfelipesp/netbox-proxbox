@@ -117,25 +117,63 @@ class FastAPIEndpoint(EndpointBase):
             url_info = get_fastapi_url(self)
             base_url = url_info.get("http_url") or url_info.get("ip_address_url")
             if not base_url:
+                logger.warning("No FastAPI URL configured, cannot register API key.")
                 return
+
+            # Check if bootstrap is needed
+            status_url = f"{base_url}/auth/bootstrap-status"
+            try:
+                status_response = _requests.get(
+                    status_url, verify=self.verify_ssl, timeout=5
+                )
+                if status_response.status_code == 200:
+                    status_data = status_response.json()
+                    if not status_data.get("needs_bootstrap", False):
+                        logger.debug(
+                            "proxbox-api already has API key configured; skipping registration."
+                        )
+                        return
+            except Exception as exc:
+                logger.debug("Could not check bootstrap status: %s", exc)
+
+            # Register the key
             response = _requests.post(
                 f"{base_url}/auth/register-key",
                 json={"api_key": self.token, "label": str(self)},
                 verify=self.verify_ssl,
                 timeout=10,
             )
-            if response.status_code == 409:
+            if response.status_code == 201:
+                logger.info("Successfully registered API key with proxbox-api backend.")
+            elif response.status_code == 409:
                 logger.info(
                     "proxbox-api already has an API key configured; skipping registration."
                 )
-            elif not response.ok:
+            elif response.status_code >= 500:
                 logger.warning(
+                    "proxbox-api key registration failed (server error %s): %s",
+                    response.status_code,
+                    response.text[:200],
+                )
+            else:
+                logger.debug(
                     "proxbox-api key registration returned %s: %s",
                     response.status_code,
-                    response.text,
+                    response.text[:200] if response.text else "",
                 )
+        except _requests.exceptions.ConnectionError as exc:
+            logger.warning(
+                "Could not register API key with proxbox-api (connection refused): %s",
+                exc,
+            )
+        except _requests.exceptions.Timeout as exc:
+            logger.warning(
+                "Could not register API key with proxbox-api (timeout): %s", exc
+            )
         except Exception as exc:
-            logger.warning("Could not register API key with proxbox-api backend: %s", exc)
+            logger.warning(
+                "Could not register API key with proxbox-api backend: %s", exc
+            )
 
     def get_absolute_url(self) -> str:
         """Plugin UI URL for this FastAPI endpoint detail view."""
