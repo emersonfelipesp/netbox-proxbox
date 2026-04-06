@@ -200,6 +200,16 @@ def test_job_live_panel_script_is_the_shared_runtime_controller():
     assert "data-proxbox-job-live-summary-status" in contents
     assert "data-proxbox-job-live-root" in contents
     assert "data-proxbox-job-live-state-pill" in contents
+    assert 'addEventListener("discovery"' in contents
+    assert 'addEventListener("substep"' in contents
+    assert 'addEventListener("item_progress"' in contents
+    assert 'addEventListener("phase_summary"' in contents
+    assert 'addEventListener("error_detail"' in contents
+    assert "handleDiscoveryFrame" in contents
+    assert "handleSubstepFrame" in contents
+    assert "handleItemProgressFrame" in contents
+    assert "handlePhaseSummaryFrame" in contents
+    assert "handleErrorDetailFrame" in contents
 
 
 def test_job_live_panel_styles_make_queued_state_visually_distinct():
@@ -207,6 +217,9 @@ def test_job_live_panel_styles_make_queued_state_visually_distinct():
 
     assert "nb-job-live-card-queued" in contents
     assert "bs-warning-rgb" in contents
+    assert "nb-job-phase-board" in contents
+    assert "nb-job-phase-item" in contents
+    assert "nb-job-error-board" in contents
 
 
 def test_home_job_live_summary_wraps_the_shared_live_panel_in_a_details_element():

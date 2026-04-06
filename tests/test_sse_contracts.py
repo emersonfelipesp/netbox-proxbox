@@ -184,6 +184,44 @@ class TestIterSSEFrames:
         frames = list(bp._iter_sse_frames(lines))
         assert len(frames) == 1
 
+    @pytest.mark.parametrize(
+        "event_name,payload",
+        [
+            (
+                "discovery",
+                '{"event":"discovery","phase":"devices","count":2,"items":[{"name":"pve1"},{"name":"pve2"}]}',
+            ),
+            (
+                "substep",
+                '{"event":"substep","phase":"devices","substep":"ensure_cluster","status":"processing"}',
+            ),
+            (
+                "item_progress",
+                '{"event":"item_progress","phase":"devices","status":"completed","progress":{"current":1,"total":2,"percent":50}}',
+            ),
+            (
+                "phase_summary",
+                '{"event":"phase_summary","phase":"devices","status":"completed","result":{"created":2,"failed":0}}',
+            ),
+            (
+                "error_detail",
+                '{"event":"error_detail","phase":"devices","category":"validation","message":"failed","suggestion":"check role"}',
+            ),
+        ],
+    )
+    def test_parse_new_detailed_event_types(
+        self, backend_proxy_module, event_name, payload
+    ):
+        """Parser should preserve new detailed event types emitted by backend."""
+        bp = backend_proxy_module
+        lines = [f"event: {event_name}", f"data: {payload}", ""]
+        frames = list(bp._iter_sse_frames(lines))
+        assert len(frames) == 1
+        event, data = frames[0]
+        assert event == event_name
+        assert data["event"] == event_name
+        assert data["phase"] == "devices"
+
 
 class TestSSEErrorFrames:
     """Test sse_error_frames generator for error handling."""
