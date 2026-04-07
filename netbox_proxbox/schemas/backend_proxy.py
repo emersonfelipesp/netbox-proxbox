@@ -68,6 +68,7 @@ class SseCompletePayload(ProxboxLenientModel):
 
     @property
     def first_error_detail(self) -> str | None:
+        """Handle first error detail."""
         if self.errors:
             first = self.errors[0]
             detail = first.get("detail")

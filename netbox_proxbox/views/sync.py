@@ -33,6 +33,7 @@ class _ProxboxSyncEnqueueView(
     action_label: ClassVar = ""
 
     def get_required_permission(self) -> str:
+        """Return required permission."""
         return permission_enqueue_proxbox_sync()
 
     def _job_name(self) -> str:
@@ -43,6 +44,7 @@ class _ProxboxSyncEnqueueView(
     def post(
         self, request: HttpRequest, *args: object, **kwargs: object
     ) -> HttpResponse:
+        """Handle post."""
         try:
             job = ProxboxSyncJob.enqueue(
                 instance=None,
@@ -166,6 +168,7 @@ class _ProxboxSelectedSyncView(
     batch_object_label: ClassVar[str] = ""
 
     def get_required_permission(self) -> str:
+        """Return required permission."""
         return permission_enqueue_proxbox_sync()
 
     def _selected_ids(self, request: HttpRequest) -> list[str]:
@@ -181,6 +184,7 @@ class _ProxboxSelectedSyncView(
     def post(
         self, request: HttpRequest, *args: object, **kwargs: object
     ) -> HttpResponse:
+        """Handle post."""
         selected_ids = self._selected_ids(request)
         if not selected_ids:
             messages.warning(request, _("Select at least one object to sync."))

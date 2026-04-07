@@ -26,9 +26,11 @@ class SettingsView(
     template_name = "netbox_proxbox/settings.html"
 
     def get_required_permission(self) -> str:
+        """Return required permission."""
         return permission_change_proxbox_plugin_settings()
 
     def get(self, request: HttpRequest) -> HttpResponse:
+        """Handle get."""
         settings_obj = ProxboxPluginSettings.get_solo()
         form = ProxboxPluginSettingsForm(
             initial={
@@ -44,6 +46,7 @@ class SettingsView(
         return render(request, self.template_name, {"form": form})
 
     def post(self, request: HttpRequest) -> HttpResponse:
+        """Handle post."""
         settings_obj = ProxboxPluginSettings.get_solo()
         form = ProxboxPluginSettingsForm(request.POST)
         if form.is_valid():

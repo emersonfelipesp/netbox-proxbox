@@ -43,6 +43,7 @@ OUTPUT_FORMAT_CONFLICT_MESSAGE = (
 
 
 class OutputFormat(StrEnum):
+    """OutputFormat implementation."""
     HUMAN = "human"
     JSON = "json"
     YAML = "yaml"
@@ -55,6 +56,7 @@ def run_with_spinner(coro: Coroutine[object, object, T]) -> T:
 
 
 def resolve_output_format(*, as_json: bool, as_yaml: bool) -> OutputFormat:
+    """Resolve output format."""
     if as_json and as_yaml:
         emit_cli_error(OUTPUT_FORMAT_CONFLICT_MESSAGE)
     if as_json:
@@ -65,6 +67,7 @@ def resolve_output_format(*, as_json: bool, as_yaml: bool) -> OutputFormat:
 
 
 def emit_cli_error(message: str, *, exit_code: int = 1) -> None:
+    """Handle emit cli error."""
     stderr.print(f"[red]Error:[/red] {message}")
     raise SystemExit(exit_code)
 
@@ -98,6 +101,7 @@ def print_response(
     as_json: bool = False,
     as_yaml: bool = False,
 ) -> None:
+    """Print response."""
     fmt = resolve_output_format(as_json=as_json, as_yaml=as_yaml)
     color = "green" if resp.is_ok() else "red"
     console.print(f"[{color}]Status: {resp.status}[/{color}]")
@@ -117,6 +121,7 @@ def print_response(
 
 
 def render_table(parsed: JSONValue) -> None:
+    """Render table."""
     if isinstance(parsed, list):
         if all(isinstance(item, dict) for item in parsed):
             render_list_table(parsed)
@@ -145,6 +150,7 @@ def _select_columns(rows: list[dict[str, JSONValue]]) -> list[str]:
 
 
 def render_list_table(rows: list[dict[str, JSONValue]], *, count: int | None = None) -> None:
+    """Render list table."""
     if not rows:
         console.print("[dim]No results.[/dim]")
         return
@@ -160,6 +166,7 @@ def render_list_table(rows: list[dict[str, JSONValue]], *, count: int | None = N
 
 
 def render_detail_table(obj: dict[str, JSONValue]) -> None:
+    """Render detail table."""
     table = Table(show_header=True, show_lines=True)
     table.add_column("Field")
     table.add_column("Value")

@@ -46,6 +46,7 @@ class RequireProxboxDashboardAccessMixin(AccessMixin):
     def dispatch(
         self, request: HttpRequest, *args: object, **kwargs: object
     ) -> HttpResponse:
+        """Handle dispatch."""
         if request.user.is_authenticated and not user_may_access_proxbox_dashboard(
             request.user
         ):
@@ -208,6 +209,7 @@ class DashboardView(
         }
 
     def get(self, request: HttpRequest) -> HttpResponse:
+        """Handle get."""
         proxmox_endpoints = list(ProxmoxEndpoint.objects.restrict(request.user, "view"))
         fastapi_endpoint = FastAPIEndpoint.objects.restrict(
             request.user, "view"

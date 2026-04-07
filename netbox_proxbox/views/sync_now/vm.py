@@ -28,9 +28,11 @@ class VirtualMachineSyncNowView(
     http_method_names = ["post"]
 
     def get_required_permission(self) -> str:
+        """Return required permission."""
         return permission_enqueue_proxbox_sync()
 
     def post(self, request: HttpRequest, pk: int | str) -> HttpResponseRedirect:
+        """Handle post."""
         vm = VirtualMachine.objects.get(pk=pk)
 
         vmid = vm.custom_field_data.get("proxmox_vm_id") or vm.custom_field_data.get(

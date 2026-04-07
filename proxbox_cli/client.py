@@ -17,14 +17,17 @@ QueryValue: TypeAlias = str | int | float | bool
 
 
 class ApiResponse(BaseModel):
+    """ApiResponse implementation."""
     status: int
     text: str
     headers: dict[str, str] = Field(default_factory=dict)
 
     def json_data(self) -> JSONValue:
+        """Handle json data."""
         return json.loads(self.text)
 
     def is_ok(self) -> bool:
+        """Handle is ok."""
         return 200 <= self.status < 300
 
 
@@ -47,6 +50,7 @@ class ProxboxApiClient:
         query: Mapping[str, QueryValue] | None = None,
         payload: JSONValue | None = None,
     ) -> ApiResponse:
+        """Handle request."""
         url = self._url(path)
         timeout = aiohttp.ClientTimeout(total=self.config.timeout)
         async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -64,13 +68,17 @@ class ProxboxApiClient:
     async def get(
         self, path: str, *, query: Mapping[str, QueryValue] | None = None
     ) -> ApiResponse:
+        """Handle get."""
         return await self.request("GET", path, query=query)
 
     async def post(self, path: str, *, payload: JSONValue | None = None) -> ApiResponse:
+        """Handle post."""
         return await self.request("POST", path, payload=payload)
 
     async def put(self, path: str, *, payload: JSONValue | None = None) -> ApiResponse:
+        """Handle put."""
         return await self.request("PUT", path, payload=payload)
 
     async def delete(self, path: str) -> ApiResponse:
+        """Handle delete."""
         return await self.request("DELETE", path)

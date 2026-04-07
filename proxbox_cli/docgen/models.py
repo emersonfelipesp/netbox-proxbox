@@ -32,6 +32,7 @@ class CaptureResult:
     notes: str = ""
 
     def to_dict(self) -> dict[str, Any]:
+        """Handle to dict."""
         return {
             "section": self.section,
             "title": self.title,

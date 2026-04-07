@@ -15,17 +15,20 @@ BASE_URL_ENV_VAR = "PROXBOX_URL"
 
 
 class Config(BaseModel):
+    """Config implementation."""
     base_url: str = DEFAULT_BASE_URL
     timeout: float = 30.0
 
 
 def config_dir() -> Path:
+    """Handle config dir."""
     xdg = os.environ.get("XDG_CONFIG_HOME", "")
     base = Path(xdg).expanduser() if xdg else Path("~/.config").expanduser()
     return base / DEFAULT_CONFIG_DIR
 
 
 def config_path() -> Path:
+    """Handle config path."""
     return config_dir() / DEFAULT_CONFIG_FILENAME
 
 

@@ -87,11 +87,13 @@ class ProxmoxVMConfigTabView(generic.ObjectView):
     )
 
     def get_queryset(self, request: HttpRequest) -> object:
+        """Return queryset."""
         return VirtualMachine.objects.restrict(request.user, "view")
 
     def get_extra_context(
         self, request: HttpRequest, instance: VirtualMachine
     ) -> dict[str, object]:
+        """Return extra context."""
         vmid = _extract_vmid(instance)
         vm_type = _extract_vm_type(instance)
         node = _extract_node(instance, vmid)

@@ -42,6 +42,7 @@ class FastAPIOpenAPIView(generic.ObjectView):
     def get_extra_context(
         self, request: HttpRequest, instance: FastAPIEndpoint
     ) -> dict[str, object]:
+        """Return extra context."""
         force_refresh = str(request.GET.get("refresh", "")).strip().lower() in {
             "1",
             "true",

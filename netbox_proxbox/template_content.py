@@ -100,6 +100,7 @@ class ProxboxVirtualMachineTemplateExtension(PluginTemplateExtension):
     models = ["virtualization.virtualmachine"]
 
     def buttons(self) -> str:
+        """Handle buttons."""
         obj = self.context["object"]
         if not isinstance(obj, VirtualMachine):
             return ""
@@ -115,6 +116,7 @@ class ProxboxVirtualMachineTemplateExtension(PluginTemplateExtension):
         )
 
     def console_button(self) -> str:
+        """Handle console button."""
         obj = self.context["object"]
         if not isinstance(obj, VirtualMachine):
             return ""
@@ -169,6 +171,7 @@ class ProxmoxClusterTemplateExtension(PluginTemplateExtension):
     models = ["virtualization.cluster"]
 
     def buttons(self) -> str:
+        """Handle buttons."""
         obj = self.context["object"]
         user = self.context["request"].user
         if not user.has_perm(permission_enqueue_proxbox_sync()):
@@ -191,6 +194,7 @@ class ProxmoxNodeTemplateExtension(PluginTemplateExtension):
     models = ["dcim.device"]
 
     def buttons(self) -> str:
+        """Handle buttons."""
         obj = self.context["object"]
         user = self.context["request"].user
         if not user.has_perm(permission_enqueue_proxbox_sync()):
@@ -213,6 +217,7 @@ class ProxmoxStorageTemplateExtension(PluginTemplateExtension):
     models = ["netbox_proxbox.proxmoxstorage"]
 
     def buttons(self) -> str:
+        """Handle buttons."""
         obj = self.context["object"]
         if not isinstance(obj, ProxmoxStorage):
             return ""
@@ -234,6 +239,7 @@ class VMBackupTemplateExtension(PluginTemplateExtension):
     models = ["netbox_proxbox.vmbackup"]
 
     def buttons(self) -> str:
+        """Handle buttons."""
         obj = self.context["object"]
         if not isinstance(obj, VMBackup):
             return ""
@@ -255,6 +261,7 @@ class VMSnapshotTemplateExtension(PluginTemplateExtension):
     models = ["netbox_proxbox.vmsnapshot"]
 
     def buttons(self) -> str:
+        """Handle buttons."""
         obj = self.context["object"]
         if not isinstance(obj, VMSnapshot):
             return ""
@@ -276,6 +283,7 @@ class VMTaskHistoryTemplateExtension(PluginTemplateExtension):
     models = ["netbox_proxbox.vmtaskhistory"]
 
     def buttons(self) -> str:
+        """Handle buttons."""
         obj = self.context["object"]
         if not isinstance(obj, VMTaskHistory):
             return ""

@@ -76,6 +76,7 @@ class BackupRoutineSerializer(NetBoxModelSerializer):
         )
 
     def get_node(self, obj: BackupRoutine) -> dict | None:
+        """Return node."""
         if obj.node is None:
             return None
         return {

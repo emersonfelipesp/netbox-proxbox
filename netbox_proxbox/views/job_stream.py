@@ -136,6 +136,7 @@ class JobStreamSSEView(View):
     http_method_names = ["get"]
 
     def get(self, request: HttpRequest, pk: int) -> StreamingHttpResponse:
+        """Handle get."""
         job = JobModel.objects.filter(pk=pk).first()
         if not job:
             raise Http404("Job not found")

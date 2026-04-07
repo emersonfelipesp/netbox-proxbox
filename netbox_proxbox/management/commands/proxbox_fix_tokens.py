@@ -18,9 +18,11 @@ logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
+    """Command implementation."""
     help = "Check and fix FastAPIEndpoint tokens and backend registration"
 
     def add_arguments(self, parser: ArgumentParser) -> None:
+        """Handle add arguments."""
         parser.add_argument(
             "--fix",
             action="store_true",
@@ -28,6 +30,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args: object, **options: object) -> None:
+        """Handle handle."""
         from netbox_proxbox.models import FastAPIEndpoint
         from netbox_proxbox.signals import (
             _get_backend_url,

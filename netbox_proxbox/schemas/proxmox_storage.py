@@ -66,10 +66,12 @@ class ProxmoxStorageRecord(ProxboxLenientModel):
 
     @property
     def effective_name(self) -> str:
+        """Handle effective name."""
         return self.storage or self.name or ""
 
     @property
     def effective_total(self) -> int:
+        """Handle effective total."""
         for value in (self.total, self.maxdisk, self.max_size, self.size):
             if value is not None:
                 return value
@@ -77,6 +79,7 @@ class ProxmoxStorageRecord(ProxboxLenientModel):
 
     @property
     def effective_used(self) -> int:
+        """Handle effective used."""
         for value in (self.used, self.disk):
             if value is not None:
                 return value
@@ -84,6 +87,7 @@ class ProxmoxStorageRecord(ProxboxLenientModel):
 
     @property
     def effective_avail(self) -> int:
+        """Handle effective avail."""
         avail = next(
             (
                 value

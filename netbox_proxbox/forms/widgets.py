@@ -27,6 +27,7 @@ class BootstrapCheckboxSelectMultiple(forms.CheckboxSelectMultiple):
         attrs: dict[str, object] | None = None,
     ) -> dict[str, object]:
         # form-check-input is rendered in bootstrap_checkbox_option.html (NetBox attrs.html skips class).
+        """Create option."""
         return super().create_option(
             name, value, label, selected, index, subindex=subindex, attrs=attrs
         )

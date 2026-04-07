@@ -115,6 +115,7 @@ class ProxboxJobCancelView(
         return get_permission_for_model(Job, "delete")
 
     def post(self, request: HttpRequest, pk: int | str) -> HttpResponseRedirect:
+        """Handle post."""
         job = get_object_or_404(Job.objects.restrict(request.user, "view"), pk=pk)
         if not is_proxbox_sync_job(job):
             messages.error(

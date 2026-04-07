@@ -79,10 +79,12 @@ class ProxmoxClusterStatusResponse(ProxboxBaseModel):
 
     @property
     def cluster_record(self) -> ProxmoxClusterStatusRecord | None:
+        """Handle cluster record."""
         return next((r for r in self.records if r.type == "cluster"), None)
 
     @property
     def node_records(self) -> list[ProxmoxClusterStatusRecord]:
+        """Handle node records."""
         return [r for r in self.records if r.type == "node"]
 
 
@@ -160,6 +162,7 @@ class ProxmoxClusterSummary(ProxboxBaseModel):
     def from_status_response(
         cls, response: ProxmoxClusterStatusResponse
     ) -> ProxmoxClusterSummary:
+        """Handle from status response."""
         cr = response.cluster_record
         nr = response.node_records
         total = (cr.nodes if cr and cr.nodes is not None else len(nr)) or len(nr)
@@ -221,6 +224,7 @@ class ProxmoxNodeRow(ProxboxBaseModel):
 
     @classmethod
     def from_node_detail(cls, detail: ProxmoxNodeDetail) -> ProxmoxNodeRow:
+        """Handle from node detail."""
         mem_used = detail.mem or 0
         mem_total = detail.maxmem or 0
         disk_used = detail.disk or 0

@@ -159,6 +159,7 @@ class ProxmoxGuestSummary(ProxboxBaseModel):
     def from_resources(
         cls, records: list[ProxmoxResourceRecord]
     ) -> ProxmoxGuestSummary:
+        """Handle from resources."""
         def _count(
             items: list[ProxmoxResourceRecord],
         ) -> ProxmoxGuestSummary.GuestTypeCounts:

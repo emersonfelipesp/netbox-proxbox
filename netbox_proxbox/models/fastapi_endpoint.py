@@ -102,6 +102,7 @@ class FastAPIEndpoint(EndpointBase):
         return f"{protocol}://{host}:{self.websocket_port}" if host else ""
 
     def save(self, *args: object, **kwargs: object) -> None:
+        """Handle save."""
         is_new_token = not (self.token or "").strip()
         if is_new_token:
             self.token = secrets.token_urlsafe(48)
