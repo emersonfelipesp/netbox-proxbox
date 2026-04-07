@@ -43,29 +43,23 @@ def has_recurring_proxbox_sync_all(user) -> bool:
     """
     True if the user can see a live recurring Proxbox job whose sync types normalize to ``[all]``.
     """
-    from core.choices import JobStatusChoices
-
     candidates = (
         Job.objects.restrict(user, "view")
-        .filter(interval__isnull=False)
+        .filter(
+            interval__isnull=False,
+            status__in=JobStatusChoices.ENQUEUED_STATE_CHOICES,
+        )
         .filter(
             Q(queue_name=PROXBOX_SYNC_QUEUE_NAME)
             | Q(queue_name=LEGACY_PROXBOX_RQ_QUEUE)
             | Q(data__has_key="proxbox_sync")
         )
     )
-    terminal_statuses = {
-        JobStatusChoices.STATUS_COMPLETED,
-        JobStatusChoices.STATUS_FAILED,
-        JobStatusChoices.STATUS_ERRORED,
-        JobStatusChoices.STATUS_CANCELED,
-    }
     for job in candidates.iterator(chunk_size=64):
         if not is_proxbox_sync_job(job):
             continue
-        if job.status not in terminal_statuses:
-            if proxbox_sync_params_from_job(job)["sync_types"] == [SyncTypeChoices.ALL]:
-                return True
+        if proxbox_sync_params_from_job(job)["sync_types"] == [SyncTypeChoices.ALL]:
+            return True
     return False
 
 
