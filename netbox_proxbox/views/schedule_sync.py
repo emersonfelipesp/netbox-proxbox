@@ -196,12 +196,51 @@ class ScheduleSyncView(
                     is_proxbox_sync_job(job)
                     and job.status in JobStatusChoices.ENQUEUED_STATE_CHOICES
                 ):
+                    job_interval = job.interval
+                    job_params = proxbox_sync_params_from_job(job)
+
+                    if job_interval and job.schedule:
+                        from datetime import timedelta
+                        from utilities.datetime import local_now
+
+                        next_schedule = job.schedule + timedelta(minutes=job_interval)
+                        if next_schedule > local_now():
+                            enqueue_kwargs = {
+                                "instance": None,
+                                "user": request.user,
+                                "name": job.name,
+                                "schedule_at": next_schedule,
+                                "interval": job_interval,
+                                "queue_name": PROXBOX_SYNC_QUEUE_NAME,
+                                **job_params,
+                            }
+                            ProxboxSyncJob.enqueue(**enqueue_kwargs)
+                            messages.info(
+                                request,
+                                _(
+                                    "Scheduled job cancelled. Next run scheduled for %(next_run)s."
+                                )
+                                % {
+                                    "next_run": next_schedule.strftime(
+                                        "%Y-%m-%d %H:%M %Z"
+                                    )
+                                },
+                            )
+                        else:
+                            messages.warning(
+                                request,
+                                _(
+                                    "Scheduled job cancelled. No next run scheduled (past due)."
+                                ),
+                            )
+                    else:
+                        messages.success(
+                            request, _("Scheduled job cancelled successfully.")
+                        )
+
                     job.status = JobStatusChoices.STATUS_CANCELED
                     job.completed = timezone.now()
                     job.save()
-                    messages.success(
-                        request, _("Scheduled job cancelled successfully.")
-                    )
             except Job.DoesNotExist:
                 messages.error(request, _("Job not found."))
 
