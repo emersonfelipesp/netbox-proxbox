@@ -93,6 +93,19 @@ class DashboardView(
         response = ProxmoxClusterStatusResponse.model_validate(cluster_payload)
         return ProxmoxClusterSummary.from_status_response(response).model_dump()
 
+    def _cluster_node_scope(
+        self, cluster_payload: object
+    ) -> tuple[str | None, set[str]]:
+        response = ProxmoxClusterStatusResponse.model_validate(cluster_payload)
+        cluster_record = response.cluster_record
+        cluster_name = (cluster_record.name or "").strip() if cluster_record else ""
+        node_names = {
+            record.name.strip()
+            for record in response.node_records
+            if isinstance(record.name, str) and record.name.strip()
+        }
+        return (cluster_name or None), node_names
+
     def _build_guest_summary(self, resources_payload: object) -> dict[str, object]:
         resource_records = [
             ProxmoxResourceRecord.model_validate(record)
@@ -101,14 +114,42 @@ class DashboardView(
         return ProxmoxGuestSummary.from_resources(resource_records).model_dump()
 
     def _build_local_node_rows(
-        self, endpoint: ProxmoxEndpoint
+        self,
+        endpoint: ProxmoxEndpoint,
+        *,
+        cluster_name: str | None = None,
+        cluster_node_names: set[str] | None = None,
     ) -> list[dict[str, object]]:
-        nodes = (
+        endpoint_nodes = list(
             ProxmoxNode.objects.filter(endpoint=endpoint)
             .select_related("proxmox_cluster", "netbox_device")
             .order_by("name")
         )
-        rows = [ProxmoxNodeRow.from_node_model(node).model_dump() for node in nodes]
+        scoped_cluster_names = {
+            node_name for node_name in (cluster_node_names or set()) if node_name
+        }
+        cluster_nodes: list[object] = []
+        if cluster_name and scoped_cluster_names:
+            cluster_nodes = list(
+                ProxmoxNode.objects.filter(
+                    proxmox_cluster__name=cluster_name,
+                    name__in=sorted(scoped_cluster_names),
+                )
+                .select_related("proxmox_cluster", "netbox_device")
+                .order_by("name")
+            )
+
+        nodes_by_name: dict[str, object] = {}
+        for node in [*endpoint_nodes, *cluster_nodes]:
+            node_name = str(getattr(node, "name", "") or "").strip()
+            if not node_name or node_name in nodes_by_name:
+                continue
+            nodes_by_name[node_name] = node
+
+        rows = [
+            ProxmoxNodeRow.from_node_model(node).model_dump()
+            for _, node in sorted(nodes_by_name.items())
+        ]
         return rows
 
     def _build_live_node_rows(self, nodes_payload: object) -> list[dict[str, object]]:
@@ -235,7 +276,18 @@ class DashboardView(
                 dashboards.append(dashboard)
                 continue
 
-            local_node_rows = self._build_local_node_rows(endpoint)
+            cluster_name = None
+            cluster_node_names: set[str] = set()
+            if not cluster_err:
+                cluster_name, cluster_node_names = self._cluster_node_scope(
+                    cluster_payload
+                )
+
+            local_node_rows = self._build_local_node_rows(
+                endpoint,
+                cluster_name=cluster_name,
+                cluster_node_names=cluster_node_names,
+            )
             live_node_rows: list[dict[str, object]] = []
             nodes_err = None
             try:
