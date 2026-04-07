@@ -145,38 +145,50 @@ def sync_individual_with_dependencies(
     return response, status, all_synced
 
 
+def _get_dependency_config(
+    dep_type: str,
+) -> tuple[str, dict | None] | None:
+    """Return (path, param_keys) for a dependency type, or None if unknown."""
+    DEPENDENCY_CONFIG = {
+        "cluster": ("sync/individual/cluster", ("name",)),
+        "node": ("sync/individual/node", ("cluster_name", "node_name")),
+        "vm": ("sync/individual/vm", ("cluster_name", "node", "type", "vmid")),
+        "storage": ("sync/individual/storage", ("cluster_name", "storage_name")),
+    }
+    return DEPENDENCY_CONFIG.get(dep_type)
+
+
 def _sync_dependency(
     dep: dict, _visited: set, parent_context: dict | None
 ) -> tuple[dict, int, list[dict]]:
     """Sync a single dependency from a dependencies_synced entry."""
     dep_type = dep.get("object_type")
+    if not dep_type:
+        return {}, 200, []
+
+    config = _get_dependency_config(dep_type)
+    if config is None:
+        return {}, 200, []
+
+    path, param_keys = config
     context = _merge_context(parent_context, dep)
 
-    if dep_type == "cluster":
-        path = "sync/individual/cluster"
-        params = {"cluster_name": dep.get("name") or context.get("cluster_name", "")}
-    elif dep_type == "node":
-        path = "sync/individual/node"
-        params = {
-            "cluster_name": dep.get("cluster_name") or context.get("cluster_name", ""),
-            "node_name": dep.get("name"),
-        }
-    elif dep_type == "vm":
-        path = "sync/individual/vm"
-        params = {
-            "cluster_name": dep.get("cluster_name") or context.get("cluster_name", ""),
-            "node": dep.get("node") or context.get("node", ""),
-            "type": dep.get("type") or context.get("type", "qemu"),
-            "vmid": dep.get("vmid") or context.get("vmid"),
-        }
-    elif dep_type == "storage":
-        path = "sync/individual/storage"
-        params = {
-            "cluster_name": dep.get("cluster_name") or context.get("cluster_name", ""),
-            "storage_name": dep.get("name") or context.get("storage_name", ""),
-        }
-    else:
-        return {}, 200, []
+    params = {}
+    for key in param_keys:
+        if key == "name":
+            params[key] = dep.get("name") or context.get(f"{dep_type}_name", "")
+        elif key == "cluster_name":
+            params[key] = dep.get("cluster_name") or context.get("cluster_name", "")
+        elif key == "node_name":
+            params[key] = dep.get("name") or ""
+        elif key == "node":
+            params[key] = dep.get("node") or context.get("node", "")
+        elif key == "type":
+            params[key] = dep.get("type") or context.get("type", "qemu")
+        elif key == "vmid":
+            params[key] = dep.get("vmid") or context.get("vmid")
+        elif key == "storage_name":
+            params[key] = dep.get("name") or context.get("storage_name", "")
 
     return sync_individual_with_dependencies(path, params, _visited, _context=context)
 

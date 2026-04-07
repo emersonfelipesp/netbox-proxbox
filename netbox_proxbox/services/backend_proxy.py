@@ -236,6 +236,43 @@ def ensure_backend_key_registered() -> tuple[bool, str]:
     return _try_register_key(context, token)
 
 
+def _build_request_candidates(
+    http_url: str,
+    ip_address_url: str | None,
+    path: str,
+    verify_ssl: bool,
+) -> list[tuple[str, bool]]:
+    """Build list of (url, verify_ssl) candidates for backend requests with fallback."""
+    main_url = f"{http_url}/{path}"
+    candidates = [(main_url, verify_ssl)]
+    if ip_address_url:
+        fallback_path = f"{ip_address_url}/{path}"
+        if fallback_path != main_url:
+            candidates.append((fallback_path, verify_ssl))
+    return candidates
+
+
+def _handle_auth_registration_and_retry(
+    context: BackendRequestContext,
+    backend_headers: dict,
+) -> tuple[dict, bool]:
+    """Attempt API key registration with the backend.
+
+    Returns (new_headers, retry_flag). If registration succeeds, returns new headers
+    and True to indicate the caller should retry the request.
+    """
+    logger.info("Backend returned 'no API key' error; attempting key registration")
+    reg_ok, reg_msg = ensure_backend_key_registered()
+    if reg_ok:
+        logger.info("Key registration succeeded: %s", reg_msg)
+        new_context = get_fastapi_request_context()
+        if new_context and new_context.headers:
+            return new_context.headers, True
+    else:
+        logger.warning("Key registration failed: %s", reg_msg)
+    return backend_headers, False
+
+
 def request_backend_resource(
     context: BackendRequestContext,
     path: str,
@@ -253,23 +290,21 @@ def request_backend_resource(
             "detail": "No FastAPI URL found.",
         }, 503
 
-    fastapi_path = f"{http_url}/{path}"
-    requested_urls: list[str] = []
+    verify_ssl = bool(context.verify_ssl)
     backend_headers = context.headers or {}
+    requested_urls: list[str] = []
+
+    request_candidates = _build_request_candidates(
+        http_url, context.ip_address_url, path, verify_ssl
+    )
+
     last_detail = None
     auth_register_attempted = False
 
-    verify_ssl = bool(context.verify_ssl)
-    request_candidates = [(fastapi_path, verify_ssl)]
-    fallback_url = context.ip_address_url
-    if fallback_url:
-        fallback_path = f"{fallback_url}/{path}"
-        if fallback_path != fastapi_path:
-            request_candidates.append((fallback_path, verify_ssl))
-
     for url, verify in request_candidates:
+        requested_urls.append(url)
+
         try:
-            requested_urls.append(url)
             response = requests.get(
                 url,
                 params=query_params,
@@ -277,71 +312,69 @@ def request_backend_resource(
                 verify=verify,
                 timeout=timeout,
             )
-            if response.status_code >= 400:
-                last_detail = f"HTTP {response.status_code}"
-                payload, json_err = parse_requests_response_json(
-                    response, log_label=f"sync:{path}"
-                )
-                if not json_err and isinstance(payload, dict):
-                    d = payload.get("detail") or payload.get("message")
-                    if d:
-                        last_detail = str(d)
-                    if (
-                        not auth_register_attempted
-                        and response.status_code == 401
-                        and "API key" in str(d)
-                    ):
-                        auth_register_attempted = True
-                        logger.info(
-                            "Backend returned 'no API key' error; attempting key registration"
-                        )
-                        reg_ok, reg_msg = ensure_backend_key_registered()
-                        if reg_ok:
-                            logger.info("Key registration succeeded: %s", reg_msg)
-                            new_context = get_fastapi_request_context()
-                            if new_context and new_context.headers:
-                                backend_headers = new_context.headers
-                                continue
-                        else:
-                            logger.warning("Key registration failed: %s", reg_msg)
-                logger.error(
-                    "Sync request failed for %s via %s: %s",
-                    path,
-                    url,
-                    last_detail,
-                )
-                if response.status_code < 500:
-                    break
-                continue
-
-            payload, json_err = parse_requests_response_json(
-                response, log_label=f"sync:{path}"
-            )
-            if json_err:
-                last_detail = json_err
-                logger.error(
-                    "Sync request returned non-JSON for %s via %s: %s",
-                    path,
-                    url,
-                    json_err,
-                )
-                continue
-            return {
-                "queued": True,
-                "path": path,
-                "requested_urls": requested_urls,
-                "response": payload,
-            }, 202
         except requests.exceptions.RequestException as exc:
             last_detail, _ = extract_backend_error_detail(exc)
             logger.error("Sync request failed for %s via %s: %s", path, url, exc)
             if getattr(exc, "response", None) is not None:
                 break
+            continue
         except (KeyboardInterrupt, SystemExit, GeneratorExit):
             raise
-        except OSError as exc:  # pragma: no cover
+        except OSError as exc:
             last_detail = str(exc)
             logger.error("Unexpected sync error for %s via %s: %s", path, url, exc)
+            continue
+
+        if response.status_code >= 400:
+            last_detail = f"HTTP {response.status_code}"
+            payload, json_err = parse_requests_response_json(
+                response, log_label=f"sync:{path}"
+            )
+            if not json_err and isinstance(payload, dict):
+                d = payload.get("detail") or payload.get("message")
+                if d:
+                    last_detail = str(d)
+                if (
+                    not auth_register_attempted
+                    and response.status_code == 401
+                    and "API key" in str(d)
+                ):
+                    auth_register_attempted = True
+                    new_headers, should_retry = _handle_auth_registration_and_retry(
+                        context, backend_headers
+                    )
+                    if should_retry:
+                        backend_headers = new_headers
+                        continue
+            logger.error(
+                "Sync request failed for %s via %s: %s",
+                path,
+                url,
+                last_detail,
+            )
+            if response.status_code < 500:
+                break
+            continue
+
+        payload, json_err = parse_requests_response_json(
+            response, log_label=f"sync:{path}"
+        )
+        if json_err:
+            last_detail = json_err
+            logger.error(
+                "Sync request returned non-JSON for %s via %s: %s",
+                path,
+                url,
+                json_err,
+            )
+            continue
+
+        return {
+            "queued": True,
+            "path": path,
+            "requested_urls": requested_urls,
+            "response": payload,
+        }, 202
 
     return {
         "queued": False,
@@ -462,101 +495,50 @@ def run_sync_stream(
         logger.error("Backend not ready: %s", ready_msg)
         return {"stream": False, "detail": f"Backend not ready: {ready_msg}"}, 503
 
-    backend_headers = context.headers or {}
-    http_url = context.http_url
-    if not http_url:
-        return {"stream": False, "detail": "No FastAPI URL found."}, 404
     verify_ssl = bool(context.verify_ssl)
-    request_candidates = [(f"{http_url}/{path}", verify_ssl)]
-    fallback_url = context.ip_address_url
-    if fallback_url:
-        fallback_path = f"{fallback_url}/{path}"
-        if fallback_path != request_candidates[0][0]:
-            request_candidates.append((fallback_path, verify_ssl))
+    request_candidates = _build_request_candidates(
+        context.http_url, context.ip_address_url, path, verify_ssl
+    )
 
+    backend_headers = context.headers or {}
     requested_urls: list[str] = []
     last_detail: str | None = None
-    auth_register_attempted = False
 
     for url, verify in request_candidates:
-        try:
-            requested_urls.append(url)
-            with requests.get(
-                url,
-                params=query_params,
-                headers=backend_headers,
-                verify=verify,
-                timeout=_SYNC_STREAM_READ_TIMEOUT,
-                stream=True,
-            ) as response:
-                if response.status_code >= 400:
-                    last_detail = f"HTTP {response.status_code}"
-                    try:
-                        payload, json_err = parse_requests_response_json(
-                            response, log_label=f"sync-stream:{path}"
-                        )
-                        if not json_err and isinstance(payload, dict):
-                            d = payload.get("detail") or payload.get("message")
-                            if d:
-                                last_detail = str(d)
-                            if (
-                                not auth_register_attempted
-                                and response.status_code == 401
-                                and "API key" in str(d)
-                            ):
-                                auth_register_attempted = True
-                                logger.info(
-                                    "Backend returned 'no API key' error; attempting key registration"
-                                )
-                                reg_ok, reg_msg = ensure_backend_key_registered()
-                                if reg_ok:
-                                    logger.info(
-                                        "Key registration succeeded: %s", reg_msg
-                                    )
-                                    context = get_fastapi_request_context()
-                                    if context and context.headers:
-                                        backend_headers = context.headers
-                                        continue
-                                else:
-                                    logger.warning(
-                                        "Key registration failed: %s", reg_msg
-                                    )
-                    except Exception:  # pragma: no cover
-                        logger.debug("Could not parse error JSON for %s", path)
-                    logger.error(
-                        "Sync stream HTTP %s for %s via %s: %s",
-                        response.status_code,
-                        path,
-                        url,
-                        last_detail,
-                    )
-                    if response.status_code < 500:
-                        break
-                    continue
+        requested_urls.append(url)
 
-                payload, status = _consume_sse_until_complete(
-                    response, on_frame=on_frame
-                )
-                payload = {
-                    **payload,
+        result = _try_sync_stream_url(
+            url=url,
+            verify=verify,
+            path=path,
+            query_params=query_params,
+            headers=backend_headers,
+            on_frame=on_frame,
+        )
+        if result is not None:
+            last_detail, should_retry, new_headers = result
+            if should_retry and new_headers:
+                backend_headers = new_headers
+                continue
+            if last_detail is None:
+                return {
+                    "stream": True,
                     "path": path,
                     "requested_urls": requested_urls,
-                }
-                return payload, status
-        except requests.exceptions.RequestException as exc:
-            last_detail, http_st = extract_backend_error_detail(exc)
-            logger.exception("Sync stream request failed for %s via %s", path, url)
-            if getattr(exc, "response", None) is not None:
+                }, 200
+            if not should_retry:
                 break
-            if http_st and http_st >= 500:
-                continue
-        except (KeyboardInterrupt, SystemExit, GeneratorExit):
-            raise
-        except OSError as exc:  # pragma: no cover
-            last_detail = str(exc)
-            logger.exception(
-                "Unexpected sync stream error for %s via %s: %s", path, url, exc
-            )
+            continue
+
+        payload, status = _make_request_and_consume_sse(
+            url, verify, query_params, backend_headers, on_frame
+        )
+        payload = {
+            **payload,
+            "path": path,
+            "requested_urls": requested_urls,
+        }
+        return payload, status
 
     return {
         "stream": True,
@@ -564,6 +546,155 @@ def run_sync_stream(
         "requested_urls": requested_urls,
         "detail": last_detail or "Unable to reach the ProxBox backend stream.",
     }, 503
+
+
+def _try_sync_stream_url(
+    url: str,
+    verify: bool,
+    path: str,
+    query_params: dict | None,
+    headers: dict,
+    on_frame: Callable[[str, dict[str, object]], None] | None,
+) -> tuple[str | None, bool, dict | None] | None:
+    """Try a single URL for sync stream request.
+
+    Returns:
+        - None if request succeeded (caller should consume SSE)
+        - (error_detail, should_retry, new_headers) on HTTP error >= 400
+        - (error_detail, False, None) on connection error
+    """
+    try:
+        with requests.get(
+            url,
+            params=query_params,
+            headers=headers,
+            verify=verify,
+            timeout=_SYNC_STREAM_READ_TIMEOUT,
+            stream=True,
+        ) as response:
+            if response.status_code >= 400:
+                last_detail = f"HTTP {response.status_code}"
+                try:
+                    payload, json_err = parse_requests_response_json(
+                        response, log_label=f"sync-stream:{path}"
+                    )
+                    if not json_err and isinstance(payload, dict):
+                        d = payload.get("detail") or payload.get("message")
+                        if d:
+                            last_detail = str(d)
+                        if response.status_code == 401 and "API key" in str(d):
+                            new_headers, should_retry = (
+                                _handle_auth_registration_and_retry(
+                                    BackendRequestContext(
+                                        http_url=url.rsplit("/", 1)[0], headers=headers
+                                    ),
+                                    headers,
+                                )
+                            )
+                            if should_retry:
+                                return last_detail, True, new_headers
+                except Exception:
+                    logger.debug("Could not parse error JSON for %s", path)
+                logger.error(
+                    "Sync stream HTTP %s for %s via %s: %s",
+                    response.status_code,
+                    path,
+                    url,
+                    last_detail,
+                )
+                should_retry = response.status_code >= 500
+                return last_detail, should_retry, None
+
+            return None
+    except requests.exceptions.RequestException as exc:
+        last_detail, http_st = extract_backend_error_detail(exc)
+        logger.exception("Sync stream request failed for %s via %s", path, url)
+        if getattr(exc, "response", None) is not None:
+            return last_detail, False, None
+        return (
+            last_detail,
+            http_st and http_st >= 500,
+            None if http_st and http_st >= 500 else None,
+        )
+    except (KeyboardInterrupt, SystemExit, GeneratorExit):
+        raise
+    except OSError as exc:
+        last_detail = str(exc)
+        logger.exception(
+            "Unexpected sync stream error for %s via %s: %s", path, url, exc
+        )
+        return last_detail, False, None
+
+
+def _consume_sse_from_response(
+    response: requests.Response,
+    on_frame: Callable[[str, dict[str, object]], None] | None,
+) -> tuple[dict[str, object], int]:
+    """Read an SSE body from an existing response to the final ``complete`` event."""
+    last_complete: SseCompletePayload | None = None
+    try:
+        for frame in _iter_sse_frames(response.iter_lines(decode_unicode=True)):
+            _event = frame.event
+            data = frame.data
+            if on_frame is not None:
+                on_frame(_event, data)
+            if _event == "complete":
+                last_complete = SseCompletePayload.model_validate(data)
+    except requests.exceptions.RequestException as exc:
+        detail, _ = extract_backend_error_detail(exc)
+        return {
+            "stream": True,
+            "detail": detail,
+        }, 502
+
+    if last_complete is None:
+        return {
+            "stream": True,
+            "detail": "ProxBox backend stream ended without a complete event.",
+        }, 502
+
+    if last_complete.ok is False:
+        msg = last_complete.message or "Sync failed."
+        if last_complete.errors:
+            first_error = last_complete.errors[0]
+            if first_error.get("detail"):
+                msg = str(first_error["detail"])
+        return {
+            "stream": True,
+            "detail": msg,
+            "response": last_complete.model_dump(),
+        }, 503
+
+    return {
+        "stream": True,
+        "response": last_complete.model_dump(),
+    }, 200
+
+
+def _make_request_and_consume_sse(
+    url: str,
+    verify: bool,
+    query_params: dict | None,
+    headers: dict,
+    on_frame: Callable[[str, dict[str, object]], None] | None,
+) -> tuple[dict[str, object], int]:
+    """Make HTTP request and consume SSE stream to completion."""
+    try:
+        with requests.get(
+            url,
+            params=query_params,
+            headers=headers,
+            verify=verify,
+            timeout=_SYNC_STREAM_READ_TIMEOUT,
+            stream=True,
+        ) as response:
+            return _consume_sse_from_response(response, on_frame)
+    except requests.exceptions.RequestException as exc:
+        detail, _ = extract_backend_error_detail(exc)
+        return {
+            "stream": True,
+            "detail": detail,
+        }, 502
 
 
 def iter_backend_sse_lines(

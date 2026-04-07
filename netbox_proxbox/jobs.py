@@ -818,102 +818,7 @@ class ProxboxSyncJob(JobRunner):
             if netbox_vm_ids:
                 self.logger.info("NetBox virtual machines: %s", netbox_vm_ids)
 
-            base_query: dict[str, str] = {}
-            base_query["use_guest_agent_interface_name"] = (
-                "true" if _use_guest_agent_interface_name_setting() else "false"
-            )
-            base_query["fetch_max_concurrency"] = str(
-                _proxbox_fetch_max_concurrency_setting()
-            )
-            base_query["ignore_ipv6_link_local_addresses"] = (
-                "true" if _ignore_ipv6_link_local_addresses_setting() else "false"
-            )
-            if proxmox_endpoint_ids:
-                base_query["proxmox_endpoint_ids"] = ",".join(proxmox_endpoint_ids)
-            if netbox_endpoint_ids:
-                base_query["netbox_endpoint_ids"] = ",".join(netbox_endpoint_ids)
-
-            flush_interval = 2.0
-            log_throttle = 1.5
-            last_flush = time.monotonic()
-            last_progress_log = time.monotonic()
-
-            def on_frame(event: str, data: dict[str, object]) -> None:
-                nonlocal last_flush, last_progress_log
-                if event == "complete":
-                    return
-                now = time.monotonic()
-                line = json.dumps(data, default=str)
-                if len(line) > 600:
-                    line = line[:600] + "…"
-                if event == "error" or now - last_progress_log >= log_throttle:
-                    self.logger.info("[proxbox-stream] {}: {}".format(event, line))
-                    last_progress_log = now
-                if now - last_flush >= flush_interval:
-                    self.job.save(update_fields=["log_entries"])
-                    last_flush = now
-
-            stages_out: list[dict[str, object]] = []
-            for st in stages:
-                query_params = dict(base_query)
-                if st == SyncTypeChoices.VIRTUAL_MACHINES_BACKUPS:
-                    query_params["delete_nonexistent_backup"] = True
-                if st == SyncTypeChoices.VIRTUAL_MACHINES_SNAPSHOTS:
-                    query_params["delete_nonexistent_snapshot"] = True
-
-                target_vm_ids = [
-                    str(x) for x in list(params.get("netbox_vm_ids") or []) if str(x)
-                ]
-                if target_vm_ids:
-                    query_params["netbox_vm_ids"] = ",".join(target_vm_ids)
-
-                stage_paths = _sync_stream_paths_for_stage(st, target_vm_ids)
-                for stream_path in stage_paths:
-                    self.logger.info(f"Starting stage: {st} ({stream_path})")
-                    stage_started = time.monotonic()
-                    last_heartbeat = stage_started
-
-                    def _heartbeat() -> None:
-                        nonlocal last_heartbeat
-                        now = time.monotonic()
-                        if now - last_heartbeat < _HEARTBEAT_SECONDS:
-                            return
-                        elapsed = _format_seconds(now - stage_started)
-                        self.logger.info(
-                            f"Stage '{st}' still running on '{stream_path}' (elapsed {elapsed})"
-                        )
-                        last_heartbeat = now
-
-                    def _on_frame_with_heartbeat(
-                        event: str,
-                        data: dict[str, object],
-                        forward: Callable[[str, dict[str, object]], None],
-                    ) -> None:
-                        forward(event, data)
-                        _heartbeat()
-
-                    payload, status = run_sync_stream(
-                        stream_path,
-                        query_params=query_params or None,
-                        on_frame=lambda e, d: _on_frame_with_heartbeat(e, d, on_frame),
-                    )
-                    elapsed = _format_seconds(time.monotonic() - stage_started)
-                    self.job.save(update_fields=["log_entries"])
-                    if status >= 400:
-                        detail = _extract_backend_error_text(payload) or str(payload)
-                        user_detail = _format_stage_sync_error(
-                            sync_type=st,
-                            status=status,
-                            payload=payload,
-                        )
-                        self.logger.error(
-                            "Stage %s failed (HTTP %s): %s", st, status, detail
-                        )
-                        raise RuntimeError(user_detail)
-                    self.logger.info(
-                        f"Stage completed: {st} ({stream_path}) HTTP {status} in {elapsed}"
-                    )
-                    stages_out.append({"sync_type": st, "payload": payload})
+            stages_out = _run_all_stages_sync(self, stages, params, run_started)
 
             runtime_seconds = round(time.monotonic() - run_started, 3)
             self.job.data = {
@@ -931,6 +836,148 @@ class ProxboxSyncJob(JobRunner):
             )
         finally:
             _release_rq_sync_ownership(self.job)
+
+
+def _build_base_query_params(
+    proxmox_endpoint_ids: list[str] | None,
+    netbox_endpoint_ids: list[str] | None,
+) -> dict[str, str]:
+    """Build base query parameters for sync stages."""
+    base_query: dict[str, str] = {}
+    base_query["use_guest_agent_interface_name"] = (
+        "true" if _use_guest_agent_interface_name_setting() else "false"
+    )
+    base_query["fetch_max_concurrency"] = str(_proxbox_fetch_max_concurrency_setting())
+    base_query["ignore_ipv6_link_local_addresses"] = (
+        "true" if _ignore_ipv6_link_local_addresses_setting() else "false"
+    )
+    if proxmox_endpoint_ids:
+        base_query["proxmox_endpoint_ids"] = ",".join(proxmox_endpoint_ids)
+    if netbox_endpoint_ids:
+        base_query["netbox_endpoint_ids"] = ",".join(netbox_endpoint_ids)
+    return base_query
+
+
+def _build_stage_query_params(
+    base_query: dict[str, str],
+    sync_type: str,
+    target_vm_ids: list[str],
+) -> dict[str, str]:
+    """Build query parameters for a specific sync stage."""
+    query_params = dict(base_query)
+    if sync_type == SyncTypeChoices.VIRTUAL_MACHINES_BACKUPS:
+        query_params["delete_nonexistent_backup"] = True
+    if sync_type == SyncTypeChoices.VIRTUAL_MACHINES_SNAPSHOTS:
+        query_params["delete_nonexistent_snapshot"] = True
+    if target_vm_ids:
+        query_params["netbox_vm_ids"] = ",".join(target_vm_ids)
+    return query_params
+
+
+def _execute_stage_sync(
+    job: ProxboxSyncJob,
+    sync_type: str,
+    stream_path: str,
+    query_params: dict[str, str] | None,
+    on_frame: Callable[[str, dict[str, object]], None],
+) -> dict[str, object]:
+    """Execute a single stage sync and return payload."""
+    from netbox_proxbox.services import run_sync_stream
+
+    job.logger.info(f"Starting stage: {sync_type} ({stream_path})")
+    stage_started = time.monotonic()
+    last_heartbeat = stage_started
+
+    def _heartbeat() -> None:
+        nonlocal last_heartbeat
+        now = time.monotonic()
+        if now - last_heartbeat < _HEARTBEAT_SECONDS:
+            return
+        elapsed = _format_seconds(now - stage_started)
+        job.logger.info(
+            f"Stage '{sync_type}' still running on '{stream_path}' (elapsed {elapsed})"
+        )
+        last_heartbeat = now
+
+    def _on_frame_with_heartbeat(
+        event: str,
+        data: dict[str, object],
+        forward: Callable[[str, dict[str, object]], None],
+    ) -> None:
+        forward(event, data)
+        _heartbeat()
+
+    payload, status = run_sync_stream(
+        stream_path,
+        query_params=query_params,
+        on_frame=lambda e, d: _on_frame_with_heartbeat(e, d, on_frame),
+    )
+    elapsed = _format_seconds(time.monotonic() - stage_started)
+    job.job.save(update_fields=["log_entries"])
+
+    if status >= 400:
+        detail = _extract_backend_error_text(payload) or str(payload)
+        user_detail = _format_stage_sync_error(
+            sync_type=sync_type,
+            status=status,
+            payload=payload,
+        )
+        job.logger.error("Stage %s failed (HTTP %s): %s", sync_type, status, detail)
+        raise RuntimeError(user_detail)
+
+    job.logger.info(
+        f"Stage completed: {sync_type} ({stream_path}) HTTP {status} in {elapsed}"
+    )
+    return payload
+
+
+def _run_all_stages_sync(
+    job: ProxboxSyncJob,
+    stages: list[str],
+    params: dict[str, object],
+    run_started: float,
+) -> list[dict[str, object]]:
+    """Run all sync stages in order and return stage results."""
+    from netbox_proxbox.services import run_sync_stream
+
+    base_query = _build_base_query_params(
+        params.get("proxmox_endpoint_ids"),
+        params.get("netbox_endpoint_ids"),
+    )
+
+    flush_interval = 2.0
+    log_throttle = 1.5
+    last_flush = time.monotonic()
+    last_progress_log = time.monotonic()
+
+    def on_frame(event: str, data: dict[str, object]) -> None:
+        nonlocal last_flush, last_progress_log
+        if event == "complete":
+            return
+        now = time.monotonic()
+        line = json.dumps(data, default=str)
+        if len(line) > 600:
+            line = line[:600] + "…"
+        if event == "error" or now - last_progress_log >= log_throttle:
+            job.logger.info("[proxbox-stream] {}: {}".format(event, line))
+            last_progress_log = now
+        if now - last_flush >= flush_interval:
+            job.job.save(update_fields=["log_entries"])
+            last_flush = now
+
+    stages_out: list[dict[str, object]] = []
+
+    target_vm_ids = [str(x) for x in list(params.get("netbox_vm_ids") or []) if str(x)]
+
+    for st in stages:
+        query_params = _build_stage_query_params(base_query, st, target_vm_ids)
+        stage_paths = _sync_stream_paths_for_stage(st, target_vm_ids)
+
+        for stream_path in stage_paths:
+            payload = _execute_stage_sync(job, st, stream_path, query_params, on_frame)
+            stages_out.append({"sync_type": st, "payload": payload})
+
+    return stages_out
 
 
 def is_proxbox_sync_job(job: object) -> bool:
