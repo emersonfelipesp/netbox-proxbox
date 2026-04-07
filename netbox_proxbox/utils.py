@@ -70,11 +70,50 @@ def get_fastapi_context(endpoint: FastAPIUrlSource) -> dict | None:
     }
 
 
-def get_first_fastapi_context() -> dict | None:
-    """Get context for the first configured FastAPI endpoint, if any."""
+def get_first_fastapi_context(endpoint_id: int | None = None) -> dict | None:
+    """Get context for the configured FastAPI endpoint.
+
+    Args:
+        endpoint_id: Optional specific endpoint ID. If not provided, selects by ID when multiple
+            endpoints exist, or returns the only endpoint when only one exists.
+
+    Returns:
+        Context dict or None if no endpoints configured.
+    """
     from netbox_proxbox.models import FastAPIEndpoint
 
-    fastapi_obj = FastAPIEndpoint.objects.first()
+    count = FastAPIEndpoint.objects.count()
+    if count == 0:
+        return None
+
+    if endpoint_id is not None:
+        fastapi_obj = FastAPIEndpoint.objects.filter(pk=endpoint_id).first()
+        if fastapi_obj is None:
+            return None
+        return get_fastapi_context(fastapi_obj)
+
+    if count == 1:
+        fastapi_obj = FastAPIEndpoint.objects.first()
+        return get_fastapi_context(fastapi_obj) if fastapi_obj else None
+
+    fastapi_obj = FastAPIEndpoint.objects.order_by("pk").first()
+    if fastapi_obj is None:
+        return None
+    return get_fastapi_context(fastapi_obj)
+
+
+def get_fastapi_context_by_id(endpoint_id: int) -> dict | None:
+    """Get context for a specific FastAPI endpoint by ID.
+
+    Args:
+        endpoint_id: The primary key of the FastAPIEndpoint.
+
+    Returns:
+        Context dict or None if endpoint not found.
+    """
+    from netbox_proxbox.models import FastAPIEndpoint
+
+    fastapi_obj = FastAPIEndpoint.objects.filter(pk=endpoint_id).first()
     if fastapi_obj is None:
         return None
     return get_fastapi_context(fastapi_obj)

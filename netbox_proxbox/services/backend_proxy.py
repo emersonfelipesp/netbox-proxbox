@@ -92,6 +92,52 @@ def _try_register_key(context: BackendRequestContext, token: str) -> tuple[bool,
         return False, f"Could not register key: {exc}"
 
 
+def _try_register_key_fallback() -> tuple[bool, str]:
+    """Try registering keys from all FastAPIEndpoints with fallback.
+
+    Iterates through all endpoints and attempts to register each token.
+    Returns (success, message) tuple showing the last attempt result.
+    """
+    from netbox_proxbox.utils import get_fastapi_context
+
+    endpoints = FastAPIEndpoint.objects.order_by("pk").all()
+    if not endpoints:
+        return False, "No FastAPI endpoints configured"
+
+    last_message = "No keys attempted"
+    for endpoint in endpoints:
+        token = (getattr(endpoint, "token", "") or "").strip()
+        if not token:
+            last_message = f"Endpoint {endpoint.pk} has no token, skipping"
+            logger.debug(last_message)
+            continue
+
+        context = get_fastapi_context(endpoint)
+        if not context:
+            last_message = f"Endpoint {endpoint.pk} has no context, skipping"
+            logger.debug(last_message)
+            continue
+
+        success, message = _try_register_key(
+            BackendRequestContext(
+                detail=context,
+                http_url=context.get("http_url"),
+                ip_address_url=context.get("ip_address_url"),
+                verify_ssl=context.get("verify_ssl", True),
+                headers=context.get("headers", {}),
+            ),
+            token,
+        )
+        if success:
+            return True, f"Registered endpoint {endpoint.pk}: {message}"
+        last_message = f"Endpoint {endpoint.pk} failed: {message}"
+        logger.warning(
+            "Token registration failed for endpoint %s: %s", endpoint.pk, message
+        )
+
+    return False, last_message
+
+
 def wait_for_backend_ready(
     context: BackendRequestContext,
     max_retries: int = 30,
@@ -201,18 +247,37 @@ def get_fastapi_request_context() -> BackendRequestContext | None:
     )
 
 
-def get_fastapi_endpoint_with_token() -> tuple[
-    object | None, BackendRequestContext | None
-]:
+def get_fastapi_endpoint_with_token(
+    endpoint_id: int | None = None,
+) -> tuple[object | None, BackendRequestContext | None]:
     """Get the FastAPIEndpoint model and its request context.
+
+    Args:
+        endpoint_id: Optional specific endpoint ID. If not provided, selects by ID
+            when multiple endpoints exist, or returns the only endpoint when only one exists.
 
     Returns (endpoint, context) tuple. Either may be None.
     """
+    from netbox_proxbox.utils import get_fastapi_context_by_id
 
-    endpoint = FastAPIEndpoint.objects.first()
+    if endpoint_id is not None:
+        endpoint = FastAPIEndpoint.objects.filter(pk=endpoint_id).first()
+        if endpoint is None:
+            return None, None
+        context = get_fastapi_request_context()
+        return endpoint, context
+
+    count = FastAPIEndpoint.objects.count()
+    if count == 0:
+        return None, None
+    if count == 1:
+        endpoint = FastAPIEndpoint.objects.first()
+        context = get_fastapi_request_context()
+        return endpoint, context
+
+    endpoint = FastAPIEndpoint.objects.order_by("pk").first()
     if endpoint is None:
         return None, None
-
     context = get_fastapi_request_context()
     return endpoint, context
 

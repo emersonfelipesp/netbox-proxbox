@@ -141,10 +141,24 @@ def ensure_proxmox_endpoint_has_fastapi_token(sender, instance, created, **kwarg
     """
     from netbox_proxbox.models import FastAPIEndpoint
 
-    fastapi_ep = FastAPIEndpoint.objects.first()
-    if not fastapi_ep:
+    count = FastAPIEndpoint.objects.count()
+    if count == 0:
         logger.debug("No FastAPIEndpoint configured, skipping token registration")
         return
+
+    order = FastAPIEndpoint.objects.order_by("pk")
+    fastapi_ep = order.first()
+    if not fastapi_ep:
+        logger.debug("No FastAPIEndpoint found, skipping token registration")
+        return
+
+    if count > 1:
+        fastapi_ep = order.first()
+        logger.debug(
+            "Multiple FastAPIEndpoint objects exist (%d), using first by PK: %s",
+            count,
+            fastapi_ep.pk,
+        )
 
     if not fastapi_ep.token:
         logger.info(
