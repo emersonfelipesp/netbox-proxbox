@@ -23,12 +23,13 @@ function wireSelectAllCheckboxes() {
 
 function initializeWebSocket() {
     const websocketEndpoint = window.proxboxConfig?.websocketEndpoint;
+    const websocketApiKey = window.proxboxConfig?.websocketApiKey;
     const syncContainer = document.querySelector("[data-use-websocket='true'][data-server-side-websocket='false']");
-    if (!websocketEndpoint || !syncContainer) {
+    if (!websocketEndpoint || !websocketApiKey || !syncContainer) {
         return null;
     }
 
-    return new WebSocketClient(websocketEndpoint);
+    return new WebSocketClient(websocketEndpoint, websocketApiKey);
 }
 
 function isFastapiStatusElement(element) {

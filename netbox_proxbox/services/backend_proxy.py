@@ -230,11 +230,17 @@ def sse_error_frames(
     yield f"data: {SseCompletePayload(ok=False, message=final_message).model_dump_json()}\n\n"
 
 
-def get_fastapi_request_context() -> BackendRequestContext | None:
-    """Build auth headers and URLs for the first configured FastAPI endpoint, if any."""
-    from netbox_proxbox.utils import get_first_fastapi_context
+def get_fastapi_request_context(
+    endpoint_id: int | None = None,
+) -> BackendRequestContext | None:
+    """Build auth headers and URLs for a configured FastAPI endpoint, if any."""
+    from netbox_proxbox.utils import get_fastapi_context_by_id, get_first_fastapi_context
 
-    context = get_first_fastapi_context()
+    context = (
+        get_fastapi_context_by_id(endpoint_id)
+        if endpoint_id is not None
+        else get_first_fastapi_context()
+    )
     if context is None:
         return None
 
@@ -258,13 +264,11 @@ def get_fastapi_endpoint_with_token(
 
     Returns (endpoint, context) tuple. Either may be None.
     """
-    from netbox_proxbox.utils import get_fastapi_context_by_id
-
     if endpoint_id is not None:
         endpoint = FastAPIEndpoint.objects.filter(pk=endpoint_id).first()
         if endpoint is None:
             return None, None
-        context = get_fastapi_request_context()
+        context = get_fastapi_request_context(endpoint_id=endpoint_id)
         return endpoint, context
 
     count = FastAPIEndpoint.objects.count()
@@ -272,22 +276,24 @@ def get_fastapi_endpoint_with_token(
         return None, None
     if count == 1:
         endpoint = FastAPIEndpoint.objects.first()
-        context = get_fastapi_request_context()
+        context = get_fastapi_request_context(
+            endpoint_id=getattr(endpoint, "pk", None)
+        )
         return endpoint, context
 
     endpoint = FastAPIEndpoint.objects.order_by("pk").first()
     if endpoint is None:
         return None, None
-    context = get_fastapi_request_context()
+    context = get_fastapi_request_context(endpoint_id=getattr(endpoint, "pk", None))
     return endpoint, context
 
 
-def ensure_backend_key_registered() -> tuple[bool, str]:
+def ensure_backend_key_registered(endpoint_id: int | None = None) -> tuple[bool, str]:
     """Check if the API key is registered with the backend, register if needed.
 
     Returns (success, message) tuple.
     """
-    endpoint, context = get_fastapi_endpoint_with_token()
+    endpoint, context = get_fastapi_endpoint_with_token(endpoint_id=endpoint_id)
     if endpoint is None:
         return False, "No FastAPI endpoint configured"
 
@@ -318,8 +324,9 @@ def _build_request_candidates(
 
 
 def _handle_auth_registration_and_retry(
-    context: BackendRequestContext,
     backend_headers: dict,
+    *,
+    endpoint_id: int | None = None,
 ) -> tuple[dict, bool]:
     """Attempt API key registration with the backend.
 
@@ -327,10 +334,10 @@ def _handle_auth_registration_and_retry(
     and True to indicate the caller should retry the request.
     """
     logger.info("Backend returned 'no API key' error; attempting key registration")
-    reg_ok, reg_msg = ensure_backend_key_registered()
+    reg_ok, reg_msg = ensure_backend_key_registered(endpoint_id=endpoint_id)
     if reg_ok:
         logger.info("Key registration succeeded: %s", reg_msg)
-        new_context = get_fastapi_request_context()
+        new_context = get_fastapi_request_context(endpoint_id=endpoint_id)
         if new_context and new_context.headers:
             return new_context.headers, True
     else:
@@ -406,7 +413,7 @@ def request_backend_resource(
                 ):
                     auth_register_attempted = True
                     new_headers, should_retry = _handle_auth_registration_and_retry(
-                        context, backend_headers
+                        backend_headers
                     )
                     if should_retry:
                         backend_headers = new_headers
@@ -544,6 +551,7 @@ def run_sync_stream(
     query_params: dict | None = None,
     *,
     on_frame: Callable[[str, dict[str, object]], None] | None = None,
+    endpoint_id: int | None = None,
 ) -> tuple[dict[str, object], int]:
     """GET a backend SSE sync URL to completion (for NetBox background jobs).
 
@@ -551,7 +559,7 @@ def run_sync_stream(
     ``dcim/devices/create/stream``). Uses the same URL fallback as
     :func:`iter_backend_sse_lines` and a long read timeout.
     """
-    context = get_fastapi_request_context()
+    context = get_fastapi_request_context(endpoint_id=endpoint_id)
     if context is None or not context.http_url:
         return {"stream": False, "detail": "No FastAPI URL found."}, 404
 
@@ -579,6 +587,7 @@ def run_sync_stream(
             query_params=query_params,
             headers=backend_headers,
             on_frame=on_frame,
+            endpoint_id=endpoint_id,
         )
         if result is not None:
             last_detail, should_retry, new_headers = result
@@ -620,6 +629,7 @@ def _try_sync_stream_url(
     query_params: dict | None,
     headers: dict,
     on_frame: Callable[[str, dict[str, object]], None] | None,
+    endpoint_id: int | None = None,
 ) -> tuple[str | None, bool, dict | None] | None:
     """Try a single URL for sync stream request.
 
@@ -650,10 +660,8 @@ def _try_sync_stream_url(
                         if response.status_code == 401 and "API key" in str(d):
                             new_headers, should_retry = (
                                 _handle_auth_registration_and_retry(
-                                    BackendRequestContext(
-                                        http_url=url.rsplit("/", 1)[0], headers=headers
-                                    ),
                                     headers,
+                                    endpoint_id=endpoint_id,
                                 )
                             )
                             if should_retry:

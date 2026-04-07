@@ -42,7 +42,7 @@ ws_sync_button_state = {
 }
 
 
-async def websocket_client(uri: str) -> None:
+async def websocket_client(uri: str, api_key: str | None = None) -> None:
     """Maintain a long-lived WebSocket to the ProxBox backend; reconnect with backoff."""
     reconnect_delay = _RECONNECT_DELAY_SEC
     while True:
@@ -51,6 +51,7 @@ async def websocket_client(uri: str) -> None:
                 uri, open_timeout=_WS_CONNECTION_TIMEOUT
             ) as websocket:
                 logger.info("Proxbox plugin WebSocket connected: %s", uri)
+                await websocket.send(json.dumps({"api_key": api_key or ""}))
                 while True:
                     if not message_queue.empty():
                         new_message = message_queue.get()
@@ -131,7 +132,7 @@ async def websocket_client(uri: str) -> None:
             reconnect_delay = min(reconnect_delay * 2, _RECONNECT_MAX_DELAY_SEC)
 
 
-def start_websocket(uri: str) -> None:
+def start_websocket(uri: str, api_key: str | None = None) -> None:
     """Start a daemon thread and asyncio loop running ``websocket_client`` for ``uri`` if not already running."""
     global websocket_task, websocket_loop
     with websocket_lock:
@@ -147,7 +148,7 @@ def start_websocket(uri: str) -> None:
         thread = threading.Thread(target=run_loop, daemon=True)
         thread.start()
         websocket_task = asyncio.run_coroutine_threadsafe(
-            websocket_client(uri), websocket_loop
+            websocket_client(uri, api_key=api_key), websocket_loop
         )
 
 
@@ -199,7 +200,7 @@ class WebSocketView(
         if uri is None:
             return HttpResponse("WebSocket URL not found", status=404)
 
-        start_websocket(uri)
+        start_websocket(uri, api_key=(getattr(fastapi_object, "token", "") or "").strip())
 
         with websocket_lock:
             if (

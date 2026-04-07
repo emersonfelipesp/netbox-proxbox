@@ -62,10 +62,10 @@ _SYNC_TYPE_PATH: dict[str, str] = {
     SyncTypeChoices.VIRTUAL_MACHINES_SNAPSHOTS: (
         "virtualization/virtual-machines/snapshots/all/create"
     ),
-    SyncTypeChoices.REPLICATIONS: "cluster/replication",
+    SyncTypeChoices.REPLICATIONS: "proxmox/replication",
     SyncTypeChoices.NETWORK_INTERFACES: "dcim/devices/interfaces/create",
     SyncTypeChoices.IP_ADDRESSES: "virtualization/virtual-machines/interfaces/ip-address/create",
-    SyncTypeChoices.BACKUP_ROUTINES: "cluster/backup",
+    SyncTypeChoices.BACKUP_ROUTINES: "proxmox/cluster/backup",
 }
 
 # Per-VM path templates used when ``netbox_vm_ids`` is set.  ``{vm_id}`` is
