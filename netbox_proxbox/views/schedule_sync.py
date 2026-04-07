@@ -153,12 +153,10 @@ class ScheduleSyncView(
         candidates = (
             Job.objects.restrict(request.user, "view")
             .filter(
-                status__in=JobStatusChoices.ENQUEUED_STATE_CHOICES,
-            )
-            .filter(
                 Q(queue_name=PROXBOX_SYNC_QUEUE_NAME) | Q(data__has_key="proxbox_sync")
             )
-            .order_by("schedule")
+            .exclude(status=JobStatusChoices.STATUS_COMPLETED)
+            .order_by("-created")
         )
 
         for job in candidates.iterator(chunk_size=64):
