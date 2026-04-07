@@ -9,7 +9,7 @@ from django.utils.translation import gettext_lazy as _
 from netbox.models import NetBoxModel
 
 
-def parse_cidr_list(text: str) -> list:
+def parse_cidr_list(text: str) -> list[str]:
     """Parse newline-separated CIDR ranges into a list of strings."""
     if not text:
         return []

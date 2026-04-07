@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, time, timedelta
-
-from django.contrib.auth.base_user import AbstractBaseUser
-from django.contrib.auth.models import AnonymousUser
+from typing import TYPE_CHECKING, Any
 
 from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
@@ -21,6 +19,13 @@ from netbox_proxbox.jobs import (
     is_proxbox_sync_job,
     proxbox_sync_params_from_job,
 )
+
+if TYPE_CHECKING:
+    from django.contrib.auth.base_user import AbstractBaseUser
+    from django.contrib.auth.models import AnonymousUser
+else:
+    AbstractBaseUser = Any
+    AnonymousUser = Any
 
 QUICK_SCHEDULE_DEFAULT_JOB_NAME = _("Proxbox Full Sync")
 

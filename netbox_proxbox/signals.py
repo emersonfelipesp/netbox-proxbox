@@ -4,16 +4,22 @@ These signals ensure FastAPIEndpoint tokens are generated and registered with
 the proxbox-api backend automatically when endpoints are created or updated.
 """
 
+from __future__ import annotations
+
 import logging
 import secrets
+from typing import TYPE_CHECKING, Any
 
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
+if TYPE_CHECKING:
+    from netbox_proxbox.models import FastAPIEndpoint
+
 logger = logging.getLogger(__name__)
 
 
-def _get_backend_url(endpoint: object) -> str | None:
+def _get_backend_url(endpoint: FastAPIEndpoint) -> str | None:
     """Build the base URL for the proxbox-api backend from a FastAPIEndpoint."""
     if not endpoint:
         return None
@@ -31,7 +37,7 @@ def _get_backend_url(endpoint: object) -> str | None:
     return f"{scheme}://{host}:{endpoint.port}"
 
 
-def _register_token_with_backend(endpoint: object) -> bool | None:
+def _register_token_with_backend(endpoint: FastAPIEndpoint) -> bool | None:
     """Attempt to register the endpoint's token with the proxbox-api backend.
 
     This is a best-effort operation that logs failures but never raises exceptions.
@@ -113,10 +119,10 @@ def _register_token_with_backend(endpoint: object) -> bool | None:
 
 @receiver(post_save, sender="netbox_proxbox.FastAPIEndpoint")
 def ensure_fastapi_endpoint_token(
-    sender: object,
-    instance: object,
+    sender: type,
+    instance: FastAPIEndpoint,
     created: bool,
-    **kwargs: object,
+    **kwargs: Any,
 ) -> None:
     """Ensure FastAPIEndpoint has a token and register it with the backend.
 
@@ -138,10 +144,10 @@ def ensure_fastapi_endpoint_token(
 
 @receiver(post_save, sender="netbox_proxbox.ProxmoxEndpoint")
 def ensure_proxmox_endpoint_has_fastapi_token(
-    sender: object,
-    instance: object,
+    sender: type,
+    instance: Any,
     created: bool,
-    **kwargs: object,
+    **kwargs: Any,
 ) -> None:
     """Ensure there's a FastAPIEndpoint with a token when ProxmoxEndpoint is saved.
 

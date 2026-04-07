@@ -8,14 +8,21 @@ from collections.abc import Callable, Generator, Iterable
 
 import requests
 
-from netbox_proxbox.models import FastAPIEndpoint
 from netbox_proxbox.schemas.backend_proxy import (
     BackendRequestContext,
     SseCompletePayload,
     SseErrorPayload,
     SseFrame,
 )
-from netbox_proxbox.utils import get_backend_auth_headers, get_fastapi_url
+from netbox_proxbox.services.backend_auth import (
+    http_timeout_for_sync_path,
+    wait_for_backend_ready,
+)
+from netbox_proxbox.services.backend_context import (
+    _build_request_candidates,
+    _handle_auth_registration_and_retry,
+    get_fastapi_request_context,
+)
 from netbox_proxbox.views.error_utils import (
     extract_backend_error_detail,
     parse_requests_response_json,
@@ -23,198 +30,7 @@ from netbox_proxbox.views.error_utils import (
 
 logger = logging.getLogger(__name__)
 
-# Long read timeout for consuming proxbox-api SSE sync streams from background jobs.
 _SYNC_STREAM_READ_TIMEOUT = (5, 3600)
-
-# proxbox-api awaits the full backup sync in one GET; allow long read like the stream proxy.
-_LONG_RUNNING_BACKUP_PATH_MARKER = "virtualization/virtual-machines/backups/all/create"
-_LONG_RUNNING_SNAPSHOT_PATH_MARKER = (
-    "virtualization/virtual-machines/snapshots/all/create"
-)
-_LONG_HTTP_READ_TIMEOUT = (5, 3600)
-
-
-def http_timeout_for_sync_path(path: str) -> float | tuple[int, int]:
-    """Return read timeout for a backend sync path (long for backup/snapshot bulk ops)."""
-    if _LONG_RUNNING_BACKUP_PATH_MARKER in path:
-        return _LONG_HTTP_READ_TIMEOUT
-    if _LONG_RUNNING_SNAPSHOT_PATH_MARKER in path:
-        return _LONG_HTTP_READ_TIMEOUT
-    return 5
-
-
-def _try_register_key(context: BackendRequestContext, token: str) -> tuple[bool, str]:
-    """Attempt to register the API key with the backend if not already registered.
-
-    Returns (success, message) tuple.
-    """
-    import requests
-
-    if not context or not context.http_url:
-        return False, "No FastAPI URL configured"
-
-    base_url = context.http_url.rstrip("/")
-    verify_ssl = bool(context.verify_ssl)
-
-    try:
-        status_response = requests.get(
-            f"{base_url}/auth/bootstrap-status",
-            verify=verify_ssl,
-            timeout=5,
-        )
-        if status_response.status_code != 200:
-            return (
-                False,
-                f"Bootstrap status check failed: HTTP {status_response.status_code}",
-            )
-
-        status_data = status_response.json()
-        if not status_data.get("needs_bootstrap", False):
-            return True, "Key already registered"
-
-    except requests.exceptions.RequestException as exc:
-        return False, f"Could not check bootstrap status: {exc}"
-
-    try:
-        register_response = requests.post(
-            f"{base_url}/auth/register-key",
-            json={"api_key": token, "label": "netbox-proxbox-plugin"},
-            verify=verify_ssl,
-            timeout=10,
-        )
-        if register_response.status_code == 201:
-            return True, "Key registered successfully"
-        if register_response.status_code == 409:
-            return True, "Key already exists"
-        return False, f"Registration failed: HTTP {register_response.status_code}"
-
-    except requests.exceptions.RequestException as exc:
-        return False, f"Could not register key: {exc}"
-
-
-def _try_register_key_fallback() -> tuple[bool, str]:
-    """Try registering keys from all FastAPIEndpoints with fallback.
-
-    Iterates through all endpoints and attempts to register each token.
-    Returns (success, message) tuple showing the last attempt result.
-    """
-    from netbox_proxbox.utils import get_fastapi_context
-
-    endpoints = FastAPIEndpoint.objects.order_by("pk").all()
-    if not endpoints:
-        return False, "No FastAPI endpoints configured"
-
-    last_message = "No keys attempted"
-    for endpoint in endpoints:
-        token = (getattr(endpoint, "token", "") or "").strip()
-        if not token:
-            last_message = f"Endpoint {endpoint.pk} has no token, skipping"
-            logger.debug(last_message)
-            continue
-
-        context = get_fastapi_context(endpoint)
-        if not context:
-            last_message = f"Endpoint {endpoint.pk} has no context, skipping"
-            logger.debug(last_message)
-            continue
-
-        success, message = _try_register_key(
-            BackendRequestContext(
-                detail=context,
-                http_url=context.get("http_url"),
-                ip_address_url=context.get("ip_address_url"),
-                verify_ssl=context.get("verify_ssl", True),
-                headers=context.get("headers", {}),
-            ),
-            token,
-        )
-        if success:
-            return True, f"Registered endpoint {endpoint.pk}: {message}"
-        last_message = f"Endpoint {endpoint.pk} failed: {message}"
-        logger.warning(
-            "Token registration failed for endpoint %s: %s", endpoint.pk, message
-        )
-
-    return False, last_message
-
-
-def wait_for_backend_ready(
-    context: BackendRequestContext,
-    max_retries: int = 30,
-    initial_delay: float = 1.0,
-    max_delay: float = 30.0,
-) -> tuple[bool, str]:
-    """Wait for the FastAPI backend to be ready before starting sync.
-
-    Returns:
-        tuple of (success, message)
-    """
-    import time as time_module
-
-    if not context or not context.http_url:
-        return False, "No FastAPI URL configured"
-
-    backend_url = context.http_url.rstrip("/")
-    health_url = f"{backend_url}/health"
-    verify_ssl = bool(context.verify_ssl)
-    headers = context.headers or {}
-
-    delay = initial_delay
-    for attempt in range(max_retries):
-        try:
-            response = requests.get(
-                health_url,
-                headers=headers,
-                verify=verify_ssl,
-                timeout=5,
-            )
-            if response.status_code == 200:
-                try:
-                    data = response.json()
-                    init_ok = data.get("init_ok", False)
-                    if init_ok:
-                        return True, "Backend is ready"
-                    status = data.get("status", "unknown")
-                    if status == "ready":
-                        return True, "Backend is ready"
-                except Exception:
-                    pass
-                if attempt < max_retries - 1:
-                    logger.info(
-                        "Backend health check returned but init not complete (attempt %s/%s), retrying in %ss",
-                        attempt + 1,
-                        max_retries,
-                        delay,
-                    )
-                    time_module.sleep(delay)
-                    delay = min(delay * 1.5, max_delay)
-                    continue
-            else:
-                if attempt < max_retries - 1:
-                    logger.info(
-                        "Backend health check failed with HTTP %s (attempt %s/%s), retrying in %ss",
-                        response.status_code,
-                        attempt + 1,
-                        max_retries,
-                        delay,
-                    )
-                    time_module.sleep(delay)
-                    delay = min(delay * 1.5, max_delay)
-                    continue
-        except requests.exceptions.RequestException as exc:
-            if attempt < max_retries - 1:
-                logger.info(
-                    "Backend health check request failed (attempt %s/%s): %s, retrying in %ss",
-                    attempt + 1,
-                    max_retries,
-                    str(exc)[:100],
-                    delay,
-                )
-                time_module.sleep(delay)
-                delay = min(delay * 1.5, max_delay)
-                continue
-
-    return False, f"Backend not ready after {max_retries} attempts"
 
 
 def sse_error_frames(
@@ -230,119 +46,139 @@ def sse_error_frames(
     yield f"data: {SseCompletePayload(ok=False, message=final_message).model_dump_json()}\n\n"
 
 
-def get_fastapi_request_context(
-    endpoint_id: int | None = None,
-) -> BackendRequestContext | None:
-    """Build auth headers and URLs for a configured FastAPI endpoint, if any."""
-    from netbox_proxbox.utils import get_fastapi_context_by_id, get_first_fastapi_context
+def _iter_sse_frames(
+    line_iter: Iterable[str | bytes | None],
+) -> Generator[SseFrame, None, None]:
+    """Parse newline-delimited SSE from ``iter_lines``-style input into (event, data_dict) pairs."""
+    event_name = ""
+    data_lines: list[str] = []
 
-    context = (
-        get_fastapi_context_by_id(endpoint_id)
-        if endpoint_id is not None
-        else get_first_fastapi_context()
-    )
-    if context is None:
-        return None
+    def flush() -> Generator[SseFrame, None, None]:
+        nonlocal event_name, data_lines
+        if not data_lines:
+            event_name = ""
+            return
+        payload_str = "\n".join(data_lines)
+        try:
+            data_obj = json.loads(payload_str)
+        except json.JSONDecodeError:
+            data_obj = {"raw": payload_str}
+        ev = event_name or "message"
+        if not isinstance(data_obj, dict):
+            data_obj = {"raw": data_obj}
+        yield SseFrame(event=ev, data=data_obj)
+        event_name = ""
+        data_lines = []
 
-    return BackendRequestContext(
-        detail=context,
-        http_url=context.get("http_url"),
-        ip_address_url=context.get("ip_address_url"),
-        verify_ssl=context.get("verify_ssl", True),
-        headers=context.get("headers", {}),
-    )
+    for raw in line_iter:
+        if raw is None:
+            continue
+        line = str(raw)
+        if line == "":
+            yield from flush()
+            continue
+        if line.startswith(":"):
+            continue
+        if line.startswith("event:"):
+            yield from flush()
+            event_name = line[6:].strip()
+        elif line.startswith("data:"):
+            data_lines.append(line[5:].lstrip())
+        else:
+            data_lines.append(line)
 
-
-def get_fastapi_endpoint_with_token(
-    endpoint_id: int | None = None,
-) -> tuple[object | None, BackendRequestContext | None]:
-    """Get the FastAPIEndpoint model and its request context.
-
-    Args:
-        endpoint_id: Optional specific endpoint ID. If not provided, selects by ID
-            when multiple endpoints exist, or returns the only endpoint when only one exists.
-
-    Returns (endpoint, context) tuple. Either may be None.
-    """
-    if endpoint_id is not None:
-        endpoint = FastAPIEndpoint.objects.filter(pk=endpoint_id).first()
-        if endpoint is None:
-            return None, None
-        context = get_fastapi_request_context(endpoint_id=endpoint_id)
-        return endpoint, context
-
-    count = FastAPIEndpoint.objects.count()
-    if count == 0:
-        return None, None
-    if count == 1:
-        endpoint = FastAPIEndpoint.objects.first()
-        context = get_fastapi_request_context(
-            endpoint_id=getattr(endpoint, "pk", None)
-        )
-        return endpoint, context
-
-    endpoint = FastAPIEndpoint.objects.order_by("pk").first()
-    if endpoint is None:
-        return None, None
-    context = get_fastapi_request_context(endpoint_id=getattr(endpoint, "pk", None))
-    return endpoint, context
+    yield from flush()
 
 
-def ensure_backend_key_registered(endpoint_id: int | None = None) -> tuple[bool, str]:
-    """Check if the API key is registered with the backend, register if needed.
-
-    Returns (success, message) tuple.
-    """
-    endpoint, context = get_fastapi_endpoint_with_token(endpoint_id=endpoint_id)
-    if endpoint is None:
-        return False, "No FastAPI endpoint configured"
-
-    if context is None or not context.http_url:
-        return False, "No FastAPI URL configured"
-
-    token = (getattr(endpoint, "token", "") or "").strip()
-    if not token:
-        return False, "No API token configured on FastAPI endpoint"
-
-    return _try_register_key(context, token)
-
-
-def _build_request_candidates(
-    http_url: str,
-    ip_address_url: str | None,
-    path: str,
-    verify_ssl: bool,
-) -> list[tuple[str, bool]]:
-    """Build list of (url, verify_ssl) candidates for backend requests with fallback."""
-    main_url = f"{http_url}/{path}"
-    candidates = [(main_url, verify_ssl)]
-    if ip_address_url:
-        fallback_path = f"{ip_address_url}/{path}"
-        if fallback_path != main_url:
-            candidates.append((fallback_path, verify_ssl))
-    return candidates
-
-
-def _handle_auth_registration_and_retry(
-    backend_headers: dict,
+def _consume_sse_until_complete(
+    response: requests.Response,
     *,
-    endpoint_id: int | None = None,
-) -> tuple[dict, bool]:
-    """Attempt API key registration with the backend.
+    on_frame: Callable[[str, dict[str, object]], None] | None = None,
+) -> tuple[dict[str, object], int]:
+    """Read an SSE body to the final ``complete`` event; return (payload, http_status_hint)."""
+    last_complete: SseCompletePayload | None = None
+    try:
+        for frame in _iter_sse_frames(response.iter_lines(decode_unicode=True)):
+            _event = frame.event
+            data = frame.data
+            if on_frame is not None:
+                on_frame(_event, data)
+            if _event == "complete":
+                last_complete = SseCompletePayload.model_validate(data)
+    except requests.exceptions.RequestException as exc:
+        detail, _ = extract_backend_error_detail(exc)
+        return {
+            "stream": True,
+            "detail": detail,
+        }, 502
 
-    Returns (new_headers, retry_flag). If registration succeeds, returns new headers
-    and True to indicate the caller should retry the request.
-    """
-    logger.info("Backend returned 'no API key' error; attempting key registration")
-    reg_ok, reg_msg = ensure_backend_key_registered(endpoint_id=endpoint_id)
-    if reg_ok:
-        logger.info("Key registration succeeded: %s", reg_msg)
-        new_context = get_fastapi_request_context(endpoint_id=endpoint_id)
-        if new_context and new_context.headers:
-            return new_context.headers, True
-    else:
-        logger.warning("Key registration failed: %s", reg_msg)
-    return backend_headers, False
+    if last_complete is None:
+        return {
+            "stream": True,
+            "detail": "ProxBox backend stream ended without a complete event.",
+        }, 502
+
+    if last_complete.ok is False:
+        msg = last_complete.message or "Sync failed."
+        if last_complete.errors:
+            first_error = last_complete.errors[0]
+            if first_error.get("detail"):
+                msg = str(first_error["detail"])
+        return {
+            "stream": True,
+            "detail": msg,
+            "response": last_complete.model_dump(),
+        }, 503
+
+    return {
+        "stream": True,
+        "response": last_complete.model_dump(),
+    }, 200
+
+
+def _consume_sse_from_response(
+    response: requests.Response,
+    on_frame: Callable[[str, dict[str, object]], None] | None,
+) -> tuple[dict[str, object], int]:
+    """Read an SSE body from an existing response to the final ``complete`` event."""
+    last_complete: SseCompletePayload | None = None
+    try:
+        for frame in _iter_sse_frames(response.iter_lines(decode_unicode=True)):
+            _event = frame.event
+            data = frame.data
+            if on_frame is not None:
+                on_frame(_event, data)
+            if _event == "complete":
+                last_complete = SseCompletePayload.model_validate(data)
+    except requests.exceptions.RequestException as exc:
+        detail, _ = extract_backend_error_detail(exc)
+        return {
+            "stream": True,
+            "detail": detail,
+        }, 502
+
+    if last_complete is None:
+        return {
+            "stream": True,
+            "detail": "ProxBox backend stream ended without a complete event.",
+        }, 502
+
+    if last_complete.ok is False:
+        msg = last_complete.message or "Sync failed."
+        if last_complete.errors:
+            first_error = last_complete.errors[0]
+            if first_error.get("detail"):
+                msg = str(first_error["detail"])
+        return {
+            "stream": True,
+            "detail": msg,
+            "response": last_complete.model_dump(),
+        }, 503
+
+    return {
+        "stream": True,
+        "response": last_complete.model_dump(),
+    }, 200
 
 
 def request_backend_resource(
@@ -456,96 +292,6 @@ def request_backend_resource(
     }, 503
 
 
-def _iter_sse_frames(
-    line_iter: Iterable[str | bytes | None],
-) -> Generator[SseFrame, None, None]:
-    """Parse newline-delimited SSE from ``iter_lines``-style input into (event, data_dict) pairs."""
-    event_name = ""
-    data_lines: list[str] = []
-
-    def flush() -> Generator[SseFrame, None, None]:
-        nonlocal event_name, data_lines
-        if not data_lines:
-            event_name = ""
-            return
-        payload_str = "\n".join(data_lines)
-        try:
-            data_obj = json.loads(payload_str)
-        except json.JSONDecodeError:
-            data_obj = {"raw": payload_str}
-        ev = event_name or "message"
-        if not isinstance(data_obj, dict):
-            data_obj = {"raw": data_obj}
-        yield SseFrame(event=ev, data=data_obj)
-        event_name = ""
-        data_lines = []
-
-    for raw in line_iter:
-        if raw is None:
-            continue
-        line = str(raw)
-        if line == "":
-            yield from flush()
-            continue
-        if line.startswith(":"):
-            continue
-        if line.startswith("event:"):
-            yield from flush()
-            event_name = line[6:].strip()
-        elif line.startswith("data:"):
-            data_lines.append(line[5:].lstrip())
-        else:
-            data_lines.append(line)
-
-    yield from flush()
-
-
-def _consume_sse_until_complete(
-    response: requests.Response,
-    *,
-    on_frame: Callable[[str, dict[str, object]], None] | None = None,
-) -> tuple[dict[str, object], int]:
-    """Read an SSE body to the final ``complete`` event; return (payload, http_status_hint)."""
-    last_complete: SseCompletePayload | None = None
-    try:
-        for frame in _iter_sse_frames(response.iter_lines(decode_unicode=True)):
-            _event = frame.event
-            data = frame.data
-            if on_frame is not None:
-                on_frame(_event, data)
-            if _event == "complete":
-                last_complete = SseCompletePayload.model_validate(data)
-    except requests.exceptions.RequestException as exc:
-        detail, _ = extract_backend_error_detail(exc)
-        return {
-            "stream": True,
-            "detail": detail,
-        }, 502
-
-    if last_complete is None:
-        return {
-            "stream": True,
-            "detail": "ProxBox backend stream ended without a complete event.",
-        }, 502
-
-    if last_complete.ok is False:
-        msg = last_complete.message or "Sync failed."
-        if last_complete.errors:
-            first_error = last_complete.errors[0]
-            if first_error.get("detail"):
-                msg = str(first_error["detail"])
-        return {
-            "stream": True,
-            "detail": msg,
-            "response": last_complete.model_dump(),
-        }, 503
-
-    return {
-        "stream": True,
-        "response": last_complete.model_dump(),
-    }, 200
-
-
 def run_sync_stream(
     path: str,
     query_params: dict | None = None,
@@ -559,7 +305,10 @@ def run_sync_stream(
     ``dcim/devices/create/stream``). Uses the same URL fallback as
     :func:`iter_backend_sse_lines` and a long read timeout.
     """
-    context = get_fastapi_request_context(endpoint_id=endpoint_id)
+    if endpoint_id is None:
+        context = get_fastapi_request_context()
+    else:
+        context = get_fastapi_request_context(endpoint_id=endpoint_id)
     if context is None or not context.http_url:
         return {"stream": False, "detail": "No FastAPI URL found."}, 404
 
@@ -697,51 +446,6 @@ def _try_sync_stream_url(
             "Unexpected sync stream error for %s via %s: %s", path, url, exc
         )
         return last_detail, False, None
-
-
-def _consume_sse_from_response(
-    response: requests.Response,
-    on_frame: Callable[[str, dict[str, object]], None] | None,
-) -> tuple[dict[str, object], int]:
-    """Read an SSE body from an existing response to the final ``complete`` event."""
-    last_complete: SseCompletePayload | None = None
-    try:
-        for frame in _iter_sse_frames(response.iter_lines(decode_unicode=True)):
-            _event = frame.event
-            data = frame.data
-            if on_frame is not None:
-                on_frame(_event, data)
-            if _event == "complete":
-                last_complete = SseCompletePayload.model_validate(data)
-    except requests.exceptions.RequestException as exc:
-        detail, _ = extract_backend_error_detail(exc)
-        return {
-            "stream": True,
-            "detail": detail,
-        }, 502
-
-    if last_complete is None:
-        return {
-            "stream": True,
-            "detail": "ProxBox backend stream ended without a complete event.",
-        }, 502
-
-    if last_complete.ok is False:
-        msg = last_complete.message or "Sync failed."
-        if last_complete.errors:
-            first_error = last_complete.errors[0]
-            if first_error.get("detail"):
-                msg = str(first_error["detail"])
-        return {
-            "stream": True,
-            "detail": msg,
-            "response": last_complete.model_dump(),
-        }, 503
-
-    return {
-        "stream": True,
-        "response": last_complete.model_dump(),
-    }, 200
 
 
 def _make_request_and_consume_sse(

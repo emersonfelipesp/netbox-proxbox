@@ -115,7 +115,7 @@ def test_proxbox_sync_job_run_imports_from_services_not_views(
     job.job.reset_mock()
     ProxboxSyncJob.run(job, sync_type=st.ALL)
     assert captured["called"] == "run_sync_stream"
-    assert captured["path"] == "cluster/backup/stream"
+    assert captured["path"] == "proxmox/cluster/backup/stream"
 
     job.job.reset_mock()
     ProxboxSyncJob.run(job, sync_type=st.VIRTUAL_MACHINES_DISKS)

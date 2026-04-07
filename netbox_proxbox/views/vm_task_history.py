@@ -1,9 +1,6 @@
 """Provide NetBox CRUD and tab views for VM task history records."""
 
 from django.http import HttpRequest
-from django.shortcuts import get_object_or_404
-
-from extras.models import TableConfig
 from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
 from virtualization.models import VirtualMachine
@@ -12,6 +9,7 @@ from netbox_proxbox.filtersets import VMTaskHistoryFilterSet
 from netbox_proxbox.forms import VMTaskHistoryFilterForm, VMTaskHistoryForm
 from netbox_proxbox.models import VMTaskHistory
 from netbox_proxbox.tables import VMTaskHistoryTable
+from netbox_proxbox.views.mixins import TableConfigOverrideMixin
 
 
 __all__ = (
@@ -33,7 +31,7 @@ class VMTaskHistoryView(generic.ObjectView):
 
 
 @register_model_view(VirtualMachine, "task_history", path="task-history")
-class VMTaskHistoryTabView(generic.ObjectChildrenView):
+class VMTaskHistoryTabView(TableConfigOverrideMixin, generic.ObjectChildrenView):
     """VM detail tab listing task history records for that virtual machine."""
 
     queryset = VirtualMachine.objects.all()
@@ -51,38 +49,15 @@ class VMTaskHistoryTabView(generic.ObjectChildrenView):
         weight=1200,
     )
 
-    def get_queryset(self, request: HttpRequest) -> object:
+    def get_queryset(self, request: HttpRequest):
         """Restrict parent VMs to those the user may view."""
         return VirtualMachine.objects.restrict(request.user, "view")
 
-    def get_children(
-        self, request: HttpRequest, parent: VirtualMachine
-    ) -> object:
+    def get_children(self, request: HttpRequest, parent: VirtualMachine):
         """Return task history rows for ``parent`` visible to the current user."""
         return VMTaskHistory.objects.restrict(request.user, "view").filter(
             virtual_machine=parent
         )
-
-    def get_table(
-        self, data: object, request: HttpRequest, bulk_actions: bool = True
-    ) -> VMTaskHistoryTable:
-        """Build the child table, honoring optional ``tableconfig_id`` column overrides."""
-        if tableconfig_id := request.GET.get("tableconfig_id"):
-            tableconfig = get_object_or_404(TableConfig, pk=tableconfig_id)
-            if request.user.is_authenticated:
-                table_name = self.table.__name__
-                request.user.config.set(
-                    f"tables.{table_name}.columns", tableconfig.columns
-                )
-                request.user.config.set(
-                    f"tables.{table_name}.ordering",
-                    tableconfig.ordering,
-                    commit=True,
-                )
-
-        table = self.table(data, exclude=("virtual_machine",))
-        table.configure(request)
-        return table
 
 
 @register_model_view(VMTaskHistory, "list", path="", detail=False)

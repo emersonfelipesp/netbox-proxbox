@@ -27,7 +27,7 @@ class ProxmoxEndpointFilterSet(NetBoxModelFilterSet):
         model = ProxmoxEndpoint
         fields = ("id", "name", "domain", "ip_address", "mode")
 
-    def search(self, queryset: object, name: str, value: str) -> object:
+    def search(self, queryset, name: str, value: str):
         """Match the search term against endpoint name or domain."""
         if not value.strip():
             return queryset
@@ -42,7 +42,7 @@ class NetBoxEndpointFilterSet(NetBoxModelFilterSet):
         model = NetBoxEndpoint
         fields = ("id", "name", "domain", "ip_address")
 
-    def search(self, queryset: object, name: str, value: str) -> object:
+    def search(self, queryset, name: str, value: str):
         """Match the search term against endpoint name or domain."""
         if not value.strip():
             return queryset
@@ -57,7 +57,7 @@ class FastAPIEndpointFilterSet(NetBoxModelFilterSet):
         model = FastAPIEndpoint
         fields = ("id", "name", "domain", "ip_address")
 
-    def search(self, queryset: object, name: str, value: str) -> object:
+    def search(self, queryset, name: str, value: str):
         """Match the search term against endpoint name or domain."""
         if not value.strip():
             return queryset
@@ -84,7 +84,7 @@ class VMBackupFilterSet(NetBoxModelFilterSet):
             "vmid",
         )
 
-    def search(self, queryset: object, name: str, value: str) -> object:
+    def search(self, queryset, name: str, value: str):
         """Match VM name, storage, or volume id (case-insensitive)."""
         if not value.strip():
             return queryset
@@ -116,7 +116,7 @@ class VMSnapshotFilterSet(NetBoxModelFilterSet):
             "snaptime",
         )
 
-    def search(self, queryset: object, name: str, value: str) -> object:
+    def search(self, queryset, name: str, value: str):
         """Match VM name, snapshot name, node, or description."""
         if not value.strip():
             return queryset
@@ -154,7 +154,7 @@ class VMTaskHistoryFilterSet(NetBoxModelFilterSet):
             "exitstatus",
         )
 
-    def search(self, queryset: object, name: str, value: str) -> object:
+    def search(self, queryset, name: str, value: str):
         """Match VM name, task metadata, user name, or task result text."""
         if not value.strip():
             return queryset
@@ -192,7 +192,7 @@ class ProxmoxStorageFilterSet(NetBoxModelFilterSet):
             "enabled",
         )
 
-    def search(self, queryset: object, name: str, value: str) -> object:
+    def search(self, queryset, name: str, value: str):
         """Match storage name, cluster, or storage path."""
         if not value.strip():
             return queryset
@@ -211,7 +211,7 @@ class ProxmoxClusterFilterSet(NetBoxModelFilterSet):
         model = ProxmoxCluster
         fields = ("id", "endpoint", "netbox_cluster", "name", "mode", "quorate")
 
-    def search(self, queryset: object, name: str, value: str) -> object:
+    def search(self, queryset, name: str, value: str):
         """Match cluster name or cluster ID."""
         if not value.strip():
             return queryset
@@ -237,7 +237,7 @@ class ProxmoxNodeFilterSet(NetBoxModelFilterSet):
             "local",
         )
 
-    def search(self, queryset: object, name: str, value: str) -> object:
+    def search(self, queryset, name: str, value: str):
         """Match node name, IP address, or SSL fingerprint."""
         if not value.strip():
             return queryset
@@ -268,7 +268,7 @@ class BackupRoutineFilterSet(NetBoxModelFilterSet):
             "keep_monthly",
         )
 
-    def search(self, queryset: object, name: str, value: str) -> object:
+    def search(self, queryset, name: str, value: str):
         """Match job ID or comment."""
         if not value.strip():
             return queryset
@@ -296,7 +296,7 @@ class ReplicationFilterSet(NetBoxModelFilterSet):
             "remove_job",
         )
 
-    def search(self, queryset: object, name: str, value: str) -> object:
+    def search(self, queryset, name: str, value: str):
         """Match replication ID, VM name, target, comment, or source."""
         if not value.strip():
             return queryset

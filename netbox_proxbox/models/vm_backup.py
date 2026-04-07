@@ -1,5 +1,7 @@
 """Define the VM backup model stored alongside NetBox virtual machines."""
 
+from __future__ import annotations
+
 # Django Imports
 from django.db import models
 from django.utils.translation import gettext_lazy as _
@@ -112,14 +114,19 @@ class VMBackup(NetBoxModel):
         verbose_name = "VM Backup"
         verbose_name_plural = "VM Backups"
         ordering = ("storage", "virtual_machine", "creation_time")
-        unique_together = (
-            "storage",
-            "virtual_machine",
-            "subtype",
-            "format",
-            "volume_id",
-            "vmid",
-        )
+        constraints = [
+            models.UniqueConstraint(
+                fields=(
+                    "storage",
+                    "virtual_machine",
+                    "subtype",
+                    "format",
+                    "volume_id",
+                    "vmid",
+                ),
+                name="unique_vm_backup_fields",
+            ),
+        ]
 
     def __str__(self) -> str:
         """VM and backup creation timestamp for list displays."""

@@ -110,6 +110,22 @@ class FastAPIEndpoint(EndpointBase):
         if is_new_token:
             self._register_key_with_backend()
 
+    def _is_bootstrap_needed(self, base_url: str) -> bool:
+        """Check whether the proxbox-api backend still needs its API key bootstrapped."""
+        try:
+            status_response = _requests.get(
+                f"{base_url}/auth/bootstrap-status",
+                verify=self.verify_ssl,
+                timeout=5,
+            )
+            if status_response.status_code == 200:
+                status_data = status_response.json()
+                if not status_data.get("needs_bootstrap", False):
+                    return False
+        except _requests.exceptions.RequestException as exc:
+            logger.debug("Could not check bootstrap status: %s", exc)
+        return True
+
     def _register_key_with_backend(self) -> None:
         """Best-effort: register the auto-generated token with the proxbox-api backend."""
         from netbox_proxbox.utils import get_fastapi_url
@@ -121,21 +137,11 @@ class FastAPIEndpoint(EndpointBase):
                 logger.warning("No FastAPI URL configured, cannot register API key.")
                 return
 
-            # Check if bootstrap is needed
-            status_url = f"{base_url}/auth/bootstrap-status"
-            try:
-                status_response = _requests.get(
-                    status_url, verify=self.verify_ssl, timeout=5
+            if not self._is_bootstrap_needed(base_url):
+                logger.debug(
+                    "proxbox-api already has API key configured; skipping registration."
                 )
-                if status_response.status_code == 200:
-                    status_data = status_response.json()
-                    if not status_data.get("needs_bootstrap", False):
-                        logger.debug(
-                            "proxbox-api already has API key configured; skipping registration."
-                        )
-                        return
-            except Exception as exc:
-                logger.debug("Could not check bootstrap status: %s", exc)
+                return
 
             # Register the key
             response = _requests.post(
@@ -171,7 +177,7 @@ class FastAPIEndpoint(EndpointBase):
             logger.warning(
                 "Could not register API key with proxbox-api (timeout): %s", exc
             )
-        except Exception as exc:
+        except _requests.exceptions.RequestException as exc:
             logger.warning(
                 "Could not register API key with proxbox-api backend: %s", exc
             )

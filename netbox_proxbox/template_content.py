@@ -33,6 +33,44 @@ __all__ = (
 )
 
 
+class _SyncNowButtonExtension(PluginTemplateExtension):
+    """Base that renders a sync-now button on a model detail page.
+
+    Subclasses set class attributes to parameterise the behaviour:
+
+    * ``button_template`` – path to the Django template for the button.
+    * ``context_key``      – key used to pass the page object into the template.
+    * ``model_class``      – optional model type; when set, ``isinstance`` is checked first.
+    * ``tracking_attr``    – optional relation name (e.g. ``"proxmox_node_tracking"``);
+      when set the first related object must exist and its URL is used for the
+      action.  When *None* the page object's own URL is used.
+    """
+
+    button_template: str
+    context_key: str
+    model_class: type | None = None
+    tracking_attr: str | None = None
+
+    def buttons(self) -> str:
+        obj = self.context["object"]
+        if self.model_class is not None and not isinstance(obj, self.model_class):
+            return ""
+        user = self.context["request"].user
+        if not user.has_perm(permission_enqueue_proxbox_sync()):
+            return ""
+        if self.tracking_attr is not None:
+            tracking = getattr(obj, self.tracking_attr).first()
+            if not tracking:
+                return ""
+            action_url = f"{tracking.get_absolute_url()}proxbox-sync-now/"
+        else:
+            action_url = f"{obj.get_absolute_url()}proxbox-sync-now/"
+        return self.render(
+            self.button_template,
+            {self.context_key: obj, "action_url": action_url},
+        )
+
+
 class ProxboxJobTemplateExtension(PluginTemplateExtension):
     """Inject Run now / Cancel controls on core Job detail for Proxbox Sync jobs."""
 
@@ -165,138 +203,58 @@ class ProxboxVirtualMachineTemplateExtension(PluginTemplateExtension):
         )
 
 
-class ProxmoxClusterTemplateExtension(PluginTemplateExtension):
+class ProxmoxClusterTemplateExtension(_SyncNowButtonExtension):
     """Inject Sync Now action on virtualization.Cluster detail pages."""
 
     models = ["virtualization.cluster"]
-
-    def buttons(self) -> str:
-        """Handle buttons."""
-        obj = self.context["object"]
-        user = self.context["request"].user
-        if not user.has_perm(permission_enqueue_proxbox_sync()):
-            return ""
-        proxbox_cluster = obj.proxmox_cluster_tracking.first()
-        if not proxbox_cluster:
-            return ""
-        return self.render(
-            "netbox_proxbox/inc/cluster_sync_now_button.html",
-            {
-                "cluster": obj,
-                "action_url": f"{proxbox_cluster.get_absolute_url()}proxbox-sync-now/",
-            },
-        )
+    button_template = "netbox_proxbox/inc/cluster_sync_now_button.html"
+    context_key = "cluster"
+    tracking_attr = "proxmox_cluster_tracking"
 
 
-class ProxmoxNodeTemplateExtension(PluginTemplateExtension):
+class ProxmoxNodeTemplateExtension(_SyncNowButtonExtension):
     """Inject Sync Now action on dcim.Device detail pages for Proxmox nodes."""
 
     models = ["dcim.device"]
-
-    def buttons(self) -> str:
-        """Handle buttons."""
-        obj = self.context["object"]
-        user = self.context["request"].user
-        if not user.has_perm(permission_enqueue_proxbox_sync()):
-            return ""
-        proxbox_node = obj.proxmox_node_tracking.first()
-        if not proxbox_node:
-            return ""
-        return self.render(
-            "netbox_proxbox/inc/node_sync_now_button.html",
-            {
-                "device": obj,
-                "action_url": f"{proxbox_node.get_absolute_url()}proxbox-sync-now/",
-            },
-        )
+    button_template = "netbox_proxbox/inc/node_sync_now_button.html"
+    context_key = "device"
+    tracking_attr = "proxmox_node_tracking"
 
 
-class ProxmoxStorageTemplateExtension(PluginTemplateExtension):
+class ProxmoxStorageTemplateExtension(_SyncNowButtonExtension):
     """Inject Sync Now action on ProxmoxStorage detail pages."""
 
     models = ["netbox_proxbox.proxmoxstorage"]
-
-    def buttons(self) -> str:
-        """Handle buttons."""
-        obj = self.context["object"]
-        if not isinstance(obj, ProxmoxStorage):
-            return ""
-        user = self.context["request"].user
-        if not user.has_perm(permission_enqueue_proxbox_sync()):
-            return ""
-        return self.render(
-            "netbox_proxbox/inc/storage_sync_now_button.html",
-            {
-                "storage": obj,
-                "action_url": f"{obj.get_absolute_url()}proxbox-sync-now/",
-            },
-        )
+    button_template = "netbox_proxbox/inc/storage_sync_now_button.html"
+    context_key = "storage"
+    model_class = ProxmoxStorage
 
 
-class VMBackupTemplateExtension(PluginTemplateExtension):
+class VMBackupTemplateExtension(_SyncNowButtonExtension):
     """Inject Sync Now action on VMBackup detail pages."""
 
     models = ["netbox_proxbox.vmbackup"]
-
-    def buttons(self) -> str:
-        """Handle buttons."""
-        obj = self.context["object"]
-        if not isinstance(obj, VMBackup):
-            return ""
-        user = self.context["request"].user
-        if not user.has_perm(permission_enqueue_proxbox_sync()):
-            return ""
-        return self.render(
-            "netbox_proxbox/inc/vm_backup_sync_now_button.html",
-            {
-                "backup": obj,
-                "action_url": f"{obj.get_absolute_url()}proxbox-sync-now/",
-            },
-        )
+    button_template = "netbox_proxbox/inc/vm_backup_sync_now_button.html"
+    context_key = "backup"
+    model_class = VMBackup
 
 
-class VMSnapshotTemplateExtension(PluginTemplateExtension):
+class VMSnapshotTemplateExtension(_SyncNowButtonExtension):
     """Inject Sync Now action on VMSnapshot detail pages."""
 
     models = ["netbox_proxbox.vmsnapshot"]
-
-    def buttons(self) -> str:
-        """Handle buttons."""
-        obj = self.context["object"]
-        if not isinstance(obj, VMSnapshot):
-            return ""
-        user = self.context["request"].user
-        if not user.has_perm(permission_enqueue_proxbox_sync()):
-            return ""
-        return self.render(
-            "netbox_proxbox/inc/vm_snapshot_sync_now_button.html",
-            {
-                "snapshot": obj,
-                "action_url": f"{obj.get_absolute_url()}proxbox-sync-now/",
-            },
-        )
+    button_template = "netbox_proxbox/inc/vm_snapshot_sync_now_button.html"
+    context_key = "snapshot"
+    model_class = VMSnapshot
 
 
-class VMTaskHistoryTemplateExtension(PluginTemplateExtension):
+class VMTaskHistoryTemplateExtension(_SyncNowButtonExtension):
     """Inject Sync Now action on VMTaskHistory detail pages."""
 
     models = ["netbox_proxbox.vmtaskhistory"]
-
-    def buttons(self) -> str:
-        """Handle buttons."""
-        obj = self.context["object"]
-        if not isinstance(obj, VMTaskHistory):
-            return ""
-        user = self.context["request"].user
-        if not user.has_perm(permission_enqueue_proxbox_sync()):
-            return ""
-        return self.render(
-            "netbox_proxbox/inc/task_history_sync_now_button.html",
-            {
-                "task_history": obj,
-                "action_url": f"{obj.get_absolute_url()}proxbox-sync-now/",
-            },
-        )
+    button_template = "netbox_proxbox/inc/task_history_sync_now_button.html"
+    context_key = "task_history"
+    model_class = VMTaskHistory
 
 
 template_extensions = [

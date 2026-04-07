@@ -1,7 +1,6 @@
 """View for scheduling a ProxBox sync job."""
 
 from django.contrib import messages
-from django.db.models import Q
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
@@ -17,9 +16,12 @@ from netbox_proxbox.jobs import (
     is_proxbox_sync_job,
     proxbox_sync_params_from_job,
 )
-from netbox_proxbox.models import NetBoxEndpoint, ProxmoxEndpoint
 from netbox_proxbox.views.home_context import build_home_dashboard_context
 from netbox_proxbox.views.proxbox_access import permission_enqueue_proxbox_sync
+from netbox_proxbox.views.schedule_helpers import (
+    build_initial_from_job as _build_initial_from_job,
+    get_scheduled_jobs_list as _get_scheduled_jobs_list,
+)
 from utilities.views import (
     ContentTypePermissionRequiredMixin,
     TokenConditionalLoginRequiredMixin,
@@ -28,9 +30,89 @@ from utilities.views import (
 __all__ = (
     "QuickScheduleSyncFromHomeView",
     "ScheduleSyncView",
+    "build_initial_from_job",
     "enqueue_proxbox_sync_from_valid_form",
+    "get_scheduled_jobs_list",
+    "proxbox_sync_params_from_job",
     "schedule_sync_success_message",
 )
+
+
+def build_initial_from_job(request: HttpRequest, edit_job_id: str) -> dict:
+    """Compatibility wrapper around the extracted helper.
+
+    Tests and older call sites patch this module-level symbol directly, so keep the
+    view module as the stable integration surface even after the helper extraction.
+    """
+    from netbox_proxbox.models import NetBoxEndpoint, ProxmoxEndpoint
+
+    try:
+        job = Job.objects.restrict(request.user, "view").get(pk=edit_job_id)
+    except Job.DoesNotExist:
+        return {}
+
+    if not is_proxbox_sync_job(job):
+        return {}
+
+    params = proxbox_sync_params_from_job(job)
+    initial = {
+        "job_name": job.name or "",
+        "sync_types": params.get("sync_types", []),
+    }
+    proxmox_endpoint_ids = params.get("proxmox_endpoint_ids", [])
+    netbox_endpoint_ids = params.get("netbox_endpoint_ids", [])
+    if proxmox_endpoint_ids:
+        initial["proxmox_endpoints"] = list(
+            ProxmoxEndpoint.objects.filter(pk__in=proxmox_endpoint_ids)
+        )
+    if netbox_endpoint_ids:
+        initial["netbox_endpoints"] = list(
+            NetBoxEndpoint.objects.filter(pk__in=netbox_endpoint_ids)
+        )
+    if job.scheduled:
+        initial["schedule_at"] = job.scheduled
+    if not job.interval:
+        return initial
+    interval_minutes = job.interval
+    if interval_minutes >= 60 * 24 * 7:
+        initial["interval_value"] = interval_minutes // (60 * 24 * 7)
+        initial["interval_unit"] = "weeks"
+    elif interval_minutes >= 60 * 24:
+        initial["interval_value"] = interval_minutes // (60 * 24)
+        initial["interval_unit"] = "days"
+    elif interval_minutes >= 60:
+        initial["interval_value"] = interval_minutes // 60
+        initial["interval_unit"] = "hours"
+    else:
+        initial["interval_value"] = interval_minutes
+        initial["interval_unit"] = "minutes"
+    return initial
+
+
+def get_scheduled_jobs_list(request: HttpRequest) -> list[dict]:
+    """Compatibility wrapper around the extracted helper."""
+    scheduled_jobs: list[dict] = []
+    candidates = (
+        Job.objects.restrict(request.user, "view")
+        .exclude(status=JobStatusChoices.STATUS_COMPLETED)
+        .order_by("-created")
+    )
+    for job in candidates.iterator(chunk_size=64):
+        if not is_proxbox_sync_job(job):
+            continue
+        params = proxbox_sync_params_from_job(job)
+        scheduled_jobs.append(
+            {
+                "id": job.pk,
+                "pk": job.pk,
+                "name": job.name,
+                "sync_types": params.get("sync_types", []),
+                "schedule": job.scheduled,
+                "interval": job.interval,
+                "status": job.status,
+            }
+        )
+    return scheduled_jobs
 
 
 def _mark_job_canceled(job: Job) -> None:
@@ -121,70 +203,11 @@ class ScheduleSyncView(
                 initial["sync_types"] = [single]
 
         edit_job_id = request.GET.get("edit")
-        scheduled_jobs = []
 
         if edit_job_id:
-            try:
-                job = Job.objects.restrict(request.user, "view").get(pk=edit_job_id)
-                if is_proxbox_sync_job(job):
-                    params = proxbox_sync_params_from_job(job)
-                    initial["job_name"] = job.name or ""
-                    initial["sync_types"] = params.get("sync_types", [])
-                    proxmox_endpoint_ids = params.get("proxmox_endpoint_ids", [])
-                    netbox_endpoint_ids = params.get("netbox_endpoint_ids", [])
-                    if proxmox_endpoint_ids:
-                        initial["proxmox_endpoints"] = list(
-                            ProxmoxEndpoint.objects.filter(pk__in=proxmox_endpoint_ids)
-                        )
-                    if netbox_endpoint_ids:
-                        initial["netbox_endpoints"] = list(
-                            NetBoxEndpoint.objects.filter(pk__in=netbox_endpoint_ids)
-                        )
-                    if job.scheduled:
-                        initial["schedule_at"] = job.scheduled
-                    if job.interval:
-                        interval_minutes = job.interval
-                        if interval_minutes >= 60 * 24 * 7:
-                            initial["interval_value"] = interval_minutes // (
-                                60 * 24 * 7
-                            )
-                            initial["interval_unit"] = "weeks"
-                        elif interval_minutes >= 60 * 24:
-                            initial["interval_value"] = interval_minutes // (60 * 24)
-                            initial["interval_unit"] = "days"
-                        elif interval_minutes >= 60:
-                            initial["interval_value"] = interval_minutes // 60
-                            initial["interval_unit"] = "hours"
-                        else:
-                            initial["interval_value"] = interval_minutes
-                            initial["interval_unit"] = "minutes"
-            except Job.DoesNotExist:
-                pass
+            initial.update(build_initial_from_job(request, edit_job_id))
 
-        candidates = (
-            Job.objects.restrict(request.user, "view")
-            .filter(
-                Q(queue_name=PROXBOX_SYNC_QUEUE_NAME) | Q(data__has_key="proxbox_sync")
-            )
-            .exclude(status=JobStatusChoices.STATUS_COMPLETED)
-            .order_by("-created")
-        )
-
-        for job in candidates.iterator(chunk_size=64):
-            if not is_proxbox_sync_job(job):
-                continue
-            params = proxbox_sync_params_from_job(job)
-            scheduled_jobs.append(
-                {
-                    "id": job.pk,
-                    "pk": job.pk,
-                    "name": job.name,
-                    "sync_types": params.get("sync_types", []),
-                    "schedule": job.scheduled,
-                    "interval": job.interval,
-                    "status": job.status,
-                }
-            )
+        scheduled_jobs = get_scheduled_jobs_list(request)
 
         return render(
             request,

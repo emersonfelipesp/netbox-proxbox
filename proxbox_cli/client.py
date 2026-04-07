@@ -18,6 +18,7 @@ QueryValue: TypeAlias = str | int | float | bool
 
 class ApiResponse(BaseModel):
     """ApiResponse implementation."""
+
     status: int
     text: str
     headers: dict[str, str] = Field(default_factory=dict)
@@ -53,17 +54,30 @@ class ProxboxApiClient:
         """Handle request."""
         url = self._url(path)
         timeout = aiohttp.ClientTimeout(total=self.config.timeout)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.request(
-                method,
-                url,
-                params=query,
-                json=payload,
-                headers={"Accept": "application/json"},
-            ) as resp:
-                text = await resp.text()
-                headers = dict(resp.headers)
-                return ApiResponse(status=resp.status, text=text, headers=headers)
+        try:
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.request(
+                    method,
+                    url,
+                    params=query,
+                    json=payload,
+                    headers={"Accept": "application/json"},
+                ) as resp:
+                    text = await resp.text()
+                    headers = dict(resp.headers)
+                    return ApiResponse(status=resp.status, text=text, headers=headers)
+        except aiohttp.ClientError as exc:
+            return ApiResponse(
+                status=503,
+                text=f"Connection error: {exc}",
+                headers={},
+            )
+        except OSError as exc:
+            return ApiResponse(
+                status=503,
+                text=f"Network error: {exc}",
+                headers={},
+            )
 
     async def get(
         self, path: str, *, query: Mapping[str, QueryValue] | None = None

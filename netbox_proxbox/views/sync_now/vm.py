@@ -3,6 +3,7 @@
 from django.contrib import messages
 from django.http import HttpRequest
 from django.http import HttpResponseRedirect
+from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 from utilities.views import (
@@ -15,6 +16,7 @@ from virtualization.models import VirtualMachine
 from netbox_proxbox.models import ProxmoxCluster
 from netbox_proxbox.services.individual_sync import sync_individual_with_dependencies
 from netbox_proxbox.views.proxbox_access import permission_enqueue_proxbox_sync
+from netbox_proxbox.views.sync_now import _handle_sync_response
 
 
 @register_model_view(VirtualMachine, "proxbox_sync_now", path="proxbox-sync-now")
@@ -33,7 +35,7 @@ class VirtualMachineSyncNowView(
 
     def post(self, request: HttpRequest, pk: int | str) -> HttpResponseRedirect:
         """Handle post."""
-        vm = VirtualMachine.objects.get(pk=pk)
+        vm = get_object_or_404(VirtualMachine.objects, pk=pk)
 
         vmid = vm.custom_field_data.get("proxmox_vm_id") or vm.custom_field_data.get(
             "cf_proxmox_vm_id"
@@ -79,25 +81,11 @@ class VirtualMachineSyncNowView(
             },
         )
 
-        if status == 200:
-            action = response.get("action", "synced")
-            messages.success(
-                request,
-                _(f"Virtual machine '{vm.name}' {action} successfully.")
-                + (
-                    f" ({len(dependencies)} dependencies synced)"
-                    if dependencies
-                    else ""
-                ),
-            )
-        elif status == 422:
-            messages.error(request, _("Invalid parameters for virtual machine sync."))
-        elif status == 503:
-            messages.error(
-                request, _("Proxbox backend is unavailable for virtual machine sync.")
-            )
-        else:
-            error = response.get("error", "Unknown error")
-            messages.error(request, _(f"Failed to sync virtual machine: {error}"))
-
-        return HttpResponseRedirect(vm.get_absolute_url())
+        return _handle_sync_response(
+            request,
+            response,
+            status,
+            dependencies,
+            f"Virtual machine '{vm.name}'",
+            vm.get_absolute_url(),
+        )

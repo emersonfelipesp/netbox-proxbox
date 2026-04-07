@@ -1,5 +1,7 @@
 """Define synchronized Proxmox storage inventory rows."""
 
+from __future__ import annotations
+
 from django.db import models
 from django.urls import reverse
 
@@ -21,7 +23,12 @@ class ProxmoxStorageVirtualDisk(models.Model):
     )
 
     class Meta:
-        unique_together = ("proxmox_storage", "virtual_disk")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("proxmox_storage", "virtual_disk"),
+                name="unique_proxmox_storage_virtual_disk",
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"{self.proxmox_storage} - {self.virtual_disk}"
@@ -51,7 +58,12 @@ class ProxmoxStorage(NetBoxModel):
 
     class Meta:
         ordering = ("cluster__name", "name")
-        unique_together = ("cluster", "name")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("cluster", "name"),
+                name="unique_proxmox_storage_cluster_name",
+            ),
+        ]
         verbose_name = "Proxmox Storage"
         verbose_name_plural = "Proxmox Storages"
 

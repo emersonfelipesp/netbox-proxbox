@@ -17,108 +17,19 @@ from netbox_proxbox.utils import (
     get_fastapi_url,
     get_ip_address_host,
 )
-from netbox_proxbox.views.backend_sync import sync_proxmox_endpoint_to_backend
 from netbox_proxbox.views.error_utils import (
     extract_backend_error_detail,
     extract_proxmox_backend_error_detail,
-    parse_requests_response_json,
 )
 
 logger = logging.getLogger(__name__)
 
 
-def _fetch_backend_endpoints(
-    netbox_endpoint_url: str,
-    auth_headers: dict[str, str],
-    timeout: float,
-) -> tuple[list | None, str | None]:
-    """Fetch existing endpoints from the backend. Returns (data, error)."""
-    try:
-        response = requests.get(
-            netbox_endpoint_url,
-            headers=auth_headers,
-            timeout=timeout,
-        )
-        response.raise_for_status()
-        endpoints_data, json_err = parse_requests_response_json(
-            response, log_label="netbox/endpoint"
-        )
-        if json_err:
-            return None, json_err
-        if not isinstance(endpoints_data, list):
-            return None, "Expected list of endpoints from backend"
-        return endpoints_data, None
-    except requests.exceptions.RequestException as exc:
-        detail, _ = extract_backend_error_detail(exc)
-        return None, detail
+def sync_proxmox_endpoint_to_backend(*args, **kwargs):
+    """Compatibility wrapper for callers that patch this service module symbol."""
+    from netbox_proxbox.views.backend_sync import sync_proxmox_endpoint_to_backend as _sync
 
-
-def _create_netbox_endpoint(
-    netbox_endpoint_url: str,
-    current_netbox: dict[str, object],
-    auth_headers: dict[str, str],
-    timeout: float,
-) -> bool:
-    """Create a new NetBox endpoint in the backend."""
-    try:
-        create_resp = requests.post(
-            netbox_endpoint_url,
-            json=current_netbox,
-            headers=auth_headers,
-            timeout=timeout,
-        )
-        create_resp.raise_for_status()
-        return True
-    except requests.exceptions.RequestException as exc:
-        detail, _ = extract_backend_error_detail(exc)
-        logger.error("Failed to create NetBox endpoint: %s", detail)
-        return False
-
-
-def _update_netbox_endpoint(
-    netbox_endpoint_url: str,
-    target_id: int,
-    updated_data: dict[str, object],
-    auth_headers: dict[str, str],
-    timeout: float,
-) -> bool:
-    """Update an existing NetBox endpoint in the backend."""
-    try:
-        update_resp = requests.put(
-            f"{netbox_endpoint_url}/{target_id}",
-            json=updated_data,
-            headers=auth_headers,
-            timeout=timeout,
-        )
-        update_resp.raise_for_status()
-        return True
-    except requests.exceptions.RequestException as exc:
-        detail, _ = extract_backend_error_detail(exc)
-        logger.error("Failed to update NetBox endpoint: %s", detail)
-        return False
-
-
-def _delete_stale_endpoints(
-    netbox_endpoint_url: str,
-    endpoints_data: list,
-    keep_target_id: int,
-    auth_headers: dict[str, str],
-    timeout: float,
-) -> None:
-    """Delete endpoints that are not the target."""
-    for endpoint in endpoints_data:
-        endpoint_id = endpoint.get("id")
-        if endpoint_id and endpoint_id != keep_target_id:
-            try:
-                requests.delete(
-                    f"{netbox_endpoint_url}/{endpoint_id}",
-                    headers=auth_headers,
-                    timeout=timeout,
-                )
-            except requests.exceptions.RequestException as exc:
-                logger.warning(
-                    "Failed to delete stale endpoint %s: %s", endpoint_id, exc
-                )
+    return _sync(*args, **kwargs)
 
 
 class ServiceStatus:
@@ -339,108 +250,6 @@ class ServiceStatus:
                 detail=self.last_error_detail,
             )
         return None
-
-    def _sync_netbox_to_backend(
-        self,
-        base_url: str,
-        current_netbox: dict[str, object],
-        auth_headers: dict[str, str],
-    ) -> bool:
-        """Sync NetBox endpoint to backend (create/update/delete stale). Returns success."""
-        netbox_endpoint_url = f"{base_url}/netbox/endpoint"
-        max_retries = 3
-        retry_delay = 1
-
-        for attempt in range(max_retries):
-            endpoints_data, fetch_err = _fetch_backend_endpoints(
-                netbox_endpoint_url, auth_headers, self.request_timeout
-            )
-            if fetch_err:
-                logger.error(
-                    "NetBox sync attempt %s failed: %s", attempt + 1, fetch_err
-                )
-                if attempt < max_retries - 1:
-                    time.sleep(retry_delay)
-                continue
-
-            if not endpoints_data:
-                if _create_netbox_endpoint(
-                    netbox_endpoint_url,
-                    current_netbox,
-                    auth_headers,
-                    self.request_timeout,
-                ):
-                    time.sleep(retry_delay)
-                    return True
-                if attempt < max_retries - 1:
-                    time.sleep(retry_delay)
-                continue
-
-            target = next(
-                (
-                    ep
-                    for ep in endpoints_data
-                    if ep.get("id") == current_netbox.get("id")
-                ),
-                endpoints_data[0],
-            )
-            target_id = target["id"]
-            updated = target | current_netbox
-            updated["id"] = target_id
-
-            if not _update_netbox_endpoint(
-                netbox_endpoint_url,
-                target_id,
-                updated,
-                auth_headers,
-                self.request_timeout,
-            ):
-                if attempt < max_retries - 1:
-                    time.sleep(retry_delay)
-                continue
-
-            _delete_stale_endpoints(
-                netbox_endpoint_url,
-                endpoints_data,
-                target_id,
-                auth_headers,
-                self.request_timeout,
-            )
-            return True
-
-        return False
-
-    def _check_netbox_backend_status(
-        self,
-        base_url: str,
-        auth_headers: dict[str, str],
-    ) -> bool:
-        """Check if backend can reach NetBox. Returns success."""
-        netbox_status_route = f"{base_url}/netbox/status"
-        max_retries = 3
-        retry_delay = 1
-
-        for attempt in range(max_retries):
-            try:
-                response = requests.get(
-                    netbox_status_route,
-                    headers=auth_headers,
-                    timeout=self.backend_status_timeout,
-                )
-                response.raise_for_status()
-                return True
-            except requests.exceptions.RequestException as exc:
-                detail, http_status = self._extract_error_detail(exc)
-                self._set_error(
-                    f"NetBox backend status check failed: {detail}",
-                    http_status=http_status,
-                )
-                logger.error(
-                    "NetBox status check attempt %s failed: %s", attempt + 1, exc
-                )
-                if attempt < max_retries - 1:
-                    time.sleep(retry_delay)
-        return False
 
     def netbox_status(
         self,

@@ -16,13 +16,8 @@ class BackendLogsView(ConditionalLoginRequiredMixin, View):
 
     def get(self, request: HttpRequest) -> HttpResponse:
         """Render the logs page with FastAPI URL for JavaScript."""
-        fastapi_endpoint = FastAPIEndpoint.objects.restrict(
-            request.user, "view"
-        ).first()
-
-        fastapi_info = {}
-        if fastapi_endpoint:
-            fastapi_info = get_fastapi_url(fastapi_endpoint) or {}
+        endpoint = FastAPIEndpoint.objects.restrict(request.user, "view").first()
+        fastapi_info = get_fastapi_url(endpoint) if endpoint is not None else {}
 
         fastapi_url = fastapi_info.get("http_url", "")
         return render(
