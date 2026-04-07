@@ -261,6 +261,12 @@ def load_plugin_module(
     django_utils_translation.gettext = lambda x: x
     django_utils_translation.gettext_lazy = lambda x: x
 
+    django_utils_timezone = types.ModuleType("django.utils.timezone")
+    django_utils_timezone.now = lambda: __import__("datetime").datetime.now(
+        __import__("datetime").timezone.utc
+    )
+    django_utils.timezone = django_utils_timezone
+
     django_db_models = types.ModuleType("django.db.models")
 
     class Q:
@@ -430,6 +436,7 @@ def load_plugin_module(
         "django.utils": django_utils,
         "django.utils.html": django_utils_html,
         "django.utils.text": django_utils_text,
+        "django.utils.timezone": django_utils_timezone,
         "django.utils.translation": django_utils_translation,
         "django.db.models": django_db_models,
         "utilities.datetime": utilities_datetime,
@@ -538,6 +545,7 @@ def load_plugin_module(
     nbp_jobs.ProxboxSyncJob = _ProxboxSyncJob
     nbp_jobs.PROXBOX_SYNC_QUEUE_NAME = "default"
     nbp_jobs.is_proxbox_sync_job = lambda job: True
+    nbp_jobs.proxbox_sync_params_from_job = lambda job: {"sync_types": ["all"]}
     monkeypatch.setitem(sys.modules, "netbox_proxbox.jobs", nbp_jobs)
 
     forms_package = types.ModuleType("netbox_proxbox.forms")

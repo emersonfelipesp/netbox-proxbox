@@ -1000,5 +1000,8 @@ def is_proxbox_sync_job(job: object) -> bool:
     qn = getattr(job, "queue_name", None) or ""
     if qn == LEGACY_PROXBOX_RQ_QUEUE:
         return True
+    name = str(getattr(job, "name", None) or "").strip()
     default_label = getattr(ProxboxSyncJob.Meta, "name", "Proxbox Sync")
-    return not qn and getattr(job, "name", None) == default_label
+    if name == default_label:
+        return True
+    return bool(_TARGETED_VM_JOB_NAME_RE.match(name))

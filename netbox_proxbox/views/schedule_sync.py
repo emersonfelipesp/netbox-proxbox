@@ -32,6 +32,14 @@ __all__ = (
 )
 
 
+def _mark_job_canceled(job: Job) -> None:
+    """Mark a scheduled Proxbox job as user-cancelled using a valid terminal status."""
+    job.status = JobStatusChoices.STATUS_FAILED
+    job.error = "Cancelled by user."
+    job.completed = timezone.now()
+    job.save(update_fields=["status", "error", "completed"])
+
+
 def enqueue_proxbox_sync_from_valid_form(request, form: ScheduleSyncForm) -> None:
     """Enqueue ``ProxboxSyncJob`` from a bound, valid ``ScheduleSyncForm``."""
     sync_types = form.cleaned_data["sync_types"]
@@ -129,8 +137,8 @@ class ScheduleSyncView(
                         initial["netbox_endpoints"] = list(
                             NetBoxEndpoint.objects.filter(pk__in=netbox_endpoint_ids)
                         )
-                    if job.schedule:
-                        initial["schedule_at"] = job.schedule
+                    if job.scheduled:
+                        initial["schedule_at"] = job.scheduled
                     if job.interval:
                         interval_minutes = job.interval
                         if interval_minutes >= 60 * 24 * 7:
@@ -166,9 +174,10 @@ class ScheduleSyncView(
             scheduled_jobs.append(
                 {
                     "id": job.pk,
+                    "pk": job.pk,
                     "name": job.name,
                     "sync_types": params.get("sync_types", []),
-                    "schedule": job.schedule,
+                    "schedule": job.scheduled,
                     "interval": job.interval,
                     "status": job.status,
                 }
@@ -196,51 +205,10 @@ class ScheduleSyncView(
                     is_proxbox_sync_job(job)
                     and job.status in JobStatusChoices.ENQUEUED_STATE_CHOICES
                 ):
-                    job_interval = job.interval
-                    job_params = proxbox_sync_params_from_job(job)
-
-                    if job_interval and job.schedule:
-                        from datetime import timedelta
-                        from utilities.datetime import local_now
-
-                        next_schedule = job.schedule + timedelta(minutes=job_interval)
-                        if next_schedule > local_now():
-                            enqueue_kwargs = {
-                                "instance": None,
-                                "user": request.user,
-                                "name": job.name,
-                                "schedule_at": next_schedule,
-                                "interval": job_interval,
-                                "queue_name": PROXBOX_SYNC_QUEUE_NAME,
-                                **job_params,
-                            }
-                            ProxboxSyncJob.enqueue(**enqueue_kwargs)
-                            messages.info(
-                                request,
-                                _(
-                                    "Scheduled job cancelled. Next run scheduled for %(next_run)s."
-                                )
-                                % {
-                                    "next_run": next_schedule.strftime(
-                                        "%Y-%m-%d %H:%M %Z"
-                                    )
-                                },
-                            )
-                        else:
-                            messages.warning(
-                                request,
-                                _(
-                                    "Scheduled job cancelled. No next run scheduled (past due)."
-                                ),
-                            )
-                    else:
-                        messages.success(
-                            request, _("Scheduled job cancelled successfully.")
-                        )
-
-                    job.status = JobStatusChoices.STATUS_CANCELED
-                    job.completed = timezone.now()
-                    job.save()
+                    _mark_job_canceled(job)
+                    messages.success(
+                        request, _("Scheduled job cancelled successfully.")
+                    )
             except Job.DoesNotExist:
                 messages.error(request, _("Job not found."))
 
@@ -254,9 +222,7 @@ class ScheduleSyncView(
                     is_proxbox_sync_job(old_job)
                     and old_job.status in JobStatusChoices.ENQUEUED_STATE_CHOICES
                 ):
-                    old_job.status = JobStatusChoices.STATUS_CANCELED
-                    old_job.completed = timezone.now()
-                    old_job.save()
+                    _mark_job_canceled(old_job)
             except Job.DoesNotExist:
                 pass
 
