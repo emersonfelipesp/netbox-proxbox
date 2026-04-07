@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 class Command(BaseCommand):
     """Command implementation."""
+
     help = "Check and fix FastAPIEndpoint tokens and backend registration"
 
     def add_arguments(self, parser: ArgumentParser) -> None:

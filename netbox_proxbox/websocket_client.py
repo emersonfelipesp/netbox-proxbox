@@ -200,7 +200,9 @@ class WebSocketView(
         if uri is None:
             return HttpResponse("WebSocket URL not found", status=404)
 
-        start_websocket(uri, api_key=(getattr(fastapi_object, "token", "") or "").strip())
+        start_websocket(
+            uri, api_key=(getattr(fastapi_object, "token", "") or "").strip()
+        )
 
         with websocket_lock:
             if (

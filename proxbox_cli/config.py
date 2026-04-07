@@ -16,6 +16,7 @@ BASE_URL_ENV_VAR = "PROXBOX_URL"
 
 class Config(BaseModel):
     """Config implementation."""
+
     base_url: str = DEFAULT_BASE_URL
     timeout: float = 30.0
 

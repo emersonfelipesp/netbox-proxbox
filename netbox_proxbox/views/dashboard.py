@@ -207,8 +207,10 @@ class DashboardView(
                 )
             else:
                 dashboard["nodes"] = live_node_rows
-            dashboard["cluster_summary"] = dashboard_data.cluster_summary_from_node_rows(
-                cluster_summary, dashboard["nodes"]
+            dashboard["cluster_summary"] = (
+                dashboard_data.cluster_summary_from_node_rows(
+                    cluster_summary, dashboard["nodes"]
+                )
             )
 
             dashboard["endpoint_ip"] = dashboard_data.get_endpoint_display_ip(endpoint)

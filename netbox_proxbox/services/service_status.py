@@ -27,7 +27,9 @@ logger = logging.getLogger(__name__)
 
 def sync_proxmox_endpoint_to_backend(*args, **kwargs):
     """Compatibility wrapper for callers that patch this service module symbol."""
-    from netbox_proxbox.views.backend_sync import sync_proxmox_endpoint_to_backend as _sync
+    from netbox_proxbox.views.backend_sync import (
+        sync_proxmox_endpoint_to_backend as _sync,
+    )
 
     return _sync(*args, **kwargs)
 
