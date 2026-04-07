@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
+from contextlib import contextmanager
 from collections.abc import Generator, Iterator
+from contextlib import AbstractContextManager
 from typing import Any, Protocol, runtime_checkable
 
 import requests
@@ -117,6 +119,16 @@ class HttpClient(Protocol):
         timeout: float | tuple[int, int] = 5,
     ) -> HttpResponse: ...
 
+    def stream_get(
+        self,
+        url: str,
+        *,
+        params: dict[str, str] | None = None,
+        headers: dict[str, str] | None = None,
+        verify: bool = True,
+        timeout: float | tuple[int, int] = (5, 3600),
+    ) -> AbstractContextManager[HttpResponse]: ...
+
 
 def _convert_exception(
     exc: requests.exceptions.RequestException,
@@ -223,6 +235,7 @@ class RequestsHttpClient:
             raise _convert_exception(exc) from exc
         return HttpResponse(resp)
 
+    @contextmanager
     def stream_get(
         self,
         url: str,
