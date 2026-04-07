@@ -92,9 +92,9 @@ class ProxboxPluginSettings(NetBoxModel):
     def __str__(self) -> str:
         return "Proxbox plugin settings"
 
-    def save(self, *args, **kwargs):
+    def save(self, *args: object, **kwargs: object) -> None:
         self.singleton_key = "default"
-        return super().save(*args, **kwargs)
+        super().save(*args, **kwargs)
 
     def get_absolute_url(self) -> str:
         return reverse("plugins:netbox_proxbox:settings")

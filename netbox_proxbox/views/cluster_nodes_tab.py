@@ -1,6 +1,7 @@
 """Cluster and node tab view for Proxmox endpoint detail page."""
 
 from django.db.models import Prefetch
+from django.http import HttpRequest
 from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
 
@@ -23,7 +24,9 @@ class ProxmoxEndpointClusterNodesTabView(generic.ObjectView):
         weight=1000,
     )
 
-    def get_extra_context(self, request, instance):
+    def get_extra_context(
+        self, request: HttpRequest, instance: ProxmoxEndpoint
+    ) -> dict[str, object]:
         """Build cluster and node tables for the template."""
         # Fetch cluster(s) for this endpoint with prefetched nodes
         clusters = ProxmoxCluster.objects.filter(endpoint=instance).prefetch_related(

@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from collections.abc import Mapping
+from typing import TypeAlias
 
 import aiohttp
 from pydantic import BaseModel, Field
 
 from proxbox_cli.config import Config
+
+JSONScalar: TypeAlias = str | int | float | bool | None
+JSONValue: TypeAlias = JSONScalar | list["JSONValue"] | dict[str, "JSONValue"]
+QueryValue: TypeAlias = str | int | float | bool
 
 
 class ApiResponse(BaseModel):
@@ -16,7 +21,7 @@ class ApiResponse(BaseModel):
     text: str
     headers: dict[str, str] = Field(default_factory=dict)
 
-    def json(self) -> Any:
+    def json_data(self) -> JSONValue:
         return json.loads(self.text)
 
     def is_ok(self) -> bool:
@@ -39,8 +44,8 @@ class ProxboxApiClient:
         method: str,
         path: str,
         *,
-        query: dict[str, Any] | None = None,
-        payload: Any | None = None,
+        query: Mapping[str, QueryValue] | None = None,
+        payload: JSONValue | None = None,
     ) -> ApiResponse:
         url = self._url(path)
         timeout = aiohttp.ClientTimeout(total=self.config.timeout)
@@ -57,14 +62,14 @@ class ProxboxApiClient:
                 return ApiResponse(status=resp.status, text=text, headers=headers)
 
     async def get(
-        self, path: str, *, query: dict[str, Any] | None = None
+        self, path: str, *, query: Mapping[str, QueryValue] | None = None
     ) -> ApiResponse:
         return await self.request("GET", path, query=query)
 
-    async def post(self, path: str, *, payload: Any | None = None) -> ApiResponse:
+    async def post(self, path: str, *, payload: JSONValue | None = None) -> ApiResponse:
         return await self.request("POST", path, payload=payload)
 
-    async def put(self, path: str, *, payload: Any | None = None) -> ApiResponse:
+    async def put(self, path: str, *, payload: JSONValue | None = None) -> ApiResponse:
         return await self.request("PUT", path, payload=payload)
 
     async def delete(self, path: str) -> ApiResponse:

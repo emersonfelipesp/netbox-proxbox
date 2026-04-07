@@ -1,3 +1,5 @@
+"""Django migration for netbox_proxbox."""
+
 from django.db import migrations, models
 
 

@@ -11,7 +11,7 @@ from queue import Queue
 
 import websockets
 import websockets.exceptions
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.views import View
 
@@ -131,7 +131,7 @@ async def websocket_client(uri: str) -> None:
             reconnect_delay = min(reconnect_delay * 2, _RECONNECT_MAX_DELAY_SEC)
 
 
-def start_websocket(uri):
+def start_websocket(uri: str) -> None:
     """Start a daemon thread and asyncio loop running ``websocket_client`` for ``uri`` if not already running."""
     global websocket_task, websocket_loop
     with websocket_lock:
@@ -140,7 +140,7 @@ def start_websocket(uri):
 
         websocket_loop = asyncio.new_event_loop()
 
-        def run_loop():
+        def run_loop() -> None:
             asyncio.set_event_loop(websocket_loop)
             websocket_loop.run_forever()
 
@@ -151,7 +151,7 @@ def start_websocket(uri):
         )
 
 
-def send_message(message):
+def send_message(message: str) -> None:
     """Enqueue a string command for the background WebSocket client to send upstream."""
     if message_queue.qsize() >= _MAX_MESSAGE_QUEUE_SIZE:
         logger.warning(
@@ -170,11 +170,11 @@ class WebSocketView(
 
     template_name = "netbox_proxbox/websocket_page.html"
 
-    def get_required_permission(self):
+    def get_required_permission(self) -> str:
         """Require FastAPI endpoint view permission to read backend stream state."""
         return permission_view_fastapi_endpoint()
 
-    def get(self, request, message):
+    def get(self, request: HttpRequest, message: str) -> HttpResponse:
         """Drain buffered messages, ensure the WS client is running, optionally kick off a sync kind."""
         json_response = request.GET.get("json_response", "false").lower() == "true"
         bulk_messages_count = 20

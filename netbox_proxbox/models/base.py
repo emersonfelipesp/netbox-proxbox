@@ -67,7 +67,9 @@ class EndpointBase(CommonProperties, NetBoxModel):
         ordering = ("name", "pk")
 
     @classmethod
-    def _get_action_url(cls, action, rest_api, kwargs):
+    def _get_action_url(
+        cls, action: str, rest_api: bool, kwargs: dict[str, object] | None
+    ) -> str:
         """
         Endpoint REST list URLs live under the nested ``endpoints`` include
         (``plugins-api:netbox_proxbox-api:endpoints:{model}-list``), not the flat

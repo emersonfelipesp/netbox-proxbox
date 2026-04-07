@@ -2,6 +2,7 @@
 
 from django.contrib import messages
 from django.db.models import Q
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.views import View
@@ -40,7 +41,9 @@ def _mark_job_canceled(job: Job) -> None:
     job.save(update_fields=["status", "error", "completed"])
 
 
-def enqueue_proxbox_sync_from_valid_form(request, form: ScheduleSyncForm) -> None:
+def enqueue_proxbox_sync_from_valid_form(
+    request: HttpRequest, form: ScheduleSyncForm
+) -> None:
     """Enqueue ``ProxboxSyncJob`` from a bound, valid ``ScheduleSyncForm``."""
     sync_types = form.cleaned_data["sync_types"]
     schedule_at = form.cleaned_data.get("schedule_at")
@@ -97,13 +100,13 @@ class ScheduleSyncView(
 ):
     """Render and process the ProxBox background sync scheduling form."""
 
-    def get_required_permission(self):
+    def get_required_permission(self) -> str:
         """Require ``add`` on core ``Job`` to enqueue jobs."""
         return permission_enqueue_proxbox_sync()
 
     template_name = "netbox_proxbox/schedule_sync.html"
 
-    def get(self, request):
+    def get(self, request: HttpRequest) -> HttpResponse:
         """Show the schedule form, optionally pre-selecting ``sync_types`` from query string."""
         initial = {}
         valid_slugs = {c[0] for c in SyncTypeChoices.CHOICES}
@@ -193,7 +196,7 @@ class ScheduleSyncView(
             },
         )
 
-    def post(self, request):
+    def post(self, request: HttpRequest) -> HttpResponse:
         """Validate the form, enqueue ``ProxboxSyncJob``, then redirect to the job list."""
         cancel_job_id = request.POST.get("cancel_job")
         if cancel_job_id:
@@ -246,15 +249,15 @@ class QuickScheduleSyncFromHomeView(
 ):
     """POST-only: enqueue from the home quick-schedule card; re-render home on errors."""
 
-    def get_required_permission(self):
+    def get_required_permission(self) -> str:
         """Require ``add`` on core ``Job`` to enqueue jobs."""
         return permission_enqueue_proxbox_sync()
 
-    def get(self, request):
+    def get(self, request: HttpRequest) -> HttpResponse:
         """Always send users to the plugin home."""
         return redirect("plugins:netbox_proxbox:home")
 
-    def post(self, request):
+    def post(self, request: HttpRequest) -> HttpResponse:
         """Validate the quick form and enqueue like ``ScheduleSyncView``; stay on home."""
         form = ScheduleSyncForm(
             request.POST,

@@ -1,6 +1,7 @@
 """Implement the plugin dashboard pages and re-export major view entrypoints."""
 
 from django.contrib.auth.mixins import AccessMixin
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.views import View
 from netbox import configuration
@@ -120,7 +121,9 @@ from .vm_task_history import (
 class RequireProxboxDashboardEndpointViewMixin(AccessMixin):
     """Require view permission on at least one plugin endpoint model when logged in."""
 
-    def dispatch(self, request, *args, **kwargs):
+    def dispatch(
+        self, request: HttpRequest, *args: object, **kwargs: object
+    ) -> HttpResponse:
         """Block authenticated users who cannot see any ProxBox endpoint inventory."""
         if request.user.is_authenticated and not user_may_access_proxbox_dashboard(
             request.user
@@ -138,7 +141,7 @@ class HomeView(
 
     template_name = "netbox_proxbox/home.html"
 
-    def get(self, request):
+    def get(self, request: HttpRequest) -> HttpResponse:
         """Render home with visible endpoint rows and resolved FastAPI HTTP/WebSocket URLs."""
         return render(
             request,
@@ -156,11 +159,11 @@ class TestWebSocketView(
 
     template_name = "netbox_proxbox/test/websocket.html"
 
-    def get_required_permission(self):
+    def get_required_permission(self) -> str:
         """Require ``view`` on ``FastAPIEndpoint``."""
         return permission_view_fastapi_endpoint()
 
-    def get(self, request):
+    def get(self, request: HttpRequest) -> HttpResponse:
         """Render the test template with HTTP and WS base URLs from the first endpoint."""
         fastapi_object = FastAPIEndpoint.objects.restrict(request.user, "view").first()
         if fastapi_object is None:
@@ -193,7 +196,7 @@ class NodesView(ConditionalLoginRequiredMixin, View):
 
     template = "netbox_proxbox/devices.html"
 
-    def get(self, request):
+    def get(self, request: HttpRequest) -> HttpResponse:
         """Load tagged devices and FastAPI URL hints for the devices template."""
         from dcim.models import Device
         from django.contrib.contenttypes.models import ContentType
@@ -245,7 +248,7 @@ class VirtualMachinesView(ConditionalLoginRequiredMixin, View):
 
     template = "netbox_proxbox/virtual_machines.html"
 
-    def get(self, request):
+    def get(self, request: HttpRequest) -> HttpResponse:
         """Load tagged VMs and FastAPI URL hints for the virtual machines template."""
         from django.contrib.contenttypes.models import ContentType
         from extras.models import Tag, TaggedItem
@@ -295,7 +298,7 @@ class LXCContainersView(ConditionalLoginRequiredMixin, View):
 
     template = "netbox_proxbox/lxc_containers.html"
 
-    def get(self, request):
+    def get(self, request: HttpRequest) -> HttpResponse:
         """Load tagged LXC containers and FastAPI URL hints for the template."""
         from django.contrib.contenttypes.models import ContentType
         from extras.models import Tag, TaggedItem
@@ -345,7 +348,7 @@ class ContributingView(ConditionalLoginRequiredMixin, View):
 
     template_name = "netbox_proxbox/contributing.html"
 
-    def get(self, request):
+    def get(self, request: HttpRequest) -> HttpResponse:
         """Fetch markdown from ``github.get`` and pass HTML to the template."""
         return render(
             request,
@@ -362,7 +365,7 @@ class CommunityView(ConditionalLoginRequiredMixin, View):
 
     template_name = "netbox_proxbox/community.html"
 
-    def get(self, request):
+    def get(self, request: HttpRequest) -> HttpResponse:
         """Render the community template with a page title."""
         return render(request, self.template_name, {"title": "Join our Community!"})
 
@@ -376,7 +379,7 @@ class InterfacesView(ConditionalLoginRequiredMixin, View):
 
     template_name = "netbox_proxbox/interfaces.html"
 
-    def get(self, request):
+    def get(self, request: HttpRequest) -> HttpResponse:
         """Load proxbox-tagged VM interfaces and device interfaces."""
         from dcim.models import Device
         from dcim.models import Interface as DCIMInterface
@@ -466,7 +469,7 @@ class IPAddressesView(ConditionalLoginRequiredMixin, View):
 
     template_name = "netbox_proxbox/ip_addresses.html"
 
-    def get(self, request):
+    def get(self, request: HttpRequest) -> HttpResponse:
         """Load proxbox-tagged IP addresses assigned to proxbox interfaces."""
         from dcim.models import Device
         from dcim.models import Interface as DCIMInterface

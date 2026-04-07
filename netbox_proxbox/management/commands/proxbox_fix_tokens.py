@@ -10,6 +10,7 @@ This command:
 """
 
 import logging
+from argparse import ArgumentParser
 
 from django.core.management.base import BaseCommand
 
@@ -19,14 +20,14 @@ logger = logging.getLogger(__name__)
 class Command(BaseCommand):
     help = "Check and fix FastAPIEndpoint tokens and backend registration"
 
-    def add_arguments(self, parser):
+    def add_arguments(self, parser: ArgumentParser) -> None:
         parser.add_argument(
             "--fix",
             action="store_true",
             help="Attempt to register unregistered tokens with the backend",
         )
 
-    def handle(self, *args, **options):
+    def handle(self, *args: object, **options: object) -> None:
         from netbox_proxbox.models import FastAPIEndpoint
         from netbox_proxbox.signals import (
             _get_backend_url,

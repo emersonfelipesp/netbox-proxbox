@@ -1,5 +1,8 @@
 """NetBox-aligned permission helpers for ProxBox custom views."""
 
+from django.contrib.auth.base_user import AbstractBaseUser
+from django.contrib.auth.models import AnonymousUser
+
 from core.models import Job
 from utilities.permissions import get_permission_for_model
 
@@ -39,7 +42,7 @@ def permission_view_fastapi_endpoint() -> str:
     return get_permission_for_model(FastAPIEndpoint, "view")
 
 
-def user_may_access_proxbox_dashboard(user) -> bool:
+def user_may_access_proxbox_dashboard(user: AbstractBaseUser | AnonymousUser) -> bool:
     """True if the user may see any ProxBox endpoint inventory on the plugin home."""
     if not getattr(user, "is_authenticated", False):
         return False

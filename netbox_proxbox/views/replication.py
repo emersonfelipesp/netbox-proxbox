@@ -1,5 +1,6 @@
 """Provide NetBox CRUD views for Replication records."""
 
+from django.http import HttpRequest
 from django.shortcuts import get_object_or_404
 from extras.models import TableConfig
 from netbox.views import generic
@@ -91,17 +92,21 @@ class ReplicationTabView(generic.ObjectChildrenView):
         weight=1150,
     )
 
-    def get_queryset(self, request):
+    def get_queryset(self, request: HttpRequest) -> object:
         """Restrict parent VMs to those the user may view."""
         return VirtualMachine.objects.restrict(request.user, "view")
 
-    def get_children(self, request, parent):
+    def get_children(
+        self, request: HttpRequest, parent: VirtualMachine
+    ) -> object:
         """Return replications for ``parent`` visible to the current user."""
         return Replication.objects.restrict(request.user, "view").filter(
             virtual_machine=parent
         )
 
-    def get_table(self, data, request, bulk_actions=True):
+    def get_table(
+        self, data: object, request: HttpRequest, bulk_actions: bool = True
+    ) -> ReplicationTable:
         """Build the child table, honoring optional ``tableconfig_id`` overrides."""
         if tableconfig_id := request.GET.get("tableconfig_id"):
             tableconfig = get_object_or_404(TableConfig, pk=tableconfig_id)

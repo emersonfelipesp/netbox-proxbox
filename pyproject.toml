@@ -32,6 +32,7 @@ dev = [
     "pylint>=4.0.5",
     "pylint-django>=2.7.0",
     "pydocstyle>=6.3.0",
+    "ty>=0.0.1a19",
     "yamllint>=1.38.0",
 ]
 test = [

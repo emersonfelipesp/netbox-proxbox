@@ -81,10 +81,10 @@ class VMSnapshot(NetBoxModel):
         ordering = ("virtual_machine", "node", "name")
         unique_together = ("vmid", "name", "node")
 
-    def __str__(self):
+    def __str__(self) -> str:
         """VM and snapshot name for list displays."""
         return f"{self.virtual_machine} - {self.name}"
 
-    def get_absolute_url(self):
+    def get_absolute_url(self) -> str:
         """Plugin UI URL for this snapshot's detail page."""
         return reverse("plugins:netbox_proxbox:vmsnapshot", args=[self.pk])

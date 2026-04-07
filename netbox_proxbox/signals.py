@@ -13,7 +13,7 @@ from django.dispatch import receiver
 logger = logging.getLogger(__name__)
 
 
-def _get_backend_url(endpoint):
+def _get_backend_url(endpoint: object) -> str | None:
     """Build the base URL for the proxbox-api backend from a FastAPIEndpoint."""
     if not endpoint:
         return None
@@ -31,7 +31,7 @@ def _get_backend_url(endpoint):
     return f"{scheme}://{host}:{endpoint.port}"
 
 
-def _register_token_with_backend(endpoint):
+def _register_token_with_backend(endpoint: object) -> bool | None:
     """Attempt to register the endpoint's token with the proxbox-api backend.
 
     This is a best-effort operation that logs failures but never raises exceptions.
@@ -112,7 +112,12 @@ def _register_token_with_backend(endpoint):
 
 
 @receiver(post_save, sender="netbox_proxbox.FastAPIEndpoint")
-def ensure_fastapi_endpoint_token(sender, instance, created, **kwargs):
+def ensure_fastapi_endpoint_token(
+    sender: object,
+    instance: object,
+    created: bool,
+    **kwargs: object,
+) -> None:
     """Ensure FastAPIEndpoint has a token and register it with the backend.
 
     This signal:
@@ -132,7 +137,12 @@ def ensure_fastapi_endpoint_token(sender, instance, created, **kwargs):
 
 
 @receiver(post_save, sender="netbox_proxbox.ProxmoxEndpoint")
-def ensure_proxmox_endpoint_has_fastapi_token(sender, instance, created, **kwargs):
+def ensure_proxmox_endpoint_has_fastapi_token(
+    sender: object,
+    instance: object,
+    created: bool,
+    **kwargs: object,
+) -> None:
     """Ensure there's a FastAPIEndpoint with a token when ProxmoxEndpoint is saved.
 
     This catches the upgrade scenario where migration ran but backend was offline.

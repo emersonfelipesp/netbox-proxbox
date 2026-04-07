@@ -1,3 +1,5 @@
+"""Tests for test_schemas."""
+
 from __future__ import annotations
 
 import importlib

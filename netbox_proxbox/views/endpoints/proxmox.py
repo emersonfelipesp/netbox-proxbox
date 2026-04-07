@@ -7,7 +7,7 @@ import json
 
 # Django imports
 from django.contrib import messages
-from django.http import HttpResponse
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect
 import yaml
 
@@ -133,11 +133,11 @@ class ProxmoxEndpointExportView(generic.ObjectListView):
 
     allowed_formats = {"csv", "json", "yaml"}
 
-    def get_required_permission(self):
+    def get_required_permission(self) -> str:
         """Require model ``view`` on Proxmox endpoints (same as the list)."""
         return get_permission_for_model(self.queryset.model, "view")
 
-    def _validate_sensitive_export_token(self, request) -> bool:
+    def _validate_sensitive_export_token(self, request: HttpRequest) -> bool:
         """Confirm POSTed NetBox API token maps to a user allowed to view Proxmox endpoints."""
         raw_token = (request.POST.get("netbox_token") or "").strip()
         if not raw_token:
@@ -182,14 +182,16 @@ class ProxmoxEndpointExportView(generic.ObjectListView):
 
         return True
 
-    def _resolve_export_format(self, request) -> str:
+    def _resolve_export_format(self, request: HttpRequest) -> str:
         """Normalize ``format`` from GET/POST to one of ``allowed_formats`` (default csv)."""
         format_value = (
             request.GET.get("format") or request.POST.get("format") or "csv"
         ).lower()
         return format_value if format_value in self.allowed_formats else "csv"
 
-    def _export_response(self, request, include_sensitive: bool, data_format: str):
+    def _export_response(
+        self, request: HttpRequest, include_sensitive: bool, data_format: str
+    ) -> HttpResponse:
         """Serialize the current filtered queryset to a downloadable HTTP response."""
         queryset = reapply_model_ordering(super().get_queryset(request))
         if self.filterset:
@@ -220,7 +222,7 @@ class ProxmoxEndpointExportView(generic.ObjectListView):
         )
         return response
 
-    def get(self, request):
+    def get(self, request: HttpRequest) -> HttpResponse:
         """Export without passwords or token values (safe columns only)."""
         data_format = self._resolve_export_format(request)
         return self._export_response(
@@ -229,7 +231,7 @@ class ProxmoxEndpointExportView(generic.ObjectListView):
             data_format=data_format,
         )
 
-    def post(self, request):
+    def post(self, request: HttpRequest) -> HttpResponse:
         """Export with optional secrets after ``_validate_sensitive_export_token`` succeeds."""
         include_sensitive = request.POST.get("include_sensitive") == "true"
         data_format = self._resolve_export_format(request)

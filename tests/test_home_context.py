@@ -1,3 +1,5 @@
+"""Tests for test_home_context."""
+
 from __future__ import annotations
 
 from types import SimpleNamespace

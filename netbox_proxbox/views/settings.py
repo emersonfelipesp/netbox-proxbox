@@ -1,6 +1,7 @@
 """Plugin settings page for feature toggles."""
 
 from django.contrib import messages
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.views import View
 
@@ -24,10 +25,10 @@ class SettingsView(
 
     template_name = "netbox_proxbox/settings.html"
 
-    def get_required_permission(self):
+    def get_required_permission(self) -> str:
         return permission_change_proxbox_plugin_settings()
 
-    def get(self, request):
+    def get(self, request: HttpRequest) -> HttpResponse:
         settings_obj = ProxboxPluginSettings.get_solo()
         form = ProxboxPluginSettingsForm(
             initial={
@@ -42,7 +43,7 @@ class SettingsView(
         )
         return render(request, self.template_name, {"form": form})
 
-    def post(self, request):
+    def post(self, request: HttpRequest) -> HttpResponse:
         settings_obj = ProxboxPluginSettings.get_solo()
         form = ProxboxPluginSettingsForm(request.POST)
         if form.is_valid():

@@ -25,6 +25,13 @@ repos:
         types: [python]
         args: ["format", "--check", "."]
 
+      - id: ty-check
+        name: ty-check
+        entry: ty
+        language: system
+        pass_filenames: false
+        args: ["check", "proxbox_cli"]
+
       - id: pytest
         name: pytest
         entry: pytest

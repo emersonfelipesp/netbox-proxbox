@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import requests
 from django.contrib.auth.mixins import AccessMixin
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.views import View
 from utilities.views import ConditionalLoginRequiredMixin
@@ -42,7 +43,9 @@ def _get_endpoint_display_ip(endpoint: ProxmoxEndpoint) -> str:
 class RequireProxboxDashboardAccessMixin(AccessMixin):
     """Require view permission on at least one endpoint model when authenticated."""
 
-    def dispatch(self, request, *args, **kwargs):
+    def dispatch(
+        self, request: HttpRequest, *args: object, **kwargs: object
+    ) -> HttpResponse:
         if request.user.is_authenticated and not user_may_access_proxbox_dashboard(
             request.user
         ):
@@ -204,7 +207,7 @@ class DashboardView(
             "nodes_offline": max(total_nodes - online_nodes, 0),
         }
 
-    def get(self, request):
+    def get(self, request: HttpRequest) -> HttpResponse:
         proxmox_endpoints = list(ProxmoxEndpoint.objects.restrict(request.user, "view"))
         fastapi_endpoint = FastAPIEndpoint.objects.restrict(
             request.user, "view"

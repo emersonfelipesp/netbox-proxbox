@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from netbox.api.viewsets import NetBoxModelViewSet
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -33,7 +31,7 @@ class ProxBoxRootView(APIRootView):
         """Human-readable title for the plugin API root schema."""
         return "ProxBox"
 
-    def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+    def get(self, request: Request, *args: object, **kwargs: object) -> Response:
         """Augment the default API root payload with an absolute ``endpoints`` URL."""
         response = super().get(request, *args, **kwargs)
         base_url = request.build_absolute_uri("/").rstrip("/")
@@ -86,7 +84,7 @@ class VMTaskHistoryViewSet(NetBoxModelViewSet):
     serializer_class = VMTaskHistorySerializer
     filterset_class = filtersets.VMTaskHistoryFilterSet
 
-    def perform_create(self, serializer):
+    def perform_create(self, serializer: object) -> None:
         """Upsert by Proxmox UPID so task reconciliation can replay safely."""
         upid = serializer.validated_data.get("upid")
         if upid:

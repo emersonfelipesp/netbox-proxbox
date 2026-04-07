@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from django.http import HttpRequest
 from django.shortcuts import get_object_or_404
 from extras.models import TableConfig
 from netbox.views import generic
@@ -40,17 +41,19 @@ class ClusterStoragesTabView(generic.ObjectChildrenView):
         weight=1000,
     )
 
-    def get_queryset(self, request):
+    def get_queryset(self, request: HttpRequest) -> object:
         """Restrict parent clusters to those the user may view."""
         return Cluster.objects.restrict(request.user, "view")
 
-    def get_children(self, request, parent):
+    def get_children(self, request: HttpRequest, parent: Cluster) -> object:
         """Return storages for ``parent`` visible to the current user."""
         return ProxmoxStorage.objects.restrict(request.user, "view").filter(
             cluster=parent
         )
 
-    def get_table(self, data, request, bulk_actions=True):
+    def get_table(
+        self, data: object, request: HttpRequest, bulk_actions: bool = True
+    ) -> ProxmoxStorageTable:
         """Build the child table, honoring optional ``tableconfig_id`` column overrides."""
         if tableconfig_id := request.GET.get("tableconfig_id"):
             tableconfig = get_object_or_404(TableConfig, pk=tableconfig_id)
@@ -84,7 +87,9 @@ class ClusterSummaryTabView(generic.ObjectView):
         weight=1100,
     )
 
-    def get_extra_context(self, request, instance):
+    def get_extra_context(
+        self, request: HttpRequest, instance: Cluster
+    ) -> dict[str, object]:
         """Gather Proxmox-related data for this cluster."""
         context: dict[str, object] = {
             "cluster": instance,

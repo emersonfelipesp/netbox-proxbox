@@ -116,10 +116,13 @@ jobs:
         uses: astral-sh/setup-uv@v7
 
       - name: Sync development environment
-        run: uv sync --extra test --extra dev --locked
+        run: uv sync --extra test --extra dev --extra cli --locked
 
       - name: Compile package
         run: uv run python -m compileall netbox_proxbox tests
+
+      - name: Run ty
+        run: uv run ty check proxbox_cli
 
       - name: Run full test suite
         run: uv run pytest --cov=netbox_proxbox --cov-report=term-missing --cov-report=xml tests

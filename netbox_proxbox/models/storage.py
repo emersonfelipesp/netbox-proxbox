@@ -23,7 +23,7 @@ class ProxmoxStorageVirtualDisk(models.Model):
     class Meta:
         unique_together = ("proxmox_storage", "virtual_disk")
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.proxmox_storage} - {self.virtual_disk}"
 
 
@@ -55,10 +55,10 @@ class ProxmoxStorage(NetBoxModel):
         verbose_name = "Proxmox Storage"
         verbose_name_plural = "Proxmox Storages"
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Cluster-qualified storage label for list displays."""
         return f"{self.cluster.name}/{self.name}"
 
-    def get_absolute_url(self):
+    def get_absolute_url(self) -> str:
         """Plugin UI URL for this storage row."""
         return reverse("plugins:netbox_proxbox:proxmoxstorage", args=[self.pk])

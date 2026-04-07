@@ -40,7 +40,7 @@ class ProxboxConfig(PluginConfig):
     required_settings = []
     queues = []
 
-    def ready(self):
+    def ready(self) -> None:
         """Register models, then import job modules so runners and core Job views hook in."""
         super().ready()
         if not _runtime_dependencies_available():

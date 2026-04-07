@@ -38,7 +38,7 @@ class ProxboxJobTemplateExtension(PluginTemplateExtension):
 
     models = ["core.job"]
 
-    def alerts(self):
+    def alerts(self) -> str:
         """Load job log DOM helpers for any Proxbox job; live poll only while non-terminal."""
         obj = self.context["object"]
         if not isinstance(obj, Job):
@@ -55,7 +55,7 @@ class ProxboxJobTemplateExtension(PluginTemplateExtension):
             )
         return mark_safe("".join(parts))
 
-    def buttons(self):
+    def buttons(self) -> str:
         """Render Run now (finished jobs only) and Cancel (pending/scheduled/running) as permitted."""
         obj = self.context["object"]
         if not isinstance(obj, Job) or not is_proxbox_sync_job(obj):
@@ -83,7 +83,7 @@ class ProxboxJobTemplateExtension(PluginTemplateExtension):
 
         return mark_safe("".join(parts)) if parts else ""
 
-    def left_page(self):
+    def left_page(self) -> str:
         """Show last Proxbox sync runtime and stage summary on Job detail."""
         obj = self.context["object"]
         if not isinstance(obj, Job) or not is_proxbox_sync_job(obj):
@@ -99,7 +99,7 @@ class ProxboxVirtualMachineTemplateExtension(PluginTemplateExtension):
 
     models = ["virtualization.virtualmachine"]
 
-    def buttons(self):
+    def buttons(self) -> str:
         obj = self.context["object"]
         if not isinstance(obj, VirtualMachine):
             return ""
@@ -114,7 +114,7 @@ class ProxboxVirtualMachineTemplateExtension(PluginTemplateExtension):
             },
         )
 
-    def console_button(self):
+    def console_button(self) -> str:
         obj = self.context["object"]
         if not isinstance(obj, VirtualMachine):
             return ""
@@ -168,7 +168,7 @@ class ProxmoxClusterTemplateExtension(PluginTemplateExtension):
 
     models = ["virtualization.cluster"]
 
-    def buttons(self):
+    def buttons(self) -> str:
         obj = self.context["object"]
         user = self.context["request"].user
         if not user.has_perm(permission_enqueue_proxbox_sync()):
@@ -190,7 +190,7 @@ class ProxmoxNodeTemplateExtension(PluginTemplateExtension):
 
     models = ["dcim.device"]
 
-    def buttons(self):
+    def buttons(self) -> str:
         obj = self.context["object"]
         user = self.context["request"].user
         if not user.has_perm(permission_enqueue_proxbox_sync()):
@@ -212,7 +212,7 @@ class ProxmoxStorageTemplateExtension(PluginTemplateExtension):
 
     models = ["netbox_proxbox.proxmoxstorage"]
 
-    def buttons(self):
+    def buttons(self) -> str:
         obj = self.context["object"]
         if not isinstance(obj, ProxmoxStorage):
             return ""
@@ -233,7 +233,7 @@ class VMBackupTemplateExtension(PluginTemplateExtension):
 
     models = ["netbox_proxbox.vmbackup"]
 
-    def buttons(self):
+    def buttons(self) -> str:
         obj = self.context["object"]
         if not isinstance(obj, VMBackup):
             return ""
@@ -254,7 +254,7 @@ class VMSnapshotTemplateExtension(PluginTemplateExtension):
 
     models = ["netbox_proxbox.vmsnapshot"]
 
-    def buttons(self):
+    def buttons(self) -> str:
         obj = self.context["object"]
         if not isinstance(obj, VMSnapshot):
             return ""
@@ -275,7 +275,7 @@ class VMTaskHistoryTemplateExtension(PluginTemplateExtension):
 
     models = ["netbox_proxbox.vmtaskhistory"]
 
-    def buttons(self):
+    def buttons(self) -> str:
         obj = self.context["object"]
         if not isinstance(obj, VMTaskHistory):
             return ""

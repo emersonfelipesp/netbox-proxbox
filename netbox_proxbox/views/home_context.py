@@ -6,6 +6,7 @@ from urllib.parse import urlencode
 
 from core.choices import JobStatusChoices
 from core.models import Job
+from django.http import HttpRequest
 from django.urls import reverse
 
 from netbox_proxbox import ProxboxConfig
@@ -34,7 +35,7 @@ def _build_add_url(view_name: str, params: dict[str, object]) -> str:
     return f"{url}?{urlencode(query_params)}"
 
 
-def _get_latest_active_proxbox_job(request):
+def _get_latest_active_proxbox_job(request: HttpRequest) -> Job | None:
     """Return the newest visible Proxbox sync job that is still running or queued."""
     jobs = (
         Job.objects.restrict(request.user, "view")
@@ -48,8 +49,8 @@ def _get_latest_active_proxbox_job(request):
 
 
 def build_home_dashboard_context(
-    request, quick_schedule_form: ScheduleSyncForm | None = None
-):
+    request: HttpRequest, quick_schedule_form: ScheduleSyncForm | None = None
+) -> dict[str, object]:
     """
     Build the context dict for ``home.html`` (endpoint lists, URLs, quick schedule card).
     """

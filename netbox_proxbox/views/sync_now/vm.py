@@ -1,6 +1,7 @@
 """Individual sync for VirtualMachine using proxbox-api individual sync endpoint."""
 
 from django.contrib import messages
+from django.http import HttpRequest
 from django.http import HttpResponseRedirect
 from django.utils.translation import gettext_lazy as _
 from django.views import View
@@ -26,10 +27,10 @@ class VirtualMachineSyncNowView(
 
     http_method_names = ["post"]
 
-    def get_required_permission(self):
+    def get_required_permission(self) -> str:
         return permission_enqueue_proxbox_sync()
 
-    def post(self, request, pk):
+    def post(self, request: HttpRequest, pk: int | str) -> HttpResponseRedirect:
         vm = VirtualMachine.objects.get(pk=pk)
 
         vmid = vm.custom_field_data.get("proxmox_vm_id") or vm.custom_field_data.get(

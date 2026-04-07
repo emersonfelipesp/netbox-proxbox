@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from django.contrib import messages
+from django.http import HttpRequest
 from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
@@ -40,10 +41,10 @@ class VirtualMachineSyncNowView(
 
     http_method_names = ["post"]
 
-    def get_required_permission(self):
+    def get_required_permission(self) -> str:
         return permission_enqueue_proxbox_sync()
 
-    def post(self, request, pk):
+    def post(self, request: HttpRequest, pk: int | str) -> HttpResponseRedirect:
         vm = get_object_or_404(
             VirtualMachine.objects.restrict(request.user, "view"),
             pk=pk,

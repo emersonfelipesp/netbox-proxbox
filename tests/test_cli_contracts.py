@@ -1,3 +1,5 @@
+"""Tests for test_cli_contracts."""
+
 from __future__ import annotations
 
 import types

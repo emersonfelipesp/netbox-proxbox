@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, ClassVar
+from typing import ClassVar
 
 from django.contrib import messages
 from django.http import HttpRequest, HttpResponse
@@ -40,7 +40,9 @@ class _ProxboxSyncEnqueueView(
             return str(format_lazy("{}: {}", _("Proxbox Sync"), self.action_label))
         return str(_("Proxbox Sync"))
 
-    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+    def post(
+        self, request: HttpRequest, *args: object, **kwargs: object
+    ) -> HttpResponse:
         try:
             job = ProxboxSyncJob.enqueue(
                 instance=None,
@@ -176,7 +178,9 @@ class _ProxboxSelectedSyncView(
             )
         return str(_("Proxbox Sync"))
 
-    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+    def post(
+        self, request: HttpRequest, *args: object, **kwargs: object
+    ) -> HttpResponse:
         selected_ids = self._selected_ids(request)
         if not selected_ids:
             messages.warning(request, _("Select at least one object to sync."))

@@ -4,13 +4,21 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import Coroutine
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, TypeVar
 
 import yaml
 from rich.console import Console
 from rich.table import Table
+
+from proxbox_cli.client import JSONValue
+
+if TYPE_CHECKING:
+    from proxbox_cli.client import ApiResponse
+
+T = TypeVar("T")
 
 console = Console()
 stderr = Console(stderr=True)
@@ -40,7 +48,7 @@ class OutputFormat(StrEnum):
     YAML = "yaml"
 
 
-def run_with_spinner(coro: Any) -> Any:
+def run_with_spinner(coro: Coroutine[object, object, T]) -> T:
     """Bridge an async coroutine to sync with a Rich spinner."""
     with console.status("[bold]Fetching...[/bold]", spinner="dots"):
         return asyncio.run(coro)
@@ -64,7 +72,7 @@ def emit_cli_error(message: str, *, exit_code: int = 1) -> None:
 def load_json_payload(
     body_json: str | None,
     body_file: Path | None,
-) -> Any | None:
+) -> JSONValue | None:
     """Parse JSON from an inline string or a file path; raise on conflict."""
     if body_json and body_file:
         emit_cli_error("Use either --body-json or --body-file, not both.")
@@ -85,7 +93,7 @@ def load_json_payload(
 
 
 def print_response(
-    resp: Any,  # ApiResponse
+    resp: ApiResponse,
     *,
     as_json: bool = False,
     as_yaml: bool = False,
@@ -95,7 +103,7 @@ def print_response(
     console.print(f"[{color}]Status: {resp.status}[/{color}]")
 
     try:
-        parsed = resp.json()
+        parsed = resp.json_data()
     except (json.JSONDecodeError, ValueError):
         console.print(resp.text)
         return
@@ -108,21 +116,25 @@ def print_response(
         render_table(parsed)
 
 
-def render_table(parsed: Any) -> None:
+def render_table(parsed: JSONValue) -> None:
     if isinstance(parsed, list):
-        render_list_table(parsed)
+        if all(isinstance(item, dict) for item in parsed):
+            render_list_table(parsed)
+        else:
+            console.print(parsed)
     elif isinstance(parsed, dict):
         # NetBox-style paginated list: {"count": N, "results": [...]}
-        if "results" in parsed and isinstance(parsed["results"], list):
+        results = parsed.get("results")
+        if isinstance(results, list) and all(isinstance(item, dict) for item in results):
             count = parsed.get("count")
-            render_list_table(parsed["results"], count=count)
+            render_list_table(results, count=count if isinstance(count, int) else None)
         else:
             render_detail_table(parsed)
     else:
         console.print(parsed)
 
 
-def _select_columns(rows: list[dict]) -> list[str]:
+def _select_columns(rows: list[dict[str, JSONValue]]) -> list[str]:
     if not rows:
         return []
     all_keys: list[str] = list(rows[0].keys())
@@ -132,7 +144,7 @@ def _select_columns(rows: list[dict]) -> list[str]:
     return ordered[:8]
 
 
-def render_list_table(rows: list[dict], *, count: int | None = None) -> None:
+def render_list_table(rows: list[dict[str, JSONValue]], *, count: int | None = None) -> None:
     if not rows:
         console.print("[dim]No results.[/dim]")
         return
@@ -147,7 +159,7 @@ def render_list_table(rows: list[dict], *, count: int | None = None) -> None:
     console.print(table)
 
 
-def render_detail_table(obj: dict) -> None:
+def render_detail_table(obj: dict[str, JSONValue]) -> None:
     table = Table(show_header=True, show_lines=True)
     table.add_column("Field")
     table.add_column("Value")
@@ -160,7 +172,7 @@ def _humanize(field: str) -> str:
     return field.replace("_", " ").title()
 
 
-def _cell(value: Any) -> str:
+def _cell(value: JSONValue) -> str:
     if value is None:
         return ""
     if isinstance(value, (dict, list)):

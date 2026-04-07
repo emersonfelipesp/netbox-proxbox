@@ -8,7 +8,7 @@ from core.choices import JobStatusChoices
 from core.models import Job
 from core.utils import stop_rq_job
 from django.contrib import messages
-from django.http import Http404, HttpResponseRedirect
+from django.http import Http404, HttpRequest, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext as _
 from django.views import View
@@ -110,11 +110,11 @@ class ProxboxJobCancelView(
 
     http_method_names = ["post"]
 
-    def get_required_permission(self):
+    def get_required_permission(self) -> str:
         """Align with deleting a core Job (destructive operational action)."""
         return get_permission_for_model(Job, "delete")
 
-    def post(self, request, pk):
+    def post(self, request: HttpRequest, pk: int | str) -> HttpResponseRedirect:
         job = get_object_or_404(Job.objects.restrict(request.user, "view"), pk=pk)
         if not is_proxbox_sync_job(job):
             messages.error(

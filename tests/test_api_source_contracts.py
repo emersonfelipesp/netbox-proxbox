@@ -1,3 +1,5 @@
+"""Tests for test_api_source_contracts."""
+
 from __future__ import annotations
 
 import ast

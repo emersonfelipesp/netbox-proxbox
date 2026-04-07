@@ -1,3 +1,5 @@
+"""Tests for test_backend_logs_view."""
+
 from __future__ import annotations
 
 from types import SimpleNamespace

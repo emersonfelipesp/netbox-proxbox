@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import requests
 from django.db import ProgrammingError
+from django.http import HttpRequest
 from netbox.views import generic
 from utilities.views import register_model_view
 
@@ -77,7 +78,9 @@ class ProxmoxStorageView(generic.ObjectView):
         payload, json_err = parse_requests_response_json(response, log_label=route)
         return payload, json_err
 
-    def get_extra_context(self, request, instance):
+    def get_extra_context(
+        self, request: HttpRequest, instance: ProxmoxStorage
+    ) -> dict[str, object]:
         """Render related backups/snapshots/disks and live storage usage when available."""
         vm_backups = (
             instance.vm_backups.restrict(request.user, "view")

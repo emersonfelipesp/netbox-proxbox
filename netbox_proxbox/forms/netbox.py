@@ -78,7 +78,7 @@ class NetBoxEndpointForm(NetBoxModelForm):
             "tags",
         )
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: object, **kwargs: object) -> None:
         """Pre-select token version when editing an endpoint with a linked token."""
         super().__init__(*args, **kwargs)
 
@@ -99,7 +99,7 @@ class NetBoxEndpointForm(NetBoxModelForm):
             else NetBoxTokenVersionChoices.V1
         )
 
-    def clean(self):
+    def clean(self) -> dict[str, object]:
         """Validate host target and mutually consistent token / key-secret auth."""
         super().clean()
         cleaned_data = self.cleaned_data

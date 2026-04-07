@@ -121,12 +121,12 @@ class VMBackup(NetBoxModel):
             "vmid",
         )
 
-    def __str__(self):
+    def __str__(self) -> str:
         """VM and backup creation timestamp for list displays."""
         if self.creation_time:
             return f"{self.virtual_machine} - {self.creation_time}"
         return f"{self.virtual_machine} - {self.volume_id}"
 
-    def get_absolute_url(self):
+    def get_absolute_url(self) -> str:
         """Plugin UI URL for this backup's detail page."""
         return reverse("plugins:netbox_proxbox:vmbackup", args=[self.pk])

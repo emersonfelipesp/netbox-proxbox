@@ -523,7 +523,7 @@ def _resolve_task_history_batch_params(task_history: object) -> dict[str, object
 
 
 async def _run_batch_selected_sync(
-    self,
+    self: "ProxboxSyncJob",
     *,
     batch_object_type: str,
     batch_object_ids: list[str],
@@ -689,7 +689,7 @@ class ProxboxSyncJob(JobRunner):
         name = "Proxbox Sync"
 
     @classmethod
-    def enqueue(cls, *args, **kwargs):
+    def enqueue(cls, *args: object, **kwargs: object) -> object:
         """Enqueue like other ``JobRunner`` jobs, but with a long RQ ``job_timeout`` by default."""
         kwargs.setdefault("job_timeout", PROXBOX_SYNC_JOB_TIMEOUT)
         sync_types_kw = kwargs.pop("sync_types", None)
@@ -742,8 +742,8 @@ class ProxboxSyncJob(JobRunner):
         batch_object_type: str | None = None,
         batch_object_ids: list[str] | None = None,
         fastapi_endpoint_id: int | None = None,
-        **kwargs,
-    ):
+        **kwargs: object,
+    ) -> None:
         """Run one or more proxbox-api SSE streams in dependency order."""
         fastapi_endpoint_id = fastapi_endpoint_id
         from netbox_proxbox.services import run_sync_stream

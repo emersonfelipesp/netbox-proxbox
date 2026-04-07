@@ -6,7 +6,8 @@ Before committing any change:
 
 1. Run syntax check: `python -m compileall netbox_proxbox tests`
 2. Run linter: `rtk ruff check .`
-3. Run tests: `rtk pytest tests/`
+3. Run type checker: `rtk ty check proxbox_cli`
+4. Run tests: `rtk pytest tests/`
 
 ## Framework Stack
 

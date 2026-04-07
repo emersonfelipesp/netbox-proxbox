@@ -1,3 +1,5 @@
+"""Tests for e2e_stack_check."""
+
 from __future__ import annotations
 
 from stack_common import extract_id, get_vm_by_proxmox_vmid, must_getenv, wait_http_ok

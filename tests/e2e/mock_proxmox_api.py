@@ -1,3 +1,5 @@
+"""Tests for mock_proxmox_api."""
+
 from __future__ import annotations
 
 import argparse

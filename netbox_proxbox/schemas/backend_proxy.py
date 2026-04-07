@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pydantic import Field
 
 from netbox_proxbox.schemas._base import ProxboxBaseModel, ProxboxLenientModel
@@ -42,7 +43,7 @@ class SseFrame(ProxboxLenientModel):
     event: str = "message"
     data: dict[str, object] = Field(default_factory=dict)
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[object]:
         yield self.event
         yield self.data
 

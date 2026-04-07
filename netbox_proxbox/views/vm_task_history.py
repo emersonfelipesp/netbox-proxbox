@@ -1,5 +1,6 @@
 """Provide NetBox CRUD and tab views for VM task history records."""
 
+from django.http import HttpRequest
 from django.shortcuts import get_object_or_404
 
 from extras.models import TableConfig
@@ -50,17 +51,21 @@ class VMTaskHistoryTabView(generic.ObjectChildrenView):
         weight=1200,
     )
 
-    def get_queryset(self, request):
+    def get_queryset(self, request: HttpRequest) -> object:
         """Restrict parent VMs to those the user may view."""
         return VirtualMachine.objects.restrict(request.user, "view")
 
-    def get_children(self, request, parent):
+    def get_children(
+        self, request: HttpRequest, parent: VirtualMachine
+    ) -> object:
         """Return task history rows for ``parent`` visible to the current user."""
         return VMTaskHistory.objects.restrict(request.user, "view").filter(
             virtual_machine=parent
         )
 
-    def get_table(self, data, request, bulk_actions=True):
+    def get_table(
+        self, data: object, request: HttpRequest, bulk_actions: bool = True
+    ) -> VMTaskHistoryTable:
         """Build the child table, honoring optional ``tableconfig_id`` column overrides."""
         if tableconfig_id := request.GET.get("tableconfig_id"):
             tableconfig = get_object_or_404(TableConfig, pk=tableconfig_id)

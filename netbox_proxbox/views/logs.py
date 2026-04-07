@@ -1,5 +1,6 @@
 """Backend logs page view for viewing proxbox-api log buffer."""
 
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.views import View
 
@@ -13,7 +14,7 @@ class BackendLogsView(ConditionalLoginRequiredMixin, View):
 
     template_name = "netbox_proxbox/logs.html"
 
-    def get(self, request):
+    def get(self, request: HttpRequest) -> HttpResponse:
         """Render the logs page with FastAPI URL for JavaScript."""
         fastapi_endpoint = FastAPIEndpoint.objects.restrict(
             request.user, "view"

@@ -1,3 +1,5 @@
+"""Tests for test_cards."""
+
 from __future__ import annotations
 
 import requests

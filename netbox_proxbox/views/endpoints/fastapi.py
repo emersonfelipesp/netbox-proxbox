@@ -1,5 +1,6 @@
 """Provide NetBox CRUD and OpenAPI tab views for FastAPI endpoint records."""
 
+from django.http import HttpRequest
 from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
 
@@ -38,7 +39,9 @@ class FastAPIOpenAPIView(generic.ObjectView):
         weight=1050,
     )
 
-    def get_extra_context(self, request, instance):
+    def get_extra_context(
+        self, request: HttpRequest, instance: FastAPIEndpoint
+    ) -> dict[str, object]:
         force_refresh = str(request.GET.get("refresh", "")).strip().lower() in {
             "1",
             "true",

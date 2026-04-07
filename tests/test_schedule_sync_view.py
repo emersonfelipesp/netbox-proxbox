@@ -1,3 +1,5 @@
+"""Tests for test_schedule_sync_view."""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone

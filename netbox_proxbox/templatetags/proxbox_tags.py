@@ -2,13 +2,12 @@
 
 from django import template
 from django.utils.html import format_html
-from django.urls import reverse
 
 register = template.Library()
 
 
 @register.filter
-def hyperlinked_object(obj):
+def hyperlinked_object(obj: object | None) -> str:
     """
     Return a hyperlinked HTML representation of an object.
 
@@ -30,7 +29,7 @@ def hyperlinked_object(obj):
 
 
 @register.filter
-def div(value, arg):
+def div(value: object, arg: object) -> int:
     """Divide value by arg and return integer result."""
     try:
         return int(value) // int(arg)
@@ -39,7 +38,7 @@ def div(value, arg):
 
 
 @register.filter
-def sync_type_label(slug):
+def sync_type_label(slug: str) -> str:
     """Convert sync type slug to user-friendly label."""
     labels = {
         "all": "All",
