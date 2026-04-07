@@ -262,6 +262,7 @@ def _serialize_sync_params(
     netbox_vm_ids: list[str],
     batch_object_type: str | None = None,
     batch_object_ids: list[str] | None = None,
+    fastapi_endpoint_id: int | None = None,
 ) -> dict[str, object]:
     """Return a backward-compatible params block for Job.data."""
     if len(sync_types) == 1:
@@ -271,7 +272,7 @@ def _serialize_sync_params(
     else:
         sync_type = SyncTypeChoices.ALL
 
-    return {
+    result = {
         "sync_types": list(sync_types),
         "sync_type": sync_type,
         "proxmox_endpoint_ids": list(proxmox_endpoint_ids),
@@ -280,6 +281,9 @@ def _serialize_sync_params(
         "batch_object_type": batch_object_type,
         "batch_object_ids": list(batch_object_ids or []),
     }
+    if fastapi_endpoint_id is not None:
+        result["fastapi_endpoint_id"] = fastapi_endpoint_id
+    return result
 
 
 def _infer_targeted_vm_job_params(job: object) -> dict[str, object] | None:
@@ -737,9 +741,11 @@ class ProxboxSyncJob(JobRunner):
         netbox_vm_ids: list[str] | None = None,
         batch_object_type: str | None = None,
         batch_object_ids: list[str] | None = None,
+        fastapi_endpoint_id: int | None = None,
         **kwargs,
     ):
         """Run one or more proxbox-api SSE streams in dependency order."""
+        fastapi_endpoint_id = fastapi_endpoint_id
         from netbox_proxbox.services import run_sync_stream
 
         if not _claim_rq_sync_ownership(self.job):
@@ -771,6 +777,7 @@ class ProxboxSyncJob(JobRunner):
                 "netbox_vm_ids": [str(x) for x in list(netbox_vm_ids or []) if str(x)],
                 "batch_object_type": batch_object_type,
                 "batch_object_ids": batch_object_ids,
+                "fastapi_endpoint_id": fastapi_endpoint_id,
             }
             self.job.data = {
                 "proxbox_sync": {
@@ -880,6 +887,7 @@ def _execute_stage_sync(
     stream_path: str,
     query_params: dict[str, str] | None,
     on_frame: Callable[[str, dict[str, object]], None],
+    endpoint_id: int | None = None,
 ) -> dict[str, object]:
     """Execute a single stage sync and return payload."""
     from netbox_proxbox.services import run_sync_stream
@@ -911,6 +919,7 @@ def _execute_stage_sync(
         stream_path,
         query_params=query_params,
         on_frame=lambda e, d: _on_frame_with_heartbeat(e, d, on_frame),
+        endpoint_id=endpoint_id,
     )
     elapsed = _format_seconds(time.monotonic() - stage_started)
     job.job.save(update_fields=["log_entries"])
@@ -968,13 +977,16 @@ def _run_all_stages_sync(
     stages_out: list[dict[str, object]] = []
 
     target_vm_ids = [str(x) for x in list(params.get("netbox_vm_ids") or []) if str(x)]
+    fastapi_endpoint_id = params.get("fastapi_endpoint_id")
 
     for st in stages:
         query_params = _build_stage_query_params(base_query, st, target_vm_ids)
         stage_paths = _sync_stream_paths_for_stage(st, target_vm_ids)
 
         for stream_path in stage_paths:
-            payload = _execute_stage_sync(job, st, stream_path, query_params, on_frame)
+            payload = _execute_stage_sync(
+                job, st, stream_path, query_params, on_frame, fastapi_endpoint_id
+            )
             stages_out.append({"sync_type": st, "payload": payload})
 
     return stages_out
