@@ -18,7 +18,15 @@ def schedule_hints(monkeypatch):
     """Load schedule_hints.py with NetBox/Django deps stubbed."""
     core_choices = types.ModuleType("core.choices")
     core_choices.JobStatusChoices = SimpleNamespace(
-        ENQUEUED_STATE_CHOICES=("pending", "scheduled", "running")
+        ENQUEUED_STATE_CHOICES=("pending", "scheduled", "running"),
+        TERMINAL_STATE_CHOICES=("completed", "errored", "failed", "canceled"),
+        STATUS_PENDING="pending",
+        STATUS_SCHEDULED="scheduled",
+        STATUS_RUNNING="running",
+        STATUS_COMPLETED="completed",
+        STATUS_ERRORED="errored",
+        STATUS_FAILED="failed",
+        STATUS_CANCELED="canceled",
     )
     monkeypatch.setitem(sys.modules, "core.choices", core_choices)
 

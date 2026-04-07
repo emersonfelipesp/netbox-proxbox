@@ -384,6 +384,7 @@ def load_plugin_module(
         STATUS_COMPLETED="completed",
         STATUS_ERRORED="errored",
         STATUS_FAILED="failed",
+        STATUS_CANCELED="canceled",
     )
     core_models = types.ModuleType("core.models")
     core_models.Job = _make_model_class("Job")
