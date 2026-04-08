@@ -35,7 +35,9 @@ class VirtualMachineSyncNowView(
 
     def post(self, request: HttpRequest, pk: int | str) -> HttpResponseRedirect:
         """Handle post."""
-        vm = get_object_or_404(VirtualMachine.objects, pk=pk)
+        vm = get_object_or_404(
+            VirtualMachine.objects.restrict(request.user, "view"), pk=pk
+        )
 
         vmid = vm.custom_field_data.get("proxmox_vm_id") or vm.custom_field_data.get(
             "cf_proxmox_vm_id"

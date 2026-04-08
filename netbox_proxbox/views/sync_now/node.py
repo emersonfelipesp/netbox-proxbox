@@ -34,7 +34,9 @@ class ProxmoxNodeSyncNowView(
 
     def post(self, request: HttpRequest, pk: int | str) -> HttpResponseRedirect:
         """Handle post."""
-        node = get_object_or_404(ProxmoxNode.objects, pk=pk)
+        node = get_object_or_404(
+            ProxmoxNode.objects.restrict(request.user, "view"), pk=pk
+        )
         node_name = node.name
 
         cluster_name = ""

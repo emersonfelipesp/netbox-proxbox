@@ -25,11 +25,11 @@ function initializeWebSocket() {
     const websocketEndpoint = window.proxboxConfig?.websocketEndpoint;
     const websocketApiKey = window.proxboxConfig?.websocketApiKey;
     const syncContainer = document.querySelector("[data-use-websocket='true'][data-server-side-websocket='false']");
-    if (!websocketEndpoint || !websocketApiKey || !syncContainer) {
+    if (!websocketEndpoint || !syncContainer) {
         return null;
     }
 
-    return new WebSocketClient(websocketEndpoint, websocketApiKey);
+    return new WebSocketClient(websocketEndpoint, websocketApiKey || null);
 }
 
 function isFastapiStatusElement(element) {

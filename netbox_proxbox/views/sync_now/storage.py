@@ -34,7 +34,9 @@ class ProxmoxStorageSyncNowView(
 
     def post(self, request: HttpRequest, pk: int | str) -> HttpResponseRedirect:
         """Handle post."""
-        storage = get_object_or_404(ProxmoxStorage.objects, pk=pk)
+        storage = get_object_or_404(
+            ProxmoxStorage.objects.restrict(request.user, "view"), pk=pk
+        )
         storage_name = storage.name
         proxmox_cluster = ProxmoxCluster.objects.filter(
             netbox_cluster=storage.cluster

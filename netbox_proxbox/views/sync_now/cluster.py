@@ -32,7 +32,9 @@ class ProxmoxClusterSyncNowView(
 
     def post(self, request: HttpRequest, pk: int | str) -> HttpResponseRedirect:
         """Handle post."""
-        cluster = get_object_or_404(ProxmoxCluster.objects, pk=pk)
+        cluster = get_object_or_404(
+            ProxmoxCluster.objects.restrict(request.user, "view"), pk=pk
+        )
         cluster_name = cluster.name
 
         response, status, dependencies = sync_individual_with_dependencies(

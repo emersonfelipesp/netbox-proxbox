@@ -68,7 +68,6 @@ def init() -> None:
         timeout = float(timeout_str)
     except ValueError:
         emit_cli_error(f"Invalid timeout value: {timeout_str!r}")
-        raise SystemExit(1)
 
     cfg = Config(base_url=normalize_base_url(raw), timeout=timeout)
     save_config(cfg)

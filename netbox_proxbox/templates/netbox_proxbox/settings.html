@@ -28,6 +28,28 @@
                     {% render_field form.backend_log_file_path %}
                 </div>
             </div>
+            {# NetBox Integration Card #}
+            <div class="card mb-3">
+                <h5 class="card-header">
+                    <i class="mdi mdi-database"></i>
+                    {% trans "NetBox Integration" %}
+                </h5>
+                <div class="card-body">
+                    <p class="text-muted">
+                        {% blocktrans trimmed %}
+                        Configure NetBox API connection behavior, caching, and bulk operation parameters.
+                        {% endblocktrans %}
+                    </p>
+                    {% render_field form.netbox_max_concurrent %}
+                    {% render_field form.netbox_max_retries %}
+                    {% render_field form.netbox_retry_delay %}
+                    {% render_field form.netbox_get_cache_ttl %}
+                    {% render_field form.bulk_batch_size %}
+                    {% render_field form.bulk_batch_delay_ms %}
+                    {% render_field form.vm_sync_max_concurrency %}
+                    {% render_field form.custom_fields_request_delay %}
+                </div>
+            </div>
             {# SSRF Protection Card #}
             <div class="card mb-3">
                 <h5 class="card-header">

@@ -46,6 +46,7 @@ def sync_type_label(slug: str) -> str:
         "storage": "Storage",
         "virtual-machines": "VMs",
         "vm-disks": "VM Disks",
+        "vm-interfaces": "VM Interfaces",
         "vm-backups": "VM Backups",
         "vm-snapshots": "VM Snapshots",
         "network-interfaces": "Net Ifaces",
