@@ -1,4 +1,4 @@
-"""Squash migrations 0022-0026: FastAPI tokens, settings, and constraint conversions."""
+"""Squashed migration: 0022-0026 FastAPI tokens, settings, and constraint conversions."""
 
 import logging
 import secrets
