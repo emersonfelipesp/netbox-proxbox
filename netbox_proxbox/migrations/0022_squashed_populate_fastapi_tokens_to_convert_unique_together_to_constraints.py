@@ -184,7 +184,24 @@ class Migration(migrations.Migration):
                 "ALTER TABLE netbox_proxbox_vmsnapshot DROP CONSTRAINT IF EXISTS netbox_proxbox_vmsnapshot_vmid_name_node_key;",
             ],
             reverse_sql=migrations.RunSQL.noop,
-            state_operations=[],
+            state_operations=[
+                migrations.AlterUniqueTogether(
+                    name='proxmoxstorage',
+                    unique_together=set(),
+                ),
+                migrations.AlterUniqueTogether(
+                    name='proxmoxstoragevirtualdisk',
+                    unique_together=set(),
+                ),
+                migrations.AlterUniqueTogether(
+                    name='vmbackup',
+                    unique_together=set(),
+                ),
+                migrations.AlterUniqueTogether(
+                    name='vmsnapshot',
+                    unique_together=set(),
+                ),
+            ],
         ),
         migrations.AddConstraint(
             model_name="proxmoxstorage",
