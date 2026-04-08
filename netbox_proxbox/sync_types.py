@@ -14,9 +14,10 @@ _SYNC_STAGE_ORDER: tuple[str, ...] = (
     SyncTypeChoices.VIRTUAL_MACHINES_DISKS,
     SyncTypeChoices.VIRTUAL_MACHINES_BACKUPS,
     SyncTypeChoices.VIRTUAL_MACHINES_SNAPSHOTS,
-    SyncTypeChoices.REPLICATIONS,
     SyncTypeChoices.NETWORK_INTERFACES,
+    SyncTypeChoices.VM_INTERFACES,
     SyncTypeChoices.IP_ADDRESSES,
+    SyncTypeChoices.REPLICATIONS,
     SyncTypeChoices.BACKUP_ROUTINES,
 )
 
@@ -32,6 +33,7 @@ _SYNC_TYPE_PATH: dict[str, str] = {
     ),
     SyncTypeChoices.REPLICATIONS: "proxmox/replication",
     SyncTypeChoices.NETWORK_INTERFACES: "dcim/devices/interfaces/create",
+    SyncTypeChoices.VM_INTERFACES: "virtualization/virtual-machines/interfaces/create",
     SyncTypeChoices.IP_ADDRESSES: "virtualization/virtual-machines/interfaces/ip-address/create",
     SyncTypeChoices.BACKUP_ROUTINES: "proxmox/cluster/backup",
 }

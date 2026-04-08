@@ -52,17 +52,15 @@ def backend_proxy_module(monkeypatch):
 
 
 class _StreamResponse:
-    """Minimal streaming ``requests`` response for ``with requests.get(..., stream=True)``."""
+    """Minimal streaming ``requests`` response for ``requests.get(..., stream=True)``."""
 
     def __init__(self, lines: list[str], *, status_code: int = 200):
         self.status_code = status_code
         self._lines = lines
+        self.closed = False
 
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *args):
-        return False
+    def close(self):
+        self.closed = True
 
     def iter_lines(self, decode_unicode: bool = True):
         yield from self._lines
@@ -79,6 +77,9 @@ class _HealthResponse:
     def __exit__(self, *args):
         return False
 
+    def close(self):
+        pass
+
     def json(self):
         return {"init_ok": True, "status": "ready"}
 
@@ -89,12 +90,10 @@ class _ErrorBodyResponse:
     def __init__(self, status_code: int, payload: dict):
         self.status_code = status_code
         self._payload = payload
+        self.closed = False
 
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *args):
-        return False
+    def close(self):
+        self.closed = True
 
     def json(self):
         return self._payload
@@ -162,6 +161,8 @@ def test_run_sync_stream_success(backend_proxy_module, monkeypatch):
     assert payload["path"] == "dcim/devices/create/stream"
     assert urls[0] == "https://proxbox.local:8800/health"
     assert urls[1].startswith("https://proxbox.local:8800/dcim/devices/create/stream")
+    # Exactly one health check + one stream request -- no double-request regression
+    assert len(urls) == 2
 
 
 def test_run_sync_stream_success_with_list_result(backend_proxy_module, monkeypatch):

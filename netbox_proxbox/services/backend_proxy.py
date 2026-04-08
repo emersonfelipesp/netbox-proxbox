@@ -136,50 +136,6 @@ def _consume_sse_until_complete(
     }, 200
 
 
-def _consume_sse_from_response(
-    response: requests.Response,
-    on_frame: Callable[[str, dict[str, object]], None] | None,
-) -> tuple[dict[str, object], int]:
-    """Read an SSE body from an existing response to the final ``complete`` event."""
-    last_complete: SseCompletePayload | None = None
-    try:
-        for frame in _iter_sse_frames(response.iter_lines(decode_unicode=True)):
-            _event = frame.event
-            data = frame.data
-            if on_frame is not None:
-                on_frame(_event, data)
-            if _event == "complete":
-                last_complete = SseCompletePayload.model_validate(data)
-    except requests.exceptions.RequestException as exc:
-        detail, _ = extract_backend_error_detail(exc)
-        return {
-            "stream": True,
-            "detail": detail,
-        }, 502
-
-    if last_complete is None:
-        return {
-            "stream": True,
-            "detail": "ProxBox backend stream ended without a complete event.",
-        }, 502
-
-    if last_complete.ok is False:
-        msg = last_complete.message or "Sync failed."
-        if last_complete.errors:
-            first_error = last_complete.errors[0]
-            if first_error.get("detail"):
-                msg = str(first_error["detail"])
-        return {
-            "stream": True,
-            "detail": msg,
-            "response": last_complete.model_dump(),
-        }, 503
-
-    return {
-        "stream": True,
-        "response": last_complete.model_dump(),
-    }, 200
-
 
 def request_backend_resource(
     context: BackendRequestContext,
@@ -338,30 +294,27 @@ def run_sync_stream(
             on_frame=on_frame,
             endpoint_id=endpoint_id,
         )
-        if result is not None:
-            last_detail, should_retry, new_headers = result
-            if should_retry and new_headers:
-                backend_headers = new_headers
-                continue
-            if last_detail is None:
-                return {
-                    "stream": True,
-                    "path": path,
-                    "requested_urls": requested_urls,
-                }, 200
-            if not should_retry:
-                break
-            continue
+        if not isinstance(result, tuple):
+            # Success: consume SSE from the already-open connection
+            try:
+                payload, status = _consume_sse_until_complete(result, on_frame=on_frame)
+            finally:
+                result.close()
+            payload = {
+                **payload,
+                "path": path,
+                "requested_urls": requested_urls,
+            }
+            return payload, status
 
-        payload, status = _make_request_and_consume_sse(
-            url, verify, query_params, backend_headers, on_frame
-        )
-        payload = {
-            **payload,
-            "path": path,
-            "requested_urls": requested_urls,
-        }
-        return payload, status
+        # Error path: result is (last_detail, should_retry, new_headers)
+        last_detail, should_retry, new_headers = result
+        if should_retry and new_headers:
+            backend_headers = new_headers
+            continue
+        if not should_retry:
+            break
+        continue
 
     return {
         "stream": True,
@@ -379,55 +332,58 @@ def _try_sync_stream_url(
     headers: dict,
     on_frame: Callable[[str, dict[str, object]], None] | None,
     endpoint_id: int | None = None,
-) -> tuple[str | None, bool, dict | None] | None:
+) -> tuple[str | None, bool, dict | None] | requests.Response:
     """Try a single URL for sync stream request.
 
     Returns:
-        - None if request succeeded (caller should consume SSE)
-        - (error_detail, should_retry, new_headers) on HTTP error >= 400
-        - (error_detail, False, None) on connection error
+        - An open ``requests.Response`` on success -- caller MUST close it.
+        - (error_detail, should_retry, new_headers) on HTTP error >= 400.
+        - (error_detail, False, None) on connection error.
     """
     try:
-        with requests.get(
+        response = requests.get(
             url,
             params=query_params,
             headers=headers,
             verify=verify,
             timeout=_SYNC_STREAM_READ_TIMEOUT,
             stream=True,
-        ) as response:
-            if response.status_code >= 400:
-                last_detail = f"HTTP {response.status_code}"
-                try:
-                    payload, json_err = parse_requests_response_json(
-                        response, log_label=f"sync-stream:{path}"
-                    )
-                    if not json_err and isinstance(payload, dict):
-                        d = payload.get("detail") or payload.get("message")
-                        if d:
-                            last_detail = str(d)
-                        if response.status_code == 401 and "API key" in str(d):
-                            new_headers, should_retry = (
-                                _handle_auth_registration_and_retry(
-                                    headers,
-                                    endpoint_id=endpoint_id,
-                                )
-                            )
-                            if should_retry:
-                                return last_detail, True, new_headers
-                except Exception:
-                    logger.debug("Could not parse error JSON for %s", path)
-                logger.error(
-                    "Sync stream HTTP %s for %s via %s: %s",
-                    response.status_code,
-                    path,
-                    url,
-                    last_detail,
+        )
+        if response.status_code >= 400:
+            last_detail = f"HTTP {response.status_code}"
+            try:
+                payload, json_err = parse_requests_response_json(
+                    response, log_label=f"sync-stream:{path}"
                 )
-                should_retry = response.status_code >= 500
-                return last_detail, should_retry, None
+                if not json_err and isinstance(payload, dict):
+                    d = payload.get("detail") or payload.get("message")
+                    if d:
+                        last_detail = str(d)
+                    if response.status_code == 401 and "API key" in str(d):
+                        new_headers, should_retry = (
+                            _handle_auth_registration_and_retry(
+                                headers,
+                                endpoint_id=endpoint_id,
+                            )
+                        )
+                        if should_retry:
+                            response.close()
+                            return last_detail, True, new_headers
+            except Exception:
+                logger.debug("Could not parse error JSON for %s", path)
+            logger.error(
+                "Sync stream HTTP %s for %s via %s: %s",
+                response.status_code,
+                path,
+                url,
+                last_detail,
+            )
+            should_retry = response.status_code >= 500
+            response.close()
+            return last_detail, should_retry, None
 
-            return None
+        # Success: return the open response for the caller to consume
+        return response
     except requests.exceptions.RequestException as exc:
         last_detail, http_st = extract_backend_error_detail(exc)
         logger.exception("Sync stream request failed for %s via %s", path, url)
@@ -446,32 +402,6 @@ def _try_sync_stream_url(
             "Unexpected sync stream error for %s via %s: %s", path, url, exc
         )
         return last_detail, False, None
-
-
-def _make_request_and_consume_sse(
-    url: str,
-    verify: bool,
-    query_params: dict | None,
-    headers: dict,
-    on_frame: Callable[[str, dict[str, object]], None] | None,
-) -> tuple[dict[str, object], int]:
-    """Make HTTP request and consume SSE stream to completion."""
-    try:
-        with requests.get(
-            url,
-            params=query_params,
-            headers=headers,
-            verify=verify,
-            timeout=_SYNC_STREAM_READ_TIMEOUT,
-            stream=True,
-        ) as response:
-            return _consume_sse_from_response(response, on_frame)
-    except requests.exceptions.RequestException as exc:
-        detail, _ = extract_backend_error_detail(exc)
-        return {
-            "stream": True,
-            "detail": detail,
-        }, 502
 
 
 def iter_backend_sse_lines(

@@ -92,6 +92,7 @@ def job_stream_module(monkeypatch):
         VIRTUAL_MACHINES_BACKUPS="vm-backups",
         VIRTUAL_MACHINES_SNAPSHOTS="vm-snapshots",
         NETWORK_INTERFACES="network-interfaces",
+        VM_INTERFACES="vm-interfaces",
         IP_ADDRESSES="ip-addresses",
     )
     nbp_jobs.is_proxbox_sync_job = lambda job: True

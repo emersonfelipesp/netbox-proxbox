@@ -40,6 +40,7 @@ def proxbox_sync_job_module(monkeypatch):
         VIRTUAL_MACHINES_DISKS="vm-disks",
         VIRTUAL_MACHINES_SNAPSHOTS="vm-snapshots",
         NETWORK_INTERFACES="network-interfaces",
+        VM_INTERFACES="vm-interfaces",
         IP_ADDRESSES="ip-addresses",
         ALL="all",
     )
@@ -741,9 +742,9 @@ def test_proxbox_sync_job_run_all_invokes_each_stage_stream(
 
     st = proxbox_sync_job_module.SyncTypeChoices
     ProxboxSyncJob.run(job, sync_types=[st.ALL])
-    assert calls == 10
+    assert calls == 11
     stages = job.job.data["proxbox_sync"]["response"]["stages"]
-    assert len(stages) == 10
+    assert len(stages) == 11
     assert {s["sync_type"] for s in stages} == {
         st.DEVICES,
         st.STORAGE,
@@ -753,6 +754,7 @@ def test_proxbox_sync_job_run_all_invokes_each_stage_stream(
         st.VIRTUAL_MACHINES_SNAPSHOTS,
         st.REPLICATIONS,
         st.NETWORK_INTERFACES,
+        st.VM_INTERFACES,
         st.IP_ADDRESSES,
         st.BACKUP_ROUTINES,
     }
