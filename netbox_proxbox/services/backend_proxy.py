@@ -136,7 +136,6 @@ def _consume_sse_until_complete(
     }, 200
 
 
-
 def request_backend_resource(
     context: BackendRequestContext,
     path: str,
@@ -360,11 +359,9 @@ def _try_sync_stream_url(
                     if d:
                         last_detail = str(d)
                     if response.status_code == 401 and "API key" in str(d):
-                        new_headers, should_retry = (
-                            _handle_auth_registration_and_retry(
-                                headers,
-                                endpoint_id=endpoint_id,
-                            )
+                        new_headers, should_retry = _handle_auth_registration_and_retry(
+                            headers,
+                            endpoint_id=endpoint_id,
                         )
                         if should_retry:
                             response.close()
