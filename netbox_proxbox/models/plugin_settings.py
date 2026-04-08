@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 from django.db import models
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
@@ -50,6 +52,61 @@ class ProxboxPluginSettings(NetBoxModel):
             "When enabled, IPv6 link-local addresses (fe80::/64) are ignored during "
             "VM interface IP address selection. Disable this only if you need link-local "
             "addresses to be included."
+        ),
+    )
+    netbox_max_concurrent = models.PositiveSmallIntegerField(
+        default=1,
+        verbose_name=_("NetBox max concurrent requests"),
+        help_text=_(
+            "Maximum number of simultaneous in-flight requests to the NetBox API (semaphore cap). "
+            "Increase carefully — PostgreSQL pool may exhaust."
+        ),
+    )
+    netbox_max_retries = models.PositiveSmallIntegerField(
+        default=5,
+        verbose_name=_("NetBox max retries"),
+        help_text=_("Maximum retry attempts for transient NetBox API failures."),
+    )
+    netbox_retry_delay = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal("2.00"),
+        verbose_name=_("NetBox retry delay (seconds)"),
+        help_text=_("Base delay in seconds for exponential back-off between retries."),
+    )
+    netbox_get_cache_ttl = models.DecimalField(
+        max_digits=7,
+        decimal_places=2,
+        default=Decimal("60.00"),
+        verbose_name=_("NetBox GET cache TTL (seconds)"),
+        help_text=_(
+            "How long to cache NetBox GET responses in memory. Set to 0 to disable caching."
+        ),
+    )
+    bulk_batch_size = models.PositiveSmallIntegerField(
+        default=50,
+        verbose_name=_("Bulk batch size"),
+        help_text=_("Number of records per batch in bulk create/update operations."),
+    )
+    bulk_batch_delay_ms = models.PositiveIntegerField(
+        default=500,
+        verbose_name=_("Bulk batch delay (ms)"),
+        help_text=_(
+            "Milliseconds to wait between bulk batches to avoid overwhelming NetBox."
+        ),
+    )
+    vm_sync_max_concurrency = models.PositiveSmallIntegerField(
+        default=4,
+        verbose_name=_("VM sync max concurrency"),
+        help_text=_("Maximum number of VMs synced in parallel during a full update."),
+    )
+    custom_fields_request_delay = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        verbose_name=_("Custom fields request delay (seconds)"),
+        help_text=_(
+            "Optional sleep between custom-field API operations to throttle requests."
         ),
     )
     backend_log_file_path = models.CharField(

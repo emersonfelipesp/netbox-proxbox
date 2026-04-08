@@ -37,6 +37,70 @@ class ProxboxPluginSettingsForm(forms.Form):
             "VM interface IP address selection. Disable only if you need link-local addresses included."
         ),
     )
+    netbox_max_concurrent = forms.IntegerField(
+        required=True,
+        min_value=1,
+        max_value=32,
+        initial=1,
+        label="NetBox max concurrent requests",
+        help_text="Maximum simultaneous in-flight requests to NetBox API. Increase carefully.",
+    )
+    netbox_max_retries = forms.IntegerField(
+        required=True,
+        min_value=1,
+        max_value=20,
+        initial=5,
+        label="NetBox max retries",
+        help_text="Maximum retry attempts for transient NetBox API failures.",
+    )
+    netbox_retry_delay = forms.DecimalField(
+        required=True,
+        min_value=0,
+        max_value=60,
+        initial="2.00",
+        label="NetBox retry delay (seconds)",
+        help_text="Base delay in seconds for exponential back-off between retries.",
+    )
+    netbox_get_cache_ttl = forms.DecimalField(
+        required=True,
+        min_value=0,
+        max_value=3600,
+        initial="60.00",
+        label="NetBox GET cache TTL (seconds)",
+        help_text="How long to cache NetBox GET responses. Set to 0 to disable caching.",
+    )
+    bulk_batch_size = forms.IntegerField(
+        required=True,
+        min_value=1,
+        max_value=1000,
+        initial=50,
+        label="Bulk batch size",
+        help_text="Number of records per batch in bulk create/update operations.",
+    )
+    bulk_batch_delay_ms = forms.IntegerField(
+        required=True,
+        min_value=0,
+        max_value=10000,
+        initial=500,
+        label="Bulk batch delay (ms)",
+        help_text="Milliseconds to wait between bulk batches to avoid overwhelming NetBox.",
+    )
+    vm_sync_max_concurrency = forms.IntegerField(
+        required=True,
+        min_value=1,
+        max_value=64,
+        initial=4,
+        label="VM sync max concurrency",
+        help_text="Maximum number of VMs synced in parallel during a full update.",
+    )
+    custom_fields_request_delay = forms.DecimalField(
+        required=False,
+        min_value=0,
+        max_value=60,
+        initial="0.00",
+        label="Custom fields request delay (seconds)",
+        help_text="Optional sleep between custom-field API operations to throttle requests.",
+    )
     backend_log_file_path = forms.CharField(
         required=True,
         max_length=255,
