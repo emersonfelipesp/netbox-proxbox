@@ -21,9 +21,9 @@ repos:
         name: ruff-format
         entry: ruff
         language: system
-        pass_filenames: true
+        pass_filenames: false
         types: [python]
-        args: ["format", "--check", "."]
+        args: ["format", "."]
 
       - id: ty-check
         name: ty-check
