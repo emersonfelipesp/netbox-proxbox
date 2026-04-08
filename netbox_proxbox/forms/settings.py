@@ -145,6 +145,17 @@ class ProxboxPluginSettingsForm(forms.Form):
             "even if they match allowed ranges above."
         ),
     )
+    encryption_key = forms.CharField(
+        required=False,
+        max_length=255,
+        widget=forms.PasswordInput(render_value=False),
+        label="Encryption key",
+        help_text=(
+            "Base64-encoded or raw encryption key for proxbox-api credential encryption. "
+            "If set, proxbox-api will use this key instead of PROXBOX_ENCRYPTION_KEY environment variable. "
+            "Leave blank to use environment variable only."
+        ),
+    )
 
     def clean_backend_log_file_path(self) -> str:
         """Require an absolute log file path including a filename."""

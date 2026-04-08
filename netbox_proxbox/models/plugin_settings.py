@@ -152,6 +152,17 @@ class ProxboxPluginSettings(NetBoxModel):
             "even if they match allowed ranges above."
         ),
     )
+    encryption_key = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        verbose_name=_("Encryption key"),
+        help_text=_(
+            "Base64-encoded or raw encryption key for proxbox-api credential encryption. "
+            "If set, proxbox-api will use this key instead of PROXBOX_ENCRYPTION_KEY env var. "
+            "Leave blank to use environment variable only."
+        ),
+    )
 
     class Meta:
         verbose_name = _("Proxbox plugin settings")
