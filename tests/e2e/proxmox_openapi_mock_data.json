@@ -1,0 +1,188 @@
+{
+  "/api2/json/version": {
+    "data": {
+      "release": "8.2",
+      "repoid": "mock"
+    }
+  },
+  "/api2/json/cluster/status": {
+    "data": [
+      {
+        "type": "cluster",
+        "name": "e2e-cluster",
+        "version": 1
+      },
+      {
+        "type": "node",
+        "name": "pve01",
+        "nodeid": 1,
+        "ip": "10.10.10.11",
+        "online": 1,
+        "local": 1,
+        "level": ""
+      }
+    ]
+  },
+  "/api2/json/cluster/config/join": {
+    "data": {
+      "nodelist": [
+        {
+          "name": "pve01",
+          "nodeid": 1,
+          "pve_fp": "AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99"
+        }
+      ]
+    }
+  },
+  "/api2/json/cluster/resources": {
+    "data": [
+      {
+        "type": "node",
+        "node": "pve01",
+        "status": "online",
+        "maxcpu": 8
+      },
+      {
+        "type": "qemu",
+        "vmid": 101,
+        "name": "e2e-qemu-101",
+        "node": "pve01",
+        "status": "running",
+        "maxcpu": 2,
+        "maxmem": 2147483648,
+        "maxdisk": 21474836480
+      },
+      {
+        "type": "lxc",
+        "vmid": 102,
+        "name": "e2e-lxc-102",
+        "node": "pve01",
+        "status": "running",
+        "maxcpu": 1,
+        "maxmem": 1073741824,
+        "maxdisk": 10737418240
+      }
+    ]
+  },
+  "/api2/json/storage": {
+    "data": [
+      {
+        "storage": "local",
+        "type": "dir",
+        "content": "images,rootdir",
+        "shared": 0,
+        "nodes": "pve01"
+      },
+      {
+        "storage": "backup",
+        "type": "dir",
+        "content": "backup",
+        "shared": 1,
+        "nodes": "pve01"
+      }
+    ]
+  },
+  "/api2/json/nodes/pve01/qemu/101/config": {
+    "data": {
+      "name": "e2e-qemu-101",
+      "onboot": 1,
+      "agent": 1,
+      "searchdomain": "lab.local",
+      "scsi0": "local-lvm:vm-101-disk-0,size=20G",
+      "sockets": 1,
+      "cores": 2,
+      "memory": 2048,
+      "node": "pve01"
+    }
+  },
+  "/api2/json/nodes/pve01/lxc/102/config": {
+    "data": {
+      "hostname": "e2e-lxc-102",
+      "onboot": 1,
+      "unprivileged": 1,
+      "rootfs": "local-lvm:subvol-102-disk-0,size=10G",
+      "cores": 1,
+      "memory": 1024,
+      "node": "pve01"
+    }
+  },
+  "/api2/json/nodes/pve01/storage/local/content": {
+    "data": []
+  },
+  "/api2/json/nodes/pve01/storage/backup/content": {
+    "data": [
+      {
+        "content": "backup",
+        "vmid": 101,
+        "volid": "backup:101/vzdump-qemu-101-2026_01_01-00_00_00.vma.zst",
+        "size": 10485760,
+        "ctime": 1767225600,
+        "format": "tzst",
+        "subtype": "qemu",
+        "notes": "e2e backup qemu",
+        "node": "pve01",
+        "storage": "backup"
+      },
+      {
+        "content": "backup",
+        "vmid": 102,
+        "volid": "backup:102/vzdump-lxc-102-2026_01_01-00_00_00.tar.zst",
+        "size": 7340032,
+        "ctime": 1767225600,
+        "format": "tzst",
+        "subtype": "lxc",
+        "notes": "e2e backup lxc",
+        "node": "pve01",
+        "storage": "backup"
+      }
+    ]
+  },
+  "/api2/json/nodes/pve01/tasks": {
+    "data": [
+      {
+        "upid": "UPID:pve01:00000001:00000001:00000001:qmstart:101:root@pam:",
+        "node": "pve01",
+        "pid": 1,
+        "pstart": 1,
+        "id": "101",
+        "type": "qmstart",
+        "user": "root@pam",
+        "starttime": 1767225600,
+        "endtime": 1767225602,
+        "status": "OK"
+      }
+    ]
+  },
+  "/api2/json/nodes/pve01/tasks/UPID:pve01:00000001:00000001:00000001:qmstart:101:root@pam:/status": {
+    "data": {
+      "status": "stopped",
+      "exitstatus": "OK"
+    }
+  },
+  "/api2/json/nodes/pve01/qemu/101/snapshot": {
+    "data": [
+      {
+        "name": "base",
+        "description": "e2e qemu snapshot",
+        "snaptime": 1767225600,
+        "vmstate": 0,
+        "parent": null,
+        "vmid": 101,
+        "node": "pve01"
+      }
+    ]
+  },
+  "/api2/json/nodes/pve01/lxc/102/snapshot": {
+    "data": [
+      {
+        "name": "base",
+        "description": "e2e lxc snapshot",
+        "snaptime": 1767225600,
+        "vmstate": 0,
+        "parent": null,
+        "vmid": 102,
+        "node": "pve01"
+      }
+    ]
+  }
+}

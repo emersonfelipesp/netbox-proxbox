@@ -5,7 +5,7 @@ from __future__ import annotations
 from core.choices import JobStatusChoices
 from core.models import Job
 from django.contrib import messages
-from django.http import HttpResponseRedirect
+from django.http import HttpRequest, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext as _
 from django.views import View
@@ -36,11 +36,11 @@ class ProxboxJobRunNowView(
 
     http_method_names = ["post"]
 
-    def get_required_permission(self):
+    def get_required_permission(self) -> str:
         """Require ``add`` on core ``Job`` (same gate as the schedule form)."""
         return permission_enqueue_proxbox_sync()
 
-    def post(self, request, pk):
+    def post(self, request: HttpRequest, pk: int | str) -> HttpResponseRedirect:
         """Clone sync parameters onto a new queued job and redirect to its detail page."""
         job = get_object_or_404(Job.objects.restrict(request.user, "view"), pk=pk)
         if not is_proxbox_sync_job(job):

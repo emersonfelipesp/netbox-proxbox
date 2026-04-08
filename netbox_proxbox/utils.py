@@ -6,7 +6,6 @@ import os
 import subprocess
 from typing import TYPE_CHECKING
 
-from netbox_proxbox.schemas.backend_proxy import FastAPIUrlDict
 from netbox_proxbox.type_defs import FastAPIAuthSource, FastAPIUrlSource
 
 if TYPE_CHECKING:
@@ -14,7 +13,6 @@ if TYPE_CHECKING:
 
 
 def resolve_ip_address_initial(value: object) -> "IPAddress | None":  # type: ignore[return-type]
-    """Best-effort resolve a query-string IP address to an existing NetBox object."""
     """Best-effort resolve a query-string IP address to an existing NetBox object."""
     from ipam.models import IPAddress
 
@@ -41,17 +39,13 @@ def get_ip_address_host(value: object | None) -> str:
 
 
 def get_backend_auth_headers(endpoint: FastAPIAuthSource | None) -> dict[str, str]:
-    """Build Authorization header dict for ProxBox backend requests."""
+    """Build auth header dict for ProxBox backend requests."""
     if endpoint is None:
         return {}
     token = (getattr(endpoint, "token", "") or "").strip()
     if not token:
         return {}
-
-    if token.startswith("Bearer ") or token.startswith("Token "):
-        return {"Authorization": token}
-
-    return {"Authorization": f"Bearer {token}"}
+    return {"X-Proxbox-API-Key": token}
 
 
 def get_fastapi_context(endpoint: FastAPIUrlSource) -> dict | None:
@@ -64,24 +58,72 @@ def get_fastapi_context(endpoint: FastAPIUrlSource) -> dict | None:
         return None
 
     url_dict = get_fastapi_url(endpoint)
-    raw = url_dict.model_dump() if hasattr(url_dict, "model_dump") else dict(url_dict)
 
     return {
-        "http_url": raw.get("http_url"),
-        "ip_address_url": raw.get("ip_address_url"),
-        "verify_ssl": bool(raw.get("verify_ssl", True)),
+        "http_url": url_dict.get("http_url"),
+        "ip_address_url": url_dict.get("ip_address_url"),
+        "verify_ssl": bool(url_dict.get("verify_ssl", True)),
         "headers": get_backend_auth_headers(endpoint),
     }
 
 
-def get_first_fastapi_context() -> dict | None:
-    """Get context for the first configured FastAPI endpoint, if any."""
+def get_first_fastapi_context(endpoint_id: int | None = None) -> dict | None:
+    """Get context for the configured FastAPI endpoint.
+
+    Args:
+        endpoint_id: Optional specific endpoint ID. If not provided, selects by ID when multiple
+            endpoints exist, or returns the only endpoint when only one exists.
+
+    Returns:
+        Context dict or None if no endpoints configured.
+    """
     from netbox_proxbox.models import FastAPIEndpoint
 
-    fastapi_obj = FastAPIEndpoint.objects.first()
+    count = FastAPIEndpoint.objects.count()
+    if count == 0:
+        return None
+
+    if endpoint_id is not None:
+        fastapi_obj = FastAPIEndpoint.objects.filter(pk=endpoint_id).first()
+        if fastapi_obj is None:
+            return None
+        return get_fastapi_context(fastapi_obj)
+
+    if count == 1:
+        fastapi_obj = FastAPIEndpoint.objects.first()
+        return get_fastapi_context(fastapi_obj) if fastapi_obj else None
+
+    fastapi_obj = FastAPIEndpoint.objects.order_by("pk").first()
     if fastapi_obj is None:
         return None
     return get_fastapi_context(fastapi_obj)
+
+
+def get_fastapi_context_by_id(endpoint_id: int) -> dict | None:
+    """Get context for a specific FastAPI endpoint by ID.
+
+    Args:
+        endpoint_id: The primary key of the FastAPIEndpoint.
+
+    Returns:
+        Context dict or None if endpoint not found.
+    """
+    from netbox_proxbox.models import FastAPIEndpoint
+
+    fastapi_obj = FastAPIEndpoint.objects.filter(pk=endpoint_id).first()
+    if fastapi_obj is None:
+        return None
+    return get_fastapi_context(fastapi_obj)
+
+
+def get_fastapi_context_for_request(request) -> dict:
+    """Get FastAPI URL context for a request, respecting object-level permissions."""
+    from netbox_proxbox.models import FastAPIEndpoint
+
+    fastapi_endpoint = FastAPIEndpoint.objects.restrict(request.user, "view").first()
+    if fastapi_endpoint:
+        return get_fastapi_url(fastapi_endpoint) or {}
+    return {}
 
 
 def get_fastapi_url(endpoint: FastAPIUrlSource) -> dict:
@@ -112,8 +154,12 @@ def get_fastapi_url(endpoint: FastAPIUrlSource) -> dict:
             os.environ["REQUESTS_CA_BUNDLE"] = f"/{ca_root_folder}/rootCA.pem"
         except (subprocess.CalledProcessError, FileNotFoundError):
             pass
-        except Exception:
-            pass
+        except OSError as exc:
+            import logging
+
+            logging.getLogger(__name__).debug(
+                "Unexpected error checking mkcert CA: %s", exc
+            )
 
     return {
         "domain": getattr(endpoint, "domain", None) or None,

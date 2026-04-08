@@ -74,7 +74,7 @@ class ScheduleSyncForm(forms.Form):
         help_text=_("Unit of time for the recurrence interval."),
     )
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: object, **kwargs: object) -> None:
         """Append current-time hint to schedule help; optionally seed interval fields."""
         self.initial_interval = kwargs.pop("initial_interval", None)
         use_bootstrap_sync_checkboxes = kwargs.pop(
@@ -118,7 +118,7 @@ class ScheduleSyncForm(forms.Form):
                     "sync_types", [SyncTypeChoices.ALL]
                 )
 
-    def clean_sync_types(self):
+    def clean_sync_types(self) -> list[str]:
         """Disallow mixing ``all`` with other slugs; require at least one type."""
         values = list(self.cleaned_data.get("sync_types") or [])
         if not values:
@@ -134,12 +134,12 @@ class ScheduleSyncForm(forms.Form):
             )
         return values
 
-    def clean_job_name(self):
+    def clean_job_name(self) -> str:
         """Normalize optional custom job label to stripped text."""
         name = (self.cleaned_data.get("job_name") or "").strip()
         return name or ""
 
-    def clean(self):
+    def clean(self) -> dict[str, object]:
         """Validate schedule time, derive interval minutes, and flatten endpoint id lists."""
         super().clean()
         cleaned_data = self.cleaned_data

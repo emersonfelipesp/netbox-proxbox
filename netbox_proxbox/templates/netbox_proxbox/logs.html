@@ -8,7 +8,9 @@
     <script>
         window.proxboxLogsConfig = {
             logsApiUrl: "{{ logs_api_url|default:''|escapejs }}",
-            fastapiUrl: "{{ fastapi_url|default:''|escapejs }}"
+            fastapiUrl: "{{ fastapi_url|default:''|escapejs }}",
+            saveLogPathUrl: "{{ save_log_path_api_url|default:''|escapejs }}",
+            backendLogFilePath: "{{ backend_log_file_path|default:'/var/log/proxbox.log'|escapejs }}"
         };
     </script>
     <script type="module" src="{% static 'netbox_proxbox/js/logs.js' %}"></script>
@@ -26,6 +28,19 @@
                         {% trans "Backend Logs" %}
                     </h5>
                     <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
+                        <div class="input-group input-group-sm" style="max-width: 420px;">
+                            <span class="input-group-text">{% trans "Log file path" %}</span>
+                            <input
+                                type="text"
+                                class="form-control"
+                                id="backendLogFilePathInput"
+                                value="{{ backend_log_file_path|default:'/var/log/proxbox.log' }}"
+                                placeholder="/var/log/proxbox.log"
+                            >
+                            <button type="button" class="btn btn-outline-secondary" id="saveBackendLogFilePathBtn">
+                                {% trans "Save Path" %}
+                            </button>
+                        </div>
                         <div class="form-check form-switch mb-0">
                             <input class="form-check-input" type="checkbox" id="autoRefreshToggle" checked>
                             <label class="form-check-label" for="autoRefreshToggle">
@@ -41,6 +56,9 @@
                             {% trans "Refresh" %}
                         </button>
                     </div>
+                </div>
+                <div class="small text-muted mt-2" id="backendLogFilePathStatus">
+                    {% trans "Log file path changes apply after proxbox-api restart." %}
                 </div>
             </div>
             <div class="card-header pb-0">

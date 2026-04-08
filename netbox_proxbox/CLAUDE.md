@@ -17,8 +17,11 @@ This package contains the NetBox plugin itself. It defines the plugin config, UR
 - [`type_defs.py`](./type_defs.py): shared type aliases and lightweight protocol helpers used across the package.
 - [`utils.py`](./utils.py): URL and host helpers, especially for the FastAPI backend and mkcert-aware local TLS handling.
 - [`websocket_client.py`](./websocket_client.py): long-lived WebSocket client, message queue, and HTTP view used to stream backend messages into NetBox pages.
+- [`signals.py`](./signals.py): Django signal handlers for automatic token generation and backend registration when FastAPIEndpoint objects are created or updated.
 - [`schemas/`](./schemas): Pydantic models and formatters for backend payloads, normalized sync context, and OpenAPI helpers.
 - [`services/`](./services): backend proxy, schema caching, service status, and sync coordination helpers.
+- [`management/`](./management): Django management commands package.
+- [`templatetags/`](./templatetags): custom template tags for ProxBox templates.
 - [`models/`](./models): persisted plugin models for Proxmox, remote NetBox, FastAPI, clusters, nodes, storage, backups, snapshots, task history, backup routines, replications, and settings.
 - [`forms/`](./forms): create/edit, filter, and scheduling forms for plugin models and sync actions.
 - [`tables/`](./tables): list-view table classes for endpoint, storage, backup, snapshot, replication, and cluster views.
@@ -53,9 +56,14 @@ This package contains the NetBox plugin itself. It defines the plugin config, UR
 - [`../CLAUDE.md`](../CLAUDE.md)
 - [`api/CLAUDE.md`](./api/CLAUDE.md)
 - [`forms/CLAUDE.md`](./forms/CLAUDE.md)
+- [`management/CLAUDE.md`](./management/CLAUDE.md)
+- [`management/commands/CLAUDE.md`](./management/commands/CLAUDE.md)
 - [`migrations/CLAUDE.md`](./migrations/CLAUDE.md)
 - [`models/CLAUDE.md`](./models/CLAUDE.md)
+- [`schemas/CLAUDE.md`](./schemas/CLAUDE.md)
+- [`services/CLAUDE.md`](./services/CLAUDE.md)
 - [`static/CLAUDE.md`](./static/CLAUDE.md)
 - [`tables/CLAUDE.md`](./tables/CLAUDE.md)
 - [`templates/CLAUDE.md`](./templates/CLAUDE.md)
+- [`templatetags/CLAUDE.md`](./templatetags/CLAUDE.md)
 - [`views/CLAUDE.md`](./views/CLAUDE.md)

@@ -94,13 +94,13 @@ class ProxmoxNodeTable(NetBoxTable):
             "netbox_device",
         )
 
-    def render_cpu_usage(self, value):
+    def render_cpu_usage(self, value: float | int | None) -> str:
         """Format CPU usage as percentage."""
         if value is not None:
             return f"{value:.1f}%"
         return "—"
 
-    def render_memory_usage_gb(self, record):
+    def render_memory_usage_gb(self, record: object) -> str:
         """Convert memory bytes to GB for display."""
         if record.memory_usage is not None:
             gb = record.memory_usage / (1024**3)

@@ -1,3 +1,5 @@
+"""Tests for conftest."""
+
 from __future__ import annotations
 
 import importlib
@@ -201,6 +203,7 @@ def load_plugin_module(
     fastapi_endpoint=None,
     netbox_endpoint=None,
     proxmox_endpoint=None,
+    proxbox_settings=None,
     get_fastapi_url=None,
 ):
     django_module = types.ModuleType("django")
@@ -258,7 +261,14 @@ def load_plugin_module(
     django_utils_text.format_lazy = lambda *parts: "".join(str(p) for p in parts)
 
     django_utils_translation = types.ModuleType("django.utils.translation")
+    django_utils_translation.gettext = lambda x: x
     django_utils_translation.gettext_lazy = lambda x: x
+
+    django_utils_timezone = types.ModuleType("django.utils.timezone")
+    django_utils_timezone.now = lambda: __import__("datetime").datetime.now(
+        __import__("datetime").timezone.utc
+    )
+    django_utils.timezone = django_utils_timezone
 
     django_db_models = types.ModuleType("django.db.models")
 
@@ -383,14 +393,35 @@ def load_plugin_module(
         STATUS_COMPLETED="completed",
         STATUS_ERRORED="errored",
         STATUS_FAILED="failed",
+        STATUS_CANCELED="canceled",
     )
     core_models = types.ModuleType("core.models")
     core_models.Job = _make_model_class("Job")
+    core_utils = types.ModuleType("core.utils")
+    core_utils.stop_rq_job = lambda job_id: []
     core_module.choices = core_choices
     core_module.models = core_models
     models_module.ProxmoxCluster = _make_model_class("ProxmoxCluster")
     models_module.ProxmoxNode = _make_model_class("ProxmoxNode")
     models_module.ProxmoxStorage = _make_model_class("ProxmoxStorage")
+
+    if proxbox_settings is None:
+        proxbox_settings = SimpleNamespace(
+            backend_log_file_path="/var/log/proxbox.log",
+            save=lambda **kwargs: None,
+        )
+
+    class _ProxboxPluginSettings:
+        @classmethod
+        def get_solo(cls):
+            return proxbox_settings
+
+    _ProxboxPluginSettings._meta = SimpleNamespace(
+        app_label="netbox_proxbox",
+        model_name="proxboxpluginsettings",
+    )
+    models_module.ProxboxPluginSettings = _ProxboxPluginSettings
+
     utils_module = types.ModuleType("netbox_proxbox.utils")
     utils_module.get_fastapi_url = get_fastapi_url or (
         lambda obj: {
@@ -426,6 +457,7 @@ def load_plugin_module(
         "django.utils": django_utils,
         "django.utils.html": django_utils_html,
         "django.utils.text": django_utils_text,
+        "django.utils.timezone": django_utils_timezone,
         "django.utils.translation": django_utils_translation,
         "django.db.models": django_db_models,
         "utilities.datetime": utilities_datetime,
@@ -439,6 +471,7 @@ def load_plugin_module(
         "core": core_module,
         "core.choices": core_choices,
         "core.models": core_models,
+        "core.utils": core_utils,
         "netbox": netbox_module,
         "netbox.plugins": netbox_plugins,
         "netbox_proxbox.models": models_module,
@@ -448,6 +481,41 @@ def load_plugin_module(
         "utilities.permissions": utilities_permissions,
         "utilities.views": utilities_views,
     }
+
+    django_rq_mod = types.ModuleType("django_rq")
+
+    class _QueueStub:
+        def fetch_job(self, jid):
+            return None
+
+    django_rq_mod.get_queue = lambda queue_name: _QueueStub()
+    stub_modules["django_rq"] = django_rq_mod
+
+    rq_root = types.ModuleType("rq")
+    rq_exceptions = types.ModuleType("rq.exceptions")
+
+    class InvalidJobOperation(Exception):
+        pass
+
+    rq_exceptions.InvalidJobOperation = InvalidJobOperation
+
+    rq_job_mod = types.ModuleType("rq.job")
+
+    class Job:
+        pass
+
+    class JobStatus:
+        QUEUED = "queued"
+        DEFERRED = "deferred"
+        SCHEDULED = "scheduled"
+        STARTED = "started"
+
+    rq_job_mod.Job = Job
+    rq_job_mod.JobStatus = JobStatus
+
+    stub_modules["rq"] = rq_root
+    stub_modules["rq.exceptions"] = rq_exceptions
+    stub_modules["rq.job"] = rq_job_mod
 
     for name, module in stub_modules.items():
         monkeypatch.setitem(sys.modules, name, module)
@@ -498,6 +566,7 @@ def load_plugin_module(
     nbp_jobs.ProxboxSyncJob = _ProxboxSyncJob
     nbp_jobs.PROXBOX_SYNC_QUEUE_NAME = "default"
     nbp_jobs.is_proxbox_sync_job = lambda job: True
+    nbp_jobs.proxbox_sync_params_from_job = lambda job: {"sync_types": ["all"]}
     monkeypatch.setitem(sys.modules, "netbox_proxbox.jobs", nbp_jobs)
 
     forms_package = types.ModuleType("netbox_proxbox.forms")
@@ -530,6 +599,9 @@ def load_plugin_module(
 
     proxbox_access = types.ModuleType("netbox_proxbox.views.proxbox_access")
     proxbox_access.permission_enqueue_proxbox_sync = lambda: "stub.enqueue_proxbox_sync"
+    proxbox_access.permission_change_proxbox_plugin_settings = lambda: (
+        "stub.change_proxboxpluginsettings"
+    )
     proxbox_access.user_may_access_proxbox_dashboard = lambda user: True
     monkeypatch.setitem(
         sys.modules, "netbox_proxbox.views.proxbox_access", proxbox_access

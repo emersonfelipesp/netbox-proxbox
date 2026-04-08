@@ -1,8 +1,6 @@
 """Provide NetBox CRUD and tab views for VM snapshot records."""
 
-from django.shortcuts import get_object_or_404
-
-from extras.models import TableConfig
+from django.http import HttpRequest
 from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
 from virtualization.models import VirtualMachine
@@ -11,6 +9,7 @@ from netbox_proxbox.filtersets import VMSnapshotFilterSet
 from netbox_proxbox.forms import VMSnapshotFilterForm, VMSnapshotForm
 from netbox_proxbox.models import VMSnapshot
 from netbox_proxbox.tables import VMSnapshotTable
+from netbox_proxbox.views.mixins import TableConfigOverrideMixin
 
 
 __all__ = (
@@ -73,7 +72,7 @@ class VMSnapshotBulkDeleteView(generic.BulkDeleteView):
 
 
 @register_model_view(VirtualMachine, "snapshots", path="snapshots")
-class VMSnapshotTabView(generic.ObjectChildrenView):
+class VMSnapshotTabView(TableConfigOverrideMixin, generic.ObjectChildrenView):
     """VM detail tab listing snapshots for that virtual machine."""
 
     queryset = VirtualMachine.objects.all()
@@ -92,33 +91,12 @@ class VMSnapshotTabView(generic.ObjectChildrenView):
         weight=1100,
     )
 
-    def get_queryset(self, request):
+    def get_queryset(self, request: HttpRequest):
         """Restrict parent VMs to those the user may view."""
         return VirtualMachine.objects.restrict(request.user, "view")
 
-    def get_children(self, request, parent):
+    def get_children(self, request: HttpRequest, parent: VirtualMachine):
         """Return snapshots for ``parent`` visible to the current user."""
         return VMSnapshot.objects.restrict(request.user, "view").filter(
             virtual_machine=parent
         )
-
-    def get_table(self, data, request, bulk_actions=True):
-        """Build the child table, honoring optional ``tableconfig_id`` column overrides."""
-        if tableconfig_id := request.GET.get("tableconfig_id"):
-            tableconfig = get_object_or_404(TableConfig, pk=tableconfig_id)
-            if request.user.is_authenticated:
-                table_name = self.table.__name__
-                request.user.config.set(
-                    f"tables.{table_name}.columns", tableconfig.columns
-                )
-                request.user.config.set(
-                    f"tables.{table_name}.ordering",
-                    tableconfig.ordering,
-                    commit=True,
-                )
-
-        table = self.table(data, exclude=("virtual_machine",))
-        if "pk" in table.base_columns and bulk_actions:
-            table.columns.show("pk")
-        table.configure(request)
-        return table

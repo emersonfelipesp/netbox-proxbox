@@ -26,9 +26,9 @@ urlpatterns = [
     path("ip-addresses/", views.IPAddressesView.as_view(), name="ip_addresses"),
     path("contributing/", views.ContributingView.as_view(), name="contributing"),
     path("community/", views.CommunityView.as_view(), name="community"),
-    path("discussions/", views.DiscussionsView, name="discussions"),
-    path("discord/", views.DiscordView, name="discord"),
-    path("telegram/", views.TelegramView, name="telegram"),
+    path("discussions/", views.discussions_redirect, name="discussions"),
+    path("discord/", views.discord_redirect, name="discord"),
+    path("telegram/", views.telegram_redirect, name="telegram"),
     path(
         "endpoints/proxmox/<int:pk>/",
         include(get_model_urls("netbox_proxbox", "proxmoxendpoint")),
@@ -178,4 +178,9 @@ urlpatterns = [
     path("websocket/<str:message>", WebSocketView.as_view(), name="websocket"),
     path("jobs/<int:pk>/stream/", views.JobStreamSSEView.as_view(), name="job_stream"),
     path("logs/", views.BackendLogsView.as_view(), name="backend_logs"),
+    path(
+        "logs/path/",
+        views.BackendLogPathUpdateView.as_view(),
+        name="backend_logs_path_update",
+    ),
 ]

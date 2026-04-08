@@ -27,6 +27,7 @@ Thanks for helping improve `netbox-proxbox`. This page is shown inside the plugi
 # netbox-proxbox
 python -m compileall netbox_proxbox tests
 rtk ruff check .
+rtk ty check proxbox_cli
 rtk pytest tests/
 ```
 

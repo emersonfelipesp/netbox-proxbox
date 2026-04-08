@@ -1,48 +1,25 @@
 """Redirect plugin users to external community and discussion pages."""
 
+from django.http import HttpRequest, HttpResponseRedirect
 from django.shortcuts import redirect
 
 
-def DiscussionsView(request):
-    """
-    ### Redirects the user to the external discussions URL.
-
-    **Args:**
-    - **request:** The HTTP request object.
-
-    **Returns:**
-    - **HttpResponseRedirect:** A redirect response to the external discussions URL.
-    """
+def discussions_redirect(request: HttpRequest) -> HttpResponseRedirect:
+    """Redirect to GitHub discussions for the project."""
 
     external_url = "https://github.com/orgs/emersonfelipesp/discussions"
     return redirect(external_url)
 
 
-def DiscordView(request):
-    """
-    ### Redirects the user to the specified Discord invite URL.
-
-    **Args:**
-    - **request:** The HTTP request object.
-
-    **Returns:**
-    - **HttpResponseRedirect:** A redirection response to the Discord invite URL.
-    """
+def discord_redirect(request: HttpRequest) -> HttpResponseRedirect:
+    """Redirect to the project Discord invite."""
 
     external_url = "https://discord.com/invite/9N3V4mpMXU"
     return redirect(external_url)
 
 
-def TelegramView(request):
-    """
-    ### Redirects the user to the NetBox Telegram group.
-
-    **Args:**
-    - **request:** The HTTP request object.
-
-    **Returns:**
-    - **HttpResponseRedirect:** A redirect response to the specified external URL.
-    """
+def telegram_redirect(request: HttpRequest) -> HttpResponseRedirect:
+    """Redirect to the NetBox Telegram group."""
 
     external_url = "https://t.me/netboxbr"
     return redirect(external_url)

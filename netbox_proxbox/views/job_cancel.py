@@ -6,8 +6,9 @@ import logging
 
 from core.choices import JobStatusChoices
 from core.models import Job
+from core.utils import stop_rq_job
 from django.contrib import messages
-from django.http import Http404, HttpResponseRedirect
+from django.http import Http404, HttpRequest, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext as _
 from django.views import View
@@ -30,9 +31,37 @@ __all__ = ("ProxboxJobCancelView", "cancel_rq_job_for_netbox_job")
 
 
 def cancel_rq_job_for_netbox_job(netbox_job: Job) -> bool:
-    """Best-effort cancel or stop the RQ job linked to ``netbox_job``. Returns True if RQ state changed."""
+    """Best-effort cancel or stop the RQ job linked to ``netbox_job``.
+
+    Compatibility notes:
+    - Prefer NetBox's ``stop_rq_job`` helper so queue/backend differences stay
+      encapsulated within NetBox (important for django-rq 4.x compatibility).
+    - Fall back to direct queue inspection/cancel for queued/scheduled jobs,
+      where a lightweight dequeue operation is preferable to force-stop semantics.
+
+    Returns True if RQ state changed, else False.
+    """
     queue_name = (netbox_job.queue_name or "").strip() or PROXBOX_SYNC_QUEUE_NAME
     jid = str(netbox_job.job_id)
+
+    # First attempt a NetBox-native stop path. This is the most stable API
+    # surface across NetBox + django-rq integration updates.
+    try:
+        stopped_jobs = stop_rq_job(jid)
+        ok = (
+            len(stopped_jobs) == 1
+            if isinstance(stopped_jobs, (list, tuple))
+            else bool(stopped_jobs)
+        )
+        if ok:
+            logger.info("Stopped RQ job %s via core.utils.stop_rq_job", jid)
+            return True
+    except Http404:
+        logger.info("No RQ job %s found via core.utils.stop_rq_job", jid)
+    except Exception as exc:  # pragma: no cover - defensive compatibility fallback
+        logger.warning("core.utils.stop_rq_job failed for %s: %s", jid, exc)
+
+    # Fallback path for queued/deferred jobs if direct queue metadata is available.
     queue = get_queue(queue_name)
     rq_job: RQJob | None = queue.fetch_job(jid)
 
@@ -52,8 +81,6 @@ def cancel_rq_job_for_netbox_job(netbox_job: Job) -> bool:
                 return False
         if status == RQJobStatus.STARTED:
             try:
-                from core.utils import stop_rq_job
-
                 stopped_jobs = stop_rq_job(jid)
                 ok = (
                     len(stopped_jobs) == 1
@@ -69,18 +96,8 @@ def cancel_rq_job_for_netbox_job(netbox_job: Job) -> bool:
         logger.info("RQ job %s in state %s; nothing to cancel", jid, status)
         return False
 
-    try:
-        from core.utils import stop_rq_job
-
-        stopped_jobs = stop_rq_job(jid)
-        return (
-            len(stopped_jobs) == 1
-            if isinstance(stopped_jobs, (list, tuple))
-            else bool(stopped_jobs)
-        )
-    except Http404:
-        logger.info("No RQ job %s in queue %s or global fetch", jid, queue_name)
-        return False
+    logger.info("No RQ job %s in queue %s after fallback lookup", jid, queue_name)
+    return False
 
 
 @register_model_view(Job, "proxbox_cancel", path="proxbox-cancel")
@@ -93,11 +110,12 @@ class ProxboxJobCancelView(
 
     http_method_names = ["post"]
 
-    def get_required_permission(self):
+    def get_required_permission(self) -> str:
         """Align with deleting a core Job (destructive operational action)."""
         return get_permission_for_model(Job, "delete")
 
-    def post(self, request, pk):
+    def post(self, request: HttpRequest, pk: int | str) -> HttpResponseRedirect:
+        """Handle post."""
         job = get_object_or_404(Job.objects.restrict(request.user, "view"), pk=pk)
         if not is_proxbox_sync_job(job):
             messages.error(

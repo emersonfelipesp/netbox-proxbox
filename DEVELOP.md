@@ -62,6 +62,14 @@ Run ruff linter:
 ruff check .
 ```
 
+### Type Checking
+
+Run ty type checker:
+
+```bash
+ty check proxbox_cli
+```
+
 ### Syntax Check
 
 Verify Python syntax:

@@ -1,3 +1,5 @@
+"""Tests for test_api_netbox_integration."""
+
 from __future__ import annotations
 
 import os

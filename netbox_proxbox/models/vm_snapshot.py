@@ -1,5 +1,7 @@
 """Define the VM snapshot model stored alongside NetBox virtual machines."""
 
+from __future__ import annotations
+
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django.urls import reverse
@@ -79,12 +81,17 @@ class VMSnapshot(NetBoxModel):
         verbose_name = "VM Snapshot"
         verbose_name_plural = "VM Snapshots"
         ordering = ("virtual_machine", "node", "name")
-        unique_together = ("vmid", "name", "node")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("vmid", "name", "node"),
+                name="unique_vm_snapshot_vmid_name_node",
+            ),
+        ]
 
-    def __str__(self):
+    def __str__(self) -> str:
         """VM and snapshot name for list displays."""
         return f"{self.virtual_machine} - {self.name}"
 
-    def get_absolute_url(self):
+    def get_absolute_url(self) -> str:
         """Plugin UI URL for this snapshot's detail page."""
         return reverse("plugins:netbox_proxbox:vmsnapshot", args=[self.pk])

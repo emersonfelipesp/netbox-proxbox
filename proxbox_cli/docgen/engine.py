@@ -7,7 +7,7 @@ from pathlib import Path
 import subprocess
 import sys
 import time
-from typing import Any
+from typing import TextIO
 
 import click
 import typer
@@ -26,7 +26,7 @@ class CaptureEngine:
     def __init__(
         self,
         *,
-        log: Any = None,
+        log: TextIO | None = None,
         timeout_seconds: float = DEFAULT_CAPTURE_TIMEOUT_SECONDS,
     ) -> None:
         self._log = log or sys.stderr
@@ -76,7 +76,7 @@ class CaptureEngine:
             )
 
 
-def build_command_catalog() -> dict[str, Any]:
+def build_command_catalog() -> dict[str, object]:
     """Return a recursive catalog of the Proxbox CLI command tree."""
     from proxbox_cli import app
 
@@ -90,7 +90,10 @@ def build_command_catalog() -> dict[str, Any]:
     }
 
 
-def _walk_command(command: click.Command, path: list[str]) -> list[dict[str, Any]]:
+CatalogEntry = dict[str, str | list[str]]
+
+
+def _walk_command(command: click.Command, path: list[str]) -> list[CatalogEntry]:
     full_path = "pxb" if not path else " ".join(["pxb", *path])
     entry = {
         "path": list(path),

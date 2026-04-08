@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 
 import requests
-from django.http import JsonResponse
+from django.http import HttpRequest, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views import View
 
@@ -30,17 +31,19 @@ from utilities.views import (
 logger = logging.getLogger(__name__)
 
 
-def _merge_cluster_payloads(version_payload, cluster_payload) -> dict:
+def _merge_cluster_payloads(
+    version_payload: object, cluster_payload: object
+) -> dict[str, object]:
     """Combine proxbox-api version and cluster session responses for the home card."""
-    version_data = {}
-    cluster_data = {}
+    version_data: dict[str, object] = {}
+    cluster_data: dict[str, object] = {}
 
-    if version_payload:
+    if isinstance(version_payload, Sequence) and version_payload:
         for _, value in version_payload[0].items():
             version_data = value
             break
 
-    if cluster_payload:
+    if isinstance(cluster_payload, Sequence) and cluster_payload:
         cluster_data = cluster_payload[0]
 
     if isinstance(cluster_data, dict) and isinstance(version_data, dict):
@@ -57,11 +60,17 @@ class ProxboxProxmoxCardView(
 
     http_method_names = ["get", "head", "options"]
 
-    def get_required_permission(self):
+    def get_required_permission(self) -> str:
         """Require model-level view permission on ``ProxmoxEndpoint``."""
         return get_permission_for_model(ProxmoxEndpoint, "view")
 
-    def get(self, request, pk: int, *args, **kwargs) -> JsonResponse:
+    def get(
+        self,
+        request: HttpRequest,
+        pk: int,
+        *args: object,
+        **kwargs: object,
+    ) -> JsonResponse:
         """Fetch version/cluster JSON from proxbox-api after syncing the endpoint row."""
         proxmox_object = get_object_or_404(
             ProxmoxEndpoint.objects.restrict(request.user, "view"),
@@ -187,7 +196,7 @@ class ProxboxProxmoxCardView(
             )
             logger.error("Unable to hydrate Proxmox card for endpoint %s: %s", pk, exc)
 
-        payload: dict = {
+        payload: dict[str, object] = {
             "cluster_data": _merge_cluster_payloads(version_data, cluster_data),
             "object": {
                 "pk": getattr(

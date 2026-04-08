@@ -124,6 +124,8 @@ class ProxmoxNode(NetBoxModel):
     def memory_usage_percent(self) -> float | None:
         """Calculate memory usage percentage."""
         if self.memory_usage is not None and self.max_memory:
+            if self.max_memory == 0:
+                return None
             return (self.memory_usage / self.max_memory) * 100
         return None
 

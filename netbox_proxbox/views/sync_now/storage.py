@@ -1,7 +1,9 @@
 """Individual sync for ProxmoxStorage."""
 
 from django.contrib import messages
+from django.http import HttpRequest
 from django.http import HttpResponseRedirect
+from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 from utilities.views import (
@@ -13,6 +15,7 @@ from utilities.views import (
 from netbox_proxbox.models import ProxmoxCluster, ProxmoxStorage
 from netbox_proxbox.services.individual_sync import sync_individual_with_dependencies
 from netbox_proxbox.views.proxbox_access import permission_enqueue_proxbox_sync
+from netbox_proxbox.views.sync_now import _handle_sync_response
 
 
 @register_model_view(ProxmoxStorage, "proxbox_sync_now", path="proxbox-sync-now")
@@ -25,11 +28,15 @@ class ProxmoxStorageSyncNowView(
 
     http_method_names = ["post"]
 
-    def get_required_permission(self):
+    def get_required_permission(self) -> str:
+        """Return required permission."""
         return permission_enqueue_proxbox_sync()
 
-    def post(self, request, pk):
-        storage = ProxmoxStorage.objects.get(pk=pk)
+    def post(self, request: HttpRequest, pk: int | str) -> HttpResponseRedirect:
+        """Handle post."""
+        storage = get_object_or_404(
+            ProxmoxStorage.objects.restrict(request.user, "view"), pk=pk
+        )
         storage_name = storage.name
         proxmox_cluster = ProxmoxCluster.objects.filter(
             netbox_cluster=storage.cluster
@@ -49,25 +56,11 @@ class ProxmoxStorageSyncNowView(
             {"cluster_name": cluster_name, "storage_name": storage_name},
         )
 
-        if status == 200:
-            action = response.get("action", "synced")
-            messages.success(
-                request,
-                _(f"Storage '{storage_name}' {action} successfully.")
-                + (
-                    f" ({len(dependencies)} dependencies synced)"
-                    if dependencies
-                    else ""
-                ),
-            )
-        elif status == 422:
-            messages.error(request, _("Invalid parameters for storage sync."))
-        elif status == 503:
-            messages.error(
-                request, _("Proxbox backend is unavailable for storage sync.")
-            )
-        else:
-            error = response.get("error", "Unknown error")
-            messages.error(request, _(f"Failed to sync storage: {error}"))
-
-        return HttpResponseRedirect(storage.get_absolute_url())
+        return _handle_sync_response(
+            request,
+            response,
+            status,
+            dependencies,
+            f"Storage '{storage_name}'",
+            storage.get_absolute_url(),
+        )

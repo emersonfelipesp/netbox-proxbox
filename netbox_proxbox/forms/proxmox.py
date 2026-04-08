@@ -80,7 +80,7 @@ class ProxmoxEndpointForm(NetBoxModelForm):
             "tags",
         )
 
-    def clean(self):
+    def clean(self) -> dict[str, object]:
         """Require domain or IP before save (matches model validation)."""
         super().clean()
         cleaned_data = self.cleaned_data

@@ -6,6 +6,7 @@ import json
 import re
 
 import requests
+from django.http import HttpRequest
 from netbox.views import generic
 from pydantic import ValidationError
 from utilities.views import ViewTab, register_model_view
@@ -61,7 +62,9 @@ def _extract_node(vm: VirtualMachine, vmid: int | None) -> str | None:
     return None
 
 
-def _pick_proxmox_endpoint(request, vm: VirtualMachine):
+def _pick_proxmox_endpoint(
+    request: HttpRequest, vm: VirtualMachine
+) -> ProxmoxEndpoint | None:
     proxmox_qs = ProxmoxEndpoint.objects.restrict(request.user, "view")
     cluster_name = getattr(getattr(vm, "cluster", None), "name", None)
     if cluster_name:
@@ -83,10 +86,14 @@ class ProxmoxVMConfigTabView(generic.ObjectView):
         weight=1200,
     )
 
-    def get_queryset(self, request):
+    def get_queryset(self, request: HttpRequest) -> object:
+        """Return queryset."""
         return VirtualMachine.objects.restrict(request.user, "view")
 
-    def get_extra_context(self, request, instance):
+    def get_extra_context(
+        self, request: HttpRequest, instance: VirtualMachine
+    ) -> dict[str, object]:
+        """Return extra context."""
         vmid = _extract_vmid(instance)
         vm_type = _extract_vm_type(instance)
         node = _extract_node(instance, vmid)
@@ -142,7 +149,7 @@ class ProxmoxVMConfigTabView(generic.ObjectView):
             context["detail"] = sync_detail
             return context
 
-        query_params = {"source": "database"}
+        query_params: dict[str, str] = {"source": "database"}
         if proxmox_obj.name:
             query_params["name"] = proxmox_obj.name
 

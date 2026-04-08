@@ -62,7 +62,7 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
             "token_value": {"write_only": True, "required": False, "allow_blank": True},
         }
 
-    def get_display(self, obj):
+    def get_display(self, obj: ProxmoxEndpoint) -> str:
         """Label for list APIs and APISelect (e.g. schedule sync): ``Name (IP)``."""
         name_part = (obj.name or "").strip() or _("Proxmox endpoint")
         ip_part = obj.ip

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import importlib.util
 import logging
 import sys
@@ -39,6 +40,7 @@ def proxbox_sync_job_module(monkeypatch):
         VIRTUAL_MACHINES_DISKS="vm-disks",
         VIRTUAL_MACHINES_SNAPSHOTS="vm-snapshots",
         NETWORK_INTERFACES="network-interfaces",
+        VM_INTERFACES="vm-interfaces",
         IP_ADDRESSES="ip-addresses",
         ALL="all",
     )
@@ -114,7 +116,7 @@ def test_proxbox_sync_job_run_imports_from_services_not_views(
     job.job.reset_mock()
     ProxboxSyncJob.run(job, sync_type=st.ALL)
     assert captured["called"] == "run_sync_stream"
-    assert captured["path"] == "cluster/backup/stream"
+    assert captured["path"] == "proxmox/cluster/backup/stream"
 
     job.job.reset_mock()
     ProxboxSyncJob.run(job, sync_type=st.VIRTUAL_MACHINES_DISKS)
@@ -131,6 +133,44 @@ def test_proxbox_sync_job_run_imports_from_services_not_views(
     assert captured["path"] == (
         "virtualization/virtual-machines/interfaces/ip-address/create/stream"
     )
+
+
+def test_proxbox_sync_job_logs_stage_lines_with_rendered_values(
+    monkeypatch, proxbox_sync_job_module, caplog
+):
+    """Stage logs should include concrete values (not '%s' placeholders)."""
+    services_mod = types.ModuleType("netbox_proxbox.services")
+
+    def run_sync_stream(path, query_params=None, **stream_kwargs):
+        on_frame = stream_kwargs.get("on_frame")
+        if on_frame:
+            on_frame("step", {"step": "storage", "status": "processing"})
+        return ({"stream": True, "response": {"ok": True}}, 200)
+
+    services_mod.run_sync_stream = run_sync_stream
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
+
+    ProxboxSyncJob = proxbox_sync_job_module.ProxboxSyncJob
+    job = ProxboxSyncJob()
+    job.logger = logging.getLogger("test_proxbox_job_logs")
+    job.job = MagicMock()
+    job.job.data = None
+
+    st = proxbox_sync_job_module.SyncTypeChoices
+
+    with caplog.at_level(logging.INFO):
+        ProxboxSyncJob.run(job, sync_type=st.STORAGE)
+
+    joined = "\n".join(record.message for record in caplog.records)
+    assert (
+        "Starting stage: storage (virtualization/virtual-machines/storage/create/stream)"
+        in joined
+    )
+    assert (
+        "Stage completed: storage (virtualization/virtual-machines/storage/create/stream) HTTP 200"
+        in joined
+    )
+    assert "%s" not in joined
 
 
 def test_proxbox_sync_params_from_job_defaults(proxbox_sync_job_module):
@@ -404,6 +444,45 @@ def test_proxbox_sync_job_run_raises_on_backend_error(
         ProxboxSyncJob.run(job, sync_type=st.DEVICES)
 
 
+def test_proxbox_sync_job_run_rewrites_postgres_slot_exhaustion_error(
+    monkeypatch, proxbox_sync_job_module
+):
+    services_mod = types.ModuleType("netbox_proxbox.services")
+    services_mod.run_sync_stream = lambda *a, **k: (
+        {
+            "detail": json.dumps(
+                {
+                    "error": (
+                        'connection failed: connection to server at "127.0.0.1", '
+                        "port 5432 failed: FATAL: remaining connection slots are "
+                        "reserved for roles with the SUPERUSER attribute"
+                    ),
+                    "exception": "OperationalError",
+                    "netbox_version": "4.5.5",
+                    "python_version": "3.13.3",
+                }
+            )
+        },
+        500,
+    )
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
+
+    ProxboxSyncJob = proxbox_sync_job_module.ProxboxSyncJob
+    job = ProxboxSyncJob()
+    job.logger = logging.getLogger("test_proxbox_job")
+    job.job = MagicMock()
+
+    st = proxbox_sync_job_module.SyncTypeChoices
+    with pytest.raises(RuntimeError) as exc_info:
+        ProxboxSyncJob.run(job, sync_type=st.DEVICES)
+
+    error_text = str(exc_info.value)
+    assert "no free PostgreSQL connections" in error_text
+    assert "Wait for running jobs to finish" in error_text
+    assert "remaining connection slots are reserved" not in error_text
+    assert '{"error"' not in error_text
+
+
 def test_proxbox_sync_job_run_multi_stage_in_dependency_order(
     monkeypatch, proxbox_sync_job_module
 ):
@@ -663,9 +742,9 @@ def test_proxbox_sync_job_run_all_invokes_each_stage_stream(
 
     st = proxbox_sync_job_module.SyncTypeChoices
     ProxboxSyncJob.run(job, sync_types=[st.ALL])
-    assert calls == 10
+    assert calls == 11
     stages = job.job.data["proxbox_sync"]["response"]["stages"]
-    assert len(stages) == 10
+    assert len(stages) == 11
     assert {s["sync_type"] for s in stages} == {
         st.DEVICES,
         st.STORAGE,
@@ -675,6 +754,7 @@ def test_proxbox_sync_job_run_all_invokes_each_stage_stream(
         st.VIRTUAL_MACHINES_SNAPSHOTS,
         st.REPLICATIONS,
         st.NETWORK_INTERFACES,
+        st.VM_INTERFACES,
         st.IP_ADDRESSES,
         st.BACKUP_ROUTINES,
     }

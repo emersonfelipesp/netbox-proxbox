@@ -2,45 +2,62 @@
 
 from __future__ import annotations
 
-from typing import Any, ClassVar
+from typing import ClassVar
 
 from django.contrib import messages
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect
 from django.utils.html import format_html
-from django.utils.text import format_lazy
 from django.utils.translation import gettext_lazy as _
-from django.views import View
-from utilities.views import (
-    ContentTypePermissionRequiredMixin,
-    TokenConditionalLoginRequiredMixin,
-)
 
 from netbox_proxbox.choices import SyncTypeChoices
 from netbox_proxbox.jobs import PROXBOX_SYNC_QUEUE_NAME, ProxboxSyncJob
-from netbox_proxbox.views.proxbox_access import permission_enqueue_proxbox_sync
+from netbox_proxbox.views.sync_helpers import (
+    _ProxboxSyncViewBase,
+    build_job_name,
+)
 
 
-class _ProxboxSyncEnqueueView(
-    TokenConditionalLoginRequiredMixin,
-    ContentTypePermissionRequiredMixin,
-    View,
-):
+def notify_sync_enqueued(request: HttpRequest, job, message: str) -> None:
+    """Module-local wrapper keeps message stubs patchable in this view module."""
+    messages.success(
+        request,
+        format_html(
+            '{} <a href="{}">{}</a>',
+            message,
+            job.get_absolute_url(),
+            _("View job"),
+        ),
+    )
+
+
+def notify_sync_error(request: HttpRequest, error: Exception) -> None:
+    """Module-local wrapper keeps error messaging on this module surface."""
+    messages.error(
+        request,
+        format_html(
+            "{} <strong>{}</strong>",
+            _("Failed to enqueue sync job:"),
+            str(error),
+        ),
+    )
+
+
+class _ProxboxSyncEnqueueView(_ProxboxSyncViewBase):
     """POST: enqueue ``ProxboxSyncJob`` for a fixed sync type set."""
 
     http_method_names = ["post", "head", "options"]
     sync_types: ClassVar[list[str]] = [SyncTypeChoices.ALL]
     action_label: ClassVar = ""
 
-    def get_required_permission(self) -> str:
-        return permission_enqueue_proxbox_sync()
-
     def _job_name(self) -> str:
-        if self.action_label:
-            return str(format_lazy("{}: {}", _("Proxbox Sync"), self.action_label))
-        return str(_("Proxbox Sync"))
+        """Build display name for this sync job."""
+        return build_job_name(self.action_label)
 
-    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+    def post(
+        self, request: HttpRequest, *args: object, **kwargs: object
+    ) -> HttpResponse:
+        """Handle post."""
         try:
             job = ProxboxSyncJob.enqueue(
                 instance=None,
@@ -49,26 +66,15 @@ class _ProxboxSyncEnqueueView(
                 name=self._job_name(),
                 sync_types=list(self.sync_types),
             )
-            messages.success(
+            notify_sync_enqueued(
                 request,
-                format_html(
-                    '{} <a href="{}">{}</a>',
-                    _(
-                        "A Proxbox sync job has been queued. Open the job to follow progress."
-                    ),
-                    job.get_absolute_url(),
-                    _("View job"),
+                job,
+                _(
+                    "A Proxbox sync job has been queued. Open the job to follow progress."
                 ),
             )
         except Exception as e:
-            messages.error(
-                request,
-                format_html(
-                    "{} <strong>{}</strong>",
-                    _("Failed to enqueue sync job:"),
-                    str(e),
-                ),
-            )
+            notify_sync_error(request, e)
         return redirect("plugins:netbox_proxbox:home")
 
 
@@ -152,31 +158,24 @@ class SyncReplicationsView(_ProxboxSyncEnqueueView):
     action_label = _("Replications")
 
 
-class _ProxboxSelectedSyncView(
-    TokenConditionalLoginRequiredMixin,
-    ContentTypePermissionRequiredMixin,
-    View,
-):
+class _ProxboxSelectedSyncView(_ProxboxSyncViewBase):
     """POST: enqueue a selected-object batch sync job."""
 
     http_method_names = ["post", "head", "options"]
     batch_object_type: ClassVar[str] = ""
     batch_object_label: ClassVar[str] = ""
 
-    def get_required_permission(self) -> str:
-        return permission_enqueue_proxbox_sync()
-
     def _selected_ids(self, request: HttpRequest) -> list[str]:
         return [str(value) for value in request.POST.getlist("pk") if str(value)]
 
     def _job_name(self) -> str:
-        if self.batch_object_label:
-            return str(
-                format_lazy("{}: {}", _("Proxbox Sync"), self.batch_object_label)
-            )
-        return str(_("Proxbox Sync"))
+        """Build display name for this batch sync job."""
+        return build_job_name(self.batch_object_label)
 
-    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+    def post(
+        self, request: HttpRequest, *args: object, **kwargs: object
+    ) -> HttpResponse:
+        """Handle post."""
         selected_ids = self._selected_ids(request)
         if not selected_ids:
             messages.warning(request, _("Select at least one object to sync."))
@@ -192,26 +191,15 @@ class _ProxboxSelectedSyncView(
                 batch_object_type=self.batch_object_type,
                 batch_object_ids=selected_ids,
             )
-            messages.success(
+            notify_sync_enqueued(
                 request,
-                format_html(
-                    '{} <a href="{}">{}</a>',
-                    _(
-                        "A selected-object Proxbox sync job has been queued. Open the job to follow progress."
-                    ),
-                    job.get_absolute_url(),
-                    _("View job"),
+                job,
+                _(
+                    "A selected-object Proxbox sync job has been queued. Open the job to follow progress."
                 ),
             )
         except Exception as e:
-            messages.error(
-                request,
-                format_html(
-                    "{} <strong>{}</strong>",
-                    _("Failed to enqueue sync job:"),
-                    str(e),
-                ),
-            )
+            notify_sync_error(request, e)
         return redirect("plugins:netbox_proxbox:home")
 
 

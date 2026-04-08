@@ -31,7 +31,7 @@ class ProxboxConfig(PluginConfig):
     name = "netbox_proxbox"
     verbose_name = "Proxbox"
     description = "Integrates Proxmox and Netbox"
-    version = "0.0.10"
+    version = "0.0.11"
     author = "Emerson Felipe (@emersonfelipesp)"
     author_email = "emersonfelipe.2003@gmail.com"
     min_version = "4.5.0"
@@ -40,7 +40,7 @@ class ProxboxConfig(PluginConfig):
     required_settings = []
     queues = []
 
-    def ready(self):
+    def ready(self) -> None:
         """Register models, then import job modules so runners and core Job views hook in."""
         super().ready()
         if not _runtime_dependencies_available():
@@ -50,8 +50,7 @@ class ProxboxConfig(PluginConfig):
             return
         from . import jobs  # noqa: F401 — registers ProxboxSyncJob with the NetBox job system
         from .views import job_cancel, job_run  # noqa: F401 — core Job: proxbox-run / proxbox-cancel
+        from . import signals  # noqa: F401 — ensures token auto-generation and backend registration
 
 
 config = ProxboxConfig
-
-# from . import proxbox_api

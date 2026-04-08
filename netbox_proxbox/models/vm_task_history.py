@@ -1,5 +1,7 @@
 """Define Proxmox task history rows stored alongside NetBox virtual machines."""
 
+from __future__ import annotations
+
 from django.db import models
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
@@ -102,10 +104,10 @@ class VMTaskHistory(NetBoxModel):
         verbose_name_plural = "VM Task Histories"
         ordering = ("-start_time", "virtual_machine", "node")
 
-    def __str__(self):
+    def __str__(self) -> str:
         """VM and task description for list displays."""
         return f"{self.virtual_machine} - {self.description}"
 
-    def get_absolute_url(self):
+    def get_absolute_url(self) -> str:
         """Plugin UI URL for this task history row."""
         return reverse("plugins:netbox_proxbox:vmtaskhistory", args=[self.pk])

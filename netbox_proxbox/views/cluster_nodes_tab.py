@@ -1,8 +1,9 @@
 """Cluster and node tab view for Proxmox endpoint detail page."""
 
 from django.db.models import Prefetch
+from django.http import HttpRequest
 from netbox.views import generic
-from utilities.views import register_model_view
+from utilities.views import ViewTab, register_model_view
 
 from netbox_proxbox.models import ProxmoxCluster, ProxmoxEndpoint, ProxmoxNode
 from netbox_proxbox.tables import ProxmoxClusterTable, ProxmoxNodeTable
@@ -17,9 +18,15 @@ class ProxmoxEndpointClusterNodesTabView(generic.ObjectView):
 
     queryset = ProxmoxEndpoint.objects.all()
     template_name = "netbox_proxbox/proxmoxendpoint_cluster_nodes.html"
-    tab = "cluster_nodes"
+    tab = ViewTab(
+        label="Cluster Nodes",
+        permission="netbox_proxbox.view_proxmoxendpoint",
+        weight=1000,
+    )
 
-    def get_extra_context(self, request, instance):
+    def get_extra_context(
+        self, request: HttpRequest, instance: ProxmoxEndpoint
+    ) -> dict[str, object]:
         """Build cluster and node tables for the template."""
         # Fetch cluster(s) for this endpoint with prefetched nodes
         clusters = ProxmoxCluster.objects.filter(endpoint=instance).prefetch_related(

@@ -25,6 +25,9 @@ on:
 
 env:
   PROXBOX_API_RELEASE_VERSION: 0.0.6.post5
+  NETBOX_IMAGE: netboxcommunity/netbox:v4.5
+  PROXBOX_API_IMAGE: emersonfelipesp/proxbox-api
+  PROXMOX_OPENAPI_IMAGE: emersonfelipesp/proxmox-openapi:latest
 
 jobs:
   e2e-docker-stack:
@@ -39,13 +42,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Checkout proxbox-api source
-        if: matrix.install_source == 'local'
-        uses: actions/checkout@v6
-        with:
-          repository: emersonfelipesp/proxbox-api
-          path: proxbox-api-source
-
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
@@ -57,20 +53,21 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install requests
 
-      - name: Build NetBox image with plugin
+      - name: Resolve plugin install source
         run: |
-          cat > Dockerfile.netbox-e2e <<'EOF'
-          FROM netboxcommunity/netbox:v4.5
-          EOF
-          cat >> Dockerfile.netbox-e2e <<'EOF'
-          COPY . /tmp/netbox-proxbox
-          RUN uv pip install --python /opt/netbox/venv/bin/python --system --upgrade /tmp/netbox-proxbox
-          EOF
-          cat >> Dockerfile.netbox-e2e <<'EOF'
-          RUN mkdir -p /etc/netbox/config
-          RUN printf 'PLUGINS = ["netbox_proxbox"]\n' > /etc/netbox/config/plugins.py
-          EOF
-          docker build --no-cache -f Dockerfile.netbox-e2e -t netbox-proxbox-e2e:local .
+          set -eux
+          if [ "${{ matrix.install_source }}" = "local" ]; then
+            echo "NETBOX_PLUGIN_INSTALL_SPEC=/tmp/netbox-proxbox" >> "$GITHUB_ENV"
+            echo "NETBOX_PLUGIN_MOUNT=-v $PWD:/tmp/netbox-proxbox:ro" >> "$GITHUB_ENV"
+          elif [ "${{ matrix.install_source }}" = "pypi" ]; then
+            VERSION=$(python -c "import pathlib, tomllib; print(tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8'))['project']['version'])")
+            echo "NETBOX_PLUGIN_INSTALL_SPEC=netbox-proxbox==${VERSION}" >> "$GITHUB_ENV"
+            echo "NETBOX_PLUGIN_MOUNT=" >> "$GITHUB_ENV"
+          else
+            # Keep 'container' mode for workflow compatibility, but use package install.
+            echo "NETBOX_PLUGIN_INSTALL_SPEC=netbox-proxbox" >> "$GITHUB_ENV"
+            echo "NETBOX_PLUGIN_MOUNT=" >> "$GITHUB_ENV"
+          fi
 
       - name: Start E2E stack
         run: |
@@ -89,48 +86,61 @@ jobs:
           docker run -d --name netbox-e2e-redis --network proxbox-e2e \
             redis:7-alpine
 
-          openssl req -x509 -newkey rsa:4096 -keyout /tmp/e2e-key.pem -out /tmp/e2e-cert.pem \
-            -days 1 -nodes -subj "/CN=proxmox-mock" 2>/dev/null
+          docker pull "${PROXMOX_OPENAPI_IMAGE}"
+          docker pull "${PROXBOX_API_IMAGE}:${PROXBOX_API_RELEASE_VERSION}"
+          docker pull "${NETBOX_IMAGE}"
 
-          docker run -d --name proxmox-e2e-mock --network proxbox-e2e -p 18006:8006 \
-            -v "$PWD/tests/e2e:/e2e:ro" \
-            -v "/tmp/e2e-key.pem:/tmp/key.pem:ro" \
-            -v "/tmp/e2e-cert.pem:/tmp/cert.pem:ro" \
-            python:3.12-slim sh -c "pip install --no-cache-dir fastapi uvicorn && uvicorn mock_proxmox_api:app --app-dir /e2e --host 0.0.0.0 --port 8006 --ssl-keyfile /tmp/key.pem --ssl-certfile /tmp/cert.pem"
+          docker run -d --name proxmox-e2e-mock --network proxbox-e2e -p 18006:8000 \
+            -v "$PWD/tests/e2e/proxmox_openapi_mock_data.json:/data/mock-data.json:ro" \
+            -e PROXMOX_MOCK_DATA_PATH=/data/mock-data.json \
+            "${PROXMOX_OPENAPI_IMAGE}"
 
-          if [ "${{ matrix.install_source }}" = "local" ]; then
-            docker run -d --name proxbox-e2e-api --network proxbox-e2e -p 18800:8000 \
-              -e PROXBOX_SKIP_NETBOX_BOOTSTRAP=true \
-              -v "$PWD/proxbox-api-source:/src:ro" \
-              python:3.12-slim sh -c "cp -r /src /tmp/proxbox-api-src && pip install --no-cache-dir fastapi uvicorn requests /tmp/proxbox-api-src && uvicorn proxbox_api.main:app --host 0.0.0.0 --port 8000 --app-dir /tmp/proxbox-api-src"
-          elif [ "${{ matrix.install_source }}" = "pypi" ]; then
-            docker run -d --name proxbox-e2e-api --network proxbox-e2e -p 18800:8000 \
-              -e PROXBOX_SKIP_NETBOX_BOOTSTRAP=true \
-              python:3.12-slim sh -c "pip install --no-cache-dir fastapi uvicorn requests proxbox-api==${PROXBOX_API_RELEASE_VERSION} && uvicorn proxbox_api.main:app --host 0.0.0.0 --port 8000"
+          docker run -d --name proxbox-e2e-api --network proxbox-e2e -p 18800:8000 \
+            -e PROXBOX_SKIP_NETBOX_BOOTSTRAP=true \
+            "${PROXBOX_API_IMAGE}:${PROXBOX_API_RELEASE_VERSION}"
+
+          if [ -n "${NETBOX_PLUGIN_MOUNT}" ]; then
+            # shellcheck disable=SC2086
+            docker run -d --name netbox-e2e --network proxbox-e2e -p 18080:8080 ${NETBOX_PLUGIN_MOUNT} \
+              -e DB_HOST=netbox-e2e-postgres \
+              -e DB_NAME=netbox \
+              -e DB_USER=netbox \
+              -e DB_PASSWORD=netbox \
+              -e REDIS_HOST=netbox-e2e-redis \
+              -e REDIS_DATABASE=0 \
+              -e REDIS_CACHE_HOST=netbox-e2e-redis \
+              -e REDIS_CACHE_DATABASE=1 \
+              -e REDIS_TASK_HOST=netbox-e2e-redis \
+              -e REDIS_TASK_DATABASE=2 \
+              -e SECRET_KEY="$SECRET_KEY" \
+              -e SUPERUSER_NAME=admin \
+              -e SUPERUSER_EMAIL=admin@example.com \
+              -e SUPERUSER_PASSWORD=admin \
+              -e ALLOWED_HOSTS="* localhost 127.0.0.1 ::1 netbox" \
+              -e LOGIN_REQUIRED=True \
+              --entrypoint /bin/bash \
+              "${NETBOX_IMAGE}" -ec "/opt/netbox/venv/bin/pip install --no-cache-dir --upgrade ${NETBOX_PLUGIN_INSTALL_SPEC} && mkdir -p /etc/netbox/config && printf 'PLUGINS = [\"netbox_proxbox\"]\\n' > /etc/netbox/config/plugins.py && /opt/netbox/docker-entrypoint.sh /opt/netbox/launch-netbox.sh"
           else
-            docker run -d --name proxbox-e2e-api --network proxbox-e2e -p 18800:8000 \
-              -e PROXBOX_SKIP_NETBOX_BOOTSTRAP=true \
-              emersonfelipesp/proxbox-api:${PROXBOX_API_RELEASE_VERSION}
+            docker run -d --name netbox-e2e --network proxbox-e2e -p 18080:8080 \
+              -e DB_HOST=netbox-e2e-postgres \
+              -e DB_NAME=netbox \
+              -e DB_USER=netbox \
+              -e DB_PASSWORD=netbox \
+              -e REDIS_HOST=netbox-e2e-redis \
+              -e REDIS_DATABASE=0 \
+              -e REDIS_CACHE_HOST=netbox-e2e-redis \
+              -e REDIS_CACHE_DATABASE=1 \
+              -e REDIS_TASK_HOST=netbox-e2e-redis \
+              -e REDIS_TASK_DATABASE=2 \
+              -e SECRET_KEY="$SECRET_KEY" \
+              -e SUPERUSER_NAME=admin \
+              -e SUPERUSER_EMAIL=admin@example.com \
+              -e SUPERUSER_PASSWORD=admin \
+              -e ALLOWED_HOSTS="* localhost 127.0.0.1 ::1 netbox" \
+              -e LOGIN_REQUIRED=True \
+              --entrypoint /bin/bash \
+              "${NETBOX_IMAGE}" -ec "/opt/netbox/venv/bin/pip install --no-cache-dir --upgrade ${NETBOX_PLUGIN_INSTALL_SPEC} && mkdir -p /etc/netbox/config && printf 'PLUGINS = [\"netbox_proxbox\"]\\n' > /etc/netbox/config/plugins.py && /opt/netbox/docker-entrypoint.sh /opt/netbox/launch-netbox.sh"
           fi
-
-          docker run -d --name netbox-e2e --network proxbox-e2e -p 18080:8080 \
-            -e DB_HOST=netbox-e2e-postgres \
-            -e DB_NAME=netbox \
-            -e DB_USER=netbox \
-            -e DB_PASSWORD=netbox \
-            -e REDIS_HOST=netbox-e2e-redis \
-            -e REDIS_DATABASE=0 \
-            -e REDIS_CACHE_HOST=netbox-e2e-redis \
-            -e REDIS_CACHE_DATABASE=1 \
-            -e REDIS_TASK_HOST=netbox-e2e-redis \
-            -e REDIS_TASK_DATABASE=2 \
-            -e SECRET_KEY="$SECRET_KEY" \
-            -e SUPERUSER_NAME=admin \
-            -e SUPERUSER_EMAIL=admin@example.com \
-            -e SUPERUSER_PASSWORD=admin \
-            -e ALLOWED_HOSTS="* localhost 127.0.0.1 ::1 netbox" \
-            -e LOGIN_REQUIRED=True \
-            netbox-proxbox-e2e:local
 
       - name: Get container IPs
         run: |
@@ -167,7 +177,7 @@ jobs:
           done
 
           for i in $(seq 1 60); do
-            if curl -fsSk --max-time 5 https://127.0.0.1:18006/api2/json/version >/dev/null 2>&1; then
+            if curl -fsS --max-time 5 http://127.0.0.1:18006/api2/json/version >/dev/null 2>&1; then
               break
             fi
             sleep 2
@@ -203,20 +213,38 @@ jobs:
           set -eux
           SECRET_KEY='proxbox-e2e-secret-key-proxbox-e2e-secret-key-proxbox-e2e-secret-key'
 
-          docker run -d --name netbox-e2e-rqworker --network proxbox-e2e \
-            -e DB_HOST=netbox-e2e-postgres \
-            -e DB_NAME=netbox \
-            -e DB_USER=netbox \
-            -e DB_PASSWORD=netbox \
-            -e REDIS_HOST=netbox-e2e-redis \
-            -e REDIS_DATABASE=0 \
-            -e REDIS_CACHE_HOST=netbox-e2e-redis \
-            -e REDIS_CACHE_DATABASE=1 \
-            -e REDIS_TASK_HOST=netbox-e2e-redis \
-            -e REDIS_TASK_DATABASE=2 \
-            -e SECRET_KEY="$SECRET_KEY" \
-            --entrypoint /opt/netbox/venv/bin/python \
-            netbox-proxbox-e2e:local /opt/netbox/netbox/manage.py rqworker
+          if [ -n "${NETBOX_PLUGIN_MOUNT}" ]; then
+            # shellcheck disable=SC2086
+            docker run -d --name netbox-e2e-rqworker --network proxbox-e2e ${NETBOX_PLUGIN_MOUNT} \
+              -e DB_HOST=netbox-e2e-postgres \
+              -e DB_NAME=netbox \
+              -e DB_USER=netbox \
+              -e DB_PASSWORD=netbox \
+              -e REDIS_HOST=netbox-e2e-redis \
+              -e REDIS_DATABASE=0 \
+              -e REDIS_CACHE_HOST=netbox-e2e-redis \
+              -e REDIS_CACHE_DATABASE=1 \
+              -e REDIS_TASK_HOST=netbox-e2e-redis \
+              -e REDIS_TASK_DATABASE=2 \
+              -e SECRET_KEY="$SECRET_KEY" \
+              --entrypoint /bin/bash \
+              "${NETBOX_IMAGE}" -ec "/opt/netbox/venv/bin/pip install --no-cache-dir --upgrade ${NETBOX_PLUGIN_INSTALL_SPEC} && mkdir -p /etc/netbox/config && printf 'PLUGINS = [\"netbox_proxbox\"]\\n' > /etc/netbox/config/plugins.py && /opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py rqworker"
+          else
+            docker run -d --name netbox-e2e-rqworker --network proxbox-e2e \
+              -e DB_HOST=netbox-e2e-postgres \
+              -e DB_NAME=netbox \
+              -e DB_USER=netbox \
+              -e DB_PASSWORD=netbox \
+              -e REDIS_HOST=netbox-e2e-redis \
+              -e REDIS_DATABASE=0 \
+              -e REDIS_CACHE_HOST=netbox-e2e-redis \
+              -e REDIS_CACHE_DATABASE=1 \
+              -e REDIS_TASK_HOST=netbox-e2e-redis \
+              -e REDIS_TASK_DATABASE=2 \
+              -e SECRET_KEY="$SECRET_KEY" \
+              --entrypoint /bin/bash \
+              "${NETBOX_IMAGE}" -ec "/opt/netbox/venv/bin/pip install --no-cache-dir --upgrade ${NETBOX_PLUGIN_INSTALL_SPEC} && mkdir -p /etc/netbox/config && printf 'PLUGINS = [\"netbox_proxbox\"]\\n' > /etc/netbox/config/plugins.py && /opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py rqworker"
+          fi
 
       - name: Run stack e2e checks
         env:

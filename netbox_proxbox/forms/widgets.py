@@ -17,9 +17,17 @@ class BootstrapCheckboxSelectMultiple(forms.CheckboxSelectMultiple):
     option_template_name = "netbox_proxbox/widgets/bootstrap_checkbox_option.html"
 
     def create_option(
-        self, name, value, label, selected, index, subindex=None, attrs=None
-    ):
+        self,
+        name: str,
+        value: object,
+        label: object,
+        selected: bool,
+        index: int,
+        subindex: int | None = None,
+        attrs: dict[str, object] | None = None,
+    ) -> dict[str, object]:
         # form-check-input is rendered in bootstrap_checkbox_option.html (NetBox attrs.html skips class).
+        """Create option."""
         return super().create_option(
             name, value, label, selected, index, subindex=subindex, attrs=attrs
         )

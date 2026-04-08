@@ -3,23 +3,32 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from collections.abc import Mapping
+from typing import TypeAlias
 
 import aiohttp
 from pydantic import BaseModel, Field
 
 from proxbox_cli.config import Config
 
+JSONScalar: TypeAlias = str | int | float | bool | None
+JSONValue: TypeAlias = JSONScalar | list["JSONValue"] | dict[str, "JSONValue"]
+QueryValue: TypeAlias = str | int | float | bool
+
 
 class ApiResponse(BaseModel):
+    """ApiResponse implementation."""
+
     status: int
     text: str
     headers: dict[str, str] = Field(default_factory=dict)
 
-    def json(self) -> Any:
+    def json_data(self) -> JSONValue:
+        """Handle json data."""
         return json.loads(self.text)
 
     def is_ok(self) -> bool:
+        """Handle is ok."""
         return 200 <= self.status < 300
 
 
@@ -39,33 +48,51 @@ class ProxboxApiClient:
         method: str,
         path: str,
         *,
-        query: dict[str, Any] | None = None,
-        payload: Any | None = None,
+        query: Mapping[str, QueryValue] | None = None,
+        payload: JSONValue | None = None,
     ) -> ApiResponse:
+        """Handle request."""
         url = self._url(path)
         timeout = aiohttp.ClientTimeout(total=self.config.timeout)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.request(
-                method,
-                url,
-                params=query,
-                json=payload,
-                headers={"Accept": "application/json"},
-            ) as resp:
-                text = await resp.text()
-                headers = dict(resp.headers)
-                return ApiResponse(status=resp.status, text=text, headers=headers)
+        try:
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.request(
+                    method,
+                    url,
+                    params=query,
+                    json=payload,
+                    headers={"Accept": "application/json"},
+                ) as resp:
+                    text = await resp.text()
+                    headers = dict(resp.headers)
+                    return ApiResponse(status=resp.status, text=text, headers=headers)
+        except aiohttp.ClientError as exc:
+            return ApiResponse(
+                status=503,
+                text=f"Connection error: {exc}",
+                headers={},
+            )
+        except OSError as exc:
+            return ApiResponse(
+                status=503,
+                text=f"Network error: {exc}",
+                headers={},
+            )
 
     async def get(
-        self, path: str, *, query: dict[str, Any] | None = None
+        self, path: str, *, query: Mapping[str, QueryValue] | None = None
     ) -> ApiResponse:
+        """Handle get."""
         return await self.request("GET", path, query=query)
 
-    async def post(self, path: str, *, payload: Any | None = None) -> ApiResponse:
+    async def post(self, path: str, *, payload: JSONValue | None = None) -> ApiResponse:
+        """Handle post."""
         return await self.request("POST", path, payload=payload)
 
-    async def put(self, path: str, *, payload: Any | None = None) -> ApiResponse:
+    async def put(self, path: str, *, payload: JSONValue | None = None) -> ApiResponse:
+        """Handle put."""
         return await self.request("PUT", path, payload=payload)
 
     async def delete(self, path: str) -> ApiResponse:
+        """Handle delete."""
         return await self.request("DELETE", path)

@@ -6,7 +6,8 @@ Before committing any change:
 
 1. Run syntax check: `python -m compileall netbox_proxbox tests`
 2. Run linter: `rtk ruff check .`
-3. Run tests: `rtk pytest tests/`
+3. Run type checker: `rtk ty check proxbox_cli`
+4. Run tests: `rtk pytest tests/`
 
 ## Framework Stack
 
@@ -32,8 +33,12 @@ Read [`CLAUDE.md`](./CLAUDE.md) first for the plugin architecture and documentat
 - [`netbox_proxbox/CLAUDE.md`](./netbox_proxbox/CLAUDE.md)
 - [`netbox_proxbox/api/CLAUDE.md`](./netbox_proxbox/api/CLAUDE.md)
 - [`netbox_proxbox/forms/CLAUDE.md`](./netbox_proxbox/forms/CLAUDE.md)
+- [`netbox_proxbox/management/CLAUDE.md`](./netbox_proxbox/management/CLAUDE.md)
+- [`netbox_proxbox/management/commands/CLAUDE.md`](./netbox_proxbox/management/commands/CLAUDE.md)
 - [`netbox_proxbox/migrations/CLAUDE.md`](./netbox_proxbox/migrations/CLAUDE.md)
 - [`netbox_proxbox/models/CLAUDE.md`](./netbox_proxbox/models/CLAUDE.md)
+- [`netbox_proxbox/schemas/CLAUDE.md`](./netbox_proxbox/schemas/CLAUDE.md)
+- [`netbox_proxbox/services/CLAUDE.md`](./netbox_proxbox/services/CLAUDE.md)
 - [`netbox_proxbox/static/CLAUDE.md`](./netbox_proxbox/static/CLAUDE.md)
 - [`netbox_proxbox/static/netbox_proxbox/CLAUDE.md`](./netbox_proxbox/static/netbox_proxbox/CLAUDE.md)
 - [`netbox_proxbox/static/netbox_proxbox/js/CLAUDE.md`](./netbox_proxbox/static/netbox_proxbox/js/CLAUDE.md)
@@ -48,6 +53,9 @@ Read [`CLAUDE.md`](./CLAUDE.md) first for the plugin architecture and documentat
 - [`netbox_proxbox/templates/netbox_proxbox/proxmox/CLAUDE.md`](./netbox_proxbox/templates/netbox_proxbox/proxmox/CLAUDE.md)
 - [`netbox_proxbox/templates/netbox_proxbox/table/CLAUDE.md`](./netbox_proxbox/templates/netbox_proxbox/table/CLAUDE.md)
 - [`netbox_proxbox/templates/netbox_proxbox/test/CLAUDE.md`](./netbox_proxbox/templates/netbox_proxbox/test/CLAUDE.md)
+- [`netbox_proxbox/templatetags/CLAUDE.md`](./netbox_proxbox/templatetags/CLAUDE.md)
 - [`netbox_proxbox/views/CLAUDE.md`](./netbox_proxbox/views/CLAUDE.md)
 - [`netbox_proxbox/views/endpoints/CLAUDE.md`](./netbox_proxbox/views/endpoints/CLAUDE.md)
+- [`netbox_proxbox/views/sync_now/CLAUDE.md`](./netbox_proxbox/views/sync_now/CLAUDE.md)
+- [`proxbox_cli/CLAUDE.md`](./proxbox_cli/CLAUDE.md)
 - [`tests/CLAUDE.md`](./tests/CLAUDE.md)

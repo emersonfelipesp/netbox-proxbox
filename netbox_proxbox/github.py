@@ -13,6 +13,7 @@ _REQUEST_TIMEOUT = (5, 30)
 
 
 def get(**kwargs: object) -> str | None:
+    """Handle get."""
     filename = kwargs.get("filename")
     if not filename:
         return None

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from netbox.api.viewsets import NetBoxModelViewSet
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -14,6 +12,7 @@ from .serializers import (
     BackupRoutineSerializer,
     FastAPIEndpointSerializer,
     NetBoxEndpointSerializer,
+    ProxboxPluginSettingsSerializer,
     ProxmoxClusterSerializer,
     ProxmoxEndpointSerializer,
     ProxmoxNodeSerializer,
@@ -32,11 +31,12 @@ class ProxBoxRootView(APIRootView):
         """Human-readable title for the plugin API root schema."""
         return "ProxBox"
 
-    def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+    def get(self, request: Request, *args: object, **kwargs: object) -> Response:
         """Augment the default API root payload with an absolute ``endpoints`` URL."""
         response = super().get(request, *args, **kwargs)
         base_url = request.build_absolute_uri("/").rstrip("/")
         response.data["endpoints"] = f"{base_url}/api/plugins/proxbox/endpoints/"
+        response.data["settings"] = f"{base_url}/api/plugins/proxbox/settings/"
         return response
 
 
@@ -46,6 +46,14 @@ class ProxBoxEndpointsView(APIRootView):
     def get_view_name(self) -> str:
         """Title for the nested endpoints API root."""
         return "Endpoints"
+
+
+class ProxboxPluginSettingsViewSet(NetBoxModelViewSet):
+    """REST API for ProxBox plugin settings (singleton)."""
+
+    queryset = models.ProxboxPluginSettings.objects.all()
+    serializer_class = ProxboxPluginSettingsSerializer
+    http_method_names = ["get", "patch", "head", "options"]
 
 
 class VMBackupViewSet(NetBoxModelViewSet):
@@ -76,7 +84,7 @@ class VMTaskHistoryViewSet(NetBoxModelViewSet):
     serializer_class = VMTaskHistorySerializer
     filterset_class = filtersets.VMTaskHistoryFilterSet
 
-    def perform_create(self, serializer):
+    def perform_create(self, serializer: object) -> None:
         """Upsert by Proxmox UPID so task reconciliation can replay safely."""
         upid = serializer.validated_data.get("upid")
         if upid:

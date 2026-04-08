@@ -21,9 +21,16 @@ repos:
         name: ruff-format
         entry: ruff
         language: system
-        pass_filenames: true
+        pass_filenames: false
         types: [python]
-        args: ["format", "--check", "."]
+        args: ["format", "."]
+
+      - id: ty-check
+        name: ty-check
+        entry: ty
+        language: system
+        pass_filenames: false
+        args: ["check", "proxbox_cli"]
 
       - id: pytest
         name: pytest

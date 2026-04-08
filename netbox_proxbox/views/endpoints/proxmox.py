@@ -1,33 +1,26 @@
 """Provide NetBox CRUD views for Proxmox endpoint records."""
 
-# Standard library imports
-import csv
-import io
-import json
-
-# Django imports
 from django.contrib import messages
-from django.http import HttpResponse
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect
-import yaml
-
-# NetBox Imports
 from netbox.api.authentication import TokenAuthentication
 from netbox.views import generic
 from utilities.permissions import get_permission_for_model
 from utilities.query import reapply_model_ordering
 from utilities.views import register_model_view
 
-# Proxbox Imports
-from netbox_proxbox.models import ProxmoxEndpoint
-from netbox_proxbox.tables import ProxmoxEndpointTable
 from netbox_proxbox.filtersets import ProxmoxEndpointFilterSet
 from netbox_proxbox.forms import (
     ProxmoxEndpointFilterForm,
     ProxmoxEndpointForm,
     ProxmoxEndpointImportForm,
 )
-
+from netbox_proxbox.models import ProxmoxEndpoint
+from netbox_proxbox.tables import ProxmoxEndpointTable
+from netbox_proxbox.views.endpoints.proxmox_export import (
+    _proxmox_export_fieldnames,
+    _serialize_proxmox_endpoint,
+)
 
 __all__ = (
     "ProxmoxEndpointView",
@@ -37,61 +30,6 @@ __all__ = (
     "ProxmoxEndpointBulkImportView",
     "ProxmoxEndpointExportView",
 )
-
-
-def _proxmox_export_fieldnames(include_sensitive: bool) -> tuple[str, ...]:
-    """CSV/serialization column names; secrets columns only when ``include_sensitive``."""
-    base_fields = (
-        "id",
-        "name",
-        "domain",
-        "ip_address",
-        "port",
-        "mode",
-        "version",
-        "repoid",
-        "username",
-        "verify_ssl",
-        "comments",
-        "tags",
-    )
-    if include_sensitive:
-        return (
-            *base_fields,
-            "password",
-            "token_name",
-            "token_value",
-        )
-    return (
-        *base_fields,
-        "token_name",
-    )
-
-
-def _serialize_proxmox_endpoint(
-    endpoint: ProxmoxEndpoint, include_sensitive: bool
-) -> dict[str, str]:
-    """One export row as string values, optionally including password and API token."""
-    tags_value = ",".join(sorted(tag.slug for tag in endpoint.tags.all()))
-    row = {
-        "id": str(endpoint.pk),
-        "name": endpoint.name or "",
-        "domain": endpoint.domain or "",
-        "ip_address": str(endpoint.ip_address.address) if endpoint.ip_address else "",
-        "port": str(endpoint.port),
-        "mode": endpoint.mode or "",
-        "version": endpoint.version or "",
-        "repoid": endpoint.repoid or "",
-        "username": endpoint.username or "",
-        "verify_ssl": "true" if endpoint.verify_ssl else "false",
-        "comments": endpoint.comments or "",
-        "tags": tags_value,
-        "token_name": endpoint.token_name or "",
-    }
-    if include_sensitive:
-        row["password"] = endpoint.password or ""
-        row["token_value"] = endpoint.token_value or ""
-    return row
 
 
 @register_model_view(ProxmoxEndpoint)
@@ -130,14 +68,13 @@ class ProxmoxEndpointExportView(generic.ObjectListView):
 
     queryset = ProxmoxEndpoint.objects.all()
     filterset = ProxmoxEndpointFilterSet
-
     allowed_formats = {"csv", "json", "yaml"}
 
-    def get_required_permission(self):
+    def get_required_permission(self) -> str:
         """Require model ``view`` on Proxmox endpoints (same as the list)."""
         return get_permission_for_model(self.queryset.model, "view")
 
-    def _validate_sensitive_export_token(self, request) -> bool:
+    def _validate_sensitive_export_token(self, request: HttpRequest) -> bool:
         """Confirm POSTed NetBox API token maps to a user allowed to view Proxmox endpoints."""
         raw_token = (request.POST.get("netbox_token") or "").strip()
         if not raw_token:
@@ -182,15 +119,23 @@ class ProxmoxEndpointExportView(generic.ObjectListView):
 
         return True
 
-    def _resolve_export_format(self, request) -> str:
+    def _resolve_export_format(self, request: HttpRequest) -> str:
         """Normalize ``format`` from GET/POST to one of ``allowed_formats`` (default csv)."""
         format_value = (
             request.GET.get("format") or request.POST.get("format") or "csv"
         ).lower()
         return format_value if format_value in self.allowed_formats else "csv"
 
-    def _export_response(self, request, include_sensitive: bool, data_format: str):
+    def _export_response(
+        self, request: HttpRequest, include_sensitive: bool, data_format: str
+    ) -> HttpResponse:
         """Serialize the current filtered queryset to a downloadable HTTP response."""
+        import csv
+        import io
+        import json
+
+        import yaml
+
         queryset = reapply_model_ordering(super().get_queryset(request))
         if self.filterset:
             queryset = self.filterset(request.GET, queryset, request=request).qs
@@ -220,7 +165,7 @@ class ProxmoxEndpointExportView(generic.ObjectListView):
         )
         return response
 
-    def get(self, request):
+    def get(self, request: HttpRequest) -> HttpResponse:
         """Export without passwords or token values (safe columns only)."""
         data_format = self._resolve_export_format(request)
         return self._export_response(
@@ -229,7 +174,7 @@ class ProxmoxEndpointExportView(generic.ObjectListView):
             data_format=data_format,
         )
 
-    def post(self, request):
+    def post(self, request: HttpRequest) -> HttpResponse:
         """Export with optional secrets after ``_validate_sensitive_export_token`` succeeds."""
         include_sensitive = request.POST.get("include_sensitive") == "true"
         data_format = self._resolve_export_format(request)

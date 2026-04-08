@@ -70,7 +70,7 @@ class FastAPIEndpointForm(NetBoxModelForm):
             "tags",
         )
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: object, **kwargs: object) -> None:
         """Pre-fill loopback IP input when the add view is launched with a default."""
         super().__init__(*args, **kwargs)
 
@@ -78,7 +78,7 @@ class FastAPIEndpointForm(NetBoxModelForm):
         if ip_address is not None:
             self.initial["ip_address"] = ip_address
 
-    def clean(self):
+    def clean(self) -> dict[str, object]:
         """Require domain or IP for HTTP/WebSocket base URLs."""
         super().clean()
         cleaned_data = self.cleaned_data

@@ -1,3 +1,5 @@
+"""Tests for stack_common."""
+
 from __future__ import annotations
 
 import os

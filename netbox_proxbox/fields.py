@@ -27,7 +27,7 @@ def validate_domain(value: object) -> None:
 class DomainField(models.CharField):
     """CharField with RFC-ish domain validation (plus ``localhost``)."""
 
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(self, *args: object, **kwargs: object) -> None:
         """Enforce max_length 253 and attach ``validate_domain``."""
         kwargs["max_length"] = 253  # Maximum length of a domain name is 253 characters
         super().__init__(*args, **kwargs)

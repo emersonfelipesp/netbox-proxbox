@@ -212,6 +212,8 @@ class BackupRoutine(NetBoxModel):
         """Human-readable list of selected VMIDs."""
         if not self.selection:
             return "All VMs" if self.raw_config.get("all") else "None"
+        if not isinstance(self.selection, list):
+            return "Invalid selection data"
         selected = ", ".join(str(v) for v in self.selection[:10])
         suffix = (
             f" ... ({len(self.selection)} total)" if len(self.selection) > 10 else ""

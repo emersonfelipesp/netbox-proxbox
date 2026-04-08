@@ -181,6 +181,7 @@ def docs_generate_capture(
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Run the command entrypoint."""
     command = typer.main.get_command(app)
     try:
         command.main(argv, standalone_mode=False)

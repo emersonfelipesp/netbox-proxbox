@@ -1,3 +1,5 @@
+"""Tests for test_frontend_contracts."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -200,6 +202,20 @@ def test_job_live_panel_script_is_the_shared_runtime_controller():
     assert "data-proxbox-job-live-summary-status" in contents
     assert "data-proxbox-job-live-root" in contents
     assert "data-proxbox-job-live-state-pill" in contents
+    assert 'addEventListener("discovery"' in contents
+    assert 'addEventListener("substep"' in contents
+    assert 'addEventListener("item_progress"' in contents
+    assert 'addEventListener("phase_summary"' in contents
+    assert 'addEventListener("error_detail"' in contents
+    assert "handleDiscoveryFrame" in contents
+    assert "handleSubstepFrame" in contents
+    assert "handleItemProgressFrame" in contents
+    assert "handlePhaseSummaryFrame" in contents
+    assert "handleErrorDetailFrame" in contents
+    assert "isGenericProgressMessage" in contents
+    assert "describeStepProgress" in contents
+    assert "isStepProgressPayload" in contents
+    assert 'msg === "sync progress"' in contents
 
 
 def test_job_live_panel_styles_make_queued_state_visually_distinct():
@@ -207,6 +223,9 @@ def test_job_live_panel_styles_make_queued_state_visually_distinct():
 
     assert "nb-job-live-card-queued" in contents
     assert "bs-warning-rgb" in contents
+    assert "nb-job-phase-board" in contents
+    assert "nb-job-phase-item" in contents
+    assert "nb-job-error-board" in contents
 
 
 def test_home_job_live_summary_wraps_the_shared_live_panel_in_a_details_element():
@@ -251,6 +270,9 @@ def test_backend_logs_page_javascript_supports_errors_tab_and_copy_button():
     assert "Backend: operation=" in contents
     assert "updateLevelFilterState()" in contents
     assert "setTab(tabKey, options = {})" in contents
+    assert "saveBackendLogFilePath()" in contents
+    assert "backendLogFilePathInput" in contents
+    assert "saveLogPathUrl" in contents
     assert "getLogLevelPriority" not in contents
 
 
@@ -260,6 +282,8 @@ def test_backend_logs_template_exposes_tabs_and_copy_button():
     assert 'id="logsTabs"' in contents
     assert 'data-log-tab="errors"' in contents
     assert 'id="copyLogsBtn"' in contents
+    assert 'id="backendLogFilePathInput"' in contents
+    assert 'id="saveBackendLogFilePathBtn"' in contents
     assert "Copy to clipboard" in contents
     assert "Errors" in contents
 
@@ -381,6 +405,7 @@ def test_settings_page_is_wired_in_urls_navigation_and_template():
     assert "use_guest_agent_interface_name" in template
     assert "proxbox_fetch_max_concurrency" in template
     assert "ignore_ipv6_link_local_addresses" in template
+    assert "backend_log_file_path" in template
     assert "inc/field.html" not in template
     assert "class SettingsView(" in view
 

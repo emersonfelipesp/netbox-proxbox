@@ -4,21 +4,14 @@ from __future__ import annotations
 
 import requests
 from django.contrib.auth.mixins import AccessMixin
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.views import View
 from utilities.views import ConditionalLoginRequiredMixin
 from virtualization.models import Cluster
 
+import netbox_proxbox.views.dashboard_data as dashboard_data
 from netbox_proxbox.models import FastAPIEndpoint, ProxmoxEndpoint, ProxmoxNode
-from netbox_proxbox.schemas import (
-    ProxmoxClusterStatusResponse,
-    ProxmoxClusterSummary,
-    ProxmoxGuestSummary,
-    ProxmoxNodeDetail,
-    ProxmoxNodeRow,
-    ProxmoxResourceRecord,
-)
-from netbox_proxbox.schemas._formatters import iter_node_records, iter_scalar_records
 from netbox_proxbox.utils import get_backend_auth_headers, get_fastapi_url
 from netbox_proxbox.views.backend_sync import sync_proxmox_endpoint_to_backend
 from netbox_proxbox.views.error_utils import (
@@ -27,22 +20,16 @@ from netbox_proxbox.views.error_utils import (
 )
 from netbox_proxbox.views.proxbox_access import user_may_access_proxbox_dashboard
 
-__all__ = ("DashboardView",)
-
-
-def _get_endpoint_display_ip(endpoint: ProxmoxEndpoint) -> str:
-    """Return the display IP address for an endpoint."""
-    if endpoint.domain:
-        return endpoint.domain
-    if endpoint.ip_address:
-        return str(endpoint.ip_address.address).split("/")[0]
-    return "—"
+__all__ = ("DashboardView", "ProxmoxNode")
 
 
 class RequireProxboxDashboardAccessMixin(AccessMixin):
     """Require view permission on at least one endpoint model when authenticated."""
 
-    def dispatch(self, request, *args, **kwargs):
+    def dispatch(
+        self, request: HttpRequest, *args: object, **kwargs: object
+    ) -> HttpResponse:
+        """Handle dispatch."""
         if request.user.is_authenticated and not user_may_access_proxbox_dashboard(
             request.user
         ):
@@ -89,81 +76,9 @@ class DashboardView(
         payload, json_err = parse_requests_response_json(response, log_label=route)
         return payload, json_err
 
-    def _build_cluster_summary(self, cluster_payload: object) -> dict[str, object]:
-        response = ProxmoxClusterStatusResponse.model_validate(cluster_payload)
-        return ProxmoxClusterSummary.from_status_response(response).model_dump()
-
-    def _build_guest_summary(self, resources_payload: object) -> dict[str, object]:
-        resource_records = [
-            ProxmoxResourceRecord.model_validate(record)
-            for record in iter_scalar_records(resources_payload)
-        ]
-        return ProxmoxGuestSummary.from_resources(resource_records).model_dump()
-
-    def _build_local_node_rows(
-        self, endpoint: ProxmoxEndpoint
-    ) -> list[dict[str, object]]:
-        nodes = (
-            ProxmoxNode.objects.filter(endpoint=endpoint)
-            .select_related("proxmox_cluster", "netbox_device")
-            .order_by("name")
-        )
-        rows = [ProxmoxNodeRow.from_node_model(node).model_dump() for node in nodes]
-        return rows
-
-    def _build_live_node_rows(self, nodes_payload: object) -> list[dict[str, object]]:
-        rows = [
-            ProxmoxNodeRow.from_node_detail(
-                ProxmoxNodeDetail.model_validate(record)
-            ).model_dump()
-            for record in iter_node_records(nodes_payload)
-        ]
-        return sorted(rows, key=lambda row: str(row["name"]))
-
-    def _merge_node_rows(
-        self,
-        local_rows: list[dict[str, object]],
-        live_rows: list[dict[str, object]],
-    ) -> list[dict[str, object]]:
-        live_rows_by_name = {
-            str(row.get("name", "")): row for row in live_rows if row.get("name")
-        }
-        merged_rows: list[dict[str, object]] = []
-        seen_names: set[str] = set()
-        for row in local_rows:
-            row_name = str(row.get("name", ""))
-            live_row = live_rows_by_name.get(row_name)
-            if live_row:
-                merged_rows.append(row | live_row)
-            else:
-                merged_rows.append(row)
-            if row_name:
-                seen_names.add(row_name)
-
-        for row in live_rows:
-            row_name = str(row.get("name", ""))
-            if row_name and row_name not in seen_names:
-                merged_rows.append(row)
-
-        return sorted(merged_rows, key=lambda row: str(row.get("name", "")))
-
-    def _cluster_summary_from_node_rows(
-        self,
-        cluster_summary: dict[str, object],
-        node_rows: list[dict[str, object]],
-    ) -> dict[str, object]:
-        if not node_rows:
-            return cluster_summary
-
-        online_nodes = sum(1 for row in node_rows if row.get("status") == "online")
-        total_nodes = len(node_rows)
-        return cluster_summary | {
-            "nodes_total": total_nodes,
-            "nodes_online": online_nodes,
-            "nodes_offline": max(total_nodes - online_nodes, 0),
-        }
-
-    def get(self, request):
+    def get(self, request: HttpRequest) -> HttpResponse:
+        """Handle get."""
+        dashboard_data.ProxmoxNode = ProxmoxNode
         proxmox_endpoints = list(ProxmoxEndpoint.objects.restrict(request.user, "view"))
         fastapi_endpoint = FastAPIEndpoint.objects.restrict(
             request.user, "view"
@@ -235,7 +150,18 @@ class DashboardView(
                 dashboards.append(dashboard)
                 continue
 
-            local_node_rows = self._build_local_node_rows(endpoint)
+            cluster_name = None
+            cluster_node_names: set[str] = set()
+            if not cluster_err:
+                cluster_name, cluster_node_names = dashboard_data.cluster_node_scope(
+                    cluster_payload
+                )
+
+            local_node_rows = dashboard_data.build_local_node_rows(
+                endpoint,
+                cluster_name=cluster_name,
+                cluster_node_names=cluster_node_names,
+            )
             live_node_rows: list[dict[str, object]] = []
             nodes_err = None
             try:
@@ -247,7 +173,7 @@ class DashboardView(
                     query_params=query_params,
                 )
                 if not nodes_err:
-                    live_node_rows = self._build_live_node_rows(nodes_payload)
+                    live_node_rows = dashboard_data.build_live_node_rows(nodes_payload)
             except requests.exceptions.RequestException as exc:
                 if not local_node_rows:
                     detail, _ = extract_proxmox_backend_error_detail(
@@ -263,37 +189,42 @@ class DashboardView(
 
             if cluster_err or resources_err:
                 dashboard["detail"] = cluster_err or resources_err
-            elif nodes_err and not local_node_rows:
+                dashboards.append(dashboard)
+                continue
+
+            if nodes_err and not local_node_rows:
                 dashboard["detail"] = nodes_err
-            else:
-                cluster_summary = self._build_cluster_summary(cluster_payload)
-                dashboard["guest_summary"] = self._build_guest_summary(
-                    resources_payload
+                dashboards.append(dashboard)
+                continue
+
+            cluster_summary = dashboard_data.build_cluster_summary(cluster_payload)
+            dashboard["guest_summary"] = dashboard_data.build_guest_summary(
+                resources_payload
+            )
+            if local_node_rows:
+                dashboard["nodes"] = dashboard_data.merge_node_rows(
+                    local_node_rows, live_node_rows
                 )
-                if local_node_rows:
-                    dashboard["nodes"] = self._merge_node_rows(
-                        local_node_rows, live_node_rows
-                    )
-                else:
-                    dashboard["nodes"] = live_node_rows
-                dashboard["cluster_summary"] = self._cluster_summary_from_node_rows(
+            else:
+                dashboard["nodes"] = live_node_rows
+            dashboard["cluster_summary"] = (
+                dashboard_data.cluster_summary_from_node_rows(
                     cluster_summary, dashboard["nodes"]
                 )
+            )
 
-                # Add endpoint IP for display
-                dashboard["endpoint_ip"] = _get_endpoint_display_ip(endpoint)
+            dashboard["endpoint_ip"] = dashboard_data.get_endpoint_display_ip(endpoint)
 
-                # Try to match with NetBox Cluster
-                cluster_name = (
-                    dashboard["cluster_summary"].get("name", "")
-                    if dashboard["cluster_summary"]
-                    else ""
-                )
-                if cluster_name and cluster_name != "—":
-                    netbox_cluster = Cluster.objects.filter(name=cluster_name).first()
-                else:
-                    netbox_cluster = None
-                dashboard["netbox_cluster"] = netbox_cluster
+            cluster_name = (
+                dashboard["cluster_summary"].get("name", "")
+                if dashboard["cluster_summary"]
+                else ""
+            )
+            if cluster_name and cluster_name != "—":
+                netbox_cluster = Cluster.objects.filter(name=cluster_name).first()
+            else:
+                netbox_cluster = None
+            dashboard["netbox_cluster"] = netbox_cluster
 
             dashboards.append(dashboard)
 

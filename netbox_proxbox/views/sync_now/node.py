@@ -1,7 +1,9 @@
 """Individual sync for ProxmoxNode."""
 
 from django.contrib import messages
+from django.http import HttpRequest
 from django.http import HttpResponseRedirect
+from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 from utilities.views import (
@@ -13,6 +15,7 @@ from utilities.views import (
 from netbox_proxbox.models import ProxmoxNode
 from netbox_proxbox.services.individual_sync import sync_individual_with_dependencies
 from netbox_proxbox.views.proxbox_access import permission_enqueue_proxbox_sync
+from netbox_proxbox.views.sync_now import _handle_sync_response
 
 
 @register_model_view(ProxmoxNode, "proxbox_sync_now", path="proxbox-sync-now")
@@ -25,11 +28,15 @@ class ProxmoxNodeSyncNowView(
 
     http_method_names = ["post"]
 
-    def get_required_permission(self):
+    def get_required_permission(self) -> str:
+        """Return required permission."""
         return permission_enqueue_proxbox_sync()
 
-    def post(self, request, pk):
-        node = ProxmoxNode.objects.get(pk=pk)
+    def post(self, request: HttpRequest, pk: int | str) -> HttpResponseRedirect:
+        """Handle post."""
+        node = get_object_or_404(
+            ProxmoxNode.objects.restrict(request.user, "view"), pk=pk
+        )
         node_name = node.name
 
         cluster_name = ""
@@ -47,23 +54,11 @@ class ProxmoxNodeSyncNowView(
             {"cluster_name": cluster_name, "node_name": node_name},
         )
 
-        if status == 200:
-            action = response.get("action", "synced")
-            messages.success(
-                request,
-                _(f"Node '{node_name}' {action} successfully.")
-                + (
-                    f" ({len(dependencies)} dependencies synced)"
-                    if dependencies
-                    else ""
-                ),
-            )
-        elif status == 422:
-            messages.error(request, _("Invalid parameters for node sync."))
-        elif status == 503:
-            messages.error(request, _("Proxbox backend is unavailable for node sync."))
-        else:
-            error = response.get("error", "Unknown error")
-            messages.error(request, _(f"Failed to sync node: {error}"))
-
-        return HttpResponseRedirect(node.get_absolute_url())
+        return _handle_sync_response(
+            request,
+            response,
+            status,
+            dependencies,
+            f"Node '{node_name}'",
+            node.get_absolute_url(),
+        )

@@ -1,3 +1,5 @@
+"""Tests for netbox_test_configuration."""
+
 from netbox.configuration_testing import *  # noqa: F403
 from netbox.configuration_testing import PLUGINS as BASE_PLUGINS
 

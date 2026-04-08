@@ -1,3 +1,5 @@
+"""Django migration for netbox_proxbox."""
+
 # Manual migration for ProxmoxCluster and ProxmoxNode models
 
 from django.db import migrations, models

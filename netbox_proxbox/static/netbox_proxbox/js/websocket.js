@@ -8,8 +8,9 @@ function updateSyncButtons(connected) {
 }
 
 export default class WebSocketClient {
-    constructor(websocketEndpoint) {
+    constructor(websocketEndpoint, apiKey = null) {
         this.websocketURL = websocketEndpoint;
+        this.apiKey = apiKey;
         this.ws = null;
         this.reconnectAttempts = 0;
         this.maxReconnectAttempts = 5;
@@ -31,6 +32,9 @@ export default class WebSocketClient {
             this.ws = new WebSocket(this.websocketURL);
             this.ws.onopen = () => {
                 this.reconnectAttempts = 0;
+                if (this.apiKey) {
+                    this.ws.send(JSON.stringify({ api_key: this.apiKey }));
+                }
                 updateSyncButtons(true);
             };
             this.ws.onmessage = (event) => this.handleMessage(event);

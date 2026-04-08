@@ -1,5 +1,10 @@
 """NetBox-aligned permission helpers for ProxBox custom views."""
 
+from django.contrib.auth.base_user import AbstractBaseUser
+from django.contrib.auth.mixins import AccessMixin
+from django.contrib.auth.models import AnonymousUser
+from django.http import HttpRequest, HttpResponse
+
 from core.models import Job
 from utilities.permissions import get_permission_for_model
 
@@ -11,12 +16,27 @@ from netbox_proxbox.models import (
 )
 
 __all__ = (
+    "RequireProxboxDashboardAccessMixin",
     "permission_change_fastapi_endpoint",
     "permission_change_proxbox_plugin_settings",
     "permission_enqueue_proxbox_sync",
     "permission_view_fastapi_endpoint",
     "user_may_access_proxbox_dashboard",
 )
+
+
+class RequireProxboxDashboardAccessMixin(AccessMixin):
+    """Require view permission on at least one endpoint model when authenticated."""
+
+    def dispatch(
+        self, request: HttpRequest, *args: object, **kwargs: object
+    ) -> HttpResponse:
+        """Block authenticated users who cannot see any ProxBox endpoint inventory."""
+        if request.user.is_authenticated and not user_may_access_proxbox_dashboard(
+            request.user
+        ):
+            return self.handle_no_permission()
+        return super().dispatch(request, *args, **kwargs)
 
 
 def permission_change_fastapi_endpoint() -> str:
@@ -39,7 +59,7 @@ def permission_view_fastapi_endpoint() -> str:
     return get_permission_for_model(FastAPIEndpoint, "view")
 
 
-def user_may_access_proxbox_dashboard(user) -> bool:
+def user_may_access_proxbox_dashboard(user: AbstractBaseUser | AnonymousUser) -> bool:
     """True if the user may see any ProxBox endpoint inventory on the plugin home."""
     if not getattr(user, "is_authenticated", False):
         return False

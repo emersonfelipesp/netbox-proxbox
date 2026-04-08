@@ -12,6 +12,8 @@
   var summaryRoot = null;
   var summaryStatusEl = null;
   var summaryDetailEl = null;
+  var phasesEl = null;
+  var errorsEl = null;
   var streamUrl = "";
   var apiUrl = "";
   var logSuffix = "log lines";
@@ -19,6 +21,8 @@
   var sseSource = null;
   var isStreaming = false;
   var lastEntries = [];
+  var phaseState = {};
+  var errorEntries = [];
   var lastStatusValue = "";
   var lastStatusLabel = "";
   var stateStorageKey = "";
@@ -292,6 +296,48 @@
     return "";
   }
 
+  function isGenericProgressMessage(message, payload, eventType) {
+    var msg = String(message || "").trim().toLowerCase();
+    if (!msg) return false;
+    if (msg === "sync progress" || msg === "progress") {
+      return true;
+    }
+    if (eventType === "step" && String(payload && payload.step || "") === "progress" && msg.indexOf("stage") === -1) {
+      return true;
+    }
+    return false;
+  }
+
+  function describeStepProgress(payload) {
+    if (!payload || typeof payload !== "object") return "";
+    var step = String(payload.step || "");
+    if (step !== "progress") return "";
+    var progress = payload.progress && typeof payload.progress === "object" ? payload.progress : null;
+    if (!progress) return "";
+    var stage = progress.stage != null ? String(progress.stage) : "";
+    var current = progress.current != null ? String(progress.current) : "";
+    var total = progress.total != null ? String(progress.total) : "";
+    var status = String(payload.status || "").toLowerCase();
+    if (status === "started") {
+      if (stage && current && total) return "Starting stage " + stage + " (" + current + "/" + total + ")";
+      if (stage) return "Starting stage " + stage;
+    }
+    if (status === "completed") {
+      if (stage && current && total) return "Completed stage " + stage + " (" + current + "/" + total + ")";
+      if (stage) return "Completed stage " + stage;
+    }
+    if (stage && current && total) return "Stage " + stage + " in progress (" + current + "/" + total + ")";
+    return "";
+  }
+
+  function isStepProgressPayload(payload) {
+    return !!(
+      payload &&
+      typeof payload === "object" &&
+      String(payload.step || "") === "progress"
+    );
+  }
+
   function updateProgress(progress, previousStatus) {
     if (!progressBarEl) return;
     var wrap = progressBarEl.parentElement ? progressBarEl.parentElement.parentElement : null;
@@ -372,9 +418,151 @@
     writeStoredState();
   }
 
+  function ensurePhaseRow(phase) {
+    if (!phasesEl || !phase) return null;
+    var key = String(phase);
+    var row = phasesEl.querySelector('[data-phase="' + key.replace(/"/g, "") + '"]');
+    if (row) return row;
+    row = document.createElement("div");
+    row.className = "nb-job-phase-item";
+    row.dataset.phase = key;
+    row.dataset.status = "pending";
+    var name = document.createElement("span");
+    name.className = "nb-job-phase-name";
+    name.textContent = key;
+    var detail = document.createElement("span");
+    detail.className = "nb-job-phase-detail";
+    detail.textContent = "Pending";
+    row.appendChild(name);
+    row.appendChild(detail);
+    phasesEl.appendChild(row);
+    return row;
+  }
+
+  function renderErrors() {
+    if (!errorsEl) return;
+    errorsEl.replaceChildren();
+    if (!Array.isArray(errorEntries) || errorEntries.length === 0) {
+      errorsEl.classList.add("d-none");
+      return;
+    }
+    errorsEl.classList.remove("d-none");
+    var title = document.createElement("div");
+    title.className = "nb-job-error-title";
+    title.textContent = "Issues detected";
+    errorsEl.appendChild(title);
+    var start = Math.max(0, errorEntries.length - 6);
+    for (var i = start; i < errorEntries.length; i++) {
+      var item = document.createElement("div");
+      item.className = "nb-job-error-item";
+      item.textContent = errorEntries[i];
+      errorsEl.appendChild(item);
+    }
+  }
+
+  function handleDiscoveryFrame(payload) {
+    if (!payload || typeof payload !== "object") return;
+    var phase = String(payload.phase || payload.step || "sync");
+    var row = ensurePhaseRow(phase);
+    if (!row) return;
+    var count = payload.count != null ? String(payload.count) : "0";
+    var detail = row.querySelector(".nb-job-phase-detail");
+    row.dataset.status = "processing";
+    if (detail) {
+      detail.textContent = "Discovered " + count + " item(s)";
+    }
+    phaseState[phase] = { status: "processing", count: count };
+  }
+
+  function handleSubstepFrame(payload) {
+    if (!payload || typeof payload !== "object") return;
+    var phase = String(payload.phase || payload.step || "sync");
+    var row = ensurePhaseRow(phase);
+    if (!row) return;
+    var status = String(payload.status || "processing").toLowerCase();
+    var substep = String(payload.substep || "work");
+    var detail = row.querySelector(".nb-job-phase-detail");
+    row.dataset.status = status === "failed" ? "failed" : "processing";
+    if (detail) {
+      detail.textContent = substep + " - " + (status === "completed" ? "done" : status);
+    }
+    phaseState[phase] = { status: row.dataset.status, substep: substep };
+  }
+
+  function handleItemProgressFrame(payload) {
+    if (!payload || typeof payload !== "object") return;
+    var phase = String(payload.phase || payload.step || "sync");
+    var row = ensurePhaseRow(phase);
+    if (!row) return;
+    var progress = payload.progress && typeof payload.progress === "object" ? payload.progress : {};
+    var current = progress.current != null ? String(progress.current) : "0";
+    var total = progress.total != null ? String(progress.total) : "0";
+    var status = String(payload.status || "processing").toLowerCase();
+    var detail = row.querySelector(".nb-job-phase-detail");
+    row.dataset.status = status === "failed" ? "failed" : status === "completed" ? "completed" : "processing";
+    if (detail) {
+      detail.textContent = current + "/" + total + " item(s)";
+    }
+    phaseState[phase] = { status: row.dataset.status, current: current, total: total };
+  }
+
+  function handlePhaseSummaryFrame(payload) {
+    if (!payload || typeof payload !== "object") return;
+    var phase = String(payload.phase || payload.step || "sync");
+    var row = ensurePhaseRow(phase);
+    if (!row) return;
+    var result = payload.result && typeof payload.result === "object" ? payload.result : {};
+    var created = result.created != null ? String(result.created) : "0";
+    var failed = result.failed != null ? String(result.failed) : "0";
+    var detail = row.querySelector(".nb-job-phase-detail");
+    row.dataset.status = String(payload.status || "completed").indexOf("error") >= 0 ? "failed" : "completed";
+    if (detail) {
+      detail.textContent = created + " ok, " + failed + " failed";
+    }
+    phaseState[phase] = { status: row.dataset.status, created: created, failed: failed };
+  }
+
+  function handleErrorDetailFrame(payload) {
+    if (!payload || typeof payload !== "object") return;
+    var phase = String(payload.phase || payload.step || "sync");
+    var row = ensurePhaseRow(phase);
+    if (row) {
+      row.dataset.status = "failed";
+      var detail = row.querySelector(".nb-job-phase-detail");
+      if (detail) {
+        detail.textContent = String(payload.category || "error") + ": failed";
+      }
+    }
+    var msg = String(payload.message || payload.error || payload.detail || "Error");
+    if (payload.suggestion) {
+      msg += " (" + String(payload.suggestion) + ")";
+    }
+    errorEntries.push(msg);
+    if (errorEntries.length > 20) {
+      errorEntries.shift();
+    }
+    renderErrors();
+  }
+
   function handleSSEFrame(eventType, data) {
     var payload = data && typeof data === "object" ? data : {};
+    if (eventType === "discovery") {
+      handleDiscoveryFrame(payload);
+    } else if (eventType === "substep") {
+      handleSubstepFrame(payload);
+    } else if (eventType === "item_progress") {
+      handleItemProgressFrame(payload);
+    } else if (eventType === "phase_summary") {
+      handlePhaseSummaryFrame(payload);
+    } else if (eventType === "error_detail") {
+      handleErrorDetailFrame(payload);
+    }
+
     var message = getFrameMessage(payload, eventType);
+    var stepProgressText = describeStepProgress(payload);
+    if (stepProgressText) {
+      message = stepProgressText;
+    }
     var status = payload.status ? String(payload.status) : "";
     var previousStatus = lastStatusValue;
     var isTerminal =
@@ -383,7 +571,12 @@
       status === "errored" ||
       eventType === "error";
 
-    if (message && !isTerminal) {
+    if (
+      message &&
+      !isTerminal &&
+      !isStepProgressPayload(payload) &&
+      !isGenericProgressMessage(message, payload, eventType)
+    ) {
       appendLog(
         message,
         eventType === "error"
@@ -510,6 +703,36 @@
           handleSSEFrame("message", data);
         } catch (error) {}
       });
+      sseSource.addEventListener("discovery", function (e) {
+        try {
+          var data = JSON.parse(e.data);
+          handleSSEFrame("discovery", data);
+        } catch (error) {}
+      });
+      sseSource.addEventListener("substep", function (e) {
+        try {
+          var data = JSON.parse(e.data);
+          handleSSEFrame("substep", data);
+        } catch (error) {}
+      });
+      sseSource.addEventListener("item_progress", function (e) {
+        try {
+          var data = JSON.parse(e.data);
+          handleSSEFrame("item_progress", data);
+        } catch (error) {}
+      });
+      sseSource.addEventListener("phase_summary", function (e) {
+        try {
+          var data = JSON.parse(e.data);
+          handleSSEFrame("phase_summary", data);
+        } catch (error) {}
+      });
+      sseSource.addEventListener("error_detail", function (e) {
+        try {
+          var data = JSON.parse(e.data);
+          handleSSEFrame("error_detail", data);
+        } catch (error) {}
+      });
       sseSource.addEventListener("error", function () {
         if (!isStreaming) {
           return;
@@ -613,6 +836,8 @@
     logEl = root.querySelector("[data-proxbox-job-live-log]");
     copyBtn = root.querySelector("[data-proxbox-job-live-copy]");
     progressBarEl = root.querySelector("[data-proxbox-job-live-progress-bar]");
+    phasesEl = root.querySelector("[data-proxbox-job-live-phases]");
+    errorsEl = root.querySelector("[data-proxbox-job-live-errors]");
     statePillEl = root.querySelector("[data-proxbox-job-live-state-pill]");
     summaryRoot = root.closest("[data-proxbox-job-live-summary]");
     summaryStatusEl = summaryRoot

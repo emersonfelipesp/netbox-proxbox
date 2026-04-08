@@ -1,3 +1,5 @@
+"""Django migration for netbox_proxbox."""
+
 # Squashes netbox_proxbox migrations from v0.0.6b2.post1 (after 0008) through v0.0.8.
 # Replaces the historical 0009-0013 chain that shipped in v0.0.7.
 

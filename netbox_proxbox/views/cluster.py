@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from django.shortcuts import get_object_or_404
-from extras.models import TableConfig
+from django.http import HttpRequest
 from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
 from virtualization.models import Cluster
@@ -12,6 +11,7 @@ from netbox_proxbox.filtersets import ProxmoxStorageFilterSet
 from netbox_proxbox.forms import ProxmoxStorageFilterForm
 from netbox_proxbox.models import ProxmoxStorage
 from netbox_proxbox.tables import ProxmoxStorageTable
+from netbox_proxbox.views.mixins import TableConfigOverrideMixin
 
 
 __all__ = (
@@ -21,7 +21,7 @@ __all__ = (
 
 
 @register_model_view(Cluster, "proxbox-storages", path="storages")
-class ClusterStoragesTabView(generic.ObjectChildrenView):
+class ClusterStoragesTabView(TableConfigOverrideMixin, generic.ObjectChildrenView):
     """Cluster detail tab listing Proxmox storages for this cluster."""
 
     queryset = Cluster.objects.all()
@@ -39,37 +39,17 @@ class ClusterStoragesTabView(generic.ObjectChildrenView):
         permission="netbox_proxbox.view_proxmoxstorage",
         weight=1000,
     )
+    table_exclude = ("cluster",)
 
-    def get_queryset(self, request):
+    def get_queryset(self, request: HttpRequest):
         """Restrict parent clusters to those the user may view."""
         return Cluster.objects.restrict(request.user, "view")
 
-    def get_children(self, request, parent):
+    def get_children(self, request: HttpRequest, parent: Cluster):
         """Return storages for ``parent`` visible to the current user."""
         return ProxmoxStorage.objects.restrict(request.user, "view").filter(
             cluster=parent
         )
-
-    def get_table(self, data, request, bulk_actions=True):
-        """Build the child table, honoring optional ``tableconfig_id`` column overrides."""
-        if tableconfig_id := request.GET.get("tableconfig_id"):
-            tableconfig = get_object_or_404(TableConfig, pk=tableconfig_id)
-            if request.user.is_authenticated:
-                table_name = self.table.__name__
-                request.user.config.set(
-                    f"tables.{table_name}.columns", tableconfig.columns
-                )
-                request.user.config.set(
-                    f"tables.{table_name}.ordering",
-                    tableconfig.ordering,
-                    commit=True,
-                )
-
-        table = self.table(data, exclude=("cluster",))
-        if "pk" in table.base_columns and bulk_actions:
-            table.columns.show("pk")
-        table.configure(request)
-        return table
 
 
 @register_model_view(Cluster, "proxbox-summary", path="summary")
@@ -84,7 +64,9 @@ class ClusterSummaryTabView(generic.ObjectView):
         weight=1100,
     )
 
-    def get_extra_context(self, request, instance):
+    def get_extra_context(
+        self, request: HttpRequest, instance: Cluster
+    ) -> dict[str, object]:
         """Gather Proxmox-related data for this cluster."""
         context: dict[str, object] = {
             "cluster": instance,

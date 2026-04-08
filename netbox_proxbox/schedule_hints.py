@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, time, timedelta
+from typing import TYPE_CHECKING, Any
 
 from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
@@ -19,6 +20,13 @@ from netbox_proxbox.jobs import (
     proxbox_sync_params_from_job,
 )
 
+if TYPE_CHECKING:
+    from django.contrib.auth.base_user import AbstractBaseUser
+    from django.contrib.auth.models import AnonymousUser
+else:
+    AbstractBaseUser = Any
+    AnonymousUser = Any
+
 QUICK_SCHEDULE_DEFAULT_JOB_NAME = _("Proxbox Full Sync")
 
 __all__ = (
@@ -29,7 +37,7 @@ __all__ = (
 )
 
 
-def next_local_3am():
+def next_local_3am() -> datetime:
     """Next local wall-clock 03:00 after ``local_now()`` (same timezone as schedule form)."""
     now = local_now()
     tz = now.tzinfo
@@ -39,7 +47,7 @@ def next_local_3am():
     return today_3am
 
 
-def has_recurring_proxbox_sync_all(user) -> bool:
+def has_recurring_proxbox_sync_all(user: AbstractBaseUser | AnonymousUser) -> bool:
     """
     True if the user can see a live recurring Proxbox job whose sync types normalize to ``[all]``.
     """
@@ -63,7 +71,7 @@ def has_recurring_proxbox_sync_all(user) -> bool:
     return False
 
 
-def quick_schedule_home_form_kwargs() -> dict:
+def quick_schedule_home_form_kwargs() -> dict[str, object]:
     """Constructor kwargs for ``ScheduleSyncForm`` with All + daily + next 03:00 local defaults."""
     return {
         "initial": {

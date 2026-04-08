@@ -78,6 +78,7 @@ def schedule_hints(monkeypatch):
         VIRTUAL_MACHINES_DISKS="vm-disks",
         VIRTUAL_MACHINES_SNAPSHOTS="vm-snapshots",
         NETWORK_INTERFACES="network-interfaces",
+        VM_INTERFACES="vm-interfaces",
         IP_ADDRESSES="ip-addresses",
         ALL="all",
     )
@@ -198,6 +199,37 @@ def test_has_recurring_proxbox_sync_all_false_when_no_candidates(
     monkeypatch.setattr(schedule_hints.Job, "objects", EmptyQS())
 
     assert schedule_hints.has_recurring_proxbox_sync_all(object()) is False
+
+
+def test_has_recurring_proxbox_sync_all_detects_default_name_job_without_metadata(
+    schedule_hints, monkeypatch
+):
+    job = _make_job(
+        interval=1440,
+        status="scheduled",
+        queue_name=schedule_hints.PROXBOX_SYNC_QUEUE_NAME,
+        name="Proxbox Sync",
+        data={},
+    )
+
+    class QS:
+        def restrict(self, user, action):
+            return self
+
+        def filter(self, *a, **k):
+            return self
+
+        def iterator(self, chunk_size=64):
+            yield job
+
+    monkeypatch.setattr(schedule_hints.Job, "objects", QS())
+    monkeypatch.setattr(
+        schedule_hints,
+        "proxbox_sync_params_from_job",
+        lambda candidate: {"sync_types": ["all"]},
+    )
+
+    assert schedule_hints.has_recurring_proxbox_sync_all(object()) is True
 
 
 def test_quick_schedule_home_form_kwargs(schedule_hints, monkeypatch):

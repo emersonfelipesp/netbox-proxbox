@@ -33,6 +33,73 @@
   gap: 0.75rem;
 }
 
+.nb-job-phase-board {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.nb-job-phase-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  border: 1px solid var(--bs-border-color);
+  border-radius: 0.35rem;
+  padding: 0.3rem 0.45rem;
+  background: rgba(var(--bs-secondary-rgb), 0.04);
+}
+
+.nb-job-phase-item[data-status="processing"] {
+  border-color: rgba(var(--bs-warning-rgb), 0.45);
+  background: rgba(var(--bs-warning-rgb), 0.08);
+}
+
+.nb-job-phase-item[data-status="completed"] {
+  border-color: rgba(var(--bs-success-rgb), 0.45);
+  background: rgba(var(--bs-success-rgb), 0.08);
+}
+
+.nb-job-phase-item[data-status="failed"] {
+  border-color: rgba(var(--bs-danger-rgb), 0.45);
+  background: rgba(var(--bs-danger-rgb), 0.08);
+}
+
+.nb-job-phase-name {
+  font-weight: 600;
+}
+
+.nb-job-phase-detail {
+  color: var(--bs-secondary-color);
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 55%;
+}
+
+.nb-job-error-board {
+  border: 1px solid rgba(var(--bs-danger-rgb), 0.35);
+  background: rgba(var(--bs-danger-rgb), 0.08);
+  border-radius: 0.35rem;
+  padding: 0.5rem 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.nb-job-error-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--bs-danger-text-emphasis);
+}
+
+.nb-job-error-item {
+  font-size: 0.78rem;
+  color: var(--bs-danger-text-emphasis);
+}
+
 .nb-job-live-log {
   width: 100%;
   max-height: 280px;

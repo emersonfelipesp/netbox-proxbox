@@ -1,3 +1,5 @@
+"""Tests for test_api_source_contracts."""
+
 from __future__ import annotations
 
 import ast
@@ -441,6 +443,7 @@ def test_plugin_api_routes_register_all_plugin_objects():
         "clusters",
         "nodes",
         "replications",
+        "settings",
         "storage",
         "backups",
         "snapshots",

@@ -1,3 +1,5 @@
+"""Tests for test_utils."""
+
 from __future__ import annotations
 
 import importlib
@@ -33,7 +35,7 @@ def test_get_fastapi_url_builds_http_and_websocket_urls(monkeypatch):
     assert result["ip_address_url"] == "http://10.0.0.5:8800"
 
 
-def test_get_backend_auth_headers_normalizes_bearer_tokens(monkeypatch):
+def test_get_backend_auth_headers_uses_api_key_header(monkeypatch):
     netbox_module = types.ModuleType("netbox")
     netbox_plugins = types.ModuleType("netbox.plugins")
     netbox_plugins.PluginConfig = type("PluginConfig", (), {})
@@ -45,13 +47,10 @@ def test_get_backend_auth_headers_normalizes_bearer_tokens(monkeypatch):
 
     assert utils.get_backend_auth_headers(SimpleNamespace(token="")) == {}
     assert utils.get_backend_auth_headers(SimpleNamespace(token="abc")) == {
-        "Authorization": "Bearer abc"
+        "X-Proxbox-API-Key": "abc"
     }
-    assert utils.get_backend_auth_headers(SimpleNamespace(token="Bearer abc")) == {
-        "Authorization": "Bearer abc"
-    }
-    assert utils.get_backend_auth_headers(SimpleNamespace(token="Token abc")) == {
-        "Authorization": "Token abc"
+    assert utils.get_backend_auth_headers(SimpleNamespace(token="  abc  ")) == {
+        "X-Proxbox-API-Key": "abc"
     }
 
 

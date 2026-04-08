@@ -1,5 +1,6 @@
 {% extends 'base/layout.html' %}
 {% load i18n %}
+{% load proxbox_tags %}
 
 {% block title %}{% trans "Schedule Proxbox Sync" %}{% endblock %}
 
@@ -22,12 +23,19 @@
 
                 <form method="post">
                     {% csrf_token %}
+                    {% if edit_job %}
+                        <input type="hidden" name="edit_job_id" value="{{ edit_job }}">
+                        <div class="alert alert-info mb-3">
+                            <i class="mdi mdi-information"></i>
+                            {% trans "You are editing an existing scheduled job. The original job will be cancelled when you save." %}
+                        </div>
+                    {% endif %}
                     {% include "netbox_proxbox/inc/schedule_sync_form_fields.html" %}
 
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-primary">
                             <i class="mdi mdi-clock-plus-outline"></i>
-                            {% trans "Schedule" %}
+                            {% if edit_job %}{% trans "Update Schedule" %}{% else %}{% trans "Schedule" %}{% endif %}
                         </button>
                         <a href="{% url 'core:job_list' %}" class="btn btn-outline-secondary">
                             <i class="mdi mdi-format-list-bulleted"></i>
@@ -37,6 +45,81 @@
                 </form>
             </div>
         </div>
+
+        {% if scheduled_jobs %}
+        <div class="card mt-4">
+            <h5 class="card-header">
+                <i class="mdi mdi-calendar-clock"></i>
+                {% trans "Scheduled Jobs" %}
+            </h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
+                    <thead>
+                        <tr>
+                            <th>{% trans "Name" %}</th>
+                            <th>{% trans "Sync Types" %}</th>
+                            <th>{% trans "Schedule" %}</th>
+                            <th>{% trans "Interval" %}</th>
+                            <th class="text-end">{% trans "Actions" %}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for job in scheduled_jobs %}
+                        <tr>
+                            <td class="align-middle">
+                                <a href="{% url 'core:job' job.pk %}">{{ job.name|default:"Proxbox Sync" }}</a>
+                            </td>
+                            <td class="align-middle">
+                                {% for st in job.sync_types %}
+                                    <span class="badge rounded-pill text-bg-info">{{ st|sync_type_label }}</span>
+                                {% endfor %}
+                            </td>
+                            <td class="align-middle">
+                                {% if job.schedule %}
+                                    {{ job.schedule }}
+                                {% else %}
+                                    <span class="text-muted">{% trans "Immediate" %}</span>
+                                {% endif %}
+                            </td>
+                            <td class="align-middle">
+                                {% if job.interval %}
+                                    {% if job.interval >= 60 * 24 * 7 %}
+                                        {{ job.interval|div:604800 }} weeks
+                                    {% elif job.interval >= 60 * 24 %}
+                                        {{ job.interval|div:1440 }} days
+                                    {% elif job.interval >= 60 %}
+                                        {{ job.interval|div:60 }} hours
+                                    {% else %}
+                                        {{ job.interval }} minutes
+                                    {% endif %}
+                                {% else %}
+                                    <span class="text-muted">{% trans "One-time" %}</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                <a href="{% url 'plugins:netbox_proxbox:schedule_sync' %}?edit={{ job.pk }}" class="btn btn-sm btn-outline-primary" title="{% trans 'Edit' %}">
+                                    <i class="mdi mdi-pencil"></i>
+                                </a>
+                                {% if job.status == 'pending' or job.status == 'scheduled' %}
+                                <form method="post" class="d-inline">
+                                    {% csrf_token %}
+                                    <button type="submit" name="cancel_job" value="{{ job.pk }}" class="btn btn-sm btn-outline-danger" title="{% trans 'Cancel' %}" onclick="return confirm('{% trans "Are you sure you want to cancel this scheduled job?" %}')">
+                                        <i class="mdi mdi-close-circle"></i>
+                                    </button>
+                                </form>
+                                {% else %}
+                                <a href="{% url 'core:job_rerun' job.pk %}" class="btn btn-sm btn-outline-success" title="{% trans 'Run' %}">
+                                    <i class="mdi mdi-play"></i>
+                                </a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
     </div>
 
     <div class="col col-md-6">

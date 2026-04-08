@@ -109,6 +109,66 @@ sudo chmod +rx -R /etc/ssl/certs/
 
 That is convenient, but you should review the security impact for your environment before using it.
 
+## Authentication
+
+The NetBox plugin and `proxbox-api` backend use database-backed API key authentication:
+
+### Automatic Token Setup (v0.0.11+)
+
+When you create or update endpoints, the plugin automatically:
+
+1. **FastAPIEndpoint creation** → Generates a secure 64-character token → Registers with backend
+2. **ProxmoxEndpoint creation** → Ensures FastAPIEndpoint has a token → Registers with backend
+3. **Migration from v0.0.10** → Generates tokens for existing endpoints → Attempts backend registration
+
+This happens without manual intervention in most cases.
+
+### Manual Token Management
+
+If automatic registration fails (e.g., backend was offline during setup), you can fix tokens:
+
+```bash
+# Check token status
+python manage.py proxbox_fix_tokens
+
+# Fix unregistered tokens
+python manage.py proxbox_fix_tokens --fix
+```
+
+### Manual Key Registration (Legacy)
+
+If the plugin cannot register the key automatically (e.g., backend not running during setup), you can register keys manually:
+
+```bash
+# Check if bootstrap is needed
+curl http://localhost:8800/auth/bootstrap-status
+
+# Register a key (only works when no keys exist)
+curl -X POST http://localhost:8800/auth/register-key \
+  -H "Content-Type: application/json" \
+  -d '{"api_key": "your-secure-api-key-at-least-32-characters", "label": "netbox-plugin"}'
+```
+
+Then set the `token` field on your `FastAPIEndpoint` in NetBox to match.
+
+### Key Management
+
+After the first key is registered, manage keys via the authenticated API:
+
+```bash
+# List keys (requires auth)
+curl http://localhost:8800/auth/keys \
+  -H "X-Proxbox-API-Key: your-key"
+
+# Create a new key
+curl -X POST http://localhost:8800/auth/keys \
+  -H "X-Proxbox-API-Key: your-key"
+
+# Delete a key
+curl -X DELETE http://localhost:8800/auth/keys/1 \
+  -H "X-Proxbox-API-Key: your-key"
+```
+
 ## Next Step In NetBox
 
 After the backend is reachable, create these objects in the Proxbox UI:

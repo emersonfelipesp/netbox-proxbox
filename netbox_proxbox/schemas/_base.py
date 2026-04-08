@@ -18,6 +18,7 @@ class ProxboxBaseModel(BaseModel):
         return getattr(self, key)
 
     def get(self, key: str, default: object | None = None) -> object | None:
+        """Handle get."""
         return getattr(self, key, default)
 
 
