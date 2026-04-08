@@ -30,6 +30,7 @@ This directory contains Django schema migrations for the plugin models.
 - The squashed migrations list `replaces = [...]` so Django treats databases that already applied the old individual migrations as up to date without re-running operations.
 - There is no `0011` migration file in this checkout; the chain jumps from `0010` to `0012`.
 - **0022_squashed_*** (v0.0.11+): Consolidates five individual migrations (0022-0026) into one. The `replaces` list allows existing databases that applied the old chain to recognize this as a replacement and skip re-running those operations.
+- **0023** (v0.0.11+): Adds `encryption_key` to `ProxboxPluginSettings`. Databases that have not yet run this migration will return HTTP 500 on `GET /api/plugins/proxbox/settings/` because the ORM always selects all model columns. Run `manage.py migrate netbox_proxbox` to apply.
 - If an install was partially upgraded into the post-squash branch, use the repair migration chain in this directory rather than hand-editing `django_migrations`.
 
 ## Dependencies
@@ -40,9 +41,10 @@ This directory contains Django schema migrations for the plugin models.
 ## Release Timeline
 
 - **v0.0.10** (and earlier): Migrations 0001-0021 (21 files)
-- **v0.0.11** (develop): Migrations 0001-0021, 0022_squashed (22 files)
-  - Adds 5 changes (FastAPI tokens, SSRF settings, backend logging, operational settings, constraint conversion) consolidated into one squashed migration
-  - Reduces individual migration file count from 27 (0001-0026, minus 0011) to 22
+- **v0.0.11** (develop): Migrations 0001-0021, 0022_squashed, 0023 (23 files)
+  - 0022_squashed adds 5 changes (FastAPI tokens, SSRF settings, backend logging, operational settings, constraint conversion) consolidated into one squashed migration
+  - 0023 adds `encryption_key` to `ProxboxPluginSettings`
+  - Reduces individual migration file count from 27 (0001-0026, minus 0011) to 23
 
 ## Notes
 
