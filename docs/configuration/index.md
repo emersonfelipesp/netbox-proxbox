@@ -12,12 +12,16 @@ Create these objects under **Plugins > Proxbox** before running a sync:
 
 ## Plugin Settings
 
-The plugin also exposes a singleton-style **Proxbox plugin settings** object for runtime behavior:
+The plugin exposes a singleton-style **Proxbox plugin settings** object for runtime behavior, organized into three groups:
 
-- **Use guest agent interface name**: prefer guest-agent interface names such as `ens18` instead of generic `net0`.
-- **Proxmox fetch max concurrency**: cap parallel fetch operations per sync stage.
+- **Core behavior** — guest-agent interface naming, Proxmox fetch concurrency, IPv6 link-local filtering.
+- **NetBox integration** — concurrency limits, retry policy, GET cache TTL, bulk-batch tuning, and VM sync parallelism.
+- **SSRF protection** — enable/disable endpoint IP validation, private IP allowances, and explicit CIDR block/allow lists.
+
+See [Plugin Settings](./plugin-settings.md) for the full field reference.
 
 ## Next Steps
 
 - Review [Required Parameters](./required-parameters.md) before creating endpoint records.
+- Configure [Plugin Settings](./plugin-settings.md) to tune sync performance and security.
 - Use [Scheduled Sync](../features/scheduled-sync.md) when you want recurring background jobs instead of manual syncs.

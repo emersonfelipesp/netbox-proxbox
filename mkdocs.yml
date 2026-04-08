@@ -74,6 +74,7 @@ nav:
   - Configuration:
     - Overview: 'configuration/index.md'
     - Required Parameters: 'configuration/required-parameters.md'
+    - Plugin Settings: 'configuration/plugin-settings.md'
   - CLI:
     - Overview: 'cli/index.md'
     - Command Reference: 'reference/proxbox-cli/command-catalog/index.md'
