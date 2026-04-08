@@ -234,7 +234,7 @@ def _execute_stage_sync(
             status=status,
             payload=payload,
         )
-        job.logger.error("Stage %s failed (HTTP %s): %s", sync_type, status, detail)
+        job.logger.error(f"Stage {sync_type} failed (HTTP {status}): {detail}")
         raise RuntimeError(user_detail)
 
     job.logger.info(

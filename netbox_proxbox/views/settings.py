@@ -37,6 +37,7 @@ class SettingsView(
                 "use_guest_agent_interface_name": settings_obj.use_guest_agent_interface_name,
                 "proxbox_fetch_max_concurrency": settings_obj.proxbox_fetch_max_concurrency,
                 "ignore_ipv6_link_local_addresses": settings_obj.ignore_ipv6_link_local_addresses,
+                "backend_log_file_path": settings_obj.backend_log_file_path,
                 "ssrf_protection_enabled": settings_obj.ssrf_protection_enabled,
                 "allow_private_ips": settings_obj.allow_private_ips,
                 "additional_allowed_ip_ranges": settings_obj.additional_allowed_ip_ranges,
@@ -59,6 +60,9 @@ class SettingsView(
             settings_obj.ignore_ipv6_link_local_addresses = form.cleaned_data[
                 "ignore_ipv6_link_local_addresses"
             ]
+            settings_obj.backend_log_file_path = form.cleaned_data[
+                "backend_log_file_path"
+            ]
             settings_obj.ssrf_protection_enabled = form.cleaned_data.get(
                 "ssrf_protection_enabled", False
             )
@@ -76,6 +80,7 @@ class SettingsView(
                     "use_guest_agent_interface_name",
                     "proxbox_fetch_max_concurrency",
                     "ignore_ipv6_link_local_addresses",
+                    "backend_log_file_path",
                     "ssrf_protection_enabled",
                     "allow_private_ips",
                     "additional_allowed_ip_ranges",

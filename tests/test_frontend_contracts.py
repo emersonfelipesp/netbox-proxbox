@@ -270,6 +270,9 @@ def test_backend_logs_page_javascript_supports_errors_tab_and_copy_button():
     assert "Backend: operation=" in contents
     assert "updateLevelFilterState()" in contents
     assert "setTab(tabKey, options = {})" in contents
+    assert "saveBackendLogFilePath()" in contents
+    assert "backendLogFilePathInput" in contents
+    assert "saveLogPathUrl" in contents
     assert "getLogLevelPriority" not in contents
 
 
@@ -279,6 +282,8 @@ def test_backend_logs_template_exposes_tabs_and_copy_button():
     assert 'id="logsTabs"' in contents
     assert 'data-log-tab="errors"' in contents
     assert 'id="copyLogsBtn"' in contents
+    assert 'id="backendLogFilePathInput"' in contents
+    assert 'id="saveBackendLogFilePathBtn"' in contents
     assert "Copy to clipboard" in contents
     assert "Errors" in contents
 
@@ -400,6 +405,7 @@ def test_settings_page_is_wired_in_urls_navigation_and_template():
     assert "use_guest_agent_interface_name" in template
     assert "proxbox_fetch_max_concurrency" in template
     assert "ignore_ipv6_link_local_addresses" in template
+    assert "backend_log_file_path" in template
     assert "inc/field.html" not in template
     assert "class SettingsView(" in view
 

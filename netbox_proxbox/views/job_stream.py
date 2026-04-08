@@ -79,12 +79,57 @@ def _release_sync_ownership(job: JobModel, owner: str) -> None:
 _STREAM_LOG_RE = re.compile(r"^\[proxbox-stream\]\s+(\S+):\s*(.+)$")
 
 
+def _format_percent_template(message: str, args: object) -> str | None:
+    """Best-effort percent-style formatting for persisted log templates."""
+    if args in (None, (), [], {}):
+        return message
+
+    candidates: list[object] = []
+    if isinstance(args, list):
+        candidates.append(tuple(args))
+    candidates.append(args)
+    if not isinstance(args, (tuple, dict, list)):
+        candidates.append((args,))
+
+    for candidate in candidates:
+        try:
+            return message % candidate
+        except Exception:  # pragma: no cover - defensive fallback
+            continue
+    return None
+
+
+def _render_log_entry_message(entry: object) -> str | None:
+    """Return the best available rendered message for a persisted log entry."""
+    if not isinstance(entry, dict):
+        return None
+
+    message: str | None = None
+    for key in ("rendered_message", "formatted_message", "message", "msg"):
+        candidate = entry.get(key)
+        if isinstance(candidate, str):
+            message = candidate
+            break
+    if message is None:
+        return None
+
+    rendered = _format_percent_template(message, entry.get("args"))
+    if rendered is not None:
+        return rendered
+
+    rendered = _format_percent_template(message, entry.get("arguments"))
+    if rendered is not None:
+        return rendered
+
+    return message
+
+
 def _decode_stream_log_entry(entry: object) -> tuple[str, dict[str, object]] | None:
     """Decode persisted ``[proxbox-stream] ...`` log entries into SSE frames."""
     if not isinstance(entry, dict):
         return None
-    raw = entry.get("message")
-    if not isinstance(raw, str):
+    raw = _render_log_entry_message(entry)
+    if raw is None:
         return None
     match = _STREAM_LOG_RE.match(raw.strip())
     if not match:
@@ -265,17 +310,16 @@ class JobStreamSSEView(View):
                                 if event_name != "complete":
                                     emit(event_name, payload)
                                 continue
-                            if isinstance(entry, dict):
-                                msg = entry.get("message")
-                                if isinstance(msg, str) and msg.strip():
-                                    emit(
-                                        "message",
-                                        {
-                                            "step": "job",
-                                            "status": "progress",
-                                            "message": msg,
-                                        },
-                                    )
+                            msg = _render_log_entry_message(entry)
+                            if isinstance(msg, str) and msg.strip():
+                                emit(
+                                    "message",
+                                    {
+                                        "step": "job",
+                                        "status": "progress",
+                                        "message": msg,
+                                    },
+                                )
                         seen_log_entries = len(log_entries)
 
                     if current_status in JobStatusChoices.TERMINAL_STATE_CHOICES:

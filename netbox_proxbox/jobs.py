@@ -219,9 +219,7 @@ class ProxboxSyncJob(JobRunner):
 
             if batch_object_type and batch_object_ids:
                 self.logger.info(
-                    "Starting batch sync for %s selected %s records",
-                    len(batch_object_ids),
-                    batch_object_type,
+                    f"Starting batch sync for {len(batch_object_ids)} selected {batch_object_type} records"
                 )
                 try:
                     loop = asyncio.get_running_loop()
@@ -261,21 +259,21 @@ class ProxboxSyncJob(JobRunner):
                 }
                 self.job.save(update_fields=["data"])
                 self.logger.info(
-                    "Batch sync completed for %s (%s total, %s succeeded, %s failed)",
-                    batch_result["batch_object_label"],
-                    batch_result["total"],
-                    batch_result["succeeded"],
-                    batch_result["failed"],
+                    "Batch sync completed for "
+                    f"{batch_result['batch_object_label']} "
+                    f"({batch_result['total']} total, "
+                    f"{batch_result['succeeded']} succeeded, "
+                    f"{batch_result['failed']} failed)"
                 )
                 return
 
             self.logger.info(f"Starting Proxbox sync stages: {', '.join(stages)}")
             if proxmox_endpoint_ids:
-                self.logger.info("Proxmox endpoints: %s", proxmox_endpoint_ids)
+                self.logger.info(f"Proxmox endpoints: {proxmox_endpoint_ids}")
             if netbox_endpoint_ids:
-                self.logger.info("NetBox endpoints: %s", netbox_endpoint_ids)
+                self.logger.info(f"NetBox endpoints: {netbox_endpoint_ids}")
             if netbox_vm_ids:
-                self.logger.info("NetBox virtual machines: %s", netbox_vm_ids)
+                self.logger.info(f"NetBox virtual machines: {netbox_vm_ids}")
 
             stages_out = _run_all_stages_sync(self, stages, params, run_started)
 
@@ -289,9 +287,7 @@ class ProxboxSyncJob(JobRunner):
             }
             self.job.save(update_fields=["data"])
             self.logger.info(
-                "All sync stages completed (%s), runtime %.3fs",
-                len(stages_out),
-                runtime_seconds,
+                f"All sync stages completed ({len(stages_out)}), runtime {runtime_seconds:.3f}s"
             )
         finally:
             _release_rq_sync_ownership(self.job)

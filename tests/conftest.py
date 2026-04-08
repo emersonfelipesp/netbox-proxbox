@@ -203,6 +203,7 @@ def load_plugin_module(
     fastapi_endpoint=None,
     netbox_endpoint=None,
     proxmox_endpoint=None,
+    proxbox_settings=None,
     get_fastapi_url=None,
 ):
     django_module = types.ModuleType("django")
@@ -403,6 +404,24 @@ def load_plugin_module(
     models_module.ProxmoxCluster = _make_model_class("ProxmoxCluster")
     models_module.ProxmoxNode = _make_model_class("ProxmoxNode")
     models_module.ProxmoxStorage = _make_model_class("ProxmoxStorage")
+
+    if proxbox_settings is None:
+        proxbox_settings = SimpleNamespace(
+            backend_log_file_path="/var/log/proxbox.log",
+            save=lambda **kwargs: None,
+        )
+
+    class _ProxboxPluginSettings:
+        @classmethod
+        def get_solo(cls):
+            return proxbox_settings
+
+    _ProxboxPluginSettings._meta = SimpleNamespace(
+        app_label="netbox_proxbox",
+        model_name="proxboxpluginsettings",
+    )
+    models_module.ProxboxPluginSettings = _ProxboxPluginSettings
+
     utils_module = types.ModuleType("netbox_proxbox.utils")
     utils_module.get_fastapi_url = get_fastapi_url or (
         lambda obj: {
@@ -580,6 +599,9 @@ def load_plugin_module(
 
     proxbox_access = types.ModuleType("netbox_proxbox.views.proxbox_access")
     proxbox_access.permission_enqueue_proxbox_sync = lambda: "stub.enqueue_proxbox_sync"
+    proxbox_access.permission_change_proxbox_plugin_settings = lambda: (
+        "stub.change_proxboxpluginsettings"
+    )
     proxbox_access.user_may_access_proxbox_dashboard = lambda user: True
     monkeypatch.setitem(
         sys.modules, "netbox_proxbox.views.proxbox_access", proxbox_access

@@ -8,6 +8,8 @@ from django.utils.translation import gettext_lazy as _
 
 from netbox.models import NetBoxModel
 
+DEFAULT_BACKEND_LOG_FILE_PATH = "/var/log/proxbox.log"
+
 
 def parse_cidr_list(text: str) -> list[str]:
     """Parse newline-separated CIDR ranges into a list of strings."""
@@ -48,6 +50,15 @@ class ProxboxPluginSettings(NetBoxModel):
             "When enabled, IPv6 link-local addresses (fe80::/64) are ignored during "
             "VM interface IP address selection. Disable this only if you need link-local "
             "addresses to be included."
+        ),
+    )
+    backend_log_file_path = models.CharField(
+        max_length=255,
+        default=DEFAULT_BACKEND_LOG_FILE_PATH,
+        verbose_name=_("Backend log file path"),
+        help_text=_(
+            "Absolute file path for proxbox-api rotated log archive output "
+            "(for example /var/log/proxbox.log). Changes apply after proxbox-api restart."
         ),
     )
     ssrf_protection_enabled = models.BooleanField(

@@ -1,6 +1,10 @@
 """Forms for plugin-level ProxBox settings."""
 
+from pathlib import PurePosixPath
+
 from django import forms
+
+from netbox_proxbox.models.plugin_settings import DEFAULT_BACKEND_LOG_FILE_PATH
 
 
 class ProxboxPluginSettingsForm(forms.Form):
@@ -31,6 +35,16 @@ class ProxboxPluginSettingsForm(forms.Form):
         help_text=(
             "When enabled, IPv6 link-local addresses (fe80::/64) are ignored during "
             "VM interface IP address selection. Disable only if you need link-local addresses included."
+        ),
+    )
+    backend_log_file_path = forms.CharField(
+        required=True,
+        max_length=255,
+        initial=DEFAULT_BACKEND_LOG_FILE_PATH,
+        label="Backend log file path",
+        help_text=(
+            "Absolute file path for proxbox-api rotated log archive output "
+            "(for example /var/log/proxbox.log). Takes effect after proxbox-api restart."
         ),
     )
     ssrf_protection_enabled = forms.BooleanField(
@@ -67,3 +81,18 @@ class ProxboxPluginSettingsForm(forms.Form):
             "even if they match allowed ranges above."
         ),
     )
+
+    def clean_backend_log_file_path(self) -> str:
+        """Require an absolute log file path including a filename."""
+        path = (self.cleaned_data.get("backend_log_file_path") or "").strip()
+        if not path:
+            raise forms.ValidationError("Backend log file path is required.")
+        if not PurePosixPath(path).is_absolute():
+            raise forms.ValidationError(
+                "Backend log file path must be absolute (for example /var/log/proxbox.log)."
+            )
+        if path.endswith("/"):
+            raise forms.ValidationError(
+                "Backend log file path must include a filename, not only a directory."
+            )
+        return path

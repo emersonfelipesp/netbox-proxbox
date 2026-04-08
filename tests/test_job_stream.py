@@ -192,6 +192,52 @@ def test_job_stream_forwards_backend_message_frames(job_stream_module, monkeypat
     assert any("event: complete" in chunk and '"ok": true' in chunk for chunk in chunks)
 
 
+def test_job_stream_renders_percent_style_templates_from_log_entries(job_stream_module):
+    """Live stream should render percent-style templates when args are persisted."""
+    module = job_stream_module
+
+    log_entries = [
+        {
+            "message": "Starting stage: %s (%s)",
+            "args": ["devices", "dcim/devices/create/stream"],
+        },
+        {
+            "message": "Stage completed: %s (HTTP %s)",
+            "args": ["devices", 200],
+        },
+    ]
+
+    status_state = {"calls": 0}
+
+    def refresh():
+        status_state["calls"] += 1
+        if status_state["calls"] >= 2:
+            job.status = "completed"
+
+    job = SimpleNamespace(
+        pk=57,
+        status="running",
+        data={"proxbox_sync": {"params": {}}},
+        save=lambda **kwargs: None,
+        refresh_from_db=refresh,
+        log_entries=log_entries,
+    )
+    view = module.JobStreamSSEView()
+    chunks = list(view._stream_job_events(job))
+
+    assert any(
+        "event: message" in chunk
+        and "Starting stage: devices (dcim/devices/create/stream)" in chunk
+        for chunk in chunks
+    )
+    assert any(
+        "event: message" in chunk and "Stage completed: devices (HTTP 200)" in chunk
+        for chunk in chunks
+    )
+    assert not any("Starting stage: %s (%s)" in chunk for chunk in chunks)
+    assert not any("Stage completed: %s (HTTP %s)" in chunk for chunk in chunks)
+
+
 def test_job_stream_does_not_execute_backend_sync(job_stream_module, monkeypatch):
     """Observer stream must never call backend sync executors directly."""
     module = job_stream_module

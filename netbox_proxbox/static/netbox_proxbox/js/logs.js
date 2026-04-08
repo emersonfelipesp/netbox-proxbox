@@ -7,6 +7,8 @@ class LogsPage {
     constructor() {
         this.config = window.proxboxLogsConfig || {};
         this.logsApiUrl = this.config.logsApiUrl || "";
+        this.saveLogPathUrl = this.config.saveLogPathUrl || "";
+        this.backendLogFilePath = this.config.backendLogFilePath || "/var/log/proxbox.log";
         this.displayedLogs = [];
         this.currentTab = "all";
         this.currentLevel = "";
@@ -29,6 +31,7 @@ class LogsPage {
 
     init() {
         this.bindEvents();
+        this.hydrateBackendLogPathInput();
         this.updateTabState();
         this.updateLevelFilterState();
         this.fetchLogs({ reset: true });
@@ -44,6 +47,7 @@ class LogsPage {
         const operationIdFilter = document.getElementById("operationIdFilter");
         const clearFiltersBtn = document.getElementById("clearFiltersBtn");
         const loadMoreBtn = document.getElementById("loadMoreBtn");
+        const saveBackendLogFilePathBtn = document.getElementById("saveBackendLogFilePathBtn");
 
         document.querySelectorAll("[data-log-tab]").forEach((button) => {
             button.addEventListener("click", () => {
@@ -107,6 +111,22 @@ class LogsPage {
 
         if (loadMoreBtn) {
             loadMoreBtn.addEventListener("click", () => this.loadMore());
+        }
+
+        if (saveBackendLogFilePathBtn) {
+            saveBackendLogFilePathBtn.addEventListener("click", () => {
+                this.saveBackendLogFilePath();
+            });
+        }
+    }
+
+    hydrateBackendLogPathInput() {
+        const input = document.getElementById("backendLogFilePathInput");
+        if (!input) {
+            return;
+        }
+        if (!input.value) {
+            input.value = this.backendLogFilePath;
         }
     }
 
@@ -722,6 +742,107 @@ class LogsPage {
         if (this.operationIdFetchTimer) {
             clearTimeout(this.operationIdFetchTimer);
             this.operationIdFetchTimer = null;
+        }
+    }
+
+    getCsrfToken() {
+        const csrfInput = document.querySelector("input[name='csrfmiddlewaretoken']");
+        if (csrfInput && csrfInput.value) {
+            return csrfInput.value;
+        }
+
+        const csrfCookie = document.cookie
+            .split(";")
+            .map((part) => part.trim())
+            .find((part) => part.startsWith("csrftoken="));
+        return csrfCookie ? csrfCookie.split("=", 2)[1] : "";
+    }
+
+    setBackendLogFilePathStatus(message, level = "muted") {
+        const statusEl = document.getElementById("backendLogFilePathStatus");
+        if (!statusEl) {
+            return;
+        }
+
+        statusEl.classList.remove("text-success", "text-danger", "text-muted");
+        if (level === "success") {
+            statusEl.classList.add("text-success");
+        } else if (level === "danger") {
+            statusEl.classList.add("text-danger");
+        } else {
+            statusEl.classList.add("text-muted");
+        }
+        statusEl.textContent = message;
+    }
+
+    async saveBackendLogFilePath() {
+        const input = document.getElementById("backendLogFilePathInput");
+        const saveBtn = document.getElementById("saveBackendLogFilePathBtn");
+        if (!input || !saveBtn) {
+            return;
+        }
+
+        const candidatePath = input.value.trim();
+        if (!candidatePath) {
+            this.setBackendLogFilePathStatus("Backend log file path is required.", "danger");
+            return;
+        }
+        if (!candidatePath.startsWith("/")) {
+            this.setBackendLogFilePathStatus(
+                "Backend log file path must be absolute (for example /var/log/proxbox.log).",
+                "danger"
+            );
+            return;
+        }
+
+        if (!this.saveLogPathUrl) {
+            this.setBackendLogFilePathStatus("Save endpoint is not configured.", "danger");
+            return;
+        }
+
+        saveBtn.disabled = true;
+        this.setBackendLogFilePathStatus("Saving log file path...", "muted");
+
+        try {
+            const payload = new URLSearchParams();
+            payload.set("backend_log_file_path", candidatePath);
+
+            const response = await fetch(this.saveLogPathUrl, {
+                method: "POST",
+                headers: {
+                    Accept: "application/json",
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "X-CSRFToken": this.getCsrfToken(),
+                },
+                body: payload.toString(),
+            });
+
+            let data = {};
+            try {
+                data = await response.json();
+            } catch {
+                data = {};
+            }
+
+            if (!response.ok || data.ok !== true) {
+                const errorMessage =
+                    data.error || data.detail || `Failed to save log file path (HTTP ${response.status}).`;
+                throw new Error(errorMessage);
+            }
+
+            this.backendLogFilePath = data.backend_log_file_path || candidatePath;
+            input.value = this.backendLogFilePath;
+            this.setBackendLogFilePathStatus(
+                data.message || "Saved. Changes apply after proxbox-api restart.",
+                "success"
+            );
+        } catch (error) {
+            this.setBackendLogFilePathStatus(
+                error.message || "Failed to save backend log file path.",
+                "danger"
+            );
+        } finally {
+            saveBtn.disabled = false;
         }
     }
 }

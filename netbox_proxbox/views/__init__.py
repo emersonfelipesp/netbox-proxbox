@@ -51,7 +51,7 @@ from .endpoints import (
 )
 from .external_pages import discord_redirect, discussions_redirect, telegram_redirect
 from .keepalive_status import get_service_status
-from .logs import BackendLogsView
+from .logs import BackendLogPathUpdateView, BackendLogsView
 from .replication import (
     ReplicationBulkDeleteView,
     ReplicationDeleteView,

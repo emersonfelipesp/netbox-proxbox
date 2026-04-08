@@ -21,6 +21,7 @@ class ProxboxPluginSettingsSerializer(NetBoxModelSerializer):
             "use_guest_agent_interface_name",
             "proxbox_fetch_max_concurrency",
             "ignore_ipv6_link_local_addresses",
+            "backend_log_file_path",
             "ssrf_protection_enabled",
             "allow_private_ips",
             "additional_allowed_ip_ranges",
