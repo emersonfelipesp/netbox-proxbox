@@ -86,11 +86,14 @@ class VMTaskHistoryViewSet(NetBoxModelViewSet):
 
     def perform_create(self, serializer: object) -> None:
         """Upsert by Proxmox UPID so task reconciliation can replay safely."""
-        upid = serializer.validated_data.get("upid")
-        if upid:
-            existing = models.VMTaskHistory.objects.filter(upid=upid).first()
-            if existing is not None:
-                serializer.instance = existing
+        validated = serializer.validated_data
+        # validated_data is a list for bulk POSTs and a dict for single POSTs.
+        if isinstance(validated, dict):
+            upid = validated.get("upid")
+            if upid:
+                existing = models.VMTaskHistory.objects.filter(upid=upid).first()
+                if existing is not None:
+                    serializer.instance = existing
         serializer.save()
 
 
