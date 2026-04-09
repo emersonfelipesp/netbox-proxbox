@@ -86,6 +86,24 @@ def test_schedule_sync_get_uses_scheduled_field_and_pk(monkeypatch):
         "proxbox_sync_params_from_job",
         lambda candidate: {"sync_types": ["all"]},
     )
+    # _get_scheduled_jobs_list lives in schedule_helpers and uses its own Job
+    # import; patch the already-bound reference on this module so the mock
+    # queryset is used without needing to load a second module.
+    monkeypatch.setattr(
+        module,
+        "_get_scheduled_jobs_list",
+        lambda req: [
+            {
+                "id": job.pk,
+                "pk": job.pk,
+                "name": job.name,
+                "sync_types": ["all"],
+                "schedule": job.scheduled,
+                "interval": job.interval,
+                "status": job.status,
+            }
+        ],
+    )
 
     response = module.ScheduleSyncView().get(
         SimpleNamespace(

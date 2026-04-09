@@ -91,28 +91,7 @@ def build_initial_from_job(request: HttpRequest, edit_job_id: str) -> dict:
 
 def get_scheduled_jobs_list(request: HttpRequest) -> list[dict]:
     """Compatibility wrapper around the extracted helper."""
-    scheduled_jobs: list[dict] = []
-    candidates = (
-        Job.objects.restrict(request.user, "view")
-        .exclude(status=JobStatusChoices.STATUS_COMPLETED)
-        .order_by("-created")
-    )
-    for job in candidates.iterator(chunk_size=64):
-        if not is_proxbox_sync_job(job):
-            continue
-        params = proxbox_sync_params_from_job(job)
-        scheduled_jobs.append(
-            {
-                "id": job.pk,
-                "pk": job.pk,
-                "name": job.name,
-                "sync_types": params.get("sync_types", []),
-                "schedule": job.scheduled,
-                "interval": job.interval,
-                "status": job.status,
-            }
-        )
-    return scheduled_jobs
+    return _get_scheduled_jobs_list(request)
 
 
 def _mark_job_canceled(job: Job) -> None:

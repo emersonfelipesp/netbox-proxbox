@@ -59,12 +59,28 @@ def build_initial_from_job(request: HttpRequest, edit_job_id: str) -> dict:
 
 
 def get_scheduled_jobs_list(request: HttpRequest) -> list[dict]:
-    """Return a list of dicts describing active Proxbox sync scheduled jobs."""
+    """Return a list of dicts describing active Proxbox sync scheduled jobs.
+
+    Includes completed recurring jobs (interval set) because a completed recurring
+    job still represents an active schedule — the next run is queued as a new job.
+    """
     scheduled_jobs: list[dict] = []
+    # Include non-completed jobs OR completed jobs that are recurring (have interval).
     candidates = (
         Job.objects.restrict(request.user, "view")
         .filter(Q(queue_name=PROXBOX_SYNC_QUEUE_NAME) | Q(data__has_key="proxbox_sync"))
-        .exclude(status=JobStatusChoices.STATUS_COMPLETED)
+        .filter(
+            Q(
+                status__in=[
+                    JobStatusChoices.STATUS_PENDING,
+                    JobStatusChoices.STATUS_SCHEDULED,
+                    JobStatusChoices.STATUS_RUNNING,
+                    JobStatusChoices.STATUS_ERRORED,
+                    JobStatusChoices.STATUS_FAILED,
+                ]
+            )
+            | Q(status=JobStatusChoices.STATUS_COMPLETED, interval__isnull=False)
+        )
         .order_by("-created")
     )
     for job in candidates.iterator(chunk_size=64):
