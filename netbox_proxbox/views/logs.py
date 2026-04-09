@@ -60,6 +60,9 @@ class BackendLogsView(ConditionalLoginRequiredMixin, View):
                 "fastapi_url": fastapi_url,
                 "fastapi_websocket_url": fastapi_info.get("websocket_url", ""),
                 "logs_api_url": f"{fastapi_url}/admin/logs" if fastapi_url else "",
+                "sse_stream_url": f"{fastapi_url}/admin/logs/stream"
+                if fastapi_url
+                else "",
                 "backend_log_file_path": settings_obj.backend_log_file_path
                 or DEFAULT_BACKEND_LOG_FILE_PATH,
                 "save_log_path_api_url": reverse(

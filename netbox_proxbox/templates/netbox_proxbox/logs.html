@@ -8,6 +8,7 @@
     <script>
         window.proxboxLogsConfig = {
             logsApiUrl: "{{ logs_api_url|default:''|escapejs }}",
+            sseStreamUrl: "{{ sse_stream_url|default:''|escapejs }}",
             fastapiUrl: "{{ fastapi_url|default:''|escapejs }}",
             saveLogPathUrl: "{{ save_log_path_api_url|default:''|escapejs }}",
             backendLogFilePath: "{{ backend_log_file_path|default:'/var/log/proxbox.log'|escapejs }}"
@@ -21,35 +22,32 @@
 <div class="row">
     <div class="col-12">
         <div class="card">
+
+            {# ── Title bar ── #}
             <div class="card-header">
                 <div class="d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">
-                        <i class="mdi mdi-file-document-outline"></i>
-                        {% trans "Backend Logs" %}
-                    </h5>
-                    <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
-                        <div class="input-group input-group-sm" style="max-width: 420px;">
-                            <span class="input-group-text">{% trans "Log file path" %}</span>
-                            <input
-                                type="text"
-                                class="form-control"
-                                id="backendLogFilePathInput"
-                                value="{{ backend_log_file_path|default:'/var/log/proxbox.log' }}"
-                                placeholder="/var/log/proxbox.log"
-                            >
-                            <button type="button" class="btn btn-outline-secondary" id="saveBackendLogFilePathBtn">
-                                {% trans "Save Path" %}
-                            </button>
-                        </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <h5 class="mb-0">
+                            <i class="mdi mdi-file-document-outline"></i>
+                            {% trans "Backend Logs" %}
+                        </h5>
+                        <span class="badge logs-status-badge disconnected" id="connectionStatus">
+                            <i class="mdi mdi-circle-small"></i>
+                            <span id="connectionModeLabel">{% trans "Connecting…" %}</span>
+                        </span>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
                         <div class="form-check form-switch mb-0">
                             <input class="form-check-input" type="checkbox" id="autoRefreshToggle" checked>
                             <label class="form-check-label" for="autoRefreshToggle">
-                                {% trans "Auto-refresh" %}
+                                {% trans "Live" %}
                             </label>
                         </div>
-                        <button type="button" class="btn btn-outline-secondary btn-sm" id="copyLogsBtn" data-label-copy="{% trans 'Copy to clipboard' %}" data-label-copied="{% trans 'Copied' %}">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="copyLogsBtn"
+                                data-label-copy="{% trans 'Copy to clipboard' %}"
+                                data-label-copied="{% trans 'Copied' %}">
                             <i class="mdi mdi-content-copy"></i>
-                            <span data-copy-label>{% trans "Copy to clipboard" %}</span>
+                            <span data-copy-label>{% trans "Copy" %}</span>
                         </button>
                         <button type="button" class="btn btn-outline-secondary btn-sm" id="refreshBtn">
                             <i class="mdi mdi-refresh"></i>
@@ -57,64 +55,49 @@
                         </button>
                     </div>
                 </div>
-                <div class="small text-muted mt-2" id="backendLogFilePathStatus">
-                    {% trans "Log file path changes apply after proxbox-api restart." %}
-                </div>
             </div>
-            <div class="card-header pb-0">
-                <ul class="nav nav-tabs card-header-tabs logs-tabs" id="logsTabs" role="tablist">
-                    <li class="nav-item" role="presentation">
-                        <button type="button" class="nav-link active" id="allLogsTab" data-log-tab="all" role="tab" aria-controls="logsTableBody" aria-selected="true">
-                            {% trans "All" %}
-                        </button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button type="button" class="nav-link" id="errorsLogsTab" data-log-tab="errors" role="tab" aria-controls="logsTableBody" aria-selected="false">
-                            {% trans "Errors" %}
-                        </button>
-                    </li>
-                </ul>
-            </div>
-            <div class="card-header">
-                <div class="row g-2 align-items-center">
-                    <div class="col-auto">
-                        <label for="levelFilter" class="col-form-label">{% trans "Level:" %}</label>
-                    </div>
-                    <div class="col-auto">
-                        <select class="form-select form-select-sm" id="levelFilter" style="width: auto;">
-                            <option value="">{% trans "All" %}</option>
+
+            {# ── Tabs + inline filters ── #}
+            <div class="card-header logs-filter-bar">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <ul class="nav nav-tabs card-header-tabs logs-tabs mb-0" id="logsTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button type="button" class="nav-link active" id="allLogsTab"
+                                    data-log-tab="all" role="tab" aria-selected="true">
+                                {% trans "All" %}
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button type="button" class="nav-link" id="errorsLogsTab"
+                                    data-log-tab="errors" role="tab" aria-selected="false">
+                                {% trans "Errors" %}
+                            </button>
+                        </li>
+                    </ul>
+                    <div class="d-flex align-items-center gap-2 flex-wrap" id="filterControls">
+                        <select class="form-select form-select-sm logs-filter-select" id="levelFilter">
+                            <option value="">{% trans "All levels" %}</option>
                             <option value="DEBUG">DEBUG</option>
                             <option value="INFO">INFO</option>
                             <option value="WARNING">WARNING</option>
                             <option value="ERROR">ERROR</option>
                             <option value="CRITICAL">CRITICAL</option>
                         </select>
-                    </div>
-                    <div class="col-auto">
-                        <label for="fromDateFilter" class="col-form-label">{% trans "From:" %}</label>
-                    </div>
-                    <div class="col-auto">
-                        <input type="datetime-local" class="form-control form-control-sm" id="fromDateFilter" style="width: 200px;">
-                    </div>
-                    <div class="col-auto">
-                        <label for="toDateFilter" class="col-form-label">{% trans "To:" %}</label>
-                    </div>
-                    <div class="col-auto">
-                        <input type="datetime-local" class="form-control form-control-sm" id="toDateFilter" style="width: 200px;">
-                    </div>
-                    <div class="col-auto">
-                        <input type="text" class="form-control form-control-sm" id="operationIdFilter" placeholder="{% trans 'Operation ID' %}" style="width: 200px;">
-                    </div>
-                    <div class="col-auto">
+                        <input type="datetime-local" class="form-control form-control-sm logs-filter-date"
+                               id="fromDateFilter" title="{% trans 'From' %}">
+                        <input type="datetime-local" class="form-control form-control-sm logs-filter-date"
+                               id="toDateFilter" title="{% trans 'To' %}">
+                        <input type="text" class="form-control form-control-sm logs-filter-op"
+                               id="operationIdFilter" placeholder="{% trans 'Operation ID' %}">
                         <button type="button" class="btn btn-outline-secondary btn-sm" id="clearFiltersBtn">
-                            {% trans "Clear Filters" %}
+                            {% trans "Clear" %}
                         </button>
-                    </div>
-                    <div class="col-auto ms-auto" id="filterIndicator" style="display: none;">
-                        <span class="badge bg-info" id="activeFiltersBadge"></span>
+                        <span class="badge bg-info" id="activeFiltersBadge" style="display:none;"></span>
                     </div>
                 </div>
             </div>
+
+            {# ── Log table ── #}
             <div class="card-body p-0">
                 <div class="table-responsive">
                     <table class="table table-hover table-sm table-striped logs-table mb-0">
@@ -131,7 +114,7 @@
                             <tr id="loadingRow">
                                 <td colspan="5" class="text-center text-muted py-4">
                                     <span class="spinner-border spinner-border-sm me-2" role="status"></span>
-                                    {% trans "Loading logs..." %}
+                                    {% trans "Loading logs…" %}
                                 </td>
                             </tr>
                         </tbody>
@@ -144,30 +127,49 @@
                     <p class="text-danger mb-0" id="errorText"></p>
                 </div>
             </div>
+
+            {# ── Footer: count + load more + collapsible log path config ── #}
             <div class="card-footer">
                 <div class="d-flex justify-content-between align-items-center">
                     <div class="text-muted small">
                         <span id="logCount">0</span> {% trans "logs" %}
-                        <span id="totalCount" class="text-muted" style="display: none;"></span>
+                        <span id="totalCount" style="display: none;"></span>
                     </div>
-                    <div>
-                        <button type="button" class="btn btn-outline-secondary btn-sm" id="loadMoreBtn" style="display: none;">
+                    <div class="d-flex align-items-center gap-2">
+                        <button type="button" class="btn btn-outline-secondary btn-sm"
+                                id="loadMoreBtn" style="display: none;">
                             {% trans "Load More" %}
+                        </button>
+                        <button type="button"
+                                class="btn btn-link btn-sm text-muted p-0 logs-config-toggle"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#logPathConfig"
+                                aria-expanded="false"
+                                aria-controls="logPathConfig">
+                            <i class="mdi mdi-cog-outline"></i>
+                            {% trans "Log path" %}
                         </button>
                     </div>
                 </div>
+                <div class="collapse mt-2" id="logPathConfig">
+                    <div class="input-group input-group-sm" style="max-width: 480px;">
+                        <span class="input-group-text">{% trans "Log file path" %}</span>
+                        <input type="text" class="form-control"
+                               id="backendLogFilePathInput"
+                               value="{{ backend_log_file_path|default:'/var/log/proxbox.log' }}"
+                               placeholder="/var/log/proxbox.log">
+                        <button type="button" class="btn btn-outline-secondary"
+                                id="saveBackendLogFilePathBtn">
+                            {% trans "Save" %}
+                        </button>
+                    </div>
+                    <div class="small text-muted mt-1" id="backendLogFilePathStatus">
+                        {% trans "Log file path changes apply after proxbox-api restart." %}
+                    </div>
+                </div>
             </div>
+
         </div>
     </div>
 </div>
-
-<template id="logRowTemplate">
-    <tr class="log-entry">
-        <td class="log-timestamp"></td>
-        <td class="log-level"></td>
-        <td class="log-module"></td>
-        <td class="log-message"></td>
-        <td class="log-operation"></td>
-    </tr>
-</template>
 {% endblock %}

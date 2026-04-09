@@ -1,30 +1,44 @@
 /**
  * Backend Logs page JavaScript
- * Handles fetching, filtering, tab switching, cursor-based pagination, and copying logs.
+ * - Non-blocking fetch with AbortController (cancels stale requests)
+ * - SSE live streaming via EventSource (falls back to polling)
+ * - Incremental DOM updates — no full re-render during live mode
  */
 
 class LogsPage {
     constructor() {
         this.config = window.proxboxLogsConfig || {};
         this.logsApiUrl = this.config.logsApiUrl || "";
+        this.sseStreamUrl = this.config.sseStreamUrl || "";
         this.saveLogPathUrl = this.config.saveLogPathUrl || "";
         this.backendLogFilePath = this.config.backendLogFilePath || "/var/log/proxbox.log";
+
         this.displayedLogs = [];
         this.currentTab = "all";
         this.currentLevel = "";
         this.currentOperationId = "";
         this.currentFromDate = "";
         this.currentToDate = "";
+
+        // Fetch state — AbortController replaces isLoading mutex
+        this.currentFetchController = null;
+        this.operationIdFetchTimer = null;
+
+        // Auto-refresh (polling fallback)
         this.autoRefreshInterval = 5000;
         this.autoRefreshTimer = null;
-        this.operationIdFetchTimer = null;
         this.isAutoRefreshEnabled = true;
+
+        // Cursor-based pagination
         this.newestLoadedId = null;
         this.oldestLoadedId = null;
         this.canLoadMoreOlder = false;
         this.limit = 200;
         this.total = 0;
-        this.isLoading = false;
+
+        // SSE
+        this.sseSource = null;
+        this.connectionMode = "disconnected"; // "live" | "polling" | "disconnected"
 
         this.init();
     }
@@ -34,117 +48,91 @@ class LogsPage {
         this.hydrateBackendLogPathInput();
         this.updateTabState();
         this.updateLevelFilterState();
-        this.fetchLogs({ reset: true });
+        this.fetchLogs({ reset: true }).then(() => {
+            if (this.isAutoRefreshEnabled) {
+                this.connectSSE();
+            }
+        });
     }
 
     bindEvents() {
-        const refreshBtn = document.getElementById("refreshBtn");
-        const copyBtn = document.getElementById("copyLogsBtn");
-        const autoRefreshToggle = document.getElementById("autoRefreshToggle");
-        const levelFilter = document.getElementById("levelFilter");
-        const fromDateFilter = document.getElementById("fromDateFilter");
-        const toDateFilter = document.getElementById("toDateFilter");
-        const operationIdFilter = document.getElementById("operationIdFilter");
-        const clearFiltersBtn = document.getElementById("clearFiltersBtn");
-        const loadMoreBtn = document.getElementById("loadMoreBtn");
-        const saveBackendLogFilePathBtn = document.getElementById("saveBackendLogFilePathBtn");
-
         document.querySelectorAll("[data-log-tab]").forEach((button) => {
-            button.addEventListener("click", () => {
-                this.setTab(button.dataset.logTab || "all");
+            button.addEventListener("click", () => this.setTab(button.dataset.logTab || "all"));
+        });
+
+        document.getElementById("refreshBtn")?.addEventListener("click", () => {
+            this.disconnectSSE();
+            this.fetchLogs({ reset: true }).then(() => {
+                if (this.isAutoRefreshEnabled) this.connectSSE();
             });
         });
 
-        if (refreshBtn) {
-            refreshBtn.addEventListener("click", () => this.fetchLogs({ reset: true }));
-        }
+        document.getElementById("copyLogsBtn")?.addEventListener("click", () => this.copyLogsToClipboard());
 
-        if (copyBtn) {
-            copyBtn.addEventListener("click", () => this.copyLogsToClipboard());
-        }
+        document.getElementById("autoRefreshToggle")?.addEventListener("change", (e) => {
+            this.isAutoRefreshEnabled = e.target.checked;
+            if (this.isAutoRefreshEnabled) {
+                this.connectSSE();
+            } else {
+                this.disconnectSSE();
+                this.stopAutoRefresh();
+                this.setConnectionMode("disconnected");
+            }
+        });
 
-        if (autoRefreshToggle) {
-            autoRefreshToggle.addEventListener("change", (e) => {
-                this.isAutoRefreshEnabled = e.target.checked;
-                if (this.isAutoRefreshEnabled) {
-                    this.startAutoRefresh();
-                } else {
-                    this.stopAutoRefresh();
-                }
-            });
-        }
+        document.getElementById("levelFilter")?.addEventListener("change", (e) => {
+            this.currentLevel = e.target.value;
+            if (this.currentTab !== "all") this.setTab("all", { refetch: false });
+            this._resetAndReconnect();
+        });
 
-        if (levelFilter) {
-            levelFilter.addEventListener("change", (e) => {
-                this.currentLevel = e.target.value;
-                if (this.currentTab !== "all") {
-                    this.setTab("all", { refetch: false });
-                }
-                this.fetchLogs({ reset: true });
-            });
-        }
+        document.getElementById("fromDateFilter")?.addEventListener("change", (e) => {
+            this.currentFromDate = e.target.value;
+            this._resetAndReconnect();
+        });
 
-        if (fromDateFilter) {
-            fromDateFilter.addEventListener("change", (e) => {
-                this.currentFromDate = e.target.value;
-                this.fetchLogs({ reset: true });
-            });
-        }
+        document.getElementById("toDateFilter")?.addEventListener("change", (e) => {
+            this.currentToDate = e.target.value;
+            this._resetAndReconnect();
+        });
 
-        if (toDateFilter) {
-            toDateFilter.addEventListener("change", (e) => {
-                this.currentToDate = e.target.value;
-                this.fetchLogs({ reset: true });
-            });
-        }
+        document.getElementById("operationIdFilter")?.addEventListener("input", (e) => {
+            this.currentOperationId = e.target.value.trim();
+            this.scheduleOperationFetch();
+        });
 
-        if (operationIdFilter) {
-            operationIdFilter.addEventListener("input", (e) => {
-                this.currentOperationId = e.target.value.trim();
-                this.scheduleOperationFetch();
-            });
-        }
+        document.getElementById("clearFiltersBtn")?.addEventListener("click", () => this.clearFilters());
 
-        if (clearFiltersBtn) {
-            clearFiltersBtn.addEventListener("click", () => this.clearFilters());
-        }
+        document.getElementById("loadMoreBtn")?.addEventListener("click", () => this.loadMore());
 
-        if (loadMoreBtn) {
-            loadMoreBtn.addEventListener("click", () => this.loadMore());
-        }
+        document.getElementById("saveBackendLogFilePathBtn")?.addEventListener("click", () =>
+            this.saveBackendLogFilePath()
+        );
+    }
 
-        if (saveBackendLogFilePathBtn) {
-            saveBackendLogFilePathBtn.addEventListener("click", () => {
-                this.saveBackendLogFilePath();
-            });
-        }
+    /** Reset logs and reconnect SSE after a filter/tab change. */
+    _resetAndReconnect() {
+        this.disconnectSSE();
+        this.stopAutoRefresh();
+        this.fetchLogs({ reset: true }).then(() => {
+            if (this.isAutoRefreshEnabled) this.connectSSE();
+        });
     }
 
     hydrateBackendLogPathInput() {
         const input = document.getElementById("backendLogFilePathInput");
-        if (!input) {
-            return;
-        }
-        if (!input.value) {
-            input.value = this.backendLogFilePath;
-        }
+        if (input && !input.value) input.value = this.backendLogFilePath;
     }
+
+    // ── Tab management ──────────────────────────────────────────────────────
 
     setTab(tabKey, options = {}) {
         const nextTab = tabKey === "errors" ? "errors" : "all";
-        if (this.currentTab === nextTab) {
-            return;
-        }
-
+        if (this.currentTab === nextTab) return;
         this.currentTab = nextTab;
         this.updateTabState();
         this.updateLevelFilterState();
-
-        if (options.refetch === false) {
-            return;
-        }
-
-        this.fetchLogs({ reset: true });
+        if (options.refetch !== false) this._resetAndReconnect();
     }
 
     updateTabState() {
@@ -158,10 +146,7 @@ class LogsPage {
 
     updateLevelFilterState() {
         const levelFilter = document.getElementById("levelFilter");
-        if (!levelFilter) {
-            return;
-        }
-
+        if (!levelFilter) return;
         const disabled = this.isErrorsTab();
         levelFilter.disabled = disabled;
         levelFilter.setAttribute("aria-disabled", disabled ? "true" : "false");
@@ -171,118 +156,92 @@ class LogsPage {
         return this.currentTab === "errors";
     }
 
+    // ── Request helpers ──────────────────────────────────────────────────────
+
     buildRequestParams({ direction = "initial" } = {}) {
         const params = new URLSearchParams();
-
         if (this.isErrorsTab()) {
             params.append("errors_only", "true");
         } else if (this.currentLevel) {
             params.append("level", this.currentLevel);
         }
-
-        if (this.currentOperationId) {
-            params.append("operation_id", this.currentOperationId);
-        }
-
+        if (this.currentOperationId) params.append("operation_id", this.currentOperationId);
         if (this.currentFromDate) {
-            const fromDate = new Date(this.currentFromDate);
-            params.append("since", fromDate.toISOString());
+            params.append("since", new Date(this.currentFromDate).toISOString());
         }
-
         if (direction === "newer" && this.newestLoadedId) {
             params.append("newer_than_id", this.newestLoadedId);
         }
-
         if (direction === "older" && this.oldestLoadedId) {
             params.append("older_than_id", this.oldestLoadedId);
         }
-
         params.append("limit", this.limit.toString());
         return params;
     }
 
     applyClientSideFilters(logs) {
-        if (!this.currentToDate) {
-            return logs;
-        }
-
+        if (!this.currentToDate) return logs;
         const toDate = new Date(this.currentToDate).getTime();
-        if (Number.isNaN(toDate)) {
-            return logs;
-        }
-
-        return logs.filter((log) => {
-            const logTime = new Date(log.timestamp).getTime();
-            return logTime <= toDate;
-        });
+        if (Number.isNaN(toDate)) return logs;
+        return logs.filter((log) => new Date(log.timestamp).getTime() <= toDate);
     }
 
-    setLoadedWindowFromLogs(rawLogs) {
-        if (!rawLogs.length) {
-            this.newestLoadedId = null;
-            this.oldestLoadedId = null;
-            return;
-        }
+    // ── Cursor helpers ───────────────────────────────────────────────────────
 
+    setLoadedWindowFromLogs(rawLogs) {
+        if (!rawLogs.length) { this.newestLoadedId = null; this.oldestLoadedId = null; return; }
         this.newestLoadedId = rawLogs[0].id || null;
         this.oldestLoadedId = rawLogs[rawLogs.length - 1].id || null;
     }
 
     extendNewestCursor(rawLogs) {
-        if (!rawLogs.length) {
-            return;
-        }
-
-        this.newestLoadedId = rawLogs[0].id || this.newestLoadedId;
+        if (rawLogs.length) this.newestLoadedId = rawLogs[0].id || this.newestLoadedId;
     }
 
     extendOldestCursor(rawLogs) {
-        if (!rawLogs.length) {
-            return;
-        }
-
-        this.oldestLoadedId = rawLogs[rawLogs.length - 1].id || this.oldestLoadedId;
+        if (rawLogs.length) this.oldestLoadedId = rawLogs[rawLogs.length - 1].id || this.oldestLoadedId;
     }
 
     sortLogsDescending(logs) {
         return [...logs].sort((a, b) => {
             const idA = Number.parseInt(a.id || "", 10);
             const idB = Number.parseInt(b.id || "", 10);
-
-            if (!Number.isNaN(idA) && !Number.isNaN(idB) && idA !== idB) {
-                return idB - idA;
-            }
-
-            const timeA = new Date(a.timestamp || 0).getTime();
-            const timeB = new Date(b.timestamp || 0).getTime();
-            return timeB - timeA;
+            if (!Number.isNaN(idA) && !Number.isNaN(idB) && idA !== idB) return idB - idA;
+            return new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime();
         });
     }
 
+    // ── Fetch (HTTP polling) ─────────────────────────────────────────────────
+
     async fetchLogs({ reset = true, isAutoRefresh = false } = {}) {
-        if (this.isLoading) return;
         if (!this.logsApiUrl) {
             this.showError("Logs API URL not configured");
             return;
         }
 
+        // Cancel any in-flight request
+        if (this.currentFetchController) {
+            this.currentFetchController.abort();
+        }
+        this.currentFetchController = new AbortController();
+
         this.stopOperationFetch();
-        this.isLoading = true;
-        this.showLoading();
+
+        // Only show full-page spinner on initial empty load
+        if (reset && this.displayedLogs.length === 0) {
+            this.showLoadingRow();
+        }
         this.hideError();
 
         try {
             const direction = isAutoRefresh ? "newer" : "initial";
             const params = this.buildRequestParams({ direction });
             const response = await fetch(`${this.logsApiUrl}?${params.toString()}`, {
-                headers: {
-                    Accept: "application/json",
-                },
+                headers: { Accept: "application/json" },
+                signal: this.currentFetchController.signal,
             });
 
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
+            if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
 
             const data = await response.json();
             const rawLogs = data.logs || [];
@@ -293,56 +252,54 @@ class LogsPage {
                 this.setLoadedWindowFromLogs(rawLogs);
                 this.canLoadMoreOlder = Boolean(data.has_more);
                 this.total = data.total || this.displayedLogs.length;
+                this.renderLogs();
             } else if (isAutoRefresh) {
                 if (rawLogs.length > 0) {
                     this.displayedLogs = [...filteredLogs, ...this.displayedLogs];
                     this.extendNewestCursor(rawLogs);
                     this.total += rawLogs.length;
+                    this.renderNewEntries(filteredLogs);
                 }
             } else {
                 this.displayedLogs = filteredLogs;
                 this.setLoadedWindowFromLogs(rawLogs);
                 this.canLoadMoreOlder = Boolean(data.has_more);
                 this.total = data.total || this.displayedLogs.length;
+                this.renderLogs();
             }
 
-            this.renderLogs();
             this.updateLogCount();
             this.updateFilterIndicator(data.active_filters);
             this.updateLoadMoreState();
 
-            if (this.isAutoRefreshEnabled) {
+            if (this.isAutoRefreshEnabled && !this.sseSource) {
                 this.startAutoRefresh();
             }
         } catch (error) {
+            if (error.name === "AbortError") return; // request was intentionally cancelled
             console.error("Failed to fetch logs:", error);
             this.showError(error.message || "Failed to fetch logs");
         } finally {
-            this.isLoading = false;
-            this.hideLoading();
+            this.currentFetchController = null;
+            this.hideLoadingRow();
         }
     }
 
     async loadMore() {
-        if (this.isLoading) return;
         if (!this.canLoadMoreOlder || !this.oldestLoadedId) return;
+        if (!this.logsApiUrl) return;
 
-        this.isLoading = true;
+        if (this.currentFetchController) this.currentFetchController.abort();
+        this.currentFetchController = new AbortController();
         this.hideError();
 
         try {
-            const params = this.buildRequestParams({
-                direction: "older",
-            });
+            const params = this.buildRequestParams({ direction: "older" });
             const response = await fetch(`${this.logsApiUrl}?${params.toString()}`, {
-                headers: {
-                    Accept: "application/json",
-                },
+                headers: { Accept: "application/json" },
+                signal: this.currentFetchController.signal,
             });
-
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
+            if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
 
             const data = await response.json();
             const rawLogs = data.logs || [];
@@ -358,359 +315,87 @@ class LogsPage {
             this.updateFilterIndicator(data.active_filters);
             this.updateLoadMoreState();
         } catch (error) {
+            if (error.name === "AbortError") return;
             console.error("Failed to load more logs:", error);
             this.showError(error.message || "Failed to load more logs");
         } finally {
-            this.isLoading = false;
+            this.currentFetchController = null;
         }
     }
 
-    renderLogs() {
-        const tbody = document.getElementById("logsTableBody");
-        const noLogsMessage = document.getElementById("noLogsMessage");
+    // ── SSE live streaming ───────────────────────────────────────────────────
 
-        if (!tbody || !noLogsMessage) return;
+    connectSSE() {
+        if (!this.sseStreamUrl || this.sseSource) return;
 
-        tbody.innerHTML = "";
-
-        if (this.displayedLogs.length === 0) {
-            noLogsMessage.style.display = "block";
-            this.updateCopyButtonState();
-            return;
+        const params = new URLSearchParams();
+        if (this.isErrorsTab()) {
+            params.set("errors_only", "true");
+        } else if (this.currentLevel) {
+            params.set("level", this.currentLevel);
         }
+        if (this.currentOperationId) params.set("operation_id", this.currentOperationId);
+        if (this.newestLoadedId) params.set("newer_than_id", this.newestLoadedId);
 
-        noLogsMessage.style.display = "none";
+        const url = `${this.sseStreamUrl}?${params.toString()}`;
+        this.sseSource = new EventSource(url);
 
-        const sortedLogs = this.sortLogsDescending(this.displayedLogs);
-
-        sortedLogs.forEach((log) => {
-            const row = document.createElement("tr");
-            const levelClass = String(log.level || "info").toLowerCase();
-            row.className = `log-entry log-level-${levelClass}`;
-
-            if (log.expandable) {
-                row.classList.add("expandable");
-                row.dataset.expanded = "false";
+        this.sseSource.addEventListener("log", (e) => {
+            try {
+                const entry = JSON.parse(e.data);
+                const filtered = this.applyClientSideFilters([entry]);
+                if (filtered.length > 0) {
+                    this.displayedLogs = [...filtered, ...this.displayedLogs];
+                    try {
+                        const entryId = String(entry.id);
+                        if (!this.newestLoadedId || Number(entryId) > Number(this.newestLoadedId)) {
+                            this.newestLoadedId = entryId;
+                        }
+                    } catch (_) { /* ignore */ }
+                    this.total += 1;
+                    this.renderNewEntries(filtered);
+                    this.updateLogCount();
+                }
+            } catch (err) {
+                console.warn("Failed to parse SSE log entry:", err);
             }
-
-            row.innerHTML = `
-                <td class="log-timestamp">${this.escapeHtml(this.formatTimestamp(log.timestamp))}</td>
-                <td class="log-level">
-                    <span class="badge bg-${this.getLevelBadgeColor(log.level)}">${this.escapeHtml(log.level || "-")}</span>
-                </td>
-                <td class="log-module">${this.escapeHtml(log.module)}</td>
-                <td class="log-message">
-                    <span class="log-message-text">${this.escapeHtml(log.message)}</span>
-                    ${log.expandable ? '<i class="mdi mdi-chevron-down expand-icon"></i>' : ""}
-                </td>
-                <td class="log-operation">
-                    ${log.operation_id ? `<code class="operation-id">${this.escapeHtml(log.operation_id.substring(0, 8))}</code>` : "-"}
-                </td>
-            `;
-
-            if (log.expandable) {
-                row.addEventListener("click", () => this.toggleExpand(row, log));
-                row.style.cursor = "pointer";
-            }
-
-            tbody.appendChild(row);
         });
 
-        this.updateCopyButtonState();
-    }
+        this.sseSource.addEventListener("open", () => {
+            this.setConnectionMode("live");
+            this.stopAutoRefresh();
+        });
 
-    toggleExpand(row, log) {
-        const existingDetail = row.nextElementSibling;
-        if (existingDetail && existingDetail.classList.contains("log-detail-row")) {
-            existingDetail.remove();
-            row.dataset.expanded = "false";
-            row.classList.remove("expanded");
-            row.querySelector(".expand-icon")?.classList.replace("mdi-chevron-up", "mdi-chevron-down");
-            return;
-        }
-
-        const detailRow = document.createElement("tr");
-        detailRow.className = "log-detail-row";
-        detailRow.innerHTML = `
-            <td colspan="5" class="p-0">
-                <div class="log-detail-content" style="display: none;">
-                    <div class="p-3 bg-light border-top">
-                        ${log.expandable && log.expandable.traceback ? `
-                            <h6 class="mb-2">Traceback:</h6>
-                            <pre class="mb-0 small"><code>${this.escapeHtml(log.expandable.traceback)}</code></pre>
-                        ` : ""}
-                        ${log.operation ? `<div class="mb-2"><strong>Operation:</strong> ${this.escapeHtml(log.operation)}</div>` : ""}
-                        ${log.phase ? `<div class="mb-2"><strong>Phase:</strong> ${this.escapeHtml(log.phase)}</div>` : ""}
-                        ${log.resource_type && log.resource_id ? `<div class="mb-2"><strong>Resource:</strong> ${this.escapeHtml(log.resource_type)}#${this.escapeHtml(String(log.resource_id))}</div>` : ""}
-                    </div>
-                </div>
-            </td>
-        `;
-
-        row.after(detailRow);
-        const content = detailRow.querySelector(".log-detail-content");
-        if (content) {
-            content.style.display = "block";
-        }
-
-        row.dataset.expanded = "true";
-        row.classList.add("expanded");
-        const icon = row.querySelector(".expand-icon");
-        if (icon) {
-            icon.classList.replace("mdi-chevron-down", "mdi-chevron-up");
-        }
-    }
-
-    copyLogsToClipboard() {
-        const text = this.formatLogsForClipboard(this.sortLogsDescending(this.displayedLogs));
-        if (!text) {
-            return;
-        }
-
-        const copyBtn = document.getElementById("copyLogsBtn");
-        const copyLabel = copyBtn?.dataset.labelCopy || "Copy to clipboard";
-        const copiedLabel = copyBtn?.dataset.labelCopied || "Copied";
-
-        const ok = () => {
-            this.setCopyButtonLabel(copiedLabel);
-            window.setTimeout(() => this.setCopyButtonLabel(copyLabel), 2000);
-        };
-
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(text).then(ok).catch(() => {
-                this.fallbackCopy(text, ok);
-            });
-        } else {
-            this.fallbackCopy(text, ok);
-        }
-    }
-
-    fallbackCopy(text, onSuccess) {
-        const textarea = document.createElement("textarea");
-        textarea.value = text;
-        textarea.setAttribute("readonly", "readonly");
-        textarea.style.position = "fixed";
-        textarea.style.opacity = "0";
-        document.body.appendChild(textarea);
-        textarea.select();
-
-        try {
-            if (document.execCommand("copy")) {
-                onSuccess();
+        this.sseSource.addEventListener("error", () => {
+            this.disconnectSSE();
+            if (this.isAutoRefreshEnabled) {
+                this.setConnectionMode("polling");
+                this.startAutoRefresh();
+            } else {
+                this.setConnectionMode("disconnected");
             }
-        } catch (error) {
-            console.error("Failed to copy logs:", error);
-        } finally {
-            document.body.removeChild(textarea);
+        });
+    }
+
+    disconnectSSE() {
+        if (this.sseSource) {
+            this.sseSource.close();
+            this.sseSource = null;
         }
     }
 
-    formatLogsForClipboard(logs) {
-        return logs
-            .map((log) => this.formatLogForClipboard(log))
-            .filter(Boolean)
-            .join("\n\n");
+    setConnectionMode(mode) {
+        this.connectionMode = mode;
+        const badge = document.getElementById("connectionStatus");
+        const label = document.getElementById("connectionModeLabel");
+        if (!badge || !label) return;
+
+        badge.className = `badge logs-status-badge ${mode}`;
+        const labels = { live: "Live", polling: "Polling", disconnected: "Disconnected" };
+        label.textContent = labels[mode] || mode;
     }
 
-    formatLogForClipboard(log) {
-        if (!log) {
-            return "";
-        }
-
-        const header = `[${this.formatTimestamp(log.timestamp)}] ${log.level || "-"} ${log.module || "-"}`;
-        const operationId = log.operation_id ? ` op=${log.operation_id}` : "";
-        const message = log.message || "";
-        const summary = message ? `${header}${operationId} - ${message}` : `${header}${operationId}`;
-        const details = [];
-
-        if (log.operation) {
-            details.push(`Operation: ${log.operation}`);
-        }
-        if (log.phase) {
-            details.push(`Phase: ${log.phase}`);
-        }
-        if (log.resource_type && log.resource_id != null) {
-            details.push(`Resource: ${log.resource_type}#${log.resource_id}`);
-        }
-        if (log.expandable && log.expandable.traceback) {
-            details.push(log.expandable.traceback.trim());
-        }
-
-        return [summary, ...details].join("\n");
-    }
-
-    updateCopyButtonState() {
-        const copyBtn = document.getElementById("copyLogsBtn");
-        if (!copyBtn) {
-            return;
-        }
-
-        copyBtn.disabled = this.displayedLogs.length === 0;
-    }
-
-    setCopyButtonLabel(label) {
-        const copyBtn = document.getElementById("copyLogsBtn");
-        if (!copyBtn) {
-            return;
-        }
-
-        const labelEl = copyBtn.querySelector("[data-copy-label]") || copyBtn;
-        labelEl.textContent = label;
-    }
-
-    formatTimestamp(timestamp) {
-        if (!timestamp) return "-";
-        try {
-            const date = new Date(timestamp);
-            if (Number.isNaN(date.getTime())) {
-                return timestamp;
-            }
-            return date.toLocaleString();
-        } catch {
-            return timestamp;
-        }
-    }
-
-    getLevelBadgeColor(level) {
-        const colors = {
-            DEBUG: "secondary",
-            INFO: "primary",
-            WARNING: "warning",
-            ERROR: "danger",
-            CRITICAL: "danger",
-        };
-        return colors[level] || "secondary";
-    }
-
-    escapeHtml(text) {
-        if (text === null || text === undefined) return "";
-        const div = document.createElement("div");
-        div.textContent = String(text);
-        return div.innerHTML;
-    }
-
-    updateLogCount() {
-        const countEl = document.getElementById("logCount");
-        const totalEl = document.getElementById("totalCount");
-        if (countEl) {
-            countEl.textContent = this.displayedLogs.length;
-        }
-        if (totalEl && this.total !== this.displayedLogs.length) {
-            totalEl.textContent = ` (${this.total} total)`;
-            totalEl.style.display = "inline";
-        } else if (totalEl) {
-            totalEl.textContent = "";
-            totalEl.style.display = "none";
-        }
-    }
-
-    updateFilterIndicator(activeFilters) {
-        const indicator = document.getElementById("filterIndicator");
-        const badge = document.getElementById("activeFiltersBadge");
-
-        if (!indicator || !badge) return;
-
-        const filters = [];
-
-        if (this.isErrorsTab() || (activeFilters && activeFilters.errors_only)) {
-            filters.push("Errors");
-        }
-
-        if (!this.isErrorsTab() && this.currentLevel) {
-            filters.push(`Client: level=${this.currentLevel}`);
-        }
-
-        if (this.currentOperationId) {
-            filters.push(`Backend: operation=${this.currentOperationId.substring(0, 8)}`);
-        } else if (activeFilters && activeFilters.operation_id) {
-            filters.push(`Backend: operation=${String(activeFilters.operation_id).substring(0, 8)}`);
-        }
-
-        if (filters.length > 0) {
-            badge.textContent = filters.join(" | ");
-            indicator.style.display = "block";
-        } else {
-            indicator.style.display = "none";
-        }
-    }
-
-    updateLoadMoreState() {
-        const shouldShow = this.canLoadMoreOlder && Boolean(this.oldestLoadedId);
-        if (shouldShow) {
-            this.showLoadMore();
-        } else {
-            this.hideLoadMore();
-        }
-    }
-
-    clearFilters() {
-        this.currentLevel = "";
-        this.currentOperationId = "";
-        this.currentFromDate = "";
-        this.currentToDate = "";
-
-        const levelFilter = document.getElementById("levelFilter");
-        const operationIdFilter = document.getElementById("operationIdFilter");
-        const fromDateFilter = document.getElementById("fromDateFilter");
-        const toDateFilter = document.getElementById("toDateFilter");
-
-        if (levelFilter) levelFilter.value = "";
-        if (operationIdFilter) operationIdFilter.value = "";
-        if (fromDateFilter) fromDateFilter.value = "";
-        if (toDateFilter) toDateFilter.value = "";
-
-        this.updateLevelFilterState();
-        this.fetchLogs({ reset: true });
-    }
-
-    showLoading() {
-        const loadingRow = document.getElementById("loadingRow");
-        if (loadingRow) {
-            loadingRow.style.display = "";
-        }
-    }
-
-    hideLoading() {
-        const loadingRow = document.getElementById("loadingRow");
-        if (loadingRow) {
-            loadingRow.style.display = "none";
-        }
-    }
-
-    showError(message) {
-        const errorMessage = document.getElementById("errorMessage");
-        const errorText = document.getElementById("errorText");
-        if (errorMessage) {
-            errorMessage.style.display = "block";
-        }
-        if (errorText) {
-            errorText.textContent = message;
-        }
-        this.hideLoadMore();
-        this.updateCopyButtonState();
-        this.hideLoading();
-    }
-
-    hideError() {
-        const errorMessage = document.getElementById("errorMessage");
-        if (errorMessage) {
-            errorMessage.style.display = "none";
-        }
-    }
-
-    showLoadMore() {
-        const loadMoreBtn = document.getElementById("loadMoreBtn");
-        if (loadMoreBtn) {
-            loadMoreBtn.style.display = "";
-        }
-    }
-
-    hideLoadMore() {
-        const loadMoreBtn = document.getElementById("loadMoreBtn");
-        if (loadMoreBtn) {
-            loadMoreBtn.style.display = "none";
-        }
-    }
+    // ── Auto-refresh (polling fallback) ──────────────────────────────────────
 
     startAutoRefresh() {
         this.stopAutoRefresh();
@@ -729,12 +414,10 @@ class LogsPage {
     }
 
     scheduleOperationFetch() {
-        if (this.operationIdFetchTimer) {
-            clearTimeout(this.operationIdFetchTimer);
-        }
+        if (this.operationIdFetchTimer) clearTimeout(this.operationIdFetchTimer);
         this.operationIdFetchTimer = window.setTimeout(() => {
             this.operationIdFetchTimer = null;
-            this.fetchLogs({ reset: true });
+            this._resetAndReconnect();
         }, 300);
     }
 
@@ -745,42 +428,305 @@ class LogsPage {
         }
     }
 
-    getCsrfToken() {
-        const csrfInput = document.querySelector("input[name='csrfmiddlewaretoken']");
-        if (csrfInput && csrfInput.value) {
-            return csrfInput.value;
-        }
+    // ── Rendering ────────────────────────────────────────────────────────────
 
-        const csrfCookie = document.cookie
-            .split(";")
-            .map((part) => part.trim())
-            .find((part) => part.startsWith("csrftoken="));
-        return csrfCookie ? csrfCookie.split("=", 2)[1] : "";
+    renderLogs() {
+        const tbody = document.getElementById("logsTableBody");
+        const noLogsMessage = document.getElementById("noLogsMessage");
+        if (!tbody) return;
+
+        tbody.innerHTML = "";
+        if (this.displayedLogs.length === 0) {
+            if (noLogsMessage) noLogsMessage.style.display = "block";
+            this.updateCopyButtonState();
+            return;
+        }
+        if (noLogsMessage) noLogsMessage.style.display = "none";
+
+        const sorted = this.sortLogsDescending(this.displayedLogs);
+        const frag = document.createDocumentFragment();
+        for (const log of sorted) frag.appendChild(this.buildLogRow(log));
+        tbody.appendChild(frag);
+
+        this.updateCopyButtonState();
     }
 
-    setBackendLogFilePathStatus(message, level = "muted") {
-        const statusEl = document.getElementById("backendLogFilePathStatus");
-        if (!statusEl) {
+    /** Prepend new entries to the existing tbody without a full re-render. */
+    renderNewEntries(entries) {
+        if (!entries.length) return;
+        const tbody = document.getElementById("logsTableBody");
+        const noLogsMessage = document.getElementById("noLogsMessage");
+        if (!tbody) return;
+
+        if (noLogsMessage) noLogsMessage.style.display = "none";
+
+        // New entries arrive newest-first; insert in reverse to keep chronological order at top
+        const sorted = this.sortLogsDescending(entries);
+        const firstExisting = tbody.firstChild;
+        for (const log of sorted) {
+            const row = this.buildLogRow(log);
+            row.classList.add("log-entry-new");
+            tbody.insertBefore(row, firstExisting);
+        }
+        this.updateCopyButtonState();
+    }
+
+    buildLogRow(log) {
+        const row = document.createElement("tr");
+        const levelClass = String(log.level || "info").toLowerCase();
+        row.className = `log-entry log-level-${levelClass}`;
+        if (log.expandable) {
+            row.classList.add("expandable");
+            row.dataset.expanded = "false";
+        }
+
+        row.innerHTML = `
+            <td class="log-timestamp">${this.escapeHtml(this.formatTimestamp(log.timestamp))}</td>
+            <td class="log-level">
+                <span class="badge bg-${this.getLevelBadgeColor(log.level)}">${this.escapeHtml(log.level || "-")}</span>
+            </td>
+            <td class="log-module">${this.escapeHtml(log.module)}</td>
+            <td class="log-message">
+                <span class="log-message-text">${this.escapeHtml(log.message)}</span>
+                ${log.expandable ? '<i class="mdi mdi-chevron-down expand-icon"></i>' : ""}
+            </td>
+            <td class="log-operation">
+                ${log.operation_id ? `<code class="operation-id">${this.escapeHtml(log.operation_id.substring(0, 8))}</code>` : "-"}
+            </td>
+        `;
+
+        if (log.expandable) {
+            row.addEventListener("click", () => this.toggleExpand(row, log));
+            row.style.cursor = "pointer";
+        }
+        return row;
+    }
+
+    toggleExpand(row, log) {
+        const existingDetail = row.nextElementSibling;
+        if (existingDetail && existingDetail.classList.contains("log-detail-row")) {
+            existingDetail.remove();
+            row.dataset.expanded = "false";
+            row.classList.remove("expanded");
+            row.querySelector(".expand-icon")?.classList.replace("mdi-chevron-up", "mdi-chevron-down");
             return;
         }
 
-        statusEl.classList.remove("text-success", "text-danger", "text-muted");
-        if (level === "success") {
-            statusEl.classList.add("text-success");
-        } else if (level === "danger") {
-            statusEl.classList.add("text-danger");
+        const detailRow = document.createElement("tr");
+        detailRow.className = "log-detail-row";
+        detailRow.innerHTML = `
+            <td colspan="5" class="p-0">
+                <div class="log-detail-content">
+                    <div class="p-3 bg-light border-top">
+                        ${log.expandable?.traceback ? `
+                            <h6 class="mb-2">Traceback:</h6>
+                            <pre class="mb-0 small"><code>${this.escapeHtml(log.expandable.traceback)}</code></pre>
+                        ` : ""}
+                        ${log.operation ? `<div class="mb-2"><strong>Operation:</strong> ${this.escapeHtml(log.operation)}</div>` : ""}
+                        ${log.phase ? `<div class="mb-2"><strong>Phase:</strong> ${this.escapeHtml(log.phase)}</div>` : ""}
+                        ${log.resource_type && log.resource_id != null ? `<div class="mb-2"><strong>Resource:</strong> ${this.escapeHtml(log.resource_type)}#${this.escapeHtml(String(log.resource_id))}</div>` : ""}
+                    </div>
+                </div>
+            </td>
+        `;
+        row.after(detailRow);
+        row.dataset.expanded = "true";
+        row.classList.add("expanded");
+        row.querySelector(".expand-icon")?.classList.replace("mdi-chevron-down", "mdi-chevron-up");
+    }
+
+    // ── Clipboard ────────────────────────────────────────────────────────────
+
+    copyLogsToClipboard() {
+        const text = this.sortLogsDescending(this.displayedLogs)
+            .map((log) => this.formatLogForClipboard(log))
+            .filter(Boolean)
+            .join("\n\n");
+        if (!text) return;
+
+        const copyBtn = document.getElementById("copyLogsBtn");
+        const copyLabel = copyBtn?.dataset.labelCopy || "Copy to clipboard";
+        const copiedLabel = copyBtn?.dataset.labelCopied || "Copied";
+        const ok = () => {
+            this.setCopyButtonLabel(copiedLabel);
+            window.setTimeout(() => this.setCopyButtonLabel(copyLabel), 2000);
+        };
+
+        if (navigator.clipboard?.writeText) {
+            navigator.clipboard.writeText(text).then(ok).catch(() => this.fallbackCopy(text, ok));
         } else {
-            statusEl.classList.add("text-muted");
+            this.fallbackCopy(text, ok);
         }
-        statusEl.textContent = message;
+    }
+
+    fallbackCopy(text, onSuccess) {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.setAttribute("readonly", "readonly");
+        textarea.style.cssText = "position:fixed;opacity:0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        try { if (document.execCommand("copy")) onSuccess(); }
+        catch (err) { console.error("Failed to copy logs:", err); }
+        finally { document.body.removeChild(textarea); }
+    }
+
+    formatLogForClipboard(log) {
+        if (!log) return "";
+        const header = `[${this.formatTimestamp(log.timestamp)}] ${log.level || "-"} ${log.module || "-"}`;
+        const operationId = log.operation_id ? ` op=${log.operation_id}` : "";
+        const message = log.message || "";
+        const summary = message ? `${header}${operationId} - ${message}` : `${header}${operationId}`;
+        const details = [];
+        if (log.operation) details.push(`Operation: ${log.operation}`);
+        if (log.phase) details.push(`Phase: ${log.phase}`);
+        if (log.resource_type && log.resource_id != null) details.push(`Resource: ${log.resource_type}#${log.resource_id}`);
+        if (log.expandable?.traceback) details.push(log.expandable.traceback.trim());
+        return [summary, ...details].join("\n");
+    }
+
+    // ── UI state helpers ─────────────────────────────────────────────────────
+
+    showLoadingRow() {
+        const row = document.getElementById("loadingRow");
+        if (row) row.style.display = "";
+    }
+
+    hideLoadingRow() {
+        const row = document.getElementById("loadingRow");
+        if (row) row.style.display = "none";
+    }
+
+    showError(message) {
+        const el = document.getElementById("errorMessage");
+        const text = document.getElementById("errorText");
+        if (el) el.style.display = "block";
+        if (text) text.textContent = message;
+        this.hideLoadMore();
+        this.updateCopyButtonState();
+        this.hideLoadingRow();
+    }
+
+    hideError() {
+        const el = document.getElementById("errorMessage");
+        if (el) el.style.display = "none";
+    }
+
+    showLoadMore() {
+        const btn = document.getElementById("loadMoreBtn");
+        if (btn) btn.style.display = "";
+    }
+
+    hideLoadMore() {
+        const btn = document.getElementById("loadMoreBtn");
+        if (btn) btn.style.display = "none";
+    }
+
+    updateLoadMoreState() {
+        if (this.canLoadMoreOlder && Boolean(this.oldestLoadedId)) this.showLoadMore();
+        else this.hideLoadMore();
+    }
+
+    updateLogCount() {
+        const countEl = document.getElementById("logCount");
+        const totalEl = document.getElementById("totalCount");
+        if (countEl) countEl.textContent = this.displayedLogs.length;
+        if (totalEl) {
+            if (this.total !== this.displayedLogs.length) {
+                totalEl.textContent = ` (${this.total} total)`;
+                totalEl.style.display = "inline";
+            } else {
+                totalEl.textContent = "";
+                totalEl.style.display = "none";
+            }
+        }
+    }
+
+    updateFilterIndicator(activeFilters) {
+        const badge = document.getElementById("activeFiltersBadge");
+        if (!badge) return;
+        const filters = [];
+        if (this.isErrorsTab() || activeFilters?.errors_only) filters.push("Errors");
+        if (!this.isErrorsTab() && this.currentLevel) filters.push(`Client: level=${this.currentLevel}`);
+        if (this.currentOperationId) filters.push(`Backend: operation=${this.currentOperationId.substring(0, 8)}`);
+        else if (activeFilters?.operation_id) filters.push(`Backend: operation=${String(activeFilters.operation_id).substring(0, 8)}`);
+
+        if (filters.length > 0) {
+            badge.textContent = filters.join(" | ");
+            badge.style.display = "inline";
+        } else {
+            badge.style.display = "none";
+        }
+    }
+
+    updateCopyButtonState() {
+        const btn = document.getElementById("copyLogsBtn");
+        if (btn) btn.disabled = this.displayedLogs.length === 0;
+    }
+
+    setCopyButtonLabel(label) {
+        const btn = document.getElementById("copyLogsBtn");
+        if (!btn) return;
+        const el = btn.querySelector("[data-copy-label]") || btn;
+        el.textContent = label;
+    }
+
+    clearFilters() {
+        this.currentLevel = "";
+        this.currentOperationId = "";
+        this.currentFromDate = "";
+        this.currentToDate = "";
+        const ids = ["levelFilter", "operationIdFilter", "fromDateFilter", "toDateFilter"];
+        for (const id of ids) {
+            const el = document.getElementById(id);
+            if (el) el.value = "";
+        }
+        this.updateLevelFilterState();
+        this._resetAndReconnect();
+    }
+
+    // ── Formatting ───────────────────────────────────────────────────────────
+
+    formatTimestamp(timestamp) {
+        if (!timestamp) return "-";
+        try {
+            const d = new Date(timestamp);
+            return Number.isNaN(d.getTime()) ? timestamp : d.toLocaleString();
+        } catch { return timestamp; }
+    }
+
+    getLevelBadgeColor(level) {
+        const colors = { DEBUG: "secondary", INFO: "primary", WARNING: "warning", ERROR: "danger", CRITICAL: "danger" };
+        return colors[level] || "secondary";
+    }
+
+    escapeHtml(text) {
+        if (text === null || text === undefined) return "";
+        const div = document.createElement("div");
+        div.textContent = String(text);
+        return div.innerHTML;
+    }
+
+    // ── Log path save ────────────────────────────────────────────────────────
+
+    getCsrfToken() {
+        const csrfInput = document.querySelector("input[name='csrfmiddlewaretoken']");
+        if (csrfInput?.value) return csrfInput.value;
+        const cookie = document.cookie.split(";").map((p) => p.trim()).find((p) => p.startsWith("csrftoken="));
+        return cookie ? cookie.split("=", 2)[1] : "";
+    }
+
+    setBackendLogFilePathStatus(message, level = "muted") {
+        const el = document.getElementById("backendLogFilePathStatus");
+        if (!el) return;
+        el.className = `small mt-1 text-${level}`;
+        el.textContent = message;
     }
 
     async saveBackendLogFilePath() {
         const input = document.getElementById("backendLogFilePathInput");
         const saveBtn = document.getElementById("saveBackendLogFilePathBtn");
-        if (!input || !saveBtn) {
-            return;
-        }
+        if (!input || !saveBtn) return;
 
         const candidatePath = input.value.trim();
         if (!candidatePath) {
@@ -794,14 +740,13 @@ class LogsPage {
             );
             return;
         }
-
         if (!this.saveLogPathUrl) {
             this.setBackendLogFilePathStatus("Save endpoint is not configured.", "danger");
             return;
         }
 
         saveBtn.disabled = true;
-        this.setBackendLogFilePathStatus("Saving log file path...", "muted");
+        this.setBackendLogFilePathStatus("Saving…", "muted");
 
         try {
             const payload = new URLSearchParams();
@@ -818,18 +763,11 @@ class LogsPage {
             });
 
             let data = {};
-            try {
-                data = await response.json();
-            } catch {
-                data = {};
-            }
+            try { data = await response.json(); } catch { data = {}; }
 
             if (!response.ok || data.ok !== true) {
-                const errorMessage =
-                    data.error || data.detail || `Failed to save log file path (HTTP ${response.status}).`;
-                throw new Error(errorMessage);
+                throw new Error(data.error || data.detail || `Failed (HTTP ${response.status}).`);
             }
-
             this.backendLogFilePath = data.backend_log_file_path || candidatePath;
             input.value = this.backendLogFilePath;
             this.setBackendLogFilePathStatus(
@@ -837,10 +775,7 @@ class LogsPage {
                 "success"
             );
         } catch (error) {
-            this.setBackendLogFilePathStatus(
-                error.message || "Failed to save backend log file path.",
-                "danger"
-            );
+            this.setBackendLogFilePathStatus(error.message || "Failed to save.", "danger");
         } finally {
             saveBtn.disabled = false;
         }

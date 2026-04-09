@@ -1,7 +1,54 @@
 /* Backend Logs page styles */
 
+/* ── Connection status badge ── */
+.logs-status-badge {
+    font-size: 0.7rem;
+    font-weight: 500;
+    transition: background-color 0.3s ease;
+    white-space: nowrap;
+}
+.logs-status-badge.live {
+    background-color: #198754 !important;
+    color: #fff;
+}
+.logs-status-badge.polling {
+    background-color: #ffc107 !important;
+    color: #212529;
+}
+.logs-status-badge.disconnected {
+    background-color: #6c757d !important;
+    color: #fff;
+}
+
+/* ── Filter bar (tabs + filters on one row) ── */
+.logs-filter-bar {
+    padding-top: 0;
+    padding-bottom: 0;
+}
+.logs-filter-select {
+    width: auto;
+    min-width: 110px;
+}
+.logs-filter-date {
+    width: 180px;
+}
+.logs-filter-op {
+    width: 180px;
+}
+
+/* ── Settings toggle in footer ── */
+.logs-config-toggle {
+    font-size: 0.8rem;
+    text-decoration: none;
+}
+.logs-config-toggle:hover {
+    text-decoration: underline;
+}
+
+/* ── Tabs ── */
 .logs-tabs {
     margin-bottom: -1px;
+    border-bottom: none;
 }
 
 .logs-tabs .nav-link {
@@ -154,6 +201,15 @@
     border-width: 0.15em;
 }
 
+/* ── New entry highlight (SSE live entries) ── */
+@keyframes logEntryFlash {
+    0% { background-color: rgba(25, 135, 84, 0.18); }
+    100% { background-color: transparent; }
+}
+.log-entry-new {
+    animation: logEntryFlash 1.2s ease-out forwards;
+}
+
 @media (max-width: 768px) {
     .logs-table {
         font-size: 0.8rem;
@@ -165,5 +221,13 @@
 
     .log-module {
         display: none;
+    }
+
+    .logs-filter-date {
+        width: 140px;
+    }
+
+    .logs-filter-op {
+        width: 130px;
     }
 }
