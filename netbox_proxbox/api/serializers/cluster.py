@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from netbox.api.fields import ChoiceField
-from netbox.api.serializers import NetBoxModelSerializer
+from netbox.api.serializers import NetBoxModelSerializer, WritableNestedSerializer
 from rest_framework import serializers
 from virtualization.api.serializers_.clusters import ClusterSerializer
 from dcim.api.serializers_.nested import NestedDeviceSerializer
@@ -13,7 +13,7 @@ from netbox_proxbox.models import ProxmoxCluster, ProxmoxNode
 from netbox_proxbox.api.serializers.endpoints import ProxmoxEndpointSerializer
 
 
-class NestedProxmoxEndpointSerializer(NetBoxModelSerializer):
+class NestedProxmoxEndpointSerializer(WritableNestedSerializer):
     """Minimal ProxmoxEndpoint for nested references."""
 
     url = serializers.HyperlinkedIdentityField(
@@ -28,7 +28,7 @@ class NestedProxmoxEndpointSerializer(NetBoxModelSerializer):
         brief_fields = ("id", "url", "display", "name")
 
 
-class NestedProxmoxClusterSerializer(NetBoxModelSerializer):
+class NestedProxmoxClusterSerializer(WritableNestedSerializer):
     """Minimal ProxmoxCluster for nested references."""
 
     url = serializers.HyperlinkedIdentityField(
@@ -41,7 +41,7 @@ class NestedProxmoxClusterSerializer(NetBoxModelSerializer):
         brief_fields = ("id", "url", "display", "name")
 
 
-class NestedProxmoxNodeSerializer(NetBoxModelSerializer):
+class NestedProxmoxNodeSerializer(WritableNestedSerializer):
     """Minimal ProxmoxNode for nested references."""
 
     url = serializers.HyperlinkedIdentityField(
