@@ -49,19 +49,21 @@ def next_local_3am() -> datetime:
 
 def has_recurring_proxbox_sync_all(user: AbstractBaseUser | AnonymousUser) -> bool:
     """
-    True if the user can see a live recurring Proxbox job whose sync types normalize to ``[all]``.
+    True if any live recurring Proxbox job exists whose sync types normalize to ``[all]``.
+
+    Uses an unrestricted query because this answers a system-wide question
+    ("is recurring full-sync configured?"), not a per-user visibility question.
+    Object-level permissions on ``core.view_job`` can hide the scheduled row
+    from ``restrict()``, causing the quick-schedule banner to re-appear even
+    though a daily schedule already exists.
     """
-    candidates = (
-        Job.objects.restrict(user, "view")
-        .filter(
-            interval__isnull=False,
-            status__in=JobStatusChoices.ENQUEUED_STATE_CHOICES,
-        )
-        .filter(
-            Q(queue_name=PROXBOX_SYNC_QUEUE_NAME)
-            | Q(queue_name=LEGACY_PROXBOX_RQ_QUEUE)
-            | Q(data__has_key="proxbox_sync")
-        )
+    candidates = Job.objects.filter(
+        interval__isnull=False,
+        status__in=JobStatusChoices.ENQUEUED_STATE_CHOICES,
+    ).filter(
+        Q(queue_name=PROXBOX_SYNC_QUEUE_NAME)
+        | Q(queue_name=LEGACY_PROXBOX_RQ_QUEUE)
+        | Q(data__has_key="proxbox_sync")
     )
     for job in candidates.iterator(chunk_size=64):
         if not is_proxbox_sync_job(job):
