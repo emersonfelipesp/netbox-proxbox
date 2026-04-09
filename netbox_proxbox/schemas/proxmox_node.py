@@ -24,25 +24,29 @@ class ProxmoxClusterStatusRecord(ProxboxLenientModel):
     id: str | None = None
     # cluster-type fields
     nodes: int | None = None
-    quorate: int | None = None
+    quorate: bool | None = None
     version: int | None = None
     # node-type fields
     nodeid: int | None = None
     ip: str | None = None
-    online: int | None = None
-    local: int | None = None
+    online: bool | None = None
+    local: bool | None = None
     level: str | None = None
     status: str | None = None
 
     @field_validator("quorate", "online", "local", mode="before")
     @classmethod
-    def _coerce_int_bool(cls, v: object) -> int | None:
+    def _coerce_bool(cls, v: object) -> bool | None:
         if v is None:
             return None
-        try:
-            return int(v)  # type: ignore[arg-type]
-        except (TypeError, ValueError):
-            return None
+        if isinstance(v, bool):
+            return v
+        s = str(v).strip().lower()
+        if s in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if s in {"0", "false", "no", "off", "disabled"}:
+            return False
+        return None
 
     @field_validator("nodes", "nodeid", "version", mode="before")
     @classmethod
@@ -166,7 +170,7 @@ class ProxmoxClusterSummary(ProxboxBaseModel):
         cr = response.cluster_record
         nr = response.node_records
         total = (cr.nodes if cr and cr.nodes is not None else len(nr)) or len(nr)
-        online = sum(r.online or 0 for r in nr)
+        online = sum(1 for r in nr if r.online)
         if online == 0:
             online = sum(1 for r in nr if r.status == "online")
         return cls(

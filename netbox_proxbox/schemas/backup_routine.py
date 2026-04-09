@@ -8,6 +8,12 @@ from typing import Annotated
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from netbox_proxbox.schemas._base import ProxboxBaseModel, ProxboxLenientModel
+from netbox_proxbox.schemas._enums import (
+    BackupMode,
+    CompressionAlgorithm,
+    NotificationMode,
+    PBSChangeDetectionMode,
+)
 from netbox_proxbox.schemas.schedule_parser import parse_systemd_calendar_to_datetime
 
 
@@ -134,16 +140,20 @@ class GetClusterBackupIdResponse(ProxboxLenientModel):
     zstd: int | None = Field(None, description="Zstd threads.")
     pigz: int | None = Field(None, description="pigz threads.")
     ionice: int | None = Field(None, description="IO priority.")
-    mode: str | None = Field(None, description="Backup mode.")
-    compress: str | None = Field(None, description="Compression algorithm.")
-    mailnotification: str | None = Field(None, description="Mail notification mode.")
+    mode: BackupMode | str | None = Field(None, description="Backup mode.")
+    compress: CompressionAlgorithm | str | None = Field(
+        None, description="Compression algorithm."
+    )
+    mailnotification: NotificationMode | str | None = Field(
+        None, description="Mail notification mode."
+    )
     mailto: str | None = Field(None, description="Comma-separated email addresses.")
     protected: bool | None = Field(None, description="Mark backups as protected.")
     quiet: bool | None = Field(None, description="Be quiet.")
     remove: bool | None = Field(None, description="Prune older backups.")
     fleecing: str | None = Field(None, description="Options for backup fleecing.")
     io_workers: int | None = Field(None, description="IO workers.")
-    pbs_change_detection_mode: str | None = Field(
+    pbs_change_detection_mode: PBSChangeDetectionMode | str | None = Field(
         None,
         alias="pbs-change-detection-mode",
         description="PBS change detection mode.",
@@ -151,7 +161,7 @@ class GetClusterBackupIdResponse(ProxboxLenientModel):
     repeat_missed: bool | None = Field(
         None, alias="repeat-missed", description="Repeat missed job."
     )
-    notification_mode: str | None = Field(
+    notification_mode: NotificationMode | str | None = Field(
         None, alias="notification-mode", description="Notification mode."
     )
     performance: str | None = Field(None, description="Performance settings.")

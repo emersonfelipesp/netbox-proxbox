@@ -5,6 +5,7 @@ from __future__ import annotations
 from pydantic import Field, field_validator
 
 from netbox_proxbox.schemas._base import ProxboxBaseModel, ProxboxLenientModel
+from netbox_proxbox.schemas._enums import DiskFormat
 from netbox_proxbox.schemas._formatters import format_bytes
 
 
@@ -29,8 +30,8 @@ class ProxmoxStorageRecord(ProxboxLenientModel):
     storage_type: str | None = Field(None, alias="type")
     content: str | None = None
     nodes: str | None = None
-    shared: int | None = None
-    enabled: int | None = None
+    shared: bool | None = None
+    enabled: bool | None = None
     total: int | None = None
     used: int | None = None
     avail: int | None = None
@@ -40,6 +41,20 @@ class ProxmoxStorageRecord(ProxboxLenientModel):
     size: int | None = None
     available: int | None = None
     free: int | None = None
+
+    @field_validator("shared", "enabled", mode="before")
+    @classmethod
+    def _coerce_bool(cls, v: object) -> bool | None:
+        if v is None:
+            return None
+        if isinstance(v, bool):
+            return v
+        s = str(v).strip().lower()
+        if s in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if s in {"0", "false", "no", "off", "disabled"}:
+            return False
+        return None
 
     @field_validator(
         "total",
@@ -51,8 +66,6 @@ class ProxmoxStorageRecord(ProxboxLenientModel):
         "size",
         "available",
         "free",
-        "shared",
-        "enabled",
         mode="before",
     )
     @classmethod
@@ -128,7 +141,7 @@ class StorageContentRecord(ProxboxLenientModel):
 
     volid: str | None = None
     content: str | None = None
-    format: str | None = None
+    format: DiskFormat | str | None = None
     size: int | None = None
     vmid: int | None = None
     parent: str | None = None

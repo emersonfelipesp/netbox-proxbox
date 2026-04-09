@@ -128,12 +128,26 @@ class ProxmoxResourceRecord(ProxboxLenientModel):
     name: str | None = None
     node: str | None = None
     status: str | None = None
-    template: int | None = None
+    template: bool | None = None
     maxcpu: int | None = None
     maxmem: int | None = None
     maxdisk: int | None = None
 
-    @field_validator("template", "vmid", "maxcpu", "maxmem", "maxdisk", mode="before")
+    @field_validator("template", mode="before")
+    @classmethod
+    def _coerce_bool(cls, v: object) -> bool | None:
+        if v is None:
+            return None
+        if isinstance(v, bool):
+            return v
+        s = str(v).strip().lower()
+        if s in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if s in {"0", "false", "no", "off", "disabled"}:
+            return False
+        return None
+
+    @field_validator("vmid", "maxcpu", "maxmem", "maxdisk", mode="before")
     @classmethod
     def _coerce_int(cls, v: object) -> int | None:
         if v is None:
@@ -165,7 +179,7 @@ class ProxmoxGuestSummary(ProxboxBaseModel):
             items: list[ProxmoxResourceRecord],
         ) -> ProxmoxGuestSummary.GuestTypeCounts:
             running = sum(1 for r in items if r.status == "running")
-            templates = sum(1 for r in items if bool(r.template))
+            templates = sum(1 for r in items if r.template)
             return cls.GuestTypeCounts(
                 running=running,
                 stopped=max(len(items) - running - templates, 0),
