@@ -6,7 +6,6 @@ from django.utils.translation import gettext as _
 
 # NetBox Imports
 from netbox.tables import NetBoxTable, ChoiceFieldColumn
-from netbox.tables.columns import BooleanColumn
 
 # Proxbox Imports
 from netbox_proxbox.models import VMBackup
@@ -33,7 +32,7 @@ class VMBackupTable(NetBoxTable):
     used = tables.Column(
         verbose_name=_("Used in Bytes"),
     )
-    encrypted = BooleanColumn(
+    encrypted = tables.Column(
         verbose_name=_("Encrypted"),
     )
     volume_id = tables.Column(

@@ -342,7 +342,7 @@ class VMBackupAPITest(APIViewTestCases.APIViewTestCase):
         "storage",
         "url",
     ]
-    bulk_update_data = {"encrypted": True}
+    bulk_update_data = {"encrypted": "1"}
     validation_excluded_fields = ["virtual_machine"]
 
     @classmethod
@@ -381,7 +381,7 @@ class VMBackupAPITest(APIViewTestCases.APIViewTestCase):
                 subtype=ProxmoxBackupSubtypeChoices.BACKUP_SUBTYPE_QEMU,
                 format=ProxmoxBackupFormatChoices.BACKUP_FORMAT_TZST,
                 vmid=100 + idx,
-                encrypted=False,
+                encrypted="",
             )
 
         cls.create_data = [
@@ -391,7 +391,7 @@ class VMBackupAPITest(APIViewTestCases.APIViewTestCase):
                 "subtype": ProxmoxBackupSubtypeChoices.BACKUP_SUBTYPE_QEMU,
                 "format": ProxmoxBackupFormatChoices.BACKUP_FORMAT_TZST,
                 "vmid": 103,
-                "encrypted": False,
+                "encrypted": "",
             },
             {
                 "storage": cls.storages[4].pk,
@@ -399,7 +399,7 @@ class VMBackupAPITest(APIViewTestCases.APIViewTestCase):
                 "subtype": ProxmoxBackupSubtypeChoices.BACKUP_SUBTYPE_LXC,
                 "format": ProxmoxBackupFormatChoices.BACKUP_FORMAT_TGZ,
                 "vmid": 104,
-                "encrypted": True,
+                "encrypted": "1",
             },
             {
                 "storage": cls.storages[5].pk,
@@ -407,7 +407,7 @@ class VMBackupAPITest(APIViewTestCases.APIViewTestCase):
                 "subtype": ProxmoxBackupSubtypeChoices.BACKUP_SUBTYPE_QEMU,
                 "format": ProxmoxBackupFormatChoices.BACKUP_FORMAT_RAW,
                 "vmid": 105,
-                "encrypted": False,
+                "encrypted": "",
             },
         ]
 

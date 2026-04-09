@@ -13,7 +13,7 @@ repos:
         name: ruff
         entry: ruff
         language: system
-        pass_filenames: true
+        pass_filenames: false
         types: [python]
         args: ["check", "."]
 

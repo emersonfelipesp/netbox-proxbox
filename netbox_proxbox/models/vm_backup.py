@@ -91,9 +91,13 @@ class VMBackup(NetBoxModel):
         help_text=_("Used space of the backup."),
     )
 
-    encrypted = models.BooleanField(
-        default=False,
-        help_text=_("Encrypted status of the backup."),
+    encrypted = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text=_(
+            "Encryption fingerprint or flag from Proxmox (empty = not encrypted)."
+        ),
     )
 
     verification_state = models.CharField(

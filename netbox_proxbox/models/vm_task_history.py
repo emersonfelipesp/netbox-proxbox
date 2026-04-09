@@ -43,10 +43,12 @@ class VMTaskHistory(NetBoxModel):
         help_text=_("Process ID for the Proxmox task."),
     )
 
-    pstart = models.DateTimeField(
+    pstart = models.BigIntegerField(
         null=True,
         blank=True,
-        help_text=_("Process start time for the Proxmox task."),
+        help_text=_(
+            "Process start value from Proxmox (kernel-internal counter, not a timestamp)."
+        ),
     )
 
     task_id = models.CharField(
