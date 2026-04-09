@@ -60,7 +60,7 @@ class VMBackupViewSet(NetBoxModelViewSet):
     """REST API for VM backup rows synced from Proxmox."""
 
     queryset = models.VMBackup.objects.select_related(
-        "virtual_machine", "proxmox_storage"
+        "virtual_machine", "proxmox_storage", "proxmox_storage__cluster"
     )
     serializer_class = VMBackupSerializer
     filterset_class = filtersets.VMBackupFilterSet
@@ -70,7 +70,7 @@ class VMSnapshotViewSet(NetBoxModelViewSet):
     """REST API for VM snapshot rows synced from Proxmox."""
 
     queryset = models.VMSnapshot.objects.select_related(
-        "virtual_machine", "proxmox_storage"
+        "virtual_machine", "proxmox_storage", "proxmox_storage__cluster"
     )
     serializer_class = VMSnapshotSerializer
     filterset_class = filtersets.VMSnapshotFilterSet
@@ -100,7 +100,7 @@ class VMTaskHistoryViewSet(NetBoxModelViewSet):
 class ProxmoxStorageViewSet(NetBoxModelViewSet):
     """REST API for Proxmox storage rows synced from Proxmox endpoints."""
 
-    queryset = models.ProxmoxStorage.objects.all()
+    queryset = models.ProxmoxStorage.objects.select_related("cluster")
     serializer_class = ProxmoxStorageSerializer
     filterset_class = filtersets.ProxmoxStorageFilterSet
 
@@ -116,7 +116,7 @@ class ProxmoxEndpointViewSet(NetBoxModelViewSet):
 class NetBoxEndpointViewSet(NetBoxModelViewSet):
     """REST API for remote NetBox API endpoint configuration."""
 
-    queryset = models.NetBoxEndpoint.objects.all()
+    queryset = models.NetBoxEndpoint.objects.select_related("ip_address", "token")
     serializer_class = NetBoxEndpointSerializer
     filterset_class = filtersets.NetBoxEndpointFilterSet
 
@@ -124,7 +124,7 @@ class NetBoxEndpointViewSet(NetBoxModelViewSet):
 class FastAPIEndpointViewSet(NetBoxModelViewSet):
     """REST API for ProxBox FastAPI backend (HTTP/WebSocket) endpoints."""
 
-    queryset = models.FastAPIEndpoint.objects.all()
+    queryset = models.FastAPIEndpoint.objects.select_related("ip_address")
     serializer_class = FastAPIEndpointSerializer
     filterset_class = filtersets.FastAPIEndpointFilterSet
 
@@ -153,7 +153,12 @@ class BackupRoutineViewSet(NetBoxModelViewSet):
     """REST API for Proxmox backup routine schedules synced from Proxmox."""
 
     queryset = models.BackupRoutine.objects.select_related(
-        "endpoint", "node", "storage", "fleecing_storage"
+        "endpoint",
+        "node",
+        "storage",
+        "storage__cluster",
+        "fleecing_storage",
+        "fleecing_storage__cluster",
     )
     serializer_class = BackupRoutineSerializer
     filterset_class = filtersets.BackupRoutineFilterSet

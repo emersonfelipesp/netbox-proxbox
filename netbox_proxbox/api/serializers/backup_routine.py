@@ -81,7 +81,7 @@ class BackupRoutineSerializer(NetBoxModelSerializer):
             return None
         return {
             "id": obj.node.id,
-            "url": f"/api/plugins/proxbox/proxmox-nodes/{obj.node.id}/",
+            "url": f"/api/plugins/proxbox/nodes/{obj.node.id}/",
             "display": obj.node.name,
         }
 
