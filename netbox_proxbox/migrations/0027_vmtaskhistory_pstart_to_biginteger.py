@@ -19,17 +19,31 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunSQL(
-            sql="UPDATE netbox_proxbox_vmtaskhistory SET pstart = NULL;",
-            reverse_sql=migrations.RunSQL.noop,
-        ),
-        migrations.AlterField(
-            model_name="vmtaskhistory",
-            name="pstart",
-            field=models.BigIntegerField(
-                null=True,
-                blank=True,
-                help_text="Process start value from Proxmox (kernel-internal counter, not a timestamp).",
-            ),
+        migrations.SeparateDatabaseAndState(
+            database_operations=[
+                migrations.RunSQL(
+                    sql=(
+                        "ALTER TABLE netbox_proxbox_vmtaskhistory "
+                        "DROP COLUMN IF EXISTS pstart, "
+                        "ADD COLUMN pstart bigint NULL;"
+                    ),
+                    reverse_sql=(
+                        "ALTER TABLE netbox_proxbox_vmtaskhistory "
+                        "DROP COLUMN IF EXISTS pstart, "
+                        "ADD COLUMN pstart timestamp with time zone NULL;"
+                    ),
+                ),
+            ],
+            state_operations=[
+                migrations.AlterField(
+                    model_name="vmtaskhistory",
+                    name="pstart",
+                    field=models.BigIntegerField(
+                        null=True,
+                        blank=True,
+                        help_text="Process start value from Proxmox (kernel-internal counter, not a timestamp).",
+                    ),
+                ),
+            ],
         ),
     ]
