@@ -51,7 +51,7 @@ class ProxBoxEndpointsView(APIRootView):
 class ProxboxPluginSettingsViewSet(NetBoxModelViewSet):
     """REST API for ProxBox plugin settings (singleton)."""
 
-    queryset = models.ProxboxPluginSettings.objects.all()
+    queryset = models.ProxboxPluginSettings.objects.all().order_by("id")
     serializer_class = ProxboxPluginSettingsSerializer
     http_method_names = ["get", "patch", "head", "options"]
 
