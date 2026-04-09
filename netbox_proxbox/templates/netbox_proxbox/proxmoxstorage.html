@@ -177,27 +177,6 @@
             </div>
         </div>
 
-        <div class="card mb-3">
-            <h5 class="card-header">{% trans "Virtual Disks on this Storage" %}</h5>
-            <div class="card-body">
-                {% include 'inc/table.html' with table=virtual_disks_table %}
-            </div>
-        </div>
-
-        <div class="card mb-3">
-            <h5 class="card-header">{% trans "Backups on this Storage" %}</h5>
-            <div class="card-body">
-                {% include 'inc/table.html' with table=backups_table %}
-            </div>
-        </div>
-
-        <div class="card mb-3">
-            <h5 class="card-header">{% trans "Snapshots on this Storage" %}</h5>
-            <div class="card-body">
-                {% include 'inc/table.html' with table=snapshots_table %}
-            </div>
-        </div>
-
         {% include 'inc/panels/tags.html' %}
         {% include 'inc/panels/custom_fields.html' %}
         {% include 'inc/panels/comments.html' %}
