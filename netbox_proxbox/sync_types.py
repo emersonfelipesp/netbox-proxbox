@@ -137,7 +137,24 @@ def expanded_sync_stages(types: list[str]) -> list[str]:
     """Turn ``[all]`` into every stage in dependency order; pass through explicit lists."""
     if types == [SyncTypeChoices.ALL]:
         return list(_SYNC_STAGE_ORDER)
-    return types
+
+    expanded = list(types)
+    # "Network interfaces" is a user-facing bundle that must reconcile both
+    # node interfaces and VM interfaces in dependency order.
+    if (
+        SyncTypeChoices.NETWORK_INTERFACES in expanded
+        and SyncTypeChoices.VM_INTERFACES not in expanded
+    ):
+        expanded.append(SyncTypeChoices.VM_INTERFACES)
+
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for sync_type in sorted(expanded, key=lambda t: _STAGE_ORDER_INDEX.get(t, 99)):
+        if sync_type in seen:
+            continue
+        seen.add(sync_type)
+        ordered.append(sync_type)
+    return ordered
 
 
 def normalize_sync_types(selected: list[str]) -> list[str]:

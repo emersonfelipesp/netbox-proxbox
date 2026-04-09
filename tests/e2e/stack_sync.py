@@ -394,6 +394,75 @@ def assert_task_history_sync_data(
         raise AssertionError("Expected at least one task history linked to VM 101")
 
 
+def assert_network_and_ip_sync_data(
+    netbox_base_url: str,
+    netbox_token: str,
+    *,
+    device_id: int,
+    vm_ids_by_vmid: dict[int, int],
+) -> None:
+    headers = {"Authorization": f"Token {netbox_token}"}
+
+    node_interfaces = list_records(
+        f"{netbox_base_url}/api/dcim/interfaces/",
+        headers,
+        context="node interfaces",
+        params={"device_id": device_id, "limit": 200},
+    )
+    if not isinstance(node_interfaces, list):
+        raise AssertionError("Node interface sync did not return a list payload")
+
+    for vmid, vm_id in vm_ids_by_vmid.items():
+        vm_interfaces = list_records(
+            f"{netbox_base_url}/api/virtualization/interfaces/",
+            headers,
+            context=f"vm interfaces vmid={vmid}",
+            params={"virtual_machine_id": vm_id, "limit": 200},
+        )
+        if not isinstance(vm_interfaces, list):
+            raise AssertionError(f"VM interface sync failed for vmid={vmid}")
+
+    vm_ip_records = list_records(
+        f"{netbox_base_url}/api/ipam/ip-addresses/",
+        headers,
+        context="vm interface IP addresses",
+        params={"assigned_object_type": "virtualization.vminterface", "limit": 200},
+    )
+    if not isinstance(vm_ip_records, list):
+        raise AssertionError("VM IP address sync did not return a list payload")
+
+
+def assert_replications_and_backup_routines_sync_data(
+    netbox_base_url: str,
+    netbox_token: str,
+) -> None:
+    headers = {"Authorization": f"Token {netbox_token}"}
+
+    replications = list_records(
+        f"{netbox_base_url}/api/plugins/proxbox/replications/",
+        headers,
+        context="replications",
+        params={"limit": 200},
+    )
+    for record in replications:
+        if not str(record.get("replication_id") or ""):
+            raise AssertionError(f"Replication missing replication_id: {record}")
+        if not str(record.get("status") or ""):
+            raise AssertionError(f"Replication missing status: {record}")
+
+    backup_routines = list_records(
+        f"{netbox_base_url}/api/plugins/proxbox/backup-routines/",
+        headers,
+        context="backup routines",
+        params={"limit": 200},
+    )
+    for record in backup_routines:
+        if not str(record.get("job_id") or ""):
+            raise AssertionError(f"Backup routine missing job_id: {record}")
+        if not str(record.get("status") or ""):
+            raise AssertionError(f"Backup routine missing status: {record}")
+
+
 def set_mock_vm_status(mock_base_url: str, vmid: int, status: str) -> bool:
     response = requests.post(
         f"{mock_base_url}/__admin/vm/{vmid}/status",
@@ -487,6 +556,11 @@ def assert_backend_stream(proxbox_base_url: str) -> dict[str, Any]:
         "task_history_count",
         "backups_count",
         "snapshots_count",
+        "node_interfaces_count",
+        "vm_interfaces_count",
+        "vm_ip_addresses_count",
+        "replications_count",
+        "backup_routines_count",
     )
     for key in required_count_keys:
         value = result.get(key)
@@ -573,6 +647,42 @@ def run_and_assert_all_sync_operations(
         netbox_base_url,
         netbox_token,
         vm_ids_by_vmid=vm_ids_by_vmid,
+    )
+
+    trigger_and_wait_sync(
+        netbox_base_url,
+        netbox_token,
+        route="/plugins/proxbox/sync/network-interfaces/",
+        expected_name_fragment="network interfaces",
+    )
+    trigger_and_wait_sync(
+        netbox_base_url,
+        netbox_token,
+        route="/plugins/proxbox/sync/ip-addresses/",
+        expected_name_fragment="ip addresses",
+    )
+    assert_network_and_ip_sync_data(
+        netbox_base_url,
+        netbox_token,
+        device_id=device_refs["device_id"],
+        vm_ids_by_vmid=vm_ids_by_vmid,
+    )
+
+    trigger_and_wait_sync(
+        netbox_base_url,
+        netbox_token,
+        route="/plugins/proxbox/sync/replications/",
+        expected_name_fragment="replications",
+    )
+    trigger_and_wait_sync(
+        netbox_base_url,
+        netbox_token,
+        route="/plugins/proxbox/sync/backup-routines/",
+        expected_name_fragment="backup routines",
+    )
+    assert_replications_and_backup_routines_sync_data(
+        netbox_base_url,
+        netbox_token,
     )
 
     trigger_and_wait_sync(

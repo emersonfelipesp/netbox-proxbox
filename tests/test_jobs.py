@@ -78,13 +78,14 @@ def test_proxbox_sync_job_run_imports_from_services_not_views(
     monkeypatch, proxbox_sync_job_module
 ):
     """run() must call ``run_sync_stream`` with proxbox-api SSE paths."""
-    captured: dict[str, object] = {}
+    captured: dict[str, object] = {"paths": []}
 
     services_mod = types.ModuleType("netbox_proxbox.services")
 
     def run_sync_stream(path, query_params=None, **stream_kwargs):
         captured["called"] = "run_sync_stream"
         captured["path"] = path
+        captured["paths"].append(path)
         captured["query_params"] = query_params
         return ({"stream": True, "response": {"ok": True, "message": "ok"}}, 200)
 
@@ -126,13 +127,46 @@ def test_proxbox_sync_job_run_imports_from_services_not_views(
 
     job.job.reset_mock()
     ProxboxSyncJob.run(job, sync_type=st.NETWORK_INTERFACES)
-    assert captured["path"] == "dcim/devices/interfaces/create/stream"
+    assert captured["paths"][-2:] == [
+        "dcim/devices/interfaces/create/stream",
+        "virtualization/virtual-machines/interfaces/create/stream",
+    ]
 
     job.job.reset_mock()
     ProxboxSyncJob.run(job, sync_type=st.IP_ADDRESSES)
     assert captured["path"] == (
         "virtualization/virtual-machines/interfaces/ip-address/create/stream"
     )
+
+
+def test_proxbox_sync_job_network_interfaces_includes_vm_interfaces_stage(
+    monkeypatch, proxbox_sync_job_module
+):
+    """network-interfaces sync must include both node and VM interface stages."""
+    paths: list[str] = []
+
+    services_mod = types.ModuleType("netbox_proxbox.services")
+
+    def run_sync_stream(path, query_params=None, **stream_kwargs):
+        paths.append(path)
+        return ({"stream": True, "response": {"ok": True}}, 200)
+
+    services_mod.run_sync_stream = run_sync_stream
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
+
+    ProxboxSyncJob = proxbox_sync_job_module.ProxboxSyncJob
+    job = ProxboxSyncJob()
+    job.logger = logging.getLogger("test_proxbox_job_network_interfaces")
+    job.job = MagicMock()
+    job.job.data = None
+
+    st = proxbox_sync_job_module.SyncTypeChoices
+    ProxboxSyncJob.run(job, sync_type=st.NETWORK_INTERFACES)
+
+    assert paths == [
+        "dcim/devices/interfaces/create/stream",
+        "virtualization/virtual-machines/interfaces/create/stream",
+    ]
 
 
 def test_proxbox_sync_job_logs_stage_lines_with_rendered_values(
