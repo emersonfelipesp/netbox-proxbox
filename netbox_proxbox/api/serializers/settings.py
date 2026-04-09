@@ -17,6 +17,7 @@ class ProxboxPluginSettingsSerializer(NetBoxModelSerializer):
         fields = [
             "id",
             "url",
+            "display",
             "singleton_key",
             "use_guest_agent_interface_name",
             "proxbox_fetch_max_concurrency",
@@ -34,7 +35,17 @@ class ProxboxPluginSettingsSerializer(NetBoxModelSerializer):
             "allow_private_ips",
             "additional_allowed_ip_ranges",
             "explicitly_blocked_ip_ranges",
+            "encryption_key",
+            "tags",
+            "custom_fields",
             "created",
             "last_updated",
         ]
-        read_only_fields = ["id", "url", "singleton_key", "created", "last_updated"]
+        read_only_fields = [
+            "id",
+            "url",
+            "display",
+            "singleton_key",
+            "created",
+            "last_updated",
+        ]
