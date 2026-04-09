@@ -42,6 +42,11 @@ storage_item = PluginMenuItem(
     link_text="Storage",
 )
 
+virtual_disks_item = PluginMenuItem(
+    link="plugins:netbox_proxbox:virtual_disks",
+    link_text="Virtual Disks",
+)
+
 schedule_sync_item = PluginMenuItem(
     link="plugins:netbox_proxbox:schedule_sync",
     link_text="Schedule Sync",
@@ -173,6 +178,7 @@ menu = PluginMenu(
                 interfaces_item,
                 ip_addresses_item,
                 storage_item,
+                virtual_disks_item,
                 backups_item,
                 backup_routines_item,
                 snapshots_item,

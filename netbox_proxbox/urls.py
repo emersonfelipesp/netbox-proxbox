@@ -24,6 +24,7 @@ urlpatterns = [
     ),
     path("interfaces/", views.InterfacesView.as_view(), name="interfaces"),
     path("ip-addresses/", views.IPAddressesView.as_view(), name="ip_addresses"),
+    path("virtual-disks/", views.VirtualDisksView.as_view(), name="virtual_disks"),
     path("contributing/", views.ContributingView.as_view(), name="contributing"),
     path("community/", views.CommunityView.as_view(), name="community"),
     path("discussions/", views.discussions_redirect, name="discussions"),

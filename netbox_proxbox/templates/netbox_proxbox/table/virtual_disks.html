@@ -1,0 +1,60 @@
+{% load helpers %}
+<div id="virtual-disks-div" class="form form-horizontal">
+    <h2 id="proxmox-virtual-disks-table" class="text-center">Virtual Disks</h2>
+    <h3>Synced Virtual Disks: <span id='synced-disk-count'>{% if virtual_disks %}{{ virtual_disks|length }}{% else %}0{% endif %}</span></h3>
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-hover object-list">
+                <thead>
+                    <tr>
+                        <th class="text-center text-nowrap">ID</th>
+                        <th class="text-nowrap">Name</th>
+                        <th class="text-nowrap">Virtual Machine</th>
+                        <th class="text-end text-nowrap">Size (MB)</th>
+                        <th class="text-nowrap">Description</th>
+                        <th class="text-end text-nowrap noprint">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="virtual-disk-table-data">
+                    {% if virtual_disks %}
+                        {% for disk in virtual_disks %}
+                            <tr>
+                                <td class="text-center text-muted">{{ disk.pk }}</td>
+                                <td>
+                                    <a href="{% url 'virtualization:virtualdisk' disk.pk %}" class="text-body text-decoration-none">
+                                        <span class="mdi mdi-harddisk"></span> {{ disk.name }}
+                                    </a>
+                                </td>
+                                <td>
+                                    {% if disk.virtual_machine %}
+                                        <a href="{% url 'virtualization:virtualmachine' disk.virtual_machine.pk %}" class="text-decoration-none">
+                                            {{ disk.virtual_machine }}
+                                        </a>
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">{{ disk.size }}</td>
+                                <td>{{ disk.description|default:"—" }}</td>
+                                <td class="text-end text-nowrap noprint">
+                                    <a href="{% url 'virtualization:virtualdisk' disk.pk %}" class="btn btn-sm btn-outline-dark" title="View">
+                                        <span class="mdi mdi-eye" aria-hidden="true"></span>
+                                    </a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center text-muted p-4">
+                                <span class="mdi mdi-harddisk mdi-24px d-block mb-2"></span>
+                                No virtual disks synced with Proxbox yet.
+                                <br>
+                                <small>Click "Sync Virtual Disks" to synchronize Proxmox VM disks with NetBox.</small>
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

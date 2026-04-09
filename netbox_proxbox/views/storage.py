@@ -98,7 +98,9 @@ class ProxmoxStorageView(generic.ObjectView):
         """Render storage summary stats and live storage usage when available."""
         # Summary counts for the summary card (tab badges handle the full tables)
         try:
-            disk_qs = instance.virtual_disks.all()
+            disk_qs = VirtualDisk.objects.filter(
+                custom_field_data__proxbox_storage_id=instance.pk
+            )
             virtual_disks_count = disk_qs.count()
             virtual_disks_size = sum(disk.size or 0 for disk in disk_qs.only("size"))
         except ProgrammingError:
@@ -223,15 +225,19 @@ class ProxmoxStorageVirtualDisksTabView(generic.ObjectChildrenView):
     table = VirtualDiskTable
     tab = ViewTab(
         label="Virtual Disks",
-        badge=lambda obj: obj.virtual_disks.count(),
+        badge=lambda obj: VirtualDisk.objects.filter(
+            custom_field_data__proxbox_storage_id=obj.pk
+        ).count(),
         permission="virtualization.view_virtualdisk",
         weight=1000,
     )
 
     def get_children(self, request: HttpRequest, parent: ProxmoxStorage):
-        """Return virtual disks linked to this storage."""
-        return parent.virtual_disks.restrict(request.user, "view").select_related(
-            "virtual_machine"
+        """Return virtual disks linked to this storage via the proxbox_storage_id custom field."""
+        return (
+            VirtualDisk.objects.restrict(request.user, "view")
+            .filter(custom_field_data__proxbox_storage_id=parent.pk)
+            .select_related("virtual_machine")
         )
 
 

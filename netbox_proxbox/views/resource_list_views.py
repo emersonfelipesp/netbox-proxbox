@@ -5,7 +5,7 @@ from django.shortcuts import render
 from django.views import View
 from netbox import configuration
 from utilities.views import ConditionalLoginRequiredMixin
-from virtualization.models import VirtualMachine, VMInterface
+from virtualization.models import VirtualDisk, VirtualMachine, VMInterface
 
 from netbox_proxbox.utils import get_fastapi_context_for_request
 
@@ -170,6 +170,59 @@ class LXCContainersView(ConditionalLoginRequiredMixin, View):
                 "fastapi_url": fastapi_info.get("http_url", ""),
                 "fastapi_websocket_url": fastapi_info.get("websocket_url", ""),
                 "lxc_containers": lxc_containers,
+            },
+        )
+
+
+class VirtualDisksView(ConditionalLoginRequiredMixin, View):
+    """List VirtualDisk objects whose parent VM is tagged ``proxbox``."""
+
+    template_name = "netbox_proxbox/virtual_disks.html"
+
+    def get(self, request: HttpRequest) -> HttpResponse:
+        """Load proxbox-managed virtual disks for the template."""
+        from django.contrib.contenttypes.models import ContentType
+        from extras.models import Tag, TaggedItem
+
+        plugin_configuration = getattr(configuration, "PLUGINS_CONFIG", {})
+        fastapi_info = get_fastapi_context_for_request(request)
+
+        proxbox_tag = Tag.objects.filter(slug="proxbox").first()
+        if not proxbox_tag:
+            return render(
+                request,
+                self.template_name,
+                {
+                    "configuration": plugin_configuration,
+                    "fastapi_url": fastapi_info.get("http_url", ""),
+                    "fastapi_websocket_url": fastapi_info.get("websocket_url", ""),
+                    "virtual_disks": [],
+                },
+            )
+
+        vm_content_type = ContentType.objects.get_for_model(VirtualMachine)
+        tagged_vm_ids = list(
+            TaggedItem.objects.filter(
+                tag=proxbox_tag, content_type=vm_content_type
+            ).values_list("object_id", flat=True)
+        )
+        virtual_disks = []
+        if tagged_vm_ids:
+            virtual_disks = list(
+                VirtualDisk.objects.restrict(request.user, "view")
+                .filter(virtual_machine_id__in=tagged_vm_ids)
+                .select_related("virtual_machine")
+                .order_by("virtual_machine__name", "name")
+            )
+
+        return render(
+            request,
+            self.template_name,
+            {
+                "configuration": plugin_configuration,
+                "fastapi_url": fastapi_info.get("http_url", ""),
+                "fastapi_websocket_url": fastapi_info.get("websocket_url", ""),
+                "virtual_disks": virtual_disks,
             },
         )
 

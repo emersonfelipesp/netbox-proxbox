@@ -67,6 +67,7 @@ from .resource_list_views import (
     IPAddressesView as _IPAddressesView,
     LXCContainersView as _LXCContainersView,
     NodesView as _NodesView,
+    VirtualDisksView as _VirtualDisksView,
     VirtualMachinesView as _VirtualMachinesView,
 )
 from .schedule_sync import QuickScheduleSyncFromHomeView, ScheduleSyncView
@@ -230,6 +231,10 @@ class LXCContainersView(_LXCContainersView):
 
 
 class InterfacesView(_InterfacesView):
+    """Compatibility wrapper for resource list views kept in this module surface."""
+
+
+class VirtualDisksView(_VirtualDisksView):
     """Compatibility wrapper for resource list views kept in this module surface."""
 
 
