@@ -243,13 +243,14 @@ def test_endpoint_serializers_do_not_override_create_semantics():
 def test_task_history_route_and_viewset_are_registered():
     views_contents = VIEWS_PATH.read_text()
     urls_contents = URLS_PATH.read_text()
+    serializers_contents = _serializers_package_source_text()
 
     assert "VMTaskHistoryViewSet" in views_contents
     assert (
         'router.register("task-history", views.VMTaskHistoryViewSet)' in urls_contents
     )
-    assert "serializer.instance = existing" in views_contents
-    assert "models.VMTaskHistory.objects.filter(upid=upid).first()" in views_contents
+    # Upsert logic lives in the serializer's create() so it covers both single and bulk POSTs.
+    assert "VMTaskHistory.objects.filter(upid=upid).first()" in serializers_contents
 
 
 def test_netbox_endpoint_serializer_rejects_selected_v2_token_objects():

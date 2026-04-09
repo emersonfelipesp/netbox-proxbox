@@ -53,3 +53,12 @@ class VMTaskHistorySerializer(NetBoxModelSerializer):
             "username",
             "status",
         )
+
+    def create(self, validated_data: dict) -> VMTaskHistory:
+        """Upsert by UPID so bulk and single POSTs are both idempotent."""
+        upid = validated_data.get("upid")
+        if upid:
+            existing = VMTaskHistory.objects.filter(upid=upid).first()
+            if existing is not None:
+                return self.update(existing, validated_data)
+        return super().create(validated_data)
