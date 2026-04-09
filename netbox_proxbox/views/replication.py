@@ -6,7 +6,12 @@ from utilities.views import ViewTab, register_model_view
 from virtualization.models import VirtualMachine
 
 from netbox_proxbox.filtersets import ReplicationFilterSet
-from netbox_proxbox.forms import ReplicationFilterForm, ReplicationForm
+from netbox_proxbox.forms import (
+    ReplicationBulkEditForm,
+    ReplicationFilterForm,
+    ReplicationForm,
+    ReplicationImportForm,
+)
 from netbox_proxbox.models import Replication
 from netbox_proxbox.tables import ReplicationTable
 from netbox_proxbox.views.mixins import TableConfigOverrideMixin
@@ -17,6 +22,8 @@ __all__ = (
     "ReplicationEditView",
     "ReplicationDeleteView",
     "ReplicationBulkDeleteView",
+    "ReplicationBulkEditView",
+    "ReplicationBulkImportView",
     "ReplicationTabView",
 )
 
@@ -25,13 +32,18 @@ __all__ = (
 class ReplicationListView(generic.ObjectListView):
     """Global list of replications with export and bulk delete actions."""
 
-    queryset = Replication.objects.select_related("virtual_machine", "proxmox_node")
+    queryset = Replication.objects.select_related(
+        "endpoint", "virtual_machine", "proxmox_node"
+    )
     table = ReplicationTable
     filterset = ReplicationFilterSet
     filterset_form = ReplicationFilterForm
     template_name = "netbox_proxbox/replication_list.html"
     actions = {
+        "add": {"add"},
+        "bulk_edit": {"change"},
         "bulk_delete": {"delete"},
+        "bulk_import": {"add"},
         "export": {"view"},
     }
 
@@ -40,7 +52,9 @@ class ReplicationListView(generic.ObjectListView):
 class ReplicationView(generic.ObjectView):
     """Detail view for one replication."""
 
-    queryset = Replication.objects.select_related("virtual_machine", "proxmox_node")
+    queryset = Replication.objects.select_related(
+        "endpoint", "virtual_machine", "proxmox_node"
+    )
     template_name = "netbox_proxbox/replication.html"
 
 
@@ -65,9 +79,31 @@ class ReplicationDeleteView(generic.ObjectDeleteView):
 class ReplicationBulkDeleteView(generic.BulkDeleteView):
     """Bulk delete replications from the global list."""
 
-    queryset = Replication.objects.select_related("virtual_machine", "proxmox_node")
+    queryset = Replication.objects.select_related(
+        "endpoint", "virtual_machine", "proxmox_node"
+    )
     filterset = ReplicationFilterSet
     table = ReplicationTable
+    default_return_url = "plugins:netbox_proxbox:replication_list"
+
+
+@register_model_view(Replication, "bulk_edit", path="edit", detail=False)
+class ReplicationBulkEditView(generic.BulkEditView):
+    """Bulk edit replication records."""
+
+    queryset = Replication.objects.all()
+    filterset = ReplicationFilterSet
+    table = ReplicationTable
+    form = ReplicationBulkEditForm
+    default_return_url = "plugins:netbox_proxbox:replication_list"
+
+
+@register_model_view(Replication, "bulk_import", path="import", detail=False)
+class ReplicationBulkImportView(generic.BulkImportView):
+    """CSV import for replication records."""
+
+    queryset = Replication.objects.all()
+    model_form = ReplicationImportForm
     default_return_url = "plugins:netbox_proxbox:replication_list"
 
 
@@ -81,6 +117,7 @@ class ReplicationTabView(TableConfigOverrideMixin, generic.ObjectChildrenView):
     filterset = ReplicationFilterSet
     filterset_form = ReplicationFilterForm
     actions = {
+        "bulk_edit": {"change"},
         "bulk_delete": {"delete"},
         "export": {"view"},
     }

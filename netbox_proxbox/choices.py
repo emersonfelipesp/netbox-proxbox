@@ -202,3 +202,43 @@ class BackupRoutineStatusChoices(ChoiceSet):
         (ACTIVE, _("Active"), "green"),
         (STALE, _("Stale"), "red"),
     ]
+
+
+class ReplicationJobTypeChoices(ChoiceSet):
+    """Proxmox replication job type (section type)."""
+
+    key = "Replication.job_type"
+
+    LOCAL = "local"
+
+    CHOICES = [
+        (LOCAL, _("Local"), "blue"),
+    ]
+
+
+class ReplicationRemoveJobChoices(ChoiceSet):
+    """Mark a Proxmox replication job for removal."""
+
+    key = "Replication.remove_job"
+
+    LOCAL = "local"
+    FULL = "full"
+
+    CHOICES = [
+        (LOCAL, _("Local"), "yellow"),
+        (FULL, _("Full"), "red"),
+    ]
+
+
+class ReplicationStatusChoices(ChoiceSet):
+    """Whether a replication job is currently active or stale (no longer exists in Proxmox)."""
+
+    key = "Replication.status"
+
+    ACTIVE = "active"
+    STALE = "stale"
+
+    CHOICES = [
+        (ACTIVE, _("Active"), "green"),
+        (STALE, _("Stale"), "red"),
+    ]

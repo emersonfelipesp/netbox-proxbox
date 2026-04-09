@@ -12,6 +12,7 @@ class ReplicationTable(NetBoxTable):
     """django-tables2 layout for Replication list views."""
 
     replication_id = tables.Column(linkify=True)
+    endpoint = tables.Column(linkify=True)
     virtual_machine = tables.Column(linkify=True)
     proxmox_node = tables.Column(linkify=True)
     job_type = ChoiceFieldColumn(
@@ -23,12 +24,16 @@ class ReplicationTable(NetBoxTable):
     remove_job = ChoiceFieldColumn(
         verbose_name=_("Remove Job"),
     )
+    status = ChoiceFieldColumn(
+        verbose_name=_("Status"),
+    )
 
     class Meta(NetBoxTable.Meta):
         model = Replication
         fields = (
             "pk",
             "id",
+            "endpoint",
             "replication_id",
             "virtual_machine",
             "proxmox_node",
@@ -41,6 +46,7 @@ class ReplicationTable(NetBoxTable):
             "source",
             "jobnum",
             "remove_job",
+            "status",
             "comment",
         )
 
@@ -52,4 +58,5 @@ class ReplicationTable(NetBoxTable):
             "job_type",
             "schedule",
             "disable",
+            "status",
         )

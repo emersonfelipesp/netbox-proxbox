@@ -7,13 +7,28 @@ from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from netbox.models import NetBoxModel
 
+from netbox_proxbox.choices import (
+    ReplicationJobTypeChoices,
+    ReplicationRemoveJobChoices,
+    ReplicationStatusChoices,
+)
+
 
 class Replication(NetBoxModel):
     """Proxmox replication metadata attached to a NetBox VirtualMachine."""
 
+    endpoint = models.ForeignKey(
+        to="netbox_proxbox.ProxmoxEndpoint",
+        on_delete=models.CASCADE,
+        related_name="replications",
+        null=True,
+        blank=True,
+        verbose_name=_("Proxmox endpoint"),
+        help_text=_("ProxmoxEndpoint this replication job is discovered from."),
+    )
+
     replication_id = models.CharField(
         max_length=255,
-        unique=True,
         help_text=_(
             "Replication job ID. Composed of guest ID and job number: '<GUEST>-<JOBNUM>'."
         ),
@@ -43,8 +58,8 @@ class Replication(NetBoxModel):
 
     job_type = models.CharField(
         max_length=50,
-        choices=[("local", _("Local"))],
-        default="local",
+        choices=ReplicationJobTypeChoices,
+        default=ReplicationJobTypeChoices.LOCAL,
         help_text=_("Replication type."),
     )
 
@@ -88,14 +103,35 @@ class Replication(NetBoxModel):
         max_length=50,
         null=True,
         blank=True,
-        choices=[("local", _("Local")), ("full", _("Full"))],
+        choices=ReplicationRemoveJobChoices,
         help_text=_("Mark the replication job for removal."),
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=ReplicationStatusChoices,
+        default=ReplicationStatusChoices.ACTIVE,
+        verbose_name=_("Status"),
+        help_text=_("Active or stale — stale jobs no longer exist in Proxmox."),
+    )
+
+    raw_config = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name=_("Raw Configuration"),
+        help_text=_("Full raw configuration from Proxmox API for reference."),
     )
 
     class Meta:
         verbose_name = _("Replication")
         verbose_name_plural = _("Replications")
-        ordering = ("virtual_machine", "replication_id")
+        ordering = ("endpoint", "replication_id")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["endpoint", "replication_id"],
+                name="netbox_proxbox_replication_unique_endpoint_replication_id",
+            )
+        ]
 
     def __str__(self) -> str:
         """VM and replication ID for list displays."""

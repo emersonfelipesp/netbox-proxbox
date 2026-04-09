@@ -190,6 +190,11 @@ class ProxmoxStorageFilterSet(NetBoxModelFilterSet):
             "nodes",
             "shared",
             "enabled",
+            "server",
+            "port",
+            "format",
+            "datastore",
+            "pool",
         )
 
     def search(self, queryset, name: str, value: str):
@@ -283,6 +288,7 @@ class ReplicationFilterSet(NetBoxModelFilterSet):
         model = Replication
         fields = (
             "id",
+            "endpoint",
             "replication_id",
             "virtual_machine",
             "proxmox_node",
@@ -294,6 +300,7 @@ class ReplicationFilterSet(NetBoxModelFilterSet):
             "source",
             "jobnum",
             "remove_job",
+            "status",
         )
 
     def search(self, queryset, name: str, value: str):

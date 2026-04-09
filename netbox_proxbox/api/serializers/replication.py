@@ -7,7 +7,15 @@ from netbox.api.serializers import NetBoxModelSerializer
 from rest_framework import serializers
 from virtualization.api.serializers_.nested import NestedVirtualMachineSerializer
 
-from netbox_proxbox.api.serializers.cluster import NestedProxmoxNodeSerializer
+from netbox_proxbox.api.serializers.cluster import (
+    NestedProxmoxEndpointSerializer,
+    NestedProxmoxNodeSerializer,
+)
+from netbox_proxbox.choices import (
+    ReplicationJobTypeChoices,
+    ReplicationRemoveJobChoices,
+    ReplicationStatusChoices,
+)
 from netbox_proxbox.models import Replication
 
 
@@ -17,15 +25,17 @@ class ReplicationSerializer(NetBoxModelSerializer):
     url = serializers.HyperlinkedIdentityField(
         view_name="plugins-api:netbox_proxbox-api:replication-detail",
     )
+    endpoint = NestedProxmoxEndpointSerializer(required=False, allow_null=True)
     virtual_machine = NestedVirtualMachineSerializer()
     proxmox_node = NestedProxmoxNodeSerializer(required=False, allow_null=True)
-    job_type = ChoiceField(choices=[("local", "Local")], required=False)
+    job_type = ChoiceField(choices=ReplicationJobTypeChoices, required=False)
     remove_job = ChoiceField(
-        choices=[("local", "Local"), ("full", "Full")],
+        choices=ReplicationRemoveJobChoices,
         required=False,
         allow_null=True,
         allow_blank=True,
     )
+    status = ChoiceField(choices=ReplicationStatusChoices, required=False)
 
     class Meta:
         model = Replication
@@ -33,6 +43,7 @@ class ReplicationSerializer(NetBoxModelSerializer):
             "id",
             "url",
             "display",
+            "endpoint",
             "replication_id",
             "virtual_machine",
             "proxmox_node",
@@ -46,6 +57,8 @@ class ReplicationSerializer(NetBoxModelSerializer):
             "source",
             "jobnum",
             "remove_job",
+            "status",
+            "raw_config",
             "tags",
             "custom_fields",
             "created",
@@ -58,4 +71,5 @@ class ReplicationSerializer(NetBoxModelSerializer):
             "replication_id",
             "virtual_machine",
             "target",
+            "status",
         )

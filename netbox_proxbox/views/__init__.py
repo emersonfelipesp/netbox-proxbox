@@ -54,6 +54,8 @@ from .keepalive_status import get_service_status
 from .logs import BackendLogPathUpdateView, BackendLogsView
 from .replication import (
     ReplicationBulkDeleteView,
+    ReplicationBulkEditView,
+    ReplicationBulkImportView,
     ReplicationDeleteView,
     ReplicationEditView,
     ReplicationListView,
