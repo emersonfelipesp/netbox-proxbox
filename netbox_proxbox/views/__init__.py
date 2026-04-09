@@ -73,10 +73,13 @@ from .schedule_sync import QuickScheduleSyncFromHomeView, ScheduleSyncView
 from .settings import SettingsView
 from .storage import (
     ProxmoxStorageBulkDeleteView,
+    ProxmoxStorageBackupsTabView,
     ProxmoxStorageDeleteView,
     ProxmoxStorageEditView,
     ProxmoxStorageListView,
+    ProxmoxStorageSnapshotsTabView,
     ProxmoxStorageView,
+    ProxmoxStorageVirtualDisksTabView,
 )
 from .sync import (
     sync_backup_routines,

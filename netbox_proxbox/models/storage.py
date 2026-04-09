@@ -49,6 +49,42 @@ class ProxmoxStorage(NetBoxModel):
     nodes = models.CharField(max_length=255, null=True, blank=True)
     shared = models.BooleanField(default=False)
     enabled = models.BooleanField(default=True)
+
+    # Remote-host fields (NFS, CIFS, PBS, iSCSI, ESXi, Ceph)
+    server = models.CharField(max_length=255, null=True, blank=True)
+    port = models.PositiveIntegerField(null=True, blank=True)
+    username = models.CharField(max_length=255, null=True, blank=True)
+
+    # NFS / CIFS
+    export = models.CharField(max_length=255, null=True, blank=True)
+    share = models.CharField(max_length=255, null=True, blank=True)
+
+    # Ceph / RBD
+    pool = models.CharField(max_length=255, null=True, blank=True)
+    monhost = models.CharField(max_length=512, null=True, blank=True)
+    namespace = models.CharField(max_length=255, null=True, blank=True)
+
+    # PBS
+    datastore = models.CharField(max_length=255, null=True, blank=True)
+    subdir = models.CharField(max_length=255, null=True, blank=True)
+
+    # Filesystem
+    mountpoint = models.CharField(max_length=255, null=True, blank=True)
+    is_mountpoint = models.CharField(max_length=255, null=True, blank=True)
+    preallocation = models.CharField(max_length=50, null=True, blank=True)
+    format = models.CharField(max_length=100, null=True, blank=True)
+
+    # Retention / backup
+    prune_backups = models.CharField(max_length=512, null=True, blank=True)
+    max_protected_backups = models.IntegerField(null=True, blank=True)
+
+    # Full raw config from Proxmox API
+    raw_config = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Full raw configuration returned by the Proxmox storage API.",
+    )
+
     virtual_disks = models.ManyToManyField(
         to="virtualization.VirtualDisk",
         related_name="proxmox_storages",

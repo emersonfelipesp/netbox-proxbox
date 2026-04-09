@@ -29,6 +29,22 @@ class ProxmoxStorageForm(NetBoxModelForm):
             "nodes",
             "shared",
             "enabled",
+            "server",
+            "port",
+            "username",
+            "export",
+            "share",
+            "pool",
+            "monhost",
+            "namespace",
+            "datastore",
+            "subdir",
+            "mountpoint",
+            "is_mountpoint",
+            "preallocation",
+            "format",
+            "prune_backups",
+            "max_protected_backups",
             "tags",
             "comments",
         )
@@ -45,5 +61,6 @@ class ProxmoxStorageFilterForm(NetBoxModelFilterSetForm):
     )
     name = forms.CharField(required=False)
     storage_type = forms.CharField(required=False)
+    server = forms.CharField(required=False)
     shared = forms.BooleanField(required=False)
     enabled = forms.BooleanField(required=False)

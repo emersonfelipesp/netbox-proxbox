@@ -43,6 +43,72 @@
                         <th scope="row">{% trans "Enabled" %}</th>
                         <td>{{ object.enabled|yesno:"Yes,No" }}</td>
                     </tr>
+                    {% if object.server %}
+                    <tr>
+                        <th scope="row">{% trans "Server" %}</th>
+                        <td>{{ object.server }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if object.port %}
+                    <tr>
+                        <th scope="row">{% trans "Port" %}</th>
+                        <td>{{ object.port }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if object.username %}
+                    <tr>
+                        <th scope="row">{% trans "Username" %}</th>
+                        <td>{{ object.username }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if object.export %}
+                    <tr>
+                        <th scope="row">{% trans "Export" %}</th>
+                        <td>{{ object.export }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if object.share %}
+                    <tr>
+                        <th scope="row">{% trans "Share" %}</th>
+                        <td>{{ object.share }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if object.pool %}
+                    <tr>
+                        <th scope="row">{% trans "Pool" %}</th>
+                        <td>{{ object.pool }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if object.datastore %}
+                    <tr>
+                        <th scope="row">{% trans "Datastore" %}</th>
+                        <td>{{ object.datastore }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if object.mountpoint %}
+                    <tr>
+                        <th scope="row">{% trans "Mountpoint" %}</th>
+                        <td>{{ object.mountpoint }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if object.format %}
+                    <tr>
+                        <th scope="row">{% trans "Format" %}</th>
+                        <td>{{ object.format }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if object.prune_backups %}
+                    <tr>
+                        <th scope="row">{% trans "Prune Backups" %}</th>
+                        <td>{{ object.prune_backups }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if object.max_protected_backups is not None %}
+                    <tr>
+                        <th scope="row">{% trans "Max Protected Backups" %}</th>
+                        <td>{{ object.max_protected_backups }}</td>
+                    </tr>
+                    {% endif %}
                 </table>
             </div>
         </div>
@@ -111,115 +177,30 @@
             </div>
         </div>
 
+        <div class="card mb-3">
+            <h5 class="card-header">{% trans "Virtual Disks on this Storage" %}</h5>
+            <div class="card-body">
+                {% include 'inc/table.html' with table=virtual_disks_table %}
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <h5 class="card-header">{% trans "Backups on this Storage" %}</h5>
+            <div class="card-body">
+                {% include 'inc/table.html' with table=backups_table %}
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <h5 class="card-header">{% trans "Snapshots on this Storage" %}</h5>
+            <div class="card-body">
+                {% include 'inc/table.html' with table=snapshots_table %}
+            </div>
+        </div>
+
         {% include 'inc/panels/tags.html' %}
         {% include 'inc/panels/custom_fields.html' %}
         {% include 'inc/panels/comments.html' %}
-    </div>
-</div>
-
-<div class="row mt-3">
-    <div class="col-12">
-        <div class="card">
-            <h5 class="card-header">{% trans "Virtual Disks on this Storage" %}</h5>
-            <div class="table-responsive">
-                <table class="table table-hover mb-0">
-                    <thead>
-                        <tr>
-                            <th>{% trans "Virtual Machine" %}</th>
-                            <th>{% trans "Name" %}</th>
-                            <th>{% trans "Size" %}</th>
-                            <th>{% trans "Description" %}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for disk in virtual_disks %}
-                            <tr>
-                                <td>{{ disk.virtual_machine|hyperlinked_object }}</td>
-                                <td>{{ disk.name|placeholder }}</td>
-                                <td>{{ disk.size|placeholder }}</td>
-                                <td>{{ disk.description|placeholder }}</td>
-                            </tr>
-                        {% empty %}
-                            <tr>
-                                <td colspan="4" class="text-muted">{% trans "No virtual disks mapped to this storage." %}</td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="row mt-3">
-    <div class="col-12">
-        <div class="card">
-            <h5 class="card-header">{% trans "Backups on this Storage" %}</h5>
-            <div class="table-responsive">
-                <table class="table table-hover mb-0">
-                    <thead>
-                        <tr>
-                            <th>{% trans "Virtual Machine" %}</th>
-                            <th>{% trans "VMID" %}</th>
-                            <th>{% trans "Created" %}</th>
-                            <th>{% trans "Volume ID" %}</th>
-                            <th>{% trans "Format" %}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for backup in vm_backups %}
-                            <tr>
-                                <td>{{ backup.virtual_machine|hyperlinked_object }}</td>
-                                <td>{{ backup.vmid|placeholder }}</td>
-                                <td>{{ backup.creation_time|placeholder }}</td>
-                                <td>{{ backup.volume_id|placeholder }}</td>
-                                <td>{{ backup.get_format_display|placeholder }}</td>
-                            </tr>
-                        {% empty %}
-                            <tr>
-                                <td colspan="5" class="text-muted">{% trans "No backups found for this storage." %}</td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="row mt-3">
-    <div class="col-12">
-        <div class="card">
-            <h5 class="card-header">{% trans "Snapshots on this Storage" %}</h5>
-            <div class="table-responsive">
-                <table class="table table-hover mb-0">
-                    <thead>
-                        <tr>
-                            <th>{% trans "Virtual Machine" %}</th>
-                            <th>{% trans "VMID" %}</th>
-                            <th>{% trans "Name" %}</th>
-                            <th>{% trans "Node" %}</th>
-                            <th>{% trans "Snapshot Time" %}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for snapshot in vm_snapshots %}
-                            <tr>
-                                <td>{{ snapshot.virtual_machine|hyperlinked_object }}</td>
-                                <td>{{ snapshot.vmid }}</td>
-                                <td>{{ snapshot.name }}</td>
-                                <td>{{ snapshot.node }}</td>
-                                <td>{{ snapshot.snaptime|placeholder }}</td>
-                            </tr>
-                        {% empty %}
-                            <tr>
-                                <td colspan="5" class="text-muted">{% trans "No snapshots found for this storage." %}</td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
     </div>
 </div>
 {% endblock %}

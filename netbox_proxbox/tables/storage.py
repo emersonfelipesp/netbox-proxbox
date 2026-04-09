@@ -30,6 +30,11 @@ class ProxmoxStorageTable(NetBoxTable):
             "nodes",
             "shared",
             "enabled",
+            "server",
+            "port",
+            "pool",
+            "datastore",
+            "format",
         )
         default_columns = (
             "pk",
@@ -38,6 +43,7 @@ class ProxmoxStorageTable(NetBoxTable):
             "storage_type",
             "content",
             "path",
+            "server",
             "shared",
             "enabled",
         )

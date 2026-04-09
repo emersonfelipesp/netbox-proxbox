@@ -6,19 +6,30 @@ import requests
 from django.db import ProgrammingError
 from django.http import HttpRequest
 from netbox.views import generic
-from utilities.views import register_model_view
+from utilities.views import ViewTab, register_model_view
+from virtualization.models import VirtualDisk
+from virtualization.tables import VirtualDiskTable
 
-from netbox_proxbox.filtersets import ProxmoxStorageFilterSet
-from netbox_proxbox.forms import ProxmoxStorageFilterForm, ProxmoxStorageForm
-from netbox_proxbox.models import FastAPIEndpoint, ProxmoxStorage
+from netbox_proxbox.filtersets import (
+    ProxmoxStorageFilterSet,
+    VMBackupFilterSet,
+    VMSnapshotFilterSet,
+)
+from netbox_proxbox.forms import (
+    ProxmoxStorageFilterForm,
+    ProxmoxStorageForm,
+    VMBackupFilterForm,
+    VMSnapshotFilterForm,
+)
+from netbox_proxbox.models import FastAPIEndpoint, ProxmoxStorage, VMBackup, VMSnapshot
 from netbox_proxbox.schemas import ProxmoxStorageRecord, StorageContentRecord
 from netbox_proxbox.schemas._formatters import iter_scalar_records
+from netbox_proxbox.tables import ProxmoxStorageTable, VMBackupTable, VMSnapshotTable
 from netbox_proxbox.utils import get_backend_auth_headers, get_fastapi_url
 from netbox_proxbox.views.error_utils import (
     extract_proxmox_backend_error_detail,
     parse_requests_response_json,
 )
-from netbox_proxbox.tables import ProxmoxStorageTable
 
 __all__ = (
     "ProxmoxStorageView",
@@ -26,6 +37,9 @@ __all__ = (
     "ProxmoxStorageEditView",
     "ProxmoxStorageDeleteView",
     "ProxmoxStorageBulkDeleteView",
+    "ProxmoxStorageVirtualDisksTabView",
+    "ProxmoxStorageBackupsTabView",
+    "ProxmoxStorageSnapshotsTabView",
 )
 
 
@@ -81,41 +95,19 @@ class ProxmoxStorageView(generic.ObjectView):
     def get_extra_context(
         self, request: HttpRequest, instance: ProxmoxStorage
     ) -> dict[str, object]:
-        """Render related backups/snapshots/disks and live storage usage when available."""
-        vm_backups = (
-            instance.vm_backups.restrict(request.user, "view")
-            .select_related("virtual_machine", "proxmox_storage")
-            .order_by("-creation_time", "virtual_machine__name")
-        )
-        vm_snapshots = (
-            instance.vm_snapshots.restrict(request.user, "view")
-            .select_related("virtual_machine", "proxmox_storage")
-            .order_by("-snaptime", "virtual_machine__name")
-        )
-        disk_relation_warning = None
+        """Render storage summary stats and live storage usage when available."""
+        # Summary counts for the summary card (tab badges handle the full tables)
         try:
             disk_qs = instance.virtual_disks.all()
-            if hasattr(disk_qs, "restrict"):
-                disk_qs = disk_qs.restrict(request.user, "view")
-            virtual_disks = list(
-                disk_qs.select_related("virtual_machine").order_by(
-                    "virtual_machine__name", "name"
-                )
-            )
+            virtual_disks_count = disk_qs.count()
+            virtual_disks_size = sum(disk.size or 0 for disk in disk_qs.only("size"))
         except ProgrammingError:
-            # Keep page usable if the through-table migration is missing.
-            virtual_disks = []
-            disk_relation_warning = (
-                "Virtual disk mapping table is unavailable. "
-                "Run NetBox migrations to enable storage-to-disk relationships."
-            )
+            virtual_disks_count = 0
+            virtual_disks_size = 0
 
-        # Calculate storage summary statistics
-        virtual_disks_count = len(virtual_disks)
-        virtual_disks_size = sum(disk.size or 0 for disk in virtual_disks)
-        backups_count = vm_backups.count()
-        backups_size = sum(backup.size or 0 for backup in vm_backups)
-        snapshots_count = vm_snapshots.count()
+        backups_count = instance.vm_backups.count()
+        backups_size = sum(b.size or 0 for b in instance.vm_backups.only("size"))
+        snapshots_count = instance.vm_snapshots.count()
 
         storage_summary = {
             "virtual_disks_count": virtual_disks_count,
@@ -188,10 +180,6 @@ class ProxmoxStorageView(generic.ObjectView):
             usage_detail = "No FastAPI endpoint is visible to your account."
 
         return {
-            "vm_backups": vm_backups,
-            "vm_snapshots": vm_snapshots,
-            "virtual_disks": virtual_disks,
-            "disk_relation_warning": disk_relation_warning,
             "storage_summary": storage_summary,
             "storage_usage": usage,
             "storage_usage_detail": usage_detail,
@@ -224,3 +212,82 @@ class ProxmoxStorageBulkDeleteView(generic.BulkDeleteView):
     filterset = ProxmoxStorageFilterSet
     table = ProxmoxStorageTable
     default_return_url = "plugins:netbox_proxbox:proxmoxstorage_list"
+
+
+@register_model_view(ProxmoxStorage, "virtual_disks", path="virtual-disks")
+class ProxmoxStorageVirtualDisksTabView(generic.ObjectChildrenView):
+    """Storage detail tab listing virtual disks on this storage."""
+
+    queryset = ProxmoxStorage.objects.all()
+    child_model = VirtualDisk
+    table = VirtualDiskTable
+    tab = ViewTab(
+        label="Virtual Disks",
+        badge=lambda obj: obj.virtual_disks.count(),
+        permission="virtualization.view_virtualdisk",
+        weight=1000,
+    )
+
+    def get_children(self, request: HttpRequest, parent: ProxmoxStorage):
+        """Return virtual disks linked to this storage."""
+        return parent.virtual_disks.restrict(request.user, "view").select_related(
+            "virtual_machine"
+        )
+
+
+@register_model_view(ProxmoxStorage, "backups", path="backups")
+class ProxmoxStorageBackupsTabView(generic.ObjectChildrenView):
+    """Storage detail tab listing VM backups stored on this storage."""
+
+    queryset = ProxmoxStorage.objects.all()
+    child_model = VMBackup
+    table = VMBackupTable
+    filterset = VMBackupFilterSet
+    filterset_form = VMBackupFilterForm
+    actions = {
+        "bulk_delete": {"delete"},
+        "export": {"view"},
+    }
+    tab = ViewTab(
+        label="Backups",
+        badge=lambda obj: obj.vm_backups.count(),
+        permission="netbox_proxbox.view_vmbackup",
+        weight=1100,
+    )
+
+    def get_children(self, request: HttpRequest, parent: ProxmoxStorage):
+        """Return backups on this storage visible to the current user."""
+        return (
+            VMBackup.objects.restrict(request.user, "view")
+            .filter(proxmox_storage=parent)
+            .select_related("virtual_machine", "proxmox_storage")
+        )
+
+
+@register_model_view(ProxmoxStorage, "snapshots", path="snapshots")
+class ProxmoxStorageSnapshotsTabView(generic.ObjectChildrenView):
+    """Storage detail tab listing VM snapshots on this storage."""
+
+    queryset = ProxmoxStorage.objects.all()
+    child_model = VMSnapshot
+    table = VMSnapshotTable
+    filterset = VMSnapshotFilterSet
+    filterset_form = VMSnapshotFilterForm
+    actions = {
+        "bulk_delete": {"delete"},
+        "export": {"view"},
+    }
+    tab = ViewTab(
+        label="Snapshots",
+        badge=lambda obj: obj.vm_snapshots.count(),
+        permission="netbox_proxbox.view_vmsnapshot",
+        weight=1200,
+    )
+
+    def get_children(self, request: HttpRequest, parent: ProxmoxStorage):
+        """Return snapshots on this storage visible to the current user."""
+        return (
+            VMSnapshot.objects.restrict(request.user, "view")
+            .filter(proxmox_storage=parent)
+            .select_related("virtual_machine", "proxmox_storage")
+        )
