@@ -6,7 +6,12 @@ from utilities.views import ViewTab, register_model_view
 from virtualization.models import VirtualMachine
 
 from netbox_proxbox.filtersets import VMSnapshotFilterSet
-from netbox_proxbox.forms import VMSnapshotFilterForm, VMSnapshotForm
+from netbox_proxbox.forms import (
+    VMSnapshotBulkEditForm,
+    VMSnapshotFilterForm,
+    VMSnapshotForm,
+    VMSnapshotImportForm,
+)
 from netbox_proxbox.models import VMSnapshot
 from netbox_proxbox.tables import VMSnapshotTable
 from netbox_proxbox.views.mixins import TableConfigOverrideMixin
@@ -18,6 +23,8 @@ __all__ = (
     "VMSnapshotEditView",
     "VMSnapshotDeleteView",
     "VMSnapshotBulkDeleteView",
+    "VMSnapshotBulkEditView",
+    "VMSnapshotBulkImportView",
     "VMSnapshotTabView",
 )
 
@@ -32,7 +39,10 @@ class VMSnapshotListView(generic.ObjectListView):
     filterset_form = VMSnapshotFilterForm
     template_name = "netbox_proxbox/vmsnapshot_list.html"
     actions = {
+        "add": {"add"},
+        "bulk_edit": {"change"},
         "bulk_delete": {"delete"},
+        "bulk_import": {"add"},
         "export": {"view"},
     }
 
@@ -71,6 +81,26 @@ class VMSnapshotBulkDeleteView(generic.BulkDeleteView):
     default_return_url = "plugins:netbox_proxbox:vmsnapshot_list"
 
 
+@register_model_view(VMSnapshot, "bulk_edit", path="edit", detail=False)
+class VMSnapshotBulkEditView(generic.BulkEditView):
+    """Bulk edit VM snapshot records."""
+
+    queryset = VMSnapshot.objects.all()
+    filterset = VMSnapshotFilterSet
+    table = VMSnapshotTable
+    form = VMSnapshotBulkEditForm
+    default_return_url = "plugins:netbox_proxbox:vmsnapshot_list"
+
+
+@register_model_view(VMSnapshot, "bulk_import", path="import", detail=False)
+class VMSnapshotBulkImportView(generic.BulkImportView):
+    """CSV import for VM snapshot records."""
+
+    queryset = VMSnapshot.objects.all()
+    model_form = VMSnapshotImportForm
+    default_return_url = "plugins:netbox_proxbox:vmsnapshot_list"
+
+
 @register_model_view(VirtualMachine, "snapshots", path="snapshots")
 class VMSnapshotTabView(TableConfigOverrideMixin, generic.ObjectChildrenView):
     """VM detail tab listing snapshots for that virtual machine."""
@@ -81,6 +111,7 @@ class VMSnapshotTabView(TableConfigOverrideMixin, generic.ObjectChildrenView):
     filterset = VMSnapshotFilterSet
     filterset_form = VMSnapshotFilterForm
     actions = {
+        "bulk_edit": {"change"},
         "bulk_delete": {"delete"},
         "export": {"view"},
     }

@@ -107,6 +107,8 @@ from .vm_backup import (
 from .vm_config import ProxmoxVMConfigTabView
 from .vm_snapshot import (
     VMSnapshotBulkDeleteView,
+    VMSnapshotBulkEditView,
+    VMSnapshotBulkImportView,
     VMSnapshotDeleteView,
     VMSnapshotEditView,
     VMSnapshotListView,
