@@ -90,6 +90,13 @@ nav:
     - Raw CLI Capture: 'generated/proxbox-cli-command-capture.md'
   - User Guide:
     - Cluster and Node Tracking: 'user-guide/cluster-nodes.md'
+  - API Reference:
+    - Overview: 'api/index.md'
+    - Endpoints: 'api/endpoints.md'
+    - Infrastructure: 'api/infrastructure.md'
+    - VM Data: 'api/vm-data.md'
+    - Operations: 'api/operations.md'
+    - Settings: 'api/settings.md'
   - Features:
     - E2E Docker Testing: 'features/e2e-docker-testing.md'
     - Synchronized Data: 'features/synchronized-data.md'

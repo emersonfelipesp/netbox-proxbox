@@ -6,8 +6,8 @@ This is the main Django template namespace for the plugin.
 
 - Dashboard and informational pages: `home.html`, `dashboard.html`, `community.html`, `contributing.html`, `devices.html`, `interfaces.html`, `ip_addresses.html`, `lxc_containers.html`, `virtual_machines.html`, `logs.html`, `settings.html`, `status_badge.html`, `proxbox-backend-status.html`, and `websocket_page.html`.
 - Endpoint pages: `proxmoxendpoint.html`, `proxmoxendpoint_list.html`, `proxmoxendpoint_edit.html`, `proxmoxendpoint_cluster_nodes.html`, `proxmox_endpoint.html`, `proxmox-endpoints.html`, `netboxendpoint.html`, `netboxendpoint_list.html`, `netboxendpoint_edit.html`, `fastapiendpoint.html`, `fastapiendpoint_list.html`, `fastapiendpoint_edit.html`, and `fastapiendpoint_openapi.html`.
-- Sync and action pages: `schedule_sync.html`, `sync_devices.html`, `sync_storage.html`, `sync_virtual_machines.html`, `sync_virtual_disks.html`, `sync_vm_backups.html`, `sync_vm_snapshots.html`, and `sync_full_update.html`.
-- Inventory detail/list pages: `storage_list.html`, `vmbackup.html`, `vmbackup_list.html`, `vmbackup_bulk_delete.html`, `vmsnapshot.html`, `vmsnapshot_list.html`, `vmtaskhistory.html`, `proxmoxstorage.html`, `backup_routine.html`, `backup_routine_list.html`, `replication.html`, and `replication_list.html`.
+- Sync and action pages: `schedule_sync.html`, `sync_devices.html`, `sync_virtual_machines.html`, `sync_vm_backups.html`, and `sync_full_update.html`.
+- Inventory detail/list pages: `storage_list.html`, `vmbackup.html`, `vmbackup_list.html`, `vmbackup_bulk_delete.html`, `vmsnapshot.html`, `vmsnapshot_list.html`, `vmtaskhistory.html`, `proxmoxstorage.html`, `backup_routine.html`, `backup_routine_list.html`, `replication.html`, `replication_list.html`, and `vm_proxmox_config.html` (live Proxmox config tab).
 - Shared fragments and includes: `footer.html`, the `inc/` snippets for job buttons, runtime panels, live poll alerts, schedule form fields, and VM sync actions, plus `widgets/` helpers for custom checkbox controls.
 - Child subdirectories: `base`, `cluster`, `fastapi`, `home`, `inc`, `partials`, `proxmox`, `table`, `test`, and `widgets`.
 

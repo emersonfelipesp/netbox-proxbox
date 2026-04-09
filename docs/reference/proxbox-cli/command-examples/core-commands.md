@@ -104,10 +104,11 @@ Command: `pxb proxbox --help`
 Plugin configuration and backend info commands.
 
 ```text
-Usage: python -m proxbox_cli proxbox [OPTIONS] COMMAND [ARGS]...
-
-Proxbox plugin and backend info commands.
-
+                                                                                
+ Usage: python -m proxbox_cli proxbox [OPTIONS] COMMAND [ARGS]...               
+                                                                                
+ Proxbox plugin and backend info commands.                                      
+                                                                                
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯

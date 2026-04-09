@@ -9,6 +9,7 @@ This directory contains dashboard card fragments and log display partials for th
 - [`fastapi_card.html`](./fastapi_card.html): ProxBox backend summary card.
 - [`log_messages.html`](./log_messages.html): streamed or polled message display block.
 - [`quick_schedule_banner.html`](./quick_schedule_banner.html): home-page banner that surfaces the quick schedule form when recurring sync is not already configured.
+- [`job_live_summary.html`](./job_live_summary.html): live job progress summary fragment shown on the home page while a sync is running.
 
 ## Dependencies
 

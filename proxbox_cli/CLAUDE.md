@@ -9,10 +9,17 @@ This package contains the standalone Typer-based CLI client for the companion `p
 - [`client.py`](./client.py): async `aiohttp` API client (`ProxboxApiClient`) and `ApiResponse` wrapper.
 - [`config.py`](./config.py): CLI config model and persistence (`~/.config/proxbox-cli/config.json` or `$XDG_CONFIG_HOME/proxbox-cli/config.json`) with `PROXBOX_URL` override support.
 - [`runtime.py`](./runtime.py): cached config loader and client factory helpers.
-- [`support.py`](./support.py): async bridge, output formatting (human/JSON/YAML), table rendering, and CLI error helpers.
+- [`support/`](./support/): package providing async bridge, output formatting (human/JSON/YAML), table rendering, and CLI error helpers. Key modules:
+  - `async_bridge.py`: event-loop bridge for running async code from sync Typer callbacks
+  - `console.py`: Rich console instance and shared print helpers
+  - `output.py`: human/JSON/YAML output formatting
+  - `tables.py`: Rich table rendering for list responses
 - [`commands/`](./commands): grouped command modules for backend resources:
   - `netbox.py` (`pxb netbox ...`)
   - `proxmox.py` (`pxb proxmox ...`)
+  - `proxmox_cluster.py` (`pxb proxmox cluster ...`)
+  - `proxmox_endpoints.py` (`pxb proxmox endpoints ...`)
+  - `proxmox_nodes.py` (`pxb proxmox nodes ...`)
   - `proxbox.py` (`pxb proxbox ...`)
   - `dcim.py` (`pxb dcim ...`)
   - `virtualization.py` (`pxb virtualization ...`)
@@ -30,7 +37,7 @@ This package contains the standalone Typer-based CLI client for the companion `p
 
 - The CLI is optional (`netbox-proxbox[cli]`) and can run independently from the NetBox plugin runtime.
 - Root command `pxb docs generate-capture` updates generated docs artifacts under `docs/generated/proxbox-cli/`.
-- Global output flags `--json` and `--yaml` are mutually exclusive and enforced by shared helpers in `support.py`.
+- Global output flags `--json` and `--yaml` are mutually exclusive and enforced by shared helpers in `support/output.py`.
 
 ## Links
 

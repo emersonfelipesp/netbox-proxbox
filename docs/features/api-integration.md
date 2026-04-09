@@ -13,3 +13,14 @@ Proxbox exposes two API layers:
 4. The backend talks to Proxmox and NetBox APIs, then streams progress back.
 
 The plugin is primarily an integration and synchronization layer, not a replacement control plane for Proxmox.
+
+## API Reference
+
+For complete endpoint documentation — HTTP methods, field tables, filter parameters, curl examples, and sample responses — see the dedicated API Reference section:
+
+- [Overview](../api/index.md) — authentication, pagination, common patterns, and the full endpoint map
+- [Endpoint Configuration](../api/endpoints.md) — ProxmoxEndpoint, NetBoxEndpoint, FastAPIEndpoint
+- [Infrastructure](../api/infrastructure.md) — ProxmoxCluster, ProxmoxNode, ProxmoxStorage
+- [VM Data](../api/vm-data.md) — VMBackup, VMSnapshot, VMTaskHistory
+- [Operations](../api/operations.md) — BackupRoutine, Replication
+- [Settings](../api/settings.md) — ProxboxPluginSettings

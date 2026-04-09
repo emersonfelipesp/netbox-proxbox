@@ -31,6 +31,10 @@ This directory contains Django schema migrations for the plugin models.
 - There is no `0011` migration file in this checkout; the chain jumps from `0010` to `0012`.
 - **0022_squashed_*** (v0.0.11+): Consolidates five individual migrations (0022-0026) into one. The `replaces` list allows existing databases that applied the old chain to recognize this as a replacement and skip re-running those operations.
 - **0023** (v0.0.11+): Adds `encryption_key` to `ProxboxPluginSettings`. Databases that have not yet run this migration will return HTTP 500 on `GET /api/plugins/proxbox/settings/` because the ORM always selects all model columns. Run `manage.py migrate netbox_proxbox` to apply.
+- **0024** (v0.0.11+): Adds `endpoint` FK, `status` field, and `raw_config` JSON field to `Replication`; adds choice sets for replication status and job type.
+- **0025** (v0.0.11+): Adds new fields to `ProxmoxStorage` (extended storage-type columns for NFS, CIFS, Ceph, PBS, and filesystem backends).
+- **0026** (v0.0.11+): Converts `VMBackup.encrypted` from `BooleanField` to `CharField` — stores the encryption fingerprint string instead of a simple flag.
+- **0027** (v0.0.11+): Converts `VMTaskHistory.pstart` from `IntegerField` to `BigIntegerField` to accommodate large kernel start-time values.
 - If an install was partially upgraded into the post-squash branch, use the repair migration chain in this directory rather than hand-editing `django_migrations`.
 
 ## Dependencies
@@ -41,10 +45,13 @@ This directory contains Django schema migrations for the plugin models.
 ## Release Timeline
 
 - **v0.0.10** (and earlier): Migrations 0001-0021 (21 files)
-- **v0.0.11** (develop): Migrations 0001-0021, 0022_squashed, 0023 (23 files)
+- **v0.0.11** (current): Migrations 0001-0021, 0022_squashed, 0023-0027 (26 files on disk — no 0011)
   - 0022_squashed adds 5 changes (FastAPI tokens, SSRF settings, backend logging, operational settings, constraint conversion) consolidated into one squashed migration
   - 0023 adds `encryption_key` to `ProxboxPluginSettings`
-  - Reduces individual migration file count from 27 (0001-0026, minus 0011) to 23
+  - 0024 extends `Replication` with `endpoint`, `status`, and `raw_config`
+  - 0025 adds extended storage-type fields to `ProxmoxStorage`
+  - 0026 converts `VMBackup.encrypted` from BooleanField to CharField
+  - 0027 converts `VMTaskHistory.pstart` to BigIntegerField
 
 ## Notes
 

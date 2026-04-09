@@ -89,10 +89,11 @@ Command: `pxb proxmox nodes lxc --help`
 LXC container listing on a specific node.
 
 ```text
-Usage: python -m proxbox_cli proxmox nodes lxc [OPTIONS] NODE
-
-List LXC containers on a specific node.
-
+                                                                                
+ Usage: python -m proxbox_cli proxmox nodes lxc [OPTIONS] NODE                  
+                                                                                
+ List LXC containers on a specific node.                                        
+                                                                                
 ╭─ Arguments ──────────────────────────────────────────────────────────────────╮
 │ *    node      TEXT  Node name. [required]                                   │
 ╰──────────────────────────────────────────────────────────────────────────────╯

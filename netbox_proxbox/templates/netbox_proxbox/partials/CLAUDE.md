@@ -5,6 +5,7 @@ This directory contains small reusable HTML fragments.
 ## Files And Ownership
 
 - [`websocket_messages.html`](./websocket_messages.html): renders message batches returned by the WebSocket polling endpoint and the job log stream helpers.
+- [`home_sync_actions_dropdown.html`](./home_sync_actions_dropdown.html): dropdown menu fragment for individual sync action buttons on the home page.
 
 ## Dependencies
 

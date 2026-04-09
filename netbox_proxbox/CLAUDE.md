@@ -10,7 +10,11 @@ This package contains the NetBox plugin itself. It defines the plugin config, UR
 - [`choices.py`](./choices.py): `ChoiceSet` definitions for endpoint modes, sync types/statuses, token versions, and VM backup metadata.
 - [`fields.py`](./fields.py): custom model/form field helpers used by the endpoint models.
 - [`filtersets.py`](./filtersets.py): NetBox filtersets backing list views and API query filtering.
-- [`jobs.py`](./jobs.py): `ProxboxSyncJob`, sync-stage ordering, and helpers that rebuild enqueue parameters from saved job data.
+- [`jobs.py`](./jobs.py): `ProxboxSyncJob` background job class, enqueue helpers, and concurrent-run ownership guards.
+- [`sync_types.py`](./sync_types.py): regex-based targeted VM job name parsing and sync-type expansion helpers used by `jobs.py`.
+- [`sync_params.py`](./sync_params.py): normalises and serialises sync parameters passed into `ProxboxSyncJob.enqueue`.
+- [`sync_stages.py`](./sync_stages.py): runs a single named sync stage against the backend SSE stream.
+- [`sync_ownership.py`](./sync_ownership.py): helpers that claim and release RQ job ownership to prevent concurrent duplicate runs.
 - [`schedule_hints.py`](./schedule_hints.py): quick-schedule heuristics and UI defaults for the home dashboard.
 - [`github.py`](./github.py): fetches markdown content from GitHub for the contributing page.
 - [`template_content.py`](./template_content.py): plugin template extensions for Job and VirtualMachine buttons/panels.

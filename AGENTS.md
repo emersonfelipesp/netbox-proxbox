@@ -17,7 +17,7 @@ When implementing or changing behavior, prefer solutions in this order:
 2. NetBox core - `utilities.forms`, `utilities.views`, `netbox.*` bases, and NetBox-aligned DRF usage.
 3. Django - standard `django.*` APIs when NetBox does not provide an equivalent.
 
-Do not add new third-party PyPI dependencies to replace what NetBox or Django already provides. Existing runtime dependencies in `pyproject.toml` such as `requests`, `websockets`, and the optional CLI extras are fine.
+Do not add new third-party PyPI dependencies to replace what NetBox or Django already provides. Existing runtime dependencies in `pyproject.toml` — `requests`, `websockets`, `pydantic` (used throughout `schemas/`), and the optional CLI extras — are fine.
 
 ## Security
 

@@ -94,9 +94,9 @@ curl -H "Authorization: Token <token>" \
      http://netbox.example.com/api/plugins/proxbox/clusters/
 ```
 
-**Filterable fields:** `endpoint_id`, `name`, `mode`, `quorate`
+**Filterable fields:** `id`, `endpoint`, `netbox_cluster`, `name`, `mode`, `quorate`
 
-**Searchable fields:** `name`, `version`
+**Searchable fields:** `name`, `cluster_id`
 
 ### Node Endpoints
 
@@ -116,9 +116,9 @@ curl -H "Authorization: Token <token>" \
      "http://netbox.example.com/api/plugins/proxbox/nodes/?endpoint_id=1&online=true"
 ```
 
-**Filterable fields:** `endpoint_id`, `proxmox_cluster_id`, `name`, `online`, `ip_address`
+**Filterable fields:** `id`, `endpoint`, `proxmox_cluster`, `netbox_device`, `name`, `ip_address`, `online`, `local`
 
-**Searchable fields:** `name`, `ip_address`
+**Searchable fields:** `name`, `ip_address`, `ssl_fingerprint`
 
 ### Sample Cluster Response
 
@@ -129,10 +129,14 @@ curl -H "Authorization: Token <token>" \
   "endpoint": {"id": 1, "name": "prod-proxmox"},
   "netbox_cluster": {"id": 5, "name": "prod-cluster"},
   "name": "pve-cluster",
-  "mode": "cluster",
-  "quorate": true,
+  "cluster_id": "abc123",
+  "mode": {"value": "cluster", "label": "Cluster"},
   "nodes_count": 3,
-  "version": "7.4-3",
+  "node_count": 3,
+  "quorate": true,
+  "version": 7,
+  "tags": [],
+  "custom_fields": {},
   "created": "2026-04-01T00:00:00Z",
   "last_updated": "2026-04-01T00:00:00Z"
 }
@@ -148,14 +152,20 @@ curl -H "Authorization: Token <token>" \
   "proxmox_cluster": {"id": 1, "name": "pve-cluster"},
   "netbox_device": {"id": 42, "name": "pve-node-01"},
   "name": "pve-node-01",
+  "node_id": 1,
   "ip_address": "10.0.0.10",
   "online": true,
+  "local": false,
   "cpu_usage": 12.5,
-  "memory_used": 17179869184,
-  "memory_total": 68719476736,
-  "uptime": 1209600,
-  "level": "",
-  "local_id": 1,
+  "cpu_usage_percent": 12.5,
+  "max_cpu": 32,
+  "memory_usage": 17179869184,
+  "memory_usage_percent": 25.0,
+  "max_memory": 68719476736,
+  "ssl_fingerprint": "AB:CD:EF:...",
+  "support_level": "",
+  "tags": [],
+  "custom_fields": {},
   "created": "2026-04-01T00:00:00Z",
   "last_updated": "2026-04-01T00:00:00Z"
 }
@@ -212,10 +222,11 @@ Both FKs are nullable (`SET_NULL` on delete). Deleting a NetBox Cluster or Devic
 | `endpoint` | FK → ProxmoxEndpoint | Parent Proxmox endpoint |
 | `netbox_cluster` | FK → virtualization.Cluster (nullable) | Linked NetBox cluster |
 | `name` | CharField | Cluster name from Proxmox |
-| `mode` | CharField | `cluster` or `standalone` |
-| `quorate` | BooleanField | Corosync quorum status |
+| `cluster_id` | CharField | Proxmox internal cluster identifier |
+| `mode` | CharField | `undefined`, `standalone`, or `cluster` |
 | `nodes_count` | IntegerField | Number of member nodes |
-| `version` | CharField | Proxmox VE version string |
+| `quorate` | BooleanField | Corosync quorum status |
+| `version` | IntegerField (nullable) | Corosync configuration version |
 
 ### ProxmoxNode
 
@@ -225,14 +236,18 @@ Both FKs are nullable (`SET_NULL` on delete). Deleting a NetBox Cluster or Devic
 | `proxmox_cluster` | FK → ProxmoxCluster (nullable) | Owning cluster (null for standalone) |
 | `netbox_device` | FK → dcim.Device (nullable) | Linked NetBox device |
 | `name` | CharField | Node name |
-| `ip_address` | CharField | Management IP address |
+| `node_id` | IntegerField | Proxmox-assigned numeric node ID |
+| `ip_address` | GenericIPAddressField | Node management IP address |
 | `online` | BooleanField | Whether node is online |
-| `cpu_usage` | FloatField | CPU usage percentage (0–100) |
-| `memory_used` | BigIntegerField | Used memory in bytes |
-| `memory_total` | BigIntegerField | Total memory in bytes |
-| `uptime` | BigIntegerField | Uptime in seconds |
-| `level` | CharField | Node level (empty for normal nodes) |
-| `local_id` | IntegerField | Proxmox-assigned node ID |
+| `local` | BooleanField | Whether this is the local node on the endpoint |
+| `cpu_usage` | FloatField | Raw CPU usage value from Proxmox |
+| `cpu_usage_percent` | FloatField (computed) | CPU usage as a percentage (0–100) |
+| `max_cpu` | IntegerField | Total CPU thread count |
+| `memory_usage` | BigIntegerField | Used memory in bytes |
+| `memory_usage_percent` | FloatField (computed) | Memory usage as a percentage (0–100) |
+| `max_memory` | BigIntegerField | Total memory in bytes |
+| `ssl_fingerprint` | CharField | TLS certificate fingerprint |
+| `support_level` | CharField | Proxmox support subscription level |
 
 ## Troubleshooting
 

@@ -15,6 +15,7 @@ This directory contains Pydantic V2 models for backend payloads, normalized sync
 - [`service_status.py`](./service_status.py): service health check models (`ServiceCheckResult`, `FastAPIStatusResult`, `KeepalivePayload`, `AuthStatusLiteral`, `StatusLiteral`).
 - [`sync_result.py`](./sync_result.py): sync job payload models (`SyncJobData`, `SyncJobParams`, `ClusterSyncResult`).
 - [`backup_routine.py`](./backup_routine.py): backup routine schema models (`BackupRoutineSchema`, `GetClusterBackupIdResponse`, `GetClusterBackupResponseItem`).
+- [`schedule_parser.py`](./schedule_parser.py): helpers for parsing and normalising Proxmox schedule strings (cron and PVE-specific formats).
 
 ## Dependencies
 

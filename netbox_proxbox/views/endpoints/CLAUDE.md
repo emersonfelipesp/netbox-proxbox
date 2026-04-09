@@ -5,6 +5,7 @@ This directory contains NetBox generic model views for the three endpoint models
 ## Files And Ownership
 
 - [`proxmox.py`](./proxmox.py): list/detail/edit/delete views for `ProxmoxEndpoint`.
+- [`proxmox_export.py`](./proxmox_export.py): bulk import and CSV export views for `ProxmoxEndpoint`.
 - [`netbox.py`](./netbox.py): list/detail/edit/delete views for `NetBoxEndpoint`.
 - [`fastapi.py`](./fastapi.py): list/detail/edit/delete views for `FastAPIEndpoint`, plus the OpenAPI tab that renders cached schema metadata.
 - [`__init__.py`](./__init__.py): re-exports endpoint view classes.

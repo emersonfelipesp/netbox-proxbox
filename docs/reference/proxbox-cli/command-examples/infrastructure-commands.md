@@ -35,10 +35,11 @@ Command: `pxb virtualization --help`
 Cluster, VM, storage, snapshot, and backup sync commands.
 
 ```text
-Usage: python -m proxbox_cli virtualization [OPTIONS] COMMAND [ARGS]...
-
-Virtualization commands.
-
+                                                                                
+ Usage: python -m proxbox_cli virtualization [OPTIONS] COMMAND [ARGS]...        
+                                                                                
+ Virtualization commands.                                                       
+                                                                                
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
@@ -46,7 +47,7 @@ Virtualization commands.
 │ cluster-types-create  Create cluster types in NetBox.                        │
 │ clusters-create       Create clusters in NetBox.                             │
 │ storage-create        Sync Proxmox storage definitions into NetBox. [NOTE:   │
-│                       triggers sync]                                          │
+│                       triggers sync]                                         │
 │ vms                   Virtual machine commands.                              │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ```
@@ -58,10 +59,12 @@ Command: `pxb virtualization storage-create --help`
 Sync Proxmox storage definitions into NetBox.
 
 ```text
-Usage: python -m proxbox_cli virtualization storage-create [OPTIONS]
-
-Sync Proxmox storage definitions into NetBox. [NOTE: triggers sync]
-
+                                                                                
+ Usage: python -m proxbox_cli virtualization storage-create                     
+            [OPTIONS]                                                           
+                                                                                
+ Sync Proxmox storage definitions into NetBox. [NOTE: triggers sync]            
+                                                                                
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --json          Output raw JSON.                                             │
 │ --yaml          Output YAML.                                                 │
@@ -76,10 +79,12 @@ Command: `pxb virtualization vms backups-sync-all --help`
 Long-running VM backup synchronization command.
 
 ```text
-Usage: python -m proxbox_cli virtualization vms backups-sync-all [OPTIONS]
-
-Sync ALL backups across all clusters/nodes/storages. [NOTE: long-running sync]
-
+                                                                                
+ Usage: python -m proxbox_cli virtualization vms backups-sync-all               
+            [OPTIONS]                                                           
+                                                                                
+ Sync ALL backups across all clusters/nodes/storages. [NOTE: long-running sync] 
+                                                                                
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --delete-stale          Delete stale backup records.                         │
 │ --json                  Output raw JSON.                                     │
@@ -95,10 +100,12 @@ Command: `pxb virtualization vms snapshots-sync-all --help`
 Long-running VM snapshot synchronization command.
 
 ```text
-Usage: python -m proxbox_cli virtualization vms snapshots-sync-all [OPTIONS]
-
-Sync ALL VM snapshots across all clusters/nodes. [NOTE: long-running sync]
-
+                                                                                
+ Usage: python -m proxbox_cli virtualization vms snapshots-sync-all             
+            [OPTIONS]                                                           
+                                                                                
+ Sync ALL VM snapshots across all clusters/nodes. [NOTE: long-running sync]     
+                                                                                
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --json          Output raw JSON.                                             │
 │ --yaml          Output YAML.                                                 │

@@ -8,6 +8,7 @@ This directory contains the plugin's browser-side JavaScript.
 - [`device.js`](./device.js): client behavior for device/node sync views.
 - [`endpoint-status.js`](./endpoint-status.js): periodic refresh for keepalive/status badges across dashboard and list pages.
 - [`home.js`](./home.js): home dashboard interactions and card/status updates. It initializes websocket support when enabled, refreshes keepalive status badges, and hydrates Proxmox cards with cluster metadata and inline warning/error messages.
+- [`job_live_panel.js`](./job_live_panel.js): live job progress panel rendering for the home page — polls job status and updates the summary panel in place.
 - [`job_log_view.js`](./job_log_view.js): browser rendering helpers for the streamed Proxbox job log payloads shown on Job detail pages.
 - [`logs.js`](./logs.js): browser behavior for the backend logs page.
 - [`polling.js`](./polling.js): repeated polling helpers for status or sync progress.
