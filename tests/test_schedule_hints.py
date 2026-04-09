@@ -18,7 +18,8 @@ def schedule_hints(monkeypatch):
     """Load schedule_hints.py with NetBox/Django deps stubbed."""
     core_choices = types.ModuleType("core.choices")
     core_choices.JobStatusChoices = SimpleNamespace(
-        ENQUEUED_STATE_CHOICES=("pending", "scheduled", "running")
+        ENQUEUED_STATE_CHOICES=("pending", "scheduled", "running"),
+        STATUS_COMPLETED="completed",
     )
     monkeypatch.setitem(sys.modules, "core.choices", core_choices)
 
@@ -88,6 +89,18 @@ def schedule_hints(monkeypatch):
     pkg = types.ModuleType("netbox_proxbox")
     pkg.__path__ = [str(root / "netbox_proxbox")]
     monkeypatch.setitem(sys.modules, "netbox_proxbox", pkg)
+
+    # Stub netbox_proxbox.models so the lazy import in quick_schedule_home_form_kwargs works.
+    class _FakePXEndpointManager:
+        def values_list(self, *a, **k):
+            return []
+
+    class _FakeProxmoxEndpoint:
+        objects = _FakePXEndpointManager()
+
+    models_mod = types.ModuleType("netbox_proxbox.models")
+    models_mod.ProxmoxEndpoint = _FakeProxmoxEndpoint
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.models", models_mod)
 
     sys.modules.pop("netbox_proxbox.jobs", None)
     jobs_path = root / "netbox_proxbox" / "jobs.py"
@@ -246,3 +259,4 @@ def test_quick_schedule_home_form_kwargs(schedule_hints, monkeypatch):
     assert kw["initial"]["job_name"] == "Proxbox Full Sync"
     assert kw["use_bootstrap_sync_checkboxes"] is True
     assert kw["initial_interval"] == 60 * 24
+    assert "proxmox_endpoints" in kw["initial"]

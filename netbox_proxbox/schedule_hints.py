@@ -56,10 +56,20 @@ def has_recurring_proxbox_sync_all(user: AbstractBaseUser | AnonymousUser) -> bo
     Object-level permissions on ``core.view_job`` can hide the scheduled row
     from ``restrict()``, causing the quick-schedule banner to re-appear even
     though a daily schedule already exists.
+
+    Also includes ``completed`` jobs: when a recurring job finishes, the old row
+    becomes ``completed`` while a new ``scheduled`` row is created for the next run.
+    If re-enqueueing fails (e.g. duplicate ``job_id`` kwarg), only the ``completed``
+    row remains.  A completed recurring job still represents an active schedule.
+    Failed/errored rows are excluded — those indicate a cancelled or broken schedule.
     """
+    active_statuses = (
+        *JobStatusChoices.ENQUEUED_STATE_CHOICES,
+        JobStatusChoices.STATUS_COMPLETED,
+    )
     candidates = Job.objects.filter(
         interval__isnull=False,
-        status__in=JobStatusChoices.ENQUEUED_STATE_CHOICES,
+        status__in=active_statuses,
     ).filter(
         Q(queue_name=PROXBOX_SYNC_QUEUE_NAME)
         | Q(queue_name=LEGACY_PROXBOX_RQ_QUEUE)
@@ -75,11 +85,17 @@ def has_recurring_proxbox_sync_all(user: AbstractBaseUser | AnonymousUser) -> bo
 
 def quick_schedule_home_form_kwargs() -> dict[str, object]:
     """Constructor kwargs for ``ScheduleSyncForm`` with All + daily + next 03:00 local defaults."""
+    from netbox_proxbox.models import (
+        ProxmoxEndpoint,
+    )  # local to avoid circular import in tests
+
+    all_proxmox_pks = list(ProxmoxEndpoint.objects.values_list("pk", flat=True))
     return {
         "initial": {
             "sync_types": [SyncTypeChoices.ALL],
             "schedule_at": next_local_3am(),
             "job_name": QUICK_SCHEDULE_DEFAULT_JOB_NAME,
+            "proxmox_endpoints": all_proxmox_pks,
         },
         "initial_interval": 60 * 24,
         "use_bootstrap_sync_checkboxes": True,
