@@ -6,10 +6,13 @@ from netbox.api.fields import ChoiceField
 from netbox.api.serializers import NetBoxModelSerializer
 from rest_framework import serializers
 
-from netbox_proxbox.api.serializers.cluster import NestedProxmoxEndpointSerializer
+from netbox_proxbox.api.serializers.cluster import (
+    NestedProxmoxEndpointSerializer,
+    NestedProxmoxNodeSerializer,
+)
 from netbox_proxbox.api.serializers.storage import NestedProxmoxStorageSerializer
 from netbox_proxbox.choices import BackupRoutineStatusChoices
-from netbox_proxbox.models import BackupRoutine, ProxmoxNode
+from netbox_proxbox.models import BackupRoutine
 
 
 class BackupRoutineSerializer(NetBoxModelSerializer):
@@ -19,7 +22,7 @@ class BackupRoutineSerializer(NetBoxModelSerializer):
         view_name="plugins-api:netbox_proxbox-api:backuproutine-detail",
     )
     endpoint = NestedProxmoxEndpointSerializer()
-    node = serializers.SerializerMethodField()
+    node = NestedProxmoxNodeSerializer(required=False, allow_null=True)
     storage = NestedProxmoxStorageSerializer(required=False, allow_null=True)
     fleecing_storage = NestedProxmoxStorageSerializer(required=False, allow_null=True)
     status = ChoiceField(
@@ -74,16 +77,6 @@ class BackupRoutineSerializer(NetBoxModelSerializer):
             "storage",
             "status",
         )
-
-    def get_node(self, obj: BackupRoutine) -> dict | None:
-        """Return node."""
-        if obj.node is None:
-            return None
-        return {
-            "id": obj.node.id,
-            "url": f"/api/plugins/proxbox/nodes/{obj.node.id}/",
-            "display": obj.node.name,
-        }
 
 
 class NestedBackupRoutineSerializer(NetBoxModelSerializer):
