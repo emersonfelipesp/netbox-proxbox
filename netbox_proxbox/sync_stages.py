@@ -37,6 +37,8 @@ if TYPE_CHECKING:
     from netbox_proxbox.jobs import ProxboxSyncJob
 
 _HEARTBEAT_SECONDS = 20.0
+_STAGE_RETRY_MAX = 2
+_STAGE_RETRY_DELAY = 8.0
 
 
 async def _run_batch_selected_sync(
@@ -218,29 +220,48 @@ def _execute_stage_sync(
         forward(event, data)
         _heartbeat()
 
-    payload, status = run_sync_stream(
-        stream_path,
-        query_params=query_params,
-        on_frame=lambda e, d: _on_frame_with_heartbeat(e, d, on_frame),
-        endpoint_id=endpoint_id,
-    )
-    elapsed = _format_seconds(time.monotonic() - stage_started)
-    job.job.save(update_fields=["log_entries"])
-
-    if status >= 400:
-        detail = _extract_backend_error_text(payload) or str(payload)
-        user_detail = _format_stage_sync_error(
-            sync_type=sync_type,
-            status=status,
-            payload=payload,
+    last_payload: dict[str, object] = {}
+    last_status: int = 0
+    for _attempt in range(_STAGE_RETRY_MAX + 1):
+        last_payload, last_status = run_sync_stream(
+            stream_path,
+            query_params=query_params,
+            on_frame=lambda e, d: _on_frame_with_heartbeat(e, d, on_frame),
+            endpoint_id=endpoint_id,
         )
-        job.logger.error(f"Stage {sync_type} failed (HTTP {status}): {detail}")
-        raise RuntimeError(user_detail)
+        elapsed = _format_seconds(time.monotonic() - stage_started)
+        job.job.save(update_fields=["log_entries"])
 
-    job.logger.info(
-        f"Stage completed: {sync_type} ({stream_path}) HTTP {status} in {elapsed}"
+        if last_status < 400:
+            job.logger.info(
+                f"Stage completed: {sync_type} ({stream_path}) HTTP {last_status} in {elapsed}"
+            )
+            return last_payload
+
+        if last_status >= 500 and _attempt < _STAGE_RETRY_MAX:
+            retry_detail = _extract_backend_error_text(last_payload) or str(
+                last_payload
+            )
+            job.logger.warning(
+                f"Stage {sync_type} failed (HTTP {last_status}): {retry_detail} "
+                f"-- retrying in {_STAGE_RETRY_DELAY:.0f}s "
+                f"(attempt {_attempt + 1}/{_STAGE_RETRY_MAX})"
+            )
+            job.job.save(update_fields=["log_entries"])
+            time.sleep(_STAGE_RETRY_DELAY)
+            continue
+
+        # 4xx (not retryable) or all retries exhausted
+        break
+
+    detail = _extract_backend_error_text(last_payload) or str(last_payload)
+    user_detail = _format_stage_sync_error(
+        sync_type=sync_type,
+        status=last_status,
+        payload=last_payload,
     )
-    return payload
+    job.logger.error(f"Stage {sync_type} failed (HTTP {last_status}): {detail}")
+    raise RuntimeError(user_detail)
 
 
 def _run_all_stages_sync(

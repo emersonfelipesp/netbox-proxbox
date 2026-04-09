@@ -838,3 +838,113 @@ def test_proxbox_sync_job_run_batch_selected_virtual_machines(
         {"batch_object_type": "virtual-machine", "batch_object_ids": ["1", "2"]}
     ]
     assert job.job.data["proxbox_sync"]["response"]["batch"]["total"] == 2
+
+
+def test_stage_retries_on_502_then_succeeds(monkeypatch, proxbox_sync_job_module):
+    """A 502 stream error on first attempt should trigger a retry that succeeds."""
+    call_count = 0
+    sleep_calls: list[float] = []
+
+    services_mod = types.ModuleType("netbox_proxbox.services")
+
+    def run_sync_stream(path, query_params=None, **stream_kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return (
+                {
+                    "stream": True,
+                    "detail": "ProxBox backend stream ended without a complete event.",
+                },
+                502,
+            )
+        return ({"stream": True, "response": {"ok": True}}, 200)
+
+    services_mod.run_sync_stream = run_sync_stream
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
+
+    import netbox_proxbox.sync_stages as ss
+
+    monkeypatch.setattr(ss.time, "sleep", lambda s: sleep_calls.append(s))
+
+    ProxboxSyncJob = proxbox_sync_job_module.ProxboxSyncJob
+    job = ProxboxSyncJob()
+    job.logger = logging.getLogger("test_retry_succeeds")
+    job.job = MagicMock()
+    job.job.data = None
+
+    st = proxbox_sync_job_module.SyncTypeChoices
+    ProxboxSyncJob.run(job, sync_type=st.DEVICES)
+
+    assert call_count == 2, "Expected one retry after initial 502"
+    assert len(sleep_calls) == 1, "Expected one sleep between retries"
+
+
+def test_stage_exhausts_retries_and_raises(monkeypatch, proxbox_sync_job_module):
+    """When all retry attempts return 502, RuntimeError should be raised."""
+    call_count = 0
+
+    services_mod = types.ModuleType("netbox_proxbox.services")
+
+    def run_sync_stream(path, query_params=None, **stream_kwargs):
+        nonlocal call_count
+        call_count += 1
+        return (
+            {
+                "stream": True,
+                "detail": "ProxBox backend stream ended without a complete event.",
+            },
+            502,
+        )
+
+    services_mod.run_sync_stream = run_sync_stream
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
+
+    import netbox_proxbox.sync_stages as ss
+
+    monkeypatch.setattr(ss.time, "sleep", lambda s: None)
+
+    ProxboxSyncJob = proxbox_sync_job_module.ProxboxSyncJob
+    job = ProxboxSyncJob()
+    job.logger = logging.getLogger("test_retry_exhausted")
+    job.job = MagicMock()
+    job.job.data = None
+
+    st = proxbox_sync_job_module.SyncTypeChoices
+    with pytest.raises(RuntimeError, match="stream ended without a complete event"):
+        ProxboxSyncJob.run(job, sync_type=st.DEVICES)
+
+    assert call_count == 3, "Expected 3 total attempts (1 + 2 retries)"
+
+
+def test_stage_does_not_retry_on_4xx(monkeypatch, proxbox_sync_job_module):
+    """A 4xx client error should not trigger retries."""
+    call_count = 0
+
+    services_mod = types.ModuleType("netbox_proxbox.services")
+
+    def run_sync_stream(path, query_params=None, **stream_kwargs):
+        nonlocal call_count
+        call_count += 1
+        return ({"detail": "Not Found"}, 404)
+
+    services_mod.run_sync_stream = run_sync_stream
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
+
+    import netbox_proxbox.sync_stages as ss
+
+    sleep_calls: list[float] = []
+    monkeypatch.setattr(ss.time, "sleep", lambda s: sleep_calls.append(s))
+
+    ProxboxSyncJob = proxbox_sync_job_module.ProxboxSyncJob
+    job = ProxboxSyncJob()
+    job.logger = logging.getLogger("test_no_retry_4xx")
+    job.job = MagicMock()
+    job.job.data = None
+
+    st = proxbox_sync_job_module.SyncTypeChoices
+    with pytest.raises(RuntimeError):
+        ProxboxSyncJob.run(job, sync_type=st.DEVICES)
+
+    assert call_count == 1, "4xx should not be retried"
+    assert len(sleep_calls) == 0, "No sleep for 4xx errors"
