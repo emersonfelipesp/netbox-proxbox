@@ -363,6 +363,11 @@ def test_proxmox_endpoint_list_template_loads_static_for_status_script():
     )
     assert "{% load static %}" in contents
     assert "endpoint-status.js" in contents
+    # export-secrets-modal JS must be inlined (not an external file reference) so it
+    # is served without requiring collectstatic.
+    assert "export-secrets-modal.js" not in contents
+    assert "TOKEN_API_URL" in contents
+    assert "loadV1Tokens" in contents
 
 
 def test_fastapi_openapi_tab_view_and_template_contract():
