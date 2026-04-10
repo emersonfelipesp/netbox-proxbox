@@ -10,6 +10,32 @@
                 {% if block.params.sync_types %}
                     <p class="mb-0"><strong>{% trans "Sync types" %}:</strong> {{ block.params.sync_types|join:", " }}</p>
                 {% endif %}
+                {% if block.response.stages %}
+                    <hr class="my-2">
+                    <p class="mb-1"><strong>{% trans "Stage breakdown" %}:</strong></p>
+                    <table class="table table-sm table-borderless mb-0">
+                        <thead>
+                            <tr>
+                                <th class="ps-0">{% trans "Stage" %}</th>
+                                <th class="text-end pe-0">{% trans "Runtime" %}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for stage in block.response.stages %}
+                                <tr>
+                                    <td class="ps-0 text-nowrap">{{ stage.sync_type }}</td>
+                                    <td class="text-end pe-0 font-monospace text-nowrap">
+                                        {% if stage.runtime_seconds is not None %}
+                                            {{ stage.runtime_seconds|floatformat:1 }}s
+                                        {% else %}
+                                            —
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% endif %}
             </div>
         </div>
     {% endif %}

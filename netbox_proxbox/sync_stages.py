@@ -193,7 +193,7 @@ def _execute_stage_sync(
     query_params: dict[str, str] | None,
     on_frame: Callable[[str, dict[str, object]], None],
     endpoint_id: int | None = None,
-) -> dict[str, object]:
+) -> tuple[dict[str, object], float]:
     """Execute a single stage sync and return payload."""
     from netbox_proxbox.services import run_sync_stream
 
@@ -233,10 +233,11 @@ def _execute_stage_sync(
         job.job.save(update_fields=["log_entries"])
 
         if last_status < 400:
+            stage_runtime = round(time.monotonic() - stage_started, 3)
             job.logger.info(
                 f"Stage completed: {sync_type} ({stream_path}) HTTP {last_status} in {elapsed}"
             )
-            return last_payload
+            return last_payload, stage_runtime
 
         if last_status >= 500 and _attempt < _STAGE_RETRY_MAX:
             retry_detail = _extract_backend_error_text(last_payload) or str(
@@ -308,9 +309,11 @@ def _run_all_stages_sync(
         stage_paths = _sync_stream_paths_for_stage(st, target_vm_ids)
 
         for stream_path in stage_paths:
-            payload = _execute_stage_sync(
+            payload, stage_runtime = _execute_stage_sync(
                 job, st, stream_path, query_params, on_frame, fastapi_endpoint_id
             )
-            stages_out.append({"sync_type": st, "payload": payload})
+            stages_out.append(
+                {"sync_type": st, "payload": payload, "runtime_seconds": stage_runtime}
+            )
 
     return stages_out
