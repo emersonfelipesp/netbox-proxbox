@@ -15,7 +15,10 @@ from virtualization.models import VirtualMachine
 from netbox_proxbox.models import FastAPIEndpoint, ProxmoxEndpoint, VMSnapshot
 from netbox_proxbox.schemas.proxmox_vm import ProxmoxVMConfig
 from netbox_proxbox.utils import get_backend_auth_headers, get_fastapi_url
-from netbox_proxbox.views.backend_sync import sync_proxmox_endpoint_to_backend
+from netbox_proxbox.views.backend_sync import (
+    proxmox_backend_name,
+    sync_proxmox_endpoint_to_backend,
+)
 from netbox_proxbox.views.error_utils import (
     extract_proxmox_backend_error_detail,
     parse_requests_response_json,
@@ -150,8 +153,9 @@ class ProxmoxVMConfigTabView(generic.ObjectView):
             return context
 
         query_params: dict[str, str] = {"source": "database"}
-        if proxmox_obj.name:
-            query_params["name"] = proxmox_obj.name
+        backend_name = proxmox_backend_name(proxmox_obj)
+        if backend_name:
+            query_params["name"] = backend_name
 
         config_url = f"{fastapi_url}/proxmox/{node}/{vm_type}/{vmid}/config"
         try:
