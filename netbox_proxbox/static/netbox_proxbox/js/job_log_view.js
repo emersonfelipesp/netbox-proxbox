@@ -201,8 +201,11 @@
     ) {
       return "badge d-inline-flex text-bg-blue text-uppercase nb-job-badge-fixed";
     }
-    if (normalized === "progress") {
+    if (normalized === "progress" || normalized === "processing") {
       return "badge d-inline-flex text-bg-warning text-uppercase nb-job-badge-fixed";
+    }
+    if (normalized === "info") {
+      return "badge d-inline-flex text-bg-info text-uppercase nb-job-badge-fixed";
     }
     if (
       normalized === "error" ||
