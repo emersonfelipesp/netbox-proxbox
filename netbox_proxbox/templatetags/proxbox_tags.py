@@ -6,6 +6,14 @@ from django.utils.html import format_html
 register = template.Library()
 
 
+@register.simple_tag
+def proxbox_version() -> str:
+    """Return the current Proxbox plugin version string."""
+    from netbox_proxbox import config as proxbox_config
+
+    return proxbox_config.version
+
+
 @register.filter
 def hyperlinked_object(obj: object | None) -> str:
     """

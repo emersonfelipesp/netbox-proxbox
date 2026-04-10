@@ -16,10 +16,20 @@ def _load_proxbox_tags(monkeypatch):
     class _Library:
         def __init__(self):
             self._filters = {}
+            self._tags = {}
 
         def filter(self, func=None, name=None):
             def decorator(f):
                 self._filters[name or f.__name__] = f
+                return f
+
+            if func is not None:
+                return decorator(func)
+            return decorator
+
+        def simple_tag(self, func=None, name=None):
+            def decorator(f):
+                self._tags[name or f.__name__] = f
                 return f
 
             if func is not None:
@@ -42,11 +52,16 @@ def _load_proxbox_tags(monkeypatch):
     django_utils = types.ModuleType("django.utils")
     django_utils.html = django_utils_html
 
+    netbox_proxbox_config = SimpleNamespace(version="0.0.11")
+    netbox_proxbox_mod = types.ModuleType("netbox_proxbox")
+    netbox_proxbox_mod.config = netbox_proxbox_config
+
     stub_modules = {
         "django": django_mod,
         "django.template": django_template,
         "django.utils": django_utils,
         "django.utils.html": django_utils_html,
+        "netbox_proxbox": netbox_proxbox_mod,
     }
     for name, mod in stub_modules.items():
         monkeypatch.setitem(sys.modules, name, mod)
@@ -68,6 +83,14 @@ def _load_proxbox_tags(monkeypatch):
     sys.modules[module_name] = module
     spec.loader.exec_module(module)
     return module
+
+
+# ── proxbox_version ───────────────────────────────────────────────────────────
+
+
+def test_proxbox_version_returns_version(monkeypatch):
+    tags = _load_proxbox_tags(monkeypatch)
+    assert tags.proxbox_version() == "0.0.11"
 
 
 # ── hyperlinked_object ────────────────────────────────────────────────────────
