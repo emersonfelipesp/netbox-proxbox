@@ -25,7 +25,7 @@
                                 <tr>
                                     <td class="ps-0 text-nowrap">{{ stage.sync_type }}</td>
                                     <td class="text-end pe-0 font-monospace text-nowrap">
-                                        {% if stage.runtime_seconds is not None %}
+                                        {% if stage.runtime_seconds is not None and stage.runtime_seconds != "" %}
                                             {{ stage.runtime_seconds|floatformat:1 }}s
                                         {% else %}
                                             —

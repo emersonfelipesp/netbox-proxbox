@@ -313,8 +313,16 @@ def _run_all_stages_sync(
             payload, stage_runtime = _execute_stage_sync(
                 job, st, stream_path, query_params, on_frame, fastapi_endpoint_id
             )
+            response = payload.get("response") or {}
             stages_out.append(
-                {"sync_type": st, "payload": payload, "runtime_seconds": stage_runtime}
+                {
+                    "sync_type": st,
+                    "runtime_seconds": stage_runtime,
+                    "result_summary": {
+                        "path": payload.get("path"),
+                        "ok": response.get("ok"),
+                    },
+                }
             )
 
     return stages_out

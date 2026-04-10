@@ -308,6 +308,12 @@ class ProxboxSyncJob(JobRunner):
 
             stages_out = _run_all_stages_sync(self, stages, params, run_started)
 
+            for stage in stages_out:
+                if stage.get("runtime_seconds") is None:
+                    self.logger.warning(
+                        f"Stage '{stage.get('sync_type')}' has runtime_seconds=None before save"
+                    )
+
             runtime_seconds = round(time.monotonic() - run_started, 3)
             self.job.data = {
                 "proxbox_sync": {
@@ -317,6 +323,22 @@ class ProxboxSyncJob(JobRunner):
                 }
             }
             self.job.save(update_fields=["data"])
+            self.job.refresh_from_db(fields=["data"])
+            stored_stages = (
+                (self.job.data or {})
+                .get("proxbox_sync", {})
+                .get("response", {})
+                .get("stages", [])
+            )
+            missing_rt = [
+                s.get("sync_type")
+                for s in stored_stages
+                if s.get("runtime_seconds") is None
+            ]
+            if missing_rt:
+                self.logger.error(
+                    f"runtime_seconds lost after DB round-trip for stages: {missing_rt}"
+                )
             self.logger.info(
                 f"All sync stages completed ({len(stages_out)}), runtime {runtime_seconds:.3f}s"
             )
