@@ -163,6 +163,40 @@
                     </div>
                   </div>
 
+                  {% if item.object_summaries %}
+                  <div class="col-12">
+                    <div class="card">
+                      <h6 class="card-header">{% trans "Synced Objects" %}</h6>
+                      <div class="table-responsive">
+                        <table class="table table-hover attr-table mb-0">
+                          <thead>
+                            <tr>
+                              <th>{% trans "Object Type" %}</th>
+                              <th>{% trans "Total" %}</th>
+                              <th>{% trans "Details" %}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {% for obj in item.object_summaries %}
+                              <tr>
+                                <td>
+                                  {% if obj.list_url_name %}
+                                    <a href="{% url obj.list_url_name %}">{{ obj.label }}</a>
+                                  {% else %}
+                                    {{ obj.label }}
+                                  {% endif %}
+                                </td>
+                                <td><span class="badge text-bg-blue">{{ obj.total }}</span></td>
+                                <td class="text-muted">{{ obj.detail|default:"—" }}</td>
+                              </tr>
+                            {% endfor %}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                  {% endif %}
+
                   <div class="col-12">
                     <div class="card">
                       <h6 class="card-header">{% trans "Nodes Summary" %}</h6>

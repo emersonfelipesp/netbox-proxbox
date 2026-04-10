@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema
+from netbox.api.authentication import IsAuthenticatedOrLoginNotRequired
 from netbox.api.viewsets import NetBoxModelViewSet
+from rest_framework.permissions import BasePermission
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.routers import APIRootView
+from rest_framework.views import APIView
 
 from .. import filtersets, models
 from .serializers import (
@@ -18,6 +23,7 @@ from .serializers import (
     ProxmoxNodeSerializer,
     ProxmoxStorageSerializer,
     ReplicationSerializer,
+    ScheduleSyncRequestSerializer,
     VMBackupSerializer,
     VMSnapshotSerializer,
     VMTaskHistorySerializer,
@@ -32,11 +38,23 @@ class ProxBoxRootView(APIRootView):
         return "ProxBox"
 
     def get(self, request: Request, *args: object, **kwargs: object) -> Response:
-        """Augment the default API root payload with an absolute ``endpoints`` URL."""
+        """Augment the default API root payload with all plugin endpoint URLs."""
         response = super().get(request, *args, **kwargs)
-        base_url = request.build_absolute_uri("/").rstrip("/")
-        response.data["endpoints"] = f"{base_url}/api/plugins/proxbox/endpoints/"
-        response.data["settings"] = f"{base_url}/api/plugins/proxbox/settings/"
+        base = f"{request.build_absolute_uri('/').rstrip('/')}/api/plugins/proxbox"
+        response.data["endpoints"] = f"{base}/endpoints/"
+        response.data["settings"] = f"{base}/settings/"
+        response.data["home"] = f"{base}/home/"
+        response.data["dashboard"] = f"{base}/dashboard/"
+        response.data["resources"] = {
+            "nodes": f"{base}/resources/nodes/",
+            "virtual_machines": f"{base}/resources/virtual-machines/",
+            "lxc_containers": f"{base}/resources/lxc-containers/",
+            "interfaces": f"{base}/resources/interfaces/",
+            "ip_addresses": f"{base}/resources/ip-addresses/",
+            "virtual_disks": f"{base}/resources/virtual-disks/",
+        }
+        response.data["schedule_sync"] = f"{base}/sync/schedule/"
+        response.data["logs"] = f"{base}/logs/"
         return response
 
 
@@ -159,3 +177,837 @@ class ReplicationViewSet(NetBoxModelViewSet):
     )
     serializer_class = ReplicationSerializer
     filterset_class = filtersets.ReplicationFilterSet
+
+
+# ---------------------------------------------------------------------------
+# Permission helper for dashboard-style views
+# ---------------------------------------------------------------------------
+
+
+class _ProxboxDashboardPermission(BasePermission):
+    """Allow access if the user may view at least one Proxbox endpoint model.
+
+    Unauthenticated users are allowed when ``LOGIN_REQUIRED`` is ``False``
+    (matching ``ConditionalLoginRequiredMixin`` behaviour on the UI side).
+    """
+
+    def has_permission(self, request: Request, view: object) -> bool:  # type: ignore[override]
+        from django.conf import settings as django_settings
+
+        from netbox_proxbox.views.proxbox_access import (
+            user_may_access_proxbox_dashboard,
+        )
+
+        if not request.user.is_authenticated:
+            return not django_settings.LOGIN_REQUIRED
+        return user_may_access_proxbox_dashboard(request.user)
+
+
+# ---------------------------------------------------------------------------
+# Shared serialisation helpers for core NetBox model instances
+# ---------------------------------------------------------------------------
+
+
+def _nested(obj: object, request: Request) -> dict | None:
+    """Return a minimal {id, name, url} dict for a related object or None."""
+    if obj is None:
+        return None
+    try:
+        url = request.build_absolute_uri(obj.get_absolute_url())
+    except Exception:
+        url = None
+    return {"id": obj.pk, "name": str(obj), "url": url}
+
+
+def _serialize_interfaces(interfaces: object, request: Request) -> list[dict]:
+    """Serialise a prefetched interface relation into a list of dicts."""
+    result = []
+    for iface in interfaces.all():
+        result.append(
+            {
+                "id": iface.pk,
+                "name": iface.name,
+                "enabled": iface.enabled,
+                "ip_addresses": [str(ip.address) for ip in iface.ip_addresses.all()],
+            }
+        )
+    return result
+
+
+def _serialize_device(device: object, request: Request) -> dict:
+    """Return a JSON-safe dict for a proxbox-tagged Device."""
+    return {
+        "id": device.pk,
+        "name": str(device.name),
+        "url": request.build_absolute_uri(device.get_absolute_url()),
+        "device_type": str(device.device_type) if device.device_type else None,
+        "manufacturer": (
+            str(device.device_type.manufacturer)
+            if device.device_type and device.device_type.manufacturer
+            else None
+        ),
+        "role": _nested(device.role, request),
+        "site": _nested(device.site, request),
+        "tenant": _nested(device.tenant, request),
+        "cluster": _nested(device.cluster, request),
+        "interfaces": _serialize_interfaces(device.interfaces, request),
+    }
+
+
+def _serialize_vm(vm: object, request: Request) -> dict:
+    """Return a JSON-safe dict for a proxbox-tagged VirtualMachine."""
+    return {
+        "id": vm.pk,
+        "name": str(vm.name),
+        "url": request.build_absolute_uri(vm.get_absolute_url()),
+        "site": _nested(vm.site, request),
+        "cluster": _nested(vm.cluster, request),
+        "role": _nested(vm.role, request),
+        "tenant": _nested(vm.tenant, request),
+        "platform": _nested(vm.platform, request),
+        "interfaces": _serialize_interfaces(vm.interfaces, request),
+    }
+
+
+def _serialize_job(job: object, request: Request | None = None) -> dict:
+    """Return a minimal JSON-safe dict for a core Job."""
+    url = None
+    if request is not None:
+        try:
+            url = request.build_absolute_uri(job.get_absolute_url())
+        except Exception:
+            pass
+    return {
+        "id": job.pk,
+        "name": job.name,
+        "status": job.status,
+        "created": job.created.isoformat() if job.created else None,
+        "url": url,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Non-model API views
+# ---------------------------------------------------------------------------
+
+
+class HomeAPIView(APIView):
+    """API mirror of the Proxbox plugin home page (/plugins/proxbox/).
+
+    Returns endpoint lists, FastAPI URL info, and an active job reference.
+    Read-only GET endpoint.
+    """
+
+    permission_classes = [_ProxboxDashboardPermission]
+
+    @extend_schema(responses={200: OpenApiTypes.OBJECT})
+    def get(self, request: Request) -> Response:
+        """Return the same data the plugin home page renders."""
+        from netbox_proxbox.jobs import is_proxbox_sync_job
+        from netbox_proxbox.schedule_hints import has_recurring_proxbox_sync_all
+        from netbox_proxbox.utils import get_fastapi_url
+        from core.choices import JobStatusChoices
+        from core.models import Job
+
+        proxmox_qs = models.ProxmoxEndpoint.objects.restrict(
+            request.user, "view"
+        ).order_by("id")
+        netbox_qs = models.NetBoxEndpoint.objects.restrict(
+            request.user, "view"
+        ).order_by("id")
+        fastapi_qs = models.FastAPIEndpoint.objects.restrict(
+            request.user, "view"
+        ).order_by("id")
+
+        fastapi_info: dict = {}
+        fastapi_obj = fastapi_qs.first()
+        if fastapi_obj is not None:
+            fastapi_info = get_fastapi_url(fastapi_obj) or {}
+
+        # Find newest running/queued proxbox sync job visible to this user.
+        active_job = None
+        for job in (
+            Job.objects.restrict(request.user, "view")
+            .filter(status__in=JobStatusChoices.ENQUEUED_STATE_CHOICES)
+            .order_by("-created")
+            .iterator(chunk_size=32)
+        ):
+            if is_proxbox_sync_job(job):
+                active_job = job
+                break
+
+        def _endpoint_dict(ep: object) -> dict:
+            return {
+                "id": ep.pk,
+                "name": str(ep.name),
+                "url": request.build_absolute_uri(ep.get_absolute_url()),
+                "domain": getattr(ep, "domain", None),
+                "ip_address": str(ep.ip_address) if ep.ip_address else None,
+            }
+
+        return Response(
+            {
+                "proxmox_endpoints": [_endpoint_dict(ep) for ep in proxmox_qs],
+                "netbox_endpoints": [_endpoint_dict(ep) for ep in netbox_qs],
+                "fastapi_endpoints": [_endpoint_dict(ep) for ep in fastapi_qs],
+                "fastapi_url": fastapi_info.get("http_url", ""),
+                "fastapi_websocket_url": fastapi_info.get("websocket_url", ""),
+                "show_quick_full_sync_banner": not has_recurring_proxbox_sync_all(
+                    request.user
+                ),
+                "active_proxbox_job": (
+                    _serialize_job(active_job, request) if active_job else None
+                ),
+            }
+        )
+
+
+class DashboardAPIView(APIView):
+    """API mirror of the Proxbox operational dashboard (/plugins/proxbox/dashboard/).
+
+    Returns live cluster summaries, node status rows, and guest counts fetched
+    from the proxbox-api backend. May be slow due to external HTTP calls.
+    Read-only GET endpoint.
+    """
+
+    permission_classes = [_ProxboxDashboardPermission]
+    _request_timeout = 8
+
+    @extend_schema(responses={200: OpenApiTypes.OBJECT})
+    def get(self, request: Request) -> Response:
+        """Return the same aggregated data the dashboard page renders."""
+        import requests as http_requests
+
+        from netbox_proxbox.utils import get_backend_auth_headers, get_fastapi_url
+        from netbox_proxbox.views import dashboard_data
+        from netbox_proxbox.views.backend_sync import sync_proxmox_endpoint_to_backend
+        from netbox_proxbox.views.error_utils import (
+            extract_proxmox_backend_error_detail,
+            parse_requests_response_json,
+        )
+        from virtualization.models import Cluster
+
+        proxmox_endpoints = list(
+            models.ProxmoxEndpoint.objects.restrict(request.user, "view")
+        )
+        fastapi_endpoint = models.FastAPIEndpoint.objects.restrict(
+            request.user, "view"
+        ).first()
+
+        fastapi_url = None
+        backend_verify_ssl = True
+        backend_headers: dict = {}
+        if fastapi_endpoint:
+            fastapi_info = get_fastapi_url(fastapi_endpoint) or {}
+            fastapi_url = fastapi_info.get("http_url")
+            backend_verify_ssl = bool(fastapi_info.get("verify_ssl", True))
+            backend_headers = get_backend_auth_headers(fastapi_endpoint)
+
+        dashboards: list[dict] = []
+        for endpoint in proxmox_endpoints:
+            entry: dict = {
+                "endpoint": {
+                    "id": endpoint.pk,
+                    "name": str(endpoint.name),
+                    "url": request.build_absolute_uri(endpoint.get_absolute_url()),
+                    "domain": endpoint.domain,
+                    "ip_address": (
+                        str(endpoint.ip_address).split("/")[0]
+                        if endpoint.ip_address
+                        else None
+                    ),
+                },
+                "cluster_summary": None,
+                "guest_summary": None,
+                "nodes": [],
+                "netbox_cluster": None,
+                "object_summaries": [],
+                "detail": None,
+            }
+
+            if not fastapi_url:
+                entry["detail"] = "No FastAPI backend URL is configured."
+                dashboards.append(entry)
+                continue
+
+            sync_ok, sync_detail, _ = sync_proxmox_endpoint_to_backend(
+                endpoint,
+                base_url=fastapi_url,
+                auth_headers=backend_headers,
+                backend_verify_ssl=backend_verify_ssl,
+                timeout=self._request_timeout,
+            )
+            if not sync_ok:
+                entry["detail"] = sync_detail
+                dashboards.append(entry)
+                continue
+
+            domain = (endpoint.domain or "").strip()
+            query_params: dict = (
+                {"source": "database", "domain": domain}
+                if domain
+                else {
+                    "source": "database",
+                    "ip_address": str(endpoint.ip_address).split("/")[0],
+                }
+            )
+
+            def _fetch(route: str) -> tuple[object, str | None]:
+                resp = http_requests.get(
+                    f"{fastapi_url}{route}",
+                    params=query_params,
+                    headers=backend_headers,
+                    verify=backend_verify_ssl,
+                    timeout=self._request_timeout,
+                )
+                resp.raise_for_status()
+                return parse_requests_response_json(resp, log_label=route)
+
+            try:
+                cluster_payload, cluster_err = _fetch("/proxmox/cluster/status")
+                resources_payload, resources_err = _fetch("/proxmox/cluster/resources")
+            except http_requests.exceptions.RequestException as exc:
+                detail, _ = extract_proxmox_backend_error_detail(
+                    exc,
+                    proxmox_host=(
+                        endpoint.domain or str(endpoint.ip_address).split("/")[0]
+                    ),
+                    proxmox_port=endpoint.port,
+                    backend_url=f"{fastapi_url}/proxmox",
+                )
+                entry["detail"] = detail
+                dashboards.append(entry)
+                continue
+
+            cluster_name = None
+            cluster_node_names: set = set()
+            if not cluster_err:
+                cluster_name, cluster_node_names = dashboard_data.cluster_node_scope(
+                    cluster_payload
+                )
+
+            local_node_rows = dashboard_data.build_local_node_rows(
+                endpoint,
+                cluster_name=cluster_name,
+                cluster_node_names=cluster_node_names,
+            )
+            live_node_rows: list = []
+            nodes_err = None
+            try:
+                nodes_payload, nodes_err = _fetch("/proxmox/nodes/")
+                if not nodes_err:
+                    live_node_rows = dashboard_data.build_live_node_rows(nodes_payload)
+            except http_requests.exceptions.RequestException as exc:
+                if not local_node_rows:
+                    detail, _ = extract_proxmox_backend_error_detail(
+                        exc,
+                        proxmox_host=(
+                            endpoint.domain or str(endpoint.ip_address).split("/")[0]
+                        ),
+                        proxmox_port=endpoint.port,
+                        backend_url=f"{fastapi_url}/proxmox",
+                    )
+                    entry["detail"] = detail
+                    dashboards.append(entry)
+                    continue
+
+            if cluster_err or resources_err:
+                entry["detail"] = cluster_err or resources_err
+                dashboards.append(entry)
+                continue
+
+            if nodes_err and not local_node_rows:
+                entry["detail"] = nodes_err
+                dashboards.append(entry)
+                continue
+
+            cluster_summary = dashboard_data.build_cluster_summary(cluster_payload)
+            entry["guest_summary"] = dashboard_data.build_guest_summary(
+                resources_payload
+            )
+
+            if local_node_rows:
+                entry["nodes"] = dashboard_data.merge_node_rows(
+                    local_node_rows, live_node_rows
+                )
+            else:
+                entry["nodes"] = live_node_rows
+
+            entry["cluster_summary"] = dashboard_data.cluster_summary_from_node_rows(
+                cluster_summary, entry["nodes"]
+            )
+
+            cluster_name_display = (
+                entry["cluster_summary"].get("name", "")
+                if entry["cluster_summary"]
+                else ""
+            )
+            netbox_cluster = (
+                Cluster.objects.filter(name=cluster_name_display).first()
+                if cluster_name_display and cluster_name_display != "—"
+                else None
+            )
+            entry["netbox_cluster"] = _nested(netbox_cluster, request)
+            entry["object_summaries"] = dashboard_data.build_object_summaries(
+                endpoint, netbox_cluster
+            )
+
+            dashboards.append(entry)
+
+        return Response({"dashboards": dashboards})
+
+
+class NodesAPIView(APIView):
+    """API mirror of the Proxbox nodes page (/plugins/proxbox/nodes/).
+
+    Returns NetBox Device objects tagged 'proxbox' (synced Proxmox nodes).
+    Read-only GET endpoint.
+    """
+
+    permission_classes = [IsAuthenticatedOrLoginNotRequired]
+
+    @extend_schema(responses={200: OpenApiTypes.OBJECT})
+    def get(self, request: Request) -> Response:
+        """Return proxbox-tagged devices with their interfaces and IPs."""
+        from dcim.models import Device
+        from netbox_proxbox.utils import get_proxbox_tagged_object_ids
+
+        tagged_ids = get_proxbox_tagged_object_ids(Device, limit=100)
+        if not tagged_ids:
+            return Response({"count": 0, "results": []})
+
+        devices = list(
+            Device.objects.restrict(request.user, "view")
+            .filter(id__in=tagged_ids)
+            .select_related(
+                "device_type__manufacturer", "role", "site", "tenant", "cluster"
+            )
+            .prefetch_related("interfaces__ip_addresses")
+        )
+        results = [_serialize_device(d, request) for d in devices]
+        return Response({"count": len(results), "results": results})
+
+
+class VirtualMachinesAPIView(APIView):
+    """API mirror of the Proxbox virtual machines page (/plugins/proxbox/virtual_machines/).
+
+    Returns NetBox VirtualMachine objects tagged 'proxbox' with vm_type=qemu.
+    Read-only GET endpoint.
+    """
+
+    permission_classes = [IsAuthenticatedOrLoginNotRequired]
+
+    @extend_schema(responses={200: OpenApiTypes.OBJECT})
+    def get(self, request: Request) -> Response:
+        """Return proxbox-tagged QEMU VMs with their interfaces and IPs."""
+        from virtualization.models import VirtualMachine
+        from netbox_proxbox.utils import get_proxbox_tagged_object_ids
+
+        tagged_ids = get_proxbox_tagged_object_ids(VirtualMachine, limit=100)
+        if not tagged_ids:
+            return Response({"count": 0, "results": []})
+
+        vms = list(
+            VirtualMachine.objects.restrict(request.user, "view")
+            .filter(id__in=tagged_ids, custom_field_data__proxmox_vm_type="qemu")
+            .select_related("site", "cluster", "role", "tenant", "platform")
+            .prefetch_related("interfaces__ip_addresses")
+        )
+        results = [_serialize_vm(vm, request) for vm in vms]
+        return Response({"count": len(results), "results": results})
+
+
+class LXCContainersAPIView(APIView):
+    """API mirror of the Proxbox LXC containers page (/plugins/proxbox/lxc_containers/).
+
+    Returns NetBox VirtualMachine objects tagged 'proxbox' with vm_type=lxc.
+    Read-only GET endpoint.
+    """
+
+    permission_classes = [IsAuthenticatedOrLoginNotRequired]
+
+    @extend_schema(responses={200: OpenApiTypes.OBJECT})
+    def get(self, request: Request) -> Response:
+        """Return proxbox-tagged LXC containers with their interfaces and IPs."""
+        from virtualization.models import VirtualMachine
+        from netbox_proxbox.utils import get_proxbox_tagged_object_ids
+
+        tagged_ids = get_proxbox_tagged_object_ids(VirtualMachine, limit=100)
+        if not tagged_ids:
+            return Response({"count": 0, "results": []})
+
+        containers = list(
+            VirtualMachine.objects.restrict(request.user, "view")
+            .filter(id__in=tagged_ids, custom_field_data__proxmox_vm_type="lxc")
+            .select_related("site", "cluster", "role", "tenant", "platform")
+            .prefetch_related("interfaces__ip_addresses")
+        )
+        results = [_serialize_vm(vm, request) for vm in containers]
+        return Response({"count": len(results), "results": results})
+
+
+class InterfacesAPIView(APIView):
+    """API mirror of the Proxbox interfaces page (/plugins/proxbox/interfaces/).
+
+    Returns combined VM interfaces and node interfaces for proxbox-tagged objects,
+    with summary counts. Read-only GET endpoint.
+    """
+
+    permission_classes = [IsAuthenticatedOrLoginNotRequired]
+
+    @extend_schema(responses={200: OpenApiTypes.OBJECT})
+    def get(self, request: Request) -> Response:
+        """Return proxbox-tagged VM and node interfaces with up/down summary."""
+        from dcim.models import Device
+        from dcim.models import Interface as DCIMInterface
+        from virtualization.models import VirtualMachine, VMInterface
+        from netbox_proxbox.utils import get_proxbox_tagged_object_ids
+
+        tagged_device_ids = get_proxbox_tagged_object_ids(Device)
+        tagged_vm_ids = get_proxbox_tagged_object_ids(VirtualMachine)
+
+        node_interfaces: list = []
+        vm_interfaces: list = []
+        interfaces_up = 0
+        interfaces_down = 0
+
+        if tagged_device_ids:
+            node_interfaces = list(
+                DCIMInterface.objects.restrict(request.user, "view")
+                .filter(device_id__in=tagged_device_ids)
+                .select_related("device")
+                .prefetch_related("ip_addresses")
+                .order_by("device__name", "name")
+            )
+            for iface in node_interfaces:
+                if iface.enabled:
+                    interfaces_up += 1
+                else:
+                    interfaces_down += 1
+
+        if tagged_vm_ids:
+            vm_interfaces = list(
+                VMInterface.objects.restrict(request.user, "view")
+                .filter(virtual_machine_id__in=tagged_vm_ids)
+                .select_related("virtual_machine")
+                .prefetch_related("ip_addresses")
+                .order_by("virtual_machine__name", "name")
+            )
+            for iface in vm_interfaces:
+                if iface.enabled:
+                    interfaces_up += 1
+                else:
+                    interfaces_down += 1
+
+        def _iface_dict(iface: object, parent_type: str) -> dict:
+            parent = iface.device if parent_type == "device" else iface.virtual_machine
+            return {
+                "id": iface.pk,
+                "name": iface.name,
+                "enabled": iface.enabled,
+                "parent_type": parent_type,
+                "parent_name": str(parent) if parent else None,
+                "ip_addresses": [str(ip.address) for ip in iface.ip_addresses.all()],
+            }
+
+        total = len(node_interfaces) + len(vm_interfaces)
+        return Response(
+            {
+                "node_interfaces": [_iface_dict(i, "device") for i in node_interfaces],
+                "vm_interfaces": [_iface_dict(i, "vm") for i in vm_interfaces],
+                "summary": {
+                    "total": total,
+                    "up": interfaces_up,
+                    "down": interfaces_down,
+                },
+            }
+        )
+
+
+class IPAddressesAPIView(APIView):
+    """API mirror of the Proxbox IP addresses page (/plugins/proxbox/ip-addresses/).
+
+    Returns IP addresses assigned to proxbox-tagged interfaces, split by node/VM.
+    Read-only GET endpoint.
+    """
+
+    permission_classes = [IsAuthenticatedOrLoginNotRequired]
+
+    @extend_schema(responses={200: OpenApiTypes.OBJECT})
+    def get(self, request: Request) -> Response:
+        """Return proxbox-tagged node and VM IP addresses with summary counts."""
+        from dcim.models import Device
+        from dcim.models import Interface as DCIMInterface
+        from ipam.models import IPAddress
+        from virtualization.models import VirtualMachine, VMInterface
+        from netbox_proxbox.utils import get_proxbox_tagged_object_ids
+
+        tagged_device_ids = get_proxbox_tagged_object_ids(Device)
+        tagged_vm_ids = get_proxbox_tagged_object_ids(VirtualMachine)
+
+        node_ips: list = []
+        vm_ips: list = []
+
+        if tagged_device_ids:
+            node_iface_ids = list(
+                DCIMInterface.objects.filter(
+                    device_id__in=tagged_device_ids
+                ).values_list("id", flat=True)
+            )
+            node_ips = list(
+                IPAddress.objects.restrict(request.user, "view")
+                .filter(
+                    assigned_object_type__app_label="dcim",
+                    assigned_object_type__model="interface",
+                    assigned_object_id__in=node_iface_ids,
+                )
+                .prefetch_related("assigned_object")
+                .order_by("address")
+            )
+
+        if tagged_vm_ids:
+            vm_iface_ids = list(
+                VMInterface.objects.filter(
+                    virtual_machine_id__in=tagged_vm_ids
+                ).values_list("id", flat=True)
+            )
+            vm_ips = list(
+                IPAddress.objects.restrict(request.user, "view")
+                .filter(
+                    assigned_object_type__app_label="virtualization",
+                    assigned_object_type__model="vminterface",
+                    assigned_object_id__in=vm_iface_ids,
+                )
+                .prefetch_related("assigned_object")
+                .order_by("address")
+            )
+
+        def _ip_dict(ip: object) -> dict:
+            assigned = ip.assigned_object
+            ct = ip.assigned_object_type
+            return {
+                "id": ip.pk,
+                "address": str(ip.address),
+                "assigned_object_type": (f"{ct.app_label}.{ct.model}" if ct else None),
+                "assigned_object_id": ip.assigned_object_id,
+                "assigned_object_name": str(assigned) if assigned else None,
+            }
+
+        return Response(
+            {
+                "node_ips": [_ip_dict(ip) for ip in node_ips],
+                "vm_ips": [_ip_dict(ip) for ip in vm_ips],
+                "summary": {
+                    "node_count": len(node_ips),
+                    "vm_count": len(vm_ips),
+                    "total": len(node_ips) + len(vm_ips),
+                },
+            }
+        )
+
+
+class VirtualDisksAPIView(APIView):
+    """API mirror of the Proxbox virtual disks page (/plugins/proxbox/virtual-disks/).
+
+    Returns VirtualDisk objects whose parent VM is tagged 'proxbox'.
+    Read-only GET endpoint.
+    """
+
+    permission_classes = [IsAuthenticatedOrLoginNotRequired]
+
+    @extend_schema(responses={200: OpenApiTypes.OBJECT})
+    def get(self, request: Request) -> Response:
+        """Return virtual disks for proxbox-tagged VMs."""
+        from virtualization.models import VirtualDisk, VirtualMachine
+        from netbox_proxbox.utils import get_proxbox_tagged_object_ids
+
+        tagged_vm_ids = get_proxbox_tagged_object_ids(VirtualMachine)
+        if not tagged_vm_ids:
+            return Response({"count": 0, "results": []})
+
+        disks = list(
+            VirtualDisk.objects.restrict(request.user, "view")
+            .filter(virtual_machine_id__in=tagged_vm_ids)
+            .select_related("virtual_machine")
+            .order_by("virtual_machine__name", "name")
+        )
+        results = [
+            {
+                "id": d.pk,
+                "name": d.name,
+                "size": d.size,
+                "virtual_machine": {
+                    "id": d.virtual_machine.pk,
+                    "name": str(d.virtual_machine.name),
+                    "url": request.build_absolute_uri(
+                        d.virtual_machine.get_absolute_url()
+                    ),
+                },
+            }
+            for d in disks
+        ]
+        return Response({"count": len(results), "results": results})
+
+
+class ScheduleSyncAPIView(APIView):
+    """API mirror of the Proxbox schedule sync page (/plugins/proxbox/sync/schedule/).
+
+    GET returns the list of active Proxbox scheduled/pending sync jobs.
+    POST creates a new sync job.
+
+    Both methods require ``core.add_job`` permission, matching the UI view's
+    ``ContentTypePermissionRequiredMixin`` behaviour.
+    """
+
+    permission_classes = [IsAuthenticatedOrLoginNotRequired]
+
+    def _check_enqueue_permission(self, request: Request) -> Response | None:
+        """Return a 403 Response if the user cannot enqueue sync jobs, else None."""
+        from netbox_proxbox.views.proxbox_access import permission_enqueue_proxbox_sync
+
+        if not request.user.has_perm(permission_enqueue_proxbox_sync()):
+            return Response(
+                {"detail": "You do not have permission to enqueue sync jobs."},
+                status=403,
+            )
+        return None
+
+    @extend_schema(responses={200: OpenApiTypes.OBJECT})
+    def get(self, request: Request) -> Response:
+        """Return active Proxbox sync jobs (scheduled, pending, running, etc.)."""
+        from netbox_proxbox.views.schedule_helpers import get_scheduled_jobs_list
+
+        denied = self._check_enqueue_permission(request)
+        if denied is not None:
+            return denied
+
+        scheduled_jobs = get_scheduled_jobs_list(request)
+        return Response(
+            {"count": len(scheduled_jobs), "scheduled_jobs": scheduled_jobs}
+        )
+
+    @extend_schema(
+        request=ScheduleSyncRequestSerializer,
+        responses={201: OpenApiTypes.OBJECT},
+    )
+    def post(self, request: Request) -> Response:
+        """Enqueue a Proxbox sync job. Requires core.add_job permission."""
+        from netbox_proxbox.choices import ScheduleIntervalUnitChoices, SyncTypeChoices
+        from netbox_proxbox.jobs import PROXBOX_SYNC_QUEUE_NAME, ProxboxSyncJob
+        from utilities.datetime import local_now
+
+        denied = self._check_enqueue_permission(request)
+        if denied is not None:
+            return denied
+
+        serializer = ScheduleSyncRequestSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response({"errors": serializer.errors}, status=400)
+
+        data = serializer.validated_data
+        sync_types: list = data["sync_types"]
+        valid_slugs = {c[0] for c in SyncTypeChoices.CHOICES}
+        invalid = [s for s in sync_types if s not in valid_slugs]
+        if invalid:
+            return Response(
+                {"errors": {"sync_types": [f"Invalid sync type(s): {invalid}"]}},
+                status=400,
+            )
+        if SyncTypeChoices.ALL in sync_types and len(sync_types) > 1:
+            return Response(
+                {
+                    "errors": {
+                        "sync_types": ['Cannot combine "all" with other sync types.']
+                    }
+                },
+                status=400,
+            )
+
+        schedule_at = data.get("schedule_at")
+        if schedule_at and schedule_at < local_now():
+            return Response(
+                {"errors": {"schedule_at": ["Scheduled time must be in the future."]}},
+                status=400,
+            )
+
+        interval_value = data.get("interval_value")
+        interval_unit = data.get("interval_unit")
+        interval: int | None = None
+        if interval_value and interval_unit:
+            interval = ScheduleIntervalUnitChoices.to_minutes(
+                interval_value, interval_unit
+            )
+        if interval and not schedule_at:
+            schedule_at = local_now()
+
+        proxmox_endpoint_ids = [
+            str(pk) for pk in data.get("proxmox_endpoint_ids") or []
+        ]
+        netbox_endpoint_ids = [str(pk) for pk in data.get("netbox_endpoint_ids") or []]
+        job_name = (data.get("job_name") or "").strip()
+
+        enqueue_kwargs: dict = dict(
+            instance=None,
+            user=request.user,
+            schedule_at=schedule_at,
+            interval=interval,
+            queue_name=PROXBOX_SYNC_QUEUE_NAME,
+            sync_types=sync_types,
+            proxmox_endpoint_ids=proxmox_endpoint_ids,
+            netbox_endpoint_ids=netbox_endpoint_ids,
+        )
+        if job_name:
+            enqueue_kwargs["name"] = job_name
+
+        job = ProxboxSyncJob.enqueue(**enqueue_kwargs)
+
+        job_id = getattr(job, "pk", None) or getattr(job, "id", None)
+        return Response(
+            {
+                "ok": True,
+                "job_id": job_id,
+                "message": (
+                    f"Sync job scheduled for {schedule_at.strftime('%Y-%m-%d %H:%M %Z')}."
+                    if schedule_at
+                    else "Sync job queued for immediate execution."
+                ),
+            },
+            status=201,
+        )
+
+
+class BackendLogsAPIView(APIView):
+    """API mirror of the Proxbox backend logs page (/plugins/proxbox/logs/).
+
+    Returns the FastAPI backend log endpoint URLs and the configured log file path.
+    Actual log content is served directly by the FastAPI backend.
+    Read-only GET endpoint.
+    """
+
+    permission_classes = [IsAuthenticatedOrLoginNotRequired]
+
+    @extend_schema(responses={200: OpenApiTypes.OBJECT})
+    def get(self, request: Request) -> Response:
+        """Return backend log URLs and the configured log file path."""
+        from netbox_proxbox.models import FastAPIEndpoint, ProxboxPluginSettings
+        from netbox_proxbox.utils import get_fastapi_url
+        from netbox_proxbox.views.logs import DEFAULT_BACKEND_LOG_FILE_PATH
+
+        endpoint = FastAPIEndpoint.objects.restrict(request.user, "view").first()
+        fastapi_info = get_fastapi_url(endpoint) if endpoint is not None else {}
+        settings_obj = ProxboxPluginSettings.get_solo()
+
+        fastapi_url = fastapi_info.get("http_url", "")
+        return Response(
+            {
+                "fastapi_url": fastapi_url,
+                "fastapi_websocket_url": fastapi_info.get("websocket_url", ""),
+                "logs_api_url": f"{fastapi_url}/admin/logs" if fastapi_url else "",
+                "sse_stream_url": (
+                    f"{fastapi_url}/admin/logs/stream" if fastapi_url else ""
+                ),
+                "backend_log_file_path": (
+                    settings_obj.backend_log_file_path or DEFAULT_BACKEND_LOG_FILE_PATH
+                ),
+            }
+        )

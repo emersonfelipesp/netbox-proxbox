@@ -4,6 +4,18 @@ from django.urls import include, path
 from netbox.api.routers import NetBoxRouter
 
 from . import views
+from .views import (
+    BackendLogsAPIView,
+    DashboardAPIView,
+    HomeAPIView,
+    InterfacesAPIView,
+    IPAddressesAPIView,
+    LXCContainersAPIView,
+    NodesAPIView,
+    ScheduleSyncAPIView,
+    VirtualDisksAPIView,
+    VirtualMachinesAPIView,
+)
 
 app_name = "proxbox"
 
@@ -40,5 +52,37 @@ urlpatterns = [
         "endpoints/",
         include((endpoints_router.urls, "endpoints"), namespace="endpoints"),
     ),
+    # Non-model API views mirroring UI pages
+    path("home/", HomeAPIView.as_view(), name="home"),
+    path("dashboard/", DashboardAPIView.as_view(), name="dashboard"),
+    path("resources/nodes/", NodesAPIView.as_view(), name="api-nodes"),
+    path(
+        "resources/virtual-machines/",
+        VirtualMachinesAPIView.as_view(),
+        name="api-virtual-machines",
+    ),
+    path(
+        "resources/lxc-containers/",
+        LXCContainersAPIView.as_view(),
+        name="api-lxc-containers",
+    ),
+    path(
+        "resources/interfaces/",
+        InterfacesAPIView.as_view(),
+        name="api-interfaces",
+    ),
+    path(
+        "resources/ip-addresses/",
+        IPAddressesAPIView.as_view(),
+        name="api-ip-addresses",
+    ),
+    path(
+        "resources/virtual-disks/",
+        VirtualDisksAPIView.as_view(),
+        name="api-virtual-disks",
+    ),
+    path("sync/schedule/", ScheduleSyncAPIView.as_view(), name="api-schedule-sync"),
+    path("logs/", BackendLogsAPIView.as_view(), name="api-logs"),
+    # Model CRUD router
     path("", include(router.urls)),
 ]

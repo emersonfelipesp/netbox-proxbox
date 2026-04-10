@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from tests.conftest import ResponseStub, load_plugin_module
+from tests.conftest import ResponseStub, _make_model_class, load_plugin_module
 
 
 class _NodeQuerySet(list):
@@ -462,3 +462,244 @@ def test_dashboard_nodes_summary_includes_cluster_sibling_nodes_from_database(
     assert dashboard["cluster_summary"]["nodes_total"] == 2
     assert dashboard["cluster_summary"]["nodes_online"] == 1
     assert dashboard["cluster_summary"]["nodes_offline"] == 1
+
+
+def test_dashboard_includes_cluster_siblings_via_proxmox_cluster_endpoint(
+    monkeypatch,
+    fastapi_endpoint,
+    proxmox_endpoint,
+):
+    """Nodes linked to clusters owned by this endpoint are included even when
+    the node's own endpoint FK points elsewhere."""
+    module = load_plugin_module(
+        "netbox_proxbox.views.dashboard",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+        proxmox_endpoint=proxmox_endpoint,
+    )
+    monkeypatch.setattr(
+        module,
+        "sync_proxmox_endpoint_to_backend",
+        lambda *args, **kwargs: (True, None, None),
+    )
+
+    # pve-01 is directly linked to the endpoint; pve-02 has its proxmox_cluster
+    # owned by the same endpoint but its own endpoint FK is a sibling endpoint.
+    cluster = SimpleNamespace(name="pve-cluster", endpoint=proxmox_endpoint)
+    sibling_endpoint = SimpleNamespace(name="pve-02-direct-endpoint")
+    monkeypatch.setattr(
+        module.ProxmoxNode,
+        "objects",
+        _NodeQuerySet(
+            [
+                SimpleNamespace(
+                    name="pve-01",
+                    endpoint=proxmox_endpoint,
+                    proxmox_cluster=cluster,
+                    online=True,
+                    cpu_usage=0.5,
+                    max_cpu=16,
+                    memory_usage=48 * 1024**3,
+                    max_memory=128 * 1024**3,
+                    support_level="enterprise",
+                ),
+                SimpleNamespace(
+                    name="pve-02",
+                    endpoint=sibling_endpoint,
+                    proxmox_cluster=cluster,
+                    online=False,
+                    cpu_usage=0.1,
+                    max_cpu=8,
+                    memory_usage=16 * 1024**3,
+                    max_memory=64 * 1024**3,
+                    support_level="community",
+                ),
+            ]
+        ),
+        raising=False,
+    )
+
+    def fake_get(url, timeout=None, params=None, headers=None, verify=None):
+        if "/proxmox/cluster/status" in url:
+            return ResponseStub(
+                [
+                    {
+                        "type": "cluster",
+                        "name": "pve-cluster",
+                        "nodes": 2,
+                        "quorate": 1,
+                    },
+                    {"type": "node", "name": "pve-01", "status": "online", "online": 1},
+                    {
+                        "type": "node",
+                        "name": "pve-02",
+                        "status": "offline",
+                        "online": 0,
+                    },
+                ]
+            )
+        if "/proxmox/cluster/resources" in url:
+            return ResponseStub([{"type": "qemu", "status": "running"}])
+        if "/proxmox/nodes/" in url:
+            return ResponseStub(
+                [
+                    {
+                        "node": "pve-01",
+                        "status": "online",
+                        "uptime": 3600,
+                        "cpu": 0.5,
+                        "maxcpu": 16,
+                        "loadavg": [0.2, 0.3, 0.4],
+                        "mem": 48 * 1024**3,
+                        "maxmem": 128 * 1024**3,
+                        "disk": 50 * 1024**3,
+                        "maxdisk": 100 * 1024**3,
+                    }
+                ]
+            )
+        raise AssertionError(url)
+
+    monkeypatch.setattr(module.requests, "get", fake_get)
+
+    response = module.DashboardView.as_view()(_dashboard_request())
+    dashboard = response["context"]["dashboards"][0]
+
+    assert [row["name"] for row in dashboard["nodes"]] == ["pve-01", "pve-02"]
+    assert dashboard["nodes"][1]["status"] == "offline"
+    assert dashboard["cluster_summary"]["nodes_total"] == 2
+
+
+def test_dashboard_object_summaries_present_in_context(
+    monkeypatch,
+    fastapi_endpoint,
+    proxmox_endpoint,
+):
+    """Dashboard context always includes object_summaries list."""
+    module = load_plugin_module(
+        "netbox_proxbox.views.dashboard",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+        proxmox_endpoint=proxmox_endpoint,
+    )
+    monkeypatch.setattr(
+        module,
+        "sync_proxmox_endpoint_to_backend",
+        lambda *args, **kwargs: (True, None, None),
+    )
+    monkeypatch.setattr(module.ProxmoxNode, "objects", _NodeQuerySet(), raising=False)
+
+    def fake_get(url, timeout=None, params=None, headers=None, verify=None):
+        if "/proxmox/cluster/status" in url:
+            return ResponseStub(
+                [
+                    {
+                        "type": "cluster",
+                        "name": "pve-cluster",
+                        "nodes": 1,
+                        "quorate": 1,
+                    },
+                    {"type": "node", "name": "pve-01", "status": "online", "online": 1},
+                ]
+            )
+        if "/proxmox/cluster/resources" in url:
+            return ResponseStub([])
+        if "/proxmox/nodes/" in url:
+            return ResponseStub(
+                [
+                    {
+                        "node": "pve-01",
+                        "status": "online",
+                        "uptime": 1000,
+                        "cpu": 0.1,
+                        "maxcpu": 4,
+                        "loadavg": [0.0, 0.0, 0.0],
+                        "mem": 1 * 1024**3,
+                        "maxmem": 8 * 1024**3,
+                        "disk": 10 * 1024**3,
+                        "maxdisk": 50 * 1024**3,
+                    }
+                ]
+            )
+        raise AssertionError(url)
+
+    monkeypatch.setattr(module.requests, "get", fake_get)
+
+    response = module.DashboardView.as_view()(_dashboard_request())
+    dashboard = response["context"]["dashboards"][0]
+
+    assert "object_summaries" in dashboard
+    assert isinstance(dashboard["object_summaries"], list)
+    # Without a linked NetBox cluster only endpoint-scoped objects are shown
+    labels = [obj["label"] for obj in dashboard["object_summaries"]]
+    assert "Backup Routines" in labels
+    assert "Replications" in labels
+
+
+def test_build_object_summaries_counts(monkeypatch, proxmox_endpoint):
+    """build_object_summaries returns correct counts from model querysets."""
+    import sys
+    import types
+    from tests.conftest import load_plugin_module
+
+    module = load_plugin_module(
+        "netbox_proxbox.views.dashboard_data",
+        monkeypatch=monkeypatch,
+        proxmox_endpoint=proxmox_endpoint,
+    )
+
+    # Build a minimal queryset stub that returns preset counts per filter key
+    class _CountingQS:
+        def __init__(self, total=0, counts_by_kwarg=None):
+            self._total = total
+            self._counts_by_kwarg = counts_by_kwarg or {}
+
+        def filter(self, **kwargs):
+            # Match on single-key hashable values (e.g. enabled=True, status="active").
+            # Non-hashable values (e.g. model objects) are skipped; the same QS is
+            # returned so chained filters like .filter(endpoint=...).filter(enabled=True)
+            # still resolve correctly.
+            for k, v in kwargs.items():
+                try:
+                    if (k, v) in self._counts_by_kwarg:
+                        return _CountingQS(total=self._counts_by_kwarg[(k, v)])
+                except TypeError:
+                    pass
+            # No match — preserve counts_by_kwarg so chained filters still work
+            return _CountingQS(total=self._total, counts_by_kwarg=self._counts_by_kwarg)
+
+        def count(self):
+            return self._total
+
+    class _ModelWithQS:
+        def __init__(self, qs):
+            self.objects = qs
+
+    module.BackupRoutine = _ModelWithQS(
+        _CountingQS(
+            total=5,
+            counts_by_kwarg={("enabled", True): 3},
+        )
+    )
+    module.Replication = _ModelWithQS(
+        _CountingQS(
+            total=4,
+            counts_by_kwarg={("status", "active"): 3, ("status", "stale"): 1},
+        )
+    )
+    module.ProxmoxStorage = _ModelWithQS(_CountingQS(total=0))
+    module.VMBackup = _ModelWithQS(_CountingQS(total=0))
+    module.VMSnapshot = _ModelWithQS(_CountingQS(total=0))
+    module.ProxmoxStorageVirtualDisk = _ModelWithQS(_CountingQS(total=0))
+
+    summaries = module.build_object_summaries(proxmox_endpoint, netbox_cluster=None)
+
+    labels = {s["label"]: s for s in summaries}
+    assert labels["Backup Routines"]["total"] == 5
+    assert "3 enabled" in labels["Backup Routines"]["detail"]
+    assert "2 disabled" in labels["Backup Routines"]["detail"]
+    assert labels["Replications"]["total"] == 4
+    assert "3 active" in labels["Replications"]["detail"]
+    assert "1 stale" in labels["Replications"]["detail"]
+    # Storage/backup/snapshot/disk cards absent when netbox_cluster is None
+    assert "Storage" not in labels
+    assert "VM Backups" not in labels

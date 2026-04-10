@@ -473,3 +473,238 @@ def test_proxmox_endpoint_export_requires_token_for_sensitive_payloads():
     assert "TokenAuthentication" in contents
     assert "A valid NetBox token is required to export secrets." in contents
     assert 'allowed_formats = {"csv", "json", "yaml"}' in contents
+
+
+# ---------------------------------------------------------------------------
+# Non-model API views (added alongside the model viewsets)
+# ---------------------------------------------------------------------------
+
+_NON_MODEL_VIEWS = [
+    "HomeAPIView",
+    "DashboardAPIView",
+    "NodesAPIView",
+    "VirtualMachinesAPIView",
+    "LXCContainersAPIView",
+    "InterfacesAPIView",
+    "IPAddressesAPIView",
+    "VirtualDisksAPIView",
+    "ScheduleSyncAPIView",
+    "BackendLogsAPIView",
+]
+
+_DASHBOARD_PERMISSION_VIEWS = {"HomeAPIView", "DashboardAPIView"}
+_RESOURCE_PERMISSION_VIEWS = {
+    "NodesAPIView",
+    "VirtualMachinesAPIView",
+    "LXCContainersAPIView",
+    "InterfacesAPIView",
+    "IPAddressesAPIView",
+    "VirtualDisksAPIView",
+    "ScheduleSyncAPIView",
+    "BackendLogsAPIView",
+}
+
+
+def _find_permission_classes_value(class_node: ast.ClassDef) -> list[str] | None:
+    """Return the string names in permission_classes = [...] or None if absent."""
+    for node in class_node.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        if (
+            len(node.targets) == 1
+            and isinstance(node.targets[0], ast.Name)
+            and node.targets[0].id == "permission_classes"
+            and isinstance(node.value, ast.List)
+        ):
+            names = []
+            for elt in node.value.elts:
+                if isinstance(elt, ast.Name):
+                    names.append(elt.id)
+                elif isinstance(elt, ast.Attribute):
+                    names.append(elt.attr)
+            return names
+    return None
+
+
+def test_non_model_api_views_exist_and_extend_api_view():
+    """Every non-model API view must exist and subclass APIView."""
+    module = _parse_module(VIEWS_PATH)
+    for view_name in _NON_MODEL_VIEWS:
+        class_node = _classdef(module, view_name)
+        base_names = [
+            b.id if isinstance(b, ast.Name) else b.attr for b in class_node.bases
+        ]
+        assert "APIView" in base_names, (
+            f"{view_name} must subclass APIView, got bases: {base_names}"
+        )
+
+
+def test_non_model_api_views_define_get_method():
+    """Every non-model view must expose a get() handler."""
+    module = _parse_module(VIEWS_PATH)
+    for view_name in _NON_MODEL_VIEWS:
+        class_node = _classdef(module, view_name)
+        methods = _class_methods(class_node)
+        assert "get" in methods, f"{view_name} is missing a get() method"
+
+
+def test_schedule_sync_api_view_defines_post_and_permission_check():
+    """ScheduleSyncAPIView must have post() and the _check_enqueue_permission helper."""
+    module = _parse_module(VIEWS_PATH)
+    class_node = _classdef(module, "ScheduleSyncAPIView")
+    methods = _class_methods(class_node)
+    assert "post" in methods, "ScheduleSyncAPIView must define post()"
+    assert "_check_enqueue_permission" in methods, (
+        "ScheduleSyncAPIView must define _check_enqueue_permission()"
+    )
+
+
+def test_dashboard_views_use_proxbox_dashboard_permission():
+    """HomeAPIView and DashboardAPIView must use _ProxboxDashboardPermission."""
+    module = _parse_module(VIEWS_PATH)
+    for view_name in _DASHBOARD_PERMISSION_VIEWS:
+        class_node = _classdef(module, view_name)
+        perms = _find_permission_classes_value(class_node)
+        assert perms is not None, f"{view_name} must declare permission_classes"
+        assert "_ProxboxDashboardPermission" in perms, (
+            f"{view_name} permission_classes must include _ProxboxDashboardPermission, got {perms}"
+        )
+
+
+def test_resource_views_use_is_authenticated_or_login_not_required():
+    """Resource/log/schedule views must use IsAuthenticatedOrLoginNotRequired."""
+    module = _parse_module(VIEWS_PATH)
+    for view_name in _RESOURCE_PERMISSION_VIEWS:
+        class_node = _classdef(module, view_name)
+        perms = _find_permission_classes_value(class_node)
+        assert perms is not None, f"{view_name} must declare permission_classes"
+        assert "IsAuthenticatedOrLoginNotRequired" in perms, (
+            f"{view_name} permission_classes must include IsAuthenticatedOrLoginNotRequired, got {perms}"
+        )
+
+
+def test_proxbox_dashboard_permission_class_exists_in_views():
+    """_ProxboxDashboardPermission must exist as a class in views.py."""
+    module = _parse_module(VIEWS_PATH)
+    _classdef(module, "_ProxboxDashboardPermission")  # raises if missing
+
+
+def test_non_model_views_registered_in_urlpatterns():
+    """All ten non-model view paths must appear in the api/urls.py urlpatterns."""
+    contents = URLS_PATH.read_text()
+    expected_paths = [
+        '"home/"',
+        '"dashboard/"',
+        '"resources/nodes/"',
+        '"resources/virtual-machines/"',
+        '"resources/lxc-containers/"',
+        '"resources/interfaces/"',
+        '"resources/ip-addresses/"',
+        '"resources/virtual-disks/"',
+        '"sync/schedule/"',
+        '"logs/"',
+    ]
+    for path_str in expected_paths:
+        assert path_str in contents, f"URL path {path_str} not found in api/urls.py"
+
+
+def test_api_root_view_exposes_all_non_model_url_keys():
+    """ProxBoxRootView.get() must set home, dashboard, resources, schedule_sync, and logs."""
+    contents = VIEWS_PATH.read_text()
+    expected_keys = [
+        'response.data["home"]',
+        'response.data["dashboard"]',
+        'response.data["resources"]',
+        'response.data["schedule_sync"]',
+        'response.data["logs"]',
+    ]
+    for key_expr in expected_keys:
+        assert key_expr in contents, f"ProxBoxRootView.get() is missing: {key_expr}"
+
+
+def test_resource_view_serializers_exist_in_package():
+    """Lightweight non-model response serializers must exist in the serializers package."""
+    module = _parse_serializers_package()
+    expected = [
+        "DeviceResourceSerializer",
+        "VirtualMachineResourceSerializer",
+        "InterfaceResourceSerializer",
+        "IPAddressResourceSerializer",
+        "VirtualDiskResourceSerializer",
+        "ScheduledJobSerializer",
+        "ScheduleSyncRequestSerializer",
+    ]
+    for serializer_name in expected:
+        _classdef(module, serializer_name)  # raises AssertionError if not found
+
+
+def test_resource_serializers_have_expected_fields():
+    """Spot-check key fields on each non-model response serializer."""
+    module = _parse_serializers_package()
+
+    expected_assignments = {
+        "DeviceResourceSerializer": {
+            "id",
+            "name",
+            "url",
+            "device_type",
+            "manufacturer",
+            "interfaces",
+        },
+        "VirtualMachineResourceSerializer": {
+            "id",
+            "name",
+            "url",
+            "cluster",
+            "interfaces",
+        },
+        "InterfaceResourceSerializer": {
+            "id",
+            "name",
+            "enabled",
+            "parent_type",
+            "parent_name",
+            "ip_addresses",
+        },
+        "IPAddressResourceSerializer": {
+            "id",
+            "address",
+            "assigned_object_type",
+        },
+        "VirtualDiskResourceSerializer": {
+            "id",
+            "name",
+            "size",
+            "virtual_machine",
+        },
+        "ScheduledJobSerializer": {
+            "id",
+            "name",
+            "sync_types",
+            "schedule",
+            "interval",
+            "status",
+        },
+        "ScheduleSyncRequestSerializer": {
+            "sync_types",
+            "job_name",
+            "schedule_at",
+            "interval_value",
+            "interval_unit",
+        },
+    }
+
+    for serializer_name, required_fields in expected_assignments.items():
+        class_node = _classdef(module, serializer_name)
+        present = _class_assignments(class_node)
+        missing = required_fields - present
+        assert not missing, (
+            f"{serializer_name} missing field assignments: {sorted(missing)}"
+        )
+
+
+def test_schedule_sync_request_serializer_requires_sync_types():
+    """ScheduleSyncRequestSerializer.sync_types must have min_length=1."""
+    contents = (SERIALIZERS_PACKAGE / "resource_views.py").read_text()
+    # min_length=1 enforces at least one sync type slug
+    assert "min_length=1" in contents

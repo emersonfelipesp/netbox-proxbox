@@ -225,6 +225,9 @@ class DashboardView(
             else:
                 netbox_cluster = None
             dashboard["netbox_cluster"] = netbox_cluster
+            dashboard["object_summaries"] = dashboard_data.build_object_summaries(
+                endpoint, netbox_cluster
+            )
 
             dashboards.append(dashboard)
 

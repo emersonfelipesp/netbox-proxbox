@@ -4,7 +4,16 @@ from __future__ import annotations
 
 from virtualization.models import Cluster
 
-from netbox_proxbox.models import ProxmoxEndpoint, ProxmoxNode
+from netbox_proxbox.models import (
+    BackupRoutine,
+    ProxmoxEndpoint,
+    ProxmoxNode,
+    ProxmoxStorage,
+    ProxmoxStorageVirtualDisk,
+    Replication,
+    VMBackup,
+    VMSnapshot,
+)
 from netbox_proxbox.schemas import (
     ProxmoxClusterStatusResponse,
     ProxmoxClusterSummary,
@@ -20,6 +29,7 @@ __all__ = (
     "build_guest_summary",
     "build_local_node_rows",
     "build_live_node_rows",
+    "build_object_summaries",
     "cluster_node_scope",
     "cluster_summary_from_node_rows",
     "get_endpoint_display_ip",
@@ -69,17 +79,26 @@ def build_local_node_rows(
     cluster_name: str | None = None,
     cluster_node_names: set[str] | None = None,
 ) -> list[dict[str, object]]:
+    # Query 1: nodes directly linked to this endpoint
     endpoint_nodes = list(
         ProxmoxNode.objects.filter(endpoint=endpoint)
         .select_related("proxmox_cluster", "netbox_device")
         .order_by("name")
     )
+    # Query 2: nodes in clusters owned by this endpoint (catches siblings synced
+    # via a different ProxmoxEndpoint but belonging to the same cluster)
+    cluster_sibling_nodes = list(
+        ProxmoxNode.objects.filter(proxmox_cluster__endpoint=endpoint)
+        .select_related("proxmox_cluster", "netbox_device")
+        .order_by("name")
+    )
+    # Query 3: nodes matching cluster name from the live API (cross-endpoint fallback)
     scoped_cluster_names = {
         node_name for node_name in (cluster_node_names or set()) if node_name
     }
-    cluster_nodes: list[object] = []
+    name_matched_nodes: list[object] = []
     if cluster_name and scoped_cluster_names:
-        cluster_nodes = list(
+        name_matched_nodes = list(
             ProxmoxNode.objects.filter(
                 proxmox_cluster__name=cluster_name,
                 name__in=sorted(scoped_cluster_names),
@@ -89,17 +108,16 @@ def build_local_node_rows(
         )
 
     nodes_by_name: dict[str, object] = {}
-    for node in [*endpoint_nodes, *cluster_nodes]:
+    for node in [*endpoint_nodes, *cluster_sibling_nodes, *name_matched_nodes]:
         node_name = str(getattr(node, "name", "") or "").strip()
         if not node_name or node_name in nodes_by_name:
             continue
         nodes_by_name[node_name] = node
 
-    rows = [
+    return [
         ProxmoxNodeRow.from_node_model(node).model_dump()
         for _, node in sorted(nodes_by_name.items())
     ]
-    return rows
 
 
 def build_live_node_rows(nodes_payload: object) -> list[dict[str, object]]:
@@ -153,3 +171,99 @@ def cluster_summary_from_node_rows(
         "nodes_online": online_nodes,
         "nodes_offline": max(total_nodes - online_nodes, 0),
     }
+
+
+def build_object_summaries(
+    endpoint: ProxmoxEndpoint,
+    netbox_cluster: Cluster | None,
+) -> list[dict[str, object]]:
+    """Return per-type counts of synced Proxmox objects for the dashboard.
+
+    Objects scoped by endpoint (BackupRoutine, Replication) are always counted.
+    Objects scoped by NetBox cluster (Storage, VMBackup, VMSnapshot, VirtualDisk)
+    return zero counts when no cluster is linked yet.
+    """
+    summaries: list[dict[str, object]] = []
+
+    # --- Backup Routines (scoped by endpoint) ---
+    br_qs = BackupRoutine.objects.filter(endpoint=endpoint)
+    br_total = br_qs.count()
+    br_enabled = br_qs.filter(enabled=True).count()
+    summaries.append(
+        {
+            "label": "Backup Routines",
+            "total": br_total,
+            "detail": f"{br_enabled} enabled, {br_total - br_enabled} disabled",
+            "list_url_name": "plugins:netbox_proxbox:backuproutine_list",
+        }
+    )
+
+    # --- Replications (scoped by endpoint) ---
+    rep_qs = Replication.objects.filter(endpoint=endpoint)
+    rep_total = rep_qs.count()
+    rep_active = rep_qs.filter(status="active").count()
+    rep_stale = rep_qs.filter(status="stale").count()
+    summaries.append(
+        {
+            "label": "Replications",
+            "total": rep_total,
+            "detail": f"{rep_active} active, {rep_stale} stale",
+            "list_url_name": "plugins:netbox_proxbox:replication_list",
+        }
+    )
+
+    # --- Storage (scoped by NetBox cluster) ---
+    if netbox_cluster is not None:
+        st_qs = ProxmoxStorage.objects.filter(cluster=netbox_cluster)
+        st_total = st_qs.count()
+        st_shared = st_qs.filter(shared=True).count()
+        st_enabled = st_qs.filter(enabled=True).count()
+        summaries.append(
+            {
+                "label": "Storage",
+                "total": st_total,
+                "detail": f"{st_shared} shared, {st_total - st_shared} local, {st_enabled} enabled",
+                "list_url_name": "plugins:netbox_proxbox:proxmoxstorage_list",
+            }
+        )
+
+        # --- VM Backups (scoped via storage → cluster) ---
+        vb_total = VMBackup.objects.filter(
+            proxmox_storage__cluster=netbox_cluster
+        ).count()
+        summaries.append(
+            {
+                "label": "VM Backups",
+                "total": vb_total,
+                "detail": None,
+                "list_url_name": "plugins:netbox_proxbox:vmbackup_list",
+            }
+        )
+
+        # --- VM Snapshots (scoped via storage → cluster) ---
+        vs_total = VMSnapshot.objects.filter(
+            proxmox_storage__cluster=netbox_cluster
+        ).count()
+        summaries.append(
+            {
+                "label": "VM Snapshots",
+                "total": vs_total,
+                "detail": None,
+                "list_url_name": "plugins:netbox_proxbox:vmsnapshot_list",
+            }
+        )
+
+        # --- Virtual Disks (scoped via storage → cluster) ---
+        vd_total = ProxmoxStorageVirtualDisk.objects.filter(
+            proxmox_storage__cluster=netbox_cluster
+        ).count()
+        summaries.append(
+            {
+                "label": "Virtual Disks",
+                "total": vd_total,
+                "detail": None,
+                "list_url_name": "plugins:netbox_proxbox:virtual_disks",
+            }
+        )
+
+    return summaries

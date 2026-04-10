@@ -126,6 +126,29 @@ def get_fastapi_context_for_request(request) -> dict:
     return {}
 
 
+def get_proxbox_tagged_object_ids(
+    model_class: type, limit: int | None = None
+) -> list[int]:
+    """Return PKs of objects tagged 'proxbox' for a given model class.
+
+    Centralises the repeated tag-lookup pattern used across resource list views
+    so both UI and API layers can share the same query.
+    """
+    from django.contrib.contenttypes.models import ContentType
+    from extras.models import Tag, TaggedItem
+
+    proxbox_tag = Tag.objects.filter(slug="proxbox").first()
+    if not proxbox_tag:
+        return []
+    ct = ContentType.objects.get_for_model(model_class)
+    qs = TaggedItem.objects.filter(tag=proxbox_tag, content_type=ct).values_list(
+        "object_id", flat=True
+    )
+    if limit is not None:
+        qs = qs[:limit]
+    return list(qs)
+
+
 def get_fastapi_url(endpoint: FastAPIUrlSource) -> dict:
     """Compute HTTP/WebSocket URLs and TLS settings for a FastAPI endpoint model."""
     ip = get_ip_address_host(getattr(endpoint, "ip_address", None))

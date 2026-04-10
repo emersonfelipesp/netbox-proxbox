@@ -155,6 +155,9 @@ def _manager(*, first=None, objects_by_pk=None, does_not_exist=None):
         def filter(self, *args, **kwargs):
             return self
 
+        def count(self):
+            return 0
+
         def order_by(self, *args, **kwargs):
             return self
 
@@ -404,6 +407,13 @@ def load_plugin_module(
     models_module.ProxmoxCluster = _make_model_class("ProxmoxCluster")
     models_module.ProxmoxNode = _make_model_class("ProxmoxNode")
     models_module.ProxmoxStorage = _make_model_class("ProxmoxStorage")
+    models_module.ProxmoxStorageVirtualDisk = _make_model_class(
+        "ProxmoxStorageVirtualDisk"
+    )
+    models_module.BackupRoutine = _make_model_class("BackupRoutine")
+    models_module.Replication = _make_model_class("Replication")
+    models_module.VMBackup = _make_model_class("VMBackup")
+    models_module.VMSnapshot = _make_model_class("VMSnapshot")
 
     if proxbox_settings is None:
         proxbox_settings = SimpleNamespace(
