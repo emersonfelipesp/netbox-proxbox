@@ -174,8 +174,11 @@ def test_proxmox_import_form_exists_with_csv_fields():
     contents = _read("netbox_proxbox/forms/proxmox.py")
     assert "class ProxmoxEndpointImportForm" in contents
     assert "NetBoxModelImportForm" in contents
-    assert "CSVModelChoiceField" in contents
     assert "CSVChoiceField" in contents
+    # ip_address uses plain CharField + clean_ip_address/get_or_create so imports
+    # from other instances auto-create missing IPs (no CSVModelChoiceField needed).
+    assert "get_or_create" in contents
+    assert "clean_ip_address" in contents
 
 
 def test_proxmox_endpoint_form_hides_secret_fields_and_preserves_existing_values():

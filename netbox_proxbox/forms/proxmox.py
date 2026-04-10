@@ -7,7 +7,7 @@ from django import forms
 from netbox.forms import NetBoxModelForm, NetBoxModelFilterSetForm
 from netbox.forms import NetBoxModelImportForm
 from utilities.forms.fields import CommentField, DynamicModelChoiceField
-from utilities.forms.fields import CSVChoiceField, CSVModelChoiceField
+from utilities.forms.fields import CSVChoiceField
 from ipam.models import IPAddress
 from django.utils.translation import gettext as _
 
@@ -118,11 +118,11 @@ class ProxmoxEndpointFilterForm(NetBoxModelFilterSetForm):
 class ProxmoxEndpointImportForm(NetBoxModelImportForm):
     """CSV import mapping for bulk Proxmox endpoint creation."""
 
-    ip_address = CSVModelChoiceField(
-        queryset=IPAddress.objects.all(),
+    ip_address = forms.CharField(
         required=False,
-        to_field_name="address",
-        help_text=_("IP address in CIDR format, for example 192.0.2.10/24."),
+        help_text=_(
+            "IP address in CIDR format, for example 192.0.2.10/24. Created automatically if it does not exist."
+        ),
     )
     mode = CSVChoiceField(choices=ProxmoxModeChoices, required=False)
 
@@ -143,8 +143,8 @@ class ProxmoxEndpointImportForm(NetBoxModelImportForm):
         )
 
     def clean_ip_address(self):
-        """Auto-create the IPAddress if it doesn't exist yet."""
-        raw = self.data.get("ip_address", "").strip()
+        """Look up or auto-create the IPAddress so imports from other instances work."""
+        raw = (self.cleaned_data.get("ip_address") or "").strip()
         if not raw:
             return None
         ip_obj, _created = IPAddress.objects.get_or_create(address=raw)
