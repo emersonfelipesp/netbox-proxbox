@@ -17,7 +17,6 @@ except ImportError:  # pragma: no cover - test stubs expose only JobRunner
 from netbox_proxbox.choices import SyncTypeChoices
 from netbox_proxbox.models import ProxmoxEndpoint
 from netbox_proxbox.schemas import SyncJobData
-from netbox_proxbox.services.sync_cluster import sync_cluster_and_nodes
 from netbox_proxbox.sync_types import (
     _TARGETED_VM_JOB_NAME_RE,
     expanded_sync_stages,
@@ -279,6 +278,9 @@ class ProxboxSyncJob(JobRunner):
 
             # Sync cluster and node data before SSE stages so cluster/node records
             # are populated regardless of which stages are selected.
+            # Lazy import to avoid a circular import through services → views → jobs.
+            from netbox_proxbox.services.sync_cluster import sync_cluster_and_nodes  # noqa: PLC0415
+
             endpoint_ids_to_sync = (
                 [int(eid) for eid in proxmox_endpoint_ids if eid]
                 if proxmox_endpoint_ids
