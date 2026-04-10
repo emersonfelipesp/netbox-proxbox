@@ -67,13 +67,13 @@ class ProxmoxEndpointBulkImportView(generic.BulkImportView):
     queryset = ProxmoxEndpoint.objects.all()
     model_form = ProxmoxEndpointImportForm
 
-    def _process_import_records(self, form, request, records, prefetched_objects):
-        # Strip any exported 'id' column so rows are always created as new objects.
-        for record in records:
+    def create_and_update_objects(self, form, request):
+        # Strip any exported 'id' column before NetBox processes the records.
+        # create_and_update_objects() prefetches by id first, then _process_import_records()
+        # looks up each id — both must not see it, so we remove it here.
+        for record in form.cleaned_data.get("data", []):
             record.pop("id", None)
-        return super()._process_import_records(
-            form, request, records, prefetched_objects
-        )
+        return super().create_and_update_objects(form, request)
 
 
 @register_model_view(ProxmoxEndpoint, "export", path="export", detail=False)

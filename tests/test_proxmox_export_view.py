@@ -183,41 +183,43 @@ def test_export_serialization_does_not_access_comments(monkeypatch):
 def test_bulk_import_view_strips_id_column(monkeypatch):
     """Regression guard: an 'id' column exported from another NetBox instance must be ignored.
 
-    NetBox's BulkImportView uses the 'id' field to look up an existing row for
-    update; if the id doesn't exist it raises ValidationError.  Our override pops
-    'id' from each record before calling super(), so rows are always created fresh.
+    NetBox's create_and_update_objects() prefetches by id and then
+    _process_import_records() looks up each id — both fail if the id doesn't
+    exist locally.  Our override strips 'id' from cleaned_data['data'] before
+    delegating to super(), so rows are always created fresh.
     """
-    import sys
-
     from netbox_proxbox.views.endpoints.proxmox import ProxmoxEndpointBulkImportView
 
     view = ProxmoxEndpointBulkImportView()
-    view.queryset = None  # not used by our override
 
-    stripped_records = []
+    seen_records = []
 
-    def fake_super_process(form, request, records, prefetched_objects):
-        stripped_records.extend([dict(r) for r in records])
+    def fake_super(form, request):
+        seen_records.extend([dict(r) for r in form.cleaned_data.get("data", [])])
         return []
 
-    # Patch the parent class method so we can observe what records reach it.
+    # Patch the parent so we can inspect what records reach it.
     monkeypatch.setattr(
-        "netbox.views.generic.BulkImportView._process_import_records",
-        fake_super_process,
+        "netbox.views.generic.BulkImportView.create_and_update_objects",
+        fake_super,
     )
 
     records = [
         {"id": "1", "name": "pve01", "port": "8006"},
         {"id": "2", "name": "pve02", "port": "8006"},
-        {"name": "pve03", "port": "8006"},  # no id — should be unchanged
+        {"name": "pve03", "port": "8006"},  # no id — unchanged
     ]
-    view._process_import_records(None, None, records, {})
 
-    for row in stripped_records:
+    class _FakeForm:
+        cleaned_data = {"data": records}
+
+    view.create_and_update_objects(_FakeForm(), request=None)
+
+    for row in seen_records:
         assert "id" not in row, f"'id' was not stripped from {row}"
 
-    assert stripped_records[0]["name"] == "pve01"
-    assert stripped_records[2]["name"] == "pve03"
+    assert seen_records[0]["name"] == "pve01"
+    assert seen_records[2]["name"] == "pve03"
 
 
 # ── _validate_sensitive_export_token: v1 / v2 / fallback modes ───────────────
