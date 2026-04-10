@@ -141,3 +141,11 @@ class ProxmoxEndpointImportForm(NetBoxModelImportForm):
             "verify_ssl",
             "tags",
         )
+
+    def clean_ip_address(self):
+        """Auto-create the IPAddress if it doesn't exist yet."""
+        raw = self.data.get("ip_address", "").strip()
+        if not raw:
+            return None
+        ip_obj, _created = IPAddress.objects.get_or_create(address=raw)
+        return ip_obj
