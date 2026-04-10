@@ -15,7 +15,9 @@ except ImportError:  # pragma: no cover - test stubs expose only JobRunner
     Job = Any  # type: ignore[misc,assignment]
 
 from netbox_proxbox.choices import SyncTypeChoices
+from netbox_proxbox.models import ProxmoxEndpoint
 from netbox_proxbox.schemas import SyncJobData
+from netbox_proxbox.services.sync_cluster import sync_cluster_and_nodes
 from netbox_proxbox.sync_types import (
     _TARGETED_VM_JOB_NAME_RE,
     expanded_sync_stages,
@@ -274,6 +276,29 @@ class ProxboxSyncJob(JobRunner):
                 self.logger.info(f"NetBox endpoints: {netbox_endpoint_ids}")
             if netbox_vm_ids:
                 self.logger.info(f"NetBox virtual machines: {netbox_vm_ids}")
+
+            # Sync cluster and node data before SSE stages so cluster/node records
+            # are populated regardless of which stages are selected.
+            endpoint_ids_to_sync = (
+                [int(eid) for eid in proxmox_endpoint_ids if eid]
+                if proxmox_endpoint_ids
+                else list(ProxmoxEndpoint.objects.values_list("pk", flat=True))
+            )
+            for eid in endpoint_ids_to_sync:
+                self.logger.info(f"Syncing cluster/nodes for endpoint {eid}")
+                cluster_result = sync_cluster_and_nodes(endpoint_id=eid)
+                if cluster_result.success:
+                    self.logger.info(
+                        f"Cluster/node sync for endpoint {eid}: "
+                        f"{cluster_result.clusters_created} cluster(s) created, "
+                        f"{cluster_result.clusters_updated} updated, "
+                        f"{cluster_result.nodes_created} node(s) created, "
+                        f"{cluster_result.nodes_updated} updated"
+                    )
+                else:
+                    self.logger.warning(
+                        f"Cluster/node sync for endpoint {eid} failed: {cluster_result.error}"
+                    )
 
             stages_out = _run_all_stages_sync(self, stages, params, run_started)
 

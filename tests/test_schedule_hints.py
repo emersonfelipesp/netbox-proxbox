@@ -103,6 +103,20 @@ def schedule_hints(monkeypatch):
     models_mod.ProxmoxEndpoint = _FakeProxmoxEndpoint
     monkeypatch.setitem(sys.modules, "netbox_proxbox.models", models_mod)
 
+    # Stub netbox_proxbox.services.sync_cluster so the top-level import in jobs.py resolves.
+    sync_cluster_mod = types.ModuleType("netbox_proxbox.services.sync_cluster")
+    sync_cluster_mod.sync_cluster_and_nodes = lambda endpoint_id=None: SimpleNamespace(
+        success=True,
+        clusters_created=0,
+        clusters_updated=0,
+        nodes_created=0,
+        nodes_updated=0,
+        error=None,
+    )
+    monkeypatch.setitem(
+        sys.modules, "netbox_proxbox.services.sync_cluster", sync_cluster_mod
+    )
+
     sys.modules.pop("netbox_proxbox.jobs", None)
     jobs_path = root / "netbox_proxbox" / "jobs.py"
     jobs_spec = importlib.util.spec_from_file_location("netbox_proxbox.jobs", jobs_path)

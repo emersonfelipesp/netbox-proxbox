@@ -62,8 +62,26 @@ def proxbox_sync_job_module(monkeypatch):
                 ignore_ipv6_link_local_addresses=True,
             )
 
+    class _ProxmoxEndpoint:
+        objects = SimpleNamespace(values_list=lambda *a, **kw: [])
+
     models_mod.ProxboxPluginSettings = _ProxboxPluginSettings
+    models_mod.ProxmoxEndpoint = _ProxmoxEndpoint
     monkeypatch.setitem(sys.modules, "netbox_proxbox.models", models_mod)
+
+    # Stub netbox_proxbox.services.sync_cluster so the top-level import in jobs.py resolves.
+    sync_cluster_mod = types.ModuleType("netbox_proxbox.services.sync_cluster")
+    sync_cluster_mod.sync_cluster_and_nodes = lambda endpoint_id=None: SimpleNamespace(
+        success=True,
+        clusters_created=0,
+        clusters_updated=0,
+        nodes_created=0,
+        nodes_updated=0,
+        error=None,
+    )
+    monkeypatch.setitem(
+        sys.modules, "netbox_proxbox.services.sync_cluster", sync_cluster_mod
+    )
 
     sys.modules.pop("netbox_proxbox.jobs", None)
     path = root / "netbox_proxbox" / "jobs.py"
