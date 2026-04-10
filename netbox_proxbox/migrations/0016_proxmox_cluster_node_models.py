@@ -9,7 +9,7 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
     dependencies = [
         ("netbox_proxbox", "0015_alter_vmbackup_unique_together_alter_vmbackup_vmid_and_more"),
-        ("dcim", "0226_modulebay_rebuild_tree"),
+        ("dcim", "0225_gfk_indexes"),
         ("virtualization", "0052_gfk_indexes"),
     ]
 
