@@ -80,7 +80,8 @@ class ProxmoxEndpointExportView(generic.ObjectListView):
         """Confirm POSTed NetBox API token maps to a user allowed to view Proxmox endpoints.
 
         Supports three modes based on the ``token_version`` POST field:
-        - ``v1``: look up an existing v1 Token by PK (``token_id`` field) and use its plaintext.
+        - ``v1``: ``v1_manual_token`` (raw plaintext) takes priority over a dropdown
+          ``token_id`` selection.  Either must be provided.
         - ``v2``: construct a Bearer header from ``token_key`` and ``token_secret`` fields.
         - Fallback (no ``token_version``): legacy ``netbox_token`` single-field format.
         """
@@ -89,23 +90,35 @@ class ProxmoxEndpointExportView(generic.ObjectListView):
         token_version = (request.POST.get("token_version") or "").strip()
 
         if token_version == "v1":
-            token_id = (request.POST.get("token_id") or "").strip()
-            if not token_id:
-                messages.error(request, "Select a v1 token to export secrets.")
-                return False
-            try:
-                token_obj = Token.objects.get(pk=int(token_id), version=1)
-            except (Token.DoesNotExist, ValueError):
-                messages.error(request, "The selected v1 token could not be found.")
-                return False
-            plaintext = (token_obj.plaintext or "").strip()
-            if not plaintext:
-                messages.error(
-                    request,
-                    "The selected v1 token does not have a usable plaintext value.",
-                )
-                return False
-            header_value = f"Token {plaintext}"
+            # A manually entered token overrides the dropdown selection.
+            manual_token = (request.POST.get("v1_manual_token") or "").strip()
+            if manual_token:
+                # Accept raw plaintext, or a prefixed "Token <value>" string.
+                if manual_token.startswith("Token "):
+                    header_value = manual_token
+                else:
+                    header_value = f"Token {manual_token}"
+            else:
+                token_id = (request.POST.get("token_id") or "").strip()
+                if not token_id:
+                    messages.error(
+                        request,
+                        "Select a v1 token or enter one manually to export secrets.",
+                    )
+                    return False
+                try:
+                    token_obj = Token.objects.get(pk=int(token_id), version=1)
+                except (Token.DoesNotExist, ValueError):
+                    messages.error(request, "The selected v1 token could not be found.")
+                    return False
+                plaintext = (token_obj.plaintext or "").strip()
+                if not plaintext:
+                    messages.error(
+                        request,
+                        "The selected v1 token does not have a usable plaintext value.",
+                    )
+                    return False
+                header_value = f"Token {plaintext}"
 
         elif token_version == "v2":
             token_key = (request.POST.get("token_key") or "").strip()

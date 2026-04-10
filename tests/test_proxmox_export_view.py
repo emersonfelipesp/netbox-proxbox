@@ -334,6 +334,41 @@ def test_validate_token_v2_mode_missing_secret_returns_false(monkeypatch):
     assert errors
 
 
+def test_validate_token_v1_manual_overrides_dropdown(monkeypatch):
+    """v1 mode: v1_manual_token field takes priority over token_id selection."""
+    view = _make_view()
+    captured = {}
+
+    def fake_authenticate(req):
+        captured["auth"] = req.META.get("HTTP_AUTHORIZATION", "")
+        return (_FakeUser(), None)
+
+    monkeypatch.setattr(proxmox_views.TokenAuthentication, "authenticate", fake_authenticate)
+
+    import sys
+    fake_users_module = type(sys)("users.models")
+    fake_users_module.Token = type("Token", (), {"DoesNotExist": KeyError})
+    monkeypatch.setitem(sys.modules, "users.models", fake_users_module)
+
+    errors = []
+    monkeypatch.setattr(proxmox_views.messages, "error", lambda req, msg: errors.append(msg))
+
+    request = SimpleNamespace(
+        POST={
+            "token_version": "v1",
+            "token_id": "42",           # dropdown selection (should be ignored)
+            "v1_manual_token": "manualplaintext1234",  # manual wins
+        },
+        META={},
+        user=_FakeUser(),
+    )
+    result = view._validate_sensitive_export_token(request)
+
+    assert result is True
+    assert captured["auth"] == "Token manualplaintext1234"
+    assert errors == []
+
+
 def test_validate_token_fallback_uses_legacy_netbox_token_field(monkeypatch):
     """Fallback (no token_version) uses the legacy netbox_token POST field."""
     view = _make_view()

@@ -49,7 +49,7 @@
               </select>
             </div>
 
-            {# Token version selector #}
+            {# Token version selector (v1 / v2) #}
             <div class="mb-3">
               <label class="form-label d-block">{% trans "NetBox API token version" %}</label>
               <div class="btn-group" role="group" aria-label="{% trans 'Token version' %}">
@@ -63,36 +63,68 @@
 
             {# v1 token section #}
             <div id="v1-token-section">
+
+              {# v1 sub-mode: select existing or enter manually #}
               <div class="mb-3">
-                <label class="form-label" for="id_token_id">{% trans "Select v1 token" %}</label>
-                <select class="form-select" id="id_token_id" name="token_id">
-                  <option value="" disabled selected>{% trans "Loading tokens…" %}</option>
-                </select>
-                <div class="form-text">
-                  {% trans "Only enabled v1 tokens belonging to your account are listed." %}
+                <div class="btn-group btn-group-sm" role="group" aria-label="{% trans 'v1 input mode' %}">
+                  <input type="radio" class="btn-check" name="v1_mode" id="v1_mode_select" value="select" autocomplete="off" checked>
+                  <label class="btn btn-outline-secondary" for="v1_mode_select">{% trans "Select existing" %}</label>
+
+                  <input type="radio" class="btn-check" name="v1_mode" id="v1_mode_manual" value="manual" autocomplete="off">
+                  <label class="btn btn-outline-secondary" for="v1_mode_manual">{% trans "Enter manually" %}</label>
                 </div>
               </div>
-              <div class="mb-3">
-                <button type="button" class="btn btn-outline-success btn-sm" id="btn-quick-add-token"
-                        data-quick-add-url="{% url 'plugins:netbox_proxbox:proxmoxendpoint_quick_add_token' %}">
-                  <i class="mdi mdi-plus" aria-hidden="true"></i> {% trans "Quick add token" %}
-                </button>
-                <span class="ms-2 text-muted small">{% trans "Creates a temporary v1 token under your account." %}</span>
-              </div>
-              <div id="quick-add-warning" class="alert alert-danger d-none" role="alert">
-                <strong>{% trans "Security notice:" %}</strong>
-                {% trans "A new v1 token was created for your account. Delete it or store it securely after this export." %}
-                <div class="mt-2">
-                  <label class="form-label small mb-1" for="id_quick_add_plaintext">{% trans "Token value (copy before closing)" %}</label>
-                  <div class="input-group input-group-sm">
-                    <input type="text" class="form-control font-monospace" id="id_quick_add_plaintext" readonly autocomplete="off">
-                    <button type="button" class="btn btn-outline-secondary" id="btn-copy-token" title="{% trans 'Copy to clipboard' %}">
-                      <i class="mdi mdi-content-copy" aria-hidden="true"></i>
-                    </button>
+
+              {# Select-existing group #}
+              <div id="v1-select-group">
+                <div class="mb-3">
+                  <label class="form-label" for="id_token_id">{% trans "Select v1 token" %}</label>
+                  <select class="form-select" id="id_token_id" name="token_id">
+                    <option value="" disabled selected>{% trans "Loading tokens…" %}</option>
+                  </select>
+                  <div class="form-text">
+                    {% trans "Only enabled v1 tokens belonging to your account are listed." %}
+                  </div>
+                </div>
+                <div class="mb-3">
+                  <button type="button" class="btn btn-outline-success btn-sm" id="btn-quick-add-token"
+                          data-quick-add-url="{% url 'plugins:netbox_proxbox:proxmoxendpoint_quick_add_token' %}">
+                    <i class="mdi mdi-plus" aria-hidden="true"></i> {% trans "Quick add token" %}
+                  </button>
+                  <span class="ms-2 text-muted small">{% trans "Creates a temporary v1 token under your account." %}</span>
+                </div>
+                <div id="quick-add-warning" class="alert alert-danger d-none" role="alert">
+                  <strong>{% trans "Security notice:" %}</strong>
+                  {% trans "A new v1 token was created for your account. Delete it or store it securely after this export." %}
+                  <div class="mt-2">
+                    <label class="form-label small mb-1" for="id_quick_add_plaintext">{% trans "Token value (copy before closing)" %}</label>
+                    <div class="input-group input-group-sm">
+                      <input type="text" class="form-control font-monospace" id="id_quick_add_plaintext" readonly autocomplete="off">
+                      <button type="button" class="btn btn-outline-secondary" id="btn-copy-token" title="{% trans 'Copy to clipboard' %}">
+                        <i class="mdi mdi-content-copy" aria-hidden="true"></i>
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
+
+              {# Manual-entry group #}
+              <div id="v1-manual-group" class="d-none">
+                <div class="mb-3">
+                  <label class="form-label" for="id_v1_manual_token">{% trans "v1 token value" %}</label>
+                  <input
+                    class="form-control font-monospace"
+                    id="id_v1_manual_token"
+                    name="v1_manual_token"
+                    type="password"
+                    placeholder="{% trans 'Paste your 40-character v1 token' %}"
+                    autocomplete="off"
+                  />
+                  <div class="form-text">{% trans "A manually entered token overrides any dropdown selection." %}</div>
+                </div>
+              </div>
+
+            </div>{# /v1-token-section #}
 
             {# v2 token section (hidden by default) #}
             <div id="v2-token-section" class="d-none">
@@ -136,5 +168,5 @@
 {% block javascript %}
   {{ block.super }}
   <script type="module" src="{% static 'netbox_proxbox/js/endpoint-status.js' %}"></script>
-  <script type="module" src="{% static 'netbox_proxbox/js/export-secrets-modal.js' %}"></script>
+  <script src="{% static 'netbox_proxbox/js/export-secrets-modal.js' %}"></script>
 {% endblock %}

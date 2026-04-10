@@ -429,6 +429,9 @@ def test_proxmox_list_template_exposes_import_export_controls_and_warning_modal(
     assert 'name="token_id"' in contents
     assert 'name="token_key"' in contents
     assert 'name="token_secret"' in contents
+    # v1 sub-mode: select vs manual.
+    assert 'name="v1_mode"' in contents
+    assert 'name="v1_manual_token"' in contents
     # Quick add button.
     assert "Quick add token" in contents
     # Security warning for quick-add.
