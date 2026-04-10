@@ -1,6 +1,7 @@
 """Re-export endpoint model views for the plugin UI."""
 
 from .fastapi import (
+    FastAPIEndpointBulkImportView,
     FastAPIEndpointDeleteView,
     FastAPIEndpointEditView,
     FastAPIEndpointListView,
@@ -8,6 +9,7 @@ from .fastapi import (
     FastAPIOpenAPIView,
 )
 from .netbox import (
+    NetBoxEndpointBulkImportView,
     NetBoxEndpointDeleteView,
     NetBoxEndpointEditView,
     NetBoxEndpointListView,

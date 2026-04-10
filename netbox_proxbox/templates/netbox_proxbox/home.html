@@ -94,6 +94,7 @@
                 <div class="d-flex flex-wrap justify-content-center gap-2">
                     <a href="{{ netbox_quick_add_url }}" class="btn btn-primary">Quick add NetBox Endpoint</a>
                     <a href="{% url 'plugins:netbox_proxbox:netboxendpoint_add' %}" class="btn btn-outline-secondary">Open blank form</a>
+                    <a href="{% url 'plugins:netbox_proxbox:netboxendpoint_bulk_import' %}" class="btn btn-outline-primary"><i class="mdi mdi-upload" aria-hidden="true"></i> Import from CSV</a>
                 </div>
             </div>
             <hr>
@@ -112,6 +113,7 @@
                 <div class="d-flex flex-wrap justify-content-center gap-2">
                     <a href="{{ fastapi_quick_add_url }}" class="btn btn-primary">Quick add FastAPI Endpoint</a>
                     <a href="{% url 'plugins:netbox_proxbox:fastapiendpoint_add' %}" class="btn btn-outline-secondary">Open blank form</a>
+                    <a href="{% url 'plugins:netbox_proxbox:fastapiendpoint_bulk_import' %}" class="btn btn-outline-primary"><i class="mdi mdi-upload" aria-hidden="true"></i> Import from CSV</a>
                 </div>
             </div>
             <hr>
@@ -132,8 +134,9 @@
         {% else %}
             <div class="d-flex flex-column align-items-center" style="margin-bottom: 15px;">
                 <div><h2>There are no Proxmox Endpoints configured.</h2></div>
-                <div class="justify-content-center">
+                <div class="d-flex flex-wrap justify-content-center gap-2">
                     <a href="{% url 'plugins:netbox_proxbox:proxmoxendpoint_add' %}" class="btn btn-primary">Create new Proxmox Endpoint</a>
+                    <a href="{% url 'plugins:netbox_proxbox:proxmoxendpoint_bulk_import' %}" class="btn btn-outline-primary"><i class="mdi mdi-upload" aria-hidden="true"></i> Import from CSV</a>
                 </div>
             </div>
             <hr>

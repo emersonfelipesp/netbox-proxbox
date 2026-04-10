@@ -2,10 +2,19 @@
 
 # Django Imports
 from django import forms
+from django.utils.translation import gettext_lazy as _
 
 # NetBox Imports
-from utilities.forms.fields import DynamicModelChoiceField, CommentField
-from netbox.forms import NetBoxModelForm, NetBoxModelFilterSetForm
+from utilities.forms.fields import (
+    DynamicModelChoiceField,
+    CommentField,
+    CSVModelChoiceField,
+)
+from netbox.forms import (
+    NetBoxModelForm,
+    NetBoxModelFilterSetForm,
+    NetBoxModelImportForm,
+)
 from ipam.models import IPAddress
 
 # Proxbox Imports
@@ -90,6 +99,33 @@ class FastAPIEndpointForm(NetBoxModelForm):
             self.add_error("ip_address", "Provide either a domain or an IP address.")
 
         return cleaned_data
+
+
+class FastAPIEndpointImportForm(NetBoxModelImportForm):
+    """CSV import mapping for bulk FastAPI endpoint creation."""
+
+    ip_address = CSVModelChoiceField(
+        queryset=IPAddress.objects.all(),
+        required=False,
+        to_field_name="address",
+        help_text=_("IP address in CIDR format, for example 192.0.2.10/24."),
+    )
+
+    class Meta:
+        model = FastAPIEndpoint
+        fields = (
+            "name",
+            "domain",
+            "ip_address",
+            "port",
+            "verify_ssl",
+            "token",
+            "use_websocket",
+            "websocket_domain",
+            "websocket_port",
+            "server_side_websocket",
+            "tags",
+        )
 
 
 class FastAPIEndpointFilterForm(NetBoxModelFilterSetForm):

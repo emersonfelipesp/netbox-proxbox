@@ -4,7 +4,11 @@ from netbox.views import generic
 from utilities.views import register_model_view
 
 from netbox_proxbox.filtersets import NetBoxEndpointFilterSet
-from netbox_proxbox.forms import NetBoxEndpointFilterForm, NetBoxEndpointForm
+from netbox_proxbox.forms import (
+    NetBoxEndpointFilterForm,
+    NetBoxEndpointForm,
+    NetBoxEndpointImportForm,
+)
 from netbox_proxbox.models import NetBoxEndpoint
 from netbox_proxbox.tables import NetBoxEndpointTable
 
@@ -12,6 +16,7 @@ from netbox_proxbox.tables import NetBoxEndpointTable
 __all__ = (
     "NetBoxEndpointView",
     "NetBoxEndpointListView",
+    "NetBoxEndpointBulkImportView",
     "NetBoxEndpointEditView",
     "NetBoxEndpointDeleteView",
 )
@@ -33,6 +38,14 @@ class NetBoxEndpointListView(generic.ObjectListView):
     filterset = NetBoxEndpointFilterSet
     filterset_form = NetBoxEndpointFilterForm
     template_name = "netbox_proxbox/netboxendpoint_list.html"
+
+
+@register_model_view(NetBoxEndpoint, "bulk_import", path="import", detail=False)
+class NetBoxEndpointBulkImportView(generic.BulkImportView):
+    """Bulk import NetBox endpoints from structured data."""
+
+    queryset = NetBoxEndpoint.objects.all()
+    model_form = NetBoxEndpointImportForm
 
 
 @register_model_view(NetBoxEndpoint, "add", detail=False)

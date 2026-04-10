@@ -2,10 +2,20 @@
 
 # Django Imports
 from django import forms
+from django.utils.translation import gettext_lazy as _
 
 # NetBox Imports
-from utilities.forms.fields import DynamicModelChoiceField, CommentField
-from netbox.forms import NetBoxModelForm, NetBoxModelFilterSetForm
+from utilities.forms.fields import (
+    DynamicModelChoiceField,
+    CommentField,
+    CSVModelChoiceField,
+    CSVChoiceField,
+)
+from netbox.forms import (
+    NetBoxModelForm,
+    NetBoxModelFilterSetForm,
+    NetBoxModelImportForm,
+)
 from ipam.models import IPAddress
 from users.models import Token
 
@@ -154,6 +164,43 @@ class NetBoxEndpointForm(NetBoxModelForm):
             cleaned_data["token_secret"] = ""
 
         return cleaned_data
+
+
+class NetBoxEndpointImportForm(NetBoxModelImportForm):
+    """CSV import mapping for bulk NetBox endpoint creation."""
+
+    ip_address = CSVModelChoiceField(
+        queryset=IPAddress.objects.all(),
+        required=False,
+        to_field_name="address",
+        help_text=_("IP address in CIDR format, for example 192.0.2.10/24."),
+    )
+    token = CSVModelChoiceField(
+        queryset=Token.objects.all(),
+        required=False,
+        to_field_name="key",
+        help_text=_("Existing NetBox API token key."),
+    )
+    token_version = CSVChoiceField(
+        choices=NetBoxTokenVersionChoices,
+        required=False,
+        help_text=_("Token version: v1 or v2."),
+    )
+
+    class Meta:
+        model = NetBoxEndpoint
+        fields = (
+            "name",
+            "domain",
+            "ip_address",
+            "port",
+            "token_version",
+            "token",
+            "token_key",
+            "token_secret",
+            "verify_ssl",
+            "tags",
+        )
 
 
 class NetBoxEndpointFilterForm(NetBoxModelFilterSetForm):

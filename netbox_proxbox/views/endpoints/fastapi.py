@@ -5,7 +5,11 @@ from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
 
 from netbox_proxbox.filtersets import FastAPIEndpointFilterSet
-from netbox_proxbox.forms import FastAPIEndpointFilterForm, FastAPIEndpointForm
+from netbox_proxbox.forms import (
+    FastAPIEndpointFilterForm,
+    FastAPIEndpointForm,
+    FastAPIEndpointImportForm,
+)
 from netbox_proxbox.models import FastAPIEndpoint
 from netbox_proxbox.services.openapi_schema import get_cached_openapi_schema
 from netbox_proxbox.tables import FastAPIEndpointTable
@@ -15,6 +19,7 @@ __all__ = (
     "FastAPIEndpointView",
     "FastAPIOpenAPIView",
     "FastAPIEndpointListView",
+    "FastAPIEndpointBulkImportView",
     "FastAPIEndpointEditView",
     "FastAPIEndpointDeleteView",
 )
@@ -64,6 +69,14 @@ class FastAPIEndpointListView(generic.ObjectListView):
     filterset = FastAPIEndpointFilterSet
     filterset_form = FastAPIEndpointFilterForm
     template_name = "netbox_proxbox/fastapiendpoint_list.html"
+
+
+@register_model_view(FastAPIEndpoint, "bulk_import", path="import", detail=False)
+class FastAPIEndpointBulkImportView(generic.BulkImportView):
+    """Bulk import FastAPI endpoints from structured data."""
+
+    queryset = FastAPIEndpoint.objects.all()
+    model_form = FastAPIEndpointImportForm
 
 
 @register_model_view(FastAPIEndpoint, "add", detail=False)

@@ -2,6 +2,12 @@
 {% load i18n %}
 {% load static %}
 
+{% block extra_controls %}
+  <a class="btn btn-outline-primary" href="{% url 'plugins:netbox_proxbox:netboxendpoint_bulk_import' %}">
+    <i class="mdi mdi-upload" aria-hidden="true"></i> {% trans "Import" %}
+  </a>
+{% endblock %}
+
 {% block javascript %}
   {{ block.super }}
   <script type="module" src="{% static 'netbox_proxbox/js/endpoint-status.js' %}"></script>
