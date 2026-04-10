@@ -85,6 +85,8 @@ def job_stream_module(monkeypatch):
     nbp_jobs.SyncTypeChoices = SimpleNamespace(
         ALL="all",
         BACKUP_ROUTINES="backup-routines",
+        REPLICATIONS="replications",
+        TASK_HISTORY="task-history",
         DEVICES="devices",
         STORAGE="storage",
         VIRTUAL_MACHINES="virtual-machines",

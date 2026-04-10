@@ -72,6 +72,7 @@ def schedule_hints(monkeypatch):
     choices_mod.SyncTypeChoices = SimpleNamespace(
         BACKUP_ROUTINES="backup-routines",
         REPLICATIONS="replications",
+        TASK_HISTORY="task-history",
         DEVICES="devices",
         STORAGE="storage",
         VIRTUAL_MACHINES="virtual-machines",

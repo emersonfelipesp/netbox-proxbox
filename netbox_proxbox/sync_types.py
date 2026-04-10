@@ -11,6 +11,7 @@ _SYNC_STAGE_ORDER: tuple[str, ...] = (
     SyncTypeChoices.DEVICES,
     SyncTypeChoices.STORAGE,
     SyncTypeChoices.VIRTUAL_MACHINES,
+    SyncTypeChoices.TASK_HISTORY,
     SyncTypeChoices.VIRTUAL_MACHINES_DISKS,
     SyncTypeChoices.VIRTUAL_MACHINES_BACKUPS,
     SyncTypeChoices.VIRTUAL_MACHINES_SNAPSHOTS,
@@ -26,6 +27,7 @@ _SYNC_TYPE_PATH: dict[str, str] = {
     SyncTypeChoices.DEVICES: "dcim/devices/create",
     SyncTypeChoices.STORAGE: "virtualization/virtual-machines/storage/create",
     SyncTypeChoices.VIRTUAL_MACHINES: "virtualization/virtual-machines/create",
+    SyncTypeChoices.TASK_HISTORY: "virtualization/virtual-machines/task-history/create",
     SyncTypeChoices.VIRTUAL_MACHINES_BACKUPS: "virtualization/virtual-machines/backups/all/create",
     SyncTypeChoices.VIRTUAL_MACHINES_DISKS: "virtualization/virtual-machines/virtual-disks/create",
     SyncTypeChoices.VIRTUAL_MACHINES_SNAPSHOTS: (
