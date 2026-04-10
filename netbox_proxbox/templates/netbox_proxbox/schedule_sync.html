@@ -126,9 +126,12 @@
                                     </button>
                                 </form>
                                 {% else %}
-                                <a href="{% url 'core:job_rerun' job.pk %}" class="btn btn-sm btn-outline-success" title="{% trans 'Run' %}">
-                                    <i class="mdi mdi-play"></i>
-                                </a>
+                                <form method="post" action="{% url 'core:job_proxbox_run' pk=job.pk %}" class="d-inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-outline-success" title="{% trans 'Run' %}">
+                                        <i class="mdi mdi-play"></i>
+                                    </button>
+                                </form>
                                 {% endif %}
                             </td>
                         </tr>
