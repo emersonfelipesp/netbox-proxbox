@@ -45,6 +45,19 @@ This package contains the NetBox plugin itself. It defines the plugin config, UR
 - The API layer exposes the same main models through NetBox plugin API endpoints.
 - Browser-side pages use templates plus JS from `static/netbox_proxbox/js/` for dashboard hydration, keepalive polling, SSE streaming, log rendering, and WebSocket updates.
 
+## Import / Export
+
+All three endpoint types support CSV, JSON, and YAML export via dedicated `ExportView` classes in `views/endpoints/`. Export comes in two modes:
+
+- **Safe export** (no credentials): available to any user with `view` permission.
+- **Sensitive export** (includes credentials): requires the user to supply a valid NetBox API token (v1 or v2) via the export-secrets modal. The token is validated server-side before the download is served.
+
+Import uses NetBox's `BulkImportView`. All import forms auto-create missing `IPAddress` objects via `get_or_create` so data can move between NetBox instances without manual IPAM pre-population. Exported `id` columns are stripped before processing to prevent PK collisions.
+
+**NetBoxEndpoint and FastAPIEndpoint are singletons.** If a record already exists when a bulk import is submitted, the import view intercepts the request and renders a confirmation page (`singleton_import_confirm.html`) before deleting the existing record and creating the replacement. ProxmoxEndpoint allows multiple rows and has no such constraint.
+
+For detailed implementation notes see [`views/endpoints/CLAUDE.md`](./views/endpoints/CLAUDE.md) and [`forms/CLAUDE.md`](./forms/CLAUDE.md).
+
 ## Dependencies
 
 - Inbound: NetBox plugin loader imports `config`, NetBox route registration imports `urls.py`, and the menu system imports `navigation.py`.

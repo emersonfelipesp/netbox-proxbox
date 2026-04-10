@@ -16,6 +16,18 @@ This is the main Django template namespace for the plugin.
 - Inbound: views throughout `views/` render these templates.
 - Outbound: static assets, NetBox base templates, and the JSON/HTML response contracts used by the views.
 
+## Export and Import Templates
+
+All three endpoint list templates (`proxmoxendpoint_list.html`, `netboxendpoint_list.html`, `fastapiendpoint_list.html`) include:
+
+- An **Import** button linking to the model's `bulk_import` URL.
+- An **Export** dropdown with CSV / JSON / YAML links to the model's `export` URL.
+- An **Export with secrets** button that opens a Bootstrap modal for authenticated sensitive export.
+
+The modal contains the full token-version UI (v1 dropdown or manual entry, v2 key+secret), a **Quick add token** button that calls the model's `quick_add_token` endpoint, copy-to-clipboard for the new token's plaintext, and client-side form validation. All of this JS is **inlined as an IIFE** directly in `{% block javascript %}` — not loaded from a separate `.js` file — so it works without running `collectstatic`.
+
+`singleton_import_confirm.html` is rendered when a `NetBoxEndpoint` or `FastAPIEndpoint` import is attempted while a record already exists. It shows the existing record's key fields and a re-submit form that adds `confirm_override=true`, plus a Cancel link back to the list. See [`views/endpoints/CLAUDE.md`](../../views/endpoints/CLAUDE.md) for the full singleton import flow.
+
 ## Notes
 
 - There is some historical naming overlap in endpoint templates; keep the Python view/template binding in mind before removing or renaming files.
