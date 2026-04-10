@@ -25,10 +25,11 @@ def resolve_ip_address_initial(value: object) -> "IPAddress | None":  # type: ig
     if not candidate:
         return None
 
-    ip_address = IPAddress.objects.filter(pk=candidate).first()
-    if ip_address is None:
-        ip_address = IPAddress.objects.filter(address=candidate).first()
-    return ip_address
+    if candidate.isdigit():
+        ip_address = IPAddress.objects.filter(pk=candidate).first()
+        if ip_address is not None:
+            return ip_address
+    return IPAddress.objects.filter(address=candidate).first()
 
 
 def get_ip_address_host(value: object | None) -> str:
