@@ -13,7 +13,7 @@
                     <table class="table table-hover attr-table">
                         <tr>
                             <th scope="row">{% trans "Job ID" %}</th>
-                            <td>{{ object.job_id|hyperlinked_object }}</td>
+                            <td>{{ object.job_id|linkify }}</td>
                         </tr>
                         <tr>
                             <th scope="row">{% trans "Enabled" %}</th>
@@ -27,11 +27,11 @@
                         </tr>
                         <tr>
                             <th scope="row">{% trans "Status" %}</th>
-                            <td>{{ object.status|hyperlinked_object }}</td>
+                            <td>{{ object.status|linkify }}</td>
                         </tr>
                         <tr>
                             <th scope="row">{% trans "Node" %}</th>
-                            <td>{{ object.node|hyperlinked_object|placeholder:"All Nodes" }}</td>
+                            <td>{{ object.node|linkify|placeholder:"All Nodes" }}</td>
                         </tr>
                         <tr>
                             <th scope="row">{% trans "Schedule" %}</th>
@@ -43,7 +43,7 @@
                         </tr>
                         <tr>
                             <th scope="row">{% trans "Storage" %}</th>
-                            <td>{{ object.storage|hyperlinked_object|placeholder }}</td>
+                            <td>{{ object.storage|linkify|placeholder }}</td>
                         </tr>
                         <tr>
                             <th scope="row">{% trans "Selection" %}</th>
@@ -134,7 +134,7 @@
                         </tr>
                         <tr>
                             <th scope="row">{% trans "Fleecing Storage" %}</th>
-                            <td>{{ object.fleecing_storage|hyperlinked_object|placeholder }}</td>
+                            <td>{{ object.fleecing_storage|linkify|placeholder }}</td>
                         </tr>
                         <tr>
                             <th scope="row">{% trans "Repeat Missed" %}</th>

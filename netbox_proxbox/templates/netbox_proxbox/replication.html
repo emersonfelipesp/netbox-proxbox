@@ -15,11 +15,11 @@
                         </tr>
                         <tr>
                             <th scope="row">{% trans "Virtual Machine" %}</th>
-                            <td>{{ object.virtual_machine|hyperlinked_object }}</td>
+                            <td>{{ object.virtual_machine|linkify }}</td>
                         </tr>
                         <tr>
                             <th scope="row">{% trans "Proxmox Node" %}</th>
-                            <td>{{ object.proxmox_node|hyperlinked_object|placeholder }}</td>
+                            <td>{{ object.proxmox_node|linkify|placeholder }}</td>
                         </tr>
                         <tr>
                             <th scope="row">{% trans "Guest" %}</th>

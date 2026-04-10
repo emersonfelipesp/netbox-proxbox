@@ -12,7 +12,6 @@ class VMSnapshotTable(NetBoxTable):
     """django-tables2 layout for VM snapshot list views."""
 
     name = tables.Column(linkify=True)
-    storage = tables.Column(linkify=True)
     virtual_machine = tables.Column(linkify=True)
     proxmox_storage = tables.Column(linkify=True)
     subtype = ChoiceFieldColumn(
@@ -32,7 +31,6 @@ class VMSnapshotTable(NetBoxTable):
             "id",
             "proxmox_storage",
             "name",
-            "storage",
             "virtual_machine",
             "vmid",
             "node",
@@ -47,7 +45,6 @@ class VMSnapshotTable(NetBoxTable):
             "pk",
             "proxmox_storage",
             "name",
-            "storage",
             "virtual_machine",
             "vmid",
             "node",

@@ -12,11 +12,11 @@
                     <table class="table table-hover attr-table">
                         <tr>
                             <th scope="row">Virtual Machine</th>
-                            <td>{{ object.virtual_machine|hyperlinked_object }}</td>
+                            <td>{{ object.virtual_machine|linkify }}</td>
                         </tr>
                         <tr>
                             <th scope="row">{% trans "Storage" %}</th>
-                            <td>{{ object.storage|hyperlinked_object|placeholder }}</td>
+                            <td>{{ object.proxmox_storage|linkify|placeholder }}</td>
                         </tr>
                         <tr>
                             <th scope="row">Subtype</th>
