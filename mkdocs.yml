@@ -85,9 +85,20 @@ nav:
       - Proxmox Commands: 'reference/proxbox-cli/command-examples/proxmox-commands.md'
       - Infrastructure Commands: 'reference/proxbox-cli/command-examples/infrastructure-commands.md'
   - Developer:
-    - Proxbox CLI Docgen: 'developer/proxbox-cli-docgen.md'
-    - Local Proxmox Mock: 'developer/proxmox-mock-local.md'
-    - Raw CLI Capture: 'generated/proxbox-cli-command-capture.md'
+    - Architecture Overview: 'developer/architecture-overview.md'
+    - Component Deep Dive: 'developer/component-deep-dive.md'
+    - Data Model: 'developer/data-model.md'
+    - Sync Pipeline: 'developer/sync-pipeline.md'
+    - Data Flow: 'developer/data-flow.md'
+    - Streaming Protocol: 'developer/streaming-protocol.md'
+    - Authentication: 'developer/authentication.md'
+    - Backend Integration: 'developer/backend-integration.md'
+    - Browser Frontend: 'developer/browser-frontend.md'
+    - Extending the Plugin: 'developer/extending-the-plugin.md'
+    - Tooling:
+      - Proxbox CLI Docgen: 'developer/proxbox-cli-docgen.md'
+      - Local Proxmox Mock: 'developer/proxmox-mock-local.md'
+      - Raw CLI Capture: 'generated/proxbox-cli-command-capture.md'
   - User Guide:
     - Cluster and Node Tracking: 'user-guide/cluster-nodes.md'
   - API Reference:
@@ -146,6 +157,7 @@ markdown_extensions:
           class: mermaid
           format: !!python/name:pymdownx.superfences.fence_code_format
   - admonition
+  - pymdownx.details
   - abbr
   - toc:
       permalink: true
