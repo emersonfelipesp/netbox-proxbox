@@ -20,7 +20,10 @@ _CONTEXT_KEYS = (
     "storage",
     "volid",
     "snapshot_name",
-    "vm_type",
+    "interface_name",
+    "ip_address",
+    "disk_name",
+    "replication_id",
 )
 
 
@@ -160,17 +163,26 @@ def _get_dependency_config(
 ) -> tuple[str, tuple[str, ...]] | None:
     """Return (path, param_keys) for a dependency type, or None if unknown."""
     DEPENDENCY_CONFIG: dict[str, tuple[str, tuple[str, ...]]] = {
-        "cluster": ("sync/individual/cluster", ("name",)),
+        "cluster": ("sync/individual/cluster", ("cluster_name",)),
         "node": ("sync/individual/node", ("cluster_name", "node_name")),
         "vm": ("sync/individual/vm", ("cluster_name", "node", "type", "vmid")),
         "storage": ("sync/individual/storage", ("cluster_name", "storage_name")),
         "interface": (
             "sync/individual/interface",
-            ("cluster_name", "node", "type", "vmid"),
+            ("cluster_name", "node", "type", "vmid", "interface_name"),
         ),
-        "ip": ("sync/individual/ip", ("cluster_name", "node", "type", "vmid")),
-        "disk": ("sync/individual/disk", ("cluster_name", "node", "type", "vmid")),
-        "replication": ("sync/individual/replication", ("cluster_name",)),
+        "ip": (
+            "sync/individual/ip",
+            ("cluster_name", "node", "type", "vmid", "ip_address"),
+        ),
+        "disk": (
+            "sync/individual/disk",
+            ("cluster_name", "node", "type", "vmid", "disk_name"),
+        ),
+        "replication": (
+            "sync/individual/replication",
+            ("cluster_name", "replication_id"),
+        ),
         "backup": (
             "sync/individual/backup",
             ("cluster_name", "node", "storage", "vmid", "volid"),
@@ -179,7 +191,7 @@ def _get_dependency_config(
             "sync/individual/snapshot",
             ("cluster_name", "node", "type", "vmid", "snapshot_name"),
         ),
-        "task-history": ("sync/individual/task-history", ("node", "vm_type", "vmid")),
+        "task-history": ("sync/individual/task-history", ("node", "type", "vmid")),
     }
     return DEPENDENCY_CONFIG.get(dep_type)
 
@@ -201,12 +213,14 @@ def _sync_dependency(
 
     params = {}
     for key in param_keys:
-        if key == "name":
-            params[key] = dep.get("name") or context.get(f"{dep_type}_name", "")
-        elif key == "cluster_name":
-            params[key] = dep.get("cluster_name") or context.get("cluster_name", "")
+        if key == "cluster_name":
+            params[key] = (
+                dep.get("cluster_name")
+                or context.get("cluster_name", "")
+                or (dep.get("name") if dep_type == "cluster" else "")
+            )
         elif key == "node_name":
-            params[key] = dep.get("name") or ""
+            params[key] = dep.get("name") or dep.get("node_name") or ""
         elif key == "node":
             params[key] = dep.get("node") or context.get("node", "")
         elif key == "type":
@@ -214,7 +228,11 @@ def _sync_dependency(
         elif key == "vmid":
             params[key] = dep.get("vmid") or context.get("vmid")
         elif key == "storage_name":
-            params[key] = dep.get("name") or context.get("storage_name", "")
+            params[key] = (
+                dep.get("storage_name")
+                or dep.get("name")
+                or context.get("storage_name", "")
+            )
         elif key == "storage":
             params[key] = dep.get("storage") or context.get("storage", "")
         elif key == "volid":
@@ -225,12 +243,27 @@ def _sync_dependency(
                 or dep.get("name")
                 or context.get("snapshot_name", "")
             )
-        elif key == "vm_type":
+        elif key == "interface_name":
             params[key] = (
-                dep.get("vm_type")
-                or dep.get("type")
-                or context.get("vm_type")
-                or context.get("type", "qemu")
+                dep.get("interface_name")
+                or dep.get("name")
+                or context.get("interface_name", "")
+            )
+        elif key == "ip_address":
+            params[key] = (
+                dep.get("ip_address")
+                or dep.get("name")
+                or context.get("ip_address", "")
+            )
+        elif key == "disk_name":
+            params[key] = (
+                dep.get("disk_name") or dep.get("name") or context.get("disk_name", "")
+            )
+        elif key == "replication_id":
+            params[key] = (
+                dep.get("replication_id")
+                or dep.get("name")
+                or context.get("replication_id", "")
             )
 
     return sync_individual_with_dependencies(path, params, _visited, _context=context)
