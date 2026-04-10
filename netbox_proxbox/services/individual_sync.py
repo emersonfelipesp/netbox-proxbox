@@ -11,7 +11,17 @@ from netbox_proxbox.utils import get_first_fastapi_context
 logger = logging.getLogger(__name__)
 
 _INDIVIDUAL_SYNC_TIMEOUT = 30
-_CONTEXT_KEYS = ("cluster_name", "node", "type", "vmid", "storage_name")
+_CONTEXT_KEYS = (
+    "cluster_name",
+    "node",
+    "type",
+    "vmid",
+    "storage_name",
+    "storage",
+    "volid",
+    "snapshot_name",
+    "vm_type",
+)
 
 
 def sync_individual(
@@ -147,13 +157,29 @@ def sync_individual_with_dependencies(
 
 def _get_dependency_config(
     dep_type: str,
-) -> tuple[str, dict | None] | None:
+) -> tuple[str, tuple[str, ...]] | None:
     """Return (path, param_keys) for a dependency type, or None if unknown."""
-    DEPENDENCY_CONFIG = {
+    DEPENDENCY_CONFIG: dict[str, tuple[str, tuple[str, ...]]] = {
         "cluster": ("sync/individual/cluster", ("name",)),
         "node": ("sync/individual/node", ("cluster_name", "node_name")),
         "vm": ("sync/individual/vm", ("cluster_name", "node", "type", "vmid")),
         "storage": ("sync/individual/storage", ("cluster_name", "storage_name")),
+        "interface": (
+            "sync/individual/interface",
+            ("cluster_name", "node", "type", "vmid"),
+        ),
+        "ip": ("sync/individual/ip", ("cluster_name", "node", "type", "vmid")),
+        "disk": ("sync/individual/disk", ("cluster_name", "node", "type", "vmid")),
+        "replication": ("sync/individual/replication", ("cluster_name",)),
+        "backup": (
+            "sync/individual/backup",
+            ("cluster_name", "node", "storage", "vmid", "volid"),
+        ),
+        "snapshot": (
+            "sync/individual/snapshot",
+            ("cluster_name", "node", "type", "vmid", "snapshot_name"),
+        ),
+        "task-history": ("sync/individual/task-history", ("node", "vm_type", "vmid")),
     }
     return DEPENDENCY_CONFIG.get(dep_type)
 
@@ -189,6 +215,23 @@ def _sync_dependency(
             params[key] = dep.get("vmid") or context.get("vmid")
         elif key == "storage_name":
             params[key] = dep.get("name") or context.get("storage_name", "")
+        elif key == "storage":
+            params[key] = dep.get("storage") or context.get("storage", "")
+        elif key == "volid":
+            params[key] = dep.get("volid") or context.get("volid", "")
+        elif key == "snapshot_name":
+            params[key] = (
+                dep.get("snapshot_name")
+                or dep.get("name")
+                or context.get("snapshot_name", "")
+            )
+        elif key == "vm_type":
+            params[key] = (
+                dep.get("vm_type")
+                or dep.get("type")
+                or context.get("vm_type")
+                or context.get("type", "qemu")
+            )
 
     return sync_individual_with_dependencies(path, params, _visited, _context=context)
 

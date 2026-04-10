@@ -86,7 +86,7 @@ def sync_backup_routines(
 
     try:
         list_resp = requests.get(
-            f"{fastapi_url}/proxmox/api2/cluster/backup",
+            f"{fastapi_url}/proxmox/cluster/backup",
             headers=auth_headers,
             verify=verify_ssl,
             timeout=SYNC_TIMEOUT,

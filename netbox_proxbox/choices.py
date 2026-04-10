@@ -36,6 +36,7 @@ class SyncTypeChoices(ChoiceSet):
     IP_ADDRESSES = "ip-addresses"
     BACKUP_ROUTINES = "backup-routines"
     REPLICATIONS = "replications"
+    TASK_HISTORY = "task-history"
     ALL = "all"
 
     CHOICES = [
@@ -50,6 +51,7 @@ class SyncTypeChoices(ChoiceSet):
         (IP_ADDRESSES, _("IP Addresses"), "violet"),
         (BACKUP_ROUTINES, _("Backup Routines"), "yellow"),
         (REPLICATIONS, _("Replications"), "teal"),
+        (TASK_HISTORY, _("Task History"), "amber"),
         (ALL, _("All"), "red"),
     ]
 
