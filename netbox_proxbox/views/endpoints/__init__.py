@@ -22,4 +22,5 @@ from .proxmox import (
     ProxmoxEndpointExportView,
     ProxmoxEndpointListView,
     ProxmoxEndpointView,
+    ProxmoxExportQuickAddTokenView,
 )

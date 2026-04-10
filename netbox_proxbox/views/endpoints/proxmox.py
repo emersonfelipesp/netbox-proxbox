@@ -1,8 +1,9 @@
 """Provide NetBox CRUD views for Proxmox endpoint records."""
 
 from django.contrib import messages
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect
+from django.views import View
 from netbox.api.authentication import TokenAuthentication
 from netbox.views import generic
 from utilities.permissions import get_permission_for_model
@@ -29,6 +30,7 @@ __all__ = (
     "ProxmoxEndpointDeleteView",
     "ProxmoxEndpointBulkImportView",
     "ProxmoxEndpointExportView",
+    "ProxmoxExportQuickAddTokenView",
 )
 
 
@@ -75,19 +77,58 @@ class ProxmoxEndpointExportView(generic.ObjectListView):
         return get_permission_for_model(self.queryset.model, "view")
 
     def _validate_sensitive_export_token(self, request: HttpRequest) -> bool:
-        """Confirm POSTed NetBox API token maps to a user allowed to view Proxmox endpoints."""
-        raw_token = (request.POST.get("netbox_token") or "").strip()
-        if not raw_token:
-            messages.error(
-                request, "A valid NetBox token is required to export secrets."
-            )
-            return False
+        """Confirm POSTed NetBox API token maps to a user allowed to view Proxmox endpoints.
 
-        header_value = raw_token
-        if not (
-            header_value.startswith("Token ") or header_value.startswith("Bearer ")
-        ):
-            if raw_token.startswith("nbt_"):
+        Supports three modes based on the ``token_version`` POST field:
+        - ``v1``: look up an existing v1 Token by PK (``token_id`` field) and use its plaintext.
+        - ``v2``: construct a Bearer header from ``token_key`` and ``token_secret`` fields.
+        - Fallback (no ``token_version``): legacy ``netbox_token`` single-field format.
+        """
+        from users.models import Token
+
+        token_version = (request.POST.get("token_version") or "").strip()
+
+        if token_version == "v1":
+            token_id = (request.POST.get("token_id") or "").strip()
+            if not token_id:
+                messages.error(request, "Select a v1 token to export secrets.")
+                return False
+            try:
+                token_obj = Token.objects.get(pk=int(token_id), version=1)
+            except (Token.DoesNotExist, ValueError):
+                messages.error(request, "The selected v1 token could not be found.")
+                return False
+            plaintext = (token_obj.plaintext or "").strip()
+            if not plaintext:
+                messages.error(
+                    request,
+                    "The selected v1 token does not have a usable plaintext value.",
+                )
+                return False
+            header_value = f"Token {plaintext}"
+
+        elif token_version == "v2":
+            token_key = (request.POST.get("token_key") or "").strip()
+            token_secret = (request.POST.get("token_secret") or "").strip()
+            if not token_key or not token_secret:
+                messages.error(
+                    request,
+                    "Both token key and token secret are required for v2 authentication.",
+                )
+                return False
+            header_value = f"Bearer {token_key}.{token_secret}"
+
+        else:
+            # Legacy fallback: raw token string in netbox_token field.
+            raw_token = (request.POST.get("netbox_token") or "").strip()
+            if not raw_token:
+                messages.error(
+                    request, "A valid NetBox token is required to export secrets."
+                )
+                return False
+            if raw_token.startswith("Token ") or raw_token.startswith("Bearer "):
+                header_value = raw_token
+            elif raw_token.startswith("nbt_"):
                 header_value = f"Bearer {raw_token}"
             else:
                 header_value = f"Token {raw_token}"
@@ -205,3 +246,44 @@ class ProxmoxEndpointDeleteView(generic.ObjectDeleteView):
     """
 
     queryset = ProxmoxEndpoint.objects.all()
+
+
+@register_model_view(
+    ProxmoxEndpoint,
+    "quick_add_token",
+    path="export/quick-add-token",
+    detail=False,
+)
+class ProxmoxExportQuickAddTokenView(View):
+    """Create a temporary v1 NetBox API token for use with the sensitive export modal.
+
+    The token is created under the current user's account and its plaintext is returned
+    once in the JSON response.  The UI warns the user to delete or securely store the
+    token after the export is complete.
+    """
+
+    def post(self, request: HttpRequest) -> JsonResponse:
+        from users.models import Token
+
+        if not request.user.is_authenticated:
+            return JsonResponse({"error": "Authentication required."}, status=401)
+
+        if not request.user.has_perm("users.add_token"):
+            return JsonResponse(
+                {"error": "You do not have permission to create tokens."}, status=403
+            )
+
+        try:
+            token = Token(version=1, user=request.user)
+            token.full_clean()
+            token.save()
+        except Exception as exc:
+            return JsonResponse({"error": f"Failed to create token: {exc}"}, status=500)
+
+        return JsonResponse(
+            {
+                "id": token.pk,
+                "display": str(token),
+                "plaintext": token.plaintext,
+            }
+        )

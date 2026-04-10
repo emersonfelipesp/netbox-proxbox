@@ -26,7 +26,7 @@
   <div class="modal fade" id="proxmox-export-secrets-modal" tabindex="-1" aria-labelledby="proxmox-export-secrets-label" aria-hidden="true">
     <div class="modal-dialog">
       <div class="modal-content">
-        <form method="post" action="{% url 'plugins:netbox_proxbox:proxmoxendpoint_export' %}">
+        <form method="post" action="{% url 'plugins:netbox_proxbox:proxmoxendpoint_export' %}" id="export-secrets-form">
           {% csrf_token %}
           <input type="hidden" name="include_sensitive" value="true" />
           <div class="modal-header">
@@ -38,6 +38,8 @@
               <strong>{% trans "Warning:" %}</strong>
               {% trans "This export includes Proxmox passwords and token values in plain text. Handle the file as a secret and store it securely." %}
             </div>
+
+            {# Export format #}
             <div class="mb-3">
               <label class="form-label" for="id_export_format">{% trans "Export format" %}</label>
               <select class="form-select" id="id_export_format" name="format" required>
@@ -46,21 +48,80 @@
                 <option value="yaml">YAML</option>
               </select>
             </div>
+
+            {# Token version selector #}
             <div class="mb-3">
-              <label class="form-label" for="id_netbox_token">{% trans "NetBox API token" %}</label>
-              <input
-                class="form-control"
-                id="id_netbox_token"
-                name="netbox_token"
-                type="password"
-                placeholder="{% trans 'Token <v1-token> or Bearer nbt_<key>.<secret>' %}"
-                autocomplete="off"
-                required
-              />
-              <div class="form-text">
-                {% trans "Provide a valid NetBox API token to authorize secret export." %}
+              <label class="form-label d-block">{% trans "NetBox API token version" %}</label>
+              <div class="btn-group" role="group" aria-label="{% trans 'Token version' %}">
+                <input type="radio" class="btn-check" name="token_version" id="token_version_v1" value="v1" autocomplete="off" checked>
+                <label class="btn btn-outline-primary" for="token_version_v1">{% trans "v1 token" %}</label>
+
+                <input type="radio" class="btn-check" name="token_version" id="token_version_v2" value="v2" autocomplete="off">
+                <label class="btn btn-outline-primary" for="token_version_v2">{% trans "v2 token" %}</label>
               </div>
             </div>
+
+            {# v1 token section #}
+            <div id="v1-token-section">
+              <div class="mb-3">
+                <label class="form-label" for="id_token_id">{% trans "Select v1 token" %}</label>
+                <select class="form-select" id="id_token_id" name="token_id">
+                  <option value="" disabled selected>{% trans "Loading tokens…" %}</option>
+                </select>
+                <div class="form-text">
+                  {% trans "Only enabled v1 tokens belonging to your account are listed." %}
+                </div>
+              </div>
+              <div class="mb-3">
+                <button type="button" class="btn btn-outline-success btn-sm" id="btn-quick-add-token"
+                        data-quick-add-url="{% url 'plugins:netbox_proxbox:proxmoxendpoint_quick_add_token' %}">
+                  <i class="mdi mdi-plus" aria-hidden="true"></i> {% trans "Quick add token" %}
+                </button>
+                <span class="ms-2 text-muted small">{% trans "Creates a temporary v1 token under your account." %}</span>
+              </div>
+              <div id="quick-add-warning" class="alert alert-danger d-none" role="alert">
+                <strong>{% trans "Security notice:" %}</strong>
+                {% trans "A new v1 token was created for your account. Delete it or store it securely after this export." %}
+                <div class="mt-2">
+                  <label class="form-label small mb-1" for="id_quick_add_plaintext">{% trans "Token value (copy before closing)" %}</label>
+                  <div class="input-group input-group-sm">
+                    <input type="text" class="form-control font-monospace" id="id_quick_add_plaintext" readonly autocomplete="off">
+                    <button type="button" class="btn btn-outline-secondary" id="btn-copy-token" title="{% trans 'Copy to clipboard' %}">
+                      <i class="mdi mdi-content-copy" aria-hidden="true"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {# v2 token section (hidden by default) #}
+            <div id="v2-token-section" class="d-none">
+              <div class="mb-3">
+                <label class="form-label" for="id_token_key">{% trans "Token key" %}</label>
+                <input
+                  class="form-control font-monospace"
+                  id="id_token_key"
+                  name="token_key"
+                  type="text"
+                  placeholder="nbt_xxxxxxxxxxxx"
+                  autocomplete="off"
+                />
+                <div class="form-text">{% trans "The public key portion of the v2 token (starts with nbt_)." %}</div>
+              </div>
+              <div class="mb-3">
+                <label class="form-label" for="id_token_secret">{% trans "Token secret" %}</label>
+                <input
+                  class="form-control"
+                  id="id_token_secret"
+                  name="token_secret"
+                  type="password"
+                  placeholder="{% trans 'Secret value' %}"
+                  autocomplete="new-password"
+                />
+                <div class="form-text">{% trans "The private secret portion of the v2 token." %}</div>
+              </div>
+            </div>
+
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">{% trans 'Cancel' %}</button>
@@ -75,4 +136,5 @@
 {% block javascript %}
   {{ block.super }}
   <script type="module" src="{% static 'netbox_proxbox/js/endpoint-status.js' %}"></script>
+  <script type="module" src="{% static 'netbox_proxbox/js/export-secrets-modal.js' %}"></script>
 {% endblock %}

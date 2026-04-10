@@ -424,7 +424,15 @@ def test_proxmox_list_template_exposes_import_export_controls_and_warning_modal(
         "This export includes Proxmox passwords and token values in plain text"
         in contents
     )
-    assert 'name="netbox_token"' in contents
+    # Token version selector fields.
+    assert 'name="token_version"' in contents
+    assert 'name="token_id"' in contents
+    assert 'name="token_key"' in contents
+    assert 'name="token_secret"' in contents
+    # Quick add button.
+    assert "Quick add token" in contents
+    # Security warning for quick-add.
+    assert "Delete it or store it securely after this export" in contents
 
 
 def test_lxc_and_storage_pages_are_wired_in_urls_navigation_and_templates():

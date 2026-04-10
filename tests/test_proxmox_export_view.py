@@ -71,7 +71,6 @@ def _endpoint(**overrides):
         "repoid": "bookworm",
         "username": "root@pam",
         "verify_ssl": False,
-        "comments": "lab",
         "token_name": "api-id",
         "password": "p@ss",
         "token_value": "s3cret",
@@ -88,7 +87,7 @@ def test_safe_export_never_contains_password_or_token_value(monkeypatch):
         def __iter__(self):
             return iter([endpoint])
 
-    view = proxmox_views.ProxmoxEndpointExportCSVView()
+    view = proxmox_views.ProxmoxEndpointExportView()
     view.filterset = None
     monkeypatch.setattr(view, "get_queryset", lambda request: _QS())
 
@@ -112,7 +111,7 @@ def test_sensitive_export_includes_password_and_token_value(monkeypatch):
         def __iter__(self):
             return iter([endpoint])
 
-    view = proxmox_views.ProxmoxEndpointExportCSVView()
+    view = proxmox_views.ProxmoxEndpointExportView()
     view.filterset = None
     monkeypatch.setattr(view, "get_queryset", lambda request: _QS())
 
@@ -155,3 +154,248 @@ def test_safe_export_json_and_yaml_formats(monkeypatch):
     assert "name: pve01" in yaml_text
     assert "password:" not in yaml_text
     assert yaml_response["Content-Disposition"].endswith('safe.yaml"')
+
+
+def test_export_fieldnames_do_not_include_comments():
+    """Regression guard: ProxmoxEndpoint has no comments field — must not appear in export."""
+    from netbox_proxbox.views.endpoints.proxmox_export import _proxmox_export_fieldnames
+
+    safe_fields = _proxmox_export_fieldnames(include_sensitive=False)
+    sensitive_fields = _proxmox_export_fieldnames(include_sensitive=True)
+    assert "comments" not in safe_fields
+    assert "comments" not in sensitive_fields
+
+
+def test_export_serialization_does_not_access_comments(monkeypatch):
+    """Regression guard: serializing an endpoint without a comments attr must not raise."""
+    endpoint = _endpoint()
+    # Explicitly remove comments if somehow set (SimpleNamespace allows it).
+    if hasattr(endpoint, "comments"):
+        delattr(endpoint, "comments")
+
+    from netbox_proxbox.views.endpoints.proxmox_export import _serialize_proxmox_endpoint
+
+    row = _serialize_proxmox_endpoint(endpoint, include_sensitive=False)
+    assert "comments" not in row
+    assert row["name"] == "pve01"
+
+
+# ── _validate_sensitive_export_token: v1 / v2 / fallback modes ───────────────
+
+
+def _make_view():
+    view = proxmox_views.ProxmoxEndpointExportView()
+    view.filterset = None
+    return view
+
+
+class _FakeToken:
+    DoesNotExist = KeyError
+
+    def __init__(self, pk, plaintext, version=1):
+        self.pk = pk
+        self.plaintext = plaintext
+        self.version = version
+
+
+class _FakeTokenManager:
+    def __init__(self, token):
+        self._token = token
+
+    def get(self, **kwargs):
+        pk = kwargs.get("pk")
+        version = kwargs.get("version", 1)
+        if self._token and self._token.pk == pk and self._token.version == version:
+            return self._token
+        raise KeyError("not found")
+
+
+class _FakeUser:
+    is_authenticated = True
+
+    def has_perm(self, perm):
+        return True
+
+
+def test_validate_token_v1_mode_uses_plaintext(monkeypatch):
+    """v1 mode: constructs 'Token <plaintext>' header from the looked-up token."""
+    view = _make_view()
+    fake_token = _FakeToken(pk=42, plaintext="abc123" * 7)  # 42-char plaintext
+    manager = _FakeTokenManager(fake_token)
+
+    captured_headers = {}
+
+    def fake_authenticate(req):
+        captured_headers.update({"auth": req.META.get("HTTP_AUTHORIZATION", "")})
+        return (_FakeUser(), fake_token)
+
+    monkeypatch.setattr(
+        proxmox_views.TokenAuthentication, "authenticate", fake_authenticate
+    )
+
+    import sys
+    fake_users_module = type(sys)("users.models")
+    fake_users_module.Token = type("Token", (), {
+        "objects": manager,
+        "DoesNotExist": KeyError,
+    })
+    monkeypatch.setitem(sys.modules, "users.models", fake_users_module)
+
+    class _Msgs:
+        def __init__(self):
+            self.errors = []
+
+        def error(self, req, msg):
+            self.errors.append(msg)
+
+    msgs = _Msgs()
+    monkeypatch.setattr(proxmox_views.messages, "error", msgs.error)
+
+    request = SimpleNamespace(
+        POST={"token_version": "v1", "token_id": "42"},
+        META={},
+        user=_FakeUser(),
+    )
+    result = view._validate_sensitive_export_token(request)
+
+    assert result is True
+    assert captured_headers["auth"] == f"Token {fake_token.plaintext}"
+    assert msgs.errors == []
+
+
+def test_validate_token_v1_mode_missing_token_id(monkeypatch):
+    """v1 mode with no token_id returns False and adds an error message."""
+    view = _make_view()
+
+    errors = []
+    monkeypatch.setattr(proxmox_views.messages, "error", lambda req, msg: errors.append(msg))
+
+    import sys
+    fake_users_module = type(sys)("users.models")
+    fake_users_module.Token = type("Token", (), {"DoesNotExist": KeyError})
+    monkeypatch.setitem(sys.modules, "users.models", fake_users_module)
+
+    request = SimpleNamespace(POST={"token_version": "v1", "token_id": ""}, META={}, user=None)
+    result = view._validate_sensitive_export_token(request)
+    assert result is False
+    assert errors
+
+
+def test_validate_token_v2_mode_constructs_bearer_header(monkeypatch):
+    """v2 mode: constructs 'Bearer key.secret' header from POST fields."""
+    view = _make_view()
+
+    captured = {}
+
+    def fake_authenticate(req):
+        captured["auth"] = req.META.get("HTTP_AUTHORIZATION", "")
+        return (_FakeUser(), None)
+
+    monkeypatch.setattr(proxmox_views.TokenAuthentication, "authenticate", fake_authenticate)
+
+    import sys
+    fake_users_module = type(sys)("users.models")
+    fake_users_module.Token = type("Token", (), {"DoesNotExist": KeyError})
+    monkeypatch.setitem(sys.modules, "users.models", fake_users_module)
+
+    errors = []
+    monkeypatch.setattr(proxmox_views.messages, "error", lambda req, msg: errors.append(msg))
+
+    request = SimpleNamespace(
+        POST={"token_version": "v2", "token_key": "nbt_abc123", "token_secret": "mysecret"},
+        META={},
+        user=_FakeUser(),
+    )
+    result = view._validate_sensitive_export_token(request)
+
+    assert result is True
+    assert captured["auth"] == "Bearer nbt_abc123.mysecret"
+    assert errors == []
+
+
+def test_validate_token_v2_mode_missing_secret_returns_false(monkeypatch):
+    """v2 mode without token_secret returns False."""
+    view = _make_view()
+    errors = []
+    monkeypatch.setattr(proxmox_views.messages, "error", lambda req, msg: errors.append(msg))
+
+    import sys
+    fake_users_module = type(sys)("users.models")
+    fake_users_module.Token = type("Token", (), {"DoesNotExist": KeyError})
+    monkeypatch.setitem(sys.modules, "users.models", fake_users_module)
+
+    request = SimpleNamespace(
+        POST={"token_version": "v2", "token_key": "nbt_abc", "token_secret": ""},
+        META={},
+        user=None,
+    )
+    result = view._validate_sensitive_export_token(request)
+    assert result is False
+    assert errors
+
+
+def test_validate_token_fallback_uses_legacy_netbox_token_field(monkeypatch):
+    """Fallback (no token_version) uses the legacy netbox_token POST field."""
+    view = _make_view()
+
+    captured = {}
+
+    def fake_authenticate(req):
+        captured["auth"] = req.META.get("HTTP_AUTHORIZATION", "")
+        return (_FakeUser(), None)
+
+    monkeypatch.setattr(proxmox_views.TokenAuthentication, "authenticate", fake_authenticate)
+
+    import sys
+    fake_users_module = type(sys)("users.models")
+    fake_users_module.Token = type("Token", (), {"DoesNotExist": KeyError})
+    monkeypatch.setitem(sys.modules, "users.models", fake_users_module)
+
+    errors = []
+    monkeypatch.setattr(proxmox_views.messages, "error", lambda req, msg: errors.append(msg))
+
+    request = SimpleNamespace(
+        POST={"netbox_token": "abcdef1234567890" * 3},
+        META={},
+        user=_FakeUser(),
+    )
+    result = view._validate_sensitive_export_token(request)
+    assert result is True
+    assert captured["auth"].startswith("Token ")
+    assert errors == []
+
+
+def test_quick_add_token_view_exists():
+    """ProxmoxExportQuickAddTokenView is importable and is registered in __all__."""
+    assert hasattr(proxmox_views, "ProxmoxExportQuickAddTokenView")
+    assert "ProxmoxExportQuickAddTokenView" in proxmox_views.__all__
+
+
+def test_quick_add_token_view_requires_authentication(monkeypatch):
+    """Unauthenticated request to quick_add_token returns 401."""
+    import importlib
+
+    view_cls = proxmox_views.ProxmoxExportQuickAddTokenView
+    view = view_cls()
+
+    class _AnonUser:
+        is_authenticated = False
+
+    request = SimpleNamespace(user=_AnonUser(), POST={}, META={}, method="POST")
+    response = view.post(request)
+    assert response.status_code == 401
+
+
+def test_quick_add_token_view_requires_add_permission(monkeypatch):
+    """Authenticated user without users.add_token perm gets 403."""
+    view = proxmox_views.ProxmoxExportQuickAddTokenView()
+
+    class _UserNoPerms:
+        is_authenticated = True
+
+        def has_perm(self, perm):
+            return False
+
+    request = SimpleNamespace(user=_UserNoPerms(), POST={}, META={}, method="POST")
+    response = view.post(request)
+    assert response.status_code == 403
