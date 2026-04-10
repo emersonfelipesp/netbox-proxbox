@@ -119,7 +119,9 @@ class ProxmoxEndpointExportView(generic.ObjectListView):
                     )
                     return False
                 try:
-                    token_obj = Token.objects.get(pk=int(token_id), version=1)
+                    token_obj = Token.objects.get(
+                        pk=int(token_id), version=1, user=request.user
+                    )
                 except (Token.DoesNotExist, ValueError):
                     messages.error(request, "The selected v1 token could not be found.")
                     return False
