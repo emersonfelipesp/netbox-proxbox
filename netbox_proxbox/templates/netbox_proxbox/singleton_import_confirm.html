@@ -1,0 +1,77 @@
+{% extends 'base/layout.html' %}
+{% load i18n %}
+
+{% block title %}{% trans "Confirm Import Override" %}{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-md-8 offset-md-2">
+    <div class="card border-warning shadow-sm">
+      <div class="card-header bg-warning text-dark">
+        <h5 class="mb-0">
+          <i class="mdi mdi-alert" aria-hidden="true"></i>
+          {% trans "Singleton already exists — confirm override" %}
+        </h5>
+      </div>
+      <div class="card-body">
+
+        <div class="alert alert-warning" role="alert">
+          <strong>{% trans "Warning:" %}</strong>
+          {% blocktrans with model=model_name %}
+            A {{ model }} already exists. Importing will permanently replace the existing
+            record. This action cannot be undone.
+          {% endblocktrans %}
+        </div>
+
+        {% if existing %}
+        <h6 class="text-muted mb-2">{% trans "Existing record that will be replaced:" %}</h6>
+        <table class="table table-sm table-bordered mb-4">
+          <tbody>
+            <tr>
+              <th scope="row" class="w-25">{% trans "Name" %}</th>
+              <td>{{ existing.name }}</td>
+            </tr>
+            <tr>
+              <th scope="row">{% trans "Domain" %}</th>
+              <td>{{ existing.domain|default:"—" }}</td>
+            </tr>
+            <tr>
+              <th scope="row">{% trans "IP Address" %}</th>
+              <td>{% if existing.ip_address %}{{ existing.ip_address.address }}{% else %}—{% endif %}</td>
+            </tr>
+            <tr>
+              <th scope="row">{% trans "Port" %}</th>
+              <td>{{ existing.port }}</td>
+            </tr>
+          </tbody>
+        </table>
+        {% endif %}
+
+        {# Re-submit the original import form data with confirm_override=true #}
+        <form method="post" action="{{ import_url }}">
+          {% csrf_token %}
+          {% for key, values in post_items %}
+            {% if key != "csrfmiddlewaretoken" %}
+              {% for val in values %}
+                <input type="hidden" name="{{ key }}" value="{{ val }}">
+              {% endfor %}
+            {% endif %}
+          {% endfor %}
+          <input type="hidden" name="confirm_override" value="true">
+
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-danger">
+              <i class="mdi mdi-database-import" aria-hidden="true"></i>
+              {% trans "Override existing" %}
+            </button>
+            <a href="{{ return_url }}" class="btn btn-outline-secondary">
+              {% trans "Cancel" %}
+            </a>
+          </div>
+        </form>
+
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

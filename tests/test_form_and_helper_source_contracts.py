@@ -188,3 +188,60 @@ def test_proxmox_endpoint_form_hides_secret_fields_and_preserves_existing_values
     assert "Leave blank to keep the current value." in contents
     assert 'cleaned_data["password"] = self.instance.password' in contents
     assert 'cleaned_data["token_value"] = self.instance.token_value' in contents
+
+
+def test_netbox_import_form_auto_creates_ip_address():
+    contents = _read("netbox_proxbox/forms/netbox.py")
+    assert "class NetBoxEndpointImportForm" in contents
+    assert "get_or_create" in contents
+    assert "clean_ip_address" in contents
+
+
+def test_fastapi_import_form_auto_creates_ip_address():
+    contents = _read("netbox_proxbox/forms/fastapi.py")
+    assert "class FastAPIEndpointImportForm" in contents
+    assert "get_or_create" in contents
+    assert "clean_ip_address" in contents
+
+
+def test_netbox_fastapi_singleton_import_views_handle_override():
+    netbox_contents = _read("netbox_proxbox/views/endpoints/netbox.py")
+    fastapi_contents = _read("netbox_proxbox/views/endpoints/fastapi.py")
+
+    for contents, name in [
+        (netbox_contents, "netbox.py"),
+        (fastapi_contents, "fastapi.py"),
+    ]:
+        assert "confirm_override" in contents, (
+            f"Expected singleton override logic in {name}"
+        )
+        assert "singleton_import_confirm.html" in contents, (
+            f"Expected singleton confirmation template reference in {name}"
+        )
+        assert "existing.delete()" in contents, (
+            f"Expected existing singleton deletion in {name}"
+        )
+
+
+def test_netbox_fastapi_export_views_exist():
+    netbox_contents = _read("netbox_proxbox/views/endpoints/netbox.py")
+    fastapi_contents = _read("netbox_proxbox/views/endpoints/fastapi.py")
+
+    assert "class NetBoxEndpointExportView" in netbox_contents
+    assert "class NetBoxExportQuickAddTokenView" in netbox_contents
+    assert "class FastAPIEndpointExportView" in fastapi_contents
+    assert "class FastAPIExportQuickAddTokenView" in fastapi_contents
+
+
+def test_netbox_fastapi_export_helpers_exist():
+    netbox_export = _read("netbox_proxbox/views/endpoints/netbox_export.py")
+    fastapi_export = _read("netbox_proxbox/views/endpoints/fastapi_export.py")
+
+    assert "_netbox_export_fieldnames" in netbox_export
+    assert "_serialize_netbox_endpoint" in netbox_export
+    assert "token_key" in netbox_export
+    assert "token_secret" in netbox_export
+
+    assert "_fastapi_export_fieldnames" in fastapi_export
+    assert "_serialize_fastapi_endpoint" in fastapi_export
+    assert '"token"' in fastapi_export

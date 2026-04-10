@@ -443,6 +443,63 @@ def test_proxmox_list_template_exposes_import_export_controls_and_warning_modal(
     assert "Delete it or store it securely after this export" in contents
 
 
+def _assert_singleton_list_template_export_controls(
+    template_path: str, url_prefix: str, warning_text: str
+) -> None:
+    """Shared checks for singleton endpoint list templates with full export UI."""
+    contents = _read(template_path)
+    assert f"{url_prefix}_bulk_import" in contents
+    assert f"{url_prefix}_export" in contents
+    assert "Export JSON" in contents
+    assert "Export YAML" in contents
+    assert "Export with secrets" in contents
+    assert 'name="format"' in contents
+    assert warning_text in contents
+    # Token version selector fields.
+    assert 'name="token_version"' in contents
+    assert 'name="token_id"' in contents
+    assert 'name="token_key"' in contents
+    assert 'name="token_secret"' in contents
+    # v1 sub-mode: select vs manual.
+    assert 'name="v1_mode"' in contents
+    assert 'name="v1_manual_token"' in contents
+    # Quick add button.
+    assert "Quick add token" in contents
+    assert f"{url_prefix}_quick_add_token" in contents
+    # Security warning for quick-add.
+    assert "Delete it or store it securely after this export" in contents
+    # JS must be inlined (not external).
+    assert "TOKEN_API_URL" in contents
+    assert "loadV1Tokens" in contents
+
+
+def test_netbox_endpoint_list_template_exposes_import_export_controls():
+    _assert_singleton_list_template_export_controls(
+        "netbox_proxbox/templates/netbox_proxbox/netboxendpoint_list.html",
+        url_prefix="netboxendpoint",
+        warning_text="includes NetBox token credentials in plain text",
+    )
+
+
+def test_fastapi_endpoint_list_template_exposes_import_export_controls():
+    _assert_singleton_list_template_export_controls(
+        "netbox_proxbox/templates/netbox_proxbox/fastapiendpoint_list.html",
+        url_prefix="fastapiendpoint",
+        warning_text="includes FastAPI backend tokens in plain text",
+    )
+
+
+def test_singleton_import_confirm_template_exists():
+    contents = _read(
+        "netbox_proxbox/templates/netbox_proxbox/singleton_import_confirm.html"
+    )
+    assert "confirm_override" in contents
+    assert "Override existing" in contents
+    assert "Cancel" in contents
+    assert "return_url" in contents
+    assert "post_items" in contents
+
+
 def test_lxc_and_storage_pages_are_wired_in_urls_navigation_and_templates():
     urls = _read("netbox_proxbox/urls.py")
     navigation = _read("netbox_proxbox/navigation.py")

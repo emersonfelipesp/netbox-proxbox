@@ -6,9 +6,408 @@
   <a class="btn btn-outline-primary" href="{% url 'plugins:netbox_proxbox:fastapiendpoint_bulk_import' %}">
     <i class="mdi mdi-upload" aria-hidden="true"></i> {% trans "Import" %}
   </a>
+  <div class="btn-group" role="group">
+    <button type="button" class="btn btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+      <i class="mdi mdi-download" aria-hidden="true"></i> {% trans "Export" %}
+    </button>
+    <ul class="dropdown-menu">
+      <li><a class="dropdown-item" href="{% url 'plugins:netbox_proxbox:fastapiendpoint_export' %}?format=csv">{% trans "Export CSV" %}</a></li>
+      <li><a class="dropdown-item" href="{% url 'plugins:netbox_proxbox:fastapiendpoint_export' %}?format=json">{% trans "Export JSON" %}</a></li>
+      <li><a class="dropdown-item" href="{% url 'plugins:netbox_proxbox:fastapiendpoint_export' %}?format=yaml">{% trans "Export YAML" %}</a></li>
+    </ul>
+  </div>
+  <button class="btn btn-warning" type="button" data-bs-toggle="modal" data-bs-target="#fastapi-export-secrets-modal">
+    <i class="mdi mdi-alert" aria-hidden="true"></i> {% trans "Export with secrets" %}
+  </button>
+{% endblock %}
+
+{% block modals %}
+  {{ block.super }}
+  <div class="modal fade" id="fastapi-export-secrets-modal" tabindex="-1" aria-labelledby="fastapi-export-secrets-label" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <form method="post" action="{% url 'plugins:netbox_proxbox:fastapiendpoint_export' %}" id="fastapi-export-secrets-form">
+          {% csrf_token %}
+          <input type="hidden" name="include_sensitive" value="true" />
+          <div class="modal-header">
+            <h5 class="modal-title" id="fastapi-export-secrets-label">{% trans "Sensitive export confirmation" %}</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{% trans 'Close' %}"></button>
+          </div>
+          <div class="modal-body">
+            <div class="alert alert-warning mb-3" role="alert">
+              <strong>{% trans "Warning:" %}</strong>
+              {% trans "This export includes FastAPI backend tokens in plain text. Handle the file as a secret and store it securely." %}
+            </div>
+
+            {# Export format #}
+            <div class="mb-3">
+              <label class="form-label" for="id_fastapi_export_format">{% trans "Export format" %}</label>
+              <select class="form-select" id="id_fastapi_export_format" name="format" required>
+                <option value="csv">CSV</option>
+                <option value="json">JSON</option>
+                <option value="yaml">YAML</option>
+              </select>
+            </div>
+
+            {# Token version selector (v1 / v2) #}
+            <div class="mb-3">
+              <label class="form-label d-block">{% trans "NetBox API token version" %}</label>
+              <div class="btn-group" role="group" aria-label="{% trans 'Token version' %}">
+                <input type="radio" class="btn-check" name="token_version" id="fastapi_token_version_v1" value="v1" autocomplete="off" checked>
+                <label class="btn btn-outline-primary" for="fastapi_token_version_v1">{% trans "v1 token" %}</label>
+
+                <input type="radio" class="btn-check" name="token_version" id="fastapi_token_version_v2" value="v2" autocomplete="off">
+                <label class="btn btn-outline-primary" for="fastapi_token_version_v2">{% trans "v2 token" %}</label>
+              </div>
+            </div>
+
+            {# v1 token section #}
+            <div id="fastapi-v1-token-section">
+
+              {# v1 sub-mode: select existing or enter manually #}
+              <div class="mb-3">
+                <div class="btn-group btn-group-sm" role="group" aria-label="{% trans 'v1 input mode' %}">
+                  <input type="radio" class="btn-check" name="v1_mode" id="fastapi_v1_mode_select" value="select" autocomplete="off" checked>
+                  <label class="btn btn-outline-secondary" for="fastapi_v1_mode_select">{% trans "Select existing" %}</label>
+
+                  <input type="radio" class="btn-check" name="v1_mode" id="fastapi_v1_mode_manual" value="manual" autocomplete="off">
+                  <label class="btn btn-outline-secondary" for="fastapi_v1_mode_manual">{% trans "Enter manually" %}</label>
+                </div>
+              </div>
+
+              {# Select-existing group #}
+              <div id="fastapi-v1-select-group">
+                <div class="mb-3">
+                  <label class="form-label" for="id_fastapi_token_id">{% trans "Select v1 token" %}</label>
+                  <select class="form-select" id="id_fastapi_token_id" name="token_id">
+                    <option value="" disabled selected>{% trans "Loading tokens…" %}</option>
+                  </select>
+                  <div class="form-text">
+                    {% trans "Only enabled v1 tokens belonging to your account are listed." %}
+                  </div>
+                </div>
+                <div class="mb-3">
+                  <button type="button" class="btn btn-outline-success btn-sm" id="fastapi-btn-quick-add-token"
+                          data-quick-add-url="{% url 'plugins:netbox_proxbox:fastapiendpoint_quick_add_token' %}">
+                    <i class="mdi mdi-plus" aria-hidden="true"></i> {% trans "Quick add token" %}
+                  </button>
+                  <span class="ms-2 text-muted small">{% trans "Creates a temporary v1 token under your account." %}</span>
+                </div>
+                <div id="fastapi-quick-add-warning" class="alert alert-danger d-none" role="alert">
+                  <strong>{% trans "Security notice:" %}</strong>
+                  {% trans "A new v1 token was created for your account. Delete it or store it securely after this export." %}
+                  <div class="mt-2">
+                    <label class="form-label small mb-1" for="id_fastapi_quick_add_plaintext">{% trans "Token value (copy before closing)" %}</label>
+                    <div class="input-group input-group-sm">
+                      <input type="text" class="form-control font-monospace" id="id_fastapi_quick_add_plaintext" readonly autocomplete="off">
+                      <button type="button" class="btn btn-outline-secondary" id="fastapi-btn-copy-token" title="{% trans 'Copy to clipboard' %}">
+                        <i class="mdi mdi-content-copy" aria-hidden="true"></i>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {# Manual-entry group #}
+              <div id="fastapi-v1-manual-group" class="d-none">
+                <div class="mb-3">
+                  <label class="form-label" for="id_fastapi_v1_manual_token">{% trans "v1 token value" %}</label>
+                  <input
+                    class="form-control font-monospace"
+                    id="id_fastapi_v1_manual_token"
+                    name="v1_manual_token"
+                    type="password"
+                    placeholder="{% trans 'Paste your 40-character v1 token' %}"
+                    autocomplete="off"
+                  />
+                  <div class="form-text">{% trans "A manually entered token overrides any dropdown selection." %}</div>
+                </div>
+              </div>
+
+            </div>{# /fastapi-v1-token-section #}
+
+            {# v2 token section (hidden by default) #}
+            <div id="fastapi-v2-token-section" class="d-none">
+              <div class="mb-3">
+                <label class="form-label" for="id_fastapi_token_key">{% trans "Token key" %}</label>
+                <input
+                  class="form-control font-monospace"
+                  id="id_fastapi_token_key"
+                  name="token_key"
+                  type="text"
+                  placeholder="nbt_xxxxxxxxxxxx"
+                  autocomplete="off"
+                />
+                <div class="form-text">{% trans "The public key portion of the v2 token (starts with nbt_)." %}</div>
+              </div>
+              <div class="mb-3">
+                <label class="form-label" for="id_fastapi_token_secret">{% trans "Token secret" %}</label>
+                <input
+                  class="form-control"
+                  id="id_fastapi_token_secret"
+                  name="token_secret"
+                  type="password"
+                  placeholder="{% trans 'Secret value' %}"
+                  autocomplete="new-password"
+                />
+                <div class="form-text">{% trans "The private secret portion of the v2 token." %}</div>
+              </div>
+            </div>
+
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">{% trans 'Cancel' %}</button>
+            <button type="submit" class="btn btn-danger">{% trans "Export with secrets" %}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
 {% endblock %}
 
 {% block javascript %}
   {{ block.super }}
   <script type="module" src="{% static 'netbox_proxbox/js/endpoint-status.js' %}"></script>
+  <script>
+  (function () {
+    'use strict';
+
+    var MODAL_ID = 'fastapi-export-secrets-modal';
+    var TOKEN_API_URL = '/api/users/tokens/?version=1&enabled=true&limit=0';
+
+    function init() {
+      var modal = document.getElementById(MODAL_ID);
+      if (!modal) return;
+
+      var form = modal.querySelector('#fastapi-export-secrets-form');
+      var v1Radio = modal.querySelector('#fastapi_token_version_v1');
+      var v2Radio = modal.querySelector('#fastapi_token_version_v2');
+      var v1Section = modal.querySelector('#fastapi-v1-token-section');
+      var v2Section = modal.querySelector('#fastapi-v2-token-section');
+      var tokenSelect = modal.querySelector('#id_fastapi_token_id');
+      var v1ManualInput = modal.querySelector('#id_fastapi_v1_manual_token');
+      var v1SelectRadio = modal.querySelector('#fastapi_v1_mode_select');
+      var v1ManualRadio = modal.querySelector('#fastapi_v1_mode_manual');
+      var v1SelectGroup = modal.querySelector('#fastapi-v1-select-group');
+      var v1ManualGroup = modal.querySelector('#fastapi-v1-manual-group');
+      var quickAddBtn = modal.querySelector('#fastapi-btn-quick-add-token');
+      var quickAddWarning = modal.querySelector('#fastapi-quick-add-warning');
+      var quickAddPlaintext = modal.querySelector('#id_fastapi_quick_add_plaintext');
+      var copyBtn = modal.querySelector('#fastapi-btn-copy-token');
+      var tokenKeyInput = modal.querySelector('#id_fastapi_token_key');
+      var tokenSecretInput = modal.querySelector('#id_fastapi_token_secret');
+
+      function showV1() {
+        v1Section.classList.remove('d-none');
+        v2Section.classList.add('d-none');
+        syncV1SubMode();
+        if (tokenKeyInput) { tokenKeyInput.required = false; tokenKeyInput.value = ''; }
+        if (tokenSecretInput) { tokenSecretInput.required = false; tokenSecretInput.value = ''; }
+      }
+
+      function showV2() {
+        v1Section.classList.add('d-none');
+        v2Section.classList.remove('d-none');
+        if (tokenSelect) tokenSelect.required = false;
+        if (v1ManualInput) v1ManualInput.required = false;
+        if (tokenKeyInput) tokenKeyInput.required = true;
+        if (tokenSecretInput) tokenSecretInput.required = true;
+      }
+
+      if (v1Radio) v1Radio.addEventListener('change', function () { if (v1Radio.checked) showV1(); });
+      if (v2Radio) v2Radio.addEventListener('change', function () { if (v2Radio.checked) showV2(); });
+
+      function syncV1SubMode() {
+        var selectMode = v1SelectRadio && v1SelectRadio.checked;
+        if (v1SelectGroup) v1SelectGroup.classList.toggle('d-none', !selectMode);
+        if (v1ManualGroup) v1ManualGroup.classList.toggle('d-none', selectMode);
+        if (tokenSelect) tokenSelect.required = selectMode;
+        if (v1ManualInput) v1ManualInput.required = !selectMode;
+      }
+
+      if (v1SelectRadio) v1SelectRadio.addEventListener('change', syncV1SubMode);
+      if (v1ManualRadio) v1ManualRadio.addEventListener('change', syncV1SubMode);
+
+      var tokensLoaded = false;
+
+      function loadV1Tokens() {
+        if (!tokenSelect) return;
+        fetch(TOKEN_API_URL, {
+          headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+          credentials: 'same-origin'
+        })
+        .then(function (resp) {
+          if (!resp.ok) throw new Error('HTTP ' + resp.status);
+          return resp.json();
+        })
+        .then(function (data) {
+          var results = data.results || [];
+          var quickAddOpts = Array.from(tokenSelect.options).filter(
+            function (o) { return o.dataset.quickAdd === 'true'; }
+          );
+          tokenSelect.innerHTML = '';
+          if (quickAddOpts.length > 0) {
+            quickAddOpts.forEach(function (o) { tokenSelect.appendChild(o); });
+            var sep = document.createElement('option');
+            sep.disabled = true;
+            sep.textContent = '\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500';
+            tokenSelect.appendChild(sep);
+          }
+          if (results.length === 0 && quickAddOpts.length === 0) {
+            var opt = document.createElement('option');
+            opt.value = '';
+            opt.disabled = true;
+            opt.selected = true;
+            opt.textContent = 'No v1 tokens found \u2014 use Quick add or enter manually';
+            tokenSelect.appendChild(opt);
+          } else {
+            if (quickAddOpts.length === 0) {
+              var placeholder = document.createElement('option');
+              placeholder.value = '';
+              placeholder.disabled = true;
+              placeholder.selected = true;
+              placeholder.textContent = 'Choose a token\u2026';
+              tokenSelect.appendChild(placeholder);
+            }
+            results.forEach(function (token) {
+              var opt = document.createElement('option');
+              opt.value = token.id;
+              var label = token.display || token.key || ('Token #' + token.id);
+              opt.textContent = token.description ? label + ' \u2014 ' + token.description : label;
+              tokenSelect.appendChild(opt);
+            });
+          }
+          tokensLoaded = true;
+        })
+        .catch(function (err) {
+          console.error('[fastapi-export-secrets-modal] Failed to load v1 tokens:', err);
+          tokenSelect.innerHTML = '';
+          var opt = document.createElement('option');
+          opt.value = '';
+          opt.disabled = true;
+          opt.selected = true;
+          opt.textContent = 'Failed to load tokens \u2014 enter manually or Quick add';
+          tokenSelect.appendChild(opt);
+        });
+      }
+
+      modal.addEventListener('shown.bs.modal', function () {
+        if (v1Radio && v1Radio.checked) showV1();
+        if (!tokensLoaded) loadV1Tokens();
+      });
+
+      if (quickAddBtn) {
+        quickAddBtn.addEventListener('click', function () {
+          var csrfInput = form.querySelector('[name=csrfmiddlewaretoken]');
+          var csrfToken = csrfInput ? csrfInput.value : '';
+          var quickAddUrl = quickAddBtn.dataset.quickAddUrl;
+          quickAddBtn.disabled = true;
+          quickAddBtn.textContent = 'Creating\u2026';
+          fetch(quickAddUrl, {
+            method: 'POST',
+            headers: {
+              'X-CSRFToken': csrfToken,
+              'Accept': 'application/json',
+              'X-Requested-With': 'XMLHttpRequest'
+            },
+            credentials: 'same-origin'
+          })
+          .then(function (resp) {
+            return resp.json().then(function (d) { return { ok: resp.ok, status: resp.status, data: d }; });
+          })
+          .then(function (result) {
+            if (!result.ok) {
+              alert('Failed to create token: ' + (result.data.error || result.status));
+              return;
+            }
+            if (v1SelectRadio && !v1SelectRadio.checked) {
+              v1SelectRadio.checked = true;
+              syncV1SubMode();
+            }
+            var opt = document.createElement('option');
+            opt.value = result.data.id;
+            opt.dataset.quickAdd = 'true';
+            var label = result.data.display || ('Token #' + result.data.id);
+            opt.textContent = label + ' [new \u2014 delete after export]';
+            opt.selected = true;
+            Array.from(tokenSelect.options).forEach(function (o) { o.selected = false; });
+            tokenSelect.prepend(opt);
+            opt.selected = true;
+            if (quickAddPlaintext) quickAddPlaintext.value = result.data.plaintext || '';
+            if (quickAddWarning) quickAddWarning.classList.remove('d-none');
+          })
+          .catch(function (err) {
+            alert('Unexpected error: ' + err.message);
+          })
+          .finally(function () {
+            quickAddBtn.disabled = false;
+            quickAddBtn.innerHTML = '<i class="mdi mdi-plus" aria-hidden="true"></i> Quick add token';
+          });
+        });
+      }
+
+      if (copyBtn && quickAddPlaintext) {
+        copyBtn.addEventListener('click', function () {
+          if (!quickAddPlaintext.value) return;
+          navigator.clipboard.writeText(quickAddPlaintext.value).then(function () {
+            var original = copyBtn.innerHTML;
+            copyBtn.innerHTML = '<i class="mdi mdi-check" aria-hidden="true"></i>';
+            setTimeout(function () { copyBtn.innerHTML = original; }, 1500);
+          });
+        });
+      }
+
+      form.addEventListener('submit', function (e) {
+        if (v1Radio && v1Radio.checked) {
+          var isManual = v1ManualRadio && v1ManualRadio.checked;
+          if (isManual) {
+            var raw = (v1ManualInput.value || '').trim();
+            if (!raw) {
+              e.preventDefault();
+              v1ManualInput.setCustomValidity('Enter a v1 token value.');
+              v1ManualInput.reportValidity();
+              return;
+            }
+            v1ManualInput.setCustomValidity('');
+          } else {
+            var selected = tokenSelect.value;
+            if (!selected) {
+              e.preventDefault();
+              tokenSelect.setCustomValidity('Select a v1 token or switch to manual entry.');
+              tokenSelect.reportValidity();
+              return;
+            }
+            tokenSelect.setCustomValidity('');
+          }
+        } else if (v2Radio && v2Radio.checked) {
+          var key = (tokenKeyInput ? tokenKeyInput.value : '').trim();
+          var secret = (tokenSecretInput ? tokenSecretInput.value : '').trim();
+          if (!key || !secret) {
+            e.preventDefault();
+            var target = !key ? tokenKeyInput : tokenSecretInput;
+            target.setCustomValidity('Both token key and token secret are required.');
+            target.reportValidity();
+            return;
+          }
+          if (tokenKeyInput) tokenKeyInput.setCustomValidity('');
+          if (tokenSecretInput) tokenSecretInput.setCustomValidity('');
+        }
+      });
+
+      [tokenSelect, tokenKeyInput, tokenSecretInput, v1ManualInput].forEach(function (el) {
+        if (!el) return;
+        var evt = el.tagName === 'SELECT' ? 'change' : 'input';
+        el.addEventListener(evt, function () { el.setCustomValidity(''); });
+      });
+
+      if (v2Radio && v2Radio.checked) showV2(); else showV1();
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  })();
+  </script>
 {% endblock %}

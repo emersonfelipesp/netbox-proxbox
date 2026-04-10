@@ -169,11 +169,11 @@ class NetBoxEndpointForm(NetBoxModelForm):
 class NetBoxEndpointImportForm(NetBoxModelImportForm):
     """CSV import mapping for bulk NetBox endpoint creation."""
 
-    ip_address = CSVModelChoiceField(
-        queryset=IPAddress.objects.all(),
+    ip_address = forms.CharField(
         required=False,
-        to_field_name="address",
-        help_text=_("IP address in CIDR format, for example 192.0.2.10/24."),
+        help_text=_(
+            "IP address in CIDR format, for example 192.0.2.10/24. Created automatically if it does not exist."
+        ),
     )
     token = CSVModelChoiceField(
         queryset=Token.objects.all(),
@@ -201,6 +201,14 @@ class NetBoxEndpointImportForm(NetBoxModelImportForm):
             "verify_ssl",
             "tags",
         )
+
+    def clean_ip_address(self):
+        """Look up or auto-create the IPAddress so imports from other instances work."""
+        raw = (self.cleaned_data.get("ip_address") or "").strip()
+        if not raw:
+            return None
+        ip_obj, _created = IPAddress.objects.get_or_create(address=raw)
+        return ip_obj
 
 
 class NetBoxEndpointFilterForm(NetBoxModelFilterSetForm):
