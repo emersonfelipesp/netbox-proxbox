@@ -242,3 +242,17 @@ class ReplicationStatusChoices(ChoiceSet):
         (ACTIVE, _("Active"), "green"),
         (STALE, _("Stale"), "red"),
     ]
+
+
+class ProxmoxVMTypeChoices(ChoiceSet):
+    """Proxmox hypervisor VM type (QEMU vs LXC) as stored in the proxmox_vm_type custom field."""
+
+    key = "VirtualMachine.proxmox_vm_type"
+
+    QEMU = "qemu"
+    LXC = "lxc"
+
+    CHOICES = [
+        (QEMU, _("QEMU"), "green"),
+        (LXC, _("LXC"), "blue"),
+    ]

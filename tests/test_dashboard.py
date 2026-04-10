@@ -647,44 +647,35 @@ def test_build_object_summaries_counts(monkeypatch, proxmox_endpoint):
         proxmox_endpoint=proxmox_endpoint,
     )
 
-    # Build a minimal queryset stub that returns preset counts per filter key
+    # Build a minimal queryset stub that returns preset counts
     class _CountingQS:
-        def __init__(self, total=0, counts_by_kwarg=None):
+        def __init__(self, total=0, aggregate_results=None):
             self._total = total
-            self._counts_by_kwarg = counts_by_kwarg or {}
+            self._aggregate_results = aggregate_results or {}
 
-        def filter(self, **kwargs):
-            # Match on single-key hashable values (e.g. enabled=True, status="active").
-            # Non-hashable values (e.g. model objects) are skipped; the same QS is
-            # returned so chained filters like .filter(endpoint=...).filter(enabled=True)
-            # still resolve correctly.
-            for k, v in kwargs.items():
-                try:
-                    if (k, v) in self._counts_by_kwarg:
-                        return _CountingQS(total=self._counts_by_kwarg[(k, v)])
-                except TypeError:
-                    pass
-            # No match — preserve counts_by_kwarg so chained filters still work
-            return _CountingQS(total=self._total, counts_by_kwarg=self._counts_by_kwarg)
+        def filter(self, *args, **kwargs):
+            return self
 
         def count(self):
             return self._total
+
+        def aggregate(self, **kwargs):
+            result = {}
+            for k in kwargs:
+                result[k] = (
+                    self._total if k == "total" else self._aggregate_results.get(k, 0)
+                )
+            return result
 
     class _ModelWithQS:
         def __init__(self, qs):
             self.objects = qs
 
     module.BackupRoutine = _ModelWithQS(
-        _CountingQS(
-            total=5,
-            counts_by_kwarg={("enabled", True): 3},
-        )
+        _CountingQS(total=5, aggregate_results={"total": 5, "enabled": 3})
     )
     module.Replication = _ModelWithQS(
-        _CountingQS(
-            total=4,
-            counts_by_kwarg={("status", "active"): 3, ("status", "stale"): 1},
-        )
+        _CountingQS(total=4, aggregate_results={"total": 4, "active": 3, "stale": 1})
     )
     module.ProxmoxStorage = _ModelWithQS(_CountingQS(total=0))
     module.VMBackup = _ModelWithQS(_CountingQS(total=0))

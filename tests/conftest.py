@@ -158,6 +158,9 @@ def _manager(*, first=None, objects_by_pk=None, does_not_exist=None):
         def count(self):
             return 0
 
+        def aggregate(self, **kwargs):
+            return {k: 0 for k in kwargs}
+
         def order_by(self, *args, **kwargs):
             return self
 
@@ -283,6 +286,12 @@ def load_plugin_module(
             return self
 
     django_db_models.Q = Q
+
+    class Count:
+        def __init__(self, *args, **kwargs):
+            pass
+
+    django_db_models.Count = Count
 
     utilities_datetime = types.ModuleType("utilities.datetime")
     utilities_datetime.local_now = lambda: __import__("datetime").datetime(
@@ -564,6 +573,10 @@ def load_plugin_module(
 
     nbp_choices.SyncTypeChoices = _SyncTypeChoices
     nbp_choices.NetBoxTokenVersionChoices = SimpleNamespace(V1="v1", V2="v2")
+    nbp_choices.ReplicationStatusChoices = SimpleNamespace(
+        ACTIVE="active", STALE="stale"
+    )
+    nbp_choices.ProxmoxVMTypeChoices = SimpleNamespace(QEMU="qemu", LXC="lxc")
     monkeypatch.setitem(sys.modules, "netbox_proxbox.choices", nbp_choices)
 
     nbp_jobs = types.ModuleType("netbox_proxbox.jobs")

@@ -12,6 +12,8 @@ from rest_framework.response import Response
 from rest_framework.routers import APIRootView
 from rest_framework.views import APIView
 
+from netbox_proxbox.choices import ProxmoxVMTypeChoices
+
 from .. import filtersets, models
 from .serializers import (
     BackupRoutineSerializer,
@@ -179,11 +181,6 @@ class ReplicationViewSet(NetBoxModelViewSet):
     filterset_class = filtersets.ReplicationFilterSet
 
 
-# ---------------------------------------------------------------------------
-# Permission helper for dashboard-style views
-# ---------------------------------------------------------------------------
-
-
 class _ProxboxDashboardPermission(BasePermission):
     """Allow access if the user may view at least one Proxbox endpoint model.
 
@@ -203,13 +200,7 @@ class _ProxboxDashboardPermission(BasePermission):
         return user_may_access_proxbox_dashboard(request.user)
 
 
-# ---------------------------------------------------------------------------
-# Shared serialisation helpers for core NetBox model instances
-# ---------------------------------------------------------------------------
-
-
 def _nested(obj: object, request: Request) -> dict | None:
-    """Return a minimal {id, name, url} dict for a related object or None."""
     if obj is None:
         return None
     try:
@@ -220,7 +211,6 @@ def _nested(obj: object, request: Request) -> dict | None:
 
 
 def _serialize_interfaces(interfaces: object, request: Request) -> list[dict]:
-    """Serialise a prefetched interface relation into a list of dicts."""
     result = []
     for iface in interfaces.all():
         result.append(
@@ -235,7 +225,6 @@ def _serialize_interfaces(interfaces: object, request: Request) -> list[dict]:
 
 
 def _serialize_device(device: object, request: Request) -> dict:
-    """Return a JSON-safe dict for a proxbox-tagged Device."""
     return {
         "id": device.pk,
         "name": str(device.name),
@@ -255,7 +244,6 @@ def _serialize_device(device: object, request: Request) -> dict:
 
 
 def _serialize_vm(vm: object, request: Request) -> dict:
-    """Return a JSON-safe dict for a proxbox-tagged VirtualMachine."""
     return {
         "id": vm.pk,
         "name": str(vm.name),
@@ -270,7 +258,6 @@ def _serialize_vm(vm: object, request: Request) -> dict:
 
 
 def _serialize_job(job: object, request: Request | None = None) -> dict:
-    """Return a minimal JSON-safe dict for a core Job."""
     url = None
     if request is not None:
         try:
@@ -286,11 +273,6 @@ def _serialize_job(job: object, request: Request | None = None) -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
-# Non-model API views
-# ---------------------------------------------------------------------------
-
-
 class HomeAPIView(APIView):
     """API mirror of the Proxbox plugin home page (/plugins/proxbox/).
 
@@ -303,7 +285,7 @@ class HomeAPIView(APIView):
     @extend_schema(responses={200: OpenApiTypes.OBJECT})
     def get(self, request: Request) -> Response:
         """Return the same data the plugin home page renders."""
-        from netbox_proxbox.jobs import is_proxbox_sync_job
+        from netbox_proxbox.jobs import PROXBOX_SYNC_QUEUE_NAME, is_proxbox_sync_job
         from netbox_proxbox.schedule_hints import has_recurring_proxbox_sync_all
         from netbox_proxbox.utils import get_fastapi_url
         from core.choices import JobStatusChoices
@@ -324,11 +306,21 @@ class HomeAPIView(APIView):
         if fastapi_obj is not None:
             fastapi_info = get_fastapi_url(fastapi_obj) or {}
 
+        from django.db.models import Q as DbQ
+        from netbox_proxbox.jobs import LEGACY_PROXBOX_RQ_QUEUE
+
         # Find newest running/queued proxbox sync job visible to this user.
+        # Pre-filter by queue or name to avoid scanning unrelated jobs.
         active_job = None
         for job in (
             Job.objects.restrict(request.user, "view")
-            .filter(status__in=JobStatusChoices.ENQUEUED_STATE_CHOICES)
+            .filter(
+                status__in=JobStatusChoices.ENQUEUED_STATE_CHOICES,
+            )
+            .filter(
+                DbQ(queue_name__in=[PROXBOX_SYNC_QUEUE_NAME, LEGACY_PROXBOX_RQ_QUEUE])
+                | DbQ(name="Proxbox Sync")
+            )
             .order_by("-created")
             .iterator(chunk_size=32)
         ):
@@ -588,18 +580,14 @@ class NodesAPIView(APIView):
         return Response({"count": len(results), "results": results})
 
 
-class VirtualMachinesAPIView(APIView):
-    """API mirror of the Proxbox virtual machines page (/plugins/proxbox/virtual_machines/).
-
-    Returns NetBox VirtualMachine objects tagged 'proxbox' with vm_type=qemu.
-    Read-only GET endpoint.
-    """
+class _ProxboxVMListAPIView(APIView):
+    """Shared base for VM-type list views — parameterized by ``vm_type``."""
 
     permission_classes = [IsAuthenticatedOrLoginNotRequired]
+    vm_type: str
 
     @extend_schema(responses={200: OpenApiTypes.OBJECT})
     def get(self, request: Request) -> Response:
-        """Return proxbox-tagged QEMU VMs with their interfaces and IPs."""
         from virtualization.models import VirtualMachine
         from netbox_proxbox.utils import get_proxbox_tagged_object_ids
 
@@ -609,7 +597,7 @@ class VirtualMachinesAPIView(APIView):
 
         vms = list(
             VirtualMachine.objects.restrict(request.user, "view")
-            .filter(id__in=tagged_ids, custom_field_data__proxmox_vm_type="qemu")
+            .filter(id__in=tagged_ids, custom_field_data__proxmox_vm_type=self.vm_type)
             .select_related("site", "cluster", "role", "tenant", "platform")
             .prefetch_related("interfaces__ip_addresses")
         )
@@ -617,33 +605,24 @@ class VirtualMachinesAPIView(APIView):
         return Response({"count": len(results), "results": results})
 
 
-class LXCContainersAPIView(APIView):
+class VirtualMachinesAPIView(_ProxboxVMListAPIView):
+    """API mirror of the Proxbox virtual machines page (/plugins/proxbox/virtual_machines/).
+
+    Returns NetBox VirtualMachine objects tagged 'proxbox' with vm_type=qemu.
+    Read-only GET endpoint.
+    """
+
+    vm_type = ProxmoxVMTypeChoices.QEMU
+
+
+class LXCContainersAPIView(_ProxboxVMListAPIView):
     """API mirror of the Proxbox LXC containers page (/plugins/proxbox/lxc_containers/).
 
     Returns NetBox VirtualMachine objects tagged 'proxbox' with vm_type=lxc.
     Read-only GET endpoint.
     """
 
-    permission_classes = [IsAuthenticatedOrLoginNotRequired]
-
-    @extend_schema(responses={200: OpenApiTypes.OBJECT})
-    def get(self, request: Request) -> Response:
-        """Return proxbox-tagged LXC containers with their interfaces and IPs."""
-        from virtualization.models import VirtualMachine
-        from netbox_proxbox.utils import get_proxbox_tagged_object_ids
-
-        tagged_ids = get_proxbox_tagged_object_ids(VirtualMachine, limit=100)
-        if not tagged_ids:
-            return Response({"count": 0, "results": []})
-
-        containers = list(
-            VirtualMachine.objects.restrict(request.user, "view")
-            .filter(id__in=tagged_ids, custom_field_data__proxmox_vm_type="lxc")
-            .select_related("site", "cluster", "role", "tenant", "platform")
-            .prefetch_related("interfaces__ip_addresses")
-        )
-        results = [_serialize_vm(vm, request) for vm in containers]
-        return Response({"count": len(results), "results": results})
+    vm_type = ProxmoxVMTypeChoices.LXC
 
 
 class InterfacesAPIView(APIView):

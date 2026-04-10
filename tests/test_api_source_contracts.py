@@ -527,25 +527,56 @@ def _find_permission_classes_value(class_node: ast.ClassDef) -> list[str] | None
 
 
 def test_non_model_api_views_exist_and_extend_api_view():
-    """Every non-model API view must exist and subclass APIView."""
+    """Every non-model API view must exist and subclass APIView (directly or via a base)."""
     module = _parse_module(VIEWS_PATH)
+
+    def _bases(class_node: ast.ClassDef) -> list[str]:
+        return [b.id if isinstance(b, ast.Name) else b.attr for b in class_node.bases]
+
+    def _inherits_api_view(class_node: ast.ClassDef) -> bool:
+        direct = _bases(class_node)
+        if "APIView" in direct:
+            return True
+        # Check one level up for intermediate base classes defined in the same module.
+        for base_name in direct:
+            try:
+                base_node = _classdef(module, base_name)
+                if "APIView" in _bases(base_node):
+                    return True
+            except (KeyError, AssertionError):
+                pass
+        return False
+
     for view_name in _NON_MODEL_VIEWS:
         class_node = _classdef(module, view_name)
-        base_names = [
-            b.id if isinstance(b, ast.Name) else b.attr for b in class_node.bases
-        ]
-        assert "APIView" in base_names, (
-            f"{view_name} must subclass APIView, got bases: {base_names}"
+        assert _inherits_api_view(class_node), (
+            f"{view_name} must subclass APIView (directly or via a base), "
+            f"got bases: {_bases(class_node)}"
         )
 
 
 def test_non_model_api_views_define_get_method():
-    """Every non-model view must expose a get() handler."""
+    """Every non-model view must expose a get() handler (directly or via a base)."""
     module = _parse_module(VIEWS_PATH)
+
+    def _has_method(class_node: ast.ClassDef, method: str) -> bool:
+        if method in _class_methods(class_node):
+            return True
+        # Check one level up for methods defined on an intermediate base in the same module.
+        for base_name in [
+            b.id if isinstance(b, ast.Name) else b.attr for b in class_node.bases
+        ]:
+            try:
+                base_node = _classdef(module, base_name)
+                if method in _class_methods(base_node):
+                    return True
+            except (KeyError, AssertionError):
+                pass
+        return False
+
     for view_name in _NON_MODEL_VIEWS:
         class_node = _classdef(module, view_name)
-        methods = _class_methods(class_node)
-        assert "get" in methods, f"{view_name} is missing a get() method"
+        assert _has_method(class_node, "get"), f"{view_name} is missing a get() method"
 
 
 def test_schedule_sync_api_view_defines_post_and_permission_check():
@@ -574,9 +605,27 @@ def test_dashboard_views_use_proxbox_dashboard_permission():
 def test_resource_views_use_is_authenticated_or_login_not_required():
     """Resource/log/schedule views must use IsAuthenticatedOrLoginNotRequired."""
     module = _parse_module(VIEWS_PATH)
+
+    def _find_perms(class_node: ast.ClassDef) -> list[str] | None:
+        perms = _find_permission_classes_value(class_node)
+        if perms is not None:
+            return perms
+        # Check one level up for permission_classes defined on an intermediate base.
+        for base_name in [
+            b.id if isinstance(b, ast.Name) else b.attr for b in class_node.bases
+        ]:
+            try:
+                base_node = _classdef(module, base_name)
+                perms = _find_permission_classes_value(base_node)
+                if perms is not None:
+                    return perms
+            except (KeyError, AssertionError):
+                pass
+        return None
+
     for view_name in _RESOURCE_PERMISSION_VIEWS:
         class_node = _classdef(module, view_name)
-        perms = _find_permission_classes_value(class_node)
+        perms = _find_perms(class_node)
         assert perms is not None, f"{view_name} must declare permission_classes"
         assert "IsAuthenticatedOrLoginNotRequired" in perms, (
             f"{view_name} permission_classes must include IsAuthenticatedOrLoginNotRequired, got {perms}"

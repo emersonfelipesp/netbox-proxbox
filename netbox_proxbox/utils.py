@@ -126,6 +126,9 @@ def get_fastapi_context_for_request(request) -> dict:
     return {}
 
 
+PROXBOX_TAG_SLUG = "proxbox"
+
+
 def get_proxbox_tagged_object_ids(
     model_class: type, limit: int | None = None
 ) -> list[int]:
@@ -137,7 +140,7 @@ def get_proxbox_tagged_object_ids(
     from django.contrib.contenttypes.models import ContentType
     from extras.models import Tag, TaggedItem
 
-    proxbox_tag = Tag.objects.filter(slug="proxbox").first()
+    proxbox_tag = Tag.objects.filter(slug=PROXBOX_TAG_SLUG).first()
     if not proxbox_tag:
         return []
     ct = ContentType.objects.get_for_model(model_class)
