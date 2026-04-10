@@ -1,4 +1,4 @@
-"""Re-queue a Proxbox Sync job from the NetBox core Job detail page."""
+"""Re-queue or immediately run a Proxbox Sync job from the NetBox core Job detail page."""
 
 from __future__ import annotations
 
@@ -26,13 +26,23 @@ from utilities.views import (
 __all__ = ("ProxboxJobRunNowView",)
 
 
+_ALLOWED_RUN_NOW_STATUSES = (
+    *JobStatusChoices.TERMINAL_STATE_CHOICES,
+    JobStatusChoices.STATUS_SCHEDULED,
+)
+
+
 @register_model_view(Job, "proxbox_run", path="proxbox-run")
 class ProxboxJobRunNowView(
     TokenConditionalLoginRequiredMixin,
     ContentTypePermissionRequiredMixin,
     View,
 ):
-    """POST: enqueue a new immediate Proxbox sync using the same parameters as this job."""
+    """POST: enqueue a new immediate Proxbox sync using the same parameters as this job.
+
+    Allowed for terminal jobs (re-run after completion/failure) and for scheduled jobs
+    (run immediately without cancelling the original — it will still execute on schedule).
+    """
 
     http_method_names = ["post"]
 
@@ -49,12 +59,11 @@ class ProxboxJobRunNowView(
                 _("This action only applies to Proxbox Sync jobs."),
             )
             return HttpResponseRedirect(job.get_absolute_url())
-        if job.status not in JobStatusChoices.TERMINAL_STATE_CHOICES:
+        if job.status not in _ALLOWED_RUN_NOW_STATUSES:
             messages.warning(
                 request,
                 _(
-                    "Run now is only available after the job has finished, failed, or been "
-                    "cancelled."
+                    "Run now is only available for finished, failed, cancelled, or scheduled jobs."
                 ),
             )
             return HttpResponseRedirect(job.get_absolute_url())
@@ -67,8 +76,17 @@ class ProxboxJobRunNowView(
             name=job.name,
             **enqueue_kwargs,
         )
-        messages.success(
-            request,
-            _("A new Proxbox sync job has been queued."),
-        )
+        if job.status == JobStatusChoices.STATUS_SCHEDULED:
+            messages.success(
+                request,
+                _(
+                    "A new Proxbox sync job has been queued to run immediately. "
+                    "The original scheduled job is unchanged."
+                ),
+            )
+        else:
+            messages.success(
+                request,
+                _("A new Proxbox sync job has been queued."),
+            )
         return HttpResponseRedirect(new_job.get_absolute_url())

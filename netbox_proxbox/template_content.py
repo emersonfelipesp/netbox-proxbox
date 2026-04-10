@@ -94,21 +94,30 @@ class ProxboxJobTemplateExtension(PluginTemplateExtension):
         return mark_safe("".join(parts))
 
     def buttons(self) -> str:
-        """Render Run now (finished jobs only) and Cancel (pending/scheduled/running) as permitted."""
+        """Render Run now and Cancel buttons on Proxbox Sync job detail pages.
+
+        Run now: shown for terminal jobs (re-run) and scheduled jobs (run immediately
+        without cancelling the original).
+        Cancel: shown for all enqueued states (pending, scheduled, running).
+        Both buttons appear together for scheduled jobs.
+        """
         obj = self.context["object"]
         if not isinstance(obj, Job) or not is_proxbox_sync_job(obj):
             return ""
         user = self.context["request"].user
         parts: list[str] = []
 
-        if obj.status in JobStatusChoices.TERMINAL_STATE_CHOICES:
-            if user.has_perm(permission_enqueue_proxbox_sync()):
-                parts.append(
-                    self.render(
-                        "netbox_proxbox/inc/job_run_now_button.html",
-                        {"job": obj},
-                    )
+        show_run_now = (
+            obj.status in JobStatusChoices.TERMINAL_STATE_CHOICES
+            or obj.status == JobStatusChoices.STATUS_SCHEDULED
+        )
+        if show_run_now and user.has_perm(permission_enqueue_proxbox_sync()):
+            parts.append(
+                self.render(
+                    "netbox_proxbox/inc/job_run_now_button.html",
+                    {"job": obj},
                 )
+            )
 
         if obj.status in JobStatusChoices.ENQUEUED_STATE_CHOICES:
             if user.has_perm(get_permission_for_model(Job, "delete")):
