@@ -58,10 +58,22 @@ class ProxmoxEndpointListView(generic.ObjectListView):
 
 @register_model_view(ProxmoxEndpoint, "bulk_import", path="import", detail=False)
 class ProxmoxEndpointBulkImportView(generic.BulkImportView):
-    """Bulk import Proxmox endpoints from structured data."""
+    """Bulk import Proxmox endpoints from structured data.
+
+    An ``id`` column exported from another NetBox instance is silently discarded —
+    rows are always treated as new creates with auto-assigned PKs.
+    """
 
     queryset = ProxmoxEndpoint.objects.all()
     model_form = ProxmoxEndpointImportForm
+
+    def _process_import_records(self, form, request, records, prefetched_objects):
+        # Strip any exported 'id' column so rows are always created as new objects.
+        for record in records:
+            record.pop("id", None)
+        return super()._process_import_records(
+            form, request, records, prefetched_objects
+        )
 
 
 @register_model_view(ProxmoxEndpoint, "export", path="export", detail=False)

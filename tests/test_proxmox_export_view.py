@@ -180,6 +180,46 @@ def test_export_serialization_does_not_access_comments(monkeypatch):
     assert row["name"] == "pve01"
 
 
+def test_bulk_import_view_strips_id_column(monkeypatch):
+    """Regression guard: an 'id' column exported from another NetBox instance must be ignored.
+
+    NetBox's BulkImportView uses the 'id' field to look up an existing row for
+    update; if the id doesn't exist it raises ValidationError.  Our override pops
+    'id' from each record before calling super(), so rows are always created fresh.
+    """
+    import sys
+
+    from netbox_proxbox.views.endpoints.proxmox import ProxmoxEndpointBulkImportView
+
+    view = ProxmoxEndpointBulkImportView()
+    view.queryset = None  # not used by our override
+
+    stripped_records = []
+
+    def fake_super_process(form, request, records, prefetched_objects):
+        stripped_records.extend([dict(r) for r in records])
+        return []
+
+    # Patch the parent class method so we can observe what records reach it.
+    monkeypatch.setattr(
+        "netbox.views.generic.BulkImportView._process_import_records",
+        fake_super_process,
+    )
+
+    records = [
+        {"id": "1", "name": "pve01", "port": "8006"},
+        {"id": "2", "name": "pve02", "port": "8006"},
+        {"name": "pve03", "port": "8006"},  # no id — should be unchanged
+    ]
+    view._process_import_records(None, None, records, {})
+
+    for row in stripped_records:
+        assert "id" not in row, f"'id' was not stripped from {row}"
+
+    assert stripped_records[0]["name"] == "pve01"
+    assert stripped_records[2]["name"] == "pve03"
+
+
 # ── _validate_sensitive_export_token: v1 / v2 / fallback modes ───────────────
 
 
