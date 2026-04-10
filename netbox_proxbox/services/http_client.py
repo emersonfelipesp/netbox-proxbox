@@ -6,7 +6,7 @@ import logging
 from contextlib import contextmanager
 from collections.abc import Generator, Iterator
 from contextlib import AbstractContextManager
-from typing import Any, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 import requests
 import requests.exceptions
@@ -62,7 +62,7 @@ class HttpResponse:
     def headers(self) -> dict[str, str]:
         return dict(self._raw.headers)
 
-    def json(self) -> Any:
+    def json(self) -> object:
         return self._raw.json()
 
     def raise_for_status(self) -> None:
@@ -94,7 +94,7 @@ class HttpClient(Protocol):
         self,
         url: str,
         *,
-        json: Any = None,
+        json: dict[str, object] | list[object] | None = None,
         headers: dict[str, str] | None = None,
         verify: bool = True,
         timeout: float | tuple[int, int] = 5,
@@ -104,7 +104,7 @@ class HttpClient(Protocol):
         self,
         url: str,
         *,
-        json: Any = None,
+        json: dict[str, object] | list[object] | None = None,
         headers: dict[str, str] | None = None,
         verify: bool = True,
         timeout: float | tuple[int, int] = 5,
@@ -178,7 +178,7 @@ class RequestsHttpClient:
         self,
         url: str,
         *,
-        json: Any = None,
+        json: dict[str, object] | list[object] | None = None,
         headers: dict[str, str] | None = None,
         verify: bool = True,
         timeout: float | tuple[int, int] = 5,
@@ -199,7 +199,7 @@ class RequestsHttpClient:
         self,
         url: str,
         *,
-        json: Any = None,
+        json: dict[str, object] | list[object] | None = None,
         headers: dict[str, str] | None = None,
         verify: bool = True,
         timeout: float | tuple[int, int] = 5,

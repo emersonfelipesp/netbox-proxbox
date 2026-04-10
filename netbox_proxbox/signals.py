@@ -8,13 +8,13 @@ from __future__ import annotations
 
 import logging
 import secrets
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
 if TYPE_CHECKING:
-    from netbox_proxbox.models import FastAPIEndpoint
+    from netbox_proxbox.models import FastAPIEndpoint, ProxmoxEndpoint
 
 logger = logging.getLogger(__name__)
 
@@ -122,7 +122,7 @@ def ensure_fastapi_endpoint_token(
     sender: type,
     instance: FastAPIEndpoint,
     created: bool,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> None:
     """Ensure FastAPIEndpoint has a token and register it with the backend.
 
@@ -145,9 +145,9 @@ def ensure_fastapi_endpoint_token(
 @receiver(post_save, sender="netbox_proxbox.ProxmoxEndpoint")
 def ensure_proxmox_endpoint_has_fastapi_token(
     sender: type,
-    instance: Any,
+    instance: ProxmoxEndpoint,
     created: bool,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> None:
     """Ensure there's a FastAPIEndpoint with a token when ProxmoxEndpoint is saved.
 

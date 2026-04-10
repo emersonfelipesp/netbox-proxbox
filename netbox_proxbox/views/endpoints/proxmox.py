@@ -67,7 +67,9 @@ class ProxmoxEndpointBulkImportView(generic.BulkImportView):
     queryset = ProxmoxEndpoint.objects.all()
     model_form = ProxmoxEndpointImportForm
 
-    def create_and_update_objects(self, form, request):
+    def create_and_update_objects(
+        self, form: ProxmoxEndpointImportForm, request: HttpRequest
+    ) -> list[object]:
         # Strip any exported 'id' column before NetBox processes the records.
         # create_and_update_objects() prefetches by id first, then _process_import_records()
         # looks up each id — both must not see it, so we remove it here.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import cast
 
 from rich.table import Table
 
@@ -27,7 +28,7 @@ def render_table(parsed: JSONValue) -> None:
     """Render table."""
     if isinstance(parsed, list):
         if all(isinstance(item, dict) for item in parsed):
-            render_list_table(parsed)
+            render_list_table(cast(list[dict[str, JSONValue]], parsed))
         else:
             console.print(parsed)
     elif isinstance(parsed, dict):
@@ -36,7 +37,10 @@ def render_table(parsed: JSONValue) -> None:
             isinstance(item, dict) for item in results
         ):
             count = parsed.get("count")
-            render_list_table(results, count=count if isinstance(count, int) else None)
+            render_list_table(
+                cast(list[dict[str, JSONValue]], results),
+                count=count if isinstance(count, int) else None,
+            )
         else:
             render_detail_table(parsed)
     else:

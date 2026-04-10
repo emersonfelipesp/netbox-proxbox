@@ -139,7 +139,7 @@ def _consume_sse_until_complete(
 def request_backend_resource(
     context: BackendRequestContext,
     path: str,
-    query_params: dict | None = None,
+    query_params: dict[str, str] | None = None,
     *,
     timeout: float | tuple[int, int] = 5,
 ) -> tuple[dict[str, object], int]:
@@ -249,7 +249,7 @@ def request_backend_resource(
 
 def run_sync_stream(
     path: str,
-    query_params: dict | None = None,
+    query_params: dict[str, str] | None = None,
     *,
     on_frame: Callable[[str, dict[str, object]], None] | None = None,
     endpoint_id: int | None = None,
@@ -327,11 +327,11 @@ def _try_sync_stream_url(
     url: str,
     verify: bool,
     path: str,
-    query_params: dict | None,
-    headers: dict,
+    query_params: dict[str, str] | None,
+    headers: dict[str, str],
     on_frame: Callable[[str, dict[str, object]], None] | None,
     endpoint_id: int | None = None,
-) -> tuple[str | None, bool, dict | None] | requests.Response:
+) -> tuple[str | None, bool, dict[str, object] | None] | requests.Response:
     """Try a single URL for sync stream request.
 
     Returns:
@@ -404,7 +404,7 @@ def _try_sync_stream_url(
 def iter_backend_sse_lines(
     context: BackendRequestContext,
     path: str,
-    query_params: dict | None = None,
+    query_params: dict[str, str] | None = None,
 ) -> Generator[str, None, None]:
     """Stream newline-terminated SSE lines from the backend, with URL fallback."""
     try:
@@ -466,7 +466,7 @@ def iter_backend_sse_lines(
 
 
 def sync_resource(
-    path: str, query_params: dict | None = None
+    path: str, query_params: dict[str, str] | None = None
 ) -> tuple[dict[str, object], int]:
     """Queue a single backend sync path (GET) using the default FastAPI endpoint."""
     context = get_fastapi_request_context()
@@ -482,7 +482,7 @@ def sync_resource(
 
 
 def sync_full_update_resource(
-    query_params: dict | None = None,
+    query_params: dict[str, str] | None = None,
 ) -> tuple[dict[str, object], int]:
     """Run full update against the backend's dedicated /full-update endpoint."""
     context = get_fastapi_request_context()

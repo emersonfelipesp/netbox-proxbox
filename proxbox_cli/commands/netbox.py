@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 
@@ -70,10 +70,10 @@ def endpoint_get(
 @endpoint_app.command("create")
 def endpoint_create(
     body_json: Annotated[
-        Optional[str], typer.Option("--body-json", help="JSON payload string.")
+        str | None, typer.Option("--body-json", help="JSON payload string.")
     ] = None,
     body_file: Annotated[
-        Optional[Path], typer.Option("--body-file", help="Path to JSON payload file.")
+        Path | None, typer.Option("--body-file", help="Path to JSON payload file.")
     ] = None,
     as_json: JsonFlag = False,
     as_yaml: YamlFlag = False,
@@ -88,10 +88,10 @@ def endpoint_create(
 def endpoint_update(
     netbox_id: Annotated[int, typer.Argument(help="NetBox endpoint ID.")],
     body_json: Annotated[
-        Optional[str], typer.Option("--body-json", help="JSON payload string.")
+        str | None, typer.Option("--body-json", help="JSON payload string.")
     ] = None,
     body_file: Annotated[
-        Optional[Path], typer.Option("--body-file", help="Path to JSON payload file.")
+        Path | None, typer.Option("--body-file", help="Path to JSON payload file.")
     ] = None,
     as_json: JsonFlag = False,
     as_yaml: YamlFlag = False,

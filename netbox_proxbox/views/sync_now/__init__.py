@@ -14,7 +14,7 @@ __all__ = (
 )
 
 
-def __getattr__(name: str):
+def __getattr__(name: str) -> type:
     """Lazy-load sync-now views to avoid circular imports during module init."""
     if name == "ProxmoxClusterSyncNowView":
         from netbox_proxbox.views.sync_now.cluster import ProxmoxClusterSyncNowView

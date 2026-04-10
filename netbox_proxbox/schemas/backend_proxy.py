@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from enum import Enum
-from typing import Any
-
 from pydantic import Field
 
 from netbox_proxbox.schemas._base import ProxboxBaseModel, ProxboxLenientModel
@@ -61,7 +59,7 @@ class SseItemInfo(ProxboxLenientModel):
     netbox_id: int | None = None
     netbox_url: str | None = None
     item_type: str | None = None
-    extra: dict[str, Any] | None = None
+    extra: dict[str, object] | None = None
 
 
 class SseDiscoveryPayload(ProxboxLenientModel):
@@ -74,7 +72,7 @@ class SseDiscoveryPayload(ProxboxLenientModel):
     count: int = 0
     items: list[SseItemInfo] = Field(default_factory=list)
     progress: SseProgressInfo | None = None
-    metadata: dict[str, Any] | None = None
+    metadata: dict[str, object] | None = None
 
 
 class SseSubstepPayload(ProxboxLenientModel):
@@ -87,7 +85,7 @@ class SseSubstepPayload(ProxboxLenientModel):
     message: str = ""
     item: SseItemInfo | None = None
     timing: SseTimingInfo | None = None
-    result: dict[str, Any] | None = None
+    result: dict[str, object] | None = None
 
 
 class SseItemProgressPayload(ProxboxLenientModel):

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 
@@ -29,7 +29,7 @@ def nodes_list(
 def nodes_network(
     node: Annotated[str, typer.Argument(help="Node name.")],
     interface_type: Annotated[
-        Optional[str], typer.Option("--type", help="Filter by interface type.")
+        str | None, typer.Option("--type", help="Filter by interface type.")
     ] = None,
     as_json: JsonFlag = False,
     as_yaml: YamlFlag = False,

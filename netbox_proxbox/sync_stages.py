@@ -5,7 +5,8 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from typing import TYPE_CHECKING, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from netbox_proxbox.choices import SyncTypeChoices
 from netbox_proxbox.sync_types import (

@@ -25,13 +25,26 @@ from netbox_proxbox.views.error_utils import (
 logger = logging.getLogger(__name__)
 
 
-def sync_proxmox_endpoint_to_backend(*args, **kwargs):
+def sync_proxmox_endpoint_to_backend(
+    endpoint: ProxmoxEndpoint,
+    *,
+    base_url: str,
+    auth_headers: dict[str, str] | None = None,
+    backend_verify_ssl: bool = True,
+    timeout: int = 15,
+) -> tuple[bool, str | None, int | None]:
     """Compatibility wrapper for callers that patch this service module symbol."""
     from netbox_proxbox.views.backend_sync import (
         sync_proxmox_endpoint_to_backend as _sync,
     )
 
-    return _sync(*args, **kwargs)
+    return _sync(
+        endpoint,
+        base_url=base_url,
+        auth_headers=auth_headers,
+        backend_verify_ssl=backend_verify_ssl,
+        timeout=timeout,
+    )
 
 
 class ServiceStatus:

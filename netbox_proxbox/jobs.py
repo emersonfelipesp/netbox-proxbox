@@ -4,14 +4,16 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Any
-
 from netbox.constants import RQ_QUEUE_DEFAULT
 from netbox.jobs import JobRunner
 
 try:
     from netbox.jobs import Job
 except ImportError:  # pragma: no cover - test stubs expose only JobRunner
+    # Intentional: `Job` is not always exported by NetBox (e.g. in test environments).
+    # Using `Any` as a stub avoids a hard import error while keeping callers typed.
+    from typing import Any
+
     Job = Any  # type: ignore[misc,assignment]
 
 from netbox_proxbox.choices import SyncTypeChoices
@@ -104,12 +106,14 @@ def _sync_stage_settings() -> None:
     )
 
 
-async def _run_batch_selected_sync(*args: Any, **kwargs: Any) -> dict[str, object]:
+async def _run_batch_selected_sync(
+    *args: object, **kwargs: object
+) -> dict[str, object]:
     """Compatibility wrapper for the extracted batch-sync coroutine."""
     return await sync_stages._run_batch_selected_sync(*args, **kwargs)
 
 
-def _run_all_stages_sync(*args: Any, **kwargs: Any) -> list[dict[str, object]]:
+def _run_all_stages_sync(*args: object, **kwargs: object) -> list[dict[str, object]]:
     """Compatibility wrapper for the extracted stage runner."""
     return sync_stages._run_all_stages_sync(*args, **kwargs)
 
@@ -121,7 +125,7 @@ class ProxboxSyncJob(JobRunner):
         name = "Proxbox Sync"
 
     @classmethod
-    def enqueue(cls, *args: Any, **kwargs: Any) -> Job:
+    def enqueue(cls, *args: object, **kwargs: object) -> Job:
         """Enqueue like other ``JobRunner`` jobs, but with a long RQ ``job_timeout`` by default."""
         kwargs.setdefault("job_timeout", PROXBOX_SYNC_JOB_TIMEOUT)
         sync_types_kw = kwargs.pop("sync_types", None)
@@ -174,7 +178,7 @@ class ProxboxSyncJob(JobRunner):
         batch_object_type: str | None = None,
         batch_object_ids: list[str] | None = None,
         fastapi_endpoint_id: int | None = None,
-        **kwargs: Any,
+        **kwargs: object,
     ) -> None:
         """Run one or more proxbox-api SSE streams in dependency order."""
         fastapi_endpoint_id = fastapi_endpoint_id

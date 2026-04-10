@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 
@@ -48,10 +48,10 @@ def pxendpoint_get(
 @endpoints_app.command("create")
 def pxendpoint_create(
     body_json: Annotated[
-        Optional[str], typer.Option("--body-json", help="JSON payload string.")
+        str | None, typer.Option("--body-json", help="JSON payload string.")
     ] = None,
     body_file: Annotated[
-        Optional[Path], typer.Option("--body-file", help="Path to JSON payload file.")
+        Path | None, typer.Option("--body-file", help="Path to JSON payload file.")
     ] = None,
     as_json: JsonFlag = False,
     as_yaml: YamlFlag = False,
@@ -66,10 +66,10 @@ def pxendpoint_create(
 def pxendpoint_update(
     endpoint_id: Annotated[int, typer.Argument(help="Proxmox endpoint ID.")],
     body_json: Annotated[
-        Optional[str], typer.Option("--body-json", help="JSON payload string.")
+        str | None, typer.Option("--body-json", help="JSON payload string.")
     ] = None,
     body_file: Annotated[
-        Optional[Path], typer.Option("--body-file", help="Path to JSON payload file.")
+        Path | None, typer.Option("--body-file", help="Path to JSON payload file.")
     ] = None,
     as_json: JsonFlag = False,
     as_yaml: YamlFlag = False,
@@ -102,10 +102,10 @@ def pxendpoint_delete(
 @viewer_app.command("generate")
 def viewer_generate(
     body_json: Annotated[
-        Optional[str], typer.Option("--body-json", help="JSON config string.")
+        str | None, typer.Option("--body-json", help="JSON config string.")
     ] = None,
     body_file: Annotated[
-        Optional[Path], typer.Option("--body-file", help="Path to JSON config file.")
+        Path | None, typer.Option("--body-file", help="Path to JSON config file.")
     ] = None,
     as_json: JsonFlag = False,
     as_yaml: YamlFlag = False,

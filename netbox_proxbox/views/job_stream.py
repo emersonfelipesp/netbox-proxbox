@@ -8,7 +8,7 @@ import queue
 import re
 import threading
 import time
-from typing import Generator
+from collections.abc import Generator
 
 from core.choices import JobStatusChoices
 from django.http import Http404, HttpRequest, StreamingHttpResponse

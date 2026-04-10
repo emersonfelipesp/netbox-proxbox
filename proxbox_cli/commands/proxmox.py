@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 
@@ -72,11 +72,9 @@ def storage(
 def storage_content(
     node: Annotated[str, typer.Argument(help="Node name.")],
     storage_id: Annotated[str, typer.Argument(help="Storage ID.")],
-    vmid: Annotated[
-        Optional[str], typer.Option("--vmid", help="Filter by VM ID.")
-    ] = None,
+    vmid: Annotated[str | None, typer.Option("--vmid", help="Filter by VM ID.")] = None,
     content: Annotated[
-        Optional[str], typer.Option("--content", help="Filter by content type.")
+        str | None, typer.Option("--content", help="Filter by content type.")
     ] = None,
     as_json: JsonFlag = False,
     as_yaml: YamlFlag = False,

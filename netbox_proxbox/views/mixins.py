@@ -11,7 +11,9 @@ class TableConfigOverrideMixin:
 
     table_exclude: tuple[str, ...] = ("virtual_machine",)
 
-    def get_table(self, data: object, request: HttpRequest, bulk_actions: bool = True):
+    def get_table(
+        self, data: object, request: HttpRequest, bulk_actions: bool = True
+    ) -> object:
         if tableconfig_id := request.GET.get("tableconfig_id"):
             tableconfig = get_object_or_404(TableConfig, pk=tableconfig_id)
             if request.user.is_authenticated:

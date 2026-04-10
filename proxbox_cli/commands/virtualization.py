@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 
@@ -155,11 +155,11 @@ def vms_disks_create(
 
 @vms_app.command("backups-create")
 def vms_backups_create(
-    node: Annotated[Optional[str], typer.Option("--node", help="Node name.")] = None,
+    node: Annotated[str | None, typer.Option("--node", help="Node name.")] = None,
     storage: Annotated[
-        Optional[str], typer.Option("--storage", help="Storage ID.")
+        str | None, typer.Option("--storage", help="Storage ID.")
     ] = None,
-    vmid: Annotated[Optional[str], typer.Option("--vmid", help="VM ID filter.")] = None,
+    vmid: Annotated[str | None, typer.Option("--vmid", help="VM ID filter.")] = None,
     as_json: JsonFlag = False,
     as_yaml: YamlFlag = False,
 ) -> None:
@@ -219,10 +219,10 @@ def storage_create(
 @vms_app.command("snapshots-create")
 def vms_snapshots_create(
     vmid: Annotated[
-        Optional[str], typer.Option("--vmid", help="Proxmox VM ID filter.")
+        str | None, typer.Option("--vmid", help="Proxmox VM ID filter.")
     ] = None,
     node: Annotated[
-        Optional[str], typer.Option("--node", help="Node name filter.")
+        str | None, typer.Option("--node", help="Node name filter.")
     ] = None,
     as_json: JsonFlag = False,
     as_yaml: YamlFlag = False,

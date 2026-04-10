@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from netbox_proxbox.type_defs import FastAPIAuthSource, FastAPIUrlSource
 
 if TYPE_CHECKING:
+    from django.http import HttpRequest
     from ipam.models import IPAddress
 
 
@@ -49,7 +50,7 @@ def get_backend_auth_headers(endpoint: FastAPIAuthSource | None) -> dict[str, st
     return {"X-Proxbox-API-Key": token}
 
 
-def get_fastapi_context(endpoint: FastAPIUrlSource) -> dict | None:
+def get_fastapi_context(endpoint: FastAPIUrlSource) -> dict[str, object] | None:
     """Build auth headers and URLs for a FastAPI endpoint.
 
     Returns a dict with http_url, ip_address_url, verify_ssl, and headers.
@@ -68,7 +69,9 @@ def get_fastapi_context(endpoint: FastAPIUrlSource) -> dict | None:
     }
 
 
-def get_first_fastapi_context(endpoint_id: int | None = None) -> dict | None:
+def get_first_fastapi_context(
+    endpoint_id: int | None = None,
+) -> dict[str, object] | None:
     """Get context for the configured FastAPI endpoint.
 
     Args:
@@ -100,7 +103,7 @@ def get_first_fastapi_context(endpoint_id: int | None = None) -> dict | None:
     return get_fastapi_context(fastapi_obj)
 
 
-def get_fastapi_context_by_id(endpoint_id: int) -> dict | None:
+def get_fastapi_context_by_id(endpoint_id: int) -> dict[str, object] | None:
     """Get context for a specific FastAPI endpoint by ID.
 
     Args:
@@ -117,7 +120,7 @@ def get_fastapi_context_by_id(endpoint_id: int) -> dict | None:
     return get_fastapi_context(fastapi_obj)
 
 
-def get_fastapi_context_for_request(request) -> dict:
+def get_fastapi_context_for_request(request: HttpRequest) -> dict[str, object]:
     """Get FastAPI URL context for a request, respecting object-level permissions."""
     from netbox_proxbox.models import FastAPIEndpoint
 
@@ -153,7 +156,7 @@ def get_proxbox_tagged_object_ids(
     return list(qs)
 
 
-def get_fastapi_url(endpoint: FastAPIUrlSource) -> dict:
+def get_fastapi_url(endpoint: FastAPIUrlSource) -> dict[str, object]:
     """Compute HTTP/WebSocket URLs and TLS settings for a FastAPI endpoint model."""
     ip = get_ip_address_host(getattr(endpoint, "ip_address", None))
     domain = getattr(endpoint, "domain", None) or ip

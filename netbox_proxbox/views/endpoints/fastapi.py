@@ -119,7 +119,9 @@ class FastAPIEndpointBulkImportView(generic.BulkImportView):
                 )
         return super().post(request, *args, **kwargs)
 
-    def create_and_update_objects(self, form, request):
+    def create_and_update_objects(
+        self, form: FastAPIEndpointImportForm, request: HttpRequest
+    ) -> list[object]:
         """Strip exported ``id`` column and handle singleton replacement."""
         for record in form.cleaned_data.get("data", []):
             record.pop("id", None)

@@ -1,6 +1,6 @@
 """Define NetBox filtersets for the plugin's list views and API queries."""
 
-from django.db.models import Q
+from django.db.models import Q, QuerySet
 from netbox.filtersets import NetBoxModelFilterSet
 from utilities.filtersets import register_filterset
 
@@ -27,7 +27,7 @@ class ProxmoxEndpointFilterSet(NetBoxModelFilterSet):
         model = ProxmoxEndpoint
         fields = ("id", "name", "domain", "ip_address", "mode")
 
-    def search(self, queryset, name: str, value: str):
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
         """Match the search term against endpoint name or domain."""
         if not value.strip():
             return queryset
@@ -42,7 +42,7 @@ class NetBoxEndpointFilterSet(NetBoxModelFilterSet):
         model = NetBoxEndpoint
         fields = ("id", "name", "domain", "ip_address")
 
-    def search(self, queryset, name: str, value: str):
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
         """Match the search term against endpoint name or domain."""
         if not value.strip():
             return queryset
@@ -57,7 +57,7 @@ class FastAPIEndpointFilterSet(NetBoxModelFilterSet):
         model = FastAPIEndpoint
         fields = ("id", "name", "domain", "ip_address")
 
-    def search(self, queryset, name: str, value: str):
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
         """Match the search term against endpoint name or domain."""
         if not value.strip():
             return queryset
@@ -84,7 +84,7 @@ class VMBackupFilterSet(NetBoxModelFilterSet):
             "vmid",
         )
 
-    def search(self, queryset, name: str, value: str):
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
         """Match VM name, storage, or volume id (case-insensitive)."""
         if not value.strip():
             return queryset
@@ -116,7 +116,7 @@ class VMSnapshotFilterSet(NetBoxModelFilterSet):
             "snaptime",
         )
 
-    def search(self, queryset, name: str, value: str):
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
         """Match VM name, snapshot name, node, or description."""
         if not value.strip():
             return queryset
@@ -154,7 +154,7 @@ class VMTaskHistoryFilterSet(NetBoxModelFilterSet):
             "exitstatus",
         )
 
-    def search(self, queryset, name: str, value: str):
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
         """Match VM name, task metadata, user name, or task result text."""
         if not value.strip():
             return queryset
@@ -197,7 +197,7 @@ class ProxmoxStorageFilterSet(NetBoxModelFilterSet):
             "pool",
         )
 
-    def search(self, queryset, name: str, value: str):
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
         """Match storage name, cluster, or storage path."""
         if not value.strip():
             return queryset
@@ -216,7 +216,7 @@ class ProxmoxClusterFilterSet(NetBoxModelFilterSet):
         model = ProxmoxCluster
         fields = ("id", "endpoint", "netbox_cluster", "name", "mode", "quorate")
 
-    def search(self, queryset, name: str, value: str):
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
         """Match cluster name or cluster ID."""
         if not value.strip():
             return queryset
@@ -242,7 +242,7 @@ class ProxmoxNodeFilterSet(NetBoxModelFilterSet):
             "local",
         )
 
-    def search(self, queryset, name: str, value: str):
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
         """Match node name, IP address, or SSL fingerprint."""
         if not value.strip():
             return queryset
@@ -273,7 +273,7 @@ class BackupRoutineFilterSet(NetBoxModelFilterSet):
             "keep_monthly",
         )
 
-    def search(self, queryset, name: str, value: str):
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
         """Match job ID or comment."""
         if not value.strip():
             return queryset
@@ -303,7 +303,7 @@ class ReplicationFilterSet(NetBoxModelFilterSet):
             "status",
         )
 
-    def search(self, queryset, name: str, value: str):
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
         """Match replication ID, VM name, target, comment, or source."""
         if not value.strip():
             return queryset

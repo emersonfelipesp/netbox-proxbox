@@ -4,16 +4,14 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
-from typing import TypeAlias
-
 import aiohttp
 from pydantic import BaseModel, Field
 
 from proxbox_cli.config import Config
 
-JSONScalar: TypeAlias = str | int | float | bool | None
-JSONValue: TypeAlias = JSONScalar | list["JSONValue"] | dict[str, "JSONValue"]
-QueryValue: TypeAlias = str | int | float | bool
+type JSONScalar = str | int | float | bool | None
+type JSONValue = JSONScalar | list[JSONValue] | dict[str, JSONValue]
+type QueryValue = str | int | float | bool
 
 
 class ApiResponse(BaseModel):

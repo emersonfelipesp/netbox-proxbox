@@ -126,7 +126,7 @@ class FastAPIEndpointImportForm(NetBoxModelImportForm):
             "tags",
         )
 
-    def clean_ip_address(self):
+    def clean_ip_address(self) -> IPAddress | None:
         """Look up or auto-create the IPAddress so imports from other instances work."""
         raw = (self.cleaned_data.get("ip_address") or "").strip()
         if not raw:

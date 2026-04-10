@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 
@@ -28,7 +28,7 @@ def cluster_status(
 @cluster_app.command("resources")
 def cluster_resources(
     resource_type: Annotated[
-        Optional[str], typer.Option("--type", help="Filter: vm, storage, node, sdn.")
+        str | None, typer.Option("--type", help="Filter: vm, storage, node, sdn.")
     ] = None,
     as_json: JsonFlag = False,
     as_yaml: YamlFlag = False,
