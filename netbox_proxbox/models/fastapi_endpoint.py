@@ -71,10 +71,15 @@ class FastAPIEndpoint(EndpointBase):
         help_text=_("Domain name used for browser WebSocket connections."),
     )
     websocket_port = models.PositiveIntegerField(
-        default=8800,
+        null=True,
+        blank=True,
+        default=None,
         validators=PORT_VALIDATORS,
         verbose_name=_("WebSocket port"),
-        help_text=_("Port used for WebSocket connectivity."),
+        help_text=_(
+            "Port used for WebSocket connectivity. "
+            "Leave blank to use the same port as the HTTP endpoint."
+        ),
     )
     server_side_websocket = models.BooleanField(
         default=False,
@@ -99,7 +104,8 @@ class FastAPIEndpoint(EndpointBase):
         """``ws(s)://`` URL for browser or server WebSocket clients."""
         protocol = "wss" if self.verify_ssl else "ws"
         host = self.websocket_domain or self.domain or self.ip
-        return f"{protocol}://{host}:{self.websocket_port}" if host else ""
+        ws_port = self.websocket_port if self.websocket_port is not None else self.port
+        return f"{protocol}://{host}:{ws_port}" if host else ""
 
     def save(self, *args: object, **kwargs: object) -> None:
         """Handle save."""

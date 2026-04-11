@@ -13,7 +13,7 @@ class FastAPIUrlSource(Protocol):
     websocket_domain: str | None
     verify_ssl: bool
     port: int
-    websocket_port: int
+    websocket_port: int | None
 
 
 class FastAPIAuthSource(Protocol):

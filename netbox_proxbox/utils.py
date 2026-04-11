@@ -166,9 +166,12 @@ def get_fastapi_url(endpoint: FastAPIUrlSource) -> dict[str, object]:
     scheme = "https" if verify_ssl else "http"
     websocket_scheme = "wss" if verify_ssl else "ws"
     http_url = f"{scheme}://{domain}:{endpoint.port}"
-    websocket_url = (
-        f"{websocket_scheme}://{websocket_domain}:{endpoint.websocket_port}/ws"
+    ws_port = (
+        endpoint.websocket_port
+        if endpoint.websocket_port is not None
+        else endpoint.port
     )
+    websocket_url = f"{websocket_scheme}://{websocket_domain}:{ws_port}/ws"
     ip_address_url = f"{scheme}://{ip}:{endpoint.port}"
 
     if verify_ssl and any(

@@ -51,8 +51,11 @@ class FastAPIEndpointForm(NetBoxModelForm):
     )
     websocket_port = forms.IntegerField(
         required=False,
-        help_text="Port of the WebSocket for the Proxbox Endpoint (the same as HTTP port)",
-        label="WebSocket Port",
+        help_text=(
+            "⚠️ Advanced: leave blank to use the HTTP port. "
+            "Only set this if your WebSocket endpoint listens on a different port than the HTTP endpoint."
+        ),
+        label="WebSocket Port (Advanced)",
     )
     server_side_websocket = forms.BooleanField(
         required=False,
