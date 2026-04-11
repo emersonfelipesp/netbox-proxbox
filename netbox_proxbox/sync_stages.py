@@ -224,6 +224,7 @@ def _execute_stage_sync(
     last_payload: dict[str, object] = {}
     last_status: int = 0
     for _attempt in range(_STAGE_RETRY_MAX + 1):
+        job.logger.info(f"Checking backend readiness for stage '{sync_type}'...")
         last_payload, last_status = run_sync_stream(
             stream_path,
             query_params=query_params,
@@ -262,7 +263,13 @@ def _execute_stage_sync(
         status=last_status,
         payload=last_payload,
     )
-    job.logger.error(f"Stage {sync_type} failed (HTTP {last_status}): {detail}")
+    if last_status in (503, 404) and "init_ok" in detail:
+        job.logger.error(
+            f"Backend not ready for stage '{sync_type}': {detail}. "
+            "Check proxbox-api bootstrap logs and verify NetBox connectivity."
+        )
+    else:
+        job.logger.error(f"Stage {sync_type} failed (HTTP {last_status}): {detail}")
     raise RuntimeError(user_detail)
 
 

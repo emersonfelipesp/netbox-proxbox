@@ -143,6 +143,13 @@ def wait_for_backend_ready(
     verify_ssl = bool(context.verify_ssl)
     headers = context.headers or {}
 
+    # Track consecutive "reachable but not initialized" responses.  After a
+    # small number of these we know it is a persistent configuration issue
+    # (e.g. proxbox-api could not connect to NetBox at startup) rather than a
+    # transient delay, so we fail fast instead of burning the full retry budget.
+    _NOT_INIT_FAST_FAIL = 5
+    not_init_streak: int = 0
+
     delay = initial_delay
     for attempt in range(max_retries):
         try:
@@ -163,6 +170,17 @@ def wait_for_backend_ready(
                         return True, "Backend is ready"
                 except Exception:
                     pass
+
+                # Backend is reachable but not yet initialized.
+                not_init_streak += 1
+                if not_init_streak >= _NOT_INIT_FAST_FAIL:
+                    return (
+                        False,
+                        "Backend is reachable but not initialized (init_ok=false). "
+                        "Check proxbox-api bootstrap logs and verify that the backend "
+                        "can reach your NetBox instance.",
+                    )
+
                 if attempt < max_retries - 1:
                     logger.info(
                         "Backend health check returned but init not complete (attempt %s/%s), retrying in %ss",
@@ -174,6 +192,7 @@ def wait_for_backend_ready(
                     delay = min(delay * 1.5, max_delay)
                     continue
             else:
+                not_init_streak = 0
                 if attempt < max_retries - 1:
                     logger.info(
                         "Backend health check failed with HTTP %s (attempt %s/%s), retrying in %ss",
@@ -186,6 +205,7 @@ def wait_for_backend_ready(
                     delay = min(delay * 1.5, max_delay)
                     continue
         except requests.exceptions.RequestException as exc:
+            not_init_streak = 0
             if attempt < max_retries - 1:
                 logger.info(
                     "Backend health check request failed (attempt %s/%s): %s, retrying in %ss",
