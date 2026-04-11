@@ -10,8 +10,9 @@ from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext as _
 from django.views import View
 
+from netbox.constants import RQ_QUEUE_HIGH
+
 from netbox_proxbox.jobs import (
-    PROXBOX_SYNC_QUEUE_NAME,
     ProxboxSyncJob,
     is_proxbox_sync_job,
     proxbox_sync_params_from_job,
@@ -72,7 +73,7 @@ class ProxboxJobRunNowView(
         new_job = ProxboxSyncJob.enqueue(
             instance=None,
             user=request.user,
-            queue_name=PROXBOX_SYNC_QUEUE_NAME,
+            queue_name=RQ_QUEUE_HIGH,
             name=job.name,
             **enqueue_kwargs,
         )
