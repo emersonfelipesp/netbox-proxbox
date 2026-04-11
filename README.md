@@ -132,23 +132,68 @@ For complete Docker installation instructions, validation checks, and Git/source
 
 ## Scheduled Sync
 
-To run sync automatically on a schedule:
+To run sync automatically on a schedule, an RQ worker must be running. Proxbox sync jobs use NetBox's **`default`** queue — the stock worker command (no queue arguments) is enough:
 
-1. Start the NetBox RQ worker with the Proxbox queue:
+```bash
+cd /opt/netbox/netbox
+source /opt/netbox/venv/bin/activate
+python3 manage.py rqworker
+```
 
-   ```bash
-   cd /opt/netbox/netbox
-   source /opt/netbox/venv/bin/activate
-   python3 manage.py rqworker
-   ```
+This worker listens to the **`high`**, **`default`**, and **`low`** queues — the same queues NetBox uses for all its background tasks.
 
-2. In NetBox, go to **Proxbox > Schedule Sync** and configure your schedule.
+> **Upgrading from an older Proxbox release?** Jobs used to be enqueued on `netbox_proxbox.sync`. Workers that only listen to that queue will not pick up new jobs. Switch to `manage.py rqworker` (no queue arguments) so all queues including `default` are covered.
 
-### NetBox v4.5.7 queue notes
+### Run as a systemd service
 
-- Proxbox sync jobs use NetBox's `JobRunner` API and default queue selection.
-- In NetBox v4.5.7+, queue/backend behavior is governed by NetBox's `RQ` configuration.
-- Run workers using NetBox's command (`python3 manage.py rqworker`) so queue settings are applied consistently.
+Use your existing `netbox-rq` unit if one is already enabled. If you need a new unit, create `/etc/systemd/system/netbox-rq.service`:
+
+```ini
+[Unit]
+Description=NetBox RQ Worker
+After=redis.service netbox.service
+Requires=redis.service
+
+[Service]
+Type=simple
+User=netbox
+Group=netbox
+WorkingDirectory=/opt/netbox/netbox
+ExecStart=/opt/netbox/venv/bin/python3 manage.py rqworker
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Then enable and start it:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now netbox-rq
+```
+
+### Schedule a sync
+
+1. In NetBox, go to **Proxbox > Schedule Sync**.
+2. Choose one or more sync types (**All**, Devices, VMs, Storage, etc.).
+3. Optionally set a **Schedule at** time and a **Recurs every** interval in minutes (e.g. `1440` for daily).
+4. Click **Schedule**.
+
+Track job status under **Proxbox > Sync Jobs** or **Operations > Background Jobs**.
+
+### Job timeout
+
+Proxbox sync jobs default to a **7200-second (2-hour) RQ wall-clock limit** (`PROXBOX_SYNC_JOB_TIMEOUT`). NetBox's default `RQ_DEFAULT_TIMEOUT` is only 300 s, which would kill long syncs. No configuration is needed unless your syncs routinely take longer than two hours; if they do, override the constant in `netbox_proxbox/jobs.py`.
+
+### Troubleshooting
+
+| Symptom | Likely cause | Fix |
+|---------|-------------|-----|
+| Job stays **`pending`** | No RQ worker running, or worker not listening to `default` queue | Start/restart `manage.py rqworker` |
+| Job stays **`running`** for a long time | Proxbox API is still syncing or stream is slow | Check the job **Log** tab; wait or inspect the backend |
+| Job **`errored: JobTimeoutException`** | RQ wall-clock limit exceeded | Increase `PROXBOX_SYNC_JOB_TIMEOUT` in `netbox_proxbox/jobs.py` |
 
 ## Documentation
 
