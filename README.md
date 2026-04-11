@@ -132,47 +132,34 @@ For complete Docker installation instructions, validation checks, and Git/source
 
 ## Scheduled Sync
 
-To run sync automatically on a schedule, an RQ worker must be running. Proxbox sync jobs use NetBox's **`default`** queue — the stock worker command (no queue arguments) is enough:
+Proxbox sync jobs run on NetBox's **`default`** RQ queue. A standard NetBox installation already ships a `netbox-rq` systemd service that runs:
+
+```
+manage.py rqworker high default low
+```
+
+Check whether it is running before doing anything else:
 
 ```bash
-cd /opt/netbox/netbox
-source /opt/netbox/venv/bin/activate
-python3 manage.py rqworker
+sudo systemctl status netbox-rq
 ```
 
-This worker listens to the **`high`**, **`default`**, and **`low`** queues — the same queues NetBox uses for all its background tasks.
+If it is **active (running)**, you have nothing extra to configure — Proxbox jobs will be picked up automatically.
 
-> **Upgrading from an older Proxbox release?** Jobs used to be enqueued on `netbox_proxbox.sync`. Workers that only listen to that queue will not pick up new jobs. Switch to `manage.py rqworker` (no queue arguments) so all queues including `default` are covered.
+If the service is **inactive or missing**, enable it:
 
-### Run as a systemd service
-
-Use your existing `netbox-rq` unit if one is already enabled. If you need a new unit, create `/etc/systemd/system/netbox-rq.service`:
-
-```ini
-[Unit]
-Description=NetBox RQ Worker
-After=redis.service netbox.service
-Requires=redis.service
-
-[Service]
-Type=simple
-User=netbox
-Group=netbox
-WorkingDirectory=/opt/netbox/netbox
-ExecStart=/opt/netbox/venv/bin/python3 manage.py rqworker
-Restart=on-failure
-RestartSec=30
-
-[Install]
-WantedBy=multi-user.target
+```bash
+sudo systemctl enable --now netbox-rq
 ```
 
-Then enable and start it:
+The unit file is provided by NetBox at `contrib/netbox-rq.service` in the NetBox repository. If you need to create it manually, copy it from there and run:
 
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable --now netbox-rq
 ```
+
+> **Upgrading from an older Proxbox release?** Jobs used to be enqueued on the `netbox_proxbox.sync` queue. The stock `netbox-rq` service does not listen to that queue, so old-style jobs will not run. New jobs always use `default` and are picked up without any changes.
 
 ### Schedule a sync
 
