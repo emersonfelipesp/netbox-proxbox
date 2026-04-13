@@ -412,8 +412,12 @@ def test_settings_page_is_wired_in_urls_navigation_and_template():
     assert "ignore_ipv6_link_local_addresses" in template
     assert "primary_ip_preference" in template
     assert "backend_log_file_path" in template
+    assert "encryption_enabled" in template
+    assert "encryption_key" in template
     assert "inc/field.html" not in template
     assert "class SettingsView(" in view
+    assert "encryption_key" in view
+    assert "encryption_enabled" in view
 
 
 def test_proxmox_list_template_exposes_import_export_controls_and_warning_modal():

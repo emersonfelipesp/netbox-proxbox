@@ -428,6 +428,7 @@ def load_plugin_module(
         proxbox_settings = SimpleNamespace(
             backend_log_file_path="/var/log/proxbox.log",
             primary_ip_preference="ipv4",
+            encryption_key="",
             save=lambda **kwargs: None,
         )
 

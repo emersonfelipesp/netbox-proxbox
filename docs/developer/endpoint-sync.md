@@ -421,9 +421,15 @@ flowchart LR
     E --> F["netbox-sdk session"]
 ```
 
-The encryption key is derived from the `PROXBOX_ENCRYPTION_KEY` environment variable
-(SHA-256 stretched to 32 bytes). If the variable is not set, credentials are stored in
-plaintext with a dev-mode warning logged.
+The encryption key is resolved using the following priority chain:
+
+1. **`PROXBOX_ENCRYPTION_KEY` environment variable** — set on the proxbox-api host (highest priority).
+2. **`ProxboxPluginSettings.encryption_key`** — fetched from the NetBox plugin API via `settings_client.get_settings()` and configurable on the plugin settings page under **Encryption**.
+3. **None** — credentials stored in plaintext; a `CRITICAL` warning is logged.
+
+The raw key (from either source) is hashed with SHA-256 to derive exactly 32 bytes,
+then base64url-encoded to form a valid Fernet key. If neither source is set, credentials
+are stored in plaintext with a dev-mode warning logged.
 
 ### Token version support
 
