@@ -35,6 +35,8 @@ This directory contains Django schema migrations for the plugin models.
 - **0025** (v0.0.11+): Adds new fields to `ProxmoxStorage` (extended storage-type columns for NFS, CIFS, Ceph, PBS, and filesystem backends).
 - **0026** (v0.0.11+): Converts `VMBackup.encrypted` from `BooleanField` to `CharField` — stores the encryption fingerprint string instead of a simple flag.
 - **0027** (v0.0.11+): Converts `VMTaskHistory.pstart` from `IntegerField` to `BigIntegerField` to accommodate large kernel start-time values.
+- **0028** (v0.0.11+): Makes `FastAPIEndpoint.websocket_port` nullable with `default=None`. A data migration resets existing rows where `websocket_port=8800` (the old hardcoded default) to `NULL` so the URL-builder falls back to the HTTP port.
+- **0029** (v0.0.11+): Adds `primary_ip_preference` (`CharField`, choices `ipv4`/`ipv6`, default `ipv4`) to `ProxboxPluginSettings`. Controls which IP family Proxbox selects as the VM primary IP. Databases missing this migration will return HTTP 500 on `GET /plugins/proxbox/settings/` because the ORM selects all model columns. Run `manage.py migrate netbox_proxbox` to apply.
 - If an install was partially upgraded into the post-squash branch, use the repair migration chain in this directory rather than hand-editing `django_migrations`.
 
 ## Dependencies
@@ -45,13 +47,15 @@ This directory contains Django schema migrations for the plugin models.
 ## Release Timeline
 
 - **v0.0.10** (and earlier): Migrations 0001-0021 (21 files)
-- **v0.0.11** (current): Migrations 0001-0021, 0022_squashed, 0023-0027 (26 files on disk — no 0011)
+- **v0.0.11** (current): Migrations 0001-0021, 0022_squashed, 0023-0029 (28 files on disk — no 0011)
   - 0022_squashed adds 5 changes (FastAPI tokens, SSRF settings, backend logging, operational settings, constraint conversion) consolidated into one squashed migration
   - 0023 adds `encryption_key` to `ProxboxPluginSettings`
   - 0024 extends `Replication` with `endpoint`, `status`, and `raw_config`
   - 0025 adds extended storage-type fields to `ProxmoxStorage`
   - 0026 converts `VMBackup.encrypted` from BooleanField to CharField
   - 0027 converts `VMTaskHistory.pstart` to BigIntegerField
+  - 0028 makes `FastAPIEndpoint.websocket_port` nullable (resets legacy 8800 default to NULL)
+  - 0029 adds `primary_ip_preference` to `ProxboxPluginSettings`
 
 ## Notes
 

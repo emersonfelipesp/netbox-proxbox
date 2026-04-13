@@ -15,6 +15,9 @@ pip3 uninstall netbox-proxbox -y
 
 pip3 install -e .
 
+# Apply any pending migrations
+python3 /opt/netbox/netbox/manage.py migrate netbox_proxbox
+
 # Start web server
 systemctl start netbox.service
 
