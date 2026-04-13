@@ -1,6 +1,8 @@
 """Define NetBox filtersets for the plugin's list views and API queries."""
 
 from django.db.models import Q, QuerySet
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema_field
 from netbox.filtersets import NetBoxModelFilterSet
 from utilities.filtersets import register_filterset
 
@@ -19,8 +21,32 @@ from .models import (
 )
 
 
+class ProxboxModelFilterSet(NetBoxModelFilterSet):
+    """NetBoxModelFilterSet with OpenAPI type hints for tag filters.
+
+    drf-spectacular cannot resolve TaggableManager field paths, so we
+    annotate tag filters explicitly to suppress schema-generation warnings
+    and produce correct OpenAPI types.
+    """
+
+    _TAG_FILTER_SCHEMA_MAP = {
+        "tag": OpenApiTypes.STR,
+        "tag__n": OpenApiTypes.STR,
+        "tag_id": OpenApiTypes.INT,
+        "tag_id__n": OpenApiTypes.INT,
+    }
+
+    @classmethod
+    def get_filters(cls):
+        filters = super().get_filters()
+        for name, openapi_type in cls._TAG_FILTER_SCHEMA_MAP.items():
+            if name in filters:
+                extend_schema_field(openapi_type)(filters[name])
+        return filters
+
+
 @register_filterset
-class ProxmoxEndpointFilterSet(NetBoxModelFilterSet):
+class ProxmoxEndpointFilterSet(ProxboxModelFilterSet):
     """Filter Proxmox VE endpoint records for list and API views."""
 
     class Meta:
@@ -35,7 +61,7 @@ class ProxmoxEndpointFilterSet(NetBoxModelFilterSet):
 
 
 @register_filterset
-class NetBoxEndpointFilterSet(NetBoxModelFilterSet):
+class NetBoxEndpointFilterSet(ProxboxModelFilterSet):
     """Filter remote NetBox API endpoint records."""
 
     class Meta:
@@ -50,7 +76,7 @@ class NetBoxEndpointFilterSet(NetBoxModelFilterSet):
 
 
 @register_filterset
-class FastAPIEndpointFilterSet(NetBoxModelFilterSet):
+class FastAPIEndpointFilterSet(ProxboxModelFilterSet):
     """Filter ProxBox FastAPI backend endpoint records."""
 
     class Meta:
@@ -65,7 +91,7 @@ class FastAPIEndpointFilterSet(NetBoxModelFilterSet):
 
 
 @register_filterset
-class VMBackupFilterSet(NetBoxModelFilterSet):
+class VMBackupFilterSet(ProxboxModelFilterSet):
     """Filter VM backup records synced from Proxmox."""
 
     class Meta:
@@ -97,7 +123,7 @@ class VMBackupFilterSet(NetBoxModelFilterSet):
 
 
 @register_filterset
-class VMSnapshotFilterSet(NetBoxModelFilterSet):
+class VMSnapshotFilterSet(ProxboxModelFilterSet):
     """Filter VM snapshot records synced from Proxmox."""
 
     class Meta:
@@ -130,7 +156,7 @@ class VMSnapshotFilterSet(NetBoxModelFilterSet):
 
 
 @register_filterset
-class VMTaskHistoryFilterSet(NetBoxModelFilterSet):
+class VMTaskHistoryFilterSet(ProxboxModelFilterSet):
     """Filter VM task history records synced from Proxmox."""
 
     class Meta:
@@ -174,7 +200,7 @@ class VMTaskHistoryFilterSet(NetBoxModelFilterSet):
 
 
 @register_filterset
-class ProxmoxStorageFilterSet(NetBoxModelFilterSet):
+class ProxmoxStorageFilterSet(ProxboxModelFilterSet):
     """Filter Proxmox storage rows synced by the plugin."""
 
     class Meta:
@@ -209,7 +235,7 @@ class ProxmoxStorageFilterSet(NetBoxModelFilterSet):
 
 
 @register_filterset
-class ProxmoxClusterFilterSet(NetBoxModelFilterSet):
+class ProxmoxClusterFilterSet(ProxboxModelFilterSet):
     """Filter Proxmox cluster records tracked by the plugin."""
 
     class Meta:
@@ -226,7 +252,7 @@ class ProxmoxClusterFilterSet(NetBoxModelFilterSet):
 
 
 @register_filterset
-class ProxmoxNodeFilterSet(NetBoxModelFilterSet):
+class ProxmoxNodeFilterSet(ProxboxModelFilterSet):
     """Filter Proxmox node records tracked by the plugin."""
 
     class Meta:
@@ -254,7 +280,7 @@ class ProxmoxNodeFilterSet(NetBoxModelFilterSet):
 
 
 @register_filterset
-class BackupRoutineFilterSet(NetBoxModelFilterSet):
+class BackupRoutineFilterSet(ProxboxModelFilterSet):
     """Filter backup routine records synced from Proxmox."""
 
     class Meta:
@@ -281,7 +307,7 @@ class BackupRoutineFilterSet(NetBoxModelFilterSet):
 
 
 @register_filterset
-class ReplicationFilterSet(NetBoxModelFilterSet):
+class ReplicationFilterSet(ProxboxModelFilterSet):
     """Filter Replication records synced from Proxmox."""
 
     class Meta:
