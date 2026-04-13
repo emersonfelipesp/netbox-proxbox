@@ -14,6 +14,8 @@
   var summaryDetailEl = null;
   var phasesEl = null;
   var errorsEl = null;
+  var errorsLogEl = null;
+  var errorsCountEl = null;
   var streamUrl = "";
   var apiUrl = "";
   var logSuffix = "log lines";
@@ -23,6 +25,7 @@
   var lastEntries = [];
   var phaseState = {};
   var errorEntries = [];
+  var errorLogEntries = [];
   var lastStatusValue = "";
   var lastStatusLabel = "";
   var stateStorageKey = "";
@@ -248,6 +251,17 @@
     if (Array.isArray(stored.entries) && stored.entries.length > 0) {
       lastEntries = stored.entries.slice();
       applyLog(lastEntries);
+      // Rebuild errors log from restored entries.
+      errorLogEntries = [];
+      for (var i = 0; i < lastEntries.length; i++) {
+        var e = lastEntries[i];
+        if (!e || typeof e !== "object") continue;
+        var lvl = String(e.level || "").toLowerCase();
+        if (lvl === "error" || lvl === "errored" || lvl === "failed" || lvl === "failure") {
+          errorLogEntries.push(e);
+        }
+      }
+      renderErrorsLog();
     }
 
     if (stored.statusValue != null) {
@@ -414,6 +428,13 @@
       logEl.appendChild(span);
     }
     logEl.scrollTop = logEl.scrollHeight;
+    // Track error-level entries separately for the Errors tab.
+    var lvl = String(entry.level).toLowerCase();
+    if (lvl === "error" || lvl === "errored" || lvl === "failed" || lvl === "failure") {
+      errorLogEntries.push(entry);
+      if (errorLogEntries.length > 200) errorLogEntries.shift();
+      renderErrorsLog();
+    }
     updateSummaryDisplay();
     writeStoredState();
   }
@@ -457,6 +478,27 @@
       item.className = "nb-job-error-item";
       item.textContent = errorEntries[i];
       errorsEl.appendChild(item);
+    }
+  }
+
+  function renderErrorsLog() {
+    if (!errorsLogEl) return;
+    var api = global.NbProxboxJobLogView;
+    if (api && typeof api.renderLiveLog === "function") {
+      errorsLogEl.replaceChildren();
+      api.renderLiveLog(errorsLogEl, errorLogEntries);
+    } else {
+      errorsLogEl.textContent = "";
+    }
+    errorsLogEl.scrollTop = errorsLogEl.scrollHeight;
+    if (errorsCountEl) {
+      var n = errorLogEntries.length;
+      errorsCountEl.textContent = String(n);
+      if (n > 0) {
+        errorsCountEl.classList.remove("d-none");
+      } else {
+        errorsCountEl.classList.add("d-none");
+      }
     }
   }
 
@@ -565,10 +607,11 @@
     }
     var status = payload.status ? String(payload.status) : "";
     var previousStatus = lastStatusValue;
+    // Only the "complete" and "error" SSE event types are truly terminal.
+    // Per-item "step" events with status "failed"/"errored" are non-fatal item
+    // errors — the backend job keeps running and must not close the stream.
     var isTerminal =
       eventType === "complete" ||
-      status === "failed" ||
-      status === "errored" ||
       eventType === "error";
 
     if (
@@ -586,6 +629,16 @@
             : status || eventType || "info",
         payload
       );
+    }
+
+    // Per-item failures: capture to the error board summary and Errors tab.
+    if (eventType === "step" && (status === "failed" || status === "errored" || status === "warning")) {
+      var errorMsg = message || (payload.data && typeof payload.data === "object" && payload.data.error) || payload.detail || payload.error || "Item failed";
+      if (errorMsg && (status === "failed" || status === "errored")) {
+        errorEntries.push(String(errorMsg));
+        if (errorEntries.length > 20) errorEntries.shift();
+        renderErrors();
+      }
     }
 
     if (payload.progress) {
@@ -627,7 +680,7 @@
       finishStream(payload.ok === false ? "failed" : "completed", message || payload.message || "");
       return;
     }
-    if (status === "failed" || eventType === "error") {
+    if (eventType === "error") {
       finishStream("failed", message || payload.detail || payload.error || "");
     }
   }
@@ -651,6 +704,17 @@
           statusEl.textContent = renderStatusLine(st, entries);
         }
         applyLog(entries);
+        // Rebuild errors log from the full entry set on each poll tick.
+        errorLogEntries = [];
+        for (var i = 0; i < entries.length; i++) {
+          var e = entries[i];
+          if (!e || typeof e !== "object") continue;
+          var lvl = String(e.level || "").toLowerCase();
+          if (lvl === "error" || lvl === "errored" || lvl === "failed" || lvl === "failure") {
+            errorLogEntries.push(e);
+          }
+        }
+        renderErrorsLog();
         var api = global.NbProxboxJobLogView;
         if (api && typeof api.applyProgress === "function") {
           api.applyProgress(progressBarEl, d, entries);
@@ -838,6 +902,8 @@
     progressBarEl = root.querySelector("[data-proxbox-job-live-progress-bar]");
     phasesEl = root.querySelector("[data-proxbox-job-live-phases]");
     errorsEl = root.querySelector("[data-proxbox-job-live-errors]");
+    errorsLogEl = root.querySelector("[data-proxbox-job-live-errors-log]");
+    errorsCountEl = root.querySelector("[data-proxbox-job-live-errors-count]");
     statePillEl = root.querySelector("[data-proxbox-job-live-state-pill]");
     summaryRoot = root.closest("[data-proxbox-job-live-summary]");
     summaryStatusEl = summaryRoot

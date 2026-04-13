@@ -219,6 +219,24 @@
   max-width: 36rem;
 }
 
+/* Tabs inside the live job panel */
+.nb-job-live-tabs {
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--bs-border-color);
+}
+
+.nb-job-live-tabs .nav-link {
+  font-size: 0.82rem;
+  padding: 0.3rem 0.65rem;
+}
+
+/* Errors-only log pane uses same styling as the main log */
+[data-proxbox-job-live-errors-log] {
+  width: 100%;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
 /* Label text inside the Proxbox job progress bar */
 .nb-job-progress-label {
   overflow: hidden;
