@@ -280,6 +280,7 @@ def run_sync_stream(
     backend_headers = context.headers or {}
     requested_urls: list[str] = []
     last_detail: str | None = None
+    last_http_status: int | None = None
 
     for url, verify in request_candidates:
         requested_urls.append(url)
@@ -306,8 +307,8 @@ def run_sync_stream(
             }
             return payload, status
 
-        # Error path: result is (last_detail, should_retry, new_headers)
-        last_detail, should_retry, new_headers = result
+        # Error path: result is (last_detail, should_retry, new_headers, http_status)
+        last_detail, should_retry, new_headers, last_http_status = result
         if should_retry and new_headers:
             backend_headers = new_headers
             continue
@@ -320,7 +321,7 @@ def run_sync_stream(
         "path": path,
         "requested_urls": requested_urls,
         "detail": last_detail or "Unable to reach the ProxBox backend stream.",
-    }, 503
+    }, last_http_status or 503
 
 
 def _try_sync_stream_url(
@@ -331,13 +332,13 @@ def _try_sync_stream_url(
     headers: dict[str, str],
     on_frame: Callable[[str, dict[str, object]], None] | None,
     endpoint_id: int | None = None,
-) -> tuple[str | None, bool, dict[str, object] | None] | requests.Response:
+) -> tuple[str | None, bool, dict[str, object] | None, int | None] | requests.Response:
     """Try a single URL for sync stream request.
 
     Returns:
         - An open ``requests.Response`` on success -- caller MUST close it.
-        - (error_detail, should_retry, new_headers) on HTTP error >= 400.
-        - (error_detail, False, None) on connection error.
+        - (error_detail, should_retry, new_headers, http_status) on HTTP error >= 400.
+        - (error_detail, False, None, http_status) on connection error.
     """
     try:
         response = requests.get(
@@ -349,7 +350,8 @@ def _try_sync_stream_url(
             stream=True,
         )
         if response.status_code >= 400:
-            last_detail = f"HTTP {response.status_code}"
+            actual_status = response.status_code
+            last_detail = f"HTTP {actual_status}"
             try:
                 payload, json_err = parse_requests_response_json(
                     response, log_label=f"sync-stream:{path}"
@@ -358,26 +360,26 @@ def _try_sync_stream_url(
                     d = payload.get("detail") or payload.get("message")
                     if d:
                         last_detail = str(d)
-                    if response.status_code == 401 and "API key" in str(d):
+                    if actual_status == 401 and "API key" in str(d):
                         new_headers, should_retry = _handle_auth_registration_and_retry(
                             headers,
                             endpoint_id=endpoint_id,
                         )
                         if should_retry:
                             response.close()
-                            return last_detail, True, new_headers
+                            return last_detail, True, new_headers, 401
             except Exception:
                 logger.debug("Could not parse error JSON for %s", path)
             logger.error(
                 "Sync stream HTTP %s for %s via %s: %s",
-                response.status_code,
+                actual_status,
                 path,
                 url,
                 last_detail,
             )
-            should_retry = response.status_code >= 500
+            should_retry = actual_status >= 500
             response.close()
-            return last_detail, should_retry, None
+            return last_detail, should_retry, None, actual_status
 
         # Success: return the open response for the caller to consume
         return response
@@ -385,11 +387,12 @@ def _try_sync_stream_url(
         last_detail, http_st = extract_backend_error_detail(exc)
         logger.exception("Sync stream request failed for %s via %s", path, url)
         if getattr(exc, "response", None) is not None:
-            return last_detail, False, None
+            return last_detail, False, None, http_st
         return (
             last_detail,
-            http_st and http_st >= 500,
-            None if http_st and http_st >= 500 else None,
+            bool(http_st and http_st >= 500),
+            None,
+            http_st,
         )
     except (KeyboardInterrupt, SystemExit, GeneratorExit):
         raise
@@ -398,7 +401,7 @@ def _try_sync_stream_url(
         logger.exception(
             "Unexpected sync stream error for %s via %s: %s", path, url, exc
         )
-        return last_detail, False, None
+        return last_detail, False, None, None
 
 
 def iter_backend_sse_lines(

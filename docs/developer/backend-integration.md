@@ -61,7 +61,7 @@ flowchart TD
     G -- "Network error" --> J
     J --> K{Fallback ok?}
     K -- Yes --> H
-    K -- No --> L["Return 503 error"]
+    K -- No --> L["Return actual HTTP status\n(e.g. 400, 502, 503)"]
     I --> F
 ```
 
@@ -129,11 +129,18 @@ def _build_request_candidates(http_url, ip_address_url, path, verify_ssl):
     return candidates
 ```
 
-5xx errors and network errors cause the fallback to be tried. 4xx client errors do **not** trigger the fallback (except 401 which triggers key re-registration).
+5xx errors and network errors cause the fallback to be tried. 4xx client errors do **not** trigger the fallback (except 401 which triggers key re-registration). The actual backend HTTP status code is propagated back to the caller — a `400` from the backend is returned as `400`, not `503`, so the retry logic (`>= 500`) does not misfire.
 
 ---
 
 ## Background Jobs (ProxboxSyncJob)
+
+Before any SSE stage runs, the job executes a **preflight push** that ensures both
+`NetBoxEndpoint` and `ProxmoxEndpoint` data are present in the backend's SQLite database.
+This closes the gap where a `post_save` signal was silently missed because the backend was
+offline when the endpoint was first configured.
+
+See [Endpoint Data Exchange](endpoint-sync.md) for the full mechanism.
 
 ```mermaid
 sequenceDiagram
@@ -149,7 +156,16 @@ sequenceDiagram
     NB->>RQ_Q: ProxboxSyncJob.enqueue(sync_types=["all"], endpoint_ids=[1])
     RQ_Q->>RQ_W: Dequeue job
     RQ_W->>Job: status = running
-    RQ_W->>API: GET /full-update/stream (run_sync_stream)
+
+    Note over RQ_W,API: Preflight — push endpoint config to backend
+    RQ_W->>API: GET /netbox/endpoint → POST/PUT /netbox/endpoint
+    RQ_W->>API: GET /proxmox/endpoints → POST/PUT /proxmox/endpoints/...
+
+    Note over RQ_W,API: Cluster/node sync (direct REST)
+    RQ_W->>API: GET /proxmox/cluster/status + /proxmox/nodes/
+
+    Note over RQ_W,API: SSE stage pipeline
+    RQ_W->>API: GET /dcim/devices/create/stream (SSE)
     API-->>RQ_W: SSE frames (per stage)
     RQ_W->>Job: Write SSE progress to Job.log (on_frame callback)
     API-->>RQ_W: event:complete ok=true

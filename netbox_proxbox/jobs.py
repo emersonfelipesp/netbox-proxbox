@@ -118,6 +118,82 @@ def _run_all_stages_sync(*args: object, **kwargs: object) -> list[dict[str, obje
     return sync_stages._run_all_stages_sync(*args, **kwargs)
 
 
+def _ensure_backend_endpoints(
+    job: "ProxboxSyncJob",
+    proxmox_endpoint_ids: list[str] | None = None,
+) -> None:
+    """Push NetBox and Proxmox endpoint data to the proxbox-api backend before sync.
+
+    Best-effort — logs warnings on failure but never raises so the sync can still
+    proceed (the endpoint may already exist in the backend from a previous push or
+    manual creation via the Next.js UI).
+    """
+    from netbox_proxbox.models import NetBoxEndpoint  # noqa: PLC0415
+    from netbox_proxbox.services.backend_context import get_fastapi_request_context  # noqa: PLC0415
+    from netbox_proxbox.views.backend_sync import (  # noqa: PLC0415
+        sync_netbox_endpoint_to_backend,
+        sync_proxmox_endpoint_to_backend,
+    )
+
+    context = get_fastapi_request_context()
+    if context is None or not context.http_url:
+        job.logger.warning(
+            "No FastAPIEndpoint configured — cannot push endpoint data to backend"
+        )
+        return
+
+    base_url = context.http_url.rstrip("/")
+    auth_headers = dict(context.headers or {})
+    backend_verify_ssl = bool(context.verify_ssl)
+
+    # Push all NetBox endpoints (singleton in practice).
+    for nb_ep in NetBoxEndpoint.objects.all():
+        ok, err, _ = sync_netbox_endpoint_to_backend(
+            nb_ep,
+            base_url=base_url,
+            auth_headers=auth_headers,
+            backend_verify_ssl=backend_verify_ssl,
+        )
+        if ok:
+            job.logger.info(
+                "Preflight: synced NetBox endpoint '%s' to proxbox-api backend",
+                getattr(nb_ep, "name", nb_ep.pk),
+            )
+        else:
+            job.logger.warning(
+                "Preflight: could not sync NetBox endpoint '%s' to proxbox-api: %s",
+                getattr(nb_ep, "name", nb_ep.pk),
+                err,
+            )
+
+    # Push Proxmox endpoints — filter by IDs if the job was scoped to specific ones.
+    if proxmox_endpoint_ids:
+        proxmox_qs = ProxmoxEndpoint.objects.filter(
+            pk__in=[int(i) for i in proxmox_endpoint_ids if i]
+        )
+    else:
+        proxmox_qs = ProxmoxEndpoint.objects.all()
+
+    for px_ep in proxmox_qs:
+        ok, err, _ = sync_proxmox_endpoint_to_backend(
+            px_ep,
+            base_url=base_url,
+            auth_headers=auth_headers,
+            backend_verify_ssl=backend_verify_ssl,
+        )
+        if ok:
+            job.logger.info(
+                "Preflight: synced Proxmox endpoint '%s' to proxbox-api backend",
+                getattr(px_ep, "name", px_ep.pk),
+            )
+        else:
+            job.logger.warning(
+                "Preflight: could not sync Proxmox endpoint '%s' to proxbox-api: %s",
+                getattr(px_ep, "name", px_ep.pk),
+                err,
+            )
+
+
 class ProxboxSyncJob(JobRunner):
     """Trigger a ProxBox sync operation against the FastAPI backend."""
 
@@ -279,6 +355,13 @@ class ProxboxSyncJob(JobRunner):
                 self.logger.info(f"NetBox endpoints: {netbox_endpoint_ids}")
             if netbox_vm_ids:
                 self.logger.info(f"NetBox virtual machines: {netbox_vm_ids}")
+
+            # Push NetBox and Proxmox endpoint configuration to the proxbox-api
+            # backend before any SSE stage runs.  The backend needs its own copy
+            # of these records to open NetBox and Proxmox sessions; the post_save
+            # signals are best-effort and may have missed a push if the backend
+            # was offline when the endpoints were first saved.
+            _ensure_backend_endpoints(self, proxmox_endpoint_ids or [])
 
             # Sync cluster and node data before SSE stages so cluster/node records
             # are populated regardless of which stages are selected.

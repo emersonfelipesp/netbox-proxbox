@@ -188,126 +188,30 @@ def ensure_proxmox_endpoint_has_fastapi_token(
 
     _register_token_with_backend(fastapi_ep)
 
-
-def _push_netbox_endpoint_to_backend(
-    netbox_ep: NetBoxEndpoint, fastapi_ep: FastAPIEndpoint
-) -> None:
-    """Push a NetBoxEndpoint's configuration to the proxbox-api internal database.
-
-    Performs GET /netbox/endpoint to check for an existing entry, then PUT to
-    update it or POST to create it.  Best-effort — logs warnings on failure,
-    never raises.
-    """
-    import requests
-
+    # Also push the Proxmox endpoint data to the backend DB so sync stages can
+    # find it without requiring a dashboard visit first.
     base_url = _get_backend_url(fastapi_ep)
-    if not base_url:
-        logger.debug(
-            "Cannot push NetBox endpoint: no backend URL configured for FastAPIEndpoint %s",
-            fastapi_ep.pk,
+    if base_url:
+        auth_headers = {"X-Proxbox-API-Key": (fastapi_ep.token or "").strip()}
+        from netbox_proxbox.views.backend_sync import sync_proxmox_endpoint_to_backend  # noqa: PLC0415
+
+        ok, err, _ = sync_proxmox_endpoint_to_backend(
+            instance,
+            base_url=base_url,
+            auth_headers=auth_headers,
+            backend_verify_ssl=bool(fastapi_ep.verify_ssl),
         )
-        return
-
-    auth_headers = {"X-Proxbox-API-Key": (fastapi_ep.token or "").strip()}
-
-    # Resolve IP address string.
-    ip_address = "127.0.0.1"
-    if netbox_ep.ip_address is not None:
-        ip_address = str(netbox_ep.ip_address.address).split("/")[0]
-
-    # Resolve token version and credential values.
-    token_version = netbox_ep.effective_token_version  # "v1" or "v2"
-    token_key = None
-    if token_version == "v2":
-        token_value = netbox_ep.token_secret or ""
-        token_key = netbox_ep.token_key or None
-    else:
-        # v1: use the linked users.Token FK's key field.
-        token_obj = getattr(netbox_ep, "token", None)
-        token_value = ""
-        if token_obj is not None:
-            token_value = (
-                getattr(token_obj, "plaintext", None)
-                or getattr(token_obj, "key", None)
-                or ""
+        if ok:
+            logger.info(
+                "Synced Proxmox endpoint '%s' to proxbox-api backend after save",
+                getattr(instance, "name", instance.pk),
             )
-
-    payload: dict = {
-        "name": netbox_ep.name or "NetBox Endpoint",
-        "ip_address": ip_address,
-        "domain": netbox_ep.domain or "",
-        "port": netbox_ep.port,
-        "verify_ssl": bool(netbox_ep.verify_ssl),
-        "token_version": token_version,
-        "token": token_value,
-    }
-    if token_key:
-        payload["token_key"] = token_key
-
-    try:
-        list_resp = requests.get(
-            f"{base_url}/netbox/endpoint",
-            headers=auth_headers,
-            verify=fastapi_ep.verify_ssl,
-            timeout=5,
-        )
-        if list_resp.status_code != 200:
-            logger.warning(
-                "Failed to list NetBox endpoints on backend: HTTP %s",
-                list_resp.status_code,
-            )
-            return
-
-        existing = list_resp.json()
-    except requests.exceptions.RequestException as exc:
-        logger.warning("Could not reach proxbox-api to sync NetBox endpoint: %s", exc)
-        return
-
-    try:
-        if existing:
-            # Singleton — always update the first (and only) entry.
-            endpoint_id = existing[0].get("id")
-            if endpoint_id is None:
-                logger.warning(
-                    "proxbox-api returned NetBox endpoint without id, cannot update"
-                )
-                return
-            resp = requests.put(
-                f"{base_url}/netbox/endpoint/{endpoint_id}",
-                json=payload,
-                headers=auth_headers,
-                verify=fastapi_ep.verify_ssl,
-                timeout=10,
-            )
-            if resp.status_code == 200:
-                logger.info(
-                    "Updated NetBox endpoint (id=%s) on proxbox-api backend",
-                    endpoint_id,
-                )
-            else:
-                logger.warning(
-                    "Failed to update NetBox endpoint on proxbox-api: HTTP %s — %s",
-                    resp.status_code,
-                    resp.text[:200],
-                )
         else:
-            resp = requests.post(
-                f"{base_url}/netbox/endpoint",
-                json=payload,
-                headers=auth_headers,
-                verify=fastapi_ep.verify_ssl,
-                timeout=10,
+            logger.warning(
+                "Could not sync Proxmox endpoint '%s' to proxbox-api backend: %s",
+                getattr(instance, "name", instance.pk),
+                err,
             )
-            if resp.status_code in (200, 201):
-                logger.info("Registered NetBox endpoint with proxbox-api backend")
-            else:
-                logger.warning(
-                    "Failed to register NetBox endpoint with proxbox-api: HTTP %s — %s",
-                    resp.status_code,
-                    resp.text[:200],
-                )
-    except requests.exceptions.RequestException as exc:
-        logger.warning("Could not push NetBox endpoint to proxbox-api: %s", exc)
 
 
 @receiver(post_save, sender="netbox_proxbox.NetBoxEndpoint")
@@ -324,10 +228,29 @@ def sync_netbox_endpoint_to_backend(
     updated automatically whenever the plugin's NetBoxEndpoint is saved.
     """
     from netbox_proxbox.models import FastAPIEndpoint
+    from netbox_proxbox.views.backend_sync import (
+        sync_netbox_endpoint_to_backend as _push,
+    )  # noqa: PLC0415
 
     fastapi_ep = FastAPIEndpoint.objects.order_by("pk").first()
     if not fastapi_ep:
         logger.debug("No FastAPIEndpoint configured, skipping NetBox endpoint sync")
         return
 
-    _push_netbox_endpoint_to_backend(instance, fastapi_ep)
+    base_url = _get_backend_url(fastapi_ep)
+    if not base_url:
+        logger.debug(
+            "Cannot push NetBox endpoint: no backend URL configured for FastAPIEndpoint %s",
+            fastapi_ep.pk,
+        )
+        return
+
+    auth_headers = {"X-Proxbox-API-Key": (fastapi_ep.token or "").strip()}
+    ok, err, _ = _push(
+        instance,
+        base_url=base_url,
+        auth_headers=auth_headers,
+        backend_verify_ssl=bool(fastapi_ep.verify_ssl),
+    )
+    if not ok:
+        logger.warning("Could not sync NetBox endpoint to proxbox-api backend: %s", err)

@@ -237,7 +237,9 @@ def test_run_sync_stream_http_error_json(backend_proxy_module, monkeypatch):
     )
     monkeypatch.setattr(bp, "get_fastapi_request_context", lambda: _stream_context(bp))
     payload, status = bp.run_sync_stream("dcim/devices/create/stream")
-    assert status == 503
+    # run_sync_stream now propagates the actual backend HTTP status rather than
+    # always falling back to 503, so a 502 from the backend is returned as 502.
+    assert status == 502
     assert payload["detail"] == "bad gateway"
 
 

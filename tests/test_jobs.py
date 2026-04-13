@@ -63,11 +63,42 @@ def proxbox_sync_job_module(monkeypatch):
             )
 
     class _ProxmoxEndpoint:
-        objects = SimpleNamespace(values_list=lambda *a, **kw: [])
+        objects = SimpleNamespace(
+            values_list=lambda *a, **kw: [],
+            all=lambda: [],
+            filter=lambda **kw: [],
+        )
+
+    class _NetBoxEndpoint:
+        objects = SimpleNamespace(all=lambda: [])
 
     models_mod.ProxboxPluginSettings = _ProxboxPluginSettings
     models_mod.ProxmoxEndpoint = _ProxmoxEndpoint
+    models_mod.NetBoxEndpoint = _NetBoxEndpoint
     monkeypatch.setitem(sys.modules, "netbox_proxbox.models", models_mod)
+
+    # Stub backend_context so _ensure_backend_endpoints returns early (no FastAPI URL).
+    backend_context_mod = types.ModuleType("netbox_proxbox.services.backend_context")
+    backend_context_mod.get_fastapi_request_context = lambda **kw: None
+    monkeypatch.setitem(
+        sys.modules, "netbox_proxbox.services.backend_context", backend_context_mod
+    )
+
+    # Stub views.backend_sync with no-op sync helpers.
+    views_backend_sync_mod = types.ModuleType("netbox_proxbox.views.backend_sync")
+    views_backend_sync_mod.sync_netbox_endpoint_to_backend = lambda *a, **kw: (
+        True,
+        None,
+        None,
+    )
+    views_backend_sync_mod.sync_proxmox_endpoint_to_backend = lambda *a, **kw: (
+        True,
+        None,
+        None,
+    )
+    monkeypatch.setitem(
+        sys.modules, "netbox_proxbox.views.backend_sync", views_backend_sync_mod
+    )
 
     # Stub netbox_proxbox.services.sync_cluster so the top-level import in jobs.py resolves.
     sync_cluster_mod = types.ModuleType("netbox_proxbox.services.sync_cluster")

@@ -93,6 +93,7 @@ nav:
     - Streaming Protocol: 'developer/streaming-protocol.md'
     - Authentication: 'developer/authentication.md'
     - Backend Integration: 'developer/backend-integration.md'
+    - Endpoint Data Exchange: 'developer/endpoint-sync.md'
     - Browser Frontend: 'developer/browser-frontend.md'
     - Extending the Plugin: 'developer/extending-the-plugin.md'
     - Tooling:
