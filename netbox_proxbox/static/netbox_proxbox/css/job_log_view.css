@@ -219,6 +219,13 @@
   max-width: 36rem;
 }
 
+/* Critical error badge — darker than standard danger, reserved for job-stopping failures */
+.nb-job-badge-critical {
+    background-color: #58151c !important;
+    color: #fff !important;
+    font-weight: 700;
+}
+
 /* Tabs inside the live job panel */
 .nb-job-live-tabs {
   margin-bottom: 0;

@@ -207,6 +207,9 @@
     if (normalized === "info") {
       return "badge d-inline-flex text-bg-info text-uppercase nb-job-badge-fixed";
     }
+    if (normalized === "critical") {
+      return "badge d-inline-flex text-uppercase nb-job-badge-fixed nb-job-badge-critical";
+    }
     if (
       normalized === "error" ||
       normalized === "errored" ||

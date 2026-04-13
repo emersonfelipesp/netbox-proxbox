@@ -257,7 +257,7 @@
         var e = lastEntries[i];
         if (!e || typeof e !== "object") continue;
         var lvl = String(e.level || "").toLowerCase();
-        if (lvl === "error" || lvl === "errored" || lvl === "failed" || lvl === "failure") {
+        if (lvl === "critical" || lvl === "error" || lvl === "errored" || lvl === "failed" || lvl === "failure") {
           errorLogEntries.push(e);
         }
       }
@@ -390,7 +390,7 @@
       }
     }
     if (message) {
-      appendLog(message, status === "completed" ? "success" : "error", {
+      appendLog(message, status === "completed" ? "success" : "critical", {
         status: status,
         message: message,
       });
@@ -430,7 +430,7 @@
     logEl.scrollTop = logEl.scrollHeight;
     // Track error-level entries separately for the Errors tab.
     var lvl = String(entry.level).toLowerCase();
-    if (lvl === "error" || lvl === "errored" || lvl === "failed" || lvl === "failure") {
+    if (lvl === "critical" || lvl === "error" || lvl === "errored" || lvl === "failed" || lvl === "failure") {
       errorLogEntries.push(entry);
       if (errorLogEntries.length > 200) errorLogEntries.shift();
       renderErrorsLog();
@@ -626,7 +626,7 @@
           ? "error"
           : eventType === "message"
             ? "info"
-            : status || eventType || "info",
+            : (status === "failed" || status === "errored") ? "error" : status || eventType || "info",
         payload
       );
     }
@@ -710,7 +710,7 @@
           var e = entries[i];
           if (!e || typeof e !== "object") continue;
           var lvl = String(e.level || "").toLowerCase();
-          if (lvl === "error" || lvl === "errored" || lvl === "failed" || lvl === "failure") {
+          if (lvl === "critical" || lvl === "error" || lvl === "errored" || lvl === "failed" || lvl === "failure") {
             errorLogEntries.push(e);
           }
         }
