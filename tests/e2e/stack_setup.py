@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 from stack_common import assert_ok, post_json
 
 # Fixed E2E API key registered with proxbox-api before any management calls.
-_E2E_PROXBOX_API_KEY = "proxbox-e2e-api-key-for-testing"
+_E2E_PROXBOX_API_KEY = "proxbox-e2e-api-key-for-e2e-testing"
 
 
 def register_proxbox_api_key(proxbox_base_url: str) -> str:
