@@ -24,6 +24,69 @@ from netbox_proxbox.views.error_utils import (
 
 logger = logging.getLogger(__name__)
 
+# Module-level throttle for the keepalive NetBox endpoint push.
+# Prevents spamming the backend on every dashboard keepalive poll.
+_last_netbox_endpoint_push: float = 0.0
+_NETBOX_PUSH_THROTTLE_SECONDS: float = 300.0  # 5 minutes
+
+
+def _maybe_push_netbox_endpoints_to_backend(
+    base_url: str,
+    auth_headers: dict[str, str],
+    backend_verify_ssl: bool,
+) -> None:
+    """Push NetBox endpoint data to the backend if the throttle window has elapsed.
+
+    Best-effort: logs warnings on failure but never raises.
+    Called after ``fastapi_status()`` confirms the backend is reachable so the
+    backend always has a current ``NetBoxEndpoint`` record — even after a fresh
+    start or database wipe — without requiring user interaction.
+    """
+    global _last_netbox_endpoint_push
+
+    now = time.monotonic()
+    if now - _last_netbox_endpoint_push < _NETBOX_PUSH_THROTTLE_SECONDS:
+        return
+
+    try:
+        from netbox_proxbox.models import NetBoxEndpoint as _NB  # noqa: PLC0415
+        from netbox_proxbox.views.backend_sync import (  # noqa: PLC0415
+            sync_netbox_endpoint_to_backend as _push,
+        )
+
+        endpoints = list(_NB.objects.all())
+        if not endpoints:
+            logger.debug("Keepalive push: no NetBoxEndpoint configured, skipping")
+            _last_netbox_endpoint_push = now
+            return
+
+        for nb_ep in endpoints:
+            ok, err, _ = _push(
+                nb_ep,
+                base_url=base_url,
+                auth_headers=auth_headers,
+                backend_verify_ssl=backend_verify_ssl,
+            )
+            if ok:
+                logger.info(
+                    "Keepalive push: synced NetBox endpoint '%s' to proxbox-api backend",
+                    getattr(nb_ep, "name", nb_ep.pk),
+                )
+            else:
+                logger.warning(
+                    "Keepalive push: could not sync NetBox endpoint '%s' to proxbox-api: %s",
+                    getattr(nb_ep, "name", nb_ep.pk),
+                    err,
+                )
+
+        _last_netbox_endpoint_push = now
+
+    except Exception:  # noqa: BLE001
+        logger.warning(
+            "Keepalive push: failed to push NetBox endpoints to proxbox-api backend",
+            exc_info=True,
+        )
+
 
 def sync_proxmox_endpoint_to_backend(
     endpoint: ProxmoxEndpoint,
@@ -198,6 +261,18 @@ class ServiceStatus:
                     http_status=http_status,
                 )
                 logger.error("Error connecting to FastAPI at %s: %s", fastapi_url, exc)
+
+        # After a successful connectivity check, push NetBox endpoint data to the
+        # backend.  This ensures the backend always has the endpoint record even
+        # after a fresh start or DB wipe, covering the gap between plugin restarts
+        # and the post_save signal.  The push is throttled to at most once per 5
+        # minutes so it does not spam the backend on every keepalive poll.
+        if connected and self.connected_url:
+            _maybe_push_netbox_endpoints_to_backend(
+                base_url=self.connected_url.rstrip("/"),
+                auth_headers=self.backend_auth_headers(fastapi_service_obj),
+                backend_verify_ssl=connected_verify_ssl,
+            )
 
         return FastAPIStatusResult(
             url=fastapi_url,
