@@ -808,6 +808,66 @@ def test_proxbox_sync_job_query_flag_ignore_ipv6_link_local_setting(
     assert captured["query_params"]["ignore_ipv6_link_local_addresses"] == "false"
 
 
+def test_full_sync_disables_vm_network_inside_virtual_machines_stage(
+    monkeypatch, proxbox_sync_job_module
+):
+    captured: list[tuple[str, dict[str, object] | None]] = []
+    services_mod = types.ModuleType("netbox_proxbox.services")
+
+    def run_sync_stream(path, query_params=None, **stream_kwargs):
+        captured.append((path, dict(query_params or {})))
+        return ({"stream": True, "response": {"ok": True}}, 200)
+
+    services_mod.run_sync_stream = run_sync_stream
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
+
+    ProxboxSyncJob = proxbox_sync_job_module.ProxboxSyncJob
+    job = ProxboxSyncJob()
+    job.logger = logging.getLogger("test_proxbox_job")
+    job.job = MagicMock()
+    job.job.data = None
+
+    st = proxbox_sync_job_module.SyncTypeChoices
+    ProxboxSyncJob.run(job, sync_types=[st.ALL])
+
+    vm_stage = next(
+        qp
+        for path, qp in captured
+        if path == "virtualization/virtual-machines/create/stream"
+    )
+    assert vm_stage["sync_vm_network"] == "false"
+
+
+def test_vm_only_stage_keeps_default_vm_network_behavior(
+    monkeypatch, proxbox_sync_job_module
+):
+    captured: list[tuple[str, dict[str, object] | None]] = []
+    services_mod = types.ModuleType("netbox_proxbox.services")
+
+    def run_sync_stream(path, query_params=None, **stream_kwargs):
+        captured.append((path, dict(query_params or {})))
+        return ({"stream": True, "response": {"ok": True}}, 200)
+
+    services_mod.run_sync_stream = run_sync_stream
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
+
+    ProxboxSyncJob = proxbox_sync_job_module.ProxboxSyncJob
+    job = ProxboxSyncJob()
+    job.logger = logging.getLogger("test_proxbox_job")
+    job.job = MagicMock()
+    job.job.data = None
+
+    st = proxbox_sync_job_module.SyncTypeChoices
+    ProxboxSyncJob.run(job, sync_types=[st.VIRTUAL_MACHINES])
+
+    vm_stage = next(
+        qp
+        for path, qp in captured
+        if path == "virtualization/virtual-machines/create/stream"
+    )
+    assert "sync_vm_network" not in vm_stage
+
+
 def test_proxbox_sync_job_run_all_invokes_each_stage_stream(
     monkeypatch, proxbox_sync_job_module
 ):

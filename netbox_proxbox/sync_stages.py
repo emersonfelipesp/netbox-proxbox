@@ -175,6 +175,7 @@ def _build_stage_query_params(
     base_query: dict[str, str],
     sync_type: str,
     target_vm_ids: list[str],
+    disable_vm_network_on_vm_stage: bool = False,
 ) -> dict[str, str]:
     """Build query parameters for a specific sync stage."""
     query_params = dict(base_query)
@@ -182,6 +183,9 @@ def _build_stage_query_params(
         query_params["delete_nonexistent_backup"] = True
     if sync_type == SyncTypeChoices.VIRTUAL_MACHINES_SNAPSHOTS:
         query_params["delete_nonexistent_snapshot"] = True
+    if sync_type == SyncTypeChoices.VIRTUAL_MACHINES and disable_vm_network_on_vm_stage:
+        # Full sync runs dedicated VM interface/IP stages; skip network work in VM stage.
+        query_params["sync_vm_network"] = "false"
     if target_vm_ids:
         query_params["netbox_vm_ids"] = ",".join(target_vm_ids)
     return query_params
@@ -311,9 +315,18 @@ def _run_all_stages_sync(
 
     target_vm_ids = [str(x) for x in list(params.get("netbox_vm_ids") or []) if str(x)]
     fastapi_endpoint_id = params.get("fastapi_endpoint_id")
+    disable_vm_network_on_vm_stage = SyncTypeChoices.VIRTUAL_MACHINES in stages and (
+        SyncTypeChoices.VM_INTERFACES in stages
+        or SyncTypeChoices.IP_ADDRESSES in stages
+    )
 
     for st in stages:
-        query_params = _build_stage_query_params(base_query, st, target_vm_ids)
+        query_params = _build_stage_query_params(
+            base_query,
+            st,
+            target_vm_ids,
+            disable_vm_network_on_vm_stage=disable_vm_network_on_vm_stage,
+        )
         stage_paths = _sync_stream_paths_for_stage(st, target_vm_ids)
 
         for stream_path in stage_paths:
