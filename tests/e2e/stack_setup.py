@@ -8,12 +8,54 @@ from urllib.parse import urlparse
 
 from stack_common import assert_ok, post_json
 
+# Fixed E2E API key registered with proxbox-api before any management calls.
+_E2E_PROXBOX_API_KEY = "proxbox-e2e-api-key-for-testing"
+
+
+def register_proxbox_api_key(proxbox_base_url: str) -> str:
+    """Register the E2E API key with proxbox-api if not already registered.
+
+    proxbox-api requires an API key registered via POST /auth/register-key before
+    any authenticated management endpoints (e.g. /netbox/endpoint) can be called.
+    Returns the API key string so callers can include it as X-Proxbox-API-Key.
+    """
+    api_key = _E2E_PROXBOX_API_KEY
+    try:
+        status_resp = requests.get(
+            f"{proxbox_base_url}/auth/bootstrap-status", timeout=10
+        )
+        if status_resp.status_code == 200:
+            status_data = status_resp.json()
+            if not status_data.get("needs_bootstrap", True):
+                print("proxbox-api bootstrap-status: key already registered")
+                return api_key
+    except Exception as exc:  # noqa: BLE001
+        print(f"bootstrap-status check failed (continuing): {exc}")
+
+    print("Registering proxbox-api API key...")
+    resp = requests.post(
+        f"{proxbox_base_url}/auth/register-key",
+        json={"api_key": api_key, "label": "netbox-proxbox-e2e"},
+        timeout=10,
+    )
+    print(f"register-key response: HTTP {resp.status_code} - {resp.text[:200]}")
+    if resp.status_code not in (201, 409):
+        raise AssertionError(
+            f"Failed to register proxbox-api key: {resp.status_code} {resp.text}"
+        )
+    return api_key
+
 
 def ensure_proxbox_backend_endpoints(
     proxbox_base_url: str,
     netbox_public_url: str,
     netbox_token: str,
+    *,
+    proxbox_api_key: str = "",
 ) -> None:
+    auth_headers: dict[str, str] = (
+        {"X-Proxbox-API-Key": proxbox_api_key} if proxbox_api_key else {}
+    )
     parsed_netbox = urlparse(netbox_public_url)
     netbox_host = parsed_netbox.hostname
     netbox_port = parsed_netbox.port or 8080
@@ -29,7 +71,10 @@ def ensure_proxbox_backend_endpoints(
         "verify_ssl": False,
     }
     resp = requests.post(
-        f"{proxbox_base_url}/netbox/endpoint", json=netbox_payload, timeout=30
+        f"{proxbox_base_url}/netbox/endpoint",
+        json=netbox_payload,
+        headers=auth_headers,
+        timeout=30,
     )
     print(f"NetBox endpoint response: HTTP {resp.status_code} - {resp.text[:300]}")
     if (
@@ -41,7 +86,9 @@ def ensure_proxbox_backend_endpoints(
         )
 
     print("Checking NetBox status on proxbox-api backend")
-    status_resp = requests.get(f"{proxbox_base_url}/netbox/status", timeout=30)
+    status_resp = requests.get(
+        f"{proxbox_base_url}/netbox/status", headers=auth_headers, timeout=30
+    )
     print(
         f"NetBox status response: HTTP {status_resp.status_code} - {status_resp.text[:300]}"
     )
@@ -58,6 +105,8 @@ def ensure_netbox_plugin_endpoints(
     netbox_token: str,
     netbox_token_id: int,
     netbox_public_url: str = "",
+    *,
+    proxbox_api_key: str = "",
 ) -> dict[str, int]:
     headers = {
         "Authorization": f"Token {netbox_token}",
@@ -127,7 +176,7 @@ def ensure_netbox_plugin_endpoints(
             "ip_address": proxbox_api_ip_obj["id"],
             "port": 8000,
             "verify_ssl": False,
-            "token": "",
+            "token": proxbox_api_key,
             "use_websocket": False,
             "websocket_domain": "",
             "websocket_port": 8000,

@@ -509,10 +509,16 @@ def assert_vm_status_transition(
         )
 
 
-def assert_backend_stream(proxbox_base_url: str) -> dict[str, Any]:
+def assert_backend_stream(
+    proxbox_base_url: str, *, proxbox_api_key: str = ""
+) -> dict[str, Any]:
+    auth_headers: dict[str, str] = (
+        {"X-Proxbox-API-Key": proxbox_api_key} if proxbox_api_key else {}
+    )
     complete_payload: dict[str, Any] | None = None
     with requests.get(
         f"{proxbox_base_url}/full-update/stream",
+        headers=auth_headers,
         timeout=(10, 300),
         stream=True,
     ) as response:
