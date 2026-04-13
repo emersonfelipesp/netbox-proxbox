@@ -70,6 +70,25 @@
                     {% render_field form.explicitly_blocked_ip_ranges %}
                 </div>
             </div>
+            {# Encryption Card #}
+            <div class="card mb-3">
+                <h5 class="card-header">
+                    <i class="mdi mdi-lock"></i>
+                    {% trans "Encryption" %}
+                </h5>
+                <div class="card-body">
+                    <p class="text-muted">
+                        {% blocktrans trimmed %}
+                        Configure credential encryption for proxbox-api. When enabled, sensitive
+                        credentials are encrypted at rest using the key below. The encryption key
+                        can also be set via the PROXBOX_ENCRYPTION_KEY environment variable on the
+                        proxbox-api host.
+                        {% endblocktrans %}
+                    </p>
+                    {% render_field form.encryption_enabled %}
+                    {% render_field form.encryption_key %}
+                </div>
+            </div>
             <div class="mb-3">
                 <button type="submit" class="btn btn-primary">
                     <i class="mdi mdi-content-save"></i>

@@ -51,6 +51,7 @@ class SettingsView(
                 "allow_private_ips": settings_obj.allow_private_ips,
                 "additional_allowed_ip_ranges": settings_obj.additional_allowed_ip_ranges,
                 "explicitly_blocked_ip_ranges": settings_obj.explicitly_blocked_ip_ranges,
+                "encryption_enabled": bool(settings_obj.encryption_key),
             }
         )
         return render(request, self.template_name, {"form": form})
@@ -130,6 +131,14 @@ class SettingsView(
             settings_obj.explicitly_blocked_ip_ranges = form.cleaned_data.get(
                 "explicitly_blocked_ip_ranges", ""
             )
+            encryption_enabled = form.cleaned_data.get("encryption_enabled", False)
+            if encryption_enabled:
+                new_key = form.cleaned_data.get("encryption_key", "").strip()
+                if new_key:
+                    settings_obj.encryption_key = new_key
+                # If checked but key field is blank, preserve existing key
+            else:
+                settings_obj.encryption_key = ""
             settings_obj.save(
                 update_fields=[
                     "use_guest_agent_interface_name",
@@ -149,6 +158,7 @@ class SettingsView(
                     "allow_private_ips",
                     "additional_allowed_ip_ranges",
                     "explicitly_blocked_ip_ranges",
+                    "encryption_key",
                 ]
             )
             messages.success(request, "Proxbox plugin settings updated.")

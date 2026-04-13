@@ -152,6 +152,14 @@ class ProxboxPluginSettingsForm(forms.Form):
             "even if they match allowed ranges above."
         ),
     )
+    encryption_enabled = forms.BooleanField(
+        required=False,
+        label="Enable credential encryption",
+        help_text=(
+            "When enabled, proxbox-api will use the encryption key below to encrypt "
+            "credentials at rest. Disabling this clears the stored key."
+        ),
+    )
     encryption_key = forms.CharField(
         required=False,
         max_length=255,
