@@ -20,6 +20,12 @@ Proxbox discovers and syncs the following from Proxmox into NetBox:
 
 Sync runs on-demand from the NetBox UI or scheduled automatically via NetBox's job system.
 
+## Compatibility Matrix
+
+| NetBox   | netbox-proxbox | proxbox-api | netbox-sdk     | proxmox-sdk    |
+|----------|----------------|-------------|----------------|----------------|
+| >=4.5.7  | v0.0.11        | v0.0.7      | v0.0.7.post4   | v0.0.2.post2   |
+
 ## Requirements
 
 - NetBox 4.5.x
