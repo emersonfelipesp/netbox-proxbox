@@ -113,6 +113,7 @@ def job_stream_module(monkeypatch):
     nbp_jobs._use_guest_agent_interface_name_setting = lambda: True
     nbp_jobs._proxbox_fetch_max_concurrency_setting = lambda: 8
     nbp_jobs._ignore_ipv6_link_local_addresses_setting = lambda: True
+    nbp_jobs._primary_ip_preference_setting = lambda: "ipv4"
     nbp_services = types.ModuleType("netbox_proxbox.services")
     nbp_services.__path__ = [str(repo_root / "netbox_proxbox" / "services")]
     nbp_services.run_sync_stream = lambda *args, **kwargs: (

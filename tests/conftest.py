@@ -427,6 +427,7 @@ def load_plugin_module(
     if proxbox_settings is None:
         proxbox_settings = SimpleNamespace(
             backend_log_file_path="/var/log/proxbox.log",
+            primary_ip_preference="ipv4",
             save=lambda **kwargs: None,
         )
 

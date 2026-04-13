@@ -22,6 +22,7 @@ class ProxboxPluginSettingsSerializer(NetBoxModelSerializer):
             "use_guest_agent_interface_name",
             "proxbox_fetch_max_concurrency",
             "ignore_ipv6_link_local_addresses",
+            "primary_ip_preference",
             "netbox_max_concurrent",
             "netbox_max_retries",
             "netbox_retry_delay",

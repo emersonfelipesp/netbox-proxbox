@@ -27,6 +27,7 @@ from netbox_proxbox.sync_params import (
     _proxbox_fetch_max_concurrency_setting,
     _use_guest_agent_interface_name_setting,
     _ignore_ipv6_link_local_addresses_setting,
+    _primary_ip_preference_setting,
     _serialize_sync_params,
 )
 from netbox_proxbox.sync_ownership import (
@@ -164,6 +165,7 @@ def _build_base_query_params(
     base_query["ignore_ipv6_link_local_addresses"] = (
         "true" if _ignore_ipv6_link_local_addresses_setting() else "false"
     )
+    base_query["primary_ip_preference"] = _primary_ip_preference_setting()
     if proxmox_endpoint_ids:
         base_query["proxmox_endpoint_ids"] = ",".join(proxmox_endpoint_ids)
     if netbox_endpoint_ids:

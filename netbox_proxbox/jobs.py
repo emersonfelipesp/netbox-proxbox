@@ -26,6 +26,7 @@ from netbox_proxbox.sync_types import (
 )
 from netbox_proxbox.sync_params import (
     _ignore_ipv6_link_local_addresses_setting,
+    _primary_ip_preference_setting,
     _infer_targeted_vm_job_params,
     _normalize_batch_object_ids,
     _proxbox_fetch_max_concurrency_setting,
@@ -104,6 +105,7 @@ def _sync_stage_settings() -> None:
     sync_stages._ignore_ipv6_link_local_addresses_setting = (
         _ignore_ipv6_link_local_addresses_setting
     )
+    sync_stages._primary_ip_preference_setting = _primary_ip_preference_setting
 
 
 async def _run_batch_selected_sync(

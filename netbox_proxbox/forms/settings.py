@@ -37,6 +37,13 @@ class ProxboxPluginSettingsForm(forms.Form):
             "VM interface IP address selection. Disable only if you need link-local addresses included."
         ),
     )
+    primary_ip_preference = forms.ChoiceField(
+        required=True,
+        choices=(("ipv4", "Prefer IPv4"), ("ipv6", "Prefer IPv6")),
+        initial="ipv4",
+        label="Primary IP preference",
+        help_text="Preferred IP family when Proxbox selects the VM primary IP.",
+    )
     netbox_max_concurrent = forms.IntegerField(
         required=True,
         min_value=1,

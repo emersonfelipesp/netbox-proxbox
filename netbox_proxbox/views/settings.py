@@ -37,6 +37,7 @@ class SettingsView(
                 "use_guest_agent_interface_name": settings_obj.use_guest_agent_interface_name,
                 "proxbox_fetch_max_concurrency": settings_obj.proxbox_fetch_max_concurrency,
                 "ignore_ipv6_link_local_addresses": settings_obj.ignore_ipv6_link_local_addresses,
+                "primary_ip_preference": settings_obj.primary_ip_preference,
                 "netbox_max_concurrent": settings_obj.netbox_max_concurrent,
                 "netbox_max_retries": settings_obj.netbox_max_retries,
                 "netbox_retry_delay": settings_obj.netbox_retry_delay,
@@ -68,6 +69,9 @@ class SettingsView(
             settings_obj.ignore_ipv6_link_local_addresses = form.cleaned_data[
                 "ignore_ipv6_link_local_addresses"
             ]
+            settings_obj.primary_ip_preference = form.cleaned_data[
+                "primary_ip_preference"
+            ]
             settings_obj.backend_log_file_path = form.cleaned_data[
                 "backend_log_file_path"
             ]
@@ -91,6 +95,9 @@ class SettingsView(
             ]
             settings_obj.ignore_ipv6_link_local_addresses = form.cleaned_data[
                 "ignore_ipv6_link_local_addresses"
+            ]
+            settings_obj.primary_ip_preference = form.cleaned_data[
+                "primary_ip_preference"
             ]
             settings_obj.netbox_max_concurrent = form.cleaned_data[
                 "netbox_max_concurrent"
@@ -128,6 +135,7 @@ class SettingsView(
                     "use_guest_agent_interface_name",
                     "proxbox_fetch_max_concurrency",
                     "ignore_ipv6_link_local_addresses",
+                    "primary_ip_preference",
                     "netbox_max_concurrent",
                     "netbox_max_retries",
                     "netbox_retry_delay",

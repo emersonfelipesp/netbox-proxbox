@@ -60,6 +60,7 @@ def proxbox_sync_job_module(monkeypatch):
                 use_guest_agent_interface_name=True,
                 proxbox_fetch_max_concurrency=8,
                 ignore_ipv6_link_local_addresses=True,
+                primary_ip_preference="ipv4",
             )
 
     class _ProxmoxEndpoint:
@@ -747,6 +748,7 @@ def test_proxbox_sync_job_query_flag_tracks_plugin_setting(
     assert captured["query_params"]["use_guest_agent_interface_name"] == "false"
     assert captured["query_params"]["fetch_max_concurrency"] == "8"
     assert captured["query_params"]["ignore_ipv6_link_local_addresses"] == "true"
+    assert captured["query_params"]["primary_ip_preference"] == "ipv4"
 
 
 def test_proxbox_sync_job_query_uses_fetch_concurrency_setting(
@@ -777,6 +779,7 @@ def test_proxbox_sync_job_query_uses_fetch_concurrency_setting(
     ProxboxSyncJob.run(job, sync_type=st.DEVICES)
     assert captured["query_params"]["fetch_max_concurrency"] == "17"
     assert captured["query_params"]["ignore_ipv6_link_local_addresses"] == "true"
+    assert captured["query_params"]["primary_ip_preference"] == "ipv4"
 
 
 def test_proxbox_sync_job_query_flag_ignore_ipv6_link_local_setting(
@@ -806,6 +809,7 @@ def test_proxbox_sync_job_query_flag_ignore_ipv6_link_local_setting(
     st = proxbox_sync_job_module.SyncTypeChoices
     ProxboxSyncJob.run(job, sync_type=st.DEVICES)
     assert captured["query_params"]["ignore_ipv6_link_local_addresses"] == "false"
+    assert captured["query_params"]["primary_ip_preference"] == "ipv4"
 
 
 def test_full_sync_disables_vm_network_inside_virtual_machines_stage(
@@ -1067,3 +1071,32 @@ def test_stage_does_not_retry_on_4xx(monkeypatch, proxbox_sync_job_module):
 
     assert call_count == 1, "4xx should not be retried"
     assert len(sleep_calls) == 0, "No sleep for 4xx errors"
+
+
+def test_proxbox_sync_job_query_flag_primary_ip_preference_setting(
+    monkeypatch, proxbox_sync_job_module
+):
+    captured: dict[str, object] = {}
+    services_mod = types.ModuleType("netbox_proxbox.services")
+
+    def run_sync_stream(path, query_params=None, **stream_kwargs):
+        captured["query_params"] = query_params
+        return ({"stream": True, "response": {"ok": True}}, 200)
+
+    services_mod.run_sync_stream = run_sync_stream
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
+    monkeypatch.setattr(
+        proxbox_sync_job_module,
+        "_primary_ip_preference_setting",
+        lambda: "ipv6",
+    )
+
+    ProxboxSyncJob = proxbox_sync_job_module.ProxboxSyncJob
+    job = ProxboxSyncJob()
+    job.logger = logging.getLogger("test_proxbox_job")
+    job.job = MagicMock()
+    job.job.data = None
+
+    st = proxbox_sync_job_module.SyncTypeChoices
+    ProxboxSyncJob.run(job, sync_type=st.DEVICES)
+    assert captured["query_params"]["primary_ip_preference"] == "ipv6"

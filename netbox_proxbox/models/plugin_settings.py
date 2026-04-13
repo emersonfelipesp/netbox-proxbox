@@ -12,6 +12,11 @@ from netbox.models import NetBoxModel
 
 DEFAULT_BACKEND_LOG_FILE_PATH = "/var/log/proxbox.log"
 
+PRIMARY_IP_PREFERENCE_CHOICES = (
+    ("ipv4", _("Prefer IPv4")),
+    ("ipv6", _("Prefer IPv6")),
+)
+
 
 def parse_cidr_list(text: str) -> list[str]:
     """Parse newline-separated CIDR ranges into a list of strings."""
@@ -52,6 +57,16 @@ class ProxboxPluginSettings(NetBoxModel):
             "When enabled, IPv6 link-local addresses (fe80::/64) are ignored during "
             "VM interface IP address selection. Disable this only if you need link-local "
             "addresses to be included."
+        ),
+    )
+    primary_ip_preference = models.CharField(
+        max_length=4,
+        choices=PRIMARY_IP_PREFERENCE_CHOICES,
+        default="ipv4",
+        verbose_name=_("Primary IP preference"),
+        help_text=_(
+            "Preferred IP family when Proxbox selects the VM primary IP. "
+            "Choose IPv4 or IPv6."
         ),
     )
     netbox_max_concurrent = models.PositiveSmallIntegerField(

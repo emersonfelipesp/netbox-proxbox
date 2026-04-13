@@ -54,6 +54,21 @@ def _ignore_ipv6_link_local_addresses_setting() -> bool:
         return True
 
 
+def _primary_ip_preference_setting() -> str:
+    """Return plugin setting for preferred primary IP family."""
+    try:
+        from netbox_proxbox.models import ProxboxPluginSettings
+
+        value = (
+            str(ProxboxPluginSettings.get_solo().primary_ip_preference or "ipv4")
+            .strip()
+            .lower()
+        )
+        return "ipv6" if value == "ipv6" else "ipv4"
+    except (ImportError, RuntimeError):
+        return "ipv4"
+
+
 def _serialize_sync_params(
     *,
     sync_types: list[str],
