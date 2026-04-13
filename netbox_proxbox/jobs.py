@@ -129,11 +129,19 @@ def _ensure_backend_endpoints(
     manual creation via the Next.js UI).
     """
     from netbox_proxbox.models import NetBoxEndpoint  # noqa: PLC0415
+    from netbox_proxbox.services.backend_auth import ensure_backend_key_registered  # noqa: PLC0415
     from netbox_proxbox.services.backend_context import get_fastapi_request_context  # noqa: PLC0415
     from netbox_proxbox.views.backend_sync import (  # noqa: PLC0415
         sync_netbox_endpoint_to_backend,
         sync_proxmox_endpoint_to_backend,
     )
+
+    # Ensure the API key is registered before making authenticated requests.
+    key_ok, key_msg = ensure_backend_key_registered()
+    if key_ok:
+        job.logger.info("Preflight: API key verified — %s", key_msg)
+    else:
+        job.logger.warning("Preflight: API key registration failed — %s", key_msg)
 
     context = get_fastapi_request_context()
     if context is None or not context.http_url:

@@ -77,9 +77,17 @@ def proxbox_sync_job_module(monkeypatch):
     models_mod.NetBoxEndpoint = _NetBoxEndpoint
     monkeypatch.setitem(sys.modules, "netbox_proxbox.models", models_mod)
 
+    # Stub backend_auth so key-registration calls are no-ops in tests.
+    backend_auth_mod = types.ModuleType("netbox_proxbox.services.backend_auth")
+    backend_auth_mod.ensure_backend_key_registered = lambda *a, **kw: (True, "stubbed")
+    monkeypatch.setitem(
+        sys.modules, "netbox_proxbox.services.backend_auth", backend_auth_mod
+    )
+
     # Stub backend_context so _ensure_backend_endpoints returns early (no FastAPI URL).
     backend_context_mod = types.ModuleType("netbox_proxbox.services.backend_context")
     backend_context_mod.get_fastapi_request_context = lambda **kw: None
+    backend_context_mod.get_fastapi_endpoint_with_token = lambda *a, **kw: (None, None)
     monkeypatch.setitem(
         sys.modules, "netbox_proxbox.services.backend_context", backend_context_mod
     )

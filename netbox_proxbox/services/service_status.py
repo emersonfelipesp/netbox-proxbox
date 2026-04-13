@@ -50,9 +50,21 @@ def _maybe_push_netbox_endpoints_to_backend(
 
     try:
         from netbox_proxbox.models import NetBoxEndpoint as _NB  # noqa: PLC0415
+        from netbox_proxbox.services.backend_auth import (  # noqa: PLC0415
+            ensure_backend_key_registered,
+        )
         from netbox_proxbox.views.backend_sync import (  # noqa: PLC0415
             sync_netbox_endpoint_to_backend as _push,
         )
+
+        # Ensure the API key is registered before making authenticated requests.
+        # This is the path that recovers when the backend restarts with a fresh
+        # database — the keepalive check fires first, then the push follows.
+        key_ok, key_msg = ensure_backend_key_registered()
+        if key_ok:
+            logger.info("Keepalive push: API key verified — %s", key_msg)
+        else:
+            logger.warning("Keepalive push: API key registration failed — %s", key_msg)
 
         endpoints = list(_NB.objects.all())
         if not endpoints:

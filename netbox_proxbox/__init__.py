@@ -25,12 +25,24 @@ def _deferred_startup_push() -> None:
 
     try:
         from netbox_proxbox.models import NetBoxEndpoint  # noqa: PLC0415
+        from netbox_proxbox.services.backend_auth import (  # noqa: PLC0415
+            ensure_backend_key_registered,
+        )
         from netbox_proxbox.services.backend_context import (  # noqa: PLC0415
             get_fastapi_request_context,
         )
         from netbox_proxbox.views.backend_sync import (  # noqa: PLC0415
             sync_netbox_endpoint_to_backend as _push,
         )
+
+        # Ensure the API key is registered with the backend before pushing
+        # endpoints.  Without this, authenticated requests would be rejected
+        # with 401 if the backend restarted with an empty database.
+        key_ok, key_msg = ensure_backend_key_registered()
+        if key_ok:
+            logger.info("Startup push: API key verified — %s", key_msg)
+        else:
+            logger.warning("Startup push: API key registration failed — %s", key_msg)
 
         context = get_fastapi_request_context()
         if context is None or not context.http_url:
