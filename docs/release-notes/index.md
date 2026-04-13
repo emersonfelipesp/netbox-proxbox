@@ -4,12 +4,13 @@ This section tracks the release line represented by this repository and keeps ol
 
 ## Current Release Line
 
-The plugin source in this repository is currently `0.0.10`.
+The plugin source in this repository is currently `0.0.11`.
 
 ## Highlights By Version
 
 | Version | Summary |
 |---------|---------|
+| `0.0.11` | Backup Routines, individual sync buttons, live job panel, Backend Logs, encryption key, endpoint CSV import/export, auto-push NetBox config to backend, three-tier error severity, extended storage/replication views, and many bug fixes |
 | `0.0.10` | Cluster and node tracking with NetBox Cluster/Device links; Mode field fix on endpoint detail |
 | `0.0.9.post4` | Follow-up migration fixes for upgrade paths and storage schema issues |
 | `0.0.9` | Storage relationships, task history, per-VM sync, settings, dashboard, and richer live job UX |
