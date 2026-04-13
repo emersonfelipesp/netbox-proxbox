@@ -24,7 +24,7 @@ on:
     - cron: "31 2 * * *"
 
 env:
-  PROXBOX_API_RELEASE_VERSION: 0.0.6.post5
+  PROXBOX_API_RELEASE_VERSION: 0.0.7
   NETBOX_IMAGE: netboxcommunity/netbox:v4.5
   PROXBOX_API_IMAGE: emersonfelipesp/proxbox-api
   PROXMOX_OPENAPI_IMAGE: emersonfelipesp/proxmox-openapi:latest
@@ -37,7 +37,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        install_source: ${{ fromJSON((github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch') && inputs.install_source != 'both' && format('["{0}"]', inputs.install_source) || '["local","pypi","container"]') }}
+        install_source: ${{ fromJSON(inputs.install_source != 'both' && format('["{0}"]', inputs.install_source) || '["local","pypi","container"]') }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -177,8 +177,12 @@ jobs:
           done
 
           for i in $(seq 1 60); do
-            if curl -fsS --max-time 5 http://127.0.0.1:18006/health >/dev/null 2>&1; then
-              break
+            if docker inspect proxmox-e2e-mock >/dev/null 2>&1; then
+              mock_health="$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' proxmox-e2e-mock 2>/dev/null)"
+              mock_running="$(docker inspect --format='{{.State.Running}}' proxmox-e2e-mock 2>/dev/null)"
+              if [ "$mock_health" = "healthy" ] || { [ "$mock_running" = "true" ] && [ "$mock_health" = "no-healthcheck" ]; }; then
+                break
+              fi
             fi
             sleep 2
             if [ "$i" -eq 60 ]; then
