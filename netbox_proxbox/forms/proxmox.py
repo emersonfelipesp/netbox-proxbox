@@ -134,6 +134,8 @@ class ProxmoxEndpointImportForm(NetBoxModelImportForm):
             "ip_address",
             "port",
             "mode",
+            "version",
+            "repoid",
             "username",
             "password",
             "token_name",
