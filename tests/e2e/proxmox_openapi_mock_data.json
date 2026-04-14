@@ -89,19 +89,21 @@
   },
   "/api2/json/nodes/pve01/qemu/101/config": {
     "data": {
+      "digest": "aabbccddeeff001122334455667788990011aabb",
       "name": "e2e-qemu-101",
       "onboot": 1,
-      "agent": 1,
+      "agent": "1",
       "searchdomain": "lab.local",
       "scsi0": "local-lvm:vm-101-disk-0,size=20G",
       "sockets": 1,
       "cores": 2,
-      "memory": 2048,
+      "memory": "2048",
       "node": "pve01"
     }
   },
   "/api2/json/nodes/pve01/lxc/102/config": {
     "data": {
+      "digest": "bbccddeeff001122334455667788990011aabbcc",
       "hostname": "e2e-lxc-102",
       "onboot": 1,
       "unprivileged": 1,
