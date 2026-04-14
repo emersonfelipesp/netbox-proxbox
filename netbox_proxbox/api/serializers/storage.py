@@ -82,3 +82,4 @@ class NestedProxmoxStorageSerializer(WritableNestedSerializer):
         model = ProxmoxStorage
         fields = ("id", "url", "display", "cluster", "name")
         brief_fields = ("id", "url", "display", "cluster", "name")
+        validators = []
