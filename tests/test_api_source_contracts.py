@@ -441,8 +441,8 @@ def test_plugin_api_routes_register_all_plugin_objects():
     assert set(endpoint_registers) == {"proxmox", "netbox", "fastapi"}
     assert set(root_registers) == {
         "backup-routines",
-        "clusters",
-        "nodes",
+        "proxmox-clusters",
+        "proxmox-nodes",
         "replications",
         "settings",
         "storage",
@@ -639,11 +639,12 @@ def test_proxbox_dashboard_permission_class_exists_in_views():
 
 
 def test_non_model_views_registered_in_urlpatterns():
-    """All ten non-model view paths must appear in the api/urls.py urlpatterns."""
+    """All non-model view paths must appear in the api/urls.py urlpatterns."""
     contents = URLS_PATH.read_text()
     expected_paths = [
         '"home/"',
         '"dashboard/"',
+        '"resources/clusters/"',
         '"resources/nodes/"',
         '"resources/virtual-machines/"',
         '"resources/lxc-containers/"',
@@ -652,6 +653,10 @@ def test_non_model_views_registered_in_urlpatterns():
         '"resources/virtual-disks/"',
         '"sync/schedule/"',
         '"logs/"',
+        # Shortcut aliases exposed at the top-level paths matching the UI URLs.
+        '"nodes/"',
+        '"clusters/"',
+        '"virtual-machines/"',
     ]
     for path_str in expected_paths:
         assert path_str in contents, f"URL path {path_str} not found in api/urls.py"

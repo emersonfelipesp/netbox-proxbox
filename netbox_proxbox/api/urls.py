@@ -36,8 +36,10 @@ endpoints_router.register(
 
 router = NetBoxRouter()
 router.APIRootView = views.ProxBoxRootView
-router.register("clusters", views.ProxmoxClusterViewSet, basename="proxmoxcluster")
-router.register("nodes", views.ProxmoxNodeViewSet, basename="proxmoxnode")
+router.register(
+    "proxmox-clusters", views.ProxmoxClusterViewSet, basename="proxmoxcluster"
+)
+router.register("proxmox-nodes", views.ProxmoxNodeViewSet, basename="proxmoxnode")
 router.register("storage", views.ProxmoxStorageViewSet, basename="storage")
 router.register("backups", views.VMBackupViewSet)
 router.register("backup-routines", views.BackupRoutineViewSet, basename="backuproutine")
@@ -85,6 +87,16 @@ urlpatterns = [
     ),
     path("sync/schedule/", ScheduleSyncAPIView.as_view(), name="api-schedule-sync"),
     path("logs/", BackendLogsAPIView.as_view(), name="api-logs"),
-    # Model CRUD router
+    # Shortcut aliases: mirror the resource views at the top-level paths the
+    # UI uses, so /nodes/, /clusters/, and /virtual-machines/ return the same
+    # tagged-object data as their /resources/... counterparts.
+    path("nodes/", NodesAPIView.as_view(), name="shortcut-nodes"),
+    path("clusters/", ClustersAPIView.as_view(), name="shortcut-clusters"),
+    path(
+        "virtual-machines/",
+        VirtualMachinesAPIView.as_view(),
+        name="shortcut-virtual-machines",
+    ),
+    # Model CRUD router (ProxmoxCluster/Node at proxmox-clusters/proxmox-nodes/)
     path("", include(router.urls)),
 ]

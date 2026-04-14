@@ -48,6 +48,7 @@ class ProxBoxRootView(APIRootView):
         response.data["home"] = f"{base}/home/"
         response.data["dashboard"] = f"{base}/dashboard/"
         response.data["resources"] = {
+            "clusters": f"{base}/resources/clusters/",
             "nodes": f"{base}/resources/nodes/",
             "virtual_machines": f"{base}/resources/virtual-machines/",
             "lxc_containers": f"{base}/resources/lxc-containers/",
@@ -605,6 +606,7 @@ class _ProxboxVMListAPIView(APIView):
 
     permission_classes = [IsAuthenticatedOrLoginNotRequired]
     vm_type: str
+    vm_type_slug: str
 
     @extend_schema(responses={200: OpenApiTypes.OBJECT})
     def get(self, request: Request) -> Response:
@@ -615,12 +617,17 @@ class _ProxboxVMListAPIView(APIView):
         if not tagged_ids:
             return Response({"count": 0, "results": []})
 
-        vms = list(
+        base_qs = (
             VirtualMachine.objects.restrict(request.user, "view")
-            .filter(id__in=tagged_ids, custom_field_data__proxmox_vm_type=self.vm_type)
+            .filter(id__in=tagged_ids)
             .select_related("site", "cluster", "role", "tenant", "platform")
             .prefetch_related("interfaces__ip_addresses")
         )
+        # Mirror the UI strategy: try virtual_machine_type slug first, fall
+        # back to the legacy custom field so both sync paths return results.
+        vms = list(base_qs.filter(virtual_machine_type__slug=self.vm_type_slug))
+        if not vms:
+            vms = list(base_qs.filter(custom_field_data__proxmox_vm_type=self.vm_type))
         results = [_serialize_vm(vm, request) for vm in vms]
         return Response({"count": len(results), "results": results})
 
@@ -633,6 +640,7 @@ class VirtualMachinesAPIView(_ProxboxVMListAPIView):
     """
 
     vm_type = ProxmoxVMTypeChoices.QEMU
+    vm_type_slug = "qemu-virtual-machine"
 
 
 class LXCContainersAPIView(_ProxboxVMListAPIView):
@@ -643,6 +651,7 @@ class LXCContainersAPIView(_ProxboxVMListAPIView):
     """
 
     vm_type = ProxmoxVMTypeChoices.LXC
+    vm_type_slug = "lxc-container"
 
 
 class InterfacesAPIView(APIView):
