@@ -108,6 +108,7 @@
       "onboot": 1,
       "unprivileged": 1,
       "rootfs": "local-lvm:subvol-102-disk-0,size=10G",
+      "mp0": "local-lvm:subvol-102-mp-0,mp=/data,size=10G",
       "cores": 1,
       "memory": 1024,
       "node": "pve01"
@@ -162,7 +163,15 @@
   },
   "/api2/json/nodes/pve01/tasks/UPID:pve01:00000001:00000001:00000001:qmstart:101:root@pam:/status": {
     "data": {
+      "id": "101",
+      "node": "pve01",
+      "pid": 1,
+      "pstart": 1,
+      "starttime": 1767225600,
       "status": "stopped",
+      "type": "qmstart",
+      "upid": "UPID:pve01:00000001:00000001:00000001:qmstart:101:root@pam:",
+      "user": "root@pam",
       "exitstatus": "OK"
     }
   },
