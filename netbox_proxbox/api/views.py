@@ -262,6 +262,21 @@ def _serialize_vm(vm: object, request: Request) -> dict:
     }
 
 
+def _serialize_cluster(cluster: object, request: Request) -> dict:
+    return {
+        "id": cluster.pk,
+        "name": str(cluster.name),
+        "url": request.build_absolute_uri(cluster.get_absolute_url()),
+        "status": cluster.status,
+        "type": _nested(cluster.type, request),
+        "group": _nested(cluster.group, request),
+        "site": _nested(cluster.site, request),
+        "tenant": _nested(cluster.tenant, request),
+        "device_count": cluster.devices.count(),
+        "vm_count": cluster.virtual_machines.count(),
+    }
+
+
 def _serialize_job(job: object, request: Request | None = None) -> dict:
     url = None
     if request is not None:
@@ -830,6 +845,34 @@ class VirtualDisksAPIView(APIView):
             }
             for d in disks
         ]
+        return Response({"count": len(results), "results": results})
+
+
+class ClustersAPIView(APIView):
+    """API mirror of the Proxbox clusters page (/plugins/proxbox/clusters/).
+
+    Returns NetBox Cluster objects tagged 'proxbox' (synced Proxmox clusters).
+    Read-only GET endpoint.
+    """
+
+    permission_classes = [IsAuthenticatedOrLoginNotRequired]
+
+    @extend_schema(responses={200: OpenApiTypes.OBJECT})
+    def get(self, request: Request) -> Response:
+        """Return proxbox-tagged clusters with their type, group, site, tenant, and counts."""
+        from virtualization.models import Cluster
+        from netbox_proxbox.utils import get_proxbox_tagged_object_ids
+
+        tagged_ids = get_proxbox_tagged_object_ids(Cluster, limit=100)
+        if not tagged_ids:
+            return Response({"count": 0, "results": []})
+
+        clusters = list(
+            Cluster.objects.restrict(request.user, "view")
+            .filter(id__in=tagged_ids)
+            .select_related("type", "group", "site", "tenant")
+        )
+        results = [_serialize_cluster(c, request) for c in clusters]
         return Response({"count": len(results), "results": results})
 
 

@@ -6,6 +6,7 @@ from netbox.api.routers import NetBoxRouter
 from . import views
 from .views import (
     BackendLogsAPIView,
+    ClustersAPIView,
     DashboardAPIView,
     HomeAPIView,
     InterfacesAPIView,
@@ -55,6 +56,7 @@ urlpatterns = [
     # Non-model API views mirroring UI pages
     path("home/", HomeAPIView.as_view(), name="home"),
     path("dashboard/", DashboardAPIView.as_view(), name="dashboard"),
+    path("resources/clusters/", ClustersAPIView.as_view(), name="api-clusters"),
     path("resources/nodes/", NodesAPIView.as_view(), name="api-nodes"),
     path(
         "resources/virtual-machines/",

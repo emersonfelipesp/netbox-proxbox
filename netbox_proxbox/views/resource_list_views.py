@@ -5,7 +5,7 @@ from django.shortcuts import render
 from django.views import View
 from netbox import configuration
 from utilities.views import ConditionalLoginRequiredMixin
-from virtualization.models import VirtualDisk, VirtualMachine, VMInterface
+from virtualization.models import Cluster, VirtualDisk, VirtualMachine, VMInterface
 
 from netbox_proxbox.utils import get_fastapi_context_for_request
 
@@ -347,6 +347,58 @@ class InterfacesView(ConditionalLoginRequiredMixin, View):
                 "interfaces_up": interfaces_up,
                 "interfaces_down": interfaces_down,
                 "interfaces_total": len(vm_interfaces) + len(node_interfaces),
+            },
+        )
+
+
+class ClustersView(ConditionalLoginRequiredMixin, View):
+    """List NetBox clusters tagged ``proxbox`` (synced Proxmox clusters) for operational review."""
+
+    template = "netbox_proxbox/clusters.html"
+
+    def get(self, request: HttpRequest) -> HttpResponse:
+        """Load tagged clusters and FastAPI URL hints for the clusters template."""
+        from django.contrib.contenttypes.models import ContentType
+        from extras.models import Tag, TaggedItem
+
+        plugin_configuration = getattr(configuration, "PLUGINS_CONFIG", {})
+        fastapi_info = get_fastapi_context_for_request(request)
+
+        proxbox_tag = Tag.objects.filter(slug="proxbox").first()
+        if not proxbox_tag:
+            return render(
+                request,
+                self.template,
+                {
+                    "configuration": plugin_configuration,
+                    "fastapi_url": fastapi_info.get("http_url", ""),
+                    "fastapi_websocket_url": fastapi_info.get("websocket_url", ""),
+                    "clusters": [],
+                },
+            )
+
+        cluster_content_type = ContentType.objects.get_for_model(Cluster)
+        tagged_cluster_ids = list(
+            TaggedItem.objects.filter(
+                tag=proxbox_tag, content_type=cluster_content_type
+            ).values_list("object_id", flat=True)[:100]
+        )
+        clusters = []
+        if tagged_cluster_ids:
+            clusters = list(
+                Cluster.objects.restrict(request.user, "view")
+                .filter(id__in=tagged_cluster_ids)
+                .select_related("type", "group", "site", "tenant")
+            )
+
+        return render(
+            request,
+            self.template,
+            {
+                "configuration": plugin_configuration,
+                "fastapi_url": fastapi_info.get("http_url", ""),
+                "fastapi_websocket_url": fastapi_info.get("websocket_url", ""),
+                "clusters": clusters,
             },
         )
 
