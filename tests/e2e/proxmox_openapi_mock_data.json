@@ -2,7 +2,8 @@
   "/api2/json/version": {
     "data": {
       "release": "8.2",
-      "repoid": "mock"
+      "repoid": "mock",
+      "version": "8.2.0"
     }
   },
   "/api2/json/cluster/status": {

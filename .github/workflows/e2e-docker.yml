@@ -93,6 +93,7 @@ jobs:
           docker run -d --name proxmox-e2e-mock --network proxbox-e2e -p 18006:8000 \
             -v "$PWD/tests/e2e/proxmox_openapi_mock_data.json:/data/mock-data.json:ro" \
             -e PROXMOX_MOCK_DATA_PATH=/data/mock-data.json \
+            -e PROXMOX_MOCK_SCHEMA_VERSION=none \
             "${PROXMOX_SDK_IMAGE}:dev-nginx"
 
           docker run -d --name proxbox-e2e-api --network proxbox-e2e -p 18800:8000 \
