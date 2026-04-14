@@ -6,19 +6,20 @@ Proxbox is a NetBox plugin that integrates Proxmox with NetBox through a separat
 
 | NetBox   | netbox-proxbox | proxbox-api | netbox-sdk     | proxmox-sdk    |
 |----------|----------------|-------------|----------------|----------------|
+| >=4.6.0  | v0.0.12        | v0.0.8      | v0.0.7.post4   | v0.0.2.post3   |
 | >=4.5.7  | v0.0.11        | v0.0.7      | v0.0.7.post4   | v0.0.2.post2   |
 
 The current repository code declares support for:
 
-- NetBox `4.5.x`
-- Plugin version `0.0.11` in source
+- NetBox `4.6.x`
+- Plugin version `0.0.12` in source
 
 That support comes directly from the plugin config in this repository:
 
-- `min_version = "4.5.0"`
-- `max_version = "4.5.99"`
+- `min_version = "4.6.0"`
+- `max_version = "4.6.99"`
 
-This compatibility line includes NetBox `v4.5.7` (django-rq `4.0` support).
+This compatibility line targets NetBox `v4.6.0-beta1` and adds native `VirtualMachineType` sync.
 
 ## Important Packaging Note
 
