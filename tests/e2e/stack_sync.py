@@ -464,11 +464,15 @@ def assert_replications_and_backup_routines_sync_data(
 
 
 def set_mock_vm_status(mock_base_url: str, vmid: int, status: str) -> bool:
-    response = requests.post(
-        f"{mock_base_url}/__admin/vm/{vmid}/status",
-        json={"status": status},
-        timeout=15,
-    )
+    try:
+        response = requests.post(
+            f"{mock_base_url}/__admin/vm/{vmid}/status",
+            json={"status": status},
+            timeout=15,
+            verify=False,
+        )
+    except requests.exceptions.RequestException:
+        return False
     if response.status_code == 404:
         return False
     payload = assert_ok(response, context=f"set proxmox mock vm status vmid={vmid}")

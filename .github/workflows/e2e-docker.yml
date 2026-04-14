@@ -27,7 +27,7 @@ env:
   PROXBOX_API_RELEASE_VERSION: 0.0.7
   NETBOX_IMAGE: netboxcommunity/netbox:v4.5
   PROXBOX_API_IMAGE: emersonfelipesp/proxbox-api
-  PROXMOX_OPENAPI_IMAGE: emersonfelipesp/proxmox-openapi:latest
+  PROXMOX_SDK_IMAGE: emersonfelipesp/proxmox-sdk
 
 jobs:
   e2e-docker-stack:
@@ -86,14 +86,14 @@ jobs:
           docker run -d --name netbox-e2e-redis --network proxbox-e2e \
             redis:7-alpine
 
-          docker pull "${PROXMOX_OPENAPI_IMAGE}"
+          docker pull "${PROXMOX_SDK_IMAGE}:dev-nginx"
           docker pull "${PROXBOX_API_IMAGE}:${PROXBOX_API_RELEASE_VERSION}"
           docker pull "${NETBOX_IMAGE}"
 
           docker run -d --name proxmox-e2e-mock --network proxbox-e2e -p 18006:8000 \
             -v "$PWD/tests/e2e/proxmox_openapi_mock_data.json:/data/mock-data.json:ro" \
             -e PROXMOX_MOCK_DATA_PATH=/data/mock-data.json \
-            "${PROXMOX_OPENAPI_IMAGE}"
+            "${PROXMOX_SDK_IMAGE}:dev-nginx"
 
           docker run -d --name proxbox-e2e-api --network proxbox-e2e -p 18800:8000 \
             -e PROXBOX_SKIP_NETBOX_BOOTSTRAP=true \
@@ -176,16 +176,12 @@ jobs:
             fi
           done
 
-          for i in $(seq 1 60); do
-            if docker inspect proxmox-e2e-mock >/dev/null 2>&1; then
-              mock_health="$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' proxmox-e2e-mock 2>/dev/null)"
-              mock_running="$(docker inspect --format='{{.State.Running}}' proxmox-e2e-mock 2>/dev/null)"
-              if [ "$mock_health" = "healthy" ] || { [ "$mock_running" = "true" ] && [ "$mock_health" = "no-healthcheck" ]; }; then
-                break
-              fi
+          for i in $(seq 1 90); do
+            if curl -sk --max-time 5 https://127.0.0.1:18006/health >/dev/null 2>&1; then
+              break
             fi
             sleep 2
-            if [ "$i" -eq 60 ]; then
+            if [ "$i" -eq 90 ]; then
               echo "proxmox mock did not become ready"
               docker logs proxmox-e2e-mock || true
               exit 1
@@ -254,7 +250,7 @@ jobs:
         env:
           NETBOX_BASE_URL: http://127.0.0.1:18080
           PROXBOX_BASE_URL: http://127.0.0.1:18800
-          PROXMOX_MOCK_BASE_URL: http://127.0.0.1:18006
+          PROXMOX_MOCK_BASE_URL: https://127.0.0.1:18006
           PROXMOX_MOCK_IP: ${{ env.PROXMOX_MOCK_IP }}
           NETBOX_IP: ${{ env.NETBOX_IP }}
           PROXBOX_API_IP: ${{ env.PROXBOX_API_IP }}
