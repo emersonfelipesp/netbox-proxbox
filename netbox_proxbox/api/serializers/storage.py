@@ -76,6 +76,9 @@ class ProxmoxStorageSerializer(NetBoxModelSerializer):
 class NestedProxmoxStorageSerializer(WritableNestedSerializer):
     """Minimal nested representation for Proxmox storage relations."""
 
+    url = serializers.HyperlinkedIdentityField(
+        view_name="plugins-api:netbox_proxbox-api:storage-detail",
+    )
     cluster = ClusterSerializer(nested=True)
 
     class Meta:
