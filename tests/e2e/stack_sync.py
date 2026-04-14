@@ -340,7 +340,7 @@ def assert_snapshots_sync_data(
             vmid,
             str(record.get("name") or ""),
             str(record.get("node") or ""),
-            str(record.get("subtype") or ""),
+            extract_status_value(record.get("subtype")),
         )
         if key not in expected_snapshots:
             continue
