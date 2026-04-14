@@ -79,11 +79,22 @@ def _deferred_startup_push() -> None:
         if pushed == 0:
             logger.debug("Startup push: no NetBoxEndpoint records found to push")
 
-    except Exception:  # noqa: BLE001
-        logger.warning(
-            "Startup push: failed to push NetBox endpoints to proxbox-api backend",
-            exc_info=True,
-        )
+    except Exception as exc:  # noqa: BLE001
+        from django.db import OperationalError, ProgrammingError  # noqa: PLC0415
+
+        if isinstance(exc, (ProgrammingError, OperationalError)):
+            # Database tables not yet created (migrations still running on first
+            # start).  This is expected and harmless — the push will be retried
+            # on the next restart once migrations have completed.
+            logger.debug(
+                "Startup push: database not ready yet (migrations pending), skipping: %s",
+                exc,
+            )
+        else:
+            logger.warning(
+                "Startup push: failed to push NetBox endpoints to proxbox-api backend",
+                exc_info=True,
+            )
 
 
 def _runtime_dependencies_available() -> bool:
