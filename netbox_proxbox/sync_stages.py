@@ -247,7 +247,7 @@ def _execute_stage_sync(
             )
             return last_payload, stage_runtime
 
-        if last_status >= 500 and _attempt < _STAGE_RETRY_MAX:
+        if (last_status >= 500 or last_status == 429) and _attempt < _STAGE_RETRY_MAX:
             retry_detail = _extract_backend_error_text(last_payload) or str(
                 last_payload
             )
