@@ -38,12 +38,15 @@
   "/api2/json/cluster/resources": {
     "data": [
       {
+        "id": "node/pve01",
         "type": "node",
         "node": "pve01",
+        "name": "pve01",
         "status": "online",
         "maxcpu": 8
       },
       {
+        "id": "qemu/101",
         "type": "qemu",
         "vmid": 101,
         "name": "e2e-qemu-101",
@@ -54,6 +57,7 @@
         "maxdisk": 21474836480
       },
       {
+        "id": "lxc/102",
         "type": "lxc",
         "vmid": 102,
         "name": "e2e-lxc-102",
