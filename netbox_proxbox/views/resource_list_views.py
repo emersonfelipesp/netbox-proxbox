@@ -388,7 +388,7 @@ class ClustersView(ConditionalLoginRequiredMixin, View):
             clusters = list(
                 Cluster.objects.restrict(request.user, "view")
                 .filter(id__in=tagged_cluster_ids)
-                .select_related("type", "group", "site", "tenant")
+                .select_related("type", "group", "_site", "tenant")
             )
 
         return render(

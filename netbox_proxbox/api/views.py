@@ -271,7 +271,7 @@ def _serialize_cluster(cluster: object, request: Request) -> dict:
         "status": cluster.status,
         "type": _nested(cluster.type, request),
         "group": _nested(cluster.group, request),
-        "site": _nested(cluster.site, request),
+        "site": _nested(cluster._site, request),
         "tenant": _nested(cluster.tenant, request),
         "device_count": cluster.devices.count(),
         "vm_count": cluster.virtual_machines.count(),
@@ -879,7 +879,7 @@ class ClustersAPIView(APIView):
         clusters = list(
             Cluster.objects.restrict(request.user, "view")
             .filter(id__in=tagged_ids)
-            .select_related("type", "group", "site", "tenant")
+            .select_related("type", "group", "_site", "tenant")
         )
         results = [_serialize_cluster(c, request) for c in clusters]
         return Response({"count": len(results), "results": results})
