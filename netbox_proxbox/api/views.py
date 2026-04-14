@@ -230,11 +230,14 @@ def _serialize_interfaces(interfaces: object, request: Request) -> list[dict]:
     return result
 
 
-def _serialize_device(device: object, request: Request) -> dict:
-    return {
+def _serialize_device(
+    device: object, request: Request, proxmox_node: object | None = None
+) -> dict:
+    result: dict = {
         "id": device.pk,
         "name": str(device.name),
         "url": request.build_absolute_uri(device.get_absolute_url()),
+        "status": {"value": device.status, "label": device.get_status_display()},
         "device_type": str(device.device_type) if device.device_type else None,
         "manufacturer": (
             str(device.device_type.manufacturer)
@@ -247,6 +250,19 @@ def _serialize_device(device: object, request: Request) -> dict:
         "cluster": _nested(device.cluster, request),
         "interfaces": _serialize_interfaces(device.interfaces, request),
     }
+    if proxmox_node is not None:
+        result.update(
+            {
+                "online": proxmox_node.online,
+                "ip_address": proxmox_node.ip_address or "",
+                "cpu_usage_percent": proxmox_node.cpu_usage_percent,
+                "max_cpu": proxmox_node.max_cpu,
+                "memory_usage": proxmox_node.memory_usage,
+                "memory_usage_percent": proxmox_node.memory_usage_percent,
+                "max_memory": proxmox_node.max_memory,
+            }
+        )
+    return result
 
 
 def _serialize_vm(vm: object, request: Request) -> dict:
@@ -583,6 +599,7 @@ class NodesAPIView(APIView):
     def get(self, request: Request) -> Response:
         """Return proxbox-tagged devices with their interfaces and IPs."""
         from dcim.models import Device
+        from netbox_proxbox.models import ProxmoxNode
         from netbox_proxbox.utils import get_proxbox_tagged_object_ids
 
         tagged_ids = get_proxbox_tagged_object_ids(Device, limit=100)
@@ -597,7 +614,17 @@ class NodesAPIView(APIView):
             )
             .prefetch_related("interfaces__ip_addresses")
         )
-        results = [_serialize_device(d, request) for d in devices]
+
+        # Build a name→ProxmoxNode lookup to enrich each device with live Proxmox metrics.
+        device_names = [d.name for d in devices]
+        nodes_by_name = {
+            n.name: n for n in ProxmoxNode.objects.filter(name__in=device_names)
+        }
+
+        results = [
+            _serialize_device(d, request, proxmox_node=nodes_by_name.get(d.name))
+            for d in devices
+        ]
         return Response({"count": len(results), "results": results})
 
 
