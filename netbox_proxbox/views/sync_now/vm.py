@@ -42,9 +42,13 @@ class VirtualMachineSyncNowView(
         vmid = vm.custom_field_data.get("proxmox_vm_id") or vm.custom_field_data.get(
             "cf_proxmox_vm_id"
         )
-        vm_type = vm.custom_field_data.get(
-            "proxmox_vm_type"
-        ) or vm.custom_field_data.get("cf_proxmox_vm_type", "qemu")
+        vm_type_obj = getattr(vm, "virtual_machine_type", None)
+        if vm_type_obj and hasattr(vm_type_obj, "slug"):
+            vm_type = "lxc" if "lxc" in str(vm_type_obj.slug) else "qemu"
+        else:
+            vm_type = vm.custom_field_data.get(
+                "proxmox_vm_type"
+            ) or vm.custom_field_data.get("cf_proxmox_vm_type", "qemu")
         proxmox_cluster = ProxmoxCluster.objects.filter(
             netbox_cluster=vm.cluster
         ).first()

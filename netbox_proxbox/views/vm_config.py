@@ -37,6 +37,13 @@ def _extract_vmid(vm: VirtualMachine) -> int | None:
 
 
 def _extract_vm_type(vm: VirtualMachine) -> str:
+    vm_type_obj = getattr(vm, "virtual_machine_type", None)
+    if vm_type_obj and hasattr(vm_type_obj, "slug"):
+        slug = str(vm_type_obj.slug).lower()
+        if "lxc" in slug:
+            return "lxc"
+        if "qemu" in slug:
+            return "qemu"
     cf = getattr(vm, "custom_field_data", {}) or {}
     vm_type = str(cf.get("proxmox_vm_type") or "qemu").strip().lower()
     return vm_type if vm_type in {"qemu", "lxc"} else "qemu"

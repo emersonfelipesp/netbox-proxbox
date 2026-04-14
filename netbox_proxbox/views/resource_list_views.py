@@ -100,13 +100,26 @@ class VirtualMachinesView(ConditionalLoginRequiredMixin, View):
         )
         virtual_machines = []
         if tagged_vm_ids:
-            virtual_machines = list(
+            base_qs = (
                 VirtualMachine.objects.restrict(request.user, "view")
                 .filter(id__in=tagged_vm_ids)
-                .filter(custom_field_data__proxmox_vm_type="qemu")
-                .select_related("site", "cluster", "role", "tenant", "platform")
+                .select_related(
+                    "site",
+                    "cluster",
+                    "role",
+                    "tenant",
+                    "platform",
+                    "virtual_machine_type",
+                )
                 .prefetch_related("interfaces__ip_addresses")
             )
+            virtual_machines = list(
+                base_qs.filter(virtual_machine_type__slug="qemu-virtual-machine")
+            )
+            if not virtual_machines:
+                virtual_machines = list(
+                    base_qs.filter(custom_field_data__proxmox_vm_type="qemu")
+                )
 
         return render(
             request,
@@ -154,13 +167,26 @@ class LXCContainersView(ConditionalLoginRequiredMixin, View):
         )
         lxc_containers = []
         if tagged_vm_ids:
-            lxc_containers = list(
+            base_qs = (
                 VirtualMachine.objects.restrict(request.user, "view")
                 .filter(id__in=tagged_vm_ids)
-                .filter(custom_field_data__proxmox_vm_type="lxc")
-                .select_related("site", "cluster", "role", "tenant", "platform")
+                .select_related(
+                    "site",
+                    "cluster",
+                    "role",
+                    "tenant",
+                    "platform",
+                    "virtual_machine_type",
+                )
                 .prefetch_related("interfaces__ip_addresses")
             )
+            lxc_containers = list(
+                base_qs.filter(virtual_machine_type__slug="lxc-container")
+            )
+            if not lxc_containers:
+                lxc_containers = list(
+                    base_qs.filter(custom_field_data__proxmox_vm_type="lxc")
+                )
 
         return render(
             request,
