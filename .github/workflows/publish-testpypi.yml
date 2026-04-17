@@ -137,7 +137,7 @@ jobs:
   publish-pypi:
     name: publish to PyPI
     if: github.event_name == 'push'
-    needs: [prepare-release, e2e-docker-local]
+    needs: [prepare-release, validate-testpypi]
     runs-on: ubuntu-latest
     steps:
       - name: Set up Python 3.13
