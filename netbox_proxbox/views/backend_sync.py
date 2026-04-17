@@ -135,17 +135,27 @@ def _netbox_endpoint_backend_payload(endpoint: NetBoxEndpoint) -> dict[str, obje
     token_version = getattr(endpoint, "effective_token_version", "v1") or "v1"
     token_key: str | None = None
     if token_version == "v2":
+        # v2: secret goes in "token", key prefix goes in "token_key".
         token_value = (getattr(endpoint, "token_secret", "") or "").strip()
         raw_key = (getattr(endpoint, "token_key", "") or "").strip()
+        # Fallback: if CharFields are empty but a FK token is linked, use its key.
+        if not raw_key:
+            token_obj = getattr(endpoint, "token", None)
+            if token_obj is not None:
+                raw_key = (getattr(token_obj, "key", "") or "").strip()
         token_key = raw_key or None
+        if not token_value:
+            logger.warning(
+                "NetBoxEndpoint %s v2 token has no secret — backend will use an empty token",
+                getattr(endpoint, "pk", None),
+            )
     else:
-        token_obj = getattr(endpoint, "token", None)
-        token_value = ""
-        if token_obj is not None:
-            token_value = (
-                getattr(token_obj, "plaintext", None)
-                or getattr(token_obj, "key", None)
-                or ""
+        # v1: delegate to the model property which handles FK + plaintext fallback.
+        token_value = (getattr(endpoint, "effective_token_value", None) or "") or ""
+        if not token_value:
+            logger.warning(
+                "NetBoxEndpoint %s has no token configured — backend will use an empty token",
+                getattr(endpoint, "pk", None),
             )
 
     payload: dict[str, object] = {

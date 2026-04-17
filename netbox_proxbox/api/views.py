@@ -6,7 +6,7 @@ from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
 from netbox.api.authentication import IsAuthenticatedOrLoginNotRequired
 from netbox.api.viewsets import NetBoxModelViewSet
-from rest_framework.permissions import BasePermission
+from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.routers import APIRootView
@@ -74,6 +74,11 @@ class ProxboxPluginSettingsViewSet(NetBoxModelViewSet):
     queryset = models.ProxboxPluginSettings.objects.all().order_by("id")
     serializer_class = ProxboxPluginSettingsSerializer
     http_method_names = ["get", "patch", "head", "options"]
+
+    def get_permissions(self):
+        if self.request.method in ("GET", "HEAD", "OPTIONS"):
+            return [IsAuthenticated()]
+        return super().get_permissions()
 
 
 class VMBackupViewSet(NetBoxModelViewSet):
