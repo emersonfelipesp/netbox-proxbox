@@ -5,7 +5,7 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("netbox_proxbox", "0030_vmtaskhistory_status_exitstatus_to_textfield"),
+        ("netbox_proxbox", "0031_proxmoxendpoint_site_tenant"),
     ]
 
     operations = [
