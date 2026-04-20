@@ -82,8 +82,7 @@ class VMTaskHistory(NetBoxModel):
         help_text=_("Human-readable task description."),
     )
 
-    status = models.CharField(
-        max_length=255,
+    status = models.TextField(
         help_text=_("Task outcome or current state."),
     )
 
@@ -94,8 +93,7 @@ class VMTaskHistory(NetBoxModel):
         help_text=_("Raw Proxmox task state."),
     )
 
-    exitstatus = models.CharField(
-        max_length=255,
+    exitstatus = models.TextField(
         null=True,
         blank=True,
         help_text=_("Raw Proxmox task exit status."),
