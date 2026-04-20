@@ -121,7 +121,9 @@ class ProxmoxStorageViewSet(NetBoxModelViewSet):
 class ProxmoxEndpointViewSet(NetBoxModelViewSet):
     """REST API for Proxmox VE API endpoint credentials and targets."""
 
-    queryset = models.ProxmoxEndpoint.objects.select_related("ip_address")
+    queryset = models.ProxmoxEndpoint.objects.select_related(
+        "ip_address", "site", "tenant"
+    )
     serializer_class = ProxmoxEndpointSerializer
     filterset_class = filtersets.ProxmoxEndpointFilterSet
 

@@ -125,6 +125,8 @@ def test_endpoint_serializers_expose_supported_model_fields():
             "username",
             "token_name",
             "verify_ssl",
+            "site",
+            "tenant",
         },
         "NetBoxEndpointSerializer": {
             "name",
@@ -282,7 +284,7 @@ def test_writable_nested_related_fields_are_declared():
     expected_assignments = {
         "VMBackupSerializer": {"proxmox_storage", "virtual_machine"},
         "VMSnapshotSerializer": {"proxmox_storage", "virtual_machine"},
-        "ProxmoxEndpointSerializer": {"ip_address"},
+        "ProxmoxEndpointSerializer": {"ip_address", "site", "tenant"},
         "NetBoxEndpointSerializer": {"ip_address", "token"},
         "FastAPIEndpointSerializer": {"ip_address"},
     }

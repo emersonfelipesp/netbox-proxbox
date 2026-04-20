@@ -6,9 +6,16 @@ from django import forms
 # NetBox Imports
 from netbox.forms import NetBoxModelForm, NetBoxModelFilterSetForm
 from netbox.forms import NetBoxModelImportForm
-from utilities.forms.fields import CommentField, DynamicModelChoiceField
-from utilities.forms.fields import CSVChoiceField
+from utilities.forms.fields import (
+    CommentField,
+    CSVChoiceField,
+    CSVModelChoiceField,
+    DynamicModelChoiceField,
+    DynamicModelMultipleChoiceField,
+)
+from dcim.models import Site
 from ipam.models import IPAddress
+from tenancy.models import Tenant
 from django.utils.translation import gettext as _
 
 # Proxbox Imports
@@ -63,6 +70,16 @@ class ProxmoxEndpointForm(NetBoxModelForm):
         ),
         label=_("Token value"),
     )
+    site = DynamicModelChoiceField(
+        queryset=Site.objects.all(),
+        required=False,
+        label=_("Site"),
+    )
+    tenant = DynamicModelChoiceField(
+        queryset=Tenant.objects.all(),
+        required=False,
+        label=_("Tenant"),
+    )
     comments = CommentField()
 
     class Meta:
@@ -77,6 +94,11 @@ class ProxmoxEndpointForm(NetBoxModelForm):
             "token_name",
             "token_value",
             "verify_ssl",
+            "timeout",
+            "max_retries",
+            "retry_backoff",
+            "site",
+            "tenant",
             "tags",
         )
 
@@ -113,6 +135,16 @@ class ProxmoxEndpointFilterForm(NetBoxModelFilterSetForm):
         queryset=IPAddress.objects.all(), required=False, help_text="Select IP Address"
     )
     mode = forms.MultipleChoiceField(choices=ProxmoxModeChoices, required=False)
+    site = DynamicModelMultipleChoiceField(
+        queryset=Site.objects.all(),
+        required=False,
+        label=_("Site"),
+    )
+    tenant = DynamicModelMultipleChoiceField(
+        queryset=Tenant.objects.all(),
+        required=False,
+        label=_("Tenant"),
+    )
 
 
 class ProxmoxEndpointImportForm(NetBoxModelImportForm):
@@ -125,6 +157,18 @@ class ProxmoxEndpointImportForm(NetBoxModelImportForm):
         ),
     )
     mode = CSVChoiceField(choices=ProxmoxModeChoices, required=False)
+    site = CSVModelChoiceField(
+        queryset=Site.objects.all(),
+        to_field_name="slug",
+        required=False,
+        label=_("Site"),
+    )
+    tenant = CSVModelChoiceField(
+        queryset=Tenant.objects.all(),
+        to_field_name="slug",
+        required=False,
+        label=_("Tenant"),
+    )
 
     class Meta:
         model = ProxmoxEndpoint
@@ -141,6 +185,11 @@ class ProxmoxEndpointImportForm(NetBoxModelImportForm):
             "token_name",
             "token_value",
             "verify_ssl",
+            "timeout",
+            "max_retries",
+            "retry_backoff",
+            "site",
+            "tenant",
             "tags",
         )
 

@@ -21,6 +21,8 @@ def _proxmox_export_fieldnames(include_sensitive: bool) -> tuple[str, ...]:
         "repoid",
         "username",
         "verify_ssl",
+        "site",
+        "tenant",
         "tags",
     )
     if include_sensitive:
@@ -52,6 +54,8 @@ def _serialize_proxmox_endpoint(
         "repoid": endpoint.repoid or "",
         "username": endpoint.username or "",
         "verify_ssl": "true" if endpoint.verify_ssl else "false",
+        "site": endpoint.site.slug if endpoint.site else "",
+        "tenant": endpoint.tenant.slug if endpoint.tenant else "",
         "tags": tags_value,
         "token_name": endpoint.token_name or "",
     }
