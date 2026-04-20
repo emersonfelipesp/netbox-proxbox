@@ -8,7 +8,7 @@ from netbox.api.fields import ChoiceField
 from netbox.api.serializers import NetBoxModelSerializer, WritableNestedSerializer
 from dcim.api.serializers_.sites import SiteSerializer
 from ipam.api.serializers_.nested import NestedIPAddressSerializer
-from tenancy.api.serializers_.nested import NestedTenantSerializer
+from tenancy.api.serializers_.tenants import TenantSerializer
 from rest_framework import serializers
 from users.models import Token
 
@@ -35,7 +35,7 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
     domain = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     mode = ChoiceField(choices=ProxmoxModeChoices)
     site = SiteSerializer(nested=True, required=False, allow_null=True)
-    tenant = NestedTenantSerializer(required=False, allow_null=True)
+    tenant = TenantSerializer(nested=True, required=False, allow_null=True)
 
     class Meta:
         model = ProxmoxEndpoint
