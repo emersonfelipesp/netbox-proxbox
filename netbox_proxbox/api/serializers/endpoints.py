@@ -6,7 +6,7 @@ from django.utils.translation import gettext as _
 
 from netbox.api.fields import ChoiceField
 from netbox.api.serializers import NetBoxModelSerializer, WritableNestedSerializer
-from dcim.api.serializers_.nested import NestedSiteSerializer
+from dcim.api.serializers_.sites import SiteSerializer
 from ipam.api.serializers_.nested import NestedIPAddressSerializer
 from tenancy.api.serializers_.nested import NestedTenantSerializer
 from rest_framework import serializers
@@ -34,7 +34,7 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
     ip_address = NestedIPAddressSerializer(required=False, allow_null=True)
     domain = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     mode = ChoiceField(choices=ProxmoxModeChoices)
-    site = NestedSiteSerializer(required=False, allow_null=True)
+    site = SiteSerializer(nested=True, required=False, allow_null=True)
     tenant = NestedTenantSerializer(required=False, allow_null=True)
 
     class Meta:
