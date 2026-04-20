@@ -29,6 +29,8 @@ import sys
 _REPO_ROOT = pathlib.Path(__file__).parent.parent
 sys.path.insert(0, str(_REPO_ROOT / "tests" / "e2e"))
 
+import requests  # noqa: E402
+
 from stack_common import must_getenv, wait_http_ok  # noqa: E402
 from stack_setup import (  # noqa: E402
     ensure_netbox_plugin_endpoints,
@@ -72,6 +74,21 @@ def seed_data(
         netbox_token,
         proxbox_api_key=proxbox_api_key,
     )
+
+    # Bootstrap proxbox-api custom fields in NetBox (skipped at startup due to
+    # PROXBOX_SKIP_NETBOX_BOOTSTRAP=true; must be called manually after the
+    # NetBox endpoint is configured or syncs fail with "custom field does not exist").
+    print("Bootstrapping proxbox-api custom fields in NetBox...")
+    cf_resp = requests.get(
+        f"{proxbox_base_url}/extras/custom-fields/create",
+        headers={"X-Proxbox-API-Key": proxbox_api_key},
+        timeout=120,
+    )
+    print(f"Custom fields bootstrap: HTTP {cf_resp.status_code}")
+    if cf_resp.status_code >= 400:
+        raise AssertionError(
+            f"Custom fields bootstrap failed: {cf_resp.status_code} {cf_resp.text[:300]}"
+        )
 
     print("Creating NetBox plugin endpoint objects...")
     ensure_netbox_plugin_endpoints(
