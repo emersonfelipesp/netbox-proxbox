@@ -75,19 +75,55 @@ def seed_data(
         proxbox_api_key=proxbox_api_key,
     )
 
-    # Bootstrap proxbox-api custom fields in NetBox (skipped at startup due to
-    # PROXBOX_SKIP_NETBOX_BOOTSTRAP=true; must be called manually after the
-    # NetBox endpoint is configured or syncs fail with "custom field does not exist").
-    print("Bootstrapping proxbox-api custom fields in NetBox...")
-    cf_resp = requests.get(
-        f"{proxbox_base_url}/extras/custom-fields/create",
-        headers={"X-Proxbox-API-Key": proxbox_api_key},
-        timeout=120,
+    # proxbox-api sets proxmox_last_updated on every synced NetBox object.
+    # The bootstrap is skipped at startup (PROXBOX_SKIP_NETBOX_BOOTSTRAP=true),
+    # so register the custom field directly via the NetBox REST API before syncing.
+    print("Registering proxmox_last_updated custom field in NetBox...")
+    _CF_PAYLOAD = {
+        "object_types": [
+            "dcim.device",
+            "dcim.devicerole",
+            "dcim.devicetype",
+            "dcim.interface",
+            "dcim.manufacturer",
+            "dcim.site",
+            "ipam.ipaddress",
+            "ipam.vlan",
+            "virtualization.cluster",
+            "virtualization.clustertype",
+            "virtualization.virtualdisk",
+            "virtualization.virtualmachine",
+            "virtualization.vminterface",
+        ],
+        "type": "datetime",
+        "name": "proxmox_last_updated",
+        "label": "Last Updated",
+        "description": "Proxmox Plugin last modified this object",
+        "ui_visible": "always",
+        "ui_editable": "hidden",
+        "weight": 200,
+        "filter_logic": "loose",
+        "search_weight": 1000,
+        "group_name": "Proxmox",
+    }
+    _cf_headers = {
+        "Authorization": f"Token {netbox_token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    cf_resp = requests.post(
+        f"{netbox_base_url}/api/extras/custom-fields/",
+        json=_CF_PAYLOAD,
+        headers=_cf_headers,
+        timeout=30,
     )
-    print(f"Custom fields bootstrap: HTTP {cf_resp.status_code}")
-    if cf_resp.status_code >= 400:
+    if cf_resp.status_code == 201:
+        print("Custom field proxmox_last_updated: created")
+    elif cf_resp.status_code == 400 and "already exists" in cf_resp.text:
+        print("Custom field proxmox_last_updated: already exists, skipping")
+    else:
         raise AssertionError(
-            f"Custom fields bootstrap failed: {cf_resp.status_code} {cf_resp.text[:300]}"
+            f"Custom field registration failed: HTTP {cf_resp.status_code} {cf_resp.text[:300]}"
         )
 
     print("Creating NetBox plugin endpoint objects...")
