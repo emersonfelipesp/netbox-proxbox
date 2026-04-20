@@ -82,23 +82,29 @@ def seed_data(
         proxbox_api_key=proxbox_api_key,
     )
 
-    # Seed devices (cluster/node) first so proxbox-api can resolve VM dependencies.
-    # full-update fails at the virtual-machines stage if devices don't exist yet.
-    print("Syncing devices (cluster/nodes) first...")
-    trigger_and_wait_sync(
-        netbox_base_url,
-        netbox_token,
-        route="/plugins/proxbox/sync/devices/",
-        expected_name_fragment="devices",
-    )
-
-    print("Triggering full-update sync and waiting for completion...")
-    trigger_and_wait_sync(
-        netbox_base_url,
-        netbox_token,
-        route="/plugins/proxbox/sync/full-update/",
-        expected_name_fragment="full update",
-    )
+    # Run each sync stage individually in dependency order (same as e2e tests).
+    # The full-update route streams all stages in one proxbox-api call and fails
+    # when VM deps (cluster, device, role) haven't been committed yet at that point.
+    _STAGES = [
+        ("/plugins/proxbox/sync/devices/", "devices"),
+        ("/plugins/proxbox/sync/storage/", "storage"),
+        ("/plugins/proxbox/sync/virtual-machines/", "virtual machines"),
+        ("/plugins/proxbox/sync/virtual-machines/virtual-disks/", "virtual disks"),
+        ("/plugins/proxbox/sync/virtual-machines/backups/", "vm backups"),
+        ("/plugins/proxbox/sync/virtual-machines/snapshots/", "vm snapshots"),
+        ("/plugins/proxbox/sync/network-interfaces/", "network interfaces"),
+        ("/plugins/proxbox/sync/ip-addresses/", "ip addresses"),
+        ("/plugins/proxbox/sync/replications/", "replications"),
+        ("/plugins/proxbox/sync/backup-routines/", "backup routines"),
+    ]
+    for route, fragment in _STAGES:
+        print(f"  Syncing stage: {fragment}...")
+        trigger_and_wait_sync(
+            netbox_base_url,
+            netbox_token,
+            route=route,
+            expected_name_fragment=fragment,
+        )
     print("Sync complete. NetBox is populated with mock data.")
 
 
