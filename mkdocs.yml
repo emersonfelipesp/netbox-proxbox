@@ -110,6 +110,7 @@ nav:
     - Operations: 'api/operations.md'
     - Settings: 'api/settings.md'
   - Features:
+    - Screenshots: 'features/screenshots.md'
     - E2E Docker Testing: 'features/e2e-docker-testing.md'
     - Synchronized Data: 'features/synchronized-data.md'
     - Scheduled Sync: 'features/scheduled-sync.md'

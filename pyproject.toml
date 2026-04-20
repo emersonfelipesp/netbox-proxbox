@@ -45,6 +45,10 @@ e2e = [
     "fastapi>=0.116.1",
     "uvicorn>=0.35.0",
 ]
+screenshot = [
+    "playwright>=1.58.0",
+    "requests>=2.33.0",
+]
 
 [build-system]
 requires = ["hatchling"]
