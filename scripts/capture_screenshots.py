@@ -82,6 +82,16 @@ def seed_data(
         proxbox_api_key=proxbox_api_key,
     )
 
+    # Seed devices (cluster/node) first so proxbox-api can resolve VM dependencies.
+    # full-update fails at the virtual-machines stage if devices don't exist yet.
+    print("Syncing devices (cluster/nodes) first...")
+    trigger_and_wait_sync(
+        netbox_base_url,
+        netbox_token,
+        route="/plugins/proxbox/sync/devices/",
+        expected_name_fragment="devices",
+    )
+
     print("Triggering full-update sync and waiting for completion...")
     trigger_and_wait_sync(
         netbox_base_url,
