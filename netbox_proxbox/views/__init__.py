@@ -219,8 +219,7 @@ class CommunityView(ConditionalLoginRequiredMixin, View):
         return render(request, self.template_name, {"title": "Join our Community!"})
 
 
-class ClustersView(_ClustersView):
-    """Compatibility wrapper for resource list views kept in this module surface."""
+ClustersView = _ClustersView
 
 
 class NodesView(_NodesView):

@@ -291,8 +291,8 @@ def _serialize_cluster(cluster: object, request: Request) -> dict:
         "group": _nested(cluster.group, request),
         "site": _nested(cluster._site, request),
         "tenant": _nested(cluster.tenant, request),
-        "device_count": getattr(cluster, "device_count", cluster.devices.count()),
-        "vm_count": getattr(cluster, "vm_count", cluster.virtual_machines.count()),
+        "device_count": cluster.device_count,
+        "vm_count": cluster.vm_count,
     }
 
 

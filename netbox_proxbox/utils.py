@@ -156,6 +156,19 @@ def get_proxbox_tagged_object_ids(
     return list(qs)
 
 
+def resolve_vm_type(vm: object) -> str:
+    """Return 'lxc' or 'qemu' for a VirtualMachine, preferring native VirtualMachineType."""
+    vm_type_obj = getattr(vm, "virtual_machine_type", None)
+    if vm_type_obj and hasattr(vm_type_obj, "slug"):
+        slug = str(vm_type_obj.slug)
+        if "lxc" in slug:
+            return "lxc"
+        if "qemu" in slug:
+            return "qemu"
+    cf = getattr(vm, "custom_field_data", None) or {}
+    return str(cf.get("proxmox_vm_type") or cf.get("cf_proxmox_vm_type") or "qemu")
+
+
 def get_fastapi_url(endpoint: FastAPIUrlSource) -> dict[str, object]:
     """Compute HTTP/WebSocket URLs and TLS settings for a FastAPI endpoint model."""
     ip = get_ip_address_host(getattr(endpoint, "ip_address", None))

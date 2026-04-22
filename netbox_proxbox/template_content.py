@@ -10,6 +10,7 @@ from utilities.permissions import get_permission_for_model
 from virtualization.models import VirtualMachine
 
 from netbox_proxbox.jobs import is_proxbox_sync_job
+from netbox_proxbox.utils import resolve_vm_type
 from netbox_proxbox.models import (
     ProxmoxCluster,
     ProxmoxNode,
@@ -174,23 +175,7 @@ class ProxboxVirtualMachineTemplateExtension(PluginTemplateExtension):
         vmid = obj.custom_field_data.get("proxmox_vm_id") or obj.custom_field_data.get(
             "cf_proxmox_vm_id"
         )
-        vm_type_obj = getattr(obj, "virtual_machine_type", None)
-        if vm_type_obj and hasattr(vm_type_obj, "slug"):
-            slug = str(vm_type_obj.slug).lower()
-            if "lxc" in slug:
-                vm_type = "lxc"
-            elif "qemu" in slug:
-                vm_type = "qemu"
-            else:
-                cf = getattr(obj, "custom_field_data", {}) or {}
-                vm_type = str(
-                    cf.get("proxmox_vm_type") or cf.get("cf_proxmox_vm_type") or "qemu"
-                )
-        else:
-            cf = getattr(obj, "custom_field_data", {}) or {}
-            vm_type = str(
-                cf.get("proxmox_vm_type") or cf.get("cf_proxmox_vm_type") or "qemu"
-            )
+        vm_type = resolve_vm_type(obj)
 
         node = ""
         if hasattr(obj, "device") and obj.device:

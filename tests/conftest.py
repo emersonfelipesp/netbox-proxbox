@@ -467,6 +467,19 @@ def load_plugin_module(
         str(value).split("/")[0] if value else "127.0.0.1"
     )
 
+    def _resolve_vm_type_stub(vm: object) -> str:
+        vm_type_obj = getattr(vm, "virtual_machine_type", None)
+        if vm_type_obj and hasattr(vm_type_obj, "slug"):
+            slug = str(vm_type_obj.slug)
+            if "lxc" in slug:
+                return "lxc"
+            if "qemu" in slug:
+                return "qemu"
+        cf = getattr(vm, "custom_field_data", None) or {}
+        return str(cf.get("proxmox_vm_type") or cf.get("cf_proxmox_vm_type") or "qemu")
+
+    utils_module.resolve_vm_type = _resolve_vm_type_stub
+
     stub_modules = {
         "django": django_module,
         "django.http": django_http,

@@ -7,7 +7,10 @@ from netbox import configuration
 from utilities.views import ConditionalLoginRequiredMixin
 from virtualization.models import Cluster, VirtualDisk, VirtualMachine, VMInterface
 
-from netbox_proxbox.utils import get_fastapi_context_for_request
+from netbox_proxbox.utils import (
+    get_fastapi_context_for_request,
+    get_proxbox_tagged_object_ids,
+)
 
 
 class NodesView(ConditionalLoginRequiredMixin, View):
@@ -360,31 +363,10 @@ class ClustersView(ConditionalLoginRequiredMixin, View):
 
     def get(self, request: HttpRequest) -> HttpResponse:
         """Load tagged clusters and FastAPI URL hints for the clusters template."""
-        from django.contrib.contenttypes.models import ContentType
-        from extras.models import Tag, TaggedItem
-
         plugin_configuration = getattr(configuration, "PLUGINS_CONFIG", {})
         fastapi_info = get_fastapi_context_for_request(request)
 
-        proxbox_tag = Tag.objects.filter(slug="proxbox").first()
-        if not proxbox_tag:
-            return render(
-                request,
-                self.template,
-                {
-                    "configuration": plugin_configuration,
-                    "fastapi_url": fastapi_info.get("http_url", ""),
-                    "fastapi_websocket_url": fastapi_info.get("websocket_url", ""),
-                    "clusters": [],
-                },
-            )
-
-        cluster_content_type = ContentType.objects.get_for_model(Cluster)
-        tagged_cluster_ids = list(
-            TaggedItem.objects.filter(
-                tag=proxbox_tag, content_type=cluster_content_type
-            ).values_list("object_id", flat=True)[:100]
-        )
+        tagged_cluster_ids = get_proxbox_tagged_object_ids(Cluster, limit=100)
         clusters = []
         if tagged_cluster_ids:
             from django.db.models import Count
