@@ -176,11 +176,21 @@ class ProxboxVirtualMachineTemplateExtension(PluginTemplateExtension):
         )
         vm_type_obj = getattr(obj, "virtual_machine_type", None)
         if vm_type_obj and hasattr(vm_type_obj, "slug"):
-            vm_type = "lxc" if "lxc" in str(vm_type_obj.slug) else "qemu"
+            slug = str(vm_type_obj.slug).lower()
+            if "lxc" in slug:
+                vm_type = "lxc"
+            elif "qemu" in slug:
+                vm_type = "qemu"
+            else:
+                cf = getattr(obj, "custom_field_data", {}) or {}
+                vm_type = str(
+                    cf.get("proxmox_vm_type") or cf.get("cf_proxmox_vm_type") or "qemu"
+                )
         else:
-            vm_type = obj.custom_field_data.get(
-                "proxmox_vm_type"
-            ) or obj.custom_field_data.get("cf_proxmox_vm_type", "qemu")
+            cf = getattr(obj, "custom_field_data", {}) or {}
+            vm_type = str(
+                cf.get("proxmox_vm_type") or cf.get("cf_proxmox_vm_type") or "qemu"
+            )
 
         node = ""
         if hasattr(obj, "device") and obj.device:

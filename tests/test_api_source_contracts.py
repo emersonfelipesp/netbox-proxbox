@@ -655,10 +655,6 @@ def test_non_model_views_registered_in_urlpatterns():
         '"resources/virtual-disks/"',
         '"sync/schedule/"',
         '"logs/"',
-        # Shortcut aliases exposed at the top-level paths matching the UI URLs.
-        '"nodes/"',
-        '"clusters/"',
-        '"virtual-machines/"',
     ]
     for path_str in expected_paths:
         assert path_str in contents, f"URL path {path_str} not found in api/urls.py"

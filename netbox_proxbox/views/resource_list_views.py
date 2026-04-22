@@ -113,13 +113,14 @@ class VirtualMachinesView(ConditionalLoginRequiredMixin, View):
                 )
                 .prefetch_related("interfaces__ip_addresses")
             )
+            from django.db.models import Q
+
             virtual_machines = list(
-                base_qs.filter(virtual_machine_type__slug="qemu-virtual-machine")
-            )
-            if not virtual_machines:
-                virtual_machines = list(
-                    base_qs.filter(custom_field_data__proxmox_vm_type="qemu")
+                base_qs.filter(
+                    Q(virtual_machine_type__slug="qemu-virtual-machine")
+                    | Q(custom_field_data__proxmox_vm_type="qemu")
                 )
+            )
 
         return render(
             request,
@@ -180,13 +181,14 @@ class LXCContainersView(ConditionalLoginRequiredMixin, View):
                 )
                 .prefetch_related("interfaces__ip_addresses")
             )
+            from django.db.models import Q
+
             lxc_containers = list(
-                base_qs.filter(virtual_machine_type__slug="lxc-container")
-            )
-            if not lxc_containers:
-                lxc_containers = list(
-                    base_qs.filter(custom_field_data__proxmox_vm_type="lxc")
+                base_qs.filter(
+                    Q(virtual_machine_type__slug="lxc-container")
+                    | Q(custom_field_data__proxmox_vm_type="lxc")
                 )
+            )
 
         return render(
             request,
@@ -385,11 +387,19 @@ class ClustersView(ConditionalLoginRequiredMixin, View):
         )
         clusters = []
         if tagged_cluster_ids:
+            from django.db.models import Count
+
             clusters = list(
                 Cluster.objects.restrict(request.user, "view")
                 .filter(id__in=tagged_cluster_ids)
                 .select_related("type", "group", "_site", "tenant")
+                .annotate(
+                    device_count=Count("devices", distinct=True),
+                    vm_count=Count("virtual_machines", distinct=True),
+                )
             )
+            for cluster in clusters:
+                cluster.site_display = cluster._site
 
         return render(
             request,

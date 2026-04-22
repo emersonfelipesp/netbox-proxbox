@@ -291,8 +291,8 @@ def _serialize_cluster(cluster: object, request: Request) -> dict:
         "group": _nested(cluster.group, request),
         "site": _nested(cluster._site, request),
         "tenant": _nested(cluster.tenant, request),
-        "device_count": cluster.devices.count(),
-        "vm_count": cluster.virtual_machines.count(),
+        "device_count": getattr(cluster, "device_count", cluster.devices.count()),
+        "vm_count": getattr(cluster, "vm_count", cluster.virtual_machines.count()),
     }
 
 
@@ -617,14 +617,16 @@ class NodesAPIView(APIView):
             .prefetch_related("interfaces__ip_addresses")
         )
 
-        # Build a name→ProxmoxNode lookup to enrich each device with live Proxmox metrics.
-        device_names = [d.name for d in devices]
-        nodes_by_name = {
-            n.name: n for n in ProxmoxNode.objects.filter(name__in=device_names)
+        # Key by the authoritative FK to avoid collisions when multiple Proxmox endpoints
+        # have nodes with the same name (e.g. the default "pve1" across clusters).
+        device_ids = [d.pk for d in devices]
+        nodes_by_device_id = {
+            n.netbox_device_id: n
+            for n in ProxmoxNode.objects.filter(netbox_device_id__in=device_ids)
         }
 
         results = [
-            _serialize_device(d, request, proxmox_node=nodes_by_name.get(d.name))
+            _serialize_device(d, request, proxmox_node=nodes_by_device_id.get(d.pk))
             for d in devices
         ]
         return Response({"count": len(results), "results": results})
@@ -652,11 +654,14 @@ class _ProxboxVMListAPIView(APIView):
             .select_related("site", "cluster", "role", "tenant", "platform")
             .prefetch_related("interfaces__ip_addresses")
         )
-        # Mirror the UI strategy: try virtual_machine_type slug first, fall
-        # back to the legacy custom field so both sync paths return results.
-        vms = list(base_qs.filter(virtual_machine_type__slug=self.vm_type_slug))
-        if not vms:
-            vms = list(base_qs.filter(custom_field_data__proxmox_vm_type=self.vm_type))
+        from django.db.models import Q
+
+        vms = list(
+            base_qs.filter(
+                Q(virtual_machine_type__slug=self.vm_type_slug)
+                | Q(custom_field_data__proxmox_vm_type=self.vm_type)
+            )
+        )
         results = [_serialize_vm(vm, request) for vm in vms]
         return Response({"count": len(results), "results": results})
 
@@ -905,10 +910,16 @@ class ClustersAPIView(APIView):
         if not tagged_ids:
             return Response({"count": 0, "results": []})
 
+        from django.db.models import Count
+
         clusters = list(
             Cluster.objects.restrict(request.user, "view")
             .filter(id__in=tagged_ids)
             .select_related("type", "group", "_site", "tenant")
+            .annotate(
+                device_count=Count("devices", distinct=True),
+                vm_count=Count("virtual_machines", distinct=True),
+            )
         )
         results = [_serialize_cluster(c, request) for c in clusters]
         return Response({"count": len(results), "results": results})

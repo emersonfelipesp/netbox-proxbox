@@ -42,7 +42,7 @@
                                     </a>
                                 </td>
                                 <td>
-                                    <span class="badge text-bg-{{ cluster.status_color }}">{{ cluster.get_status_display }}</span>
+                                    <span class="badge text-bg-{{ cluster.get_status_color }}">{{ cluster.get_status_display }}</span>
                                 </td>
                                 <td>
                                     {% if cluster.type %}
@@ -59,8 +59,8 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    {% if cluster.site %}
-                                        <a href="{% url 'dcim:site' cluster.site.pk %}" class="text-decoration-none">{{ cluster.site }}</a>
+                                    {% if cluster.site_display %}
+                                        <a href="{% url 'dcim:site' cluster.site_display.pk %}" class="text-decoration-none">{{ cluster.site_display }}</a>
                                     {% else %}
                                         <span class="text-muted">—</span>
                                     {% endif %}
@@ -72,8 +72,8 @@
                                         <span class="text-muted">—</span>
                                     {% endif %}
                                 </td>
-                                <td class="text-center">{{ cluster.devices.count }}</td>
-                                <td class="text-center">{{ cluster.virtual_machines.count }}</td>
+                                <td class="text-center">{{ cluster.device_count }}</td>
+                                <td class="text-center">{{ cluster.vm_count }}</td>
                                 <td class="text-end text-nowrap noprint">
                                     <a href="{% url 'virtualization:cluster' cluster.pk %}" class="btn btn-sm btn-outline-dark" title="View">
                                         <span class="mdi mdi-eye" aria-hidden="true"></span>
