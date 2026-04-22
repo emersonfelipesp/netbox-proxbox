@@ -40,6 +40,7 @@ dev = [
 test = [
     "pytest>=9.0.2",
     "pytest-cov>=7.1.0",
+    "proxbox-api",
 ]
 e2e = [
     "fastapi>=0.116.1",
@@ -76,6 +77,9 @@ ignore = ["F403", "F401", "E501", "W293"]
 
 [tool.ruff.format]
 quote-style = "double"
+
+[tool.uv.sources]
+proxbox-api = { path = "../proxbox-api", editable = true }
 
 [dependency-groups]
 dev = [
