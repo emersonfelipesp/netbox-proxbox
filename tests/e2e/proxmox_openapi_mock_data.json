@@ -11,7 +11,7 @@
       {
         "type": "cluster",
         "name": "e2e-cluster",
-        "version": 1
+        "version": 3
       },
       {
         "type": "node",
@@ -20,6 +20,24 @@
         "ip": "10.10.10.11",
         "online": 1,
         "local": 1,
+        "level": ""
+      },
+      {
+        "type": "node",
+        "name": "pve02",
+        "nodeid": 2,
+        "ip": "10.10.10.12",
+        "online": 1,
+        "local": 0,
+        "level": ""
+      },
+      {
+        "type": "node",
+        "name": "pve03",
+        "nodeid": 3,
+        "ip": "10.10.10.13",
+        "online": 1,
+        "local": 0,
         "level": ""
       }
     ]
@@ -31,6 +49,16 @@
           "name": "pve01",
           "nodeid": 1,
           "pve_fp": "AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99"
+        },
+        {
+          "name": "pve02",
+          "nodeid": 2,
+          "pve_fp": "BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA"
+        },
+        {
+          "name": "pve03",
+          "nodeid": 3,
+          "pve_fp": "CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB"
         }
       ]
     }
@@ -43,7 +71,32 @@
         "node": "pve01",
         "name": "pve01",
         "status": "online",
-        "maxcpu": 8
+        "maxcpu": 16,
+        "maxmem": 68719476736,
+        "mem": 12884901888,
+        "cpu": 0.12
+      },
+      {
+        "id": "node/pve02",
+        "type": "node",
+        "node": "pve02",
+        "name": "pve02",
+        "status": "online",
+        "maxcpu": 32,
+        "maxmem": 137438953472,
+        "mem": 34359738368,
+        "cpu": 0.35
+      },
+      {
+        "id": "node/pve03",
+        "type": "node",
+        "node": "pve03",
+        "name": "pve03",
+        "status": "online",
+        "maxcpu": 16,
+        "maxmem": 68719476736,
+        "mem": 8589934592,
+        "cpu": 0.08
       },
       {
         "id": "qemu/101",
@@ -57,6 +110,61 @@
         "maxdisk": 21474836480
       },
       {
+        "id": "qemu/103",
+        "type": "qemu",
+        "vmid": 103,
+        "name": "web-server-01",
+        "node": "pve01",
+        "status": "running",
+        "maxcpu": 4,
+        "maxmem": 4294967296,
+        "maxdisk": 53687091200
+      },
+      {
+        "id": "qemu/104",
+        "type": "qemu",
+        "vmid": 104,
+        "name": "db-primary-01",
+        "node": "pve02",
+        "status": "running",
+        "maxcpu": 8,
+        "maxmem": 17179869184,
+        "maxdisk": 214748364800
+      },
+      {
+        "id": "qemu/105",
+        "type": "qemu",
+        "vmid": 105,
+        "name": "gitlab-runner-01",
+        "node": "pve02",
+        "status": "stopped",
+        "maxcpu": 4,
+        "maxmem": 8589934592,
+        "maxdisk": 107374182400
+      },
+      {
+        "id": "qemu/106",
+        "type": "qemu",
+        "vmid": 106,
+        "name": "monitoring-01",
+        "node": "pve03",
+        "status": "running",
+        "maxcpu": 2,
+        "maxmem": 4294967296,
+        "maxdisk": 53687091200
+      },
+      {
+        "id": "qemu/107",
+        "type": "qemu",
+        "vmid": 107,
+        "name": "backup-server-01",
+        "node": "pve03",
+        "status": "running",
+        "maxcpu": 2,
+        "maxmem": 2147483648,
+        "maxdisk": 107374182400
+      },
+      {
         "id": "lxc/102",
         "type": "lxc",
         "vmid": 102,
@@ -66,6 +174,39 @@
         "maxcpu": 1,
         "maxmem": 1073741824,
         "maxdisk": 10737418240
+      },
+      {
+        "id": "lxc/108",
+        "type": "lxc",
+        "vmid": 108,
+        "name": "nginx-proxy-01",
+        "node": "pve01",
+        "status": "running",
+        "maxcpu": 2,
+        "maxmem": 2147483648,
+        "maxdisk": 21474836480
+      },
+      {
+        "id": "lxc/109",
+        "type": "lxc",
+        "vmid": 109,
+        "name": "mail-relay-01",
+        "node": "pve02",
+        "status": "running",
+        "maxcpu": 1,
+        "maxmem": 1073741824,
+        "maxdisk": 10737418240
+      },
+      {
+        "id": "lxc/110",
+        "type": "lxc",
+        "vmid": 110,
+        "name": "dev-sandbox-01",
+        "node": "pve03",
+        "status": "stopped",
+        "maxcpu": 4,
+        "maxmem": 4294967296,
+        "maxdisk": 53687091200
       }
     ]
   },
@@ -76,14 +217,86 @@
         "type": "dir",
         "content": "images,rootdir",
         "shared": 0,
-        "nodes": "pve01"
+        "nodes": "pve01,pve02,pve03"
       },
       {
         "storage": "backup",
         "type": "dir",
         "content": "backup",
         "shared": 1,
-        "nodes": "pve01"
+        "nodes": "pve01,pve02,pve03"
+      },
+      {
+        "storage": "ceph-pool",
+        "type": "rbd",
+        "content": "images,rootdir",
+        "shared": 1,
+        "nodes": "pve01,pve02,pve03",
+        "pool": "rbd",
+        "monhost": "10.10.10.11,10.10.10.12,10.10.10.13"
+      },
+      {
+        "storage": "nfs-backup",
+        "type": "nfs",
+        "content": "backup",
+        "shared": 1,
+        "nodes": "pve01,pve02,pve03",
+        "server": "10.10.10.20",
+        "export": "/mnt/backups"
+      }
+    ]
+  },
+  "/api2/json/cluster/backup": {
+    "data": [
+      {
+        "id": "backup-job-01",
+        "enabled": 1,
+        "schedule": "0 2 * * *",
+        "storage": "backup",
+        "vmid": "103,104",
+        "comment": "Nightly VM backup",
+        "keep-last": 7,
+        "keep-daily": 7,
+        "keep-weekly": 4,
+        "mode": "snapshot",
+        "compress": "zstd",
+        "mailnotification": "failure"
+      },
+      {
+        "id": "backup-job-02",
+        "enabled": 1,
+        "schedule": "0 3 * * 0",
+        "storage": "nfs-backup",
+        "vmid": "all",
+        "comment": "Weekly full backup to NFS",
+        "keep-last": 4,
+        "mode": "stop",
+        "compress": "lzo",
+        "mailnotification": "always"
+      }
+    ]
+  },
+  "/api2/json/cluster/replication": {
+    "data": [
+      {
+        "id": "104-0",
+        "guest": 104,
+        "target": "pve03",
+        "schedule": "*/15",
+        "type": "local",
+        "comment": "DB primary replication to pve03",
+        "disable": false,
+        "rate": 0
+      },
+      {
+        "id": "103-0",
+        "guest": 103,
+        "target": "pve02",
+        "schedule": "*/30",
+        "type": "local",
+        "comment": "Web server replication to pve02",
+        "disable": false,
+        "rate": 0
       }
     ]
   },
@@ -101,6 +314,86 @@
       "node": "pve01"
     }
   },
+  "/api2/json/nodes/pve01/qemu/103/config": {
+    "data": {
+      "digest": "ccddee001122334455667788990011aabbccddee",
+      "name": "web-server-01",
+      "onboot": 1,
+      "agent": "1",
+      "searchdomain": "lab.local",
+      "scsi0": "ceph-pool:vm-103-disk-0,size=50G",
+      "net0": "virtio=AA:BB:CC:01:03:01,bridge=vmbr0",
+      "sockets": 1,
+      "cores": 4,
+      "memory": "4096",
+      "node": "pve01",
+      "tags": "web;production"
+    }
+  },
+  "/api2/json/nodes/pve02/qemu/104/config": {
+    "data": {
+      "digest": "ddeeff112233445566778899001122334455aabb",
+      "name": "db-primary-01",
+      "onboot": 1,
+      "agent": "1",
+      "searchdomain": "lab.local",
+      "scsi0": "ceph-pool:vm-104-disk-0,size=200G",
+      "net0": "virtio=AA:BB:CC:01:04:01,bridge=vmbr0",
+      "sockets": 2,
+      "cores": 4,
+      "memory": "16384",
+      "node": "pve02",
+      "tags": "database;production"
+    }
+  },
+  "/api2/json/nodes/pve02/qemu/105/config": {
+    "data": {
+      "digest": "eeff00223344556677889900112233445566bbcc",
+      "name": "gitlab-runner-01",
+      "onboot": 0,
+      "agent": "1",
+      "searchdomain": "lab.local",
+      "scsi0": "local-lvm:vm-105-disk-0,size=100G",
+      "net0": "virtio=AA:BB:CC:01:05:01,bridge=vmbr0",
+      "sockets": 1,
+      "cores": 4,
+      "memory": "8192",
+      "node": "pve02",
+      "tags": "ci;development"
+    }
+  },
+  "/api2/json/nodes/pve03/qemu/106/config": {
+    "data": {
+      "digest": "ff0011334455667788990011223344556677ccdd",
+      "name": "monitoring-01",
+      "onboot": 1,
+      "agent": "1",
+      "searchdomain": "lab.local",
+      "scsi0": "local-lvm:vm-106-disk-0,size=50G",
+      "net0": "virtio=AA:BB:CC:01:06:01,bridge=vmbr0",
+      "sockets": 1,
+      "cores": 2,
+      "memory": "4096",
+      "node": "pve03",
+      "tags": "monitoring;infrastructure"
+    }
+  },
+  "/api2/json/nodes/pve03/qemu/107/config": {
+    "data": {
+      "digest": "001122445566778899001122334455667788ddee",
+      "name": "backup-server-01",
+      "onboot": 1,
+      "agent": "1",
+      "searchdomain": "lab.local",
+      "scsi0": "local-lvm:vm-107-disk-0,size=100G",
+      "net0": "virtio=AA:BB:CC:01:07:01,bridge=vmbr0",
+      "sockets": 1,
+      "cores": 2,
+      "memory": "2048",
+      "node": "pve03",
+      "tags": "backup;infrastructure"
+    }
+  },
   "/api2/json/nodes/pve01/lxc/102/config": {
     "data": {
       "digest": "bbccddeeff001122334455667788990011aabbcc",
@@ -114,7 +407,64 @@
       "node": "pve01"
     }
   },
+  "/api2/json/nodes/pve01/lxc/108/config": {
+    "data": {
+      "digest": "1122334455667788990011aabbccddeeff001122",
+      "hostname": "nginx-proxy-01",
+      "onboot": 1,
+      "unprivileged": 1,
+      "rootfs": "local-lvm:subvol-108-disk-0,size=20G",
+      "net0": "name=eth0,bridge=vmbr0,hwaddr=AA:BB:CC:02:08:01,ip=dhcp",
+      "cores": 2,
+      "memory": 2048,
+      "node": "pve01",
+      "tags": "web;proxy"
+    }
+  },
+  "/api2/json/nodes/pve02/lxc/109/config": {
+    "data": {
+      "digest": "2233445566778899001122aabbccddeeff001122",
+      "hostname": "mail-relay-01",
+      "onboot": 1,
+      "unprivileged": 1,
+      "rootfs": "local-lvm:subvol-109-disk-0,size=10G",
+      "net0": "name=eth0,bridge=vmbr0,hwaddr=AA:BB:CC:02:09:01,ip=dhcp",
+      "cores": 1,
+      "memory": 1024,
+      "node": "pve02",
+      "tags": "mail;infrastructure"
+    }
+  },
+  "/api2/json/nodes/pve03/lxc/110/config": {
+    "data": {
+      "digest": "3344556677889900112233aabbccddeeff001122",
+      "hostname": "dev-sandbox-01",
+      "onboot": 0,
+      "unprivileged": 0,
+      "rootfs": "local-lvm:subvol-110-disk-0,size=50G",
+      "net0": "name=eth0,bridge=vmbr0,hwaddr=AA:BB:CC:02:10:01,ip=dhcp",
+      "cores": 4,
+      "memory": 4096,
+      "node": "pve03",
+      "tags": "development"
+    }
+  },
   "/api2/json/nodes/pve01/storage/local/content": {
+    "data": []
+  },
+  "/api2/json/nodes/pve02/storage/local/content": {
+    "data": []
+  },
+  "/api2/json/nodes/pve03/storage/local/content": {
+    "data": []
+  },
+  "/api2/json/nodes/pve01/storage/ceph-pool/content": {
+    "data": []
+  },
+  "/api2/json/nodes/pve02/storage/ceph-pool/content": {
+    "data": []
+  },
+  "/api2/json/nodes/pve03/storage/ceph-pool/content": {
     "data": []
   },
   "/api2/json/nodes/pve01/storage/backup/content": {
@@ -142,6 +492,206 @@
         "notes": "e2e backup lxc",
         "node": "pve01",
         "storage": "backup"
+      },
+      {
+        "content": "backup",
+        "vmid": 103,
+        "volid": "backup:103/vzdump-qemu-103-2026_01_15-02_00_00.vma.zst",
+        "size": 21474836,
+        "ctime": 1768435200,
+        "format": "tzst",
+        "subtype": "qemu",
+        "notes": "Nightly backup - web-server-01",
+        "node": "pve01",
+        "storage": "backup"
+      },
+      {
+        "content": "backup",
+        "vmid": 103,
+        "volid": "backup:103/vzdump-qemu-103-2026_01_16-02_00_00.vma.zst",
+        "size": 22020096,
+        "ctime": 1768521600,
+        "format": "tzst",
+        "subtype": "qemu",
+        "notes": "Nightly backup - web-server-01",
+        "node": "pve01",
+        "storage": "backup"
+      },
+      {
+        "content": "backup",
+        "vmid": 108,
+        "volid": "backup:108/vzdump-lxc-108-2026_01_15-02_30_00.tar.zst",
+        "size": 5242880,
+        "ctime": 1768437000,
+        "format": "tzst",
+        "subtype": "lxc",
+        "notes": "nginx-proxy-01 backup",
+        "node": "pve01",
+        "storage": "backup"
+      }
+    ]
+  },
+  "/api2/json/nodes/pve02/storage/backup/content": {
+    "data": [
+      {
+        "content": "backup",
+        "vmid": 104,
+        "volid": "backup:104/vzdump-qemu-104-2026_01_15-02_00_00.vma.zst",
+        "size": 104857600,
+        "ctime": 1768435200,
+        "format": "tzst",
+        "subtype": "qemu",
+        "notes": "Nightly backup - db-primary-01",
+        "node": "pve02",
+        "storage": "backup"
+      },
+      {
+        "content": "backup",
+        "vmid": 104,
+        "volid": "backup:104/vzdump-qemu-104-2026_01_16-02_00_00.vma.zst",
+        "size": 109051904,
+        "ctime": 1768521600,
+        "format": "tzst",
+        "subtype": "qemu",
+        "notes": "Nightly backup - db-primary-01",
+        "node": "pve02",
+        "storage": "backup"
+      },
+      {
+        "content": "backup",
+        "vmid": 105,
+        "volid": "backup:105/vzdump-qemu-105-2026_01_15-02_00_00.vma.zst",
+        "size": 52428800,
+        "ctime": 1768435200,
+        "format": "tzst",
+        "subtype": "qemu",
+        "notes": "gitlab-runner-01 backup",
+        "node": "pve02",
+        "storage": "backup"
+      },
+      {
+        "content": "backup",
+        "vmid": 109,
+        "volid": "backup:109/vzdump-lxc-109-2026_01_15-02_30_00.tar.zst",
+        "size": 4194304,
+        "ctime": 1768437000,
+        "format": "tzst",
+        "subtype": "lxc",
+        "notes": "mail-relay-01 backup",
+        "node": "pve02",
+        "storage": "backup"
+      }
+    ]
+  },
+  "/api2/json/nodes/pve03/storage/backup/content": {
+    "data": [
+      {
+        "content": "backup",
+        "vmid": 106,
+        "volid": "backup:106/vzdump-qemu-106-2026_01_15-02_00_00.vma.zst",
+        "size": 20971520,
+        "ctime": 1768435200,
+        "format": "tzst",
+        "subtype": "qemu",
+        "notes": "monitoring-01 backup",
+        "node": "pve03",
+        "storage": "backup"
+      },
+      {
+        "content": "backup",
+        "vmid": 107,
+        "volid": "backup:107/vzdump-qemu-107-2026_01_15-02_00_00.vma.zst",
+        "size": 52428800,
+        "ctime": 1768435200,
+        "format": "tzst",
+        "subtype": "qemu",
+        "notes": "backup-server-01 backup",
+        "node": "pve03",
+        "storage": "backup"
+      }
+    ]
+  },
+  "/api2/json/nodes/pve01/storage/nfs-backup/content": {
+    "data": [
+      {
+        "content": "backup",
+        "vmid": 101,
+        "volid": "nfs-backup:101/vzdump-qemu-101-2026_01_12-03_00_00.vma.lzo",
+        "size": 10240000,
+        "ctime": 1767988800,
+        "format": "lzo",
+        "subtype": "qemu",
+        "notes": "Weekly full backup",
+        "node": "pve01",
+        "storage": "nfs-backup"
+      },
+      {
+        "content": "backup",
+        "vmid": 103,
+        "volid": "nfs-backup:103/vzdump-qemu-103-2026_01_12-03_00_00.vma.lzo",
+        "size": 20480000,
+        "ctime": 1767988800,
+        "format": "lzo",
+        "subtype": "qemu",
+        "notes": "Weekly full backup",
+        "node": "pve01",
+        "storage": "nfs-backup"
+      }
+    ]
+  },
+  "/api2/json/nodes/pve02/storage/nfs-backup/content": {
+    "data": [
+      {
+        "content": "backup",
+        "vmid": 104,
+        "volid": "nfs-backup:104/vzdump-qemu-104-2026_01_12-03_00_00.vma.lzo",
+        "size": 102400000,
+        "ctime": 1767988800,
+        "format": "lzo",
+        "subtype": "qemu",
+        "notes": "Weekly full backup",
+        "node": "pve02",
+        "storage": "nfs-backup"
+      },
+      {
+        "content": "backup",
+        "vmid": 105,
+        "volid": "nfs-backup:105/vzdump-qemu-105-2026_01_12-03_00_00.vma.lzo",
+        "size": 51200000,
+        "ctime": 1767988800,
+        "format": "lzo",
+        "subtype": "qemu",
+        "notes": "Weekly full backup",
+        "node": "pve02",
+        "storage": "nfs-backup"
+      }
+    ]
+  },
+  "/api2/json/nodes/pve03/storage/nfs-backup/content": {
+    "data": [
+      {
+        "content": "backup",
+        "vmid": 106,
+        "volid": "nfs-backup:106/vzdump-qemu-106-2026_01_12-03_00_00.vma.lzo",
+        "size": 20480000,
+        "ctime": 1767988800,
+        "format": "lzo",
+        "subtype": "qemu",
+        "notes": "Weekly full backup",
+        "node": "pve03",
+        "storage": "nfs-backup"
+      },
+      {
+        "content": "backup",
+        "vmid": 107,
+        "volid": "nfs-backup:107/vzdump-qemu-107-2026_01_12-03_00_00.vma.lzo",
+        "size": 51200000,
+        "ctime": 1767988800,
+        "format": "lzo",
+        "subtype": "qemu",
+        "notes": "Weekly full backup",
+        "node": "pve03",
+        "storage": "nfs-backup"
       }
     ]
   },
@@ -157,6 +707,122 @@
         "user": "root@pam",
         "starttime": 1767225600,
         "endtime": 1767225602,
+        "status": "OK"
+      },
+      {
+        "upid": "UPID:pve01:00000002:00000002:00000002:vzdump:103:root@pam:",
+        "node": "pve01",
+        "pid": 2,
+        "pstart": 2,
+        "id": "103",
+        "type": "vzdump",
+        "user": "root@pam",
+        "starttime": 1768435200,
+        "endtime": 1768437600,
+        "status": "OK"
+      },
+      {
+        "upid": "UPID:pve01:00000003:00000003:00000003:vzsnapshot:108:root@pam:",
+        "node": "pve01",
+        "pid": 3,
+        "pstart": 3,
+        "id": "108",
+        "type": "vzsnapshot",
+        "user": "root@pam",
+        "starttime": 1768521600,
+        "endtime": 1768521620,
+        "status": "OK"
+      },
+      {
+        "upid": "UPID:pve01:00000004:00000004:00000004:qmsnapshot:103:root@pam:",
+        "node": "pve01",
+        "pid": 4,
+        "pstart": 4,
+        "id": "103",
+        "type": "qmsnapshot",
+        "user": "root@pam",
+        "starttime": 1768608000,
+        "endtime": 1768608010,
+        "status": "OK"
+      }
+    ]
+  },
+  "/api2/json/nodes/pve02/tasks": {
+    "data": [
+      {
+        "upid": "UPID:pve02:00000010:00000010:00000010:qmstart:104:root@pam:",
+        "node": "pve02",
+        "pid": 10,
+        "pstart": 10,
+        "id": "104",
+        "type": "qmstart",
+        "user": "root@pam",
+        "starttime": 1767225700,
+        "endtime": 1767225705,
+        "status": "OK"
+      },
+      {
+        "upid": "UPID:pve02:00000011:00000011:00000011:vzdump:104:root@pam:",
+        "node": "pve02",
+        "pid": 11,
+        "pstart": 11,
+        "id": "104",
+        "type": "vzdump",
+        "user": "root@pam",
+        "starttime": 1768435200,
+        "endtime": 1768439400,
+        "status": "OK"
+      },
+      {
+        "upid": "UPID:pve02:00000012:00000012:00000012:qmstop:105:root@pam:",
+        "node": "pve02",
+        "pid": 12,
+        "pstart": 12,
+        "id": "105",
+        "type": "qmstop",
+        "user": "root@pam",
+        "starttime": 1768521800,
+        "endtime": 1768521810,
+        "status": "OK"
+      }
+    ]
+  },
+  "/api2/json/nodes/pve03/tasks": {
+    "data": [
+      {
+        "upid": "UPID:pve03:00000020:00000020:00000020:qmstart:106:root@pam:",
+        "node": "pve03",
+        "pid": 20,
+        "pstart": 20,
+        "id": "106",
+        "type": "qmstart",
+        "user": "root@pam",
+        "starttime": 1767225800,
+        "endtime": 1767225808,
+        "status": "OK"
+      },
+      {
+        "upid": "UPID:pve03:00000021:00000021:00000021:vzdump:106:root@pam:",
+        "node": "pve03",
+        "pid": 21,
+        "pstart": 21,
+        "id": "106",
+        "type": "vzdump",
+        "user": "root@pam",
+        "starttime": 1768435200,
+        "endtime": 1768437000,
+        "status": "OK"
+      },
+      {
+        "upid": "UPID:pve03:00000022:00000022:00000022:qmcreate:110:admin@pam:",
+        "node": "pve03",
+        "pid": 22,
+        "pstart": 22,
+        "id": "110",
+        "type": "qmcreate",
+        "user": "admin@pam",
+        "starttime": 1768521900,
+        "endtime": 1768521920,
         "status": "OK"
       }
     ]
@@ -175,6 +841,20 @@
       "exitstatus": "OK"
     }
   },
+  "/api2/json/nodes/pve01/tasks/UPID:pve01:00000002:00000002:00000002:vzdump:103:root@pam:/status": {
+    "data": {
+      "id": "103",
+      "node": "pve01",
+      "pid": 2,
+      "pstart": 2,
+      "starttime": 1768435200,
+      "status": "stopped",
+      "type": "vzdump",
+      "upid": "UPID:pve01:00000002:00000002:00000002:vzdump:103:root@pam:",
+      "user": "root@pam",
+      "exitstatus": "OK"
+    }
+  },
   "/api2/json/nodes/pve01/qemu/101/snapshot": {
     "data": [
       {
@@ -188,6 +868,80 @@
       }
     ]
   },
+  "/api2/json/nodes/pve01/qemu/103/snapshot": {
+    "data": [
+      {
+        "name": "pre-nginx-upgrade",
+        "description": "Before upgrading nginx to 1.26",
+        "snaptime": 1768435000,
+        "vmstate": 0,
+        "parent": null,
+        "vmid": 103,
+        "node": "pve01"
+      },
+      {
+        "name": "post-nginx-upgrade",
+        "description": "After successful nginx upgrade",
+        "snaptime": 1768521600,
+        "vmstate": 0,
+        "parent": "pre-nginx-upgrade",
+        "vmid": 103,
+        "node": "pve01"
+      }
+    ]
+  },
+  "/api2/json/nodes/pve02/qemu/104/snapshot": {
+    "data": [
+      {
+        "name": "pre-postgres-15",
+        "description": "Before PostgreSQL 15 upgrade",
+        "snaptime": 1768435000,
+        "vmstate": 0,
+        "parent": null,
+        "vmid": 104,
+        "node": "pve02"
+      }
+    ]
+  },
+  "/api2/json/nodes/pve02/qemu/105/snapshot": {
+    "data": [
+      {
+        "name": "clean-install",
+        "description": "Fresh GitLab Runner installation",
+        "snaptime": 1767225600,
+        "vmstate": 0,
+        "parent": null,
+        "vmid": 105,
+        "node": "pve02"
+      }
+    ]
+  },
+  "/api2/json/nodes/pve03/qemu/106/snapshot": {
+    "data": [
+      {
+        "name": "grafana-10-install",
+        "description": "Grafana 10 + Prometheus stack",
+        "snaptime": 1768435000,
+        "vmstate": 0,
+        "parent": null,
+        "vmid": 106,
+        "node": "pve03"
+      }
+    ]
+  },
+  "/api2/json/nodes/pve03/qemu/107/snapshot": {
+    "data": [
+      {
+        "name": "base-config",
+        "description": "Initial backup server configuration",
+        "snaptime": 1767225600,
+        "vmstate": 0,
+        "parent": null,
+        "vmid": 107,
+        "node": "pve03"
+      }
+    ]
+  },
   "/api2/json/nodes/pve01/lxc/102/snapshot": {
     "data": [
       {
@@ -198,6 +952,45 @@
         "parent": null,
         "vmid": 102,
         "node": "pve01"
+      }
+    ]
+  },
+  "/api2/json/nodes/pve01/lxc/108/snapshot": {
+    "data": [
+      {
+        "name": "initial-config",
+        "description": "nginx-proxy-01 initial setup",
+        "snaptime": 1767225600,
+        "vmstate": 0,
+        "parent": null,
+        "vmid": 108,
+        "node": "pve01"
+      }
+    ]
+  },
+  "/api2/json/nodes/pve02/lxc/109/snapshot": {
+    "data": [
+      {
+        "name": "postfix-config",
+        "description": "Postfix + Dovecot configured",
+        "snaptime": 1768435000,
+        "vmstate": 0,
+        "parent": null,
+        "vmid": 109,
+        "node": "pve02"
+      }
+    ]
+  },
+  "/api2/json/nodes/pve03/lxc/110/snapshot": {
+    "data": [
+      {
+        "name": "dev-tools-installed",
+        "description": "Dev tools and IDE setup complete",
+        "snaptime": 1768521600,
+        "vmstate": 0,
+        "parent": null,
+        "vmid": 110,
+        "node": "pve03"
       }
     ]
   }

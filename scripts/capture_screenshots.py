@@ -40,7 +40,7 @@ from stack_setup import (  # noqa: E402
 from stack_sync import trigger_and_wait_sync  # noqa: E402
 
 
-# Pages to capture: (slug, url-path-relative-to-base)
+# List-view pages: (slug, url-path-relative-to-base)
 PAGES: list[tuple[str, str]] = [
     ("home", "/plugins/proxbox/"),
     ("dashboard", "/plugins/proxbox/dashboard/"),
@@ -54,6 +54,80 @@ PAGES: list[tuple[str, str]] = [
     ("storage", "/plugins/proxbox/storage/"),
     ("backups", "/plugins/proxbox/backups/"),
     ("snapshots", "/plugins/proxbox/snapshots/"),
+    ("backup-routines", "/plugins/proxbox/backup-routines/"),
+    ("replications", "/plugins/proxbox/replications/"),
+    ("task-history", "/plugins/proxbox/task-history/"),
+]
+
+# Detail pages: (slug, detail_url_template, api_path, query_params)
+# api_path is queried to discover the first object's pk; {id} in the template is replaced.
+DETAIL_SPECS: list[tuple[str, str, str, dict]] = [
+    (
+        "proxmox-endpoint-detail",
+        "/plugins/proxbox/endpoints/proxmox/{id}/",
+        "/api/plugins/proxbox/endpoints/proxmox/",
+        {},
+    ),
+    (
+        "netbox-endpoint-detail",
+        "/plugins/proxbox/endpoints/netbox/{id}/",
+        "/api/plugins/proxbox/endpoints/netbox/",
+        {},
+    ),
+    (
+        "fastapi-endpoint-detail",
+        "/plugins/proxbox/endpoints/fastapi/{id}/",
+        "/api/plugins/proxbox/endpoints/fastapi/",
+        {},
+    ),
+    (
+        "storage-detail",
+        "/plugins/proxbox/storage/{id}/",
+        "/api/plugins/proxbox/storage/",
+        {},
+    ),
+    (
+        "backup-detail",
+        "/plugins/proxbox/backups/{id}/",
+        "/api/plugins/proxbox/backups/",
+        {},
+    ),
+    (
+        "backup-routine-detail",
+        "/plugins/proxbox/backup-routines/{id}/",
+        "/api/plugins/proxbox/backup-routines/",
+        {},
+    ),
+    (
+        "replication-detail",
+        "/plugins/proxbox/replications/{id}/",
+        "/api/plugins/proxbox/replications/",
+        {},
+    ),
+    (
+        "snapshot-detail",
+        "/plugins/proxbox/snapshots/{id}/",
+        "/api/plugins/proxbox/snapshots/",
+        {},
+    ),
+    (
+        "task-history-detail",
+        "/plugins/proxbox/task-history/{id}/",
+        "/api/plugins/proxbox/task-history/",
+        {},
+    ),
+    (
+        "virtual-machine-detail",
+        "/virtualization/virtual-machines/{id}/",
+        "/api/virtualization/virtual-machines/",
+        {},
+    ),
+    (
+        "lxc-container-detail",
+        "/virtualization/virtual-machines/{id}/",
+        "/api/virtualization/virtual-machines/",
+        {"name": "e2e-lxc-102"},
+    ),
 ]
 
 
@@ -198,6 +272,26 @@ def seed_data(
     print("Sync complete. NetBox is populated with mock data.")
 
 
+def fetch_first_id(
+    netbox_base_url: str,
+    netbox_token: str,
+    api_path: str,
+    params: dict | None = None,
+) -> int | None:
+    resp = requests.get(
+        f"{netbox_base_url}{api_path}",
+        params=params or {},
+        headers={
+            "Authorization": f"Token {netbox_token}",
+            "Accept": "application/json",
+        },
+        timeout=30,
+    )
+    resp.raise_for_status()
+    results = resp.json().get("results", [])
+    return results[0]["id"] if results else None
+
+
 def login(page, base_url: str) -> None:
     page.goto(f"{base_url}/login/")
     page.fill("#id_username", "admin")
@@ -217,6 +311,26 @@ def capture(page, base_url: str, slug: str, path: str, out_dir: pathlib.Path) ->
     dest = out_dir / f"{slug}.png"
     page.screenshot(path=str(dest), full_page=True)
     print(f"  Saved: {dest}")
+
+
+def capture_detail_pages(
+    page,
+    netbox_base_url: str,
+    netbox_token: str,
+    out_dir: pathlib.Path,
+) -> int:
+    captured = 0
+    for slug, url_tpl, api_path, params in DETAIL_SPECS:
+        obj_id = fetch_first_id(netbox_base_url, netbox_token, api_path, params)
+        if obj_id is None:
+            print(
+                f"  Skipping {slug}: no objects found at {api_path} (params={params})"
+            )
+            continue
+        path = url_tpl.format(id=obj_id)
+        capture(page, netbox_base_url, slug, path, out_dir)
+        captured += 1
+    return captured
 
 
 def main() -> None:
@@ -253,12 +367,22 @@ def main() -> None:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page(viewport={"width": 1440, "height": 900})
         login(page, netbox_base_url)
-        print(f"Capturing {len(PAGES)} pages...")
+
+        print(f"Capturing {len(PAGES)} list-view pages...")
         for slug, path in PAGES:
             capture(page, netbox_base_url, slug, path, screenshots_dir)
+
+        print(f"Capturing up to {len(DETAIL_SPECS)} detail pages...")
+        detail_count = capture_detail_pages(
+            page, netbox_base_url, netbox_token, screenshots_dir
+        )
+
         browser.close()
 
-    print(f"\nDone. {len(PAGES)} screenshots written to {screenshots_dir}")
+    total = len(PAGES) + detail_count
+    print(f"\nDone. {total} screenshots written to {screenshots_dir}")
+    print(f"  List views: {len(PAGES)}")
+    print(f"  Detail views: {detail_count}")
 
 
 if __name__ == "__main__":
