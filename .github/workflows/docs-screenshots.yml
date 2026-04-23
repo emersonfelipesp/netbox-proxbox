@@ -25,8 +25,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          # For tag events, commit screenshots back to main; for branch events, use the triggered branch.
-          ref: ${{ startsWith(github.ref, 'refs/tags/') && 'main' || github.ref_name }}
+          # For tag events, commit screenshots back to develop; for branch events, use the triggered branch.
+          ref: ${{ startsWith(github.ref, 'refs/tags/') && 'develop' || github.ref_name }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Python

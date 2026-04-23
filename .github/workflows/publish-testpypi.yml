@@ -54,7 +54,7 @@ jobs:
           PY
 
       - name: Build distribution
-        run: uv run --with build python -m build
+        run: uv build
 
       - name: Upload dist artifacts
         uses: actions/upload-artifact@v7
@@ -116,7 +116,7 @@ jobs:
         uses: astral-sh/setup-uv@v7
 
       - name: Sync development environment
-        run: uv sync --extra test --extra dev --extra cli --locked
+        run: uv sync --extra test --extra dev --extra cli --no-sources
 
       - name: Compile package
         run: uv run python -m compileall netbox_proxbox tests
