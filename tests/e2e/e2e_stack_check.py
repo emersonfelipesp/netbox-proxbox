@@ -42,12 +42,12 @@ def main() -> None:
         proxbox_api_key=proxbox_api_key,
     )
     assert_plugin_routes(netbox_base_url, netbox_token, endpoint_ids)
+    assert_backend_stream(proxbox_base_url, proxbox_api_key=proxbox_api_key)
     run_and_assert_all_sync_operations(
         netbox_base_url,
         netbox_token,
         proxmox_mock_base_url,
     )
-    assert_backend_stream(proxbox_base_url, proxbox_api_key=proxbox_api_key)
 
     vm_101 = get_vm_by_proxmox_vmid(netbox_base_url, netbox_token, 101)
     vm_101_id = int(extract_id(vm_101.get("id")) or 0)
