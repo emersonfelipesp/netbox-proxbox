@@ -6,7 +6,7 @@ Proxbox is a NetBox plugin that integrates Proxmox with NetBox through a separat
 
 | NetBox   | netbox-proxbox | proxbox-api | netbox-sdk     | proxmox-sdk    |
 |----------|----------------|-------------|----------------|----------------|
-| >=4.6.0  | v0.0.12        | v0.0.8      | v0.0.7.post4   | v0.0.2.post3   |
+| >=4.6.0-beta1  | v0.0.12        | v0.0.8.post1 | v0.0.7.post6   | v0.0.3.post1   |
 | >=4.5.7  | v0.0.11        | v0.0.7      | v0.0.7.post4   | v0.0.2.post2   |
 
 The current repository code declares support for:

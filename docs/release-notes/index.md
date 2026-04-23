@@ -10,7 +10,7 @@ The plugin source in this repository is currently `0.0.12`.
 
 | Version | Summary |
 |---------|---------|
-| `0.0.12` | NetBox 4.6.x support; native `VirtualMachineType` sync (QEMU / LXC); nullable cluster on VirtualMachine |
+| `0.0.12` | NetBox 4.6.x support; native `VirtualMachineType` sync (QEMU / LXC); Clusters list page and API; site/tenant on ProxmoxEndpoint; ships with proxbox-api v0.0.8.post1 |
 | `0.0.11` | Backup Routines, individual sync buttons, live job panel, Backend Logs, encryption key, endpoint CSV import/export, auto-push NetBox config to backend, three-tier error severity, extended storage/replication views, and many bug fixes |
 | `0.0.10` | Cluster and node tracking with NetBox Cluster/Device links; Mode field fix on endpoint detail |
 | `0.0.9.post4` | Follow-up migration fixes for upgrade paths and storage schema issues |
