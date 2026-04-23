@@ -85,6 +85,50 @@ class ProxmoxEndpoint(EndpointBase):
         verbose_name=_("Verify SSL"),
         help_text=_("Verify the TLS certificate presented by the Proxmox endpoint."),
     )
+    timeout = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name=_("Timeout (seconds)"),
+        help_text=_(
+            "Per-endpoint API request timeout in seconds. Leave blank to use the global default."
+        ),
+    )
+    max_retries = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        verbose_name=_("Max retries"),
+        help_text=_(
+            "Per-endpoint maximum retry attempts for transient failures (GET/HEAD only). "
+            "Leave blank to use the global default."
+        ),
+    )
+    retry_backoff = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name=_("Retry back-off (seconds)"),
+        help_text=_(
+            "Per-endpoint exponential back-off base delay in seconds between retries. "
+            "Leave blank to use the global default."
+        ),
+    )
+    site = models.ForeignKey(
+        to="dcim.Site",
+        on_delete=models.SET_NULL,
+        related_name="+",
+        verbose_name=_("Site"),
+        null=True,
+        blank=True,
+    )
+    tenant = models.ForeignKey(
+        to="tenancy.Tenant",
+        on_delete=models.SET_NULL,
+        related_name="+",
+        verbose_name=_("Tenant"),
+        null=True,
+        blank=True,
+    )
 
     class Meta(EndpointBase.Meta):
         verbose_name = _("Proxmox endpoint")

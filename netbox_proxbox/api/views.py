@@ -48,6 +48,7 @@ class ProxBoxRootView(APIRootView):
         response.data["home"] = f"{base}/home/"
         response.data["dashboard"] = f"{base}/dashboard/"
         response.data["resources"] = {
+            "clusters": f"{base}/resources/clusters/",
             "nodes": f"{base}/resources/nodes/",
             "virtual_machines": f"{base}/resources/virtual-machines/",
             "lxc_containers": f"{base}/resources/lxc-containers/",
@@ -120,7 +121,9 @@ class ProxmoxStorageViewSet(NetBoxModelViewSet):
 class ProxmoxEndpointViewSet(NetBoxModelViewSet):
     """REST API for Proxmox VE API endpoint credentials and targets."""
 
-    queryset = models.ProxmoxEndpoint.objects.select_related("ip_address")
+    queryset = models.ProxmoxEndpoint.objects.select_related(
+        "ip_address", "site", "tenant"
+    )
     serializer_class = ProxmoxEndpointSerializer
     filterset_class = filtersets.ProxmoxEndpointFilterSet
 
@@ -229,11 +232,14 @@ def _serialize_interfaces(interfaces: object, request: Request) -> list[dict]:
     return result
 
 
-def _serialize_device(device: object, request: Request) -> dict:
-    return {
+def _serialize_device(
+    device: object, request: Request, proxmox_node: object | None = None
+) -> dict:
+    result: dict = {
         "id": device.pk,
         "name": str(device.name),
         "url": request.build_absolute_uri(device.get_absolute_url()),
+        "status": {"value": device.status, "label": device.get_status_display()},
         "device_type": str(device.device_type) if device.device_type else None,
         "manufacturer": (
             str(device.device_type.manufacturer)
@@ -246,6 +252,19 @@ def _serialize_device(device: object, request: Request) -> dict:
         "cluster": _nested(device.cluster, request),
         "interfaces": _serialize_interfaces(device.interfaces, request),
     }
+    if proxmox_node is not None:
+        result.update(
+            {
+                "online": proxmox_node.online,
+                "ip_address": proxmox_node.ip_address or "",
+                "cpu_usage_percent": proxmox_node.cpu_usage_percent,
+                "max_cpu": proxmox_node.max_cpu,
+                "memory_usage": proxmox_node.memory_usage,
+                "memory_usage_percent": proxmox_node.memory_usage_percent,
+                "max_memory": proxmox_node.max_memory,
+            }
+        )
+    return result
 
 
 def _serialize_vm(vm: object, request: Request) -> dict:
@@ -259,6 +278,21 @@ def _serialize_vm(vm: object, request: Request) -> dict:
         "tenant": _nested(vm.tenant, request),
         "platform": _nested(vm.platform, request),
         "interfaces": _serialize_interfaces(vm.interfaces, request),
+    }
+
+
+def _serialize_cluster(cluster: object, request: Request) -> dict:
+    return {
+        "id": cluster.pk,
+        "name": str(cluster.name),
+        "url": request.build_absolute_uri(cluster.get_absolute_url()),
+        "status": cluster.status,
+        "type": _nested(cluster.type, request),
+        "group": _nested(cluster.group, request),
+        "site": _nested(cluster._site, request),
+        "tenant": _nested(cluster.tenant, request),
+        "device_count": cluster.device_count,
+        "vm_count": cluster.vm_count,
     }
 
 
@@ -567,6 +601,7 @@ class NodesAPIView(APIView):
     def get(self, request: Request) -> Response:
         """Return proxbox-tagged devices with their interfaces and IPs."""
         from dcim.models import Device
+        from netbox_proxbox.models import ProxmoxNode
         from netbox_proxbox.utils import get_proxbox_tagged_object_ids
 
         tagged_ids = get_proxbox_tagged_object_ids(Device, limit=100)
@@ -581,7 +616,19 @@ class NodesAPIView(APIView):
             )
             .prefetch_related("interfaces__ip_addresses")
         )
-        results = [_serialize_device(d, request) for d in devices]
+
+        # Key by the authoritative FK to avoid collisions when multiple Proxmox endpoints
+        # have nodes with the same name (e.g. the default "pve1" across clusters).
+        device_ids = [d.pk for d in devices]
+        nodes_by_device_id = {
+            n.netbox_device_id: n
+            for n in ProxmoxNode.objects.filter(netbox_device_id__in=device_ids)
+        }
+
+        results = [
+            _serialize_device(d, request, proxmox_node=nodes_by_device_id.get(d.pk))
+            for d in devices
+        ]
         return Response({"count": len(results), "results": results})
 
 
@@ -590,6 +637,7 @@ class _ProxboxVMListAPIView(APIView):
 
     permission_classes = [IsAuthenticatedOrLoginNotRequired]
     vm_type: str
+    vm_type_slug: str
 
     @extend_schema(responses={200: OpenApiTypes.OBJECT})
     def get(self, request: Request) -> Response:
@@ -600,11 +648,19 @@ class _ProxboxVMListAPIView(APIView):
         if not tagged_ids:
             return Response({"count": 0, "results": []})
 
-        vms = list(
+        base_qs = (
             VirtualMachine.objects.restrict(request.user, "view")
-            .filter(id__in=tagged_ids, custom_field_data__proxmox_vm_type=self.vm_type)
+            .filter(id__in=tagged_ids)
             .select_related("site", "cluster", "role", "tenant", "platform")
             .prefetch_related("interfaces__ip_addresses")
+        )
+        from django.db.models import Q
+
+        vms = list(
+            base_qs.filter(
+                Q(virtual_machine_type__slug=self.vm_type_slug)
+                | Q(custom_field_data__proxmox_vm_type=self.vm_type)
+            )
         )
         results = [_serialize_vm(vm, request) for vm in vms]
         return Response({"count": len(results), "results": results})
@@ -618,6 +674,7 @@ class VirtualMachinesAPIView(_ProxboxVMListAPIView):
     """
 
     vm_type = ProxmoxVMTypeChoices.QEMU
+    vm_type_slug = "qemu-virtual-machine"
 
 
 class LXCContainersAPIView(_ProxboxVMListAPIView):
@@ -628,6 +685,7 @@ class LXCContainersAPIView(_ProxboxVMListAPIView):
     """
 
     vm_type = ProxmoxVMTypeChoices.LXC
+    vm_type_slug = "lxc-container"
 
 
 class InterfacesAPIView(APIView):
@@ -830,6 +888,40 @@ class VirtualDisksAPIView(APIView):
             }
             for d in disks
         ]
+        return Response({"count": len(results), "results": results})
+
+
+class ClustersAPIView(APIView):
+    """API mirror of the Proxbox clusters page (/plugins/proxbox/clusters/).
+
+    Returns NetBox Cluster objects tagged 'proxbox' (synced Proxmox clusters).
+    Read-only GET endpoint.
+    """
+
+    permission_classes = [IsAuthenticatedOrLoginNotRequired]
+
+    @extend_schema(responses={200: OpenApiTypes.OBJECT})
+    def get(self, request: Request) -> Response:
+        """Return proxbox-tagged clusters with their type, group, site, tenant, and counts."""
+        from virtualization.models import Cluster
+        from netbox_proxbox.utils import get_proxbox_tagged_object_ids
+
+        tagged_ids = get_proxbox_tagged_object_ids(Cluster, limit=100)
+        if not tagged_ids:
+            return Response({"count": 0, "results": []})
+
+        from django.db.models import Count
+
+        clusters = list(
+            Cluster.objects.restrict(request.user, "view")
+            .filter(id__in=tagged_ids)
+            .select_related("type", "group", "_site", "tenant")
+            .annotate(
+                device_count=Count("devices", distinct=True),
+                vm_count=Count("virtual_machines", distinct=True),
+            )
+        )
+        results = [_serialize_cluster(c, request) for c in clusters]
         return Response({"count": len(results), "results": results})
 
 

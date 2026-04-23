@@ -75,6 +75,8 @@ def _endpoint(**overrides):
         "password": "p@ss",
         "token_value": "s3cret",
         "tags": _TagManager(["lab", "prod"]),
+        "site": None,
+        "tenant": None,
     }
     data.update(overrides)
     return SimpleNamespace(**data)

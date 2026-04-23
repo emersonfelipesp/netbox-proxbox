@@ -148,6 +148,13 @@ def _resolve_vm_node(vm: VirtualMachine) -> str:
 
 
 def _resolve_vm_type(vm: VirtualMachine) -> str:
+    vm_type_obj = getattr(vm, "virtual_machine_type", None)
+    if vm_type_obj and hasattr(vm_type_obj, "slug"):
+        slug = str(vm_type_obj.slug)
+        if "lxc" in slug:
+            return "lxc"
+        if "qemu" in slug:
+            return "qemu"
     custom_field_data = getattr(vm, "custom_field_data", None) or {}
     return str(
         custom_field_data.get("proxmox_vm_type")

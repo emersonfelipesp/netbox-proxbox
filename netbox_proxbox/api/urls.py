@@ -6,6 +6,7 @@ from netbox.api.routers import NetBoxRouter
 from . import views
 from .views import (
     BackendLogsAPIView,
+    ClustersAPIView,
     DashboardAPIView,
     HomeAPIView,
     InterfacesAPIView,
@@ -35,8 +36,10 @@ endpoints_router.register(
 
 router = NetBoxRouter()
 router.APIRootView = views.ProxBoxRootView
-router.register("clusters", views.ProxmoxClusterViewSet, basename="proxmoxcluster")
-router.register("nodes", views.ProxmoxNodeViewSet, basename="proxmoxnode")
+router.register(
+    "proxmox-clusters", views.ProxmoxClusterViewSet, basename="proxmoxcluster"
+)
+router.register("proxmox-nodes", views.ProxmoxNodeViewSet, basename="proxmoxnode")
 router.register("storage", views.ProxmoxStorageViewSet, basename="storage")
 router.register("backups", views.VMBackupViewSet)
 router.register("backup-routines", views.BackupRoutineViewSet, basename="backuproutine")
@@ -55,6 +58,7 @@ urlpatterns = [
     # Non-model API views mirroring UI pages
     path("home/", HomeAPIView.as_view(), name="home"),
     path("dashboard/", DashboardAPIView.as_view(), name="dashboard"),
+    path("resources/clusters/", ClustersAPIView.as_view(), name="api-clusters"),
     path("resources/nodes/", NodesAPIView.as_view(), name="api-nodes"),
     path(
         "resources/virtual-machines/",
@@ -83,6 +87,6 @@ urlpatterns = [
     ),
     path("sync/schedule/", ScheduleSyncAPIView.as_view(), name="api-schedule-sync"),
     path("logs/", BackendLogsAPIView.as_view(), name="api-logs"),
-    # Model CRUD router
+    # Model CRUD router (ProxmoxCluster/Node at proxmox-clusters/proxmox-nodes/)
     path("", include(router.urls)),
 ]

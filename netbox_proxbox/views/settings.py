@@ -52,6 +52,9 @@ class SettingsView(
                 "additional_allowed_ip_ranges": settings_obj.additional_allowed_ip_ranges,
                 "explicitly_blocked_ip_ranges": settings_obj.explicitly_blocked_ip_ranges,
                 "encryption_enabled": bool(settings_obj.encryption_key),
+                "proxmox_timeout": settings_obj.proxmox_timeout,
+                "proxmox_max_retries": settings_obj.proxmox_max_retries,
+                "proxmox_retry_backoff": settings_obj.proxmox_retry_backoff,
             }
         )
         return render(request, self.template_name, {"form": form})
@@ -131,6 +134,11 @@ class SettingsView(
             settings_obj.explicitly_blocked_ip_ranges = form.cleaned_data.get(
                 "explicitly_blocked_ip_ranges", ""
             )
+            settings_obj.proxmox_timeout = form.cleaned_data["proxmox_timeout"]
+            settings_obj.proxmox_max_retries = form.cleaned_data["proxmox_max_retries"]
+            settings_obj.proxmox_retry_backoff = form.cleaned_data[
+                "proxmox_retry_backoff"
+            ]
             encryption_enabled = form.cleaned_data.get("encryption_enabled", False)
             if encryption_enabled:
                 new_key = form.cleaned_data.get("encryption_key", "").strip()
@@ -159,6 +167,9 @@ class SettingsView(
                     "additional_allowed_ip_ranges",
                     "explicitly_blocked_ip_ranges",
                     "encryption_key",
+                    "proxmox_timeout",
+                    "proxmox_max_retries",
+                    "proxmox_retry_backoff",
                 ]
             )
             messages.success(request, "Proxbox plugin settings updated.")

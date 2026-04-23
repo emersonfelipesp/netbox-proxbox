@@ -171,6 +171,30 @@ class ProxboxPluginSettingsForm(forms.Form):
             "Leave blank to use environment variable only."
         ),
     )
+    proxmox_timeout = forms.IntegerField(
+        required=True,
+        min_value=1,
+        max_value=300,
+        initial=5,
+        label="Proxmox API timeout (seconds)",
+        help_text="Default timeout in seconds for Proxmox API requests. Individual endpoints can override this.",
+    )
+    proxmox_max_retries = forms.IntegerField(
+        required=True,
+        min_value=0,
+        max_value=20,
+        initial=0,
+        label="Proxmox max retries",
+        help_text="Default max retry attempts for transient Proxmox API failures (GET/HEAD only). Individual endpoints can override this.",
+    )
+    proxmox_retry_backoff = forms.DecimalField(
+        required=True,
+        min_value=0,
+        max_value=30,
+        initial="0.50",
+        label="Proxmox retry back-off (seconds)",
+        help_text="Default exponential back-off base delay in seconds between Proxmox retries. Individual endpoints can override this.",
+    )
 
     def clean_backend_log_file_path(self) -> str:
         """Require an absolute log file path including a filename."""

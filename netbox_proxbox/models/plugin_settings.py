@@ -178,6 +178,32 @@ class ProxboxPluginSettings(NetBoxModel):
             "Leave blank to use environment variable only."
         ),
     )
+    proxmox_timeout = models.PositiveIntegerField(
+        default=5,
+        verbose_name=_("Proxmox API timeout (seconds)"),
+        help_text=_(
+            "Default timeout in seconds for Proxmox API requests. "
+            "Individual endpoints can override this value."
+        ),
+    )
+    proxmox_max_retries = models.PositiveSmallIntegerField(
+        default=0,
+        verbose_name=_("Proxmox max retries"),
+        help_text=_(
+            "Default maximum retry attempts for transient Proxmox API failures (GET/HEAD only). "
+            "Individual endpoints can override this value."
+        ),
+    )
+    proxmox_retry_backoff = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal("0.50"),
+        verbose_name=_("Proxmox retry back-off (seconds)"),
+        help_text=_(
+            "Default exponential back-off base delay in seconds between Proxmox retries. "
+            "Individual endpoints can override this value."
+        ),
+    )
 
     class Meta:
         verbose_name = _("Proxbox plugin settings")

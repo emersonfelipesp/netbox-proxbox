@@ -125,6 +125,8 @@ def test_endpoint_serializers_expose_supported_model_fields():
             "username",
             "token_name",
             "verify_ssl",
+            "site",
+            "tenant",
         },
         "NetBoxEndpointSerializer": {
             "name",
@@ -282,7 +284,7 @@ def test_writable_nested_related_fields_are_declared():
     expected_assignments = {
         "VMBackupSerializer": {"proxmox_storage", "virtual_machine"},
         "VMSnapshotSerializer": {"proxmox_storage", "virtual_machine"},
-        "ProxmoxEndpointSerializer": {"ip_address"},
+        "ProxmoxEndpointSerializer": {"ip_address", "site", "tenant"},
         "NetBoxEndpointSerializer": {"ip_address", "token"},
         "FastAPIEndpointSerializer": {"ip_address"},
     }
@@ -441,8 +443,8 @@ def test_plugin_api_routes_register_all_plugin_objects():
     assert set(endpoint_registers) == {"proxmox", "netbox", "fastapi"}
     assert set(root_registers) == {
         "backup-routines",
-        "clusters",
-        "nodes",
+        "proxmox-clusters",
+        "proxmox-nodes",
         "replications",
         "settings",
         "storage",
@@ -639,11 +641,12 @@ def test_proxbox_dashboard_permission_class_exists_in_views():
 
 
 def test_non_model_views_registered_in_urlpatterns():
-    """All ten non-model view paths must appear in the api/urls.py urlpatterns."""
+    """All non-model view paths must appear in the api/urls.py urlpatterns."""
     contents = URLS_PATH.read_text()
     expected_paths = [
         '"home/"',
         '"dashboard/"',
+        '"resources/clusters/"',
         '"resources/nodes/"',
         '"resources/virtual-machines/"',
         '"resources/lxc-containers/"',

@@ -14,6 +14,7 @@ from utilities.views import (
 from virtualization.models import VirtualMachine
 
 from netbox_proxbox.models import ProxmoxCluster
+from netbox_proxbox.utils import resolve_vm_type
 from netbox_proxbox.services.individual_sync import sync_individual_with_dependencies
 from netbox_proxbox.views.proxbox_access import permission_enqueue_proxbox_sync
 from netbox_proxbox.views.sync_now import _handle_sync_response
@@ -42,9 +43,7 @@ class VirtualMachineSyncNowView(
         vmid = vm.custom_field_data.get("proxmox_vm_id") or vm.custom_field_data.get(
             "cf_proxmox_vm_id"
         )
-        vm_type = vm.custom_field_data.get(
-            "proxmox_vm_type"
-        ) or vm.custom_field_data.get("cf_proxmox_vm_type", "qemu")
+        vm_type = resolve_vm_type(vm)
         proxmox_cluster = ProxmoxCluster.objects.filter(
             netbox_cluster=vm.cluster
         ).first()

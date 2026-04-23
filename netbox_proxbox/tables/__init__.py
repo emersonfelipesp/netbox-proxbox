@@ -36,6 +36,8 @@ class ProxmoxEndpointTable(NetBoxTable):
 
     name = tables.Column(linkify=True)
     ip_address = tables.Column(linkify=True)
+    site = tables.Column(linkify=True)
+    tenant = tables.Column(linkify=True)
     mode = ChoiceFieldColumn()
     verify_ssl = BooleanColumn()
     status = tables.TemplateColumn(
@@ -59,6 +61,11 @@ class ProxmoxEndpointTable(NetBoxTable):
             "username",
             "token_name",
             "verify_ssl",
+            "timeout",
+            "max_retries",
+            "retry_backoff",
+            "site",
+            "tenant",
             "status",
             "actions",
         )

@@ -5,9 +5,12 @@ from django.shortcuts import render
 from django.views import View
 from netbox import configuration
 from utilities.views import ConditionalLoginRequiredMixin
-from virtualization.models import VirtualDisk, VirtualMachine, VMInterface
+from virtualization.models import Cluster, VirtualDisk, VirtualMachine, VMInterface
 
-from netbox_proxbox.utils import get_fastapi_context_for_request
+from netbox_proxbox.utils import (
+    get_fastapi_context_for_request,
+    get_proxbox_tagged_object_ids,
+)
 
 
 class NodesView(ConditionalLoginRequiredMixin, View):
@@ -100,12 +103,26 @@ class VirtualMachinesView(ConditionalLoginRequiredMixin, View):
         )
         virtual_machines = []
         if tagged_vm_ids:
-            virtual_machines = list(
+            base_qs = (
                 VirtualMachine.objects.restrict(request.user, "view")
                 .filter(id__in=tagged_vm_ids)
-                .filter(custom_field_data__proxmox_vm_type="qemu")
-                .select_related("site", "cluster", "role", "tenant", "platform")
+                .select_related(
+                    "site",
+                    "cluster",
+                    "role",
+                    "tenant",
+                    "platform",
+                    "virtual_machine_type",
+                )
                 .prefetch_related("interfaces__ip_addresses")
+            )
+            from django.db.models import Q
+
+            virtual_machines = list(
+                base_qs.filter(
+                    Q(virtual_machine_type__slug="qemu-virtual-machine")
+                    | Q(custom_field_data__proxmox_vm_type="qemu")
+                )
             )
 
         return render(
@@ -154,12 +171,26 @@ class LXCContainersView(ConditionalLoginRequiredMixin, View):
         )
         lxc_containers = []
         if tagged_vm_ids:
-            lxc_containers = list(
+            base_qs = (
                 VirtualMachine.objects.restrict(request.user, "view")
                 .filter(id__in=tagged_vm_ids)
-                .filter(custom_field_data__proxmox_vm_type="lxc")
-                .select_related("site", "cluster", "role", "tenant", "platform")
+                .select_related(
+                    "site",
+                    "cluster",
+                    "role",
+                    "tenant",
+                    "platform",
+                    "virtual_machine_type",
+                )
                 .prefetch_related("interfaces__ip_addresses")
+            )
+            from django.db.models import Q
+
+            lxc_containers = list(
+                base_qs.filter(
+                    Q(virtual_machine_type__slug="lxc-container")
+                    | Q(custom_field_data__proxmox_vm_type="lxc")
+                )
             )
 
         return render(
@@ -321,6 +352,45 @@ class InterfacesView(ConditionalLoginRequiredMixin, View):
                 "interfaces_up": interfaces_up,
                 "interfaces_down": interfaces_down,
                 "interfaces_total": len(vm_interfaces) + len(node_interfaces),
+            },
+        )
+
+
+class ClustersView(ConditionalLoginRequiredMixin, View):
+    """List NetBox clusters tagged ``proxbox`` (synced Proxmox clusters) for operational review."""
+
+    template = "netbox_proxbox/clusters.html"
+
+    def get(self, request: HttpRequest) -> HttpResponse:
+        """Load tagged clusters and FastAPI URL hints for the clusters template."""
+        plugin_configuration = getattr(configuration, "PLUGINS_CONFIG", {})
+        fastapi_info = get_fastapi_context_for_request(request)
+
+        tagged_cluster_ids = get_proxbox_tagged_object_ids(Cluster, limit=100)
+        clusters = []
+        if tagged_cluster_ids:
+            from django.db.models import Count
+
+            clusters = list(
+                Cluster.objects.restrict(request.user, "view")
+                .filter(id__in=tagged_cluster_ids)
+                .select_related("type", "group", "_site", "tenant")
+                .annotate(
+                    device_count=Count("devices", distinct=True),
+                    vm_count=Count("virtual_machines", distinct=True),
+                )
+            )
+            for cluster in clusters:
+                cluster.site_display = cluster._site
+
+        return render(
+            request,
+            self.template,
+            {
+                "configuration": plugin_configuration,
+                "fastapi_url": fastapi_info.get("http_url", ""),
+                "fastapi_websocket_url": fastapi_info.get("websocket_url", ""),
+                "clusters": clusters,
             },
         )
 

@@ -31,6 +31,9 @@ _BASE_CLEANED_DATA = {
     "allow_private_ips": True,
     "additional_allowed_ip_ranges": "",
     "explicitly_blocked_ip_ranges": "",
+    "proxmox_timeout": 5,
+    "proxmox_max_retries": 0,
+    "proxmox_retry_backoff": "0.50",
 }
 
 
@@ -59,6 +62,9 @@ def _fake_settings_obj(encryption_key: str = "") -> SimpleNamespace:
         additional_allowed_ip_ranges="",
         explicitly_blocked_ip_ranges="",
         encryption_key=encryption_key,
+        proxmox_timeout=5,
+        proxmox_max_retries=0,
+        proxmox_retry_backoff="0.50",
         save=_save,
         _saved=saved,
     )

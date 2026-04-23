@@ -51,6 +51,24 @@
                     {% render_field form.custom_fields_request_delay %}
                 </div>
             </div>
+            {# Proxmox API Card #}
+            <div class="card mb-3">
+                <h5 class="card-header">
+                    <i class="mdi mdi-server"></i>
+                    {% trans "Proxmox API" %}
+                </h5>
+                <div class="card-body">
+                    <p class="text-muted">
+                        {% blocktrans trimmed %}
+                        Configure default timeout and retry behavior for Proxmox API requests.
+                        Individual endpoints can override these values.
+                        {% endblocktrans %}
+                    </p>
+                    {% render_field form.proxmox_timeout %}
+                    {% render_field form.proxmox_max_retries %}
+                    {% render_field form.proxmox_retry_backoff %}
+                </div>
+            </div>
             {# SSRF Protection Card #}
             <div class="card mb-3">
                 <h5 class="card-header">

@@ -10,6 +10,7 @@ from utilities.permissions import get_permission_for_model
 from virtualization.models import VirtualMachine
 
 from netbox_proxbox.jobs import is_proxbox_sync_job
+from netbox_proxbox.utils import resolve_vm_type
 from netbox_proxbox.models import (
     ProxmoxCluster,
     ProxmoxNode,
@@ -174,9 +175,7 @@ class ProxboxVirtualMachineTemplateExtension(PluginTemplateExtension):
         vmid = obj.custom_field_data.get("proxmox_vm_id") or obj.custom_field_data.get(
             "cf_proxmox_vm_id"
         )
-        vm_type = obj.custom_field_data.get(
-            "proxmox_vm_type"
-        ) or obj.custom_field_data.get("cf_proxmox_vm_type", "qemu")
+        vm_type = resolve_vm_type(obj)
 
         node = ""
         if hasattr(obj, "device") and obj.device:

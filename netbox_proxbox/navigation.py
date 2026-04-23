@@ -12,6 +12,11 @@ dashboard_item = PluginMenuItem(
     link_text="Dashboard",
 )
 
+clusters_item = PluginMenuItem(
+    link="plugins:netbox_proxbox:clusters",
+    link_text="Clusters",
+)
+
 nodes_item = PluginMenuItem(
     link="plugins:netbox_proxbox:nodes",
     link_text="Nodes (Devices)",
@@ -172,6 +177,7 @@ menu = PluginMenu(
             (
                 fullupdate_item,
                 dashboard_item,
+                clusters_item,
                 nodes_item,
                 virtual_machines_item,
                 lxc_containers_item,

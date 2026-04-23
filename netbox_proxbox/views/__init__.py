@@ -63,6 +63,7 @@ from .replication import (
     ReplicationView,
 )
 from .resource_list_views import (
+    ClustersView as _ClustersView,
     InterfacesView as _InterfacesView,
     IPAddressesView as _IPAddressesView,
     LXCContainersView as _LXCContainersView,
@@ -216,6 +217,9 @@ class CommunityView(ConditionalLoginRequiredMixin, View):
     def get(self, request: HttpRequest) -> HttpResponse:
         """Render the community template with a page title."""
         return render(request, self.template_name, {"title": "Join our Community!"})
+
+
+ClustersView = _ClustersView
 
 
 class NodesView(_NodesView):

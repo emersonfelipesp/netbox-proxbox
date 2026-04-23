@@ -1,0 +1,98 @@
+{% load helpers %}
+<div id="clusters-div" class="form form-horizontal">
+    <h2 id="proxmox-clusters-table" class="text-center">Clusters</h2>
+    <h3>Synced Clusters: <span id='synced-cluster-count'>{% if clusters %}{{ clusters|length }}{% else %}0{% endif %}</span></h3>
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-hover object-list">
+                <thead>
+                    <tr>
+                        <th class="text-center text-nowrap"><span class="mdi mdi-check-bold" title="Status"></span></th>
+                        <th class="text-center text-nowrap">ID</th>
+                        <th class="text-nowrap">Name</th>
+                        <th class="text-nowrap">Status</th>
+                        <th class="text-nowrap">Type</th>
+                        <th class="text-nowrap">Group</th>
+                        <th class="text-nowrap">Site</th>
+                        <th class="text-nowrap">Tenant</th>
+                        <th class="text-center text-nowrap">Devices</th>
+                        <th class="text-center text-nowrap">VMs</th>
+                        <th class="text-end text-nowrap noprint">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="cluster-table-data">
+                    {% if clusters %}
+                        {% for cluster in clusters %}
+                            <tr>
+                                <td class="text-center">
+                                    {% if cluster.status == 'active' %}
+                                        <span class="mdi mdi-check-circle text-success" title="Active"></span>
+                                    {% elif cluster.status == 'offline' %}
+                                        <span class="mdi mdi-close-circle text-danger" title="Offline"></span>
+                                    {% elif cluster.status == 'planned' %}
+                                        <span class="mdi text-info" title="Planned">—</span>
+                                    {% else %}
+                                        <span class="mdi text-secondary" title="{{ cluster.get_status_display }}">—</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center text-muted">{{ cluster.pk }}</td>
+                                <td>
+                                    <a href="{% url 'virtualization:cluster' cluster.pk %}" class="text-body text-decoration-none">
+                                        <span class="mdi mdi-server-network"></span> {{ cluster.name }}
+                                    </a>
+                                </td>
+                                <td>
+                                    <span class="badge text-bg-{{ cluster.get_status_color }}">{{ cluster.get_status_display }}</span>
+                                </td>
+                                <td>
+                                    {% if cluster.type %}
+                                        <a href="{% url 'virtualization:clustertype' cluster.type.pk %}" class="text-decoration-none">{{ cluster.type }}</a>
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if cluster.group %}
+                                        <a href="{% url 'virtualization:clustergroup' cluster.group.pk %}" class="text-decoration-none">{{ cluster.group }}</a>
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if cluster.site_display %}
+                                        <a href="{% url 'dcim:site' cluster.site_display.pk %}" class="text-decoration-none">{{ cluster.site_display }}</a>
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if cluster.tenant %}
+                                        <a href="{% url 'tenancy:tenant' cluster.tenant.pk %}" class="text-decoration-none">{{ cluster.tenant }}</a>
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">{{ cluster.device_count }}</td>
+                                <td class="text-center">{{ cluster.vm_count }}</td>
+                                <td class="text-end text-nowrap noprint">
+                                    <a href="{% url 'virtualization:cluster' cluster.pk %}" class="btn btn-sm btn-outline-dark" title="View">
+                                        <span class="mdi mdi-eye" aria-hidden="true"></span>
+                                    </a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="11" class="text-center text-muted p-4">
+                                <span class="mdi mdi-information-outline mdi-24px d-block mb-2"></span>
+                                No clusters synced with Proxbox yet.
+                                <br>
+                                <small>Clusters are created automatically when nodes or VMs are synced from Proxmox.</small>
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

@@ -24,12 +24,13 @@ Sync runs on-demand from the NetBox UI or scheduled automatically via NetBox's j
 
 | NetBox   | netbox-proxbox | proxbox-api | netbox-sdk     | proxmox-sdk    |
 |----------|----------------|-------------|----------------|----------------|
+| >=4.6.0  | v0.0.12        | v0.0.8      | v0.0.7.post4   | v0.0.2.post3   |
 | >=4.5.7  | v0.0.11        | v0.0.7      | v0.0.7.post4   | v0.0.2.post2   |
 
 ## Requirements
 
-- NetBox 4.5.x
-- Verified with NetBox v4.5.7 (django-rq 4.0 support line)
+- NetBox 4.6.x
+- Verified with NetBox v4.6.0-beta1
 - Python 3.12+
 - Proxmox VE 7.x or 8.x
 - Proxbox API backend (see below)

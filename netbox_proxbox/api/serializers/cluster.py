@@ -6,11 +6,23 @@ from netbox.api.fields import ChoiceField
 from netbox.api.serializers import NetBoxModelSerializer, WritableNestedSerializer
 from rest_framework import serializers
 from virtualization.api.serializers_.clusters import ClusterSerializer
-from dcim.api.serializers_.nested import NestedDeviceSerializer
+from dcim.choices import DeviceStatusChoices
+from dcim.models import Device
 
 from netbox_proxbox.choices import ProxmoxModeChoices
 from netbox_proxbox.models import ProxmoxCluster, ProxmoxNode
 from netbox_proxbox.api.serializers.endpoints import ProxmoxEndpointSerializer
+
+
+class NestedDeviceWithStatusSerializer(WritableNestedSerializer):
+    """Minimal Device serializer that also exposes the NetBox device status."""
+
+    status = ChoiceField(choices=DeviceStatusChoices)
+
+    class Meta:
+        model = Device
+        fields = ["id", "url", "display", "name", "status"]
+        brief_fields = ("id", "url", "display", "name")
 
 
 class NestedProxmoxEndpointSerializer(WritableNestedSerializer):
@@ -96,7 +108,7 @@ class ProxmoxNodeSerializer(NetBoxModelSerializer):
     )
     endpoint = NestedProxmoxEndpointSerializer()
     proxmox_cluster = NestedProxmoxClusterSerializer(required=False, allow_null=True)
-    netbox_device = NestedDeviceSerializer(required=False, allow_null=True)
+    netbox_device = NestedDeviceWithStatusSerializer(required=False, allow_null=True)
     memory_usage_percent = serializers.FloatField(read_only=True)
     cpu_usage_percent = serializers.FloatField(read_only=True)
 

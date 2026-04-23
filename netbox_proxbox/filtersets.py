@@ -51,7 +51,7 @@ class ProxmoxEndpointFilterSet(ProxboxModelFilterSet):
 
     class Meta:
         model = ProxmoxEndpoint
-        fields = ("id", "name", "domain", "ip_address", "mode")
+        fields = ("id", "name", "domain", "ip_address", "mode", "site", "tenant")
 
     def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
         """Match the search term against endpoint name or domain."""

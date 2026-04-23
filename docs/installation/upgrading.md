@@ -21,9 +21,9 @@ pip install -e /opt/netbox/netbox/netbox-proxbox
 
 ## Important Notes
 
-- Proxbox `0.0.10` targets NetBox `4.5.x`.
+- Proxbox `0.0.12` targets NetBox `4.6.x`. If you are still on NetBox `4.5.x`, use `0.0.11`.
 - Recent releases moved sync execution to NetBox Jobs and the default RQ queue, so keep a standard NetBox RQ worker running after upgrade.
-- Review the release notes before jumping from older `0.0.7` or early `0.0.9` installs; the `0.0.10` line continues the same NetBox `4.5.x` compatibility range.
+- Review the release notes before jumping from older `0.0.7` or early `0.0.9` installs; the `0.0.11` line continues the NetBox `4.5.x` compatibility range while `0.0.12` requires NetBox `4.6.0` or later.
 
 ## Backend Upgrade
 

@@ -118,11 +118,11 @@ class ProxboxConfig(PluginConfig):
     name = "netbox_proxbox"
     verbose_name = "Proxbox"
     description = "Integrates Proxmox and Netbox"
-    version = "0.0.11.post1"
+    version = "0.0.12"
     author = "Emerson Felipe (@emersonfelipesp)"
     author_email = "emersonfelipe.2003@gmail.com"
-    min_version = "4.5.0"
-    max_version = "4.5.99"
+    min_version = "4.6.0"
+    max_version = "4.6.99"
     base_url = "proxbox"
     required_settings = []
     queues = []
