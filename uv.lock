@@ -1529,7 +1529,7 @@ requires-dist = [
     { name = "invoke", marker = "extra == 'dev'", specifier = ">=2.2.1" },
     { name = "playwright", marker = "extra == 'screenshot'", specifier = ">=1.58.0" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0.0" },
-    { name = "proxbox-api", marker = "extra == 'test'", editable = "../proxbox-api" },
+    { name = "proxbox-api", marker = "extra == 'test'" },
     { name = "pydantic", specifier = ">=2.11.7" },
     { name = "pydocstyle", marker = "extra == 'dev'", specifier = ">=6.3.0" },
     { name = "pylint", marker = "extra == 'dev'", specifier = ">=4.0.5" },
@@ -1562,8 +1562,8 @@ dev = [
 
 [[package]]
 name = "netbox-sdk"
-version = "0.0.7.post5"
-source = { editable = "../netbox-sdk" }
+version = "0.0.7.post6"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
     { name = "email-validator" },
@@ -1571,61 +1571,9 @@ dependencies = [
     { name = "pyyaml" },
     { name = "rich" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "aiohttp", specifier = ">=3.13.4" },
-    { name = "email-validator", specifier = ">=2.3.0" },
-    { name = "fastapi", marker = "extra == 'all'", specifier = ">=0.115.0" },
-    { name = "fastapi", marker = "extra == 'dev'", specifier = ">=0.115.0" },
-    { name = "fastapi", marker = "extra == 'mock'", specifier = ">=0.115.0" },
-    { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27.0" },
-    { name = "mkdocs-material", marker = "extra == 'docs'", specifier = ">=9.7.6" },
-    { name = "mkdocs-static-i18n", extras = ["material"], marker = "extra == 'docs'", specifier = ">=1.3.0" },
-    { name = "playwright", marker = "extra == 'all'", specifier = ">=1.58.0" },
-    { name = "playwright", marker = "extra == 'demo'", specifier = ">=1.58.0" },
-    { name = "playwright", marker = "extra == 'dev'", specifier = ">=1.58.0" },
-    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.5.1" },
-    { name = "pydantic", specifier = ">=2.12.5" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.0.2" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=1.3.0" },
-    { name = "pytest-timeout", marker = "extra == 'dev'", specifier = ">=2.4.0" },
-    { name = "pytest-xdist", marker = "extra == 'dev'", specifier = ">=3.8.0" },
-    { name = "pyyaml", specifier = ">=6.0.3" },
-    { name = "rich", specifier = ">=14.3.3" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.15.8" },
-    { name = "textual", marker = "extra == 'all'", specifier = ">=8.2.0" },
-    { name = "textual", marker = "extra == 'dev'", specifier = ">=8.2.0" },
-    { name = "textual", marker = "extra == 'tui'", specifier = ">=8.2.0" },
-    { name = "ty", marker = "extra == 'dev'", specifier = ">=0.0.1a16" },
-    { name = "typer", marker = "extra == 'all'", specifier = ">=0.24.1" },
-    { name = "typer", marker = "extra == 'cli'", specifier = ">=0.24.1" },
-    { name = "typer", marker = "extra == 'dev'", specifier = ">=0.24.1" },
-    { name = "uvicorn", extras = ["standard"], marker = "extra == 'all'", specifier = ">=0.30.0" },
-    { name = "uvicorn", extras = ["standard"], marker = "extra == 'dev'", specifier = ">=0.30.0" },
-    { name = "uvicorn", extras = ["standard"], marker = "extra == 'mock'", specifier = ">=0.30.0" },
-]
-provides-extras = ["sdk", "tui", "cli", "demo", "mock", "all", "dev", "docs"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "fastapi", specifier = ">=0.115.0" },
-    { name = "httpx", specifier = ">=0.27.0" },
-    { name = "playwright", specifier = ">=1.58.0" },
-    { name = "pre-commit", specifier = ">=4.5.1" },
-    { name = "pytest", specifier = ">=9.0.2" },
-    { name = "pytest-asyncio", specifier = ">=1.3.0" },
-    { name = "pytest-timeout", specifier = ">=2.4.0" },
-    { name = "pytest-xdist", specifier = ">=3.8.0" },
-    { name = "ruff", specifier = ">=0.15.8" },
-    { name = "textual", specifier = ">=8.2.0" },
-    { name = "ty", specifier = ">=0.0.1a16" },
-    { name = "typer", specifier = ">=0.24.1" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.30.0" },
-]
-docs = [
-    { name = "mkdocs-material", specifier = ">=9.7.6" },
-    { name = "mkdocs-static-i18n", extras = ["material"], specifier = ">=1.3.0" },
+sdist = { url = "https://files.pythonhosted.org/packages/82/92/160f89fa4a0d9eecc709cc513a05071f21ff7f52d807df9e61227ab6a8e4/netbox_sdk-0.0.7.post6.tar.gz", hash = "sha256:2bfe04032f62dbe9593cdd73c029b440afe261697bfa8454acfbe3601e894b18", size = 2455379, upload-time = "2026-04-22T21:27:05.505Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a6/c4/efc2d31cc41dbd9e86c399367482a23720855cdb78fdd95e208a6097bbe8/netbox_sdk-0.0.7.post6-py3-none-any.whl", hash = "sha256:243379e9f0eddb4b91135ac84ac1b98bde6784915a868aceee6f589e05f3cb5e", size = 2535361, upload-time = "2026-04-22T21:27:03.407Z" },
 ]
 
 [[package]]
@@ -1804,7 +1752,7 @@ wheels = [
 [[package]]
 name = "proxbox-api"
 version = "0.0.8"
-source = { editable = "../proxbox-api" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiosqlite" },
     { name = "bcrypt" },
@@ -1814,49 +1762,24 @@ dependencies = [
     { name = "proxmox-sdk" },
     { name = "sqlmodel" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "aiosqlite", specifier = ">=0.20.0,<1.0.0" },
-    { name = "bcrypt", specifier = ">=4.0.0,<5.0.0" },
-    { name = "cryptography", specifier = ">=43.0.0,<50.0.0" },
-    { name = "fastapi", extras = ["standard"], specifier = ">=0.135.2,<1.0.0" },
-    { name = "granian", marker = "extra == 'granian'", specifier = ">=2.7.0" },
-    { name = "httpx", marker = "extra == 'e2e'", specifier = ">=0.28.1" },
-    { name = "httpx", marker = "extra == 'test'", specifier = ">=0.28.1" },
-    { name = "mkdocs", marker = "extra == 'docs'", specifier = ">=1.6.1" },
-    { name = "mkdocs-material", marker = "extra == 'docs'", specifier = ">=9.7.6" },
-    { name = "mkdocs-static-i18n", marker = "extra == 'docs'", specifier = ">=1.3.1" },
-    { name = "netbox-sdk", editable = "../netbox-sdk" },
-    { name = "playwright", marker = "extra == 'playwright'", specifier = ">=1.58.0" },
-    { name = "playwright", marker = "extra == 'test'", specifier = ">=1.58.0" },
-    { name = "proxmox-sdk", git = "https://github.com/emersonfelipesp/proxmox-sdk.git?rev=139d7bf" },
-    { name = "pytest", marker = "extra == 'e2e'", specifier = ">=9.0.3" },
-    { name = "pytest", marker = "extra == 'test'", specifier = ">=9.0.3" },
-    { name = "pytest-asyncio", marker = "extra == 'e2e'", specifier = ">=0.24.0" },
-    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.24.0" },
-    { name = "pytest-cov", marker = "extra == 'test'", specifier = ">=7.1.0" },
-    { name = "pytest-xdist", marker = "extra == 'e2e'", specifier = ">=3.6.1" },
-    { name = "pytest-xdist", marker = "extra == 'test'", specifier = ">=3.6.1" },
-    { name = "sqlmodel", specifier = ">=0.0.37,<1.0.0" },
-]
-provides-extras = ["test", "e2e", "playwright", "docs", "granian"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "ruff", specifier = ">=0.15.8" },
-    { name = "ty", specifier = ">=0.0.29" },
+sdist = { url = "https://files.pythonhosted.org/packages/45/ac/58d6cb436e5c3e80791eb7bc9bf1309556303aeb4fbc5efb616c3ca9290a/proxbox_api-0.0.8.tar.gz", hash = "sha256:fcf5f30792ab2f2d9cd407444a38fb793a6679dd0b5e1d929539ab697796fb64", size = 7053365, upload-time = "2026-04-23T12:49:26.925Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d4/37/84a62a5a5ef9024cbe660e4be144fc338e7ce7a10c57d58a8508b61ea64f/proxbox_api-0.0.8-py3-none-any.whl", hash = "sha256:0bb2fe0b6ade864598332f2e61b88ac70b1adb52d1c837ddbba5a0fc60c04f7a", size = 7427293, upload-time = "2026-04-23T12:49:24.564Z" },
 ]
 
 [[package]]
 name = "proxmox-sdk"
-version = "0.0.3"
-source = { git = "https://github.com/emersonfelipesp/proxmox-sdk.git?rev=139d7bf#139d7bf5273a2962a38448f1556741e5a9848217" }
+version = "0.0.3.post1"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
     { name = "fastapi", extra = ["standard"] },
     { name = "pyyaml" },
     { name = "slowapi" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a4/f2/866c1448acea43de5f849c4857619d7b059185d7de00cc202d3b4ba57e97/proxmox_sdk-0.0.3.post1.tar.gz", hash = "sha256:2fd3ee7a1cf25fe7ecbf72864249fd2faec359e12f07bfe894586a4de8aca284", size = 178709, upload-time = "2026-04-22T22:47:10.337Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/86/5d/c06f9585c45aab10907f084722e4d6f8144eeb38f99ffa3fd256338ddd07/proxmox_sdk-0.0.3.post1-py3-none-any.whl", hash = "sha256:0dc2eae6782621fc9d1af2995da1e198654429b83017eada4409c8b5eb009832", size = 211049, upload-time = "2026-04-22T22:47:09.061Z" },
 ]
 
 [[package]]

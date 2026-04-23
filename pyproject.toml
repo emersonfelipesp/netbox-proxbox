@@ -78,9 +78,6 @@ ignore = ["F403", "F401", "E501", "W293"]
 [tool.ruff.format]
 quote-style = "double"
 
-[tool.uv.sources]
-proxbox-api = { path = "../proxbox-api", editable = true }
-
 [dependency-groups]
 dev = [
     "griffe>=2.0.2",
