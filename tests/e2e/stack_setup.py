@@ -236,3 +236,24 @@ def assert_plugin_routes(
     for url in list_api_checks:
         response = requests.get(url, headers=headers, timeout=30)
         assert_ok(response, context=f"plugin api {url}")
+
+
+def create_proxbox_custom_fields(
+    proxbox_base_url: str, *, proxbox_api_key: str = ""
+) -> None:
+    """Call proxbox-api to create all Proxmox custom fields in NetBox.
+
+    Must be called before any device sync so that the proxmox_last_updated
+    custom field exists in NetBox when device prerequisites are written.
+    """
+    headers: dict[str, str] = (
+        {"X-Proxbox-API-Key": proxbox_api_key} if proxbox_api_key else {}
+    )
+    print("Creating Proxmox custom fields in NetBox via proxbox-api...")
+    response = requests.get(
+        f"{proxbox_base_url}/extras/custom-fields/create",
+        headers=headers,
+        timeout=60,
+    )
+    assert_ok(response, context="create proxmox custom fields")
+    print(f"Custom fields created: {len(response.json())} field(s)")
