@@ -251,7 +251,7 @@ def create_proxbox_custom_fields(
     )
     print("Creating Proxmox custom fields in NetBox via proxbox-api...")
     response = requests.get(
-        f"{proxbox_base_url}/extras/custom-fields/create",
+        f"{proxbox_base_url}/extras/extras/custom-fields/create",
         headers=headers,
         timeout=60,
     )
