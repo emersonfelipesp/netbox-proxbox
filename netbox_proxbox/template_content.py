@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from urllib.parse import quote
+
 from core.choices import JobStatusChoices
 from core.models import Job
 from django.utils.safestring import mark_safe
@@ -194,15 +196,18 @@ class ProxboxVirtualMachineTemplateExtension(PluginTemplateExtension):
         if not all([vmid, node, endpoint_url]):
             return ""
 
+        vmname_encoded = quote(str(obj.name), safe="")
+        node_encoded = quote(str(node), safe="")
+
         if vm_type == "lxc":
             console_url = (
                 f"{endpoint_url}/?console=lxc&xtermjs=1&vmid={vmid}"
-                f"&vmname={obj.name}&node={node}&cmd="
+                f"&vmname={vmname_encoded}&node={node_encoded}&cmd="
             )
         else:
             console_url = (
                 f"{endpoint_url}/?console=kvm&novnc=1&vmid={vmid}"
-                f"&vmname={obj.name}&node={node}&resize=off&cmd="
+                f"&vmname={vmname_encoded}&node={node_encoded}&resize=off&cmd="
             )
 
         return self.render(

@@ -50,3 +50,6 @@ class ProxboxPluginSettingsSerializer(NetBoxModelSerializer):
             "created",
             "last_updated",
         ]
+        extra_kwargs = {
+            "encryption_key": {"write_only": True},
+        }
