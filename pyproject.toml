@@ -43,7 +43,7 @@ test = [
     "proxbox-api",
 ]
 e2e = [
-    "fastapi>=0.116.1",
+    "fastapi==0.136.1",
     "uvicorn>=0.35.0",
 ]
 screenshot = [
