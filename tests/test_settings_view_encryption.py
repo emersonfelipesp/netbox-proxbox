@@ -65,6 +65,11 @@ def _fake_settings_obj(encryption_key: str = "") -> SimpleNamespace:
         proxmox_timeout=5,
         proxmox_max_retries=0,
         proxmox_retry_backoff="0.50",
+        overwrite_device_role=True,
+        overwrite_device_type=True,
+        overwrite_device_tags=True,
+        overwrite_vm_role=True,
+        overwrite_vm_tags=True,
         save=_save,
         _saved=saved,
     )
