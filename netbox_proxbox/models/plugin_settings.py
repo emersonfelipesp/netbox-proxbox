@@ -238,10 +238,11 @@ class ProxboxPluginSettings(NetBoxModel):
     )
     overwrite_vm_tags = models.BooleanField(
         default=True,
-        verbose_name=_("Overwrite VM tags"),
+        verbose_name=_("Merge VM tags"),
         help_text=_(
-            "When disabled, sync never changes the tags on existing NetBox virtual machines "
-            "that already have tags assigned. Tags are still applied when the VM is first created."
+            "When enabled, sync merges existing NetBox VM tags with the Proxbox tag, preserving "
+            "user-assigned tags. When disabled, sync never changes tags on existing virtual "
+            "machines; tags are still applied at VM creation."
         ),
     )
 

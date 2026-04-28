@@ -65,6 +65,38 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
 - **Run now on Job detail:** Shown only when the job is in a **terminal** state (**completed**, **errored**, or **failed**), including after **Cancel** (failed). It is **not** shown for **pending**, **scheduled**, or **running**—use **Cancel** first if a queued run should be abandoned, then **Run now** on the finished row to queue a new sync with the same parameters.
 - **Full update (UI vs jobs):** The plugin home may still use non-streaming helpers such as [`sync_full_update_resource`](./netbox_proxbox/services/backend_proxy.py) for JSON/redirect flows. Scheduled or immediate **Proxbox Sync** jobs use **`full-update/stream`** on proxbox-api and execute the full stage chain in one stream: devices, storage, virtual machines, virtual disks, backups, snapshots, network interfaces, IP addresses, VM interfaces, backup routines, and replications.
 
+## CI/CD Workflows
+
+### E2E Docker workflow (`e2e-docker.yml`)
+
+Accepts two inputs:
+
+| Input | Values | Default | Effect |
+|-------|--------|---------|--------|
+| `install_source` | `local`, `pypi`, `container`, `both` | `both` | How netbox-proxbox is installed inside the NetBox container |
+| `dependency_mode` | `dev`, `published` | `dev` | Whether proxbox-api is built from GitHub source or pulled from Docker Hub |
+
+**`dependency_mode: dev`** — clones `emersonfelipesp/proxbox-api` at HEAD and builds the `raw` Docker target locally. Use this for pre-publish E2E to verify against the latest source.
+
+**`dependency_mode: published`** — pulls `emersonfelipesp/proxbox-api:<PROXBOX_API_RELEASE_VERSION>` from Docker Hub. Use this for post-publish E2E to verify the released image works end-to-end.
+
+### Release pipeline (`publish-testpypi.yml`)
+
+```
+prepare-release
+├── e2e-docker-local  (install_source=local,  dependency_mode=dev)       ← pre-publish gate
+├── validate-testpypi (lint, type check, compile, tests)
+└── publish-pypi      (needs both above)
+      ├── e2e-docker-pypi       (install_source=pypi,      dependency_mode=published)
+      └── e2e-docker-container  (install_source=container, dependency_mode=published)
+```
+
+The pre-publish E2E (`e2e-docker-local` with `dependency_mode=dev`) gates `publish-pypi` — if the dev stack does not work end-to-end, the package is not published.
+
+The post-publish E2E jobs (`dependency_mode=published`) run after `publish-pypi` to verify that the published PyPI package works against the released proxbox-api Docker Hub image.
+
+---
+
 ## How To Navigate
 
 - Start with [`netbox_proxbox/CLAUDE.md`](./netbox_proxbox/CLAUDE.md) for the package-level map.
