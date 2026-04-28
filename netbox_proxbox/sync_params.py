@@ -69,6 +69,56 @@ def _primary_ip_preference_setting() -> str:
         return "ipv4"
 
 
+def _overwrite_device_role_setting() -> bool:
+    """Return plugin setting for whether sync should overwrite the device role."""
+    try:
+        from netbox_proxbox.models import ProxboxPluginSettings
+
+        return bool(ProxboxPluginSettings.get_solo().overwrite_device_role)
+    except (ImportError, RuntimeError, AttributeError):
+        return True
+
+
+def _overwrite_device_type_setting() -> bool:
+    """Return plugin setting for whether sync should overwrite the device type."""
+    try:
+        from netbox_proxbox.models import ProxboxPluginSettings
+
+        return bool(ProxboxPluginSettings.get_solo().overwrite_device_type)
+    except (ImportError, RuntimeError, AttributeError):
+        return True
+
+
+def _overwrite_device_tags_setting() -> bool:
+    """Return plugin setting for whether sync should overwrite device tags."""
+    try:
+        from netbox_proxbox.models import ProxboxPluginSettings
+
+        return bool(ProxboxPluginSettings.get_solo().overwrite_device_tags)
+    except (ImportError, RuntimeError, AttributeError):
+        return True
+
+
+def _overwrite_vm_role_setting() -> bool:
+    """Return plugin setting for whether sync should overwrite the VM role."""
+    try:
+        from netbox_proxbox.models import ProxboxPluginSettings
+
+        return bool(ProxboxPluginSettings.get_solo().overwrite_vm_role)
+    except (ImportError, RuntimeError, AttributeError):
+        return True
+
+
+def _overwrite_vm_tags_setting() -> bool:
+    """Return plugin setting for whether sync should overwrite VM tags."""
+    try:
+        from netbox_proxbox.models import ProxboxPluginSettings
+
+        return bool(ProxboxPluginSettings.get_solo().overwrite_vm_tags)
+    except (ImportError, RuntimeError, AttributeError):
+        return True
+
+
 def _serialize_sync_params(
     *,
     sync_types: list[str],

@@ -28,6 +28,11 @@ from netbox_proxbox.sync_params import (
     _use_guest_agent_interface_name_setting,
     _ignore_ipv6_link_local_addresses_setting,
     _primary_ip_preference_setting,
+    _overwrite_device_role_setting,
+    _overwrite_device_type_setting,
+    _overwrite_device_tags_setting,
+    _overwrite_vm_role_setting,
+    _overwrite_vm_tags_setting,
     _serialize_sync_params,
 )
 from netbox_proxbox.sync_ownership import (
@@ -166,6 +171,21 @@ def _build_base_query_params(
         "true" if _ignore_ipv6_link_local_addresses_setting() else "false"
     )
     base_query["primary_ip_preference"] = _primary_ip_preference_setting()
+    base_query["overwrite_device_role"] = (
+        "true" if _overwrite_device_role_setting() else "false"
+    )
+    base_query["overwrite_device_type"] = (
+        "true" if _overwrite_device_type_setting() else "false"
+    )
+    base_query["overwrite_device_tags"] = (
+        "true" if _overwrite_device_tags_setting() else "false"
+    )
+    base_query["overwrite_vm_role"] = (
+        "true" if _overwrite_vm_role_setting() else "false"
+    )
+    base_query["overwrite_vm_tags"] = (
+        "true" if _overwrite_vm_tags_setting() else "false"
+    )
     if proxmox_endpoint_ids:
         base_query["proxmox_endpoint_ids"] = ",".join(proxmox_endpoint_ids)
     if netbox_endpoint_ids:

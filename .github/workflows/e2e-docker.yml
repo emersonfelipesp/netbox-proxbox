@@ -8,6 +8,11 @@ on:
         required: false
         type: string
         default: both
+      dependency_mode:
+        description: "dev = build proxbox-api from GitHub source; published = pull from Docker Hub"
+        required: false
+        type: string
+        default: dev
   workflow_dispatch:
     inputs:
       install_source:
@@ -20,12 +25,20 @@ on:
           - pypi
           - container
         default: both
+      dependency_mode:
+        description: "dev = build proxbox-api from GitHub source; published = pull from Docker Hub"
+        required: false
+        type: choice
+        options:
+          - dev
+          - published
+        default: dev
   schedule:
     - cron: "31 2 * * *"
 
 env:
   PROXBOX_API_RELEASE_VERSION: 0.0.8
-  NETBOX_IMAGE: netboxcommunity/netbox:v4.6.0-beta1
+  NETBOX_IMAGE: netboxcommunity/netbox:v4.6.0-beta2
   PROXBOX_API_IMAGE: emersonfelipesp/proxbox-api
   PROXMOX_SDK_IMAGE: emersonfelipesp/proxmox-sdk
 
@@ -87,7 +100,6 @@ jobs:
             redis:7-alpine
 
           docker pull "${PROXMOX_SDK_IMAGE}:dev-nginx"
-          docker pull "${PROXBOX_API_IMAGE}:${PROXBOX_API_RELEASE_VERSION}"
           docker pull "${NETBOX_IMAGE}"
 
           docker run -d --name proxmox-e2e-mock --network proxbox-e2e -p 18006:8000 \
@@ -97,9 +109,18 @@ jobs:
             -e APP_MODULE=proxmox_sdk.mock_main:app \
             "${PROXMOX_SDK_IMAGE}:dev-nginx"
 
-          docker run -d --name proxbox-e2e-api --network proxbox-e2e -p 18800:8000 \
-            -e PROXBOX_SKIP_NETBOX_BOOTSTRAP=true \
-            "${PROXBOX_API_IMAGE}:${PROXBOX_API_RELEASE_VERSION}"
+          if [ "${{ inputs.dependency_mode }}" = "published" ]; then
+            docker pull "${PROXBOX_API_IMAGE}:${PROXBOX_API_RELEASE_VERSION}"
+            docker run -d --name proxbox-e2e-api --network proxbox-e2e -p 18800:8000 \
+              -e PROXBOX_SKIP_NETBOX_BOOTSTRAP=true \
+              "${PROXBOX_API_IMAGE}:${PROXBOX_API_RELEASE_VERSION}"
+          else
+            git clone --depth 1 https://github.com/emersonfelipesp/proxbox-api.git /tmp/proxbox-api-src
+            docker build --target raw -t proxbox-api-e2e:dev /tmp/proxbox-api-src
+            docker run -d --name proxbox-e2e-api --network proxbox-e2e -p 18800:8000 \
+              -e PROXBOX_SKIP_NETBOX_BOOTSTRAP=true \
+              proxbox-api-e2e:dev
+          fi
 
           if [ -n "${NETBOX_PLUGIN_MOUNT}" ]; then
             # shellcheck disable=SC2086

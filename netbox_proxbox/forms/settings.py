@@ -195,6 +195,52 @@ class ProxboxPluginSettingsForm(forms.Form):
         label="Proxmox retry back-off (seconds)",
         help_text="Default exponential back-off base delay in seconds between Proxmox retries. Individual endpoints can override this.",
     )
+    overwrite_device_role = forms.BooleanField(
+        required=False,
+        initial=True,
+        label="Overwrite device role",
+        help_text=(
+            "When disabled, sync never changes the device role on existing Proxmox node devices "
+            "that already have a role assigned. The role is still set when the device is first created."
+        ),
+    )
+    overwrite_device_type = forms.BooleanField(
+        required=False,
+        initial=True,
+        label="Overwrite device type",
+        help_text=(
+            "When disabled, sync never changes the device type on existing Proxmox node devices "
+            "that already have a device type assigned. The device type is still set at create time."
+        ),
+    )
+    overwrite_device_tags = forms.BooleanField(
+        required=False,
+        initial=True,
+        label="Overwrite device tags",
+        help_text=(
+            "When disabled, sync never changes the tags on existing Proxmox node devices "
+            "that already have tags assigned. Tags are still applied when the device is first created."
+        ),
+    )
+    overwrite_vm_role = forms.BooleanField(
+        required=False,
+        initial=True,
+        label="Overwrite VM role",
+        help_text=(
+            "When disabled, sync never changes the role on existing NetBox virtual machines "
+            "that already have a role assigned. The role is still set when the VM is first created."
+        ),
+    )
+    overwrite_vm_tags = forms.BooleanField(
+        required=False,
+        initial=True,
+        label="Merge VM tags",
+        help_text=(
+            "When enabled (default), sync ensures the Proxbox tag is present while preserving "
+            "all other existing tags. When disabled, sync never changes tags on existing virtual "
+            "machines; tags are still applied when the VM is first created."
+        ),
+    )
 
     def clean_backend_log_file_path(self) -> str:
         """Require an absolute log file path including a filename."""

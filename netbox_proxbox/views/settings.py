@@ -55,6 +55,11 @@ class SettingsView(
                 "proxmox_timeout": settings_obj.proxmox_timeout,
                 "proxmox_max_retries": settings_obj.proxmox_max_retries,
                 "proxmox_retry_backoff": settings_obj.proxmox_retry_backoff,
+                "overwrite_device_role": settings_obj.overwrite_device_role,
+                "overwrite_device_type": settings_obj.overwrite_device_type,
+                "overwrite_device_tags": settings_obj.overwrite_device_tags,
+                "overwrite_vm_role": settings_obj.overwrite_vm_role,
+                "overwrite_vm_tags": settings_obj.overwrite_vm_tags,
             }
         )
         return render(request, self.template_name, {"form": form})
@@ -139,6 +144,21 @@ class SettingsView(
             settings_obj.proxmox_retry_backoff = form.cleaned_data[
                 "proxmox_retry_backoff"
             ]
+            settings_obj.overwrite_device_role = form.cleaned_data.get(
+                "overwrite_device_role", True
+            )
+            settings_obj.overwrite_device_type = form.cleaned_data.get(
+                "overwrite_device_type", True
+            )
+            settings_obj.overwrite_device_tags = form.cleaned_data.get(
+                "overwrite_device_tags", True
+            )
+            settings_obj.overwrite_vm_role = form.cleaned_data.get(
+                "overwrite_vm_role", True
+            )
+            settings_obj.overwrite_vm_tags = form.cleaned_data.get(
+                "overwrite_vm_tags", True
+            )
             encryption_enabled = form.cleaned_data.get("encryption_enabled", False)
             if encryption_enabled:
                 new_key = form.cleaned_data.get("encryption_key", "").strip()
@@ -170,6 +190,11 @@ class SettingsView(
                     "proxmox_timeout",
                     "proxmox_max_retries",
                     "proxmox_retry_backoff",
+                    "overwrite_device_role",
+                    "overwrite_device_type",
+                    "overwrite_device_tags",
+                    "overwrite_vm_role",
+                    "overwrite_vm_tags",
                 ]
             )
             messages.success(request, "Proxbox plugin settings updated.")

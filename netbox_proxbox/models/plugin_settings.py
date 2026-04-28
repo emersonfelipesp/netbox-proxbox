@@ -204,6 +204,47 @@ class ProxboxPluginSettings(NetBoxModel):
             "Individual endpoints can override this value."
         ),
     )
+    overwrite_device_role = models.BooleanField(
+        default=True,
+        verbose_name=_("Overwrite device role"),
+        help_text=_(
+            "When disabled, sync never changes the device role on existing Proxmox node devices "
+            "that already have a role assigned. The role is still set when the device is first created."
+        ),
+    )
+    overwrite_device_type = models.BooleanField(
+        default=True,
+        verbose_name=_("Overwrite device type"),
+        help_text=_(
+            "When disabled, sync never changes the device type on existing Proxmox node devices "
+            "that already have a device type assigned. The device type is still set at create time."
+        ),
+    )
+    overwrite_device_tags = models.BooleanField(
+        default=True,
+        verbose_name=_("Overwrite device tags"),
+        help_text=_(
+            "When disabled, sync never changes the tags on existing Proxmox node devices "
+            "that already have tags assigned. Tags are still applied when the device is first created."
+        ),
+    )
+    overwrite_vm_role = models.BooleanField(
+        default=True,
+        verbose_name=_("Overwrite VM role"),
+        help_text=_(
+            "When disabled, sync never changes the role on existing NetBox virtual machines "
+            "that already have a role assigned. The role is still set when the VM is first created."
+        ),
+    )
+    overwrite_vm_tags = models.BooleanField(
+        default=True,
+        verbose_name=_("Merge VM tags"),
+        help_text=_(
+            "When enabled, sync merges existing NetBox VM tags with the Proxbox tag, preserving "
+            "user-assigned tags. When disabled, sync never changes tags on existing virtual "
+            "machines; tags are still applied at VM creation."
+        ),
+    )
 
     class Meta:
         verbose_name = _("Proxbox plugin settings")
