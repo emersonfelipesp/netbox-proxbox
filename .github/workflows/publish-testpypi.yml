@@ -133,6 +133,7 @@ jobs:
     uses: ./.github/workflows/e2e-docker.yml
     with:
       install_source: local
+      dependency_mode: dev
 
   publish-pypi:
     name: publish to PyPI
@@ -174,6 +175,7 @@ jobs:
     uses: ./.github/workflows/e2e-docker.yml
     with:
       install_source: pypi
+      dependency_mode: published
 
   e2e-docker-container:
     name: E2E Docker / container
@@ -182,3 +184,4 @@ jobs:
     uses: ./.github/workflows/e2e-docker.yml
     with:
       install_source: container
+      dependency_mode: published
