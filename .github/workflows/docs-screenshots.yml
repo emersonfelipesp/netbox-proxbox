@@ -210,6 +210,7 @@ jobs:
             exit 0
           fi
           git commit -m "chore: update UI screenshots [skip ci]"
+          git pull --rebase origin develop
           git push
 
       - name: Install documentation dependencies
