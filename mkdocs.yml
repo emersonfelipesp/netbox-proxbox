@@ -127,6 +127,7 @@ nav:
     - Backend Logs: 'features/backend-logs.md'
     - Monitoring: 'features/monitoring.md'
     - API Integration: 'features/api-integration.md'
+    - Endpoint Import / Export: 'features/endpoint-import-export.md'
   - Data Model:
     - Virtual Machine: 'models/virtual-machine.md'
     - Containers: 'models/containers.md'

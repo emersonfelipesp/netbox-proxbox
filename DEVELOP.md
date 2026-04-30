@@ -6,7 +6,7 @@ This guide covers development setup, testing, and release processes for Proxbox.
 
 - Python 3.12+
 - Git
-- A running NetBox 4.5.x instance (for integration testing)
+- A running NetBox 4.6.x instance (tested against 4.6.0-beta2; for integration testing)
 - Proxmox VE (optional, for full integration tests)
 
 ## Development Environment Setup
