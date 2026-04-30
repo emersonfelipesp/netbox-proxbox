@@ -45,6 +45,15 @@ def div(value: object, arg: object) -> int:
         return 0
 
 
+@register.filter(name="form_field")
+def form_field(form: object, name: str) -> object:
+    """Look up a bound form field by string name (for dynamically-named fields)."""
+    try:
+        return form[name]
+    except (KeyError, TypeError):
+        return ""
+
+
 @register.filter
 def sync_type_label(slug: str) -> str:
     """Convert sync type slug to user-friendly label."""

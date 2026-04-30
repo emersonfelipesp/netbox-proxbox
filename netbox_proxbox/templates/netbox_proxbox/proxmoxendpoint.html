@@ -94,6 +94,30 @@
             {% include 'inc/panels/custom_fields.html' %}
         </div>
         <div class="col col-md-6">
+            <div class="card">
+                <h5 class="card-header">Sync Overwrite Behavior</h5>
+                <div class="card-body">
+                    <table class="table table-hover attr-table">
+                        {% for row in overwrite_rows %}
+                        <tr>
+                            <th scope="row">{{ row.label }}</th>
+                            <td>
+                                {% if row.value %}
+                                    <span class="badge text-bg-success">Yes</span>
+                                {% else %}
+                                    <span class="badge text-bg-secondary">No</span>
+                                {% endif %}
+                                {% if row.is_override %}
+                                    <span class="badge text-bg-warning ms-1">override</span>
+                                {% else %}
+                                    <span class="badge text-bg-light ms-1">global</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </table>
+                </div>
+            </div>
             {% include 'inc/panels/tags.html' %}
             {% include 'inc/panels/comments.html' %}
         </div>

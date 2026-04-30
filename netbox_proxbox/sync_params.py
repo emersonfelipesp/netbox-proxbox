@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from netbox_proxbox.choices import SyncTypeChoices
+from netbox_proxbox.constants import OVERWRITE_FIELDS
 from netbox_proxbox.sync_types import (
     _TARGETED_VM_JOB_NAME_RE,
     _TARGETED_VM_SYNC_TYPES,
@@ -117,6 +118,41 @@ def _overwrite_vm_tags_setting() -> bool:
         return bool(ProxboxPluginSettings.get_solo().overwrite_vm_tags)
     except (ImportError, RuntimeError, AttributeError):
         return True
+
+
+def _global_overwrites() -> dict[str, bool]:
+    """Return overwrite flags from the global plugin settings singleton."""
+    try:
+        from netbox_proxbox.models import ProxboxPluginSettings
+
+        settings = ProxboxPluginSettings.get_solo()
+        return {name: bool(getattr(settings, name)) for name in OVERWRITE_FIELDS}
+    except (ImportError, RuntimeError, AttributeError):
+        return {name: True for name in OVERWRITE_FIELDS}
+
+
+def effective_overwrites_for_endpoint(
+    proxmox_endpoint_id: int | str | None,
+) -> dict[str, bool]:
+    """Resolve overwrite flags for a single endpoint, falling back to global when unset.
+
+    When ``proxmox_endpoint_id`` is ``None`` or the endpoint cannot be loaded the
+    result mirrors the global ProxboxPluginSettings singleton, so non-endpoint
+    contexts behave exactly like before this helper existed.
+    """
+    if proxmox_endpoint_id in (None, "", 0, "0"):
+        return _global_overwrites()
+    try:
+        from netbox_proxbox.models import ProxmoxEndpoint
+
+        endpoint = ProxmoxEndpoint.objects.filter(pk=int(proxmox_endpoint_id)).first()
+    except (ImportError, RuntimeError, ValueError, TypeError):
+        return _global_overwrites()
+    if endpoint is None:
+        return _global_overwrites()
+    return {
+        name: bool(value) for name, value in endpoint.effective_overwrites().items()
+    }
 
 
 def _serialize_sync_params(

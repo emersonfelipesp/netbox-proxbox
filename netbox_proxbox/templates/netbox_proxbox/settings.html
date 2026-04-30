@@ -1,6 +1,7 @@
 {% extends 'base/layout.html' %}
 {% load form_helpers %}
 {% load i18n %}
+{% load proxbox_tags %}
 
 {% block title %}{% trans "Proxbox Settings" %}{% endblock %}
 
@@ -51,6 +52,35 @@
                     {% render_field form.custom_fields_request_delay %}
                 </div>
             </div>
+            {# Sync Overwrite Behavior — one card per resource category #}
+            <div class="card mb-3">
+                <h5 class="card-header">
+                    <i class="mdi mdi-pencil-circle"></i>
+                    {% trans "Sync Overwrite Behavior" %}
+                </h5>
+                <div class="card-body">
+                    <p class="text-muted">
+                        {% blocktrans trimmed %}
+                        Control whether sync overwrites specific fields on existing NetBox objects.
+                        These are the global defaults; individual Proxmox endpoints can override
+                        each value from their Settings tab.
+                        {% endblocktrans %}
+                    </p>
+                </div>
+            </div>
+            {% for group_label, group_fields in overwrite_field_groups %}
+            <div class="card mb-3">
+                <h5 class="card-header">
+                    <i class="mdi mdi-pencil-circle-outline"></i>
+                    {{ group_label }}
+                </h5>
+                <div class="card-body">
+                    {% for field_name in group_fields %}
+                        {% render_field form|form_field:field_name %}
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
             {# Proxmox API Card #}
             <div class="card mb-3">
                 <h5 class="card-header">

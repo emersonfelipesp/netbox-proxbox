@@ -19,6 +19,7 @@ from tenancy.models import Tenant
 from django.utils.translation import gettext as _
 
 # Proxbox Imports
+from ..constants import OVERWRITE_FIELDS
 from ..models import ProxmoxEndpoint
 from ..choices import ProxmoxModeChoices
 
@@ -94,9 +95,6 @@ class ProxmoxEndpointForm(NetBoxModelForm):
             "token_name",
             "token_value",
             "verify_ssl",
-            "timeout",
-            "max_retries",
-            "retry_backoff",
             "site",
             "tenant",
             "tags",
@@ -121,6 +119,39 @@ class ProxmoxEndpointForm(NetBoxModelForm):
                 cleaned_data["token_value"] = self.instance.token_value
 
         return cleaned_data
+
+
+class ProxmoxEndpointSettingsForm(NetBoxModelForm):
+    """Per-endpoint Proxmox-specific overrides exposed on the Settings tab.
+
+    Connection tunables (timeout / retries) and overwrite flags live here so the
+    main edit form keeps a tight focus on identity, network, and credentials.
+    Overwrite fields are tri-state: empty = inherit from the global plugin setting.
+    """
+
+    class Meta:
+        model = ProxmoxEndpoint
+        fields = (
+            "timeout",
+            "max_retries",
+            "retry_backoff",
+            *OVERWRITE_FIELDS,
+        )
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        super().__init__(*args, **kwargs)
+        for name in OVERWRITE_FIELDS:
+            label = name.removeprefix("overwrite_").replace("_", " ").capitalize()
+            if name == "overwrite_vm_tags":
+                label = "Merge VM tags"
+            self.fields[name] = forms.NullBooleanField(
+                required=False,
+                widget=forms.NullBooleanSelect,
+                label=_(label),
+                help_text=_(
+                    "Leave blank to inherit the global Proxbox plugin setting."
+                ),
+            )
 
 
 class ProxmoxEndpointFilterForm(NetBoxModelFilterSetForm):
@@ -188,6 +219,7 @@ class ProxmoxEndpointImportForm(NetBoxModelImportForm):
             "timeout",
             "max_retries",
             "retry_backoff",
+            *OVERWRITE_FIELDS,
             "site",
             "tenant",
             "tags",

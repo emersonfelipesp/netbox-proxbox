@@ -28,12 +28,8 @@ from netbox_proxbox.sync_params import (
     _use_guest_agent_interface_name_setting,
     _ignore_ipv6_link_local_addresses_setting,
     _primary_ip_preference_setting,
-    _overwrite_device_role_setting,
-    _overwrite_device_type_setting,
-    _overwrite_device_tags_setting,
-    _overwrite_vm_role_setting,
-    _overwrite_vm_tags_setting,
     _serialize_sync_params,
+    effective_overwrites_for_endpoint,
 )
 from netbox_proxbox.sync_ownership import (
     _claim_rq_sync_ownership,
@@ -161,7 +157,13 @@ def _build_base_query_params(
     proxmox_endpoint_ids: list[str] | None,
     netbox_endpoint_ids: list[str] | None,
 ) -> dict[str, str]:
-    """Build base query parameters for sync stages."""
+    """Build base query parameters for sync stages.
+
+    Overwrite flags resolve per-endpoint when exactly one Proxmox endpoint is in
+    scope, falling back to the global ``ProxboxPluginSettings`` singleton
+    otherwise (zero or multiple endpoints — the backend cannot accept a per-
+    endpoint map over a flat query string).
+    """
     base_query: dict[str, str] = {}
     base_query["use_guest_agent_interface_name"] = (
         "true" if _use_guest_agent_interface_name_setting() else "false"
@@ -171,21 +173,16 @@ def _build_base_query_params(
         "true" if _ignore_ipv6_link_local_addresses_setting() else "false"
     )
     base_query["primary_ip_preference"] = _primary_ip_preference_setting()
-    base_query["overwrite_device_role"] = (
-        "true" if _overwrite_device_role_setting() else "false"
+
+    single_endpoint_id = (
+        proxmox_endpoint_ids[0]
+        if proxmox_endpoint_ids and len(proxmox_endpoint_ids) == 1
+        else None
     )
-    base_query["overwrite_device_type"] = (
-        "true" if _overwrite_device_type_setting() else "false"
-    )
-    base_query["overwrite_device_tags"] = (
-        "true" if _overwrite_device_tags_setting() else "false"
-    )
-    base_query["overwrite_vm_role"] = (
-        "true" if _overwrite_vm_role_setting() else "false"
-    )
-    base_query["overwrite_vm_tags"] = (
-        "true" if _overwrite_vm_tags_setting() else "false"
-    )
+    overwrites = effective_overwrites_for_endpoint(single_endpoint_id)
+    for name, value in overwrites.items():
+        base_query[name] = "true" if value else "false"
+
     if proxmox_endpoint_ids:
         base_query["proxmox_endpoint_ids"] = ",".join(proxmox_endpoint_ids)
     if netbox_endpoint_ids:

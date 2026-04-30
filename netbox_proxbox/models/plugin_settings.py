@@ -245,6 +245,118 @@ class ProxboxPluginSettings(NetBoxModel):
             "machines; tags are still applied at VM creation."
         ),
     )
+    overwrite_device_status = models.BooleanField(
+        default=True,
+        verbose_name=_("Overwrite device status"),
+        help_text=_(
+            "When disabled, sync never changes the status on existing Proxmox node devices."
+        ),
+    )
+    overwrite_device_description = models.BooleanField(
+        default=True,
+        verbose_name=_("Overwrite device description"),
+        help_text=_(
+            "When disabled, sync never changes the description on existing Proxmox node devices."
+        ),
+    )
+    overwrite_device_custom_fields = models.BooleanField(
+        default=True,
+        verbose_name=_("Overwrite device custom fields"),
+        help_text=_(
+            "When disabled, sync never changes custom fields on existing Proxmox node devices."
+        ),
+    )
+    overwrite_vm_description = models.BooleanField(
+        default=True,
+        verbose_name=_("Overwrite VM description"),
+        help_text=_(
+            "When disabled, sync never changes the description on existing NetBox virtual machines."
+        ),
+    )
+    overwrite_vm_custom_fields = models.BooleanField(
+        default=True,
+        verbose_name=_("Overwrite VM custom fields"),
+        help_text=_(
+            "When disabled, sync never changes custom fields on existing NetBox virtual machines."
+        ),
+    )
+    overwrite_cluster_tags = models.BooleanField(
+        default=True,
+        verbose_name=_("Overwrite cluster tags"),
+        help_text=_(
+            "When disabled, sync never changes tags on existing NetBox virtualization clusters."
+        ),
+    )
+    overwrite_cluster_description = models.BooleanField(
+        default=True,
+        verbose_name=_("Overwrite cluster description"),
+        help_text=_(
+            "When disabled, sync never changes the description on existing NetBox virtualization clusters."
+        ),
+    )
+    overwrite_cluster_custom_fields = models.BooleanField(
+        default=True,
+        verbose_name=_("Overwrite cluster custom fields"),
+        help_text=_(
+            "When disabled, sync never changes custom fields on existing NetBox virtualization clusters."
+        ),
+    )
+    overwrite_node_interface_tags = models.BooleanField(
+        default=True,
+        verbose_name=_("Overwrite node interface tags"),
+        help_text=_(
+            "When disabled, sync never changes tags on existing physical interfaces of Proxmox node devices."
+        ),
+    )
+    overwrite_node_interface_custom_fields = models.BooleanField(
+        default=True,
+        verbose_name=_("Overwrite node interface custom fields"),
+        help_text=_(
+            "When disabled, sync never changes custom fields on existing physical interfaces of Proxmox node devices."
+        ),
+    )
+    overwrite_storage_tags = models.BooleanField(
+        default=True,
+        verbose_name=_("Overwrite storage tags"),
+        help_text=_(
+            "When disabled, sync never changes tags on existing ProxmoxStorage records."
+        ),
+    )
+    overwrite_vm_interface_tags = models.BooleanField(
+        default=True,
+        verbose_name=_("Overwrite VM interface tags"),
+        help_text=_(
+            "When disabled, sync never changes tags on existing virtual-machine interfaces."
+        ),
+    )
+    overwrite_vm_interface_custom_fields = models.BooleanField(
+        default=True,
+        verbose_name=_("Overwrite VM interface custom fields"),
+        help_text=_(
+            "When disabled, sync never changes custom fields on existing virtual-machine interfaces."
+        ),
+    )
+    overwrite_ip_status = models.BooleanField(
+        default=True,
+        verbose_name=_("Overwrite IP status"),
+        help_text=_(
+            "When disabled, sync never changes the status of existing IP addresses assigned to VM interfaces."
+        ),
+    )
+    overwrite_ip_tags = models.BooleanField(
+        default=True,
+        verbose_name=_("Overwrite IP tags"),
+        help_text=_(
+            "When disabled, sync never changes tags on existing IP addresses assigned to VM interfaces."
+        ),
+    )
+    overwrite_ip_custom_fields = models.BooleanField(
+        default=True,
+        verbose_name=_("Overwrite IP custom fields"),
+        help_text=_(
+            "When disabled, sync never changes custom fields on existing IP addresses assigned to VM interfaces."
+        ),
+    )
 
     class Meta:
         verbose_name = _("Proxbox plugin settings")

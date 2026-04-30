@@ -7,6 +7,7 @@ from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 
 from netbox_proxbox.choices import ProxmoxModeChoices
+from netbox_proxbox.constants import OVERWRITE_FIELDS
 from netbox_proxbox.fields import DomainField
 from netbox_proxbox.models.base import PORT_VALIDATORS, EndpointBase
 
@@ -113,6 +114,174 @@ class ProxmoxEndpoint(EndpointBase):
             "Leave blank to use the global default."
         ),
     )
+    overwrite_device_role = models.BooleanField(
+        null=True,
+        blank=True,
+        verbose_name=_("Overwrite device role"),
+        help_text=_(
+            "Per-endpoint override for the global Proxbox setting. Leave blank to inherit."
+        ),
+    )
+    overwrite_device_type = models.BooleanField(
+        null=True,
+        blank=True,
+        verbose_name=_("Overwrite device type"),
+        help_text=_(
+            "Per-endpoint override for the global Proxbox setting. Leave blank to inherit."
+        ),
+    )
+    overwrite_device_tags = models.BooleanField(
+        null=True,
+        blank=True,
+        verbose_name=_("Overwrite device tags"),
+        help_text=_(
+            "Per-endpoint override for the global Proxbox setting. Leave blank to inherit."
+        ),
+    )
+    overwrite_device_status = models.BooleanField(
+        null=True,
+        blank=True,
+        verbose_name=_("Overwrite device status"),
+        help_text=_(
+            "Per-endpoint override for the global Proxbox setting. Leave blank to inherit."
+        ),
+    )
+    overwrite_device_description = models.BooleanField(
+        null=True,
+        blank=True,
+        verbose_name=_("Overwrite device description"),
+        help_text=_(
+            "Per-endpoint override for the global Proxbox setting. Leave blank to inherit."
+        ),
+    )
+    overwrite_device_custom_fields = models.BooleanField(
+        null=True,
+        blank=True,
+        verbose_name=_("Overwrite device custom fields"),
+        help_text=_(
+            "Per-endpoint override for the global Proxbox setting. Leave blank to inherit."
+        ),
+    )
+    overwrite_vm_role = models.BooleanField(
+        null=True,
+        blank=True,
+        verbose_name=_("Overwrite VM role"),
+        help_text=_(
+            "Per-endpoint override for the global Proxbox setting. Leave blank to inherit."
+        ),
+    )
+    overwrite_vm_tags = models.BooleanField(
+        null=True,
+        blank=True,
+        verbose_name=_("Merge VM tags"),
+        help_text=_(
+            "Per-endpoint override for the global Proxbox setting. Leave blank to inherit."
+        ),
+    )
+    overwrite_vm_description = models.BooleanField(
+        null=True,
+        blank=True,
+        verbose_name=_("Overwrite VM description"),
+        help_text=_(
+            "Per-endpoint override for the global Proxbox setting. Leave blank to inherit."
+        ),
+    )
+    overwrite_vm_custom_fields = models.BooleanField(
+        null=True,
+        blank=True,
+        verbose_name=_("Overwrite VM custom fields"),
+        help_text=_(
+            "Per-endpoint override for the global Proxbox setting. Leave blank to inherit."
+        ),
+    )
+    overwrite_cluster_tags = models.BooleanField(
+        null=True,
+        blank=True,
+        verbose_name=_("Overwrite cluster tags"),
+        help_text=_(
+            "Per-endpoint override for the global Proxbox setting. Leave blank to inherit."
+        ),
+    )
+    overwrite_cluster_description = models.BooleanField(
+        null=True,
+        blank=True,
+        verbose_name=_("Overwrite cluster description"),
+        help_text=_(
+            "Per-endpoint override for the global Proxbox setting. Leave blank to inherit."
+        ),
+    )
+    overwrite_cluster_custom_fields = models.BooleanField(
+        null=True,
+        blank=True,
+        verbose_name=_("Overwrite cluster custom fields"),
+        help_text=_(
+            "Per-endpoint override for the global Proxbox setting. Leave blank to inherit."
+        ),
+    )
+    overwrite_node_interface_tags = models.BooleanField(
+        null=True,
+        blank=True,
+        verbose_name=_("Overwrite node interface tags"),
+        help_text=_(
+            "Per-endpoint override for the global Proxbox setting. Leave blank to inherit."
+        ),
+    )
+    overwrite_node_interface_custom_fields = models.BooleanField(
+        null=True,
+        blank=True,
+        verbose_name=_("Overwrite node interface custom fields"),
+        help_text=_(
+            "Per-endpoint override for the global Proxbox setting. Leave blank to inherit."
+        ),
+    )
+    overwrite_storage_tags = models.BooleanField(
+        null=True,
+        blank=True,
+        verbose_name=_("Overwrite storage tags"),
+        help_text=_(
+            "Per-endpoint override for the global Proxbox setting. Leave blank to inherit."
+        ),
+    )
+    overwrite_vm_interface_tags = models.BooleanField(
+        null=True,
+        blank=True,
+        verbose_name=_("Overwrite VM interface tags"),
+        help_text=_(
+            "Per-endpoint override for the global Proxbox setting. Leave blank to inherit."
+        ),
+    )
+    overwrite_vm_interface_custom_fields = models.BooleanField(
+        null=True,
+        blank=True,
+        verbose_name=_("Overwrite VM interface custom fields"),
+        help_text=_(
+            "Per-endpoint override for the global Proxbox setting. Leave blank to inherit."
+        ),
+    )
+    overwrite_ip_status = models.BooleanField(
+        null=True,
+        blank=True,
+        verbose_name=_("Overwrite IP status"),
+        help_text=_(
+            "Per-endpoint override for the global Proxbox setting. Leave blank to inherit."
+        ),
+    )
+    overwrite_ip_tags = models.BooleanField(
+        null=True,
+        blank=True,
+        verbose_name=_("Overwrite IP tags"),
+        help_text=_(
+            "Per-endpoint override for the global Proxbox setting. Leave blank to inherit."
+        ),
+    )
+    overwrite_ip_custom_fields = models.BooleanField(
+        null=True,
+        blank=True,
+        verbose_name=_("Overwrite IP custom fields"),
+        help_text=_(
+            "Per-endpoint override for the global Proxbox setting. Leave blank to inherit."
+        ),
+    )
     site = models.ForeignKey(
         to="dcim.Site",
         on_delete=models.SET_NULL,
@@ -143,3 +312,15 @@ class ProxmoxEndpoint(EndpointBase):
     def get_absolute_url(self) -> str:
         """Plugin UI URL for this Proxmox endpoint detail view."""
         return reverse("plugins:netbox_proxbox:proxmoxendpoint", args=[self.pk])
+
+    def effective_overwrites(self) -> dict[str, bool]:
+        """Resolve overwrite flags by falling back to the global plugin singleton when NULL."""
+        from netbox_proxbox.models.plugin_settings import ProxboxPluginSettings
+
+        settings = ProxboxPluginSettings.get_solo()
+        return {
+            name: getattr(self, name)
+            if getattr(self, name) is not None
+            else getattr(settings, name)
+            for name in OVERWRITE_FIELDS
+        }

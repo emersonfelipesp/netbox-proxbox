@@ -8,13 +8,14 @@ from netbox.api.authentication import TokenAuthentication
 from netbox.views import generic
 from utilities.permissions import get_permission_for_model
 from utilities.query import reapply_model_ordering
-from utilities.views import register_model_view
+from utilities.views import ViewTab, register_model_view
 
 from netbox_proxbox.filtersets import ProxmoxEndpointFilterSet
 from netbox_proxbox.forms import (
     ProxmoxEndpointFilterForm,
     ProxmoxEndpointForm,
     ProxmoxEndpointImportForm,
+    ProxmoxEndpointSettingsForm,
 )
 from netbox_proxbox.models import ProxmoxEndpoint
 from netbox_proxbox.tables import ProxmoxEndpointTable
@@ -27,6 +28,7 @@ __all__ = (
     "ProxmoxEndpointView",
     "ProxmoxEndpointListView",
     "ProxmoxEndpointEditView",
+    "ProxmoxEndpointSettingsView",
     "ProxmoxEndpointDeleteView",
     "ProxmoxEndpointBulkImportView",
     "ProxmoxEndpointExportView",
@@ -41,6 +43,24 @@ class ProxmoxEndpointView(generic.ObjectView):
     """
 
     queryset = ProxmoxEndpoint.objects.all()
+
+    def get_extra_context(
+        self, request: HttpRequest, instance: ProxmoxEndpoint
+    ) -> dict[str, object]:
+        """Expose resolved overwrite map plus per-field override origin to the template."""
+        from netbox_proxbox.constants import OVERWRITE_FIELDS
+
+        effective = instance.effective_overwrites()
+        overwrite_rows = [
+            {
+                "field": name,
+                "label": instance._meta.get_field(name).verbose_name,
+                "value": effective[name],
+                "is_override": getattr(instance, name) is not None,
+            }
+            for name in OVERWRITE_FIELDS
+        ]
+        return {"overwrite_rows": overwrite_rows}
 
 
 @register_model_view(ProxmoxEndpoint, "list", path="", detail=False)
@@ -266,6 +286,34 @@ class ProxmoxEndpointEditView(generic.ObjectEditView):
 
     queryset = ProxmoxEndpoint.objects.all()
     form = ProxmoxEndpointForm
+
+
+@register_model_view(ProxmoxEndpoint, "settings", path="settings")
+class ProxmoxEndpointSettingsView(generic.ObjectEditView):
+    """
+    Edit Proxmox-specific per-endpoint overrides on a dedicated Settings tab.
+
+    Hosts connection tunables (timeout / max_retries / retry_backoff) and the
+    per-endpoint overwrite_* overrides. Empty overwrite values fall back to the
+    global ProxboxPluginSettings.
+    """
+
+    queryset = ProxmoxEndpoint.objects.all()
+    form = ProxmoxEndpointSettingsForm
+    template_name = "netbox_proxbox/proxmoxendpoint_settings.html"
+    tab = ViewTab(
+        label="Settings",
+        permission="netbox_proxbox.change_proxmoxendpoint",
+        weight=900,
+    )
+
+    def get_extra_context(
+        self, request: HttpRequest, instance: ProxmoxEndpoint
+    ) -> dict[str, object]:
+        """Expose grouped overwrite metadata so the template can render category cards."""
+        from netbox_proxbox.constants import OVERWRITE_FIELD_GROUPS
+
+        return {"overwrite_field_groups": OVERWRITE_FIELD_GROUPS}
 
 
 @register_model_view(ProxmoxEndpoint, "delete")

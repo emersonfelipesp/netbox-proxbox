@@ -5,6 +5,7 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.views import View
 
+from netbox_proxbox.constants import OVERWRITE_FIELD_GROUPS, OVERWRITE_FIELDS
 from netbox_proxbox.forms.settings import ProxboxPluginSettingsForm
 from netbox_proxbox.models import ProxboxPluginSettings
 from netbox_proxbox.views.proxbox_access import (
@@ -32,37 +33,37 @@ class SettingsView(
     def get(self, request: HttpRequest) -> HttpResponse:
         """Handle get."""
         settings_obj = ProxboxPluginSettings.get_solo()
-        form = ProxboxPluginSettingsForm(
-            initial={
-                "use_guest_agent_interface_name": settings_obj.use_guest_agent_interface_name,
-                "proxbox_fetch_max_concurrency": settings_obj.proxbox_fetch_max_concurrency,
-                "ignore_ipv6_link_local_addresses": settings_obj.ignore_ipv6_link_local_addresses,
-                "primary_ip_preference": settings_obj.primary_ip_preference,
-                "netbox_max_concurrent": settings_obj.netbox_max_concurrent,
-                "netbox_max_retries": settings_obj.netbox_max_retries,
-                "netbox_retry_delay": settings_obj.netbox_retry_delay,
-                "netbox_get_cache_ttl": settings_obj.netbox_get_cache_ttl,
-                "bulk_batch_size": settings_obj.bulk_batch_size,
-                "bulk_batch_delay_ms": settings_obj.bulk_batch_delay_ms,
-                "vm_sync_max_concurrency": settings_obj.vm_sync_max_concurrency,
-                "custom_fields_request_delay": settings_obj.custom_fields_request_delay,
-                "backend_log_file_path": settings_obj.backend_log_file_path,
-                "ssrf_protection_enabled": settings_obj.ssrf_protection_enabled,
-                "allow_private_ips": settings_obj.allow_private_ips,
-                "additional_allowed_ip_ranges": settings_obj.additional_allowed_ip_ranges,
-                "explicitly_blocked_ip_ranges": settings_obj.explicitly_blocked_ip_ranges,
-                "encryption_enabled": bool(settings_obj.encryption_key),
-                "proxmox_timeout": settings_obj.proxmox_timeout,
-                "proxmox_max_retries": settings_obj.proxmox_max_retries,
-                "proxmox_retry_backoff": settings_obj.proxmox_retry_backoff,
-                "overwrite_device_role": settings_obj.overwrite_device_role,
-                "overwrite_device_type": settings_obj.overwrite_device_type,
-                "overwrite_device_tags": settings_obj.overwrite_device_tags,
-                "overwrite_vm_role": settings_obj.overwrite_vm_role,
-                "overwrite_vm_tags": settings_obj.overwrite_vm_tags,
-            }
+        initial = {
+            "use_guest_agent_interface_name": settings_obj.use_guest_agent_interface_name,
+            "proxbox_fetch_max_concurrency": settings_obj.proxbox_fetch_max_concurrency,
+            "ignore_ipv6_link_local_addresses": settings_obj.ignore_ipv6_link_local_addresses,
+            "primary_ip_preference": settings_obj.primary_ip_preference,
+            "netbox_max_concurrent": settings_obj.netbox_max_concurrent,
+            "netbox_max_retries": settings_obj.netbox_max_retries,
+            "netbox_retry_delay": settings_obj.netbox_retry_delay,
+            "netbox_get_cache_ttl": settings_obj.netbox_get_cache_ttl,
+            "bulk_batch_size": settings_obj.bulk_batch_size,
+            "bulk_batch_delay_ms": settings_obj.bulk_batch_delay_ms,
+            "vm_sync_max_concurrency": settings_obj.vm_sync_max_concurrency,
+            "custom_fields_request_delay": settings_obj.custom_fields_request_delay,
+            "backend_log_file_path": settings_obj.backend_log_file_path,
+            "ssrf_protection_enabled": settings_obj.ssrf_protection_enabled,
+            "allow_private_ips": settings_obj.allow_private_ips,
+            "additional_allowed_ip_ranges": settings_obj.additional_allowed_ip_ranges,
+            "explicitly_blocked_ip_ranges": settings_obj.explicitly_blocked_ip_ranges,
+            "encryption_enabled": bool(settings_obj.encryption_key),
+            "proxmox_timeout": settings_obj.proxmox_timeout,
+            "proxmox_max_retries": settings_obj.proxmox_max_retries,
+            "proxmox_retry_backoff": settings_obj.proxmox_retry_backoff,
+        }
+        for name in OVERWRITE_FIELDS:
+            initial[name] = getattr(settings_obj, name)
+        form = ProxboxPluginSettingsForm(initial=initial)
+        return render(
+            request,
+            self.template_name,
+            {"form": form, "overwrite_field_groups": OVERWRITE_FIELD_GROUPS},
         )
-        return render(request, self.template_name, {"form": form})
 
     def post(self, request: HttpRequest) -> HttpResponse:
         """Handle post."""
@@ -144,21 +145,12 @@ class SettingsView(
             settings_obj.proxmox_retry_backoff = form.cleaned_data[
                 "proxmox_retry_backoff"
             ]
-            settings_obj.overwrite_device_role = form.cleaned_data.get(
-                "overwrite_device_role", True
-            )
-            settings_obj.overwrite_device_type = form.cleaned_data.get(
-                "overwrite_device_type", True
-            )
-            settings_obj.overwrite_device_tags = form.cleaned_data.get(
-                "overwrite_device_tags", True
-            )
-            settings_obj.overwrite_vm_role = form.cleaned_data.get(
-                "overwrite_vm_role", True
-            )
-            settings_obj.overwrite_vm_tags = form.cleaned_data.get(
-                "overwrite_vm_tags", True
-            )
+            for _overwrite_field in OVERWRITE_FIELDS:
+                setattr(
+                    settings_obj,
+                    _overwrite_field,
+                    form.cleaned_data.get(_overwrite_field, True),
+                )
             encryption_enabled = form.cleaned_data.get("encryption_enabled", False)
             if encryption_enabled:
                 new_key = form.cleaned_data.get("encryption_key", "").strip()
@@ -190,13 +182,13 @@ class SettingsView(
                     "proxmox_timeout",
                     "proxmox_max_retries",
                     "proxmox_retry_backoff",
-                    "overwrite_device_role",
-                    "overwrite_device_type",
-                    "overwrite_device_tags",
-                    "overwrite_vm_role",
-                    "overwrite_vm_tags",
+                    *OVERWRITE_FIELDS,
                 ]
             )
             messages.success(request, "Proxbox plugin settings updated.")
             return redirect("plugins:netbox_proxbox:settings")
-        return render(request, self.template_name, {"form": form})
+        return render(
+            request,
+            self.template_name,
+            {"form": form, "overwrite_field_groups": OVERWRITE_FIELD_GROUPS},
+        )

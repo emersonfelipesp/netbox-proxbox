@@ -1,0 +1,68 @@
+{% extends 'generic/object_edit.html' %}
+{% load form_helpers %}
+{% load i18n %}
+{% load proxbox_tags %}
+
+{% block title %}
+  {% blocktrans trimmed with object=object %}Settings for {{ object }}{% endblocktrans %}
+{% endblock title %}
+
+{% block form %}
+  {% for field in form.hidden_fields %}
+    {{ field }}
+  {% endfor %}
+
+  <div class="card mb-3">
+    <h5 class="card-header">
+      <i class="mdi mdi-cog"></i>
+      {% trans "Connection tunables" %}
+    </h5>
+    <div class="card-body">
+      <p class="text-muted">
+        {% blocktrans trimmed %}
+        Per-endpoint overrides for the global Proxmox API connection defaults.
+        Leave any field blank to inherit the value from the global plugin settings.
+        {% endblocktrans %}
+      </p>
+      {% render_field form.timeout %}
+      {% render_field form.max_retries %}
+      {% render_field form.retry_backoff %}
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <h5 class="card-header">
+      <i class="mdi mdi-pencil-circle"></i>
+      {% trans "Sync overwrite overrides" %}
+    </h5>
+    <div class="card-body">
+      <p class="text-muted">
+        {% blocktrans trimmed %}
+        Override per-endpoint whether sync overwrites specific fields on existing
+        NetBox objects. Set "Unknown" (the default) to inherit the value from the
+        global Proxbox plugin settings.
+        {% endblocktrans %}
+      </p>
+    </div>
+  </div>
+
+  {% for group_label, group_fields in overwrite_field_groups %}
+  <div class="card mb-3">
+    <h5 class="card-header">
+      <i class="mdi mdi-pencil-circle-outline"></i>
+      {{ group_label }}
+    </h5>
+    <div class="card-body">
+      {% for field_name in group_fields %}
+        {% render_field form|form_field:field_name %}
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+
+  {% if form.changelog_message %}
+    <div class="bg-primary-subtle border border-primary rounded-1 pt-3 px-3 mb-3">
+      {% render_field form.changelog_message %}
+    </div>
+  {% endif %}
+{% endblock form %}
