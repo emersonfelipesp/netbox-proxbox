@@ -182,3 +182,60 @@ def test_sync_type_label_known_slugs(monkeypatch, slug, expected):
 def test_sync_type_label_unknown_slug_passthrough(monkeypatch):
     tags = _load_proxbox_tags(monkeypatch)
     assert tags.sync_type_label("unknown-type") == "unknown-type"
+
+
+# ── form_field ────────────────────────────────────────────────────────────────
+
+
+class _FakeBoundField:
+    def __init__(self, name: str):
+        self.name = name
+
+
+class _FakeFormWithMapping:
+    """Form-like object that supports ``form[name]`` for bound-field lookup."""
+
+    def __init__(self, fields: dict[str, _FakeBoundField]):
+        self._fields = fields
+
+    def __getitem__(self, name: str) -> _FakeBoundField:
+        return self._fields[name]
+
+
+def test_form_field_returns_bound_field_for_known_name(monkeypatch):
+    tags = _load_proxbox_tags(monkeypatch)
+    bound = _FakeBoundField("overwrite_vm_tags")
+    form = _FakeFormWithMapping({"overwrite_vm_tags": bound})
+
+    result = tags.form_field(form, "overwrite_vm_tags")
+
+    assert result is bound
+
+
+def test_form_field_returns_empty_string_for_missing_field(monkeypatch):
+    tags = _load_proxbox_tags(monkeypatch)
+    form = _FakeFormWithMapping({"overwrite_vm_tags": _FakeBoundField("x")})
+
+    assert tags.form_field(form, "nope") == ""
+
+
+def test_form_field_returns_empty_string_when_form_is_none(monkeypatch):
+    """Subscripting None raises TypeError; the filter swallows it and returns ''."""
+    tags = _load_proxbox_tags(monkeypatch)
+
+    assert tags.form_field(None, "anything") == ""
+
+
+def test_form_field_returns_empty_string_when_object_not_subscriptable(monkeypatch):
+    tags = _load_proxbox_tags(monkeypatch)
+
+    class NotSubscriptable:
+        pass
+
+    assert tags.form_field(NotSubscriptable(), "anything") == ""
+
+
+def test_form_field_is_registered_under_explicit_name(monkeypatch):
+    """The decorator uses ``name="form_field"`` — verify the registry sees it."""
+    tags = _load_proxbox_tags(monkeypatch)
+    assert tags.register._filters.get("form_field") is tags.form_field

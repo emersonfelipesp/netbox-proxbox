@@ -13,6 +13,7 @@ from rest_framework import serializers
 from users.models import Token
 
 from netbox_proxbox.choices import NetBoxTokenVersionChoices, ProxmoxModeChoices
+from netbox_proxbox.constants import OVERWRITE_FIELDS
 from netbox_proxbox.models import FastAPIEndpoint, NetBoxEndpoint, ProxmoxEndpoint
 
 
@@ -58,11 +59,7 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
             "timeout",
             "max_retries",
             "retry_backoff",
-            "overwrite_device_role",
-            "overwrite_device_type",
-            "overwrite_device_tags",
-            "overwrite_vm_role",
-            "overwrite_vm_tags",
+            *OVERWRITE_FIELDS,
             "site",
             "tenant",
             "tags",

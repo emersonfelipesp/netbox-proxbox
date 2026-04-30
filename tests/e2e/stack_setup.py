@@ -212,6 +212,28 @@ def assert_plugin_routes(
                 f"Plugin route failed: {url} -> HTTP {response.status_code}"
             )
 
+    # Settings tab smoke check: confirm the page renders and at least one of
+    # the 21 overwrite_* form fields is present (regression for issue #343).
+    settings_url = (
+        f"{netbox_base_url}/plugins/proxbox/endpoints/proxmox/"
+        f"{endpoint_ids['proxmox_pk']}/settings/"
+    )
+    response = requests.get(settings_url, headers=headers, timeout=30)
+    if response.status_code != 200:
+        raise AssertionError(
+            f"Settings tab failed: {settings_url} -> HTTP {response.status_code}"
+        )
+    if 'name="overwrite_vm_tags"' not in response.text:
+        raise AssertionError(
+            f"Settings tab missing overwrite_vm_tags form field at {settings_url}"
+        )
+    # Regression for issue #342: the overwrite_device_type flag must render so
+    # users can disable device-type drift on VM and node sync runs.
+    if 'name="overwrite_device_type"' not in response.text:
+        raise AssertionError(
+            f"Settings tab missing overwrite_device_type form field at {settings_url}"
+        )
+
     keepalive_checks = [
         f"{netbox_base_url}/plugins/proxbox/keepalive-status/fastapi/{endpoint_ids['fastapi_pk']}/",
         f"{netbox_base_url}/plugins/proxbox/keepalive-status/proxmox/{endpoint_ids['proxmox_pk']}/",

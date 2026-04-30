@@ -3,9 +3,34 @@
 from __future__ import annotations
 
 import ast
+import importlib.util
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _load_overwrite_fields() -> tuple[str, ...]:
+    """Load `OVERWRITE_FIELDS` from `constants.py` without importing the package.
+
+    The plugin's `__init__.py` requires a live NetBox install, which is not
+    available during unit-test collection — bypass it by loading the
+    constants module directly from disk.
+    """
+    spec = importlib.util.spec_from_file_location(
+        "_netbox_proxbox_constants",
+        REPO_ROOT / "netbox_proxbox" / "constants.py",
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return tuple(module.OVERWRITE_FIELDS)
+
+
+OVERWRITE_FIELDS = _load_overwrite_fields()
+
+_STARRED_CONSTANTS: dict[str, tuple[str, ...]] = {
+    "OVERWRITE_FIELDS": OVERWRITE_FIELDS,
+}
 SERIALIZERS_PACKAGE = REPO_ROOT / "netbox_proxbox" / "api" / "serializers"
 VIEWS_PATH = REPO_ROOT / "netbox_proxbox" / "api" / "views.py"
 FILTERS_PATH = REPO_ROOT / "netbox_proxbox" / "api" / "filters.py"
@@ -56,6 +81,24 @@ def _assigned_name(node: ast.Assign | ast.AnnAssign) -> str | None:
     return None
 
 
+def _resolve_field_sequence(node: ast.AST) -> tuple[str, ...]:
+    """Evaluate a fields tuple/list, resolving `*OVERWRITE_FIELDS` star-unpacking."""
+    if not isinstance(node, (ast.Tuple, ast.List)):
+        return tuple(ast.literal_eval(node))
+    resolved: list[str] = []
+    for elt in node.elts:
+        if isinstance(elt, ast.Starred) and isinstance(elt.value, ast.Name):
+            name = elt.value.id
+            if name not in _STARRED_CONSTANTS:
+                raise AssertionError(
+                    f"Unknown star-unpacked constant in Meta.fields: *{name}"
+                )
+            resolved.extend(_STARRED_CONSTANTS[name])
+        else:
+            resolved.append(ast.literal_eval(elt))
+    return tuple(resolved)
+
+
 def _meta_fields(class_node: ast.ClassDef) -> tuple[str, ...]:
     meta_node = _classdef(ast.Module(body=class_node.body, type_ignores=[]), "Meta")
     for node in meta_node.body:
@@ -65,7 +108,7 @@ def _meta_fields(class_node: ast.ClassDef) -> tuple[str, ...]:
             and isinstance(node.targets[0], ast.Name)
         ):
             if node.targets[0].id == "fields":
-                return tuple(ast.literal_eval(node.value))
+                return _resolve_field_sequence(node.value)
     raise AssertionError(f"Meta.fields not found for {class_node.name}")
 
 
@@ -240,6 +283,26 @@ def test_endpoint_serializers_do_not_override_create_semantics():
     for serializer_name in ("NetBoxEndpointSerializer", "FastAPIEndpointSerializer"):
         class_node = _classdef(module, serializer_name)
         assert "create" not in _class_methods(class_node)
+
+
+def test_overwrite_fields_exposed_in_endpoint_and_settings_serializers():
+    """Every flag in `OVERWRITE_FIELDS` must round-trip through the REST API.
+
+    Regression for issue #343: previously the serializers hardcoded only the
+    original 5 flag names and silently dropped the 16 added in the expansion.
+    """
+    module = _parse_serializers_package()
+
+    for serializer_name in (
+        "ProxmoxEndpointSerializer",
+        "ProxboxPluginSettingsSerializer",
+    ):
+        class_node = _classdef(module, serializer_name)
+        meta_fields = set(_meta_fields(class_node))
+        missing = set(OVERWRITE_FIELDS) - meta_fields
+        assert not missing, (
+            f"{serializer_name} is missing overwrite fields: {sorted(missing)}"
+        )
 
 
 def test_task_history_route_and_viewset_are_registered():

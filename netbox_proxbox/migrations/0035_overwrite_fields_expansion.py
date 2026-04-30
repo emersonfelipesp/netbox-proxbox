@@ -44,6 +44,58 @@ _VERBOSE_NAMES = {
 }
 
 
+_SETTINGS_HELP_TEXTS = {
+    "overwrite_device_status": (
+        "When disabled, sync never changes the status on existing Proxmox node devices."
+    ),
+    "overwrite_device_description": (
+        "When disabled, sync never changes the description on existing Proxmox node devices."
+    ),
+    "overwrite_device_custom_fields": (
+        "When disabled, sync never changes custom fields on existing Proxmox node devices."
+    ),
+    "overwrite_vm_description": (
+        "When disabled, sync never changes the description on existing NetBox virtual machines."
+    ),
+    "overwrite_vm_custom_fields": (
+        "When disabled, sync never changes custom fields on existing NetBox virtual machines."
+    ),
+    "overwrite_cluster_tags": (
+        "When disabled, sync never changes tags on existing NetBox virtualization clusters."
+    ),
+    "overwrite_cluster_description": (
+        "When disabled, sync never changes the description on existing NetBox virtualization clusters."
+    ),
+    "overwrite_cluster_custom_fields": (
+        "When disabled, sync never changes custom fields on existing NetBox virtualization clusters."
+    ),
+    "overwrite_node_interface_tags": (
+        "When disabled, sync never changes tags on existing physical interfaces of Proxmox node devices."
+    ),
+    "overwrite_node_interface_custom_fields": (
+        "When disabled, sync never changes custom fields on existing physical interfaces of Proxmox node devices."
+    ),
+    "overwrite_storage_tags": (
+        "When disabled, sync never changes tags on existing ProxmoxStorage records."
+    ),
+    "overwrite_vm_interface_tags": (
+        "When disabled, sync never changes tags on existing virtual-machine interfaces."
+    ),
+    "overwrite_vm_interface_custom_fields": (
+        "When disabled, sync never changes custom fields on existing virtual-machine interfaces."
+    ),
+    "overwrite_ip_status": (
+        "When disabled, sync never changes the status of existing IP addresses assigned to VM interfaces."
+    ),
+    "overwrite_ip_tags": (
+        "When disabled, sync never changes tags on existing IP addresses assigned to VM interfaces."
+    ),
+    "overwrite_ip_custom_fields": (
+        "When disabled, sync never changes custom fields on existing IP addresses assigned to VM interfaces."
+    ),
+}
+
+
 def _endpoint_db_ops() -> list[migrations.RunSQL]:
     ops: list[migrations.RunSQL] = []
     for name in _ENDPOINT_NEW_FIELDS:
@@ -97,6 +149,7 @@ def _settings_state_ops() -> list[migrations.AddField]:
             field=models.BooleanField(
                 default=True,
                 verbose_name=_VERBOSE_NAMES[name],
+                help_text=_SETTINGS_HELP_TEXTS[name],
             ),
         )
         for name in _SETTINGS_NEW_FIELDS

@@ -69,6 +69,12 @@ DETAIL_SPECS: list[tuple[str, str, str, dict]] = [
         {},
     ),
     (
+        "proxmox-endpoint-settings",
+        "/plugins/proxbox/endpoints/proxmox/{id}/settings/",
+        "/api/plugins/proxbox/endpoints/proxmox/",
+        {},
+    ),
+    (
         "netbox-endpoint-detail",
         "/plugins/proxbox/endpoints/netbox/{id}/",
         "/api/plugins/proxbox/endpoints/netbox/",

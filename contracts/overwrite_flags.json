@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "description": "Canonical list of overwrite_* flags shared between netbox-proxbox (plugin) and proxbox-api (backend). Order is significant — the same order is rendered in the plugin Settings UI and reflected in SyncOverwriteFlags.model_fields. Adding, removing, or reordering flags must be done in BOTH repos in the same release; CI fails otherwise.",
+  "fields": [
+    "overwrite_device_role",
+    "overwrite_device_type",
+    "overwrite_device_tags",
+    "overwrite_device_status",
+    "overwrite_device_description",
+    "overwrite_device_custom_fields",
+    "overwrite_vm_role",
+    "overwrite_vm_tags",
+    "overwrite_vm_description",
+    "overwrite_vm_custom_fields",
+    "overwrite_cluster_tags",
+    "overwrite_cluster_description",
+    "overwrite_cluster_custom_fields",
+    "overwrite_node_interface_tags",
+    "overwrite_node_interface_custom_fields",
+    "overwrite_storage_tags",
+    "overwrite_vm_interface_tags",
+    "overwrite_vm_interface_custom_fields",
+    "overwrite_ip_status",
+    "overwrite_ip_tags",
+    "overwrite_ip_custom_fields"
+  ]
+}

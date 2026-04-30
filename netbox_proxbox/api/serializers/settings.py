@@ -3,6 +3,7 @@
 from netbox.api.serializers import NetBoxModelSerializer
 from rest_framework import serializers
 
+from netbox_proxbox.constants import OVERWRITE_FIELDS
 from netbox_proxbox.models import ProxboxPluginSettings
 
 
@@ -40,11 +41,7 @@ class ProxboxPluginSettingsSerializer(NetBoxModelSerializer):
             "proxmox_timeout",
             "proxmox_max_retries",
             "proxmox_retry_backoff",
-            "overwrite_device_role",
-            "overwrite_device_type",
-            "overwrite_device_tags",
-            "overwrite_vm_role",
-            "overwrite_vm_tags",
+            *OVERWRITE_FIELDS,
             "tags",
             "custom_fields",
             "created",
