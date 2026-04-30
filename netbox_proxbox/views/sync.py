@@ -73,7 +73,7 @@ class _ProxboxSyncEnqueueView(_ProxboxSyncViewBase):
                     "A Proxbox sync job has been queued. Open the job to follow progress."
                 ),
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — surface any enqueue failure to the user
             notify_sync_error(request, e)
         return redirect("plugins:netbox_proxbox:home")
 
@@ -198,7 +198,7 @@ class _ProxboxSelectedSyncView(_ProxboxSyncViewBase):
                     "A selected-object Proxbox sync job has been queued. Open the job to follow progress."
                 ),
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — surface any enqueue failure to the user
             notify_sync_error(request, e)
         return redirect("plugins:netbox_proxbox:home")
 

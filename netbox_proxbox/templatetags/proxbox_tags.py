@@ -31,8 +31,7 @@ def hyperlinked_object(obj: object | None) -> str:
     try:
         url = obj.get_absolute_url()
         return format_html('<a href="{}">{}</a>', url, obj)
-    except (AttributeError, Exception):
-        # Fallback: return string representation
+    except Exception:  # noqa: BLE001 — template filter must never raise
         return str(obj)
 
 
