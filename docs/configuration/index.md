@@ -20,8 +20,15 @@ The plugin exposes a singleton-style **Proxbox plugin settings** object for runt
 
 See [Plugin Settings](./plugin-settings.md) for the full field reference.
 
+## Sync Overwrite Flags
+
+Every `overwrite_*` toggle (device fields, VM fields, tags, primary IP, status) is now configurable both globally on the plugin settings object and per-endpoint on the **Settings** tab of each `ProxmoxEndpoint`. Per-endpoint values use tri-state semantics: **Use plugin default**, **Always overwrite**, or **Never overwrite**.
+
+See [Sync Overwrite Flags](./sync-overwrite-flags.md) for the full flag matrix and merge-vs-replace semantics.
+
 ## Next Steps
 
 - Review [Required Parameters](./required-parameters.md) before creating endpoint records.
 - Configure [Plugin Settings](./plugin-settings.md) to tune sync performance and security.
+- Pin [Sync Overwrite Flags](./sync-overwrite-flags.md) globally or per-endpoint to control which Proxmox fields can replace existing NetBox values.
 - Use [Scheduled Sync](../features/scheduled-sync.md) when you want recurring background jobs instead of manual syncs.

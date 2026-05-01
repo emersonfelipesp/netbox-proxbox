@@ -117,6 +117,7 @@ nav:
     - Scheduled Sync: 'features/scheduled-sync.md'
     - Background Jobs: 'features/background-jobs.md'
     - Virtual Machine: 'features/virtual-machine.md'
+    - Proxmox Config Tab: 'features/proxmox-config-tab.md'
     - Containers: 'features/containers.md'
     - Network: 'features/network.md'
     - VLAN Management: 'features/vlan-management.md'
@@ -134,6 +135,7 @@ nav:
     - Other Models: 'models/others.md'
   - Release Notes:
     - Summary: 'release-notes/index.md'
+    - Version 0.0.13: 'release-notes/version-0.0.13.md'
     - Version 0.0.12: 'release-notes/version-0.0.12.md'
     - Version 0.0.11: 'release-notes/version-0.0.11.md'
     - Version 0.0.10: 'release-notes/version-0.0.10.md'

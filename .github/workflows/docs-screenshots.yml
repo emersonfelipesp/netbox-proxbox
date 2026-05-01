@@ -11,7 +11,7 @@ permissions:
 
 env:
   PROXBOX_API_RELEASE_VERSION: 0.0.9
-  NETBOX_IMAGE: netboxcommunity/netbox:v4.6.0-beta1
+  NETBOX_IMAGE: netboxcommunity/netbox:v4.6.0-beta2
   PROXBOX_API_IMAGE: emersonfelipesp/proxbox-api
   PROXMOX_SDK_IMAGE: emersonfelipesp/proxmox-sdk
 
@@ -38,7 +38,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install requests playwright
+          python -m pip install -e ".[screenshot]"
           playwright install chromium --with-deps
 
       - name: Resolve plugin install spec

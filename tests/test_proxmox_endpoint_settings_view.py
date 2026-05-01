@@ -21,6 +21,7 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PROXMOX_VIEW_PATH = REPO_ROOT / "netbox_proxbox" / "views" / "endpoints" / "proxmox.py"
+PROXMOX_FORM_PATH = REPO_ROOT / "netbox_proxbox" / "forms" / "proxmox.py"
 
 
 @pytest.fixture(scope="module")
@@ -143,3 +144,45 @@ def test_get_extra_context_exposes_overwrite_field_groups():
     flat = tuple(field for _name, fields in groups for field in fields)
     assert flat == mod.OVERWRITE_FIELDS
     assert len(flat) == 21
+
+
+# ── Form-level label semantics ───────────────────────────────────────────────
+
+
+def test_overwrite_vm_tags_uses_merge_label():
+    """``overwrite_vm_tags`` is the one tri-state flag with merge (not replace)
+    semantics; the Settings form must surface that distinction in its label
+    so operators are not surprised by the additive behavior (commit 66ec814).
+    """
+    source = PROXMOX_FORM_PATH.read_text(encoding="utf-8")
+    module = ast.parse(source)
+
+    settings_form = _find_class(module, "ProxmoxEndpointSettingsForm")
+    assert settings_form is not None, (
+        "ProxmoxEndpointSettingsForm missing from forms/proxmox.py"
+    )
+
+    init = next(
+        (
+            n
+            for n in settings_form.body
+            if isinstance(n, ast.FunctionDef) and n.name == "__init__"
+        ),
+        None,
+    )
+    assert init is not None, "ProxmoxEndpointSettingsForm.__init__ not found"
+
+    label_constants: list[str] = []
+    for node in ast.walk(init):
+        if isinstance(node, ast.Assign):
+            for tgt in node.targets:
+                if isinstance(tgt, ast.Name) and tgt.id == "label":
+                    if isinstance(node.value, ast.Constant) and isinstance(
+                        node.value.value, str
+                    ):
+                        label_constants.append(node.value.value)
+
+    assert "Merge VM tags" in label_constants, (
+        "Settings form must override the overwrite_vm_tags label to 'Merge VM tags' "
+        "so the merge-not-replace semantics are visible in the UI"
+    )

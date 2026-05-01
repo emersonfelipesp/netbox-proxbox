@@ -4,7 +4,7 @@ This is the recommended installation path for the current repository state.
 
 ## Why This Is Recommended
 
-The code in this repository is `0.0.11` and targets NetBox `4.5.x` (including NetBox `v4.5.7`). That is the version line reflected by the docs in this repository.
+The code in this repository is `0.0.13.post1` and targets NetBox `4.6.x` (certified against `v4.6.0-beta2`). That is the version line reflected by the docs in this repository.
 
 ## Install
 
@@ -31,8 +31,8 @@ PLUGINS = ["netbox_proxbox"]
 
 ## Notes
 
-- The plugin declares `min_version = "4.5.0"` and `max_version = "4.5.99"`.
-- NetBox `v4.5.7` introduces django-rq `4.0` support; Proxbox uses NetBox's JobRunner queue APIs and is compatible with this line.
+- The plugin declares `min_version = "4.6.0"` and `max_version = "4.6.99"`.
+- Proxbox uses NetBox's JobRunner queue APIs and runs on the default RQ queue (`RQ_QUEUE_DEFAULT`).
 - The project requires Python `>=3.12`.
 - `pip install -e` is useful while the repository is moving faster than packaged releases.
 
