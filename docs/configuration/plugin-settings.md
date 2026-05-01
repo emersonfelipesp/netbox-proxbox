@@ -32,6 +32,24 @@ These fields tune how aggressively Proxbox calls the NetBox API during sync oper
 
 ---
 
+## Sync Overwrite Flags
+
+The Plugin Settings object also stores **global defaults** for every `overwrite_*` flag (device fields, VM fields, tags, primary IP, status, and custom fields). Per-endpoint overrides live on the **Settings** tab of each `ProxmoxEndpoint`.
+
+Tri-state semantics on the per-endpoint tab:
+
+| Setting | Effect |
+|---|---|
+| **Use plugin default** (None) | Inherit the value from the global Plugin Settings object. |
+| **Always overwrite** (True) | The sync overwrites the existing NetBox value with the Proxmox value on every run. |
+| **Never overwrite** (False) | The sync preserves the existing NetBox value and only writes when the field is empty. |
+
+The `overwrite_vm_tags` toggle controls **merge vs replace** semantics: when enabled, Proxbox-managed tags replace the existing tag set; when disabled, Proxbox tags are merged with whatever tags are already present on the NetBox VM.
+
+See [Sync Overwrite Flags](./sync-overwrite-flags.md) for the full flag matrix.
+
+---
+
 ## SSRF Protection
 
 These settings guard against Server-Side Request Forgery by validating endpoint IPs before Proxbox contacts them.

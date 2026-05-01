@@ -6,20 +6,21 @@ Proxbox is a NetBox plugin that integrates Proxmox with NetBox through a separat
 
 | NetBox   | netbox-proxbox | proxbox-api | netbox-sdk     | proxmox-sdk    |
 |----------|----------------|-------------|----------------|----------------|
-| >=4.6.0-beta1  | v0.0.12        | v0.0.8.post1 | v0.0.7.post6   | v0.0.3.post1   |
+| >=4.6.0-beta2 | v0.0.13.post1 | v0.0.9 | v0.0.7.post6 | v0.0.3.post1 |
+| >=4.6.0-beta1 | v0.0.12       | v0.0.8.post1 | v0.0.7.post6 | v0.0.3.post1 |
 | >=4.5.7  | v0.0.11        | v0.0.7      | v0.0.7.post4   | v0.0.2.post2   |
 
 The current repository code declares support for:
 
 - NetBox `4.6.x`
-- Plugin version `0.0.12` in source
+- Plugin version `0.0.13.post1` in source
 
 That support comes directly from the plugin config in this repository:
 
 - `min_version = "4.6.0"`
 - `max_version = "4.6.99"`
 
-This compatibility line targets NetBox `v4.6.0-beta1` and adds native `VirtualMachineType` sync.
+This compatibility line is certified against NetBox `v4.6.0-beta2`. It adds per-endpoint Settings tabs, surfaces every `overwrite_*` flag in the plugin UI, enforces VM-sync device flags on the proxbox-api side, and ships endpoint CSV/JSON/YAML import/export pages.
 
 ## Important Packaging Note
 
@@ -32,24 +33,27 @@ The repository is ahead of the latest published PyPI release of `netbox-proxbox`
 
 The current codebase includes NetBox models for:
 
-- Proxmox endpoints
-- NetBox endpoints
-- FastAPI endpoints
-- Sync processes
-- VM backups
-- VM snapshots
+- Proxmox endpoints (with per-endpoint sync overwrite flags and Settings tab)
+- NetBox endpoints (singleton)
+- FastAPI endpoints (singleton)
 - Proxmox clusters and hypervisor nodes (with links to NetBox Cluster and Device objects)
+- Proxmox storage rows
 - Backup routines (Proxmox vzdump schedules with retention policies)
 - Replications (Proxmox storage replication metadata)
+- VM backups
+- VM snapshots
+- VM task history
+- Plugin-wide settings (`ProxboxPluginSettings`)
 
 The plugin UI exposes sync actions for:
 
-- devices
-- virtual machines
-- containers
-- full update
-- VM backups
-- VM snapshots
+- Devices (Proxmox node → NetBox `Device`)
+- Virtual machines and containers (with per-VM targeted sync)
+- Full update (single SSE stream covering devices, storage, VMs, virtual disks, backups, snapshots, network interfaces, IP addresses, VM interfaces, backup routines, and replications)
+- Storage
+- Virtual disks
+- Network interfaces and IP addresses
+- VM backups and snapshots
 - Backup routines
 - Replications
 

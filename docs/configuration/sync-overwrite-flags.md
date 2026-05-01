@@ -92,8 +92,9 @@ reverting:
 
 ## Migration note
 
-Upgrading the plugin past version 0.0.13 adds the 16 new per-endpoint
-overwrite columns. After installing the new release run:
+The 16 new per-endpoint overwrite columns shipped in `netbox-proxbox 0.0.13`
+(migration `0035_overwrite_fields_expansion`). When upgrading from `0.0.12` or
+earlier, run:
 
 ```bash
 python manage.py migrate netbox_proxbox

@@ -2,9 +2,11 @@
 
 The plugin's main plugin-specific models are:
 
-- `ProxmoxEndpoint`: Proxmox cluster or node credentials and connectivity settings
-- `NetBoxEndpoint`: target NetBox API endpoint and token configuration
-- `FastAPIEndpoint`: `proxbox-api` backend connectivity settings
+- `ProxmoxEndpoint`: Proxmox cluster or node credentials and connectivity settings (with per-endpoint sync overwrite flags and a Settings tab)
+- `NetBoxEndpoint`: target NetBox API endpoint and token configuration (singleton)
+- `FastAPIEndpoint`: `proxbox-api` backend connectivity settings (singleton)
+- `ProxmoxCluster`: synchronized cluster metadata linked to NetBox `Cluster`
+- `ProxmoxNode`: synchronized hypervisor node metadata linked to NetBox `Device`
 - `ProxmoxStorage`: synchronized storage rows linked to NetBox clusters and virtual disks
 - `VMBackup`: backup metadata for synchronized virtual machines
 - `VMSnapshot`: snapshot metadata for synchronized virtual machines
