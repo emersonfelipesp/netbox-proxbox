@@ -214,11 +214,39 @@ def assert_plugin_routes(
 
     # Settings tab smoke check: confirm the page renders and at least one of
     # the 21 overwrite_* form fields is present (regression for issue #343).
+    # The settings view is a NetBox ObjectEditView, which only honors session
+    # auth — Token auth on a UI route redirects to /login/. Use a Django login
+    # session (admin/admin from the e2e-docker workflow superuser env) so the
+    # form renders.
     settings_url = (
         f"{netbox_base_url}/plugins/proxbox/endpoints/proxmox/"
         f"{endpoint_ids['proxmox_pk']}/settings/"
     )
-    response = requests.get(settings_url, headers=headers, timeout=30)
+    session = requests.Session()
+    session.get(f"{netbox_base_url}/login/", timeout=30)
+    csrf = session.cookies.get("csrftoken")
+    if not csrf:
+        raise AssertionError(
+            f"Login page did not set csrftoken cookie at {netbox_base_url}/login/"
+        )
+    login_resp = session.post(
+        f"{netbox_base_url}/login/",
+        data={
+            "username": "admin",
+            "password": "admin",
+            "csrfmiddlewaretoken": csrf,
+            "next": "/",
+        },
+        headers={"Referer": f"{netbox_base_url}/login/"},
+        allow_redirects=False,
+        timeout=30,
+    )
+    if login_resp.status_code != 302:
+        raise AssertionError(
+            f"Session login failed: HTTP {login_resp.status_code} - "
+            f"{login_resp.text[:300]}"
+        )
+    response = session.get(settings_url, allow_redirects=False, timeout=30)
     if response.status_code != 200:
         raise AssertionError(
             f"Settings tab failed: {settings_url} -> HTTP {response.status_code}"
