@@ -6,12 +6,15 @@ Version 0.0.13 surfaces every `overwrite_*` flag in the plugin UI, adds a per-en
 
 `0.0.13.post1` is a packaging follow-up that pins `proxbox-api==0.0.9`, certifies NetBox `v4.6.0-beta2` against the published Docker Hub image, and re-publishes the documentation site with the endpoint import/export feature page surfaced.
 
+`0.0.13.post2` re-pins `proxbox-api==0.0.9.post1` across `pyproject.toml`, the e2e and docs-screenshots workflows, and the nightly contract job. No runtime behavior change — only the compatibility matrix and the pinned proxbox-api version move forward.
+
 ## Compatibility
 
-| NetBox         | netbox-proxbox  | proxbox-api | netbox-sdk   | proxmox-sdk    |
-|----------------|-----------------|-------------|--------------|----------------|
-| >=4.6.0-beta2  | v0.0.13.post1   | v0.0.9      | v0.0.7.post6 | v0.0.3.post1   |
-| >=4.6.0-beta1  | v0.0.13         | v0.0.9      | v0.0.7.post6 | v0.0.3.post1   |
+| NetBox         | netbox-proxbox  | proxbox-api  | netbox-sdk   | proxmox-sdk    |
+|----------------|-----------------|--------------|--------------|----------------|
+| >=4.6.0-beta2  | v0.0.13.post2   | v0.0.9.post1 | v0.0.7.post6 | v0.0.3.post1   |
+| >=4.6.0-beta2  | v0.0.13.post1   | v0.0.9       | v0.0.7.post6 | v0.0.3.post1   |
+| >=4.6.0-beta1  | v0.0.13         | v0.0.9       | v0.0.7.post6 | v0.0.3.post1   |
 
 NetBox compatibility range: `4.6.0` – `4.6.99`.
 

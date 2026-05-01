@@ -25,7 +25,7 @@ jobs:
           # ``proxbox-api`` powers the cross-repo SSE/overwrite-flags contract
           # mirrors. It is already pinned in the [test] extra; install it
           # explicitly so the upcoming step can drop ``importorskip`` skips.
-          python -m pip install proxbox-api==0.0.9
+          python -m pip install proxbox-api==0.0.9.post1
 
       - name: Run ty
         run: ty check proxbox_cli

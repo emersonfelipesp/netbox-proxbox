@@ -34,7 +34,7 @@ def _class_constants(class_name: str) -> dict[str, str]:
 
 def test_plugin_version_is_pinned():
     constants = _class_constants("ProxboxConfig")
-    assert constants.get("version") == "0.0.13.post1", (
+    assert constants.get("version") == "0.0.13.post2", (
         "version drifted; update docs/, release-notes, and pyproject.toml together"
     )
 
