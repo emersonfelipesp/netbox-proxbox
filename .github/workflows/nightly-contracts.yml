@@ -22,9 +22,16 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e ".[test,dev,cli]"
+          # ``proxbox-api`` powers the cross-repo SSE/overwrite-flags contract
+          # mirrors. It is already pinned in the [test] extra; install it
+          # explicitly so the upcoming step can drop ``importorskip`` skips.
+          python -m pip install proxbox-api==0.0.9
 
       - name: Run ty
         run: ty check proxbox_cli
 
       - name: Run contract-sensitive mocked tests
         run: pytest -q tests/test_keepalive_status.py tests/test_sync.py tests/test_cards.py
+
+      - name: Run cross-repo contract mirrors (requires proxbox-api)
+        run: pytest -q tests/test_sse_schema_mirror.py tests/test_overwrite_flags_contract.py

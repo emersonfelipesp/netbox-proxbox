@@ -13,6 +13,11 @@ on:
         required: false
         type: string
         default: dev
+      netbox_image:
+        description: "Override NetBox image (e.g. netboxcommunity/netbox:v4.6.0-beta2). Empty = workflow default."
+        required: false
+        type: string
+        default: ""
   workflow_dispatch:
     inputs:
       install_source:
@@ -33,12 +38,17 @@ on:
           - dev
           - published
         default: dev
+      netbox_image:
+        description: "Override NetBox image (full ref). Leave empty for workflow default."
+        required: false
+        type: string
+        default: ""
   schedule:
     - cron: "31 2 * * *"
 
 env:
   PROXBOX_API_RELEASE_VERSION: 0.0.9
-  NETBOX_IMAGE: netboxcommunity/netbox:v4.6.0-beta1
+  NETBOX_IMAGE: ${{ inputs.netbox_image != '' && inputs.netbox_image || 'netboxcommunity/netbox:v4.6.0-beta2' }}
   PROXBOX_API_IMAGE: emersonfelipesp/proxbox-api
   PROXMOX_SDK_IMAGE: emersonfelipesp/proxmox-sdk
 

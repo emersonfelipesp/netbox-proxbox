@@ -19,13 +19,16 @@ jobs:
           python-version: "3.12"
           cache: "pip"
 
-      - name: Install ruff
-        run: pip install ruff
+      - name: Install ruff and bandit
+        run: pip install ruff bandit
 
       - name: Run ruff (lint + format check)
         run: |
           ruff check .
           ruff format --check .
+
+      - name: Run bandit (security lint)
+        run: bandit -r netbox_proxbox proxbox_cli -ll
 
   typecheck:
     runs-on: ubuntu-latest
@@ -70,14 +73,18 @@ jobs:
   test:
     runs-on: ubuntu-latest
     needs: [lint, typecheck, compile]
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Set up Python
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v6
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
           cache: "pip"
 
       - name: Install dependencies
@@ -89,6 +96,7 @@ jobs:
         run: pytest --cov=netbox_proxbox --cov-report=term-missing --cov-report=xml tests
 
       - name: Upload coverage report
+        if: matrix.python-version == '3.12'
         uses: actions/upload-artifact@v6
         with:
           name: netbox-proxbox-coverage
