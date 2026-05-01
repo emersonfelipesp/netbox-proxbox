@@ -94,7 +94,8 @@ class ProxboxJobTemplateExtension(PluginTemplateExtension):
                     {"job": obj},
                 )
             )
-        return mark_safe("".join(parts))
+        # Joined HTML comes from this plugin's own templates rendered above.
+        return mark_safe("".join(parts))  # nosec
 
     def buttons(self) -> str:
         """Render Run now and Cancel buttons on Proxbox Sync job detail pages.
@@ -131,7 +132,8 @@ class ProxboxJobTemplateExtension(PluginTemplateExtension):
                     )
                 )
 
-        return mark_safe("".join(parts)) if parts else ""
+        # Joined HTML comes from this plugin's own templates rendered above.
+        return mark_safe("".join(parts)) if parts else ""  # nosec
 
     def left_page(self) -> str:
         """Show last Proxbox sync runtime and stage summary on Job detail."""
