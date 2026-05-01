@@ -4,7 +4,7 @@ This is the recommended installation path for the current repository state.
 
 ## Why This Is Recommended
 
-The code in this repository is `0.0.13.post1` and targets NetBox `4.6.x` (certified against `v4.6.0-beta2`). That is the version line reflected by the docs in this repository.
+The code in this repository is `0.0.13.post2` and targets NetBox `4.6.x` (certified against `v4.6.0-beta2`). That is the version line reflected by the docs in this repository.
 
 ## Install
 
