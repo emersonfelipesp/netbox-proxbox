@@ -4,13 +4,13 @@ This section tracks the release line represented by this repository and keeps ol
 
 ## Current Release Line
 
-The plugin source in this repository is currently `0.0.13.post3`.
+The plugin source in this repository is currently `0.0.13.post4`.
 
 ## Highlights By Version
 
 | Version | Summary |
 |---------|---------|
-| `0.0.13.post3` | Re-pins `proxbox-api==0.0.9.post2` (fixes `create_storages()` `TypeError` regression in `0.0.9.post1`); no runtime behavior change |
+| `0.0.13.post4` | Re-pins `proxbox-api==0.0.9.post2` (fixes `create_storages()` `TypeError` regression in `0.0.9.post1`); no runtime behavior change. Supersedes `0.0.13.post3` which never reached PyPI due to a stale `uv.lock`. |
 | `0.0.13.post2` | Re-pins `proxbox-api==0.0.9.post1`; adds matrix row for the new pair; no runtime behavior change |
 | `0.0.13.post1` | Bumps `proxbox-api==0.0.9` pin; certifies NetBox `v4.6.0-beta2`; documents endpoint import/export page; CI screenshot rebase fix |
 | `0.0.13` | Per-endpoint Settings tab on ProxmoxEndpoint detail; surfaces all `overwrite_*` flags in the plugin UI with tri-state semantics; VM-sync device flag enforcement (overwrite_device_*) honored end-to-end; merge-semantics label for `overwrite_vm_tags`; `_ensure_device` fix; narrowed broad except handlers in sync views and template tags |
