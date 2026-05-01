@@ -8,10 +8,13 @@ Version 0.0.13 surfaces every `overwrite_*` flag in the plugin UI, adds a per-en
 
 `0.0.13.post2` re-pins `proxbox-api==0.0.9.post1` across `pyproject.toml`, the e2e and docs-screenshots workflows, and the nightly contract job. No runtime behavior change — only the compatibility matrix and the pinned proxbox-api version move forward.
 
+`0.0.13.post3` re-pins `proxbox-api==0.0.9.post2`. The `0.0.9.post1` pairing in `0.0.13.post2` shipped with a `create_storages()` `TypeError` regression in `proxbox_api.app.full_update`; `0.0.9.post2` fixes the import to use the service-level `create_storages` (which accepts the `overwrite_flags` kwarg). No netbox-proxbox runtime change.
+
 ## Compatibility
 
 | NetBox         | netbox-proxbox  | proxbox-api  | netbox-sdk   | proxmox-sdk    |
 |----------------|-----------------|--------------|--------------|----------------|
+| >=4.6.0-beta2  | v0.0.13.post3   | v0.0.9.post2 | v0.0.7.post6 | v0.0.3.post1   |
 | >=4.6.0-beta2  | v0.0.13.post2   | v0.0.9.post1 | v0.0.7.post6 | v0.0.3.post1   |
 | >=4.6.0-beta2  | v0.0.13.post1   | v0.0.9       | v0.0.7.post6 | v0.0.3.post1   |
 | >=4.6.0-beta1  | v0.0.13         | v0.0.9       | v0.0.7.post6 | v0.0.3.post1   |

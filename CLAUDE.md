@@ -41,7 +41,7 @@ This repository packages the `netbox_proxbox` NetBox plugin. The plugin adds end
 - Docker-based plugin installation docs are maintained at [`docs/installation/3-installing-plugin-docker.md`](./docs/installation/3-installing-plugin-docker.md), including `plugin_requirements.txt` and `configuration/plugins.py` usage.
 - Backend Docker examples map host `8800` to container `8000` (`-p 8800:8000`) because the published `proxbox-api` image serves through nginx on container port `8000`.
 
-The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxbox/__init__.py). It declares plugin version `0.0.13.post2` and NetBox compatibility `4.6.0` through `4.6.99` (certified against `4.6.0-beta2`).
+The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxbox/__init__.py). It declares plugin version `0.0.13.post3` and NetBox compatibility `4.6.0` through `4.6.99` (certified against `4.6.0-beta2`).
 
 ## Architecture Summary
 
