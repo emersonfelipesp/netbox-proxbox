@@ -18,6 +18,7 @@ OVERWRITE_FIELD_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
         "Virtual Machine",
         (
             "overwrite_vm_role",
+            "overwrite_vm_type",
             "overwrite_vm_tags",
             "overwrite_vm_description",
             "overwrite_vm_custom_fields",

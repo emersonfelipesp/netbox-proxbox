@@ -170,6 +170,14 @@ class ProxmoxEndpoint(EndpointBase):
             "Per-endpoint override for the global Proxbox setting. Leave blank to inherit."
         ),
     )
+    overwrite_vm_type = models.BooleanField(
+        null=True,
+        blank=True,
+        verbose_name=_("Overwrite VM type"),
+        help_text=_(
+            "Per-endpoint override for the global Proxbox setting. Leave blank to inherit."
+        ),
+    )
     overwrite_vm_tags = models.BooleanField(
         null=True,
         blank=True,

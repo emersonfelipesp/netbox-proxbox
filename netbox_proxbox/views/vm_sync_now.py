@@ -20,6 +20,7 @@ from netbox_proxbox.jobs import (
     PROXBOX_SYNC_QUEUE_NAME,
     ProxboxSyncJob,
 )
+from netbox_proxbox.models import ProxmoxEndpoint
 from netbox_proxbox.views.proxbox_access import permission_enqueue_proxbox_sync
 
 __all__ = ("VirtualMachineSyncNowView",)
@@ -58,6 +59,9 @@ class VirtualMachineSyncNowView(
             name=str(_("Proxbox Sync: Virtual machine {}")).format(vm.pk),
             sync_types=list(_VM_SYNC_NOW_SYNC_TYPES),
             netbox_vm_ids=[str(vm.pk)],
+            proxmox_endpoint_ids=list(
+                ProxmoxEndpoint.objects.values_list("pk", flat=True)
+            ),
         )
         messages.success(
             request,

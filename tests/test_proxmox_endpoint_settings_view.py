@@ -88,7 +88,7 @@ def test_settings_view_tab_metadata(view_module_ast):
         and keywords["label"].value == "Settings"
     )
     assert isinstance(keywords["permission"], ast.Constant)
-    assert keywords["permission"].value == "netbox_proxbox.change_proxmoxendpoint"
+    assert keywords["permission"].value == "netbox_proxbox.view_proxmoxendpoint"
     assert isinstance(keywords["weight"], ast.Constant)
     assert isinstance(keywords["weight"].value, int)
 
@@ -143,7 +143,7 @@ def test_get_extra_context_exposes_overwrite_field_groups():
     )
     flat = tuple(field for _name, fields in groups for field in fields)
     assert flat == mod.OVERWRITE_FIELDS
-    assert len(flat) == 21
+    assert len(flat) == 22
 
 
 # ── Form-level label semantics ───────────────────────────────────────────────

@@ -296,6 +296,27 @@ def _execute_stage_sync(
     raise RuntimeError(user_detail)
 
 
+def _proxmox_endpoint_scopes(
+    proxmox_endpoint_ids: object,
+) -> list[list[str]]:
+    """Return one flat-query endpoint scope per backend SSE run."""
+    requested = [str(value) for value in list(proxmox_endpoint_ids or []) if str(value)]
+    if requested:
+        return [[endpoint_id] for endpoint_id in requested]
+
+    try:
+        from netbox_proxbox.models import ProxmoxEndpoint
+
+        endpoint_ids = [
+            str(pk) for pk in ProxmoxEndpoint.objects.values_list("pk", flat=True)
+        ]
+    except (ImportError, RuntimeError, AttributeError):
+        endpoint_ids = []
+    if not endpoint_ids:
+        return [[]]
+    return [[endpoint_id] for endpoint_id in endpoint_ids]
+
+
 def _run_all_stages_sync(
     job: "ProxboxSyncJob",
     stages: list[str],
@@ -303,12 +324,7 @@ def _run_all_stages_sync(
     run_started: float,
 ) -> list[dict[str, object]]:
     """Run all sync stages in order and return stage results."""
-    from netbox_proxbox.services import run_sync_stream
-
-    base_query = _build_base_query_params(
-        params.get("proxmox_endpoint_ids"),
-        params.get("netbox_endpoint_ids"),
-    )
+    endpoint_scopes = _proxmox_endpoint_scopes(params.get("proxmox_endpoint_ids"))
 
     flush_interval = 2.0
     log_throttle = 1.5
@@ -339,29 +355,41 @@ def _run_all_stages_sync(
         or SyncTypeChoices.IP_ADDRESSES in stages
     )
 
-    for st in stages:
-        query_params = _build_stage_query_params(
-            base_query,
-            st,
-            target_vm_ids,
-            disable_vm_network_on_vm_stage=disable_vm_network_on_vm_stage,
+    for endpoint_scope in endpoint_scopes:
+        if endpoint_scope:
+            job.logger.info(
+                "Running SSE sync for Proxmox endpoint %s", endpoint_scope[0]
+            )
+        else:
+            job.logger.info("Running SSE sync with no Proxmox endpoint filter")
+        base_query = _build_base_query_params(
+            endpoint_scope,
+            params.get("netbox_endpoint_ids"),
         )
-        stage_paths = _sync_stream_paths_for_stage(st, target_vm_ids)
 
-        for stream_path in stage_paths:
-            payload, stage_runtime = _execute_stage_sync(
-                job, st, stream_path, query_params, on_frame, fastapi_endpoint_id
+        for st in stages:
+            query_params = _build_stage_query_params(
+                base_query,
+                st,
+                target_vm_ids,
+                disable_vm_network_on_vm_stage=disable_vm_network_on_vm_stage,
             )
-            response = payload.get("response") or {}
-            stages_out.append(
-                {
-                    "sync_type": st,
-                    "runtime_seconds": stage_runtime,
-                    "result_summary": {
-                        "path": payload.get("path"),
-                        "ok": response.get("ok"),
-                    },
-                }
-            )
+            stage_paths = _sync_stream_paths_for_stage(st, target_vm_ids)
+
+            for stream_path in stage_paths:
+                payload, stage_runtime = _execute_stage_sync(
+                    job, st, stream_path, query_params, on_frame, fastapi_endpoint_id
+                )
+                response = payload.get("response") or {}
+                stages_out.append(
+                    {
+                        "sync_type": st,
+                        "runtime_seconds": stage_runtime,
+                        "result_summary": {
+                            "path": payload.get("path"),
+                            "ok": response.get("ok"),
+                        },
+                    }
+                )
 
     return stages_out

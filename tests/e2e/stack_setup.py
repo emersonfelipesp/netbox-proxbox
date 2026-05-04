@@ -213,7 +213,7 @@ def assert_plugin_routes(
             )
 
     # Settings tab smoke check: confirm the page renders and at least one of
-    # the 21 overwrite_* form fields is present (regression for issue #343).
+    # the 22 overwrite_* form fields is present (regression for issue #343).
     # The settings view is a NetBox ObjectEditView, which only honors session
     # auth — Token auth on a UI route redirects to /login/. Use a Django login
     # session (admin/admin from the e2e-docker workflow superuser env) so the

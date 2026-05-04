@@ -236,8 +236,12 @@ class ProxboxSyncJob(JobRunner):
 
         params = {
             "sync_types": normalized,
-            "proxmox_endpoint_ids": list(kwargs.get("proxmox_endpoint_ids") or []),
-            "netbox_endpoint_ids": list(kwargs.get("netbox_endpoint_ids") or []),
+            "proxmox_endpoint_ids": [
+                str(x) for x in list(kwargs.get("proxmox_endpoint_ids") or []) if str(x)
+            ],
+            "netbox_endpoint_ids": [
+                str(x) for x in list(kwargs.get("netbox_endpoint_ids") or []) if str(x)
+            ],
             "netbox_vm_ids": [
                 str(x) for x in list(kwargs.get("netbox_vm_ids") or []) if str(x)
             ],
@@ -294,8 +298,12 @@ class ProxboxSyncJob(JobRunner):
 
             params: dict[str, object] = {
                 "sync_types": types,
-                "proxmox_endpoint_ids": list(proxmox_endpoint_ids or []),
-                "netbox_endpoint_ids": list(netbox_endpoint_ids or []),
+                "proxmox_endpoint_ids": [
+                    str(x) for x in list(proxmox_endpoint_ids or []) if str(x)
+                ],
+                "netbox_endpoint_ids": [
+                    str(x) for x in list(netbox_endpoint_ids or []) if str(x)
+                ],
                 "netbox_vm_ids": [str(x) for x in list(netbox_vm_ids or []) if str(x)],
                 "batch_object_type": batch_object_type,
                 "batch_object_ids": batch_object_ids,
