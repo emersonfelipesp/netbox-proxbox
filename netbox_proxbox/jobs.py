@@ -237,14 +237,10 @@ class ProxboxSyncJob(JobRunner):
         params = {
             "sync_types": normalized,
             "proxmox_endpoint_ids": [
-                str(x)
-                for x in list(kwargs.get("proxmox_endpoint_ids") or [])
-                if str(x)
+                str(x) for x in list(kwargs.get("proxmox_endpoint_ids") or []) if str(x)
             ],
             "netbox_endpoint_ids": [
-                str(x)
-                for x in list(kwargs.get("netbox_endpoint_ids") or [])
-                if str(x)
+                str(x) for x in list(kwargs.get("netbox_endpoint_ids") or []) if str(x)
             ],
             "netbox_vm_ids": [
                 str(x) for x in list(kwargs.get("netbox_vm_ids") or []) if str(x)

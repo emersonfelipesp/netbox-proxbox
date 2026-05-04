@@ -1121,10 +1121,7 @@ def test_proxbox_sync_job_full_update_uses_single_endpoint_overrides(
     )
 
     def effective_overwrites_for_endpoint(endpoint_id):
-        return {
-            name: name != "overwrite_device_role"
-            for name in overwrite_fields
-        }
+        return {name: name != "overwrite_device_role" for name in overwrite_fields}
 
     monkeypatch.setattr(
         proxbox_sync_job_module.sync_stages,

@@ -28,12 +28,12 @@ def test_overwrite_vm_type_order_matches_backend_contract():
 
 
 def test_overwrite_vm_type_model_fields_exist():
-    plugin_settings = (REPO_ROOT / "netbox_proxbox/models/plugin_settings.py").read_text(
-        encoding="utf-8"
-    )
-    proxmox_endpoint = (REPO_ROOT / "netbox_proxbox/models/proxmox_endpoint.py").read_text(
-        encoding="utf-8"
-    )
+    plugin_settings = (
+        REPO_ROOT / "netbox_proxbox/models/plugin_settings.py"
+    ).read_text(encoding="utf-8")
+    proxmox_endpoint = (
+        REPO_ROOT / "netbox_proxbox/models/proxmox_endpoint.py"
+    ).read_text(encoding="utf-8")
 
     assert "overwrite_vm_type = models.BooleanField(" in plugin_settings
     assert "default=True" in plugin_settings

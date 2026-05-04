@@ -158,7 +158,9 @@ def _manager(*, first=None, objects_by_pk=None, does_not_exist=None):
         def values_list(self, field_name, flat=False):
             values = []
             if objects_by_pk:
-                values = [getattr(obj, field_name, pk) for pk, obj in objects_by_pk.items()]
+                values = [
+                    getattr(obj, field_name, pk) for pk, obj in objects_by_pk.items()
+                ]
             elif first is not None:
                 values = [getattr(first, field_name, getattr(first, "pk", None))]
             if flat:
