@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       install_source:
-        description: "Install source selection: both, local, pypi, or container"
+        description: "Install source selection: both, local, pypi, container, or testpypi"
         required: false
         type: string
         default: both
@@ -21,7 +21,7 @@ on:
   workflow_dispatch:
     inputs:
       install_source:
-        description: "Install source selection: both, local, pypi, or container"
+        description: "Install source selection: both, local, pypi, container, or testpypi"
         required: false
         type: choice
         options:
@@ -29,6 +29,7 @@ on:
           - local
           - pypi
           - container
+          - testpypi
         default: both
       dependency_mode:
         description: "dev = build proxbox-api from GitHub source; published = pull from Docker Hub"
@@ -48,19 +49,26 @@ on:
 
 env:
   PROXBOX_API_RELEASE_VERSION: 0.0.9.post2
-  NETBOX_IMAGE: ${{ inputs.netbox_image != '' && inputs.netbox_image || 'netboxcommunity/netbox:v4.6.0-beta2' }}
   PROXBOX_API_IMAGE: emersonfelipesp/proxbox-api
   PROXMOX_SDK_IMAGE: emersonfelipesp/proxmox-sdk
 
 jobs:
   e2e-docker-stack:
-    name: E2E Docker / ${{ matrix.install_source }}
+    name: E2E Docker / ${{ matrix.install_source }} / ${{ matrix.netbox_image }} [${{ matrix.network_stack }}]
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      NETBOX_IMAGE: ${{ matrix.netbox_image }}
     strategy:
       fail-fast: false
       matrix:
         install_source: ${{ fromJSON(inputs.install_source != 'both' && format('["{0}"]', inputs.install_source) || '["local","pypi","container"]') }}
+        netbox_image: ${{ fromJSON(inputs.netbox_image != '' && format('["{0}"]', inputs.netbox_image) || '["netboxcommunity/netbox:v4.5.8","netboxcommunity/netbox:v4.5.9","netboxcommunity/netbox:v4.6.0-beta2"]') }}
+        network_stack: [ipv4]
+        include:
+          - install_source: local
+            netbox_image: netboxcommunity/netbox:v4.6.0-beta2
+            network_stack: ipv6
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -79,12 +87,20 @@ jobs:
       - name: Resolve plugin install source
         run: |
           set -eux
+          # NETBOX_PLUGIN_INSTALL_INDEX is only set for testpypi; otherwise empty so
+          # the in-container `uv pip install` line does not pass any --index-url flag.
+          echo "NETBOX_PLUGIN_INSTALL_INDEX=" >> "$GITHUB_ENV"
           if [ "${{ matrix.install_source }}" = "local" ]; then
             echo "NETBOX_PLUGIN_INSTALL_SPEC=/tmp/netbox-proxbox" >> "$GITHUB_ENV"
             echo "NETBOX_PLUGIN_MOUNT=-v $PWD:/tmp/netbox-proxbox:ro" >> "$GITHUB_ENV"
           elif [ "${{ matrix.install_source }}" = "pypi" ]; then
             VERSION=$(python -c "import pathlib, tomllib; print(tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8'))['project']['version'])")
             echo "NETBOX_PLUGIN_INSTALL_SPEC=netbox-proxbox==${VERSION}" >> "$GITHUB_ENV"
+            echo "NETBOX_PLUGIN_MOUNT=" >> "$GITHUB_ENV"
+          elif [ "${{ matrix.install_source }}" = "testpypi" ]; then
+            VERSION=$(python -c "import pathlib, tomllib; print(tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8'))['project']['version'])")
+            echo "NETBOX_PLUGIN_INSTALL_SPEC=netbox-proxbox==${VERSION}" >> "$GITHUB_ENV"
+            echo "NETBOX_PLUGIN_INSTALL_INDEX=--index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/" >> "$GITHUB_ENV"
             echo "NETBOX_PLUGIN_MOUNT=" >> "$GITHUB_ENV"
           else
             # Keep 'container' mode for workflow compatibility, but use package install.
@@ -95,7 +111,19 @@ jobs:
       - name: Start E2E stack
         run: |
           set -eux
-          docker network create proxbox-e2e || true
+          if [ "${{ matrix.network_stack }}" = "ipv6" ]; then
+            docker network create --ipv6 --subnet fd00:e2e::/64 proxbox-e2e || true
+            HOST_BIND="[::]:"
+            TEST_HOST="[::1]"
+          else
+            docker network create proxbox-e2e || true
+            HOST_BIND=""
+            TEST_HOST="127.0.0.1"
+          fi
+          {
+            echo "HOST_BIND=${HOST_BIND}"
+            echo "TEST_HOST=${TEST_HOST}"
+          } >> "$GITHUB_ENV"
           SECRET_KEY='proxbox-e2e-secret-key-proxbox-e2e-secret-key-proxbox-e2e-secret-key'
 
           docker rm -f netbox-e2e-postgres netbox-e2e-redis netbox-e2e netbox-e2e-rqworker proxbox-e2e-api proxmox-e2e-mock 2>/dev/null || true
@@ -112,7 +140,7 @@ jobs:
           docker pull "${PROXMOX_SDK_IMAGE}:dev-nginx"
           docker pull "${NETBOX_IMAGE}"
 
-          docker run -d --name proxmox-e2e-mock --network proxbox-e2e -p 18006:8000 \
+          docker run -d --name proxmox-e2e-mock --network proxbox-e2e -p "${HOST_BIND}18006:8000" \
             -v "$PWD/tests/e2e/proxmox_openapi_mock_data.json:/data/mock-data.json:ro" \
             -e PROXMOX_MOCK_DATA_PATH=/data/mock-data.json \
             -e PROXMOX_MOCK_SCHEMA_VERSION=none \
@@ -120,21 +148,30 @@ jobs:
             "${PROXMOX_SDK_IMAGE}:dev-nginx"
 
           if [ "${{ inputs.dependency_mode }}" = "published" ]; then
+          if [ "${{ matrix.network_stack }}" = "ipv6" ]; then
+            PROXBOX_BIND_HOST_VALUE="::"
+          else
+            PROXBOX_BIND_HOST_VALUE="0.0.0.0"
+          fi
+
+          if [ "${{ inputs.dependency_mode }}" = "published" ]; then
             docker pull "${PROXBOX_API_IMAGE}:${PROXBOX_API_RELEASE_VERSION}"
-            docker run -d --name proxbox-e2e-api --network proxbox-e2e -p 18800:8000 \
+            docker run -d --name proxbox-e2e-api --network proxbox-e2e -p "${HOST_BIND}18800:8000" \
               -e PROXBOX_SKIP_NETBOX_BOOTSTRAP=true \
+              -e PROXBOX_BIND_HOST="${PROXBOX_BIND_HOST_VALUE}" \
               "${PROXBOX_API_IMAGE}:${PROXBOX_API_RELEASE_VERSION}"
           else
             git clone --depth 1 https://github.com/emersonfelipesp/proxbox-api.git /tmp/proxbox-api-src
             docker build --target raw -t proxbox-api-e2e:dev /tmp/proxbox-api-src
-            docker run -d --name proxbox-e2e-api --network proxbox-e2e -p 18800:8000 \
+            docker run -d --name proxbox-e2e-api --network proxbox-e2e -p "${HOST_BIND}18800:8000" \
               -e PROXBOX_SKIP_NETBOX_BOOTSTRAP=true \
+              -e PROXBOX_BIND_HOST="${PROXBOX_BIND_HOST_VALUE}" \
               proxbox-api-e2e:dev
           fi
 
           if [ -n "${NETBOX_PLUGIN_MOUNT}" ]; then
             # shellcheck disable=SC2086
-            docker run -d --name netbox-e2e --network proxbox-e2e -p 18080:8080 ${NETBOX_PLUGIN_MOUNT} \
+            docker run -d --name netbox-e2e --network proxbox-e2e -p "${HOST_BIND}18080:8080" ${NETBOX_PLUGIN_MOUNT} \
               -e DB_HOST=netbox-e2e-postgres \
               -e DB_NAME=netbox \
               -e DB_USER=netbox \
@@ -152,9 +189,9 @@ jobs:
               -e ALLOWED_HOSTS="* localhost 127.0.0.1 ::1 netbox" \
               -e LOGIN_REQUIRED=True \
               --entrypoint /bin/bash \
-              "${NETBOX_IMAGE}" -ec "uv pip install --upgrade ${NETBOX_PLUGIN_INSTALL_SPEC} && mkdir -p /etc/netbox/config && printf 'PLUGINS = [\"netbox_proxbox\"]\\n' > /etc/netbox/config/plugins.py && /opt/netbox/docker-entrypoint.sh /opt/netbox/launch-netbox.sh"
+              "${NETBOX_IMAGE}" -ec "i=0; until uv pip install --upgrade ${NETBOX_PLUGIN_INSTALL_INDEX} ${NETBOX_PLUGIN_INSTALL_SPEC}; do i=\$((i+1)); [ \$i -ge 30 ] && exit 1; sleep 10; done && mkdir -p /etc/netbox/config && printf 'PLUGINS = [\"netbox_proxbox\"]\\n' > /etc/netbox/config/plugins.py && /opt/netbox/docker-entrypoint.sh /opt/netbox/launch-netbox.sh"
           else
-            docker run -d --name netbox-e2e --network proxbox-e2e -p 18080:8080 \
+            docker run -d --name netbox-e2e --network proxbox-e2e -p "${HOST_BIND}18080:8080" \
               -e DB_HOST=netbox-e2e-postgres \
               -e DB_NAME=netbox \
               -e DB_USER=netbox \
@@ -172,7 +209,7 @@ jobs:
               -e ALLOWED_HOSTS="* localhost 127.0.0.1 ::1 netbox" \
               -e LOGIN_REQUIRED=True \
               --entrypoint /bin/bash \
-              "${NETBOX_IMAGE}" -ec "uv pip install --upgrade ${NETBOX_PLUGIN_INSTALL_SPEC} && mkdir -p /etc/netbox/config && printf 'PLUGINS = [\"netbox_proxbox\"]\\n' > /etc/netbox/config/plugins.py && /opt/netbox/docker-entrypoint.sh /opt/netbox/launch-netbox.sh"
+              "${NETBOX_IMAGE}" -ec "i=0; until uv pip install --upgrade ${NETBOX_PLUGIN_INSTALL_INDEX} ${NETBOX_PLUGIN_INSTALL_SPEC}; do i=\$((i+1)); [ \$i -ge 30 ] && exit 1; sleep 10; done && mkdir -p /etc/netbox/config && printf 'PLUGINS = [\"netbox_proxbox\"]\\n' > /etc/netbox/config/plugins.py && /opt/netbox/docker-entrypoint.sh /opt/netbox/launch-netbox.sh"
           fi
 
       - name: Get container IPs
@@ -180,24 +217,44 @@ jobs:
           set -eux
           echo "Waiting for containers to get IPs..."
           sleep 5
-          
-          PROXMOX_MOCK_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' proxmox-e2e-mock)
-          NETBOX_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' netbox-e2e)
-          PROXBOX_API_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' proxbox-e2e-api)
-          
+
+          if [ "${{ matrix.network_stack }}" = "ipv6" ]; then
+            INSPECT_FIELD='.GlobalIPv6Address'
+            # NetBox's gunicorn binds 0.0.0.0:8080, so proxbox-api's callback
+            # uses the container hostname (resolved by Docker DNS to AAAA+A on
+            # the dual-stack bridge) and the kernel falls back to IPv4 against
+            # NetBox's listener. The host-side test path still exercises IPv6.
+            NETBOX_PUBLIC_HOST='netbox-e2e'
+          else
+            INSPECT_FIELD='.IPAddress'
+            NETBOX_PUBLIC_HOST=''
+          fi
+
+          PROXMOX_MOCK_IP=$(docker inspect -f "{{range .NetworkSettings.Networks}}{{${INSPECT_FIELD}}}{{end}}" proxmox-e2e-mock)
+          NETBOX_IP=$(docker inspect -f "{{range .NetworkSettings.Networks}}{{${INSPECT_FIELD}}}{{end}}" netbox-e2e)
+          PROXBOX_API_IP=$(docker inspect -f "{{range .NetworkSettings.Networks}}{{${INSPECT_FIELD}}}{{end}}" proxbox-e2e-api)
+
+          if [ -z "${NETBOX_PUBLIC_HOST}" ]; then
+            NETBOX_PUBLIC_HOST="${NETBOX_IP}"
+          fi
+
           echo "PROXMOX_MOCK_IP=$PROXMOX_MOCK_IP"
           echo "NETBOX_IP=$NETBOX_IP"
           echo "PROXBOX_API_IP=$PROXBOX_API_IP"
-          
-          echo "PROXMOX_MOCK_IP=$PROXMOX_MOCK_IP" >> "$GITHUB_ENV"
-          echo "NETBOX_IP=$NETBOX_IP" >> "$GITHUB_ENV"
-          echo "PROXBOX_API_IP=$PROXBOX_API_IP" >> "$GITHUB_ENV"
+          echo "NETBOX_PUBLIC_HOST=$NETBOX_PUBLIC_HOST"
+
+          {
+            echo "PROXMOX_MOCK_IP=$PROXMOX_MOCK_IP"
+            echo "NETBOX_IP=$NETBOX_IP"
+            echo "PROXBOX_API_IP=$PROXBOX_API_IP"
+            echo "NETBOX_PUBLIC_HOST=$NETBOX_PUBLIC_HOST"
+          } >> "$GITHUB_ENV"
 
       - name: Wait for stack readiness and create NetBox API token
         run: |
           set -eux
           for i in $(seq 1 240); do
-            http_code="$(curl -sS --max-time 5 -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/api/ 2>/dev/null || true)"
+            http_code="$(curl -sS --max-time 5 -o /dev/null -w '%{http_code}' "http://${TEST_HOST}:18080/api/" 2>/dev/null || true)"
             if [ "$http_code" -ge 100 ] 2>/dev/null && [ "$http_code" -lt 500 ]; then
               break
             fi
@@ -210,7 +267,7 @@ jobs:
           done
 
           for i in $(seq 1 90); do
-            if curl -sk --max-time 5 https://127.0.0.1:18006/health >/dev/null 2>&1; then
+            if curl -sk --max-time 5 "https://${TEST_HOST}:18006/health" >/dev/null 2>&1; then
               break
             fi
             sleep 2
@@ -222,7 +279,7 @@ jobs:
           done
 
           for i in $(seq 1 90); do
-            http_code="$(curl -sS --max-time 5 -o /dev/null -w '%{http_code}' http://127.0.0.1:18800/ 2>/dev/null || true)"
+            http_code="$(curl -sS --max-time 5 -o /dev/null -w '%{http_code}' "http://${TEST_HOST}:18800/" 2>/dev/null || true)"
             if [ "$http_code" -ge 100 ] 2>/dev/null && [ "$http_code" -lt 500 ]; then
               break
             fi
@@ -261,7 +318,7 @@ jobs:
               -e REDIS_TASK_DATABASE=2 \
               -e SECRET_KEY="$SECRET_KEY" \
               --entrypoint /bin/bash \
-              "${NETBOX_IMAGE}" -ec "uv pip install --upgrade ${NETBOX_PLUGIN_INSTALL_SPEC} && mkdir -p /etc/netbox/config && printf 'PLUGINS = [\"netbox_proxbox\"]\\n' > /etc/netbox/config/plugins.py && /opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py rqworker"
+              "${NETBOX_IMAGE}" -ec "i=0; until uv pip install --upgrade ${NETBOX_PLUGIN_INSTALL_INDEX} ${NETBOX_PLUGIN_INSTALL_SPEC}; do i=\$((i+1)); [ \$i -ge 30 ] && exit 1; sleep 10; done && mkdir -p /etc/netbox/config && printf 'PLUGINS = [\"netbox_proxbox\"]\\n' > /etc/netbox/config/plugins.py && /opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py rqworker"
           else
             docker run -d --name netbox-e2e-rqworker --network proxbox-e2e \
               -e DB_HOST=netbox-e2e-postgres \
@@ -276,18 +333,18 @@ jobs:
               -e REDIS_TASK_DATABASE=2 \
               -e SECRET_KEY="$SECRET_KEY" \
               --entrypoint /bin/bash \
-              "${NETBOX_IMAGE}" -ec "uv pip install --upgrade ${NETBOX_PLUGIN_INSTALL_SPEC} && mkdir -p /etc/netbox/config && printf 'PLUGINS = [\"netbox_proxbox\"]\\n' > /etc/netbox/config/plugins.py && /opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py rqworker"
+              "${NETBOX_IMAGE}" -ec "i=0; until uv pip install --upgrade ${NETBOX_PLUGIN_INSTALL_INDEX} ${NETBOX_PLUGIN_INSTALL_SPEC}; do i=\$((i+1)); [ \$i -ge 30 ] && exit 1; sleep 10; done && mkdir -p /etc/netbox/config && printf 'PLUGINS = [\"netbox_proxbox\"]\\n' > /etc/netbox/config/plugins.py && /opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py rqworker"
           fi
 
       - name: Run stack e2e checks
         env:
-          NETBOX_BASE_URL: http://127.0.0.1:18080
-          PROXBOX_BASE_URL: http://127.0.0.1:18800
-          PROXMOX_MOCK_BASE_URL: https://127.0.0.1:18006
+          NETBOX_BASE_URL: http://${{ env.TEST_HOST }}:18080
+          PROXBOX_BASE_URL: http://${{ env.TEST_HOST }}:18800
+          PROXMOX_MOCK_BASE_URL: https://${{ env.TEST_HOST }}:18006
           PROXMOX_MOCK_IP: ${{ env.PROXMOX_MOCK_IP }}
           NETBOX_IP: ${{ env.NETBOX_IP }}
           PROXBOX_API_IP: ${{ env.PROXBOX_API_IP }}
-          NETBOX_PUBLIC_URL: http://${{ env.NETBOX_IP }}:8080
+          NETBOX_PUBLIC_URL: http://${{ env.NETBOX_PUBLIC_HOST }}:8080
           NETBOX_TOKEN_ID: ${{ env.NETBOX_TOKEN_ID }}
           NETBOX_API_TOKEN: ${{ env.NETBOX_API_TOKEN }}
         run: |
