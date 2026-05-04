@@ -303,7 +303,7 @@ class ProxmoxEndpointSettingsView(generic.ObjectEditView):
     template_name = "netbox_proxbox/proxmoxendpoint_settings.html"
     tab = ViewTab(
         label="Settings",
-        permission="netbox_proxbox.change_proxmoxendpoint",
+        permission="netbox_proxbox.view_proxmoxendpoint",
         weight=900,
     )
 

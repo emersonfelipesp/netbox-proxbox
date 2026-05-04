@@ -1100,3 +1100,93 @@ def test_proxbox_sync_job_query_flag_primary_ip_preference_setting(
     st = proxbox_sync_job_module.SyncTypeChoices
     ProxboxSyncJob.run(job, sync_type=st.DEVICES)
     assert captured["query_params"]["primary_ip_preference"] == "ipv6"
+
+
+def test_proxbox_sync_job_full_update_uses_single_endpoint_overrides(
+    monkeypatch, proxbox_sync_job_module
+):
+    """A full-update scoped to one endpoint must send that endpoint's flags."""
+    captured: list[dict[str, object]] = []
+    services_mod = types.ModuleType("netbox_proxbox.services")
+
+    def run_sync_stream(path, query_params=None, **stream_kwargs):
+        captured.append(dict(query_params or {}))
+        return ({"stream": True, "response": {"ok": True}}, 200)
+
+    services_mod.run_sync_stream = run_sync_stream
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
+
+    overwrite_fields = tuple(
+        proxbox_sync_job_module.sync_stages.effective_overwrites_for_endpoint(None)
+    )
+
+    def effective_overwrites_for_endpoint(endpoint_id):
+        return {
+            name: name != "overwrite_device_role"
+            for name in overwrite_fields
+        }
+
+    monkeypatch.setattr(
+        proxbox_sync_job_module.sync_stages,
+        "effective_overwrites_for_endpoint",
+        effective_overwrites_for_endpoint,
+    )
+
+    ProxboxSyncJob = proxbox_sync_job_module.ProxboxSyncJob
+    job = ProxboxSyncJob()
+    job.logger = logging.getLogger("test_proxbox_job_endpoint_overrides")
+    job.job = MagicMock()
+    job.job.data = None
+
+    st = proxbox_sync_job_module.SyncTypeChoices
+    ProxboxSyncJob.run(job, sync_types=[st.ALL], proxmox_endpoint_ids=["1"])
+
+    assert captured
+    assert {query["proxmox_endpoint_ids"] for query in captured} == {"1"}
+    assert {query["overwrite_device_role"] for query in captured} == {"false"}
+
+
+def test_proxbox_sync_job_loops_multiple_endpoint_scopes_with_distinct_overrides(
+    monkeypatch, proxbox_sync_job_module
+):
+    """Multiple endpoint syncs run one SSE request per endpoint with flat flags."""
+    captured: list[dict[str, object]] = []
+    services_mod = types.ModuleType("netbox_proxbox.services")
+
+    def run_sync_stream(path, query_params=None, **stream_kwargs):
+        captured.append(dict(query_params or {}))
+        return ({"stream": True, "response": {"ok": True}}, 200)
+
+    services_mod.run_sync_stream = run_sync_stream
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
+
+    overwrite_fields = tuple(
+        proxbox_sync_job_module.sync_stages.effective_overwrites_for_endpoint(None)
+    )
+
+    def effective_overwrites_for_endpoint(endpoint_id):
+        return {
+            name: not (str(endpoint_id) == "2" and name == "overwrite_device_role")
+            for name in overwrite_fields
+        }
+
+    monkeypatch.setattr(
+        proxbox_sync_job_module.sync_stages,
+        "effective_overwrites_for_endpoint",
+        effective_overwrites_for_endpoint,
+    )
+
+    ProxboxSyncJob = proxbox_sync_job_module.ProxboxSyncJob
+    job = ProxboxSyncJob()
+    job.logger = logging.getLogger("test_proxbox_job_multi_endpoint_overrides")
+    job.job = MagicMock()
+    job.job.data = None
+
+    st = proxbox_sync_job_module.SyncTypeChoices
+    ProxboxSyncJob.run(job, sync_types=[st.DEVICES], proxmox_endpoint_ids=["1", "2"])
+
+    assert [query["proxmox_endpoint_ids"] for query in captured] == ["1", "2"]
+    assert [query["overwrite_device_role"] for query in captured] == [
+        "true",
+        "false",
+    ]

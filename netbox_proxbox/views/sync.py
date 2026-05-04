@@ -12,10 +12,16 @@ from django.utils.translation import gettext_lazy as _
 
 from netbox_proxbox.choices import SyncTypeChoices
 from netbox_proxbox.jobs import PROXBOX_SYNC_QUEUE_NAME, ProxboxSyncJob
+from netbox_proxbox.models import ProxmoxEndpoint
 from netbox_proxbox.views.sync_helpers import (
     _ProxboxSyncViewBase,
     build_job_name,
 )
+
+
+def _all_proxmox_endpoint_ids() -> list[int]:
+    """Return explicit endpoint IDs for sync jobs started from broad UI actions."""
+    return list(ProxmoxEndpoint.objects.values_list("pk", flat=True))
 
 
 def notify_sync_enqueued(request: HttpRequest, job, message: str) -> None:
@@ -65,6 +71,7 @@ class _ProxboxSyncEnqueueView(_ProxboxSyncViewBase):
                 queue_name=PROXBOX_SYNC_QUEUE_NAME,
                 name=self._job_name(),
                 sync_types=list(self.sync_types),
+                proxmox_endpoint_ids=_all_proxmox_endpoint_ids(),
             )
             notify_sync_enqueued(
                 request,
@@ -190,6 +197,7 @@ class _ProxboxSelectedSyncView(_ProxboxSyncViewBase):
                 sync_types=[SyncTypeChoices.ALL],
                 batch_object_type=self.batch_object_type,
                 batch_object_ids=selected_ids,
+                proxmox_endpoint_ids=_all_proxmox_endpoint_ids(),
             )
             notify_sync_enqueued(
                 request,

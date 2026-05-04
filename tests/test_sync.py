@@ -174,3 +174,20 @@ def test_sync_selected_virtual_machines_enqueues_batch_job(
     assert len(calls) == 1
     assert calls[0]["batch_object_type"] == "virtual-machine"
     assert calls[0]["batch_object_ids"] == ["11", "22"]
+
+
+def test_sync_full_update_forwards_explicit_proxmox_endpoint_ids(
+    monkeypatch, fastapi_endpoint, proxmox_endpoint
+):
+    module = load_plugin_module(
+        "netbox_proxbox.views.sync",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+        proxmox_endpoint=proxmox_endpoint,
+    )
+    calls = _enqueue_spy(monkeypatch, module)
+
+    module.sync_full_update(_post_request())
+
+    assert calls[0]["sync_types"] == [ST_ALL]
+    assert calls[0]["proxmox_endpoint_ids"] == [proxmox_endpoint.pk]

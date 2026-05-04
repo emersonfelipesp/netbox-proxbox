@@ -72,6 +72,7 @@ def _fake_settings_obj(encryption_key: str = "") -> SimpleNamespace:
         overwrite_device_description=True,
         overwrite_device_custom_fields=True,
         overwrite_vm_role=True,
+        overwrite_vm_type=True,
         overwrite_vm_tags=True,
         overwrite_vm_description=True,
         overwrite_vm_custom_fields=True,

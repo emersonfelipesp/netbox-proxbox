@@ -1,7 +1,7 @@
 """Cross-repo drift detector for the overwrite_* flag set.
 
 The plugin (`netbox-proxbox`) and the backend (`proxbox-api`) each carry the
-same canonical 21-flag list as a single source of truth:
+same canonical 22-flag list as a single source of truth:
 
 - Plugin: `netbox_proxbox.constants.OVERWRITE_FIELDS`
 - Backend: `proxbox_api.schemas.sync.SyncOverwriteFlags.model_fields`
@@ -9,7 +9,7 @@ same canonical 21-flag list as a single source of truth:
 A copy of the canonical names + order is committed to BOTH repos as
 `contracts/overwrite_flags.json`. This test asserts that the local source of
 truth on this side matches the manifest exactly. The mirror repo runs the same
-test against its own source of truth. Any developer who adds a 22nd flag to
+test against its own source of truth. Any developer who changes flags on
 either side must update both manifests; CI on both repos fails otherwise.
 """
 
@@ -57,10 +57,10 @@ def test_manifest_matches_constants_overwrite_fields() -> None:
     )
 
 
-def test_manifest_field_count_is_canonical_21() -> None:
+def test_manifest_field_count_is_canonical_22() -> None:
     """Sanity check: any change to flag count is intentional and reviewed."""
     manifest_fields = _load_manifest_fields()
-    assert len(manifest_fields) == 21
+    assert len(manifest_fields) == 22
 
 
 def test_manifest_has_no_duplicate_fields() -> None:

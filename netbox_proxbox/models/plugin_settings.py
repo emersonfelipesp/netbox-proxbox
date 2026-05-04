@@ -236,6 +236,14 @@ class ProxboxPluginSettings(NetBoxModel):
             "that already have a role assigned. The role is still set when the VM is first created."
         ),
     )
+    overwrite_vm_type = models.BooleanField(
+        default=True,
+        verbose_name=_("Overwrite VM type"),
+        help_text=_(
+            "When disabled, sync never changes the type on existing NetBox virtual machines "
+            "that already have a type assigned. The type is still set when the VM is first created."
+        ),
+    )
     overwrite_vm_tags = models.BooleanField(
         default=True,
         verbose_name=_("Merge VM tags"),
