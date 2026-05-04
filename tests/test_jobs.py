@@ -228,6 +228,57 @@ def test_proxbox_sync_job_network_interfaces_includes_vm_interfaces_stage(
     ]
 
 
+def test_proxbox_sync_job_skips_invalid_proxmox_endpoint_ids(
+    monkeypatch, proxbox_sync_job_module, caplog
+):
+    """Malformed endpoint ids should be logged and skipped, not crash the job."""
+    paths: list[str] = []
+    synced_endpoint_ids: list[int] = []
+
+    services_mod = types.ModuleType("netbox_proxbox.services")
+
+    def run_sync_stream(path, query_params=None, **stream_kwargs):
+        paths.append(path)
+        return ({"stream": True, "response": {"ok": True}}, 200)
+
+    services_mod.run_sync_stream = run_sync_stream
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
+
+    sync_cluster_mod = sys.modules["netbox_proxbox.services.sync_cluster"]
+
+    def sync_cluster_and_nodes(endpoint_id=None):
+        synced_endpoint_ids.append(endpoint_id)
+        return SimpleNamespace(
+            success=True,
+            clusters_created=0,
+            clusters_updated=0,
+            nodes_created=0,
+            nodes_updated=0,
+            error=None,
+        )
+
+    sync_cluster_mod.sync_cluster_and_nodes = sync_cluster_and_nodes
+    monkeypatch.setattr(
+        proxbox_sync_job_module.sync_stages,
+        "effective_overwrites_for_endpoint",
+        lambda _endpoint_id: {},
+    )
+
+    ProxboxSyncJob = proxbox_sync_job_module.ProxboxSyncJob
+    job = ProxboxSyncJob()
+    job.logger = logging.getLogger("test_proxbox_job_invalid_endpoint_ids")
+    job.job = MagicMock()
+    job.job.data = None
+
+    st = proxbox_sync_job_module.SyncTypeChoices
+    with caplog.at_level(logging.WARNING):
+        ProxboxSyncJob.run(job, sync_type=st.DEVICES, proxmox_endpoint_ids=["bad", "2"])
+
+    assert synced_endpoint_ids == [2]
+    assert paths == ["dcim/devices/create/stream"]
+    assert "Skipping invalid Proxmox endpoint id 'bad'" in caplog.text
+
+
 def test_proxbox_sync_job_logs_stage_lines_with_rendered_values(
     monkeypatch, proxbox_sync_job_module, caplog
 ):

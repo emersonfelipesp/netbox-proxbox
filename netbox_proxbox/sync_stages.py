@@ -300,7 +300,16 @@ def _proxmox_endpoint_scopes(
     proxmox_endpoint_ids: object,
 ) -> list[list[str]]:
     """Return one flat-query endpoint scope per backend SSE run."""
-    requested = [str(value) for value in list(proxmox_endpoint_ids or []) if str(value)]
+    requested: list[str] = []
+    for value in list(proxmox_endpoint_ids or []):
+        endpoint_id = str(value).strip()
+        if not endpoint_id:
+            continue
+        try:
+            int(endpoint_id)
+        except (TypeError, ValueError):
+            continue
+        requested.append(endpoint_id)
     if requested:
         return [[endpoint_id] for endpoint_id in requested]
 

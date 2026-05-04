@@ -3,12 +3,36 @@
 from __future__ import annotations
 
 import importlib
+import json
 import sys
 import types
 from pathlib import Path
 from types import SimpleNamespace
 
 from tests.conftest import load_plugin_module
+
+
+class _FakeResponse:
+    def __init__(self, status_code=200, payload=None, text=""):
+        self.status_code = status_code
+        self._payload = payload
+        self.text = text
+        self.url = "http://backend/sync/individual/vm"
+        self.headers = {"Content-Type": "application/json"}
+
+    def json(self):
+        if isinstance(self._payload, BaseException):
+            raise self._payload
+        return self._payload
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            import requests
+
+            raise requests.exceptions.HTTPError(
+                f"HTTP {self.status_code}",
+                response=self,
+            )
 
 
 def _load_individual_sync_module(monkeypatch):
@@ -28,6 +52,10 @@ def _load_individual_sync_module(monkeypatch):
     nbp_services.__path__ = [str(repo_root / "netbox_proxbox" / "services")]
     monkeypatch.setitem(sys.modules, "netbox_proxbox.services", nbp_services)
 
+    nbp_views = types.ModuleType("netbox_proxbox.views")
+    nbp_views.__path__ = [str(repo_root / "netbox_proxbox" / "views")]
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.views", nbp_views)
+
     models_stub = types.ModuleType("netbox_proxbox.models")
     models_stub.FastAPIEndpoint = type(
         "FastAPIEndpoint",
@@ -43,6 +71,7 @@ def _load_individual_sync_module(monkeypatch):
     monkeypatch.setitem(sys.modules, "netbox_proxbox.utils", utils_stub)
 
     sys.modules.pop("netbox_proxbox.services.individual_sync", None)
+    sys.modules.pop("netbox_proxbox.views.error_utils", None)
     return importlib.import_module("netbox_proxbox.services.individual_sync")
 
 
@@ -94,6 +123,42 @@ def test_build_cache_key_is_deterministic(monkeypatch):
     )
 
     assert key_a == key_b
+
+
+def test_sync_individual_reports_non_json_backend_response(monkeypatch):
+    module = _load_individual_sync_module(monkeypatch)
+    module.get_first_fastapi_context = lambda: {
+        "http_url": "http://backend",
+        "headers": {},
+        "verify_ssl": True,
+    }
+    response = _FakeResponse(
+        status_code=200,
+        payload=json.JSONDecodeError("bad json", "<html>", 0),
+        text="<html>not proxbox-api</html>",
+    )
+    monkeypatch.setattr(module.requests, "get", lambda *a, **kw: response)
+
+    payload, status = module.sync_individual("sync/individual/vm", {"vmid": 101})
+
+    assert status == 502
+    assert "not valid JSON" in payload["error"]
+
+
+def test_sync_individual_preserves_backend_http_status_and_detail(monkeypatch):
+    module = _load_individual_sync_module(monkeypatch)
+    module.get_first_fastapi_context = lambda: {
+        "http_url": "http://backend",
+        "headers": {},
+        "verify_ssl": True,
+    }
+    response = _FakeResponse(status_code=404, payload={"detail": "VM not found"})
+    monkeypatch.setattr(module.requests, "get", lambda *a, **kw: response)
+
+    payload, status = module.sync_individual("sync/individual/vm", {"vmid": 999})
+
+    assert status == 404
+    assert payload["error"] == "VM not found"
 
 
 def test_vm_sync_now_view_fails_fast_without_cluster(monkeypatch):

@@ -21,9 +21,9 @@ pip install -e /opt/netbox/netbox/netbox-proxbox
 
 ## Important Notes
 
-- Proxbox `0.0.13.post4` is the current release for NetBox `4.6.x` (certified against `v4.6.0-beta2`). It pairs with `proxbox-api==0.0.9.post2`, which fixes a `create_storages()` `TypeError` that affected `0.0.9.post1`. If you are still on NetBox `4.5.x`, stay on `0.0.11`.
+- Proxbox `0.0.13.post4` is the current release for NetBox `4.5.8`, `4.5.9`, and `4.6.x` (certified against `v4.5.8`, `v4.5.9`, and `v4.6.0-beta2`). It pairs with `proxbox-api==0.0.9.post2`, which fixes issue #349 and a `create_storages()` `TypeError` that affected `0.0.9.post1`.
 - Recent releases moved sync execution to NetBox Jobs and the default RQ queue, so keep a standard NetBox RQ worker running after upgrade.
-- Review the release notes before jumping from older `0.0.7` or early `0.0.9` installs; the `0.0.11` line continues the NetBox `4.5.x` compatibility range while `0.0.12` and later require NetBox `4.6.0` or later.
+- Review the release notes before jumping from older `0.0.7` or early `0.0.9` installs; the `0.0.13.post4` line restores support for NetBox `4.5.8` and `4.5.9` while preserving the NetBox `4.6` compatibility path.
 - Upgrading to `0.0.13` introduces 16 new per-endpoint `overwrite_*` columns on `ProxmoxEndpoint`. The migration ships in this release; no manual schema work is required, but plan for the migration to run during the upgrade window.
 
 ## Backend Upgrade

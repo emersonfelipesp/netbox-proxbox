@@ -7,6 +7,7 @@ import logging
 from collections.abc import Callable, Generator, Iterable
 
 import requests
+from pydantic import ValidationError
 
 from netbox_proxbox.schemas.backend_proxy import (
     BackendRequestContext,
@@ -73,7 +74,11 @@ def _iter_sse_frames(
     for raw in line_iter:
         if raw is None:
             continue
-        line = str(raw)
+        line = (
+            raw.decode("utf-8", errors="replace")
+            if isinstance(raw, bytes)
+            else str(raw)
+        )
         if line == "":
             yield from flush()
             continue
@@ -104,7 +109,16 @@ def _consume_sse_until_complete(
             if on_frame is not None:
                 on_frame(_event, data)
             if _event == "complete":
-                last_complete = SseCompletePayload.model_validate(data)
+                try:
+                    last_complete = SseCompletePayload.model_validate(data)
+                except ValidationError as exc:
+                    return {
+                        "stream": True,
+                        "detail": (
+                            "ProxBox backend stream sent an invalid complete event: "
+                            f"{exc.errors()[0].get('msg', str(exc))}"
+                        ),
+                    }, 502
     except requests.exceptions.RequestException as exc:
         detail, _ = extract_backend_error_detail(exc)
         return {

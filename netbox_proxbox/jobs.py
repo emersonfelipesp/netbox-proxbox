@@ -178,9 +178,12 @@ def _ensure_backend_endpoints(
 
     # Push Proxmox endpoints — filter by IDs if the job was scoped to specific ones.
     if proxmox_endpoint_ids:
-        proxmox_qs = ProxmoxEndpoint.objects.filter(
-            pk__in=[int(i) for i in proxmox_endpoint_ids if i]
+        valid_endpoint_ids = _coerce_endpoint_ids(
+            proxmox_endpoint_ids,
+            logger=job.logger,
+            context="preflight endpoint push",
         )
+        proxmox_qs = ProxmoxEndpoint.objects.filter(pk__in=valid_endpoint_ids)
     else:
         proxmox_qs = ProxmoxEndpoint.objects.all()
 
@@ -202,6 +205,30 @@ def _ensure_backend_endpoints(
                 getattr(px_ep, "name", px_ep.pk),
                 err,
             )
+
+
+def _coerce_endpoint_ids(
+    raw_ids: list[str] | None,
+    *,
+    logger: object | None = None,
+    context: str = "sync",
+) -> list[int]:
+    """Return valid integer endpoint IDs and log skipped malformed values."""
+    endpoint_ids: list[int] = []
+    for raw_id in raw_ids or []:
+        value = str(raw_id).strip()
+        if not value:
+            continue
+        try:
+            endpoint_ids.append(int(value))
+        except (TypeError, ValueError):
+            if logger is not None and hasattr(logger, "warning"):
+                logger.warning(
+                    "Skipping invalid Proxmox endpoint id %r during %s",
+                    raw_id,
+                    context,
+                )
+    return endpoint_ids
 
 
 class ProxboxSyncJob(JobRunner):
@@ -387,7 +414,11 @@ class ProxboxSyncJob(JobRunner):
             from netbox_proxbox.services.sync_cluster import sync_cluster_and_nodes  # noqa: PLC0415
 
             endpoint_ids_to_sync = (
-                [int(eid) for eid in proxmox_endpoint_ids if eid]
+                _coerce_endpoint_ids(
+                    proxmox_endpoint_ids,
+                    logger=self.logger,
+                    context="cluster/node sync",
+                )
                 if proxmox_endpoint_ids
                 else list(ProxmoxEndpoint.objects.values_list("pk", flat=True))
             )

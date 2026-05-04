@@ -39,7 +39,7 @@ def parse_requests_response_json(
     """
     try:
         return response.json(), None
-    except _JSON_DECODE_ERROR as exc:
+    except (_JSON_DECODE_ERROR, ValueError) as exc:
         url = getattr(response, "url", "") or ""
         snippet = (getattr(response, "text", "") or "")[:200].replace("\n", " ")
         logger.warning(

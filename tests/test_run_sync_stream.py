@@ -228,6 +228,26 @@ def test_run_sync_stream_missing_complete(backend_proxy_module, monkeypatch):
     assert "without a complete" in payload["detail"]
 
 
+def test_run_sync_stream_invalid_complete_payload(backend_proxy_module, monkeypatch):
+    bp = backend_proxy_module
+    lines = [
+        "event: complete",
+        f"data: {json.dumps({'ok': True, 'errors': {'detail': 'bad shape'}})}",
+        "",
+    ]
+    monkeypatch.setattr(
+        bp.requests,
+        "get",
+        _mock_backend_get(_StreamResponse(lines)),
+    )
+    monkeypatch.setattr(bp, "get_fastapi_request_context", lambda: _stream_context(bp))
+
+    payload, status = bp.run_sync_stream("dcim/devices/create/stream")
+
+    assert status == 502
+    assert "invalid complete event" in payload["detail"]
+
+
 def test_run_sync_stream_http_error_json(backend_proxy_module, monkeypatch):
     bp = backend_proxy_module
     monkeypatch.setattr(

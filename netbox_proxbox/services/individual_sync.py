@@ -7,6 +7,10 @@ import logging
 import requests
 
 from netbox_proxbox.utils import get_first_fastapi_context
+from netbox_proxbox.views.error_utils import (
+    extract_backend_error_detail,
+    parse_requests_response_json,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +62,7 @@ def sync_individual(
             request_candidates.append((fallback_path, verify_ssl))
 
     last_error = None
+    last_status = 503
     for request_url, verify in request_candidates:
         try:
             response = requests.get(
@@ -68,9 +73,18 @@ def sync_individual(
                 timeout=_INDIVIDUAL_SYNC_TIMEOUT,
             )
             response.raise_for_status()
-            return response.json(), 200
+            payload, json_err = parse_requests_response_json(
+                response, log_label=f"individual-sync:{path}"
+            )
+            if json_err:
+                return {"error": json_err}, 502
+            if isinstance(payload, dict):
+                return payload, response.status_code
+            return {"response": payload}, response.status_code
         except requests.exceptions.RequestException as exc:
-            last_error = str(exc)
+            detail, http_status = extract_backend_error_detail(exc)
+            last_error = detail
+            last_status = http_status or 503
             logger.error(
                 "Individual sync request failed for %s via %s: %s",
                 path,
@@ -79,11 +93,25 @@ def sync_individual(
             )
             if getattr(exc, "response", None) is not None:
                 break
+        except ValueError as exc:
+            response_obj = locals().get("response")
+            snippet = (getattr(response_obj, "text", "") or "")[:200].replace("\n", " ")
+            last_error = (
+                "ProxBox backend returned a response that is not valid JSON. "
+                "Check that the FastAPI URL points to proxbox-api, not another service."
+            )
+            if snippet:
+                last_error += f" Body starts with: {snippet!r}"
+            last_status = 502
+            logger.error("Invalid individual sync response for %s: %s", path, exc)
         except Exception as exc:  # pragma: no cover
             last_error = str(exc)
-            logger.error("Unexpected error in individual sync for %s: %s", path, exc)
+            last_status = 500
+            logger.exception("Unexpected error in individual sync for %s", path)
 
-    return {"error": last_error or "Unable to reach the ProxBox backend."}, 503
+    return {
+        "error": last_error or "Unable to reach the ProxBox backend.",
+    }, last_status
 
 
 def _build_cache_key(path: str, query_params: dict | None) -> str:

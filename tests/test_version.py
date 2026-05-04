@@ -41,5 +41,11 @@ def test_plugin_version_is_pinned():
 
 def test_min_max_netbox_versions_are_pinned():
     constants = _class_constants("ProxboxConfig")
-    assert constants.get("min_version") == "4.6.0"
+    assert constants.get("min_version") == "4.5.8"
     assert constants.get("max_version") == "4.6.99"
+
+
+def test_certified_netbox_versions_are_documented():
+    constants = _class_constants("ProxboxConfig")
+    assert constants["min_version"] == "4.5.8"
+    assert constants["max_version"] == "4.6.99"
