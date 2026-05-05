@@ -4,12 +4,13 @@ This section tracks the release line represented by this repository and keeps ol
 
 ## Current Release Line
 
-The plugin source in this repository is currently `0.0.13.post4`.
+The plugin source in this repository is currently `0.0.14`.
 
 ## Highlights By Version
 
 | Version | Summary |
 |---------|---------|
+| `0.0.14` | Certification bump for the separate `proxbox-api` backend release `0.0.10.post2`. No plugin source changes; REST / SSE / WebSocket / auth / overwrite-flag contracts remain compatible with backend `0.0.9.post2`. Backend internally adopts `netbox-sdk==0.0.8.post1` and supports NetBox `4.5.8`, `4.5.9`, and official `4.6.0`. |
 | `0.0.13.post4` | Re-pins `proxbox-api==0.0.9.post2` (fixes `create_storages()` `TypeError` regression in `0.0.9.post1`); certifies NetBox `4.5.8` and `4.5.9` for issue #349. Supersedes `0.0.13.post3` which never reached PyPI due to a stale `uv.lock`. |
 | `0.0.13.post2` | Re-pins `proxbox-api==0.0.9.post1`; adds matrix row for the new pair; no runtime behavior change |
 | `0.0.13.post1` | Bumps `proxbox-api==0.0.9` pin; certifies NetBox `v4.6.0-beta2`; documents endpoint import/export page; CI screenshot rebase fix |

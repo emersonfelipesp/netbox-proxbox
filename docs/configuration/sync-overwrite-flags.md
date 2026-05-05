@@ -77,7 +77,7 @@ The `overwrite_device_role`, `overwrite_device_type`, and
 `overwrite_device_tags` flags govern **two** different write paths in
 `proxbox-api`. The bulk DCIM sync respects them, but a single VM sync also
 materializes the VM's parent `Device` record — and prior to the fix shipped
-in `proxbox-api 0.0.10` (paired with `netbox-proxbox 0.0.13`+) that per-VM
+in `proxbox-api 0.0.10+` (paired with `netbox-proxbox 0.0.13`+) that per-VM
 path was reverting `device_type` to *Proxmox Generic Device* on every run.
 
 If you are on `netbox-proxbox 0.0.13`+ and still see your custom `device_type`

@@ -2,7 +2,7 @@
 
 ## Read This First
 
-The current repository code targets NetBox `4.5.8`, `4.5.9`, and `4.6.x` (certified against `v4.5.8`, `v4.5.9`, and `v4.6.0-beta2`), but the repository is ahead of the latest published PyPI build of `netbox-proxbox`.
+The current repository code targets NetBox `4.5.8`, `4.5.9`, and `4.6.x` (certified simultaneously against `v4.5.8`, `v4.5.9`, and official `v4.6.0`), but the repository is ahead of the latest published PyPI build of `netbox-proxbox`.
 
 If you need the code documented in this repository, use [Installing the Plugin Using Git](./2-installing-plugin-git.md) instead.
 

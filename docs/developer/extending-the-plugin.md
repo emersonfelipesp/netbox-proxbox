@@ -27,6 +27,9 @@ rtk ty check proxbox_cli
 ## Adding a New Sync Stage
 
 Use this checklist when adding a new Proxmox data type to the sync pipeline.
+Steps that reference `proxbox_api/...` are backend-service changes in the
+separate `proxbox-api` repository; they are not Python imports from the
+`netbox-proxbox` plugin.
 
 ```mermaid
 flowchart TD

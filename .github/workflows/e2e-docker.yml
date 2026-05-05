@@ -14,7 +14,7 @@ on:
         type: string
         default: dev
       netbox_image:
-        description: "Override NetBox image (e.g. netboxcommunity/netbox:v4.6.0-beta2). Empty = workflow default."
+        description: "Override NetBox image (e.g. netboxcommunity/netbox:v4.6.0). Empty = workflow default."
         required: false
         type: string
         default: ""
@@ -48,9 +48,10 @@ on:
     - cron: "31 2 * * *"
 
 env:
-  PROXBOX_API_RELEASE_VERSION: 0.0.9.post2
+  PROXBOX_API_RELEASE_VERSION: 0.0.10.post2
   PROXBOX_API_IMAGE: emersonfelipesp/proxbox-api
   PROXMOX_SDK_IMAGE: emersonfelipesp/proxmox-sdk
+  PROXBOX_ENCRYPTION_KEY: proxbox-ci-only-encryption-key-not-a-secret
 
 jobs:
   e2e-docker-stack:
@@ -63,11 +64,11 @@ jobs:
       fail-fast: false
       matrix:
         install_source: ${{ fromJSON(inputs.install_source != 'both' && format('["{0}"]', inputs.install_source) || '["local","pypi","container"]') }}
-        netbox_image: ${{ fromJSON(inputs.netbox_image != '' && format('["{0}"]', inputs.netbox_image) || '["netboxcommunity/netbox:v4.5.8","netboxcommunity/netbox:v4.5.9","netboxcommunity/netbox:v4.6.0-beta2"]') }}
+        netbox_image: ${{ fromJSON(inputs.netbox_image != '' && format('["{0}"]', inputs.netbox_image) || '["netboxcommunity/netbox:v4.5.8","netboxcommunity/netbox:v4.5.9","netboxcommunity/netbox:v4.6.0"]') }}
         network_stack: [ipv4]
         include:
           - install_source: local
-            netbox_image: netboxcommunity/netbox:v4.6.0-beta2
+            netbox_image: netboxcommunity/netbox:v4.6.0
             network_stack: ipv6
     steps:
       - name: Checkout repository
@@ -138,7 +139,17 @@ jobs:
             redis:7-alpine
 
           docker pull "${PROXMOX_SDK_IMAGE}:dev-nginx"
-          docker pull "${NETBOX_IMAGE}"
+          if ! docker pull "${NETBOX_IMAGE}" 2>/dev/null; then
+            NETBOX_VERSION="${NETBOX_IMAGE##*:}"
+            git clone --depth 1 https://github.com/netbox-community/netbox-docker.git /tmp/netbox-docker
+            git clone --depth 1 --branch "${NETBOX_VERSION}" \
+              https://github.com/netbox-community/netbox.git /tmp/netbox-docker/.netbox
+            docker build \
+              --build-arg "FROM=ubuntu:24.04" \
+              --build-arg "NETBOX_PATH=.netbox" \
+              -t "${NETBOX_IMAGE}" \
+              /tmp/netbox-docker
+          fi
 
           docker run -d --name proxmox-e2e-mock --network proxbox-e2e -p "${HOST_BIND}18006:8000" \
             -v "$PWD/tests/e2e/proxmox_openapi_mock_data.json:/data/mock-data.json:ro" \
@@ -147,7 +158,6 @@ jobs:
             -e APP_MODULE=proxmox_sdk.mock_main:app \
             "${PROXMOX_SDK_IMAGE}:dev-nginx"
 
-          if [ "${{ inputs.dependency_mode }}" = "published" ]; then
           if [ "${{ matrix.network_stack }}" = "ipv6" ]; then
             PROXBOX_BIND_HOST_VALUE="::"
           else
@@ -158,6 +168,7 @@ jobs:
             docker pull "${PROXBOX_API_IMAGE}:${PROXBOX_API_RELEASE_VERSION}"
             docker run -d --name proxbox-e2e-api --network proxbox-e2e -p "${HOST_BIND}18800:8000" \
               -e PROXBOX_SKIP_NETBOX_BOOTSTRAP=true \
+              -e PROXBOX_ENCRYPTION_KEY \
               -e PROXBOX_BIND_HOST="${PROXBOX_BIND_HOST_VALUE}" \
               "${PROXBOX_API_IMAGE}:${PROXBOX_API_RELEASE_VERSION}"
           else
@@ -165,6 +176,7 @@ jobs:
             docker build --target raw -t proxbox-api-e2e:dev /tmp/proxbox-api-src
             docker run -d --name proxbox-e2e-api --network proxbox-e2e -p "${HOST_BIND}18800:8000" \
               -e PROXBOX_SKIP_NETBOX_BOOTSTRAP=true \
+              -e PROXBOX_ENCRYPTION_KEY \
               -e PROXBOX_BIND_HOST="${PROXBOX_BIND_HOST_VALUE}" \
               proxbox-api-e2e:dev
           fi

@@ -135,6 +135,7 @@ nav:
     - Other Models: 'models/others.md'
   - Release Notes:
     - Summary: 'release-notes/index.md'
+    - Version 0.0.14: 'release-notes/version-0.0.14.md'
     - Version 0.0.13: 'release-notes/version-0.0.13.md'
     - Version 0.0.12: 'release-notes/version-0.0.12.md'
     - Version 0.0.11: 'release-notes/version-0.0.11.md'

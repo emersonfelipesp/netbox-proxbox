@@ -1,6 +1,6 @@
 [project]
 name = "netbox-proxbox"
-version = "0.0.13.post4"
+version = "0.0.14"
 description = "Netbox Plugin - Integrate Proxmox and Netbox"
 readme = "README.md"
 authors = [
@@ -40,7 +40,6 @@ dev = [
 test = [
     "pytest>=9.0.2",
     "pytest-cov>=7.1.0",
-    "proxbox-api",
 ]
 e2e = [
     "fastapi==0.136.1",

@@ -6,23 +6,28 @@ Proxbox is a NetBox plugin that integrates Proxmox with NetBox through a separat
 
 | NetBox   | netbox-proxbox | proxbox-api | netbox-sdk     | proxmox-sdk    |
 |----------|----------------|-------------|----------------|----------------|
+| >=4.5.8  | v0.0.14 | v0.0.10.post2 | v0.0.8.post1 | v0.0.3.post1 |
 | >=4.5.8  | v0.0.13.post4 | v0.0.9.post2 | v0.0.7.post6 | v0.0.3.post1 |
 | >=4.6.0-beta2 | v0.0.13.post2 | v0.0.9.post1 | v0.0.7.post6 | v0.0.3.post1 |
 | >=4.6.0-beta2 | v0.0.13.post1 | v0.0.9 | v0.0.7.post6 | v0.0.3.post1 |
 | >=4.6.0-beta1 | v0.0.12       | v0.0.8.post1 | v0.0.7.post6 | v0.0.3.post1 |
 | >=4.5.7  | v0.0.11        | v0.0.7      | v0.0.7.post4   | v0.0.2.post2   |
 
+`proxbox-api` is listed as the separately deployed backend service. It is not a
+Python dependency of `netbox-proxbox`; the plugin talks to it over REST, SSE,
+and WebSocket.
+
 The current repository code declares support for:
 
 - NetBox `4.5.8`, `4.5.9`, and `4.6.x`
-- Plugin version `0.0.13.post4` in source
+- Plugin version `0.0.14` in source
 
 That support comes directly from the plugin config in this repository:
 
 - `min_version = "4.5.8"`
 - `max_version = "4.6.99"`
 
-This compatibility line is certified against NetBox `v4.5.8`, `v4.5.9`, and `v4.6.0-beta2`. It adds per-endpoint Settings tabs, surfaces every `overwrite_*` flag in the plugin UI, enforces VM-sync device flags on the proxbox-api side, and ships endpoint CSV/JSON/YAML import/export pages.
+This compatibility line is certified simultaneously against NetBox `v4.5.8`, `v4.5.9`, and official `v4.6.0`. It adds per-endpoint Settings tabs, surfaces every `overwrite_*` flag in the plugin UI, enforces VM-sync device flags on the proxbox-api side, and ships endpoint CSV/JSON/YAML import/export pages.
 
 ## Important Packaging Note
 

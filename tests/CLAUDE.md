@@ -37,7 +37,7 @@ This directory contains the plugin's pytest test suite.
 - Tests rely heavily on compatibility stubs in `conftest.py` rather than a live NetBox database.
 - When changing view, job-enqueue, or template contracts, update both the runtime code and those stubs.
 - `test_frontend_contracts.py` guards against accidental regressions in public-facing attribute names and JS function signatures.
-- **Optional-dependency tests:** `test_sse_schema_mirror.py` is a contract-mirror test that requires `proxbox-api` on the import path. It uses `pytest.importorskip("proxbox_api...")` and is silently skipped in the standard CI matrix; the nightly contracts workflow installs `proxbox-api` from PyPI and runs this file explicitly so cross-repo overwrite-flag drift is detected.
+- **Wire-contract tests:** `test_sse_schema_mirror.py` validates local REST/SSE schema mirrors against `contracts/proxbox_api_sse_schema.json`. It must not import or install `proxbox-api`; the plugin and backend communicate over HTTP, not direct Python calls.
 - **AST-based source contracts** (e.g. `test_version.py`, `test_signals.py`, `test_services_backend_context.py`, `test_views_vm_config.py`, `test_views_storage.py`) parse the relevant module with `ast` and never bootstrap Django. Use this pattern when the runtime cost of starting NetBox would dominate the test value — it is the same approach as `test_proxmox_endpoint_settings_view.py`.
 - **Coverage:** `pyproject.toml` defines `[tool.coverage.run]` with `source = ["netbox_proxbox"]` and `branch = true`, plus `[tool.coverage.report]` with `exclude_lines` for `TYPE_CHECKING` and `pragma: no cover` markers. CI invokes `pytest --cov=netbox_proxbox`.
 

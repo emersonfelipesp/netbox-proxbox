@@ -1,0 +1,82 @@
+{
+  "schema": "proxbox-api-sse-schema",
+  "version": 1,
+  "source": {
+    "project": "proxbox-api",
+    "release": "0.0.10.post2",
+    "release_url": "https://github.com/emersonfelipesp/proxbox-api/releases/tag/v0.0.10.post2",
+    "modules": [
+      "proxbox_api.enum.proxmox",
+      "proxbox_api.schemas.stream_messages"
+    ]
+  },
+  "description": "Wire contract for proxbox-api REST/SSE payloads consumed by netbox-proxbox. netbox-proxbox must not import proxbox-api; it validates its local HTTP schema mirrors against this manifest.",
+  "enum_values": {
+    "BackupMode": ["snapshot", "suspend", "stop"],
+    "CompressionAlgorithm": ["zstd", "lzo", "gzip", "0"],
+    "NotificationMode": ["always", "failure", "auto", "never"],
+    "PBSChangeDetectionMode": ["legacy", "data", "metadata"],
+    "ProxmoxVMStatus": ["running", "stopped", "paused", "suspended", "prelaunch"],
+    "DiskFormat": ["qcow2", "raw", "vmdk", "subvol"],
+    "StreamMessageType": [
+      "discovery",
+      "substep",
+      "item_progress",
+      "phase_summary",
+      "error_detail",
+      "progress"
+    ]
+  },
+  "payload_fields": {
+    "DiscoveryMessage": [
+      "event",
+      "phase",
+      "status",
+      "message",
+      "count",
+      "items",
+      "progress",
+      "metadata"
+    ],
+    "SubstepMessage": [
+      "event",
+      "phase",
+      "substep",
+      "status",
+      "message",
+      "item",
+      "timing",
+      "result"
+    ],
+    "ItemProgressMessage": [
+      "event",
+      "phase",
+      "status",
+      "message",
+      "item",
+      "operation",
+      "progress",
+      "timing",
+      "error",
+      "warning"
+    ],
+    "PhaseSummaryMessage": [
+      "event",
+      "phase",
+      "status",
+      "message",
+      "result",
+      "timing"
+    ],
+    "ErrorDetailMessage": [
+      "event",
+      "phase",
+      "item",
+      "category",
+      "message",
+      "detail",
+      "suggestion",
+      "traceback"
+    ]
+  }
+}
