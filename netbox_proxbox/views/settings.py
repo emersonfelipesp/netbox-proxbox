@@ -39,14 +39,23 @@ class SettingsView(
             "ignore_ipv6_link_local_addresses": settings_obj.ignore_ipv6_link_local_addresses,
             "primary_ip_preference": settings_obj.primary_ip_preference,
             "netbox_max_concurrent": settings_obj.netbox_max_concurrent,
+            "netbox_timeout": settings_obj.netbox_timeout,
+            "netbox_write_concurrency": settings_obj.netbox_write_concurrency,
+            "proxmox_fetch_concurrency": settings_obj.proxmox_fetch_concurrency,
             "netbox_max_retries": settings_obj.netbox_max_retries,
             "netbox_retry_delay": settings_obj.netbox_retry_delay,
             "netbox_get_cache_ttl": settings_obj.netbox_get_cache_ttl,
+            "netbox_get_cache_max_entries": settings_obj.netbox_get_cache_max_entries,
+            "netbox_get_cache_max_bytes": settings_obj.netbox_get_cache_max_bytes,
             "bulk_batch_size": settings_obj.bulk_batch_size,
             "bulk_batch_delay_ms": settings_obj.bulk_batch_delay_ms,
+            "backup_batch_size": settings_obj.backup_batch_size,
+            "backup_batch_delay_ms": settings_obj.backup_batch_delay_ms,
             "vm_sync_max_concurrency": settings_obj.vm_sync_max_concurrency,
             "custom_fields_request_delay": settings_obj.custom_fields_request_delay,
             "backend_log_file_path": settings_obj.backend_log_file_path,
+            "debug_cache": settings_obj.debug_cache,
+            "expose_internal_errors": settings_obj.expose_internal_errors,
             "ssrf_protection_enabled": settings_obj.ssrf_protection_enabled,
             "allow_private_ips": settings_obj.allow_private_ips,
             "additional_allowed_ip_ranges": settings_obj.additional_allowed_ip_ranges,
@@ -112,18 +121,39 @@ class SettingsView(
             settings_obj.netbox_max_concurrent = form.cleaned_data[
                 "netbox_max_concurrent"
             ]
+            settings_obj.netbox_timeout = form.cleaned_data["netbox_timeout"]
+            settings_obj.netbox_write_concurrency = form.cleaned_data[
+                "netbox_write_concurrency"
+            ]
+            settings_obj.proxmox_fetch_concurrency = form.cleaned_data[
+                "proxmox_fetch_concurrency"
+            ]
             settings_obj.netbox_max_retries = form.cleaned_data["netbox_max_retries"]
             settings_obj.netbox_retry_delay = form.cleaned_data["netbox_retry_delay"]
             settings_obj.netbox_get_cache_ttl = form.cleaned_data[
                 "netbox_get_cache_ttl"
             ]
+            settings_obj.netbox_get_cache_max_entries = form.cleaned_data[
+                "netbox_get_cache_max_entries"
+            ]
+            settings_obj.netbox_get_cache_max_bytes = form.cleaned_data[
+                "netbox_get_cache_max_bytes"
+            ]
             settings_obj.bulk_batch_size = form.cleaned_data["bulk_batch_size"]
             settings_obj.bulk_batch_delay_ms = form.cleaned_data["bulk_batch_delay_ms"]
+            settings_obj.backup_batch_size = form.cleaned_data["backup_batch_size"]
+            settings_obj.backup_batch_delay_ms = form.cleaned_data[
+                "backup_batch_delay_ms"
+            ]
             settings_obj.vm_sync_max_concurrency = form.cleaned_data[
                 "vm_sync_max_concurrency"
             ]
             settings_obj.custom_fields_request_delay = form.cleaned_data.get(
                 "custom_fields_request_delay", 0
+            )
+            settings_obj.debug_cache = form.cleaned_data.get("debug_cache", False)
+            settings_obj.expose_internal_errors = form.cleaned_data.get(
+                "expose_internal_errors", False
             )
             settings_obj.backend_log_file_path = form.cleaned_data[
                 "backend_log_file_path"
@@ -166,14 +196,23 @@ class SettingsView(
                     "ignore_ipv6_link_local_addresses",
                     "primary_ip_preference",
                     "netbox_max_concurrent",
+                    "netbox_timeout",
+                    "netbox_write_concurrency",
+                    "proxmox_fetch_concurrency",
                     "netbox_max_retries",
                     "netbox_retry_delay",
                     "netbox_get_cache_ttl",
+                    "netbox_get_cache_max_entries",
+                    "netbox_get_cache_max_bytes",
                     "bulk_batch_size",
                     "bulk_batch_delay_ms",
+                    "backup_batch_size",
+                    "backup_batch_delay_ms",
                     "vm_sync_max_concurrency",
                     "custom_fields_request_delay",
                     "backend_log_file_path",
+                    "debug_cache",
+                    "expose_internal_errors",
                     "ssrf_protection_enabled",
                     "allow_private_ips",
                     "additional_allowed_ip_ranges",

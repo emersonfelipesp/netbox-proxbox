@@ -77,6 +77,30 @@ class ProxboxPluginSettings(NetBoxModel):
             "Increase carefully — PostgreSQL pool may exhaust."
         ),
     )
+    netbox_timeout = models.PositiveIntegerField(
+        default=120,
+        verbose_name=_("NetBox client timeout (seconds)"),
+        help_text=_(
+            "Timeout for proxbox-api → NetBox HTTP requests. "
+            "Increase when NetBox runs slow large queries."
+        ),
+    )
+    netbox_write_concurrency = models.PositiveSmallIntegerField(
+        default=8,
+        verbose_name=_("NetBox write concurrency"),
+        help_text=_(
+            "Maximum concurrent NetBox write operations (creates/updates) used by VM, "
+            "snapshot, and task-history sync paths."
+        ),
+    )
+    proxmox_fetch_concurrency = models.PositiveSmallIntegerField(
+        default=8,
+        verbose_name=_("Proxmox fetch concurrency"),
+        help_text=_(
+            "Maximum concurrent Proxmox read operations used by backup, snapshot, "
+            "and task-history discovery."
+        ),
+    )
     netbox_max_retries = models.PositiveSmallIntegerField(
         default=5,
         verbose_name=_("NetBox max retries"),
@@ -98,6 +122,22 @@ class ProxboxPluginSettings(NetBoxModel):
             "How long to cache NetBox GET responses in memory. Set to 0 to disable caching."
         ),
     )
+    netbox_get_cache_max_entries = models.PositiveIntegerField(
+        default=4096,
+        verbose_name=_("NetBox GET cache max entries"),
+        help_text=_(
+            "Maximum number of entries kept in the in-memory NetBox GET cache before "
+            "least-recently-used entries are evicted."
+        ),
+    )
+    netbox_get_cache_max_bytes = models.PositiveBigIntegerField(
+        default=52_428_800,
+        verbose_name=_("NetBox GET cache max bytes"),
+        help_text=_(
+            "Maximum total size in bytes of the in-memory NetBox GET cache. "
+            "Default is 50 MiB."
+        ),
+    )
     bulk_batch_size = models.PositiveSmallIntegerField(
         default=50,
         verbose_name=_("Bulk batch size"),
@@ -108,6 +148,20 @@ class ProxboxPluginSettings(NetBoxModel):
         verbose_name=_("Bulk batch delay (ms)"),
         help_text=_(
             "Milliseconds to wait between bulk batches to avoid overwhelming NetBox."
+        ),
+    )
+    backup_batch_size = models.PositiveSmallIntegerField(
+        default=5,
+        verbose_name=_("Backup batch size"),
+        help_text=_(
+            "Number of VM backup records processed per batch during backup sync."
+        ),
+    )
+    backup_batch_delay_ms = models.PositiveIntegerField(
+        default=200,
+        verbose_name=_("Backup batch delay (ms)"),
+        help_text=_(
+            "Milliseconds to wait between backup batches to throttle Proxmox/NetBox load."
         ),
     )
     vm_sync_max_concurrency = models.PositiveSmallIntegerField(
@@ -131,6 +185,22 @@ class ProxboxPluginSettings(NetBoxModel):
         help_text=_(
             "Absolute file path for proxbox-api rotated log archive output "
             "(for example /var/log/proxbox.log). Changes apply after proxbox-api restart."
+        ),
+    )
+    debug_cache = models.BooleanField(
+        default=False,
+        verbose_name=_("Debug cache logging"),
+        help_text=_(
+            "When enabled, proxbox-api emits verbose log entries for NetBox GET cache "
+            "hits, misses, and evictions. Useful for diagnosing cache behavior."
+        ),
+    )
+    expose_internal_errors = models.BooleanField(
+        default=False,
+        verbose_name=_("Expose internal errors"),
+        help_text=_(
+            "When enabled, proxbox-api includes internal exception details in HTTP error "
+            "responses. Leave disabled in production to avoid leaking implementation details."
         ),
     )
     ssrf_protection_enabled = models.BooleanField(

@@ -53,6 +53,30 @@ class ProxboxPluginSettingsForm(forms.Form):
         label="NetBox max concurrent requests",
         help_text="Maximum simultaneous in-flight requests to NetBox API. Increase carefully.",
     )
+    netbox_timeout = forms.IntegerField(
+        required=True,
+        min_value=1,
+        max_value=3600,
+        initial=120,
+        label="NetBox client timeout (seconds)",
+        help_text="Timeout for proxbox-api → NetBox HTTP requests.",
+    )
+    netbox_write_concurrency = forms.IntegerField(
+        required=True,
+        min_value=1,
+        max_value=64,
+        initial=8,
+        label="NetBox write concurrency",
+        help_text="Maximum concurrent NetBox write operations (creates/updates).",
+    )
+    proxmox_fetch_concurrency = forms.IntegerField(
+        required=True,
+        min_value=1,
+        max_value=64,
+        initial=8,
+        label="Proxmox fetch concurrency",
+        help_text="Maximum concurrent Proxmox read operations during sync.",
+    )
     netbox_max_retries = forms.IntegerField(
         required=True,
         min_value=1,
@@ -77,6 +101,22 @@ class ProxboxPluginSettingsForm(forms.Form):
         label="NetBox GET cache TTL (seconds)",
         help_text="How long to cache NetBox GET responses. Set to 0 to disable caching.",
     )
+    netbox_get_cache_max_entries = forms.IntegerField(
+        required=True,
+        min_value=1,
+        max_value=1_000_000,
+        initial=4096,
+        label="NetBox GET cache max entries",
+        help_text="Max number of NetBox GET cache entries before LRU eviction.",
+    )
+    netbox_get_cache_max_bytes = forms.IntegerField(
+        required=True,
+        min_value=1,
+        max_value=10_737_418_240,
+        initial=52_428_800,
+        label="NetBox GET cache max bytes",
+        help_text="Max total bytes of the NetBox GET cache (default 50 MiB).",
+    )
     bulk_batch_size = forms.IntegerField(
         required=True,
         min_value=1,
@@ -92,6 +132,22 @@ class ProxboxPluginSettingsForm(forms.Form):
         initial=500,
         label="Bulk batch delay (ms)",
         help_text="Milliseconds to wait between bulk batches to avoid overwhelming NetBox.",
+    )
+    backup_batch_size = forms.IntegerField(
+        required=True,
+        min_value=1,
+        max_value=1000,
+        initial=5,
+        label="Backup batch size",
+        help_text="Number of VM backup records processed per batch during backup sync.",
+    )
+    backup_batch_delay_ms = forms.IntegerField(
+        required=True,
+        min_value=0,
+        max_value=10000,
+        initial=200,
+        label="Backup batch delay (ms)",
+        help_text="Milliseconds to wait between backup batches.",
     )
     vm_sync_max_concurrency = forms.IntegerField(
         required=True,
@@ -117,6 +173,22 @@ class ProxboxPluginSettingsForm(forms.Form):
         help_text=(
             "Absolute file path for proxbox-api rotated log archive output "
             "(for example /var/log/proxbox.log). Takes effect after proxbox-api restart."
+        ),
+    )
+    debug_cache = forms.BooleanField(
+        required=False,
+        label="Debug cache logging",
+        help_text=(
+            "When enabled, proxbox-api emits verbose log entries for NetBox GET cache "
+            "hits, misses, and evictions."
+        ),
+    )
+    expose_internal_errors = forms.BooleanField(
+        required=False,
+        label="Expose internal errors",
+        help_text=(
+            "When enabled, proxbox-api includes internal exception details in HTTP error "
+            "responses. Leave disabled in production."
         ),
     )
     ssrf_protection_enabled = forms.BooleanField(

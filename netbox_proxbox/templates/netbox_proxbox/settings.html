@@ -43,11 +43,18 @@
                         {% endblocktrans %}
                     </p>
                     {% render_field form.netbox_max_concurrent %}
+                    {% render_field form.netbox_timeout %}
+                    {% render_field form.netbox_write_concurrency %}
+                    {% render_field form.proxmox_fetch_concurrency %}
                     {% render_field form.netbox_max_retries %}
                     {% render_field form.netbox_retry_delay %}
                     {% render_field form.netbox_get_cache_ttl %}
+                    {% render_field form.netbox_get_cache_max_entries %}
+                    {% render_field form.netbox_get_cache_max_bytes %}
                     {% render_field form.bulk_batch_size %}
                     {% render_field form.bulk_batch_delay_ms %}
+                    {% render_field form.backup_batch_size %}
+                    {% render_field form.backup_batch_delay_ms %}
                     {% render_field form.vm_sync_max_concurrency %}
                     {% render_field form.custom_fields_request_delay %}
                 </div>
@@ -116,6 +123,22 @@
                     {% render_field form.allow_private_ips %}
                     {% render_field form.additional_allowed_ip_ranges %}
                     {% render_field form.explicitly_blocked_ip_ranges %}
+                </div>
+            </div>
+            {# Diagnostics Card #}
+            <div class="card mb-3">
+                <h5 class="card-header">
+                    <i class="mdi mdi-bug"></i>
+                    {% trans "Diagnostics" %}
+                </h5>
+                <div class="card-body">
+                    <p class="text-muted">
+                        {% blocktrans trimmed %}
+                        Toggle diagnostic logging and error-detail behavior on the proxbox-api service.
+                        {% endblocktrans %}
+                    </p>
+                    {% render_field form.debug_cache %}
+                    {% render_field form.expose_internal_errors %}
                 </div>
             </div>
             {# Encryption Card #}
