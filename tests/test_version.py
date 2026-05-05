@@ -25,6 +25,7 @@ RELEASE_NOTES_INDEX_PATH = REPO_ROOT / "docs" / "release-notes" / "index.md"
 RELEASE_NOTES_013_PATH = REPO_ROOT / "docs" / "release-notes" / "version-0.0.13.md"
 RELEASE_NOTES_014_PATH = REPO_ROOT / "docs" / "release-notes" / "version-0.0.14.md"
 E2E_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "e2e-docker.yml"
+PUBLISH_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "publish-testpypi.yml"
 NIGHTLY_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "nightly-contracts.yml"
 DOCS_SCREENSHOTS_WORKFLOW_PATH = (
     REPO_ROOT / ".github" / "workflows" / "docs-screenshots.yml"
@@ -130,6 +131,40 @@ def test_workflows_pin_proxbox_api_runtime_release_without_installing_package():
     assert expected_pin in e2e_workflow
     assert expected_pin in docs_workflow
     assert "pip install proxbox-api" not in nightly_workflow
+
+
+def test_release_workflow_uses_matching_package_indexes_for_e2e():
+    publish_workflow = PUBLISH_WORKFLOW_PATH.read_text(encoding="utf-8")
+
+    assert "--skip-existing" not in publish_workflow
+    assert "PROXBOX_API_TESTPYPI_VERSION" in publish_workflow
+    assert "PROXBOX_API_PYPI_VERSION" in publish_workflow
+
+    assert "install_source: testpypi" in publish_workflow
+    assert "dependency_mode: testpypi-package" in publish_workflow
+
+    assert "install_source: local" in publish_workflow
+    assert "install_source: pypi" in publish_workflow
+    assert publish_workflow.count("dependency_mode: pypi-package") >= 2
+    assert (
+        publish_workflow.count(
+            "proxbox_api_version: ${{ needs.prepare-release.outputs.proxbox_api_version }}"
+        )
+        == 3
+    )
+
+
+def test_e2e_workflow_supports_proxbox_api_package_index_runtime_modes():
+    e2e_workflow = E2E_WORKFLOW_PATH.read_text(encoding="utf-8")
+
+    assert "- testpypi" in e2e_workflow
+    assert "- testpypi-package" in e2e_workflow
+    assert "- pypi-package" in e2e_workflow
+    assert 'PROXBOX_API_VERSION="${{ inputs.proxbox_api_version }}"' in e2e_workflow
+    assert "--index-url https://test.pypi.org/simple/" in e2e_workflow
+    assert "--extra-index-url https://pypi.org/simple/" in e2e_workflow
+    assert "--index-url https://pypi.org/simple/" in e2e_workflow
+    assert '"proxbox-api==${PROXBOX_API_VERSION}"' in e2e_workflow
 
 
 def test_current_release_pairing_is_documented_in_primary_docs():

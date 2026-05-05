@@ -5,6 +5,9 @@ its companion `proxbox-api` backend. The workflow deliberately separates package
 index validation from final publication so failed published artifacts are never
 reused.
 
+For the broader CI job map and Docker E2E matrix, see
+[CI and E2E Workflows](ci-e2e-workflows.md).
+
 ## Release State Machine
 
 ```mermaid

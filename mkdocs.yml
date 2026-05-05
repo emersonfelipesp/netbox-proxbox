@@ -99,6 +99,7 @@ nav:
     - Extending the Plugin: 'developer/extending-the-plugin.md'
     - Tooling:
       - Release Publishing: 'developer/release-publishing.md'
+      - CI and E2E Workflows: 'developer/ci-e2e-workflows.md'
       - Proxbox CLI Docgen: 'developer/proxbox-cli-docgen.md'
       - Local Proxmox Mock: 'developer/proxmox-mock-local.md'
       - Raw CLI Capture: 'generated/proxbox-cli-command-capture.md'

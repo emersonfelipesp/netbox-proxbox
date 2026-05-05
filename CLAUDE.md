@@ -95,31 +95,46 @@ additive schema changes).
 
 ### E2E Docker workflow (`e2e-docker.yml`)
 
-Accepts two inputs:
+Accepts four main inputs:
 
 | Input | Values | Default | Effect |
 |-------|--------|---------|--------|
-| `install_source` | `local`, `pypi`, `container`, `both` | `both` | How netbox-proxbox is installed inside the NetBox container |
-| `dependency_mode` | `dev`, `published` | `dev` | Whether proxbox-api is built from GitHub source or pulled from Docker Hub |
+| `install_source` | `local`, `pypi`, `testpypi`, `container`, `both` | `both` | How netbox-proxbox is installed inside the NetBox container |
+| `dependency_mode` | `dev`, `published`, `testpypi-package`, `pypi-package` | `dev` | How the separate proxbox-api container is built or installed |
+| `proxbox_api_version` | version string | `PROXBOX_API_RELEASE_VERSION` fallback | Exact proxbox-api version for package-index E2E modes |
+| `netbox_image` | full image ref | NetBox matrix | NetBox image override for focused runs |
 
 **`dependency_mode: dev`** — clones `emersonfelipesp/proxbox-api` at HEAD and builds the `raw` Docker target locally. Use this for pre-publish E2E to verify against the latest source.
 
 **`dependency_mode: published`** — pulls `emersonfelipesp/proxbox-api:<PROXBOX_API_RELEASE_VERSION>` from Docker Hub. Use this for post-publish E2E to verify the released image works end-to-end.
 
+**`dependency_mode: testpypi-package`** — builds a temporary proxbox-api container by installing `proxbox-api==<proxbox_api_version>` from TestPyPI.
+
+**`dependency_mode: pypi-package`** — builds a temporary proxbox-api container by installing `proxbox-api==<proxbox_api_version>` from PyPI.
+
 ### Release pipeline (`publish-testpypi.yml`)
 
 ```
 prepare-release
-├── e2e-docker-local  (install_source=local,  dependency_mode=dev)       ← pre-publish gate
-├── validate-testpypi (lint, type check, compile, tests)
-└── publish-pypi      (needs both above)
-      ├── e2e-docker-pypi       (install_source=pypi,      dependency_mode=published)
-      └── e2e-docker-container  (install_source=container, dependency_mode=published)
+├── TestPyPI lane
+│   ├── publish-testpypi
+│   ├── validate-testpypi
+│   └── e2e-docker-testpypi (install_source=testpypi, dependency_mode=testpypi-package)
+└── PyPI lane
+    ├── validate-pypi-candidate
+    ├── e2e-docker-pypi-candidate (install_source=local, dependency_mode=pypi-package)
+    ├── publish-pypi
+    ├── validate-pypi
+    └── e2e-docker-pypi (install_source=pypi, dependency_mode=pypi-package)
 ```
 
-The pre-publish E2E (`e2e-docker-local` with `dependency_mode=dev`) gates `publish-pypi` — if the dev stack does not work end-to-end, the package is not published.
+Normal and `.postN` tag pushes publish to TestPyPI. `rcN` tag pushes, GitHub releases, and manual dispatch with `publish_target=pypi` publish to PyPI.
 
-The post-publish E2E jobs (`dependency_mode=published`) run after `publish-pypi` to verify that the published PyPI package works against the released proxbox-api Docker Hub image.
+TestPyPI validation installs both `netbox-proxbox` and the configured `proxbox-api` from TestPyPI. PyPI candidate/final validation uses PyPI `proxbox-api` for backend package-index E2E.
+
+Package uploads intentionally do not use `twine --skip-existing`; if a version is consumed by TestPyPI/PyPI and validation later fails, fix forward with the next `.postN` or `rcN`.
+
+For public docs, keep [`docs/developer/ci-e2e-workflows.md`](./docs/developer/ci-e2e-workflows.md) and [`docs/developer/release-publishing.md`](./docs/developer/release-publishing.md) aligned with this section.
 
 ---
 

@@ -9,11 +9,28 @@ The `E2E Docker` GitHub Action validates the real integration path between:
 
 The workflow runs in parallel across plugin install variants:
 
+- `testpypi` installs the exact `netbox-proxbox` release candidate from
+  TestPyPI into the NetBox container.
 - `pypi` installs only `netbox-proxbox` from PyPI into the NetBox container.
 - `local` installs only `netbox-proxbox` from the current checkout into the NetBox container.
 - `container` keeps the legacy install-source option but still installs the plugin package into NetBox.
 
-The separate `proxbox-api` backend is always run as its own container: `dependency_mode: published` pulls the pinned Docker Hub image, while `dependency_mode: dev` clones the backend repository and builds a local image. It is not installed into the plugin environment as a Python dependency.
+The separate `proxbox-api` backend is always run as its own container. The
+runtime source is selected independently from the plugin install source:
+`dependency_mode: published` pulls the pinned Docker Hub image,
+`dependency_mode: dev` clones the backend repository and builds a local image,
+`dependency_mode: testpypi-package` installs the exact backend package version
+from TestPyPI into a temporary container, and `dependency_mode: pypi-package`
+does the same from PyPI. It is never installed into the plugin environment as a
+Python dependency.
+
+Release validation uses matching package indexes: TestPyPI plugin releases run
+with `install_source: testpypi` and `dependency_mode: testpypi-package`; PyPI
+release candidates and final releases run with `install_source: pypi` or
+`local` and `dependency_mode: pypi-package`.
+
+For the full CI and release workflow map, see
+[CI and E2E Workflows](../developer/ci-e2e-workflows.md).
 
 ## Architecture
 
@@ -22,9 +39,9 @@ flowchart LR
   A[GitHub Actions Runner]
 
   subgraph D[Docker network: proxbox-e2e]
-    NB[NetBox Container\nnetbox-proxbox from PyPI or source]
+    NB[NetBox Container\nnetbox-proxbox from TestPyPI,\nPyPI, or source]
     RQ[NetBox rqworker\nmanage.py rqworker]
-    PB[Proxbox API Container\nDocker image or source build]
+    PB[Proxbox API Container\nDocker image, source build,\nor package-index install]
     PM[Proxmox Mock Container\nFastAPI mock_proxmox_api.py]
     PG[(PostgreSQL)]
     RD[(Redis)]
