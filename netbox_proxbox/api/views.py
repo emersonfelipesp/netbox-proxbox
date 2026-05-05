@@ -6,11 +6,13 @@ from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
 from netbox.api.authentication import IsAuthenticatedOrLoginNotRequired
 from netbox.api.viewsets import NetBoxModelViewSet
+from rest_framework.decorators import action
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.routers import APIRootView
 from rest_framework.views import APIView
+from utilities.permissions import get_permission_for_model
 
 from netbox_proxbox.choices import ProxmoxVMTypeChoices
 
@@ -80,6 +82,29 @@ class ProxboxPluginSettingsViewSet(NetBoxModelViewSet):
         if self.request.method in ("GET", "HEAD", "OPTIONS"):
             return [IsAuthenticated()]
         return super().get_permissions()
+
+    @action(detail=False, methods=["get"], url_path="runtime")
+    def runtime(self, request: Request) -> Response:
+        """Return the singleton settings row in the backend runtime shape."""
+        settings_obj = models.ProxboxPluginSettings.get_solo()
+        data = dict(self.get_serializer(settings_obj).data)
+        encryption_key = settings_obj.encryption_key or ""
+        data["encryption_key_configured"] = bool(encryption_key)
+        data["encryption_key"] = (
+            encryption_key if _user_can_read_runtime_secret(request.user) else ""
+        )
+        return Response(data)
+
+
+def _user_can_read_runtime_secret(user: object) -> bool:
+    """Return whether the API caller may read backend-only sensitive settings."""
+    if getattr(user, "is_superuser", False):
+        return True
+    has_perm = getattr(user, "has_perm", None)
+    return bool(
+        callable(has_perm)
+        and has_perm(get_permission_for_model(models.ProxboxPluginSettings, "change"))
+    )
 
 
 class VMBackupViewSet(NetBoxModelViewSet):

@@ -305,6 +305,25 @@ def test_overwrite_fields_exposed_in_endpoint_and_settings_serializers():
         )
 
 
+def test_settings_runtime_action_preserves_secret_gate():
+    """Backend runtime settings must not expose secrets through the normal list serializer."""
+    views_contents = VIEWS_PATH.read_text()
+    serializers_contents = _serializers_package_source_text()
+
+    assert (
+        '@action(detail=False, methods=["get"], url_path="runtime")' in views_contents
+    )
+    assert "def runtime(self, request: Request) -> Response:" in views_contents
+    assert "encryption_key_configured" in views_contents
+    assert "_user_can_read_runtime_secret(request.user)" in views_contents
+    assert (
+        'get_permission_for_model(models.ProxboxPluginSettings, "change")'
+        in views_contents
+    )
+
+    assert '"encryption_key": {"write_only": True}' in serializers_contents
+
+
 def test_task_history_route_and_viewset_are_registered():
     views_contents = VIEWS_PATH.read_text()
     urls_contents = URLS_PATH.read_text()
