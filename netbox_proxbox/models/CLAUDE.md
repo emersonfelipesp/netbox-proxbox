@@ -46,6 +46,14 @@ This directory defines the plugin's persisted data model.
 - `CommonProperties` and `EndpointBase` centralize endpoint URL semantics.
 - `FastAPIEndpoint.websocket_url` is distinct from the backend HTTP URL and is used by `websocket_client.py`.
 - `NetBoxEndpoint.has_configured_token` and serializer/form validation together define the remote NetBox credential behavior.
+- `ProxboxPluginSettings` is the singleton home for runtime tunables shared with the
+  `proxbox-api` backend (timeouts, concurrency, batch sizes, cache limits, diagnostic
+  flags). Add new tunables here rather than as fresh `PROXBOX_*` env vars on the
+  backend; the backend reads them through `proxbox_api.runtime_settings.get_*` which
+  resolves env > plugin settings > default. See
+  [top-level `CLAUDE.md` → Plugin settings and configuration](../../CLAUDE.md) and
+  migration [`0037_pluginsettings_runtime_tunables.py`](../migrations/0037_pluginsettings_runtime_tunables.py)
+  for the migration shape (`SeparateDatabaseAndState` + `IF NOT EXISTS`).
 
 ## Links
 

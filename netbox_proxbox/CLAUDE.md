@@ -63,6 +63,16 @@ For detailed implementation notes see [`views/endpoints/CLAUDE.md`](./views/endp
 - Inbound: NetBox plugin loader imports `config`, NetBox route registration imports `urls.py`, and the menu system imports `navigation.py`.
 - Outbound: Django/NetBox APIs, `requests`, `websockets`, the external ProxBox FastAPI service, GitHub raw content for the contributing page, and standard NetBox core models like `users.Token`, `ipam.IPAddress`, `virtualization.VirtualMachine`, and `virtualization.Cluster`.
 
+## Configuration
+
+`ProxboxPluginSettings` (see [`models/plugin_settings.py`](./models/plugin_settings.py))
+is the singleton that holds runtime tunables for both this plugin and the companion
+`proxbox-api` backend. **New runtime tunables belong here, not in proxbox-api's
+`.env`** — the backend reads them through `proxbox_api.runtime_settings.get_*` which
+resolves env > plugin settings > default with a 5-minute cache. See
+[top-level `CLAUDE.md` → Plugin settings and configuration](../CLAUDE.md) for the full
+policy and the short list of `.env`-only operator infrastructure variables.
+
 ## Installation Docs
 
 - Docker-based NetBox installation guidance is documented at [`../docs/installation/3-installing-plugin-docker.md`](../docs/installation/3-installing-plugin-docker.md).

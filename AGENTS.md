@@ -23,6 +23,33 @@ Do not add new third-party PyPI dependencies to replace what NetBox or Django al
 
 Use NetBox view mixins from `utilities.views` (`ConditionalLoginRequiredMixin`, `TokenConditionalLoginRequiredMixin`, `ContentTypePermissionRequiredMixin`) for custom routes. Enforce object visibility with `QuerySet.restrict()`. Permission strings for ProxBox-specific operations are centralized in [`netbox_proxbox/views/proxbox_access.py`](./netbox_proxbox/views/proxbox_access.py); see [`CLAUDE.md`](./CLAUDE.md) for the current permission and workflow notes.
 
+## Configuration policy
+
+**Prefer DB-backed plugin settings over `.env` variables.**
+When adding a new runtime tunable that the plugin or the companion `proxbox-api`
+backend needs to read, default to making it a
+[`ProxboxPluginSettings`](./netbox_proxbox/models/plugin_settings.py) field —
+NetBox-UI-editable and persisted in the NetBox database. On the backend it is read
+via `proxbox_api.runtime_settings.get_int / get_float / get_bool / get_str`, which
+already resolves **env var (override) → `ProxboxPluginSettings` → built-in default**
+with a 5-minute settings cache.
+
+Only fall back to a pure `.env` variable on the backend when the value is needed
+**before** the NetBox connection exists or is **operator-only infrastructure** with
+no business in the UI: `PROXBOX_BIND_HOST`, `PROXBOX_RATE_LIMIT`,
+`PROXBOX_ENCRYPTION_KEY` / `PROXBOX_ENCRYPTION_KEY_FILE`, `PROXBOX_STRICT_STARTUP`,
+`PROXBOX_SKIP_NETBOX_BOOTSTRAP`, `PROXBOX_GENERATED_DIR`,
+`PROXBOX_CORS_EXTRA_ORIGINS`. Anything that controls sync behavior, batching,
+concurrency, caching, or feature toggles belongs in `ProxboxPluginSettings`.
+
+Do **not** invent shadow config layers (parallel JSON/YAML files, ad-hoc dotenv
+sections, module-level constants meant as overrides) to dodge the migration cost.
+A new field touches all five wiring points — model, migration, form, serializer,
+template — and existing fields plus migration
+[`0037_pluginsettings_runtime_tunables.py`](./netbox_proxbox/migrations/0037_pluginsettings_runtime_tunables.py)
+show the pattern. See [`CLAUDE.md → Plugin settings and configuration`](./CLAUDE.md)
+for the full keep-list.
+
 ## Navigation
 
 Read [`CLAUDE.md`](./CLAUDE.md) first for the plugin architecture and documentation map. Use the lower-level `CLAUDE.md` files when working in a specific directory or when changing only one layer of the plugin.

@@ -65,6 +65,32 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
 - **Run now on Job detail:** Shown only when the job is in a **terminal** state (**completed**, **errored**, or **failed**), including after **Cancel** (failed). It is **not** shown for **pending**, **scheduled**, or **running**—use **Cancel** first if a queued run should be abandoned, then **Run now** on the finished row to queue a new sync with the same parameters.
 - **Full update (UI vs jobs):** The plugin home may still use non-streaming helpers such as [`sync_full_update_resource`](./netbox_proxbox/services/backend_proxy.py) for JSON/redirect flows. Scheduled or immediate **Proxbox Sync** jobs use **`full-update/stream`** on proxbox-api and execute the full stage chain in one stream: devices, storage, virtual machines, virtual disks, backups, snapshots, network interfaces, IP addresses, VM interfaces, backup routines, and replications.
 
+## Plugin settings and configuration
+
+**Configuration policy — prefer DB-backed plugin settings.**
+When adding a new runtime tunable that proxbox-api or this plugin needs to read,
+default to making it a [`ProxboxPluginSettings`](./netbox_proxbox/models/plugin_settings.py)
+field (NetBox-UI-editable, persisted in the NetBox database). On the proxbox-api side
+it is read via `proxbox_api.runtime_settings.get_int / get_float / get_bool / get_str`,
+which resolves **env var (override) → `ProxboxPluginSettings` → built-in default**
+with a 5-minute settings cache.
+
+Only fall back to a pure `.env` variable on the backend when the value is needed
+**before** the NetBox connection exists or is **operator-only infrastructure** that
+has no business in the UI: `PROXBOX_BIND_HOST`, `PROXBOX_RATE_LIMIT`,
+`PROXBOX_ENCRYPTION_KEY` / `PROXBOX_ENCRYPTION_KEY_FILE`, `PROXBOX_STRICT_STARTUP`,
+`PROXBOX_SKIP_NETBOX_BOOTSTRAP`, `PROXBOX_GENERATED_DIR`,
+`PROXBOX_CORS_EXTRA_ORIGINS`. Anything that controls sync behavior, batching,
+concurrency, caching, or feature toggles belongs in `ProxboxPluginSettings`.
+
+Do **not** invent shadow config layers (parallel JSON/YAML files, ad-hoc dotenv
+sections, module-level constants meant as overrides) to dodge the migration cost.
+A new field touches all five wiring points — model, migration, form, serializer, and
+template — and the existing fields plus migration
+[`0037_pluginsettings_runtime_tunables.py`](./netbox_proxbox/migrations/0037_pluginsettings_runtime_tunables.py)
+show the pattern (`SeparateDatabaseAndState` + `IF NOT EXISTS` for production-safe
+additive schema changes).
+
 ## CI/CD Workflows
 
 ### E2E Docker workflow (`e2e-docker.yml`)
