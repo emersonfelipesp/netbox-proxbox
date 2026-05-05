@@ -25,7 +25,7 @@ Sync runs on-demand from the NetBox UI or scheduled automatically via NetBox's j
 | NetBox   | netbox-proxbox | proxbox-api | netbox-sdk     | proxmox-sdk    |
 |----------|----------------|-------------|----------------|----------------|
 | >=4.5.8  | v0.0.14              | v0.0.10.post2    | v0.0.8.post1   | v0.0.3.post1   |
-| >=4.6.0-beta2  | v0.0.13.post4        | v0.0.9.post2     | v0.0.7.post6   | v0.0.3.post1   |
+| >=4.5.8  | v0.0.13.post4        | v0.0.9.post2     | v0.0.7.post6   | v0.0.3.post1   |
 | >=4.6.0-beta2  | v0.0.13.post2        | v0.0.9.post1     | v0.0.7.post6   | v0.0.3.post1   |
 | >=4.6.0-beta2  | v0.0.13.post1        | v0.0.9           | v0.0.7.post6   | v0.0.3.post1   |
 | >=4.6.0-beta1  | v0.0.12        | v0.0.8.post1      | v0.0.7.post6   | v0.0.3.post1   |

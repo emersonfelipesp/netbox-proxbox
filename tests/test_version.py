@@ -16,11 +16,26 @@ import tomllib
 REPO_ROOT = Path(__file__).resolve().parents[1]
 INIT_PATH = REPO_ROOT / "netbox_proxbox" / "__init__.py"
 PYPROJECT_PATH = REPO_ROOT / "pyproject.toml"
+README_PATH = REPO_ROOT / "README.md"
+CLAUDE_PATH = REPO_ROOT / "CLAUDE.md"
+DOCS_INDEX_PATH = REPO_ROOT / "docs" / "index.md"
+INSTALL_GIT_PATH = REPO_ROOT / "docs" / "installation" / "2-installing-plugin-git.md"
+UPGRADING_PATH = REPO_ROOT / "docs" / "installation" / "upgrading.md"
+RELEASE_NOTES_INDEX_PATH = REPO_ROOT / "docs" / "release-notes" / "index.md"
+RELEASE_NOTES_013_PATH = REPO_ROOT / "docs" / "release-notes" / "version-0.0.13.md"
+RELEASE_NOTES_014_PATH = REPO_ROOT / "docs" / "release-notes" / "version-0.0.14.md"
 E2E_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "e2e-docker.yml"
 NIGHTLY_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "nightly-contracts.yml"
 DOCS_SCREENSHOTS_WORKFLOW_PATH = (
     REPO_ROOT / ".github" / "workflows" / "docs-screenshots.yml"
 )
+
+CURRENT_PLUGIN_VERSION = "0.0.14"
+CURRENT_PROXBOX_API_VERSION = "0.0.10.post2"
+CURRENT_NETBOX_MIN_VERSION = "4.5.8"
+CURRENT_NETBOX_MAX_VERSION = "4.6.99"
+PREVIOUS_PLUGIN_VERSION = "0.0.13.post4"
+PREVIOUS_PROXBOX_API_VERSION = "0.0.9.post2"
 
 
 def _class_constants(class_name: str) -> dict[str, str]:
@@ -39,23 +54,49 @@ def _class_constants(class_name: str) -> dict[str, str]:
     raise AssertionError(f"class {class_name} not found in {INIT_PATH}")
 
 
+def _read(path: Path) -> str:
+    return path.read_text(encoding="utf-8")
+
+
+def _assert_markdown_table_row(text: str, expected_cells: tuple[str, ...]) -> None:
+    normalized_rows = {
+        "|".join(cell.strip() for cell in line.strip().strip("|").split("|"))
+        for line in text.splitlines()
+        if line.lstrip().startswith("|")
+    }
+    expected = "|".join(expected_cells)
+    assert expected in normalized_rows
+
+
 def test_plugin_version_is_pinned():
     constants = _class_constants("ProxboxConfig")
-    assert constants.get("version") == "0.0.14", (
+    assert constants.get("version") == CURRENT_PLUGIN_VERSION, (
         "version drifted; update docs/, release-notes, and pyproject.toml together"
     )
 
 
 def test_min_max_netbox_versions_are_pinned():
     constants = _class_constants("ProxboxConfig")
-    assert constants.get("min_version") == "4.5.8"
-    assert constants.get("max_version") == "4.6.99"
+    assert constants.get("min_version") == CURRENT_NETBOX_MIN_VERSION
+    assert constants.get("max_version") == CURRENT_NETBOX_MAX_VERSION
 
 
 def test_certified_netbox_versions_are_documented():
     constants = _class_constants("ProxboxConfig")
-    assert constants["min_version"] == "4.5.8"
-    assert constants["max_version"] == "4.6.99"
+    assert constants["min_version"] == CURRENT_NETBOX_MIN_VERSION
+    assert constants["max_version"] == CURRENT_NETBOX_MAX_VERSION
+
+    docs_with_explicit_range = (
+        CLAUDE_PATH,
+        DOCS_INDEX_PATH,
+        INSTALL_GIT_PATH,
+        UPGRADING_PATH,
+        RELEASE_NOTES_014_PATH,
+    )
+    for path in docs_with_explicit_range:
+        text = _read(path)
+        assert CURRENT_NETBOX_MIN_VERSION in text, f"{path} missing min version"
+        assert CURRENT_NETBOX_MAX_VERSION in text, f"{path} missing max version"
 
 
 def test_certified_netbox_versions_are_in_e2e_matrix():
@@ -85,6 +126,48 @@ def test_workflows_pin_proxbox_api_runtime_release_without_installing_package():
     nightly_workflow = NIGHTLY_WORKFLOW_PATH.read_text(encoding="utf-8")
     docs_workflow = DOCS_SCREENSHOTS_WORKFLOW_PATH.read_text(encoding="utf-8")
 
-    assert "PROXBOX_API_RELEASE_VERSION: 0.0.10.post2" in e2e_workflow
-    assert "PROXBOX_API_RELEASE_VERSION: 0.0.10.post2" in docs_workflow
+    expected_pin = f"PROXBOX_API_RELEASE_VERSION: {CURRENT_PROXBOX_API_VERSION}"
+    assert expected_pin in e2e_workflow
+    assert expected_pin in docs_workflow
     assert "pip install proxbox-api" not in nightly_workflow
+
+
+def test_current_release_pairing_is_documented_in_primary_docs():
+    current_row = (
+        f">={CURRENT_NETBOX_MIN_VERSION}",
+        f"v{CURRENT_PLUGIN_VERSION}",
+        f"v{CURRENT_PROXBOX_API_VERSION}",
+        "v0.0.8.post1",
+        "v0.0.3.post1",
+    )
+    for path in (README_PATH, DOCS_INDEX_PATH, RELEASE_NOTES_014_PATH):
+        text = _read(path)
+        _assert_markdown_table_row(text, current_row)
+
+    for path in (
+        CLAUDE_PATH,
+        DOCS_INDEX_PATH,
+        UPGRADING_PATH,
+        RELEASE_NOTES_INDEX_PATH,
+        RELEASE_NOTES_014_PATH,
+    ):
+        text = _read(path)
+        assert CURRENT_PLUGIN_VERSION in text, f"{path} missing plugin version"
+        assert CURRENT_PROXBOX_API_VERSION in text, f"{path} missing backend pin"
+
+
+def test_previous_release_compatibility_row_matches_release_notes():
+    previous_row = (
+        f">={CURRENT_NETBOX_MIN_VERSION}",
+        f"v{PREVIOUS_PLUGIN_VERSION}",
+        f"v{PREVIOUS_PROXBOX_API_VERSION}",
+        "v0.0.7.post6",
+        "v0.0.3.post1",
+    )
+    for path in (
+        README_PATH,
+        DOCS_INDEX_PATH,
+        RELEASE_NOTES_013_PATH,
+        RELEASE_NOTES_014_PATH,
+    ):
+        _assert_markdown_table_row(_read(path), previous_row)
