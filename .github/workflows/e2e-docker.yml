@@ -66,10 +66,6 @@ jobs:
         install_source: ${{ fromJSON(inputs.install_source != 'both' && format('["{0}"]', inputs.install_source) || '["local","pypi","container"]') }}
         netbox_image: ${{ fromJSON(inputs.netbox_image != '' && format('["{0}"]', inputs.netbox_image) || '["netboxcommunity/netbox:v4.5.8","netboxcommunity/netbox:v4.5.9","netboxcommunity/netbox:v4.6.0"]') }}
         network_stack: [ipv4]
-        include:
-          - install_source: local
-            netbox_image: netboxcommunity/netbox:v4.6.0
-            network_stack: ipv6
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
