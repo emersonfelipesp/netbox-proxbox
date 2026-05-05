@@ -9,10 +9,15 @@ on:
         type: string
         default: both
       dependency_mode:
-        description: "dev = build proxbox-api from GitHub source; published = pull from Docker Hub"
+        description: "dev = build proxbox-api from GitHub source; published = pull from Docker Hub; testpypi-package/pypi-package = install proxbox-api from that index"
         required: false
         type: string
         default: dev
+      proxbox_api_version:
+        description: "proxbox-api package version for testpypi-package or pypi-package modes. Empty = workflow default."
+        required: false
+        type: string
+        default: ""
       netbox_image:
         description: "Override NetBox image (e.g. netboxcommunity/netbox:v4.6.0). Empty = workflow default."
         required: false
@@ -32,13 +37,20 @@ on:
           - testpypi
         default: both
       dependency_mode:
-        description: "dev = build proxbox-api from GitHub source; published = pull from Docker Hub"
+        description: "proxbox-api source"
         required: false
         type: choice
         options:
           - dev
           - published
+          - testpypi-package
+          - pypi-package
         default: dev
+      proxbox_api_version:
+        description: "proxbox-api package version for testpypi-package or pypi-package modes. Empty = workflow default."
+        required: false
+        type: string
+        default: ""
       netbox_image:
         description: "Override NetBox image (full ref). Leave empty for workflow default."
         required: false
@@ -105,6 +117,21 @@ jobs:
             echo "NETBOX_PLUGIN_MOUNT=" >> "$GITHUB_ENV"
           fi
 
+      - name: Resolve proxbox-api runtime source
+        run: |
+          set -eux
+          PROXBOX_API_VERSION="${{ inputs.proxbox_api_version }}"
+          if [ -z "${PROXBOX_API_VERSION}" ]; then
+            PROXBOX_API_VERSION="${PROXBOX_API_RELEASE_VERSION}"
+          fi
+          echo "PROXBOX_API_VERSION=${PROXBOX_API_VERSION}" >> "$GITHUB_ENV"
+          echo "PROXBOX_API_PACKAGE_INDEX=" >> "$GITHUB_ENV"
+          if [ "${{ inputs.dependency_mode }}" = "testpypi-package" ]; then
+            echo "PROXBOX_API_PACKAGE_INDEX=--index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/" >> "$GITHUB_ENV"
+          elif [ "${{ inputs.dependency_mode }}" = "pypi-package" ]; then
+            echo "PROXBOX_API_PACKAGE_INDEX=--index-url https://pypi.org/simple/" >> "$GITHUB_ENV"
+          fi
+
       - name: Start E2E stack
         run: |
           set -eux
@@ -161,12 +188,32 @@ jobs:
           fi
 
           if [ "${{ inputs.dependency_mode }}" = "published" ]; then
-            docker pull "${PROXBOX_API_IMAGE}:${PROXBOX_API_RELEASE_VERSION}"
+            docker pull "${PROXBOX_API_IMAGE}:${PROXBOX_API_VERSION}"
             docker run -d --name proxbox-e2e-api --network proxbox-e2e -p "${HOST_BIND}18800:8000" \
               -e PROXBOX_SKIP_NETBOX_BOOTSTRAP=true \
               -e PROXBOX_ENCRYPTION_KEY \
               -e PROXBOX_BIND_HOST="${PROXBOX_BIND_HOST_VALUE}" \
-              "${PROXBOX_API_IMAGE}:${PROXBOX_API_RELEASE_VERSION}"
+              "${PROXBOX_API_IMAGE}:${PROXBOX_API_VERSION}"
+          elif [ "${{ inputs.dependency_mode }}" = "testpypi-package" ] || [ "${{ inputs.dependency_mode }}" = "pypi-package" ]; then
+            cat > /tmp/proxbox-api-package.Dockerfile <<'EOF'
+          FROM python:3.13-slim
+          RUN python -m pip install --upgrade pip
+          ARG PROXBOX_API_VERSION
+          ARG PROXBOX_API_PACKAGE_INDEX
+          RUN python -m pip install --no-cache-dir ${PROXBOX_API_PACKAGE_INDEX} "proxbox-api==${PROXBOX_API_VERSION}"
+          CMD ["python", "-m", "uvicorn", "proxbox_api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+          EOF
+            docker build \
+              --build-arg "PROXBOX_API_VERSION=${PROXBOX_API_VERSION}" \
+              --build-arg "PROXBOX_API_PACKAGE_INDEX=${PROXBOX_API_PACKAGE_INDEX}" \
+              -t proxbox-api-e2e:package \
+              -f /tmp/proxbox-api-package.Dockerfile \
+              /tmp
+            docker run -d --name proxbox-e2e-api --network proxbox-e2e -p "${HOST_BIND}18800:8000" \
+              -e PROXBOX_SKIP_NETBOX_BOOTSTRAP=true \
+              -e PROXBOX_ENCRYPTION_KEY \
+              -e PROXBOX_BIND_HOST="${PROXBOX_BIND_HOST_VALUE}" \
+              proxbox-api-e2e:package
           else
             git clone --depth 1 https://github.com/emersonfelipesp/proxbox-api.git /tmp/proxbox-api-src
             docker build --target raw -t proxbox-api-e2e:dev /tmp/proxbox-api-src

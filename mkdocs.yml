@@ -98,6 +98,7 @@ nav:
     - Browser Frontend: 'developer/browser-frontend.md'
     - Extending the Plugin: 'developer/extending-the-plugin.md'
     - Tooling:
+      - Release Publishing: 'developer/release-publishing.md'
       - Proxbox CLI Docgen: 'developer/proxbox-cli-docgen.md'
       - Local Proxmox Mock: 'developer/proxmox-mock-local.md'
       - Raw CLI Capture: 'generated/proxbox-cli-command-capture.md'
