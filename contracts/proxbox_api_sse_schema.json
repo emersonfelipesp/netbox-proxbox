@@ -3,8 +3,8 @@
   "version": 1,
   "source": {
     "project": "proxbox-api",
-    "release": "0.0.10.post2",
-    "release_url": "https://github.com/emersonfelipesp/proxbox-api/releases/tag/v0.0.10.post2",
+    "release": "0.0.11",
+    "release_url": "https://github.com/emersonfelipesp/proxbox-api/releases/tag/v0.0.11",
     "modules": [
       "proxbox_api.enum.proxmox",
       "proxbox_api.schemas.stream_messages"

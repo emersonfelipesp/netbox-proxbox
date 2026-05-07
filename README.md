@@ -24,6 +24,7 @@ Sync runs on-demand from the NetBox UI or scheduled automatically via NetBox's j
 
 | NetBox   | netbox-proxbox | proxbox-api | netbox-sdk     | proxmox-sdk    |
 |----------|----------------|-------------|----------------|----------------|
+| >=4.5.8  | v0.0.15              | v0.0.11          | v0.0.8.post1   | v0.0.3.post1   |
 | >=4.5.8  | v0.0.14              | v0.0.10.post2    | v0.0.8.post1   | v0.0.3.post1   |
 | >=4.5.8  | v0.0.13.post4        | v0.0.9.post2     | v0.0.7.post6   | v0.0.3.post1   |
 | >=4.6.0-beta2  | v0.0.13.post2        | v0.0.9.post1     | v0.0.7.post6   | v0.0.3.post1   |
@@ -104,7 +105,14 @@ Choose the installation path that matches your NetBox deployment:
 5. **Configure endpoints in NetBox:**
 
    - Go to **Plugins > Proxbox**
-   - Create a **Proxmox API** endpoint (your Proxmox host URL and token)
+   - Create a **Proxmox API** endpoint (your Proxmox host URL and token).
+     The Proxmox user/token must hold a role with `Datastore.Audit`,
+     `Sys.Audit`, `VM.Audit`, `VM.Monitor`, **and `VM.GuestAgent.Audit`**.
+     `VM.GuestAgent.Audit` is required on Proxmox VE >= 9 for the backend to
+     pull VM IPs through the QEMU guest agent — without it, VMs sync but
+     their IP addresses are missing from NetBox. See the proxbox-api docs
+     [Required Proxmox role privileges](https://github.com/emersonfelipesp/proxbox-api/blob/main/docs/getting-started/configuration.md#required-proxmox-role-privileges)
+     for the `pveum role add` command.
    - Create a **NetBox API** endpoint (your NetBox URL and token)
    - Create a **ProxBox API** endpoint (the backend from step 4)
 

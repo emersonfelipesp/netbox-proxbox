@@ -127,6 +127,7 @@ nav:
     - Backup: 'features/backup.md'
     - Backup Routines: 'features/backup-routines.md'
     - Replications: 'features/replications.md'
+    - HA Status: 'features/ha.md'
     - Backend Logs: 'features/backend-logs.md'
     - Monitoring: 'features/monitoring.md'
     - API Integration: 'features/api-integration.md'
@@ -137,6 +138,7 @@ nav:
     - Other Models: 'models/others.md'
   - Release Notes:
     - Summary: 'release-notes/index.md'
+    - Version 0.0.15: 'release-notes/version-0.0.15.md'
     - Version 0.0.14: 'release-notes/version-0.0.14.md'
     - Version 0.0.13: 'release-notes/version-0.0.13.md'
     - Version 0.0.12: 'release-notes/version-0.0.12.md'
