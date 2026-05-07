@@ -170,14 +170,21 @@ def resolve_vm_type(vm: object) -> str:
 
 
 def get_fastapi_url(endpoint: FastAPIUrlSource) -> dict[str, object]:
-    """Compute HTTP/WebSocket URLs and TLS settings for a FastAPI endpoint model."""
+    """Compute HTTP/WebSocket URLs and TLS settings for a FastAPI endpoint model.
+
+    The URL scheme (``http``/``https``, ``ws``/``wss``) is driven by the
+    ``use_https`` flag on the endpoint. ``verify_ssl`` is reported alongside but
+    governs only certificate verification on whatever connection the scheme
+    selects — see issue #352 for the rationale.
+    """
     ip = get_ip_address_host(getattr(endpoint, "ip_address", None))
     domain = getattr(endpoint, "domain", None) or ip
     websocket_domain = getattr(endpoint, "websocket_domain", None) or ip
+    use_https = bool(getattr(endpoint, "use_https", False))
     verify_ssl = bool(getattr(endpoint, "verify_ssl", False))
 
-    scheme = "https" if verify_ssl else "http"
-    websocket_scheme = "wss" if verify_ssl else "ws"
+    scheme = "https" if use_https else "http"
+    websocket_scheme = "wss" if use_https else "ws"
     http_url = f"{scheme}://{domain}:{endpoint.port}"
     ws_port = (
         endpoint.websocket_port
@@ -187,8 +194,13 @@ def get_fastapi_url(endpoint: FastAPIUrlSource) -> dict[str, object]:
     websocket_url = f"{websocket_scheme}://{websocket_domain}:{ws_port}/ws"
     ip_address_url = f"{scheme}://{ip}:{endpoint.port}"
 
-    if verify_ssl and any(
-        host in http_url for host in ("proxbox.backend.local", "localhost", "127.0.0.1")
+    if (
+        use_https
+        and verify_ssl
+        and any(
+            host in http_url
+            for host in ("proxbox.backend.local", "localhost", "127.0.0.1")
+        )
     ):
         try:
             ca_root_folder = subprocess.run(
@@ -213,5 +225,6 @@ def get_fastapi_url(endpoint: FastAPIUrlSource) -> dict[str, object]:
         "ip_address_url": ip_address_url,
         "http_url": http_url,
         "websocket_url": websocket_url,
+        "use_https": use_https,
         "verify_ssl": verify_ssl,
     }

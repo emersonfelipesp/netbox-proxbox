@@ -46,10 +46,25 @@ class FastAPIEndpoint(EndpointBase):
         validators=PORT_VALIDATORS,
         verbose_name=_("HTTP port"),
     )
+    use_https = models.BooleanField(
+        default=False,
+        verbose_name=_("Use HTTPS"),
+        help_text=_(
+            "Use the HTTPS scheme to reach the ProxBox backend. "
+            "Enable this when the backend is served over TLS, e.g. the "
+            "proxbox-api '*-nginx' image. Certificate verification is "
+            "controlled separately by 'Verify SSL'."
+        ),
+    )
     verify_ssl = models.BooleanField(
         default=True,
         verbose_name=_("Verify SSL"),
-        help_text=_("Verify the TLS certificate presented by the ProxBox backend."),
+        help_text=_(
+            "Verify the TLS certificate presented by the ProxBox backend. "
+            "Disable this when 'Use HTTPS' is enabled but the backend "
+            "presents a self-signed certificate (e.g. the bundled mkcert "
+            "cert in the proxbox-api '*-nginx' image)."
+        ),
     )
     token = models.CharField(
         blank=True,
@@ -100,9 +115,21 @@ class FastAPIEndpoint(EndpointBase):
         )
 
     @property
+    def url(self) -> str:
+        """Synthetic ``http(s)://`` base URL using domain or IP and the model port.
+
+        Overrides :class:`CommonProperties.url` so the scheme is driven by
+        ``use_https`` rather than ``verify_ssl`` (which only governs cert
+        verification on the resulting connection).
+        """
+        protocol = "https" if self.use_https else "http"
+        host = self.domain or self.ip
+        return f"{protocol}://{host}:{self.port}" if host else ""
+
+    @property
     def websocket_url(self) -> str:
         """``ws(s)://`` URL for browser or server WebSocket clients."""
-        protocol = "wss" if self.verify_ssl else "ws"
+        protocol = "wss" if self.use_https else "ws"
         host = self.websocket_domain or self.domain or self.ip
         ws_port = self.websocket_port if self.websocket_port is not None else self.port
         return f"{protocol}://{host}:{ws_port}" if host else ""

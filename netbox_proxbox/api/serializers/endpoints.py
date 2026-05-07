@@ -238,6 +238,7 @@ class FastAPIEndpointSerializer(NetBoxModelSerializer):
             "ip_address",
             "domain",
             "port",
+            "use_https",
             "verify_ssl",
             "token",
             "use_websocket",

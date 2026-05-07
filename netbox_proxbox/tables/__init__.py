@@ -126,6 +126,7 @@ class FastAPIEndpointTable(NetBoxTable):
 
     name = tables.Column(linkify=True)
     ip_address = tables.Column(linkify=True)
+    use_https = BooleanColumn()
     verify_ssl = BooleanColumn()
     status = tables.TemplateColumn(
         template_code=STATUS_BADGE_TEMPLATE.replace("{{ service }}", "fastapi"),
@@ -142,6 +143,7 @@ class FastAPIEndpointTable(NetBoxTable):
             "domain",
             "ip_address",
             "port",
+            "use_https",
             "verify_ssl",
             "use_websocket",
             "websocket_domain",
@@ -159,6 +161,7 @@ class FastAPIEndpointTable(NetBoxTable):
             "ip_address",
             "port",
             "status",
+            "use_https",
             "verify_ssl",
             "use_websocket",
             "websocket_domain",

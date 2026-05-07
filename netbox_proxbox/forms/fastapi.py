@@ -72,6 +72,7 @@ class FastAPIEndpointForm(NetBoxModelForm):
             "domain",
             "ip_address",
             "port",
+            "use_https",
             "verify_ssl",
             "use_websocket",
             "websocket_domain",
@@ -80,6 +81,13 @@ class FastAPIEndpointForm(NetBoxModelForm):
             "token",
             "tags",
         )
+        help_texts = {
+            "use_https": (
+                "Use HTTPS to reach the ProxBox backend. Enable for the "
+                "proxbox-api '*-nginx' image (TLS-only). Leave 'Verify SSL' "
+                "unchecked when the backend uses a self-signed certificate."
+            ),
+        }
 
     def __init__(self, *args: object, **kwargs: object) -> None:
         """Pre-fill loopback IP input when the add view is launched with a default."""
@@ -120,6 +128,7 @@ class FastAPIEndpointImportForm(NetBoxModelImportForm):
             "domain",
             "ip_address",
             "port",
+            "use_https",
             "verify_ssl",
             "token",
             "use_websocket",

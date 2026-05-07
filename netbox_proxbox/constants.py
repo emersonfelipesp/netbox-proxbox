@@ -56,6 +56,7 @@ OVERWRITE_FIELD_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "overwrite_ip_status",
             "overwrite_ip_tags",
             "overwrite_ip_custom_fields",
+            "overwrite_ip_address_dns_name",
         ),
     ),
 )

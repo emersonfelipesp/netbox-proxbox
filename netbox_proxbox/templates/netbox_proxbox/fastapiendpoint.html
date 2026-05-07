@@ -34,6 +34,26 @@
                             <td>{{ object.port }}</td>
                         </tr>
                         <tr>
+                            <th scope="row">Use HTTPS</th>
+                            <td>
+                                {% if object.use_https %}
+                                    <span class="text-success"><i class="mdi mdi-check-bold"></i> Yes</span>
+                                {% else %}
+                                    <span class="text-muted"><i class="mdi mdi-close-thick"></i> No</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Verify SSL</th>
+                            <td>
+                                {% if object.verify_ssl %}
+                                    <span class="text-success"><i class="mdi mdi-check-bold"></i> Yes</span>
+                                {% else %}
+                                    <span class="text-warning"><i class="mdi mdi-close-thick"></i> No</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
                             <th scope="row">Username</th>
                             <td>{{ object.username }}</td>
                         </tr>
