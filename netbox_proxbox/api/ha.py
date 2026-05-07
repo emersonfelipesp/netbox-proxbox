@@ -28,8 +28,7 @@ from netbox_proxbox.services.backend_context import get_fastapi_request_context
 
 _BACKEND_NOT_CONFIGURED = "No FastAPI backend endpoint is configured."
 _BACKEND_TOO_OLD = (
-    "Backend does not support HA endpoints — "
-    "upgrade proxbox-api to v0.0.11 or later."
+    "Backend does not support HA endpoints — upgrade proxbox-api to v0.0.11 or later."
 )
 _HA_REQUEST_TIMEOUT = 15
 
