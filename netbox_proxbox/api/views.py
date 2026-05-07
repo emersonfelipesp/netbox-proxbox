@@ -60,6 +60,10 @@ class ProxBoxRootView(APIRootView):
         }
         response.data["schedule_sync"] = f"{base}/sync/schedule/"
         response.data["logs"] = f"{base}/logs/"
+        response.data["ha"] = {
+            "summary": f"{base}/ha/summary/",
+            "vm": f"{base}/ha/vm/",
+        }
         return response
 
 
