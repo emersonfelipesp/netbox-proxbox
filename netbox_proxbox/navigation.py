@@ -99,6 +99,11 @@ replications_item = PluginMenuItem(
     link_text="Replications",
 )
 
+ha_item = PluginMenuItem(
+    link="plugins:netbox_proxbox:ha",
+    link_text="HA Status",
+)
+
 task_history_item = PluginMenuItem(
     link="plugins:netbox_proxbox:vmtaskhistory_list",
     link_text="Task History",
@@ -189,6 +194,7 @@ menu = PluginMenu(
                 backup_routines_item,
                 snapshots_item,
                 replications_item,
+                ha_item,
                 task_history_item,
                 schedule_sync_item,
                 sync_jobs_item,

@@ -2,10 +2,11 @@
 
 ## Summary
 
-Version `0.0.15` fixes two issues in pair with backend `proxbox-api 0.0.11`:
+Version `0.0.15` fixes two issues and adds one new feature in pair with backend `proxbox-api 0.0.11`:
 
 - [Issue #352](https://github.com/emersonfelipesp/netbox-proxbox/issues/352): the `FastAPIEndpoint` model could not express the combination "use HTTPS but skip certificate verification", which is the default state of the proxbox-api `*-nginx` image (TLS-only with a self-signed mkcert certificate).
 - [Issue #354](https://github.com/emersonfelipesp/netbox-proxbox/issues/354): IPAM `IPAddress` records created during virtualization sync had an empty `dns_name`, even though Proxmox knew the guest hostname. The plugin now exposes a new `overwrite_ip_address_dns_name` setting (global + per-endpoint) so operators can opt out of `dns_name` writes; the actual hostname resolution and write live in `proxbox-api 0.0.11`.
+- [Issue #243](https://github.com/emersonfelipesp/netbox-proxbox/issues/243): Proxmox cluster High-Availability state was not surfaced anywhere in NetBox. The plugin now ships a per-VM **HA tab** and a cluster-wide **HA Status** page, both backed by new read-only HA endpoints in `proxbox-api 0.0.11`.
 
 ## #352 — `Use HTTPS` toggle decoupled from `Verify SSL`
 
@@ -22,6 +23,24 @@ A new `Use HTTPS` field decouples scheme selection from certificate verification
 A migration backfills `use_https = verify_ssl` for existing rows so installs that were already on a working HTTPS-with-verified-cert setup keep working without operator intervention.
 
 The plugin also returns a clearer error when it detects nginx's `plain HTTP request was sent to HTTPS port` body, prompting the operator to enable `Use HTTPS`.
+
+## #243 — HA tab and cluster-wide HA Status page
+
+Proxmox cluster High-Availability state was previously invisible inside NetBox. Operators had to open the Proxmox web UI just to answer "is this VM HA-managed and what's its current CRM state?". This release adds two read-only views — both fetched live from `proxbox-api 0.0.11` on every page render, no caching, no NetBox-side persistence, no migration.
+
+- **VM HA tab.** A new tab on every `virtualization.VirtualMachine` detail page, sibling to **Proxmox Config** (slot weight `1400`). It calls `GET /proxmox/cluster/ha/resources/by-vm/{vmid}` and renders HA managed yes/no, group, current state / CRM state / request state, node, and the restart/relocate/failback counters. VMs that are not HA-managed get a friendly empty state with a link to the cluster page.
+- **HA Status page.** A new top-level Proxbox menu entry (`/plugins/proxbox/ha/`) that calls `GET /proxmox/cluster/ha/summary` once and renders three sections: Cluster Status (per-node CRM state and quorum), HA Groups (name / nodes / restricted / nofailback), and HA Resources (every HA-managed VM/CT, sid linked to its NetBox `VirtualMachine` when one exists with the matching `proxmox_vm_id`).
+- **Backend version awareness.** When the FastAPI backend is older than `0.0.11` and returns `404` on the new HA routes, both views render an inline "Backend does not support HA endpoints — upgrade proxbox-api to v0.0.11 or later." banner instead of a 500.
+
+### Changes
+
+- **`netbox_proxbox/views/vm_ha.py` (new).** `ProxmoxVMHATabView` registered via `register_model_view(VirtualMachine, "proxmox_ha", path="proxmox-ha")` with `ViewTab(label="HA", permission="virtualization.view_virtualmachine", weight=1400)`. Reuses `services.backend_context.get_fastapi_request_context` and `services._endpoint_errors.translate_request_exception` exactly like `ProxmoxVMConfigTabView`.
+- **`netbox_proxbox/views/ha.py` (new).** `HAClusterView` extending `ConditionalLoginRequiredMixin` + `RequireProxboxDashboardAccessMixin`, fetching `/proxmox/cluster/ha/summary` with a 15s timeout and rendering `netbox_proxbox/ha.html`.
+- **Templates.** `templates/netbox_proxbox/vm_proxmox_ha.html` (extends `generic/object.html`) and `templates/netbox_proxbox/ha.html` (extends `base/layout.html`), both using NetBox's standard card / table / badge styling.
+- **`urls.py`.** New route `path("ha/", views.HAClusterView.as_view(), name="ha")`.
+- **`navigation.py`.** New `ha_item = PluginMenuItem(link="plugins:netbox_proxbox:ha", link_text="HA Status")` slotted between Replications and Task History under the "Proxmox Plugin" group.
+- **Tests.** `tests/test_views_vm_ha.py` and `tests/test_views_ha.py` are AST-based source-contract tests — same pattern as `test_views_vm_config.py` — pinning the `register_model_view` arguments, `ViewTab` kwargs, template names, backend URLs (`/proxmox/cluster/ha/resources/by-vm/` and `/proxmox/cluster/ha/summary`), the `_extract_vmid` helper, and the navigation/URL wiring.
+- **No DB migration. No new persisted model. No `OVERWRITE_FIELDS` change.** HA state is read-only.
 
 ## Compatibility
 

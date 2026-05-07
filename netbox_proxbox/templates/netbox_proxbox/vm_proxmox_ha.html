@@ -1,0 +1,110 @@
+{% extends 'generic/object.html' %}
+{% load i18n %}
+
+{% block content %}
+  <div class="row">
+    <div class="col-12 col-xl-8">
+      <div class="card">
+        <h5 class="card-header">{% trans "Proxmox HA Status" %}</h5>
+        <div class="card-body">
+          {% if detail %}
+            <div class="alert alert-warning" role="alert">{{ detail }}</div>
+            <p>
+              <a href="{% url 'plugins:netbox_proxbox:ha' %}">
+                {% trans "View cluster-wide HA status" %}
+              </a>
+            </p>
+          {% elif ha is None %}
+            <div class="alert alert-info" role="alert">
+              {% trans "This VM is not HA-managed in Proxmox." %}
+            </div>
+            <p>
+              <a href="{% url 'plugins:netbox_proxbox:ha' %}">
+                {% trans "View cluster-wide HA status" %}
+              </a>
+            </p>
+          {% else %}
+            <table class="table table-hover attr-table">
+              <tr><th scope="row">{% trans "SID" %}</th><td><code>{{ ha.sid }}</code></td></tr>
+              <tr><th scope="row">{% trans "Type" %}</th><td>{{ ha.type|default:"—"|upper }}</td></tr>
+              <tr><th scope="row">{% trans "Group" %}</th><td>{{ ha.group|default:"—" }}</td></tr>
+              <tr><th scope="row">{% trans "Node" %}</th><td>{{ ha.node|default:"—" }}</td></tr>
+              <tr>
+                <th scope="row">{% trans "Configured State" %}</th>
+                <td>
+                  {% if ha.state == "started" %}
+                    <span class="badge text-bg-green">{{ ha.state }}</span>
+                  {% elif ha.state == "stopped" %}
+                    <span class="badge text-bg-grey">{{ ha.state }}</span>
+                  {% elif ha.state == "disabled" %}
+                    <span class="badge text-bg-yellow">{{ ha.state }}</span>
+                  {% elif ha.state %}
+                    <span class="badge text-bg-blue">{{ ha.state }}</span>
+                  {% else %}—{% endif %}
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">{% trans "CRM State" %}</th>
+                <td>
+                  {% if ha.crm_state == "started" %}
+                    <span class="badge text-bg-green">{{ ha.crm_state }}</span>
+                  {% elif ha.crm_state == "stopped" %}
+                    <span class="badge text-bg-grey">{{ ha.crm_state }}</span>
+                  {% elif ha.crm_state == "error" %}
+                    <span class="badge text-bg-red">{{ ha.crm_state }}</span>
+                  {% elif ha.crm_state %}
+                    <span class="badge text-bg-blue">{{ ha.crm_state }}</span>
+                  {% else %}—{% endif %}
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">{% trans "Request State" %}</th>
+                <td>{{ ha.request_state|default:"—" }}</td>
+              </tr>
+              <tr>
+                <th scope="row">{% trans "Status" %}</th>
+                <td>{{ ha.status|default:"—" }}</td>
+              </tr>
+              <tr>
+                <th scope="row">{% trans "Cluster" %}</th>
+                <td>{{ ha.cluster_name|default:"—" }}</td>
+              </tr>
+            </table>
+          {% endif %}
+        </div>
+      </div>
+
+      {% if ha %}
+        <div class="card mt-3">
+          <h5 class="card-header">{% trans "HA Counters" %}</h5>
+          <div class="card-body">
+            <table class="table table-hover attr-table">
+              <tr>
+                <th scope="row">{% trans "Max Restart" %}</th>
+                <td>{{ ha.max_restart|default:"—" }}</td>
+              </tr>
+              <tr>
+                <th scope="row">{% trans "Max Relocate" %}</th>
+                <td>{{ ha.max_relocate|default:"—" }}</td>
+              </tr>
+              <tr>
+                <th scope="row">{% trans "Failback" %}</th>
+                <td>
+                  {% if ha.failback is True %}
+                    <span class="badge text-bg-green">{% trans "Enabled" %}</span>
+                  {% elif ha.failback is False %}
+                    <span class="badge text-bg-grey">{% trans "Disabled" %}</span>
+                  {% else %}—{% endif %}
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">{% trans "Comment" %}</th>
+                <td>{{ ha.comment|default:"—" }}</td>
+              </tr>
+            </table>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}
