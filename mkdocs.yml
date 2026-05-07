@@ -112,6 +112,7 @@ nav:
     - VM Data: 'api/vm-data.md'
     - Operations: 'api/operations.md'
     - Settings: 'api/settings.md'
+    - Cluster HA: 'api/ha.md'
   - Features:
     - Screenshots: 'features/screenshots.md'
     - E2E Docker Testing: 'features/e2e-docker-testing.md'

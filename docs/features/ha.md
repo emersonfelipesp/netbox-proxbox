@@ -52,7 +52,7 @@ When the cluster has no HA configured, each section renders an empty-state row i
 | VM HA tab | `GET /proxmox/cluster/ha/resources/by-vm/{vmid}` | Single resource for one VM/CT (`null` if unmanaged) |
 | HA Status page | `GET /proxmox/cluster/ha/summary` | Composed `{nodes, groups, resources, status}` envelope |
 
-The full set of HA endpoints exposed by proxbox-api is documented in [`docs/api/http-reference.md`](../api/http-reference.md).
+The plugin's REST shim that exposes both backend calls as JSON for non-HTML consumers is documented in [Cluster HA API](../api/ha.md).
 
 ## Permissions
 

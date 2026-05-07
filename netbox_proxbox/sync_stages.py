@@ -199,9 +199,9 @@ def _build_stage_query_params(
     """Build query parameters for a specific sync stage."""
     query_params = dict(base_query)
     if sync_type == SyncTypeChoices.VIRTUAL_MACHINES_BACKUPS:
-        query_params["delete_nonexistent_backup"] = True
+        query_params["delete_nonexistent_backup"] = "true"
     if sync_type == SyncTypeChoices.VIRTUAL_MACHINES_SNAPSHOTS:
-        query_params["delete_nonexistent_snapshot"] = True
+        query_params["delete_nonexistent_snapshot"] = "true"
     if sync_type == SyncTypeChoices.VIRTUAL_MACHINES and disable_vm_network_on_vm_stage:
         # Full sync runs dedicated VM interface/IP stages; skip network work in VM stage.
         query_params["sync_vm_network"] = "false"
