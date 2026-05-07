@@ -7,10 +7,15 @@
 > repository) on every axis a contributor or operator might care about.
 >
 > Source revisions:
-> - `netbox-proxbox` `0.0.14` (this repo, `pyproject.toml`, plugin
->   `__init__.py`).
+> - `netbox-proxbox` `0.0.15` (this repo, `v0.0.15` branch). Paired with
+>   sibling backend `proxbox-api` `0.0.11` (`v0.0.11` branch at
+>   `/root/nms/proxbox-api/`). The previous `0.0.14` + `0.0.10.post2`
+>   pair remains wire-compatible for the new `Use HTTPS` toggle but
+>   does not implement IPAM `dns_name` writes from the Proxmox guest
+>   hostname.
 > - `netbox-proxmox-automation` `2025.11.01` (CalVer; cloned at
->   `/root/nms/netbox-proxmox-automation`).
+>   `/root/nms/netbox-proxmox-automation`). Unchanged from the prior
+>   revision of this doc.
 
 ---
 
@@ -74,6 +79,50 @@ in NetBox**, the other lets you **observe hypervisor state from NetBox**.
 They are complementary in principle and could coexist on a single NetBox
 deployment.
 
+### What changed in `netbox-proxbox 0.0.15` + `proxbox-api 0.0.11`
+
+This is the running delta from the `0.0.14 / 0.0.10.post2` pair the rest
+of the doc was originally written against:
+
+- **`Use HTTPS` decoupled from `Verify SSL`** on `FastAPIEndpoint`
+  (issue [#352](https://github.com/emersonfelipesp/netbox-proxbox/issues/352)).
+  New `use_https` field, migration `0038`, and a one-time data
+  backfill so existing rows keep working. `services/_endpoint_errors.py`
+  translates the two known nginx-image misconfigurations
+  (`plain HTTP request was sent to HTTPS port`, `SSLError`) into
+  operator-actionable strings on the endpoint detail page.
+- **IPAM `dns_name` is now populated from Proxmox guest hostnames**
+  (issue [#354](https://github.com/emersonfelipesp/netbox-proxbox/issues/354)).
+  Backend resolves `VMConfig.hostname` for LXC and
+  `agent/get-host-name` for QEMU (with a fall-back through the
+  network-interfaces payload). Plugin gates the write through a new
+  `overwrite_ip_address_dns_name` flag (global on
+  `ProxboxPluginSettings`, tri-state per `ProxmoxEndpoint`) — bringing
+  the canonical overwrite-flag count to **23**.
+- **Runtime tunables migrated to `ProxboxPluginSettings`** (plugin
+  migration `0037`; backend `proxbox_api/runtime_settings.py` and
+  `settings_client.py`). Concurrency, batching, cache, retry, and
+  observability fields are now DB-backed singleton fields editable in
+  NetBox UI; backend reads them via
+  `runtime_settings.get_int / get_float / get_bool / get_str`, with
+  resolution order **env var → `ProxboxPluginSettings` →
+  built-in default** and a 5-minute settings cache.
+- **Non-blocking startup + runtime encryption-key endpoints** on the
+  backend (`routes/admin/encryption.py`). Startup no longer blocks on
+  credentials; the encryption key can be rotated through a runtime
+  admin endpoint instead of requiring a process restart.
+- **`netbox-sdk` bumped to `0.0.8.post1`** in the backend.
+- **Inline home dashboard logos + JS** so the plugin's home page
+  renders without `python manage.py collectstatic` (issue
+  [#355](https://github.com/emersonfelipesp/netbox-proxbox/issues/355)).
+- **Release pipeline staged** into TestPyPI → PyPI lanes
+  (`publish-testpypi.yml`); new operator-facing docs at
+  `docs/developer/{ci-e2e-workflows,release-publishing}.md`.
+
+The mental model in §4, the architecture in §5, and the operational
+verb stance ("plugin observes, upstream authors") all still hold.
+Section 6 cells, Section 7.5, and Section 8 are the rows that move.
+
 ---
 
 ## 3. Project Identity at a Glance
@@ -84,12 +133,13 @@ deployment.
 | Maintainer | Nate Patwardhan (NetBox Labs) | Emerson Felipe |
 | License | Apache-2.0 | Apache-2.0 |
 | Language | Python 3.12 + Ansible YAML + Jinja2 | Python 3.12 + Django + Pydantic v2 |
-| Versioning | CalVer (`2025.11.01`) | SemVer (`0.0.14`) |
+| Versioning | CalVer (`2025.11.01`) | SemVer (`0.0.15`; backend `0.0.11`) |
 | Project shape | Standalone repo (no NetBox plugin) | NetBox plugin (Django app + Pydantic schemas) |
-| Companion service | Optional Flask app + AWX/Tower/AAP | Required FastAPI backend (`proxbox-api`) |
+| Companion service | Optional Flask app + AWX/Tower/AAP | Required FastAPI backend (`proxbox-api 0.0.11`) |
 | NetBox compat | ≥ 4.3.7 | 4.5.8 → 4.6.99 (`min_version` / `max_version` in `__init__.py`) |
-| Proxmox compat | 8.x (8.4 tested); 9.x untested | 8.x (validated through `proxbox-api` `0.0.10.post2`) |
-| Distribution | Git clone, pip install of `setup/`, run scripts | PyPI / TestPyPI; `pip install netbox-proxbox` |
+| Proxmox compat | 8.x (8.4 tested); 9.x untested | 8.x (validated through `proxbox-api` `0.0.11`; QEMU hostname resolution uses `agent/get-host-name`) |
+| `netbox-sdk` (backend) | N/A | `0.0.8.post1` |
+| Distribution | Git clone, pip install of `setup/`, run scripts | PyPI / TestPyPI (staged release pipeline); `pip install netbox-proxbox` |
 
 ---
 
@@ -132,6 +182,13 @@ The operator's mental loop:
    plugin-specific Django models (`ProxmoxCluster`, `ProxmoxNode`,
    `ProxmoxStorage`, `VMBackup`, `VMSnapshot`, `Replication`,
    `BackupRoutine`, `VMTaskHistory`).
+6. As of `0.0.15` / `0.0.11`, the mirror also pulls Proxmox guest
+   **hostnames** into IPAM `IPAddress.dns_name`, gated by the
+   `overwrite_ip_address_dns_name` flag. Concurrency / batching /
+   cache / retry knobs are no longer environment-only — they live as
+   DB-backed fields on the `ProxboxPluginSettings` singleton, editable
+   from the NetBox UI and read by the backend through
+   `runtime_settings`.
 
 Loss surface: NetBox is a mirror. Proxmox is the truth.
 
@@ -193,17 +250,19 @@ Loss surface: NetBox is a mirror. Proxmox is the truth.
    └────────────────┬─────────────────────┘
                     │ HTTP + SSE  (X-Proxbox-API-Key)
                     ▼
-       ┌──────────────────────────────┐
-       │  proxbox-api (FastAPI)       │
-       │  Encrypted credential store  │
-       │  netbox-sdk + proxmox-sdk    │
-       └─────┬───────────────────┬────┘
-             │                   │
-   netbox-sdk│                   │proxmox-sdk
-             ▼                   ▼
-      ┌────────────┐     ┌──────────────┐
-      │  NetBox    │     │  Proxmox VE  │
-      └────────────┘     └──────────────┘
+       ┌──────────────────────────────────────┐
+       │  proxbox-api (FastAPI, v0.0.11)      │
+       │  Encrypted credential store          │
+       │  /admin/encryption (runtime rotate)  │
+       │  /settings (runtime tunables, cached)│
+       │  netbox-sdk 0.0.8.post1 + proxmox-sdk│
+       └─────┬─────────────────────────┬──────┘
+             │                         │
+   netbox-sdk│                         │proxmox-sdk
+             ▼                         ▼
+      ┌────────────┐           ┌──────────────┐
+      │  NetBox    │           │  Proxmox VE  │
+      └────────────┘           └──────────────┘
 ```
 
 The plugin **never** talks to Proxmox directly. All Proxmox calls go
@@ -233,9 +292,9 @@ This is the main artifact. Rows are grouped by category. ✅ = supported,
 
 | Aspect | `netbox-proxmox-automation` | `netbox-proxbox` |
 |---|---|---|
-| Django models | ❌ None | ✅ 13 (`ProxmoxEndpoint`, `NetBoxEndpoint`, `FastAPIEndpoint`, `ProxmoxCluster`, `ProxmoxNode`, `ProxmoxStorage`, `ProxmoxStorageVirtualDisk`, `BackupRoutine`, `Replication`, `VMBackup`, `VMSnapshot`, `VMTaskHistory`, `ProxboxPluginSettings`) |
-| Migrations | ❌ None | ✅ Yes |
-| Custom fields | ✅ 8 declared (`proxmox_node`, `proxmox_vm_type`, `proxmox_vmid`, `proxmox_vm_storage`, `proxmox_public_ssh_key`, `proxmox_vm_templates`, `proxmox_disk_storage_volume`, `proxmox_lxc_templates`) | ⚠️ Reads `proxmox_vm_id`, `proxmox_vm_type`, `proxmox_node` (created by `proxbox-api` sync, not by the plugin itself) |
+| Django models | ❌ None | ✅ 13 (`ProxmoxEndpoint`, `NetBoxEndpoint`, `FastAPIEndpoint`, `ProxmoxCluster`, `ProxmoxNode`, `ProxmoxStorage`, `ProxmoxStorageVirtualDisk`, `BackupRoutine`, `Replication`, `VMBackup`, `VMSnapshot`, `VMTaskHistory`, `ProxboxPluginSettings`). 0.0.15 adds new fields, no new models: `FastAPIEndpoint.use_https`, `ProxboxPluginSettings.overwrite_ip_address_dns_name`, `ProxmoxEndpoint.overwrite_ip_address_dns_name` (tri-state), and the runtime-tunable singleton fields from migration `0037`. |
+| Migrations | ❌ None | ✅ Yes (latest: `0039_pluginsettings_overwrite_ip_address_dns_name`) |
+| Custom fields | ✅ 8 declared (`proxmox_node`, `proxmox_vm_type`, `proxmox_vmid`, `proxmox_vm_storage`, `proxmox_public_ssh_key`, `proxmox_vm_templates`, `proxmox_disk_storage_volume`, `proxmox_lxc_templates`) | ⚠️ Reads `proxmox_vm_id`, `proxmox_vm_type`, `proxmox_node` (created by `proxbox-api` sync, not by the plugin itself); `IPAddress.dns_name` is now **written** from Proxmox guest hostnames via `proxbox-api 0.0.11` |
 | Custom field choice sets | ✅ 5 (`proxmox-vm-templates`, `-vm-storage`, `-lxc-templates`, `-cluster-nodes`, `-vm-type`) | ❌ Not on `extras.custom_field_choice_sets`; uses Django form `ChoiceSet` only |
 | Tags created | ✅ 2 (`proxmox-vm-discovered`, `proxmox-lxc-discovered`) | ⚠️ Indirect via `proxbox-api` sync |
 | Event rules | ✅ 17 declared by setup script | ❌ None |
@@ -252,6 +311,7 @@ This is the main artifact. Rows are grouped by category. ✅ = supported,
 | Direct Proxmox API calls? | ✅ Yes — `proxmoxer` (Flask) and `community.proxmox` Ansible (AWX) | ❌ No — all Proxmox traffic flows through `proxbox-api` |
 | Auth | Token only (`api_user@pve` + token id + token secret) | Token or username/password; stored encrypted; pushed to backend at sync time |
 | SSL verification | Configurable (but `verify_ssl=False` is hardcoded for Proxmox in the Flask helper — known divergence) | Configurable per `ProxmoxEndpoint`; SSRF-protected via `ssrf_protection_enabled` setting |
+| HTTPS scheme vs cert verification | Coupled (one flag) | ✅ **Decoupled in 0.0.15** — `FastAPIEndpoint.use_https` controls scheme, `verify_ssl` controls cert strictness; required for the proxbox-api `*-nginx` image bundled with mkcert |
 | QEMU VMs | ✅ Full lifecycle | ⚠️ Read-only sync; no lifecycle actions |
 | LXC containers | ✅ Full lifecycle | ⚠️ Read-only sync |
 | Cloud-init `ipconfig0` | ✅ Sets cloud-init IP + derived gateway | ❌ N/A |
@@ -264,6 +324,8 @@ This is the main artifact. Rows are grouped by category. ✅ = supported,
 | Task history (UPIDs) | ❌ | ✅ Read-only sync (`VMTaskHistory`) |
 | Storage definitions | ❌ | ✅ Read-only sync (`ProxmoxStorage`) with NFS/CIFS/Ceph/PBS detail fields |
 | Cluster discovery | ✅ One-shot via SSH + `dmidecode` + `ethtool` + Proxmox API | ✅ Continuous via `proxbox-api` |
+| QEMU `agent/get-host-name` resolution | ❌ | ✅ **0.0.11**, with fall-back through the network-interfaces payload |
+| LXC `VMConfig.hostname` resolution | ❌ | ✅ **0.0.11** |
 | Console buttons in UI | ❌ | ✅ VNC / LXC console links injected via template extensions |
 
 ### 6.4. Trigger & execution model
@@ -285,19 +347,23 @@ This is the main artifact. Rows are grouped by category. ✅ = supported,
 | Queue technology | ❌ None — synchronous in gunicorn worker | ✅ NetBox RQ `default` queue |
 | Long-task handling | Polling Proxmox `tasks/<upid>/status` inside the HTTP request | RQ job with `job_timeout=7200s` + SSE stream `(5, 3600)s` read timeout |
 | Worker count | gunicorn `-w 4` | Standard NetBox RQ worker count |
-| Concurrency tuning | None | `proxbox_fetch_max_concurrency`, `netbox_max_concurrent`, `netbox_write_concurrency`, `vm_sync_max_concurrency`, `proxmox_fetch_concurrency` |
+| Concurrency tuning | None | `proxbox_fetch_max_concurrency`, `netbox_max_concurrent`, `netbox_write_concurrency`, `vm_sync_max_concurrency`, `proxmox_fetch_concurrency` — all are **DB-backed `ProxboxPluginSettings` fields** since 0.0.15 (migration `0037`); backend reads them via `runtime_settings.get_int / get_float / get_bool / get_str` |
 | Per-stage concurrency | N/A | ✅ Configurable in `ProxboxPluginSettings` |
+| Settings cache | N/A | 5-minute TTL on `proxbox_api/settings_client.py` |
 
 ### 6.6. Configuration & secrets
 
 | Aspect | `netbox-proxmox-automation` | `netbox-proxbox` |
 |---|---|---|
-| Config medium | YAML files on disk (`conf.d/netbox_setup_objects.yml`, Flask `app_config.yml`) | Django models (DB), editable in NetBox UI |
-| Environment variables | ❌ None used | ⚠️ Backend reads a few infra-level env vars (`PROXBOX_BIND_HOST`, `PROXBOX_RATE_LIMIT`, `PROXBOX_ENCRYPTION_KEY`, etc.); plugin uses none |
-| Encryption at rest | ❌ Plaintext YAML | ✅ `proxbox-api` Fernet encryption with `PROXBOX_ENCRYPTION_KEY` |
-| Per-endpoint config | One YAML file per cluster | One `ProxmoxEndpoint` row per cluster; per-endpoint `overwrite_*` flags |
-| Singleton settings | ❌ | ✅ `ProxboxPluginSettings` (singleton enforced via `singleton_key="default"`) |
-| Settings UI | ❌ | ✅ `views/settings.py` + form |
+| Config medium | YAML files on disk (`conf.d/netbox_setup_objects.yml`, Flask `app_config.yml`) | Django models (DB), editable in NetBox UI; **0.0.15 codifies a "DB-first" policy** in `CLAUDE.md` |
+| Environment variables | ❌ None used | ⚠️ Backend uses env vars only for **pre-DB infra**: `PROXBOX_BIND_HOST`, `PROXBOX_RATE_LIMIT`, `PROXBOX_ENCRYPTION_KEY` / `PROXBOX_ENCRYPTION_KEY_FILE`, `PROXBOX_STRICT_STARTUP`, `PROXBOX_SKIP_NETBOX_BOOTSTRAP`, `PROXBOX_GENERATED_DIR`, `PROXBOX_CORS_EXTRA_ORIGINS`. All sync/concurrency/cache/feature-toggle tunables live in `ProxboxPluginSettings` since 0.0.15. Plugin still uses none. |
+| Tunable resolution order (backend) | N/A | ✅ **0.0.11**: `runtime_settings.get_int/get_float/get_bool/get_str` resolves **env var → `ProxboxPluginSettings` → built-in default** with a 5-minute settings cache |
+| Encryption at rest | ❌ Plaintext YAML | ✅ `proxbox-api` Fernet encryption with `PROXBOX_ENCRYPTION_KEY`; **0.0.11 adds runtime rotation** via `routes/admin/encryption.py` (no process restart required) |
+| Encryption-key bootstrap | N/A | ✅ Non-blocking startup in 0.0.11 (`feat(credentials): non-blocking startup + runtime encryption key endpoints`) — backend no longer hangs at startup if the key store is empty |
+| Per-endpoint config | One YAML file per cluster | One `ProxmoxEndpoint` row per cluster; per-endpoint `overwrite_*` flags **(23 in 0.0.15)** with tri-state inheritance from the global `ProxboxPluginSettings` row |
+| Singleton settings | ❌ | ✅ `ProxboxPluginSettings` (singleton enforced via `singleton_key="default"`); now exposes runtime tunables + `overwrite_ip_address_dns_name` |
+| Settings UI | ❌ | ✅ `views/settings.py` + form; runtime tunables grouped on the Settings tab |
+| Settings REST endpoint | ❌ | ✅ `/api/plugins/proxbox/settings/` (added by `fix(api): expose runtime settings endpoint` in 0.0.15) — backend reads it on every cache miss |
 | `PLUGINS_CONFIG` keys | N/A | ⚠️ `required_settings = []`; everything in DB |
 | Multi-cluster support | ✅ One YAML per cluster, separate runs | ✅ Multiple `ProxmoxEndpoint` rows, one cluster per row |
 
@@ -398,11 +464,11 @@ This is the main artifact. Rows are grouped by category. ✅ = supported,
 | Aspect | `netbox-proxmox-automation` | `netbox-proxbox` |
 |---|---|---|
 | Test framework | ❌ No `tests/` directory | ✅ pytest + heavy mocking via `conftest.py` |
-| Test files | 0 | ~55 |
+| Test files | 0 | 50 (`find tests -name 'test_*.py' \| wc -l`); 0.0.15 adds `test_endpoint_errors`, `test_settings_view_encryption`, `test_templatetags`, `test_utils` |
 | E2E tests | ❌ | ✅ `tests/e2e/` with Docker stack tests |
 | AST contract tests | ❌ | ✅ `test_version.py`, `test_signals.py`, `test_overwrite_flags_contract.py`, etc. |
 | Coverage tooling | ❌ | ✅ `pytest-cov`, `coverage.xml`, branch coverage |
-| Schema mirror tests | ❌ | ✅ `test_sse_schema_mirror.py` validates against `contracts/proxbox_api_sse_schema.json` |
+| Schema mirror tests | ❌ | ✅ `test_sse_schema_mirror.py` validates against `contracts/proxbox_api_sse_schema.json`; `test_overwrite_flags_contract.py` pins the canonical 23-flag list against `contracts/overwrite_flags.json` (mirrored in `proxbox-api`) |
 
 ### 6.17. CI/CD
 
@@ -412,7 +478,7 @@ This is the main artifact. Rows are grouped by category. ✅ = supported,
 | Lint | ❌ | ✅ `ruff` (lint + format), `bandit`, `ty` |
 | Type check | ❌ | ✅ `ty` on `proxbox_cli` |
 | E2E matrix | ❌ | ✅ `e2e-docker.yml`: `install_source × netbox_image × network_stack`, nightly 02:31 UTC |
-| Release pipeline | ❌ | ✅ TestPyPI → PyPI lanes (`publish-testpypi.yml`) |
+| Release pipeline | ❌ | ✅ Staged TestPyPI → PyPI lanes (`publish-testpypi.yml`); 0.0.15 adds `prepare-release`, `validate-testpypi`, `e2e-docker-testpypi`, `validate-pypi-candidate`, `e2e-docker-pypi-candidate`, `publish-pypi`, `validate-pypi`, `e2e-docker-pypi` jobs and `docs/developer/release-publishing.md` to document them |
 | Docs build | ✅ MkDocs (manual) | ✅ `docs.yml` deploys to GitHub Pages |
 | Screenshot capture | ❌ | ✅ `docs-screenshots.yml` + Playwright |
 | Nightly contract refresh | ❌ | ✅ `nightly-contracts.yml` |
@@ -423,7 +489,7 @@ This is the main artifact. Rows are grouped by category. ✅ = supported,
 |---|---|---|
 | Theme | MkDocs Material | MkDocs Material |
 | Color scheme | NetBox Labs (`nbl-light` / `nbl-dark`) | Default Material + deep-orange accent |
-| Pages | 15 markdown pages | 60+ across Install / Backend / Configuration / CLI / Developer / API Reference / Features / Data Model / Release Notes / Roadmap |
+| Pages | 15 markdown pages | 60+ across Install / Backend / Configuration / CLI / Developer / API Reference / Features / Data Model / Release Notes / Roadmap; 0.0.15 adds `docs/release-notes/version-0.0.15.md` and `docs/developer/{ci-e2e-workflows,release-publishing}.md` |
 | `mkdocstrings`? | ❌ | ✅ Python handler + `griffe_typingdoc` |
 | Inline screenshots | ✅ 50+ PNGs in `docs/images/` | ⚠️ Generated via Playwright |
 
@@ -436,7 +502,9 @@ This is the main artifact. Rows are grouped by category. ✅ = supported,
 | SSRF protection | ❌ | ✅ `ssrf_protection_enabled` toggle, IP allow/blocklist |
 | Allow private IPs flag | ❌ | ✅ `allow_private_ips` |
 | Encryption at rest | ❌ | ✅ Backend Fernet (`PROXBOX_ENCRYPTION_KEY`) |
+| Encryption-key rotation at runtime | ❌ | ✅ **0.0.11** — `routes/admin/encryption.py` (no process restart) |
 | Token rotation in plugin | N/A | ✅ FastAPIEndpoint regenerates token on save |
+| Endpoint misconfig surfacing | ❌ | ✅ **0.0.15** — `services/_endpoint_errors.py` translates `400 plain HTTP request was sent to HTTPS port` (nginx image with mkcert) and `SSLError` into a one-sentence operator-actionable message on the FastAPI endpoint detail page |
 
 ### 6.20. Observability & logging
 
@@ -447,13 +515,14 @@ This is the main artifact. Rows are grouped by category. ✅ = supported,
 | Live log UI | ❌ | ✅ Backend logs page (`views/logs.py`); per-job SSE stream (`views/job_stream.py`) |
 | Health probes | ❌ | ✅ `views/keepalive_status.py` (`/keepalive/fastapi/`, NetBox, Proxmox) |
 | Status badges | ⚠️ Flask `/status/` endpoint | ✅ `templates/proxbox-backend-status.html`, status-badge partial |
+| Inline-asset rendering | N/A | ✅ **0.0.15** — home dashboard logos and JS are inlined via `templatetags/proxbox_tags.py` and `static/netbox_proxbox/js/home_inline.js`; the home page now renders correctly on installs that skipped `python manage.py collectstatic` (issue #355) |
 
 ### 6.21. Roadmap / known issues
 
 | Aspect | `netbox-proxmox-automation` | `netbox-proxbox` |
 |---|---|---|
-| Known limitations | Proxmox 9.x untested; LXC migration unsupported; SCSI disks only; tags not synced; `verify_ssl=False` hardcoded in Flask helper; MB÷1000 vs ÷1024 unit divergence | Some operational verbs not yet exposed; sync is read-only |
-| Stated roadmap | NetBox Custom Objects (>4.4); DNS via gss-tsig; NetBox Discovery/Assurance | See `docs/roadmap.md` in this repo |
+| Known limitations | Proxmox 9.x untested; LXC migration unsupported; SCSI disks only; tags not synced; `verify_ssl=False` hardcoded in Flask helper; MB÷1000 vs ÷1024 unit divergence | Most operational verbs not yet exposed; sync is mostly observational (the lone write into NetBox-hosted DCIM/IPAM/virtualization is the `IPAddress.dns_name` propagation added in 0.0.11). Backend nginx image required `Use HTTPS` + `Verify SSL`-off coupling — now decoupled in 0.0.15 |
+| Stated roadmap | NetBox Custom Objects (>4.4); DNS via gss-tsig; NetBox Discovery/Assurance | See `docs/roadmap.md` in this repo and `docs/release-notes/version-0.0.15.md` for the latest delta |
 
 ---
 
@@ -570,11 +639,18 @@ NetBox webhook payload as a raw dict (`json_in['data']['custom_fields']
 against a wire contract:
 
 - `contracts/proxbox_api_sse_schema.json` — sourced from `proxbox-api`
-  release `0.0.10.post2`; defines every SSE message type, enum, and
+  release `0.0.11`; defines every SSE message type, enum, and
   payload field.
+- `contracts/overwrite_flags.json` — canonical 23-flag list (was 22 in
+  0.0.14; the new entry is `overwrite_ip_address_dns_name`); mirrored
+  in `proxbox-api/contracts/overwrite_flags.json`. Adding, removing,
+  or reordering flags must happen in **both** repos in the same
+  release; CI fails otherwise.
 - `netbox_proxbox/schemas/backend_proxy.py` — local Pydantic v2 mirror.
 - `tests/test_sse_schema_mirror.py` — fails CI if the local mirror
   drifts from the JSON contract.
+- `tests/test_overwrite_flags_contract.py` — pins the canonical
+  flag set across both repos.
 
 This is the same boundary discipline used in sibling plugin
 `netbox-gpon` and is a load-bearing assumption of the SSE flow: every
@@ -616,12 +692,16 @@ What each project actually *does* to a Proxmox cluster. ✅ = does it,
 | Discover VMs | ✅ (one-shot) | 👁️ |
 | Discover storage | ❌ (only via plugin's setup script for choice set) | 👁️ |
 | Reflect VNC console URL in NetBox | ❌ | 👁️ (template extension) |
+| Resolve LXC `VMConfig.hostname` | ❌ | ✅ (0.0.11 backend) |
+| Resolve QEMU hostname via `qemu-guest-agent` | ❌ | ✅ (0.0.11 backend; `agent/get-host-name`, fall-back via network-interfaces payload) |
+| Write IPAM `IPAddress.dns_name` from Proxmox guest hostname | ❌ | ✅ (0.0.11 backend, gated by `overwrite_ip_address_dns_name`) |
 | Update DNS (BIND9) | ⚠️ Roadmap (Jinja2 template exists, no write step) | ❌ |
 
 Summary: `netbox-proxmox-automation` is a **doer** for VM/LXC
 lifecycles but a thin observer; `netbox-proxbox` is a **mirror** that
-covers more Proxmox object kinds but does not initiate any state
-change.
+covers more Proxmox object kinds. As of `0.0.11`, the mirror also
+**writes** Proxmox guest hostnames into NetBox IPAM `dns_name` — a
+narrow but real exception to the otherwise read-only stance.
 
 ---
 
@@ -702,6 +782,11 @@ The safest coexistence pattern is:
 | `X-Proxbox-API-Key` | this repo | Custom auth header used by the plugin to talk to `proxbox-api`. |
 | SSE | this repo | Server-Sent Events; the protocol over which `proxbox-api` streams sync progress. |
 | `pxb` | this repo | Optional Typer CLI shipped under `proxbox_cli/`. |
+| `use_https` | this repo (0.0.15) | New boolean field on `FastAPIEndpoint` controlling URL scheme (`http://` vs `https://`); independent of `verify_ssl`. |
+| `runtime_settings` | this repo (backend 0.0.11) | `proxbox_api/runtime_settings.py` helpers (`get_int / get_float / get_bool / get_str`) that resolve env var → `ProxboxPluginSettings` → built-in default with a 5-minute cache. |
+| `OVERWRITE_FIELDS` / `OVERWRITE_FIELD_GROUPS` | this repo | Canonical, ordered registry of overwrite flags shared between the plugin Settings UI and `SyncOverwriteFlags.model_fields`; pinned by `contracts/overwrite_flags.json` (23 entries in 0.0.15). |
+| `_endpoint_errors` | this repo (0.0.15) | `services/_endpoint_errors.py` — translates `400 plain HTTP request was sent to HTTPS port` and `SSLError` into operator-actionable strings on the FastAPI endpoint detail page. |
+| `routes/admin/encryption.py` | this repo (backend 0.0.11) | Runtime endpoints to fetch and rotate `PROXBOX_ENCRYPTION_KEY` without restarting the FastAPI process. |
 
 ---
 
@@ -716,7 +801,12 @@ The safest coexistence pattern is:
   [`../DEVELOP.md`](../DEVELOP.md).
 - Legacy `PLUGINS_CONFIG` reference (pre-DB endpoints):
   [`../PAST_CONFIG.md`](../PAST_CONFIG.md).
-- Wire contract pinned against `proxbox-api`:
+- Latest plugin release notes:
+  [`../docs/release-notes/version-0.0.15.md`](../docs/release-notes/version-0.0.15.md).
+- Cross-repo overwrite-flag contract:
+  `../contracts/overwrite_flags.json` (23 flags) — must stay in lock-step
+  with `proxbox-api/contracts/overwrite_flags.json`.
+- Wire contract pinned against `proxbox-api 0.0.11`:
   `../contracts/proxbox_api_sse_schema.json`.
 - Sibling project `proxbox-api` (FastAPI backend):
   `/root/nms/proxbox-api/`.
