@@ -38,7 +38,12 @@ def test_home_template_uses_plugin_vanilla_js_entrypoint():
     assert "netbox_proxbox/home/job_live_summary.html" in contents
     assert "active_proxbox_job" in contents
     assert "job_log_assets.html" in contents
-    assert "netbox_proxbox/js/home.js" in contents
+    # Issue #355: home dashboard hydration is inlined via the
+    # `inline_static_script` template tag instead of loaded as a {% static %}
+    # ES module, so logos and cluster cards render even when collectstatic
+    # was skipped after a plugin install/upgrade.
+    assert "inline_static_script 'netbox_proxbox/js/home_inline.js'" in contents
+    assert "{% load proxbox_tags %}" in contents
     assert "htmx.org" not in contents
     assert 'id="sync-progress-container"' in contents
     assert 'id="sync-progress-label"' in contents

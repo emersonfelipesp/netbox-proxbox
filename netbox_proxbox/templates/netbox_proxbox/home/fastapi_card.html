@@ -1,4 +1,5 @@
 {% load static %}
+{% load proxbox_tags %}
 
 <div class="col col-md-6">
     <div class="card">
@@ -8,7 +9,7 @@
         <div class="d-flex flex-row justify-content-center align-items-center p-1 mt-1">
             <div class="d-flex mx-auto position-absolute">
                 <a href="{{ object.get_absolute_url }}" target="_blank">
-                    <img src="{% static 'netbox_proxbox/fastapi_logo.png' %}" alt="FastAPI Logo" width="200">
+                    <img src="{% inline_logo_data_uri 'netbox_proxbox/fastapi_logo.png' %}" alt="FastAPI Logo" width="200">
                 </a>
             </div>
             <div class="d-flex ms-auto" style="margin: 0 40px 0 0">

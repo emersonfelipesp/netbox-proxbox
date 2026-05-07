@@ -282,6 +282,9 @@ def load_plugin_module(
     django_utils_translation.gettext = lambda x: x
     django_utils_translation.gettext_lazy = lambda x: x
 
+    django_utils_safestring = types.ModuleType("django.utils.safestring")
+    django_utils_safestring.mark_safe = lambda value: value
+
     django_utils_timezone = types.ModuleType("django.utils.timezone")
     django_utils_timezone.now = lambda: __import__("datetime").datetime.now(
         __import__("datetime").timezone.utc
@@ -505,6 +508,7 @@ def load_plugin_module(
         "django.utils.text": django_utils_text,
         "django.utils.timezone": django_utils_timezone,
         "django.utils.translation": django_utils_translation,
+        "django.utils.safestring": django_utils_safestring,
         "django.db.models": django_db_models,
         "utilities.datetime": utilities_datetime,
         "netbox.constants": netbox_constants,

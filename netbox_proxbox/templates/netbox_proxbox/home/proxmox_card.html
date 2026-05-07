@@ -1,4 +1,5 @@
 {% load static %}
+{% load proxbox_tags %}
 
 <div class="card" data-proxmox-card-url="{% url 'plugins:netbox_proxbox:proxmox_card' object.pk %}" data-proxmox-card-id="{{ object.pk }}">
     <h2 class="card-header">Proxmox Cluster</h2>
@@ -7,7 +8,7 @@
     <div class="d-flex flex-row justify-content-center align-items-center p-2 mt-1">
         <div class="d-flex mx-auto position-absolute">
             <a href="{{ object.get_absolute_url }}">
-                <img src="{% static 'netbox_proxbox/proxmox-logo.svg' %}" alt="Proxmox Logo" width="200">
+                <img src="{% inline_logo_data_uri 'netbox_proxbox/proxmox-logo.svg' %}" alt="Proxmox Logo" width="200">
             </a>
         </div>
         <div class="d-flex ms-auto" style="margin: 0 40px 0 0">

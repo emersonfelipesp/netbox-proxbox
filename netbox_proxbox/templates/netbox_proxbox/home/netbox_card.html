@@ -1,4 +1,5 @@
 {% load static %}
+{% load proxbox_tags %}
 
 <div class="col col-md-6">
     <div class="card">
@@ -7,7 +8,7 @@
         <div class="d-flex flex-row justify-content-center align-items-center p-3 m-2 mt-1">
             <div class="d-flex mx-auto position-absolute p-2">
                 <a href="{{ object.get_absolute_url }}">
-                    <img src="{% static 'netbox_proxbox/logo_netbox_dark_teal.svg' %}" alt="NetBox Logo" width="200">
+                    <img src="{% inline_logo_data_uri 'netbox_proxbox/logo_netbox_dark_teal.svg' %}" alt="NetBox Logo" width="200">
                 </a>
             </div>
             <div class="d-flex ms-auto" style="margin: 0 40px 0 0">
