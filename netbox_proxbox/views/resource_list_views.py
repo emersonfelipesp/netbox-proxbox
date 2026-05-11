@@ -8,8 +8,10 @@ from utilities.views import ConditionalLoginRequiredMixin
 from virtualization.models import Cluster, VirtualDisk, VirtualMachine, VMInterface
 
 from netbox_proxbox.utils import (
+    filter_queryset_by_proxmox_vm_type,
     get_fastapi_context_for_request,
     get_proxbox_tagged_object_ids,
+    vm_type_select_related_fields,
 )
 
 
@@ -106,22 +108,16 @@ class VirtualMachinesView(ConditionalLoginRequiredMixin, View):
             base_qs = (
                 VirtualMachine.objects.restrict(request.user, "view")
                 .filter(id__in=tagged_vm_ids)
-                .select_related(
-                    "site",
-                    "cluster",
-                    "role",
-                    "tenant",
-                    "platform",
-                    "virtual_machine_type",
-                )
+                .select_related(*vm_type_select_related_fields(VirtualMachine))
                 .prefetch_related("interfaces__ip_addresses")
             )
-            from django.db.models import Q
 
             virtual_machines = list(
-                base_qs.filter(
-                    Q(virtual_machine_type__slug="qemu-virtual-machine")
-                    | Q(custom_field_data__proxmox_vm_type="qemu")
+                filter_queryset_by_proxmox_vm_type(
+                    base_qs,
+                    VirtualMachine,
+                    vm_type="qemu",
+                    vm_type_slug="qemu-virtual-machine",
                 )
             )
 
@@ -174,22 +170,16 @@ class LXCContainersView(ConditionalLoginRequiredMixin, View):
             base_qs = (
                 VirtualMachine.objects.restrict(request.user, "view")
                 .filter(id__in=tagged_vm_ids)
-                .select_related(
-                    "site",
-                    "cluster",
-                    "role",
-                    "tenant",
-                    "platform",
-                    "virtual_machine_type",
-                )
+                .select_related(*vm_type_select_related_fields(VirtualMachine))
                 .prefetch_related("interfaces__ip_addresses")
             )
-            from django.db.models import Q
 
             lxc_containers = list(
-                base_qs.filter(
-                    Q(virtual_machine_type__slug="lxc-container")
-                    | Q(custom_field_data__proxmox_vm_type="lxc")
+                filter_queryset_by_proxmox_vm_type(
+                    base_qs,
+                    VirtualMachine,
+                    vm_type="lxc",
+                    vm_type_slug="lxc-container",
                 )
             )
 

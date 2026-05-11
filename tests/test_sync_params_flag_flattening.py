@@ -1,11 +1,11 @@
 """Tests that ``sync_stages._build_base_query_params`` flattens 23 overwrite flags.
 
 The plugin sends overwrite flags to the FastAPI backend as flat query string
-keys (one ``overwrite_*`` key per field, value ``"true"`` / ``"false"``). This
-mirrors the backend's ``Annotated[SyncOverwriteFlags, Query()]`` flattening on
-the receive side. If a future change drops a flag from this serialization, the
-backend will silently fall back to its default (always overwrite) — so we lock
-the contract here.
+keys (one ``overwrite_*`` key per field, value ``"true"`` / ``"false"``). The
+backend makes those raw query keys authoritative when resolving
+``SyncOverwriteFlags``. If a future change drops a flag from this serialization,
+the backend will fall back to its default (always overwrite) — so we lock the
+contract here.
 """
 
 from __future__ import annotations
@@ -173,8 +173,10 @@ def test_build_base_query_params_serializes_true_false_strings(sync_stages_modul
         assert isinstance(base_query[name], str)
 
 
-def test_build_base_query_params_falls_back_when_multiple_endpoints(sync_stages_module):
-    """With >1 endpoint in scope we cannot encode a per-endpoint map; use global."""
+def test_build_base_query_params_direct_multi_endpoint_call_uses_one_flat_group(
+    sync_stages_module,
+):
+    """A direct multi-endpoint helper call has one flat flag group available."""
     fields = _load_overwrite_fields()
     sync_stages_module._stubs["global"] = {name: False for name in fields}
 

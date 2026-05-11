@@ -12,8 +12,9 @@ overwritten on every sync, or preserved once they exist. This is controlled by
 
 When the plugin sends a sync request to the FastAPI backend, it flattens the
 *resolved* 23 flags into the query string. The backend (`SyncOverwriteFlags`
-in `proxbox-api`) reads them and translates each `False` into a corresponding
-key being dropped from the `patchable_fields` allowlist used by `rest_reconcile_async`.
+in `proxbox-api`) reads those raw query parameters authoritatively and
+translates each `False` into a corresponding key being dropped from the
+`patchable_fields` allowlist used by `rest_reconcile_async`.
 
 ## The 23 flags
 
@@ -59,12 +60,13 @@ The detail page of each endpoint shows the **resolved** value plus an
 ## How the flags reach the backend
 
 1. The plugin builds the flat query string in
-   `sync_stages._build_base_query_params()`. With one Proxmox endpoint in
-   scope it uses the endpoint's resolved values; with zero or multiple
-   endpoints in scope it uses the global singleton (the FastAPI backend
-   accepts a single flat group, not a per-endpoint map).
+   `sync_stages._build_base_query_params()`. Each backend SSE request carries
+   one flat group of overwrite flags, so a sync covering multiple Proxmox
+   endpoints is split into one SSE request per endpoint. If no endpoint exists
+   or a helper is called without a concrete endpoint, the global singleton is
+   used.
 2. Every flag is serialized as `"true"` or `"false"`.
-3. The backend receives them as `Annotated[SyncOverwriteFlags, Query()]` and
+3. The backend resolves the flat query keys into `SyncOverwriteFlags` and
    passes the resolved object into the affected sync services.
 4. Each service derives a `patchable_fields` allowlist from the flags and
    forwards it to `rest_reconcile_async` / `rest_bulk_reconcile_async`.

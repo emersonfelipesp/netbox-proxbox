@@ -1156,7 +1156,7 @@ def test_proxbox_sync_job_query_flag_primary_ip_preference_setting(
 def test_proxbox_sync_job_full_update_uses_single_endpoint_overrides(
     monkeypatch, proxbox_sync_job_module
 ):
-    """A full-update scoped to one endpoint must send that endpoint's flags."""
+    """A full-update scoped to one endpoint must send all of that endpoint's flags."""
     captured: list[dict[str, object]] = []
     services_mod = types.ModuleType("netbox_proxbox.services")
 
@@ -1170,9 +1170,16 @@ def test_proxbox_sync_job_full_update_uses_single_endpoint_overrides(
     overwrite_fields = tuple(
         proxbox_sync_job_module.sync_stages.effective_overwrites_for_endpoint(None)
     )
+    assert len(overwrite_fields) == 23
+    disabled_fields = {
+        "overwrite_device_role",
+        "overwrite_device_type",
+        "overwrite_device_tags",
+    }
 
     def effective_overwrites_for_endpoint(endpoint_id):
-        return {name: name != "overwrite_device_role" for name in overwrite_fields}
+        assert str(endpoint_id) == "1"
+        return {name: name not in disabled_fields for name in overwrite_fields}
 
     monkeypatch.setattr(
         proxbox_sync_job_module.sync_stages,
@@ -1191,7 +1198,12 @@ def test_proxbox_sync_job_full_update_uses_single_endpoint_overrides(
 
     assert captured
     assert {query["proxmox_endpoint_ids"] for query in captured} == {"1"}
-    assert {query["overwrite_device_role"] for query in captured} == {"false"}
+    for query in captured:
+        overwrite_keys = [key for key in query if key.startswith("overwrite_")]
+        assert len(overwrite_keys) == 23
+        assert set(overwrite_fields).issubset(query)
+        for name in disabled_fields:
+            assert query[name] == "false"
 
 
 def test_proxbox_sync_job_loops_multiple_endpoint_scopes_with_distinct_overrides(
@@ -1211,12 +1223,15 @@ def test_proxbox_sync_job_loops_multiple_endpoint_scopes_with_distinct_overrides
     overwrite_fields = tuple(
         proxbox_sync_job_module.sync_stages.effective_overwrites_for_endpoint(None)
     )
+    assert len(overwrite_fields) == 23
 
     def effective_overwrites_for_endpoint(endpoint_id):
-        return {
-            name: not (str(endpoint_id) == "2" and name == "overwrite_device_role")
-            for name in overwrite_fields
-        }
+        disabled_fields = (
+            {"overwrite_device_role", "overwrite_device_type", "overwrite_device_tags"}
+            if str(endpoint_id) == "2"
+            else set()
+        )
+        return {name: name not in disabled_fields for name in overwrite_fields}
 
     monkeypatch.setattr(
         proxbox_sync_job_module.sync_stages,
@@ -1234,7 +1249,22 @@ def test_proxbox_sync_job_loops_multiple_endpoint_scopes_with_distinct_overrides
     ProxboxSyncJob.run(job, sync_types=[st.DEVICES], proxmox_endpoint_ids=["1", "2"])
 
     assert [query["proxmox_endpoint_ids"] for query in captured] == ["1", "2"]
-    assert [query["overwrite_device_role"] for query in captured] == [
-        "true",
-        "false",
-    ]
+    for query in captured:
+        overwrite_keys = [key for key in query if key.startswith("overwrite_")]
+        assert len(overwrite_keys) == 23
+        assert set(overwrite_fields).issubset(query)
+    device_identity_flags = (
+        "overwrite_device_role",
+        "overwrite_device_type",
+        "overwrite_device_tags",
+    )
+    assert {name: captured[0][name] for name in device_identity_flags} == {
+        "overwrite_device_role": "true",
+        "overwrite_device_type": "true",
+        "overwrite_device_tags": "true",
+    }
+    assert {name: captured[1][name] for name in device_identity_flags} == {
+        "overwrite_device_role": "false",
+        "overwrite_device_type": "false",
+        "overwrite_device_tags": "false",
+    }

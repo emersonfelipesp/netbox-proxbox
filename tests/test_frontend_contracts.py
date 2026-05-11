@@ -534,6 +534,20 @@ def test_lxc_and_storage_pages_are_wired_in_urls_navigation_and_templates():
     assert "class SyncStorageView(" in sync_view
 
 
+def test_vm_resource_pages_gate_native_vm_type_field_for_netbox_45():
+    utils = _read("netbox_proxbox/utils.py")
+    views = _read("netbox_proxbox/views/resource_list_views.py")
+
+    assert "def has_virtual_machine_type_field(" in utils
+    assert "def filter_queryset_by_proxmox_vm_type(" in utils
+    assert "def vm_type_select_related_fields(" in utils
+    assert "filter_queryset_by_proxmox_vm_type(" in views
+    assert "vm_type_select_related_fields(VirtualMachine)" in views
+    assert 'Q(virtual_machine_type__slug="qemu-virtual-machine")' not in views
+    assert 'Q(virtual_machine_type__slug="lxc-container")' not in views
+    assert '"virtual_machine_type",' not in views
+
+
 def test_replication_page_is_wired_in_urls_navigation_and_vm_tabs():
     urls = _read("netbox_proxbox/urls.py")
     navigation = _read("netbox_proxbox/navigation.py")

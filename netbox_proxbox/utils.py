@@ -169,6 +169,46 @@ def resolve_vm_type(vm: object) -> str:
     return str(cf.get("proxmox_vm_type") or cf.get("cf_proxmox_vm_type") or "qemu")
 
 
+def has_virtual_machine_type_field(model_class: type[object]) -> bool:
+    """Return True when the live NetBox VirtualMachine model has the 4.6 type FK."""
+    meta = getattr(model_class, "_meta", None)
+    if meta is None:
+        return bool(getattr(model_class, "virtual_machine_type", None))
+    try:
+        meta.get_field("virtual_machine_type")
+    except Exception:
+        return False
+    return True
+
+
+def vm_type_select_related_fields(model_class: type[object]) -> tuple[str, ...]:
+    """Return common VM select_related fields, adding VirtualMachineType only if present."""
+    fields = ["site", "cluster", "role", "tenant", "platform"]
+    if has_virtual_machine_type_field(model_class):
+        fields.append("virtual_machine_type")
+    return tuple(fields)
+
+
+def filter_queryset_by_proxmox_vm_type(
+    queryset: object,
+    model_class: type[object],
+    *,
+    vm_type: str,
+    vm_type_slug: str,
+) -> object:
+    """Filter a VirtualMachine queryset by Proxmox type across NetBox 4.5 and 4.6."""
+    from django.db.models import Q
+
+    legacy_filter = Q(custom_field_data__proxmox_vm_type=vm_type) | Q(
+        custom_field_data__cf_proxmox_vm_type=vm_type
+    )
+    if has_virtual_machine_type_field(model_class):
+        return queryset.filter(
+            Q(virtual_machine_type__slug=vm_type_slug) | legacy_filter
+        )
+    return queryset.filter(legacy_filter)
+
+
 def get_fastapi_url(endpoint: FastAPIUrlSource) -> dict[str, object]:
     """Compute HTTP/WebSocket URLs and TLS settings for a FastAPI endpoint model.
 

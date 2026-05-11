@@ -122,7 +122,8 @@ def inline_static_script(relative_path: str) -> str:
         payload = _read_static(relative_path)
     except (FileNotFoundError, ValueError):
         return ""
-    return mark_safe(payload.decode("utf-8"))
+    # Safe because payload is read from bundled plugin static files, not user input.
+    return mark_safe(payload.decode("utf-8"))  # nosec
 
 
 @register.filter
