@@ -202,6 +202,24 @@ def test_fastapi_import_form_auto_creates_ip_address():
     assert "class FastAPIEndpointImportForm" in contents
     assert "get_or_create" in contents
     assert "clean_ip_address" in contents
+    assert "NullableCSVIntegerField" in contents
+    assert 'expected="fastapi"' in contents
+
+
+def test_endpoint_import_forms_detect_wrong_endpoint_exports():
+    helper_contents = _read("netbox_proxbox/forms/import_utils.py")
+    assert "validate_endpoint_import_headers" in helper_contents
+    assert "This import data looks like a {label} export" in helper_contents
+    assert '"websocket_port"' in helper_contents
+    assert '"token_value"' in helper_contents
+    assert '"token_secret"' in helper_contents
+
+
+def test_fastapi_export_round_trips_nullable_websocket_port_and_https_scheme():
+    contents = _read("netbox_proxbox/views/endpoints/fastapi_export.py")
+    assert '"use_https"' in contents
+    assert "if endpoint.websocket_port is not None" in contents
+    assert '"websocket_port": str(endpoint.websocket_port)' not in contents
 
 
 def test_netbox_fastapi_singleton_import_views_handle_override():

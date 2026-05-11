@@ -20,6 +20,8 @@ from ipam.models import IPAddress
 from ..models import FastAPIEndpoint
 from ..utils import resolve_ip_address_initial
 
+from .import_utils import NullableCSVIntegerField, validate_endpoint_import_headers
+
 
 class FastAPIEndpointForm(NetBoxModelForm):
     """
@@ -120,6 +122,11 @@ class FastAPIEndpointImportForm(NetBoxModelImportForm):
             "IP address in CIDR format, for example 192.0.2.10/24. Created automatically if it does not exist."
         ),
     )
+    websocket_port = NullableCSVIntegerField(
+        required=False,
+        validators=FastAPIEndpoint._meta.get_field("websocket_port").validators,
+        help_text=_("Optional WebSocket port. Leave blank to use the HTTP port."),
+    )
 
     class Meta:
         model = FastAPIEndpoint
@@ -137,6 +144,11 @@ class FastAPIEndpointImportForm(NetBoxModelImportForm):
             "server_side_websocket",
             "tags",
         )
+
+    def clean(self) -> dict[str, object]:
+        """Detect wrong endpoint exports before generic CSV header validation."""
+        validate_endpoint_import_headers(self, expected="fastapi")
+        return super().clean()
 
     def clean_ip_address(self) -> IPAddress | None:
         """Look up or auto-create the IPAddress so imports from other instances work."""

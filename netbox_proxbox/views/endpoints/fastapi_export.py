@@ -16,6 +16,7 @@ def _fastapi_export_fieldnames(include_sensitive: bool) -> tuple[str, ...]:
         "domain",
         "ip_address",
         "port",
+        "use_https",
         "verify_ssl",
         "use_websocket",
         "websocket_domain",
@@ -42,10 +43,15 @@ def _serialize_fastapi_endpoint(
         "domain": endpoint.domain or "",
         "ip_address": str(endpoint.ip_address.address) if endpoint.ip_address else "",
         "port": str(endpoint.port),
+        "use_https": "true" if endpoint.use_https else "false",
         "verify_ssl": "true" if endpoint.verify_ssl else "false",
         "use_websocket": "true" if endpoint.use_websocket else "false",
         "websocket_domain": endpoint.websocket_domain or "",
-        "websocket_port": str(endpoint.websocket_port),
+        "websocket_port": (
+            str(endpoint.websocket_port)
+            if endpoint.websocket_port is not None
+            else ""
+        ),
         "server_side_websocket": "true" if endpoint.server_side_websocket else "false",
         "tags": tags_value,
     }

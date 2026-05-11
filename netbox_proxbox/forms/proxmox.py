@@ -23,6 +23,8 @@ from ..constants import OVERWRITE_FIELDS
 from ..models import ProxmoxEndpoint
 from ..choices import ProxmoxModeChoices
 
+from .import_utils import validate_endpoint_import_headers
+
 
 class ProxmoxEndpointForm(NetBoxModelForm):
     """
@@ -224,6 +226,11 @@ class ProxmoxEndpointImportForm(NetBoxModelImportForm):
             "tenant",
             "tags",
         )
+
+    def clean(self) -> dict[str, object]:
+        """Detect wrong endpoint exports before generic CSV header validation."""
+        validate_endpoint_import_headers(self, expected="proxmox")
+        return super().clean()
 
     def clean_ip_address(self) -> IPAddress | None:
         """Look up or auto-create the IPAddress so imports from other instances work."""

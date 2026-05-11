@@ -24,6 +24,8 @@ from ..choices import NetBoxTokenVersionChoices
 from ..models import NetBoxEndpoint
 from ..utils import resolve_ip_address_initial
 
+from .import_utils import validate_endpoint_import_headers
+
 
 class NetBoxEndpointForm(NetBoxModelForm):
     """
@@ -201,6 +203,11 @@ class NetBoxEndpointImportForm(NetBoxModelImportForm):
             "verify_ssl",
             "tags",
         )
+
+    def clean(self) -> dict[str, object]:
+        """Detect wrong endpoint exports before generic CSV header validation."""
+        validate_endpoint_import_headers(self, expected="netbox")
+        return super().clean()
 
     def clean_ip_address(self) -> IPAddress | None:
         """Look up or auto-create the IPAddress so imports from other instances work."""
