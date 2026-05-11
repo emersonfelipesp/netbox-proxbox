@@ -36,17 +36,28 @@ docker run -d --name proxbox-api -p 8800:8000 emersonfelipesp/proxbox-api:latest
 
 The image serves on container port `8000` (nginx), so keep `8800:8000` if you want the backend reachable as `http://<host>:8800`.
 
-If you want NetBox to connect over HTTPS, use the TLS image instead:
+If you want NetBox to connect over HTTPS, use the TLS (`*-nginx`) image instead:
 
 ```bash
-docker pull emersonfelipesp/proxbox-api:latest-mkcert
+docker pull emersonfelipesp/proxbox-api:latest-nginx
 docker run -d --name proxbox-api-tls \
   -p 8800:8000 \
   -e MKCERT_EXTRA_NAMES='proxbox.backend.local' \
-  emersonfelipesp/proxbox-api:latest-mkcert
+  emersonfelipesp/proxbox-api:latest-nginx
 ```
 
-Then set the NetBox `FastAPIEndpoint` URL to `https://<host>:8800` and leave `verify_ssl` enabled. If NetBox or your workstation does not trust the mkcert root CA yet, install that root CA first so HTTPS verification succeeds.
+When configuring the NetBox `FastAPIEndpoint` for an `*-nginx` (TLS-only) image,
+set:
+
+| Field | Value | Why |
+|---|---|---|
+| **Use HTTPS** | ✓ enabled | The image only listens on TLS; plain HTTP returns `400`. |
+| **Verify SSL** | ✗ disabled (when using the bundled mkcert cert) | The cert is self-signed; verification will fail unless the mkcert root CA is trusted on the NetBox host. Tick **only** if you have installed the mkcert CA into NetBox's trust store. |
+| **Port** | host port mapped to container `8000` | Typically `8800`. |
+
+`Use HTTPS` and `Verify SSL` are independent toggles since v0.0.15 (issue #352).
+Earlier releases coupled them, which made the `*-nginx` + self-signed-cert combo
+unreachable from the UI.
 
 ## Option 3: Run It As A systemd Service
 

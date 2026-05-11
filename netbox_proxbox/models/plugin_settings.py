@@ -435,6 +435,13 @@ class ProxboxPluginSettings(NetBoxModel):
             "When disabled, sync never changes custom fields on existing IP addresses assigned to VM interfaces."
         ),
     )
+    overwrite_ip_address_dns_name = models.BooleanField(
+        default=True,
+        verbose_name=_("Overwrite IP address DNS name"),
+        help_text=_(
+            "When disabled, sync never changes the dns_name field on existing IP addresses; dns_name is still populated when an IP is created."
+        ),
+    )
 
     class Meta:
         verbose_name = _("Proxbox plugin settings")

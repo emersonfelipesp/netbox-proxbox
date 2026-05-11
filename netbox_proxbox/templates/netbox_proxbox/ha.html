@@ -1,0 +1,156 @@
+{% extends 'base/layout.html' %}
+{% load i18n %}
+
+{% block title %}{% trans "Proxmox HA" %}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <h1>{% trans "Proxmox High-Availability" %}</h1>
+  <p class="text-muted">
+    {% trans "Live HA state for managed Proxmox clusters." %}
+  </p>
+
+  {% if detail %}
+    <div class="alert alert-warning" role="alert">{{ detail }}</div>
+  {% endif %}
+
+  {% if summary %}
+    <div class="card mb-3">
+      <h5 class="card-header">{% trans "Cluster Status" %}</h5>
+      <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+          <thead>
+            <tr>
+              <th>{% trans "Cluster" %}</th>
+              <th>{% trans "Type" %}</th>
+              <th>{% trans "SID / Node" %}</th>
+              <th>{% trans "CRM State" %}</th>
+              <th>{% trans "Request" %}</th>
+              <th>{% trans "Quorate" %}</th>
+              <th>{% trans "Status" %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in summary.status %}
+              <tr>
+                <td>{{ row.cluster_name|default:"—" }}</td>
+                <td>{{ row.type|default:"—" }}</td>
+                <td>
+                  {% if row.sid %}<code>{{ row.sid }}</code>{% endif %}
+                  {% if row.node %}<span class="text-muted ms-1">{{ row.node }}</span>{% endif %}
+                </td>
+                <td>
+                  {% if row.crm_state == "started" %}
+                    <span class="badge text-bg-green">{{ row.crm_state }}</span>
+                  {% elif row.crm_state == "error" %}
+                    <span class="badge text-bg-red">{{ row.crm_state }}</span>
+                  {% elif row.crm_state %}
+                    <span class="badge text-bg-grey">{{ row.crm_state }}</span>
+                  {% else %}—{% endif %}
+                </td>
+                <td>{{ row.request_state|default:"—" }}</td>
+                <td>
+                  {% if row.quorate is True %}
+                    <span class="badge text-bg-green">{% trans "Yes" %}</span>
+                  {% elif row.quorate is False %}
+                    <span class="badge text-bg-red">{% trans "No" %}</span>
+                  {% else %}—{% endif %}
+                </td>
+                <td>{{ row.status|default:"—" }}</td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="7" class="text-muted">{% trans "No HA status rows reported." %}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <h5 class="card-header">{% trans "HA Groups" %}</h5>
+      <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+          <thead>
+            <tr>
+              <th>{% trans "Cluster" %}</th>
+              <th>{% trans "Group" %}</th>
+              <th>{% trans "Nodes" %}</th>
+              <th>{% trans "Restricted" %}</th>
+              <th>{% trans "No-Failback" %}</th>
+              <th>{% trans "Comment" %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for group in summary.groups %}
+              <tr>
+                <td>{{ group.cluster_name|default:"—" }}</td>
+                <td><code>{{ group.group }}</code></td>
+                <td>{{ group.nodes|default:"—" }}</td>
+                <td>
+                  {% if group.restricted is True %}
+                    <span class="badge text-bg-blue">{% trans "Yes" %}</span>
+                  {% else %}—{% endif %}
+                </td>
+                <td>
+                  {% if group.nofailback is True %}
+                    <span class="badge text-bg-blue">{% trans "Yes" %}</span>
+                  {% else %}—{% endif %}
+                </td>
+                <td>{{ group.comment|default:"—" }}</td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="6" class="text-muted">{% trans "No HA groups configured." %}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <h5 class="card-header">{% trans "HA Resources" %}</h5>
+      <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+          <thead>
+            <tr>
+              <th>{% trans "Cluster" %}</th>
+              <th>{% trans "SID" %}</th>
+              <th>{% trans "Type" %}</th>
+              <th>{% trans "Group" %}</th>
+              <th>{% trans "Node" %}</th>
+              <th>{% trans "State" %}</th>
+              <th>{% trans "CRM" %}</th>
+              <th>{% trans "Restart" %}</th>
+              <th>{% trans "Relocate" %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for res in summary.resources %}
+              <tr>
+                <td>{{ res.cluster_name|default:"—" }}</td>
+                <td><code>{{ res.sid }}</code></td>
+                <td>{{ res.type|default:"—" }}</td>
+                <td>{{ res.group|default:"—" }}</td>
+                <td>{{ res.node|default:"—" }}</td>
+                <td>{{ res.state|default:"—" }}</td>
+                <td>
+                  {% if res.crm_state == "started" %}
+                    <span class="badge text-bg-green">{{ res.crm_state }}</span>
+                  {% elif res.crm_state == "error" %}
+                    <span class="badge text-bg-red">{{ res.crm_state }}</span>
+                  {% elif res.crm_state %}
+                    <span class="badge text-bg-grey">{{ res.crm_state }}</span>
+                  {% else %}—{% endif %}
+                </td>
+                <td>{{ res.max_restart|default:"—" }}</td>
+                <td>{{ res.max_relocate|default:"—" }}</td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="9" class="text-muted">{% trans "No HA resources configured." %}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

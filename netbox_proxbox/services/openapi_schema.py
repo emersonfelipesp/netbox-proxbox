@@ -9,6 +9,7 @@ from django.core.cache import cache
 
 from netbox_proxbox.models import FastAPIEndpoint
 from netbox_proxbox.schemas.openapi_schema import OpenAPISummary
+from netbox_proxbox.services._endpoint_errors import translate_request_exception
 from netbox_proxbox.utils import get_backend_auth_headers, get_fastapi_url
 
 _CACHE_TIMEOUT_SECONDS = 60 * 60 * 24 * 30
@@ -31,7 +32,7 @@ def _request_json(
         )
         response.raise_for_status()
     except requests.exceptions.RequestException as exc:
-        return None, str(exc)
+        return None, translate_request_exception(exc)
 
     try:
         return response.json(), None

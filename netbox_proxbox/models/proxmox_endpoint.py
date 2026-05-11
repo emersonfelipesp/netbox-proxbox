@@ -290,6 +290,14 @@ class ProxmoxEndpoint(EndpointBase):
             "Per-endpoint override for the global Proxbox setting. Leave blank to inherit."
         ),
     )
+    overwrite_ip_address_dns_name = models.BooleanField(
+        null=True,
+        blank=True,
+        verbose_name=_("Overwrite IP address DNS name"),
+        help_text=_(
+            "Per-endpoint override for the global Proxbox setting. Leave blank to inherit."
+        ),
+    )
     site = models.ForeignKey(
         to="dcim.Site",
         on_delete=models.SET_NULL,

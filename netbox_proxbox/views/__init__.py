@@ -111,7 +111,9 @@ from .vm_backup import (
 )
 
 # Task History tab and detail views live in ``vm_task_history``.
+from .ha import HAClusterView
 from .vm_config import ProxmoxVMConfigTabView
+from .vm_ha import ProxmoxVMHATabView
 from .vm_snapshot import (
     VMSnapshotBulkDeleteView,
     VMSnapshotBulkEditView,

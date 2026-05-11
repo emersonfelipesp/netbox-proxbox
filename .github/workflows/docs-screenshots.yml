@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 env:
-  PROXBOX_API_RELEASE_VERSION: 0.0.10.post2
+  PROXBOX_API_RELEASE_VERSION: 0.0.11
   NETBOX_IMAGE: netboxcommunity/netbox:v4.6.0
   PROXBOX_API_IMAGE: emersonfelipesp/proxbox-api
   PROXMOX_SDK_IMAGE: emersonfelipesp/proxmox-sdk

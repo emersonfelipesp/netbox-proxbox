@@ -35,7 +35,7 @@ def _get_backend_url(endpoint: FastAPIEndpoint) -> str | None:
     if not host:
         return None
 
-    scheme = "https" if endpoint.verify_ssl else "http"
+    scheme = "https" if endpoint.use_https else "http"
     return f"{scheme}://{host}:{endpoint.port}"
 
 

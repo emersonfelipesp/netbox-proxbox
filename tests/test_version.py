@@ -22,8 +22,8 @@ DOCS_INDEX_PATH = REPO_ROOT / "docs" / "index.md"
 INSTALL_GIT_PATH = REPO_ROOT / "docs" / "installation" / "2-installing-plugin-git.md"
 UPGRADING_PATH = REPO_ROOT / "docs" / "installation" / "upgrading.md"
 RELEASE_NOTES_INDEX_PATH = REPO_ROOT / "docs" / "release-notes" / "index.md"
-RELEASE_NOTES_013_PATH = REPO_ROOT / "docs" / "release-notes" / "version-0.0.13.md"
 RELEASE_NOTES_014_PATH = REPO_ROOT / "docs" / "release-notes" / "version-0.0.14.md"
+RELEASE_NOTES_015_PATH = REPO_ROOT / "docs" / "release-notes" / "version-0.0.15.md"
 E2E_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "e2e-docker.yml"
 PUBLISH_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "publish-testpypi.yml"
 NIGHTLY_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "nightly-contracts.yml"
@@ -31,12 +31,12 @@ DOCS_SCREENSHOTS_WORKFLOW_PATH = (
     REPO_ROOT / ".github" / "workflows" / "docs-screenshots.yml"
 )
 
-CURRENT_PLUGIN_VERSION = "0.0.14"
-CURRENT_PROXBOX_API_VERSION = "0.0.10.post2"
+CURRENT_PLUGIN_VERSION = "0.0.15"
+CURRENT_PROXBOX_API_VERSION = "0.0.11"
 CURRENT_NETBOX_MIN_VERSION = "4.5.8"
 CURRENT_NETBOX_MAX_VERSION = "4.6.99"
-PREVIOUS_PLUGIN_VERSION = "0.0.13.post4"
-PREVIOUS_PROXBOX_API_VERSION = "0.0.9.post2"
+PREVIOUS_PLUGIN_VERSION = "0.0.14"
+PREVIOUS_PROXBOX_API_VERSION = "0.0.10.post2"
 
 
 def _class_constants(class_name: str) -> dict[str, str]:
@@ -92,7 +92,7 @@ def test_certified_netbox_versions_are_documented():
         DOCS_INDEX_PATH,
         INSTALL_GIT_PATH,
         UPGRADING_PATH,
-        RELEASE_NOTES_014_PATH,
+        RELEASE_NOTES_015_PATH,
     )
     for path in docs_with_explicit_range:
         text = _read(path)
@@ -175,7 +175,7 @@ def test_current_release_pairing_is_documented_in_primary_docs():
         "v0.0.8.post1",
         "v0.0.3.post1",
     )
-    for path in (README_PATH, DOCS_INDEX_PATH, RELEASE_NOTES_014_PATH):
+    for path in (README_PATH, DOCS_INDEX_PATH, RELEASE_NOTES_015_PATH):
         text = _read(path)
         _assert_markdown_table_row(text, current_row)
 
@@ -184,7 +184,7 @@ def test_current_release_pairing_is_documented_in_primary_docs():
         DOCS_INDEX_PATH,
         UPGRADING_PATH,
         RELEASE_NOTES_INDEX_PATH,
-        RELEASE_NOTES_014_PATH,
+        RELEASE_NOTES_015_PATH,
     ):
         text = _read(path)
         assert CURRENT_PLUGIN_VERSION in text, f"{path} missing plugin version"
@@ -196,13 +196,13 @@ def test_previous_release_compatibility_row_matches_release_notes():
         f">={CURRENT_NETBOX_MIN_VERSION}",
         f"v{PREVIOUS_PLUGIN_VERSION}",
         f"v{PREVIOUS_PROXBOX_API_VERSION}",
-        "v0.0.7.post6",
+        "v0.0.8.post1",
         "v0.0.3.post1",
     )
     for path in (
         README_PATH,
         DOCS_INDEX_PATH,
-        RELEASE_NOTES_013_PATH,
         RELEASE_NOTES_014_PATH,
+        RELEASE_NOTES_015_PATH,
     ):
         _assert_markdown_table_row(_read(path), previous_row)

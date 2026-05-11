@@ -4,6 +4,7 @@ from django.urls import include, path
 from netbox.api.routers import NetBoxRouter
 
 from . import views
+from .ha import HAClusterSummaryAPIView, HAVMResourceAPIView
 from .views import (
     BackendLogsAPIView,
     ClustersAPIView,
@@ -87,6 +88,13 @@ urlpatterns = [
     ),
     path("sync/schedule/", ScheduleSyncAPIView.as_view(), name="api-schedule-sync"),
     path("logs/", BackendLogsAPIView.as_view(), name="api-logs"),
+    # Proxbox-api 0.0.11+ HA proxy (mirrors UI views/ha.py + views/vm_ha.py).
+    path("ha/summary/", HAClusterSummaryAPIView.as_view(), name="api-ha-summary"),
+    path(
+        "ha/vm/<int:vmid>/",
+        HAVMResourceAPIView.as_view(),
+        name="api-ha-vm-resource",
+    ),
     # Model CRUD router (ProxmoxCluster/Node at proxmox-clusters/proxmox-nodes/)
     path("", include(router.urls)),
 ]

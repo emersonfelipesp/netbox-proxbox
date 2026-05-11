@@ -128,7 +128,7 @@ def test_contract_identifies_proxbox_api_release():
     source = _contract()["source"]
     assert isinstance(source, dict)
     assert source["project"] == "proxbox-api"
-    assert source["release"] == "0.0.10.post2"
+    assert source["release"] == "0.0.11"
 
 
 def test_contract_test_does_not_import_proxbox_api():

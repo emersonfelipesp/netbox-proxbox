@@ -48,9 +48,13 @@ def _load_proxbox_tags(monkeypatch):
 
     django_utils_html.format_html = _format_html
 
+    django_utils_safestring = types.ModuleType("django.utils.safestring")
+    django_utils_safestring.mark_safe = lambda value: value
+
     django_mod = types.ModuleType("django")
     django_utils = types.ModuleType("django.utils")
     django_utils.html = django_utils_html
+    django_utils.safestring = django_utils_safestring
 
     netbox_proxbox_config = SimpleNamespace(version="0.0.11")
     netbox_proxbox_mod = types.ModuleType("netbox_proxbox")
@@ -61,6 +65,7 @@ def _load_proxbox_tags(monkeypatch):
         "django.template": django_template,
         "django.utils": django_utils,
         "django.utils.html": django_utils_html,
+        "django.utils.safestring": django_utils_safestring,
         "netbox_proxbox": netbox_proxbox_mod,
     }
     for name, mod in stub_modules.items():
