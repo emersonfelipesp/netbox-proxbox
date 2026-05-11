@@ -160,9 +160,11 @@ def _build_base_query_params(
     """Build base query parameters for sync stages.
 
     Overwrite flags resolve per-endpoint when exactly one Proxmox endpoint is in
-    scope, falling back to the global ``ProxboxPluginSettings`` singleton
-    otherwise (zero or multiple endpoints — the backend cannot accept a per-
-    endpoint map over a flat query string).
+    scope. Full syncs split multiple Proxmox endpoints into separate one-
+    endpoint SSE requests before calling this helper, because the backend
+    accepts one flat overwrite flag group per request. Direct helper calls
+    without a concrete endpoint fall back to the global
+    ``ProxboxPluginSettings`` singleton.
     """
     base_query: dict[str, str] = {}
     base_query["use_guest_agent_interface_name"] = (

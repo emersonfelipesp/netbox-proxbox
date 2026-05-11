@@ -2,7 +2,7 @@
 
 Proxbox decides whether each NetBox object's existing field values are
 overwritten on every sync, or preserved once they exist. This is controlled by
-21 boolean **overwrite** flags grouped by resource. They live in two places:
+23 boolean **overwrite** flags grouped by resource. They live in two places:
 
 - The **plugin singleton** (`ProxboxPluginSettings`) — the global default for
   every endpoint that does not override the flag.
@@ -11,21 +11,22 @@ overwritten on every sync, or preserved once they exist. This is controlled by
   value with `True` / `False`.
 
 When the plugin sends a sync request to the FastAPI backend, it flattens the
-*resolved* 21 flags into the query string. The backend (`SyncOverwriteFlags`
-in `proxbox-api`) reads them and translates each `False` into a corresponding
-key being dropped from the `patchable_fields` allowlist used by `rest_reconcile_async`.
+*resolved* 23 flags into the query string. The backend (`SyncOverwriteFlags`
+in `proxbox-api`) reads those raw query parameters authoritatively and
+translates each `False` into a corresponding key being dropped from the
+`patchable_fields` allowlist used by `rest_reconcile_async`.
 
-## The 21 flags
+## The 23 flags
 
 | Group | Flags |
 |-------|-------|
 | **Device** | `overwrite_device_role`, `overwrite_device_type`, `overwrite_device_tags`, `overwrite_device_status`, `overwrite_device_description`, `overwrite_device_custom_fields` |
-| **Virtual Machine** | `overwrite_vm_role`, `overwrite_vm_tags`, `overwrite_vm_description`, `overwrite_vm_custom_fields` |
+| **Virtual Machine** | `overwrite_vm_role`, `overwrite_vm_type`, `overwrite_vm_tags`, `overwrite_vm_description`, `overwrite_vm_custom_fields` |
 | **Cluster** | `overwrite_cluster_tags`, `overwrite_cluster_description`, `overwrite_cluster_custom_fields` |
 | **Node Interface** | `overwrite_node_interface_tags`, `overwrite_node_interface_custom_fields` |
 | **Storage** | `overwrite_storage_tags` |
 | **VM Interface** | `overwrite_vm_interface_tags`, `overwrite_vm_interface_custom_fields` |
-| **IP Address** | `overwrite_ip_status`, `overwrite_ip_tags`, `overwrite_ip_custom_fields` |
+| **IP Address** | `overwrite_ip_status`, `overwrite_ip_tags`, `overwrite_ip_custom_fields`, `overwrite_ip_address_dns_name` |
 
 The canonical list of names lives in `netbox_proxbox/constants.py::OVERWRITE_FIELDS`
 and a copy is committed in `contracts/overwrite_flags.json`. The same list is
@@ -59,12 +60,13 @@ The detail page of each endpoint shows the **resolved** value plus an
 ## How the flags reach the backend
 
 1. The plugin builds the flat query string in
-   `sync_stages._build_base_query_params()`. With one Proxmox endpoint in
-   scope it uses the endpoint's resolved values; with zero or multiple
-   endpoints in scope it uses the global singleton (the FastAPI backend
-   accepts a single flat group, not a per-endpoint map).
+   `sync_stages._build_base_query_params()`. Each backend SSE request carries
+   one flat group of overwrite flags, so a sync covering multiple Proxmox
+   endpoints is split into one SSE request per endpoint. If no endpoint exists
+   or a helper is called without a concrete endpoint, the global singleton is
+   used.
 2. Every flag is serialized as `"true"` or `"false"`.
-3. The backend receives them as `Annotated[SyncOverwriteFlags, Query()]` and
+3. The backend resolves the flat query keys into `SyncOverwriteFlags` and
    passes the resolved object into the affected sync services.
 4. Each service derives a `patchable_fields` allowlist from the flags and
    forwards it to `rest_reconcile_async` / `rest_bulk_reconcile_async`.
@@ -93,7 +95,9 @@ reverting:
 ## Migration note
 
 The 16 new per-endpoint overwrite columns shipped in `netbox-proxbox 0.0.13`
-(migration `0035_overwrite_fields_expansion`). When upgrading from `0.0.12` or
+(migration `0035_overwrite_fields_expansion`). Later migrations added
+`overwrite_vm_type` and `overwrite_ip_address_dns_name` to both the global
+settings singleton and per-endpoint overrides. When upgrading from `0.0.12` or
 earlier, run:
 
 ```bash
@@ -108,4 +112,4 @@ upgrade is a no-op for behavior unless you start setting overrides.
 - `proxbox-api` documentation: *Synchronization → Overwrite Flags* describes
   the backend schema and `patchable_fields` propagation.
 - `netbox_proxbox/CLAUDE.md` *(internal)* — pre-commit checklist and source
-  contracts that lock the 21 flags into REST serializers, forms, and tests.
+  contracts that lock the 23 flags into REST serializers, forms, and tests.
