@@ -48,9 +48,7 @@ def _serialize_fastapi_endpoint(
         "use_websocket": "true" if endpoint.use_websocket else "false",
         "websocket_domain": endpoint.websocket_domain or "",
         "websocket_port": (
-            str(endpoint.websocket_port)
-            if endpoint.websocket_port is not None
-            else ""
+            str(endpoint.websocket_port) if endpoint.websocket_port is not None else ""
         ),
         "server_side_websocket": "true" if endpoint.server_side_websocket else "false",
         "tags": tags_value,

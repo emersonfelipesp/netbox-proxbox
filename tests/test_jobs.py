@@ -1231,10 +1231,7 @@ def test_proxbox_sync_job_loops_multiple_endpoint_scopes_with_distinct_overrides
             if str(endpoint_id) == "2"
             else set()
         )
-        return {
-            name: name not in disabled_fields
-            for name in overwrite_fields
-        }
+        return {name: name not in disabled_fields for name in overwrite_fields}
 
     monkeypatch.setattr(
         proxbox_sync_job_module.sync_stages,
@@ -1261,18 +1258,12 @@ def test_proxbox_sync_job_loops_multiple_endpoint_scopes_with_distinct_overrides
         "overwrite_device_type",
         "overwrite_device_tags",
     )
-    assert {
-        name: captured[0][name]
-        for name in device_identity_flags
-    } == {
+    assert {name: captured[0][name] for name in device_identity_flags} == {
         "overwrite_device_role": "true",
         "overwrite_device_type": "true",
         "overwrite_device_tags": "true",
     }
-    assert {
-        name: captured[1][name]
-        for name in device_identity_flags
-    } == {
+    assert {name: captured[1][name] for name in device_identity_flags} == {
         "overwrite_device_role": "false",
         "overwrite_device_type": "false",
         "overwrite_device_tags": "false",
