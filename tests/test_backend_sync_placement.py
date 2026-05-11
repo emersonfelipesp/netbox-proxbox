@@ -26,13 +26,20 @@ def _load_backend_sync_module(monkeypatch):
     monkeypatch.setitem(sys.modules, "netbox_proxbox.models", models_mod)
 
     utils_mod = types.ModuleType("netbox_proxbox.utils")
-    utils_mod.get_ip_address_host = lambda value: str(value).split("/")[0] if value else "127.0.0.1"
+    utils_mod.get_ip_address_host = lambda value: (
+        str(value).split("/")[0] if value else "127.0.0.1"
+    )
     monkeypatch.setitem(sys.modules, "netbox_proxbox.utils", utils_mod)
 
     error_utils_mod = types.ModuleType("netbox_proxbox.views.error_utils")
     error_utils_mod.extract_backend_error_detail = lambda exc: (str(exc), None)
-    error_utils_mod.parse_requests_response_json = lambda response, log_label=None: ({}, None)
-    monkeypatch.setitem(sys.modules, "netbox_proxbox.views.error_utils", error_utils_mod)
+    error_utils_mod.parse_requests_response_json = lambda response, log_label=None: (
+        {},
+        None,
+    )
+    monkeypatch.setitem(
+        sys.modules, "netbox_proxbox.views.error_utils", error_utils_mod
+    )
 
     spec = importlib.util.spec_from_file_location(
         "netbox_proxbox.views.backend_sync",
