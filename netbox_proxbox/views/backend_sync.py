@@ -29,7 +29,9 @@ def proxmox_backend_name(endpoint: ProxmoxEndpoint) -> str:
     return f"{base_name} (nb:{endpoint_id})" if endpoint_id is not None else base_name
 
 
-def _related_object_metadata(prefix: str, value: object | None) -> dict[str, object | None]:
+def _related_object_metadata(
+    prefix: str, value: object | None
+) -> dict[str, object | None]:
     """Return flat relation metadata for proxbox-api endpoint placement fields."""
     if value is None:
         return {

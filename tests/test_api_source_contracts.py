@@ -564,7 +564,10 @@ def test_resource_vm_api_views_gate_native_vm_type_field_for_netbox_45():
     assert "filter_queryset_by_proxmox_vm_type(" in contents
     assert "vm_type_select_related_fields(VirtualMachine)" in contents
     assert "Q(virtual_machine_type__slug=self.vm_type_slug)" not in contents
-    assert '.select_related("site", "cluster", "role", "tenant", "platform")' not in contents
+    assert (
+        '.select_related("site", "cluster", "role", "tenant", "platform")'
+        not in contents
+    )
 
 
 # ---------------------------------------------------------------------------
