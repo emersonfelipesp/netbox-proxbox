@@ -29,6 +29,21 @@ def proxmox_backend_name(endpoint: ProxmoxEndpoint) -> str:
     return f"{base_name} (nb:{endpoint_id})" if endpoint_id is not None else base_name
 
 
+def _related_object_metadata(prefix: str, value: object | None) -> dict[str, object | None]:
+    """Return flat relation metadata for proxbox-api endpoint placement fields."""
+    if value is None:
+        return {
+            f"{prefix}_id": None,
+            f"{prefix}_slug": None,
+            f"{prefix}_name": None,
+        }
+    return {
+        f"{prefix}_id": getattr(value, "pk", getattr(value, "id", None)),
+        f"{prefix}_slug": getattr(value, "slug", None),
+        f"{prefix}_name": getattr(value, "name", None) or str(value),
+    }
+
+
 def _proxmox_backend_payload(endpoint: ProxmoxEndpoint) -> dict[str, object]:
     """JSON body for POST/PUT ``/proxmox/endpoints`` from a ``ProxmoxEndpoint`` row."""
     return {
@@ -42,6 +57,8 @@ def _proxmox_backend_payload(endpoint: ProxmoxEndpoint) -> dict[str, object]:
         "verify_ssl": bool(getattr(endpoint, "verify_ssl", False)),
         "token_name": (getattr(endpoint, "token_name", "") or "").strip() or None,
         "token_value": (getattr(endpoint, "token_value", "") or "").strip() or None,
+        **_related_object_metadata("site", getattr(endpoint, "site", None)),
+        **_related_object_metadata("tenant", getattr(endpoint, "tenant", None)),
     }
 
 
