@@ -559,6 +559,14 @@ def test_proxmox_endpoint_export_requires_token_for_sensitive_payloads():
     assert 'allowed_formats = {"csv", "json", "yaml"}' in contents
 
 
+def test_resource_vm_api_views_gate_native_vm_type_field_for_netbox_45():
+    contents = VIEWS_PATH.read_text()
+    assert "filter_queryset_by_proxmox_vm_type(" in contents
+    assert "vm_type_select_related_fields(VirtualMachine)" in contents
+    assert "Q(virtual_machine_type__slug=self.vm_type_slug)" not in contents
+    assert '.select_related("site", "cluster", "role", "tenant", "platform")' not in contents
+
+
 # ---------------------------------------------------------------------------
 # Non-model API views (added alongside the model viewsets)
 # ---------------------------------------------------------------------------

@@ -671,7 +671,11 @@ class _ProxboxVMListAPIView(APIView):
     @extend_schema(responses={200: OpenApiTypes.OBJECT})
     def get(self, request: Request) -> Response:
         from virtualization.models import VirtualMachine
-        from netbox_proxbox.utils import get_proxbox_tagged_object_ids
+        from netbox_proxbox.utils import (
+            filter_queryset_by_proxmox_vm_type,
+            get_proxbox_tagged_object_ids,
+            vm_type_select_related_fields,
+        )
 
         tagged_ids = get_proxbox_tagged_object_ids(VirtualMachine, limit=100)
         if not tagged_ids:
@@ -680,15 +684,16 @@ class _ProxboxVMListAPIView(APIView):
         base_qs = (
             VirtualMachine.objects.restrict(request.user, "view")
             .filter(id__in=tagged_ids)
-            .select_related("site", "cluster", "role", "tenant", "platform")
+            .select_related(*vm_type_select_related_fields(VirtualMachine))
             .prefetch_related("interfaces__ip_addresses")
         )
-        from django.db.models import Q
 
         vms = list(
-            base_qs.filter(
-                Q(virtual_machine_type__slug=self.vm_type_slug)
-                | Q(custom_field_data__proxmox_vm_type=self.vm_type)
+            filter_queryset_by_proxmox_vm_type(
+                base_qs,
+                VirtualMachine,
+                vm_type=self.vm_type,
+                vm_type_slug=self.vm_type_slug,
             )
         )
         results = [_serialize_vm(vm, request) for vm in vms]
