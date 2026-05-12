@@ -59,6 +59,17 @@ class ProxboxPluginSettings(NetBoxModel):
             "addresses to be included."
         ),
     )
+    ensure_netbox_objects = models.BooleanField(
+        default=True,
+        verbose_name=_("Ensure NetBox supporting objects on startup"),
+        help_text=_(
+            "When enabled, proxbox-api runs an idempotent NetBox-side bootstrap pass "
+            "on each process startup that ensures the supporting objects the plugin "
+            "requires (cluster type, device roles, manufacturer, device type, VM type, "
+            "custom fields, discovery tags) exist. Disable to leave hand-curated "
+            "NetBox installs untouched."
+        ),
+    )
     primary_ip_preference = models.CharField(
         max_length=4,
         choices=PRIMARY_IP_PREFERENCE_CHOICES,

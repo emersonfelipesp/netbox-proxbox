@@ -38,6 +38,17 @@ class ProxboxPluginSettingsForm(forms.Form):
             "VM interface IP address selection. Disable only if you need link-local addresses included."
         ),
     )
+    ensure_netbox_objects = forms.BooleanField(
+        required=False,
+        label="Ensure NetBox supporting objects on startup",
+        help_text=(
+            "When enabled, proxbox-api runs an idempotent NetBox-side bootstrap pass "
+            "on each process startup that ensures the supporting objects the plugin "
+            "requires (cluster type, device roles, manufacturer, device type, VM type, "
+            "custom fields, discovery tags) exist. Disable to leave hand-curated "
+            "NetBox installs untouched."
+        ),
+    )
     primary_ip_preference = forms.ChoiceField(
         required=True,
         choices=(("ipv4", "Prefer IPv4"), ("ipv6", "Prefer IPv6")),
