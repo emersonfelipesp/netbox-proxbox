@@ -308,6 +308,30 @@ class ProxmoxEndpoint(EndpointBase):
             "Per-endpoint override for the global Proxbox setting. Leave blank to inherit."
         ),
     )
+    default_role_qemu = models.ForeignKey(
+        to="dcim.DeviceRole",
+        on_delete=models.SET_NULL,
+        related_name="+",
+        null=True,
+        blank=True,
+        limit_choices_to={"vm_role": True},
+        verbose_name=_("Default QEMU VM role"),
+        help_text=_(
+            "Per-endpoint override for the global default QEMU VM role. Leave blank to inherit."
+        ),
+    )
+    default_role_lxc = models.ForeignKey(
+        to="dcim.DeviceRole",
+        on_delete=models.SET_NULL,
+        related_name="+",
+        null=True,
+        blank=True,
+        limit_choices_to={"vm_role": True},
+        verbose_name=_("Default LXC container role"),
+        help_text=_(
+            "Per-endpoint override for the global default LXC container role. Leave blank to inherit."
+        ),
+    )
     enable_tenant_name_regex = models.BooleanField(
         null=True,
         blank=True,

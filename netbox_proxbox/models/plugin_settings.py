@@ -321,6 +321,34 @@ class ProxboxPluginSettings(NetBoxModel):
             "that already have a type assigned. The type is still set when the VM is first created."
         ),
     )
+    default_role_qemu = models.ForeignKey(
+        to="dcim.DeviceRole",
+        on_delete=models.SET_NULL,
+        related_name="+",
+        null=True,
+        blank=True,
+        limit_choices_to={"vm_role": True},
+        verbose_name=_("Default QEMU VM role"),
+        help_text=_(
+            "Default DeviceRole assigned to QEMU virtual machines synced from Proxmox. "
+            "Per-Endpoint and per-Node values override this; operator edits on a specific "
+            "VirtualMachine are preserved by the last-synced-role snapshot lock."
+        ),
+    )
+    default_role_lxc = models.ForeignKey(
+        to="dcim.DeviceRole",
+        on_delete=models.SET_NULL,
+        related_name="+",
+        null=True,
+        blank=True,
+        limit_choices_to={"vm_role": True},
+        verbose_name=_("Default LXC container role"),
+        help_text=_(
+            "Default DeviceRole assigned to LXC containers synced from Proxmox. "
+            "Per-Endpoint and per-Node values override this; operator edits on a specific "
+            "VirtualMachine are preserved by the last-synced-role snapshot lock."
+        ),
+    )
     overwrite_vm_tags = models.BooleanField(
         default=True,
         verbose_name=_("Merge VM tags"),

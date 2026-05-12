@@ -27,10 +27,7 @@ import pytest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 BRANCH_LIFECYCLE_PATH = (
-    REPO_ROOT
-    / "netbox_proxbox"
-    / "services"
-    / "branch_lifecycle.py"
+    REPO_ROOT / "netbox_proxbox" / "services" / "branch_lifecycle.py"
 )
 
 
@@ -167,9 +164,7 @@ def test_merge_branch_fail_policy_with_conflicts_does_not_merge(monkeypatch):
     mod, _ = _install_branching_stubs(monkeypatch, has_conflicts=True)
 
     branch = _FakeBranch(name="b-conflicted")
-    merged, message = mod.merge_branch(
-        branch=branch, user=None, on_conflict="fail"
-    )
+    merged, message = mod.merge_branch(branch=branch, user=None, on_conflict="fail")
 
     assert merged is False
     assert branch.merge_calls == [], "merge must not be invoked under 'fail' policy"
@@ -206,9 +201,7 @@ def test_merge_branch_returns_failure_when_merge_raises(monkeypatch):
     mod, _ = _install_branching_stubs(monkeypatch, has_conflicts=False)
 
     branch = _FakeBranch(name="b-boom", raise_on_merge=True)
-    merged, message = mod.merge_branch(
-        branch=branch, user=None, on_conflict="fail"
-    )
+    merged, message = mod.merge_branch(branch=branch, user=None, on_conflict="fail")
 
     assert merged is False
     assert "merge failed" in message

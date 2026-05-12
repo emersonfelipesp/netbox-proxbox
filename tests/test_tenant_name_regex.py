@@ -380,9 +380,7 @@ def parser_module(monkeypatch):
 
     class _ValidationError(Exception):
         def __init__(self, messages):
-            self.messages = (
-                messages if isinstance(messages, list) else [messages]
-            )
+            self.messages = messages if isinstance(messages, list) else [messages]
             super().__init__(messages)
 
     forms_mod.ValidationError = _ValidationError
@@ -414,6 +412,36 @@ def parser_module(monkeypatch):
     monkeypatch.setitem(sys.modules, "django", django_pkg)
     monkeypatch.setitem(sys.modules, "django.forms", forms_mod)
 
+    # Stub dcim and utilities so DeviceRole / DynamicModelChoiceField imports
+    # in forms/settings.py succeed.
+    dcim_pkg = types.ModuleType("dcim")
+    dcim_models = types.ModuleType("dcim.models")
+
+    class _DeviceRoleManager:
+        @staticmethod
+        def all():
+            return SimpleNamespace()
+
+    dcim_models.DeviceRole = SimpleNamespace(objects=_DeviceRoleManager)
+    dcim_pkg.models = dcim_models
+    monkeypatch.setitem(sys.modules, "dcim", dcim_pkg)
+    monkeypatch.setitem(sys.modules, "dcim.models", dcim_models)
+
+    utilities_pkg = types.ModuleType("utilities")
+    utilities_forms_pkg = types.ModuleType("utilities.forms")
+    utilities_forms_fields = types.ModuleType("utilities.forms.fields")
+
+    class _DynamicModelChoiceField:
+        def __init__(self, *a, **kw):
+            pass
+
+    utilities_forms_fields.DynamicModelChoiceField = _DynamicModelChoiceField
+    utilities_forms_pkg.fields = utilities_forms_fields
+    utilities_pkg.forms = utilities_forms_pkg
+    monkeypatch.setitem(sys.modules, "utilities", utilities_pkg)
+    monkeypatch.setitem(sys.modules, "utilities.forms", utilities_forms_pkg)
+    monkeypatch.setitem(sys.modules, "utilities.forms.fields", utilities_forms_fields)
+
     # Stub the relative imports that forms/settings.py performs.
     constants_mod = types.ModuleType("netbox_proxbox.constants")
     constants_mod.OVERWRITE_FIELDS = ()
@@ -443,9 +471,7 @@ def parser_module(monkeypatch):
 
     sys.modules.pop("netbox_proxbox.forms.settings", None)
     path = REPO_ROOT / "netbox_proxbox" / "forms" / "settings.py"
-    spec = importlib.util.spec_from_file_location(
-        "netbox_proxbox.forms.settings", path
-    )
+    spec = importlib.util.spec_from_file_location("netbox_proxbox.forms.settings", path)
     module = importlib.util.module_from_spec(spec)
     assert spec and spec.loader
     sys.modules["netbox_proxbox.forms.settings"] = module
@@ -515,6 +541,4 @@ def test_parser_happy_path_with_label(parser_module):
         '[{"pattern": "^acme-", "tenant_slug": "acme", "label": "Acme"}]',
         allow_none=False,
     )
-    assert result == [
-        {"pattern": "^acme-", "tenant_slug": "acme", "label": "Acme"}
-    ]
+    assert result == [{"pattern": "^acme-", "tenant_slug": "acme", "label": "Acme"}]

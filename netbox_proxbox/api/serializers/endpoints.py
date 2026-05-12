@@ -59,6 +59,8 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
             "timeout",
             "max_retries",
             "retry_backoff",
+            "default_role_qemu",
+            "default_role_lxc",
             *OVERWRITE_FIELDS,
             "site",
             "tenant",

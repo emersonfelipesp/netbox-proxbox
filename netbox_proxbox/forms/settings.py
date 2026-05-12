@@ -6,6 +6,9 @@ from pathlib import PurePosixPath
 
 from django import forms
 
+from dcim.models import DeviceRole
+from utilities.forms.fields import DynamicModelChoiceField
+
 from netbox_proxbox.constants import OVERWRITE_FIELDS
 from netbox_proxbox.models.plugin_settings import (
     BRANCH_ON_CONFLICT_CHOICES,
@@ -348,6 +351,26 @@ class ProxboxPluginSettingsForm(forms.Form):
         label="Proxmox retry back-off (seconds)",
         help_text="Default exponential back-off base delay in seconds between Proxmox retries. Individual endpoints can override this.",
     )
+    default_role_qemu = DynamicModelChoiceField(
+        queryset=DeviceRole.objects.all(),
+        required=False,
+        query_params={"vm_role": "true"},
+        label="Default QEMU VM role",
+        help_text=(
+            "Plugin-global default role applied to newly synced QEMU virtual machines. "
+            "Per-endpoint and per-node overrides take precedence."
+        ),
+    )
+    default_role_lxc = DynamicModelChoiceField(
+        queryset=DeviceRole.objects.all(),
+        required=False,
+        query_params={"vm_role": "true"},
+        label="Default LXC container role",
+        help_text=(
+            "Plugin-global default role applied to newly synced LXC containers. "
+            "Per-endpoint and per-node overrides take precedence."
+        ),
+    )
     enable_tenant_name_regex = forms.BooleanField(
         required=False,
         label="Enable tenant assignment by VM-name regex",
@@ -444,10 +467,13 @@ class ProxboxPluginSettingsForm(forms.Form):
 
     def clean_tenant_name_regex_rules(self) -> list[dict]:
         """Normalize tenant regex rules JSON; empty input means no rules."""
-        return _parse_tenant_regex_rules(
-            self.cleaned_data.get("tenant_name_regex_rules"),
-            allow_none=False,
-        ) or []
+        return (
+            _parse_tenant_regex_rules(
+                self.cleaned_data.get("tenant_name_regex_rules"),
+                allow_none=False,
+            )
+            or []
+        )
 
     def clean_backend_log_file_path(self) -> str:
         """Require an absolute log file path including a filename."""
