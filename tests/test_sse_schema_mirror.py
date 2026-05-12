@@ -121,6 +121,11 @@ _PAYLOAD_PAIRS = [
         "netbox_proxbox.schemas.backend_proxy",
         "SseErrorDetailPayload",
     ),
+    (
+        "DuplicateNameResolvedMessage",
+        "netbox_proxbox.schemas.backend_proxy",
+        "SseDuplicateNameResolvedPayload",
+    ),
 ]
 
 
