@@ -3,9 +3,16 @@
 Idempotent: existing DeviceRoles with the well-known slugs are reused; the
 ProxboxPluginSettings singleton's default_role_qemu / default_role_lxc fields
 are only populated when they are currently NULL.
+
+DeviceRole is MPTT-tracked (level/lft/rght/tree_id are NOT NULL). Historical
+models returned by ``apps.get_model`` do not carry the custom TreeManager that
+fills these on save, so the values are set explicitly here. The seeded rows
+are roots with no children: level=0, lft=1, rght=2, and a tree_id picked
+above the current MAX(tree_id) so each row owns its own tree.
 """
 
 from django.db import migrations
+from django.db.models import Max
 
 
 VM_ROLE_SEEDS = (
@@ -26,16 +33,24 @@ def seed_default_vm_roles(apps, schema_editor):
     DeviceRole = apps.get_model("dcim", "DeviceRole")
     ProxboxPluginSettings = apps.get_model("netbox_proxbox", "ProxboxPluginSettings")
 
+    next_tree_id = (DeviceRole.objects.aggregate(Max("tree_id"))["tree_id__max"] or 0) + 1
+
     roles_by_slug = {}
     for seed in VM_ROLE_SEEDS:
-        role, _created = DeviceRole.objects.get_or_create(
+        role, created = DeviceRole.objects.get_or_create(
             slug=seed["slug"],
             defaults={
                 "name": seed["name"],
                 "color": seed["color"],
                 "vm_role": True,
+                "level": 0,
+                "lft": 1,
+                "rght": 2,
+                "tree_id": next_tree_id,
             },
         )
+        if created:
+            next_tree_id += 1
         roles_by_slug[seed["slug"]] = role
 
     settings = ProxboxPluginSettings.objects.filter(singleton_key="default").first()
