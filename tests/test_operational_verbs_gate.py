@@ -47,13 +47,13 @@ except Exception as exc:  # pragma: no cover - depends on external test services
         f"NetBox test environment is not available: {exc}", allow_module_level=True
     )
 
-from django.contrib.auth.models import Permission
-from django.contrib.contenttypes.models import ContentType
-from django.test import TestCase
-from utilities.testing import create_test_user
+from django.contrib.auth.models import Permission  # noqa: E402
+from django.contrib.contenttypes.models import ContentType  # noqa: E402
+from django.test import TestCase  # noqa: E402
+from utilities.testing import create_test_user  # noqa: E402
 
-from netbox_proxbox.models import ProxmoxEndpoint
-from netbox_proxbox.views.proxbox_access import (
+from netbox_proxbox.models import ProxmoxEndpoint  # noqa: E402
+from netbox_proxbox.views.proxbox_access import (  # noqa: E402
     PROXMOX_ACTION_PERMISSION,
     permission_run_proxmox_action,
 )
