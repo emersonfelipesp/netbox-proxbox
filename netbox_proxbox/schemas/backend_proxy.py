@@ -27,6 +27,8 @@ class SseEventType(str, Enum):
     PHASE_SUMMARY = "phase_summary"
     ERROR_DETAIL = "error_detail"
     PROGRESS = "progress"
+    # Bootstrap status frame emitted as the first frame of each sync run
+    BOOTSTRAP_DONE = "bootstrap_done"
 
 
 # ---------------------------------------------------------------------------

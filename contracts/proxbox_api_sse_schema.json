@@ -24,7 +24,8 @@
       "item_progress",
       "phase_summary",
       "error_detail",
-      "progress"
+      "progress",
+      "bootstrap_done"
     ]
   },
   "payload_fields": {
