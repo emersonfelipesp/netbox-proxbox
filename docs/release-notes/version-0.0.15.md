@@ -2,12 +2,13 @@
 
 ## Summary
 
-Version `0.0.15` fixes three issues and adds one new feature in pair with backend `proxbox-api 0.0.11`:
+Version `0.0.15` fixes three issues and adds two new features in pair with backend `proxbox-api 0.0.11`:
 
 - [Issue #352](https://github.com/emersonfelipesp/netbox-proxbox/issues/352): the `FastAPIEndpoint` model could not express the combination "use HTTPS but skip certificate verification", which is the default state of the proxbox-api `*-nginx` image (TLS-only with a self-signed mkcert certificate).
 - [Issue #354](https://github.com/emersonfelipesp/netbox-proxbox/issues/354): IPAM `IPAddress` records created during virtualization sync had an empty `dns_name`, even though Proxmox knew the guest hostname. The plugin now exposes a new `overwrite_ip_address_dns_name` setting (global + per-endpoint) so operators can opt out of `dns_name` writes; the actual hostname resolution and write live in `proxbox-api 0.0.11`.
 - [Issue #391](https://github.com/emersonfelipesp/netbox-proxbox/issues/391): the Virtual Machines and LXC Containers plugin pages now auto-detect whether the installed NetBox has the 4.6 `VirtualMachineType` relation. NetBox 4.5.x stays on the legacy `proxmox_vm_type` custom-field path, while NetBox 4.6.x keeps native type support.
 - [Issue #243](https://github.com/emersonfelipesp/netbox-proxbox/issues/243): Proxmox cluster High-Availability state was not surfaced anywhere in NetBox. The plugin now ships a per-VM **HA tab** and a cluster-wide **HA Status** page, both backed by new read-only HA endpoints in `proxbox-api 0.0.11`.
+- [Issue #360](https://github.com/emersonfelipesp/netbox-proxbox/issues/360): operators had no headless way to trigger a full Proxmox→NetBox sync — every run required a human clicking **Full Update** in the plugin UI, which blocked cron, systemd timers, Kubernetes CronJobs, and CI smoke checks. The plugin now ships a `python manage.py proxbox_sync` Django management command that enqueues the same `ProxboxSyncJob` as the UI button.
 
 ## #352 — `Use HTTPS` toggle decoupled from `Verify SSL`
 
@@ -79,6 +80,34 @@ The plugin already renders `IPAddress.dns_name` in the IP-addresses table; the g
 - **`contracts/overwrite_flags.json`.** Updated mirror manifest (paired with the matching update in `proxbox-api/contracts/overwrite_flags.json`); the cross-repo drift detector test (`tests/test_overwrite_flags_contract.py`) covers it.
 - **Settings + endpoint forms, serializers, tables.** Surface the new flag wherever the sibling `overwrite_*` flags appear, so it can be toggled from the UI and exported in CSV/JSON/YAML.
 - **`sync_params._build_base_query_params`.** Forwards the resolved `overwrite_ip_address_dns_name` value to proxbox-api as a flat query-string key (the same shape every other overwrite flag uses).
+
+## #360 — Headless `proxbox_sync` Django management command
+
+Operators previously had no programmatic way to trigger a full Proxmox→NetBox sync — every run required a logged-in user clicking **Full Update** in the plugin UI. This blocked the entire operational-verbs roadmap (#14, #15, #16) for cron, systemd timers, Kubernetes CronJobs, and CI smoke checks.
+
+This release adds a `proxbox_sync` Django management command that is the exact headless equivalent of clicking **Full Update**: it enqueues the same `ProxboxSyncJob` (queue `default`, `sync_types=[SyncTypeChoices.ALL]`, all configured `ProxmoxEndpoint` rows) and writes a styled success / failure line.
+
+```bash
+# Fire-and-forget — enqueue and return immediately
+python manage.py proxbox_sync
+
+# Block until the job reaches a terminal state and mirror its exit code
+python manage.py proxbox_sync --wait --timeout 7200
+
+# Attribute the job to a specific user instead of the oldest active superuser
+python manage.py proxbox_sync --user backupbot --wait
+```
+
+### Changes
+
+- **`netbox_proxbox/management/commands/proxbox_sync.py` (new).** Thin wrapper around `ProxboxSyncJob.enqueue(...)` with five flags — `--user`, `--wait`, `--timeout`, `--poll-interval`, `--worker-grace` — and `CommandError`-driven non-zero exits for cron/systemd-friendly failure semantics.
+- **Pre-flight reachability.** Reuses `services.backend_auth.wait_for_backend_ready` (5-retry snappy CLI mode) and `services.backend_context.get_fastapi_request_context` so the command surfaces the same backend-unreachable / no-FastAPIEndpoint errors the UI does.
+- **`--wait` no-worker fast-fail.** If `--wait` is set and the job stays `pending` for more than `--worker-grace` seconds with zero RQ workers on the `default` queue, the command exits non-zero with an actionable "no RQ worker is consuming the `default` queue" message instead of hanging.
+- **User attribution.** Defaults to the oldest active superuser; `--user USERNAME` overrides. Missing user is a `CommandError`.
+- **Tests.** `tests/management/test_proxbox_sync.py` (10 scenarios) plus `tests/management/conftest.py` install lightweight `django.core.management.base` / `django.contrib.auth` stubs so the command can be exercised without bootstrapping NetBox.
+- **Docs.** New [`docs/operations/headless-sync.md`](../operations/headless-sync.md) page covering flag reference, exit codes, the RQ-worker requirement, a 3-line cron example, and a 6-line systemd-timer example.
+
+No DB migration. No model change. No new persisted state.
 
 ## Upgrade Notes
 

@@ -28,6 +28,7 @@ This directory contains the plugin's pytest test suite.
 - `test_stack_setup.py`, `test_stack_sync_polling.py`: integration-level stack setup and sync polling behavior tests.
 - `test_templatetags.py`: tests for custom Proxbox template tag helpers.
 - `e2e/`: stack-oriented tests that exercise the proxbox-api and NetBox integration flow end to end.
+- `management/`: tests for Django management commands. `conftest.py` installs `django.core.management.base` and `django.contrib.auth` stubs at conftest import time so command modules can be imported without bootstrapping Django. `test_proxbox_sync.py` covers the `proxbox_sync` command — enqueue happy path, `--user` override, missing-user / missing-FastAPI / unreachable-backend errors, and `--wait` polling (terminal success and terminal failure).
 - `netbox_test_configuration.py`: NetBox settings stub used during tests.
 
 ## Dependencies

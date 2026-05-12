@@ -105,6 +105,8 @@ nav:
       - Raw CLI Capture: 'generated/proxbox-cli-command-capture.md'
   - User Guide:
     - Cluster and Node Tracking: 'user-guide/cluster-nodes.md'
+  - Operations:
+    - Headless Sync: 'operations/headless-sync.md'
   - API Reference:
     - Overview: 'api/index.md'
     - Endpoints: 'api/endpoints.md'
