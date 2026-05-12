@@ -107,6 +107,7 @@ nav:
     - Cluster and Node Tracking: 'user-guide/cluster-nodes.md'
   - Operations:
     - Headless Sync: 'operations/headless-sync.md'
+    - Single-Exec Compose: 'operations/single-exec.md'
   - API Reference:
     - Overview: 'api/index.md'
     - Endpoints: 'api/endpoints.md'
