@@ -308,6 +308,24 @@ class ProxmoxEndpoint(EndpointBase):
             "Per-endpoint override for the global Proxbox setting. Leave blank to inherit."
         ),
     )
+    enable_tenant_name_regex = models.BooleanField(
+        null=True,
+        blank=True,
+        verbose_name=_("Enable tenant regex (override)"),
+        help_text=_(
+            "Per-endpoint override for the global tenant-regex toggle. Leave blank to inherit."
+        ),
+    )
+    tenant_name_regex_rules = models.JSONField(
+        null=True,
+        blank=True,
+        default=None,
+        verbose_name=_("Tenant regex rules (override)"),
+        help_text=_(
+            "Per-endpoint override for the global rule list. Leave null to inherit. "
+            "When set (even to an empty list), replaces the global list for this endpoint."
+        ),
+    )
     site = models.ForeignKey(
         to="dcim.Site",
         on_delete=models.SET_NULL,

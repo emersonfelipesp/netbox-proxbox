@@ -442,6 +442,26 @@ class ProxboxPluginSettings(NetBoxModel):
             "When disabled, sync never changes the dns_name field on existing IP addresses; dns_name is still populated when an IP is created."
         ),
     )
+    enable_tenant_name_regex = models.BooleanField(
+        default=False,
+        verbose_name=_("Enable tenant assignment by VM-name regex"),
+        help_text=_(
+            "When enabled, sync resolves a NetBox Tenant for VMs by matching the "
+            "VM name against the rules below. Disabled by default. Existing "
+            "tenant assignments are never overwritten."
+        ),
+    )
+    tenant_name_regex_rules = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name=_("Tenant name regex rules"),
+        help_text=_(
+            "Ordered list of {pattern, tenant_slug, [label]} dicts. First match "
+            "wins; specificity-first ordering is recommended (e.g. '^cust-acme-' "
+            "before '^cust-'). Patterns are compiled and tenant slugs are verified "
+            "at save time."
+        ),
+    )
 
     class Meta:
         verbose_name = _("Proxbox plugin settings")
