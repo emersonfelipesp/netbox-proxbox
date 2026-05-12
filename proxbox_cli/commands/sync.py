@@ -19,9 +19,7 @@ from proxbox_cli._locate_manage import (
 from proxbox_cli.config import load_config
 from proxbox_cli.support import console, emit_cli_error, stderr
 
-sync_app = typer.Typer(
-    no_args_is_help=True, help="Run Proxbox sync jobs from the CLI."
-)
+sync_app = typer.Typer(no_args_is_help=True, help="Run Proxbox sync jobs from the CLI.")
 
 JOB_PK_RE = re.compile(r"\(pk=(\d+)\)")
 COMPLETE_RE = re.compile(r"\bcompleted\b", re.IGNORECASE)

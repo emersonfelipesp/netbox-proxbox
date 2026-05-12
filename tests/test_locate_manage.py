@@ -38,7 +38,9 @@ def _make_django_only_install(root: Path) -> Path:
 def _isolate_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """Make every test start with no NETBOX_PATH and a guaranteed-missing default."""
     monkeypatch.delenv(NETBOX_PATH_ENV_VAR, raising=False)
-    monkeypatch.setattr(_locate_manage, "DEFAULT_NETBOX_PATH", Path("/nonexistent-default"))
+    monkeypatch.setattr(
+        _locate_manage, "DEFAULT_NETBOX_PATH", Path("/nonexistent-default")
+    )
 
 
 def test_override_file(tmp_path: Path) -> None:
@@ -89,9 +91,7 @@ def test_walk_up_hits_filesystem_root(
     assert NETBOX_PATH_ENV_VAR in str(exc.value)
 
 
-def test_env_var_as_directory(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_env_var_as_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     manage_py = _make_netbox_install(tmp_path)
     empty = tmp_path.parent / f"empty-{tmp_path.name}"
     empty.mkdir(exist_ok=True)
@@ -101,9 +101,7 @@ def test_env_var_as_directory(
     assert location.manage_py == manage_py
 
 
-def test_env_var_as_file(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_env_var_as_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     manage_py = _make_netbox_install(tmp_path)
     empty = tmp_path.parent / f"empty-file-{tmp_path.name}"
     empty.mkdir(exist_ok=True)
@@ -113,9 +111,7 @@ def test_env_var_as_file(
     assert location.manage_py == manage_py
 
 
-def test_env_var_nonexistent(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_env_var_nonexistent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     empty = tmp_path / "empty"
     empty.mkdir()
     monkeypatch.chdir(empty)
@@ -124,9 +120,7 @@ def test_env_var_nonexistent(
         locate_manage_py()
 
 
-def test_default_path_fallback(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_default_path_fallback(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     manage_py = _make_netbox_install(tmp_path)
     monkeypatch.setattr(_locate_manage, "DEFAULT_NETBOX_PATH", manage_py)
     empty = tmp_path.parent / f"empty-default-{tmp_path.name}"
@@ -136,9 +130,7 @@ def test_default_path_fallback(
     assert location.manage_py == manage_py
 
 
-def test_config_fallback(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_config_fallback(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     manage_py = _make_netbox_install(tmp_path)
     empty = tmp_path.parent / f"empty-cfg-{tmp_path.name}"
     empty.mkdir(exist_ok=True)
@@ -186,8 +178,7 @@ def test_netbox_heuristic_via_settings_import(
     netbox_dir = root / "netbox"
     netbox_dir.mkdir()
     (netbox_dir / "settings.py").write_text(
-        "from netbox.plugins import PluginConfig\n"
-        "INSTALLED_APPS = ['core', 'dcim']\n"
+        "from netbox.plugins import PluginConfig\nINSTALLED_APPS = ['core', 'dcim']\n"
     )
     # No configuration_example.py here — the import-substring branch must
     # carry this on its own.

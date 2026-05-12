@@ -242,7 +242,9 @@ def test_netbox_path_override(
 
     def capturing_locate(**kwargs: Any) -> ManageLocation:
         captured.update(kwargs)
-        return ManageLocation(manage_py=Path("/some/manage.py"), python=Path(sys.executable))
+        return ManageLocation(
+            manage_py=Path("/some/manage.py"), python=Path(sys.executable)
+        )
 
     monkeypatch.setattr(sync_module, "locate_manage_py", capturing_locate)
     monkeypatch.setattr(sync_module.subprocess, "Popen", _popen_factory())

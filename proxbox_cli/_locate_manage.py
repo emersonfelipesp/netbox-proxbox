@@ -15,8 +15,7 @@ NETBOX_PATH_ENV_VAR = "NETBOX_PATH"
 DEFAULT_NETBOX_PATH = Path("/opt/netbox/manage.py")
 
 NOT_FOUND_MESSAGE = (
-    "could not find manage.py — set $NETBOX_PATH or run from inside the "
-    "project tree"
+    "could not find manage.py — set $NETBOX_PATH or run from inside the project tree"
 )
 
 
