@@ -75,6 +75,7 @@ def _fake_settings_obj(encryption_key: str = "") -> SimpleNamespace:
         backend_log_file_path="/var/log/proxbox.log",
         debug_cache=False,
         expose_internal_errors=False,
+        parse_description_metadata=False,
         ssrf_protection_enabled=True,
         allow_private_ips=True,
         additional_allowed_ip_ranges="",

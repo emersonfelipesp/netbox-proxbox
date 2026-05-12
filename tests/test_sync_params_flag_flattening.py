@@ -200,3 +200,4 @@ def test_build_base_query_params_includes_other_runtime_settings(sync_stages_mod
     assert base_query["ignore_ipv6_link_local_addresses"] in {"true", "false"}
     assert base_query["fetch_max_concurrency"].isdigit()
     assert base_query["primary_ip_preference"] in {"ipv4", "ipv6"}
+    assert base_query["parse_description_metadata"] in {"true", "false"}

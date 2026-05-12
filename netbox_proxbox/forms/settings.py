@@ -191,6 +191,16 @@ class ProxboxPluginSettingsForm(forms.Form):
             "responses. Leave disabled in production."
         ),
     )
+    parse_description_metadata = forms.BooleanField(
+        required=False,
+        label="Parse description metadata",
+        help_text=(
+            "When enabled, proxbox-api reads each Proxmox object's description for a "
+            "fenced \"netbox-metadata\" JSON block and applies the parsed PK ids to the "
+            "matching NetBox fields. Per-field overwrite_* flags still gate keys they "
+            "cover. Disabled by default."
+        ),
+    )
     ssrf_protection_enabled = forms.BooleanField(
         required=False,
         label="Enable SSRF protection",

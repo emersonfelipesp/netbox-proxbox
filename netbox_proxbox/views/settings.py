@@ -56,6 +56,7 @@ class SettingsView(
             "backend_log_file_path": settings_obj.backend_log_file_path,
             "debug_cache": settings_obj.debug_cache,
             "expose_internal_errors": settings_obj.expose_internal_errors,
+            "parse_description_metadata": settings_obj.parse_description_metadata,
             "ssrf_protection_enabled": settings_obj.ssrf_protection_enabled,
             "allow_private_ips": settings_obj.allow_private_ips,
             "additional_allowed_ip_ranges": settings_obj.additional_allowed_ip_ranges,
@@ -155,6 +156,9 @@ class SettingsView(
             settings_obj.expose_internal_errors = form.cleaned_data.get(
                 "expose_internal_errors", False
             )
+            settings_obj.parse_description_metadata = form.cleaned_data.get(
+                "parse_description_metadata", False
+            )
             settings_obj.backend_log_file_path = form.cleaned_data[
                 "backend_log_file_path"
             ]
@@ -213,6 +217,7 @@ class SettingsView(
                     "backend_log_file_path",
                     "debug_cache",
                     "expose_internal_errors",
+                    "parse_description_metadata",
                     "ssrf_protection_enabled",
                     "allow_private_ips",
                     "additional_allowed_ip_ranges",
