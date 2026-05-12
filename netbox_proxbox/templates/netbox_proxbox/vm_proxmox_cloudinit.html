@@ -1,0 +1,58 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load i18n %}
+
+{% block content %}
+<div class="row">
+	<div class="col-12 col-xl-8">
+		<div class="card">
+			<h5 class="card-header">{% trans "Proxmox Cloud-init" %}</h5>
+			<div class="card-body">
+				{% if cloudinit %}
+					<table class="table table-hover attr-table">
+						<tr>
+							<th scope="row">{% trans "Cloud-init User" %}</th>
+							<td>{{ cloudinit.ciuser|placeholder }}</td>
+						</tr>
+						<tr>
+							<th scope="row">{% trans "ipconfig0" %}</th>
+							<td><code>{{ cloudinit.ipconfig0|placeholder }}</code></td>
+						</tr>
+						<tr>
+							<th scope="row">{% trans "SSH Keys Truncated" %}</th>
+							<td>
+								{% if cloudinit.sshkeys_truncated %}
+									<span class="badge text-bg-yellow">{% trans "Yes" %}</span>
+								{% else %}
+									<span class="badge text-bg-grey">{% trans "No" %}</span>
+								{% endif %}
+							</td>
+						</tr>
+						<tr>
+							<th scope="row">{% trans "Last Synced" %}</th>
+							<td>{{ cloudinit.last_synced|placeholder }}</td>
+						</tr>
+						<tr>
+							<th scope="row">{% trans "Detail Record" %}</th>
+							<td>{{ cloudinit|linkify:"Open" }}</td>
+						</tr>
+					</table>
+				{% else %}
+					<div class="alert alert-info" role="alert">
+						{% trans "No Proxmox cloud-init record has been synced for this VM." %}
+					</div>
+				{% endif %}
+			</div>
+		</div>
+
+		{% if cloudinit and cloudinit.sshkeys %}
+			<div class="card mt-3">
+				<h5 class="card-header">{% trans "SSH Keys" %}</h5>
+				<div class="card-body">
+					<pre class="mb-0"><code>{{ cloudinit.sshkeys }}</code></pre>
+				</div>
+			</div>
+		{% endif %}
+	</div>
+</div>
+{% endblock %}

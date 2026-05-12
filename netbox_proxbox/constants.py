@@ -22,6 +22,7 @@ OVERWRITE_FIELD_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "overwrite_vm_tags",
             "overwrite_vm_description",
             "overwrite_vm_custom_fields",
+            "overwrite_vm_cloudinit",
         ),
     ),
     (
