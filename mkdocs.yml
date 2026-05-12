@@ -97,6 +97,8 @@ nav:
     - Endpoint Data Exchange: 'developer/endpoint-sync.md'
     - Browser Frontend: 'developer/browser-frontend.md'
     - Extending the Plugin: 'developer/extending-the-plugin.md'
+    - Design:
+      - Operational Verbs: 'design/operational-verbs.md'
     - Tooling:
       - Release Publishing: 'developer/release-publishing.md'
       - CI and E2E Workflows: 'developer/ci-e2e-workflows.md'
