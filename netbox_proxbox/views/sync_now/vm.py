@@ -15,6 +15,7 @@ from virtualization.models import VirtualMachine
 
 from netbox_proxbox.models import ProxmoxCluster
 from netbox_proxbox.utils import resolve_vm_type
+from netbox_proxbox.services.branch_lifecycle import get_active_branch_schema_id
 from netbox_proxbox.services.individual_sync import sync_individual_with_dependencies
 from netbox_proxbox.services.tenant_assignment import maybe_assign_tenant_from_regex
 from netbox_proxbox.views.proxbox_access import permission_enqueue_proxbox_sync
@@ -81,6 +82,7 @@ class VirtualMachineSyncNowView(
                 "type": vm_type,
                 "vmid": vmid,
             },
+            netbox_branch_schema_id=get_active_branch_schema_id(),
         )
 
         if 200 <= status < 300:

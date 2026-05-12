@@ -25,6 +25,32 @@ def is_branching_available() -> bool:
     return True
 
 
+def get_active_branch_schema_id() -> str | None:
+    """Return the ``schema_id`` of the currently-active netbox-branching Branch.
+
+    Reads ``netbox_branching.contextvars.active_branch`` — the canonical
+    process-local indicator of "the user is browsing on a branch right
+    now". Returns ``None`` when branching is not installed, when no branch
+    is active in this context, or when the branch object lacks the expected
+    attributes. The detection is best-effort and never raises: the caller
+    (sync-now views, etc.) treats ``None`` as "stay on main".
+    """
+    try:
+        from netbox_branching.contextvars import active_branch  # noqa: PLC0415
+    except Exception:
+        return None
+    try:
+        branch = active_branch.get()
+    except Exception:
+        return None
+    if branch is None:
+        return None
+    schema_id = getattr(branch, "schema_id", None)
+    if not schema_id:
+        return None
+    return str(schema_id)
+
+
 def branching_enabled_settings() -> dict[str, str] | None:
     """Return branching config from ProxboxPluginSettings, or None when disabled."""
     if not is_branching_available():

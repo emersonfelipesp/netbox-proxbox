@@ -17,9 +17,10 @@ def _add_sync_now_stubs(monkeypatch, individual_sync_response=None):
     if individual_sync_response is None:
         individual_sync_response = ({"action": "synced"}, 200, [])
 
-    def fake_sync(endpoint, params):
+    def fake_sync(endpoint, params, **kwargs):
         captured["endpoint"] = endpoint
         captured["params"] = params
+        captured["kwargs"] = kwargs
         return individual_sync_response
 
     individual_sync_mod.sync_individual_with_dependencies = fake_sync
@@ -27,6 +28,16 @@ def _add_sync_now_stubs(monkeypatch, individual_sync_response=None):
         sys.modules,
         "netbox_proxbox.services.individual_sync",
         individual_sync_mod,
+    )
+
+    branch_lifecycle_mod = types.ModuleType(
+        "netbox_proxbox.services.branch_lifecycle"
+    )
+    branch_lifecycle_mod.get_active_branch_schema_id = lambda: None
+    monkeypatch.setitem(
+        sys.modules,
+        "netbox_proxbox.services.branch_lifecycle",
+        branch_lifecycle_mod,
     )
 
     sync_now_pkg = types.ModuleType("netbox_proxbox.views.sync_now")

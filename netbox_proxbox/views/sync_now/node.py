@@ -13,6 +13,7 @@ from utilities.views import (
 )
 
 from netbox_proxbox.models import ProxmoxNode
+from netbox_proxbox.services.branch_lifecycle import get_active_branch_schema_id
 from netbox_proxbox.services.individual_sync import sync_individual_with_dependencies
 from netbox_proxbox.views.proxbox_access import permission_enqueue_proxbox_sync
 from netbox_proxbox.views.sync_now import _handle_sync_response
@@ -52,6 +53,7 @@ class ProxmoxNodeSyncNowView(
         response, status, dependencies = sync_individual_with_dependencies(
             "sync/individual/node",
             {"cluster_name": cluster_name, "node_name": node_name},
+            netbox_branch_schema_id=get_active_branch_schema_id(),
         )
 
         return _handle_sync_response(
