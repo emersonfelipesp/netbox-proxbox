@@ -21,7 +21,11 @@ from netbox_proxbox.models import (
     VMSnapshot,
     VMTaskHistory,
 )
-from netbox_proxbox.views.proxbox_access import permission_enqueue_proxbox_sync
+from netbox_proxbox.views.operational import resolve_vm_endpoint_context
+from netbox_proxbox.views.proxbox_access import (
+    permission_enqueue_proxbox_sync,
+    permission_run_proxmox_action,
+)
 
 __all__ = (
     "ProxboxJobTemplateExtension",
@@ -157,15 +161,42 @@ class ProxboxVirtualMachineTemplateExtension(PluginTemplateExtension):
         if not isinstance(obj, VirtualMachine):
             return ""
         user = self.context["request"].user
-        if not user.has_perm(permission_enqueue_proxbox_sync()):
-            return ""
-        return self.render(
-            "netbox_proxbox/inc/vm_sync_now_button.html",
-            {
-                "vm": obj,
-                "action_url": f"{obj.get_absolute_url()}proxbox-sync-now/",
-            },
-        )
+        parts: list[str] = []
+        if user.has_perm(permission_enqueue_proxbox_sync()):
+            parts.append(
+                self.render(
+                    "netbox_proxbox/inc/vm_sync_now_button.html",
+                    {
+                        "vm": obj,
+                        "action_url": f"{obj.get_absolute_url()}proxbox-sync-now/",
+                    },
+                )
+            )
+        if user.has_perm(permission_run_proxmox_action()):
+            resolved = resolve_vm_endpoint_context(obj)
+            if resolved is not None:
+                endpoint_id, _vmid, _vm_type = resolved
+                from netbox_proxbox.models import ProxmoxEndpoint
+                endpoint = ProxmoxEndpoint.objects.filter(pk=endpoint_id).first()
+                allow_writes = bool(
+                    endpoint and getattr(endpoint, "allow_writes", False)
+                )
+                base = obj.get_absolute_url()
+                parts.append(
+                    self.render(
+                        "netbox_proxbox/inc/vm_operational_buttons.html",
+                        {
+                            "vm": obj,
+                            "allow_writes": allow_writes,
+                            "action_start_url": f"{base}proxbox-operational-start/",
+                            "action_stop_url": f"{base}proxbox-operational-stop/",
+                            "action_snapshot_url": f"{base}proxbox-operational-snapshot/",
+                            "action_migrate_url": f"{base}proxbox-operational-migrate/",
+                        },
+                    )
+                )
+        # Joined HTML comes from this plugin's own templates rendered above.
+        return mark_safe("".join(parts)) if parts else ""  # nosec
 
     def console_button(self) -> str:
         """Handle console button."""

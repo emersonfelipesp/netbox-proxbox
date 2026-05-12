@@ -1,0 +1,46 @@
+{% load i18n %}
+{% if allow_writes %}
+<form method="post" action="{{ action_start_url }}" class="d-inline">
+  {% csrf_token %}
+  <button type="submit" class="btn btn-success btn-sm" title="{% trans 'Start this VM on Proxmox' %}">
+    <i class="mdi mdi-play" aria-hidden="true"></i>
+    {% trans "Start" %}
+  </button>
+</form>
+<form method="post" action="{{ action_stop_url }}" class="d-inline">
+  {% csrf_token %}
+  <button type="submit" class="btn btn-danger btn-sm" title="{% trans 'Stop this VM on Proxmox' %}">
+    <i class="mdi mdi-stop" aria-hidden="true"></i>
+    {% trans "Stop" %}
+  </button>
+</form>
+<form method="post" action="{{ action_snapshot_url }}" class="d-inline">
+  {% csrf_token %}
+  <button type="submit" class="btn btn-info btn-sm" title="{% trans 'Take a snapshot of this VM' %}">
+    <i class="mdi mdi-camera" aria-hidden="true"></i>
+    {% trans "Snapshot" %}
+  </button>
+</form>
+<a href="{{ action_migrate_url }}" class="btn btn-warning btn-sm" title="{% trans 'Migrate this VM to another node' %}">
+  <i class="mdi mdi-truck-fast" aria-hidden="true"></i>
+  {% trans "Migrate" %}
+</a>
+{% else %}
+{% trans "This endpoint does not allow writes. Toggle allow_writes on the ProxmoxEndpoint to enable." as disabled_tooltip %}
+<button type="button" class="btn btn-success btn-sm" disabled title="{{ disabled_tooltip }}">
+  <i class="mdi mdi-play" aria-hidden="true"></i>
+  {% trans "Start" %}
+</button>
+<button type="button" class="btn btn-danger btn-sm" disabled title="{{ disabled_tooltip }}">
+  <i class="mdi mdi-stop" aria-hidden="true"></i>
+  {% trans "Stop" %}
+</button>
+<button type="button" class="btn btn-info btn-sm" disabled title="{{ disabled_tooltip }}">
+  <i class="mdi mdi-camera" aria-hidden="true"></i>
+  {% trans "Snapshot" %}
+</button>
+<button type="button" class="btn btn-warning btn-sm" disabled title="{{ disabled_tooltip }}">
+  <i class="mdi mdi-truck-fast" aria-hidden="true"></i>
+  {% trans "Migrate" %}
+</button>
+{% endif %}

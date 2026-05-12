@@ -132,6 +132,12 @@ from .vm_snapshot import (
     VMSnapshotTabView,
     VMSnapshotView,
 )
+from .operational import (
+    OperationalMigrateView,
+    OperationalSnapshotView,
+    OperationalStartView,
+    OperationalStopView,
+)
 from .vm_sync_now import VirtualMachineSyncNowView
 from .vm_task_history import (
     VMTaskHistoryBulkDeleteView,

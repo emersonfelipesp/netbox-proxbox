@@ -658,6 +658,7 @@ def load_plugin_module(
     proxbox_access.permission_change_proxbox_plugin_settings = lambda: (
         "stub.change_proxboxpluginsettings"
     )
+    proxbox_access.permission_run_proxmox_action = lambda: "core.run_proxmox_action"
     proxbox_access.user_may_access_proxbox_dashboard = lambda user: True
     monkeypatch.setitem(
         sys.modules, "netbox_proxbox.views.proxbox_access", proxbox_access
