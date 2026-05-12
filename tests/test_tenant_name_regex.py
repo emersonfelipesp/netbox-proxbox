@@ -421,6 +421,11 @@ def parser_module(monkeypatch):
 
     plugin_settings_mod = types.ModuleType("netbox_proxbox.models.plugin_settings")
     plugin_settings_mod.DEFAULT_BACKEND_LOG_FILE_PATH = "/var/log/proxbox.log"
+    plugin_settings_mod.BRANCH_ON_CONFLICT_CHOICES = [
+        ("fail", "fail"),
+        ("acknowledge", "acknowledge"),
+    ]
+    plugin_settings_mod.NETBOX_TO_PROXMOX_TYPED_PHRASE = "allow-edit-and-add-actions"
     monkeypatch.setitem(
         sys.modules,
         "netbox_proxbox.models.plugin_settings",
