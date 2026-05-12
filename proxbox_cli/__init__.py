@@ -23,6 +23,7 @@ from proxbox_cli.commands.extras import extras_app
 from proxbox_cli.commands.netbox import netbox_app
 from proxbox_cli.commands.proxmox import proxmox_app
 from proxbox_cli.commands.proxbox import proxbox_app
+from proxbox_cli.commands.sync import sync_app
 from proxbox_cli.commands.virtualization import virtualization_app
 from proxbox_cli.config import Config, load_config, normalize_base_url, save_config
 from proxbox_cli.runtime import _cache_config, _ensure_config, _get_client
@@ -46,6 +47,7 @@ app.add_typer(proxbox_app, name="proxbox")
 app.add_typer(dcim_app, name="dcim")
 app.add_typer(virtualization_app, name="virtualization")
 app.add_typer(extras_app, name="extras")
+app.add_typer(sync_app, name="sync")
 
 docs_app = typer.Typer(no_args_is_help=True, help="Documentation generation commands.")
 app.add_typer(docs_app, name="docs")
