@@ -379,6 +379,14 @@ class ProxboxPluginSettings(NetBoxModel):
             "When disabled, sync never changes custom fields on existing NetBox virtual machines."
         ),
     )
+    overwrite_vm_cloudinit = models.BooleanField(
+        default=True,
+        verbose_name=_("Overwrite VM cloud-init"),
+        help_text=_(
+            "When disabled, sync never updates the ProxmoxVMCloudInit row "
+            "(ciuser, sshkeys, ipconfig0) on existing NetBox virtual machines."
+        ),
+    )
     overwrite_cluster_tags = models.BooleanField(
         default=True,
         verbose_name=_("Overwrite cluster tags"),

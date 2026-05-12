@@ -9,5 +9,6 @@ from .schedule_sync import *
 from .settings import *
 from .storage import *
 from .vm_backup import *
+from .vm_cloudinit import *
 from .vm_snapshot import *
 from .vm_task_history import *

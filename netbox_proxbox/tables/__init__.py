@@ -20,6 +20,7 @@ from netbox_proxbox.tables.cluster import ProxmoxClusterTable, ProxmoxNodeTable
 from netbox_proxbox.tables.replication import ReplicationTable
 from netbox_proxbox.tables.storage import ProxmoxStorageTable
 from netbox_proxbox.tables.vm_backup import VMBackupTable
+from netbox_proxbox.tables.vm_cloudinit import ProxmoxVMCloudInitTable
 from netbox_proxbox.tables.vm_snapshot import VMSnapshotTable
 from netbox_proxbox.tables.vm_task_history import VMTaskHistoryTable
 

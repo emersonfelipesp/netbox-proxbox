@@ -1,0 +1,63 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load i18n %}
+
+{% block content %}
+<div class="row">
+	<div class="col-md-6">
+		<div class="card">
+			<h5 class="card-header">{% trans "Proxmox VM Cloud-init" %}</h5>
+			<table class="table table-hover attr-table">
+				<tr>
+					<th scope="row">{% trans "Virtual Machine" %}</th>
+					<td>{{ object.virtual_machine|linkify }}</td>
+				</tr>
+				<tr>
+					<th scope="row">{% trans "Cloud-init User" %}</th>
+					<td>{{ object.ciuser|placeholder }}</td>
+				</tr>
+				<tr>
+					<th scope="row">{% trans "ipconfig0" %}</th>
+					<td><code>{{ object.ipconfig0|placeholder }}</code></td>
+				</tr>
+				<tr>
+					<th scope="row">{% trans "SSH Keys Truncated" %}</th>
+					<td>
+						{% if object.sshkeys_truncated %}
+							<span class="badge text-bg-yellow">{% trans "Yes" %}</span>
+						{% else %}
+							<span class="badge text-bg-grey">{% trans "No" %}</span>
+						{% endif %}
+					</td>
+				</tr>
+				<tr>
+					<th scope="row">{% trans "Last Synced" %}</th>
+					<td>{{ object.last_synced|placeholder }}</td>
+				</tr>
+			</table>
+		</div>
+		<div class="card mt-3">
+			<h5 class="card-header">{% trans "SSH Keys" %}</h5>
+			<div class="card-body">
+				{% if object.sshkeys %}
+					<pre class="mb-0"><code>{{ object.sshkeys }}</code></pre>
+				{% else %}
+					<span class="text-muted">{% trans "No SSH keys configured." %}</span>
+				{% endif %}
+			</div>
+		</div>
+	</div>
+	<div class="col-md-6">
+		{% include 'inc/panels/tags.html' %}
+		{% include 'inc/panels/custom_fields.html' %}
+		<div class="card">
+			<h5 class="card-header">{% trans "Source of Truth" %}</h5>
+			<div class="card-body">
+				<p class="mb-0">
+					{% trans "This record is a read-only reflection of Proxmox cloud-init configuration. Edits made in NetBox will not propagate back to Proxmox; modify the values on the Proxmox side and re-sync." %}
+				</p>
+			</div>
+		</div>
+	</div>
+</div>
+{% endblock %}
