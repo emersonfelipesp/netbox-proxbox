@@ -2,13 +2,14 @@
 
 ## Summary
 
-Version `0.0.15` fixes three issues and adds two new features in pair with backend `proxbox-api 0.0.11`:
+Version `0.0.15` fixes four issues and adds two new features in pair with backend `proxbox-api 0.0.11`:
 
 - [Issue #352](https://github.com/emersonfelipesp/netbox-proxbox/issues/352): the `FastAPIEndpoint` model could not express the combination "use HTTPS but skip certificate verification", which is the default state of the proxbox-api `*-nginx` image (TLS-only with a self-signed mkcert certificate).
 - [Issue #354](https://github.com/emersonfelipesp/netbox-proxbox/issues/354): IPAM `IPAddress` records created during virtualization sync had an empty `dns_name`, even though Proxmox knew the guest hostname. The plugin now exposes a new `overwrite_ip_address_dns_name` setting (global + per-endpoint) so operators can opt out of `dns_name` writes; the actual hostname resolution and write live in `proxbox-api 0.0.11`.
 - [Issue #391](https://github.com/emersonfelipesp/netbox-proxbox/issues/391): the Virtual Machines and LXC Containers plugin pages now auto-detect whether the installed NetBox has the 4.6 `VirtualMachineType` relation. NetBox 4.5.x stays on the legacy `proxmox_vm_type` custom-field path, while NetBox 4.6.x keeps native type support.
 - [Issue #243](https://github.com/emersonfelipesp/netbox-proxbox/issues/243): Proxmox cluster High-Availability state was not surfaced anywhere in NetBox. The plugin now ships a per-VM **HA tab** and a cluster-wide **HA Status** page, both backed by new read-only HA endpoints in `proxbox-api 0.0.11`.
 - [Issue #360](https://github.com/emersonfelipesp/netbox-proxbox/issues/360): operators had no headless way to trigger a full Proxmox→NetBox sync — every run required a human clicking **Full Update** in the plugin UI, which blocked cron, systemd timers, Kubernetes CronJobs, and CI smoke checks. The plugin now ships a `python manage.py proxbox_sync` Django management command that enqueues the same `ProxboxSyncJob` as the UI button.
+- [Issue #359](https://github.com/emersonfelipesp/netbox-proxbox/issues/359): VM-interface MACs synced through the plugin never appeared in NetBox. The legacy inline `mac_address` field on `VMInterface` is `read_only=True` at NetBox 4.5/4.6 (computed from `primary_mac_address`), so every MAC `proxbox-api` posted was silently dropped. The plugin itself ships no code change; the fix lives in `proxbox-api 0.0.11`, which now writes MACs via `dcim.MACAddress` and links them through `VMInterface.primary_mac_address`. Existing v0.0.15 installs pick the fix up by upgrading the backend.
 
 ## #352 — `Use HTTPS` toggle decoupled from `Verify SSL`
 
