@@ -30,9 +30,7 @@ def _add_sync_now_stubs(monkeypatch, individual_sync_response=None):
         individual_sync_mod,
     )
 
-    branch_lifecycle_mod = types.ModuleType(
-        "netbox_proxbox.services.branch_lifecycle"
-    )
+    branch_lifecycle_mod = types.ModuleType("netbox_proxbox.services.branch_lifecycle")
     branch_lifecycle_mod.get_active_branch_schema_id = lambda: None
     monkeypatch.setitem(
         sys.modules,
