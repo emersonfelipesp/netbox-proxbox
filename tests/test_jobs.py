@@ -1009,7 +1009,11 @@ def test_proxbox_sync_job_run_batch_selected_virtual_machines(
     )
 
     assert batch_calls == [
-        {"batch_object_type": "virtual-machine", "batch_object_ids": ["1", "2"]}
+        {
+            "batch_object_type": "virtual-machine",
+            "batch_object_ids": ["1", "2"],
+            "netbox_branch_schema_id": None,
+        }
     ]
     assert job.job.data["proxbox_sync"]["response"]["batch"]["total"] == 2
 

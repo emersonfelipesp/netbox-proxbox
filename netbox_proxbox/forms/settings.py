@@ -1,5 +1,7 @@
 """Forms for plugin-level ProxBox settings."""
 
+import json
+import re
 from pathlib import PurePosixPath
 
 from django import forms
@@ -8,7 +10,85 @@ from dcim.models import DeviceRole
 from utilities.forms.fields import DynamicModelChoiceField
 
 from netbox_proxbox.constants import OVERWRITE_FIELDS
-from netbox_proxbox.models.plugin_settings import DEFAULT_BACKEND_LOG_FILE_PATH
+from netbox_proxbox.models.plugin_settings import (
+    BRANCH_ON_CONFLICT_CHOICES,
+    DEFAULT_BACKEND_LOG_FILE_PATH,
+    NETBOX_TO_PROXMOX_TYPED_PHRASE,
+)
+
+
+def _parse_tenant_regex_rules(
+    raw: object,
+    *,
+    allow_none: bool,
+) -> list[dict] | None:
+    """Validate and normalize tenant regex rules.
+
+    When ``allow_none`` is True, empty/whitespace input returns ``None``
+    (the per-endpoint "inherit" sentinel). Otherwise empty input returns
+    ``[]`` (the global "no rules configured" state).
+
+    Each rule must be an object with non-empty string ``pattern`` and
+    ``tenant_slug``. ``pattern`` must compile as a regex. ``tenant_slug``
+    must reference an existing ``tenancy.Tenant``. ``label`` is optional.
+    Duplicate patterns are rejected.
+    """
+    if isinstance(raw, list):
+        rules = raw
+    else:
+        text = (raw or "").strip() if isinstance(raw, str) else ""
+        if not text:
+            return None if allow_none else []
+        try:
+            rules = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise forms.ValidationError(f"Invalid JSON: {exc}") from exc
+
+    if not isinstance(rules, list):
+        raise forms.ValidationError("Expected a JSON list of rule objects.")
+    if allow_none and rules == []:
+        # Explicit "override with empty" stays as [], distinct from None.
+        return []
+
+    from tenancy.models import Tenant
+
+    errors: list[str] = []
+    cleaned: list[dict] = []
+    seen: set[str] = set()
+    for i, rule in enumerate(rules, start=1):
+        if not isinstance(rule, dict):
+            errors.append(f"Rule #{i}: must be an object.")
+            continue
+        pattern = rule.get("pattern")
+        slug = rule.get("tenant_slug")
+        if not isinstance(pattern, str) or not pattern:
+            errors.append(f"Rule #{i}: 'pattern' must be a non-empty string.")
+            continue
+        if not isinstance(slug, str) or not slug:
+            errors.append(f"Rule #{i}: 'tenant_slug' must be a non-empty string.")
+            continue
+        try:
+            re.compile(pattern)
+        except re.error as exc:
+            errors.append(f"Rule #{i}: invalid regex {pattern!r} — {exc}.")
+            continue
+        rule_ok = True
+        if not Tenant.objects.filter(slug=slug).exists():
+            errors.append(f"Rule #{i}: tenant slug '{slug}' does not exist.")
+            rule_ok = False
+        if pattern in seen:
+            errors.append(f"Rule #{i}: duplicate pattern '{pattern}'.")
+            rule_ok = False
+        seen.add(pattern)
+        if rule_ok:
+            entry: dict = {"pattern": pattern, "tenant_slug": slug}
+            label = rule.get("label")
+            if isinstance(label, str) and label:
+                entry["label"] = label
+            cleaned.append(entry)
+    if errors:
+        raise forms.ValidationError(errors)
+    return cleaned
 
 
 class ProxboxPluginSettingsForm(forms.Form):
@@ -291,6 +371,83 @@ class ProxboxPluginSettingsForm(forms.Form):
             "Per-endpoint and per-node overrides take precedence."
         ),
     )
+    enable_tenant_name_regex = forms.BooleanField(
+        required=False,
+        label="Enable tenant assignment by VM-name regex",
+        help_text=(
+            "When enabled, sync resolves a NetBox Tenant for VMs by matching the VM "
+            "name against the rules below. Disabled by default. Existing tenant "
+            "assignments are never overwritten."
+        ),
+    )
+    tenant_name_regex_rules = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 6, "cols": 60}),
+        label="Tenant name regex rules (JSON)",
+        help_text=(
+            "JSON list of {pattern, tenant_slug, [label]} objects. First match wins; "
+            "order more specific patterns first. Patterns are compiled and tenant "
+            "slugs are verified on save."
+        ),
+    )
+    branching_enabled = forms.BooleanField(
+        required=False,
+        label="Branching-enabled sync (Proxmox → NetBox)",
+        help_text=(
+            "When enabled, every Proxbox sync job creates a fresh netbox-branching "
+            "branch, runs the sync on that branch, and merges it back into main on "
+            "success. Requires netbox_branching to be installed and listed last in "
+            "PLUGINS."
+        ),
+    )
+    branch_name_prefix = forms.CharField(
+        required=True,
+        max_length=64,
+        initial="proxbox-sync",
+        label="Branch name prefix",
+        help_text=(
+            "Prefix used when auto-creating a NetBox branch per sync job "
+            "(e.g. proxbox-sync-<job_id>-<timestamp>)."
+        ),
+    )
+    branch_on_conflict = forms.ChoiceField(
+        required=True,
+        choices=BRANCH_ON_CONFLICT_CHOICES,
+        initial="fail",
+        label="Branch merge conflict policy",
+        help_text=(
+            "Policy when the auto-created sync branch reports merge conflicts. "
+            "'fail' leaves the branch open and marks the job failed. 'acknowledge' "
+            "retries the merge with acknowledge_conflicts=True."
+        ),
+    )
+    netbox_to_proxmox_enabled = forms.BooleanField(
+        required=False,
+        label="Enable NetBox → Proxmox intent direction",
+        help_text=(
+            "Master flag for intent-direction writes. Off by default. Enabling this "
+            "widens the trust boundary — see the warning in the docs."
+        ),
+    )
+    netbox_to_proxmox_typed_confirmation = forms.CharField(
+        required=False,
+        max_length=64,
+        label="Typed confirmation phrase",
+        help_text=(
+            "Operators enabling NetBox → Proxmox writes must type the exact phrase "
+            f"'{NETBOX_TO_PROXMOX_TYPED_PHRASE}' here. Cleared automatically when the "
+            "master flag is turned off."
+        ),
+    )
+    apply_destroy_confirmed = forms.BooleanField(
+        required=False,
+        label="Allow apply-destroy authorization workflow",
+        help_text=(
+            "Per-branch destroy master switch. Destroys still flow through a separate "
+            "DeletionRequest approved by a user holding "
+            "netbox_proxbox.authorize_deletion_request."
+        ),
+    )
 
     def __init__(self, *args: object, **kwargs: object) -> None:
         super().__init__(*args, **kwargs)
@@ -308,6 +465,13 @@ class ProxboxPluginSettingsForm(forms.Form):
                 ),
             )
 
+    def clean_tenant_name_regex_rules(self) -> list[dict]:
+        """Normalize tenant regex rules JSON; empty input means no rules."""
+        return _parse_tenant_regex_rules(
+            self.cleaned_data.get("tenant_name_regex_rules"),
+            allow_none=False,
+        ) or []
+
     def clean_backend_log_file_path(self) -> str:
         """Require an absolute log file path including a filename."""
         path = (self.cleaned_data.get("backend_log_file_path") or "").strip()
@@ -322,3 +486,23 @@ class ProxboxPluginSettingsForm(forms.Form):
                 "Backend log file path must include a filename, not only a directory."
             )
         return path
+
+    def clean(self) -> dict:
+        """Cross-field validation for branching and intent-direction fields."""
+        super().clean()
+        enabled = self.cleaned_data.get("netbox_to_proxmox_enabled")
+        phrase = (
+            self.cleaned_data.get("netbox_to_proxmox_typed_confirmation") or ""
+        ).strip()
+        if enabled:
+            if phrase != NETBOX_TO_PROXMOX_TYPED_PHRASE:
+                self.add_error(
+                    "netbox_to_proxmox_typed_confirmation",
+                    forms.ValidationError(
+                        "To enable NetBox → Proxmox writes you must type the exact "
+                        f"phrase '{NETBOX_TO_PROXMOX_TYPED_PHRASE}'."
+                    ),
+                )
+        else:
+            self.cleaned_data["netbox_to_proxmox_typed_confirmation"] = ""
+        return self.cleaned_data

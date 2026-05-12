@@ -27,6 +27,7 @@ class SseEventType(str, Enum):
     PHASE_SUMMARY = "phase_summary"
     ERROR_DETAIL = "error_detail"
     PROGRESS = "progress"
+    DUPLICATE_NAME_RESOLVED = "duplicate_name_resolved"
 
 
 # ---------------------------------------------------------------------------
@@ -125,6 +126,24 @@ class SseErrorDetailPayload(ProxboxLenientModel):
     detail: str | None = None
     suggestion: str | None = None
     traceback: str | None = None
+
+
+class SseDuplicateNameResolvedPayload(ProxboxLenientModel):
+    """Payload of a ``duplicate_name_resolved`` event.
+
+    Mirrors proxbox_api DuplicateNameResolvedMessage. Emitted once per VM
+    whose name collided with another VM in the same NetBox cluster (suffix
+    applied) or whose NetBox record was manually renamed by an operator
+    (``operator_renamed=True``, no rename performed).
+    """
+
+    event: str = SseEventType.DUPLICATE_NAME_RESOLVED
+    cluster: str = ""
+    original_name: str = ""
+    resolved_name: str = ""
+    vmid: int = 0
+    suffix_index: int = 1
+    operator_renamed: bool = False
 
 
 class FastAPIUrlDict(ProxboxBaseModel):

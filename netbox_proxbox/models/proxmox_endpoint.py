@@ -86,6 +86,16 @@ class ProxmoxEndpoint(EndpointBase):
         verbose_name=_("Verify SSL"),
         help_text=_("Verify the TLS certificate presented by the Proxmox endpoint."),
     )
+    allow_writes = models.BooleanField(
+        default=False,
+        verbose_name=_("Allow Proxmox-side writes"),
+        help_text=_(
+            "When enabled, operational verbs (start, stop, snapshot, migrate) "
+            "may be dispatched against this endpoint. Default off. Enabling "
+            "this widens the trust boundary; restrict the new "
+            "core.run_proxmox_action permission to a small operator group."
+        ),
+    )
     timeout = models.PositiveIntegerField(
         null=True,
         blank=True,
@@ -320,6 +330,24 @@ class ProxmoxEndpoint(EndpointBase):
         verbose_name=_("Default LXC container role"),
         help_text=_(
             "Per-endpoint override for the global default LXC container role. Leave blank to inherit."
+        ),
+    )
+    enable_tenant_name_regex = models.BooleanField(
+        null=True,
+        blank=True,
+        verbose_name=_("Enable tenant regex (override)"),
+        help_text=_(
+            "Per-endpoint override for the global tenant-regex toggle. Leave blank to inherit."
+        ),
+    )
+    tenant_name_regex_rules = models.JSONField(
+        null=True,
+        blank=True,
+        default=None,
+        verbose_name=_("Tenant regex rules (override)"),
+        help_text=_(
+            "Per-endpoint override for the global rule list. Leave null to inherit. "
+            "When set (even to an empty list), replaces the global list for this endpoint."
         ),
     )
     site = models.ForeignKey(

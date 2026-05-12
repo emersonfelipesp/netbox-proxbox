@@ -155,6 +155,47 @@ def effective_overwrites_for_endpoint(
     }
 
 
+def effective_tenant_regex_for_endpoint(
+    proxmox_endpoint_id: int | str | None,
+) -> tuple[bool, list[dict]]:
+    """Resolve (enabled, rules) for tenant-regex assignment on a given endpoint.
+
+    The endpoint can override both the toggle and the rule list. When an
+    endpoint's rule list is non-null it **replaces** the global list. Any
+    failure to load returns the global values, mirroring
+    ``effective_overwrites_for_endpoint``.
+    """
+    try:
+        from netbox_proxbox.models import ProxboxPluginSettings
+    except (ImportError, RuntimeError):
+        return False, []
+    try:
+        settings_obj = ProxboxPluginSettings.get_solo()
+    except Exception:
+        return False, []
+    enabled = bool(getattr(settings_obj, "enable_tenant_name_regex", False))
+    rules_value = getattr(settings_obj, "tenant_name_regex_rules", None) or []
+    rules: list[dict] = list(rules_value) if isinstance(rules_value, list) else []
+
+    if proxmox_endpoint_id in (None, "", 0, "0"):
+        return enabled, rules
+    try:
+        from netbox_proxbox.models import ProxmoxEndpoint
+
+        endpoint = ProxmoxEndpoint.objects.filter(pk=int(proxmox_endpoint_id)).first()
+    except (ImportError, RuntimeError, ValueError, TypeError):
+        return enabled, rules
+    if endpoint is None:
+        return enabled, rules
+    ep_enabled = getattr(endpoint, "enable_tenant_name_regex", None)
+    if ep_enabled is not None:
+        enabled = bool(ep_enabled)
+    ep_rules = getattr(endpoint, "tenant_name_regex_rules", None)
+    if ep_rules is not None:
+        rules = list(ep_rules) if isinstance(ep_rules, list) else []
+    return enabled, rules
+
+
 def _serialize_sync_params(
     *,
     sync_types: list[str],

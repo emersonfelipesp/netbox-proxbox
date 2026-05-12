@@ -137,3 +137,5 @@ Two models perform an **upsert** on POST — if a matching record already exists
 | `/api/plugins/proxbox/replications/{id}/` | GET PUT PATCH DELETE | [Replication](operations.md#replication) |
 | `/api/plugins/proxbox/settings/` | GET | [Plugin Settings](settings.md) |
 | `/api/plugins/proxbox/settings/{id}/` | GET PATCH | [Plugin Settings](settings.md) |
+| `/api/plugins/proxbox/ha/summary/` | GET | [Cluster HA](ha.md) |
+| `/api/plugins/proxbox/ha/vm/{vmid}/` | GET | [Cluster HA](ha.md) |

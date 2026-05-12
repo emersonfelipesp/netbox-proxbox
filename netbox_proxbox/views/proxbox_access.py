@@ -20,9 +20,12 @@ __all__ = (
     "permission_change_fastapi_endpoint",
     "permission_change_proxbox_plugin_settings",
     "permission_enqueue_proxbox_sync",
+    "permission_run_proxmox_action",
     "permission_view_fastapi_endpoint",
     "user_may_access_proxbox_dashboard",
 )
+
+PROXMOX_ACTION_PERMISSION = "core.run_proxmox_action"
 
 
 class RequireProxboxDashboardAccessMixin(AccessMixin):
@@ -52,6 +55,16 @@ def permission_change_proxbox_plugin_settings() -> str:
 def permission_enqueue_proxbox_sync() -> str:
     """Required to enqueue Proxbox background sync jobs (including UI sync buttons)."""
     return get_permission_for_model(Job, "add")
+
+
+def permission_run_proxmox_action() -> str:
+    """Required to dispatch operational verbs (start/stop/snapshot/migrate) via proxbox-api.
+
+    Single permission gates all four verbs. Pair with ``ProxmoxEndpoint.allow_writes``
+    on the target endpoint — both must be true for the verb to dispatch. See
+    ``docs/design/operational-verbs.md`` for the full contract.
+    """
+    return PROXMOX_ACTION_PERMISSION
 
 
 def permission_view_fastapi_endpoint() -> str:

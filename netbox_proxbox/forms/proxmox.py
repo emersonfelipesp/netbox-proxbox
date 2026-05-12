@@ -22,6 +22,7 @@ from django.utils.translation import gettext as _
 from ..constants import OVERWRITE_FIELDS
 from ..models import ProxmoxEndpoint
 from ..choices import ProxmoxModeChoices
+from .settings import _parse_tenant_regex_rules
 
 from .import_utils import validate_endpoint_import_headers
 
@@ -160,6 +161,8 @@ class ProxmoxEndpointSettingsForm(NetBoxModelForm):
             "retry_backoff",
             "default_role_qemu",
             "default_role_lxc",
+            "enable_tenant_name_regex",
+            "tenant_name_regex_rules",
             *OVERWRITE_FIELDS,
         )
 
@@ -177,6 +180,38 @@ class ProxmoxEndpointSettingsForm(NetBoxModelForm):
                     "Leave blank to inherit the global Proxbox plugin setting."
                 ),
             )
+        self.fields["enable_tenant_name_regex"] = forms.NullBooleanField(
+            required=False,
+            widget=forms.NullBooleanSelect,
+            label=_("Enable tenant regex (override)"),
+            help_text=_(
+                "Per-endpoint override for the global tenant-regex toggle. "
+                "Leave blank to inherit."
+            ),
+        )
+        # Render the JSON list as a Textarea; empty input => inherit, "[]" => override.
+        import json as _json
+
+        instance = kwargs.get("instance") or getattr(self, "instance", None)
+        existing = getattr(instance, "tenant_name_regex_rules", None) if instance else None
+        initial = "" if existing is None else _json.dumps(existing, indent=2)
+        self.fields["tenant_name_regex_rules"] = forms.CharField(
+            required=False,
+            widget=forms.Textarea(attrs={"rows": 6, "cols": 60}),
+            initial=initial,
+            label=_("Tenant regex rules (override, JSON)"),
+            help_text=_(
+                "JSON list. Leave blank to inherit the global list. Use '[]' to "
+                "explicitly disable all global rules for this endpoint."
+            ),
+        )
+
+    def clean_tenant_name_regex_rules(self) -> list[dict] | None:
+        """Empty → None (inherit); '[]' → [] (explicit override)."""
+        return _parse_tenant_regex_rules(
+            self.cleaned_data.get("tenant_name_regex_rules"),
+            allow_none=True,
+        )
 
 
 class ProxmoxEndpointFilterForm(NetBoxModelFilterSetForm):

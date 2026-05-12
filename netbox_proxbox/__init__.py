@@ -2,6 +2,8 @@
 
 from importlib import util as importlib_util
 import logging
+import os
+import sys
 import threading
 
 # Netbox plugin related import
@@ -9,6 +11,32 @@ from netbox.plugins import PluginConfig
 
 
 logger = logging.getLogger(__name__)
+
+
+_SERVER_MANAGEMENT_COMMANDS = frozenset(
+    {
+        "runserver",
+        "runserver_plus",
+        "rqworker",
+    }
+)
+
+
+def _is_server_process() -> bool:
+    """Return True only when Django is being launched as a long-running server.
+
+    The startup push is only meaningful while NetBox is actually serving HTTP
+    (gunicorn / uvicorn / ``runserver``) or running an RQ worker. For
+    one-shot management commands such as ``createsuperuser``, ``migrate``,
+    ``shell``, ``test``, etc., it must stay silent so its log output does
+    not bleed into interactive prompts.
+    """
+    argv0 = os.path.basename(sys.argv[0]) if sys.argv else ""
+    is_manage_entrypoint = argv0 in {"manage.py", "django-admin", "django-admin.py"}
+    if not is_manage_entrypoint:
+        return True
+    subcommand = sys.argv[1] if len(sys.argv) > 1 else ""
+    return subcommand in _SERVER_MANAGEMENT_COMMANDS
 
 
 def _deferred_startup_push() -> None:
@@ -142,12 +170,20 @@ class ProxboxConfig(PluginConfig):
         # Push any existing NetBox endpoint data to the proxbox-api backend shortly
         # after startup.  This ensures the backend always has the endpoint record even
         # after a fresh start or database wipe, without blocking Django initialization.
-        thread = threading.Thread(
-            target=_deferred_startup_push,
-            daemon=True,
-            name="proxbox-startup-endpoint-push",
-        )
-        thread.start()
+        # Only run for long-lived server processes — one-shot management commands
+        # like ``createsuperuser`` must not have these warnings leak into stdout.
+        if _is_server_process():
+            thread = threading.Thread(
+                target=_deferred_startup_push,
+                daemon=True,
+                name="proxbox-startup-endpoint-push",
+            )
+            thread.start()
+        else:
+            logger.debug(
+                "Skipping proxbox startup push: not a server process (argv=%r)",
+                sys.argv,
+            )
 
 
 config = ProxboxConfig
