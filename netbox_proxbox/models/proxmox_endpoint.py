@@ -86,6 +86,16 @@ class ProxmoxEndpoint(EndpointBase):
         verbose_name=_("Verify SSL"),
         help_text=_("Verify the TLS certificate presented by the Proxmox endpoint."),
     )
+    allow_writes = models.BooleanField(
+        default=False,
+        verbose_name=_("Allow Proxmox-side writes"),
+        help_text=_(
+            "When enabled, operational verbs (start, stop, snapshot, migrate) "
+            "may be dispatched against this endpoint. Default off. Enabling "
+            "this widens the trust boundary; restrict the new "
+            "core.run_proxmox_action permission to a small operator group."
+        ),
+    )
     timeout = models.PositiveIntegerField(
         null=True,
         blank=True,
