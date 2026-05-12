@@ -7,8 +7,15 @@ from pathlib import Path
 
 import pytest
 
-from proxbox_cli import _locate_manage
-from proxbox_cli._locate_manage import (
+# proxbox_cli/__init__.py imports click and typer at module import time, so the
+# test environment must have the CLI extras installed before any submodule of
+# proxbox_cli can be imported — even one (like _locate_manage) that itself
+# depends only on stdlib.
+for module_name in ("click", "typer", "rich"):
+    pytest.importorskip(module_name)
+
+from proxbox_cli import _locate_manage  # noqa: E402 — guarded by importorskip above
+from proxbox_cli._locate_manage import (  # noqa: E402 — guarded by importorskip above
     ManageLocation,
     ManagePyNotFoundError,
     NETBOX_PATH_ENV_VAR,
