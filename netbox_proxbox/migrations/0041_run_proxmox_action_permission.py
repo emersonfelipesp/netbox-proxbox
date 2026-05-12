@@ -12,6 +12,16 @@ type — not coupled to ``Job`` background semantics or ``ObjectChange`` audit
 semantics). ``ContentTypePermissionRequiredMixin`` performs a literal
 ``user.has_perm("core.run_proxmox_action")`` lookup and does not care which
 content type the row is attached to.
+
+Note on apparent ambiguity with the design doc. ``operational-verbs.md`` §3
+describes the permission as "content-type-scoped on
+``virtualization.virtualmachine``". That sentence describes the **view
+binding** — i.e. which NetBox object the verb buttons attach to in the UI —
+not where the underlying ``auth_permission`` row is anchored. Django's
+``<app_label>.<codename>`` string is derived from the **row's** content type,
+so to make the literal ``core.run_proxmox_action`` resolvable we anchor the
+row in ``core``; the verb buttons still scope onto ``virtualization.virtualmachine``
+at the view layer (sub-PR G). The two facts coexist without contradiction.
 """
 
 from django.db import migrations
