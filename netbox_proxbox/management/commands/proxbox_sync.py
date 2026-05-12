@@ -100,11 +100,15 @@ class Command(BaseCommand):
             timeout = PROXBOX_SYNC_JOB_TIMEOUT
         poll_interval_raw = options.get("poll_interval")
         poll_interval = (
-            DEFAULT_POLL_INTERVAL if poll_interval_raw is None else float(poll_interval_raw)
+            DEFAULT_POLL_INTERVAL
+            if poll_interval_raw is None
+            else float(poll_interval_raw)
         )
         worker_grace_raw = options.get("worker_grace")
         worker_grace = (
-            DEFAULT_WORKER_GRACE if worker_grace_raw is None else float(worker_grace_raw)
+            DEFAULT_WORKER_GRACE
+            if worker_grace_raw is None
+            else float(worker_grace_raw)
         )
 
         user = self._resolve_user(username)
@@ -220,9 +224,7 @@ class Command(BaseCommand):
             if status in TERMINAL_JOB_STATUSES:
                 if status in SUCCESS_JOB_STATUSES:
                     self.stdout.write(
-                        self.style.SUCCESS(
-                            f"Proxbox sync job (pk={job_pk}) completed."
-                        )
+                        self.style.SUCCESS(f"Proxbox sync job (pk={job_pk}) completed.")
                     )
                     return
                 raise CommandError(

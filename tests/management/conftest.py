@@ -18,9 +18,7 @@ def _install_django_management_stubs() -> None:
         return
 
     django_module = sys.modules.setdefault("django", types.ModuleType("django"))
-    django_core = sys.modules.setdefault(
-        "django.core", types.ModuleType("django.core")
-    )
+    django_core = sys.modules.setdefault("django.core", types.ModuleType("django.core"))
     django_core_management = sys.modules.setdefault(
         "django.core.management", types.ModuleType("django.core.management")
     )
@@ -61,7 +59,9 @@ def _install_django_management_stubs() -> None:
     )
 
     def _placeholder_get_user_model():  # pragma: no cover - overridden per test
-        raise RuntimeError("django.contrib.auth.get_user_model not stubbed for this test")
+        raise RuntimeError(
+            "django.contrib.auth.get_user_model not stubbed for this test"
+        )
 
     if not hasattr(django_auth, "get_user_model"):
         django_auth.get_user_model = _placeholder_get_user_model

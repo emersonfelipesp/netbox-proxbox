@@ -166,13 +166,7 @@ def proxbox_sync_command(monkeypatch):
 
     # Load the command module fresh
     root = Path(__file__).resolve().parents[2]
-    path = (
-        root
-        / "netbox_proxbox"
-        / "management"
-        / "commands"
-        / "proxbox_sync.py"
-    )
+    path = root / "netbox_proxbox" / "management" / "commands" / "proxbox_sync.py"
     sys.modules.pop("netbox_proxbox.management.commands.proxbox_sync", None)
     spec = importlib.util.spec_from_file_location(
         "netbox_proxbox.management.commands.proxbox_sync", path
@@ -281,7 +275,11 @@ def test_no_active_superuser_raises_command_error(proxbox_sync_command):
 
 def test_wait_happy_path_returns_on_completion(proxbox_sync_command):
     """--wait blocks until completion; success exits cleanly."""
-    proxbox_sync_command.job_objects.status_sequence = ["pending", "running", "completed"]
+    proxbox_sync_command.job_objects.status_sequence = [
+        "pending",
+        "running",
+        "completed",
+    ]
     proxbox_sync_command.job_objects.reset()
     _run(proxbox_sync_command.module, wait=True, timeout=5, poll_interval=0.0)
     assert len(proxbox_sync_command.enqueue_calls) == 1
