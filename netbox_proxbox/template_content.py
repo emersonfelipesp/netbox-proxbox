@@ -177,6 +177,7 @@ class ProxboxVirtualMachineTemplateExtension(PluginTemplateExtension):
             if resolved is not None:
                 endpoint_id, _vmid, _vm_type = resolved
                 from netbox_proxbox.models import ProxmoxEndpoint
+
                 endpoint = ProxmoxEndpoint.objects.filter(pk=endpoint_id).first()
                 allow_writes = bool(
                     endpoint and getattr(endpoint, "allow_writes", False)
