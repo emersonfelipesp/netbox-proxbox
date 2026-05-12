@@ -55,7 +55,7 @@ def seed_default_vm_roles(apps, schema_editor):
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("netbox_proxbox", "0040_default_role_fk_fields"),
+        ("netbox_proxbox", "0044_default_role_fk_fields"),
         ("dcim", "0227_alter_interface_speed_bigint"),
     ]
 

@@ -52,7 +52,7 @@ def unregister_last_synced_role_cf(apps, schema_editor):
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("netbox_proxbox", "0041_seed_default_vm_roles"),
+        ("netbox_proxbox", "0045_seed_default_vm_roles"),
         ("extras", "0100_customfield_ui_attrs"),
         ("virtualization", "0001_squashed_0022"),
         ("contenttypes", "0002_remove_content_type_name"),

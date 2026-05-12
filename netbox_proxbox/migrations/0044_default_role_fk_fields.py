@@ -4,7 +4,7 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("netbox_proxbox", "0039_pluginsettings_overwrite_ip_address_dns_name"),
+        ("netbox_proxbox", "0043_pluginsettings_branching_fields"),
         ("dcim", "0227_alter_interface_speed_bigint"),
     ]
 
