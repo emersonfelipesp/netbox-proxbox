@@ -7,6 +7,12 @@ across sync runs. The field is hidden in the NetBox UI.
 
 Idempotent: uses get_or_create on the name and adds the VirtualMachine
 content type to object_types if missing.
+
+ContentType rows are created by Django's ``post_migrate`` signal after the
+full migration plan runs, so during a fresh-database migration this RunPython
+may execute before the row exists. ``get_or_create`` lets the data migration
+materialise the row defensively rather than aborting — same pattern as #408
+applied to migration 0041.
 """
 
 from django.db import migrations
@@ -19,10 +25,10 @@ def register_last_synced_role_cf(apps, schema_editor):
     CustomField = apps.get_model("extras", "CustomField")
     ContentType = apps.get_model("contenttypes", "ContentType")
 
-    try:
-        vm_ct = ContentType.objects.get(app_label="virtualization", model="virtualmachine")
-    except ContentType.DoesNotExist:
-        return
+    vm_ct, _ = ContentType.objects.get_or_create(
+        app_label="virtualization",
+        model="virtualmachine",
+    )
 
     cf, _created = CustomField.objects.get_or_create(
         name=CUSTOM_FIELD_NAME,
