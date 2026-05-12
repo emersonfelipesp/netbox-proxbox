@@ -1,0 +1,520 @@
+"""Tests for the optional, multi-pattern, per-endpoint tenant regex resolver.
+
+The feature is disabled by default. These tests pin:
+
+- The global/endpoint inherit-vs-override semantics for both the toggle and
+  the rule list (the endpoint list **replaces** the global list when set).
+- The first-match-wins rule with operator-set tenant assignments never
+  overwritten.
+- The form-level JSON validator: bad regex, missing slug, duplicate pattern,
+  non-list JSON.
+
+Tests use isolated module stubs (no live NetBox/Django imports) — same shape
+as ``test_models_overwrites.py``.
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import sys
+import types
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+# ---------------------------------------------------------------------------
+# sync_params.effective_tenant_regex_for_endpoint
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def sync_params_module(monkeypatch):
+    """Load sync_params.py with stubbed model + dependency imports."""
+    state: dict[str, object] = {
+        "global_enabled": False,
+        "global_rules": [],
+        "endpoints_by_pk": {},
+    }
+
+    class _ProxboxPluginSettings:
+        @classmethod
+        def get_solo(cls):
+            return SimpleNamespace(
+                enable_tenant_name_regex=state["global_enabled"],
+                tenant_name_regex_rules=state["global_rules"],
+            )
+
+    class _Manager:
+        def filter(self, **kwargs):
+            self._pk = kwargs.get("pk")
+            return self
+
+        def first(self):
+            return state["endpoints_by_pk"].get(self._pk)
+
+    class _ProxmoxEndpoint:
+        objects = _Manager()
+
+    pkg = types.ModuleType("netbox_proxbox")
+    pkg.__path__ = [str(REPO_ROOT / "netbox_proxbox")]
+    monkeypatch.setitem(sys.modules, "netbox_proxbox", pkg)
+
+    constants_mod = types.ModuleType("netbox_proxbox.constants")
+    constants_mod.OVERWRITE_FIELDS = ()
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.constants", constants_mod)
+
+    choices_mod = types.ModuleType("netbox_proxbox.choices")
+    choices_mod.SyncTypeChoices = SimpleNamespace(
+        ALL="all", VIRTUAL_MACHINES="virtual-machines"
+    )
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.choices", choices_mod)
+
+    sync_types_mod = types.ModuleType("netbox_proxbox.sync_types")
+    import re
+
+    sync_types_mod._TARGETED_VM_JOB_NAME_RE = re.compile(r"^Sync VM (\d+)")
+    sync_types_mod._TARGETED_VM_SYNC_TYPES = ("virtual-machines",)
+    sync_types_mod.normalize_sync_types = lambda x: list(x or [])
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.sync_types", sync_types_mod)
+
+    models_mod = types.ModuleType("netbox_proxbox.models")
+    models_mod.ProxboxPluginSettings = _ProxboxPluginSettings
+    models_mod.ProxmoxEndpoint = _ProxmoxEndpoint
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.models", models_mod)
+
+    sys.modules.pop("netbox_proxbox.sync_params", None)
+    path = REPO_ROOT / "netbox_proxbox" / "sync_params.py"
+    spec = importlib.util.spec_from_file_location("netbox_proxbox.sync_params", path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec and spec.loader
+    sys.modules["netbox_proxbox.sync_params"] = module
+    spec.loader.exec_module(module)
+    module._stubs = state  # type: ignore[attr-defined]
+    return module
+
+
+def _endpoint(*, enable=None, rules=None):
+    return SimpleNamespace(
+        enable_tenant_name_regex=enable,
+        tenant_name_regex_rules=rules,
+    )
+
+
+def test_disabled_by_default(sync_params_module):
+    enabled, rules = sync_params_module.effective_tenant_regex_for_endpoint(None)
+    assert enabled is False
+    assert rules == []
+
+
+def test_global_enabled_endpoint_inherits(sync_params_module):
+    sync_params_module._stubs["global_enabled"] = True
+    sync_params_module._stubs["global_rules"] = [
+        {"pattern": "^acme-", "tenant_slug": "acme"}
+    ]
+    sync_params_module._stubs["endpoints_by_pk"] = {3: _endpoint()}
+
+    enabled, rules = sync_params_module.effective_tenant_regex_for_endpoint(3)
+
+    assert enabled is True
+    assert rules == [{"pattern": "^acme-", "tenant_slug": "acme"}]
+
+
+def test_endpoint_disable_overrides_global_enable(sync_params_module):
+    sync_params_module._stubs["global_enabled"] = True
+    sync_params_module._stubs["global_rules"] = [{"pattern": "^x-", "tenant_slug": "x"}]
+    sync_params_module._stubs["endpoints_by_pk"] = {3: _endpoint(enable=False)}
+
+    enabled, rules = sync_params_module.effective_tenant_regex_for_endpoint(3)
+
+    assert enabled is False
+    # rules list is still inherited but the toggle is what gates resolution.
+    assert rules == [{"pattern": "^x-", "tenant_slug": "x"}]
+
+
+def test_endpoint_rules_replace_global_list(sync_params_module):
+    sync_params_module._stubs["global_enabled"] = True
+    sync_params_module._stubs["global_rules"] = [
+        {"pattern": "^global-", "tenant_slug": "global-tenant"},
+    ]
+    sync_params_module._stubs["endpoints_by_pk"] = {
+        9: _endpoint(rules=[{"pattern": "^ep-", "tenant_slug": "ep-tenant"}])
+    }
+
+    enabled, rules = sync_params_module.effective_tenant_regex_for_endpoint(9)
+
+    assert enabled is True
+    assert rules == [{"pattern": "^ep-", "tenant_slug": "ep-tenant"}]
+
+
+def test_endpoint_empty_list_explicitly_replaces(sync_params_module):
+    sync_params_module._stubs["global_enabled"] = True
+    sync_params_module._stubs["global_rules"] = [
+        {"pattern": "^global-", "tenant_slug": "global-tenant"},
+    ]
+    sync_params_module._stubs["endpoints_by_pk"] = {9: _endpoint(rules=[])}
+
+    enabled, rules = sync_params_module.effective_tenant_regex_for_endpoint(9)
+
+    assert enabled is True
+    assert rules == []
+
+
+def test_endpoint_missing_returns_global(sync_params_module):
+    sync_params_module._stubs["global_enabled"] = True
+    sync_params_module._stubs["global_rules"] = [{"pattern": "^g-", "tenant_slug": "g"}]
+    sync_params_module._stubs["endpoints_by_pk"] = {}
+
+    enabled, rules = sync_params_module.effective_tenant_regex_for_endpoint(42)
+
+    assert enabled is True
+    assert rules == [{"pattern": "^g-", "tenant_slug": "g"}]
+
+
+# ---------------------------------------------------------------------------
+# services.tenant_assignment.maybe_assign_tenant_from_regex
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def tenant_assignment_module(monkeypatch, sync_params_module):
+    """Load tenant_assignment.py with a stubbed tenancy.Tenant model."""
+    tenants: dict[str, object] = {}
+
+    class _Tenant:
+        def __init__(self, slug):
+            self.slug = slug
+            self.pk = id(self)
+
+    class _TenantManager:
+        @staticmethod
+        def filter(**kwargs):
+            slug = kwargs.get("slug")
+            return SimpleNamespace(
+                first=lambda: tenants.get(slug),
+                exists=lambda: slug in tenants,
+            )
+
+    tenancy_models = types.ModuleType("tenancy.models")
+    tenancy_models.Tenant = SimpleNamespace(objects=_TenantManager)
+    tenancy_pkg = types.ModuleType("tenancy")
+    tenancy_pkg.models = tenancy_models
+    monkeypatch.setitem(sys.modules, "tenancy", tenancy_pkg)
+    monkeypatch.setitem(sys.modules, "tenancy.models", tenancy_models)
+
+    # Provide ProxmoxCluster used by _endpoint_id_for_vm.
+    models_mod = sys.modules["netbox_proxbox.models"]
+
+    class _ClusterManager:
+        @staticmethod
+        def filter(**kwargs):
+            return SimpleNamespace(first=lambda: None)
+
+    models_mod.ProxmoxCluster = SimpleNamespace(objects=_ClusterManager)
+
+    sys.modules.pop("netbox_proxbox.services", None)
+    sys.modules.pop("netbox_proxbox.services.tenant_assignment", None)
+    services_pkg = types.ModuleType("netbox_proxbox.services")
+    services_pkg.__path__ = [str(REPO_ROOT / "netbox_proxbox" / "services")]
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_pkg)
+
+    path = REPO_ROOT / "netbox_proxbox" / "services" / "tenant_assignment.py"
+    spec = importlib.util.spec_from_file_location(
+        "netbox_proxbox.services.tenant_assignment", path
+    )
+    module = importlib.util.module_from_spec(spec)
+    assert spec and spec.loader
+    sys.modules["netbox_proxbox.services.tenant_assignment"] = module
+    spec.loader.exec_module(module)
+    module._tenants = tenants  # type: ignore[attr-defined]
+    return module
+
+
+class _FakeVM:
+    def __init__(self, name, tenant_id=None):
+        self.name = name
+        self.tenant = None
+        self.tenant_id = tenant_id
+        self.saved_with: list[list[str]] = []
+
+    def save(self, update_fields=None):
+        self.saved_with.append(list(update_fields or []))
+
+
+def test_assign_no_op_when_disabled(tenant_assignment_module, sync_params_module):
+    sync_params_module._stubs["global_enabled"] = False
+    sync_params_module._stubs["global_rules"] = [
+        {"pattern": "^cust-acme-", "tenant_slug": "acme"}
+    ]
+    tenant_assignment_module._tenants["acme"] = object()
+    vm = _FakeVM("cust-acme-001")
+
+    assigned = tenant_assignment_module.maybe_assign_tenant_from_regex(
+        vm, endpoint_id=None
+    )
+
+    assert assigned is False
+    assert vm.tenant is None
+    assert vm.saved_with == []
+
+
+def test_first_match_wins(tenant_assignment_module, sync_params_module):
+    sync_params_module._stubs["global_enabled"] = True
+    sync_params_module._stubs["global_rules"] = [
+        {"pattern": "^cust-acme-", "tenant_slug": "acme"},
+        {"pattern": "^cust-", "tenant_slug": "generic"},
+    ]
+    acme = SimpleNamespace(slug="acme", pk=1)
+    generic = SimpleNamespace(slug="generic", pk=2)
+    tenant_assignment_module._tenants["acme"] = acme
+    tenant_assignment_module._tenants["generic"] = generic
+
+    vm = _FakeVM("cust-acme-prod-01")
+    assigned = tenant_assignment_module.maybe_assign_tenant_from_regex(
+        vm, endpoint_id=None
+    )
+
+    assert assigned is True
+    assert vm.tenant is acme
+    assert vm.saved_with == [["tenant"]]
+
+
+def test_operator_set_tenant_preserved(tenant_assignment_module, sync_params_module):
+    sync_params_module._stubs["global_enabled"] = True
+    sync_params_module._stubs["global_rules"] = [
+        {"pattern": "^cust-", "tenant_slug": "generic"}
+    ]
+    tenant_assignment_module._tenants["generic"] = SimpleNamespace(slug="generic")
+
+    vm = _FakeVM("cust-bigco-001", tenant_id=99)
+    assigned = tenant_assignment_module.maybe_assign_tenant_from_regex(
+        vm, endpoint_id=None
+    )
+
+    assert assigned is False
+    assert vm.tenant is None
+    assert vm.saved_with == []
+
+
+def test_unknown_slug_logs_and_stops(
+    tenant_assignment_module, sync_params_module, caplog
+):
+    sync_params_module._stubs["global_enabled"] = True
+    sync_params_module._stubs["global_rules"] = [
+        {"pattern": "^cust-acme-", "tenant_slug": "acme"},
+        {"pattern": "^cust-", "tenant_slug": "generic"},
+    ]
+    # acme tenant is missing entirely; generic is present.
+    tenant_assignment_module._tenants["generic"] = SimpleNamespace(slug="generic")
+
+    vm = _FakeVM("cust-acme-prod-01")
+    import logging
+
+    with caplog.at_level(logging.WARNING):
+        assigned = tenant_assignment_module.maybe_assign_tenant_from_regex(
+            vm, endpoint_id=None
+        )
+
+    assert assigned is False
+    assert vm.tenant is None
+    assert vm.saved_with == []
+    assert any("acme" in rec.getMessage() for rec in caplog.records)
+
+
+def test_no_match_leaves_vm_alone(tenant_assignment_module, sync_params_module):
+    sync_params_module._stubs["global_enabled"] = True
+    sync_params_module._stubs["global_rules"] = [
+        {"pattern": "^cust-acme-", "tenant_slug": "acme"}
+    ]
+    tenant_assignment_module._tenants["acme"] = SimpleNamespace(slug="acme")
+
+    vm = _FakeVM("infra-monitoring-01")
+    assigned = tenant_assignment_module.maybe_assign_tenant_from_regex(
+        vm, endpoint_id=None
+    )
+
+    assert assigned is False
+    assert vm.tenant is None
+
+
+# ---------------------------------------------------------------------------
+# forms.settings._parse_tenant_regex_rules
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def parser_module(monkeypatch):
+    """Load just the parser helper from forms/settings.py.
+
+    The full forms module pulls in Django; we extract and exec only the
+    helper function with stubbed ``tenancy.models.Tenant`` and ``django.forms``.
+    """
+    tenants: set[str] = set()
+
+    class _TenantManager:
+        @staticmethod
+        def filter(slug):
+            return SimpleNamespace(exists=lambda: slug in tenants)
+
+    # The helper imports tenancy.Tenant lazily inside the function, so we set
+    # it on a module-level Tenant attribute access; mimic Django manager API.
+    class _Tenant:
+        class objects:
+            @staticmethod
+            def filter(slug):
+                return SimpleNamespace(exists=lambda: slug in tenants)
+
+    tenancy_models = types.ModuleType("tenancy.models")
+    tenancy_models.Tenant = _Tenant
+    tenancy_pkg = types.ModuleType("tenancy")
+    tenancy_pkg.models = tenancy_models
+    monkeypatch.setitem(sys.modules, "tenancy", tenancy_pkg)
+    monkeypatch.setitem(sys.modules, "tenancy.models", tenancy_models)
+
+    # Stub django.forms.ValidationError minimally.
+    django_pkg = types.ModuleType("django")
+    forms_mod = types.ModuleType("django.forms")
+
+    class _ValidationError(Exception):
+        def __init__(self, messages):
+            self.messages = (
+                messages if isinstance(messages, list) else [messages]
+            )
+            super().__init__(messages)
+
+    forms_mod.ValidationError = _ValidationError
+
+    class _Textarea:
+        def __init__(self, *a, **kw):
+            pass
+
+    forms_mod.Textarea = _Textarea
+
+    class _Field:
+        def __init__(self, *a, **kw):
+            pass
+
+    forms_mod.CharField = _Field
+    forms_mod.BooleanField = _Field
+    forms_mod.IntegerField = _Field
+    forms_mod.DecimalField = _Field
+    forms_mod.ChoiceField = _Field
+    forms_mod.PasswordInput = _Field
+    forms_mod.NullBooleanField = _Field
+    forms_mod.NullBooleanSelect = _Field
+
+    class _Form:
+        pass
+
+    forms_mod.Form = _Form
+    django_pkg.forms = forms_mod
+    monkeypatch.setitem(sys.modules, "django", django_pkg)
+    monkeypatch.setitem(sys.modules, "django.forms", forms_mod)
+
+    # Stub the relative imports that forms/settings.py performs.
+    constants_mod = types.ModuleType("netbox_proxbox.constants")
+    constants_mod.OVERWRITE_FIELDS = ()
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.constants", constants_mod)
+
+    plugin_settings_mod = types.ModuleType("netbox_proxbox.models.plugin_settings")
+    plugin_settings_mod.DEFAULT_BACKEND_LOG_FILE_PATH = "/var/log/proxbox.log"
+    plugin_settings_mod.BRANCH_ON_CONFLICT_CHOICES = [
+        ("fail", "fail"),
+        ("acknowledge", "acknowledge"),
+    ]
+    plugin_settings_mod.NETBOX_TO_PROXMOX_TYPED_PHRASE = "allow-edit-and-add-actions"
+    monkeypatch.setitem(
+        sys.modules,
+        "netbox_proxbox.models.plugin_settings",
+        plugin_settings_mod,
+    )
+
+    pkg = types.ModuleType("netbox_proxbox")
+    pkg.__path__ = [str(REPO_ROOT / "netbox_proxbox")]
+    monkeypatch.setitem(sys.modules, "netbox_proxbox", pkg)
+    models_pkg = types.ModuleType("netbox_proxbox.models")
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.models", models_pkg)
+    forms_pkg = types.ModuleType("netbox_proxbox.forms")
+    forms_pkg.__path__ = [str(REPO_ROOT / "netbox_proxbox" / "forms")]
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.forms", forms_pkg)
+
+    sys.modules.pop("netbox_proxbox.forms.settings", None)
+    path = REPO_ROOT / "netbox_proxbox" / "forms" / "settings.py"
+    spec = importlib.util.spec_from_file_location(
+        "netbox_proxbox.forms.settings", path
+    )
+    module = importlib.util.module_from_spec(spec)
+    assert spec and spec.loader
+    sys.modules["netbox_proxbox.forms.settings"] = module
+    spec.loader.exec_module(module)
+    module._tenants = tenants  # type: ignore[attr-defined]
+    module._ValidationError = _ValidationError  # type: ignore[attr-defined]
+    return module
+
+
+def test_parser_empty_string_allow_none_returns_none(parser_module):
+    result = parser_module._parse_tenant_regex_rules("", allow_none=True)
+    assert result is None
+
+
+def test_parser_empty_string_disallow_none_returns_empty(parser_module):
+    result = parser_module._parse_tenant_regex_rules("", allow_none=False)
+    assert result == []
+
+
+def test_parser_explicit_empty_list_with_allow_none_returns_empty(parser_module):
+    result = parser_module._parse_tenant_regex_rules("[]", allow_none=True)
+    assert result == []
+
+
+def test_parser_invalid_json(parser_module):
+    with pytest.raises(parser_module._ValidationError):
+        parser_module._parse_tenant_regex_rules("not json", allow_none=False)
+
+
+def test_parser_non_list_json(parser_module):
+    with pytest.raises(parser_module._ValidationError):
+        parser_module._parse_tenant_regex_rules("{}", allow_none=False)
+
+
+def test_parser_bad_regex(parser_module):
+    parser_module._tenants.add("acme")
+    with pytest.raises(parser_module._ValidationError) as excinfo:
+        parser_module._parse_tenant_regex_rules(
+            '[{"pattern": "(", "tenant_slug": "acme"}]', allow_none=False
+        )
+    assert any("invalid regex" in m for m in excinfo.value.messages)
+
+
+def test_parser_missing_tenant(parser_module):
+    with pytest.raises(parser_module._ValidationError) as excinfo:
+        parser_module._parse_tenant_regex_rules(
+            '[{"pattern": "^x-", "tenant_slug": "ghost"}]', allow_none=False
+        )
+    assert any("ghost" in m for m in excinfo.value.messages)
+
+
+def test_parser_duplicate_pattern(parser_module):
+    parser_module._tenants.add("acme")
+    parser_module._tenants.add("bigco")
+    with pytest.raises(parser_module._ValidationError) as excinfo:
+        parser_module._parse_tenant_regex_rules(
+            '[{"pattern": "^x-", "tenant_slug": "acme"},'
+            ' {"pattern": "^x-", "tenant_slug": "bigco"}]',
+            allow_none=False,
+        )
+    assert any("duplicate" in m for m in excinfo.value.messages)
+
+
+def test_parser_happy_path_with_label(parser_module):
+    parser_module._tenants.add("acme")
+    result = parser_module._parse_tenant_regex_rules(
+        '[{"pattern": "^acme-", "tenant_slug": "acme", "label": "Acme"}]',
+        allow_none=False,
+    )
+    assert result == [
+        {"pattern": "^acme-", "tenant_slug": "acme", "label": "Acme"}
+    ]

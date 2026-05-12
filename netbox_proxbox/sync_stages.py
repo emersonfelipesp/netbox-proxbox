@@ -49,6 +49,7 @@ async def _run_batch_selected_sync(
     *,
     batch_object_type: str,
     batch_object_ids: list[str],
+    netbox_branch_schema_id: str | None = None,
 ) -> dict[str, object]:
     """Run selected object syncs concurrently with asyncio.gather."""
     from virtualization.models import VirtualMachine
@@ -126,11 +127,28 @@ async def _run_batch_selected_sync(
 
             path = str(params["path"])
             query_params = dict(params.get("query_params") or {})
+            if netbox_branch_schema_id:
+                query_params["netbox_branch_schema_id"] = str(netbox_branch_schema_id)
 
             def _call_sync() -> tuple[dict, int, list[dict]]:
                 return sync_individual_with_dependencies(path, query_params)
 
             response, status, dependencies = await asyncio.to_thread(_call_sync)
+
+            if (
+                batch_object_type == "virtual-machine"
+                and 200 <= int(status) < 300
+            ):
+                from netbox_proxbox.services.tenant_assignment import (
+                    maybe_assign_tenant_from_regex,
+                )
+
+                def _post_sync_assign() -> None:
+                    obj.refresh_from_db()
+                    maybe_assign_tenant_from_regex(obj)
+
+                await asyncio.to_thread(_post_sync_assign)
+
             return {
                 "batch_object_type": batch_object_type,
                 "object_id": str(object_id),
@@ -201,9 +219,9 @@ def _build_stage_query_params(
     """Build query parameters for a specific sync stage."""
     query_params = dict(base_query)
     if sync_type == SyncTypeChoices.VIRTUAL_MACHINES_BACKUPS:
-        query_params["delete_nonexistent_backup"] = True
+        query_params["delete_nonexistent_backup"] = "true"
     if sync_type == SyncTypeChoices.VIRTUAL_MACHINES_SNAPSHOTS:
-        query_params["delete_nonexistent_snapshot"] = True
+        query_params["delete_nonexistent_snapshot"] = "true"
     if sync_type == SyncTypeChoices.VIRTUAL_MACHINES and disable_vm_network_on_vm_stage:
         # Full sync runs dedicated VM interface/IP stages; skip network work in VM stage.
         query_params["sync_vm_network"] = "false"
@@ -361,6 +379,7 @@ def _run_all_stages_sync(
 
     target_vm_ids = [str(x) for x in list(params.get("netbox_vm_ids") or []) if str(x)]
     fastapi_endpoint_id = params.get("fastapi_endpoint_id")
+    netbox_branch_schema_id = params.get("netbox_branch_schema_id")
     disable_vm_network_on_vm_stage = SyncTypeChoices.VIRTUAL_MACHINES in stages and (
         SyncTypeChoices.VM_INTERFACES in stages
         or SyncTypeChoices.IP_ADDRESSES in stages
@@ -377,6 +396,8 @@ def _run_all_stages_sync(
             endpoint_scope,
             params.get("netbox_endpoint_ids"),
         )
+        if netbox_branch_schema_id:
+            base_query["netbox_branch_schema_id"] = str(netbox_branch_schema_id)
 
         for st in stages:
             query_params = _build_stage_query_params(

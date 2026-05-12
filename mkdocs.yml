@@ -97,6 +97,8 @@ nav:
     - Endpoint Data Exchange: 'developer/endpoint-sync.md'
     - Browser Frontend: 'developer/browser-frontend.md'
     - Extending the Plugin: 'developer/extending-the-plugin.md'
+    - Design:
+      - Operational Verbs: 'design/operational-verbs.md'
     - Tooling:
       - Release Publishing: 'developer/release-publishing.md'
       - CI and E2E Workflows: 'developer/ci-e2e-workflows.md'
@@ -105,6 +107,8 @@ nav:
       - Raw CLI Capture: 'generated/proxbox-cli-command-capture.md'
   - User Guide:
     - Cluster and Node Tracking: 'user-guide/cluster-nodes.md'
+  - Operations:
+    - Headless Sync: 'operations/headless-sync.md'
   - API Reference:
     - Overview: 'api/index.md'
     - Endpoints: 'api/endpoints.md'
@@ -112,6 +116,7 @@ nav:
     - VM Data: 'api/vm-data.md'
     - Operations: 'api/operations.md'
     - Settings: 'api/settings.md'
+    - Cluster HA: 'api/ha.md'
   - Features:
     - Screenshots: 'features/screenshots.md'
     - E2E Docker Testing: 'features/e2e-docker-testing.md'

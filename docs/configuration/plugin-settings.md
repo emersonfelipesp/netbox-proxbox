@@ -2,33 +2,87 @@
 
 Proxbox exposes a singleton **Plugin Settings** object for runtime behavior toggles. Create or edit it under **Plugins → Proxbox → Plugin Settings**.
 
+## Runtime tunable resolution
+
+Most fields below are also readable by the paired `proxbox-api` backend through
+`proxbox_api.runtime_settings.get_int / get_float / get_bool / get_str`. The
+backend resolves each tunable in the following order:
+
+1. **`PROXBOX_*` environment variable** on the backend host (highest priority,
+   set in `.env` or systemd unit).
+2. **Plugin Settings field** here (cached for **5 minutes** in the backend).
+3. **Built-in default** documented in each table below.
+
+The 5-minute cache means edits on this page take effect on the next backend
+read after the cache expires; restart `proxbox-api` to apply immediately. The
+**Env override** column in each table below names the backend env var that
+shadows the field.
+
 ---
 
 ## Core Behavior
 
-| Field | Default | Description |
-|---|---|---|
-| **Use guest agent interface name** | `true` | Use QEMU guest-agent interface names (e.g. `ens18`) instead of generic Proxmox labels (e.g. `net0`). |
-| **Proxmox fetch max concurrency** | `8` | Maximum parallel Proxmox fetch operations per sync stage. Raise for multi-cluster speed; lower if Proxmox load is a concern. |
-| **Ignore IPv6 link-local addresses** | `true` | Skip `fe80::/64` addresses during VM interface IP selection. |
+| Field | Default | Env override | Description |
+|---|---|---|---|
+| **Use guest agent interface name** | `true` | _(plugin only)_ | Use QEMU guest-agent interface names (e.g. `ens18`) instead of generic Proxmox labels (e.g. `net0`). |
+| **Proxmox fetch max concurrency** | `8` | `PROXBOX_FETCH_MAX_CONCURRENCY` | Maximum parallel Proxmox fetch operations per sync stage. Raise for multi-cluster speed; lower if Proxmox load is a concern. |
+| **Ignore IPv6 link-local addresses** | `true` | _(plugin only)_ | Skip `fe80::/64` addresses during VM interface IP selection. |
+| **Primary IP preference** | `ipv4` | _(plugin only)_ | Whether the sync should prefer IPv4 or IPv6 when assigning primary IP on NetBox VMs. |
 
 ---
 
-## NetBox Integration
+## NetBox API
 
-These fields tune how aggressively Proxbox calls the NetBox API during sync operations. The defaults are conservative and safe for most deployments.
+These fields tune how aggressively Proxbox calls the NetBox REST API during sync operations. The defaults are conservative and safe for most deployments.
 
-| Field | Default | Description |
-|---|---|---|
-| **NetBox max concurrent requests** | `1` | Semaphore cap on simultaneous in-flight NetBox API calls. Increase carefully — PostgreSQL connection pool may exhaust at high values. |
-| **NetBox max retries** | `5` | Retry attempts for transient NetBox API failures. |
-| **NetBox retry delay (s)** | `2.00` | Base delay in seconds for exponential back-off between retries. |
-| **NetBox GET cache TTL (s)** | `60.00` | How long NetBox GET responses are cached in memory. Set to `0` to disable caching. |
-| **Bulk batch size** | `50` | Number of records per batch during bulk create/update operations. |
-| **Bulk batch delay (ms)** | `500` | Milliseconds to pause between bulk batches to avoid overwhelming NetBox. |
-| **VM sync max concurrency** | `4` | Maximum number of VMs synced in parallel during a full update. |
-| **Custom fields request delay (s)** | `0.00` | Optional sleep between custom-field API operations to throttle requests. |
-| **Backend log file path** | `/var/log/proxbox.log` | Absolute path for proxbox-api rotated log archive output. Changes take effect after proxbox-api restart. |
+| Field | Default | Env override | Description |
+|---|---|---|---|
+| **NetBox client timeout (s)** | `120` | `PROXBOX_NETBOX_TIMEOUT` | Per-request timeout for NetBox API calls. |
+| **NetBox max concurrent requests** | `1` | `PROXBOX_NETBOX_MAX_CONCURRENT` | Semaphore cap on simultaneous in-flight NetBox API calls. Increase carefully — PostgreSQL connection pool may exhaust at high values. |
+| **NetBox write concurrency** | `8` | `PROXBOX_NETBOX_WRITE_CONCURRENCY` | Cap on parallel writes during create/update fan-out (lower than reads to avoid PostgreSQL row-lock contention). |
+| **NetBox max retries** | `5` | `PROXBOX_NETBOX_MAX_RETRIES` | Retry attempts for transient NetBox API failures. |
+| **NetBox retry delay (s)** | `2.00` | `PROXBOX_NETBOX_RETRY_DELAY` | Base delay in seconds for exponential back-off between retries. |
+| **NetBox GET cache TTL (s)** | `60.00` | `PROXBOX_NETBOX_GET_CACHE_TTL` | How long NetBox GET responses are cached in memory. Set to `0` to disable caching. |
+| **NetBox GET cache max entries** | `4096` | `PROXBOX_NETBOX_GET_CACHE_MAX_ENTRIES` | Maximum number of distinct GET responses retained in the in-memory cache. |
+| **NetBox GET cache max bytes** | `52428800` | `PROXBOX_NETBOX_GET_CACHE_MAX_BYTES` | Maximum total cache size in bytes (default ≈ 50 MB). |
+| **Debug cache logging** | `false` | `PROXBOX_DEBUG_CACHE` | Emit verbose hit/miss/eviction logs for the NetBox GET cache. Use sparingly — produces high log volume. |
+| **Expose internal errors** | `false` | `PROXBOX_EXPOSE_INTERNAL_ERRORS` | When enabled, full Python tracebacks surface in HTTP responses. Keep `false` outside of dev environments. |
+
+---
+
+## Sync Pipeline
+
+These fields control batching, concurrency, and pacing for the Proxmox-to-NetBox sync pipeline.
+
+| Field | Default | Env override | Description |
+|---|---|---|---|
+| **VM sync max concurrency** | `4` | `PROXBOX_VM_SYNC_MAX_CONCURRENCY` | Maximum number of VMs synced in parallel during a full update. |
+| **Bulk batch size** | `50` | `PROXBOX_BULK_BATCH_SIZE` | Number of records per batch during bulk create/update operations. |
+| **Bulk batch delay (ms)** | `500` | `PROXBOX_BULK_BATCH_DELAY_MS` | Milliseconds to pause between bulk batches to avoid overwhelming NetBox. |
+| **Backup batch size** | `5` | `PROXBOX_BACKUP_BATCH_SIZE` | Records per batch during backup/snapshot reconciliation (kept lower than bulk batches because each item triggers Proxmox calls). |
+| **Backup batch delay (ms)** | `200` | `PROXBOX_BACKUP_BATCH_DELAY_MS` | Milliseconds to pause between backup batches. |
+| **Custom fields request delay (s)** | `0.00` | `PROXBOX_CUSTOM_FIELDS_REQUEST_DELAY` | Optional sleep between custom-field API operations to throttle requests. |
+
+---
+
+## Proxmox API
+
+Tunables that govern how proxbox-api talks to upstream Proxmox clusters.
+
+| Field | Default | Env override | Description |
+|---|---|---|---|
+| **Proxmox API timeout (s)** | `60` | _(plugin only)_ | Per-request timeout for Proxmox API calls. |
+| **Proxmox max retries** | `3` | _(plugin only)_ | Retry attempts for transient Proxmox API failures. |
+| **Proxmox retry back-off (s)** | `1.00` | _(plugin only)_ | Base delay in seconds for exponential back-off between Proxmox retries. |
+| **Proxmox fetch concurrency** | `8` | `PROXBOX_PROXMOX_FETCH_CONCURRENCY` | Cap on parallel Proxmox reads during sync stages that loop over many VMs (e.g. task-history). Distinct from the workspace-wide **Proxmox fetch max concurrency** in Core Behavior. |
+
+---
+
+## Logging
+
+| Field | Default | Env override | Description |
+|---|---|---|---|
+| **Backend log file path** | `/var/log/proxbox.log` | _(plugin only)_ | Absolute path for proxbox-api rotated log archive output. Changes take effect after proxbox-api restart. |
 
 ---
 

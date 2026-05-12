@@ -94,11 +94,15 @@ reverting:
 
 ## Migration note
 
-The 16 new per-endpoint overwrite columns shipped in `netbox-proxbox 0.0.13`
-(migration `0035_overwrite_fields_expansion`). Later migrations added
-`overwrite_vm_type` and `overwrite_ip_address_dns_name` to both the global
-settings singleton and per-endpoint overrides. When upgrading from `0.0.12` or
-earlier, run:
+The flag set has grown across releases:
+
+| Migration | Release | Flags added |
+|---|---|---|
+| `0035_overwrite_fields_expansion` | `0.0.13` | 16 per-endpoint overwrite columns (the original Device / VM / Cluster / Node Interface / Storage / VM Interface / IP base set). |
+| `0036_add_overwrite_vm_type` | `0.0.15` | `overwrite_vm_type`. |
+| `0039_pluginsettings_overwrite_ip_address_dns_name` | `0.0.15` | `overwrite_ip_address_dns_name`. |
+
+When upgrading from `0.0.12` or earlier, run:
 
 ```bash
 python manage.py migrate netbox_proxbox

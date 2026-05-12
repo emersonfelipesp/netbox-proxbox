@@ -178,3 +178,85 @@ For public docs, keep [`docs/developer/ci-e2e-workflows.md`](./docs/developer/ci
 - [`netbox_proxbox/views/sync_now/CLAUDE.md`](./netbox_proxbox/views/sync_now/CLAUDE.md)
 - [`proxbox_cli/CLAUDE.md`](./proxbox_cli/CLAUDE.md)
 - [`tests/CLAUDE.md`](./tests/CLAUDE.md)
+
+---
+
+## Branching-Driven Intent
+
+netbox-proxbox supports **two integration directions**:
+
+1. **Proxmox → NetBox (reflection, default).** The historic, read-only
+   pipeline. `proxbox-api` discovers Proxmox state and reflects it into
+   NetBox via `createOrUpdate`-style helpers. No Proxmox-side mutation.
+2. **NetBox → Proxmox (intent, opt-in).** Operators declare desired state
+   on a NetBox **branch**; merging the branch triggers `proxbox-api` to
+   apply CREATE / UPDATE / DELETE against Proxmox (VMs, LXC, optional
+   Cloud-Init). Gated by
+   `ProxboxPluginSettings.netbox_to_proxmox_enabled` (default `False`)
+   and per-branch custom field `apply_to_proxmox` (default `False`).
+
+### Decision rule for new features
+
+Every new feature must answer: **does it belong on the reflection side
+(read-only), the intent side (write-through), or both?** If "both", ship
+the read side first and the write side as a separate sub-PR.
+
+### Invariants for the intent side
+
+- The **single source of truth** for intent is the merged `ChangeDiff`
+  list on a branch flagged `apply_to_proxmox=True`.
+- The **single trigger** for Proxmox-side mutation is the `post_merge`
+  signal from `netbox_branching.signals`. No other code path may mutate
+  Proxmox; the operational verbs from #376 (start/stop/snapshot/migrate)
+  are the one exception and they are audit-logged identically.
+- Direct writes to `main` (no branch) do not trigger applies — they
+  remain NetBox-only by construction.
+- DELETE requires a **five-lock chain** (see **Safety Model** below):
+  master flag + typed confirmation phrase + per-branch
+  `apply_destroy_confirmed` + RBAC at request time + a *separate*
+  user holding `authorize_deletion_request` who approves the
+  resulting `DeletionRequest`. The plugin **never** calls Proxmox
+  destroy from the merge handler.
+- After every successful apply, the read-side reflection sync must
+  produce **zero diffs** (drift-detect verification per #357).
+
+### Safety Model
+
+netbox-proxbox enforces four mandatory safety invariants on the intent
+path. Code or configuration that bypasses any of these is a regression.
+
+1. **Default direction is Proxmox → NetBox (read-only).** The intent
+   path is opt-in at every level; nothing in this plugin's design
+   weakens the read-only default.
+2. **Master flag is locked behind a typed confirmation phrase.**
+   `netbox_to_proxmox_enabled=True` requires
+   `netbox_to_proxmox_typed_confirmation == "allow-edit-and-add-actions"`
+   to pass `ProxboxPluginSettingsForm.clean()`. The settings template
+   renders a red warning callout listing the risks. Toggling the
+   boolean back to `False` clears the typed phrase, forcing a
+   re-confirmation on re-enable. Code that bypasses the form-level
+   validator is a regression.
+3. **Every Proxmox-side DELETE goes through a `DeletionRequest`.**
+   Branch merges containing DELETE diffs MUST NOT call Proxmox destroy
+   at merge time. Instead, they create a `DeletionRequest` row in
+   `pending` state, tag the Proxmox VM `proxbox-pending-deletion`, and
+   wait for separate authorization. The metadata snapshot
+   (`vmid`, `node`, name, tags, cores, memory, disk, interfaces, IPs,
+   CFs) is captured so the executor can act after authorization
+   without a NetBox FK. Code that calls Proxmox destroy without first
+   creating an *approved* `DeletionRequest` is a regression.
+4. **Authorization permission is held separately from
+   `intent_delete_*`.** `netbox_proxbox.authorize_deletion_request` is
+   declared on `DeletionRequest.Meta.permissions` and is independent
+   of `intent_delete_vm` / `intent_delete_lxc` (which control who can
+   *request* a delete). Granting both to the same role is allowed,
+   but four-eyes self-approval is rejected at the view layer unless
+   `intent_apply_authorization_self_approve_allowed=True` (default
+   **False**). The Deletion-Requests page lives at
+   `/plugins/proxbox/intent/deletion-requests/`.
+
+### Cross-references
+
+- Issue: [`#377`](https://github.com/emersonfelipesp/netbox-proxbox/issues/377)
+- Reference doc: [`reference/NETBOX-BRANCHING.md`](./reference/NETBOX-BRANCHING.md)
+- Companion roadmap items: #357, #358, #367, #370, #376

@@ -24,7 +24,8 @@
       "item_progress",
       "phase_summary",
       "error_detail",
-      "progress"
+      "progress",
+      "duplicate_name_resolved"
     ]
   },
   "payload_fields": {
@@ -77,6 +78,15 @@
       "detail",
       "suggestion",
       "traceback"
+    ],
+    "DuplicateNameResolvedMessage": [
+      "event",
+      "cluster",
+      "original_name",
+      "resolved_name",
+      "vmid",
+      "suffix_index",
+      "operator_renamed"
     ]
   }
 }

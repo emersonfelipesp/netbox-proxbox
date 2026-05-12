@@ -141,6 +141,41 @@
                     {% render_field form.expose_internal_errors %}
                 </div>
             </div>
+            {# NetBox Branching Integration Card #}
+            <div class="card mb-3">
+                <h5 class="card-header">
+                    <i class="mdi mdi-source-branch"></i>
+                    {% trans "NetBox Branching Integration" %}
+                </h5>
+                <div class="card-body">
+                    <p class="text-muted">
+                        {% blocktrans trimmed %}
+                        Auto-create a NetBox branch per Proxbox sync job and merge it
+                        back into main on success. Requires the netbox_branching
+                        plugin to be installed and listed last in PLUGINS.
+                        {% endblocktrans %}
+                    </p>
+                    {% render_field form.branching_enabled %}
+                    {% render_field form.branch_name_prefix %}
+                    {% render_field form.branch_on_conflict %}
+                    <hr>
+                    <p class="text-danger">
+                        <strong>
+                            {% trans "NetBox → Proxmox intent direction (advanced)" %}
+                        </strong>
+                        <br>
+                        {% blocktrans trimmed %}
+                        Enabling these settings allows merging a NetBox branch flagged
+                        apply_to_proxmox=True to dispatch CREATE / UPDATE writes to
+                        Proxmox via proxbox-api. DELETE still requires a separate
+                        DeletionRequest authorization chain. Off by default.
+                        {% endblocktrans %}
+                    </p>
+                    {% render_field form.netbox_to_proxmox_enabled %}
+                    {% render_field form.netbox_to_proxmox_typed_confirmation %}
+                    {% render_field form.apply_destroy_confirmed %}
+                </div>
+            </div>
             {# Encryption Card #}
             <div class="card mb-3">
                 <h5 class="card-header">

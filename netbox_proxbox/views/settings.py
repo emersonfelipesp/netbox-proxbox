@@ -1,5 +1,7 @@
 """Plugin settings page for feature toggles."""
 
+import json
+
 from django.contrib import messages
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
@@ -64,6 +66,19 @@ class SettingsView(
             "proxmox_timeout": settings_obj.proxmox_timeout,
             "proxmox_max_retries": settings_obj.proxmox_max_retries,
             "proxmox_retry_backoff": settings_obj.proxmox_retry_backoff,
+            "enable_tenant_name_regex": settings_obj.enable_tenant_name_regex,
+            "tenant_name_regex_rules": json.dumps(
+                settings_obj.tenant_name_regex_rules or [],
+                indent=2,
+            ),
+            "branching_enabled": settings_obj.branching_enabled,
+            "branch_name_prefix": settings_obj.branch_name_prefix,
+            "branch_on_conflict": settings_obj.branch_on_conflict,
+            "netbox_to_proxmox_enabled": settings_obj.netbox_to_proxmox_enabled,
+            "netbox_to_proxmox_typed_confirmation": (
+                settings_obj.netbox_to_proxmox_typed_confirmation
+            ),
+            "apply_destroy_confirmed": settings_obj.apply_destroy_confirmed,
         }
         for name in OVERWRITE_FIELDS:
             initial[name] = getattr(settings_obj, name)
@@ -175,6 +190,30 @@ class SettingsView(
             settings_obj.proxmox_retry_backoff = form.cleaned_data[
                 "proxmox_retry_backoff"
             ]
+            settings_obj.enable_tenant_name_regex = form.cleaned_data.get(
+                "enable_tenant_name_regex", False
+            )
+            settings_obj.tenant_name_regex_rules = form.cleaned_data.get(
+                "tenant_name_regex_rules", []
+            )
+            settings_obj.branching_enabled = form.cleaned_data.get(
+                "branching_enabled", False
+            )
+            settings_obj.branch_name_prefix = form.cleaned_data.get(
+                "branch_name_prefix", "proxbox-sync"
+            )
+            settings_obj.branch_on_conflict = form.cleaned_data.get(
+                "branch_on_conflict", "fail"
+            )
+            settings_obj.netbox_to_proxmox_enabled = form.cleaned_data.get(
+                "netbox_to_proxmox_enabled", False
+            )
+            settings_obj.netbox_to_proxmox_typed_confirmation = form.cleaned_data.get(
+                "netbox_to_proxmox_typed_confirmation", ""
+            )
+            settings_obj.apply_destroy_confirmed = form.cleaned_data.get(
+                "apply_destroy_confirmed", False
+            )
             for _overwrite_field in OVERWRITE_FIELDS:
                 setattr(
                     settings_obj,
@@ -221,6 +260,14 @@ class SettingsView(
                     "proxmox_timeout",
                     "proxmox_max_retries",
                     "proxmox_retry_backoff",
+                    "enable_tenant_name_regex",
+                    "tenant_name_regex_rules",
+                    "branching_enabled",
+                    "branch_name_prefix",
+                    "branch_on_conflict",
+                    "netbox_to_proxmox_enabled",
+                    "netbox_to_proxmox_typed_confirmation",
+                    "apply_destroy_confirmed",
                     *OVERWRITE_FIELDS,
                 ]
             )
