@@ -467,10 +467,13 @@ class ProxboxPluginSettingsForm(forms.Form):
 
     def clean_tenant_name_regex_rules(self) -> list[dict]:
         """Normalize tenant regex rules JSON; empty input means no rules."""
-        return _parse_tenant_regex_rules(
-            self.cleaned_data.get("tenant_name_regex_rules"),
-            allow_none=False,
-        ) or []
+        return (
+            _parse_tenant_regex_rules(
+                self.cleaned_data.get("tenant_name_regex_rules"),
+                allow_none=False,
+            )
+            or []
+        )
 
     def clean_backend_log_file_path(self) -> str:
         """Require an absolute log file path including a filename."""

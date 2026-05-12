@@ -24,10 +24,7 @@ import pytest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 BRANCH_LIFECYCLE_PATH = (
-    REPO_ROOT
-    / "netbox_proxbox"
-    / "services"
-    / "branch_lifecycle.py"
+    REPO_ROOT / "netbox_proxbox" / "services" / "branch_lifecycle.py"
 )
 
 
@@ -95,7 +92,9 @@ def test_branching_enabled_settings_returns_none_when_flag_off(monkeypatch):
     assert mod.branching_enabled_settings() is None
 
 
-def test_branching_enabled_settings_returns_none_when_branching_unavailable(monkeypatch):
+def test_branching_enabled_settings_returns_none_when_branching_unavailable(
+    monkeypatch,
+):
     settings = SimpleNamespace(
         branching_enabled=True,
         branch_name_prefix="proxbox-sync",

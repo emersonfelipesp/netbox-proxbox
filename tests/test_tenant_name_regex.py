@@ -380,9 +380,7 @@ def parser_module(monkeypatch):
 
     class _ValidationError(Exception):
         def __init__(self, messages):
-            self.messages = (
-                messages if isinstance(messages, list) else [messages]
-            )
+            self.messages = messages if isinstance(messages, list) else [messages]
             super().__init__(messages)
 
     forms_mod.ValidationError = _ValidationError
@@ -473,9 +471,7 @@ def parser_module(monkeypatch):
 
     sys.modules.pop("netbox_proxbox.forms.settings", None)
     path = REPO_ROOT / "netbox_proxbox" / "forms" / "settings.py"
-    spec = importlib.util.spec_from_file_location(
-        "netbox_proxbox.forms.settings", path
-    )
+    spec = importlib.util.spec_from_file_location("netbox_proxbox.forms.settings", path)
     module = importlib.util.module_from_spec(spec)
     assert spec and spec.loader
     sys.modules["netbox_proxbox.forms.settings"] = module
@@ -545,6 +541,4 @@ def test_parser_happy_path_with_label(parser_module):
         '[{"pattern": "^acme-", "tenant_slug": "acme", "label": "Acme"}]',
         allow_none=False,
     )
-    assert result == [
-        {"pattern": "^acme-", "tenant_slug": "acme", "label": "Acme"}
-    ]
+    assert result == [{"pattern": "^acme-", "tenant_slug": "acme", "label": "Acme"}]

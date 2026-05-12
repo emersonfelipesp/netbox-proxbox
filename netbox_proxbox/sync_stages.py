@@ -135,10 +135,7 @@ async def _run_batch_selected_sync(
 
             response, status, dependencies = await asyncio.to_thread(_call_sync)
 
-            if (
-                batch_object_type == "virtual-machine"
-                and 200 <= int(status) < 300
-            ):
+            if batch_object_type == "virtual-machine" and 200 <= int(status) < 300:
                 from netbox_proxbox.services.tenant_assignment import (
                     maybe_assign_tenant_from_regex,
                 )

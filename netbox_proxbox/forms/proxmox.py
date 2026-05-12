@@ -193,7 +193,9 @@ class ProxmoxEndpointSettingsForm(NetBoxModelForm):
         import json as _json
 
         instance = kwargs.get("instance") or getattr(self, "instance", None)
-        existing = getattr(instance, "tenant_name_regex_rules", None) if instance else None
+        existing = (
+            getattr(instance, "tenant_name_regex_rules", None) if instance else None
+        )
         initial = "" if existing is None else _json.dumps(existing, indent=2)
         self.fields["tenant_name_regex_rules"] = forms.CharField(
             required=False,

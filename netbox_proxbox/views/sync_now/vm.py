@@ -85,9 +85,7 @@ class VirtualMachineSyncNowView(
 
         if 200 <= status < 300:
             vm.refresh_from_db()
-            endpoint_id = (
-                proxmox_cluster.endpoint_id if proxmox_cluster else None
-            )
+            endpoint_id = proxmox_cluster.endpoint_id if proxmox_cluster else None
             maybe_assign_tenant_from_regex(vm, endpoint_id=endpoint_id)
 
         return _handle_sync_response(

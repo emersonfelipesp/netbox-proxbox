@@ -38,6 +38,7 @@ from netbox_proxbox.sync_ownership import (
     _claim_rq_sync_ownership,
     _release_rq_sync_ownership,
 )
+
 # Use NetBox's default RQ queue so a stock ``manage.py rqworker`` (no args) picks up jobs.
 # Plugin-only queues such as ``netbox_proxbox.sync`` are not in that default worker list.
 PROXBOX_SYNC_QUEUE_NAME = RQ_QUEUE_DEFAULT
@@ -356,9 +357,7 @@ class ProxboxSyncJob(JobRunner):
 
             stages = expanded_sync_stages(types)
 
-            netbox_branch_schema_id = (
-                branch.schema_id if branch is not None else None
-            )
+            netbox_branch_schema_id = branch.schema_id if branch is not None else None
             params: dict[str, object] = {
                 "sync_types": types,
                 "proxmox_endpoint_ids": [
