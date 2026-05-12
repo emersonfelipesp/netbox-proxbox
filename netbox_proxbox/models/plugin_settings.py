@@ -17,6 +17,13 @@ PRIMARY_IP_PREFERENCE_CHOICES = (
     ("ipv6", _("Prefer IPv6")),
 )
 
+BRANCH_ON_CONFLICT_CHOICES = (
+    ("fail", _("Fail (leave branch open for review)")),
+    ("acknowledge", _("Acknowledge and merge anyway")),
+)
+
+NETBOX_TO_PROXMOX_TYPED_PHRASE = "allow-edit-and-add-actions"
+
 
 def parse_cidr_list(text: str) -> list[str]:
     """Parse newline-separated CIDR ranges into a list of strings."""
@@ -489,6 +496,66 @@ class ProxboxPluginSettings(NetBoxModel):
             "wins; specificity-first ordering is recommended (e.g. '^cust-acme-' "
             "before '^cust-'). Patterns are compiled and tenant slugs are verified "
             "at save time."
+        ),
+    )
+    branching_enabled = models.BooleanField(
+        default=False,
+        verbose_name=_("Branching-enabled sync (Proxmox → NetBox)"),
+        help_text=_(
+            "When enabled, every Proxbox sync job creates a fresh netbox-branching "
+            "branch, runs the sync on that branch, and merges it back into main on "
+            "success. Requires the netbox_branching plugin to be installed and listed "
+            "last in PLUGINS."
+        ),
+    )
+    branch_name_prefix = models.CharField(
+        max_length=64,
+        default="proxbox-sync",
+        verbose_name=_("Branch name prefix"),
+        help_text=_(
+            "Prefix used when auto-creating a NetBox branch per sync job "
+            "(e.g. proxbox-sync-<job_id>-<timestamp>)."
+        ),
+    )
+    branch_on_conflict = models.CharField(
+        max_length=16,
+        choices=BRANCH_ON_CONFLICT_CHOICES,
+        default="fail",
+        verbose_name=_("Branch merge conflict policy"),
+        help_text=_(
+            "What to do when the auto-created sync branch reports merge conflicts. "
+            "'fail' leaves the branch open for operator review and marks the job failed. "
+            "'acknowledge' retries the merge with acknowledge_conflicts=True."
+        ),
+    )
+    netbox_to_proxmox_enabled = models.BooleanField(
+        default=False,
+        verbose_name=_("Enable NetBox → Proxmox intent direction"),
+        help_text=_(
+            "Master flag for the intent-direction integration: merging a branch flagged "
+            "apply_to_proxmox=True dispatches CREATE/UPDATE writes to Proxmox via "
+            "proxbox-api. DELETE still requires the separate DeletionRequest authorization "
+            "chain. Off by default."
+        ),
+    )
+    netbox_to_proxmox_typed_confirmation = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        verbose_name=_("Typed confirmation phrase"),
+        help_text=_(
+            "Operators enabling NetBox → Proxmox writes must type the exact phrase "
+            "'allow-edit-and-add-actions' into this field. Toggling the master flag back "
+            "to off clears this phrase, forcing a re-confirmation on re-enable."
+        ),
+    )
+    apply_destroy_confirmed = models.BooleanField(
+        default=False,
+        verbose_name=_("Allow apply-destroy authorization workflow"),
+        help_text=_(
+            "Per-branch destroy master switch. Even when set, every destroy still flows "
+            "through a separate DeletionRequest approved by a user holding "
+            "netbox_proxbox.authorize_deletion_request. Off by default."
         ),
     )
 
