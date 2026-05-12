@@ -26,7 +26,11 @@
       "error_detail",
       "progress",
       "bootstrap_done",
-      "duplicate_name_resolved"
+      "duplicate_name_resolved",
+      "migrate_dispatched",
+      "migrate_progress",
+      "migrate_succeeded",
+      "migrate_failed"
     ]
   },
   "payload_fields": {
