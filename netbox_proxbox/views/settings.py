@@ -1,5 +1,7 @@
 """Plugin settings page for feature toggles."""
 
+import json
+
 from django.contrib import messages
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
@@ -65,6 +67,11 @@ class SettingsView(
             "proxmox_timeout": settings_obj.proxmox_timeout,
             "proxmox_max_retries": settings_obj.proxmox_max_retries,
             "proxmox_retry_backoff": settings_obj.proxmox_retry_backoff,
+            "enable_tenant_name_regex": settings_obj.enable_tenant_name_regex,
+            "tenant_name_regex_rules": json.dumps(
+                settings_obj.tenant_name_regex_rules or [],
+                indent=2,
+            ),
         }
         for name in OVERWRITE_FIELDS:
             initial[name] = getattr(settings_obj, name)
@@ -182,6 +189,12 @@ class SettingsView(
             settings_obj.proxmox_retry_backoff = form.cleaned_data[
                 "proxmox_retry_backoff"
             ]
+            settings_obj.enable_tenant_name_regex = form.cleaned_data.get(
+                "enable_tenant_name_regex", False
+            )
+            settings_obj.tenant_name_regex_rules = form.cleaned_data.get(
+                "tenant_name_regex_rules", []
+            )
             for _overwrite_field in OVERWRITE_FIELDS:
                 setattr(
                     settings_obj,
@@ -229,6 +242,8 @@ class SettingsView(
                     "proxmox_timeout",
                     "proxmox_max_retries",
                     "proxmox_retry_backoff",
+                    "enable_tenant_name_regex",
+                    "tenant_name_regex_rules",
                     *OVERWRITE_FIELDS,
                 ]
             )

@@ -131,6 +131,18 @@ async def _run_batch_selected_sync(
                 return sync_individual_with_dependencies(path, query_params)
 
             response, status, dependencies = await asyncio.to_thread(_call_sync)
+
+            if batch_object_type == "virtual-machine" and 200 <= int(status) < 300:
+                from netbox_proxbox.services.tenant_assignment import (
+                    maybe_assign_tenant_from_regex,
+                )
+
+                def _post_sync_assign() -> None:
+                    obj.refresh_from_db()
+                    maybe_assign_tenant_from_regex(obj)
+
+                await asyncio.to_thread(_post_sync_assign)
+
             return {
                 "batch_object_type": batch_object_type,
                 "object_id": str(object_id),
