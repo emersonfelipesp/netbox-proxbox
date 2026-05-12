@@ -321,8 +321,43 @@ class ProxboxSyncJob(JobRunner):
             run_started = time.monotonic()
             _sync_stage_settings()
 
+            try:
+                from netbox_proxbox.services.branch_lifecycle import (  # noqa: PLC0415
+                    branching_enabled_settings,
+                    create_and_provision_branch,
+                    merge_branch,
+                )
+            except ModuleNotFoundError:
+                branching_enabled_settings = lambda: None  # noqa: E731
+                create_and_provision_branch = None  # type: ignore[assignment]
+                merge_branch = None  # type: ignore[assignment]
+
+            branch = None
+            branch_config = branching_enabled_settings()
+            if branch_config is not None:
+                branch_name = (
+                    f"{branch_config['prefix']}-{self.job.pk}-{int(run_started)}"
+                )
+                self.logger.info(
+                    f"NetBox branching enabled — creating branch {branch_name!r}"
+                )
+                try:
+                    branch = create_and_provision_branch(
+                        name=branch_name,
+                        user=getattr(self.job, "user", None),
+                    )
+                    self.logger.info(
+                        f"Branch {branch.name} ready (schema_id={branch.schema_id})"
+                    )
+                except Exception as exc:
+                    self.logger.error(
+                        f"Failed to create/provision NetBox branch {branch_name}: {exc}"
+                    )
+                    raise
+
             stages = expanded_sync_stages(types)
 
+            netbox_branch_schema_id = branch.schema_id if branch is not None else None
             params: dict[str, object] = {
                 "sync_types": types,
                 "proxmox_endpoint_ids": [
@@ -342,6 +377,8 @@ class ProxboxSyncJob(JobRunner):
                 }
             }
             self.job.save(update_fields=["data"])
+
+            params["netbox_branch_schema_id"] = netbox_branch_schema_id
 
             if batch_object_type and batch_object_ids:
                 self.logger.info(
@@ -364,6 +401,7 @@ class ProxboxSyncJob(JobRunner):
                                 self,
                                 batch_object_type=batch_object_type,
                                 batch_object_ids=batch_object_ids,
+                                netbox_branch_schema_id=netbox_branch_schema_id,
                             ),
                         )
                         batch_result = future.result()
@@ -373,6 +411,7 @@ class ProxboxSyncJob(JobRunner):
                             self,
                             batch_object_type=batch_object_type,
                             batch_object_ids=batch_object_ids,
+                            netbox_branch_schema_id=netbox_branch_schema_id,
                         )
                     )
                 runtime_seconds = round(time.monotonic() - run_started, 3)
@@ -391,6 +430,17 @@ class ProxboxSyncJob(JobRunner):
                     f"{batch_result['succeeded']} succeeded, "
                     f"{batch_result['failed']} failed)"
                 )
+                if branch is not None and branch_config is not None:
+                    merged, message = merge_branch(
+                        branch=branch,
+                        user=getattr(self.job, "user", None),
+                        on_conflict=branch_config["on_conflict"],
+                    )
+                    if merged:
+                        self.logger.info(message)
+                    else:
+                        self.logger.error(message)
+                        raise RuntimeError(message)
                 return
 
             self.logger.info(f"Starting Proxbox sync stages: {', '.join(stages)}")
@@ -474,6 +524,18 @@ class ProxboxSyncJob(JobRunner):
             self.logger.info(
                 f"All sync stages completed ({len(stages_out)}), runtime {runtime_seconds:.3f}s"
             )
+
+            if branch is not None and branch_config is not None:
+                merged, message = merge_branch(
+                    branch=branch,
+                    user=getattr(self.job, "user", None),
+                    on_conflict=branch_config["on_conflict"],
+                )
+                if merged:
+                    self.logger.info(message)
+                else:
+                    self.logger.error(message)
+                    raise RuntimeError(message)
         finally:
             _release_rq_sync_ownership(self.job)
 

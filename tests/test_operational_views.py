@@ -42,9 +42,7 @@ def _stub_services_before_load(monkeypatch):
     monkeypatch.setitem(sys.modules, "requests", requests_mod)
     monkeypatch.setitem(sys.modules, "requests.exceptions", requests_exceptions)
 
-    endpoint_errors_mod = types.ModuleType(
-        "netbox_proxbox.services._endpoint_errors"
-    )
+    endpoint_errors_mod = types.ModuleType("netbox_proxbox.services._endpoint_errors")
     endpoint_errors_mod.translate_request_exception = lambda exc: str(exc)
     monkeypatch.setitem(
         sys.modules,
@@ -52,9 +50,7 @@ def _stub_services_before_load(monkeypatch):
         endpoint_errors_mod,
     )
 
-    backend_context_mod = types.ModuleType(
-        "netbox_proxbox.services.backend_context"
-    )
+    backend_context_mod = types.ModuleType("netbox_proxbox.services.backend_context")
     backend_context_mod.get_fastapi_request_context = lambda endpoint_id=None: None
     monkeypatch.setitem(
         sys.modules,

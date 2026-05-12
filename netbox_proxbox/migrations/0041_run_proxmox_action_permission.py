@@ -36,7 +36,7 @@ CT_MODEL = "objecttype"
 def _create_perm(apps, schema_editor):
     ContentType = apps.get_model("contenttypes", "ContentType")
     Permission = apps.get_model("auth", "Permission")
-    ct = ContentType.objects.get(app_label=CT_APP_LABEL, model=CT_MODEL)
+    ct, _ = ContentType.objects.get_or_create(app_label=CT_APP_LABEL, model=CT_MODEL)
     Permission.objects.get_or_create(
         content_type=ct,
         codename=PERM_CODENAME,

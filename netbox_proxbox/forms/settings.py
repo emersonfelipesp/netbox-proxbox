@@ -7,7 +7,11 @@ from pathlib import PurePosixPath
 from django import forms
 
 from netbox_proxbox.constants import OVERWRITE_FIELDS
-from netbox_proxbox.models.plugin_settings import DEFAULT_BACKEND_LOG_FILE_PATH
+from netbox_proxbox.models.plugin_settings import (
+    BRANCH_ON_CONFLICT_CHOICES,
+    DEFAULT_BACKEND_LOG_FILE_PATH,
+    NETBOX_TO_PROXMOX_TYPED_PHRASE,
+)
 
 
 def _parse_tenant_regex_rules(
@@ -384,6 +388,64 @@ class ProxboxPluginSettingsForm(forms.Form):
             "slugs are verified on save."
         ),
     )
+    branching_enabled = forms.BooleanField(
+        required=False,
+        label="Branching-enabled sync (Proxmox → NetBox)",
+        help_text=(
+            "When enabled, every Proxbox sync job creates a fresh netbox-branching "
+            "branch, runs the sync on that branch, and merges it back into main on "
+            "success. Requires netbox_branching to be installed and listed last in "
+            "PLUGINS."
+        ),
+    )
+    branch_name_prefix = forms.CharField(
+        required=True,
+        max_length=64,
+        initial="proxbox-sync",
+        label="Branch name prefix",
+        help_text=(
+            "Prefix used when auto-creating a NetBox branch per sync job "
+            "(e.g. proxbox-sync-<job_id>-<timestamp>)."
+        ),
+    )
+    branch_on_conflict = forms.ChoiceField(
+        required=True,
+        choices=BRANCH_ON_CONFLICT_CHOICES,
+        initial="fail",
+        label="Branch merge conflict policy",
+        help_text=(
+            "Policy when the auto-created sync branch reports merge conflicts. "
+            "'fail' leaves the branch open and marks the job failed. 'acknowledge' "
+            "retries the merge with acknowledge_conflicts=True."
+        ),
+    )
+    netbox_to_proxmox_enabled = forms.BooleanField(
+        required=False,
+        label="Enable NetBox → Proxmox intent direction",
+        help_text=(
+            "Master flag for intent-direction writes. Off by default. Enabling this "
+            "widens the trust boundary — see the warning in the docs."
+        ),
+    )
+    netbox_to_proxmox_typed_confirmation = forms.CharField(
+        required=False,
+        max_length=64,
+        label="Typed confirmation phrase",
+        help_text=(
+            "Operators enabling NetBox → Proxmox writes must type the exact phrase "
+            f"'{NETBOX_TO_PROXMOX_TYPED_PHRASE}' here. Cleared automatically when the "
+            "master flag is turned off."
+        ),
+    )
+    apply_destroy_confirmed = forms.BooleanField(
+        required=False,
+        label="Allow apply-destroy authorization workflow",
+        help_text=(
+            "Per-branch destroy master switch. Destroys still flow through a separate "
+            "DeletionRequest approved by a user holding "
+            "netbox_proxbox.authorize_deletion_request."
+        ),
+    )
 
     def __init__(self, *args: object, **kwargs: object) -> None:
         super().__init__(*args, **kwargs)
@@ -425,3 +487,23 @@ class ProxboxPluginSettingsForm(forms.Form):
                 "Backend log file path must include a filename, not only a directory."
             )
         return path
+
+    def clean(self) -> dict:
+        """Cross-field validation for branching and intent-direction fields."""
+        super().clean()
+        enabled = self.cleaned_data.get("netbox_to_proxmox_enabled")
+        phrase = (
+            self.cleaned_data.get("netbox_to_proxmox_typed_confirmation") or ""
+        ).strip()
+        if enabled:
+            if phrase != NETBOX_TO_PROXMOX_TYPED_PHRASE:
+                self.add_error(
+                    "netbox_to_proxmox_typed_confirmation",
+                    forms.ValidationError(
+                        "To enable NetBox → Proxmox writes you must type the exact "
+                        f"phrase '{NETBOX_TO_PROXMOX_TYPED_PHRASE}'."
+                    ),
+                )
+        else:
+            self.cleaned_data["netbox_to_proxmox_typed_confirmation"] = ""
+        return self.cleaned_data
