@@ -25,7 +25,8 @@
       "phase_summary",
       "error_detail",
       "progress",
-      "bootstrap_done"
+      "bootstrap_done",
+      "duplicate_name_resolved"
     ]
   },
   "payload_fields": {
@@ -78,6 +79,15 @@
       "detail",
       "suggestion",
       "traceback"
+    ],
+    "DuplicateNameResolvedMessage": [
+      "event",
+      "cluster",
+      "original_name",
+      "resolved_name",
+      "vmid",
+      "suffix_index",
+      "operator_renamed"
     ]
   }
 }
