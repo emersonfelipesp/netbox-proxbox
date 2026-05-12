@@ -109,6 +109,8 @@ def _fake_settings_obj(encryption_key: str = "") -> SimpleNamespace:
         overwrite_ip_tags=True,
         overwrite_ip_custom_fields=True,
         overwrite_ip_address_dns_name=True,
+        enable_tenant_name_regex=False,
+        tenant_name_regex_rules=[],
         save=_save,
         _saved=saved,
     )
