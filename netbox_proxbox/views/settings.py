@@ -64,6 +64,8 @@ class SettingsView(
             "proxmox_timeout": settings_obj.proxmox_timeout,
             "proxmox_max_retries": settings_obj.proxmox_max_retries,
             "proxmox_retry_backoff": settings_obj.proxmox_retry_backoff,
+            "default_role_qemu": settings_obj.default_role_qemu_id,
+            "default_role_lxc": settings_obj.default_role_lxc_id,
         }
         for name in OVERWRITE_FIELDS:
             initial[name] = getattr(settings_obj, name)
@@ -175,6 +177,8 @@ class SettingsView(
             settings_obj.proxmox_retry_backoff = form.cleaned_data[
                 "proxmox_retry_backoff"
             ]
+            settings_obj.default_role_qemu = form.cleaned_data.get("default_role_qemu")
+            settings_obj.default_role_lxc = form.cleaned_data.get("default_role_lxc")
             for _overwrite_field in OVERWRITE_FIELDS:
                 setattr(
                     settings_obj,
@@ -221,6 +225,8 @@ class SettingsView(
                     "proxmox_timeout",
                     "proxmox_max_retries",
                     "proxmox_retry_backoff",
+                    "default_role_qemu",
+                    "default_role_lxc",
                     *OVERWRITE_FIELDS,
                 ]
             )

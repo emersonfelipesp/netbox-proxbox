@@ -50,6 +50,8 @@ class ProxboxPluginSettingsSerializer(NetBoxModelSerializer):
             "proxmox_timeout",
             "proxmox_max_retries",
             "proxmox_retry_backoff",
+            "default_role_qemu",
+            "default_role_lxc",
             *OVERWRITE_FIELDS,
             "tags",
             "custom_fields",

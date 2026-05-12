@@ -4,6 +4,9 @@ from pathlib import PurePosixPath
 
 from django import forms
 
+from dcim.models import DeviceRole
+from utilities.forms.fields import DynamicModelChoiceField
+
 from netbox_proxbox.constants import OVERWRITE_FIELDS
 from netbox_proxbox.models.plugin_settings import DEFAULT_BACKEND_LOG_FILE_PATH
 
@@ -267,6 +270,26 @@ class ProxboxPluginSettingsForm(forms.Form):
         initial="0.50",
         label="Proxmox retry back-off (seconds)",
         help_text="Default exponential back-off base delay in seconds between Proxmox retries. Individual endpoints can override this.",
+    )
+    default_role_qemu = DynamicModelChoiceField(
+        queryset=DeviceRole.objects.all(),
+        required=False,
+        query_params={"vm_role": "true"},
+        label="Default QEMU VM role",
+        help_text=(
+            "Plugin-global default role applied to newly synced QEMU virtual machines. "
+            "Per-endpoint and per-node overrides take precedence."
+        ),
+    )
+    default_role_lxc = DynamicModelChoiceField(
+        queryset=DeviceRole.objects.all(),
+        required=False,
+        query_params={"vm_role": "true"},
+        label="Default LXC container role",
+        help_text=(
+            "Plugin-global default role applied to newly synced LXC containers. "
+            "Per-endpoint and per-node overrides take precedence."
+        ),
     )
 
     def __init__(self, *args: object, **kwargs: object) -> None:
