@@ -24,6 +24,7 @@ from netbox_proxbox.sync_params import (
     _resolve_vm_snapshot_batch_params,
     _resolve_storage_batch_params,
     _resolve_task_history_batch_params,
+    _parse_description_metadata_setting,
     _proxbox_fetch_max_concurrency_setting,
     _use_guest_agent_interface_name_setting,
     _ignore_ipv6_link_local_addresses_setting,
@@ -175,6 +176,9 @@ def _build_base_query_params(
         "true" if _ignore_ipv6_link_local_addresses_setting() else "false"
     )
     base_query["primary_ip_preference"] = _primary_ip_preference_setting()
+    base_query["parse_description_metadata"] = (
+        "true" if _parse_description_metadata_setting() else "false"
+    )
 
     single_endpoint_id = (
         proxmox_endpoint_ids[0]

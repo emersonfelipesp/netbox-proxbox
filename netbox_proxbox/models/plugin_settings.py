@@ -214,6 +214,16 @@ class ProxboxPluginSettings(NetBoxModel):
             "responses. Leave disabled in production to avoid leaking implementation details."
         ),
     )
+    parse_description_metadata = models.BooleanField(
+        default=False,
+        verbose_name=_("Parse description metadata"),
+        help_text=_(
+            "When enabled, proxbox-api reads each Proxmox object's description for a "
+            "fenced ``netbox-metadata`` JSON block and applies the parsed PK ids to the "
+            "matching NetBox fields. Per-field ``overwrite_*`` flags still gate keys "
+            "they cover. Disabled by default."
+        ),
+    )
     ssrf_protection_enabled = models.BooleanField(
         default=True,
         verbose_name=_("Enable SSRF protection"),
