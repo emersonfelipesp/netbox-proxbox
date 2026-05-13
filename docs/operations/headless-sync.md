@@ -54,6 +54,7 @@ python manage.py proxbox_sync --wait --worker-grace 10
 | `--timeout SECONDS` | `7200` | Upper bound on the `--wait` loop. Matches `PROXBOX_SYNC_JOB_TIMEOUT`. |
 | `--poll-interval SECONDS` | `2.0` | Seconds between job-status polls while `--wait` is set. |
 | `--worker-grace SECONDS` | `30.0` | Maximum seconds the job may stay pending before the command checks for an active RQ worker and fast-fails if none is found. |
+| `--enqueue-once` | off | Route through `JobRunner.enqueue_once()` so the command reuses an already-pending recurring schedule instead of duplicating it. Designed for the [`proxbox-scheduler`](../scheduler/README.md) container so it coexists with the NetBox-side **Schedule Sync** form. |
 
 ## Exit codes
 
@@ -131,3 +132,4 @@ systemctl enable --now proxbox-sync.timer
   (`SyncFullUpdateView` in `netbox_proxbox/views/sync.py`).
 - Token-status diagnostics: `python manage.py proxbox_fix_tokens`.
 - Sync internals: [`netbox_proxbox/jobs.py`](../../netbox_proxbox/jobs.py).
+- Container-based scheduler with cron/continuous modes: [`docs/scheduler/README.md`](../scheduler/README.md) (issue #372).

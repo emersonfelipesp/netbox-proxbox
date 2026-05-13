@@ -110,6 +110,7 @@ nav:
   - Operations:
     - Headless Sync: 'operations/headless-sync.md'
     - Single-Exec Compose: 'operations/single-exec.md'
+    - Scheduler Container: 'scheduler/README.md'
   - API Reference:
     - Overview: 'api/index.md'
     - Endpoints: 'api/endpoints.md'
