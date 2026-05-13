@@ -2,7 +2,7 @@
 
 ## Summary
 
-Version `0.0.15` fixes four issues and adds two new features in pair with backend `proxbox-api 0.0.11`:
+Version `0.0.15` fixes five issues and adds three new features in pair with backend `proxbox-api 0.0.11`:
 
 - [Issue #352](https://github.com/emersonfelipesp/netbox-proxbox/issues/352): the `FastAPIEndpoint` model could not express the combination "use HTTPS but skip certificate verification", which is the default state of the proxbox-api `*-nginx` image (TLS-only with a self-signed mkcert certificate).
 - [Issue #354](https://github.com/emersonfelipesp/netbox-proxbox/issues/354): IPAM `IPAddress` records created during virtualization sync had an empty `dns_name`, even though Proxmox knew the guest hostname. The plugin now exposes a new `overwrite_ip_address_dns_name` setting (global + per-endpoint) so operators can opt out of `dns_name` writes; the actual hostname resolution and write live in `proxbox-api 0.0.11`.
@@ -10,6 +10,7 @@ Version `0.0.15` fixes four issues and adds two new features in pair with backen
 - [Issue #243](https://github.com/emersonfelipesp/netbox-proxbox/issues/243): Proxmox cluster High-Availability state was not surfaced anywhere in NetBox. The plugin now ships a per-VM **HA tab** and a cluster-wide **HA Status** page, both backed by new read-only HA endpoints in `proxbox-api 0.0.11`.
 - [Issue #360](https://github.com/emersonfelipesp/netbox-proxbox/issues/360): operators had no headless way to trigger a full Proxmox→NetBox sync — every run required a human clicking **Full Update** in the plugin UI, which blocked cron, systemd timers, Kubernetes CronJobs, and CI smoke checks. The plugin now ships a `python manage.py proxbox_sync` Django management command that enqueues the same `ProxboxSyncJob` as the UI button.
 - [Issue #359](https://github.com/emersonfelipesp/netbox-proxbox/issues/359): VM-interface MACs synced through the plugin never appeared in NetBox. The legacy inline `mac_address` field on `VMInterface` is `read_only=True` at NetBox 4.5/4.6 (computed from `primary_mac_address`), so every MAC `proxbox-api` posted was silently dropped. The plugin itself ships no code change; the fix lives in `proxbox-api 0.0.11`, which now writes MACs via `dcim.MACAddress` and links them through `VMInterface.primary_mac_address`. Existing v0.0.15 installs pick the fix up by upgrading the backend.
+- [Issue #367](https://github.com/emersonfelipesp/netbox-proxbox/issues/367): operators need a safe way to remove VMs that were previously discovered by Proxbox but no longer appear in the current Proxmox inventory. The plugin now exposes a default-off **Delete orphan VMs** setting that proxbox-api reads before running its orphan sweep.
 
 ## #352 — `Use HTTPS` toggle decoupled from `Verify SSL`
 
@@ -82,6 +83,19 @@ The plugin already renders `IPAddress.dns_name` in the IP-addresses table; the g
 - **Settings + endpoint forms, serializers, tables.** Surface the new flag wherever the sibling `overwrite_*` flags appear, so it can be toggled from the UI and exported in CSV/JSON/YAML.
 - **`sync_params._build_base_query_params`.** Forwards the resolved `overwrite_ip_address_dns_name` value to proxbox-api as a flat query-string key (the same shape every other overwrite flag uses).
 
+## #367 — Optional orphan VM cleanup toggle
+
+The backend now stamps every reconciled VM with a shared run UUID and can sweep
+Proxbox-discovered VMs whose stamp is stale or missing. This plugin release adds
+the operator-facing gate for that destructive behavior.
+
+### Changes
+
+- **`ProxboxPluginSettings.delete_orphans` (new field, default `False`).** When enabled, proxbox-api full-update runs may delete Proxbox-discovered QEMU/LXC VMs that were not touched by the current sync run.
+- **Migration `0046_pluginsettings_delete_orphans`.** Adds the default-off column using the established `SeparateDatabaseAndState` + `ALTER TABLE ... IF NOT EXISTS` pattern.
+- **Settings form, template, and API serializer.** Surface the flag in the Plugin Settings page and `/api/plugins/proxbox/settings/` so proxbox-api can read it through the existing runtime settings client.
+- **Docs.** The Plugin Settings guide documents the `PROXBOX_DELETE_ORPHANS` backend env override and recommends reviewing the full-update dry-run stream before enabling deletion.
+
 ## #360 — Headless `proxbox_sync` Django management command
 
 Operators previously had no programmatic way to trigger a full Proxmox→NetBox sync — every run required a logged-in user clicking **Full Update** in the plugin UI. This blocked the entire operational-verbs roadmap (#14, #15, #16) for cron, systemd timers, Kubernetes CronJobs, and CI smoke checks.
@@ -112,7 +126,7 @@ No DB migration. No model change. No new persisted state.
 
 ## Upgrade Notes
 
-- Run `python manage.py migrate netbox_proxbox` after upgrading; the migrations are additive and include a one-time data backfill (issue #352) and a single new column on `ProxboxPluginSettings` and `ProxmoxEndpoint` (issue #354).
+- Run `python manage.py migrate netbox_proxbox` after upgrading; the migrations are additive and include a one-time data backfill (issue #352), a single new column on `ProxboxPluginSettings` and `ProxmoxEndpoint` (issue #354), and the default-off `delete_orphans` flag (issue #367).
 - If you operate the proxbox-api `*-nginx` image and previously could not connect, edit the FastAPI endpoint after upgrade and tick **Use HTTPS** (and untick **Verify SSL** if you use the bundled mkcert cert).
 - For the `dns_name` fix, pair with `proxbox-api ≥ 0.0.11`. `proxbox-api 0.0.10.post2` is still wire-compatible for the `Use HTTPS` fix but does not populate `dns_name`. With an older backend, the new toggle has no effect because the backend never writes `dns_name`.
 - The `dns_name` default is "always overwrite" to match every other overwrite flag. If you have hand-edited `dns_name` on synced IPs, untick **Overwrite IP address DNS name** before the next sync (globally, or per Proxmox endpoint).

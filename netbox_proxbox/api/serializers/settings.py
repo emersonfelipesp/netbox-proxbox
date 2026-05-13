@@ -24,6 +24,7 @@ class ProxboxPluginSettingsSerializer(NetBoxModelSerializer):
             "proxbox_fetch_max_concurrency",
             "ignore_ipv6_link_local_addresses",
             "ensure_netbox_objects",
+            "delete_orphans",
             "primary_ip_preference",
             "netbox_max_concurrent",
             "netbox_timeout",

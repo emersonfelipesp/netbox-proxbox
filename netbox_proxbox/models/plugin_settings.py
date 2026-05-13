@@ -77,6 +77,15 @@ class ProxboxPluginSettings(NetBoxModel):
             "NetBox installs untouched."
         ),
     )
+    delete_orphans = models.BooleanField(
+        default=False,
+        verbose_name=_("Delete orphan VMs"),
+        help_text=_(
+            "When enabled, full-update runs delete Proxbox-discovered VMs that were "
+            "not touched by the current sync run. Review a dry-run preview before "
+            "enabling in production."
+        ),
+    )
     primary_ip_preference = models.CharField(
         max_length=4,
         choices=PRIMARY_IP_PREFERENCE_CHOICES,
