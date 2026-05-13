@@ -2,6 +2,9 @@
 
 Proxbox exposes a singleton **Plugin Settings** object for runtime behavior toggles. Create or edit it under **Plugins → Proxbox → Plugin Settings**.
 
+!!! tip "Programmatic access"
+    Every field below is also readable and writable through the [Plugin Settings API](../api/settings.md) (GET + PATCH).
+
 ## Runtime tunable resolution
 
 Most fields below are also readable by the paired `proxbox-api` backend through

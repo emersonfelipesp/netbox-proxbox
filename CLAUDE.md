@@ -43,6 +43,11 @@ This repository packages the `netbox_proxbox` NetBox plugin. The plugin adds end
 
 The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxbox/__init__.py). It declares plugin version `0.0.15` and NetBox compatibility `4.5.8` through `4.6.99` (certified simultaneously against `4.5.8`, `4.5.9`, and official `4.6.0`). The `0.0.15` release is certified with the separate `proxbox-api` backend release `0.0.11` (paired with the prior `0.0.14` / backend `0.0.10.post2`). `proxbox-api` is not a Python dependency of this plugin; the services communicate over HTTP.
 
+**Companion repos (cross-link map):**
+
+- Backend service: [`emersonfelipesp/proxbox-api`](https://github.com/emersonfelipesp/proxbox-api) — the HA REST shim and `overwrite_ip_address_dns_name` write paths in this release pair with `proxbox-api 0.0.11`. See its [`docs/api/cluster-ha.md`](https://github.com/emersonfelipesp/proxbox-api/blob/main/docs/api/cluster-ha.md) for the upstream contract this plugin proxies.
+- Workspace context: [`personal-context/claude-reference/netbox-proxbox.md`](https://github.com/emersonfelipesp/personal-context/blob/main/claude-reference/netbox-proxbox.md) — N-MultiCloud workspace-level notes (cross-repo deps, NetBox compatibility rotation policy).
+
 ## Architecture Summary
 
 - `ProxmoxEndpoint`, `NetBoxEndpoint`, `FastAPIEndpoint`, `ProxmoxCluster`, `ProxmoxNode`, `ProxmoxStorage`, `BackupRoutine`, `Replication`, `VMBackup`, `VMSnapshot`, `VMTaskHistory`, and `ProxboxPluginSettings` are the plugin's main persisted models.
