@@ -33,6 +33,7 @@ def proxbox_sync_command(monkeypatch):
     jobs_mod.PROXBOX_SYNC_JOB_TIMEOUT = 7200
 
     enqueue_calls: list[dict] = []
+    enqueue_once_calls: list[dict] = []
 
     class _ProxboxSyncJob:
         last_kwargs: dict = {}
@@ -43,6 +44,14 @@ def proxbox_sync_command(monkeypatch):
         def enqueue(cls, **kwargs):
             cls.last_kwargs = kwargs
             enqueue_calls.append(kwargs)
+            if cls.raise_on_enqueue is not None:
+                raise cls.raise_on_enqueue
+            return SimpleNamespace(pk=cls.next_job_pk)
+
+        @classmethod
+        def enqueue_once(cls, **kwargs):
+            cls.last_kwargs = kwargs
+            enqueue_once_calls.append(kwargs)
             if cls.raise_on_enqueue is not None:
                 raise cls.raise_on_enqueue
             return SimpleNamespace(pk=cls.next_job_pk)
@@ -179,6 +188,7 @@ def proxbox_sync_command(monkeypatch):
     return SimpleNamespace(
         module=module,
         enqueue_calls=enqueue_calls,
+        enqueue_once_calls=enqueue_once_calls,
         jobs_mod=jobs_mod,
         models_mod=models_mod,
         backend_auth_mod=backend_auth_mod,
@@ -202,6 +212,7 @@ def _run(command_module, **options):
         "timeout": None,
         "poll_interval": 0.0,
         "worker_grace": 0.0,
+        "enqueue_once": False,
     }
     defaults.update(options)
     cmd = command_module.Command()
@@ -264,6 +275,33 @@ def test_unknown_user_raises_command_error(proxbox_sync_command):
     with pytest.raises(CommandError, match="ghost"):
         _run(proxbox_sync_command.module, username="ghost")
     assert proxbox_sync_command.enqueue_calls == []
+
+
+def test_enqueue_once_routes_through_dedup_classmethod(proxbox_sync_command):
+    """--enqueue-once routes through ``JobRunner.enqueue_once`` for dedup.
+
+    This is the integration hook the proxbox-scheduler container relies on
+    (issue #372): the same kwargs reach the dedup classmethod and the
+    plain ``enqueue`` is bypassed, so a pending recurring schedule from
+    the NetBox-side Schedule Sync form gets reused instead of duplicated.
+    """
+    _run(proxbox_sync_command.module, enqueue_once=True)
+
+    assert proxbox_sync_command.enqueue_calls == []
+    assert len(proxbox_sync_command.enqueue_once_calls) == 1
+    call = proxbox_sync_command.enqueue_once_calls[0]
+    assert call["sync_types"] == ["all"]
+    assert call["proxmox_endpoint_ids"] == [1, 2]
+    assert call["queue_name"] == "default"
+    assert "CLI" in call["name"]
+
+
+def test_enqueue_once_default_off_uses_plain_enqueue(proxbox_sync_command):
+    """Without the flag, the command must keep using ``enqueue`` for backwards compatibility."""
+    _run(proxbox_sync_command.module)
+
+    assert len(proxbox_sync_command.enqueue_calls) == 1
+    assert proxbox_sync_command.enqueue_once_calls == []
 
 
 def test_no_active_superuser_raises_command_error(proxbox_sync_command):
