@@ -1,0 +1,5 @@
+recursive-include netbox_pbs/templates *
+recursive-include netbox_pbs/static *
+recursive-include netbox_pbs/migrations *.py
+include README.md
+include LICENSE
