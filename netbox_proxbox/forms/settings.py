@@ -129,6 +129,15 @@ class ProxboxPluginSettingsForm(forms.Form):
             "NetBox installs untouched."
         ),
     )
+    delete_orphans = forms.BooleanField(
+        required=False,
+        label="Delete orphan VMs",
+        help_text=(
+            "When enabled, full-update runs delete Proxbox-discovered VMs that were "
+            "not touched by the current sync run. Review the full-update dry-run "
+            "preview before enabling in production."
+        ),
+    )
     primary_ip_preference = forms.ChoiceField(
         required=True,
         choices=(("ipv4", "Prefer IPv4"), ("ipv6", "Prefer IPv6")),

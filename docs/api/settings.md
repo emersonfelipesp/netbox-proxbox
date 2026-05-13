@@ -59,6 +59,7 @@ curl -X PATCH \
   "use_guest_agent_interface_name": true,
   "proxbox_fetch_max_concurrency": 8,
   "ignore_ipv6_link_local_addresses": true,
+  "delete_orphans": false,
   "netbox_max_concurrent": 1,
   "netbox_max_retries": 5,
   "netbox_retry_delay": "2.00",
@@ -110,6 +111,7 @@ These fields are set by the system and cannot be modified via PATCH:
 | `backup_batch_size` | integer | Records per batch during backup/snapshot reconciliation (kept lower than bulk batches because each item triggers Proxmox calls). Default `5`. |
 | `backup_batch_delay_ms` | integer | Milliseconds to pause between backup batches. Default `200`. |
 | `custom_fields_request_delay` | decimal | Delay in seconds between custom field update requests |
+| `delete_orphans` | boolean | When `true`, full-update may delete Proxbox-discovered VMs with stale or missing `proxbox_last_run_id` stamps |
 
 ### NetBox Client
 
