@@ -175,7 +175,9 @@ class Command(BaseCommand):
             raise CommandError(f"Failed to enqueue ProxboxSyncJob: {exc}") from exc
 
         job_pk = getattr(job, "pk", None)
-        dedup_note = " (enqueue_once: reused pending or freshly created)" if enqueue_once else ""
+        dedup_note = (
+            " (enqueue_once: reused pending or freshly created)" if enqueue_once else ""
+        )
         self.stdout.write(
             self.style.SUCCESS(
                 f"Enqueued ProxboxSyncJob (pk={job_pk}) on queue "
