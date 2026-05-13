@@ -81,6 +81,7 @@ class SettingsView(
                 settings_obj.netbox_to_proxmox_typed_confirmation
             ),
             "apply_destroy_confirmed": settings_obj.apply_destroy_confirmed,
+            "hardware_discovery_enabled": settings_obj.hardware_discovery_enabled,
         }
         for name in OVERWRITE_FIELDS:
             initial[name] = getattr(settings_obj, name)
@@ -218,6 +219,9 @@ class SettingsView(
             settings_obj.apply_destroy_confirmed = form.cleaned_data.get(
                 "apply_destroy_confirmed", False
             )
+            settings_obj.hardware_discovery_enabled = form.cleaned_data.get(
+                "hardware_discovery_enabled", False
+            )
             for _overwrite_field in OVERWRITE_FIELDS:
                 setattr(
                     settings_obj,
@@ -274,6 +278,7 @@ class SettingsView(
                     "netbox_to_proxmox_enabled",
                     "netbox_to_proxmox_typed_confirmation",
                     "apply_destroy_confirmed",
+                    "hardware_discovery_enabled",
                     *OVERWRITE_FIELDS,
                 ]
             )

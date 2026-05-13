@@ -178,6 +178,22 @@
                     {% render_field form.apply_destroy_confirmed %}
                 </div>
             </div>
+            {# Hardware Discovery Card #}
+            <div class="card mb-3">
+                <h5 class="card-header">
+                    <i class="mdi mdi-server-network"></i>
+                    {% trans "Hardware Discovery" %}
+                </h5>
+                <div class="card-body">
+                    <p class="text-muted">
+                        {% blocktrans trimmed %}
+                        Enable the opt-in SSH discovery pass that reflects chassis and NIC
+                        hardware facts onto NetBox custom fields during Proxmox sync.
+                        {% endblocktrans %}
+                    </p>
+                    {% render_field form.hardware_discovery_enabled %}
+                </div>
+            </div>
             {# Encryption Card #}
             <div class="card mb-3">
                 <h5 class="card-header">

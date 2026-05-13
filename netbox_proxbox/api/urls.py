@@ -5,6 +5,10 @@ from netbox.api.routers import NetBoxRouter
 
 from . import views
 from .ha import HAClusterSummaryAPIView, HAVMResourceAPIView
+from .ssh_credentials import (
+    NodeSSHCredentialByNodeAPIView,
+    NodeSSHCredentialSecretsAPIView,
+)
 from .views import (
     BackendLogsAPIView,
     ClustersAPIView,
@@ -50,6 +54,11 @@ router.register("task-history", views.VMTaskHistoryViewSet)
 router.register(
     "settings", views.ProxboxPluginSettingsViewSet, basename="proxboxpluginsettings"
 )
+router.register(
+    "ssh-credentials",
+    views.NodeSSHCredentialViewSet,
+    basename="nodesshcredential",
+)
 
 urlpatterns = [
     path(
@@ -94,6 +103,17 @@ urlpatterns = [
         "ha/vm/<int:vmid>/",
         HAVMResourceAPIView.as_view(),
         name="api-ha-vm-resource",
+    ),
+    # SSH credentials — by-node lookup (metadata-only) + NetBox token-gated secrets.
+    path(
+        "ssh-credentials/by-node/<int:node_id>/",
+        NodeSSHCredentialByNodeAPIView.as_view(),
+        name="api-ssh-credential-by-node",
+    ),
+    path(
+        "ssh-credentials/by-node/<int:node_id>/credentials/",
+        NodeSSHCredentialSecretsAPIView.as_view(),
+        name="api-ssh-credential-secrets",
     ),
     # Model CRUD router (ProxmoxCluster/Node at proxmox-clusters/proxmox-nodes/)
     path("", include(router.urls)),

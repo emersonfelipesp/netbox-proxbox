@@ -28,6 +28,7 @@ class SseEventType(str, Enum):
     ERROR_DETAIL = "error_detail"
     PROGRESS = "progress"
     DUPLICATE_NAME_RESOLVED = "duplicate_name_resolved"
+    HARDWARE_DISCOVERY = "hardware_discovery"
 
 
 # ---------------------------------------------------------------------------
@@ -144,6 +145,19 @@ class SseDuplicateNameResolvedPayload(ProxboxLenientModel):
     vmid: int = 0
     suffix_index: int = 1
     operator_renamed: bool = False
+
+
+class SseHardwareDiscoveryPayload(ProxboxLenientModel):
+    """Payload of a ``hardware_discovery`` event from newer proxbox-api builds."""
+
+    event: str = SseEventType.HARDWARE_DISCOVERY
+    node: str = ""
+    cluster: str | None = None
+    chassis_serial: str | None = None
+    chassis_manufacturer: str | None = None
+    chassis_product: str | None = None
+    nic_count: int = 0
+    duration_ms: int | None = None
 
 
 class FastAPIUrlDict(ProxboxBaseModel):

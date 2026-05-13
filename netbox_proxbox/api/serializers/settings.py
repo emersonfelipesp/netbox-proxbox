@@ -58,6 +58,7 @@ class ProxboxPluginSettingsSerializer(NetBoxModelSerializer):
             "netbox_to_proxmox_enabled",
             "netbox_to_proxmox_typed_confirmation",
             "apply_destroy_confirmed",
+            "hardware_discovery_enabled",
             *OVERWRITE_FIELDS,
             "tags",
             "custom_fields",

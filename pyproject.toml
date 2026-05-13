@@ -9,6 +9,7 @@ authors = [
 license = "Apache-2.0"
 requires-python = ">=3.12"
 dependencies = [
+    "cryptography>=43.0.0",
     "pydantic==2.13.4",
     "requests>=2.33.0",
     "websockets>=16.0",

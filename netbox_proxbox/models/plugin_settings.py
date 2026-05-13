@@ -557,6 +557,18 @@ class ProxboxPluginSettings(NetBoxModel):
             "netbox_proxbox.authorize_deletion_request. Off by default."
         ),
     )
+    hardware_discovery_enabled = models.BooleanField(
+        default=False,
+        verbose_name=_("Enable SSH-based hardware discovery"),
+        help_text=_(
+            "Master flag for the SSH-driven hardware-discovery pass. When enabled, "
+            "proxbox-api opens a pinned-fingerprint SSH session to each ProxmoxNode that "
+            "has a stored NodeSSHCredential row, runs dmidecode + ethtool + ip link under "
+            "sudo -n, and reflects the parsed chassis / NIC values onto the matching "
+            "dcim.Device and dcim.Interface custom fields. Off by default — flipping off "
+            "results in zero SSH sockets opened during sync."
+        ),
+    )
 
     class Meta:
         verbose_name = _("Proxbox plugin settings")

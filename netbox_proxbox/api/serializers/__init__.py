@@ -27,6 +27,7 @@ from netbox_proxbox.api.serializers.endpoints import (
 )
 from netbox_proxbox.api.serializers.replication import ReplicationSerializer
 from netbox_proxbox.api.serializers.settings import ProxboxPluginSettingsSerializer
+from netbox_proxbox.api.serializers.ssh_credential import NodeSSHCredentialSerializer
 from netbox_proxbox.api.serializers.storage import (
     NestedProxmoxStorageSerializer,
     ProxmoxStorageSerializer,
@@ -47,6 +48,7 @@ __all__ = (
     "NestedTokenSerializer",
     "NetBoxEndpointSerializer",
     "NestedProxmoxStorageSerializer",
+    "NodeSSHCredentialSerializer",
     "ProxboxPluginSettingsSerializer",
     "ProxmoxClusterSerializer",
     "ProxmoxEndpointSerializer",

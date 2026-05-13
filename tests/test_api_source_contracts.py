@@ -529,6 +529,7 @@ def test_plugin_api_routes_register_all_plugin_objects():
         "proxmox-nodes",
         "replications",
         "settings",
+        "ssh-credentials",
         "storage",
         "backups",
         "snapshots",

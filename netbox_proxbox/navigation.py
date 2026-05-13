@@ -151,6 +151,18 @@ fastapi_endpoints_item = PluginMenuItem(
     ),
 )
 
+ssh_credentials_item = PluginMenuItem(
+    link="plugins:netbox_proxbox:nodesshcredential_list",
+    link_text="SSH Credentials",
+    buttons=(
+        PluginMenuButton(
+            "plugins:netbox_proxbox:nodesshcredential_add",
+            "Add SSH Credential",
+            "mdi mdi-plus",
+        ),
+    ),
+)
+
 community_item = PluginMenuItem(
     link="plugins:netbox_proxbox:community",
     link_text="Community",
@@ -228,6 +240,7 @@ menu = PluginMenu(
                 proxmox_endpoints_item,
                 netbox_endpoints_item,
                 fastapi_endpoints_item,
+                ssh_credentials_item,
             ),
         ),
         (

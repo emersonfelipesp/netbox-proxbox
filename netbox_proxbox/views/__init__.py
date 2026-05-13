@@ -73,6 +73,13 @@ from .resource_list_views import (
 )
 from .schedule_sync import QuickScheduleSyncFromHomeView, ScheduleSyncView
 from .settings import SettingsView
+from .ssh_credential import (
+    NodeSSHCredentialBulkDeleteView,
+    NodeSSHCredentialDeleteView,
+    NodeSSHCredentialEditView,
+    NodeSSHCredentialListView,
+    NodeSSHCredentialView,
+)
 from .storage import (
     ProxmoxStorageBulkDeleteView,
     ProxmoxStorageBackupsTabView,
