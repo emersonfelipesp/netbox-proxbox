@@ -11,7 +11,7 @@ GET   /api/plugins/proxbox/settings/{id}/
 PATCH /api/plugins/proxbox/settings/{id}/
 ```
 
-For common API conventions (authentication, pagination, nested serializers), see [API Overview](index.md).
+For common API conventions (authentication, pagination, nested serializers), see [API Overview](index.md). For the human-readable description of every tunable (defaults, env-var overrides, resolution order), see [Plugin Settings configuration guide](../configuration/plugin-settings.md).
 
 ---
 
@@ -65,6 +65,8 @@ curl -X PATCH \
   "netbox_get_cache_ttl": "60.00",
   "bulk_batch_size": 50,
   "bulk_batch_delay_ms": 500,
+  "backup_batch_size": 5,
+  "backup_batch_delay_ms": 200,
   "vm_sync_max_concurrency": 4,
   "custom_fields_request_delay": "0.00",
   "backend_log_file_path": "/var/log/proxbox.log",
@@ -105,6 +107,8 @@ These fields are set by the system and cannot be modified via PATCH:
 | `vm_sync_max_concurrency` | integer | Maximum number of VMs synced in parallel per sync run |
 | `bulk_batch_size` | integer | Number of objects per batch in bulk NetBox write operations |
 | `bulk_batch_delay_ms` | integer | Delay in milliseconds between bulk write batches |
+| `backup_batch_size` | integer | Records per batch during backup/snapshot reconciliation (kept lower than bulk batches because each item triggers Proxmox calls). Default `5`. |
+| `backup_batch_delay_ms` | integer | Milliseconds to pause between backup batches. Default `200`. |
 | `custom_fields_request_delay` | decimal | Delay in seconds between custom field update requests |
 
 ### NetBox Client

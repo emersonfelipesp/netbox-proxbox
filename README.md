@@ -20,6 +20,18 @@ Proxbox discovers and syncs the following from Proxmox into NetBox:
 
 Sync runs on-demand from the NetBox UI or scheduled automatically via NetBox's job system.
 
+## What's New in v0.0.15
+
+Paired with backend [`proxbox-api 0.0.11`](https://github.com/emersonfelipesp/proxbox-api):
+
+- **Cluster HA visibility** — new per-VM **HA tab** and cluster-wide **HA Status** page, both fetched live from `proxbox-api` (no persistence, no migration). See [HA feature](https://emersonfelipesp.github.io/netbox-proxbox/features/ha/).
+- **`Use HTTPS` decoupled from `Verify SSL`** on `FastAPIEndpoint` — supports the `*-nginx` image's self-signed mkcert TLS without disabling cert verification globally. See [Backend Setup](https://emersonfelipesp.github.io/netbox-proxbox/installation/backend-setup/).
+- **`proxbox_sync` headless command** — `python manage.py proxbox_sync` enqueues the same full-update job as the UI button; usable from cron, systemd timers, or CI. See [Headless Sync](https://emersonfelipesp.github.io/netbox-proxbox/operations/headless-sync/).
+- **Runtime sync tunables** on `ProxboxPluginSettings` (`bulk_batch_size`, `bulk_batch_delay_ms`, `backup_batch_size`, `backup_batch_delay_ms`, `vm_sync_max_concurrency`) plus the new `overwrite_vm_type` and `overwrite_ip_address_dns_name` flags. See [Plugin Settings](https://emersonfelipesp.github.io/netbox-proxbox/configuration/plugin-settings/) and [Sync Overwrite Flags](https://emersonfelipesp.github.io/netbox-proxbox/configuration/sync-overwrite-flags/).
+- **NetBox 4.6 auto-detect** — the VM type plugin pages branch automatically on the presence of NetBox 4.6's `VirtualMachineType` relation, keeping a working path for both 4.5.x and 4.6.x.
+
+Full notes: [Release Notes — v0.0.15](https://emersonfelipesp.github.io/netbox-proxbox/release-notes/version-0.0.15/).
+
 ## Compatibility Matrix
 
 | NetBox   | netbox-proxbox | proxbox-api | netbox-sdk     | proxmox-sdk    |
