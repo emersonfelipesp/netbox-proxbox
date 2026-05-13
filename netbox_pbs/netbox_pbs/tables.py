@@ -10,9 +10,9 @@ the ``actions`` dict on each ``ObjectListView``).
 from __future__ import annotations
 
 from django.utils.translation import gettext_lazy as _
-from django_tables2 import tables
+import django_tables2 as tables
 
-from netbox.tables import ChoiceFieldColumn, NetBoxTable
+from netbox.tables import BooleanColumn, ChoiceFieldColumn, NetBoxTable
 
 from netbox_pbs.models import (
     PBSBackupGroup,
@@ -30,7 +30,7 @@ class PBSEndpointTable(NetBoxTable):
     name = tables.Column(linkify=True)
     host = tables.Column()
     port = tables.Column()
-    verify_ssl = tables.BooleanColumn(verbose_name=_("Verify SSL"))
+    verify_ssl = BooleanColumn(verbose_name=_("Verify SSL"))
     last_seen_at = tables.DateTimeColumn(verbose_name=_("Last seen"))
 
     class Meta(NetBoxTable.Meta):
@@ -163,9 +163,9 @@ class PBSSnapshotTable(NetBoxTable):
     backup_group = tables.Column(linkify=True)
     backup_time = tables.DateTimeColumn(linkify=True, verbose_name=_("Backup time"))
     size_bytes = tables.Column(verbose_name=_("Size"))
-    encrypted = tables.BooleanColumn()
+    encrypted = BooleanColumn()
     verified = ChoiceFieldColumn()
-    protected = tables.BooleanColumn()
+    protected = BooleanColumn()
 
     class Meta(NetBoxTable.Meta):
         model = PBSSnapshot
@@ -198,7 +198,7 @@ class PBSJobStatusTable(NetBoxTable):
     job_type = ChoiceFieldColumn(verbose_name=_("Type"))
     job_id = tables.Column(linkify=True, verbose_name=_("Job ID"))
     datastore = tables.Column(linkify=True)
-    enabled = tables.BooleanColumn()
+    enabled = BooleanColumn()
     last_run_at = tables.DateTimeColumn(verbose_name=_("Last run"))
     last_run_state = ChoiceFieldColumn(verbose_name=_("Last state"))
     next_run_at = tables.DateTimeColumn(verbose_name=_("Next run"))
