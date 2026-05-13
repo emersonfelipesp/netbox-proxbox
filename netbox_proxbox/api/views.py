@@ -223,12 +223,13 @@ class NodeSSHCredentialViewSet(NetBoxModelViewSet):
     """REST API for per-node SSH credentials used by hardware discovery.
 
     Secrets are write-only on this viewset. Callers that need decrypted
-    secrets (the proxbox-api orchestrator) use the dedicated Bearer-gated
+    secrets (the proxbox-api orchestrator) use the dedicated NetBox API-token
     shim at ``/ssh-credentials/by-node/<node_id>/credentials/``.
     """
 
     queryset = models.NodeSSHCredential.objects.select_related("node")
     serializer_class = NodeSSHCredentialSerializer
+    filterset_class = filtersets.NodeSSHCredentialFilterSet
 
 
 class _ProxboxDashboardPermission(BasePermission):

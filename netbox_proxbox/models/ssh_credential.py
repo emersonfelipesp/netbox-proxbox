@@ -147,6 +147,16 @@ class NodeSSHCredential(NetBoxModel):
     def __str__(self) -> str:
         return f"{self.username}@{self.node}"
 
+    @property
+    def has_password(self) -> bool:
+        """Return whether a password ciphertext is stored."""
+        return bool(self.password_enc)
+
+    @property
+    def has_private_key(self) -> bool:
+        """Return whether a private-key ciphertext is stored."""
+        return bool(self.private_key_enc)
+
     def get_absolute_url(self) -> str:
         """Plugin UI URL for this credential's detail view."""
         return reverse("plugins:netbox_proxbox:nodesshcredential", args=[self.pk])

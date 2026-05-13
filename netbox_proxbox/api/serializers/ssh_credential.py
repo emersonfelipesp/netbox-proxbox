@@ -4,7 +4,7 @@ CRUD-shape serializer that lets operators store credentials through the REST
 API or the NetBox UI. Secrets are write-only and never reflected back in any
 response — `password_enc` / `private_key_enc` ciphertext is not exposed
 either. Callers that need the *decrypted* secrets go through the dedicated
-Bearer-only shim at
+NetBox API-token-protected shim at
 ``/api/plugins/proxbox/ssh-credentials/by-node/<node_id>/credentials/``
 (see ``netbox_proxbox/api/ssh_credentials.py``).
 
@@ -82,23 +82,23 @@ class NodeSSHCredentialSerializer(NetBoxModelSerializer):
     def _apply_secrets(self, instance: NodeSSHCredential, validated_data: dict) -> None:
         password = validated_data.pop("password", None)
         private_key = validated_data.pop("private_key", None)
-        if password is None and private_key is None:
+        if not password and not private_key:
             return
         key = self._resolve_encryption_key()
-        if password is not None:
+        if password:
             instance.password_enc = enc_helpers.encrypt(password, key=key)
-        if private_key is not None:
+        if private_key:
             instance.private_key_enc = enc_helpers.encrypt(private_key, key=key)
 
     def create(self, validated_data: dict) -> NodeSSHCredential:
         password = validated_data.pop("password", None)
         private_key = validated_data.pop("private_key", None)
         instance = NodeSSHCredential(**validated_data)
-        if password is not None or private_key is not None:
+        if password or private_key:
             key = self._resolve_encryption_key()
-            if password is not None:
+            if password:
                 instance.password_enc = enc_helpers.encrypt(password, key=key)
-            if private_key is not None:
+            if private_key:
                 instance.private_key_enc = enc_helpers.encrypt(private_key, key=key)
         instance.full_clean()
         instance.save()

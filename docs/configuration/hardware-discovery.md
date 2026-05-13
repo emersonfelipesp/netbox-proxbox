@@ -5,10 +5,14 @@ manufacturer, product name) or per-NIC link details (negotiated speed,
 duplex, link state). Operators that need those fields populated in NetBox
 historically had to hand-edit each `dcim.Device` and `dcim.Interface`.
 
-Starting with `netbox-proxbox 0.0.16` (and `proxbox-api 0.0.12`), the
-plugin can run an opt-in **SSH-driven discovery pass** that runs
-`dmidecode` and `ethtool` on each Proxmox node and reflects the parsed
-values onto the matching NetBox records.
+In the `netbox-proxbox 0.0.15` line, the plugin can store per-node SSH
+credentials, expose a token-gated credential endpoint, and register the
+NetBox custom fields used by an opt-in **SSH-driven discovery pass**. The
+released `proxbox-api 0.0.11` backend remains compatible and simply does
+not run this discovery pass; discovery activates with a backend build that
+includes [proxbox-api PR #80](https://github.com/emersonfelipesp/proxbox-api/pull/80).
+That backend runs `dmidecode` and `ethtool` on each Proxmox node and
+reflects the parsed values onto the matching NetBox records.
 
 This page is the operator-facing setup guide.
 
@@ -38,6 +42,7 @@ proxbox-api                NetBox plugin                Proxmox node
 1. Fetch credentials ────►  /api/plugins/proxbox/
                             ssh-credentials/by-node/
                             <node_id>/credentials/
+                            (NetBox API token)
 
 2. Open SSH session ─────────────────────────────────►  sshd (port 22)
    (pinned fingerprint,                                  ↓
@@ -218,16 +223,21 @@ affected credentials) before the next sync.
 
 ### 403 from the secrets endpoint
 
-The Bearer token does not match `FastAPIEndpoint.token`. Confirm
-proxbox-api is configured against this NetBox and that the
-`FastAPIEndpoint` row's token matches the proxbox-api `.env`.
+The NetBox API token used by proxbox-api was rejected, the request was not
+HTTPS while `DEBUG=False`, or the token's user lacks
+`netbox_proxbox.view_nodesshcredential`. Confirm proxbox-api is configured
+against this NetBox, sends `Authorization: Token <key>` (or NetBox v2's
+`Bearer <key.secret>` form), and uses a service account with the
+credential-view permission. This endpoint does not use
+`FastAPIEndpoint.token`.
 
 ## Security boundary recap
 
 - Browser users with the standard `view` permission on the credential
   see only metadata (`has_password`, `has_private_key`, fingerprint).
-- Plaintext is only returned to the Bearer-gated
-  `…/credentials/` endpoint, which refuses non-HTTPS when `DEBUG=False`.
+- Plaintext is only returned to the NetBox API-token-gated
+  `…/credentials/` endpoint, which rejects browser sessions and refuses
+  non-HTTPS when `DEBUG=False`.
 - All SSH primitives are pinned to modern AEAD ciphers, ETM MACs, and
   curve25519 kex inside `proxmox-sdk.ssh.RemoteSSHClient`.
 - The discovery user runs a `command=`-locked script, has no shell, no

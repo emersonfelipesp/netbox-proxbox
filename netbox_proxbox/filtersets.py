@@ -10,6 +10,7 @@ from .models import (
     BackupRoutine,
     FastAPIEndpoint,
     NetBoxEndpoint,
+    NodeSSHCredential,
     ProxmoxCluster,
     ProxmoxEndpoint,
     ProxmoxNode,
@@ -88,6 +89,25 @@ class FastAPIEndpointFilterSet(ProxboxModelFilterSet):
         if not value.strip():
             return queryset
         return queryset.filter(Q(name__icontains=value) | Q(domain__icontains=value))
+
+
+@register_filterset
+class NodeSSHCredentialFilterSet(ProxboxModelFilterSet):
+    """Filter per-node SSH credential rows."""
+
+    class Meta:
+        model = NodeSSHCredential
+        fields = ("id", "node", "username", "auth_method", "port", "sudo_required")
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        """Match username, Proxmox node name, or linked NetBox device name."""
+        if not value.strip():
+            return queryset
+        return queryset.filter(
+            Q(username__icontains=value)
+            | Q(node__name__icontains=value)
+            | Q(node__netbox_device__name__icontains=value)
+        )
 
 
 @register_filterset

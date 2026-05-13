@@ -104,7 +104,7 @@ urlpatterns = [
         HAVMResourceAPIView.as_view(),
         name="api-ha-vm-resource",
     ),
-    # SSH credentials — by-node lookup (metadata-only) + Bearer-gated secrets.
+    # SSH credentials — by-node lookup (metadata-only) + NetBox token-gated secrets.
     path(
         "ssh-credentials/by-node/<int:node_id>/",
         NodeSSHCredentialByNodeAPIView.as_view(),

@@ -3,8 +3,9 @@
 The endpoint module is half permission policy and half decrypt-and-return
 plumbing. Both halves are exercised here without booting Django/DRF:
 
-* ``_ProxboxBackendBearer.has_permission`` — accepts the configured
-  FastAPI endpoint token, rejects everything else.
+* ``_NetBoxTokenCanViewNodeSSHCredential.has_permission`` — accepts NetBox
+  API-token requests whose user has ``view_nodesshcredential`` and rejects
+  browser/session-style callers.
 * AST contract on the two ``APIView`` classes — locks the permission
   classes, the HTTPS-required guard, and the encryption-key-missing
   ``503`` branch.
@@ -29,21 +30,58 @@ URLS_PATH = REPO_ROOT / "netbox_proxbox" / "api" / "urls.py"
 
 
 # ---------------------------------------------------------------------------
-# Behavior: _ProxboxBackendBearer.has_permission
+# Behavior: _NetBoxTokenCanViewNodeSSHCredential.has_permission
 # ---------------------------------------------------------------------------
 
 
-def _stub_for_ssh_credentials(monkeypatch, *, token: str | None = "expected-token"):
+def _stub_for_ssh_credentials(
+    monkeypatch,
+    *,
+    authenticated: bool = True,
+    has_perm: bool = True,
+):
     """Minimal stubs so ``ssh_credentials.py`` imports cleanly."""
 
     django = types.ModuleType("django")
+    django.__path__ = []
     django_conf = types.ModuleType("django.conf")
     django_conf.settings = SimpleNamespace(DEBUG=False)
 
     django_shortcuts = types.ModuleType("django.shortcuts")
-    django_shortcuts.get_object_or_404 = lambda *a, **kw: SimpleNamespace()
+    django_shortcuts.get_object_or_404 = lambda queryset, **kw: queryset.get(**kw)
+
+    netbox = types.ModuleType("netbox")
+    netbox.__path__ = []
+    netbox_api = types.ModuleType("netbox.api")
+    netbox_api.__path__ = []
+    netbox_api_auth = types.ModuleType("netbox.api.authentication")
+
+    class _TokenAuthentication:
+        def authenticate(self, request):
+            header = request.headers.get("Authorization", "")
+            accepted_headers = {
+                "Token expected-token",
+                "Bearer nbt_key.expected-secret",
+            }
+            if header not in accepted_headers:
+                return None
+
+            user = SimpleNamespace(is_authenticated=authenticated)
+
+            def _has_perm(permission):
+                return (
+                    has_perm and permission == "netbox_proxbox.view_nodesshcredential"
+                )
+
+            user.has_perm = _has_perm
+            return user, SimpleNamespace(key=header.split(" ", 1)[1])
+
+    netbox_api_auth.TokenAuthentication = _TokenAuthentication
+    netbox.api = netbox_api
+    netbox_api.authentication = netbox_api_auth
 
     rest_framework = types.ModuleType("rest_framework")
+    rest_framework.__path__ = []
     rf_status = types.ModuleType("rest_framework.status")
     rf_status.HTTP_403_FORBIDDEN = 403
     rf_status.HTTP_503_SERVICE_UNAVAILABLE = 503
@@ -74,30 +112,16 @@ def _stub_for_ssh_credentials(monkeypatch, *, token: str | None = "expected-toke
     rf_views = types.ModuleType("rest_framework.views")
     rf_views.APIView = _APIView
 
-    class _FastAPIEndpoint:
-        @classmethod
-        def configure(cls, token_value):
-            class _QS:
-                @staticmethod
-                def first():
-                    if token_value is None:
-                        return None
-                    return SimpleNamespace(token=token_value)
-
-            cls.objects = _QS
-
-    _FastAPIEndpoint.configure(token)
-
     class _ProxboxPluginSettings:
         @staticmethod
         def get_solo():
             return SimpleNamespace(encryption_key="")
 
     class _NodeSSHCredential:
-        pass
+        class DoesNotExist(Exception):
+            pass
 
     np_models = types.ModuleType("netbox_proxbox.models")
-    np_models.FastAPIEndpoint = _FastAPIEndpoint
     np_models.NodeSSHCredential = _NodeSSHCredential
     np_models.ProxboxPluginSettings = _ProxboxPluginSettings
 
@@ -117,6 +141,9 @@ def _stub_for_ssh_credentials(monkeypatch, *, token: str | None = "expected-toke
         ("django", django),
         ("django.conf", django_conf),
         ("django.shortcuts", django_shortcuts),
+        ("netbox", netbox),
+        ("netbox.api", netbox_api),
+        ("netbox.api.authentication", netbox_api_auth),
         ("rest_framework", rest_framework),
         ("rest_framework.status", rf_status),
         ("rest_framework.permissions", rf_permissions),
@@ -130,14 +157,22 @@ def _stub_for_ssh_credentials(monkeypatch, *, token: str | None = "expected-toke
         monkeypatch.setitem(sys.modules, name, mod)
 
     return SimpleNamespace(
-        FastAPIEndpoint=_FastAPIEndpoint,
         NodeSSHCredential=_NodeSSHCredential,
         ProxboxPluginSettings=_ProxboxPluginSettings,
     )
 
 
-def _load_ssh_credentials_view(monkeypatch, *, token: str | None = "expected-token"):
-    stubs = _stub_for_ssh_credentials(monkeypatch, token=token)
+def _load_ssh_credentials_view(
+    monkeypatch,
+    *,
+    authenticated: bool = True,
+    has_perm: bool = True,
+):
+    stubs = _stub_for_ssh_credentials(
+        monkeypatch,
+        authenticated=authenticated,
+        has_perm=has_perm,
+    )
     spec = importlib.util.spec_from_file_location(
         "_ssh_credentials_under_test", API_PATH
     )
@@ -154,42 +189,121 @@ def _request(*, header: str = ""):
     )
 
 
-def test_bearer_rejects_missing_header(monkeypatch):
+def test_netbox_token_rejects_missing_header(monkeypatch):
     module, _ = _load_ssh_credentials_view(monkeypatch)
-    perm = module._ProxboxBackendBearer()
+    perm = module._NetBoxTokenCanViewNodeSSHCredential()
     assert perm.has_permission(_request(), object()) is False
 
 
-def test_bearer_rejects_non_bearer_scheme(monkeypatch):
+def test_netbox_token_rejects_non_api_token_scheme(monkeypatch):
     module, _ = _load_ssh_credentials_view(monkeypatch)
-    perm = module._ProxboxBackendBearer()
+    perm = module._NetBoxTokenCanViewNodeSSHCredential()
     assert perm.has_permission(_request(header="Basic abc"), object()) is False
 
 
-def test_bearer_rejects_empty_token(monkeypatch):
+def test_netbox_token_rejects_empty_token(monkeypatch):
     module, _ = _load_ssh_credentials_view(monkeypatch)
-    perm = module._ProxboxBackendBearer()
+    perm = module._NetBoxTokenCanViewNodeSSHCredential()
     assert perm.has_permission(_request(header="Bearer "), object()) is False
 
 
-def test_bearer_rejects_wrong_token(monkeypatch):
+def test_netbox_token_rejects_wrong_token(monkeypatch):
     module, _ = _load_ssh_credentials_view(monkeypatch)
-    perm = module._ProxboxBackendBearer()
+    perm = module._NetBoxTokenCanViewNodeSSHCredential()
     assert perm.has_permission(_request(header="Bearer wrong"), object()) is False
 
 
-def test_bearer_accepts_matching_token(monkeypatch):
+def test_netbox_token_accepts_token_scheme(monkeypatch):
     module, _ = _load_ssh_credentials_view(monkeypatch)
-    perm = module._ProxboxBackendBearer()
+    perm = module._NetBoxTokenCanViewNodeSSHCredential()
     assert (
-        perm.has_permission(_request(header="Bearer expected-token"), object()) is True
+        perm.has_permission(_request(header="Token expected-token"), object()) is True
     )
 
 
-def test_bearer_rejects_when_no_endpoint_row(monkeypatch):
-    module, _ = _load_ssh_credentials_view(monkeypatch, token=None)
-    perm = module._ProxboxBackendBearer()
-    assert perm.has_permission(_request(header="Bearer anything"), object()) is False
+def test_netbox_token_accepts_bearer_scheme(monkeypatch):
+    module, _ = _load_ssh_credentials_view(monkeypatch)
+    perm = module._NetBoxTokenCanViewNodeSSHCredential()
+    assert (
+        perm.has_permission(_request(header="Bearer nbt_key.expected-secret"), object())
+        is True
+    )
+
+
+def test_netbox_token_rejects_user_without_permission(monkeypatch):
+    module, _ = _load_ssh_credentials_view(monkeypatch, has_perm=False)
+    perm = module._NetBoxTokenCanViewNodeSSHCredential()
+    assert (
+        perm.has_permission(_request(header="Token expected-token"), object()) is False
+    )
+
+
+def test_netbox_token_rejects_unauthenticated_user(monkeypatch):
+    module, _ = _load_ssh_credentials_view(monkeypatch, authenticated=False)
+    perm = module._NetBoxTokenCanViewNodeSSHCredential()
+    assert (
+        perm.has_permission(_request(header="Token expected-token"), object()) is False
+    )
+
+
+# ---------------------------------------------------------------------------
+# Behavior: node lookup accepts ProxmoxNode PK with NetBox device PK fallback
+# ---------------------------------------------------------------------------
+
+
+def test_credential_lookup_prefers_proxmox_node_id(monkeypatch):
+    module, stubs = _load_ssh_credentials_view(monkeypatch)
+    credential = SimpleNamespace(pk=1)
+
+    class _QuerySet:
+        def __init__(self):
+            self.calls = []
+
+        def select_related(self, *fields):
+            self.select_related_fields = fields
+            return self
+
+        def get(self, **kwargs):
+            self.calls.append(kwargs)
+            if kwargs == {"node_id": 42}:
+                return credential
+            raise AssertionError(f"unexpected lookup: {kwargs}")
+
+    queryset = _QuerySet()
+    stubs.NodeSSHCredential.objects = queryset
+
+    assert module._credential_for_node_identifier(42) is credential
+    assert queryset.calls == [{"node_id": 42}]
+    assert queryset.select_related_fields == ("node", "node__netbox_device")
+
+
+def test_credential_lookup_falls_back_to_netbox_device_id(monkeypatch):
+    module, stubs = _load_ssh_credentials_view(monkeypatch)
+    credential = SimpleNamespace(pk=2)
+
+    class _QuerySet:
+        def __init__(self):
+            self.calls = []
+
+        def select_related(self, *fields):
+            return self
+
+        def get(self, **kwargs):
+            self.calls.append(kwargs)
+            if kwargs == {"node_id": 99}:
+                raise stubs.NodeSSHCredential.DoesNotExist()
+            if kwargs == {"node__netbox_device_id": 99}:
+                return credential
+            raise AssertionError(f"unexpected lookup: {kwargs}")
+
+    queryset = _QuerySet()
+    stubs.NodeSSHCredential.objects = queryset
+
+    assert module._credential_for_node_identifier(99) is credential
+    assert queryset.calls == [
+        {"node_id": 99},
+        {"node__netbox_device_id": 99},
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -253,7 +367,7 @@ def test_by_node_view_uses_dashboard_permission(api_ast):
     assert "_ProxboxDashboardPermission" in src
 
 
-def test_secrets_view_uses_backend_bearer(api_ast):
+def test_secrets_view_uses_netbox_token_permission(api_ast):
     cls = _class_def(api_ast, "NodeSSHCredentialSecretsAPIView")
     targets = []
     for node in cls.body:
@@ -263,7 +377,7 @@ def test_secrets_view_uses_backend_bearer(api_ast):
                     targets.append(node)
     assert targets, "permission_classes assignment missing on SecretsAPIView"
     src = ast.get_source_segment(API_PATH.read_text(), targets[0])
-    assert src is not None and "_ProxboxBackendBearer" in src
+    assert src is not None and "_NetBoxTokenCanViewNodeSSHCredential" in src
 
 
 def test_secrets_view_blocks_non_https_in_production(api_ast):

@@ -2,13 +2,14 @@
 
 ## Summary
 
-Version `0.0.15` fixes three issues and adds two new features in pair with backend `proxbox-api 0.0.11`:
+Version `0.0.15` fixes several sync/UI issues and adds operator-facing features in pair with backend `proxbox-api 0.0.11`. The package version remains `0.0.15`; the hardware-discovery work below is a forward-compatible credential surface for the backend build merged in `proxbox-api` PR #80.
 
 - [Issue #352](https://github.com/emersonfelipesp/netbox-proxbox/issues/352): the `FastAPIEndpoint` model could not express the combination "use HTTPS but skip certificate verification", which is the default state of the proxbox-api `*-nginx` image (TLS-only with a self-signed mkcert certificate).
 - [Issue #354](https://github.com/emersonfelipesp/netbox-proxbox/issues/354): IPAM `IPAddress` records created during virtualization sync had an empty `dns_name`, even though Proxmox knew the guest hostname. The plugin now exposes a new `overwrite_ip_address_dns_name` setting (global + per-endpoint) so operators can opt out of `dns_name` writes; the actual hostname resolution and write live in `proxbox-api 0.0.11`.
 - [Issue #391](https://github.com/emersonfelipesp/netbox-proxbox/issues/391): the Virtual Machines and LXC Containers plugin pages now auto-detect whether the installed NetBox has the 4.6 `VirtualMachineType` relation. NetBox 4.5.x stays on the legacy `proxmox_vm_type` custom-field path, while NetBox 4.6.x keeps native type support.
 - [Issue #243](https://github.com/emersonfelipesp/netbox-proxbox/issues/243): Proxmox cluster High-Availability state was not surfaced anywhere in NetBox. The plugin now ships a per-VM **HA tab** and a cluster-wide **HA Status** page, both backed by new read-only HA endpoints in `proxbox-api 0.0.11`.
 - [Issue #360](https://github.com/emersonfelipesp/netbox-proxbox/issues/360): operators had no headless way to trigger a full Proxmox→NetBox sync — every run required a human clicking **Full Update** in the plugin UI, which blocked cron, systemd timers, Kubernetes CronJobs, and CI smoke checks. The plugin now ships a `python manage.py proxbox_sync` Django management command that enqueues the same `ProxboxSyncJob` as the UI button.
+- [Issue #374](https://github.com/emersonfelipesp/netbox-proxbox/issues/374): the plugin now exposes per-node SSH credential CRUD, renders the hardware-discovery feature flag in Settings, and serves decrypted secrets only to NetBox API tokens with `netbox_proxbox.view_nodesshcredential`. Existing `proxbox-api 0.0.11` deployments stay wire-compatible; the SSH discovery pass starts when the backend includes [proxbox-api PR #80](https://github.com/emersonfelipesp/proxbox-api/pull/80).
 
 ## #352 — `Use HTTPS` toggle decoupled from `Verify SSL`
 
@@ -109,9 +110,24 @@ python manage.py proxbox_sync --user backupbot --wait
 
 No DB migration. No model change. No new persisted state.
 
+## #374 — SSH hardware-discovery credential surface
+
+Hardware discovery needs a secure handoff from NetBox to proxbox-api before the backend can open SSH sessions. This release keeps the plugin version at `0.0.15` and adds the NetBox-side surface without requiring existing `proxbox-api 0.0.11` installs to change behavior.
+
+### Changes
+
+- **`NodeSSHCredential` UI CRUD.** Operators can list, view, add, edit, delete, bulk-delete, and filter per-node SSH credential rows from **Plugins → Proxbox → SSH Credentials**. The form encrypts new password/private-key inputs and leaves existing secrets untouched when edit fields are blank.
+- **Credential API compatibility.** The by-node lookup still resolves the intended `ProxmoxNode` id and now falls back to the linked NetBox `dcim.Device` id, matching the backend behavior merged in `proxbox-api` PR #80.
+- **Secrets endpoint hardening.** The plaintext endpoint now requires a NetBox API token (`Token ...` or NetBox v2 `Bearer ...`) whose user has `netbox_proxbox.view_nodesshcredential`. Browser sessions and `FastAPIEndpoint.token` are not accepted for decrypted SSH secrets.
+- **Settings and stream mirrors.** The Settings page renders `hardware_discovery_enabled`, and the SSE schema mirror accepts future `hardware_discovery` frames while keeping the committed `proxbox-api 0.0.11` contract as the baseline.
+- **Docs.** New operator documentation covers SSH user setup, host-key pinning, credential entry, troubleshooting, and the compatibility split between `proxbox-api 0.0.11` and the backend build containing PR #80.
+
+No version bump beyond `0.0.15`. The existing backend remains compatible; enabling the SSH discovery pass requires the backend code from `proxbox-api` PR #80 or a later backend build that includes it.
+
 ## Upgrade Notes
 
 - Run `python manage.py migrate netbox_proxbox` after upgrading; the migrations are additive and include a one-time data backfill (issue #352) and a single new column on `ProxboxPluginSettings` and `ProxmoxEndpoint` (issue #354).
 - If you operate the proxbox-api `*-nginx` image and previously could not connect, edit the FastAPI endpoint after upgrade and tick **Use HTTPS** (and untick **Verify SSL** if you use the bundled mkcert cert).
 - For the `dns_name` fix, pair with `proxbox-api ≥ 0.0.11`. `proxbox-api 0.0.10.post2` is still wire-compatible for the `Use HTTPS` fix but does not populate `dns_name`. With an older backend, the new toggle has no effect because the backend never writes `dns_name`.
 - The `dns_name` default is "always overwrite" to match every other overwrite flag. If you have hand-edited `dns_name` on synced IPs, untick **Overwrite IP address DNS name** before the next sync (globally, or per Proxmox endpoint).
+- For SSH hardware discovery, create a NetBox service account/token with `netbox_proxbox.view_nodesshcredential`, use HTTPS for the secrets endpoint when `DEBUG=False`, and run a backend build that includes `proxbox-api` PR #80. `proxbox-api 0.0.11` ignores the new credential surface and remains supported.

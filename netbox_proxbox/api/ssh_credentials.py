@@ -11,8 +11,8 @@ a way to retrieve them:
   ``_ProxboxDashboardPermission``.
 * ``GET /api/plugins/proxbox/ssh-credentials/by-node/<node_id>/credentials/``
   — full payload including the decrypted password / private key. Requires
-  a Bearer header matching ``FastAPIEndpoint.token`` (the proxbox-api
-  backend) and refuses non-HTTPS in non-DEBUG mode.
+  a NetBox API token with ``view_nodesshcredential`` permission and refuses
+  non-HTTPS in non-DEBUG mode.
 
 The encryption key is read from ``ProxboxPluginSettings.encryption_key``;
 when missing the secrets endpoint returns ``503 Service Unavailable``
@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from django.conf import settings as django_settings
 from django.shortcuts import get_object_or_404
+from netbox.api.authentication import TokenAuthentication
 from rest_framework import status
 from rest_framework.permissions import BasePermission
 from rest_framework.request import Request
@@ -30,7 +31,6 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from netbox_proxbox.models import (
-    FastAPIEndpoint,
     NodeSSHCredential,
     ProxboxPluginSettings,
 )
@@ -57,27 +57,45 @@ def _metadata_payload(cred: NodeSSHCredential) -> dict:
     }
 
 
-class _ProxboxBackendBearer(BasePermission):
-    """Allow only the configured proxbox-api backend token to retrieve secrets.
+def _credential_for_node_identifier(node_id: int) -> NodeSSHCredential:
+    """Resolve credentials by ProxmoxNode PK, with NetBox device PK fallback.
 
-    The token is compared against ``FastAPIEndpoint.token`` (the same value
-    proxbox-api already uses to authenticate to this plugin's WebSocket /
-    SSE bridges). Authentication is intentionally separate from NetBox
-    user permissions: secrets must never be reachable from a browser
-    session even with full ``view`` permission.
+    ``proxbox-api`` initially passed the linked ``dcim.Device`` id when fetching
+    credentials. The primary lookup stays the intended ``ProxmoxNode`` id, while
+    the fallback keeps that backend build compatible.
+    """
+    queryset = NodeSSHCredential.objects.select_related("node", "node__netbox_device")
+    try:
+        return queryset.get(node_id=node_id)
+    except NodeSSHCredential.DoesNotExist:
+        return get_object_or_404(queryset, node__netbox_device_id=node_id)
+
+
+class _NetBoxTokenCanViewNodeSSHCredential(BasePermission):
+    """Allow only NetBox API tokens with credential view permission.
+
+    Browser sessions are intentionally rejected: decrypted SSH secrets are only
+    returned when the request carries a NetBox API token, which is the header
+    shape sent by ``proxbox-api`` through ``netbox-sdk``.
     """
 
     def has_permission(self, request: Request, view: object) -> bool:  # type: ignore[override]
         auth = request.headers.get("Authorization", "")
-        if not auth.startswith("Bearer "):
+        if not (auth.startswith("Token ") or auth.startswith("Bearer ")):
             return False
-        offered = auth[7:].strip()
-        if not offered:
+        try:
+            auth_result = TokenAuthentication().authenticate(request)
+        except Exception:
             return False
-        endpoint = FastAPIEndpoint.objects.first()
-        if endpoint is None or not endpoint.token:
+        if not auth_result:
             return False
-        return offered == endpoint.token
+        user, _token = auth_result
+        if not getattr(user, "is_authenticated", False):
+            return False
+        has_perm = getattr(user, "has_perm", None)
+        return bool(
+            callable(has_perm) and has_perm("netbox_proxbox.view_nodesshcredential")
+        )
 
 
 class NodeSSHCredentialByNodeAPIView(APIView):
@@ -91,29 +109,29 @@ class NodeSSHCredentialByNodeAPIView(APIView):
 
     def get(self, request: Request, node_id: int) -> Response:
         """Return metadata only; 404 if no row, never returns secrets."""
-        cred = get_object_or_404(NodeSSHCredential, node_id=node_id)
+        cred = _credential_for_node_identifier(node_id)
         return Response(_metadata_payload(cred))
 
 
 class NodeSSHCredentialSecretsAPIView(APIView):
     """Return the decrypted credential payload for proxbox-api.
 
-    Requires the Bearer token matching ``FastAPIEndpoint.token`` and
-    refuses non-HTTPS in non-DEBUG mode. The response is intentionally
-    minimal: just what ``proxmox_sdk.ssh.RemoteSSHClient`` needs.
+    Requires a NetBox API token with ``view_nodesshcredential`` permission and
+    refuses non-HTTPS in non-DEBUG mode. The response is intentionally minimal:
+    just what ``proxmox_sdk.ssh.RemoteSSHClient`` needs.
     """
 
-    permission_classes = [_ProxboxBackendBearer]
+    permission_classes = [_NetBoxTokenCanViewNodeSSHCredential]
 
     def get(self, request: Request, node_id: int) -> Response:
-        """Return decrypted secrets for proxbox-api Bearer callers only."""
+        """Return decrypted secrets for proxbox-api API-token callers only."""
         if not django_settings.DEBUG and not request.is_secure():
             return Response(
                 {"detail": "HTTPS required to retrieve SSH credentials."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        cred = get_object_or_404(NodeSSHCredential, node_id=node_id)
+        cred = _credential_for_node_identifier(node_id)
         settings_obj = ProxboxPluginSettings.get_solo()
         key = settings_obj.encryption_key or ""
         if not key:
