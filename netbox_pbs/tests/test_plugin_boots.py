@@ -50,14 +50,48 @@ def test_pyproject_declares_separate_wheel():
     )
 
 
-def test_pyproject_does_not_depend_on_netbox_proxbox():
+def test_pyproject_pins_netbox_proxbox_floor():
+    """Per the 2026-05-13 pivot, netbox-proxbox is a hard runtime dependency.
+
+    netbox_pbs declares ``required_plugins = ["netbox_proxbox"]`` on
+    ``PBSConfig`` and reuses ``netbox_proxbox.NetBoxEndpoint``,
+    ``netbox_proxbox.FastAPIEndpoint``, and
+    ``netbox_proxbox.services.branch_lifecycle`` directly. The pyproject
+    pin guarantees pip resolves a compatible release at install time.
+    """
     data = tomllib.loads(PYPROJECT_PATH.read_text(encoding="utf-8"))
     deps = list(data["project"].get("dependencies", []))
     normalized = [d.lower().replace("_", "-") for d in deps]
-    assert not any(d.startswith("netbox-proxbox") for d in normalized), (
-        "netbox-pbs must boot standalone — netbox-proxbox is only a soft "
-        "(optional) cross-link"
+    assert any(d.startswith("netbox-proxbox") for d in normalized), (
+        "netbox-pbs requires netbox-proxbox as a hard dependency "
+        "(see PBSConfig.required_plugins)"
     )
+
+
+def test_pluginconfig_declares_required_plugins():
+    """``PBSConfig.required_plugins`` must include ``netbox_proxbox``."""
+    module = ast.parse(INIT_PATH.read_text(encoding="utf-8"))
+    for node in ast.walk(module):
+        if isinstance(node, ast.ClassDef) and node.name == "PBSConfig":
+            for stmt in node.body:
+                if (
+                    isinstance(stmt, ast.Assign)
+                    and len(stmt.targets) == 1
+                    and isinstance(stmt.targets[0], ast.Name)
+                    and stmt.targets[0].id == "required_plugins"
+                    and isinstance(stmt.value, ast.List)
+                ):
+                    values = [
+                        elt.value
+                        for elt in stmt.value.elts
+                        if isinstance(elt, ast.Constant)
+                    ]
+                    assert "netbox_proxbox" in values, values
+                    return
+            raise AssertionError(
+                "PBSConfig.required_plugins must list 'netbox_proxbox'"
+            )
+    raise AssertionError("PBSConfig class not found")
 
 
 def test_pluginconfig_pins_metadata():

@@ -8,8 +8,10 @@ signal-backed backfill.
 
 These tests pin:
 
-* ``template_extensions`` is gated by ``apps.is_installed("netbox_proxbox")``
-  so the plugin is safe to install standalone.
+* ``template_extensions`` is an unconditional module-level list. Per the
+  2026-05-13 pivot, ``netbox_proxbox`` is declared in
+  ``PBSConfig.required_plugins``, so the cross-link is always live and the
+  old ``apps.is_installed("netbox_proxbox")`` guard is gone.
 * Both extension classes target the correct host model and define
   ``right_page``.
 * The two panel templates exist.
@@ -80,39 +82,18 @@ def test_pbssnapshot_extension_targets_pbssnapshot() -> None:
     assert "right_page" in _method_names(cls)
 
 
-def test_template_extensions_gated_on_netbox_proxbox_installed() -> None:
-    """``template_extensions`` must be populated only when proxbox is installed.
+def test_template_extensions_is_unconditional_list() -> None:
+    """``template_extensions`` must be an unconditional module-level list.
 
-    The guard pattern keeps standalone installs clean: without proxbox,
-    NetBox sees an empty list and registers no cross-plugin hooks.
+    Per the 2026-05-13 pivot, ``netbox_proxbox`` is a hard dependency
+    declared in ``PBSConfig.required_plugins`` — NetBox refuses to load
+    ``netbox_pbs`` without it — so the old
+    ``if apps.is_installed("netbox_proxbox"): template_extensions = [...]``
+    guard is gone.
     """
     module = _module()
-    # Find the top-level ``if apps.is_installed("netbox_proxbox"):`` block
-    guard = None
+    found = False
     for stmt in module.body:
-        if isinstance(stmt, ast.If):
-            test = stmt.test
-            if (
-                isinstance(test, ast.Call)
-                and isinstance(test.func, ast.Attribute)
-                and test.func.attr == "is_installed"
-                and isinstance(test.func.value, ast.Name)
-                and test.func.value.id == "apps"
-                and len(test.args) == 1
-                and isinstance(test.args[0], ast.Constant)
-                and test.args[0].value == "netbox_proxbox"
-            ):
-                guard = stmt
-                break
-    assert guard is not None, (
-        "expected top-level guard "
-        "`if apps.is_installed('netbox_proxbox'): template_extensions = [...]`"
-    )
-
-    # Inside the guard body, template_extensions must be assigned a non-empty list
-    # containing both extension classes.
-    populated = False
-    for stmt in guard.body:
         if (
             isinstance(stmt, ast.Assign)
             and len(stmt.targets) == 1
@@ -127,12 +108,24 @@ def test_template_extensions_gated_on_netbox_proxbox_installed() -> None:
                 "VMBackupPBSSnapshotExtension",
                 "PBSSnapshotVMBackupExtension",
             } <= names, names
-            populated = True
+            found = True
             break
-    assert populated, "guard body must assign template_extensions = [...]"
+    assert found, "expected module-level `template_extensions = [...]` assignment"
 
-    # Else-branch must assign an empty list (explicit fallback).
-    assert guard.orelse, "expected explicit `else: template_extensions = []` branch"
+    # And the old guard must NOT be present.
+    for stmt in module.body:
+        if isinstance(stmt, ast.If):
+            test = stmt.test
+            if (
+                isinstance(test, ast.Call)
+                and isinstance(test.func, ast.Attribute)
+                and test.func.attr == "is_installed"
+            ):
+                raise AssertionError(
+                    "Stale `apps.is_installed(...)` guard found in "
+                    "template_content.py — pivot requires unconditional "
+                    "registration."
+                )
 
 
 def test_panel_templates_exist() -> None:

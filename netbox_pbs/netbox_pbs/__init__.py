@@ -2,14 +2,14 @@
 
 This plugin adds read-only inventory for Proxmox Backup Server (PBS):
 datastores, backup groups, snapshots, and job status. The integration
-is `netbox-branching`-aware from day one (the branch lifecycle helpers
-mirror those used by ``netbox_proxbox``).
+is `netbox-branching`-aware from day one and hard-depends on
+``netbox_proxbox`` for shared utilities (NetBoxEndpoint, FastAPIEndpoint,
+branch lifecycle helpers, HTTP client patterns).
 
-When ``netbox_proxbox`` is also installed, a presentation-only
-cross-link panel is rendered on both the ``VMBackup`` detail page and
-the ``PBSSnapshot`` detail page. The two sides are matched by natural
-key (``vmid`` + ``creation_time``) — no foreign key, no schema change.
-See ``template_content.py``.
+A presentation-only cross-link panel is rendered on both the ``VMBackup``
+detail page and the ``PBSSnapshot`` detail page. The two sides are
+matched by natural key (``vmid`` + ``creation_time``) — no foreign key,
+no schema change. See ``template_content.py``.
 """
 
 from netbox.plugins import PluginConfig
@@ -31,6 +31,7 @@ class PBSConfig(PluginConfig):
     max_version = "4.6.99"
     base_url = "pbs"
     required_settings = []
+    required_plugins = ["netbox_proxbox"]
     queues = []
 
 

@@ -5,20 +5,21 @@ stage in :data:`PBS_STAGES_FULL` the job calls :func:`run_pbs_sync_stage`,
 which streams the proxbox-api SSE response and returns a structured result.
 
 The backend base URL is resolved from ``netbox_proxbox.FastAPIEndpoint`` via
-a soft import. When ``netbox_proxbox`` is not installed the helper returns a
-failed :class:`PBSStageResult` rather than raising — letting the plugin boot
-standalone and surfacing the configuration gap through the Job log.
+``netbox_proxbox.services.backend_context.get_fastapi_request_context()``.
+netbox_proxbox is a hard dependency declared in
+``PBSConfig.required_plugins``, so the import is unconditional.
 """
 
 from __future__ import annotations
 
-import importlib
 import json
 import logging
 from dataclasses import dataclass, field
 from typing import Any
 
 import requests
+
+from netbox_proxbox.services.backend_context import get_fastapi_request_context
 
 logger = logging.getLogger("netbox_pbs.http_client")
 
@@ -53,24 +54,12 @@ class PBSStageResult:
 def _resolve_backend_context() -> Any | None:
     """Return a ``BackendRequestContext`` from netbox_proxbox, or ``None``.
 
-    PBSPluginSettings does not yet carry its own FastAPI endpoint pointer
-    (planned for a follow-up sub-PR); for now we reuse the single
-    ``FastAPIEndpoint`` row owned by netbox_proxbox when that plugin is
-    co-installed.
+    PBS reuses the single ``FastAPIEndpoint`` row owned by netbox_proxbox.
+    Returns ``None`` if the row is missing or unreachable; the caller emits
+    a failed :class:`PBSStageResult` rather than raising.
     """
     try:
-        backend_context = importlib.import_module(
-            "netbox_proxbox.services.backend_context"
-        )
-    except ModuleNotFoundError:
-        logger.warning(
-            "netbox_proxbox is not installed; cannot resolve a FastAPI backend "
-            "for PBS sync. Install netbox-proxbox or add a self-owned endpoint "
-            "field to PBSPluginSettings."
-        )
-        return None
-    try:
-        return backend_context.get_fastapi_request_context()
+        return get_fastapi_request_context()
     except Exception:
         logger.exception("Failed to resolve FastAPI request context for PBS sync")
         return None

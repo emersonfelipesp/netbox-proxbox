@@ -1,21 +1,20 @@
 """Cross-plugin template hooks for ``netbox_pbs``.
 
-When ``netbox_proxbox`` is also installed, render a presentation-only
-cross-link between :class:`netbox_proxbox.models.VMBackup` and
-:class:`netbox_pbs.models.PBSSnapshot` rows that share a natural key:
+netbox_proxbox is a hard dependency (declared in
+``PBSConfig.required_plugins``), so the cross-link is always live. Render a
+presentation-only cross-link between :class:`netbox_proxbox.models.VMBackup`
+and :class:`netbox_pbs.models.PBSSnapshot` rows that share a natural key:
 
 * ``VMBackup.vmid``           == ``int(PBSSnapshot.backup_group.backup_id)``
 * ``VMBackup.creation_time``  == ``PBSSnapshot.backup_time``
 * ``PBSSnapshot.backup_group.backup_type`` == ``"vm"``
 
 The integration is read-only (issue #325 v1 scope): no foreign key, no
-schema change, no signal-backed backfill. If proxbox is not installed
-the extensions are simply not registered.
+schema change, no signal-backed backfill.
 """
 
 from __future__ import annotations
 
-from django.apps import apps
 from django.utils.safestring import mark_safe
 from netbox.plugins import PluginTemplateExtension
 
@@ -96,10 +95,7 @@ class PBSSnapshotVMBackupExtension(PluginTemplateExtension):
         )
 
 
-if apps.is_installed("netbox_proxbox"):
-    template_extensions = [
-        VMBackupPBSSnapshotExtension,
-        PBSSnapshotVMBackupExtension,
-    ]
-else:
-    template_extensions = []
+template_extensions = [
+    VMBackupPBSSnapshotExtension,
+    PBSSnapshotVMBackupExtension,
+]

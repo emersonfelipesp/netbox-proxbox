@@ -32,10 +32,7 @@ class PBSEndpoint(NetBoxModel):
     )
     host = models.CharField(
         max_length=255,
-        help_text=_(
-            "PBS hostname or IP. A plain string keeps standalone install "
-            "viable when ``ipam`` is not pre-populated."
-        ),
+        help_text=_("PBS hostname or IP."),
     )
     port = models.PositiveIntegerField(
         default=8007,
