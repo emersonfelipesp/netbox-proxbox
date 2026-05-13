@@ -106,6 +106,41 @@ jobs:
                           if isinstance(target, ast.Name) and target.id == 'version':
                               init_version = ast.literal_eval(stmt.value)
                               break
+
+          # netbox-pbs sister package (issue #325): version-locked to netbox-proxbox in v1.
+          pbs_data = tomllib.loads(
+              pathlib.Path('netbox_pbs/pyproject.toml').read_text(encoding='utf-8')
+          )
+          pbs_project_name = pbs_data['project']['name']
+          pbs_version = pbs_data['project']['version']
+          pbs_init_tree = ast.parse(
+              pathlib.Path('netbox_pbs/netbox_pbs/__init__.py').read_text(encoding='utf-8')
+          )
+          pbs_init_version = None
+          for node in pbs_init_tree.body:
+              if isinstance(node, ast.ClassDef) and node.name == 'PBSConfig':
+                  for stmt in node.body:
+                      if not isinstance(stmt, ast.Assign):
+                          continue
+                      for target in stmt.targets:
+                          if isinstance(target, ast.Name) and target.id == 'version':
+                              pbs_init_version = ast.literal_eval(stmt.value)
+                              break
+          if pbs_project_name != 'netbox-pbs':
+              raise SystemExit(
+                  f'Expected netbox_pbs project name netbox-pbs, got {pbs_project_name!r}'
+              )
+          if pbs_init_version != pbs_version:
+              raise SystemExit(
+                  f'netbox_pbs/netbox_pbs/__init__.py version mismatch: '
+                  f'init={pbs_init_version!r}, version={pbs_version!r}'
+              )
+          if pbs_version != version:
+              raise SystemExit(
+                  f'netbox-pbs version {pbs_version!r} must equal netbox-proxbox version {version!r} '
+                  'while both packages share a release train (issue #325 v1).'
+              )
+
           tag = os.getenv('GITHUB_REF_NAME', '')
           event = os.getenv('GITHUB_EVENT_NAME', '')
           release_tag = os.getenv('RELEASE_TAG_NAME', '') or ''
@@ -156,8 +191,12 @@ jobs:
               fh.write(f'version={version}\n')
           PY
 
-      - name: Build distribution
-        run: uv build
+      - name: Build netbox-proxbox distribution
+        run: uv build --out-dir dist
+
+      - name: Build netbox-pbs distribution
+        working-directory: netbox_pbs
+        run: uv build --out-dir ../dist
 
       - name: Upload dist artifacts
         uses: actions/upload-artifact@v7
@@ -228,32 +267,35 @@ jobs:
         run: |
           set -eux
           uv venv --python "${{ matrix.python-version }}" .package-smoke
-          installed=0
-          for i in $(seq 1 30); do
-            if uv pip install \
-              --python .package-smoke/bin/python \
-              --index-url https://test.pypi.org/simple/ \
-              --extra-index-url https://pypi.org/simple/ \
-              "${PACKAGE_NAME}==${PACKAGE_VERSION}"; then
-              installed=1
-              break
+          for package in "${PACKAGE_NAME}" "netbox-pbs"; do
+            installed=0
+            for i in $(seq 1 30); do
+              if uv pip install \
+                --python .package-smoke/bin/python \
+                --index-url https://test.pypi.org/simple/ \
+                --extra-index-url https://pypi.org/simple/ \
+                "${package}==${PACKAGE_VERSION}"; then
+                installed=1
+                break
+              fi
+              sleep 10
+            done
+            if [ "$installed" -ne 1 ]; then
+              exit 1
             fi
-            sleep 10
           done
-          if [ "$installed" -ne 1 ]; then
-            exit 1
-          fi
+          PACKAGE_NAMES="${PACKAGE_NAME},netbox-pbs" \
           .package-smoke/bin/python - <<'PY'
           import importlib.metadata as metadata
           import os
 
-          package_name = os.environ["PACKAGE_NAME"]
           package_version = os.environ["PACKAGE_VERSION"]
-          installed_version = metadata.version(package_name)
-          if installed_version != package_version:
-              raise SystemExit(
-                  f"Installed {package_name} {installed_version}, expected {package_version}"
-              )
+          for package_name in os.environ["PACKAGE_NAMES"].split(","):
+              installed_version = metadata.version(package_name)
+              if installed_version != package_version:
+                  raise SystemExit(
+                      f"Installed {package_name} {installed_version}, expected {package_version}"
+                  )
           PY
 
       - name: Sync development environment
@@ -380,31 +422,34 @@ jobs:
         run: |
           set -eux
           uv venv --python "${{ matrix.python-version }}" .package-smoke
-          installed=0
-          for i in $(seq 1 30); do
-            if uv pip install \
-              --python .package-smoke/bin/python \
-              --index-url https://pypi.org/simple/ \
-              "${PACKAGE_NAME}==${PACKAGE_VERSION}"; then
-              installed=1
-              break
+          for package in "${PACKAGE_NAME}" "netbox-pbs"; do
+            installed=0
+            for i in $(seq 1 30); do
+              if uv pip install \
+                --python .package-smoke/bin/python \
+                --index-url https://pypi.org/simple/ \
+                "${package}==${PACKAGE_VERSION}"; then
+                installed=1
+                break
+              fi
+              sleep 10
+            done
+            if [ "$installed" -ne 1 ]; then
+              exit 1
             fi
-            sleep 10
           done
-          if [ "$installed" -ne 1 ]; then
-            exit 1
-          fi
+          PACKAGE_NAMES="${PACKAGE_NAME},netbox-pbs" \
           .package-smoke/bin/python - <<'PY'
           import importlib.metadata as metadata
           import os
 
-          package_name = os.environ["PACKAGE_NAME"]
           package_version = os.environ["PACKAGE_VERSION"]
-          installed_version = metadata.version(package_name)
-          if installed_version != package_version:
-              raise SystemExit(
-                  f"Installed {package_name} {installed_version}, expected {package_version}"
-              )
+          for package_name in os.environ["PACKAGE_NAMES"].split(","):
+              installed_version = metadata.version(package_name)
+              if installed_version != package_version:
+                  raise SystemExit(
+                      f"Installed {package_name} {installed_version}, expected {package_version}"
+                  )
           PY
 
   e2e-docker-pypi:
