@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from importlib import util as importlib_util
 from urllib.parse import urlencode
 
 from core.choices import JobStatusChoices
 from core.models import Job
 from django.http import HttpRequest
-from django.urls import reverse
+from django.urls import NoReverseMatch, reverse
 
 from netbox_proxbox import ProxboxConfig
 from netbox_proxbox.choices import NetBoxTokenVersionChoices
@@ -21,7 +22,24 @@ from netbox_proxbox.schedule_hints import (
 from netbox_proxbox.utils import get_fastapi_url
 from netbox_proxbox.views.proxbox_access import permission_enqueue_proxbox_sync
 
-__all__ = ("build_home_dashboard_context",)
+__all__ = ("build_home_dashboard_context", "pbs_integration_available")
+
+
+def pbs_integration_available() -> bool:
+    """Return ``True`` when the sibling ``netbox_pbs`` plugin is importable and
+    its REST surface is mounted.
+
+    Two gates: package importability (``find_spec``) plus REST URL resolution
+    (``pbsendpoint-list``). Both must hold; otherwise the home page must not
+    surface PBS markup.
+    """
+    if importlib_util.find_spec("netbox_pbs") is None:
+        return False
+    try:
+        reverse("plugins:netbox_pbs-api:pbsendpoint-list")
+    except NoReverseMatch:
+        return False
+    return True
 
 
 def _build_add_url(view_name: str, params: dict[str, object]) -> str:
@@ -96,6 +114,26 @@ def build_home_dashboard_context(
 
     active_proxbox_job = _get_latest_active_proxbox_job(request)
 
+    pbs_installed = pbs_integration_available()
+    pbs_endpoint_list = None
+    pbs_endpoint_add_url: str | None = None
+    pbs_endpoint_bulk_import_url: str | None = None
+    if pbs_installed:
+        try:
+            from netbox_pbs.models import PBSEndpoint  # noqa: PLC0415 — gated import
+
+            pbs_qs = PBSEndpoint.objects.restrict(request.user, "view")
+            pbs_endpoint_list = pbs_qs if pbs_qs.exists() else None
+            pbs_endpoint_add_url = reverse("plugins:netbox_pbs:pbsendpoint_add")
+            pbs_endpoint_bulk_import_url = reverse(
+                "plugins:netbox_pbs:pbsendpoint_bulk_import"
+            )
+        except (ImportError, NoReverseMatch):
+            pbs_installed = False
+            pbs_endpoint_list = None
+            pbs_endpoint_add_url = None
+            pbs_endpoint_bulk_import_url = None
+
     return {
         "default_config": default_config,
         "proxmox_endpoint_list": proxmox_endpoint_obj
@@ -117,4 +155,8 @@ def build_home_dashboard_context(
         "can_quick_schedule_sync": can_quick_schedule_sync,
         "quick_schedule_form": quick_schedule_form,
         "active_proxbox_job": active_proxbox_job,
+        "pbs_installed": pbs_installed,
+        "pbs_endpoint_list": pbs_endpoint_list,
+        "pbs_endpoint_add_url": pbs_endpoint_add_url,
+        "pbs_endpoint_bulk_import_url": pbs_endpoint_bulk_import_url,
     }

@@ -1,0 +1,69 @@
+<div class="card" data-pbs-card-id="{{ object.pk }}">
+    <h2 class="card-header">Proxmox Backup Server</h2>
+
+    <div class="d-flex flex-row justify-content-center align-items-center p-2 mt-1">
+        <div class="d-flex mx-auto position-absolute">
+            <a href="{{ object.get_absolute_url }}">
+                <strong>{{ object.name }}</strong>
+            </a>
+        </div>
+        <div class="d-flex ms-auto" style="margin: 0 40px 0 0">
+            <span class="badge text-bg-secondary p-1">Configured</span>
+        </div>
+    </div>
+
+    <div class="card-body">
+        <table class="table table-hover attr-table">
+            <tr>
+                <th scope="row"><strong>PBS Endpoint Name</strong></th>
+                <td>
+                    {% if object.name %}
+                        <a href="{{ object.get_absolute_url }}">{{ object.name }}</a>
+                    {% else %}
+                        <span class="badge text-bg-grey">Empty</span>
+                    {% endif %}
+                </td>
+            </tr>
+            <tr>
+                <th scope="row"><strong>Host</strong></th>
+                <td>{{ object.host|default:"Not configured" }}</td>
+            </tr>
+            <tr>
+                <th scope="row"><strong>HTTP Port</strong></th>
+                <td>{{ object.port }}</td>
+            </tr>
+            <tr>
+                <th scope="row"><strong>Token ID</strong></th>
+                <td>{{ object.token_id|default:"Not configured" }}</td>
+            </tr>
+            <tr>
+                <th scope="row"><strong>Token Secret</strong></th>
+                <td>{% if object.token_secret %}Configured{% else %}Not configured{% endif %}</td>
+            </tr>
+            <tr>
+                <th scope="row"><strong>Fingerprint</strong></th>
+                <td>
+                    {% if object.fingerprint %}
+                        <code>{{ object.fingerprint|truncatechars:24 }}</code>
+                    {% else %}
+                        <span class="badge text-bg-grey">None</span>
+                    {% endif %}
+                </td>
+            </tr>
+            <tr>
+                <th scope="row"><strong>SSL</strong></th>
+                <td>
+                    {% if object.verify_ssl %}
+                        <span class="text-success"><i class="mdi mdi-check-bold"></i></span>
+                    {% else %}
+                        <span class="text-danger"><i class="mdi mdi-close-thick"></i></span>
+                    {% endif %}
+                </td>
+            </tr>
+            <tr>
+                <th scope="row"><strong>Sync Direction</strong></th>
+                <td><span class="badge text-bg-info">PBS → NetBox (read-only)</span></td>
+            </tr>
+        </table>
+    </div>
+</div>

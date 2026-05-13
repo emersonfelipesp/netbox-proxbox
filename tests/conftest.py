@@ -263,6 +263,11 @@ def load_plugin_module(
     django_urls = types.ModuleType("django.urls")
     django_urls.reverse = lambda *args, **kwargs: "/dummy/"
 
+    class NoReverseMatch(Exception):
+        pass
+
+    django_urls.NoReverseMatch = NoReverseMatch
+
     django_contrib = types.ModuleType("django.contrib")
     django_messages = MessagesStub()
     django_contrib.messages = django_messages

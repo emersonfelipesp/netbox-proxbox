@@ -145,6 +145,31 @@
             </div>
             <hr>
         {% endif %}
+
+        {% if pbs_installed %}
+            {% if pbs_endpoint_list and pbs_endpoint_list|length > 0 %}
+                {% for object in pbs_endpoint_list %}
+                    {% if pbs_endpoint_list|length == 1 %}
+                        <div class="col">
+                    {% elif pbs_endpoint_list|length == 2 %}
+                        <div class="col col-md-6">
+                    {% else %}
+                        <div class="col col-md-4">
+                    {% endif %}
+                            {% include "netbox_proxbox/home/pbs_card.html" %}
+                        </div>
+                {% endfor %}
+            {% else %}
+                <div class="d-flex flex-column align-items-center" style="margin-bottom: 15px;">
+                    <div><h2>There are no PBS Endpoints configured.</h2></div>
+                    <div class="d-flex flex-wrap justify-content-center gap-2">
+                        <a href="{{ pbs_endpoint_add_url }}" class="btn btn-primary">Create new PBS Endpoint</a>
+                        <a href="{{ pbs_endpoint_bulk_import_url }}" class="btn btn-outline-primary"><i class="mdi mdi-upload" aria-hidden="true"></i> Import from CSV</a>
+                    </div>
+                </div>
+                <hr>
+            {% endif %}
+        {% endif %}
     </div>
 
     <div class="text-center mt-4 mb-2">
