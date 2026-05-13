@@ -9,6 +9,7 @@ from netbox_proxbox.models.proxmox_cluster import ProxmoxCluster
 from netbox_proxbox.models.proxmox_endpoint import ProxmoxEndpoint
 from netbox_proxbox.models.proxmox_node import ProxmoxNode
 from netbox_proxbox.models.replication import Replication
+from netbox_proxbox.models.ssh_credential import NodeSSHCredential
 from netbox_proxbox.models.storage import ProxmoxStorage, ProxmoxStorageVirtualDisk
 from netbox_proxbox.models.vm_backup import VMBackup
 from netbox_proxbox.models.vm_snapshot import VMSnapshot
@@ -18,6 +19,7 @@ __all__ = (
     "BackupRoutine",
     "FastAPIEndpoint",
     "NetBoxEndpoint",
+    "NodeSSHCredential",
     "ProxboxPluginSettings",
     "ProxmoxCluster",
     "ProxmoxEndpoint",

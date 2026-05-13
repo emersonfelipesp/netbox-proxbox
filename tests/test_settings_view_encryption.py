@@ -116,6 +116,7 @@ def _fake_settings_obj(encryption_key: str = "") -> SimpleNamespace:
         netbox_to_proxmox_enabled=False,
         netbox_to_proxmox_typed_confirmation="",
         apply_destroy_confirmed=False,
+        hardware_discovery_enabled=False,
         save=_save,
         _saved=saved,
     )

@@ -429,6 +429,16 @@ class ProxboxPluginSettingsForm(forms.Form):
             "widens the trust boundary — see the warning in the docs."
         ),
     )
+    hardware_discovery_enabled = forms.BooleanField(
+        required=False,
+        label="Enable SSH-based hardware discovery",
+        help_text=(
+            "Master flag for the SSH hardware-discovery pass. Off by default. When "
+            "enabled, proxbox-api opens an SSH session to each ProxmoxNode that has a "
+            "stored NodeSSHCredential row and reflects dmidecode/ethtool output onto "
+            "the matching dcim.Device and dcim.Interface custom fields."
+        ),
+    )
     netbox_to_proxmox_typed_confirmation = forms.CharField(
         required=False,
         max_length=64,
