@@ -1,0 +1,25 @@
+<div class="card">
+    <h2 class="card-header">Matching PBS Snapshots</h2>
+    <table class="table table-hover attr-table">
+        <thead>
+            <tr>
+                <th>Snapshot</th>
+                <th>Datastore</th>
+                <th>Group</th>
+                <th>Size</th>
+                <th>Verified</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for snapshot in snapshots %}
+                <tr>
+                    <td><a href="{{ snapshot.get_absolute_url }}">{{ snapshot.backup_time|date:"Y-m-d H:i:s" }}</a></td>
+                    <td><a href="{{ snapshot.backup_group.datastore.get_absolute_url }}">{{ snapshot.backup_group.datastore.name }}</a></td>
+                    <td>{{ snapshot.backup_group.backup_type }}/{{ snapshot.backup_group.backup_id }}</td>
+                    <td>{% if snapshot.size_bytes %}{{ snapshot.size_bytes|filesizeformat }}{% else %}&mdash;{% endif %}</td>
+                    <td>{{ snapshot.get_verified_display }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>

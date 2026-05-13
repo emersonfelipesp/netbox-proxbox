@@ -5,9 +5,11 @@ datastores, backup groups, snapshots, and job status. The integration
 is `netbox-branching`-aware from day one (the branch lifecycle helpers
 mirror those used by ``netbox_proxbox``).
 
-This file ships in PR C1 as scaffold only — domain models, sync jobs,
-and the optional cross-link to ``netbox_proxbox.VMBackup`` land in
-subsequent sub-PRs of issue #325.
+When ``netbox_proxbox`` is also installed, a presentation-only
+cross-link panel is rendered on both the ``VMBackup`` detail page and
+the ``PBSSnapshot`` detail page. The two sides are matched by natural
+key (``vmid`` + ``creation_time``) — no foreign key, no schema change.
+See ``template_content.py``.
 """
 
 from netbox.plugins import PluginConfig
