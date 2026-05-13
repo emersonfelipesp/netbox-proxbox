@@ -19,7 +19,7 @@ URLS_PATH = REPO_ROOT / "netbox_pbs" / "urls.py"
 NAVIGATION_PATH = REPO_ROOT / "netbox_pbs" / "navigation.py"
 MIGRATION_PATH = REPO_ROOT / "netbox_pbs" / "migrations" / "0001_initial.py"
 
-EXPECTED_VERSION = "0.0.15"
+EXPECTED_VERSION = "0.0.1"
 EXPECTED_MIN_NETBOX = "4.5.8"
 EXPECTED_MAX_NETBOX = "4.6.99"
 

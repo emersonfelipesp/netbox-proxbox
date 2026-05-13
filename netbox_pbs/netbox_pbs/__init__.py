@@ -24,7 +24,7 @@ class PBSConfig(PluginConfig):
         "Read-only Proxmox Backup Server (PBS) inventory: datastores, "
         "backup groups, snapshots, and job status."
     )
-    version = "0.0.15"
+    version = "0.0.1"
     author = "Emerson Felipe (@emersonfelipesp)"
     author_email = "emersonfelipe.2003@gmail.com"
     min_version = "4.5.8"

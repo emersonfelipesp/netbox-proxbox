@@ -107,7 +107,8 @@ jobs:
                               init_version = ast.literal_eval(stmt.value)
                               break
 
-          # netbox-pbs sister package (issue #325): version-locked to netbox-proxbox in v1.
+          # netbox-pbs sister package (issue #325): version is tracked independently
+          # (netbox-pbs starts at 0.0.1 while netbox-proxbox continues its own train).
           pbs_data = tomllib.loads(
               pathlib.Path('netbox_pbs/pyproject.toml').read_text(encoding='utf-8')
           )
@@ -135,12 +136,6 @@ jobs:
                   f'netbox_pbs/netbox_pbs/__init__.py version mismatch: '
                   f'init={pbs_init_version!r}, version={pbs_version!r}'
               )
-          if pbs_version != version:
-              raise SystemExit(
-                  f'netbox-pbs version {pbs_version!r} must equal netbox-proxbox version {version!r} '
-                  'while both packages share a release train (issue #325 v1).'
-              )
-
           tag = os.getenv('GITHUB_REF_NAME', '')
           event = os.getenv('GITHUB_EVENT_NAME', '')
           release_tag = os.getenv('RELEASE_TAG_NAME', '') or ''

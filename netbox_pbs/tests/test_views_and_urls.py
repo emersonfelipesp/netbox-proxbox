@@ -144,7 +144,7 @@ def test_navigation_only_endpoint_has_add_or_import_buttons():
     # Only PBSEndpoint should expose add/import buttons; read-only models
     # must not surface them.
     assert "pbsendpoint_add" in text
-    assert "pbsendpoint_import" in text
+    assert "pbsendpoint_bulk_import" in text
     for model_url in (
         "pbsnode_add",
         "pbsdatastore_add",

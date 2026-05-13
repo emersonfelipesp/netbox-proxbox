@@ -1,6 +1,6 @@
 [project]
 name = "netbox-pbs"
-version = "0.0.15"
+version = "0.0.1"
 description = "NetBox plugin — Proxmox Backup Server inventory and snapshot sync (read-only)"
 readme = "README.md"
 authors = [

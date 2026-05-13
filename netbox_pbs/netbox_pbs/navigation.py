@@ -26,7 +26,7 @@ pbs_endpoint_item = PluginMenuItem(
             permissions=["netbox_pbs.add_pbsendpoint"],
         ),
         PluginMenuButton(
-            link="plugins:netbox_pbs:pbsendpoint_import",
+            link="plugins:netbox_pbs:pbsendpoint_bulk_import",
             title="Import PBS Endpoints",
             icon_class="mdi mdi-upload",
             permissions=["netbox_pbs.add_pbsendpoint"],

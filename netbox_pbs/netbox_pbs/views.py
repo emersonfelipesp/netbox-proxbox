@@ -91,6 +91,7 @@ class PBSEndpointView(generic.ObjectView):
     queryset = PBSEndpoint.objects.all()
 
 
+@register_model_view(PBSEndpoint, "add", detail=False)
 @register_model_view(PBSEndpoint, "edit")
 class PBSEndpointEditView(generic.ObjectEditView):
     """Create or edit a PBS endpoint."""
