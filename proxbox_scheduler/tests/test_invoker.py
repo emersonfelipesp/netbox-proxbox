@@ -189,7 +189,11 @@ class TestExecInvoker:
         def runner(cmd: list[str], **kwargs: object) -> _FakeCompleted:
             return _FakeCompleted(returncode=2, stderr="bad config")
 
-        inv = ExecInvoker(command=["python", "manage.py", "proxbox_sync"], timeout_seconds=5, runner=runner)
+        inv = ExecInvoker(
+            command=["python", "manage.py", "proxbox_sync"],
+            timeout_seconds=5,
+            runner=runner,
+        )
         result = inv.trigger()
 
         assert result.success is False

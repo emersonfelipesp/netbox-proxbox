@@ -34,7 +34,9 @@ class SchedulerMode:
     def __post_init__(self) -> None:
         if self.kind is ModeKind.INTERVAL:
             if self.interval_seconds is None or self.interval_seconds <= 0:
-                raise ConfigError("interval mode requires a positive integer of seconds")
+                raise ConfigError(
+                    "interval mode requires a positive integer of seconds"
+                )
         if self.kind is ModeKind.CRON:
             if not self.cron_expression:
                 raise ConfigError("cron mode requires a non-empty cron expression")

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Callable
 from zoneinfo import ZoneInfo
 
@@ -43,7 +43,9 @@ def _make_off_config(base_config: SchedulerConfig) -> SchedulerConfig:
     return replace(base_config, mode=SchedulerMode(kind=ModeKind.OFF))
 
 
-def _make_continuous_config(base_config: SchedulerConfig, *, backoff: float = 0.0) -> SchedulerConfig:
+def _make_continuous_config(
+    base_config: SchedulerConfig, *, backoff: float = 0.0
+) -> SchedulerConfig:
     return replace(
         base_config,
         mode=SchedulerMode(kind=ModeKind.CONTINUOUS),
@@ -51,7 +53,9 @@ def _make_continuous_config(base_config: SchedulerConfig, *, backoff: float = 0.
     )
 
 
-def _make_interval_config(base_config: SchedulerConfig, *, seconds: int, backoff: float = 0.0) -> SchedulerConfig:
+def _make_interval_config(
+    base_config: SchedulerConfig, *, seconds: int, backoff: float = 0.0
+) -> SchedulerConfig:
     return replace(
         base_config,
         mode=SchedulerMode(kind=ModeKind.INTERVAL, interval_seconds=seconds),
@@ -87,7 +91,9 @@ class TestOffMode:
 
 
 class TestContinuousMode:
-    def test_fires_back_to_back_until_stopped(self, base_config: SchedulerConfig) -> None:
+    def test_fires_back_to_back_until_stopped(
+        self, base_config: SchedulerConfig
+    ) -> None:
         inv = _CountingInvoker([InvokeResult.ok(), InvokeResult.ok()])
 
         def stop_after_two(s: _RecordingSleeper, _seconds: float) -> None:
@@ -116,7 +122,9 @@ class TestContinuousMode:
         assert inv.calls == 3
         assert sleeper.sleeps == []  # no backoff because all succeeded
 
-    def test_backoff_applied_only_on_failure(self, base_config: SchedulerConfig) -> None:
+    def test_backoff_applied_only_on_failure(
+        self, base_config: SchedulerConfig
+    ) -> None:
         inv = _CountingInvoker(
             [InvokeResult.ok(), InvokeResult.failed("nope"), InvokeResult.ok()]
         )
@@ -170,7 +178,9 @@ class TestIntervalMode:
         # The trigger is near-instantaneous in tests, so we should be close to 60s.
         assert 50.0 <= slept <= 60.0
 
-    def test_interval_failure_triggers_backoff(self, base_config: SchedulerConfig) -> None:
+    def test_interval_failure_triggers_backoff(
+        self, base_config: SchedulerConfig
+    ) -> None:
         inv = _CountingInvoker([InvokeResult.failed("boom")])
         sleeper = _RecordingSleeper()
         runner = SchedulerRunner(
@@ -195,7 +205,9 @@ class TestIntervalMode:
 
 
 class TestCronMode:
-    def test_cron_sleeps_until_next_fire_then_triggers(self, base_config: SchedulerConfig) -> None:
+    def test_cron_sleeps_until_next_fire_then_triggers(
+        self, base_config: SchedulerConfig
+    ) -> None:
         inv = _CountingInvoker([InvokeResult.ok()])
         sleeper = _RecordingSleeper()
         tz = ZoneInfo("UTC")
