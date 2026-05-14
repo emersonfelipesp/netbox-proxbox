@@ -4,6 +4,11 @@ from django.urls import include, path
 from utilities.urls import get_model_urls
 
 from netbox_proxbox import views
+from netbox_proxbox.views.apply_jobs import (
+    ProxmoxApplyJobCancelView,
+    ProxmoxApplyJobListView,
+    ProxmoxApplyJobView,
+)
 from netbox_proxbox.websocket_client import WebSocketView
 
 app_name = "netbox_proxbox"
@@ -181,6 +186,21 @@ urlpatterns = [
         name="sync_ip_addresses",
     ),
     path("sync/full-update/", views.sync_full_update, name="sync_full_update"),
+    path(
+        "intent/apply-jobs/",
+        ProxmoxApplyJobListView.as_view(),
+        name="proxmoxapplyjob_list",
+    ),
+    path(
+        "intent/apply-jobs/<int:pk>/",
+        ProxmoxApplyJobView.as_view(),
+        name="proxmoxapplyjob",
+    ),
+    path(
+        "intent/apply-jobs/<int:pk>/cancel/",
+        ProxmoxApplyJobCancelView.as_view(),
+        name="proxmoxapplyjob_cancel",
+    ),
     path("sync/schedule/", views.ScheduleSyncView.as_view(), name="schedule_sync"),
     path("settings/", views.SettingsView.as_view(), name="settings"),
     path(
