@@ -41,7 +41,7 @@ class Migration(migrations.Migration):
         ('contenttypes', '0002_remove_content_type_name'),
         ('core', '0018_concrete_objecttype'),
         ('dcim', '0227_alter_interface_speed_bigint'),
-        ('extras', '0138_customfieldchoiceset_choice_colors'),
+        ('extras', '0134_owner'),
         ('netbox_proxbox', '0036_add_overwrite_vm_type'),
         ('virtualization', '0052_gfk_indexes'),
     ]
