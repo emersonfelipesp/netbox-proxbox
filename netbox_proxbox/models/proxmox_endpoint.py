@@ -212,6 +212,14 @@ class ProxmoxEndpoint(EndpointBase):
             "Per-endpoint override for the global Proxbox setting. Leave blank to inherit."
         ),
     )
+    overwrite_vm_cloudinit = models.BooleanField(
+        null=True,
+        blank=True,
+        verbose_name=_("Overwrite VM cloud-init"),
+        help_text=_(
+            "Per-endpoint override for the global Proxbox setting. Leave blank to inherit."
+        ),
+    )
     overwrite_cluster_tags = models.BooleanField(
         null=True,
         blank=True,

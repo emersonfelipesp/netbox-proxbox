@@ -1,7 +1,7 @@
 """django-tables2 layout for Proxmox VM cloud-init records (issue #363)."""
 
 from django.utils.translation import gettext as _
-from django_tables2 import tables
+import django_tables2 as tables
 
 from netbox.tables import NetBoxTable
 from netbox.tables.columns import BooleanColumn
