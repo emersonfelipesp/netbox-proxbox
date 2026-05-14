@@ -6,9 +6,7 @@ import ast
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DELETION_REQUEST_PATH = (
-    REPO_ROOT / "netbox_proxbox" / "models" / "deletion_request.py"
-)
+DELETION_REQUEST_PATH = REPO_ROOT / "netbox_proxbox" / "models" / "deletion_request.py"
 APPLY_JOB_MODEL_PATH = REPO_ROOT / "netbox_proxbox" / "models" / "apply_job.py"
 
 

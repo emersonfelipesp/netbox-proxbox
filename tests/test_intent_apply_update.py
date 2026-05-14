@@ -48,8 +48,7 @@ def test_apply_job_imports_build_update_delta():
                     found = True
                     break
     assert found, (
-        "apply_job.py must import build_update_delta from "
-        "netbox_proxbox.intent.payload"
+        "apply_job.py must import build_update_delta from netbox_proxbox.intent.payload"
     )
 
 

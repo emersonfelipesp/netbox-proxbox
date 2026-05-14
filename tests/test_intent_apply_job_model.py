@@ -61,6 +61,9 @@ def test_apply_job_meta_permissions_are_preserved():
     assert meta is not None, "ProxmoxApplyJob.Meta must exist"
     assert any(
         isinstance(stmt, ast.Assign)
-        and any(isinstance(target, ast.Name) and target.id == "permissions" for target in stmt.targets)
+        and any(
+            isinstance(target, ast.Name) and target.id == "permissions"
+            for target in stmt.targets
+        )
         for stmt in meta.body
     ), "ProxmoxApplyJob.Meta.permissions must be preserved"

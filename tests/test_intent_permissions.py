@@ -80,9 +80,7 @@ def test_apply_job_meta_permissions():
 
 def test_deletion_request_meta_permissions():
     """``DeletionRequest.Meta.permissions`` must declare ``authorize_deletion_request``."""
-    module = _parse(
-        REPO_ROOT / "netbox_proxbox" / "models" / "deletion_request.py"
-    )
+    module = _parse(REPO_ROOT / "netbox_proxbox" / "models" / "deletion_request.py")
     perms = _extract_meta_permissions(module, class_name="DeletionRequest")
     codenames = {codename for codename, _label in perms}
     assert codenames == {"authorize_deletion_request"}, (
@@ -95,10 +93,7 @@ def test_deletion_request_meta_permissions():
 def test_migration_0038_lists_both_models():
     """Migration 0038 must CreateModel both shells with matching permissions."""
     module = _parse(
-        REPO_ROOT
-        / "netbox_proxbox"
-        / "migrations"
-        / "0038_intent_permissions.py"
+        REPO_ROOT / "netbox_proxbox" / "migrations" / "0038_intent_permissions.py"
     )
     create_calls = [
         node
@@ -144,9 +139,7 @@ def _extract_meta_permissions(
                                 and isinstance(elt.elts[0], ast.Constant)
                                 and isinstance(elt.elts[1], ast.Constant)
                             )
-    raise AssertionError(
-        f"{class_name}.Meta.permissions tuple not found in module AST"
-    )
+    raise AssertionError(f"{class_name}.Meta.permissions tuple not found in module AST")
 
 
 # --- Runtime tests (require Django + NetBox) ------------------------------
@@ -162,9 +155,7 @@ except ModuleNotFoundError:
     django = None  # type: ignore[assignment]
 
 if django is not None:
-    os.environ.setdefault(
-        "NETBOX_CONFIGURATION", "tests.netbox_test_configuration"
-    )
+    os.environ.setdefault("NETBOX_CONFIGURATION", "tests.netbox_test_configuration")
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "netbox.settings")
     try:
         django.setup()
@@ -244,9 +235,7 @@ if django is not None:
             ct = ContentType.objects.get(
                 app_label="netbox_proxbox", model="proxmoxapplyjob"
             )
-            perm = Permission.objects.get(
-                content_type=ct, codename="intent_create_vm"
-            )
+            perm = Permission.objects.get(content_type=ct, codename="intent_create_vm")
             user.user_permissions.add(perm)
             user = type(user).objects.get(pk=user.pk)
             self.assertTrue(user.has_perm("netbox_proxbox.intent_create_vm"))
@@ -259,4 +248,5 @@ if django is not None:
                     user.has_perm(expected),
                     f"Default user must not hold {expected}",
                 )
+
     # Runtime tests defined above when Django/NetBox is bootstrapped.

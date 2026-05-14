@@ -97,9 +97,18 @@ class ProxmoxApplyJob(NetBoxModel):
             ("intent_create_vm", "Can request CREATE of a Proxmox QEMU VM via intent"),
             ("intent_update_vm", "Can request UPDATE of a Proxmox QEMU VM via intent"),
             ("intent_delete_vm", "Can request DELETE of a Proxmox QEMU VM via intent"),
-            ("intent_create_lxc", "Can request CREATE of a Proxmox LXC container via intent"),
-            ("intent_update_lxc", "Can request UPDATE of a Proxmox LXC container via intent"),
-            ("intent_delete_lxc", "Can request DELETE of a Proxmox LXC container via intent"),
+            (
+                "intent_create_lxc",
+                "Can request CREATE of a Proxmox LXC container via intent",
+            ),
+            (
+                "intent_update_lxc",
+                "Can request UPDATE of a Proxmox LXC container via intent",
+            ),
+            (
+                "intent_delete_lxc",
+                "Can request DELETE of a Proxmox LXC container via intent",
+            ),
         )
 
     def __str__(self) -> str:

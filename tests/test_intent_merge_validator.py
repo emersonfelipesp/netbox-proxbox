@@ -60,9 +60,7 @@ def test_intent_package_exists_with_required_modules():
     assert VALIDATOR_PATH.exists(), (
         "merge_validator.py must exist on the intent package"
     )
-    assert PLAN_CLIENT_PATH.exists(), (
-        "plan_client.py must exist on the intent package"
-    )
+    assert PLAN_CLIENT_PATH.exists(), "plan_client.py must exist on the intent package"
 
 
 def test_validator_module_exports_validate_proxmox_intent():
@@ -156,9 +154,7 @@ def test_plan_client_targets_intent_plan_path():
 
 def test_management_command_emits_validator_dotted_path():
     text = MGMT_CMD_PATH.read_text()
-    assert (
-        "netbox_proxbox.intent.merge_validator.validate_proxmox_intent" in text
-    ), (
+    assert "netbox_proxbox.intent.merge_validator.validate_proxmox_intent" in text, (
         "proxbox_install_merge_validator must print the validator's "
         "dotted path so operators can paste it into PLUGINS_CONFIG"
     )

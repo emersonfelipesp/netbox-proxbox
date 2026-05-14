@@ -6,9 +6,7 @@ import ast
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-EXECUTOR_PATH = (
-    REPO_ROOT / "netbox_proxbox" / "intent" / "deletion_executor.py"
-)
+EXECUTOR_PATH = REPO_ROOT / "netbox_proxbox" / "intent" / "deletion_executor.py"
 
 
 def _module() -> ast.Module:

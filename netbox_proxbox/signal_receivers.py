@@ -38,7 +38,9 @@ def _virtualmachine_changediffs(branch: Any) -> Any:
 if post_merge is not None:
 
     @receiver(post_merge, sender=Branch)
-    def handle_branch_merged(sender: Any, branch: Any, user: Any, **kwargs: Any) -> None:
+    def handle_branch_merged(
+        sender: Any, branch: Any, user: Any, **kwargs: Any
+    ) -> None:
         """Queue the dry-run Proxmox apply executor after eligible branch merges."""
         try:
             from netbox_proxbox.intent.apply_job import ProxmoxApplyJob  # noqa: PLC0415

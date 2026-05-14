@@ -129,9 +129,7 @@ def build_vm_payload(vm) -> dict:
         "cores": _int_or_none(getattr(vm, "vcpus", None)),
         "memory": _int_or_none(getattr(vm, "memory", None)),
         "disk_gb": _disk_gb(vm),
-        "storage": _str_or_none(
-            _cf_value(cf, "proxmox_storage", "cf_proxmox_storage")
-        ),
+        "storage": _str_or_none(_cf_value(cf, "proxmox_storage", "cf_proxmox_storage")),
         "iso": _str_or_none(_cf_value(cf, "proxmox_iso", "cf_proxmox_iso")),
         "template_vmid": _int_or_none(
             _cf_value(cf, "proxmox_template_vmid", "cf_proxmox_template_vmid")
@@ -156,9 +154,7 @@ def build_lxc_payload(vm) -> dict:
         "memory": _int_or_none(getattr(vm, "memory", None)),
         "swap": _int_or_none(_cf_value(cf, "proxmox_swap", "cf_proxmox_swap")),
         "rootfs": _str_or_none(_cf_value(cf, "proxmox_rootfs", "cf_proxmox_rootfs")),
-        "storage": _str_or_none(
-            _cf_value(cf, "proxmox_storage", "cf_proxmox_storage")
-        ),
+        "storage": _str_or_none(_cf_value(cf, "proxmox_storage", "cf_proxmox_storage")),
         "ostemplate": _str_or_none(
             _cf_value(
                 cf,

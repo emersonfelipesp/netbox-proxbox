@@ -42,8 +42,7 @@ def test_settings_form_has_clean_method():
     classes = [
         node
         for node in ast.walk(tree)
-        if isinstance(node, ast.ClassDef)
-        and node.name == "ProxboxPluginSettingsForm"
+        if isinstance(node, ast.ClassDef) and node.name == "ProxboxPluginSettingsForm"
     ]
     assert classes, "ProxboxPluginSettingsForm class not found in forms/settings.py"
     methods = {m.name for m in classes[0].body if isinstance(m, ast.FunctionDef)}

@@ -329,8 +329,10 @@ class ProxmoxApplyJob(JobRunner):
                             kind, _DELETE_PERMISSIONS["qemu"]
                         )
                         has_perm = getattr(actor, "has_perm", None)
-                        if actor is None or not callable(has_perm) or not has_perm(
-                            permission
+                        if (
+                            actor is None
+                            or not callable(has_perm)
+                            or not has_perm(permission)
                         ):
                             results[key] = _result_entry(
                                 vmid=vmid,
@@ -399,8 +401,10 @@ class ProxmoxApplyJob(JobRunner):
                             kind, _UPDATE_PERMISSIONS["qemu"]
                         )
                         has_perm = getattr(actor, "has_perm", None)
-                        if actor is None or not callable(has_perm) or not has_perm(
-                            permission
+                        if (
+                            actor is None
+                            or not callable(has_perm)
+                            or not has_perm(permission)
                         ):
                             results[key] = _result_entry(
                                 vmid=vmid,
@@ -446,8 +450,10 @@ class ProxmoxApplyJob(JobRunner):
                         kind, _CREATE_PERMISSIONS["qemu"]
                     )
                     has_perm = getattr(actor, "has_perm", None)
-                    if actor is None or not callable(has_perm) or not has_perm(
-                        permission
+                    if (
+                        actor is None
+                        or not callable(has_perm)
+                        or not has_perm(permission)
                     ):
                         results[key] = _result_entry(
                             vmid=vmid,
