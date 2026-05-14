@@ -53,7 +53,7 @@ REST, SSE, and WebSocket.
 - NetBox 4.5.8, 4.5.9, or 4.6.x
 - Verified with NetBox v4.5.8, v4.5.9, and official v4.6.0
 - Python 3.12+
-- Proxmox VE 7.x or 8.x
+- Proxmox VE 7.x, 8.x, or 9.x (PVE 9 requires `VM.GuestAgent.Audit` on the API role; see "Troubleshooting" below for the PVE 9 auth checklist)
 - Proxbox API backend as a separately deployed service (see below)
 
 ## Quick Start
@@ -216,6 +216,17 @@ Proxbox sync jobs default to a **7200-second (2-hour) RQ wall-clock limit** (`PR
 | Job stays **`pending`** | No RQ worker running, or worker not listening to `default` queue | Start/restart `manage.py rqworker` |
 | Job stays **`running`** for a long time | Proxbox API is still syncing or stream is slow | Check the job **Log** tab; wait or inspect the backend |
 | Job **`errored: JobTimeoutException`** | RQ wall-clock limit exceeded | Increase `PROXBOX_SYNC_JOB_TIMEOUT` in `netbox_proxbox/jobs.py` |
+| **HTTP 401 Authentication failed!** against Proxmox VE 9.x | A stale stored token is overriding fresh password credentials, or the role is missing PVE 9 permissions | On the Proxmox endpoint edit page, tick **"Clear stored API token on save"** (and/or **"Clear stored password on save"**) to wipe the unused secret. The form rejects rows that end up with neither a password nor a complete `(token name, token value)` pair. Confirm the role on Proxmox grants `Datastore.Audit`, `Sys.Audit`, `VM.Audit`, and on PVE 9 also `VM.GuestAgent.Audit`. The plugin now surfaces the upstream PVE 9 error message in the UI instead of `"Unknown error."`, which makes "no such realm" / "expired token" / "missing privilege" failures self-diagnosing. |
+
+#### Switching credentials cleanly (PVE 9 friendly)
+
+The Proxmox endpoint edit form preserves the stored password and token value
+when you submit blank masked fields — that is intentional for partial edits.
+When you genuinely want to **switch** auth modes (for example, password → token
+or vice versa, or rotate a leaked secret), tick the matching **"Clear
+stored …"** checkbox so the unused credential is wiped on save. Clearing the
+token always clears **both** `token name` and `token value` together so the row
+never persists in a half-token state.
 
 ## Documentation
 

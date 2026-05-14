@@ -74,6 +74,23 @@ class ProxmoxEndpointForm(NetBoxModelForm):
         ),
         label=_("Token value"),
     )
+    clear_password = forms.BooleanField(
+        required=False,
+        label=_("Clear stored password on save"),
+        help_text=_(
+            "Tick to delete the stored password when saving. Switch credentials cleanly "
+            "(for example, moving from password to token auth) without leaving stale "
+            "secrets in the database."
+        ),
+    )
+    clear_token = forms.BooleanField(
+        required=False,
+        label=_("Clear stored API token on save"),
+        help_text=_(
+            "Tick to delete the stored token name AND token value when saving. The two "
+            "fields are always cleared together so the row never holds a half-token."
+        ),
+    )
     site = DynamicModelChoiceField(
         queryset=Site.objects.all(),
         required=False,
@@ -85,6 +102,22 @@ class ProxmoxEndpointForm(NetBoxModelForm):
         label=_("Tenant"),
     )
     comments = CommentField()
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        """Only expose the clear-credential checkboxes when there is something to clear."""
+        super().__init__(*args, **kwargs)
+        instance = getattr(self, "instance", None)
+        if not (instance and getattr(instance, "pk", None)):
+            self.fields.pop("clear_password", None)
+            self.fields.pop("clear_token", None)
+            return
+        if not getattr(instance, "password", ""):
+            self.fields.pop("clear_password", None)
+        has_token = bool(getattr(instance, "token_name", "")) or bool(
+            getattr(instance, "token_value", "")
+        )
+        if not has_token:
+            self.fields.pop("clear_token", None)
 
     class Meta:
         model = ProxmoxEndpoint
@@ -104,7 +137,8 @@ class ProxmoxEndpointForm(NetBoxModelForm):
         )
 
     def clean(self) -> dict[str, object]:
-        """Require domain or IP before save (matches model validation)."""
+        """Require domain or IP, honour explicit credential clears, and enforce
+        the password-or-complete-token invariant before save."""
         super().clean()
         cleaned_data = self.cleaned_data
         domain = (cleaned_data.get("domain") or "").strip()
@@ -114,12 +148,51 @@ class ProxmoxEndpointForm(NetBoxModelForm):
             self.add_error("domain", "Provide either a domain or an IP address.")
             self.add_error("ip_address", "Provide either a domain or an IP address.")
 
-        # Keep stored secrets on edit when user submits blank masked fields.
+        clear_password = bool(cleaned_data.get("clear_password"))
+        clear_token = bool(cleaned_data.get("clear_token"))
+
+        # Explicit clears win over both submitted blanks and the preserve branch.
+        if clear_password:
+            cleaned_data["password"] = ""
+        if clear_token:
+            cleaned_data["token_name"] = ""
+            cleaned_data["token_value"] = ""
+
+        # Keep stored secrets on edit when user submits blank masked fields,
+        # unless they explicitly cleared them above.
         if self.instance and self.instance.pk:
-            if not cleaned_data.get("password"):
+            if not clear_password and not cleaned_data.get("password"):
                 cleaned_data["password"] = self.instance.password
-            if not cleaned_data.get("token_value"):
+            if not clear_token and not cleaned_data.get("token_value"):
                 cleaned_data["token_value"] = self.instance.token_value
+
+        # Invariant: row must have either a password or a complete (token_name,
+        # token_value) pair. Half-tokens are rejected.
+        final_password = cleaned_data.get("password") or ""
+        final_token_name = (cleaned_data.get("token_name") or "").strip()
+        final_token_value = cleaned_data.get("token_value") or ""
+        has_password = bool(final_password)
+        has_token_pair = bool(final_token_name) and bool(final_token_value)
+        has_half_token = bool(final_token_name) ^ bool(final_token_value)
+
+        if has_half_token:
+            if not final_token_name:
+                self.add_error(
+                    "token_name",
+                    _("Token name is required when a token value is set."),
+                )
+            if not final_token_value:
+                self.add_error(
+                    "token_value",
+                    _("Token value is required when a token name is set."),
+                )
+        if not has_password and not has_token_pair:
+            msg = _(
+                "Provide either a password or a complete API token "
+                "(both token name and token value)."
+            )
+            self.add_error("password", msg)
+            self.add_error("token_name", msg)
 
         return cleaned_data
 
