@@ -19,6 +19,7 @@ from netbox_proxbox.choices import ProxmoxVMTypeChoices
 from .. import filtersets, models
 from .serializers import (
     BackupRoutineSerializer,
+    CloudImageTemplateSerializer,
     FastAPIEndpointSerializer,
     NetBoxEndpointSerializer,
     NodeSSHCredentialSerializer,
@@ -62,6 +63,7 @@ class ProxBoxRootView(APIRootView):
         }
         response.data["schedule_sync"] = f"{base}/sync/schedule/"
         response.data["logs"] = f"{base}/logs/"
+        response.data["cloud_image_templates"] = f"{base}/cloud-image-templates/"
         response.data["ha"] = {
             "summary": f"{base}/ha/summary/",
             "vm": f"{base}/ha/vm/",
@@ -121,6 +123,16 @@ class VMBackupViewSet(NetBoxModelViewSet):
     )
     serializer_class = VMBackupSerializer
     filterset_class = filtersets.VMBackupFilterSet
+
+
+class CloudImageTemplateViewSet(NetBoxModelViewSet):
+    """REST API for tenant-scoped Cloud Portal cloud image templates."""
+
+    queryset = models.CloudImageTemplate.objects.select_related(
+        "cluster",
+    ).prefetch_related("allowed_tenants", "tags")
+    serializer_class = CloudImageTemplateSerializer
+    filterset_class = filtersets.CloudImageTemplateFilterSet
 
 
 class VMSnapshotViewSet(NetBoxModelViewSet):

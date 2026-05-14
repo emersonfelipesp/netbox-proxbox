@@ -246,6 +246,26 @@ class ReplicationStatusChoices(ChoiceSet):
     ]
 
 
+class CloudImageOSFamilyChoices(ChoiceSet):
+    """Operating-system families exposed through the cloud image catalog."""
+
+    key = "CloudImageTemplate.os_family"
+
+    UBUNTU = "ubuntu"
+    DEBIAN = "debian"
+    ROCKY = "rocky"
+    ALPINE = "alpine"
+    GENERIC = "generic"
+
+    CHOICES = [
+        (UBUNTU, _("Ubuntu"), "orange"),
+        (DEBIAN, _("Debian"), "red"),
+        (ROCKY, _("Rocky Linux"), "green"),
+        (ALPINE, _("Alpine Linux"), "blue"),
+        (GENERIC, _("Generic Linux"), "gray"),
+    ]
+
+
 class ProxmoxVMTypeChoices(ChoiceSet):
     """Proxmox hypervisor VM type (QEMU vs LXC) as stored in the proxmox_vm_type custom field."""
 
