@@ -75,9 +75,8 @@ def test_clear_fields_not_in_meta_fields() -> None:
     assert meta is not None, "ProxmoxEndpointForm.Meta not found"
     fields_value: ast.AST | None = None
     for stmt in meta.body:
-        if (
-            isinstance(stmt, ast.Assign)
-            and any(isinstance(t, ast.Name) and t.id == "fields" for t in stmt.targets)
+        if isinstance(stmt, ast.Assign) and any(
+            isinstance(t, ast.Name) and t.id == "fields" for t in stmt.targets
         ):
             fields_value = stmt.value
             break
