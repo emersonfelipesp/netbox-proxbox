@@ -23,7 +23,6 @@ import logging
 from typing import Any
 
 import requests
-
 from netbox_proxbox.services.backend_context import get_fastapi_request_context
 
 logger = logging.getLogger("netbox_ceph.http_client")

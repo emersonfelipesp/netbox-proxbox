@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from netbox.plugins import PluginMenu, PluginMenuButton, PluginMenuItem
 
-
 _buttons = {
     "settings": [
         PluginMenuButton(

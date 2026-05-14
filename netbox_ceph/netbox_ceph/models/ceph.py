@@ -19,7 +19,6 @@ from netbox_ceph.choices import (
     CephHealthChoices,
 )
 
-
 BRANCH_ON_CONFLICT_CHOICES = (
     ("fail", _("Fail (leave branch open for review)")),
     ("acknowledge", _("Acknowledge and merge anyway")),

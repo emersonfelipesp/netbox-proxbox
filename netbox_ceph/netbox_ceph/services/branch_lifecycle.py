@@ -15,8 +15,6 @@ from __future__ import annotations
 
 import logging
 
-from netbox_ceph.models import CephPluginSettings
-
 # Reuse the mechanics from netbox_proxbox so there is one implementation
 # of branch provisioning, conflict detection, and merge behavior.
 from netbox_proxbox.services.branch_lifecycle import (
@@ -26,6 +24,8 @@ from netbox_proxbox.services.branch_lifecycle import (
     is_branching_available,
     merge_branch,
 )
+
+from netbox_ceph.models import CephPluginSettings
 
 logger = logging.getLogger("netbox_ceph.branch_lifecycle")
 
