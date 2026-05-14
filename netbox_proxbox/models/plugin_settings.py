@@ -351,6 +351,34 @@ class ProxboxPluginSettings(NetBoxModel):
             "that already have a type assigned. The type is still set when the VM is first created."
         ),
     )
+    default_role_qemu = models.ForeignKey(
+        to="dcim.DeviceRole",
+        on_delete=models.SET_NULL,
+        related_name="+",
+        null=True,
+        blank=True,
+        limit_choices_to={"vm_role": True},
+        verbose_name=_("Default QEMU VM role"),
+        help_text=_(
+            "Default DeviceRole assigned to QEMU virtual machines synced from Proxmox. "
+            "Per-Endpoint and per-Node values override this; operator edits on a specific "
+            "VirtualMachine are preserved by the last-synced-role snapshot lock."
+        ),
+    )
+    default_role_lxc = models.ForeignKey(
+        to="dcim.DeviceRole",
+        on_delete=models.SET_NULL,
+        related_name="+",
+        null=True,
+        blank=True,
+        limit_choices_to={"vm_role": True},
+        verbose_name=_("Default LXC container role"),
+        help_text=_(
+            "Default DeviceRole assigned to LXC containers synced from Proxmox. "
+            "Per-Endpoint and per-Node values override this; operator edits on a specific "
+            "VirtualMachine are preserved by the last-synced-role snapshot lock."
+        ),
+    )
     overwrite_vm_tags = models.BooleanField(
         default=True,
         verbose_name=_("Merge VM tags"),
@@ -565,6 +593,18 @@ class ProxboxPluginSettings(NetBoxModel):
             "Per-branch destroy master switch. Even when set, every destroy still flows "
             "through a separate DeletionRequest approved by a user holding "
             "netbox_proxbox.authorize_deletion_request. Off by default."
+        ),
+    )
+    hardware_discovery_enabled = models.BooleanField(
+        default=False,
+        verbose_name=_("Enable SSH-based hardware discovery"),
+        help_text=_(
+            "Master flag for the SSH-driven hardware-discovery pass. When enabled, "
+            "proxbox-api opens a pinned-fingerprint SSH session to each ProxmoxNode that "
+            "has a stored NodeSSHCredential row, runs dmidecode + ethtool + ip link under "
+            "sudo -n, and reflects the parsed chassis / NIC values onto the matching "
+            "dcim.Device and dcim.Interface custom fields. Off by default — flipping off "
+            "results in zero SSH sockets opened during sync."
         ),
     )
 

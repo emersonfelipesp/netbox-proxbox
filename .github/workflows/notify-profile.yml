@@ -1,0 +1,33 @@
+name: Notify profile site
+
+# Pings emersonfelipesp/emersonfelipesp to refresh its GitHub data snapshots
+# (roadmap, releases, repo stats) whenever issues or releases change here.
+# The profile repo's `sync-github-data` workflow listens for
+# `repository_dispatch: refresh-github-data`.
+#
+# Requires a repository secret `PROFILE_REPO_PAT`: a fine-grained PAT scoped to
+# emersonfelipesp/emersonfelipesp with `metadata:read` + `contents:write` +
+# `actions:write` (or a classic PAT with `repo` + `workflow`).
+
+on:
+  issues:
+    types: [opened, closed, reopened, edited, labeled, unlabeled, milestoned, demilestoned]
+  release:
+    types: [published, edited, deleted]
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch refresh-github-data
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.PROFILE_REPO_PAT }}
+          repository: emersonfelipesp/emersonfelipesp
+          event-type: refresh-github-data
+          client-payload: |
+            {
+              "source_repo": "${{ github.repository }}",
+              "source_event": "${{ github.event_name }}",
+              "ref": "${{ github.ref }}"
+            }

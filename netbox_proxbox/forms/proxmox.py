@@ -13,7 +13,7 @@ from utilities.forms.fields import (
     DynamicModelChoiceField,
     DynamicModelMultipleChoiceField,
 )
-from dcim.models import Site
+from dcim.models import DeviceRole, Site
 from ipam.models import IPAddress
 from tenancy.models import Tenant
 from django.utils.translation import gettext as _
@@ -132,12 +132,35 @@ class ProxmoxEndpointSettingsForm(NetBoxModelForm):
     Overwrite fields are tri-state: empty = inherit from the global plugin setting.
     """
 
+    default_role_qemu = DynamicModelChoiceField(
+        queryset=DeviceRole.objects.all(),
+        required=False,
+        query_params={"vm_role": "true"},
+        label=_("Default QEMU VM role"),
+        help_text=_(
+            "Per-endpoint override for the QEMU VM role. Wins over the plugin-global "
+            "default. Leave blank to inherit."
+        ),
+    )
+    default_role_lxc = DynamicModelChoiceField(
+        queryset=DeviceRole.objects.all(),
+        required=False,
+        query_params={"vm_role": "true"},
+        label=_("Default LXC container role"),
+        help_text=_(
+            "Per-endpoint override for the LXC container role. Wins over the "
+            "plugin-global default. Leave blank to inherit."
+        ),
+    )
+
     class Meta:
         model = ProxmoxEndpoint
         fields = (
             "timeout",
             "max_retries",
             "retry_backoff",
+            "default_role_qemu",
+            "default_role_lxc",
             "enable_tenant_name_regex",
             "tenant_name_regex_rules",
             *OVERWRITE_FIELDS,

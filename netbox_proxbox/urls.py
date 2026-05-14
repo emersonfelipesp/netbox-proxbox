@@ -57,6 +57,14 @@ urlpatterns = [
         include(get_model_urls("netbox_proxbox", "fastapiendpoint", detail=False)),
     ),
     path(
+        "ssh-credentials/<int:pk>/",
+        include(get_model_urls("netbox_proxbox", "nodesshcredential")),
+    ),
+    path(
+        "ssh-credentials/",
+        include(get_model_urls("netbox_proxbox", "nodesshcredential", detail=False)),
+    ),
+    path(
         "storage/<int:pk>/",
         include(get_model_urls("netbox_proxbox", "proxmoxstorage")),
     ),

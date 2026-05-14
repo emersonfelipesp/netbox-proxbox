@@ -30,6 +30,8 @@
                     {% render_field form.delete_orphans %}
                     {% render_field form.primary_ip_preference %}
                     {% render_field form.parse_description_metadata %}
+                    {% render_field form.default_role_qemu %}
+                    {% render_field form.default_role_lxc %}
                     {% render_field form.backend_log_file_path %}
                 </div>
             </div>
@@ -177,6 +179,22 @@
                     {% render_field form.netbox_to_proxmox_enabled %}
                     {% render_field form.netbox_to_proxmox_typed_confirmation %}
                     {% render_field form.apply_destroy_confirmed %}
+                </div>
+            </div>
+            {# Hardware Discovery Card #}
+            <div class="card mb-3">
+                <h5 class="card-header">
+                    <i class="mdi mdi-server-network"></i>
+                    {% trans "Hardware Discovery" %}
+                </h5>
+                <div class="card-body">
+                    <p class="text-muted">
+                        {% blocktrans trimmed %}
+                        Enable the opt-in SSH discovery pass that reflects chassis and NIC
+                        hardware facts onto NetBox custom fields during Proxmox sync.
+                        {% endblocktrans %}
+                    </p>
+                    {% render_field form.hardware_discovery_enabled %}
                 </div>
             </div>
             {# Encryption Card #}

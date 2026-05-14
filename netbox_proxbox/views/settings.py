@@ -69,6 +69,8 @@ class SettingsView(
             "proxmox_timeout": settings_obj.proxmox_timeout,
             "proxmox_max_retries": settings_obj.proxmox_max_retries,
             "proxmox_retry_backoff": settings_obj.proxmox_retry_backoff,
+            "default_role_qemu": settings_obj.default_role_qemu_id,
+            "default_role_lxc": settings_obj.default_role_lxc_id,
             "enable_tenant_name_regex": settings_obj.enable_tenant_name_regex,
             "tenant_name_regex_rules": json.dumps(
                 settings_obj.tenant_name_regex_rules or [],
@@ -82,6 +84,7 @@ class SettingsView(
                 settings_obj.netbox_to_proxmox_typed_confirmation
             ),
             "apply_destroy_confirmed": settings_obj.apply_destroy_confirmed,
+            "hardware_discovery_enabled": settings_obj.hardware_discovery_enabled,
         }
         for name in OVERWRITE_FIELDS:
             initial[name] = getattr(settings_obj, name)
@@ -204,6 +207,8 @@ class SettingsView(
             settings_obj.proxmox_retry_backoff = form.cleaned_data[
                 "proxmox_retry_backoff"
             ]
+            settings_obj.default_role_qemu = form.cleaned_data.get("default_role_qemu")
+            settings_obj.default_role_lxc = form.cleaned_data.get("default_role_lxc")
             settings_obj.enable_tenant_name_regex = form.cleaned_data.get(
                 "enable_tenant_name_regex", False
             )
@@ -227,6 +232,9 @@ class SettingsView(
             )
             settings_obj.apply_destroy_confirmed = form.cleaned_data.get(
                 "apply_destroy_confirmed", False
+            )
+            settings_obj.hardware_discovery_enabled = form.cleaned_data.get(
+                "hardware_discovery_enabled", False
             )
             for _overwrite_field in OVERWRITE_FIELDS:
                 setattr(
@@ -277,6 +285,8 @@ class SettingsView(
                     "proxmox_timeout",
                     "proxmox_max_retries",
                     "proxmox_retry_backoff",
+                    "default_role_qemu",
+                    "default_role_lxc",
                     "enable_tenant_name_regex",
                     "tenant_name_regex_rules",
                     "branching_enabled",
@@ -285,6 +295,7 @@ class SettingsView(
                     "netbox_to_proxmox_enabled",
                     "netbox_to_proxmox_typed_confirmation",
                     "apply_destroy_confirmed",
+                    "hardware_discovery_enabled",
                     *OVERWRITE_FIELDS,
                 ]
             )

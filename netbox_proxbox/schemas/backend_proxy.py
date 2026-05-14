@@ -30,6 +30,7 @@ class SseEventType(str, Enum):
     # Bootstrap status frame emitted as the first frame of each sync run
     BOOTSTRAP_DONE = "bootstrap_done"
     DUPLICATE_NAME_RESOLVED = "duplicate_name_resolved"
+    HARDWARE_DISCOVERY = "hardware_discovery"
     # Migrate verb SSE channel (operational-verbs.md §7.1) — emitted on
     # /proxmox/{vm_type}/{vmid}/migrate/{task_upid}/stream by proxbox-api
     # 0.0.11; mirrored here so the test_sse_schema_mirror canary catches
@@ -154,6 +155,19 @@ class SseDuplicateNameResolvedPayload(ProxboxLenientModel):
     vmid: int = 0
     suffix_index: int = 1
     operator_renamed: bool = False
+
+
+class SseHardwareDiscoveryPayload(ProxboxLenientModel):
+    """Payload of a ``hardware_discovery`` event from newer proxbox-api builds."""
+
+    event: str = SseEventType.HARDWARE_DISCOVERY
+    node: str = ""
+    cluster: str | None = None
+    chassis_serial: str | None = None
+    chassis_manufacturer: str | None = None
+    chassis_product: str | None = None
+    nic_count: int = 0
+    duration_ms: int | None = None
 
 
 class FastAPIUrlDict(ProxboxBaseModel):

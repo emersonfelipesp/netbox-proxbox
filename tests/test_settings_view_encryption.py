@@ -88,6 +88,8 @@ def _fake_settings_obj(encryption_key: str = "") -> SimpleNamespace:
         proxmox_timeout=5,
         proxmox_max_retries=0,
         proxmox_retry_backoff="0.50",
+        default_role_qemu_id=None,
+        default_role_lxc_id=None,
         overwrite_device_role=True,
         overwrite_device_type=True,
         overwrite_device_tags=True,
@@ -120,6 +122,7 @@ def _fake_settings_obj(encryption_key: str = "") -> SimpleNamespace:
         netbox_to_proxmox_enabled=False,
         netbox_to_proxmox_typed_confirmation="",
         apply_destroy_confirmed=False,
+        hardware_discovery_enabled=False,
         save=_save,
         _saved=saved,
     )

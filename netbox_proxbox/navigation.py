@@ -156,6 +156,18 @@ fastapi_endpoints_item = PluginMenuItem(
     ),
 )
 
+ssh_credentials_item = PluginMenuItem(
+    link="plugins:netbox_proxbox:nodesshcredential_list",
+    link_text="SSH Credentials",
+    buttons=(
+        PluginMenuButton(
+            "plugins:netbox_proxbox:nodesshcredential_add",
+            "Add SSH Credential",
+            "mdi mdi-plus",
+        ),
+    ),
+)
+
 community_item = PluginMenuItem(
     link="plugins:netbox_proxbox:community",
     link_text="Community",
@@ -183,37 +195,58 @@ menu = PluginMenu(
     label="Proxbox",
     groups=(
         (
-            "Proxmox Plugin",
+            "Overview",
             (
                 fullupdate_item,
                 dashboard_item,
+            ),
+        ),
+        (
+            "Infrastructure",
+            (
                 clusters_item,
                 nodes_item,
+                storage_item,
+                ha_item,
+            ),
+        ),
+        (
+            "Virtualization",
+            (
                 virtual_machines_item,
                 lxc_containers_item,
+                virtual_disks_item,
                 interfaces_item,
                 ip_addresses_item,
-                storage_item,
-                virtual_disks_item,
+                vm_cloudinit_item,
+            ),
+        ),
+        (
+            "Data Protection",
+            (
                 backups_item,
                 backup_routines_item,
                 snapshots_item,
                 replications_item,
-                ha_item,
-                task_history_item,
-                vm_cloudinit_item,
-                schedule_sync_item,
-                sync_jobs_item,
-                backend_logs_item,
-                settings_item,
             ),
         ),
         (
-            "Endpoints",
+            "Sync & Operations",
             (
+                schedule_sync_item,
+                sync_jobs_item,
+                task_history_item,
+                backend_logs_item,
+            ),
+        ),
+        (
+            "Configuration",
+            (
+                settings_item,
                 proxmox_endpoints_item,
                 netbox_endpoints_item,
                 fastapi_endpoints_item,
+                ssh_credentials_item,
             ),
         ),
         (

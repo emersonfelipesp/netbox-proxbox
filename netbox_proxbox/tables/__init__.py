@@ -13,6 +13,7 @@ from netbox.tables.columns import BooleanColumn
 from netbox_proxbox.models import (
     FastAPIEndpoint,
     NetBoxEndpoint,
+    NodeSSHCredential,
     ProxmoxEndpoint,
 )
 from netbox_proxbox.tables.backup_routine import BackupRoutineTable
@@ -154,7 +155,6 @@ class FastAPIEndpointTable(NetBoxTable):
             "status",
             "actions",
         )
-
         default_columns = (
             "pk",
             "name",
@@ -166,4 +166,40 @@ class FastAPIEndpointTable(NetBoxTable):
             "verify_ssl",
             "use_websocket",
             "websocket_domain",
+        )
+
+
+class NodeSSHCredentialTable(NetBoxTable):
+    """django-tables2 layout for hardware-discovery SSH credentials."""
+
+    node = tables.Column(linkify=True)
+    auth_method = ChoiceFieldColumn()
+    sudo_required = BooleanColumn()
+    has_password = BooleanColumn(verbose_name=_("Password stored"))
+    has_private_key = BooleanColumn(verbose_name=_("Private key stored"))
+
+    class Meta(NetBoxTable.Meta):
+        model = NodeSSHCredential
+        fields = (
+            "pk",
+            "id",
+            "node",
+            "username",
+            "port",
+            "auth_method",
+            "known_host_fingerprint",
+            "sudo_required",
+            "has_password",
+            "has_private_key",
+            "actions",
+        )
+        default_columns = (
+            "pk",
+            "node",
+            "username",
+            "port",
+            "auth_method",
+            "sudo_required",
+            "has_password",
+            "has_private_key",
         )
