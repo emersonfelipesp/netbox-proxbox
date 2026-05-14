@@ -98,9 +98,13 @@ curl -H "Authorization: Token <token>" \
 | `token_name` | string | Proxmox API token name |
 | `token_value` | string (write-only) | Proxmox API token secret |
 | `verify_ssl` | boolean | Whether to verify the Proxmox TLS certificate (default `false`) |
+| `allow_writes` | boolean | Gate for the operational verb routes on the paired `proxbox-api` (start/stop/snapshot/migrate). Defaults to `false`. When `false`, `proxbox-api` returns `403 {"reason": "writes_disabled_for_endpoint"}` for verb POSTs against this endpoint even with a valid API key and `X-Proxbox-Actor` header. Flip to `true` per-endpoint to opt that Proxmox cluster into write access. |
 
 !!! warning "Validation"
     At least one of `domain` or `ip_address` must be provided. Omitting both returns a 400 error on both fields.
+
+!!! tip "Operational verbs"
+    `allow_writes` does **not** gate any of the read-side sync paths. It only controls the POST verb routes (`/proxmox/qemu/{vmid}/{start,stop,snapshot,migrate}` and the LXC equivalents) on the paired `proxbox-api`. See [Operational verbs design](../design/operational-verbs.md) and the [Endpoint Operations API](./operations.md).
 
 ---
 
