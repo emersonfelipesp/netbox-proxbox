@@ -23,7 +23,12 @@ from netbox_proxbox.intent.payload import (
     build_update_delta,
     build_vm_payload,
 )
-from netbox_proxbox.models import ProxmoxApplyJob as ProxmoxApplyJobModel
+from netbox_proxbox.intent.proxmox_tags import tag_pending_deletion
+from netbox_proxbox.intent.snapshot import build_metadata_snapshot
+from netbox_proxbox.models import (
+    DeletionRequest,
+    ProxmoxApplyJob as ProxmoxApplyJobModel,
+)
 from netbox_proxbox.services.backend_context import get_fastapi_request_context
 
 PROXBOX_APPLY_JOB_TIMEOUT = 3600
@@ -41,9 +46,18 @@ _UPDATE_PERMISSIONS = {
     "qemu": "netbox_proxbox.intent_update_vm",
     "lxc": "netbox_proxbox.intent_update_lxc",
 }
-_SUCCESS_STATUSES = {"succeeded", "success", "applied", "intent-logged"}
+_DELETE_PERMISSIONS = {
+    "qemu": "netbox_proxbox.intent_delete_vm",
+    "lxc": "netbox_proxbox.intent_delete_lxc",
+}
+_SUCCESS_STATUSES = {
+    "succeeded",
+    "success",
+    "applied",
+    "intent-logged",
+    "delete-pending-approval",
+}
 _FAILED_STATUSES = {"failed"}
-_NOT_IMPLEMENTED_MESSAGE = "Sub-PR G/H lands this"
 
 
 def _normalize_run_uuid(value: uuid.UUID | str | None) -> uuid.UUID:
@@ -294,13 +308,79 @@ class ProxmoxApplyJob(JobRunner):
                         continue
 
                     if op == "delete":
-                        results[key] = _result_entry(
-                            vmid=vmid,
-                            op=op,
-                            kind=kind,
-                            status="not_implemented",
-                            message=_NOT_IMPLEMENTED_MESSAGE,
+                        branch_custom_fields = (
+                            getattr(branch, "custom_field_data", None) or {}
                         )
+                        if (
+                            not isinstance(branch_custom_fields, dict)
+                            or branch_custom_fields.get("apply_destroy_confirmed")
+                            is not True
+                        ):
+                            results[key] = _result_entry(
+                                vmid=vmid,
+                                op=op,
+                                kind=kind,
+                                status="skipped",
+                                message="apply_destroy_confirmed not set",
+                            )
+                            continue
+
+                        permission = _DELETE_PERMISSIONS.get(
+                            kind, _DELETE_PERMISSIONS["qemu"]
+                        )
+                        has_perm = getattr(actor, "has_perm", None)
+                        if actor is None or not callable(has_perm) or not has_perm(
+                            permission
+                        ):
+                            results[key] = _result_entry(
+                                vmid=vmid,
+                                op=op,
+                                kind=kind,
+                                status="skipped",
+                                message=f"permission denied: {permission}",
+                            )
+                            continue
+
+                        snapshot = build_metadata_snapshot(vm)
+                        snapshot_vmid = snapshot.get("vmid")
+                        snapshot_node = snapshot.get("node")
+                        deletion_request = DeletionRequest(
+                            branch=branch,
+                            requested_by=actor,
+                            state=DeletionRequest.State.PENDING,
+                            vmid=snapshot_vmid,
+                            node=snapshot_node or "",
+                            kind=kind,
+                            metadata_snapshot=snapshot,
+                            requested_at=timezone.now(),
+                        )
+                        deletion_request.save()
+
+                        endpoint = get_fastapi_request_context()
+                        tagged = tag_pending_deletion(
+                            endpoint,
+                            vmid=snapshot_vmid,
+                            node=snapshot_node,
+                            kind=kind,
+                        )
+                        if not tagged:
+                            logger.warning(
+                                "DeletionRequest %s created, but VM %s on node %s "
+                                "was not tagged %s.",
+                                deletion_request.pk,
+                                snapshot_vmid,
+                                snapshot_node,
+                                "proxbox-pending-deletion",
+                            )
+
+                        results[key] = {
+                            "vmid": snapshot_vmid,
+                            "op": "delete",
+                            "kind": kind,
+                            "status": "delete-pending-approval",
+                            "deletion_request_id": deletion_request.pk,
+                            "message": "pending authorization",
+                        }
                         continue
 
                     if op == "update":
