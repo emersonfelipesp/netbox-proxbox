@@ -29,7 +29,7 @@ def _parse_proxmox_tags(raw: str | None) -> list[str]:
 
 def _tag_fallback_color(name: str) -> str:
     """Deterministic 6-char hex color for a tag name."""
-    return hashlib.md5(name.encode("utf-8")).hexdigest()[:6]
+    return hashlib.md5(name.encode("utf-8"), usedforsecurity=False).hexdigest()[:6]
 
 
 _CORE_VM_FIELDS = frozenset(
