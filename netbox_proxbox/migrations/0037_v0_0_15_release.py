@@ -40,10 +40,10 @@ class Migration(migrations.Migration):
         ('auth', '0012_alter_user_first_name_max_length'),
         ('contenttypes', '0002_remove_content_type_name'),
         ('core', '0018_concrete_objecttype'),
-        ('dcim', '0233_device_render_config_permission'),
+        ('dcim', '0227_alter_interface_speed_bigint'),
         ('extras', '0138_customfieldchoiceset_choice_colors'),
         ('netbox_proxbox', '0036_add_overwrite_vm_type'),
-        ('virtualization', '0056_virtualmachine_render_config_permission'),
+        ('virtualization', '0052_gfk_indexes'),
     ]
 
     operations = [
