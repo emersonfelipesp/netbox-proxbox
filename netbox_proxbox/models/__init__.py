@@ -1,7 +1,9 @@
 """Re-export ProxBox plugin models for stable `from netbox_proxbox.models import ...`."""
 
+from netbox_proxbox.models.apply_job import ProxmoxApplyJob
 from netbox_proxbox.models.backup_routine import BackupRoutine
 from netbox_proxbox.models.base import PORT_VALIDATORS, CommonProperties, EndpointBase
+from netbox_proxbox.models.deletion_request import DeletionRequest
 from netbox_proxbox.models.fastapi_endpoint import FastAPIEndpoint
 from netbox_proxbox.models.netbox_endpoint import NetBoxEndpoint
 from netbox_proxbox.models.plugin_settings import ProxboxPluginSettings
@@ -18,10 +20,12 @@ from netbox_proxbox.models.vm_task_history import VMTaskHistory
 
 __all__ = (
     "BackupRoutine",
+    "DeletionRequest",
     "FastAPIEndpoint",
     "NetBoxEndpoint",
     "NodeSSHCredential",
     "ProxboxPluginSettings",
+    "ProxmoxApplyJob",
     "ProxmoxCluster",
     "ProxmoxEndpoint",
     "ProxmoxNode",

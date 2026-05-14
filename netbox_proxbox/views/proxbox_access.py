@@ -9,17 +9,26 @@ from core.models import Job
 from utilities.permissions import get_permission_for_model
 
 from netbox_proxbox.models import (
+    DeletionRequest,
     FastAPIEndpoint,
     NetBoxEndpoint,
     ProxboxPluginSettings,
+    ProxmoxApplyJob,
     ProxmoxEndpoint,
 )
 
 __all__ = (
     "RequireProxboxDashboardAccessMixin",
+    "permission_authorize_deletion_request",
     "permission_change_fastapi_endpoint",
     "permission_change_proxbox_plugin_settings",
     "permission_enqueue_proxbox_sync",
+    "permission_intent_create_lxc",
+    "permission_intent_create_vm",
+    "permission_intent_delete_lxc",
+    "permission_intent_delete_vm",
+    "permission_intent_update_lxc",
+    "permission_intent_update_vm",
     "permission_run_proxmox_action",
     "permission_view_fastapi_endpoint",
     "user_may_access_proxbox_dashboard",
@@ -70,6 +79,62 @@ def permission_run_proxmox_action() -> str:
 def permission_view_fastapi_endpoint() -> str:
     """Required for read-only WebSocket / operational views tied to the backend."""
     return get_permission_for_model(FastAPIEndpoint, "view")
+
+
+def _apply_job_intent_perm(codename: str) -> str:
+    return f"{ProxmoxApplyJob._meta.app_label}.{codename}"
+
+
+def permission_intent_create_vm() -> str:
+    """Required to request a Proxmox QEMU VM CREATE via the intent merge path."""
+    return _apply_job_intent_perm("intent_create_vm")
+
+
+def permission_intent_update_vm() -> str:
+    """Required to request a Proxmox QEMU VM UPDATE via the intent merge path."""
+    return _apply_job_intent_perm("intent_update_vm")
+
+
+def permission_intent_delete_vm() -> str:
+    """Required to request a Proxmox QEMU VM DELETE via the intent merge path.
+
+    Distinct from ``authorize_deletion_request``: this permission lets a user
+    *request* a delete; the DeletionRequest still requires a separate user with
+    ``authorize_deletion_request`` to approve it (four-eyes). The two are
+    intentionally on different ContentTypes so they can be granted to different
+    roles.
+    """
+    return _apply_job_intent_perm("intent_delete_vm")
+
+
+def permission_intent_create_lxc() -> str:
+    """Required to request a Proxmox LXC container CREATE via the intent merge path."""
+    return _apply_job_intent_perm("intent_create_lxc")
+
+
+def permission_intent_update_lxc() -> str:
+    """Required to request a Proxmox LXC container UPDATE via the intent merge path."""
+    return _apply_job_intent_perm("intent_update_lxc")
+
+
+def permission_intent_delete_lxc() -> str:
+    """Required to request a Proxmox LXC container DELETE via the intent merge path.
+
+    Four-eyes pair of ``authorize_deletion_request`` — see
+    ``permission_intent_delete_vm`` for the same rationale.
+    """
+    return _apply_job_intent_perm("intent_delete_lxc")
+
+
+def permission_authorize_deletion_request() -> str:
+    """Required to approve or reject a pending DeletionRequest (four-eyes).
+
+    Held separately from ``intent_delete_*``; a single user holding both still
+    cannot self-approve unless
+    ``ProxboxPluginSettings.intent_apply_authorization_self_approve_allowed=True``
+    (default ``False``).
+    """
+    return f"{DeletionRequest._meta.app_label}.authorize_deletion_request"
 
 
 def user_may_access_proxbox_dashboard(user: AbstractBaseUser | AnonymousUser) -> bool:
