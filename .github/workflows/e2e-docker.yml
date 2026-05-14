@@ -405,6 +405,42 @@ jobs:
         run: |
           python tests/e2e/e2e_stack_check.py
 
+      - name: Smoke test single-exec compose (issue #371)
+        # Run only against the local install source: published wheels on
+        # v0.0.14 and earlier do not yet ship `proxbox_sync`. Other install
+        # sources start exercising this once v0.0.15 is on PyPI.
+        if: matrix.install_source == 'local'
+        env:
+          NETBOX_IMAGE: ${{ matrix.netbox_image }}
+        run: |
+          set -eux
+          # 1. Parse the compose file end-to-end. Catches YAML / env-var errors.
+          docker compose -f docs/installation/docker-compose-single-exec.yml config --quiet
+
+          # 2. Run it for real, attached to the live e2e stack via env-var overrides.
+          # Mount the in-tree source at /tmp/netbox-proxbox so the script's
+          # `uv pip install /tmp/netbox-proxbox` resolves to the branch being tested.
+          SECRET_KEY='proxbox-e2e-secret-key-proxbox-e2e-secret-key-proxbox-e2e-secret-key'
+          NETBOX_ENV_FILE=/dev/null \
+          NETBOX_NETWORK=proxbox-e2e \
+          PROXBOX_SYNC_TIMEOUT=600 \
+          NETBOX_PROXBOX_PIP_SPEC=/tmp/netbox-proxbox \
+          docker compose -f docs/installation/docker-compose-single-exec.yml run --rm \
+            -v "$PWD:/tmp/netbox-proxbox:ro" \
+            -e DB_HOST=netbox-e2e-postgres \
+            -e DB_NAME=netbox \
+            -e DB_USER=netbox \
+            -e DB_PASSWORD=netbox \
+            -e REDIS_HOST=netbox-e2e-redis \
+            -e REDIS_DATABASE=0 \
+            -e REDIS_CACHE_HOST=netbox-e2e-redis \
+            -e REDIS_CACHE_DATABASE=1 \
+            -e REDIS_TASK_HOST=netbox-e2e-redis \
+            -e REDIS_TASK_DATABASE=2 \
+            -e SECRET_KEY="$SECRET_KEY" \
+            -e ALLOWED_HOSTS="* localhost 127.0.0.1 ::1 netbox" \
+            netbox
+
       - name: Dump container logs on failure
         if: failure()
         run: |

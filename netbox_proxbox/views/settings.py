@@ -39,6 +39,8 @@ class SettingsView(
             "use_guest_agent_interface_name": settings_obj.use_guest_agent_interface_name,
             "proxbox_fetch_max_concurrency": settings_obj.proxbox_fetch_max_concurrency,
             "ignore_ipv6_link_local_addresses": settings_obj.ignore_ipv6_link_local_addresses,
+            "ensure_netbox_objects": settings_obj.ensure_netbox_objects,
+            "delete_orphans": settings_obj.delete_orphans,
             "primary_ip_preference": settings_obj.primary_ip_preference,
             "netbox_max_concurrent": settings_obj.netbox_max_concurrent,
             "netbox_timeout": settings_obj.netbox_timeout,
@@ -58,6 +60,7 @@ class SettingsView(
             "backend_log_file_path": settings_obj.backend_log_file_path,
             "debug_cache": settings_obj.debug_cache,
             "expose_internal_errors": settings_obj.expose_internal_errors,
+            "parse_description_metadata": settings_obj.parse_description_metadata,
             "ssrf_protection_enabled": settings_obj.ssrf_protection_enabled,
             "allow_private_ips": settings_obj.allow_private_ips,
             "additional_allowed_ip_ranges": settings_obj.additional_allowed_ip_ranges,
@@ -106,6 +109,10 @@ class SettingsView(
             settings_obj.ignore_ipv6_link_local_addresses = form.cleaned_data[
                 "ignore_ipv6_link_local_addresses"
             ]
+            settings_obj.ensure_netbox_objects = form.cleaned_data.get(
+                "ensure_netbox_objects", True
+            )
+            settings_obj.delete_orphans = form.cleaned_data.get("delete_orphans", False)
             settings_obj.primary_ip_preference = form.cleaned_data[
                 "primary_ip_preference"
             ]
@@ -133,6 +140,10 @@ class SettingsView(
             settings_obj.ignore_ipv6_link_local_addresses = form.cleaned_data[
                 "ignore_ipv6_link_local_addresses"
             ]
+            settings_obj.ensure_netbox_objects = form.cleaned_data.get(
+                "ensure_netbox_objects", True
+            )
+            settings_obj.delete_orphans = form.cleaned_data.get("delete_orphans", False)
             settings_obj.primary_ip_preference = form.cleaned_data[
                 "primary_ip_preference"
             ]
@@ -172,6 +183,9 @@ class SettingsView(
             settings_obj.debug_cache = form.cleaned_data.get("debug_cache", False)
             settings_obj.expose_internal_errors = form.cleaned_data.get(
                 "expose_internal_errors", False
+            )
+            settings_obj.parse_description_metadata = form.cleaned_data.get(
+                "parse_description_metadata", False
             )
             settings_obj.backend_log_file_path = form.cleaned_data[
                 "backend_log_file_path"
@@ -241,6 +255,8 @@ class SettingsView(
                     "use_guest_agent_interface_name",
                     "proxbox_fetch_max_concurrency",
                     "ignore_ipv6_link_local_addresses",
+                    "ensure_netbox_objects",
+                    "delete_orphans",
                     "primary_ip_preference",
                     "netbox_max_concurrent",
                     "netbox_timeout",
@@ -260,6 +276,7 @@ class SettingsView(
                     "backend_log_file_path",
                     "debug_cache",
                     "expose_internal_errors",
+                    "parse_description_metadata",
                     "ssrf_protection_enabled",
                     "allow_private_ips",
                     "additional_allowed_ip_ranges",

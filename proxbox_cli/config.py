@@ -12,6 +12,7 @@ DEFAULT_CONFIG_DIR = "proxbox-cli"
 DEFAULT_CONFIG_FILENAME = "config.json"
 DEFAULT_BASE_URL = "http://localhost:8000"
 BASE_URL_ENV_VAR = "PROXBOX_URL"
+NETBOX_PATH_ENV_VAR = "NETBOX_PATH"
 
 
 class Config(BaseModel):
@@ -19,6 +20,7 @@ class Config(BaseModel):
 
     base_url: str = DEFAULT_BASE_URL
     timeout: float = 30.0
+    netbox_manage_py: str | None = None
 
 
 def config_dir() -> Path:

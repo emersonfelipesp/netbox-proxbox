@@ -15,6 +15,7 @@ from .models import (
     ProxmoxEndpoint,
     ProxmoxNode,
     ProxmoxStorage,
+    ProxmoxVMCloudInit,
     Replication,
     VMBackup,
     VMSnapshot,
@@ -216,6 +217,31 @@ class VMTaskHistoryFilterSet(ProxboxModelFilterSet):
             | Q(status__icontains=value)
             | Q(task_state__icontains=value)
             | Q(exitstatus__icontains=value)
+        )
+
+
+@register_filterset
+class ProxmoxVMCloudInitFilterSet(ProxboxModelFilterSet):
+    """Filter Proxmox VM cloud-init rows reflected from Proxmox (issue #363)."""
+
+    class Meta:
+        model = ProxmoxVMCloudInit
+        fields = (
+            "id",
+            "virtual_machine",
+            "ciuser",
+            "ipconfig0",
+            "sshkeys_truncated",
+        )
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        """Match VM name or cloud-init fields case-insensitively."""
+        if not value.strip():
+            return queryset
+        return queryset.filter(
+            Q(virtual_machine__name__icontains=value)
+            | Q(ciuser__icontains=value)
+            | Q(ipconfig0__icontains=value)
         )
 
 

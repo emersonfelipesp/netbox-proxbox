@@ -25,7 +25,12 @@
       "phase_summary",
       "error_detail",
       "progress",
-      "duplicate_name_resolved"
+      "bootstrap_done",
+      "duplicate_name_resolved",
+      "migrate_dispatched",
+      "migrate_progress",
+      "migrate_succeeded",
+      "migrate_failed"
     ]
   },
   "payload_fields": {

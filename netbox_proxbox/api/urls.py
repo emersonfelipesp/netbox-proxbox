@@ -52,6 +52,9 @@ router.register("replications", views.ReplicationViewSet, basename="replication"
 router.register("snapshots", views.VMSnapshotViewSet)
 router.register("task-history", views.VMTaskHistoryViewSet)
 router.register(
+    "vm-cloudinit", views.ProxmoxVMCloudInitViewSet, basename="proxmoxvmcloudinit"
+)
+router.register(
     "settings", views.ProxboxPluginSettingsViewSet, basename="proxboxpluginsettings"
 )
 router.register(

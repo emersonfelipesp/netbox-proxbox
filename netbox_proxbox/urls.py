@@ -107,6 +107,14 @@ urlpatterns = [
         "task-history/",
         include(get_model_urls("netbox_proxbox", "vmtaskhistory", detail=False)),
     ),
+    path(
+        "vm-cloudinit/<int:pk>/",
+        include(get_model_urls("netbox_proxbox", "proxmoxvmcloudinit")),
+    ),
+    path(
+        "vm-cloudinit/",
+        include(get_model_urls("netbox_proxbox", "proxmoxvmcloudinit", detail=False)),
+    ),
     path("sync/devices/", views.sync_devices, name="sync_devices"),
     path("sync/storage/", views.sync_storage, name="sync_storage"),
     path(

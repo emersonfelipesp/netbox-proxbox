@@ -1,0 +1,25 @@
+# Example compose snippet — drop into an existing stack that already runs
+# NetBox + proxbox-api. Tracks issue #372.
+#
+# Run with `docker compose up -d proxbox-scheduler`.
+
+services:
+  proxbox-scheduler:
+    build:
+      context: .
+    image: proxbox-scheduler:0.0.15
+    restart: unless-stopped
+    environment:
+      # off | continuous | interval=<seconds> | cron=<expression>
+      PROXBOX_MODE: "cron=0 */4 * * *"
+      PROXBOX_SCHEDULER_TZ: America/Sao_Paulo
+      PROXBOX_SCHEDULER_INVOKE: http
+      PROXBOX_API_URL: http://proxbox-api:8000
+      PROXBOX_API_KEY: ${PROXBOX_API_KEY:?set PROXBOX_API_KEY in your .env}
+      PROXBOX_API_TIMEOUT: "7200"
+      PROXBOX_API_VERIFY_SSL: "false"
+      PROXBOX_SCHEDULER_BACKOFF_ON_ERROR_SECONDS: "30"
+      PROXBOX_SCHEDULER_LOG_JSON: "true"
+      PROXBOX_SCHEDULER_LOG_LEVEL: INFO
+    depends_on:
+      - proxbox-api

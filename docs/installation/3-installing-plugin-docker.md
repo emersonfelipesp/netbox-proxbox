@@ -61,6 +61,16 @@ docker compose exec netbox /opt/netbox/netbox/manage.py showmigrations netbox_pr
 
 All plugin migrations should be marked as applied.
 
+## Scheduled sync deployments
+
+After the long-lived stack is up, you usually want syncs to run on a
+schedule without a human clicking **Full Update**. The recommended
+one-shot pattern ships next to this page as
+[`docker-compose-single-exec.yml`](./docker-compose-single-exec.yml) and
+is documented in
+[Scheduled sync — one-shot `docker compose` pattern](../operations/single-exec.md),
+with worked crontab and systemd-timer examples.
+
 ## Next Step
 
 The plugin requires the separate FastAPI backend service. Continue with [Proxbox Backend Setup](./backend-setup.md).

@@ -215,6 +215,7 @@ curl -X POST \
        "name": "proxbox-backend",
        "domain": "proxbox-api.example.com",
        "port": 8800,
+       "use_https": true,
        "verify_ssl": false,
        "use_websocket": true,
        "websocket_port": 8800
@@ -244,6 +245,7 @@ curl -H "Authorization: Token <token>" \
   "ip_address": null,
   "domain": "proxbox-api.example.com",
   "port": 8800,
+  "use_https": true,
   "verify_ssl": false,
   "token": "a1b2c3d4e5f6...",
   "use_websocket": true,
@@ -268,7 +270,8 @@ curl -H "Authorization: Token <token>" \
 | `ip_address` | nested IPAddress (nullable) | NetBox IPAddress object linked to this endpoint |
 | `domain` | string (nullable) | FQDN, hostname, or `localhost` |
 | `port` | integer | HTTP API port (default `8800`) |
-| `verify_ssl` | boolean | Whether to verify the backend TLS certificate |
+| `use_https` | boolean | URL scheme selector. `true` → `https://`, `false` → `http://`. Independent of `verify_ssl` since v0.0.15 (migration `0038`, [#352](https://github.com/emersonfelipesp/netbox-proxbox/issues/352)). See [Backend Setup → TLS combinations](../installation/backend-setup.md) and [v0.0.15 release notes](../release-notes/version-0.0.15.md). |
+| `verify_ssl` | boolean | Whether to verify the backend TLS certificate. Only meaningful when `use_https=true`. |
 | `token` | string (read-only) | Bearer token used to authenticate requests to the backend |
 | `use_websocket` | boolean | Whether to use a WebSocket connection for streaming |
 | `websocket_domain` | string | Override domain for WebSocket connections (defaults to `domain`) |

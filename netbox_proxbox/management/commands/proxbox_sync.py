@@ -3,10 +3,16 @@
 Usage:
     python manage.py proxbox_sync [--user USERNAME] [--wait] [--timeout SECONDS]
                                   [--poll-interval SECONDS] [--worker-grace SECONDS]
+                                  [--enqueue-once]
 
 This is the headless equivalent of clicking "Full Update" in the plugin UI:
 it enqueues the same ``ProxboxSyncJob`` (on NetBox's default RQ queue) with
 ``sync_types=[SyncTypeChoices.ALL]`` and all configured Proxmox endpoint IDs.
+
+``--enqueue-once`` is the integration hook for the ``proxbox-scheduler``
+container (issue #372): it routes through ``JobRunner.enqueue_once()``,
+which uses an advisory-locked dedup keyed on the job class + instance, so
+the command no-ops when a pending recurring schedule already exists.
 
 Exit codes:
     0  job enqueued (and, with --wait, completed successfully)
@@ -78,6 +84,17 @@ class Command(BaseCommand):
                 f"seconds with no RQ worker on the default queue (default: {DEFAULT_WORKER_GRACE})."
             ),
         )
+        parser.add_argument(
+            "--enqueue-once",
+            action="store_true",
+            help=(
+                "Dedup against any pending recurring schedule via "
+                "JobRunner.enqueue_once(). If a pending ProxboxSyncJob already "
+                "exists (e.g. created by the NetBox-side Schedule Sync form), "
+                "reuse it instead of enqueuing a duplicate. Intended for the "
+                "proxbox-scheduler container (issue #372)."
+            ),
+        )
 
     def handle(self, *args: object, **options: object) -> None:
         """Handle handle."""
@@ -110,6 +127,7 @@ class Command(BaseCommand):
             if worker_grace_raw is None
             else float(worker_grace_raw)
         )
+        enqueue_once = bool(options.get("enqueue_once"))
 
         user = self._resolve_user(username)
 
@@ -139,24 +157,32 @@ class Command(BaseCommand):
             )
             return
 
+        enqueue_kwargs = dict(
+            instance=None,
+            user=user,
+            queue_name=PROXBOX_SYNC_QUEUE_NAME,
+            name="Proxbox Sync: Full update (CLI)",
+            sync_types=[SyncTypeChoices.ALL],
+            proxmox_endpoint_ids=proxmox_endpoint_ids,
+        )
+
         try:
-            job = ProxboxSyncJob.enqueue(
-                instance=None,
-                user=user,
-                queue_name=PROXBOX_SYNC_QUEUE_NAME,
-                name="Proxbox Sync: Full update (CLI)",
-                sync_types=[SyncTypeChoices.ALL],
-                proxmox_endpoint_ids=proxmox_endpoint_ids,
-            )
+            if enqueue_once:
+                job = ProxboxSyncJob.enqueue_once(**enqueue_kwargs)
+            else:
+                job = ProxboxSyncJob.enqueue(**enqueue_kwargs)
         except Exception as exc:  # noqa: BLE001 — surface any enqueue failure
             raise CommandError(f"Failed to enqueue ProxboxSyncJob: {exc}") from exc
 
         job_pk = getattr(job, "pk", None)
+        dedup_note = (
+            " (enqueue_once: reused pending or freshly created)" if enqueue_once else ""
+        )
         self.stdout.write(
             self.style.SUCCESS(
                 f"Enqueued ProxboxSyncJob (pk={job_pk}) on queue "
                 f"'{PROXBOX_SYNC_QUEUE_NAME}' for {len(proxmox_endpoint_ids)} "
-                f"Proxmox endpoint(s), attributed to user '{user}'."
+                f"Proxmox endpoint(s), attributed to user '{user}'{dedup_note}."
             )
         )
 

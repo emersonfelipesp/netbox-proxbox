@@ -109,6 +109,11 @@ task_history_item = PluginMenuItem(
     link_text="Task History",
 )
 
+vm_cloudinit_item = PluginMenuItem(
+    link="plugins:netbox_proxbox:proxmoxvmcloudinit_list",
+    link_text="VM Cloud-init",
+)
+
 contributing_item = PluginMenuItem(
     link="plugins:netbox_proxbox:contributing",
     link_text="Contributing!",
@@ -213,6 +218,7 @@ menu = PluginMenu(
                 virtual_disks_item,
                 interfaces_item,
                 ip_addresses_item,
+                vm_cloudinit_item,
             ),
         ),
         (

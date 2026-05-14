@@ -27,6 +27,7 @@ from .serializers import (
     ProxmoxEndpointSerializer,
     ProxmoxNodeSerializer,
     ProxmoxStorageSerializer,
+    ProxmoxVMCloudInitSerializer,
     ReplicationSerializer,
     ScheduleSyncRequestSerializer,
     VMBackupSerializer,
@@ -138,6 +139,19 @@ class VMTaskHistoryViewSet(NetBoxModelViewSet):
     queryset = models.VMTaskHistory.objects.select_related("virtual_machine")
     serializer_class = VMTaskHistorySerializer
     filterset_class = filtersets.VMTaskHistoryFilterSet
+
+
+class ProxmoxVMCloudInitViewSet(NetBoxModelViewSet):
+    """REST API for Proxmox VM cloud-init rows (issue #363).
+
+    proxbox-api writes ciuser/sshkeys/ipconfig0 here after each per-VM sync.
+    The NetBox UI keeps the row read-only via disabled form fields; the API
+    inherits NetBox's standard object-level permissions.
+    """
+
+    queryset = models.ProxmoxVMCloudInit.objects.select_related("virtual_machine")
+    serializer_class = ProxmoxVMCloudInitSerializer
+    filterset_class = filtersets.ProxmoxVMCloudInitFilterSet
 
 
 class ProxmoxStorageViewSet(NetBoxModelViewSet):

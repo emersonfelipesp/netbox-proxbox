@@ -121,6 +121,26 @@ class ProxboxPluginSettingsForm(forms.Form):
             "VM interface IP address selection. Disable only if you need link-local addresses included."
         ),
     )
+    ensure_netbox_objects = forms.BooleanField(
+        required=False,
+        label="Ensure NetBox supporting objects on startup",
+        help_text=(
+            "When enabled, proxbox-api runs an idempotent NetBox-side bootstrap pass "
+            "on each process startup that ensures the supporting objects the plugin "
+            "requires (cluster type, device roles, manufacturer, device type, VM type, "
+            "custom fields, discovery tags) exist. Disable to leave hand-curated "
+            "NetBox installs untouched."
+        ),
+    )
+    delete_orphans = forms.BooleanField(
+        required=False,
+        label="Delete orphan VMs",
+        help_text=(
+            "When enabled, full-update runs will delete Proxbox-discovered VMs "
+            "that were not touched by the current sync run. Review the full-update "
+            "dry-run preview before enabling in production."
+        ),
+    )
     primary_ip_preference = forms.ChoiceField(
         required=True,
         choices=(("ipv4", "Prefer IPv4"), ("ipv6", "Prefer IPv6")),
@@ -272,6 +292,16 @@ class ProxboxPluginSettingsForm(forms.Form):
         help_text=(
             "When enabled, proxbox-api includes internal exception details in HTTP error "
             "responses. Leave disabled in production."
+        ),
+    )
+    parse_description_metadata = forms.BooleanField(
+        required=False,
+        label="Parse description metadata",
+        help_text=(
+            "When enabled, proxbox-api reads each Proxmox object's description for a "
+            'fenced "netbox-metadata" JSON block and applies the parsed PK ids to the '
+            "matching NetBox fields. Per-field overwrite_* flags still gate keys they "
+            "cover. Disabled by default."
         ),
     )
     ssrf_protection_enabled = forms.BooleanField(

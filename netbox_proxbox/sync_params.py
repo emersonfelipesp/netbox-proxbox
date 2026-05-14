@@ -70,6 +70,16 @@ def _primary_ip_preference_setting() -> str:
         return "ipv4"
 
 
+def _parse_description_metadata_setting() -> bool:
+    """Return plugin setting for description-metadata JSON parsing (opt-in)."""
+    try:
+        from netbox_proxbox.models import ProxboxPluginSettings
+
+        return bool(ProxboxPluginSettings.get_solo().parse_description_metadata)
+    except (ImportError, RuntimeError, AttributeError):
+        return False
+
+
 def _overwrite_device_role_setting() -> bool:
     """Return plugin setting for whether sync should overwrite the device role."""
     try:

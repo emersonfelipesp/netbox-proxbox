@@ -1,0 +1,56 @@
+{% extends 'base/layout.html' %}
+{% load i18n %}
+
+{% block title %}{% trans "Migrate VM" %} — {{ vm.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <h1>{% trans "Migrate VM" %} — {{ vm.name }}</h1>
+  <p class="text-muted">
+    {% blocktrans with vmid=vm.custom_field_data.proxmox_vm_id %}Pick a target Proxmox node for migration of VMID {{ vmid }}.{% endblocktrans %}
+  </p>
+
+  {% if not resolvable %}
+    <div class="alert alert-warning" role="alert">
+      {% trans "This VM is not linked to a Proxmox endpoint or is missing a proxmox_vm_id custom field." %}
+    </div>
+    <a class="btn btn-secondary" href="{{ vm.get_absolute_url }}">{% trans "Back to VM" %}</a>
+  {% elif not targets %}
+    <div class="alert alert-info" role="alert">
+      {% trans "No alternative Proxmox nodes are known for this VM's cluster. Run a Proxbox sync to populate the node inventory." %}
+    </div>
+    <a class="btn btn-secondary" href="{{ vm.get_absolute_url }}">{% trans "Back to VM" %}</a>
+  {% else %}
+    <form method="post" action="{{ action_url }}" class="card p-3">
+      {% csrf_token %}
+      {% if current_node %}
+        <p class="mb-2">
+          {% blocktrans with node=current_node %}Currently on node <strong>{{ node }}</strong>.{% endblocktrans %}
+        </p>
+      {% endif %}
+      <div class="mb-3">
+        <label for="target" class="form-label">{% trans "Target node" %}</label>
+        <select id="target" name="target" class="form-select" required>
+          <option value="" selected disabled>{% trans "Select target node…" %}</option>
+          {% for node in targets %}
+            <option value="{{ node.name }}">{{ node.name }}{% if not node.online %} ({% trans "offline" %}){% endif %}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-check mb-3">
+        <input class="form-check-input" type="checkbox" id="online" name="online" value="on">
+        <label class="form-check-label" for="online">
+          {% trans "Online (live) migrate" %}
+        </label>
+      </div>
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-warning">
+          <i class="mdi mdi-truck-fast" aria-hidden="true"></i>
+          {% trans "Migrate" %}
+        </button>
+        <a class="btn btn-secondary" href="{{ vm.get_absolute_url }}">{% trans "Cancel" %}</a>
+      </div>
+    </form>
+  {% endif %}
+</div>
+{% endblock %}

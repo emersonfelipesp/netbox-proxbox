@@ -2,6 +2,9 @@
 
 Proxbox exposes a singleton **Plugin Settings** object for runtime behavior toggles. Create or edit it under **Plugins → Proxbox → Plugin Settings**.
 
+!!! tip "Programmatic access"
+    Every field below is also readable and writable through the [Plugin Settings API](../api/settings.md) (GET + PATCH).
+
 ## Runtime tunable resolution
 
 Most fields below are also readable by the paired `proxbox-api` backend through
@@ -27,6 +30,7 @@ shadows the field.
 | **Use guest agent interface name** | `true` | _(plugin only)_ | Use QEMU guest-agent interface names (e.g. `ens18`) instead of generic Proxmox labels (e.g. `net0`). |
 | **Proxmox fetch max concurrency** | `8` | `PROXBOX_FETCH_MAX_CONCURRENCY` | Maximum parallel Proxmox fetch operations per sync stage. Raise for multi-cluster speed; lower if Proxmox load is a concern. |
 | **Ignore IPv6 link-local addresses** | `true` | _(plugin only)_ | Skip `fe80::/64` addresses during VM interface IP selection. |
+| **Delete orphan VMs** | `false` | `PROXBOX_DELETE_ORPHANS` | Delete Proxbox-discovered VMs that were not touched by the current full-update run. Review `/full-update/stream?dry_run=true` before enabling in production. |
 | **Primary IP preference** | `ipv4` | _(plugin only)_ | Whether the sync should prefer IPv4 or IPv6 when assigning primary IP on NetBox VMs. |
 
 ---

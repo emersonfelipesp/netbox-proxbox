@@ -4,7 +4,7 @@ The plugin's main plugin-specific models are:
 
 - `ProxmoxEndpoint`: Proxmox cluster or node credentials and connectivity settings (with per-endpoint sync overwrite flags and a Settings tab)
 - `NetBoxEndpoint`: target NetBox API endpoint and token configuration (singleton)
-- `FastAPIEndpoint`: `proxbox-api` backend connectivity settings (singleton)
+- `FastAPIEndpoint`: `proxbox-api` backend connectivity settings (singleton). Since v0.0.15 the model exposes `use_https` (URL scheme) and `verify_ssl` (certificate verification) as **independent** boolean flags — `use_https=true, verify_ssl=false` is the supported combination for the `*-nginx` image with a self-signed mkcert certificate. See [Backend Setup](../installation/backend-setup.md) for the full combination table and migration `0038_fastapiendpoint_use_https.py` for the upgrade-path backfill.
 - `ProxmoxCluster`: synchronized cluster metadata linked to NetBox `Cluster`
 - `ProxmoxNode`: synchronized hypervisor node metadata linked to NetBox `Device`
 - `ProxmoxStorage`: synchronized storage rows linked to NetBox clusters and virtual disks

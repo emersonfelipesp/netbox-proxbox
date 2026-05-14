@@ -13,6 +13,7 @@
     "overwrite_vm_tags",
     "overwrite_vm_description",
     "overwrite_vm_custom_fields",
+    "overwrite_vm_cloudinit",
     "overwrite_cluster_tags",
     "overwrite_cluster_description",
     "overwrite_cluster_custom_fields",

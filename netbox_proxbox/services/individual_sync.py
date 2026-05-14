@@ -34,16 +34,27 @@ _CONTEXT_KEYS = (
 def sync_individual(
     path: str,
     query_params: dict | None = None,
+    netbox_branch_schema_id: str | None = None,
 ) -> tuple[dict, int]:
     """Call an individual sync endpoint on proxbox-api.
 
     Args:
         path: The API path (e.g., "sync/individual/vm")
         query_params: Query parameters for the endpoint
+        netbox_branch_schema_id: Optional netbox-branching schema_id. When
+            set, it is forwarded as a query param so proxbox-api wraps the
+            single-record sync in ``activate_branch(schema_id)`` and emits
+            the ``X-NetBox-Branch`` header on every NetBox write. Bridges
+            issue #370 through SyncContext (#375) per issue #406.
 
     Returns:
         Tuple of (response_dict, status_code)
     """
+    if netbox_branch_schema_id:
+        merged_params = dict(query_params or {})
+        merged_params["netbox_branch_schema_id"] = netbox_branch_schema_id
+        query_params = merged_params
+
     context = get_first_fastapi_context()
     if context is None or not context.get("http_url"):
         return {"error": "No FastAPI endpoint configured."}, 503
@@ -136,6 +147,7 @@ def sync_individual_with_dependencies(
     query_params: dict | None = None,
     _visited: set | None = None,
     _context: dict | None = None,
+    netbox_branch_schema_id: str | None = None,
 ) -> tuple[dict, int, list[dict]]:
     """Call an individual sync endpoint and recursively sync dependencies.
 
@@ -143,6 +155,9 @@ def sync_individual_with_dependencies(
         path: The API path (e.g., "sync/individual/vm")
         query_params: Query parameters for the endpoint
         _visited: Internal tracker to prevent circular dependency syncs
+        netbox_branch_schema_id: Optional netbox-branching schema_id;
+            forwarded to every recursive call so all dependent records land
+            on the same branch (see :func:`sync_individual`).
 
     Returns:
         Tuple of (response_dict, status_code, list of synced dependencies)
@@ -161,7 +176,9 @@ def sync_individual_with_dependencies(
         return {}, 200, []
     _visited.add(cache_key)
 
-    response, status = sync_individual(path, params)
+    response, status = sync_individual(
+        path, params, netbox_branch_schema_id=netbox_branch_schema_id
+    )
     all_synced = []
 
     if status == 200 and isinstance(response, dict):
@@ -171,7 +188,10 @@ def sync_individual_with_dependencies(
             action = dep.get("action")
             if action in ("created", "updated"):
                 dep_response, dep_status, dep_synced = _sync_dependency(
-                    dep, _visited, context
+                    dep,
+                    _visited,
+                    context,
+                    netbox_branch_schema_id=netbox_branch_schema_id,
                 )
                 all_synced.extend(dep_synced)
                 if dep_response:
@@ -225,7 +245,10 @@ def _get_dependency_config(
 
 
 def _sync_dependency(
-    dep: dict, _visited: set, parent_context: dict | None
+    dep: dict,
+    _visited: set,
+    parent_context: dict | None,
+    netbox_branch_schema_id: str | None = None,
 ) -> tuple[dict, int, list[dict]]:
     """Sync a single dependency from a dependencies_synced entry."""
     dep_type = dep.get("object_type")
@@ -294,7 +317,13 @@ def _sync_dependency(
                 or context.get("replication_id", "")
             )
 
-    return sync_individual_with_dependencies(path, params, _visited, _context=context)
+    return sync_individual_with_dependencies(
+        path,
+        params,
+        _visited,
+        _context=context,
+        netbox_branch_schema_id=netbox_branch_schema_id,
+    )
 
 
 def sync_backup_routines_individual(

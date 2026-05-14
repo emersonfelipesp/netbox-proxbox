@@ -116,6 +116,14 @@ from .vm_backup import (
     VMBackupTabView,
     VMBackupView,
 )
+from .vm_cloudinit import (
+    ProxmoxVMCloudInitBulkDeleteView,
+    ProxmoxVMCloudInitDeleteView,
+    ProxmoxVMCloudInitEditView,
+    ProxmoxVMCloudInitListView,
+    ProxmoxVMCloudInitTabView,
+    ProxmoxVMCloudInitView,
+)
 
 # Task History tab and detail views live in ``vm_task_history``.
 from .ha import HAClusterView
@@ -130,6 +138,12 @@ from .vm_snapshot import (
     VMSnapshotListView,
     VMSnapshotTabView,
     VMSnapshotView,
+)
+from .operational import (
+    OperationalMigrateView,
+    OperationalSnapshotView,
+    OperationalStartView,
+    OperationalStopView,
 )
 from .vm_sync_now import VirtualMachineSyncNowView
 from .vm_task_history import (

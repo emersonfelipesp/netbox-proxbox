@@ -80,7 +80,7 @@ def test_sync_individual_with_dependencies_propagates_cluster_context(monkeypatc
 
     calls: list[tuple[str, dict]] = []
 
-    def fake_sync(path, query_params=None):
+    def fake_sync(path, query_params=None, netbox_branch_schema_id=None):
         params = dict(query_params or {})
         calls.append((path, params))
         if path == "sync/individual/vm":

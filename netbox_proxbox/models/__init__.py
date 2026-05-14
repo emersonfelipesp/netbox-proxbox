@@ -12,6 +12,7 @@ from netbox_proxbox.models.replication import Replication
 from netbox_proxbox.models.ssh_credential import NodeSSHCredential
 from netbox_proxbox.models.storage import ProxmoxStorage, ProxmoxStorageVirtualDisk
 from netbox_proxbox.models.vm_backup import VMBackup
+from netbox_proxbox.models.vm_cloudinit import ProxmoxVMCloudInit
 from netbox_proxbox.models.vm_snapshot import VMSnapshot
 from netbox_proxbox.models.vm_task_history import VMTaskHistory
 
@@ -24,6 +25,7 @@ __all__ = (
     "ProxmoxCluster",
     "ProxmoxEndpoint",
     "ProxmoxNode",
+    "ProxmoxVMCloudInit",
     "Replication",
     "ProxmoxStorage",
     "ProxmoxStorageVirtualDisk",

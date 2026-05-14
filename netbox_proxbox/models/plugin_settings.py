@@ -66,6 +66,26 @@ class ProxboxPluginSettings(NetBoxModel):
             "addresses to be included."
         ),
     )
+    ensure_netbox_objects = models.BooleanField(
+        default=True,
+        verbose_name=_("Ensure NetBox supporting objects on startup"),
+        help_text=_(
+            "When enabled, proxbox-api runs an idempotent NetBox-side bootstrap pass "
+            "on each process startup that ensures the supporting objects the plugin "
+            "requires (cluster type, device roles, manufacturer, device type, VM type, "
+            "custom fields, discovery tags) exist. Disable to leave hand-curated "
+            "NetBox installs untouched."
+        ),
+    )
+    delete_orphans = models.BooleanField(
+        default=False,
+        verbose_name=_("Delete orphan VMs"),
+        help_text=_(
+            "When enabled, full-update runs will delete Proxbox-discovered VMs "
+            "that were not touched by the current sync run. Review a dry-run "
+            "preview before enabling in production."
+        ),
+    )
     primary_ip_preference = models.CharField(
         max_length=4,
         choices=PRIMARY_IP_PREFERENCE_CHOICES,
@@ -208,6 +228,16 @@ class ProxboxPluginSettings(NetBoxModel):
         help_text=_(
             "When enabled, proxbox-api includes internal exception details in HTTP error "
             "responses. Leave disabled in production to avoid leaking implementation details."
+        ),
+    )
+    parse_description_metadata = models.BooleanField(
+        default=False,
+        verbose_name=_("Parse description metadata"),
+        help_text=_(
+            "When enabled, proxbox-api reads each Proxmox object's description for a "
+            "fenced ``netbox-metadata`` JSON block and applies the parsed PK ids to the "
+            "matching NetBox fields. Per-field ``overwrite_*`` flags still gate keys "
+            "they cover. Disabled by default."
         ),
     )
     ssrf_protection_enabled = models.BooleanField(
@@ -393,6 +423,14 @@ class ProxboxPluginSettings(NetBoxModel):
             "When disabled, sync never changes custom fields on existing NetBox virtual machines."
         ),
     )
+    overwrite_vm_cloudinit = models.BooleanField(
+        default=True,
+        verbose_name=_("Overwrite VM cloud-init"),
+        help_text=_(
+            "When disabled, sync never updates the ProxmoxVMCloudInit row "
+            "(ciuser, sshkeys, ipconfig0) on existing NetBox virtual machines."
+        ),
+    )
     overwrite_cluster_tags = models.BooleanField(
         default=True,
         verbose_name=_("Overwrite cluster tags"),
@@ -524,7 +562,8 @@ class ProxboxPluginSettings(NetBoxModel):
         help_text=_(
             "What to do when the auto-created sync branch reports merge conflicts. "
             "'fail' leaves the branch open for operator review and marks the job failed. "
-            "'acknowledge' retries the merge with acknowledge_conflicts=True."
+            "'acknowledge' attempts the merge anyway and delegates conflict handling "
+            "to the netbox-branching merge strategy."
         ),
     )
     netbox_to_proxmox_enabled = models.BooleanField(

@@ -1,60 +1,54 @@
-"""Behavior tests for migration ``0049_register_hardware_discovery_cfs``.
+"""Behavior tests for the hardware-discovery CustomField registration callables.
 
-The migration registers six custom fields on ``dcim.Device`` and
-``dcim.Interface`` so proxbox-api's hardware-discovery pass has somewhere to
-write parsed dmidecode + ethtool output. This test invokes
-``register_hardware_discovery_cfs`` against a fake ``apps`` registry and
-verifies the six fields are created with the right types, content types, and
-UI flags, and that the operation is idempotent (re-running creates no
-duplicates).
+These callables originally shipped in ``0049_register_hardware_discovery_cfs``;
+they now live in the consolidated ``_v0_0_15_release_data`` helper module
+(imported by ``0037_v0_0_15_release``). The contract is unchanged: register
+six custom fields on ``dcim.Device`` and ``dcim.Interface`` so proxbox-api's
+hardware-discovery pass has somewhere to write parsed dmidecode + ethtool
+output. This test invokes ``register_hardware_discovery_cfs`` against a fake
+``apps`` registry and verifies the six fields are created with the right
+types, content types, and UI flags, and that the operation is idempotent
+(re-running creates no duplicates).
 """
 
 from __future__ import annotations
 
 import importlib.util
+import sys
+import types
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-MIGRATION_PATH = (
-    REPO_ROOT
-    / "netbox_proxbox"
-    / "migrations"
-    / "0049_register_hardware_discovery_cfs.py"
+DATA_MODULE_PATH = (
+    REPO_ROOT / "netbox_proxbox" / "migrations" / "_v0_0_15_release_data.py"
+)
+CONSOLIDATED_MIGRATION_PATH = (
+    REPO_ROOT / "netbox_proxbox" / "migrations" / "0037_v0_0_15_release.py"
 )
 
 
 @pytest.fixture
 def migration_module():
-    spec = importlib.util.spec_from_file_location("_m0049_under_test", MIGRATION_PATH)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    # The migration imports ``from django.db import migrations`` — stub it.
-    import sys
-    import types
-
+    # Stub ``django.db.models`` so ``from django.db.models import Max`` succeeds
+    # without a real Django installation.
     if "django" not in sys.modules:
         sys.modules["django"] = types.ModuleType("django")
     if "django.db" not in sys.modules:
         sys.modules["django.db"] = types.ModuleType("django.db")
-    if "django.db.migrations" not in sys.modules:
-        mig_stub = types.ModuleType("django.db.migrations")
+    if "django.db.models" not in sys.modules:
+        models_stub = types.ModuleType("django.db.models")
+        models_stub.Max = lambda *a, **kw: None
+        sys.modules["django.db.models"] = models_stub
+        sys.modules["django.db"].models = models_stub
 
-        class _Migration:
-            dependencies: list = []
-            operations: list = []
-
-        class _RunPython:
-            def __init__(self, code, reverse_code=None):
-                self.code = code
-                self.reverse_code = reverse_code
-
-        mig_stub.Migration = _Migration
-        mig_stub.RunPython = _RunPython
-        sys.modules["django.db.migrations"] = mig_stub
-        sys.modules["django.db"].migrations = mig_stub
+    spec = importlib.util.spec_from_file_location(
+        "_v0_0_15_release_data_under_test", DATA_MODULE_PATH
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
@@ -244,9 +238,12 @@ def test_unregister_removes_all_six_fields(migration_module):
     assert _FakeCustomField._by_name == {}
 
 
-def test_migration_dependencies_chain_correctly(migration_module):
-    deps = dict(migration_module.Migration.dependencies)
-    assert deps.get("netbox_proxbox") == "0048_node_ssh_credential"
-    assert "extras" in deps
-    assert "dcim" in deps
-    assert "contenttypes" in deps
+def test_consolidated_migration_pins_required_dependencies():
+    """The consolidated migration anchors at 0036 and pulls in extras/dcim/contenttypes."""
+    source = CONSOLIDATED_MIGRATION_PATH.read_text(encoding="utf-8")
+    assert "('netbox_proxbox', '0036_add_overwrite_vm_type')" in source
+    assert "'extras'" in source
+    assert "'dcim'" in source
+    assert "'contenttypes'" in source
+    assert "register_hardware_discovery_cfs" in source
+    assert "unregister_hardware_discovery_cfs" in source
