@@ -62,6 +62,7 @@ class ProxboxPluginSettingsSerializer(NetBoxModelSerializer):
             "branch_on_conflict",
             "netbox_to_proxmox_enabled",
             "netbox_to_proxmox_typed_confirmation",
+            "intent_warn_plaintext_password",
             "apply_destroy_confirmed",
             "intent_apply_authorization_self_approve_allowed",
             "intent_deletion_request_ttl_days",

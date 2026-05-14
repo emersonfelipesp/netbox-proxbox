@@ -83,6 +83,11 @@ class SettingsView(
             "netbox_to_proxmox_typed_confirmation": (
                 settings_obj.netbox_to_proxmox_typed_confirmation
             ),
+            "intent_warn_plaintext_password": getattr(
+                settings_obj,
+                "intent_warn_plaintext_password",
+                True,
+            ),
             "apply_destroy_confirmed": settings_obj.apply_destroy_confirmed,
             "intent_apply_authorization_self_approve_allowed": getattr(
                 settings_obj,
@@ -240,6 +245,10 @@ class SettingsView(
             settings_obj.netbox_to_proxmox_typed_confirmation = form.cleaned_data.get(
                 "netbox_to_proxmox_typed_confirmation", ""
             )
+            settings_obj.intent_warn_plaintext_password = form.cleaned_data.get(
+                "intent_warn_plaintext_password",
+                True,
+            )
             settings_obj.apply_destroy_confirmed = form.cleaned_data.get(
                 "apply_destroy_confirmed", False
             )
@@ -314,6 +323,7 @@ class SettingsView(
                     "branch_on_conflict",
                     "netbox_to_proxmox_enabled",
                     "netbox_to_proxmox_typed_confirmation",
+                    "intent_warn_plaintext_password",
                     "apply_destroy_confirmed",
                     "intent_apply_authorization_self_approve_allowed",
                     "intent_deletion_request_ttl_days",

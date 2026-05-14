@@ -588,6 +588,14 @@ class ProxboxPluginSettings(NetBoxModel):
             "to off clears this phrase, forcing a re-confirmation on re-enable."
         ),
     )
+    intent_warn_plaintext_password = models.BooleanField(
+        default=True,
+        verbose_name=_("Warn on plaintext cloud-init passwords"),
+        help_text=_(
+            "When enabled, the intent merge validator emits a warning if "
+            "cloud_init_user_data contains a plaintext password line."
+        ),
+    )
     apply_destroy_confirmed = models.BooleanField(
         default=False,
         verbose_name=_("Allow apply-destroy authorization workflow"),

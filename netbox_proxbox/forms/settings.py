@@ -479,6 +479,15 @@ class ProxboxPluginSettingsForm(forms.Form):
             "master flag is turned off."
         ),
     )
+    intent_warn_plaintext_password = forms.BooleanField(
+        required=False,
+        initial=True,
+        label="Warn on plaintext cloud-init passwords",
+        help_text=(
+            "When enabled, branch merge validation warns if cloud_init_user_data "
+            "contains a plaintext password line."
+        ),
+    )
     apply_destroy_confirmed = forms.BooleanField(
         required=False,
         label="Allow apply-destroy authorization workflow",

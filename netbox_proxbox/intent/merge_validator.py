@@ -55,6 +55,15 @@ logger = logging.getLogger(__name__)
 _VM_MODEL = "virtualmachine"
 
 
+def _plugin_settings() -> Any:
+    try:
+        from netbox_proxbox.models.plugin_settings import ProxboxPluginSettings
+    except Exception:  # pragma: no cover - defensive
+        return None
+
+    return ProxboxPluginSettings.objects.first()
+
+
 def _indicator(permitted: bool, message: str = "") -> "BranchActionIndicator":
     """Build a ``BranchActionIndicator`` lazily.
 
@@ -69,15 +78,17 @@ def _indicator(permitted: bool, message: str = "") -> "BranchActionIndicator":
 
 def _is_intent_enabled() -> bool:
     """Master flag check — read fresh from ProxboxPluginSettings."""
-    try:
-        from netbox_proxbox.models.plugin_settings import ProxboxPluginSettings
-    except Exception:  # pragma: no cover - defensive
-        return False
-
-    settings_obj = ProxboxPluginSettings.objects.first()
+    settings_obj = _plugin_settings()
     if settings_obj is None:
         return False
     return bool(getattr(settings_obj, "netbox_to_proxmox_enabled", False))
+
+
+def _warn_plaintext_password_enabled() -> bool:
+    settings_obj = _plugin_settings()
+    if settings_obj is None:
+        return True
+    return bool(getattr(settings_obj, "intent_warn_plaintext_password", True))
 
 
 def _branch_opted_in(branch: Any) -> bool:
@@ -125,6 +136,72 @@ def _classify_vm_diffs(branch: Any) -> list[dict[str, Any]]:
     return diffs
 
 
+def _custom_fields_from_data(data: Any) -> dict[str, Any]:
+    if not isinstance(data, dict):
+        return {}
+    for key in ("custom_field_data", "custom_fields"):
+        cf = data.get(key)
+        if isinstance(cf, dict):
+            return cf
+    return {}
+
+
+def _custom_fields_from_row(row: Any) -> dict[str, Any]:
+    vm = getattr(row, "object", None)
+    cf = getattr(vm, "custom_field_data", None)
+    if isinstance(cf, dict):
+        return cf
+
+    for attr in ("postchange_data", "prechange_data"):
+        cf = _custom_fields_from_data(getattr(row, attr, None))
+        if cf:
+            return cf
+    return {}
+
+
+def _contains_plaintext_password(user_data: Any) -> bool:
+    return "password:" in str(user_data or "").lower()
+
+
+def _row_vm_name(row: Any) -> str:
+    vm = getattr(row, "object", None)
+    for value in (
+        getattr(vm, "name", None),
+        getattr(row, "object_repr", None),
+        getattr(row, "object_id", None),
+    ):
+        if value not in (None, ""):
+            return str(value)
+    return "unknown"
+
+
+def _plaintext_password_warnings(branch: Any) -> list[dict[str, str]]:
+    if not _warn_plaintext_password_enabled():
+        return []
+
+    changediff_qs = getattr(branch, "changediff_set", None)
+    if changediff_qs is None:
+        return []
+
+    warnings: list[dict[str, str]] = []
+    rows = changediff_qs.filter(object_type__model=_VM_MODEL)
+    for row in rows:
+        if getattr(row, "action", None) == "delete":
+            continue
+        user_data = _custom_fields_from_row(row).get("cloud_init_user_data")
+        if not _contains_plaintext_password(user_data):
+            continue
+        warnings.append(
+            {
+                "vm": _row_vm_name(row),
+                "level": "warn",
+                "code": "plaintext_password_warning",
+                "message": "cloud_init_user_data contains a plaintext password line",
+            }
+        )
+    return warnings
+
+
 def _has_delete(diffs: list[dict[str, Any]]) -> bool:
     return any(d.get("op") == "delete" for d in diffs)
 
@@ -141,6 +218,21 @@ def _format_remote_failure(result: PlanClientResult) -> str:
     if result.summary:
         return f"proxbox-api refused the merge: {result.summary}"
     return "proxbox-api refused the merge."
+
+
+def _format_success(result: PlanClientResult) -> str:
+    warnings = [
+        f"{v.get('vm', 'unknown')}: {v.get('message', '').strip()}"
+        for v in result.verdicts
+        if v.get("level") == "warn" and v.get("code") == "plaintext_password_warning"
+    ]
+    if not warnings:
+        return result.summary or ""
+
+    warning_text = "; ".join(warnings)
+    if result.summary:
+        return f"{result.summary} Warnings: {warning_text}"
+    return f"Warnings: {warning_text}"
 
 
 def validate_proxmox_intent(
@@ -181,6 +273,7 @@ def validate_proxmox_intent(
             ),
         )
 
+    local_warnings = _plaintext_password_warnings(branch)
     payload: dict[str, Any] = {
         "branch_id": getattr(branch, "pk", None),
         "actor": getattr(user, "username", None) if user else None,
@@ -196,7 +289,12 @@ def validate_proxmox_intent(
             f"Could not validate merge against proxbox-api: {exc}",
         )
 
+    if local_warnings:
+        result.verdicts.extend(local_warnings)
+        if isinstance(result.raw, dict):
+            result.raw["verdicts"] = result.verdicts
+
     if not result.permitted:
         return _indicator(False, _format_remote_failure(result))
 
-    return _indicator(True, result.summary or "")
+    return _indicator(True, _format_success(result))

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 
@@ -31,6 +32,57 @@ def _str_or_none(value: Any) -> str | None:
     if value in (None, ""):
         return None
     return str(value)
+
+
+def _cloud_init_text(value: Any) -> Any:
+    if value in (None, ""):
+        return None
+    if isinstance(value, str) and not value.strip():
+        return None
+    return value
+
+
+def _cloud_init_ssh_keys(value: Any) -> list[str] | None:
+    text = _cloud_init_text(value)
+    if text is None:
+        return None
+    keys = [line.strip() for line in str(text).splitlines() if line.strip()]
+    return keys or None
+
+
+def _cloud_init_network(value: Any) -> dict[str, Any] | None:
+    if isinstance(value, dict):
+        return value or None
+    text = _cloud_init_text(value)
+    if text is None:
+        return None
+    try:
+        parsed = json.loads(str(text))
+    except (TypeError, ValueError):
+        return None
+    return parsed if isinstance(parsed, dict) and parsed else None
+
+
+def _cloud_init_payload(cf: dict[str, Any]) -> dict[str, Any] | None:
+    cloud_init: dict[str, Any] = {}
+
+    user = _str_or_none(_cf_value(cf, "cloud_init_user"))
+    if user is not None:
+        cloud_init["user"] = user
+
+    ssh_keys = _cloud_init_ssh_keys(_cf_value(cf, "cloud_init_ssh_keys"))
+    if ssh_keys is not None:
+        cloud_init["ssh_keys"] = ssh_keys
+
+    user_data = _cloud_init_text(_cf_value(cf, "cloud_init_user_data"))
+    if user_data is not None:
+        cloud_init["user_data"] = user_data
+
+    network = _cloud_init_network(_cf_value(cf, "cloud_init_network"))
+    if network is not None:
+        cloud_init["network"] = network
+
+    return cloud_init or None
 
 
 def _related_all(vm: Any, relation_name: str) -> list[Any]:
@@ -70,7 +122,7 @@ def _tag_names(vm: Any) -> list[str]:
 def build_vm_payload(vm) -> dict:
     """Build a proxbox-api ``VMIntentPayload`` dictionary from a NetBox VM."""
     cf = _custom_fields(vm)
-    return {
+    payload = {
         "vmid": _int_or_none(_cf_value(cf, "proxmox_vm_id", "cf_proxmox_vm_id")),
         "name": str(getattr(vm, "name", "") or ""),
         "node": _str_or_none(_cf_value(cf, "proxmox_node", "cf_proxmox_node")),
@@ -87,12 +139,16 @@ def build_vm_payload(vm) -> dict:
         "tags": _tag_names(vm),
         "description": _str_or_none(getattr(vm, "description", None)),
     }
+    cloud_init = _cloud_init_payload(cf)
+    if cloud_init is not None:
+        payload["cloud_init"] = cloud_init
+    return payload
 
 
 def build_lxc_payload(vm) -> dict:
     """Build a proxbox-api ``LXCIntentPayload`` dictionary from a NetBox VM."""
     cf = _custom_fields(vm)
-    return {
+    payload = {
         "vmid": _int_or_none(_cf_value(cf, "proxmox_vm_id", "cf_proxmox_vm_id")),
         "name": str(getattr(vm, "name", "") or ""),
         "node": _str_or_none(_cf_value(cf, "proxmox_node", "cf_proxmox_node")),
@@ -115,6 +171,10 @@ def build_lxc_payload(vm) -> dict:
         "tags": _tag_names(vm),
         "description": _str_or_none(getattr(vm, "description", None)),
     }
+    cloud_init = _cloud_init_payload(cf)
+    if cloud_init is not None:
+        payload["cloud_init"] = cloud_init
+    return payload
 
 
 def build_update_delta(vm, prev_state: dict) -> dict:
