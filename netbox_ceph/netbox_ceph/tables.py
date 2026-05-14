@@ -196,7 +196,14 @@ class CephCrushRuleTable(NetBoxTable):
             "last_seen_at",
             "actions",
         )
-        default_columns = ("name", "endpoint", "cluster", "rule_type", "device_class", "last_seen_at")
+        default_columns = (
+            "name",
+            "endpoint",
+            "cluster",
+            "rule_type",
+            "device_class",
+            "last_seen_at",
+        )
 
 
 class CephFlagTable(NetBoxTable):
@@ -207,7 +214,17 @@ class CephFlagTable(NetBoxTable):
 
     class Meta(NetBoxTable.Meta):
         model = CephFlag
-        fields = ("pk", "id", "name", "endpoint", "cluster", "enabled", "value", "last_seen_at", "actions")
+        fields = (
+            "pk",
+            "id",
+            "name",
+            "endpoint",
+            "cluster",
+            "enabled",
+            "value",
+            "last_seen_at",
+            "actions",
+        )
         default_columns = ("name", "endpoint", "cluster", "enabled", "value", "last_seen_at")
 
 

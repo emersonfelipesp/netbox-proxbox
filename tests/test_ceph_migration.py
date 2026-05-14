@@ -15,11 +15,7 @@ import pathlib
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 MIGRATION_PATH = (
-    REPO_ROOT
-    / "netbox_ceph"
-    / "netbox_ceph"
-    / "migrations"
-    / "0001_initial.py"
+    REPO_ROOT / "netbox_ceph" / "netbox_ceph" / "migrations" / "0001_initial.py"
 )
 
 
@@ -51,9 +47,7 @@ def test_migration_declares_all_model_tables() -> None:
         if not isinstance(node, ast.Call):
             continue
         func = node.func
-        is_create_model = (
-            isinstance(func, ast.Attribute) and func.attr == "CreateModel"
-        )
+        is_create_model = isinstance(func, ast.Attribute) and func.attr == "CreateModel"
         if not is_create_model:
             continue
         for kw in node.keywords:

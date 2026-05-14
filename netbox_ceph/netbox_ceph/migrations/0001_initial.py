@@ -9,7 +9,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
@@ -32,7 +31,10 @@ class Migration(migrations.Migration):
                         encoder=utilities.json.CustomFieldJSONEncoder,
                     ),
                 ),
-                ("singleton_key", models.CharField(default="default", editable=False, max_length=32, unique=True)),
+                (
+                    "singleton_key",
+                    models.CharField(default="default", editable=False, max_length=32, unique=True),
+                ),
                 ("branching_enabled", models.BooleanField(default=False)),
                 ("branch_name_prefix", models.CharField(default="ceph-sync", max_length=64)),
                 (
@@ -46,7 +48,10 @@ class Migration(migrations.Migration):
                         max_length=16,
                     ),
                 ),
-                ("tags", taggit.managers.TaggableManager(through="extras.TaggedItem", to="extras.Tag")),
+                (
+                    "tags",
+                    taggit.managers.TaggableManager(through="extras.TaggedItem", to="extras.Tag"),
+                ),
             ],
             options={
                 "verbose_name": "Ceph plugin settings",
@@ -72,11 +77,15 @@ class Migration(migrations.Migration):
                 ("health", models.CharField(default="unknown", max_length=32)),
                 (
                     "quorum_names",
-                    models.JSONField(blank=True, default=list, encoder=utilities.json.CustomFieldJSONEncoder),
+                    models.JSONField(
+                        blank=True, default=list, encoder=utilities.json.CustomFieldJSONEncoder
+                    ),
                 ),
                 (
                     "status",
-                    models.JSONField(blank=True, default=dict, encoder=utilities.json.CustomFieldJSONEncoder),
+                    models.JSONField(
+                        blank=True, default=dict, encoder=utilities.json.CustomFieldJSONEncoder
+                    ),
                 ),
                 ("last_seen_at", models.DateTimeField(blank=True, null=True)),
                 (
@@ -97,7 +106,10 @@ class Migration(migrations.Migration):
                         to="netbox_proxbox.proxmoxcluster",
                     ),
                 ),
-                ("tags", taggit.managers.TaggableManager(through="extras.TaggedItem", to="extras.Tag")),
+                (
+                    "tags",
+                    taggit.managers.TaggableManager(through="extras.TaggedItem", to="extras.Tag"),
+                ),
             ],
             options={
                 "verbose_name": "Ceph cluster",
@@ -135,7 +147,9 @@ class Migration(migrations.Migration):
                 ("version", models.CharField(blank=True, max_length=128)),
                 (
                     "metadata",
-                    models.JSONField(blank=True, default=dict, encoder=utilities.json.CustomFieldJSONEncoder),
+                    models.JSONField(
+                        blank=True, default=dict, encoder=utilities.json.CustomFieldJSONEncoder
+                    ),
                 ),
                 ("last_seen_at", models.DateTimeField(blank=True, null=True)),
                 (
@@ -166,7 +180,10 @@ class Migration(migrations.Migration):
                         to="netbox_proxbox.proxmoxnode",
                     ),
                 ),
-                ("tags", taggit.managers.TaggableManager(through="extras.TaggedItem", to="extras.Tag")),
+                (
+                    "tags",
+                    taggit.managers.TaggableManager(through="extras.TaggedItem", to="extras.Tag"),
+                ),
             ],
             options={
                 "verbose_name": "Ceph daemon",
@@ -210,7 +227,9 @@ class Migration(migrations.Migration):
                 ("pgs", models.PositiveIntegerField(blank=True, null=True)),
                 (
                     "metadata",
-                    models.JSONField(blank=True, default=dict, encoder=utilities.json.CustomFieldJSONEncoder),
+                    models.JSONField(
+                        blank=True, default=dict, encoder=utilities.json.CustomFieldJSONEncoder
+                    ),
                 ),
                 ("last_seen_at", models.DateTimeField(blank=True, null=True)),
                 (
@@ -241,7 +260,10 @@ class Migration(migrations.Migration):
                         to="netbox_proxbox.proxmoxnode",
                     ),
                 ),
-                ("tags", taggit.managers.TaggableManager(through="extras.TaggedItem", to="extras.Tag")),
+                (
+                    "tags",
+                    taggit.managers.TaggableManager(through="extras.TaggedItem", to="extras.Tag"),
+                ),
             ],
             options={
                 "verbose_name": "Ceph OSD",
@@ -283,7 +305,9 @@ class Migration(migrations.Migration):
                 ("percent_used", models.FloatField(blank=True, null=True)),
                 (
                     "status",
-                    models.JSONField(blank=True, default=dict, encoder=utilities.json.CustomFieldJSONEncoder),
+                    models.JSONField(
+                        blank=True, default=dict, encoder=utilities.json.CustomFieldJSONEncoder
+                    ),
                 ),
                 ("last_seen_at", models.DateTimeField(blank=True, null=True)),
                 (
@@ -304,7 +328,10 @@ class Migration(migrations.Migration):
                         to="netbox_ceph.cephcluster",
                     ),
                 ),
-                ("tags", taggit.managers.TaggableManager(through="extras.TaggedItem", to="extras.Tag")),
+                (
+                    "tags",
+                    taggit.managers.TaggableManager(through="extras.TaggedItem", to="extras.Tag"),
+                ),
             ],
             options={
                 "verbose_name": "Ceph pool",
@@ -336,12 +363,16 @@ class Migration(migrations.Migration):
                 ("name", models.CharField(max_length=255)),
                 (
                     "data_pools",
-                    models.JSONField(blank=True, default=list, encoder=utilities.json.CustomFieldJSONEncoder),
+                    models.JSONField(
+                        blank=True, default=list, encoder=utilities.json.CustomFieldJSONEncoder
+                    ),
                 ),
                 ("standby_count_wanted", models.PositiveIntegerField(blank=True, null=True)),
                 (
                     "status",
-                    models.JSONField(blank=True, default=dict, encoder=utilities.json.CustomFieldJSONEncoder),
+                    models.JSONField(
+                        blank=True, default=dict, encoder=utilities.json.CustomFieldJSONEncoder
+                    ),
                 ),
                 ("last_seen_at", models.DateTimeField(blank=True, null=True)),
                 (
@@ -372,7 +403,10 @@ class Migration(migrations.Migration):
                         to="netbox_ceph.cephpool",
                     ),
                 ),
-                ("tags", taggit.managers.TaggableManager(through="extras.TaggedItem", to="extras.Tag")),
+                (
+                    "tags",
+                    taggit.managers.TaggableManager(through="extras.TaggedItem", to="extras.Tag"),
+                ),
             ],
             options={
                 "verbose_name": "Ceph filesystem",
@@ -407,11 +441,15 @@ class Migration(migrations.Migration):
                 ("device_class", models.CharField(blank=True, max_length=64)),
                 (
                     "steps",
-                    models.JSONField(blank=True, default=list, encoder=utilities.json.CustomFieldJSONEncoder),
+                    models.JSONField(
+                        blank=True, default=list, encoder=utilities.json.CustomFieldJSONEncoder
+                    ),
                 ),
                 (
                     "raw",
-                    models.JSONField(blank=True, default=dict, encoder=utilities.json.CustomFieldJSONEncoder),
+                    models.JSONField(
+                        blank=True, default=dict, encoder=utilities.json.CustomFieldJSONEncoder
+                    ),
                 ),
                 ("last_seen_at", models.DateTimeField(blank=True, null=True)),
                 (
@@ -432,7 +470,10 @@ class Migration(migrations.Migration):
                         to="netbox_ceph.cephcluster",
                     ),
                 ),
-                ("tags", taggit.managers.TaggableManager(through="extras.TaggedItem", to="extras.Tag")),
+                (
+                    "tags",
+                    taggit.managers.TaggableManager(through="extras.TaggedItem", to="extras.Tag"),
+                ),
             ],
             options={
                 "verbose_name": "Ceph CRUSH rule",
@@ -466,7 +507,9 @@ class Migration(migrations.Migration):
                 ("value", models.CharField(blank=True, max_length=255)),
                 (
                     "raw",
-                    models.JSONField(blank=True, default=dict, encoder=utilities.json.CustomFieldJSONEncoder),
+                    models.JSONField(
+                        blank=True, default=dict, encoder=utilities.json.CustomFieldJSONEncoder
+                    ),
                 ),
                 ("last_seen_at", models.DateTimeField(blank=True, null=True)),
                 (
@@ -487,7 +530,10 @@ class Migration(migrations.Migration):
                         to="netbox_ceph.cephcluster",
                     ),
                 ),
-                ("tags", taggit.managers.TaggableManager(through="extras.TaggedItem", to="extras.Tag")),
+                (
+                    "tags",
+                    taggit.managers.TaggableManager(through="extras.TaggedItem", to="extras.Tag"),
+                ),
             ],
             options={
                 "verbose_name": "Ceph flag",
@@ -521,7 +567,9 @@ class Migration(migrations.Migration):
                 ("summary", models.CharField(blank=True, max_length=512)),
                 (
                     "detail",
-                    models.JSONField(blank=True, default=list, encoder=utilities.json.CustomFieldJSONEncoder),
+                    models.JSONField(
+                        blank=True, default=list, encoder=utilities.json.CustomFieldJSONEncoder
+                    ),
                 ),
                 ("source", models.CharField(blank=True, max_length=64)),
                 ("first_seen_at", models.DateTimeField(blank=True, null=True)),
@@ -544,7 +592,10 @@ class Migration(migrations.Migration):
                         to="netbox_ceph.cephcluster",
                     ),
                 ),
-                ("tags", taggit.managers.TaggableManager(through="extras.TaggedItem", to="extras.Tag")),
+                (
+                    "tags",
+                    taggit.managers.TaggableManager(through="extras.TaggedItem", to="extras.Tag"),
+                ),
             ],
             options={
                 "verbose_name": "Ceph health check",

@@ -27,9 +27,7 @@ class _EndpointSearchMixin:
     def search(self, queryset, name, value):
         if not value:
             return queryset
-        return queryset.filter(
-            Q(name__icontains=value) | Q(endpoint__name__icontains=value)
-        )
+        return queryset.filter(Q(name__icontains=value) | Q(endpoint__name__icontains=value))
 
 
 class CephClusterFilterSet(_EndpointSearchMixin, NetBoxModelFilterSet):
@@ -71,9 +69,7 @@ class CephOSDFilterSet(_EndpointSearchMixin, NetBoxModelFilterSet):
         if not value:
             return queryset
         return queryset.filter(
-            Q(name__icontains=value)
-            | Q(host__icontains=value)
-            | Q(endpoint__name__icontains=value)
+            Q(name__icontains=value) | Q(host__icontains=value) | Q(endpoint__name__icontains=value)
         )
 
 

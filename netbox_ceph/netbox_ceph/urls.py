@@ -10,5 +10,9 @@ app_name = "netbox_ceph"
 
 urlpatterns = [
     path("", views.CephHomeView.as_view(), name="home"),
-    path("settings/edit/", views.settings_singleton_redirect, name="cephpluginsettings_singleton_edit"),
+    path(
+        "settings/edit/",
+        views.settings_singleton_redirect,
+        name="cephpluginsettings_singleton_edit",
+    ),
 ]

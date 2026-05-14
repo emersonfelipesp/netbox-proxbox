@@ -76,9 +76,7 @@ def _install_jobs_module(monkeypatch: pytest.MonkeyPatch):
     hc.fetch_ceph_sync = _stub  # type: ignore[attr-defined]
 
     sys.modules.pop("netbox_ceph.jobs", None)
-    spec = importlib.util.spec_from_file_location(
-        "netbox_ceph.jobs", JOBS_PATH
-    )
+    spec = importlib.util.spec_from_file_location("netbox_ceph.jobs", JOBS_PATH)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     sys.modules["netbox_ceph.jobs"] = module

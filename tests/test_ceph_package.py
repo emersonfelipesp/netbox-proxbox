@@ -65,13 +65,15 @@ def test_ceph_init_exposes_pluginconfig() -> None:
     source = CEPH_INIT.read_text(encoding="utf-8")
     # Must declare the PluginConfig the test_ceph_version module pins.
     assert "class CephConfig" in source or "CephConfig" in source
-    assert 'required_plugins' in source
+    assert "required_plugins" in source
 
 
 def test_release_notes_for_0_0_17_mention_ceph_plugin() -> None:
     release_notes = (
-        REPO_ROOT / "docs" / "release-notes" / "version-0.0.17.md"
-    ).read_text(encoding="utf-8").lower()
+        (REPO_ROOT / "docs" / "release-notes" / "version-0.0.17.md")
+        .read_text(encoding="utf-8")
+        .lower()
+    )
     assert "netbox-ceph" in release_notes
     assert "read-only" in release_notes
     # Cross-issue traceability for #424 sub-issues.

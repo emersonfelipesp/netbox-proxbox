@@ -85,16 +85,13 @@ def _get_json(
 
     if response.status_code >= 400:
         raise CephBackendError(
-            f"Ceph backend returned HTTP {response.status_code} for {path}: "
-            f"{response.text[:500]}"
+            f"Ceph backend returned HTTP {response.status_code} for {path}: {response.text[:500]}"
         )
 
     try:
         payload = response.json()
     except ValueError as exc:
-        raise CephBackendError(
-            f"Ceph backend returned non-JSON body for {path}: {exc}"
-        ) from exc
+        raise CephBackendError(f"Ceph backend returned non-JSON body for {path}: {exc}") from exc
 
     if not isinstance(payload, dict):
         raise CephBackendError(
@@ -117,8 +114,7 @@ def fetch_ceph_sync(
     """Call ``/ceph/sync/<resource>`` and return the parsed JSON payload."""
     if resource not in CEPH_SYNC_RESOURCES:
         raise ValueError(
-            f"Unknown Ceph sync resource {resource!r}; "
-            f"expected one of {CEPH_SYNC_RESOURCES}"
+            f"Unknown Ceph sync resource {resource!r}; expected one of {CEPH_SYNC_RESOURCES}"
         )
     params: dict[str, Any] = {}
     if netbox_branch_schema_id:

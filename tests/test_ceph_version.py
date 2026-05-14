@@ -49,7 +49,9 @@ def ceph_config_attrs() -> dict[str, object]:
     return _ceph_config_assignments()
 
 
-def test_ceph_config_has_expected_identity(ceph_config_attrs: dict[str, object]) -> None:
+def test_ceph_config_has_expected_identity(
+    ceph_config_attrs: dict[str, object],
+) -> None:
     assert ceph_config_attrs.get("name") == "netbox_ceph"
     assert ceph_config_attrs.get("base_url") == "ceph"
 

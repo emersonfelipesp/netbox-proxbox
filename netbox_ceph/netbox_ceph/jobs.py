@@ -60,8 +60,7 @@ def _normalize_resources(resources: list[str] | None) -> list[str]:
             continue
         if value not in CEPH_SYNC_RESOURCES:
             raise ValueError(
-                f"Unknown Ceph sync resource {value!r}; "
-                f"expected one of {CEPH_SYNC_RESOURCES}"
+                f"Unknown Ceph sync resource {value!r}; expected one of {CEPH_SYNC_RESOURCES}"
             )
         if value not in normalized:
             normalized.append(value)
@@ -112,9 +111,7 @@ class CephSyncJob(JobRunner):
         branch = None
         branch_config = branching_enabled_settings()
         if branch_config is not None:
-            branch_name = (
-                f"{branch_config['prefix']}-{self.job.pk}-{int(run_started)}"
-            )
+            branch_name = f"{branch_config['prefix']}-{self.job.pk}-{int(run_started)}"
             self.logger.info(
                 "NetBox branching enabled — creating branch %r for Ceph sync",
                 branch_name,
@@ -124,9 +121,7 @@ class CephSyncJob(JobRunner):
                     name=branch_name,
                     user=getattr(self.job, "user", None),
                 )
-                self.logger.info(
-                    "Branch %s ready (schema_id=%s)", branch.name, branch.schema_id
-                )
+                self.logger.info("Branch %s ready (schema_id=%s)", branch.name, branch.schema_id)
             except Exception as exc:
                 self.logger.error(
                     "Failed to create/provision NetBox branch %s: %s",
@@ -135,9 +130,7 @@ class CephSyncJob(JobRunner):
                 )
                 raise
 
-        netbox_branch_schema_id = (
-            str(branch.schema_id) if branch is not None else None
-        )
+        netbox_branch_schema_id = str(branch.schema_id) if branch is not None else None
 
         params: dict[str, Any] = {
             "resources": normalized_resources,
@@ -198,9 +191,7 @@ class CephSyncJob(JobRunner):
                     "Leaving branch %s open because one or more Ceph stages failed",
                     branch.name,
                 )
-            raise RuntimeError(
-                "One or more Ceph sync stages failed; see job log for details."
-            )
+            raise RuntimeError("One or more Ceph sync stages failed; see job log for details.")
 
         if branch is not None and branch_config is not None:
             merged, message = merge_branch(

@@ -137,16 +137,30 @@ def _register_readonly(model, table_cls, fs_cls, form_cls):
         actions = {}
 
 
-_register_readonly(CephDaemon, tables.CephDaemonTable, filtersets.CephDaemonFilterSet, forms.CephDaemonFilterForm)
-_register_readonly(CephOSD, tables.CephOSDTable, filtersets.CephOSDFilterSet, forms.CephOSDFilterForm)
-_register_readonly(CephPool, tables.CephPoolTable, filtersets.CephPoolFilterSet, forms.CephPoolFilterForm)
 _register_readonly(
-    CephFilesystem, tables.CephFilesystemTable, filtersets.CephFilesystemFilterSet, forms.CephFilesystemFilterForm
+    CephDaemon, tables.CephDaemonTable, filtersets.CephDaemonFilterSet, forms.CephDaemonFilterForm
 )
 _register_readonly(
-    CephCrushRule, tables.CephCrushRuleTable, filtersets.CephCrushRuleFilterSet, forms.CephCrushRuleFilterForm
+    CephOSD, tables.CephOSDTable, filtersets.CephOSDFilterSet, forms.CephOSDFilterForm
 )
-_register_readonly(CephFlag, tables.CephFlagTable, filtersets.CephFlagFilterSet, forms.CephFlagFilterForm)
+_register_readonly(
+    CephPool, tables.CephPoolTable, filtersets.CephPoolFilterSet, forms.CephPoolFilterForm
+)
+_register_readonly(
+    CephFilesystem,
+    tables.CephFilesystemTable,
+    filtersets.CephFilesystemFilterSet,
+    forms.CephFilesystemFilterForm,
+)
+_register_readonly(
+    CephCrushRule,
+    tables.CephCrushRuleTable,
+    filtersets.CephCrushRuleFilterSet,
+    forms.CephCrushRuleFilterForm,
+)
+_register_readonly(
+    CephFlag, tables.CephFlagTable, filtersets.CephFlagFilterSet, forms.CephFlagFilterForm
+)
 _register_readonly(
     CephHealthCheck,
     tables.CephHealthCheckTable,
