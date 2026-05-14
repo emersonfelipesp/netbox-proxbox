@@ -79,6 +79,7 @@ nav:
     - Hardware Discovery: 'configuration/hardware-discovery.md'
   - CLI:
     - Overview: 'cli/index.md'
+    - Sync Command: 'cli/sync.md'
     - Command Reference: 'reference/proxbox-cli/command-catalog/index.md'
     - Command Examples:
       - Overview: 'reference/proxbox-cli/command-examples/index.md'
@@ -112,6 +113,7 @@ nav:
     - Headless Sync: 'operations/headless-sync.md'
     - Single-Exec Compose: 'operations/single-exec.md'
     - Scheduler Container: 'scheduler/README.md'
+    - Tenant Mapping: 'operations/tenant-mapping.md'
   - API Reference:
     - Overview: 'api/index.md'
     - Endpoints: 'api/endpoints.md'
@@ -142,6 +144,7 @@ nav:
     - Endpoint Import / Export: 'features/endpoint-import-export.md'
   - Data Model:
     - Virtual Machine: 'models/virtual-machine.md'
+    - VM Cloud-Init: 'models/vm-cloudinit.md'
     - Containers: 'models/containers.md'
     - Other Models: 'models/others.md'
   - Release Notes:
