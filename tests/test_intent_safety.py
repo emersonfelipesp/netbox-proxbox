@@ -7,9 +7,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PLUGIN_SETTINGS_PATH = REPO_ROOT / "netbox_proxbox" / "models" / "plugin_settings.py"
-DELETION_REQUEST_PATH = (
-    REPO_ROOT / "netbox_proxbox" / "models" / "deletion_request.py"
-)
+DELETION_REQUEST_PATH = REPO_ROOT / "netbox_proxbox" / "models" / "deletion_request.py"
 
 
 def _module(path: Path) -> ast.Module:

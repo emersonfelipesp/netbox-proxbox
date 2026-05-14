@@ -88,8 +88,6 @@ def test_plugin_ready_imports_signal_receivers():
             and any(alias.name == "signal_receivers" for alias in stmt.names)
             for stmt in ready.body
         )
-        assert imports_receiver, (
-            "ProxboxConfig.ready() must import signal_receivers"
-        )
+        assert imports_receiver, "ProxboxConfig.ready() must import signal_receivers"
         return
     raise AssertionError("ProxboxConfig class not found")

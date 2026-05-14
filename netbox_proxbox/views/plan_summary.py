@@ -123,9 +123,11 @@ class IntentPlanSummaryView(ConditionalLoginRequiredMixin, View):
             return render(request, self.template_name, context)
 
         try:
-            branch = _maybe_restrict(Branch.objects.all(), request.user).filter(
-                pk=branch_id
-            ).first()
+            branch = (
+                _maybe_restrict(Branch.objects.all(), request.user)
+                .filter(pk=branch_id)
+                .first()
+            )
         except Exception as exc:  # pragma: no cover - defensive
             context["error"] = f"Could not load branch {branch_id}: {exc}"
             return render(request, self.template_name, context)
@@ -178,7 +180,10 @@ class IntentPlanSummaryView(ConditionalLoginRequiredMixin, View):
             )
             return render(request, self.template_name, context)
 
-        if any(diff["op"] == "delete" for diff in diffs) and not apply_destroy_confirmed:
+        if (
+            any(diff["op"] == "delete" for diff in diffs)
+            and not apply_destroy_confirmed
+        ):
             context["permitted"] = False
             context["summary"] = "DELETE diffs require apply_destroy_confirmed=True."
             context["verdicts"] = _not_evaluated_verdicts(

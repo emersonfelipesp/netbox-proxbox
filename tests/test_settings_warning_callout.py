@@ -13,11 +13,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SETTINGS_TEMPLATE = (
-    REPO_ROOT
-    / "netbox_proxbox"
-    / "templates"
-    / "netbox_proxbox"
-    / "settings.html"
+    REPO_ROOT / "netbox_proxbox" / "templates" / "netbox_proxbox" / "settings.html"
 )
 
 
@@ -28,7 +24,7 @@ def _read() -> str:
 def test_red_warning_block_present():
     """The callout must use ``text-danger`` so it visibly renders red."""
     html = _read()
-    assert 'text-danger' in html, (
+    assert "text-danger" in html, (
         "Settings template must keep the red 'text-danger' warning class on "
         "the NetBox → Proxmox intent callout."
     )

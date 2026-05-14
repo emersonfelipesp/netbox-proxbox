@@ -6,10 +6,7 @@ import ast
 from pathlib import Path
 
 APPLY_JOB_PATH = (
-    Path(__file__).resolve().parents[1]
-    / "netbox_proxbox"
-    / "intent"
-    / "apply_job.py"
+    Path(__file__).resolve().parents[1] / "netbox_proxbox" / "intent" / "apply_job.py"
 )
 
 
@@ -36,8 +33,7 @@ def test_run_calls_has_perm_with_intent_update_literal():
             module_literals.add(node.value)
 
     assert module_literals & update_literals, (
-        "apply_job.py must reference at least one of "
-        f"{update_literals}; found none"
+        f"apply_job.py must reference at least one of {update_literals}; found none"
     )
 
     has_perm_seen = False

@@ -19,18 +19,8 @@ import ast
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DATA_MODULE = (
-    REPO_ROOT
-    / "netbox_proxbox"
-    / "migrations"
-    / "_v0_0_16_release_data.py"
-)
-MIGRATION = (
-    REPO_ROOT
-    / "netbox_proxbox"
-    / "migrations"
-    / "0039_intent_custom_fields.py"
-)
+DATA_MODULE = REPO_ROOT / "netbox_proxbox" / "migrations" / "_v0_0_16_release_data.py"
+MIGRATION = REPO_ROOT / "netbox_proxbox" / "migrations" / "0039_intent_custom_fields.py"
 
 EXPECTED_VM_CFS = {
     "proxmox_node",

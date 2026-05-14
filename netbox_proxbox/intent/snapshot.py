@@ -18,7 +18,9 @@ def _cf_value(custom_fields: dict[str, Any], *keys: str) -> Any:
     return None
 
 
-def _attr_or_cf(vm: Any, attr_name: str, custom_fields: dict[str, Any], *keys: str) -> Any:
+def _attr_or_cf(
+    vm: Any, attr_name: str, custom_fields: dict[str, Any], *keys: str
+) -> Any:
     value = getattr(vm, attr_name, None)
     if value not in (None, ""):
         return value

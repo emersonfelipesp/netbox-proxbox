@@ -6,12 +6,7 @@ import ast
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-FORM_PATH = (
-    REPO_ROOT
-    / "netbox_proxbox"
-    / "forms"
-    / "deletion_request_approve.py"
-)
+FORM_PATH = REPO_ROOT / "netbox_proxbox" / "forms" / "deletion_request_approve.py"
 VIEW_PATH = REPO_ROOT / "netbox_proxbox" / "views" / "deletion_requests.py"
 
 SELF_APPROVAL_MESSAGE = (
@@ -33,7 +28,10 @@ def test_approve_form_declares_vmid_field():
     assert form_class is not None
     assert any(
         isinstance(stmt, ast.Assign)
-        and any(isinstance(target, ast.Name) and target.id == "vmid" for target in stmt.targets)
+        and any(
+            isinstance(target, ast.Name) and target.id == "vmid"
+            for target in stmt.targets
+        )
         for stmt in form_class.body
     )
 

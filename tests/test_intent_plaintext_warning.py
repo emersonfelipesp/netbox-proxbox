@@ -7,9 +7,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 VALIDATOR_PATH = REPO_ROOT / "netbox_proxbox" / "intent" / "merge_validator.py"
-PLUGIN_SETTINGS_PATH = (
-    REPO_ROOT / "netbox_proxbox" / "models" / "plugin_settings.py"
-)
+PLUGIN_SETTINGS_PATH = REPO_ROOT / "netbox_proxbox" / "models" / "plugin_settings.py"
 
 
 def _class(module: ast.Module, name: str) -> ast.ClassDef:
