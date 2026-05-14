@@ -22,7 +22,7 @@ SETTINGS_TEMPLATE = (
 
 
 def _read() -> str:
-    return SETTINGS_TEMPLATE.read_text()
+    return SETTINGS_TEMPLATE.read_text(encoding="utf-8")
 
 
 def test_red_warning_block_present():
@@ -31,6 +31,15 @@ def test_red_warning_block_present():
     assert 'text-danger' in html, (
         "Settings template must keep the red 'text-danger' warning class on "
         "the NetBox → Proxmox intent callout."
+    )
+
+
+def test_intent_warning_callout_keeps_heading_and_danger_class():
+    html = _read()
+    assert "NetBox → Proxmox intent direction" in html
+    assert any(
+        danger_class in html
+        for danger_class in ("bg-danger", "alert-danger", "text-danger")
     )
 
 
