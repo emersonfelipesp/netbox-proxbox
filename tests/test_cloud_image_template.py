@@ -70,7 +70,9 @@ def test_cloud_image_template_api_surface_is_registered():
 
 
 def test_cloud_image_template_templates_exist():
-    detail = REPO_ROOT / "netbox_proxbox/templates/netbox_proxbox/cloudimagetemplate.html"
+    detail = (
+        REPO_ROOT / "netbox_proxbox/templates/netbox_proxbox/cloudimagetemplate.html"
+    )
     listing = (
         REPO_ROOT
         / "netbox_proxbox/templates/netbox_proxbox/cloudimagetemplate_list.html"
