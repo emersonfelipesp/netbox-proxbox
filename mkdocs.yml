@@ -101,6 +101,7 @@ nav:
     - Extending the Plugin: 'developer/extending-the-plugin.md'
     - Design:
       - Operational Verbs: 'design/operational-verbs.md'
+      - NetBox to Proxmox Intent: 'design/netbox-to-proxmox-intent.md'
     - Tooling:
       - Release Publishing: 'developer/release-publishing.md'
       - CI and E2E Workflows: 'developer/ci-e2e-workflows.md'
