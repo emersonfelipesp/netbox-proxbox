@@ -43,6 +43,7 @@ class ProxmoxEndpointTable(NetBoxTable):
     site = tables.Column(linkify=True)
     tenant = tables.Column(linkify=True)
     mode = ChoiceFieldColumn()
+    environment = ChoiceFieldColumn()
     verify_ssl = BooleanColumn()
     status = tables.TemplateColumn(
         template_code=STATUS_BADGE_TEMPLATE.replace("{{ service }}", "proxmox"),
@@ -60,6 +61,7 @@ class ProxmoxEndpointTable(NetBoxTable):
             "ip_address",
             "port",
             "mode",
+            "environment",
             "version",
             "repoid",
             "username",
@@ -81,6 +83,7 @@ class ProxmoxEndpointTable(NetBoxTable):
             "ip_address",
             "port",
             "mode",
+            "environment",
             "version",
             "status",
             "verify_ssl",
