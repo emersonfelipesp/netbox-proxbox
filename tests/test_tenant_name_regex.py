@@ -417,6 +417,50 @@ def parser_module(monkeypatch):
     constants_mod.OVERWRITE_FIELDS = ()
     monkeypatch.setitem(sys.modules, "netbox_proxbox.constants", constants_mod)
 
+    # Stub dcim.models so `from dcim.models import DeviceRole` succeeds —
+    # forms/settings.py now exposes a default_role_qemu/lxc ModelChoiceField
+    # backed by dcim.DeviceRole (added by the hardware-discovery feature
+    # merged from develop).
+    dcim_pkg = types.ModuleType("dcim")
+    dcim_models_mod = types.ModuleType("dcim.models")
+
+    class _DeviceRole:
+        class _objects:
+            @staticmethod
+            def filter(*a, **kw):
+                return _DeviceRole._objects
+
+            @staticmethod
+            def all():
+                return []
+
+            @staticmethod
+            def order_by(*a, **kw):
+                return []
+
+        objects = _objects
+
+    dcim_models_mod.DeviceRole = _DeviceRole
+    monkeypatch.setitem(sys.modules, "dcim", dcim_pkg)
+    monkeypatch.setitem(sys.modules, "dcim.models", dcim_models_mod)
+
+    # Stub utilities.forms.fields.DynamicModelChoiceField (the NetBox helper
+    # used by the new default_role_* form fields).
+    utilities_pkg = types.ModuleType("utilities")
+    utilities_forms_pkg = types.ModuleType("utilities.forms")
+    utilities_forms_fields_mod = types.ModuleType("utilities.forms.fields")
+
+    class _DynamicModelChoiceField:
+        def __init__(self, *a, **kw):
+            pass
+
+    utilities_forms_fields_mod.DynamicModelChoiceField = _DynamicModelChoiceField
+    monkeypatch.setitem(sys.modules, "utilities", utilities_pkg)
+    monkeypatch.setitem(sys.modules, "utilities.forms", utilities_forms_pkg)
+    monkeypatch.setitem(
+        sys.modules, "utilities.forms.fields", utilities_forms_fields_mod
+    )
+
     plugin_settings_mod = types.ModuleType("netbox_proxbox.models.plugin_settings")
     plugin_settings_mod.DEFAULT_BACKEND_LOG_FILE_PATH = "/var/log/proxbox.log"
     plugin_settings_mod.BRANCH_ON_CONFLICT_CHOICES = [

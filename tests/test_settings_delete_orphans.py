@@ -14,14 +14,13 @@ def _read(relative_path: str) -> str:
 
 def test_delete_orphans_model_and_migration_are_default_off():
     model = _read("netbox_proxbox/models/plugin_settings.py")
-    migration = _read("netbox_proxbox/migrations/0046_pluginsettings_delete_orphans.py")
+    migration = _read("netbox_proxbox/migrations/0037_v0_0_15_release.py")
 
     assert "delete_orphans = models.BooleanField(" in model
     assert "default=False" in model
-    assert '("netbox_proxbox", "0045_pluginsettings_branching_fields")' in migration
-    assert 'ADD COLUMN IF NOT EXISTS "delete_orphans" boolean' in migration
-    assert "NOT NULL DEFAULT FALSE" in migration
-    assert 'DROP COLUMN IF EXISTS "delete_orphans"' in migration
+    assert "('netbox_proxbox', '0036_add_overwrite_vm_type')" in migration
+    assert "name='delete_orphans'" in migration
+    assert "models.BooleanField(default=False)" in migration
 
 
 def test_delete_orphans_is_exposed_in_settings_ui_api_and_docs():
