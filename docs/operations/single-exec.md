@@ -4,8 +4,8 @@ This page documents `docs/installation/docker-compose-single-exec.yml`, a
 single-container Docker Compose file that runs one full Proxmox→NetBox sync
 and exits. It is the lightest of the three supported scheduled-sync
 topologies — the others being the long-lived plugin worker (UI-triggered
-syncs) and the standalone scheduler container (tracked as a separate
-follow-up).
+syncs) and the standalone [`proxbox-scheduler`](../scheduler/README.md)
+container (interval/cron/continuous loop).
 
 The compose file is a thin wrapper around the [`proxbox_sync`
 management command][headless-sync]. For the command's full flag reference,
@@ -43,7 +43,8 @@ Each invocation:
 The container does **not** run an RQ worker — it relies on the worker
 already running in your long-lived stack to actually execute the enqueued
 job. Without a healthy worker on the `default` queue, the command
-fast-fails after `PROXBOX_SYNC_WORKER_GRACE` seconds.
+fast-fails after the `--worker-grace` window (default 30s — see the
+[`proxbox_sync` flag reference][headless-sync]).
 
 ## Configuration
 

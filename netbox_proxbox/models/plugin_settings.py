@@ -81,9 +81,9 @@ class ProxboxPluginSettings(NetBoxModel):
         default=False,
         verbose_name=_("Delete orphan VMs"),
         help_text=_(
-            "When enabled, full-update runs delete Proxbox-discovered VMs that were "
-            "not touched by the current sync run. Review a dry-run preview before "
-            "enabling in production."
+            "When enabled, full-update runs will delete Proxbox-discovered VMs "
+            "that were not touched by the current sync run. Review a dry-run "
+            "preview before enabling in production."
         ),
     )
     primary_ip_preference = models.CharField(
@@ -562,7 +562,8 @@ class ProxboxPluginSettings(NetBoxModel):
         help_text=_(
             "What to do when the auto-created sync branch reports merge conflicts. "
             "'fail' leaves the branch open for operator review and marks the job failed. "
-            "'acknowledge' retries the merge with acknowledge_conflicts=True."
+            "'acknowledge' attempts the merge anyway and delegates conflict handling "
+            "to the netbox-branching merge strategy."
         ),
     )
     netbox_to_proxmox_enabled = models.BooleanField(

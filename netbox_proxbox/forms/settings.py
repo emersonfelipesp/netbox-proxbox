@@ -136,9 +136,9 @@ class ProxboxPluginSettingsForm(forms.Form):
         required=False,
         label="Delete orphan VMs",
         help_text=(
-            "When enabled, full-update runs delete Proxbox-discovered VMs that were "
-            "not touched by the current sync run. Review the full-update dry-run "
-            "preview before enabling in production."
+            "When enabled, full-update runs will delete Proxbox-discovered VMs "
+            "that were not touched by the current sync run. Review the full-update "
+            "dry-run preview before enabling in production."
         ),
     )
     primary_ip_preference = forms.ChoiceField(

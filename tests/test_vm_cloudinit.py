@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 from pathlib import Path
@@ -128,13 +129,15 @@ class ProxmoxVMCloudInitAPITest(TestCase):
         url = reverse("plugins-api:netbox_proxbox-api:proxmoxvmcloudinit-list")
         response = self.client.post(
             url,
-            data={
-                "virtual_machine": self.vm.pk,
-                "ciuser": "ubuntu",
-                "sshkeys": "ssh-rsa AAAA test@host\n",
-                "ipconfig0": "ip=dhcp",
-                "sshkeys_truncated": False,
-            },
+            data=json.dumps(
+                {
+                    "virtual_machine": self.vm.pk,
+                    "ciuser": "ubuntu",
+                    "sshkeys": "ssh-rsa AAAA test@host\n",
+                    "ipconfig0": "ip=dhcp",
+                    "sshkeys_truncated": False,
+                }
+            ),
             content_type="application/json",
             **self._auth_headers(),
         )
