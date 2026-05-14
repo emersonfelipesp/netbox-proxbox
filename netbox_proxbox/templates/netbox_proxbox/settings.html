@@ -178,7 +178,10 @@
                     </p>
                     {% render_field form.netbox_to_proxmox_enabled %}
                     {% render_field form.netbox_to_proxmox_typed_confirmation %}
+                    {% render_field form.intent_warn_plaintext_password %}
                     {% render_field form.apply_destroy_confirmed %}
+                    {% render_field form.intent_apply_authorization_self_approve_allowed %}
+                    {% render_field form.intent_deletion_request_ttl_days %}
                 </div>
             </div>
             {# Hardware Discovery Card #}

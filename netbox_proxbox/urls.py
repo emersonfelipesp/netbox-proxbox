@@ -4,6 +4,18 @@ from django.urls import include, path
 from utilities.urls import get_model_urls
 
 from netbox_proxbox import views
+from netbox_proxbox.views.apply_jobs import (
+    ProxmoxApplyJobCancelView,
+    ProxmoxApplyJobListView,
+    ProxmoxApplyJobView,
+)
+from netbox_proxbox.views.deletion_requests import (
+    DeletionRequestApproveView,
+    DeletionRequestListView,
+    DeletionRequestRejectView,
+    DeletionRequestView,
+)
+from netbox_proxbox.views.plan_summary import IntentPlanSummaryView
 from netbox_proxbox.websocket_client import WebSocketView
 
 app_name = "netbox_proxbox"
@@ -181,6 +193,46 @@ urlpatterns = [
         name="sync_ip_addresses",
     ),
     path("sync/full-update/", views.sync_full_update, name="sync_full_update"),
+    path(
+        "intent/apply-jobs/",
+        ProxmoxApplyJobListView.as_view(),
+        name="proxmoxapplyjob_list",
+    ),
+    path(
+        "intent/apply-jobs/<int:pk>/",
+        ProxmoxApplyJobView.as_view(),
+        name="proxmoxapplyjob",
+    ),
+    path(
+        "intent/apply-jobs/<int:pk>/cancel/",
+        ProxmoxApplyJobCancelView.as_view(),
+        name="proxmoxapplyjob_cancel",
+    ),
+    path(
+        "intent/plan-summary/<int:branch_id>/",
+        IntentPlanSummaryView.as_view(),
+        name="plan_summary",
+    ),
+    path(
+        "intent/deletion-requests/",
+        DeletionRequestListView.as_view(),
+        name="deletionrequest_list",
+    ),
+    path(
+        "intent/deletion-requests/<int:pk>/",
+        DeletionRequestView.as_view(),
+        name="deletionrequest",
+    ),
+    path(
+        "intent/deletion-requests/<int:pk>/approve/",
+        DeletionRequestApproveView.as_view(),
+        name="deletionrequest_approve",
+    ),
+    path(
+        "intent/deletion-requests/<int:pk>/reject/",
+        DeletionRequestRejectView.as_view(),
+        name="deletionrequest_reject",
+    ),
     path("sync/schedule/", views.ScheduleSyncView.as_view(), name="schedule_sync"),
     path("settings/", views.SettingsView.as_view(), name="settings"),
     path(

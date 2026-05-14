@@ -1,0 +1,49 @@
+{% extends 'base/layout.html' %}
+{% load form_helpers %}
+{% load helpers %}
+{% load i18n %}
+
+{% block title %}{% trans "Approve Deletion Request" %}{% endblock %}
+
+{% block content %}
+  <div class="row">
+    <div class="col col-md-6">
+      <div class="card">
+        <h5 class="card-header">{% trans "Approve Deletion Request" %}</h5>
+        <div class="card-body">
+          <table class="table table-hover attr-table mb-3">
+            <tr>
+              <th scope="row">{% trans "Request" %}</th>
+              <td>{{ object|linkify }}</td>
+            </tr>
+            <tr>
+              <th scope="row">{% trans "Requested by" %}</th>
+              <td>{{ object.requested_by|linkify|placeholder }}</td>
+            </tr>
+            <tr>
+              <th scope="row">{% trans "VMID" %}</th>
+              <td>{{ object.vmid|placeholder }}</td>
+            </tr>
+            <tr>
+              <th scope="row">{% trans "Node" %}</th>
+              <td>{{ object.node|placeholder }}</td>
+            </tr>
+          </table>
+          <form method="post">
+            {% csrf_token %}
+            {% render_field form.vmid %}
+            <div class="d-flex gap-2">
+              <button type="submit" class="btn btn-danger">
+                <i class="mdi mdi-check-circle-outline" aria-hidden="true"></i>
+                {% trans "Approve and Execute" %}
+              </button>
+              <a href="{{ object.get_absolute_url }}" class="btn btn-outline-secondary">
+                {% trans "Cancel" %}
+              </a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

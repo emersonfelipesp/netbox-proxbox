@@ -1,0 +1,25 @@
+{% extends 'generic/object.html' %}
+{% load i18n %}
+
+{% block content %}
+  <div class="row mb-3">
+    <div class="col col-md-6">
+      <div class="card">
+        <h5 class="card-header">{% trans "Cancel Apply Job" %}</h5>
+        <div class="card-body">
+          <p>{% trans "Cancel this queued or running Proxmox apply dry-run?" %}</p>
+          <form method="post" action="{% url 'plugins:netbox_proxbox:proxmoxapplyjob_cancel' pk=object.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-danger">
+              <i class="mdi mdi-close-circle-outline" aria-hidden="true"></i>
+              {% trans "Cancel Apply Job" %}
+            </button>
+            <a href="{{ object.get_absolute_url }}" class="btn btn-outline-secondary">
+              {% trans "Back" %}
+            </a>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

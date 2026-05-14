@@ -1,0 +1,27 @@
+"""Add plaintext password warning setting for Cloud-Init intent payloads."""
+
+from __future__ import annotations
+
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ("netbox_proxbox", "0042_pluginsettings_self_approve"),
+    ]
+
+    operations = [
+        migrations.AddField(
+            model_name="proxboxpluginsettings",
+            name="intent_warn_plaintext_password",
+            field=models.BooleanField(
+                default=True,
+                help_text=(
+                    "When enabled, the intent merge validator emits a warning if "
+                    "cloud_init_user_data contains a plaintext password line."
+                ),
+                verbose_name="Warn on plaintext cloud-init passwords",
+            ),
+        ),
+    ]

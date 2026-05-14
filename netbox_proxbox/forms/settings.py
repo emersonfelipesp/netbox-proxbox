@@ -479,6 +479,15 @@ class ProxboxPluginSettingsForm(forms.Form):
             "master flag is turned off."
         ),
     )
+    intent_warn_plaintext_password = forms.BooleanField(
+        required=False,
+        initial=True,
+        label="Warn on plaintext cloud-init passwords",
+        help_text=(
+            "When enabled, branch merge validation warns if cloud_init_user_data "
+            "contains a plaintext password line."
+        ),
+    )
     apply_destroy_confirmed = forms.BooleanField(
         required=False,
         label="Allow apply-destroy authorization workflow",
@@ -486,6 +495,24 @@ class ProxboxPluginSettingsForm(forms.Form):
             "Per-branch destroy master switch. Destroys still flow through a separate "
             "DeletionRequest approved by a user holding "
             "netbox_proxbox.authorize_deletion_request."
+        ),
+    )
+    intent_apply_authorization_self_approve_allowed = forms.BooleanField(
+        required=False,
+        label="Allow deletion request self-approval",
+        help_text=(
+            "When enabled, the user who requested a Proxmox deletion may also approve "
+            "the DeletionRequest. Leave disabled for four-eyes authorization."
+        ),
+    )
+    intent_deletion_request_ttl_days = forms.IntegerField(
+        required=True,
+        min_value=1,
+        initial=7,
+        label="Deletion request TTL (days)",
+        help_text=(
+            "Pending DeletionRequests older than this many days are auto-rejected "
+            "and the pending-deletion tag is removed from Proxmox best-effort."
         ),
     )
 

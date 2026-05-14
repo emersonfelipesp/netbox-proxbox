@@ -92,6 +92,11 @@
       "vmid",
       "suffix_index",
       "operator_renamed"
+    ],
+    "PlanSummaryMessage": [
+      "event",
+      "branch_id",
+      "verdicts"
     ]
   }
 }
