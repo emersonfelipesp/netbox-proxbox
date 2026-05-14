@@ -18,7 +18,11 @@ except ImportError:  # pragma: no cover - test stubs expose only JobRunner
 
 from netbox_proxbox.intent.cf_writes import stamp_intent_state
 from netbox_proxbox.intent.diff_classify import classify_diff
-from netbox_proxbox.intent.payload import build_lxc_payload, build_vm_payload
+from netbox_proxbox.intent.payload import (
+    build_lxc_payload,
+    build_update_delta,
+    build_vm_payload,
+)
 from netbox_proxbox.models import ProxmoxApplyJob as ProxmoxApplyJobModel
 from netbox_proxbox.services.backend_context import get_fastapi_request_context
 
@@ -32,6 +36,10 @@ _VM_MODEL = "virtualmachine"
 _CREATE_PERMISSIONS = {
     "qemu": "netbox_proxbox.intent_create_vm",
     "lxc": "netbox_proxbox.intent_create_lxc",
+}
+_UPDATE_PERMISSIONS = {
+    "qemu": "netbox_proxbox.intent_update_vm",
+    "lxc": "netbox_proxbox.intent_update_lxc",
 }
 _SUCCESS_STATUSES = {"succeeded", "success", "applied", "intent-logged"}
 _FAILED_STATUSES = {"failed"}
@@ -285,7 +293,7 @@ class ProxmoxApplyJob(JobRunner):
                         )
                         continue
 
-                    if op in {"update", "delete"}:
+                    if op == "delete":
                         results[key] = _result_entry(
                             vmid=vmid,
                             op=op,
@@ -293,6 +301,65 @@ class ProxmoxApplyJob(JobRunner):
                             status="not_implemented",
                             message=_NOT_IMPLEMENTED_MESSAGE,
                         )
+                        continue
+
+                    if op == "update":
+                        prev_state = getattr(row, "prechange_data", None) or {}
+                        delta = build_update_delta(vm, prev_state)
+                        if not delta:
+                            results[key] = _result_entry(
+                                vmid=vmid,
+                                op=op,
+                                kind=kind,
+                                status="skipped",
+                                message="no real change",
+                            )
+                            continue
+                        permission = _UPDATE_PERMISSIONS.get(
+                            kind, _UPDATE_PERMISSIONS["qemu"]
+                        )
+                        has_perm = getattr(actor, "has_perm", None)
+                        if actor is None or not callable(has_perm) or not has_perm(
+                            permission
+                        ):
+                            results[key] = _result_entry(
+                                vmid=vmid,
+                                op=op,
+                                kind=kind,
+                                status="skipped",
+                                message=f"permission denied: {permission}",
+                            )
+                            continue
+                        apply_payload = {
+                            "diffs": [
+                                {
+                                    "op": "update",
+                                    "kind": kind,
+                                    "payload": delta,
+                                }
+                            ],
+                            "run_uuid": str(normalized_uuid),
+                        }
+                        body = _call_apply_endpoint(
+                            apply_payload,
+                            actor_username=actor_username,
+                        )
+                        item = _first_apply_result(body)
+                        status = str(item.get("status") or "failed")
+                        proxmox_upid = item.get("proxmox_upid") or item.get("upid")
+                        result_vmid = item.get("vmid", vmid)
+                        results[key] = _result_entry(
+                            vmid=result_vmid,
+                            op=op,
+                            kind=kind,
+                            status=status,
+                            message=str(item.get("message") or ""),
+                            proxmox_upid=proxmox_upid,
+                        )
+                        if _status_is_success(status):
+                            stamp_intent_state(
+                                vm, "applied", run_uuid=str(normalized_uuid)
+                            )
                         continue
 
                     permission = _CREATE_PERMISSIONS.get(

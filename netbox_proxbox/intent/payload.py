@@ -115,3 +115,30 @@ def build_lxc_payload(vm) -> dict:
         "tags": _tag_names(vm),
         "description": _str_or_none(getattr(vm, "description", None)),
     }
+
+
+def build_update_delta(vm, prev_state: dict) -> dict:
+    """Return only the payload fields that changed vs ``prev_state``.
+
+    The result always includes ``vmid`` and ``node`` so the backend can route
+    the request; an empty result (after stripping routing keys) means no real
+    change and the caller should skip the dispatch.
+    """
+    prev = prev_state if isinstance(prev_state, dict) else {}
+    kind_hint = str(prev.get("kind") or "").lower()
+    builder = build_lxc_payload if kind_hint == "lxc" else build_vm_payload
+    current = builder(vm)
+
+    delta: dict[str, Any] = {}
+    for key, new_value in current.items():
+        if key in ("vmid", "node"):
+            continue
+        if prev.get(key) != new_value:
+            delta[key] = new_value
+
+    if not delta:
+        return {}
+
+    delta["vmid"] = current.get("vmid")
+    delta["node"] = current.get("node")
+    return delta
