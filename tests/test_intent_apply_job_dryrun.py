@@ -1,4 +1,4 @@
-"""Sub-PR E (#382): AST contract for the dry-run apply executor."""
+"""Sub-PR E/F (#382/#383): AST contract for the apply executor shell."""
 
 from __future__ import annotations
 
@@ -34,26 +34,25 @@ def test_apply_job_module_exposes_runner_and_timeout():
     assert "PROXBOX_APPLY_JOB_TIMEOUT" in assigned_names
 
 
-def test_apply_job_executor_has_no_http_or_destroy_calls():
+def test_apply_job_executor_has_no_destroy_calls():
     text = APPLY_JOB_PATH.read_text(encoding="utf-8")
     forbidden_fragments = (
-        "requests.post",
         "requests.delete",
         ".destroy(",
         "proxmox.delete",
     )
     for fragment in forbidden_fragments:
-        assert fragment not in text, f"dry-run executor must not contain {fragment}"
+        assert fragment not in text, f"apply executor must not contain {fragment}"
 
     for node in ast.walk(_parse()):
         if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
             continue
-        if node.func.attr not in {"post", "delete"}:
+        if node.func.attr != "delete":
             continue
         receiver = node.func.value
         assert not (
             isinstance(receiver, ast.Name) and receiver.id in {"requests", "proxmox"}
-        ), "dry-run executor must not call requests/proxmox post/delete methods"
+        ), "apply executor must not call requests/proxmox delete methods"
 
 
 def test_enqueue_signature_includes_required_parameters():
