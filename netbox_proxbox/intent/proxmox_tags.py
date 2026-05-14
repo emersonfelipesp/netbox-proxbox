@@ -67,4 +67,56 @@ def tag_pending_deletion(endpoint: Any, vmid: Any, node: Any, kind: Any) -> bool
     return True
 
 
-__all__ = ("PENDING_DELETION_TAG", "tag_pending_deletion")
+def untag_pending_deletion(endpoint: Any, vmid: Any, node: Any, kind: Any) -> bool:
+    """Ask proxbox-api to remove the pending-delete tag without destroying the VM."""
+    try:
+        http_url = _endpoint_value(endpoint, "http_url") or _endpoint_value(
+            endpoint, "url"
+        )
+        if not http_url:
+            logger.warning(
+                "Cannot untag VM %s pending deletion: FastAPI endpoint has no URL.",
+                vmid,
+            )
+            return False
+
+        url = f"{str(http_url).rstrip('/')}/intent/untag-pending-deletion"
+        response = requests.put(
+            url,
+            json={
+                "vmid": vmid,
+                "node": node or "",
+                "kind": kind,
+                "tag": PENDING_DELETION_TAG,
+            },
+            headers=dict(_endpoint_value(endpoint, "headers", {}) or {}),
+            timeout=TAG_REQUEST_TIMEOUT_SECONDS,
+            verify=bool(_endpoint_value(endpoint, "verify_ssl", True)),
+        )
+        response.raise_for_status()
+        body = response.json()
+        if isinstance(body, dict) and body.get("ok") is False:
+            logger.warning(
+                "proxbox-api declined pending-deletion untag for VM %s on node %s: %s",
+                vmid,
+                node,
+                body,
+            )
+            return False
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "Failed to remove pending-deletion tag from VM %s on node %s: %s",
+            vmid,
+            node,
+            exc,
+        )
+        return False
+
+    return True
+
+
+__all__ = (
+    "PENDING_DELETION_TAG",
+    "tag_pending_deletion",
+    "untag_pending_deletion",
+)

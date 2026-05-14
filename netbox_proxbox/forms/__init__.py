@@ -1,6 +1,8 @@
 """Re-export the plugin's model and filter form classes."""
 
 from .backup_routine import *
+from .deletion_request_approve import *
+from .deletion_request_reject import *
 from .fastapi import *
 from .netbox import *
 from .proxmox import *

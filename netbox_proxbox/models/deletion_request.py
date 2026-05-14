@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
@@ -101,3 +102,18 @@ class DeletionRequest(NetBoxModel):
 
     def get_absolute_url(self) -> str:
         return reverse("plugins:netbox_proxbox:deletionrequest", args=[self.pk])
+
+    def clean(self) -> None:
+        super().clean()
+        if self.authorizer_id is None or self.authorizer_id != self.requested_by_id:
+            return
+
+        from netbox_proxbox.models.plugin_settings import (  # noqa: PLC0415
+            ProxboxPluginSettings,
+        )
+
+        settings_obj = ProxboxPluginSettings.get_solo()
+        if not settings_obj.intent_apply_authorization_self_approve_allowed:
+            raise ValidationError(
+                "Self-approval blocked: a different authorized user must approve this request."
+            )

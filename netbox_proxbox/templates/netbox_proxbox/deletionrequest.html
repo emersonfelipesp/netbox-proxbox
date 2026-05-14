@@ -1,0 +1,95 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load i18n %}
+
+{% block content %}
+  <div class="row mb-3">
+    <div class="col col-md-6">
+      <div class="card">
+        <h5 class="card-header">{% trans "Deletion Request" %}</h5>
+        <div class="card-body">
+          <table class="table table-hover attr-table">
+            <tr>
+              <th scope="row">{% trans "Name" %}</th>
+              <td>{{ object.name|placeholder }}</td>
+            </tr>
+            <tr>
+              <th scope="row">{% trans "State" %}</th>
+              <td>{{ object.get_state_display|placeholder }}</td>
+            </tr>
+            <tr>
+              <th scope="row">{% trans "Branch" %}</th>
+              <td>{{ object.branch|linkify|placeholder }}</td>
+            </tr>
+            <tr>
+              <th scope="row">{% trans "Requested by" %}</th>
+              <td>{{ object.requested_by|linkify|placeholder }}</td>
+            </tr>
+            <tr>
+              <th scope="row">{% trans "Authorizer" %}</th>
+              <td>{{ object.authorizer|linkify|placeholder }}</td>
+            </tr>
+            <tr>
+              <th scope="row">{% trans "VMID" %}</th>
+              <td>{{ object.vmid|placeholder }}</td>
+            </tr>
+            <tr>
+              <th scope="row">{% trans "Node" %}</th>
+              <td>{{ object.node|placeholder }}</td>
+            </tr>
+            <tr>
+              <th scope="row">{% trans "Kind" %}</th>
+              <td>{{ object.kind|placeholder }}</td>
+            </tr>
+            <tr>
+              <th scope="row">{% trans "Requested" %}</th>
+              <td>{{ object.requested_at|placeholder }}</td>
+            </tr>
+            <tr>
+              <th scope="row">{% trans "Approved" %}</th>
+              <td>{{ object.approved_at|placeholder }}</td>
+            </tr>
+            <tr>
+              <th scope="row">{% trans "Executed" %}</th>
+              <td>{{ object.executed_at|placeholder }}</td>
+            </tr>
+            <tr>
+              <th scope="row">{% trans "Executor run UUID" %}</th>
+              <td>{{ object.executor_run_uuid|placeholder }}</td>
+            </tr>
+            <tr>
+              <th scope="row">{% trans "Reject reason" %}</th>
+              <td>{{ object.reject_reason|placeholder }}</td>
+            </tr>
+          </table>
+        </div>
+      </div>
+      {% include 'inc/panels/custom_fields.html' %}
+    </div>
+    <div class="col col-md-6">
+      {% if object.state == "pending" %}
+        <div class="card mb-3">
+          <h5 class="card-header">{% trans "Authorization" %}</h5>
+          <div class="card-body">
+            <a href="{% url 'plugins:netbox_proxbox:deletionrequest_approve' pk=object.pk %}" class="btn btn-success">
+              <i class="mdi mdi-check-circle-outline" aria-hidden="true"></i>
+              {% trans "Approve" %}
+            </a>
+            <a href="{% url 'plugins:netbox_proxbox:deletionrequest_reject' pk=object.pk %}" class="btn btn-danger">
+              <i class="mdi mdi-close-circle-outline" aria-hidden="true"></i>
+              {% trans "Reject" %}
+            </a>
+          </div>
+        </div>
+      {% endif %}
+      <div class="card mb-3">
+        <h5 class="card-header">{% trans "Metadata Snapshot" %}</h5>
+        <div class="card-body">
+          <pre class="mb-0"><code>{{ object.metadata_snapshot|default:"{}" }}</code></pre>
+        </div>
+      </div>
+      {% include 'inc/panels/tags.html' %}
+      {% include 'inc/panels/comments.html' %}
+    </div>
+  </div>
+{% endblock %}

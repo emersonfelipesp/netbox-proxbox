@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
@@ -594,6 +595,23 @@ class ProxboxPluginSettings(NetBoxModel):
             "Per-branch destroy master switch. Even when set, every destroy still flows "
             "through a separate DeletionRequest approved by a user holding "
             "netbox_proxbox.authorize_deletion_request. Off by default."
+        ),
+    )
+    intent_apply_authorization_self_approve_allowed = models.BooleanField(
+        default=False,
+        verbose_name=_("Allow deletion request self-approval"),
+        help_text=_(
+            "When enabled, the user who requested a Proxmox deletion may also approve "
+            "the DeletionRequest. Leave disabled for four-eyes authorization."
+        ),
+    )
+    intent_deletion_request_ttl_days = models.IntegerField(
+        default=7,
+        validators=[MinValueValidator(1)],
+        verbose_name=_("Deletion request TTL (days)"),
+        help_text=_(
+            "Pending DeletionRequests older than this many days are auto-rejected "
+            "and the pending-deletion tag is removed from Proxmox best-effort."
         ),
     )
     hardware_discovery_enabled = models.BooleanField(

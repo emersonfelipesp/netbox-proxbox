@@ -9,6 +9,12 @@ from netbox_proxbox.views.apply_jobs import (
     ProxmoxApplyJobListView,
     ProxmoxApplyJobView,
 )
+from netbox_proxbox.views.deletion_requests import (
+    DeletionRequestApproveView,
+    DeletionRequestListView,
+    DeletionRequestRejectView,
+    DeletionRequestView,
+)
 from netbox_proxbox.websocket_client import WebSocketView
 
 app_name = "netbox_proxbox"
@@ -200,6 +206,26 @@ urlpatterns = [
         "intent/apply-jobs/<int:pk>/cancel/",
         ProxmoxApplyJobCancelView.as_view(),
         name="proxmoxapplyjob_cancel",
+    ),
+    path(
+        "intent/deletion-requests/",
+        DeletionRequestListView.as_view(),
+        name="deletionrequest_list",
+    ),
+    path(
+        "intent/deletion-requests/<int:pk>/",
+        DeletionRequestView.as_view(),
+        name="deletionrequest",
+    ),
+    path(
+        "intent/deletion-requests/<int:pk>/approve/",
+        DeletionRequestApproveView.as_view(),
+        name="deletionrequest_approve",
+    ),
+    path(
+        "intent/deletion-requests/<int:pk>/reject/",
+        DeletionRequestRejectView.as_view(),
+        name="deletionrequest_reject",
     ),
     path("sync/schedule/", views.ScheduleSyncView.as_view(), name="schedule_sync"),
     path("settings/", views.SettingsView.as_view(), name="settings"),
