@@ -172,6 +172,8 @@ class ProxmoxEndpointSettingsForm(NetBoxModelForm):
             label = name.removeprefix("overwrite_").replace("_", " ").capitalize()
             if name == "overwrite_vm_tags":
                 label = "Merge VM tags"
+            elif name == "overwrite_vm_proxmox_tags":
+                label = "Sync Proxmox tags"
             self.fields[name] = forms.NullBooleanField(
                 required=False,
                 widget=forms.NullBooleanSelect,

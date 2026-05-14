@@ -389,6 +389,16 @@ class ProxboxPluginSettings(NetBoxModel):
             "machines; tags are still applied at VM creation."
         ),
     )
+    overwrite_vm_proxmox_tags = models.BooleanField(
+        default=True,
+        verbose_name=_("Sync Proxmox tags"),
+        help_text=_(
+            "When enabled, Proxmox VM tags (the `;`-separated `tags` field on QEMU/LXC config) "
+            "are mirrored as NetBox tags on the synced VirtualMachine. Tag colors match the "
+            "Proxmox `tag-style` color-map when available, otherwise a stable deterministic "
+            "color is used. When disabled, Proxmox-sourced tags are never created or attached."
+        ),
+    )
     overwrite_device_status = models.BooleanField(
         default=True,
         verbose_name=_("Overwrite device status"),

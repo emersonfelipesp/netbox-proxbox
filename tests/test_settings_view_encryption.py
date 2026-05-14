@@ -100,6 +100,7 @@ def _fake_settings_obj(encryption_key: str = "") -> SimpleNamespace:
         overwrite_vm_type=True,
         overwrite_vm_cloudinit=True,
         overwrite_vm_tags=True,
+        overwrite_vm_proxmox_tags=True,
         overwrite_vm_description=True,
         overwrite_vm_custom_fields=True,
         overwrite_cluster_tags=True,
