@@ -17,6 +17,7 @@ from netbox_proxbox.models import (
     ProxmoxEndpoint,
 )
 from netbox_proxbox.tables.backup_routine import BackupRoutineTable
+from netbox_proxbox.tables.cloud_image_template import CloudImageTemplateTable
 from netbox_proxbox.tables.cluster import ProxmoxClusterTable, ProxmoxNodeTable
 from netbox_proxbox.tables.deletion_requests import DeletionRequestTable
 from netbox_proxbox.tables.replication import ReplicationTable

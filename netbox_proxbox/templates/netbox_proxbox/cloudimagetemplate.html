@@ -1,0 +1,96 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load i18n %}
+
+{% block content %}
+<div class="row mb-3">
+  <div class="col col-md-6">
+    <div class="card mb-3">
+      <h5 class="card-header">{% trans "Cloud Image" %}</h5>
+      <div class="card-body">
+        <table class="table table-hover attr-table">
+          <tr>
+            <th scope="row">{% trans "Name" %}</th>
+            <td>{{ object.name }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Slug" %}</th>
+            <td>{{ object.slug }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Description" %}</th>
+            <td>{{ object.description|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Active" %}</th>
+            <td>
+              {% if object.is_active %}
+                <span class="text-success"><i class="mdi mdi-check"></i> {% trans "Yes" %}</span>
+              {% else %}
+                <span class="text-danger"><i class="mdi mdi-close"></i> {% trans "No" %}</span>
+              {% endif %}
+            </td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <h5 class="card-header">{% trans "Source Template" %}</h5>
+      <div class="card-body">
+        <table class="table table-hover attr-table">
+          <tr>
+            <th scope="row">{% trans "Cluster" %}</th>
+            <td>{{ object.cluster|linkify }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Source VMID" %}</th>
+            <td>{{ object.source_vmid }}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col col-md-6">
+    <div class="card mb-3">
+      <h5 class="card-header">{% trans "Cloud-Init Defaults" %}</h5>
+      <div class="card-body">
+        <table class="table table-hover attr-table">
+          <tr>
+            <th scope="row">{% trans "OS family" %}</th>
+            <td>{{ object.get_os_family_display }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "OS release" %}</th>
+            <td>{{ object.os_release|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Default user" %}</th>
+            <td>{{ object.default_ciuser }}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <h5 class="card-header">{% trans "Tenant Scope" %}</h5>
+      <div class="card-body">
+        {% if object.allowed_tenants.exists %}
+          <ul class="list-unstyled mb-0">
+            {% for tenant in object.allowed_tenants.all %}
+              <li>{{ tenant|linkify }}</li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <span class="text-muted">{% trans "All tenants" %}</span>
+        {% endif %}
+      </div>
+    </div>
+
+    {% include 'inc/panels/tags.html' %}
+    {% include 'inc/panels/comments.html' %}
+    {% include 'inc/panels/custom_fields.html' %}
+  </div>
+</div>
+{% endblock %}
