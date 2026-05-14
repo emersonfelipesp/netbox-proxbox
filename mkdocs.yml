@@ -115,6 +115,9 @@ nav:
     - Single-Exec Compose: 'operations/single-exec.md'
     - Scheduler Container: 'scheduler/README.md'
     - Tenant Mapping: 'operations/tenant-mapping.md'
+    - NetBox to Proxmox: 'operations/netbox-to-proxmox.md'
+    - Deletion Requests: 'operations/deletion-requests.md'
+    - Troubleshooting: 'operations/troubleshooting.md'
   - API Reference:
     - Overview: 'api/index.md'
     - Endpoints: 'api/endpoints.md'

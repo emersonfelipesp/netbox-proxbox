@@ -83,6 +83,33 @@
         </div>
       {% endif %}
       <div class="card mb-3">
+        <h5 class="card-header">{% trans "State Transitions" %}</h5>
+        <div class="card-body">
+          <table class="table table-hover attr-table">
+            <tr>
+              <th scope="row">{% trans "Requested" %}</th>
+              <td>{{ object.requested_at|placeholder }} {% trans "by" %} {{ object.requested_by|linkify|placeholder }}</td>
+            </tr>
+            <tr>
+              <th scope="row">{% trans "Approved" %}</th>
+              <td>{{ object.approved_at|placeholder }} {% trans "by" %} {{ object.authorizer|linkify|placeholder }}</td>
+            </tr>
+            <tr>
+              <th scope="row">{% trans "Rejected" %}</th>
+              <td>{{ object.reject_reason|placeholder }}</td>
+            </tr>
+            <tr>
+              <th scope="row">{% trans "Executed" %}</th>
+              <td>{{ object.executed_at|placeholder }}</td>
+            </tr>
+            <tr>
+              <th scope="row">{% trans "Executor run UUID" %}</th>
+              <td><code>{{ object.executor_run_uuid|placeholder }}</code></td>
+            </tr>
+          </table>
+        </div>
+      </div>
+      <div class="card mb-3">
         <h5 class="card-header">{% trans "Metadata Snapshot" %}</h5>
         <div class="card-body">
           <pre class="mb-0"><code>{{ object.metadata_snapshot|default:"{}" }}</code></pre>

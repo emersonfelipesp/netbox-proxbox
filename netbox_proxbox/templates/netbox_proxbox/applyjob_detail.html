@@ -1,6 +1,7 @@
 {% extends 'generic/object.html' %}
 {% load helpers %}
 {% load i18n %}
+{% load static %}
 
 {% block content %}
   <div class="row mb-3">
@@ -49,6 +50,12 @@
           <pre class="mb-0"><code>{{ object.per_vm_results|default:"{}" }}</code></pre>
         </div>
       </div>
+      <div class="card mb-3">
+        <h5 class="card-header">{% trans "Live Apply Log" %}</h5>
+        <div class="card-body">
+          <pre id="apply-sse-log" class="mb-0" data-sse-url="{{ apply_job_sse_url|default:'' }}">{% if not apply_job_sse_url %}{% trans "No live stream is available for this apply job." %}{% endif %}</pre>
+        </div>
+      </div>
       {% if object.state == "queued" or object.state == "running" %}
         <form method="post" action="{% url 'plugins:netbox_proxbox:proxmoxapplyjob_cancel' pk=object.pk %}" class="mb-3">
           {% csrf_token %}
@@ -62,4 +69,9 @@
       {% include 'inc/panels/comments.html' %}
     </div>
   </div>
+{% endblock %}
+
+{% block javascript %}
+  {{ block.super }}
+  <script src="{% static 'netbox_proxbox/sse_log.js' %}"></script>
 {% endblock %}

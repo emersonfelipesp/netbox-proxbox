@@ -15,6 +15,7 @@ from netbox_proxbox.views.deletion_requests import (
     DeletionRequestRejectView,
     DeletionRequestView,
 )
+from netbox_proxbox.views.plan_summary import IntentPlanSummaryView
 from netbox_proxbox.websocket_client import WebSocketView
 
 app_name = "netbox_proxbox"
@@ -206,6 +207,11 @@ urlpatterns = [
         "intent/apply-jobs/<int:pk>/cancel/",
         ProxmoxApplyJobCancelView.as_view(),
         name="proxmoxapplyjob_cancel",
+    ),
+    path(
+        "intent/plan-summary/<int:branch_id>/",
+        IntentPlanSummaryView.as_view(),
+        name="plan_summary",
     ),
     path(
         "intent/deletion-requests/",

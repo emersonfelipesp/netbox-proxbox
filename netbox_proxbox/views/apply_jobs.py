@@ -5,6 +5,7 @@ from __future__ import annotations
 from django.contrib import messages
 from django.http import HttpRequest, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext as _
 from django.views import View
@@ -17,6 +18,11 @@ from utilities.views import (
 
 from netbox_proxbox.models import ProxmoxApplyJob
 from netbox_proxbox.tables.apply_jobs import ProxmoxApplyJobTable
+
+try:
+    from netbox.jobs import Job as JobModel
+except ImportError:  # pragma: no cover - NetBox test stubs may omit Job
+    JobModel = None
 
 __all__ = (
     "ProxmoxApplyJobCancelView",
@@ -54,6 +60,32 @@ class ProxmoxApplyJobView(
 
     queryset = ProxmoxApplyJob.objects.select_related("branch", "user")
     template_name = "netbox_proxbox/applyjob_detail.html"
+
+    def get_extra_context(
+        self, request: HttpRequest, instance: ProxmoxApplyJob
+    ) -> dict[str, object]:
+        """Expose the matching core Job SSE URL when the RQ row can be found."""
+        del request
+        if JobModel is None:
+            return {"apply_job_sse_url": ""}
+        try:
+            core_job = (
+                JobModel.objects.filter(
+                    data__proxbox_apply__run_uuid=str(instance.run_uuid)
+                )
+                .order_by("-pk")
+                .first()
+            )
+        except Exception:  # pragma: no cover - defensive for JSON lookup support
+            core_job = None
+        if core_job is None:
+            return {"apply_job_sse_url": ""}
+        return {
+            "apply_job_sse_url": reverse(
+                "plugins:netbox_proxbox:job_stream",
+                args=[core_job.pk],
+            )
+        }
 
 
 class ProxmoxApplyJobCancelView(
