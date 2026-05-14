@@ -23,16 +23,10 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DATA_MODULE_PATH = (
-    REPO_ROOT
-    / "netbox_proxbox"
-    / "migrations"
-    / "_v0_0_15_release_data.py"
+    REPO_ROOT / "netbox_proxbox" / "migrations" / "_v0_0_15_release_data.py"
 )
 CONSOLIDATED_MIGRATION_PATH = (
-    REPO_ROOT
-    / "netbox_proxbox"
-    / "migrations"
-    / "0037_v0_0_15_release.py"
+    REPO_ROOT / "netbox_proxbox" / "migrations" / "0037_v0_0_15_release.py"
 )
 
 
