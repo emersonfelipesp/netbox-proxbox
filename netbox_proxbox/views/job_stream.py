@@ -307,6 +307,8 @@ class JobStreamSSEView(View):
                             decoded = _decode_stream_log_entry(entry)
                             if decoded is not None:
                                 event_name, payload = decoded
+                                # Pass through recognized proxbox-api event names,
+                                # including intent ``plan_summary`` frames.
                                 if event_name != "complete":
                                     emit(event_name, payload)
                                 continue
