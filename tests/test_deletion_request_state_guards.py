@@ -16,9 +16,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 VIEW_PATH = REPO_ROOT / "netbox_proxbox" / "views" / "deletion_requests.py"
 EXECUTOR_PATH = REPO_ROOT / "netbox_proxbox" / "intent" / "deletion_executor.py"
 
-NON_PENDING_LITERAL = (
-    "Deletion request is not pending; approve and reject are only valid in the pending state."
-)
+NON_PENDING_LITERAL = "Deletion request is not pending; approve and reject are only valid in the pending state."
 
 
 def _module(path: Path) -> ast.Module:

@@ -34,9 +34,7 @@ __all__ = (
 SELF_APPROVAL_BLOCKED_MESSAGE = (
     "Self-approval blocked: a different authorized user must approve this request."
 )
-NON_PENDING_STATE_MESSAGE = (
-    "Deletion request is not pending; approve and reject are only valid in the pending state."
-)
+NON_PENDING_STATE_MESSAGE = "Deletion request is not pending; approve and reject are only valid in the pending state."
 
 
 def _self_approval_allowed() -> bool:
