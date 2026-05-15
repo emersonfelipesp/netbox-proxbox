@@ -477,9 +477,9 @@ verbs through the UI.
 
 Per §5.5 the verbs depend on:
 
-- v0.0.16 item #1 (drift-detect helper) — the journal-entry write
+- v0.0.15 item #1 (drift-detect helper) — the journal-entry write
   uses the same diff semantics the drift-detect helper introduces.
-- v0.0.16 item #2 (NetBox-side bootstrap) — the
+- v0.0.15 item #2 (NetBox-side bootstrap) — the
   `core.run_proxmox_action` permission's content-type registration
   uses the bootstrap pass.
 - This design doc (sub-PR A) — non-negotiable per §5.5.

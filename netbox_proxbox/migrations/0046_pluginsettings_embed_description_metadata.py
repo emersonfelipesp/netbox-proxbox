@@ -3,7 +3,7 @@
 Mirrors ``parse_description_metadata`` (#366, read-side) by adding a single
 opt-in BooleanField that gates the intent-path write of a fenced
 ``netbox-metadata`` JSON block into the Proxmox description. Default
-``False`` keeps the intent path byte-for-byte identical to v0.0.16 for
+``False`` keeps the intent path byte-for-byte identical to v0.0.15 for
 existing deployments.
 
 Also merges the 0044 leaf fork (``0044_overwrite_vm_proxmox_tags`` was added

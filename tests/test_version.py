@@ -25,7 +25,6 @@ UPGRADING_PATH = REPO_ROOT / "docs" / "installation" / "upgrading.md"
 RELEASE_NOTES_INDEX_PATH = REPO_ROOT / "docs" / "release-notes" / "index.md"
 RELEASE_NOTES_014_PATH = REPO_ROOT / "docs" / "release-notes" / "version-0.0.14.md"
 RELEASE_NOTES_015_PATH = REPO_ROOT / "docs" / "release-notes" / "version-0.0.15.md"
-RELEASE_NOTES_016_PATH = REPO_ROOT / "docs" / "release-notes" / "version-0.0.16.md"
 E2E_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "e2e-docker.yml"
 PUBLISH_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "publish-testpypi.yml"
 NIGHTLY_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "nightly-contracts.yml"
@@ -33,7 +32,7 @@ DOCS_SCREENSHOTS_WORKFLOW_PATH = (
     REPO_ROOT / ".github" / "workflows" / "docs-screenshots.yml"
 )
 
-CURRENT_PLUGIN_VERSION = "0.0.16"
+CURRENT_PLUGIN_VERSION = "0.0.15"
 CURRENT_PROXBOX_API_VERSION = "0.0.11"
 CURRENT_NETBOX_MIN_VERSION = "4.5.8"
 CURRENT_NETBOX_MAX_VERSION = "4.6.99"
@@ -182,7 +181,7 @@ def test_current_release_pairing_is_documented_in_primary_docs():
         "v0.0.8.post1",
         "v0.0.3.post1",
     )
-    for path in (README_PATH, DOCS_INDEX_PATH, RELEASE_NOTES_016_PATH):
+    for path in (README_PATH, DOCS_INDEX_PATH, RELEASE_NOTES_015_PATH):
         text = _read(path)
         _assert_markdown_table_row(text, current_row)
 
@@ -191,7 +190,7 @@ def test_current_release_pairing_is_documented_in_primary_docs():
         DOCS_INDEX_PATH,
         UPGRADING_PATH,
         RELEASE_NOTES_INDEX_PATH,
-        RELEASE_NOTES_016_PATH,
+        RELEASE_NOTES_015_PATH,
     ):
         text = _read(path)
         assert CURRENT_PLUGIN_VERSION in text, f"{path} missing plugin version"
