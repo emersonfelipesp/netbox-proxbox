@@ -35,7 +35,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('extras', '0138_customfieldchoiceset_choice_colors'),
+        ('extras', '0134_owner'),
         ('netbox_proxbox', '0037_v0_0_15_release'),
     ]
 
