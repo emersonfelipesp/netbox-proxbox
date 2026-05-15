@@ -725,9 +725,7 @@ class _ProxboxVMListAPIView(APIView):
 
         tagged_ids = get_proxbox_tagged_object_ids(VirtualMachine)
         if not tagged_ids:
-            return Response(
-                {"count": 0, "next": None, "previous": None, "results": []}
-            )
+            return Response({"count": 0, "next": None, "previous": None, "results": []})
 
         base_qs = (
             VirtualMachine.objects.restrict(request.user, "view")
