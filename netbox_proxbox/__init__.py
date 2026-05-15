@@ -146,7 +146,7 @@ class ProxboxConfig(PluginConfig):
     name = "netbox_proxbox"
     verbose_name = "Proxbox"
     description = "Integrates Proxmox and Netbox"
-    version = "0.0.15rc8"
+    version = "0.0.15rc9"
     author = "Emerson Felipe (@emersonfelipesp)"
     author_email = "emersonfelipe.2003@gmail.com"
     min_version = "4.5.8"
