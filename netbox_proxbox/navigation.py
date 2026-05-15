@@ -114,6 +114,18 @@ vm_cloudinit_item = PluginMenuItem(
     link_text="VM Cloud-init",
 )
 
+cloud_images_item = PluginMenuItem(
+    link="plugins:netbox_proxbox:cloudimagetemplate_list",
+    link_text="Cloud Images",
+    buttons=(
+        PluginMenuButton(
+            "plugins:netbox_proxbox:cloudimagetemplate_add",
+            "Add Cloud Image",
+            "mdi mdi-plus",
+        ),
+    ),
+)
+
 contributing_item = PluginMenuItem(
     link="plugins:netbox_proxbox:contributing",
     link_text="Contributing!",
@@ -219,6 +231,7 @@ menu = PluginMenu(
                 interfaces_item,
                 ip_addresses_item,
                 vm_cloudinit_item,
+                cloud_images_item,
             ),
         ),
         (

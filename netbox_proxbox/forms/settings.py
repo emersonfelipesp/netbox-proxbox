@@ -304,6 +304,17 @@ class ProxboxPluginSettingsForm(forms.Form):
             "cover. Disabled by default."
         ),
     )
+    embed_description_metadata = forms.BooleanField(
+        required=False,
+        label="Embed description metadata",
+        help_text=(
+            "When enabled, intent-direction create/update writes to Proxmox append a "
+            'fenced "netbox-metadata" JSON block of NetBox FK ids (role, tenant, site, '
+            "platform, cluster, device) to the Proxmox object's description. Pairs "
+            "with parse_description_metadata to round-trip NetBox metadata through "
+            "Proxmox without drift. Disabled by default."
+        ),
+    )
     ssrf_protection_enabled = forms.BooleanField(
         required=False,
         label="Enable SSRF protection",
@@ -479,6 +490,15 @@ class ProxboxPluginSettingsForm(forms.Form):
             "master flag is turned off."
         ),
     )
+    intent_warn_plaintext_password = forms.BooleanField(
+        required=False,
+        initial=True,
+        label="Warn on plaintext cloud-init passwords",
+        help_text=(
+            "When enabled, branch merge validation warns if cloud_init_user_data "
+            "contains a plaintext password line."
+        ),
+    )
     apply_destroy_confirmed = forms.BooleanField(
         required=False,
         label="Allow apply-destroy authorization workflow",
@@ -488,6 +508,24 @@ class ProxboxPluginSettingsForm(forms.Form):
             "netbox_proxbox.authorize_deletion_request."
         ),
     )
+    intent_apply_authorization_self_approve_allowed = forms.BooleanField(
+        required=False,
+        label="Allow deletion request self-approval",
+        help_text=(
+            "When enabled, the user who requested a Proxmox deletion may also approve "
+            "the DeletionRequest. Leave disabled for four-eyes authorization."
+        ),
+    )
+    intent_deletion_request_ttl_days = forms.IntegerField(
+        required=True,
+        min_value=1,
+        initial=7,
+        label="Deletion request TTL (days)",
+        help_text=(
+            "Pending DeletionRequests older than this many days are auto-rejected "
+            "and the pending-deletion tag is removed from Proxmox best-effort."
+        ),
+    )
 
     def __init__(self, *args: object, **kwargs: object) -> None:
         super().__init__(*args, **kwargs)
@@ -495,6 +533,8 @@ class ProxboxPluginSettingsForm(forms.Form):
             label = name.removeprefix("overwrite_").replace("_", " ").capitalize()
             if name == "overwrite_vm_tags":
                 label = "Merge VM tags"
+            elif name == "overwrite_vm_proxmox_tags":
+                label = "Sync Proxmox tags"
             self.fields[name] = forms.BooleanField(
                 required=False,
                 initial=True,

@@ -20,6 +20,18 @@ Proxbox discovers and syncs the following from Proxmox into NetBox:
 
 Sync runs on-demand from the NetBox UI or scheduled automatically via NetBox's job system.
 
+## What's New in v0.0.16
+
+Paired with backend [`proxbox-api 0.0.12`](https://github.com/emersonfelipesp/proxbox-api) (matching `0.0.11` remains supported for the read-only reflection path):
+
+- **Opt-in NetBox → Proxmox intent path** (issue #377, twelve sub-PRs A–L). Operators declare desired VM/LXC state on a NetBox **branch**; merging the branch triggers `proxbox-api` to apply CREATE / UPDATE / DELETE against Proxmox. Gated by `ProxboxPluginSettings.netbox_to_proxmox_enabled` (default **False**) plus the typed-confirmation phrase `allow-edit-and-add-actions`.
+- **Safe-delete via `DeletionRequest`** — merging a branch with VM DELETE diffs never calls Proxmox destroy. The plugin creates a `DeletionRequest`, tags the VM `proxbox-pending-deletion`, and waits for a *separate* user holding `authorize_deletion_request` to approve. Self-approval is rejected unless `intent_apply_authorization_self_approve_allowed=True`.
+- **Cloud-Init payload** — four new VM custom fields (`cloud_init_user`, `cloud_init_ssh_keys`, `cloud_init_user_data`, `cloud_init_network`) map to Proxmox `ciuser`, `sshkeys` (URL-encoded), `cicustom`, and `ipconfig0`. Plain-text passwords in `cloud_init_user_data` are flagged at plan time and scrubbed from every journal entry.
+- **Apply-Jobs and Deletion-Requests UI** — `/plugins/proxbox/intent/apply-jobs/` and `/plugins/proxbox/intent/deletion-requests/` with live SSE log streaming, audit-chain rendering, and a plan-summary view per branch.
+- **Read-only reflection path is unchanged.** With `netbox_to_proxmox_enabled=False`, the historic Proxmox → NetBox sync, HA tab, headless sync command, and overwrite flags behave exactly as in v0.0.15.
+
+Full notes: [Release Notes — v0.0.16](https://emersonfelipesp.github.io/netbox-proxbox/release-notes/version-0.0.16/).
+
 ## What's New in v0.0.15
 
 Paired with backend [`proxbox-api 0.0.11`](https://github.com/emersonfelipesp/proxbox-api):
@@ -36,6 +48,7 @@ Full notes: [Release Notes — v0.0.15](https://emersonfelipesp.github.io/netbox
 
 | NetBox   | netbox-proxbox | proxbox-api | netbox-sdk     | proxmox-sdk    |
 |----------|----------------|-------------|----------------|----------------|
+| >=4.5.8  | v0.0.16              | v0.0.11          | v0.0.8.post1   | v0.0.3.post1   |
 | >=4.5.8  | v0.0.15              | v0.0.11          | v0.0.8.post1   | v0.0.3.post1   |
 | >=4.5.8  | v0.0.14              | v0.0.10.post2    | v0.0.8.post1   | v0.0.3.post1   |
 | >=4.5.8  | v0.0.13.post4        | v0.0.9.post2     | v0.0.7.post6   | v0.0.3.post1   |
@@ -53,7 +66,7 @@ REST, SSE, and WebSocket.
 - NetBox 4.5.8, 4.5.9, or 4.6.x
 - Verified with NetBox v4.5.8, v4.5.9, and official v4.6.0
 - Python 3.12+
-- Proxmox VE 7.x or 8.x
+- Proxmox VE 7.x, 8.x, or 9.x (PVE 9 requires `VM.GuestAgent.Audit` on the API role; see "Troubleshooting" below for the PVE 9 auth checklist)
 - Proxbox API backend as a separately deployed service (see below)
 
 ## Quick Start
@@ -216,6 +229,17 @@ Proxbox sync jobs default to a **7200-second (2-hour) RQ wall-clock limit** (`PR
 | Job stays **`pending`** | No RQ worker running, or worker not listening to `default` queue | Start/restart `manage.py rqworker` |
 | Job stays **`running`** for a long time | Proxbox API is still syncing or stream is slow | Check the job **Log** tab; wait or inspect the backend |
 | Job **`errored: JobTimeoutException`** | RQ wall-clock limit exceeded | Increase `PROXBOX_SYNC_JOB_TIMEOUT` in `netbox_proxbox/jobs.py` |
+| **HTTP 401 Authentication failed!** against Proxmox VE 9.x | A stale stored token is overriding fresh password credentials, or the role is missing PVE 9 permissions | On the Proxmox endpoint edit page, tick **"Clear stored API token on save"** (and/or **"Clear stored password on save"**) to wipe the unused secret. The form rejects rows that end up with neither a password nor a complete `(token name, token value)` pair. Confirm the role on Proxmox grants `Datastore.Audit`, `Sys.Audit`, `VM.Audit`, and on PVE 9 also `VM.GuestAgent.Audit`. The plugin now surfaces the upstream PVE 9 error message in the UI instead of `"Unknown error."`, which makes "no such realm" / "expired token" / "missing privilege" failures self-diagnosing. |
+
+#### Switching credentials cleanly (PVE 9 friendly)
+
+The Proxmox endpoint edit form preserves the stored password and token value
+when you submit blank masked fields — that is intentional for partial edits.
+When you genuinely want to **switch** auth modes (for example, password → token
+or vice versa, or rotate a leaked secret), tick the matching **"Clear
+stored …"** checkbox so the unused credential is wiped on save. Clearing the
+token always clears **both** `token name` and `token value` together so the row
+never persists in a half-token state.
 
 ## Documentation
 

@@ -20,6 +20,31 @@ class ProxmoxModeChoices(ChoiceSet):
     ]
 
 
+class ProxmoxEndpointEnvironmentChoices(ChoiceSet):
+    """Operator-selected lifecycle stage for a Proxmox endpoint.
+
+    Manual classification only; never written by sync. Blank is a valid value.
+    """
+
+    key = "ProxmoxEndpoint.environment"
+
+    PRODUCTION = "production"
+    STAGING = "staging"
+    DEVELOPMENT = "development"
+    HOMOLOGATION = "homologation"
+    TESTING = "testing"
+    LAB = "lab"
+
+    CHOICES = [
+        (PRODUCTION, _("Production"), "red"),
+        (STAGING, _("Staging"), "orange"),
+        (DEVELOPMENT, _("Development"), "blue"),
+        (HOMOLOGATION, _("Homologation"), "purple"),
+        (TESTING, _("Testing"), "yellow"),
+        (LAB, _("Lab"), "gray"),
+    ]
+
+
 class SyncTypeChoices(ChoiceSet):
     """Which ProxBox sync operation to run (devices, VMs, backups, full, etc.)."""
 
@@ -243,6 +268,26 @@ class ReplicationStatusChoices(ChoiceSet):
     CHOICES = [
         (ACTIVE, _("Active"), "green"),
         (STALE, _("Stale"), "red"),
+    ]
+
+
+class CloudImageOSFamilyChoices(ChoiceSet):
+    """Operating-system families exposed through the cloud image catalog."""
+
+    key = "CloudImageTemplate.os_family"
+
+    UBUNTU = "ubuntu"
+    DEBIAN = "debian"
+    ROCKY = "rocky"
+    ALPINE = "alpine"
+    GENERIC = "generic"
+
+    CHOICES = [
+        (UBUNTU, _("Ubuntu"), "orange"),
+        (DEBIAN, _("Debian"), "red"),
+        (ROCKY, _("Rocky Linux"), "green"),
+        (ALPINE, _("Alpine Linux"), "blue"),
+        (GENERIC, _("Generic Linux"), "gray"),
     ]
 
 

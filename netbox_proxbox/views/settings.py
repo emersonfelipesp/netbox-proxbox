@@ -61,6 +61,7 @@ class SettingsView(
             "debug_cache": settings_obj.debug_cache,
             "expose_internal_errors": settings_obj.expose_internal_errors,
             "parse_description_metadata": settings_obj.parse_description_metadata,
+            "embed_description_metadata": settings_obj.embed_description_metadata,
             "ssrf_protection_enabled": settings_obj.ssrf_protection_enabled,
             "allow_private_ips": settings_obj.allow_private_ips,
             "additional_allowed_ip_ranges": settings_obj.additional_allowed_ip_ranges,
@@ -83,7 +84,22 @@ class SettingsView(
             "netbox_to_proxmox_typed_confirmation": (
                 settings_obj.netbox_to_proxmox_typed_confirmation
             ),
+            "intent_warn_plaintext_password": getattr(
+                settings_obj,
+                "intent_warn_plaintext_password",
+                True,
+            ),
             "apply_destroy_confirmed": settings_obj.apply_destroy_confirmed,
+            "intent_apply_authorization_self_approve_allowed": getattr(
+                settings_obj,
+                "intent_apply_authorization_self_approve_allowed",
+                False,
+            ),
+            "intent_deletion_request_ttl_days": getattr(
+                settings_obj,
+                "intent_deletion_request_ttl_days",
+                7,
+            ),
             "hardware_discovery_enabled": settings_obj.hardware_discovery_enabled,
         }
         for name in OVERWRITE_FIELDS:
@@ -187,6 +203,9 @@ class SettingsView(
             settings_obj.parse_description_metadata = form.cleaned_data.get(
                 "parse_description_metadata", False
             )
+            settings_obj.embed_description_metadata = form.cleaned_data.get(
+                "embed_description_metadata", False
+            )
             settings_obj.backend_log_file_path = form.cleaned_data[
                 "backend_log_file_path"
             ]
@@ -230,8 +249,22 @@ class SettingsView(
             settings_obj.netbox_to_proxmox_typed_confirmation = form.cleaned_data.get(
                 "netbox_to_proxmox_typed_confirmation", ""
             )
+            settings_obj.intent_warn_plaintext_password = form.cleaned_data.get(
+                "intent_warn_plaintext_password",
+                True,
+            )
             settings_obj.apply_destroy_confirmed = form.cleaned_data.get(
                 "apply_destroy_confirmed", False
+            )
+            settings_obj.intent_apply_authorization_self_approve_allowed = (
+                form.cleaned_data.get(
+                    "intent_apply_authorization_self_approve_allowed",
+                    False,
+                )
+            )
+            settings_obj.intent_deletion_request_ttl_days = form.cleaned_data.get(
+                "intent_deletion_request_ttl_days",
+                7,
             )
             settings_obj.hardware_discovery_enabled = form.cleaned_data.get(
                 "hardware_discovery_enabled", False
@@ -277,6 +310,7 @@ class SettingsView(
                     "debug_cache",
                     "expose_internal_errors",
                     "parse_description_metadata",
+                    "embed_description_metadata",
                     "ssrf_protection_enabled",
                     "allow_private_ips",
                     "additional_allowed_ip_ranges",
@@ -294,7 +328,10 @@ class SettingsView(
                     "branch_on_conflict",
                     "netbox_to_proxmox_enabled",
                     "netbox_to_proxmox_typed_confirmation",
+                    "intent_warn_plaintext_password",
                     "apply_destroy_confirmed",
+                    "intent_apply_authorization_self_approve_allowed",
+                    "intent_deletion_request_ttl_days",
                     "hardware_discovery_enabled",
                     *OVERWRITE_FIELDS,
                 ]

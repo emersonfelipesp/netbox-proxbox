@@ -41,7 +41,7 @@ This repository packages the `netbox_proxbox` NetBox plugin. The plugin adds end
 - Docker-based plugin installation docs are maintained at [`docs/installation/3-installing-plugin-docker.md`](./docs/installation/3-installing-plugin-docker.md), including `plugin_requirements.txt` and `configuration/plugins.py` usage.
 - Backend Docker examples map host `8800` to container `8000` (`-p 8800:8000`) because the published `proxbox-api` image serves through nginx on container port `8000`.
 
-The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxbox/__init__.py). It declares plugin version `0.0.15` and NetBox compatibility `4.5.8` through `4.6.99` (certified simultaneously against `4.5.8`, `4.5.9`, and official `4.6.0`). The `0.0.15` release is certified with the separate `proxbox-api` backend release `0.0.11` (paired with the prior `0.0.14` / backend `0.0.10.post2`). `proxbox-api` is not a Python dependency of this plugin; the services communicate over HTTP.
+The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxbox/__init__.py). It declares plugin version `0.0.16` and NetBox compatibility `4.5.8` through `4.6.99` (certified simultaneously against `4.5.8`, `4.5.9`, and official `4.6.0`). The `0.0.16` release is certified with the separate `proxbox-api` backend release `0.0.11` (matching backend `0.0.12` ships the new `/intent/*` HTTP surface; paired with the prior `0.0.15` / backend `0.0.11` and `0.0.14` / backend `0.0.10.post2`). `proxbox-api` is not a Python dependency of this plugin; the services communicate over HTTP.
 
 **Companion repos (cross-link map):**
 

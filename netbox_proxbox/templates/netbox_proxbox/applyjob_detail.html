@@ -1,0 +1,77 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load i18n %}
+{% load static %}
+
+{% block content %}
+  <div class="row mb-3">
+    <div class="col col-md-6">
+      <div class="card">
+        <h5 class="card-header">{% trans "Apply Job" %}</h5>
+        <div class="card-body">
+          <table class="table table-hover attr-table">
+            <tr>
+              <th scope="row">{% trans "Name" %}</th>
+              <td>{{ object.name|placeholder }}</td>
+            </tr>
+            <tr>
+              <th scope="row">{% trans "Branch" %}</th>
+              <td>{{ object.branch|linkify|placeholder }}</td>
+            </tr>
+            <tr>
+              <th scope="row">{% trans "User" %}</th>
+              <td>{{ object.user|linkify|placeholder }}</td>
+            </tr>
+            <tr>
+              <th scope="row">{% trans "Run UUID" %}</th>
+              <td><code>{{ object.run_uuid }}</code></td>
+            </tr>
+            <tr>
+              <th scope="row">{% trans "State" %}</th>
+              <td>{{ object.state }}</td>
+            </tr>
+            <tr>
+              <th scope="row">{% trans "Started" %}</th>
+              <td>{{ object.started_at|placeholder }}</td>
+            </tr>
+            <tr>
+              <th scope="row">{% trans "Finished" %}</th>
+              <td>{{ object.finished_at|placeholder }}</td>
+            </tr>
+          </table>
+        </div>
+      </div>
+      {% include 'inc/panels/custom_fields.html' %}
+    </div>
+    <div class="col col-md-6">
+      <div class="card mb-3">
+        <h5 class="card-header">{% trans "Per-VM Results" %}</h5>
+        <div class="card-body">
+          <pre class="mb-0"><code>{{ object.per_vm_results|default:"{}" }}</code></pre>
+        </div>
+      </div>
+      <div class="card mb-3">
+        <h5 class="card-header">{% trans "Live Apply Log" %}</h5>
+        <div class="card-body">
+          <pre id="apply-sse-log" class="mb-0" data-sse-url="{{ apply_job_sse_url|default:'' }}">{% if not apply_job_sse_url %}{% trans "No live stream is available for this apply job." %}{% endif %}</pre>
+        </div>
+      </div>
+      {% if object.state == "queued" or object.state == "running" %}
+        <form method="post" action="{% url 'plugins:netbox_proxbox:proxmoxapplyjob_cancel' pk=object.pk %}" class="mb-3">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-danger">
+            <i class="mdi mdi-close-circle-outline" aria-hidden="true"></i>
+            {% trans "Cancel Apply Job" %}
+          </button>
+        </form>
+      {% endif %}
+      {% include 'inc/panels/tags.html' %}
+      {% include 'inc/panels/comments.html' %}
+    </div>
+  </div>
+{% endblock %}
+
+{% block javascript %}
+  {{ block.super }}
+  <script src="{% static 'netbox_proxbox/sse_log.js' %}"></script>
+{% endblock %}

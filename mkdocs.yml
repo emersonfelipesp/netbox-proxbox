@@ -79,6 +79,7 @@ nav:
     - Hardware Discovery: 'configuration/hardware-discovery.md'
   - CLI:
     - Overview: 'cli/index.md'
+    - Sync Command: 'cli/sync.md'
     - Command Reference: 'reference/proxbox-cli/command-catalog/index.md'
     - Command Examples:
       - Overview: 'reference/proxbox-cli/command-examples/index.md'
@@ -100,6 +101,7 @@ nav:
     - Extending the Plugin: 'developer/extending-the-plugin.md'
     - Design:
       - Operational Verbs: 'design/operational-verbs.md'
+      - NetBox to Proxmox Intent: 'design/netbox-to-proxmox-intent.md'
     - Tooling:
       - Release Publishing: 'developer/release-publishing.md'
       - CI and E2E Workflows: 'developer/ci-e2e-workflows.md'
@@ -112,6 +114,10 @@ nav:
     - Headless Sync: 'operations/headless-sync.md'
     - Single-Exec Compose: 'operations/single-exec.md'
     - Scheduler Container: 'scheduler/README.md'
+    - Tenant Mapping: 'operations/tenant-mapping.md'
+    - NetBox to Proxmox: 'operations/netbox-to-proxmox.md'
+    - Deletion Requests: 'operations/deletion-requests.md'
+    - Troubleshooting: 'operations/troubleshooting.md'
   - API Reference:
     - Overview: 'api/index.md'
     - Endpoints: 'api/endpoints.md'
@@ -142,10 +148,12 @@ nav:
     - Endpoint Import / Export: 'features/endpoint-import-export.md'
   - Data Model:
     - Virtual Machine: 'models/virtual-machine.md'
+    - VM Cloud-Init: 'models/vm-cloudinit.md'
     - Containers: 'models/containers.md'
     - Other Models: 'models/others.md'
   - Release Notes:
     - Summary: 'release-notes/index.md'
+    - Version 0.0.16: 'release-notes/version-0.0.16.md'
     - Version 0.0.15: 'release-notes/version-0.0.15.md'
     - Version 0.0.14: 'release-notes/version-0.0.14.md'
     - Version 0.0.13: 'release-notes/version-0.0.13.md'

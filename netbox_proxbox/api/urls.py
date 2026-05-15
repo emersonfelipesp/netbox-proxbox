@@ -45,6 +45,11 @@ router.register(
     "proxmox-clusters", views.ProxmoxClusterViewSet, basename="proxmoxcluster"
 )
 router.register("proxmox-nodes", views.ProxmoxNodeViewSet, basename="proxmoxnode")
+router.register(
+    "cloud-image-templates",
+    views.CloudImageTemplateViewSet,
+    basename="cloudimagetemplate",
+)
 router.register("storage", views.ProxmoxStorageViewSet, basename="storage")
 router.register("backups", views.VMBackupViewSet)
 router.register("backup-routines", views.BackupRoutineViewSet, basename="backuproutine")

@@ -30,8 +30,21 @@ shadows the field.
 | **Use guest agent interface name** | `true` | _(plugin only)_ | Use QEMU guest-agent interface names (e.g. `ens18`) instead of generic Proxmox labels (e.g. `net0`). |
 | **Proxmox fetch max concurrency** | `8` | `PROXBOX_FETCH_MAX_CONCURRENCY` | Maximum parallel Proxmox fetch operations per sync stage. Raise for multi-cluster speed; lower if Proxmox load is a concern. |
 | **Ignore IPv6 link-local addresses** | `true` | _(plugin only)_ | Skip `fe80::/64` addresses during VM interface IP selection. |
+| **Ensure NetBox supporting objects on startup** | `true` | _(plugin only)_ | When enabled, proxbox-api runs an idempotent NetBox-side bootstrap pass on each process start that ensures the supporting objects the plugin relies on (cluster type, device roles, manufacturer, device type, VM type, custom fields, discovery tags) exist. Disable to leave hand-curated NetBox installs untouched. |
 | **Delete orphan VMs** | `false` | `PROXBOX_DELETE_ORPHANS` | Delete Proxbox-discovered VMs that were not touched by the current full-update run. Review `/full-update/stream?dry_run=true` before enabling in production. |
+| **Parse description metadata** | `false` | _(plugin only)_ | When enabled, proxbox-api reads each Proxmox object's description for a fenced `netbox-metadata` JSON block and applies the parsed primary-key ids to the matching NetBox fields. Per-field `overwrite_*` flags still gate keys they cover. |
 | **Primary IP preference** | `ipv4` | _(plugin only)_ | Whether the sync should prefer IPv4 or IPv6 when assigning primary IP on NetBox VMs. |
+
+### Default VM roles
+
+`default_role_qemu` and `default_role_lxc` provide global fallback DeviceRoles used when a synced VM has no role assignment yet. They are FK choices restricted to `DeviceRole` rows with `vm_role=True`.
+
+| Field | Default | Env override | Description |
+|---|---|---|---|
+| **Default QEMU VM role** | `virtual-machine-qemu` (seeded by migration) | _(plugin only)_ | DeviceRole assigned to QEMU VMs synced from Proxmox when no per-Endpoint or per-Node override applies. Operator edits on a specific VM are preserved by the `proxmox_last_synced_role_id` snapshot lock. |
+| **Default LXC container role** | `container-lxc` (seeded by migration) | _(plugin only)_ | DeviceRole assigned to LXC containers synced from Proxmox when no per-Endpoint or per-Node override applies. Operator edits on a specific VM are preserved by the same snapshot lock. |
+
+The lookup order applied during sync is **VM-level (operator pin) → per-Node → per-Endpoint → Plugin Settings default → built-in fallback**. The `proxmox_last_synced_role_id` custom field on `virtualization.VirtualMachine` stores the role that sync last wrote; subsequent runs only update the role when it still matches that snapshot, so manual edits in NetBox are not clobbered.
 
 ---
 
@@ -105,6 +118,53 @@ Tri-state semantics on the per-endpoint tab:
 The `overwrite_vm_tags` toggle controls **merge vs replace** semantics: when enabled, Proxbox-managed tags replace the existing tag set; when disabled, Proxbox tags are merged with whatever tags are already present on the NetBox VM.
 
 See [Sync Overwrite Flags](./sync-overwrite-flags.md) for the full flag matrix.
+
+---
+
+## Tenant Mapping
+
+These fields drive the optional VM-name → Tenant resolver. Existing tenant assignments are never overwritten by this rule set.
+
+| Field | Default | Env override | Description |
+|---|---|---|---|
+| **Enable tenant assignment by VM-name regex** | `false` | _(plugin only)_ | When enabled, sync resolves a NetBox Tenant for each VM by matching its name against the rules below. |
+| **Tenant name regex rules** | `[]` | _(plugin only)_ | Ordered list of `{pattern, tenant_slug, [label]}` dicts. First match wins; specificity-first ordering is recommended (e.g. `^cust-acme-` before `^cust-`). Patterns are compiled and tenant slugs are verified at save time. |
+
+See [Tenant Mapping operations](../operations/tenant-mapping.md) for runbook-level guidance, pattern examples, and the audit-tag emitted on each match.
+
+---
+
+## Branching
+
+These fields configure the optional **branching-enabled sync** mode where every Proxbox job runs against a fresh `netbox-branching` branch and merges on success. Requires the `netbox_branching` plugin installed and listed **last** in `PLUGINS`.
+
+| Field | Default | Env override | Description |
+|---|---|---|---|
+| **Branching-enabled sync (Proxmox → NetBox)** | `false` | _(plugin only)_ | Master toggle. When enabled, every Proxbox sync job creates a branch, runs the sync on it, and merges it back into `main` on success. |
+| **Branch name prefix** | `proxbox-sync` | _(plugin only)_ | Prefix used when auto-creating a NetBox branch per sync job. Final name pattern is `<prefix>-<job_id>-<timestamp>`. |
+| **Branch merge conflict policy** | `fail` | _(plugin only)_ | `fail` leaves the branch open for operator review and marks the job failed. `acknowledge` attempts the merge anyway and delegates conflict handling to the netbox-branching merge strategy. |
+
+---
+
+## NetBox → Proxmox intent direction
+
+These fields gate the optional write-back direction in which merging a branch flagged `apply_to_proxmox=True` dispatches CREATE / UPDATE writes to Proxmox via `proxbox-api`. See the [Safety Model](../../CLAUDE.md#safety-model) for the full five-lock invariant chain.
+
+| Field | Default | Env override | Description |
+|---|---|---|---|
+| **Enable NetBox → Proxmox intent direction** | `false` | _(plugin only)_ | Master flag. Off by default. DELETE still requires the separate `DeletionRequest` authorization chain even when this is on. |
+| **Typed confirmation phrase** | _(empty)_ | _(plugin only)_ | Operators enabling the master flag must type the exact phrase `allow-edit-and-add-actions` here. Toggling the master flag back to `false` clears this phrase, forcing re-confirmation on re-enable. |
+| **Allow apply-destroy authorization workflow** | `false` | _(plugin only)_ | Per-branch destroy master switch. Even when set, every destroy flows through a separate `DeletionRequest` approved by a user holding `netbox_proxbox.authorize_deletion_request`. |
+
+---
+
+## Hardware Discovery
+
+| Field | Default | Env override | Description |
+|---|---|---|---|
+| **Enable SSH-based hardware discovery** | `false` | _(plugin only)_ | Master flag for the SSH-driven hardware-discovery pass. When enabled, proxbox-api opens a pinned-fingerprint SSH session to each `ProxmoxNode` that has a stored `NodeSSHCredential` row, runs `dmidecode + ethtool + ip link` under `sudo -n`, and reflects the parsed chassis / NIC values onto the matching `dcim.Device` and `dcim.Interface` custom fields. Flipping off results in zero SSH sockets opened during sync. |
+
+See [Hardware Discovery](./hardware-discovery.md) for the full configuration, custom-field surface, and SSH-credential model.
 
 ---
 

@@ -58,6 +58,11 @@ def _get_sync_ownership(job: JobModel) -> str | None:
     return data.get("proxbox_sync", {}).get("sync_owner")
 
 
+def _is_proxbox_apply_job(job: JobModel) -> bool:
+    data = getattr(job, "data", None)
+    return isinstance(data, dict) and isinstance(data.get("proxbox_apply"), dict)
+
+
 def _release_sync_ownership(job: JobModel, owner: str) -> None:
     """Release sync ownership if we are the owner."""
     data = getattr(job, "data", None)
@@ -214,9 +219,10 @@ class JobStreamSSEView(View):
 
         def worker() -> None:
             try:
-                if not is_proxbox_sync_job(job):
-                    emit_error("Not a Proxbox sync job")
-                    emit_complete(False, "Not a Proxbox sync job")
+                is_apply_job = _is_proxbox_apply_job(job)
+                if not (is_proxbox_sync_job(job) or is_apply_job):
+                    emit_error("Not a Proxbox sync or apply job")
+                    emit_complete(False, "Not a Proxbox sync or apply job")
                     return
 
                 job.refresh_from_db()
@@ -274,7 +280,9 @@ class JobStreamSSEView(View):
                         "step": "job",
                         "status": "started",
                         "message": (
-                            "Observing Proxbox sync job progress"
+                            "Observing Proxbox apply job progress"
+                            if is_apply_job
+                            else "Observing Proxbox sync job progress"
                             if not sync_owner
                             else f"Observing Proxbox sync handled by {sync_owner}"
                         ),
@@ -307,6 +315,8 @@ class JobStreamSSEView(View):
                             decoded = _decode_stream_log_entry(entry)
                             if decoded is not None:
                                 event_name, payload = decoded
+                                # Pass through recognized proxbox-api event names,
+                                # including intent ``plan_summary`` frames.
                                 if event_name != "complete":
                                     emit(event_name, payload)
                                 continue

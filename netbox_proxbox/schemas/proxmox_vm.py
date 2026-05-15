@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 from typing import Literal
 
@@ -9,6 +10,26 @@ from pydantic import Field, field_validator
 
 from netbox_proxbox.schemas._base import ProxboxBaseModel, ProxboxLenientModel
 from netbox_proxbox.schemas._formatters import format_bytes
+
+
+def _parse_proxmox_tags(raw: str | None) -> list[str]:
+    """Split the Proxmox ``tags`` field on ``;``, trim, lower, dedupe in order."""
+    if not isinstance(raw, str):
+        return []
+    seen: set[str] = set()
+    result: list[str] = []
+    for piece in raw.split(";"):
+        name = piece.strip().lower()
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        result.append(name)
+    return result
+
+
+def _tag_fallback_color(name: str) -> str:
+    """Deterministic 6-char hex color for a tag name."""
+    return hashlib.md5(name.encode("utf-8"), usedforsecurity=False).hexdigest()[:6]
 
 
 _CORE_VM_FIELDS = frozenset(
@@ -104,6 +125,10 @@ class ProxmoxVMConfig(ProxboxLenientModel):
 
     def to_normalized_context(self, vm_name: str = "") -> dict[str, object]:
         """Build the template context dict used in the VM config tab view."""
+        tag_names = _parse_proxmox_tags(self.tags)
+        tags_list = [
+            {"name": name, "color": _tag_fallback_color(name)} for name in tag_names
+        ]
         return {
             "name": self.name or vm_name,
             "cores": self.cores,
@@ -117,6 +142,7 @@ class ProxmoxVMConfig(ProxboxLenientModel):
             "qemu_agent": self.agent,
             "description": self.description or "—",
             "tags": self.tags or "—",
+            "tags_list": tags_list,
         }
 
 

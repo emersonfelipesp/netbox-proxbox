@@ -17,7 +17,9 @@ from netbox_proxbox.models import (
     ProxmoxEndpoint,
 )
 from netbox_proxbox.tables.backup_routine import BackupRoutineTable
+from netbox_proxbox.tables.cloud_image_template import CloudImageTemplateTable
 from netbox_proxbox.tables.cluster import ProxmoxClusterTable, ProxmoxNodeTable
+from netbox_proxbox.tables.deletion_requests import DeletionRequestTable
 from netbox_proxbox.tables.replication import ReplicationTable
 from netbox_proxbox.tables.storage import ProxmoxStorageTable
 from netbox_proxbox.tables.vm_backup import VMBackupTable
@@ -41,6 +43,7 @@ class ProxmoxEndpointTable(NetBoxTable):
     site = tables.Column(linkify=True)
     tenant = tables.Column(linkify=True)
     mode = ChoiceFieldColumn()
+    environment = ChoiceFieldColumn()
     verify_ssl = BooleanColumn()
     status = tables.TemplateColumn(
         template_code=STATUS_BADGE_TEMPLATE.replace("{{ service }}", "proxmox"),
@@ -58,6 +61,7 @@ class ProxmoxEndpointTable(NetBoxTable):
             "ip_address",
             "port",
             "mode",
+            "environment",
             "version",
             "repoid",
             "username",
@@ -79,6 +83,7 @@ class ProxmoxEndpointTable(NetBoxTable):
             "ip_address",
             "port",
             "mode",
+            "environment",
             "version",
             "status",
             "verify_ssl",

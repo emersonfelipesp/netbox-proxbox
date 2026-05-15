@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
@@ -240,6 +241,17 @@ class ProxboxPluginSettings(NetBoxModel):
             "they cover. Disabled by default."
         ),
     )
+    embed_description_metadata = models.BooleanField(
+        default=False,
+        verbose_name=_("Embed description metadata"),
+        help_text=_(
+            "When enabled, intent-direction create/update writes to Proxmox append a "
+            "fenced ``netbox-metadata`` JSON block of NetBox FK ids (role, tenant, "
+            "site, platform, cluster, device) to the Proxmox object's description. "
+            "Pairs with ``parse_description_metadata`` to round-trip NetBox metadata "
+            "through Proxmox without drift. Disabled by default."
+        ),
+    )
     ssrf_protection_enabled = models.BooleanField(
         default=True,
         verbose_name=_("Enable SSRF protection"),
@@ -386,6 +398,16 @@ class ProxboxPluginSettings(NetBoxModel):
             "When enabled, sync merges existing NetBox VM tags with the Proxbox tag, preserving "
             "user-assigned tags. When disabled, sync never changes tags on existing virtual "
             "machines; tags are still applied at VM creation."
+        ),
+    )
+    overwrite_vm_proxmox_tags = models.BooleanField(
+        default=True,
+        verbose_name=_("Sync Proxmox tags"),
+        help_text=_(
+            "When enabled, Proxmox VM tags (the `;`-separated `tags` field on QEMU/LXC config) "
+            "are mirrored as NetBox tags on the synced VirtualMachine. Tag colors match the "
+            "Proxmox `tag-style` color-map when available, otherwise a stable deterministic "
+            "color is used. When disabled, Proxmox-sourced tags are never created or attached."
         ),
     )
     overwrite_device_status = models.BooleanField(
@@ -587,6 +609,14 @@ class ProxboxPluginSettings(NetBoxModel):
             "to off clears this phrase, forcing a re-confirmation on re-enable."
         ),
     )
+    intent_warn_plaintext_password = models.BooleanField(
+        default=True,
+        verbose_name=_("Warn on plaintext cloud-init passwords"),
+        help_text=_(
+            "When enabled, the intent merge validator emits a warning if "
+            "cloud_init_user_data contains a plaintext password line."
+        ),
+    )
     apply_destroy_confirmed = models.BooleanField(
         default=False,
         verbose_name=_("Allow apply-destroy authorization workflow"),
@@ -594,6 +624,23 @@ class ProxboxPluginSettings(NetBoxModel):
             "Per-branch destroy master switch. Even when set, every destroy still flows "
             "through a separate DeletionRequest approved by a user holding "
             "netbox_proxbox.authorize_deletion_request. Off by default."
+        ),
+    )
+    intent_apply_authorization_self_approve_allowed = models.BooleanField(
+        default=False,
+        verbose_name=_("Allow deletion request self-approval"),
+        help_text=_(
+            "When enabled, the user who requested a Proxmox deletion may also approve "
+            "the DeletionRequest. Leave disabled for four-eyes authorization."
+        ),
+    )
+    intent_deletion_request_ttl_days = models.IntegerField(
+        default=7,
+        validators=[MinValueValidator(1)],
+        verbose_name=_("Deletion request TTL (days)"),
+        help_text=_(
+            "Pending DeletionRequests older than this many days are auto-rejected "
+            "and the pending-deletion tag is removed from Proxmox best-effort."
         ),
     )
     hardware_discovery_enabled = models.BooleanField(

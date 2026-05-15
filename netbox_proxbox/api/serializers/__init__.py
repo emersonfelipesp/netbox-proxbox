@@ -19,6 +19,10 @@ from netbox_proxbox.api.serializers.cluster import (
     ProxmoxClusterSerializer,
     ProxmoxNodeSerializer,
 )
+from netbox_proxbox.api.serializers.cloud_image_template import (
+    CloudImageTemplateSerializer,
+    NestedCloudImageTemplateSerializer,
+)
 from netbox_proxbox.api.serializers.endpoints import (
     FastAPIEndpointSerializer,
     NestedTokenSerializer,
@@ -39,11 +43,13 @@ from netbox_proxbox.api.serializers.vm_task_history import VMTaskHistorySerializ
 
 __all__ = (
     "BackupRoutineSerializer",
+    "CloudImageTemplateSerializer",
     "DeviceResourceSerializer",
     "FastAPIEndpointSerializer",
     "InterfaceResourceSerializer",
     "IPAddressResourceSerializer",
     "NestedBackupRoutineSerializer",
+    "NestedCloudImageTemplateSerializer",
     "NestedProxmoxClusterSerializer",
     "NestedProxmoxEndpointSerializer",
     "NestedTokenSerializer",

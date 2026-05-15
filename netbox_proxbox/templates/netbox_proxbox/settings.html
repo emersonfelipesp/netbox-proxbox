@@ -30,6 +30,7 @@
                     {% render_field form.delete_orphans %}
                     {% render_field form.primary_ip_preference %}
                     {% render_field form.parse_description_metadata %}
+                    {% render_field form.embed_description_metadata %}
                     {% render_field form.default_role_qemu %}
                     {% render_field form.default_role_lxc %}
                     {% render_field form.backend_log_file_path %}
@@ -178,7 +179,10 @@
                     </p>
                     {% render_field form.netbox_to_proxmox_enabled %}
                     {% render_field form.netbox_to_proxmox_typed_confirmation %}
+                    {% render_field form.intent_warn_plaintext_password %}
                     {% render_field form.apply_destroy_confirmed %}
+                    {% render_field form.intent_apply_authorization_self_approve_allowed %}
+                    {% render_field form.intent_deletion_request_ttl_days %}
                 </div>
             </div>
             {# Hardware Discovery Card #}
