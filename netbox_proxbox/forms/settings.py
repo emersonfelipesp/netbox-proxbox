@@ -304,6 +304,17 @@ class ProxboxPluginSettingsForm(forms.Form):
             "cover. Disabled by default."
         ),
     )
+    embed_description_metadata = forms.BooleanField(
+        required=False,
+        label="Embed description metadata",
+        help_text=(
+            "When enabled, intent-direction create/update writes to Proxmox append a "
+            'fenced "netbox-metadata" JSON block of NetBox FK ids (role, tenant, site, '
+            "platform, cluster, device) to the Proxmox object's description. Pairs "
+            "with parse_description_metadata to round-trip NetBox metadata through "
+            "Proxmox without drift. Disabled by default."
+        ),
+    )
     ssrf_protection_enabled = forms.BooleanField(
         required=False,
         label="Enable SSRF protection",

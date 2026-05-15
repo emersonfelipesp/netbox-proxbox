@@ -80,6 +80,7 @@ def _fake_settings_obj(encryption_key: str = "") -> SimpleNamespace:
         debug_cache=False,
         expose_internal_errors=False,
         parse_description_metadata=False,
+        embed_description_metadata=False,
         ssrf_protection_enabled=True,
         allow_private_ips=True,
         additional_allowed_ip_ranges="",
