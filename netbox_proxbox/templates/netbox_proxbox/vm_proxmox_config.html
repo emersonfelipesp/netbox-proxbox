@@ -46,7 +46,16 @@
                   {% endif %}
                 </td>
               </tr>
-              <tr><th scope="row">{% trans "Tags" %}</th><td>{{ normalized.tags }}</td></tr>
+              <tr>
+                <th scope="row">{% trans "Tags" %}</th>
+                <td>
+                  {% if normalized.tags_list %}
+                    {% for tag in normalized.tags_list %}<span class="badge" style="background-color: #{{ tag.color }}; color: #fff; margin-right: 4px;">{{ tag.name }}</span>{% endfor %}
+                  {% else %}
+                    {{ normalized.tags }}
+                  {% endif %}
+                </td>
+              </tr>
               <tr><th scope="row">{% trans "Description" %}</th><td>{{ normalized.description }}</td></tr>
             </table>
           {% endif %}

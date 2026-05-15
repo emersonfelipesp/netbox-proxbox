@@ -143,7 +143,7 @@ def test_get_extra_context_exposes_overwrite_field_groups():
     )
     flat = tuple(field for _name, fields in groups for field in fields)
     assert flat == mod.OVERWRITE_FIELDS
-    assert len(flat) == 24
+    assert len(flat) == 25
 
 
 # ── Form-level label semantics ───────────────────────────────────────────────

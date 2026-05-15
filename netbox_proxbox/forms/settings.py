@@ -522,6 +522,8 @@ class ProxboxPluginSettingsForm(forms.Form):
             label = name.removeprefix("overwrite_").replace("_", " ").capitalize()
             if name == "overwrite_vm_tags":
                 label = "Merge VM tags"
+            elif name == "overwrite_vm_proxmox_tags":
+                label = "Sync Proxmox tags"
             self.fields[name] = forms.BooleanField(
                 required=False,
                 initial=True,
