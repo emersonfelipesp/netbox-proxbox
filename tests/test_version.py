@@ -138,6 +138,10 @@ def test_workflows_pin_proxbox_api_runtime_release_without_installing_package():
 
 
 def test_release_workflow_uses_matching_package_indexes_for_e2e():
+    # The release workflow temporarily builds proxbox-api from source (dev mode)
+    # in the three E2E gates because proxbox-api 0.0.11 (required for the v0.0.15
+    # HA surface) is not yet published to PyPI. Restore `*-package` dependency_mode
+    # values once the matching proxbox-api release lands on PyPI/TestPyPI.
     publish_workflow = PUBLISH_WORKFLOW_PATH.read_text(encoding="utf-8")
 
     assert "--skip-existing" not in publish_workflow
@@ -145,11 +149,9 @@ def test_release_workflow_uses_matching_package_indexes_for_e2e():
     assert "PROXBOX_API_PYPI_VERSION" in publish_workflow
 
     assert "install_source: testpypi" in publish_workflow
-    assert "dependency_mode: testpypi-package" in publish_workflow
-
     assert "install_source: local" in publish_workflow
     assert "install_source: pypi" in publish_workflow
-    assert publish_workflow.count("dependency_mode: pypi-package") >= 2
+    assert publish_workflow.count("dependency_mode: dev") == 3
     assert (
         publish_workflow.count(
             "proxbox_api_version: ${{ needs.prepare-release.outputs.proxbox_api_version }}"
