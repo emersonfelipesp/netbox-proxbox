@@ -45,9 +45,7 @@ def _self_approval_allowed() -> bool:
 
 
 def _deletion_request_queryset():
-    return DeletionRequest.objects.select_related(
-        "branch", "requested_by", "authorizer"
-    )
+    return DeletionRequest.objects.select_related("requested_by", "authorizer")
 
 
 def _visible_deletion_request(request: HttpRequest, pk: int | str) -> DeletionRequest:

@@ -18,15 +18,26 @@ class Migration(migrations.Migration):
     operations = [
         migrations.AddField(
             model_name="proxmoxapplyjob",
-            name="branch",
-            field=models.ForeignKey(
+            name="branch_id",
+            field=models.IntegerField(
                 blank=True,
-                help_text="Merged netbox-branching branch that triggered this apply run.",
+                help_text=(
+                    "Primary key of the merged netbox-branching Branch that "
+                    "triggered this run."
+                ),
                 null=True,
-                on_delete=django.db.models.deletion.SET_NULL,
-                related_name="+",
-                to="netbox_branching.branch",
-                verbose_name="Branch",
+                verbose_name="Branch ID",
+            ),
+        ),
+        migrations.AddField(
+            model_name="proxmoxapplyjob",
+            name="branch_name",
+            field=models.CharField(
+                blank=True,
+                default="",
+                help_text="Name of the merged netbox-branching Branch at queue time.",
+                max_length=255,
+                verbose_name="Branch name",
             ),
         ),
         migrations.AddField(

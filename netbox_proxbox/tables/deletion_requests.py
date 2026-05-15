@@ -16,7 +16,7 @@ class DeletionRequestTable(NetBoxTable):
     """django-tables2 layout for safe-delete approval records."""
 
     name = tables.Column(linkify=True)
-    branch = tables.Column(linkify=True)
+    branch_name = tables.Column(verbose_name=_("Branch"))
     requested_by = tables.Column(linkify=True, verbose_name=_("Requested by"))
     authorizer = tables.Column(linkify=True)
     requested_at = tables.Column(verbose_name=_("Requested"))
@@ -28,7 +28,8 @@ class DeletionRequestTable(NetBoxTable):
             "pk",
             "id",
             "name",
-            "branch",
+            "branch_id",
+            "branch_name",
             "requested_by",
             "authorizer",
             "state",

@@ -12,7 +12,7 @@ class ProxmoxApplyJobTable(NetBoxTable):
     """django-tables2 layout for intent apply-job list views."""
 
     name = tables.Column(linkify=True)
-    branch = tables.Column(linkify=True)
+    branch_name = tables.Column(verbose_name=_("Branch"))
     user = tables.Column(linkify=True)
     started_at = tables.Column(verbose_name=_("Started"))
     finished_at = tables.Column(verbose_name=_("Finished"))
@@ -23,7 +23,8 @@ class ProxmoxApplyJobTable(NetBoxTable):
             "pk",
             "id",
             "name",
-            "branch",
+            "branch_id",
+            "branch_name",
             "user",
             "run_uuid",
             "state",
@@ -34,7 +35,7 @@ class ProxmoxApplyJobTable(NetBoxTable):
         default_columns = (
             "pk",
             "name",
-            "branch",
+            "branch_name",
             "user",
             "state",
             "started_at",

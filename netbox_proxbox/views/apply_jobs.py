@@ -43,7 +43,7 @@ class ProxmoxApplyJobListView(
 ):
     """Global list of NetBox→Proxmox intent apply dry-run records."""
 
-    queryset = ProxmoxApplyJob.objects.select_related("branch", "user")
+    queryset = ProxmoxApplyJob.objects.select_related("user")
     table = ProxmoxApplyJobTable
     template_name = "netbox_proxbox/applyjob_list.html"
     actions = {
@@ -58,7 +58,7 @@ class ProxmoxApplyJobView(
 ):
     """Detail view for one intent apply dry-run record."""
 
-    queryset = ProxmoxApplyJob.objects.select_related("branch", "user")
+    queryset = ProxmoxApplyJob.objects.select_related("user")
     template_name = "netbox_proxbox/applyjob_detail.html"
 
     def get_extra_context(

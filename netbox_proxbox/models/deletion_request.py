@@ -39,13 +39,8 @@ class DeletionRequest(NetBoxModel):
         related_name="netbox_proxbox_deletionrequest_set",
     )
 
-    branch = models.ForeignKey(
-        "netbox_branching.Branch",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="+",
-    )
+    branch_id = models.IntegerField(null=True, blank=True)
+    branch_name = models.CharField(max_length=255, blank=True, default="")
     requested_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         related_name="proxbox_deletion_requests_requested",
@@ -102,6 +97,17 @@ class DeletionRequest(NetBoxModel):
 
     def get_absolute_url(self) -> str:
         return reverse("plugins:netbox_proxbox:deletionrequest", args=[self.pk])
+
+    @property
+    def branch(self):
+        """Resolve the underlying netbox-branching Branch lazily, if installed."""
+        if not self.branch_id:
+            return None
+        try:
+            from netbox_branching.models import Branch  # noqa: PLC0415
+        except ImportError:
+            return None
+        return Branch.objects.filter(pk=self.branch_id).first()
 
     def clean(self) -> None:
         super().clean()
