@@ -36,9 +36,7 @@ FORM_PATH = PLUGIN_ROOT / "forms" / "proxmox.py"
 FILTERSET_PATH = PLUGIN_ROOT / "filtersets.py"
 TABLE_PATH = PLUGIN_ROOT / "tables" / "__init__.py"
 SERIALIZER_PATH = PLUGIN_ROOT / "api" / "serializers" / "endpoints.py"
-TEMPLATE_PATH = (
-    PLUGIN_ROOT / "templates" / "netbox_proxbox" / "proxmoxendpoint.html"
-)
+TEMPLATE_PATH = PLUGIN_ROOT / "templates" / "netbox_proxbox" / "proxmoxendpoint.html"
 
 EXPECTED_SLUGS = {
     "production",
@@ -155,7 +153,7 @@ def test_migration_exists_and_chains_after_0044() -> None:
     assert '("netbox_proxbox", "0044_cloud_image_template")' in src
     assert "migrations.AddField(" in src
     assert 'name="environment"' in src
-    assert "model_name=\"proxmoxendpoint\"" in src
+    assert 'model_name="proxmoxendpoint"' in src
     assert "blank=True" in src
     assert "null=True" in src
 
@@ -311,7 +309,9 @@ def test_sync_paths_never_write_environment() -> None:
     for path in _iter_sync_files():
         for lineno, line in enumerate(path.read_text().splitlines(), start=1):
             if ASSIGNMENT_RE.search(line):
-                offenders.append(f"{path.relative_to(REPO_ROOT)}:{lineno}: {line.strip()}")
+                offenders.append(
+                    f"{path.relative_to(REPO_ROOT)}:{lineno}: {line.strip()}"
+                )
     assert not offenders, (
         "Sync paths must never write ProxmoxEndpoint.environment:\n"
         + "\n".join(offenders)
