@@ -5,6 +5,34 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from netbox_proxbox.intent.description_metadata import (
+    build_description_with_metadata,
+)
+
+
+def _embed_description_metadata_setting() -> bool:
+    """Return ``ProxboxPluginSettings.embed_description_metadata`` (default False).
+
+    Imported lazily and wrapped so import-time evaluation of this module is
+    safe in test environments that have not configured Django yet.
+    """
+    try:
+        from netbox_proxbox.models.plugin_settings import ProxboxPluginSettings
+    except Exception:
+        return False
+    try:
+        return bool(ProxboxPluginSettings.get_solo().embed_description_metadata)
+    except Exception:
+        return False
+
+
+def _resolve_description(vm: Any) -> str | None:
+    raw = getattr(vm, "description", None)
+    description = _str_or_none(raw)
+    if not _embed_description_metadata_setting():
+        return description
+    return build_description_with_metadata(vm, description)
+
 
 def _custom_fields(vm: Any) -> dict[str, Any]:
     cf = getattr(vm, "custom_field_data", None)
@@ -135,7 +163,7 @@ def build_vm_payload(vm) -> dict:
             _cf_value(cf, "proxmox_template_vmid", "cf_proxmox_template_vmid")
         ),
         "tags": _tag_names(vm),
-        "description": _str_or_none(getattr(vm, "description", None)),
+        "description": _resolve_description(vm),
     }
     cloud_init = _cloud_init_payload(cf)
     if cloud_init is not None:
@@ -165,7 +193,7 @@ def build_lxc_payload(vm) -> dict:
             )
         ),
         "tags": _tag_names(vm),
-        "description": _str_or_none(getattr(vm, "description", None)),
+        "description": _resolve_description(vm),
     }
     cloud_init = _cloud_init_payload(cf)
     if cloud_init is not None:

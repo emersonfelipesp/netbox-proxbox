@@ -6,7 +6,7 @@ Version `0.0.17` introduces a sibling **read-only Ceph plugin** packaged as
 `netbox-ceph 0.0.1` from this repository. It is the third integration
 direction tracked by the Proxbox project, after read-only Proxmox →
 NetBox reflection (`netbox-proxbox`) and opt-in NetBox → Proxmox intent
-(also in `netbox-proxbox`, shipped in `0.0.16`). Ceph inventory is
+(also in `netbox-proxbox`, shipped in `0.0.15`). Ceph inventory is
 **Proxmox-managed only** in v1: no direct Ceph Dashboard / Prometheus / RGW
 / RBD / external-cluster integration, and no NetBox → Ceph write path.
 
@@ -69,8 +69,8 @@ Tracking issues:
 
 ## Compatibility
 
-- NetBox: `4.5.8` – `4.6.99` (unchanged from `0.0.16`).
-- Paired backend: `proxbox-api >= 0.0.11` (same floor as `0.0.16`'s HA
+- NetBox: `4.5.8` – `4.6.99` (unchanged from `0.0.15`).
+- Paired backend: `proxbox-api >= 0.0.11` (same floor as `0.0.15`'s HA
   surface). The `/ceph/*` routes ship in the backend release that
   introduced the HA REST shim; no further backend bump is required.
 - Companion Proxmox SDK: `proxmox-sdk` with `proxmox_sdk/ceph/` facade.

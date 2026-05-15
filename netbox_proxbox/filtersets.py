@@ -1,13 +1,19 @@
 """Define NetBox filtersets for the plugin's list views and API queries."""
 
+import django_filters
 from django.db.models import Q, QuerySet
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
 from netbox.filtersets import NetBoxModelFilterSet
+from tenancy.models import Tenant
 from utilities.filtersets import register_filterset
+from utilities.filters import MultiValueNumberFilter
+from virtualization.models import Cluster
 
+from .choices import CloudImageOSFamilyChoices
 from .models import (
     BackupRoutine,
+    CloudImageTemplate,
     FastAPIEndpoint,
     NetBoxEndpoint,
     NodeSSHCredential,
@@ -48,12 +54,89 @@ class ProxboxModelFilterSet(NetBoxModelFilterSet):
 
 
 @register_filterset
+class CloudImageTemplateFilterSet(ProxboxModelFilterSet):
+    """Filter cloud image templates exposed through the Cloud Portal."""
+
+    cluster_id = django_filters.ModelMultipleChoiceFilter(
+        field_name="cluster",
+        queryset=Cluster.objects.all(),
+    )
+    cluster = django_filters.ModelMultipleChoiceFilter(
+        field_name="cluster__name",
+        to_field_name="name",
+        queryset=Cluster.objects.all(),
+    )
+    os_family = django_filters.MultipleChoiceFilter(
+        choices=CloudImageOSFamilyChoices,
+    )
+    allowed_tenants_id = django_filters.ModelMultipleChoiceFilter(
+        field_name="allowed_tenants",
+        queryset=Tenant.objects.all(),
+    )
+    allowed_tenants = django_filters.ModelMultipleChoiceFilter(
+        field_name="allowed_tenants__slug",
+        to_field_name="slug",
+        queryset=Tenant.objects.all(),
+    )
+    allowed_tenants__id__in = MultiValueNumberFilter(
+        field_name="allowed_tenants__id",
+        lookup_expr="in",
+    )
+    allowed_tenants__isnull = django_filters.BooleanFilter(
+        field_name="allowed_tenants",
+        lookup_expr="isnull",
+    )
+
+    class Meta:
+        model = CloudImageTemplate
+        fields = (
+            "id",
+            "name",
+            "slug",
+            "cluster",
+            "cluster_id",
+            "source_vmid",
+            "os_family",
+            "os_release",
+            "default_ciuser",
+            "allowed_tenants",
+            "allowed_tenants_id",
+            "allowed_tenants__id__in",
+            "allowed_tenants__isnull",
+            "is_active",
+        )
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        """Match cloud image name, slug, cluster, release, or source VMID."""
+        if not value.strip():
+            return queryset
+        query = (
+            Q(name__icontains=value)
+            | Q(slug__icontains=value)
+            | Q(cluster__name__icontains=value)
+            | Q(os_release__icontains=value)
+        )
+        if value.isdigit():
+            query |= Q(source_vmid=int(value))
+        return queryset.filter(query)
+
+
+@register_filterset
 class ProxmoxEndpointFilterSet(ProxboxModelFilterSet):
     """Filter Proxmox VE endpoint records for list and API views."""
 
     class Meta:
         model = ProxmoxEndpoint
-        fields = ("id", "name", "domain", "ip_address", "mode", "site", "tenant")
+        fields = (
+            "id",
+            "name",
+            "domain",
+            "ip_address",
+            "mode",
+            "environment",
+            "site",
+            "tenant",
+        )
 
     def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
         """Match the search term against endpoint name or domain."""

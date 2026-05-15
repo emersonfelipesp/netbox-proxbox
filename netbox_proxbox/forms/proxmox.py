@@ -21,7 +21,7 @@ from django.utils.translation import gettext as _
 # Proxbox Imports
 from ..constants import OVERWRITE_FIELDS
 from ..models import ProxmoxEndpoint
-from ..choices import ProxmoxModeChoices
+from ..choices import ProxmoxEndpointEnvironmentChoices, ProxmoxModeChoices
 from .settings import _parse_tenant_regex_rules
 
 from .import_utils import validate_endpoint_import_headers
@@ -131,6 +131,7 @@ class ProxmoxEndpointForm(NetBoxModelForm):
             "token_name",
             "token_value",
             "verify_ssl",
+            "environment",
             "site",
             "tenant",
             "tags",
@@ -245,6 +246,8 @@ class ProxmoxEndpointSettingsForm(NetBoxModelForm):
             label = name.removeprefix("overwrite_").replace("_", " ").capitalize()
             if name == "overwrite_vm_tags":
                 label = "Merge VM tags"
+            elif name == "overwrite_vm_proxmox_tags":
+                label = "Sync Proxmox tags"
             self.fields[name] = forms.NullBooleanField(
                 required=False,
                 widget=forms.NullBooleanSelect,
@@ -301,6 +304,9 @@ class ProxmoxEndpointFilterForm(NetBoxModelFilterSetForm):
         queryset=IPAddress.objects.all(), required=False, help_text="Select IP Address"
     )
     mode = forms.MultipleChoiceField(choices=ProxmoxModeChoices, required=False)
+    environment = forms.MultipleChoiceField(
+        choices=ProxmoxEndpointEnvironmentChoices, required=False
+    )
     site = DynamicModelMultipleChoiceField(
         queryset=Site.objects.all(),
         required=False,
@@ -323,6 +329,9 @@ class ProxmoxEndpointImportForm(NetBoxModelImportForm):
         ),
     )
     mode = CSVChoiceField(choices=ProxmoxModeChoices, required=False)
+    environment = CSVChoiceField(
+        choices=ProxmoxEndpointEnvironmentChoices, required=False
+    )
     site = CSVModelChoiceField(
         queryset=Site.objects.all(),
         to_field_name="slug",
@@ -344,6 +353,7 @@ class ProxmoxEndpointImportForm(NetBoxModelImportForm):
             "ip_address",
             "port",
             "mode",
+            "environment",
             "version",
             "repoid",
             "username",

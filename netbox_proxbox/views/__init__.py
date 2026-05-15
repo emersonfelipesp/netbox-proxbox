@@ -29,6 +29,13 @@ from .backup_routine import (
     BackupRoutineView,
 )
 from .cards import get_proxmox_card
+from .cloud_image_templates import (
+    CloudImageTemplateBulkDeleteView,
+    CloudImageTemplateDeleteView,
+    CloudImageTemplateEditView,
+    CloudImageTemplateListView,
+    CloudImageTemplateView,
+)
 from .cluster import (
     ClusterStoragesTabView,
     ClusterSummaryTabView,

@@ -1,9 +1,9 @@
 # NetBox → Proxmox Intent Layer
 
-> **Status:** design (Sub-PR A of v0.0.16 / proxbox-api v0.0.12).
+> **Status:** design (Sub-PR A of v0.0.15 / proxbox-api v0.0.12).
 > **Tracking issue:** [#377](https://github.com/emersonfelipesp/netbox-proxbox/issues/377).
 > **Roadmap deviation:** parent issue nominated `v0.1.0`; this work is
-> consolidated into the next-version slot (`v0.0.16` /
+> consolidated into the current-version slot (`v0.0.15` /
 > `v0.0.12`) and lands as a sequence of 12 sub-PRs (A–L, #378–#389).
 
 ## 1. Motivation
@@ -321,7 +321,7 @@ backend remains stateless for `/intent/*`).
 
 | Phase | Default state | Operator action to opt in |
 |---|---|---|
-| **Phase 0** (v0.0.16 ships) | `netbox_to_proxmox_enabled=False` | none — reflection sync continues |
+| **Phase 0** (v0.0.15 ships) | `netbox_to_proxmox_enabled=False` | none — reflection sync continues |
 | **Phase 1** (operator opts in) | typed phrase entered | branches with `apply_to_proxmox=True` dispatch on merge |
 | **Phase 2** (delete enabled) | `apply_destroy_confirmed` per branch + 4-eyes config | DELETE diffs reach the deletion-request queue |
 | **Phase 3** (full automation) | TTL cron enabled | stale requests auto-reject and untag |

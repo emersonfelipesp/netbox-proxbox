@@ -35,7 +35,8 @@ def test_deletion_request_declares_required_schema_fields():
     deletion_request = _class(_module(), "DeletionRequest")
     assignments = _class_assignments(deletion_request)
     expected = {
-        "branch",
+        "branch_id",
+        "branch_name",
         "requested_by",
         "authorizer",
         "state",

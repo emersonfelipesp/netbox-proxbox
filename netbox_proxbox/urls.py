@@ -97,6 +97,14 @@ urlpatterns = [
         include(get_model_urls("netbox_proxbox", "backuproutine", detail=False)),
     ),
     path(
+        "cloud-image-templates/<int:pk>/",
+        include(get_model_urls("netbox_proxbox", "cloudimagetemplate")),
+    ),
+    path(
+        "cloud-image-templates/",
+        include(get_model_urls("netbox_proxbox", "cloudimagetemplate", detail=False)),
+    ),
+    path(
         "replications/<int:pk>/",
         include(get_model_urls("netbox_proxbox", "replication")),
     ),
@@ -126,6 +134,16 @@ urlpatterns = [
     path(
         "vm-cloudinit/",
         include(get_model_urls("netbox_proxbox", "proxmoxvmcloudinit", detail=False)),
+    ),
+    path(
+        "cloud-image-templates/<int:pk>/",
+        include(get_model_urls("netbox_proxbox", "cloudimagetemplate")),
+    ),
+    path(
+        "cloud-image-templates/",
+        include(
+            get_model_urls("netbox_proxbox", "cloudimagetemplate", detail=False),
+        ),
     ),
     path("sync/devices/", views.sync_devices, name="sync_devices"),
     path("sync/storage/", views.sync_storage, name="sync_storage"),

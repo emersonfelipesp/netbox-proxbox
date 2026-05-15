@@ -2,7 +2,11 @@
 
 ## Summary
 
-Version `0.0.15` fixes five issues and adds three new features in pair with backend `proxbox-api 0.0.11`:
+Version `0.0.15` introduces the **NetBox → Proxmox intent path** (Issue #377) — an opt-in second integration direction that complements the historic read-only Proxmox → NetBox reflection — and rolls up the rest of the long-running v0.0.15 line: the Cluster HA dashboard, operational verbs, SSH-driven hardware discovery, NetBox Branching integration, a standalone scheduler container, cloud-init reflection, description-field metadata parsing, regex-based tenant assignment, default-role pinning, and an idempotent NetBox bootstrap. It pairs with backend `proxbox-api 0.0.11` for the reflection surface and the new HA endpoints, and with `proxbox-api 0.0.12` for the new `/intent/*` surface (plan validator, CREATE/UPDATE/DELETE dispatchers, cloud-init builder, deletion-request executor, audit-journal scrubbing).
+
+The intent path is **opt-in at every level**. With `netbox_to_proxmox_enabled=False` (default), nothing in 0.0.15 changes the historic read-only reflection behavior.
+
+It also fixes five issues:
 
 - [Issue #352](https://github.com/emersonfelipesp/netbox-proxbox/issues/352): the `FastAPIEndpoint` model could not express the combination "use HTTPS but skip certificate verification", which is the default state of the proxbox-api `*-nginx` image (TLS-only with a self-signed mkcert certificate).
 - [Issue #354](https://github.com/emersonfelipesp/netbox-proxbox/issues/354): IPAM `IPAddress` records created during virtualization sync had an empty `dns_name`, even though Proxmox knew the guest hostname. The plugin now exposes a new `overwrite_ip_address_dns_name` setting (global + per-endpoint) so operators can opt out of `dns_name` writes; the actual hostname resolution and write live in `proxbox-api 0.0.11`.
@@ -11,6 +15,34 @@ Version `0.0.15` fixes five issues and adds three new features in pair with back
 - [Issue #360](https://github.com/emersonfelipesp/netbox-proxbox/issues/360): operators had no headless way to trigger a full Proxmox→NetBox sync — every run required a human clicking **Full Update** in the plugin UI, which blocked cron, systemd timers, Kubernetes CronJobs, and CI smoke checks. The plugin now ships a `python manage.py proxbox_sync` Django management command that enqueues the same `ProxboxSyncJob` as the UI button.
 - [Issue #359](https://github.com/emersonfelipesp/netbox-proxbox/issues/359): VM-interface MACs synced through the plugin never appeared in NetBox. The legacy inline `mac_address` field on `VMInterface` is `read_only=True` at NetBox 4.5/4.6 (computed from `primary_mac_address`), so every MAC `proxbox-api` posted was silently dropped. The plugin itself ships no code change; the fix lives in `proxbox-api 0.0.11`, which now writes MACs via `dcim.MACAddress` and links them through `VMInterface.primary_mac_address`. Existing v0.0.15 installs pick the fix up by upgrading the backend.
 - [Issue #367](https://github.com/emersonfelipesp/netbox-proxbox/issues/367): operators need a safe way to remove VMs that were previously discovered by Proxbox but no longer appear in the current Proxmox inventory. The plugin now exposes a default-off **Delete orphan VMs** setting that proxbox-api reads before running its orphan sweep.
+
+## NetBox → Proxmox Intent System (#377)
+
+Twelve sub-issues land together as Sub-PRs A through L:
+
+- **#378 — Sub-PR A — Design doc.** New [`docs/design/netbox-to-proxmox-intent.md`](../design/netbox-to-proxmox-intent.md) captures the §1–§17 design from #377 verbatim.
+- **#379 — Sub-PR B — Gate.** `ProxboxPluginSettings.netbox_to_proxmox_enabled`, typed-confirmation phrase `allow-edit-and-add-actions`, `apply_destroy_confirmed` flag, seven RBAC permissions registered through migration `0038_intent_permissions`, and a red advanced-direction warning callout on the Settings page.
+- **#380 — Sub-PR C — Bootstrap custom fields.** Migration `0039_intent_custom_fields` registers 10 VM CFs and 2 Branch CFs through the `_v0_0_15_release_data` bootstrap module. Branching CFs are guarded so the migration is a no-op when `netbox_branching` is not installed.
+- **#381 — Sub-PR D — Plan validator.** `POST /intent/plan` on the backend plus `netbox_proxbox.intent.merge_validator` returning a `BranchActionIndicator(permitted, message)` for `netbox-branching` to consume.
+- **#382 — Sub-PR E — `post_merge` hook.** New `signal_receivers.py` plus `netbox_proxbox.intent.apply_job.ProxmoxApplyJob`. Receiver exceptions are fully swallowed (the merge transaction has already committed when `post_merge` fires). The run phase is a dry-run no-op in this PR.
+- **#383 — Sub-PR F — CREATE.** `apply_job.run` builds `VMIntentPayload`/`LXCIntentPayload` from NetBox state, POSTs to `/intent/apply`, and stamps `proxbox_intent_state=applied` plus `proxbox_last_apply_run_id`. UPDATE/DELETE return `501` in this PR.
+- **#384 — Sub-PR G — UPDATE.** Adds delta builders, TOCTOU recheck via `find_vmid_record`, and offline-required-key gating (`QEMU_OFFLINE_REQUIRED_KEYS = {"cores","memory"}`; LXC adds `mp`, `rootfs`). Running VMs are never auto-stopped.
+- **#385 — Sub-PR H — DELETE → safe-delete.** DELETE diffs create a `DeletionRequest` row, tag the Proxmox VM `proxbox-pending-deletion`, and capture a metadata snapshot. The plugin never calls Proxmox destroy from the merge handler.
+- **#386 — Sub-PR I — Deletion Requests UI + executor.** Approve/reject/list views, four-eyes self-approval block at model + view + API client layers, TTL cron job, and the two-and-only-two backend destroy dispatchers (`qemu_destroy.py`, `lxc_destroy.py`).
+- **#387 — Sub-PR J — Audit + four-eyes regression suite.** Pure test PR: static destroy-gate walker, state-machine, orphan-tag, and journal-emit invariants.
+- **#388 — Sub-PR K — Cloud-Init.** `CloudInitPayload` Pydantic model and `build_proxmox_ci_args` map the four cloud-init CFs to `ciuser`, `sshkeys` (URL-encoded), `cicustom`, and `ipconfig0`. The plan validator emits a plaintext-password warning when `cloud_init_user_data` contains a `password:` key. New `proxbox_api/utils/log_scrubbing.py` strips `cipassword`, `password`, `secret`, and `token` from every journal write.
+- **#389 — Sub-PR L — UI / docs / polish.** Plan-summary view, live SSE log widget on apply-job detail, audit-chain rendering on deletion-request detail, operator guides under `docs/operations/`, version bump to `0.0.15` / `proxbox-api 0.0.12`, and the four-invariant **Safety Model** appended to `CLAUDE.md` and `AGENTS.md`.
+
+### Safety Model — four mandatory invariants
+
+netbox-proxbox 0.0.15 enforces four mandatory invariants on the intent path. Code or configuration that bypasses any of these is a regression.
+
+1. **Default direction is Proxmox → NetBox (read-only).** The intent path is opt-in at every level.
+2. **Master flag is locked behind a typed confirmation phrase.** `netbox_to_proxmox_enabled=True` requires `netbox_to_proxmox_typed_confirmation == "allow-edit-and-add-actions"` to pass `ProxboxPluginSettingsForm.clean()`.
+3. **Every Proxmox-side DELETE goes through a `DeletionRequest`.** Branch merges containing DELETE diffs do not call Proxmox destroy at merge time.
+4. **Authorization permission is held separately from `intent_delete_*`.** `netbox_proxbox.authorize_deletion_request` is independent of `intent_delete_vm` / `intent_delete_lxc`; self-approval is rejected unless `intent_apply_authorization_self_approve_allowed=True` (default `False`).
+
+The 0.0.15 plugin pairs with the **0.0.12** release of `proxbox-api` for the new intent path. The 0.0.11 backend remains wire-compatible for the reflection-side surface; intent calls return `404 Not Found` against an older backend, and the plugin renders an inline "Backend does not support intent endpoints — upgrade proxbox-api to v0.0.12 or later." banner.
 
 ## #352 — `Use HTTPS` toggle decoupled from `Verify SSL`
 
@@ -126,7 +158,9 @@ No DB migration. No model change. No new persisted state.
 
 ## Upgrade Notes
 
-- Run `python manage.py migrate netbox_proxbox` after upgrading; the migrations are additive and include a one-time data backfill (issue #352), a single new column on `ProxboxPluginSettings` and `ProxmoxEndpoint` (issue #354), and the default-off `delete_orphans` flag (issue #367).
+- Run `python manage.py migrate netbox_proxbox` after upgrading; the migrations are additive and include a one-time data backfill (issue #352), a single new column on `ProxboxPluginSettings` and `ProxmoxEndpoint` (issue #354), the default-off `delete_orphans` flag (issue #367), and the intent migrations `0038_intent_permissions`, `0039_intent_custom_fields`, `0040_apply_job_full`, and `0041_deletion_request_full`. The custom-field migration is a no-op for the two Branch CFs when `netbox_branching` is not installed.
 - If you operate the proxbox-api `*-nginx` image and previously could not connect, edit the FastAPI endpoint after upgrade and tick **Use HTTPS** (and untick **Verify SSL** if you use the bundled mkcert cert).
 - For the `dns_name` fix, pair with `proxbox-api ≥ 0.0.11`. `proxbox-api 0.0.10.post2` is still wire-compatible for the `Use HTTPS` fix but does not populate `dns_name`. With an older backend, the new toggle has no effect because the backend never writes `dns_name`.
 - The `dns_name` default is "always overwrite" to match every other overwrite flag. If you have hand-edited `dns_name` on synced IPs, untick **Overwrite IP address DNS name** before the next sync (globally, or per Proxmox endpoint).
+- The default for `netbox_to_proxmox_enabled` is `False`. Existing installs see no behavior change unless an operator explicitly opts in. To opt in, see [`docs/operations/netbox-to-proxmox.md`](../operations/netbox-to-proxmox.md) and [`docs/operations/deletion-requests.md`](../operations/deletion-requests.md). Granting `intent_delete_*` and `authorize_deletion_request` to the same user is allowed by default, but the resulting four-eyes self-approval is rejected at the view layer unless `intent_apply_authorization_self_approve_allowed=True`.
+- The `Deletion Requests` UI lives at `/plugins/proxbox/intent/deletion-requests/`. The apply-job UI lives at `/plugins/proxbox/intent/apply-jobs/`.

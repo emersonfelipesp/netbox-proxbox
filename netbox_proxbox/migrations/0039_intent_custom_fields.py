@@ -19,7 +19,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('contenttypes', '0002_remove_content_type_name'),
-        ('extras', '0138_customfieldchoiceset_choice_colors'),
+        ('extras', '0134_owner'),
         ('netbox_proxbox', '0038_intent_permissions'),
     ]
 

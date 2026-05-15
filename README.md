@@ -20,27 +20,20 @@ Proxbox discovers and syncs the following from Proxmox into NetBox:
 
 Sync runs on-demand from the NetBox UI or scheduled automatically via NetBox's job system.
 
-## What's New in v0.0.16
+## What's New in v0.0.15
 
-Paired with backend [`proxbox-api 0.0.12`](https://github.com/emersonfelipesp/proxbox-api) (matching `0.0.11` remains supported for the read-only reflection path):
+Paired with backend [`proxbox-api 0.0.11`](https://github.com/emersonfelipesp/proxbox-api); the new `/intent/*` HTTP surface pairs with `proxbox-api 0.0.12`:
 
 - **Opt-in NetBox → Proxmox intent path** (issue #377, twelve sub-PRs A–L). Operators declare desired VM/LXC state on a NetBox **branch**; merging the branch triggers `proxbox-api` to apply CREATE / UPDATE / DELETE against Proxmox. Gated by `ProxboxPluginSettings.netbox_to_proxmox_enabled` (default **False**) plus the typed-confirmation phrase `allow-edit-and-add-actions`.
 - **Safe-delete via `DeletionRequest`** — merging a branch with VM DELETE diffs never calls Proxmox destroy. The plugin creates a `DeletionRequest`, tags the VM `proxbox-pending-deletion`, and waits for a *separate* user holding `authorize_deletion_request` to approve. Self-approval is rejected unless `intent_apply_authorization_self_approve_allowed=True`.
 - **Cloud-Init payload** — four new VM custom fields (`cloud_init_user`, `cloud_init_ssh_keys`, `cloud_init_user_data`, `cloud_init_network`) map to Proxmox `ciuser`, `sshkeys` (URL-encoded), `cicustom`, and `ipconfig0`. Plain-text passwords in `cloud_init_user_data` are flagged at plan time and scrubbed from every journal entry.
 - **Apply-Jobs and Deletion-Requests UI** — `/plugins/proxbox/intent/apply-jobs/` and `/plugins/proxbox/intent/deletion-requests/` with live SSE log streaming, audit-chain rendering, and a plan-summary view per branch.
-- **Read-only reflection path is unchanged.** With `netbox_to_proxmox_enabled=False`, the historic Proxmox → NetBox sync, HA tab, headless sync command, and overwrite flags behave exactly as in v0.0.15.
-
-Full notes: [Release Notes — v0.0.16](https://emersonfelipesp.github.io/netbox-proxbox/release-notes/version-0.0.16/).
-
-## What's New in v0.0.15
-
-Paired with backend [`proxbox-api 0.0.11`](https://github.com/emersonfelipesp/proxbox-api):
-
 - **Cluster HA visibility** — new per-VM **HA tab** and cluster-wide **HA Status** page, both fetched live from `proxbox-api` (no persistence, no migration). See [HA feature](https://emersonfelipesp.github.io/netbox-proxbox/features/ha/).
 - **`Use HTTPS` decoupled from `Verify SSL`** on `FastAPIEndpoint` — supports the `*-nginx` image's self-signed mkcert TLS without disabling cert verification globally. See [Backend Setup](https://emersonfelipesp.github.io/netbox-proxbox/installation/backend-setup/).
 - **`proxbox_sync` headless command** — `python manage.py proxbox_sync` enqueues the same full-update job as the UI button; usable from cron, systemd timers, or CI. See [Headless Sync](https://emersonfelipesp.github.io/netbox-proxbox/operations/headless-sync/).
 - **Runtime sync tunables** on `ProxboxPluginSettings` (`bulk_batch_size`, `bulk_batch_delay_ms`, `backup_batch_size`, `backup_batch_delay_ms`, `vm_sync_max_concurrency`) plus the new `overwrite_vm_type` and `overwrite_ip_address_dns_name` flags. See [Plugin Settings](https://emersonfelipesp.github.io/netbox-proxbox/configuration/plugin-settings/) and [Sync Overwrite Flags](https://emersonfelipesp.github.io/netbox-proxbox/configuration/sync-overwrite-flags/).
 - **NetBox 4.6 auto-detect** — the VM type plugin pages branch automatically on the presence of NetBox 4.6's `VirtualMachineType` relation, keeping a working path for both 4.5.x and 4.6.x.
+- **Read-only reflection path is unchanged.** With `netbox_to_proxmox_enabled=False` (default), the historic Proxmox → NetBox sync behaves exactly as in v0.0.14.
 
 Full notes: [Release Notes — v0.0.15](https://emersonfelipesp.github.io/netbox-proxbox/release-notes/version-0.0.15/).
 
@@ -48,7 +41,6 @@ Full notes: [Release Notes — v0.0.15](https://emersonfelipesp.github.io/netbox
 
 | NetBox   | netbox-proxbox | proxbox-api | netbox-sdk     | proxmox-sdk    |
 |----------|----------------|-------------|----------------|----------------|
-| >=4.5.8  | v0.0.16              | v0.0.11          | v0.0.8.post1   | v0.0.3.post1   |
 | >=4.5.8  | v0.0.15              | v0.0.11          | v0.0.8.post1   | v0.0.3.post1   |
 | >=4.5.8  | v0.0.14              | v0.0.10.post2    | v0.0.8.post1   | v0.0.3.post1   |
 | >=4.5.8  | v0.0.13.post4        | v0.0.9.post2     | v0.0.7.post6   | v0.0.3.post1   |

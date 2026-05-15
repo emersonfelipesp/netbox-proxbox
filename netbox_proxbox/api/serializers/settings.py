@@ -26,6 +26,7 @@ class ProxboxPluginSettingsSerializer(NetBoxModelSerializer):
             "ensure_netbox_objects",
             "delete_orphans",
             "parse_description_metadata",
+            "embed_description_metadata",
             "enable_tenant_name_regex",
             "tenant_name_regex_rules",
             "primary_ip_preference",

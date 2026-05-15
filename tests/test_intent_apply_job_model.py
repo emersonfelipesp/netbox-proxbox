@@ -37,7 +37,8 @@ def test_apply_job_model_has_full_schema_fields():
             assigned_names.add(stmt.target.id)
 
     for field_name in (
-        "branch",
+        "branch_id",
+        "branch_name",
         "user",
         "run_uuid",
         "state",

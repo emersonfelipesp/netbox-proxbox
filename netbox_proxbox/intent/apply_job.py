@@ -222,9 +222,12 @@ class ProxmoxApplyJob(JobRunner):
     ) -> Job:
         """Create the apply model row and enqueue the NetBox default RQ job."""
         normalized_uuid = _normalize_run_uuid(run_uuid)
-        branch_label = getattr(branch, "name", None) or getattr(branch, "pk", "unknown")
+        branch_pk = getattr(branch, "pk", None)
+        branch_name_value = str(getattr(branch, "name", "") or "")
+        branch_label = branch_name_value or branch_pk or "unknown"
         apply_job = ProxmoxApplyJobModel.objects.create(
-            branch=branch,
+            branch_id=branch_pk,
+            branch_name=branch_name_value,
             user=user,
             run_uuid=normalized_uuid,
             state=ProxmoxApplyJobModel.State.queued,
@@ -261,9 +264,9 @@ class ProxmoxApplyJob(JobRunner):
         apply_job = None
         try:
             normalized_uuid = _normalize_run_uuid(run_uuid)
-            apply_job = ProxmoxApplyJobModel.objects.select_related(
-                "branch", "user"
-            ).get(run_uuid=normalized_uuid)
+            apply_job = ProxmoxApplyJobModel.objects.select_related("user").get(
+                run_uuid=normalized_uuid
+            )
             apply_job.state = ProxmoxApplyJobModel.State.running
             apply_job.started_at = timezone.now()
             apply_job.save(update_fields=["state", "started_at"])
@@ -347,7 +350,8 @@ class ProxmoxApplyJob(JobRunner):
                         snapshot_vmid = snapshot.get("vmid")
                         snapshot_node = snapshot.get("node")
                         deletion_request = DeletionRequest(
-                            branch=branch,
+                            branch_id=getattr(branch, "pk", None),
+                            branch_name=str(getattr(branch, "name", "") or ""),
                             requested_by=actor,
                             state=DeletionRequest.State.PENDING,
                             vmid=snapshot_vmid,

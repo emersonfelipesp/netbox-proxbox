@@ -142,7 +142,7 @@ def sync_stages_module(monkeypatch):
     return module
 
 
-def test_build_base_query_params_includes_all_24_overwrite_keys(sync_stages_module):
+def test_build_base_query_params_includes_all_25_overwrite_keys(sync_stages_module):
     fields = _load_overwrite_fields()
 
     base_query = sync_stages_module._build_base_query_params(
@@ -153,7 +153,7 @@ def test_build_base_query_params_includes_all_24_overwrite_keys(sync_stages_modu
     for name in fields:
         assert name in base_query, f"missing flag {name} in flattened query"
     overwrite_keys = [k for k in base_query if k.startswith("overwrite_")]
-    assert len(overwrite_keys) == 24
+    assert len(overwrite_keys) == 25
 
 
 def test_build_base_query_params_serializes_true_false_strings(sync_stages_module):

@@ -265,4 +265,4 @@ def test_effective_overwrites_keys_match_canonical_field_set(
 ):
     result = sync_params_module.effective_overwrites_for_endpoint(None)
     assert tuple(result.keys()) == tuple(overwrite_fields)
-    assert len(result) == 24
+    assert len(result) == 25

@@ -12,7 +12,7 @@ description = "NetBox plugin for read-only Ceph inventory through netbox-proxbox
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "netbox-proxbox>=0.0.16",
+    "netbox-proxbox>=0.0.15",
     "requests>=2.33.0",
 ]
 

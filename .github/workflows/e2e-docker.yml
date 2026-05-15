@@ -156,10 +156,29 @@ jobs:
             -e POSTGRES_DB=netbox \
             -e POSTGRES_USER=netbox \
             -e POSTGRES_PASSWORD=netbox \
+            --health-cmd="pg_isready -U netbox -d netbox" \
+            --health-interval=2s \
+            --health-timeout=2s \
+            --health-retries=30 \
             postgres:16-alpine
 
           docker run -d --name netbox-e2e-redis --network proxbox-e2e \
             redis:7-alpine
+
+          echo "Waiting for postgres to be healthy..."
+          for i in $(seq 1 60); do
+            health="$(docker inspect --format '{{.State.Health.Status}}' netbox-e2e-postgres 2>/dev/null || echo unknown)"
+            if [ "$health" = "healthy" ]; then
+              echo "postgres healthy after ${i} iterations"
+              break
+            fi
+            sleep 1
+            if [ "$i" -eq 60 ]; then
+              echo "postgres did not become healthy in 60s"
+              docker logs netbox-e2e-postgres || true
+              exit 1
+            fi
+          done
 
           docker pull "${PROXMOX_SDK_IMAGE}:dev-nginx"
           if ! docker pull "${NETBOX_IMAGE}" 2>/dev/null; then
@@ -231,6 +250,7 @@ jobs:
               -e DB_NAME=netbox \
               -e DB_USER=netbox \
               -e DB_PASSWORD=netbox \
+              -e DB_WAIT_DEBUG=1 \
               -e REDIS_HOST=netbox-e2e-redis \
               -e REDIS_DATABASE=0 \
               -e REDIS_CACHE_HOST=netbox-e2e-redis \
@@ -244,13 +264,14 @@ jobs:
               -e ALLOWED_HOSTS="* localhost 127.0.0.1 ::1 netbox" \
               -e LOGIN_REQUIRED=True \
               --entrypoint /bin/bash \
-              "${NETBOX_IMAGE}" -ec "i=0; until uv pip install --upgrade ${NETBOX_PLUGIN_INSTALL_INDEX} ${NETBOX_PLUGIN_INSTALL_SPEC}; do i=\$((i+1)); [ \$i -ge 30 ] && exit 1; sleep 10; done && mkdir -p /etc/netbox/config && printf 'PLUGINS = [\"netbox_proxbox\"]\\n' > /etc/netbox/config/plugins.py && /opt/netbox/docker-entrypoint.sh /opt/netbox/launch-netbox.sh"
+              "${NETBOX_IMAGE}" -ec "i=0; until uv pip install --upgrade ${NETBOX_PLUGIN_INSTALL_INDEX} ${NETBOX_PLUGIN_INSTALL_SPEC}; do i=\$((i+1)); [ \$i -ge 30 ] && exit 1; sleep 10; done && mkdir -p /etc/netbox/config && printf 'PLUGINS = [\"netbox_proxbox\"]\n' > /etc/netbox/config/plugins.py && /opt/netbox/docker-entrypoint.sh /opt/netbox/launch-netbox.sh"
           else
             docker run -d --name netbox-e2e --network proxbox-e2e -p "${HOST_BIND}18080:8080" \
               -e DB_HOST=netbox-e2e-postgres \
               -e DB_NAME=netbox \
               -e DB_USER=netbox \
               -e DB_PASSWORD=netbox \
+              -e DB_WAIT_DEBUG=1 \
               -e REDIS_HOST=netbox-e2e-redis \
               -e REDIS_DATABASE=0 \
               -e REDIS_CACHE_HOST=netbox-e2e-redis \
@@ -264,7 +285,7 @@ jobs:
               -e ALLOWED_HOSTS="* localhost 127.0.0.1 ::1 netbox" \
               -e LOGIN_REQUIRED=True \
               --entrypoint /bin/bash \
-              "${NETBOX_IMAGE}" -ec "i=0; until uv pip install --upgrade ${NETBOX_PLUGIN_INSTALL_INDEX} ${NETBOX_PLUGIN_INSTALL_SPEC}; do i=\$((i+1)); [ \$i -ge 30 ] && exit 1; sleep 10; done && mkdir -p /etc/netbox/config && printf 'PLUGINS = [\"netbox_proxbox\"]\\n' > /etc/netbox/config/plugins.py && /opt/netbox/docker-entrypoint.sh /opt/netbox/launch-netbox.sh"
+              "${NETBOX_IMAGE}" -ec "i=0; until uv pip install --upgrade ${NETBOX_PLUGIN_INSTALL_INDEX} ${NETBOX_PLUGIN_INSTALL_SPEC}; do i=\$((i+1)); [ \$i -ge 30 ] && exit 1; sleep 10; done && mkdir -p /etc/netbox/config && printf 'PLUGINS = [\"netbox_proxbox\"]\n' > /etc/netbox/config/plugins.py && /opt/netbox/docker-entrypoint.sh /opt/netbox/launch-netbox.sh"
           fi
 
       - name: Get container IPs
@@ -353,6 +374,41 @@ jobs:
           echo "NETBOX_TOKEN_ID=$TOKEN_ID" >> "$GITHUB_ENV"
           echo "NETBOX_API_TOKEN=$TOKEN_VALUE" >> "$GITHUB_ENV"
 
+      - name: Seed proxbox discovery tags in NetBox
+        # proxbox-api's startup bootstrap cannot seed these tags because it has
+        # no NetBoxEndpoint row yet at startup time (the plugin registers one
+        # only after proxbox-api is already running). With
+        # PROXBOX_SKIP_NETBOX_BOOTSTRAP=true we instead seed the discovery tags
+        # directly through the NetBox REST API here so device_ensure and
+        # similar reconciliation paths have the tags they expect.
+        run: |
+          set -eu
+          AUTH="Authorization: Token ${NETBOX_API_TOKEN}"
+          CT="Content-Type: application/json"
+          URL="http://${TEST_HOST}:18080/api/extras/tags/"
+
+          create_tag() {
+            name="$1"; slug="$2"; color="$3"
+            body=$(printf '{"name":"%s","slug":"%s","color":"%s"}' "$name" "$slug" "$color")
+            http_code=$(curl -sS -o /tmp/tag.out -w '%{http_code}' \
+              -X POST -H "$AUTH" -H "$CT" -d "$body" "$URL")
+            if [ "$http_code" = "201" ]; then
+              echo "Created tag: $name"
+            elif [ "$http_code" = "400" ] && grep -q "already exists" /tmp/tag.out; then
+              echo "Tag already exists: $name"
+            else
+              echo "Failed to create tag $name (HTTP $http_code):" >&2
+              cat /tmp/tag.out >&2 || true
+              exit 1
+            fi
+          }
+
+          create_tag "Proxbox" "proxbox" "ff5722"
+          create_tag "proxbox-discovered-qemu" "proxbox-discovered-qemu" "9c27b0"
+          create_tag "proxbox-discovered-lxc" "proxbox-discovered-lxc" "9c27b0"
+          create_tag "proxbox-discovered-cluster" "proxbox-discovered-cluster" "9c27b0"
+          create_tag "proxbox-discovered-node" "proxbox-discovered-node" "9c27b0"
+
       - name: Start NetBox rqworker
         run: |
           set -eux
@@ -373,7 +429,7 @@ jobs:
               -e REDIS_TASK_DATABASE=2 \
               -e SECRET_KEY="$SECRET_KEY" \
               --entrypoint /bin/bash \
-              "${NETBOX_IMAGE}" -ec "i=0; until uv pip install --upgrade ${NETBOX_PLUGIN_INSTALL_INDEX} ${NETBOX_PLUGIN_INSTALL_SPEC}; do i=\$((i+1)); [ \$i -ge 30 ] && exit 1; sleep 10; done && mkdir -p /etc/netbox/config && printf 'PLUGINS = [\"netbox_proxbox\"]\\n' > /etc/netbox/config/plugins.py && /opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py rqworker"
+              "${NETBOX_IMAGE}" -ec "i=0; until uv pip install --upgrade ${NETBOX_PLUGIN_INSTALL_INDEX} ${NETBOX_PLUGIN_INSTALL_SPEC}; do i=\$((i+1)); [ \$i -ge 30 ] && exit 1; sleep 10; done && mkdir -p /etc/netbox/config && printf 'PLUGINS = [\"netbox_proxbox\"]\n' > /etc/netbox/config/plugins.py && /opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py rqworker"
           else
             docker run -d --name netbox-e2e-rqworker --network proxbox-e2e \
               -e DB_HOST=netbox-e2e-postgres \
@@ -388,7 +444,7 @@ jobs:
               -e REDIS_TASK_DATABASE=2 \
               -e SECRET_KEY="$SECRET_KEY" \
               --entrypoint /bin/bash \
-              "${NETBOX_IMAGE}" -ec "i=0; until uv pip install --upgrade ${NETBOX_PLUGIN_INSTALL_INDEX} ${NETBOX_PLUGIN_INSTALL_SPEC}; do i=\$((i+1)); [ \$i -ge 30 ] && exit 1; sleep 10; done && mkdir -p /etc/netbox/config && printf 'PLUGINS = [\"netbox_proxbox\"]\\n' > /etc/netbox/config/plugins.py && /opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py rqworker"
+              "${NETBOX_IMAGE}" -ec "i=0; until uv pip install --upgrade ${NETBOX_PLUGIN_INSTALL_INDEX} ${NETBOX_PLUGIN_INSTALL_SPEC}; do i=\$((i+1)); [ \$i -ge 30 ] && exit 1; sleep 10; done && mkdir -p /etc/netbox/config && printf 'PLUGINS = [\"netbox_proxbox\"]\n' > /etc/netbox/config/plugins.py && /opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py rqworker"
           fi
 
       - name: Run stack e2e checks

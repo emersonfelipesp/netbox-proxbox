@@ -14,11 +14,6 @@ from netbox.models import NetBoxModel
 
 logger = logging.getLogger(__name__)
 
-try:
-    import netbox_branching  # noqa: F401
-except ImportError:
-    logger.info("netbox_branching not available; ProxmoxApplyJob.branch is inert.")
-
 
 class ProxmoxApplyJob(NetBoxModel):
     """Records a single NetBox→Proxmox apply run triggered by a branch merge.
@@ -40,14 +35,20 @@ class ProxmoxApplyJob(NetBoxModel):
         verbose_name=_("Name"),
         help_text=_("Optional human-readable label for the apply run."),
     )
-    branch = models.ForeignKey(
-        "netbox_branching.Branch",
-        on_delete=models.SET_NULL,
-        related_name="+",
+    branch_id = models.IntegerField(
         null=True,
         blank=True,
-        verbose_name=_("Branch"),
-        help_text=_("Merged netbox-branching branch that triggered this apply run."),
+        verbose_name=_("Branch ID"),
+        help_text=_(
+            "Primary key of the merged netbox-branching Branch that triggered this run."
+        ),
+    )
+    branch_name = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        verbose_name=_("Branch name"),
+        help_text=_("Name of the merged netbox-branching Branch at queue time."),
     )
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -116,3 +117,14 @@ class ProxmoxApplyJob(NetBoxModel):
 
     def get_absolute_url(self) -> str:
         return reverse("plugins:netbox_proxbox:proxmoxapplyjob", args=[self.pk])
+
+    @property
+    def branch(self):
+        """Resolve the underlying netbox-branching Branch lazily, if installed."""
+        if not self.branch_id:
+            return None
+        try:
+            from netbox_branching.models import Branch  # noqa: PLC0415
+        except ImportError:
+            return None
+        return Branch.objects.filter(pk=self.branch_id).first()

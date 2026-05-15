@@ -16,14 +16,13 @@ class Migration(migrations.Migration):
     operations = [
         migrations.AddField(
             model_name="deletionrequest",
-            name="branch",
-            field=models.ForeignKey(
-                blank=True,
-                null=True,
-                on_delete=django.db.models.deletion.SET_NULL,
-                related_name="+",
-                to="netbox_branching.branch",
-            ),
+            name="branch_id",
+            field=models.IntegerField(blank=True, null=True),
+        ),
+        migrations.AddField(
+            model_name="deletionrequest",
+            name="branch_name",
+            field=models.CharField(blank=True, default="", max_length=255),
         ),
         migrations.AddField(
             model_name="deletionrequest",
