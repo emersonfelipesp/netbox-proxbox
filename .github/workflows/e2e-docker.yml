@@ -209,7 +209,7 @@ jobs:
           if [ "${{ inputs.dependency_mode }}" = "published" ]; then
             docker pull "${PROXBOX_API_IMAGE}:${PROXBOX_API_VERSION}"
             docker run -d --name proxbox-e2e-api --network proxbox-e2e -p "${HOST_BIND}18800:8000" \
-              -e PROXBOX_SKIP_NETBOX_BOOTSTRAP=false \
+              -e PROXBOX_SKIP_NETBOX_BOOTSTRAP=true \
               -e PROXBOX_ENCRYPTION_KEY \
               -e PROXBOX_BIND_HOST="${PROXBOX_BIND_HOST_VALUE}" \
               "${PROXBOX_API_IMAGE}:${PROXBOX_API_VERSION}"
@@ -229,7 +229,7 @@ jobs:
               -f /tmp/proxbox-api-package.Dockerfile \
               /tmp
             docker run -d --name proxbox-e2e-api --network proxbox-e2e -p "${HOST_BIND}18800:8000" \
-              -e PROXBOX_SKIP_NETBOX_BOOTSTRAP=false \
+              -e PROXBOX_SKIP_NETBOX_BOOTSTRAP=true \
               -e PROXBOX_ENCRYPTION_KEY \
               -e PROXBOX_BIND_HOST="${PROXBOX_BIND_HOST_VALUE}" \
               proxbox-api-e2e:package
@@ -237,7 +237,7 @@ jobs:
             git clone --depth 1 https://github.com/emersonfelipesp/proxbox-api.git /tmp/proxbox-api-src
             docker build --target raw -t proxbox-api-e2e:dev /tmp/proxbox-api-src
             docker run -d --name proxbox-e2e-api --network proxbox-e2e -p "${HOST_BIND}18800:8000" \
-              -e PROXBOX_SKIP_NETBOX_BOOTSTRAP=false \
+              -e PROXBOX_SKIP_NETBOX_BOOTSTRAP=true \
               -e PROXBOX_ENCRYPTION_KEY \
               -e PROXBOX_BIND_HOST="${PROXBOX_BIND_HOST_VALUE}" \
               proxbox-api-e2e:dev
@@ -373,6 +373,41 @@ jobs:
 
           echo "NETBOX_TOKEN_ID=$TOKEN_ID" >> "$GITHUB_ENV"
           echo "NETBOX_API_TOKEN=$TOKEN_VALUE" >> "$GITHUB_ENV"
+
+      - name: Seed proxbox discovery tags in NetBox
+        # proxbox-api's startup bootstrap cannot seed these tags because it has
+        # no NetBoxEndpoint row yet at startup time (the plugin registers one
+        # only after proxbox-api is already running). With
+        # PROXBOX_SKIP_NETBOX_BOOTSTRAP=true we instead seed the discovery tags
+        # directly through the NetBox REST API here so device_ensure and
+        # similar reconciliation paths have the tags they expect.
+        run: |
+          set -eu
+          AUTH="Authorization: Token ${NETBOX_API_TOKEN}"
+          CT="Content-Type: application/json"
+          URL="http://${TEST_HOST}:18080/api/extras/tags/"
+
+          create_tag() {
+            name="$1"; slug="$2"; color="$3"
+            body=$(printf '{"name":"%s","slug":"%s","color":"%s"}' "$name" "$slug" "$color")
+            http_code=$(curl -sS -o /tmp/tag.out -w '%{http_code}' \
+              -X POST -H "$AUTH" -H "$CT" -d "$body" "$URL")
+            if [ "$http_code" = "201" ]; then
+              echo "Created tag: $name"
+            elif [ "$http_code" = "400" ] && grep -q "already exists" /tmp/tag.out; then
+              echo "Tag already exists: $name"
+            else
+              echo "Failed to create tag $name (HTTP $http_code):" >&2
+              cat /tmp/tag.out >&2 || true
+              exit 1
+            fi
+          }
+
+          create_tag "Proxbox" "proxbox" "ff5722"
+          create_tag "proxbox-discovered-qemu" "proxbox-discovered-qemu" "9c27b0"
+          create_tag "proxbox-discovered-lxc" "proxbox-discovered-lxc" "9c27b0"
+          create_tag "proxbox-discovered-cluster" "proxbox-discovered-cluster" "9c27b0"
+          create_tag "proxbox-discovered-node" "proxbox-discovered-node" "9c27b0"
 
       - name: Start NetBox rqworker
         run: |
