@@ -156,10 +156,29 @@ jobs:
             -e POSTGRES_DB=netbox \
             -e POSTGRES_USER=netbox \
             -e POSTGRES_PASSWORD=netbox \
+            --health-cmd="pg_isready -U netbox -d netbox" \
+            --health-interval=2s \
+            --health-timeout=2s \
+            --health-retries=30 \
             postgres:16-alpine
 
           docker run -d --name netbox-e2e-redis --network proxbox-e2e \
             redis:7-alpine
+
+          echo "Waiting for postgres to be healthy..."
+          for i in $(seq 1 60); do
+            health="$(docker inspect --format '{{.State.Health.Status}}' netbox-e2e-postgres 2>/dev/null || echo unknown)"
+            if [ "$health" = "healthy" ]; then
+              echo "postgres healthy after ${i} iterations"
+              break
+            fi
+            sleep 1
+            if [ "$i" -eq 60 ]; then
+              echo "postgres did not become healthy in 60s"
+              docker logs netbox-e2e-postgres || true
+              exit 1
+            fi
+          done
 
           docker pull "${PROXMOX_SDK_IMAGE}:dev-nginx"
           if ! docker pull "${NETBOX_IMAGE}" 2>/dev/null; then
@@ -231,6 +250,7 @@ jobs:
               -e DB_NAME=netbox \
               -e DB_USER=netbox \
               -e DB_PASSWORD=netbox \
+              -e DB_WAIT_DEBUG=1 \
               -e REDIS_HOST=netbox-e2e-redis \
               -e REDIS_DATABASE=0 \
               -e REDIS_CACHE_HOST=netbox-e2e-redis \
@@ -251,6 +271,7 @@ jobs:
               -e DB_NAME=netbox \
               -e DB_USER=netbox \
               -e DB_PASSWORD=netbox \
+              -e DB_WAIT_DEBUG=1 \
               -e REDIS_HOST=netbox-e2e-redis \
               -e REDIS_DATABASE=0 \
               -e REDIS_CACHE_HOST=netbox-e2e-redis \
