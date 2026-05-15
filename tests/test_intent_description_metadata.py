@@ -17,9 +17,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-HELPER_PATH = (
-    REPO_ROOT / "netbox_proxbox" / "intent" / "description_metadata.py"
-)
+HELPER_PATH = REPO_ROOT / "netbox_proxbox" / "intent" / "description_metadata.py"
 PAYLOAD_PATH = REPO_ROOT / "netbox_proxbox" / "intent" / "payload.py"
 
 
@@ -30,9 +28,7 @@ def _load_helper_module():
     available in this lightweight test environment. The helper module itself
     only uses ``json``/``re``/``typing`` so it can be loaded directly.
     """
-    spec = importlib.util.spec_from_file_location(
-        "_desc_md_under_test", HELPER_PATH
-    )
+    spec = importlib.util.spec_from_file_location("_desc_md_under_test", HELPER_PATH)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -102,7 +98,7 @@ def test_strip_removes_block_and_collapses_empty_to_none():
 
 
 def test_strip_preserves_operator_prose():
-    text = "Production database VM.\n\n" '```netbox-metadata\n{"role": 1}\n```\n'
+    text = 'Production database VM.\n\n```netbox-metadata\n{"role": 1}\n```\n'
     assert strip_netbox_metadata(text) == "Production database VM."
 
 
@@ -118,15 +114,11 @@ def test_embed_appends_block_after_blank_line():
         "Production database VM.",
         '```netbox-metadata\n{"role": 1}\n```',
     )
-    assert out == (
-        'Production database VM.\n\n```netbox-metadata\n{"role": 1}\n```'
-    )
+    assert out == ('Production database VM.\n\n```netbox-metadata\n{"role": 1}\n```')
 
 
 def test_embed_strips_pre_existing_block_before_appending():
-    description = (
-        "Production database VM.\n\n" '```netbox-metadata\n{"role": 99}\n```'
-    )
+    description = 'Production database VM.\n\n```netbox-metadata\n{"role": 99}\n```'
     new_block = '```netbox-metadata\n{"role": 1}\n```'
     out = embed_netbox_metadata(description, new_block)
     assert out == "Production database VM.\n\n" + new_block
@@ -195,8 +187,7 @@ def test_payload_imports_description_metadata_helper():
             and node.module == "netbox_proxbox.intent.description_metadata"
         ):
             found = found or any(
-                alias.name == "build_description_with_metadata"
-                for alias in node.names
+                alias.name == "build_description_with_metadata" for alias in node.names
             )
     assert found, (
         "payload.py must import build_description_with_metadata from "
@@ -222,10 +213,7 @@ def test_resolve_description_calls_helper_when_gate_is_on():
     module = _parse_payload()
     func = None
     for node in module.body:
-        if (
-            isinstance(node, ast.FunctionDef)
-            and node.name == "_resolve_description"
-        ):
+        if isinstance(node, ast.FunctionDef) and node.name == "_resolve_description":
             func = node
             break
     assert func is not None, "payload.py must define _resolve_description"
