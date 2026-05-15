@@ -264,7 +264,7 @@ jobs:
               -e ALLOWED_HOSTS="* localhost 127.0.0.1 ::1 netbox" \
               -e LOGIN_REQUIRED=True \
               --entrypoint /bin/bash \
-              "${NETBOX_IMAGE}" -ec "i=0; until uv pip install --upgrade ${NETBOX_PLUGIN_INSTALL_INDEX} ${NETBOX_PLUGIN_INSTALL_SPEC}; do i=\$((i+1)); [ \$i -ge 30 ] && exit 1; sleep 10; done && /opt/netbox/docker-entrypoint.sh /opt/netbox/launch-netbox.sh"
+              "${NETBOX_IMAGE}" -ec "i=0; until uv pip install --upgrade ${NETBOX_PLUGIN_INSTALL_INDEX} ${NETBOX_PLUGIN_INSTALL_SPEC}; do i=\$((i+1)); [ \$i -ge 30 ] && exit 1; sleep 10; done && mkdir -p /etc/netbox/config && printf 'PLUGINS = [\"netbox_proxbox\"]\n' > /etc/netbox/config/plugins.py && /opt/netbox/docker-entrypoint.sh /opt/netbox/launch-netbox.sh"
           else
             docker run -d --name netbox-e2e --network proxbox-e2e -p "${HOST_BIND}18080:8080" \
               -e DB_HOST=netbox-e2e-postgres \
@@ -285,7 +285,7 @@ jobs:
               -e ALLOWED_HOSTS="* localhost 127.0.0.1 ::1 netbox" \
               -e LOGIN_REQUIRED=True \
               --entrypoint /bin/bash \
-              "${NETBOX_IMAGE}" -ec "i=0; until uv pip install --upgrade ${NETBOX_PLUGIN_INSTALL_INDEX} ${NETBOX_PLUGIN_INSTALL_SPEC}; do i=\$((i+1)); [ \$i -ge 30 ] && exit 1; sleep 10; done && /opt/netbox/docker-entrypoint.sh /opt/netbox/launch-netbox.sh"
+              "${NETBOX_IMAGE}" -ec "i=0; until uv pip install --upgrade ${NETBOX_PLUGIN_INSTALL_INDEX} ${NETBOX_PLUGIN_INSTALL_SPEC}; do i=\$((i+1)); [ \$i -ge 30 ] && exit 1; sleep 10; done && mkdir -p /etc/netbox/config && printf 'PLUGINS = [\"netbox_proxbox\"]\n' > /etc/netbox/config/plugins.py && /opt/netbox/docker-entrypoint.sh /opt/netbox/launch-netbox.sh"
           fi
 
       - name: Get container IPs
@@ -394,7 +394,7 @@ jobs:
               -e REDIS_TASK_DATABASE=2 \
               -e SECRET_KEY="$SECRET_KEY" \
               --entrypoint /bin/bash \
-              "${NETBOX_IMAGE}" -ec "i=0; until uv pip install --upgrade ${NETBOX_PLUGIN_INSTALL_INDEX} ${NETBOX_PLUGIN_INSTALL_SPEC}; do i=\$((i+1)); [ \$i -ge 30 ] && exit 1; sleep 10; done && /opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py rqworker"
+              "${NETBOX_IMAGE}" -ec "i=0; until uv pip install --upgrade ${NETBOX_PLUGIN_INSTALL_INDEX} ${NETBOX_PLUGIN_INSTALL_SPEC}; do i=\$((i+1)); [ \$i -ge 30 ] && exit 1; sleep 10; done && mkdir -p /etc/netbox/config && printf 'PLUGINS = [\"netbox_proxbox\"]\n' > /etc/netbox/config/plugins.py && /opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py rqworker"
           else
             docker run -d --name netbox-e2e-rqworker --network proxbox-e2e \
               -e DB_HOST=netbox-e2e-postgres \
@@ -409,7 +409,7 @@ jobs:
               -e REDIS_TASK_DATABASE=2 \
               -e SECRET_KEY="$SECRET_KEY" \
               --entrypoint /bin/bash \
-              "${NETBOX_IMAGE}" -ec "i=0; until uv pip install --upgrade ${NETBOX_PLUGIN_INSTALL_INDEX} ${NETBOX_PLUGIN_INSTALL_SPEC}; do i=\$((i+1)); [ \$i -ge 30 ] && exit 1; sleep 10; done && /opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py rqworker"
+              "${NETBOX_IMAGE}" -ec "i=0; until uv pip install --upgrade ${NETBOX_PLUGIN_INSTALL_INDEX} ${NETBOX_PLUGIN_INSTALL_SPEC}; do i=\$((i+1)); [ \$i -ge 30 ] && exit 1; sleep 10; done && mkdir -p /etc/netbox/config && printf 'PLUGINS = [\"netbox_proxbox\"]\n' > /etc/netbox/config/plugins.py && /opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py rqworker"
           fi
 
       - name: Run stack e2e checks
