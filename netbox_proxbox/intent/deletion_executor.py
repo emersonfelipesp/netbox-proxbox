@@ -107,6 +107,14 @@ class DeletionExecutorJob(JobRunner):
         try:
             dr = DeletionRequest.objects.get(pk=deletion_request_id)
 
+            if dr.state != DeletionRequest.State.APPROVED:
+                logger.warning(
+                    "DeletionRequest %s is in state %s, not APPROVED; aborting executor.",
+                    deletion_request_id,
+                    dr.state,
+                )
+                return
+
             if (
                 dr.authorizer_id is not None
                 and dr.authorizer_id == dr.requested_by_id

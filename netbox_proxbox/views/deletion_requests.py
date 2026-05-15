@@ -34,6 +34,9 @@ __all__ = (
 SELF_APPROVAL_BLOCKED_MESSAGE = (
     "Self-approval blocked: a different authorized user must approve this request."
 )
+NON_PENDING_STATE_MESSAGE = (
+    "Deletion request is not pending; approve and reject are only valid in the pending state."
+)
 
 
 def _self_approval_allowed() -> bool:
@@ -104,6 +107,8 @@ class DeletionRequestApproveView(
 
     def post(self, request: HttpRequest, pk: int | str) -> HttpResponse:
         deletion_request = _visible_deletion_request(request, pk)
+        if deletion_request.state != DeletionRequest.State.PENDING:
+            return HttpResponseForbidden(NON_PENDING_STATE_MESSAGE)
         if (
             deletion_request.requested_by_id is not None
             and request.user.pk == deletion_request.requested_by_id
@@ -155,6 +160,8 @@ class DeletionRequestRejectView(
 
     def post(self, request: HttpRequest, pk: int | str) -> HttpResponse:
         deletion_request = _visible_deletion_request(request, pk)
+        if deletion_request.state != DeletionRequest.State.PENDING:
+            return HttpResponseForbidden(NON_PENDING_STATE_MESSAGE)
         form = DeletionRequestRejectForm(request.POST)
         if not form.is_valid():
             return render(
