@@ -133,9 +133,7 @@ def get_fastapi_context_for_request(request: HttpRequest) -> dict[str, object]:
 PROXBOX_TAG_SLUG = "proxbox"
 
 
-def get_proxbox_tagged_object_ids(
-    model_class: type, limit: int | None = None
-) -> list[int]:
+def get_proxbox_tagged_object_ids(model_class: type) -> list[int]:
     """Return PKs of objects tagged 'proxbox' for a given model class.
 
     Centralises the repeated tag-lookup pattern used across resource list views
@@ -151,8 +149,6 @@ def get_proxbox_tagged_object_ids(
     qs = TaggedItem.objects.filter(tag=proxbox_tag, content_type=ct).values_list(
         "object_id", flat=True
     )
-    if limit is not None:
-        qs = qs[:limit]
     return list(qs)
 
 

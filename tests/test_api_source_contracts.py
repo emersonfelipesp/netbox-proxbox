@@ -35,6 +35,8 @@ SERIALIZERS_PACKAGE = REPO_ROOT / "netbox_proxbox" / "api" / "serializers"
 VIEWS_PATH = REPO_ROOT / "netbox_proxbox" / "api" / "views.py"
 FILTERS_PATH = REPO_ROOT / "netbox_proxbox" / "api" / "filters.py"
 URLS_PATH = REPO_ROOT / "netbox_proxbox" / "api" / "urls.py"
+UTILS_PATH = REPO_ROOT / "netbox_proxbox" / "utils.py"
+UTILS_PACKAGE_PATH = REPO_ROOT / "netbox_proxbox" / "utils" / "__init__.py"
 PROXMOX_ENDPOINT_VIEWS_PATH = (
     REPO_ROOT / "netbox_proxbox" / "views" / "endpoints" / "proxmox.py"
 )
@@ -67,6 +69,12 @@ def _classdef(module: ast.Module, name: str) -> ast.ClassDef:
         if isinstance(node, ast.ClassDef) and node.name == name:
             return node
     raise AssertionError(f"class {name} not found in {module}")
+
+
+def _class_source(path: Path, name: str) -> str:
+    source = path.read_text()
+    class_node = _classdef(ast.parse(source, filename=str(path)), name)
+    return ast.get_source_segment(source, class_node) or ""
 
 
 def _assigned_name(node: ast.Assign | ast.AnnAssign) -> str | None:
@@ -571,6 +579,62 @@ def test_resource_vm_api_views_gate_native_vm_type_field_for_netbox_45():
         '.select_related("site", "cluster", "role", "tenant", "platform")'
         not in contents
     )
+
+
+def test_get_proxbox_tagged_object_ids_has_no_helper_level_limit():
+    """The shared tag helper must not slice before VM type filters run."""
+
+    for path in (UTILS_PATH, UTILS_PACKAGE_PATH):
+        source = path.read_text()
+        module = ast.parse(source, filename=str(path))
+        function = next(
+            node
+            for node in module.body
+            if isinstance(node, ast.FunctionDef)
+            and node.name == "get_proxbox_tagged_object_ids"
+        )
+        function_source = ast.get_source_segment(source, function) or ""
+
+        assert [arg.arg for arg in function.args.args] == ["model_class"]
+        assert "limit" not in function_source
+        assert "[:100]" not in function_source
+
+
+def test_vm_resource_api_filters_full_queryset_before_limit_offset_pagination():
+    """VM/LXC resource APIs must filter all tagged VMs before optional paging."""
+
+    source = _class_source(VIEWS_PATH, "_ProxboxVMListAPIView")
+
+    assert "get_proxbox_tagged_object_ids(VirtualMachine)" in source
+    assert "get_proxbox_tagged_object_ids(VirtualMachine, limit=100)" not in source
+    assert "[:100]" not in source
+    assert '.order_by("name")' in source
+    assert "paginator = LimitOffsetPagination()" in source
+    assert "paginator.default_limit = 1000" in source
+    assert "paginator.max_limit = 5000" in source
+    assert '"count": qs.count()' in source
+    assert '"next": None' in source
+    assert '"previous": None' in source
+    assert "paginator.paginate_queryset(qs, request, view=self)" in source
+    assert "paginator.get_paginated_response(results)" in source
+
+    filter_index = source.index("qs = filter_queryset_by_proxmox_vm_type(")
+    order_index = source.index('.order_by("name")')
+    paginator_index = source.index("paginator = LimitOffsetPagination()")
+    paginate_index = source.index("paginator.paginate_queryset(qs, request, view=self)")
+    assert filter_index < order_index < paginator_index < paginate_index
+
+
+def test_vm_resource_api_subclasses_pin_qemu_and_lxc_filters():
+    """The two shared VM resource subclasses must keep distinct Proxmox types."""
+
+    vm_source = _class_source(VIEWS_PATH, "VirtualMachinesAPIView")
+    lxc_source = _class_source(VIEWS_PATH, "LXCContainersAPIView")
+
+    assert "vm_type = ProxmoxVMTypeChoices.QEMU" in vm_source
+    assert 'vm_type_slug = "qemu-virtual-machine"' in vm_source
+    assert "vm_type = ProxmoxVMTypeChoices.LXC" in lxc_source
+    assert 'vm_type_slug = "lxc-container"' in lxc_source
 
 
 # ---------------------------------------------------------------------------

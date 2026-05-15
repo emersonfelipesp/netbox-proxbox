@@ -356,7 +356,7 @@ class ClustersView(ConditionalLoginRequiredMixin, View):
         plugin_configuration = getattr(configuration, "PLUGINS_CONFIG", {})
         fastapi_info = get_fastapi_context_for_request(request)
 
-        tagged_cluster_ids = get_proxbox_tagged_object_ids(Cluster, limit=100)
+        tagged_cluster_ids = get_proxbox_tagged_object_ids(Cluster)[:100]
         clusters = []
         if tagged_cluster_ids:
             from django.db.models import Count

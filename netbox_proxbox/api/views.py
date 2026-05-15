@@ -7,6 +7,7 @@ from drf_spectacular.utils import extend_schema
 from netbox.api.authentication import IsAuthenticatedOrLoginNotRequired
 from netbox.api.viewsets import NetBoxModelViewSet
 from rest_framework.decorators import action
+from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -673,7 +674,7 @@ class NodesAPIView(APIView):
         from netbox_proxbox.models import ProxmoxNode
         from netbox_proxbox.utils import get_proxbox_tagged_object_ids
 
-        tagged_ids = get_proxbox_tagged_object_ids(Device, limit=100)
+        tagged_ids = get_proxbox_tagged_object_ids(Device)[:100]
         if not tagged_ids:
             return Response({"count": 0, "results": []})
 
@@ -702,7 +703,12 @@ class NodesAPIView(APIView):
 
 
 class _ProxboxVMListAPIView(APIView):
-    """Shared base for VM-type list views — parameterized by ``vm_type``."""
+    """Shared paginated VM resource list view, parameterized by ``vm_type``.
+
+    Requests without ``limit`` or ``offset`` return the full filtered VM set for
+    backwards compatibility. Requests with either parameter use DRF
+    ``LimitOffsetPagination`` with a default page size of 1000 and max of 5000.
+    """
 
     permission_classes = [IsAuthenticatedOrLoginNotRequired]
     vm_type: str
@@ -717,9 +723,11 @@ class _ProxboxVMListAPIView(APIView):
             vm_type_select_related_fields,
         )
 
-        tagged_ids = get_proxbox_tagged_object_ids(VirtualMachine, limit=100)
+        tagged_ids = get_proxbox_tagged_object_ids(VirtualMachine)
         if not tagged_ids:
-            return Response({"count": 0, "results": []})
+            return Response(
+                {"count": 0, "next": None, "previous": None, "results": []}
+            )
 
         base_qs = (
             VirtualMachine.objects.restrict(request.user, "view")
@@ -728,16 +736,32 @@ class _ProxboxVMListAPIView(APIView):
             .prefetch_related("interfaces__ip_addresses")
         )
 
-        vms = list(
-            filter_queryset_by_proxmox_vm_type(
-                base_qs,
-                VirtualMachine,
-                vm_type=self.vm_type,
-                vm_type_slug=self.vm_type_slug,
+        qs = filter_queryset_by_proxmox_vm_type(
+            base_qs,
+            VirtualMachine,
+            vm_type=self.vm_type,
+            vm_type_slug=self.vm_type_slug,
+        ).order_by("name")
+
+        paginator = LimitOffsetPagination()
+        paginator.default_limit = 1000
+        paginator.max_limit = 5000
+
+        query_params = request.query_params
+        if "limit" not in query_params and "offset" not in query_params:
+            results = [_serialize_vm(vm, request) for vm in qs]
+            return Response(
+                {
+                    "count": qs.count(),
+                    "next": None,
+                    "previous": None,
+                    "results": results,
+                }
             )
-        )
-        results = [_serialize_vm(vm, request) for vm in vms]
-        return Response({"count": len(results), "results": results})
+
+        page = paginator.paginate_queryset(qs, request, view=self)
+        results = [_serialize_vm(vm, request) for vm in page]
+        return paginator.get_paginated_response(results)
 
 
 class VirtualMachinesAPIView(_ProxboxVMListAPIView):
@@ -980,7 +1004,7 @@ class ClustersAPIView(APIView):
         from virtualization.models import Cluster
         from netbox_proxbox.utils import get_proxbox_tagged_object_ids
 
-        tagged_ids = get_proxbox_tagged_object_ids(Cluster, limit=100)
+        tagged_ids = get_proxbox_tagged_object_ids(Cluster)[:100]
         if not tagged_ids:
             return Response({"count": 0, "results": []})
 
