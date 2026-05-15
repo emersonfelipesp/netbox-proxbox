@@ -2,7 +2,7 @@
 
 ## Summary
 
-Version `0.0.15` introduces the **NetBox → Proxmox intent path** (Issue #377) — an opt-in second integration direction that complements the historic read-only Proxmox → NetBox reflection — and rolls up the rest of the long-running v0.0.15 line: the Cluster HA dashboard, operational verbs, SSH-driven hardware discovery, NetBox Branching integration, a standalone scheduler container, cloud-init reflection, description-field metadata parsing, regex-based tenant assignment, default-role pinning, and an idempotent NetBox bootstrap. It pairs with backend `proxbox-api 0.0.11` for the reflection surface and the new HA endpoints, and with `proxbox-api 0.0.12` for the new `/intent/*` surface (plan validator, CREATE/UPDATE/DELETE dispatchers, cloud-init builder, deletion-request executor, audit-journal scrubbing).
+Version `0.0.15` introduces the **NetBox → Proxmox intent path** (Issue #377) — an opt-in second integration direction that complements the historic read-only Proxmox → NetBox reflection — and rolls up the rest of the long-running v0.0.15 line: the Cluster HA dashboard, operational verbs, SSH-driven hardware discovery, NetBox Branching integration, a standalone scheduler container, cloud-init reflection, description-field metadata parsing, regex-based tenant assignment, default-role pinning, and an idempotent NetBox bootstrap. It pairs with backend `proxbox-api 0.0.11` for the reflection surface, the new HA endpoints, and the new `/intent/*` surface (plan validator, CREATE/UPDATE/DELETE dispatchers, cloud-init builder, deletion-request executor, audit-journal scrubbing).
 
 The intent path is **opt-in at every level**. With `netbox_to_proxmox_enabled=False` (default), nothing in 0.0.15 changes the historic read-only reflection behavior.
 
@@ -31,7 +31,7 @@ Twelve sub-issues land together as Sub-PRs A through L:
 - **#386 — Sub-PR I — Deletion Requests UI + executor.** Approve/reject/list views, four-eyes self-approval block at model + view + API client layers, TTL cron job, and the two-and-only-two backend destroy dispatchers (`qemu_destroy.py`, `lxc_destroy.py`).
 - **#387 — Sub-PR J — Audit + four-eyes regression suite.** Pure test PR: static destroy-gate walker, state-machine, orphan-tag, and journal-emit invariants.
 - **#388 — Sub-PR K — Cloud-Init.** `CloudInitPayload` Pydantic model and `build_proxmox_ci_args` map the four cloud-init CFs to `ciuser`, `sshkeys` (URL-encoded), `cicustom`, and `ipconfig0`. The plan validator emits a plaintext-password warning when `cloud_init_user_data` contains a `password:` key. New `proxbox_api/utils/log_scrubbing.py` strips `cipassword`, `password`, `secret`, and `token` from every journal write.
-- **#389 — Sub-PR L — UI / docs / polish.** Plan-summary view, live SSE log widget on apply-job detail, audit-chain rendering on deletion-request detail, operator guides under `docs/operations/`, version bump to `0.0.15` / `proxbox-api 0.0.12`, and the four-invariant **Safety Model** appended to `CLAUDE.md` and `AGENTS.md`.
+- **#389 — Sub-PR L — UI / docs / polish.** Plan-summary view, live SSE log widget on apply-job detail, audit-chain rendering on deletion-request detail, operator guides under `docs/operations/`, version bump to `0.0.15` / `proxbox-api 0.0.11`, and the four-invariant **Safety Model** appended to `CLAUDE.md` and `AGENTS.md`.
 
 ### Safety Model — four mandatory invariants
 
@@ -42,7 +42,7 @@ netbox-proxbox 0.0.15 enforces four mandatory invariants on the intent path. Cod
 3. **Every Proxmox-side DELETE goes through a `DeletionRequest`.** Branch merges containing DELETE diffs do not call Proxmox destroy at merge time.
 4. **Authorization permission is held separately from `intent_delete_*`.** `netbox_proxbox.authorize_deletion_request` is independent of `intent_delete_vm` / `intent_delete_lxc`; self-approval is rejected unless `intent_apply_authorization_self_approve_allowed=True` (default `False`).
 
-The 0.0.15 plugin pairs with the **0.0.12** release of `proxbox-api` for the new intent path. The 0.0.11 backend remains wire-compatible for the reflection-side surface; intent calls return `404 Not Found` against an older backend, and the plugin renders an inline "Backend does not support intent endpoints — upgrade proxbox-api to v0.0.12 or later." banner.
+The 0.0.15 plugin pairs with the **0.0.11** release of `proxbox-api` for both the reflection-side surface and the new intent path. The published 0.0.11 backend exposes `/intent/plan`, `/intent/apply`, and `/intent/deletion-requests/*`; older backends that do not expose those routes return `404 Not Found` to the plugin's intent clients.
 
 ## #352 — `Use HTTPS` toggle decoupled from `Verify SSL`
 
