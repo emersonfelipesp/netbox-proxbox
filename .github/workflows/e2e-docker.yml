@@ -209,7 +209,7 @@ jobs:
           if [ "${{ inputs.dependency_mode }}" = "published" ]; then
             docker pull "${PROXBOX_API_IMAGE}:${PROXBOX_API_VERSION}"
             docker run -d --name proxbox-e2e-api --network proxbox-e2e -p "${HOST_BIND}18800:8000" \
-              -e PROXBOX_SKIP_NETBOX_BOOTSTRAP=true \
+              -e PROXBOX_SKIP_NETBOX_BOOTSTRAP=false \
               -e PROXBOX_ENCRYPTION_KEY \
               -e PROXBOX_BIND_HOST="${PROXBOX_BIND_HOST_VALUE}" \
               "${PROXBOX_API_IMAGE}:${PROXBOX_API_VERSION}"
@@ -229,7 +229,7 @@ jobs:
               -f /tmp/proxbox-api-package.Dockerfile \
               /tmp
             docker run -d --name proxbox-e2e-api --network proxbox-e2e -p "${HOST_BIND}18800:8000" \
-              -e PROXBOX_SKIP_NETBOX_BOOTSTRAP=true \
+              -e PROXBOX_SKIP_NETBOX_BOOTSTRAP=false \
               -e PROXBOX_ENCRYPTION_KEY \
               -e PROXBOX_BIND_HOST="${PROXBOX_BIND_HOST_VALUE}" \
               proxbox-api-e2e:package
@@ -237,7 +237,7 @@ jobs:
             git clone --depth 1 https://github.com/emersonfelipesp/proxbox-api.git /tmp/proxbox-api-src
             docker build --target raw -t proxbox-api-e2e:dev /tmp/proxbox-api-src
             docker run -d --name proxbox-e2e-api --network proxbox-e2e -p "${HOST_BIND}18800:8000" \
-              -e PROXBOX_SKIP_NETBOX_BOOTSTRAP=true \
+              -e PROXBOX_SKIP_NETBOX_BOOTSTRAP=false \
               -e PROXBOX_ENCRYPTION_KEY \
               -e PROXBOX_BIND_HOST="${PROXBOX_BIND_HOST_VALUE}" \
               proxbox-api-e2e:dev
