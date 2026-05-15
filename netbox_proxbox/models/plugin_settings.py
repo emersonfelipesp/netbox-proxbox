@@ -241,6 +241,17 @@ class ProxboxPluginSettings(NetBoxModel):
             "they cover. Disabled by default."
         ),
     )
+    embed_description_metadata = models.BooleanField(
+        default=False,
+        verbose_name=_("Embed description metadata"),
+        help_text=_(
+            "When enabled, intent-direction create/update writes to Proxmox append a "
+            "fenced ``netbox-metadata`` JSON block of NetBox FK ids (role, tenant, "
+            "site, platform, cluster, device) to the Proxmox object's description. "
+            "Pairs with ``parse_description_metadata`` to round-trip NetBox metadata "
+            "through Proxmox without drift. Disabled by default."
+        ),
+    )
     ssrf_protection_enabled = models.BooleanField(
         default=True,
         verbose_name=_("Enable SSRF protection"),
