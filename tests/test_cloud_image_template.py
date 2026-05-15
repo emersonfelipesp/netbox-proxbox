@@ -69,6 +69,15 @@ def test_cloud_image_template_api_surface_is_registered():
     assert "allowed_tenants__isnull" in filtersets
 
 
+def test_cloud_image_template_api_serializer_supports_writable_tenant_scope():
+    serializer = _read("netbox_proxbox/api/serializers/cloud_image_template.py")
+
+    assert "def create(self, validated_data)" in serializer
+    assert "def update(self, instance, validated_data)" in serializer
+    assert 'validated_data.pop("allowed_tenants", None)' in serializer
+    assert "instance.allowed_tenants.set(allowed_tenants)" in serializer
+
+
 def test_cloud_image_template_templates_exist():
     detail = (
         REPO_ROOT / "netbox_proxbox/templates/netbox_proxbox/cloudimagetemplate.html"
