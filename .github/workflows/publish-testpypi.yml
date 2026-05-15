@@ -275,7 +275,7 @@ jobs:
     uses: ./.github/workflows/e2e-docker.yml
     with:
       install_source: testpypi
-      dependency_mode: testpypi-package
+      dependency_mode: dev
       proxbox_api_version: ${{ needs.prepare-release.outputs.proxbox_api_version }}
 
   validate-pypi-candidate:
@@ -320,7 +320,7 @@ jobs:
     uses: ./.github/workflows/e2e-docker.yml
     with:
       install_source: local
-      dependency_mode: pypi-package
+      dependency_mode: dev
       proxbox_api_version: ${{ needs.prepare-release.outputs.proxbox_api_version }}
 
   publish-pypi:
@@ -414,5 +414,5 @@ jobs:
     uses: ./.github/workflows/e2e-docker.yml
     with:
       install_source: pypi
-      dependency_mode: pypi-package
+      dependency_mode: dev
       proxbox_api_version: ${{ needs.prepare-release.outputs.proxbox_api_version }}
