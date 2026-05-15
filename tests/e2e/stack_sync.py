@@ -469,7 +469,7 @@ def set_mock_vm_status(mock_base_url: str, vmid: int, status: str) -> bool:
             f"{mock_base_url}/__admin/vm/{vmid}/status",
             json={"status": status},
             timeout=15,
-            verify=False,
+verify=True,
         )
     except requests.exceptions.RequestException:
         return False

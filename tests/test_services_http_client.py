@@ -60,7 +60,7 @@ def test_get_returns_wrapped_response(http_client_module):
     client = http_client_module.RequestsHttpClient()
     raw = _make_response(204, "")
     with patch("requests.get", return_value=raw) as mock_get:
-        resp = client.get("http://x/", headers={"a": "b"}, timeout=7, verify=False)
+resp = client.get("http://x/", headers={"a": "b"}, timeout=7, verify=True)
     assert isinstance(resp, http_client_module.HttpResponse)
     assert resp.status_code == 204
     mock_get.assert_called_once()

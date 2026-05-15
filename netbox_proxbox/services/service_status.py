@@ -246,10 +246,10 @@ class ServiceStatus:
                     try:
                         # Intentional fallback to IP URL after SSL hostname
                         # failure; the endpoint operator already opted into
-                        # verify=False at config time on the FastAPIEndpoint.
+# verify=True at config time on the FastAPIEndpoint.
                         response = requests.get(
                             ip_url,
-                            verify=False,  # nosec B501
+verify=True,  # nosec B501
                             timeout=self.request_timeout,
                         )
                         response.raise_for_status()

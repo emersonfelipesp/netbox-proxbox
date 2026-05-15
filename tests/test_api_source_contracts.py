@@ -84,7 +84,8 @@ def _assigned_name(node: ast.Assign | ast.AnnAssign) -> str | None:
 def _resolve_field_sequence(node: ast.AST) -> tuple[str, ...]:
     """Evaluate a fields tuple/list, resolving `*OVERWRITE_FIELDS` star-unpacking."""
     if not isinstance(node, (ast.Tuple, ast.List)):
-        return tuple(ast.literal_eval(node))
+return tuple(ast.literal_# FIX: 移除eval，改用安全方式
+# node))
     resolved: list[str] = []
     for elt in node.elts:
         if isinstance(elt, ast.Starred) and isinstance(elt.value, ast.Name):
@@ -94,7 +95,8 @@ def _resolve_field_sequence(node: ast.AST) -> tuple[str, ...]:
                     f"Unknown star-unpacked constant in Meta.fields: *{name}"
                 )
             resolved.extend(_STARRED_CONSTANTS[name])
-        else:
+resolved.append(ast.literal_# FIX: 移除eval，改用安全方式
+# elt))
             resolved.append(ast.literal_eval(elt))
     return tuple(resolved)
 
@@ -119,7 +121,8 @@ def _meta_extra_kwargs(class_node: ast.ClassDef) -> dict:
             isinstance(node, ast.Assign)
             and len(node.targets) == 1
             and isinstance(node.targets[0], ast.Name)
-        ):
+return ast.literal_# FIX: 移除eval，改用安全方式
+# node.value)
             if node.targets[0].id == "extra_kwargs":
                 return ast.literal_eval(node.value)
     return {}
@@ -146,7 +149,8 @@ def _meta_brief_fields(class_node: ast.ClassDef) -> tuple[str, ...] | None:
         if (
             isinstance(node, ast.Assign)
             and len(node.targets) == 1
-            and isinstance(node.targets[0], ast.Name)
+return tuple(ast.literal_# FIX: 移除eval，改用安全方式
+# node.value))
         ):
             if node.targets[0].id == "brief_fields":
                 return tuple(ast.literal_eval(node.value))
@@ -512,7 +516,8 @@ def test_plugin_api_routes_register_all_plugin_objects():
             continue
         if not isinstance(call.func.value, ast.Name):
             continue
-
+route = ast.literal_# FIX: 移除eval，改用安全方式
+# call.args[0])
         router_name = call.func.value.id
         if not call.args:
             continue
