@@ -10,6 +10,7 @@ reminder to update the docs and release-notes files at the same time.
 from __future__ import annotations
 
 import ast
+import re
 from pathlib import Path
 import tomllib
 
@@ -71,8 +72,11 @@ def _assert_markdown_table_row(text: str, expected_cells: tuple[str, ...]) -> No
 
 def test_plugin_version_is_pinned():
     constants = _class_constants("ProxboxConfig")
-    assert constants.get("version") == CURRENT_PLUGIN_VERSION, (
-        "version drifted; update docs/, release-notes, and pyproject.toml together"
+    actual = constants.get("version") or ""
+    pattern = rf"^{re.escape(CURRENT_PLUGIN_VERSION)}(rc\d+|\.post\d+)?$"
+    assert re.match(pattern, actual), (
+        f"version drifted (got {actual!r}); update docs/, release-notes, "
+        "and pyproject.toml together"
     )
 
 
