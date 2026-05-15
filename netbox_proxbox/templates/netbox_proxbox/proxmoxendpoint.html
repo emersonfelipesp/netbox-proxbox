@@ -71,6 +71,26 @@
                             </td>
                         </tr>
                         <tr>
+                            <th scope="row">Environment</th>
+                            <td>
+                                {% if object.environment == 'production' %}
+                                    <span class="badge text-bg-danger">Production</span>
+                                {% elif object.environment == 'staging' %}
+                                    <span class="badge text-bg-warning">Staging</span>
+                                {% elif object.environment == 'development' %}
+                                    <span class="badge text-bg-info">Development</span>
+                                {% elif object.environment == 'homologation' %}
+                                    <span class="badge text-bg-purple">Homologation</span>
+                                {% elif object.environment == 'testing' %}
+                                    <span class="badge text-bg-warning">Testing</span>
+                                {% elif object.environment == 'lab' %}
+                                    <span class="badge text-bg-secondary">Lab</span>
+                                {% else %}
+                                    <span class="text-muted">&mdash;</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
                             <th scope="row">Target</th>
                             <td>
                                 <span id="proxmox-target-{{ object.pk }}">Loading...</span>

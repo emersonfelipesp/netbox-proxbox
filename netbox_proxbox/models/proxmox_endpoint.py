@@ -6,7 +6,7 @@ from django.db import models
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 
-from netbox_proxbox.choices import ProxmoxModeChoices
+from netbox_proxbox.choices import ProxmoxEndpointEnvironmentChoices, ProxmoxModeChoices
 from netbox_proxbox.constants import OVERWRITE_FIELDS
 from netbox_proxbox.fields import DomainField
 from netbox_proxbox.models.base import PORT_VALIDATORS, EndpointBase
@@ -48,6 +48,17 @@ class ProxmoxEndpoint(EndpointBase):
         max_length=255,
         choices=ProxmoxModeChoices,
         default=ProxmoxModeChoices.PROXMOX_MODE_UNDEFINED,
+    )
+    environment = models.CharField(
+        max_length=32,
+        choices=ProxmoxEndpointEnvironmentChoices,
+        blank=True,
+        null=True,
+        verbose_name=_("Environment"),
+        help_text=_(
+            "Operator-selected lifecycle stage (e.g. production, development, "
+            "homologation). Manual classification only; never written by sync."
+        ),
     )
     version = models.CharField(max_length=20, blank=True, null=True)
     repoid = models.CharField(

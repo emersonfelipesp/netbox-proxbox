@@ -12,7 +12,11 @@ from tenancy.api.serializers_.tenants import TenantSerializer
 from rest_framework import serializers
 from users.models import Token
 
-from netbox_proxbox.choices import NetBoxTokenVersionChoices, ProxmoxModeChoices
+from netbox_proxbox.choices import (
+    NetBoxTokenVersionChoices,
+    ProxmoxEndpointEnvironmentChoices,
+    ProxmoxModeChoices,
+)
 from netbox_proxbox.constants import OVERWRITE_FIELDS
 from netbox_proxbox.models import FastAPIEndpoint, NetBoxEndpoint, ProxmoxEndpoint
 
@@ -35,6 +39,12 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
     ip_address = NestedIPAddressSerializer(required=False, allow_null=True)
     domain = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     mode = ChoiceField(choices=ProxmoxModeChoices)
+    environment = ChoiceField(
+        choices=ProxmoxEndpointEnvironmentChoices,
+        required=False,
+        allow_null=True,
+        allow_blank=True,
+    )
     site = SiteSerializer(nested=True, required=False, allow_null=True)
     tenant = TenantSerializer(nested=True, required=False, allow_null=True)
 
@@ -49,6 +59,7 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
             "domain",
             "port",
             "mode",
+            "environment",
             "version",
             "repoid",
             "username",
