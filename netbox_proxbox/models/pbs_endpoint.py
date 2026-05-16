@@ -11,7 +11,7 @@ reserved for a future write surface and stays `False`.
 from __future__ import annotations
 
 from django.db import models
-from django.urls import reverse
+from django.urls import NoReverseMatch, reverse
 from django.utils.translation import gettext_lazy as _
 
 from netbox_proxbox.models.base import PORT_VALIDATORS, EndpointBase
@@ -100,5 +100,14 @@ class PBSEndpoint(EndpointBase):
         )
 
     def get_absolute_url(self) -> str:
-        """Plugin UI URL for this PBS endpoint detail view."""
-        return reverse("plugins:netbox_proxbox:pbsendpoint", args=[self.pk])
+        """Plugin UI URL for this PBS endpoint detail view.
+
+        URL routes for the new endpoint models land alongside the form / table /
+        view scaffolding in Phase 2 of #449. Until those views are registered,
+        gracefully degrade rather than raise ``NoReverseMatch`` if a changelog
+        or template helper tries to linkify the row.
+        """
+        try:
+            return reverse("plugins:netbox_proxbox:pbsendpoint", args=[self.pk])
+        except NoReverseMatch:
+            return ""

@@ -13,7 +13,7 @@ Drift between the two surfaces is rendered as a warning on the
 from __future__ import annotations
 
 from django.db import models
-from django.urls import reverse
+from django.urls import NoReverseMatch, reverse
 from django.utils.translation import gettext_lazy as _
 
 from netbox.models import NetBoxModel
@@ -120,5 +120,13 @@ class PDMRemote(NetBoxModel):
             )
 
     def get_absolute_url(self) -> str:
-        """Plugin UI URL for this PDM remote detail view."""
-        return reverse("plugins:netbox_proxbox:pdmremote", args=[self.pk])
+        """Plugin UI URL for this PDM remote detail view.
+
+        URL routes land in Phase 2 of #449; until then, degrade gracefully
+        rather than raise ``NoReverseMatch`` if a changelog or template
+        helper tries to linkify the row.
+        """
+        try:
+            return reverse("plugins:netbox_proxbox:pdmremote", args=[self.pk])
+        except NoReverseMatch:
+            return ""
