@@ -7,8 +7,14 @@ All inventory models are exposed as read-only object/list views in v1. Only
 from __future__ import annotations
 
 from django.shortcuts import redirect
+from django.views import View
 from netbox.views import generic
-from utilities.views import ConditionalLoginRequiredMixin, ViewTab, register_model_view
+from utilities.views import (
+    ConditionalLoginRequiredMixin,
+    ContentTypePermissionRequiredMixin,
+    ViewTab,
+    register_model_view,
+)
 
 from netbox_ceph import filtersets, forms, tables
 from netbox_ceph.models import (
@@ -50,10 +56,27 @@ class CephPluginSettingsEditView(generic.ObjectEditView):
     form = forms.CephPluginSettingsForm
 
 
-def settings_singleton_redirect(request):
-    """UI helper: always edit the singleton settings row."""
-    obj = CephPluginSettings.get_solo()
-    return redirect("plugins:netbox_ceph:cephpluginsettings_edit", pk=obj.pk)
+class SettingsSingletonRedirectView(
+    ConditionalLoginRequiredMixin,
+    ContentTypePermissionRequiredMixin,
+    View,
+):
+    """UI helper: always edit the singleton settings row.
+
+    Guarded so that the implicit ``get_or_create`` inside ``get_solo`` is not
+    reachable to anonymous users when ``LOGIN_REQUIRED=False``, and so that
+    only users with ``change_cephpluginsettings`` can land on the editor.
+    """
+
+    def get_required_permission(self) -> str:
+        return "netbox_ceph.change_cephpluginsettings"
+
+    def get(self, request, *args, **kwargs):
+        obj = CephPluginSettings.get_solo()
+        return redirect("plugins:netbox_ceph:cephpluginsettings_edit", pk=obj.pk)
+
+
+settings_singleton_redirect = SettingsSingletonRedirectView.as_view()
 
 
 # ---------------------------------------------------------------------------
