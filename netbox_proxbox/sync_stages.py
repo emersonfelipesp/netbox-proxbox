@@ -49,9 +49,9 @@ _STAGE_RETRY_DELAY = 8.0
 # in this set and still abort the run on failure.
 _SKIPPABLE_STAGES: frozenset[str] = frozenset(
     {
-        SyncTypeChoices.VIRTUAL_MACHINES_BACKUPS,   # "vm-backups"
-        SyncTypeChoices.VIRTUAL_MACHINES_SNAPSHOTS, # "vm-snapshots"
-        SyncTypeChoices.TASK_HISTORY,               # "task-history"
+        SyncTypeChoices.VIRTUAL_MACHINES_BACKUPS,  # "vm-backups"
+        SyncTypeChoices.VIRTUAL_MACHINES_SNAPSHOTS,  # "vm-snapshots"
+        SyncTypeChoices.TASK_HISTORY,  # "task-history"
     }
 )
 
@@ -423,7 +423,12 @@ def _run_all_stages_sync(
             for stream_path in stage_paths:
                 try:
                     payload, stage_runtime = _execute_stage_sync(
-                        job, st, stream_path, query_params, on_frame, fastapi_endpoint_id
+                        job,
+                        st,
+                        stream_path,
+                        query_params,
+                        on_frame,
+                        fastapi_endpoint_id,
                     )
                 except RuntimeError as exc:
                     if st in _SKIPPABLE_STAGES:

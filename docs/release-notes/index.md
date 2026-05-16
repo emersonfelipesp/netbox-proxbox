@@ -4,12 +4,14 @@ This section tracks the release line represented by this repository and keeps ol
 
 ## Current Release Line
 
-The plugin source in this repository is currently `0.0.15.post1`.
+The plugin source in this repository is currently `0.0.15.post1`, with the
+`v0.0.17` line in progress on the `v0.0.17-ceph` branch.
 
 ## Highlights By Version
 
 | Version | Summary |
 |---------|---------|
+| `0.0.17` (in progress) | Ships a sibling read-only **Ceph plugin** (`netbox-ceph` `0.0.1`) covering Proxmox-managed Ceph inventory (cluster health, MON/MGR/MDS daemons, OSDs, pools, CephFS, CRUSH rules, flags, health checks) via `proxbox-api`'s `/ceph/*` routes; reuses `netbox-proxbox` endpoints, FastAPI context, and branch-lifecycle helpers; threads `netbox_branch_schema_id` through every sync stage; strictly read-only at the model, API, and UI layers. Tracks parent issue #424 and sub-issues #428 (scaffold), #430 (sync job + HTTP client), #429 (release/docs). |
 | `0.0.15.post1` | Post-release patch on stable `0.0.15`: VM/LXC resource API pagination (fixes 100-object truncation), PVE 9.x HA rules in the cluster HA dashboard, cloud image template PUT/PATCH support, `ProxmoxEndpointBulkDeleteView` bulk-delete 404 fix, `NetBoxModelSerializer` MRO delegation for create/update, and full-update resilience (skip optional stages on failure). Paired with backend `proxbox-api 0.0.11.post1`. No NetBox compatibility rotation. |
 | `0.0.15` | Adds the opt-in **NetBox → Proxmox intent** path (issue #377, twelve sub-PRs A–L): typed-confirmation master flag, branch-merge `post_merge` hook, plan validator, CREATE/UPDATE dispatchers, safe-delete with `DeletionRequest` four-eyes approval flow, cloud-init payload mapping, and the apply-job + deletion-request UIs. Also decouples HTTPS scheme from `Verify SSL` on `FastAPIEndpoint` (issue #352); adds `overwrite_ip_address_dns_name` so the backend can populate `IPAddress.dns_name` from Proxmox guest hostnames (issue #354); ships a per-VM **HA tab**, a cluster-wide **HA Status** page (issue #243), and the forward-compatible SSH hardware-discovery credential surface for issue #374. Pairs with backend `proxbox-api 0.0.11`, which ships both the reflection/HA surface and the `/intent/*` HTTP surface. With `netbox_to_proxmox_enabled=False` (default), no behavior changes from the read-only reflection path. |
 | `0.0.14` | Certification bump for the separate `proxbox-api` backend release `0.0.10.post2`. No plugin source changes; REST / SSE / WebSocket / auth / overwrite-flag contracts remain compatible with backend `0.0.9.post2`. Backend internally adopts `netbox-sdk==0.0.8.post1` and supports NetBox `4.5.8`, `4.5.9`, and official `4.6.0`. |
