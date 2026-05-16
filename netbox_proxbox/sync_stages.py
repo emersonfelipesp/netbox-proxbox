@@ -44,6 +44,17 @@ _HEARTBEAT_SECONDS = 20.0
 _STAGE_RETRY_MAX = 2
 _STAGE_RETRY_DELAY = 8.0
 
+# Stages that are supplementary/optional: a failure logs a warning and the sync
+# continues.  Required stages (devices, VMs, storage, interfaces, IPs) are NOT
+# in this set and still abort the run on failure.
+_SKIPPABLE_STAGES: frozenset[str] = frozenset(
+    {
+        SyncTypeChoices.VIRTUAL_MACHINES_BACKUPS,   # "vm-backups"
+        SyncTypeChoices.VIRTUAL_MACHINES_SNAPSHOTS, # "vm-snapshots"
+        SyncTypeChoices.TASK_HISTORY,               # "task-history"
+    }
+)
+
 
 async def _run_batch_selected_sync(
     self: "ProxboxSyncJob",
@@ -410,9 +421,18 @@ def _run_all_stages_sync(
             stage_paths = _sync_stream_paths_for_stage(st, target_vm_ids)
 
             for stream_path in stage_paths:
-                payload, stage_runtime = _execute_stage_sync(
-                    job, st, stream_path, query_params, on_frame, fastapi_endpoint_id
-                )
+                try:
+                    payload, stage_runtime = _execute_stage_sync(
+                        job, st, stream_path, query_params, on_frame, fastapi_endpoint_id
+                    )
+                except RuntimeError as exc:
+                    if st in _SKIPPABLE_STAGES:
+                        job.logger.warning(
+                            "Optional stage '%s' failed and was skipped: %s", st, exc
+                        )
+                        job.job.save(update_fields=["log_entries"])
+                        continue
+                    raise
                 response = payload.get("response") or {}
                 stages_out.append(
                     {
