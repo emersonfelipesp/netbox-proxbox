@@ -1,0 +1,104 @@
+"""Proxmox Backup Server (PBS) endpoint stored in NetBox for ProxBox sync.
+
+NetBox-side mirror of `proxbox_api.database.PBSEndpoint`. Holds the PBS API
+credentials and connection parameters needed for the read-side `/pbs/*`
+sync surface in `proxbox-api`.
+
+Read-only integration in v1 (parallels the backend model): `allow_writes` is
+reserved for a future write surface and stays `False`.
+"""
+
+from __future__ import annotations
+
+from django.db import models
+from django.urls import reverse
+from django.utils.translation import gettext_lazy as _
+
+from netbox_proxbox.models.base import PORT_VALIDATORS, EndpointBase
+
+
+class PBSEndpoint(EndpointBase):
+    """Credentials and address for a Proxmox Backup Server instance."""
+
+    name = models.CharField(
+        default="PBS Endpoint",
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text=_("Name of the PBS endpoint. May be updated from the PBS API."),
+    )
+    port = models.PositiveIntegerField(
+        default=8007,
+        validators=PORT_VALIDATORS,
+        verbose_name=_("HTTP port"),
+    )
+    token_id = models.CharField(
+        max_length=255,
+        verbose_name=_("Token ID"),
+        help_text=_("PBS API token id of the form 'user@realm!tokenname'."),
+    )
+    token_secret = models.CharField(
+        max_length=255,
+        verbose_name=_("Token secret"),
+        help_text=_("PBS API token secret value."),
+    )
+    fingerprint = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name=_("TLS fingerprint"),
+        help_text=_(
+            "PBS server TLS fingerprint pinned at connection time. Optional."
+        ),
+    )
+    verify_ssl = models.BooleanField(
+        default=True,
+        verbose_name=_("Verify SSL"),
+        help_text=_("Verify the TLS certificate presented by the PBS endpoint."),
+    )
+    allow_writes = models.BooleanField(
+        default=False,
+        verbose_name=_("Allow PBS-side writes"),
+        help_text=_(
+            "Reserved for a future PBS-side write surface. Default off; "
+            "v1 integration is read-only."
+        ),
+    )
+    timeout = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name=_("Timeout (seconds)"),
+        help_text=_(
+            "Per-endpoint API request timeout in seconds. Leave blank for the global default."
+        ),
+    )
+    site = models.ForeignKey(
+        to="dcim.Site",
+        on_delete=models.SET_NULL,
+        related_name="+",
+        verbose_name=_("Site"),
+        null=True,
+        blank=True,
+    )
+    tenant = models.ForeignKey(
+        to="tenancy.Tenant",
+        on_delete=models.SET_NULL,
+        related_name="+",
+        verbose_name=_("Tenant"),
+        null=True,
+        blank=True,
+    )
+
+    class Meta(EndpointBase.Meta):
+        verbose_name = _("PBS endpoint")
+        verbose_name_plural = _("PBS endpoints")
+        constraints = (
+            models.UniqueConstraint(
+                fields=("name", "ip_address", "domain"),
+                name="netbox_proxbox_pbsendpoint_identity",
+            ),
+        )
+
+    def get_absolute_url(self) -> str:
+        """Plugin UI URL for this PBS endpoint detail view."""
+        return reverse("plugins:netbox_proxbox:pbsendpoint", args=[self.pk])

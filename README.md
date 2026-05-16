@@ -24,8 +24,9 @@ Sync runs on-demand from the NetBox UI or scheduled automatically via NetBox's j
 
 Paired with backend [`proxbox-api 0.0.11.post2`](https://github.com/emersonfelipesp/proxbox-api).
 
+- **PDM / PBS endpoint models** — New `PBSEndpoint`, `PDMEndpoint`, and `PDMRemote` Django models land the ForeignKey plumbing for Proxmox Datacenter Manager support per [#449](https://github.com/emersonfelipesp/netbox-proxbox/issues/449). `PDMEndpoint` declares `proxmox_endpoints` (M2M to `ProxmoxEndpoint`) and `pbs_endpoints` (M2M to `PBSEndpoint`) so operators can register which PVE/PBS instances each PDM federates. UI / API surfaces land in Phase 2 (v0.0.16.x).
 - **Build PVE template action** — `ProxmoxEndpointViewSet` exposes a `build-pve-template` action so operators can build PVE-installer cloud-init templates against an endpoint from the plugin REST API; mirrors the `/cloud/templates/pve` route added in `proxbox-api 0.0.11.post2`.
-- **Backend pickup of proxmox-sdk 0.0.5.post1** — The paired `proxbox-api 0.0.11.post2` lifts its `proxmox-sdk` pin from `0.0.4.post3` to `0.0.5.post1`, which adds the new `proxmox_sdk.pdm` subpackage (full PDM SDK + CLI + TUI + mock server). This release is the foundation cut before the plugin-side PDM model + UI work tracked in [#449](https://github.com/emersonfelipesp/netbox-proxbox/issues/449).
+- **Backend pickup of proxmox-sdk 0.0.5.post1** — The paired `proxbox-api 0.0.11.post2` lifts its `proxmox-sdk` pin from `0.0.4.post3` to `0.0.5.post1`, which adds the new `proxmox_sdk.pdm` subpackage (full PDM SDK + CLI + TUI + mock server).
 - **Read-only reflection path is unchanged.** No NetBox compatibility rotation ships in this patch release. Carries forward every fix shipped in `v0.0.15.post1`.
 
 Full notes: [Release Notes — v0.0.15.post2](https://emersonfelipesp.github.io/netbox-proxbox/release-notes/version-0.0.15.post2/).
