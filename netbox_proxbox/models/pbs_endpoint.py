@@ -47,9 +47,7 @@ class PBSEndpoint(EndpointBase):
         blank=True,
         null=True,
         verbose_name=_("TLS fingerprint"),
-        help_text=_(
-            "PBS server TLS fingerprint pinned at connection time. Optional."
-        ),
+        help_text=_("PBS server TLS fingerprint pinned at connection time. Optional."),
     )
     verify_ssl = models.BooleanField(
         default=True,

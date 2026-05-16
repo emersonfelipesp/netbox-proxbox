@@ -12,7 +12,13 @@ from utilities.views import (
 )
 
 from netbox_pbs import filtersets, forms, tables
-from netbox_pbs.models import PBSDatastore, PBSJob, PBSPluginSettings, PBSServer, PBSSnapshot
+from netbox_pbs.models import (
+    PBSDatastore,
+    PBSJob,
+    PBSPluginSettings,
+    PBSServer,
+    PBSSnapshot,
+)
 
 
 class PBSHomeView(ConditionalLoginRequiredMixin, generic.ObjectListView):

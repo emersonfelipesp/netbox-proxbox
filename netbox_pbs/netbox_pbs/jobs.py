@@ -103,7 +103,9 @@ class PBSSyncJob(JobRunner):
                     name=branch_name,
                     user=getattr(self.job, "user", None),
                 )
-                self.logger.info("Branch %s ready (schema_id=%s)", branch.name, branch.schema_id)
+                self.logger.info(
+                    "Branch %s ready (schema_id=%s)", branch.name, branch.schema_id
+                )
             except Exception as exc:
                 self.logger.error(
                     "Failed to create/provision NetBox branch %s: %s",
@@ -174,7 +176,9 @@ class PBSSyncJob(JobRunner):
                     "Leaving branch %s open because one or more PBS stages failed",
                     branch.name,
                 )
-            raise RuntimeError("One or more PBS sync stages failed; see job log for details.")
+            raise RuntimeError(
+                "One or more PBS sync stages failed; see job log for details."
+            )
 
         if branch is not None and branch_config is not None:
             merged, message = merge_branch(

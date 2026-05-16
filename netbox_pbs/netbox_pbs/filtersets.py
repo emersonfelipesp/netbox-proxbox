@@ -5,7 +5,13 @@ from __future__ import annotations
 from django.db.models import Q
 from netbox.filtersets import NetBoxModelFilterSet
 
-from netbox_pbs.models import PBSDatastore, PBSJob, PBSPluginSettings, PBSServer, PBSSnapshot
+from netbox_pbs.models import (
+    PBSDatastore,
+    PBSJob,
+    PBSPluginSettings,
+    PBSServer,
+    PBSSnapshot,
+)
 
 
 class PBSServerFilterSet(NetBoxModelFilterSet):

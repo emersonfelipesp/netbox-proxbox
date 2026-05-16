@@ -19,7 +19,12 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name="PBSPluginSettings",
             fields=[
-                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False
+                    ),
+                ),
                 ("created", models.DateTimeField(auto_now_add=True, null=True)),
                 ("last_updated", models.DateTimeField(auto_now=True, null=True)),
                 (
@@ -32,12 +37,17 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "singleton_key",
-                    models.CharField(default="default", editable=False, max_length=32, unique=True),
+                    models.CharField(
+                        default="default", editable=False, max_length=32, unique=True
+                    ),
                 ),
                 ("proxbox_api_url", models.CharField(blank=True, max_length=255)),
                 ("proxbox_api_key", models.CharField(blank=True, max_length=255)),
                 ("branching_enabled", models.BooleanField(default=False)),
-                ("branch_name_prefix", models.CharField(default="pbs-sync", max_length=64)),
+                (
+                    "branch_name_prefix",
+                    models.CharField(default="pbs-sync", max_length=64),
+                ),
                 (
                     "branch_on_conflict",
                     models.CharField(
@@ -51,7 +61,9 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "tags",
-                    taggit.managers.TaggableManager(through="extras.TaggedItem", to="extras.Tag"),
+                    taggit.managers.TaggableManager(
+                        through="extras.TaggedItem", to="extras.Tag"
+                    ),
                 ),
             ],
             options={
@@ -62,7 +74,12 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name="PBSServer",
             fields=[
-                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False
+                    ),
+                ),
                 ("created", models.DateTimeField(auto_now_add=True, null=True)),
                 ("last_updated", models.DateTimeField(auto_now=True, null=True)),
                 (
@@ -84,7 +101,9 @@ class Migration(migrations.Migration):
                 ("last_seen_at", models.DateTimeField(blank=True, null=True)),
                 (
                     "tags",
-                    taggit.managers.TaggableManager(through="extras.TaggedItem", to="extras.Tag"),
+                    taggit.managers.TaggableManager(
+                        through="extras.TaggedItem", to="extras.Tag"
+                    ),
                 ),
             ],
             options={
@@ -96,7 +115,12 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name="PBSDatastore",
             fields=[
-                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False
+                    ),
+                ),
                 ("created", models.DateTimeField(auto_now_add=True, null=True)),
                 ("last_updated", models.DateTimeField(auto_now=True, null=True)),
                 (
@@ -125,7 +149,9 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "tags",
-                    taggit.managers.TaggableManager(through="extras.TaggedItem", to="extras.Tag"),
+                    taggit.managers.TaggableManager(
+                        through="extras.TaggedItem", to="extras.Tag"
+                    ),
                 ),
             ],
             options={
@@ -144,7 +170,12 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name="PBSSnapshot",
             fields=[
-                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False
+                    ),
+                ),
                 ("created", models.DateTimeField(auto_now_add=True, null=True)),
                 ("last_updated", models.DateTimeField(auto_now=True, null=True)),
                 (
@@ -175,7 +206,9 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "tags",
-                    taggit.managers.TaggableManager(through="extras.TaggedItem", to="extras.Tag"),
+                    taggit.managers.TaggableManager(
+                        through="extras.TaggedItem", to="extras.Tag"
+                    ),
                 ),
             ],
             options={
@@ -193,14 +226,25 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name="pbssnapshot",
             constraint=models.UniqueConstraint(
-                fields=("server", "datastore_name", "backup_type", "backup_id", "backup_time"),
+                fields=(
+                    "server",
+                    "datastore_name",
+                    "backup_type",
+                    "backup_id",
+                    "backup_time",
+                ),
                 name="netbox_pbs_snapshot_identity",
             ),
         ),
         migrations.CreateModel(
             name="PBSJob",
             fields=[
-                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False
+                    ),
+                ),
                 ("created", models.DateTimeField(auto_now_add=True, null=True)),
                 ("last_updated", models.DateTimeField(auto_now=True, null=True)),
                 (
@@ -231,7 +275,9 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "tags",
-                    taggit.managers.TaggableManager(through="extras.TaggedItem", to="extras.Tag"),
+                    taggit.managers.TaggableManager(
+                        through="extras.TaggedItem", to="extras.Tag"
+                    ),
                 ),
             ],
             options={

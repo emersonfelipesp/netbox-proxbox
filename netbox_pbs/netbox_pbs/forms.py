@@ -14,7 +14,13 @@ from netbox_pbs.choices import (
     PBSJobTypeChoices,
     PBSServerStatusChoices,
 )
-from netbox_pbs.models import PBSDatastore, PBSJob, PBSPluginSettings, PBSServer, PBSSnapshot
+from netbox_pbs.models import (
+    PBSDatastore,
+    PBSJob,
+    PBSPluginSettings,
+    PBSServer,
+    PBSSnapshot,
+)
 
 
 class PBSPluginSettingsForm(NetBoxModelForm):
