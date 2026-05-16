@@ -23,6 +23,10 @@ from netbox_proxbox.api.serializers.cloud_image_template import (
     CloudImageTemplateSerializer,
     NestedCloudImageTemplateSerializer,
 )
+from netbox_proxbox.api.serializers.pve_template import (
+    PVETemplateBuildRequestSerializer,
+    PVETemplateBuildResponseSerializer,
+)
 from netbox_proxbox.api.serializers.endpoints import (
     FastAPIEndpointSerializer,
     NestedTokenSerializer,
@@ -61,6 +65,8 @@ __all__ = (
     "ProxmoxEndpointSerializer",
     "ProxmoxNodeSerializer",
     "ProxmoxVMCloudInitSerializer",
+    "PVETemplateBuildRequestSerializer",
+    "PVETemplateBuildResponseSerializer",
     "ReplicationSerializer",
     "ProxmoxStorageSerializer",
     "ScheduledJobSerializer",
