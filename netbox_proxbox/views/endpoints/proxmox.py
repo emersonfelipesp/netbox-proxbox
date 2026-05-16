@@ -331,6 +331,7 @@ class ProxmoxEndpointBulkDeleteView(generic.BulkDeleteView):
     """Bulk-delete Proxmox endpoint records."""
 
     queryset = ProxmoxEndpoint.objects.all()
+    filterset = ProxmoxEndpointFilterSet
     table = ProxmoxEndpointTable
 
 

@@ -741,22 +741,20 @@ class _ProxboxVMListAPIView(APIView):
             vm_type_slug=self.vm_type_slug,
         ).order_by("name")
 
-        paginator = LimitOffsetPagination()
-        paginator.default_limit = 1000
-        paginator.max_limit = 5000
-
-        query_params = request.query_params
-        if "limit" not in query_params and "offset" not in query_params:
+        if "limit" not in request.query_params and "offset" not in request.query_params:
             results = [_serialize_vm(vm, request) for vm in qs]
             return Response(
                 {
-                    "count": qs.count(),
+                    "count": len(results),
                     "next": None,
                     "previous": None,
                     "results": results,
                 }
             )
 
+        paginator = LimitOffsetPagination()
+        paginator.default_limit = 1000
+        paginator.max_limit = 5000
         page = paginator.paginate_queryset(qs, request, view=self)
         results = [_serialize_vm(vm, request) for vm in page]
         return paginator.get_paginated_response(results)
