@@ -7,6 +7,7 @@ from drf_spectacular.utils import extend_schema
 from netbox.api.authentication import IsAuthenticatedOrLoginNotRequired
 from netbox.api.viewsets import NetBoxModelViewSet
 from rest_framework.decorators import action
+from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -29,12 +30,15 @@ from .serializers import (
     ProxmoxNodeSerializer,
     ProxmoxStorageSerializer,
     ProxmoxVMCloudInitSerializer,
+    PVETemplateBuildRequestSerializer,
+    PVETemplateBuildResponseSerializer,
     ReplicationSerializer,
     ScheduleSyncRequestSerializer,
     VMBackupSerializer,
     VMSnapshotSerializer,
     VMTaskHistorySerializer,
 )
+from netbox_proxbox.api.build_pve_template import build_pve_template_via_backend
 
 
 class ProxBoxRootView(APIRootView):
@@ -182,6 +186,40 @@ class ProxmoxEndpointViewSet(NetBoxModelViewSet):
     )
     serializer_class = ProxmoxEndpointSerializer
     filterset_class = filtersets.ProxmoxEndpointFilterSet
+
+    @extend_schema(
+        request=PVETemplateBuildRequestSerializer,
+        responses={
+            201: PVETemplateBuildResponseSerializer,
+            502: OpenApiTypes.OBJECT,
+            503: OpenApiTypes.OBJECT,
+        },
+        operation_id="proxbox_proxmox_endpoint_build_pve_template",
+    )
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="build-pve-template",
+        url_name="build-pve-template",
+        permission_classes=[IsAuthenticated],
+    )
+    def build_pve_template(self, request: Request, pk: int | None = None) -> Response:
+        """Trigger a PVE-installer cloud-init template build via proxbox-api.
+
+        Validates the request body against ``PVETemplateBuildRequestSerializer``,
+        injects ``endpoint_id`` from the URL path, then proxies the call to
+        the companion ``POST /cloud/templates/pve`` endpoint on proxbox-api.
+        The response is the upstream body verbatim — including the rendered
+        cloud-init snippets the operator must drop into
+        ``/var/lib/vz/snippets/`` on the target host.
+        """
+        endpoint = self.get_object()
+        serializer = PVETemplateBuildRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        payload = dict(serializer.validated_data)
+        payload["endpoint_id"] = endpoint.pk
+        body, status_code = build_pve_template_via_backend(payload)
+        return Response(body, status=status_code)
 
 
 class NetBoxEndpointViewSet(NetBoxModelViewSet):
@@ -673,7 +711,7 @@ class NodesAPIView(APIView):
         from netbox_proxbox.models import ProxmoxNode
         from netbox_proxbox.utils import get_proxbox_tagged_object_ids
 
-        tagged_ids = get_proxbox_tagged_object_ids(Device, limit=100)
+        tagged_ids = get_proxbox_tagged_object_ids(Device)[:100]
         if not tagged_ids:
             return Response({"count": 0, "results": []})
 
@@ -702,7 +740,12 @@ class NodesAPIView(APIView):
 
 
 class _ProxboxVMListAPIView(APIView):
-    """Shared base for VM-type list views — parameterized by ``vm_type``."""
+    """Shared paginated VM resource list view, parameterized by ``vm_type``.
+
+    Requests without ``limit`` or ``offset`` return the full filtered VM set for
+    backwards compatibility. Requests with either parameter use DRF
+    ``LimitOffsetPagination`` with a default page size of 1000 and max of 5000.
+    """
 
     permission_classes = [IsAuthenticatedOrLoginNotRequired]
     vm_type: str
@@ -717,9 +760,9 @@ class _ProxboxVMListAPIView(APIView):
             vm_type_select_related_fields,
         )
 
-        tagged_ids = get_proxbox_tagged_object_ids(VirtualMachine, limit=100)
+        tagged_ids = get_proxbox_tagged_object_ids(VirtualMachine)
         if not tagged_ids:
-            return Response({"count": 0, "results": []})
+            return Response({"count": 0, "next": None, "previous": None, "results": []})
 
         base_qs = (
             VirtualMachine.objects.restrict(request.user, "view")
@@ -728,16 +771,30 @@ class _ProxboxVMListAPIView(APIView):
             .prefetch_related("interfaces__ip_addresses")
         )
 
-        vms = list(
-            filter_queryset_by_proxmox_vm_type(
-                base_qs,
-                VirtualMachine,
-                vm_type=self.vm_type,
-                vm_type_slug=self.vm_type_slug,
+        qs = filter_queryset_by_proxmox_vm_type(
+            base_qs,
+            VirtualMachine,
+            vm_type=self.vm_type,
+            vm_type_slug=self.vm_type_slug,
+        ).order_by("name")
+
+        if "limit" not in request.query_params and "offset" not in request.query_params:
+            results = [_serialize_vm(vm, request) for vm in qs]
+            return Response(
+                {
+                    "count": len(results),
+                    "next": None,
+                    "previous": None,
+                    "results": results,
+                }
             )
-        )
-        results = [_serialize_vm(vm, request) for vm in vms]
-        return Response({"count": len(results), "results": results})
+
+        paginator = LimitOffsetPagination()
+        paginator.default_limit = 1000
+        paginator.max_limit = 5000
+        page = paginator.paginate_queryset(qs, request, view=self)
+        results = [_serialize_vm(vm, request) for vm in page]
+        return paginator.get_paginated_response(results)
 
 
 class VirtualMachinesAPIView(_ProxboxVMListAPIView):
@@ -980,7 +1037,7 @@ class ClustersAPIView(APIView):
         from virtualization.models import Cluster
         from netbox_proxbox.utils import get_proxbox_tagged_object_ids
 
-        tagged_ids = get_proxbox_tagged_object_ids(Cluster, limit=100)
+        tagged_ids = get_proxbox_tagged_object_ids(Cluster)[:100]
         if not tagged_ids:
             return Response({"count": 0, "results": []})
 

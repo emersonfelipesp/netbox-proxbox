@@ -1,10 +1,10 @@
 # NetBox → Proxmox Intent Layer
 
-> **Status:** design (Sub-PR A of v0.0.15 / proxbox-api v0.0.12).
+> **Status:** design (Sub-PR A of v0.0.15 / proxbox-api v0.0.11).
 > **Tracking issue:** [#377](https://github.com/emersonfelipesp/netbox-proxbox/issues/377).
 > **Roadmap deviation:** parent issue nominated `v0.1.0`; this work is
 > consolidated into the current-version slot (`v0.0.15` /
-> `v0.0.12`) and lands as a sequence of 12 sub-PRs (A–L, #378–#389).
+> `proxbox-api v0.0.11`) and lands as a sequence of 12 sub-PRs (A-L, #378-#389).
 
 ## 1. Motivation
 

@@ -30,6 +30,7 @@ __all__ = (
     "ProxmoxEndpointEditView",
     "ProxmoxEndpointSettingsView",
     "ProxmoxEndpointDeleteView",
+    "ProxmoxEndpointBulkDeleteView",
     "ProxmoxEndpointBulkImportView",
     "ProxmoxEndpointExportView",
     "ProxmoxExportQuickAddTokenView",
@@ -323,6 +324,15 @@ class ProxmoxEndpointDeleteView(generic.ObjectDeleteView):
     """
 
     queryset = ProxmoxEndpoint.objects.all()
+
+
+@register_model_view(ProxmoxEndpoint, "bulk_delete", detail=False)
+class ProxmoxEndpointBulkDeleteView(generic.BulkDeleteView):
+    """Bulk-delete Proxmox endpoint records."""
+
+    queryset = ProxmoxEndpoint.objects.all()
+    filterset = ProxmoxEndpointFilterSet
+    table = ProxmoxEndpointTable
 
 
 @register_model_view(

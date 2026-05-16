@@ -57,6 +57,24 @@ class CloudImageTemplateSerializer(NetBoxModelSerializer):
             "is_active",
         )
 
+    def _apply_allowed_tenants(self, instance, allowed_tenants):
+        if allowed_tenants is not None:
+            instance.allowed_tenants.set(allowed_tenants)
+
+    def create(self, validated_data):
+        """Create while applying tenant scope after the instance exists."""
+        allowed_tenants = validated_data.pop("allowed_tenants", None)
+        instance = super().create(validated_data)
+        self._apply_allowed_tenants(instance, allowed_tenants)
+        return instance
+
+    def update(self, instance, validated_data):
+        """Update writable nested fields without DRF's default nested assertion."""
+        allowed_tenants = validated_data.pop("allowed_tenants", None)
+        instance = super().update(instance, validated_data)
+        self._apply_allowed_tenants(instance, allowed_tenants)
+        return instance
+
 
 class NestedCloudImageTemplateSerializer(WritableNestedSerializer):
     """Nested cloud image template representation for related serializers."""

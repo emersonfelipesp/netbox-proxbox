@@ -106,6 +106,48 @@
       </div>
     </div>
 
+    {% if summary.rules %}
+    <div class="card mb-3">
+      <h5 class="card-header">{% trans "HA Rules (PVE 9.x)" %}</h5>
+      <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+          <thead>
+            <tr>
+              <th>{% trans "Cluster" %}</th>
+              <th>{% trans "Rule" %}</th>
+              <th>{% trans "Type" %}</th>
+              <th>{% trans "Affinity" %}</th>
+              <th>{% trans "Nodes" %}</th>
+              <th>{% trans "Resources" %}</th>
+              <th>{% trans "Strict" %}</th>
+              <th>{% trans "Comment" %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for rule in summary.rules %}
+              <tr>
+                <td>{{ rule.cluster_name|default:"—" }}</td>
+                <td><code>{{ rule.rule }}</code></td>
+                <td>{{ rule.type|default:"—" }}</td>
+                <td>{{ rule.affinity|default:"—" }}</td>
+                <td>{{ rule.nodes|default:"—" }}</td>
+                <td>{{ rule.resources|default:"—" }}</td>
+                <td>
+                  {% if rule.strict is True %}
+                    <span class="badge text-bg-blue">{% trans "Yes" %}</span>
+                  {% else %}—{% endif %}
+                </td>
+                <td>{{ rule.comment|default:"—" }}</td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="8" class="text-muted">{% trans "No HA rules configured." %}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+
     <div class="card mb-3">
       <h5 class="card-header">{% trans "HA Resources" %}</h5>
       <div class="card-body p-0">
