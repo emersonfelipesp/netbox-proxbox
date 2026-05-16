@@ -11,7 +11,13 @@ from netbox_pbs.models import PBSPluginSettings
 
 logger = logging.getLogger("netbox_pbs.http_client")
 
-PBS_SYNC_RESOURCES: tuple[str, ...] = ("full", "datastores", "snapshots", "jobs", "node")
+PBS_SYNC_RESOURCES: tuple[str, ...] = (
+    "full",
+    "datastores",
+    "snapshots",
+    "jobs",
+    "node",
+)
 
 _PBS_HTTP_TIMEOUT: tuple[float, float] = (5.0, 300.0)
 
@@ -104,7 +110,9 @@ def _request_json(
     try:
         return response.json()
     except ValueError as exc:
-        raise PBSBackendError(f"PBS backend returned non-JSON body for {path}: {exc}") from exc
+        raise PBSBackendError(
+            f"PBS backend returned non-JSON body for {path}: {exc}"
+        ) from exc
 
 
 def get_pbs_status(request: object | None = None) -> dict[str, Any]:

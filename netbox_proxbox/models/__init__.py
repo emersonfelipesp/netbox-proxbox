@@ -7,6 +7,9 @@ from netbox_proxbox.models.cloud_image_template import CloudImageTemplate
 from netbox_proxbox.models.deletion_request import DeletionRequest
 from netbox_proxbox.models.fastapi_endpoint import FastAPIEndpoint
 from netbox_proxbox.models.netbox_endpoint import NetBoxEndpoint
+from netbox_proxbox.models.pbs_endpoint import PBSEndpoint
+from netbox_proxbox.models.pdm_endpoint import PDMEndpoint
+from netbox_proxbox.models.pdm_remote import PDMRemote, PDMRemoteTypeChoices
 from netbox_proxbox.models.plugin_settings import ProxboxPluginSettings
 from netbox_proxbox.models.proxmox_cluster import ProxmoxCluster
 from netbox_proxbox.models.proxmox_endpoint import ProxmoxEndpoint
@@ -26,6 +29,10 @@ __all__ = (
     "FastAPIEndpoint",
     "NetBoxEndpoint",
     "NodeSSHCredential",
+    "PBSEndpoint",
+    "PDMEndpoint",
+    "PDMRemote",
+    "PDMRemoteTypeChoices",
     "ProxboxPluginSettings",
     "ProxmoxApplyJob",
     "ProxmoxCluster",

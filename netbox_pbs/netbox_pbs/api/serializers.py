@@ -5,7 +5,13 @@ from __future__ import annotations
 from netbox.api.serializers import NetBoxModelSerializer
 from rest_framework import serializers
 
-from netbox_pbs.models import PBSDatastore, PBSJob, PBSPluginSettings, PBSServer, PBSSnapshot
+from netbox_pbs.models import (
+    PBSDatastore,
+    PBSJob,
+    PBSPluginSettings,
+    PBSServer,
+    PBSSnapshot,
+)
 
 
 class PBSPluginSettingsSerializer(NetBoxModelSerializer):

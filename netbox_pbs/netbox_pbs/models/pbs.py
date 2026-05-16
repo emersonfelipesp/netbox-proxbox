@@ -88,7 +88,9 @@ class PBSServer(NetBoxModel):
     host = models.CharField(max_length=255, verbose_name=_("Host"))
     port = models.IntegerField(default=8007, verbose_name=_("Port"))
     token_id = models.CharField(max_length=255, verbose_name=_("Token ID"))
-    fingerprint = models.CharField(max_length=255, blank=True, verbose_name=_("Fingerprint"))
+    fingerprint = models.CharField(
+        max_length=255, blank=True, verbose_name=_("Fingerprint")
+    )
     verify_ssl = models.BooleanField(default=True, verbose_name=_("Verify SSL"))
     status = models.CharField(
         max_length=32,
@@ -97,7 +99,9 @@ class PBSServer(NetBoxModel):
         verbose_name=_("Status"),
     )
     version = models.CharField(max_length=128, blank=True, verbose_name=_("Version"))
-    last_seen_at = models.DateTimeField(null=True, blank=True, verbose_name=_("Last seen"))
+    last_seen_at = models.DateTimeField(
+        null=True, blank=True, verbose_name=_("Last seen")
+    )
 
     class Meta:
         ordering = ("name",)
@@ -122,9 +126,15 @@ class PBSDatastore(NetBoxModel):
     )
     name = models.CharField(max_length=255, verbose_name=_("Name"))
     path = models.CharField(max_length=1024, verbose_name=_("Path"))
-    used_bytes = models.BigIntegerField(null=True, blank=True, verbose_name=_("Used bytes"))
-    total_bytes = models.BigIntegerField(null=True, blank=True, verbose_name=_("Total bytes"))
-    avail_bytes = models.BigIntegerField(null=True, blank=True, verbose_name=_("Available bytes"))
+    used_bytes = models.BigIntegerField(
+        null=True, blank=True, verbose_name=_("Used bytes")
+    )
+    total_bytes = models.BigIntegerField(
+        null=True, blank=True, verbose_name=_("Total bytes")
+    )
+    avail_bytes = models.BigIntegerField(
+        null=True, blank=True, verbose_name=_("Available bytes")
+    )
     gc_status = models.CharField(
         max_length=32,
         choices=PBSGCStatusChoices,
@@ -132,7 +142,9 @@ class PBSDatastore(NetBoxModel):
         verbose_name=_("GC status"),
     )
     comment = models.CharField(max_length=1024, blank=True, verbose_name=_("Comment"))
-    last_seen_at = models.DateTimeField(null=True, blank=True, verbose_name=_("Last seen"))
+    last_seen_at = models.DateTimeField(
+        null=True, blank=True, verbose_name=_("Last seen")
+    )
 
     class Meta:
         ordering = ("server", "name")
@@ -168,8 +180,12 @@ class PBSSnapshot(NetBoxModel):
         verbose_name=_("Backup type"),
     )
     backup_id = models.CharField(max_length=255, verbose_name=_("Backup ID"))
-    backup_time = models.DateTimeField(null=True, blank=True, verbose_name=_("Backup time"))
-    size_bytes = models.BigIntegerField(null=True, blank=True, verbose_name=_("Size bytes"))
+    backup_time = models.DateTimeField(
+        null=True, blank=True, verbose_name=_("Backup time")
+    )
+    size_bytes = models.BigIntegerField(
+        null=True, blank=True, verbose_name=_("Size bytes")
+    )
     owner = models.CharField(max_length=255, blank=True, verbose_name=_("Owner"))
     protected = models.BooleanField(default=False, verbose_name=_("Protected"))
     comment = models.CharField(max_length=1024, blank=True, verbose_name=_("Comment"))
@@ -178,15 +194,29 @@ class PBSSnapshot(NetBoxModel):
         blank=True,
         verbose_name=_("Verification state"),
     )
-    last_seen_at = models.DateTimeField(null=True, blank=True, verbose_name=_("Last seen"))
+    last_seen_at = models.DateTimeField(
+        null=True, blank=True, verbose_name=_("Last seen")
+    )
 
     class Meta:
-        ordering = ("server", "datastore_name", "backup_type", "backup_id", "-backup_time")
+        ordering = (
+            "server",
+            "datastore_name",
+            "backup_type",
+            "backup_id",
+            "-backup_time",
+        )
         verbose_name = _("PBS snapshot")
         verbose_name_plural = _("PBS snapshots")
         constraints = [
             models.UniqueConstraint(
-                fields=("server", "datastore_name", "backup_type", "backup_id", "backup_time"),
+                fields=(
+                    "server",
+                    "datastore_name",
+                    "backup_type",
+                    "backup_id",
+                    "backup_time",
+                ),
                 name="netbox_pbs_snapshot_identity",
             )
         ]
@@ -229,7 +259,9 @@ class PBSJob(NetBoxModel):
         verbose_name=_("Last run end time"),
     )
     next_run = models.DateTimeField(null=True, blank=True, verbose_name=_("Next run"))
-    last_seen_at = models.DateTimeField(null=True, blank=True, verbose_name=_("Last seen"))
+    last_seen_at = models.DateTimeField(
+        null=True, blank=True, verbose_name=_("Last seen")
+    )
 
     class Meta:
         ordering = ("server", "job_type", "job_id")

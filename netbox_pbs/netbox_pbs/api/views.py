@@ -6,7 +6,13 @@ from netbox.api.viewsets import NetBoxModelViewSet
 
 from netbox_pbs import filtersets
 from netbox_pbs.api import serializers
-from netbox_pbs.models import PBSDatastore, PBSJob, PBSPluginSettings, PBSServer, PBSSnapshot
+from netbox_pbs.models import (
+    PBSDatastore,
+    PBSJob,
+    PBSPluginSettings,
+    PBSServer,
+    PBSSnapshot,
+)
 
 _READ_ONLY_HTTP_METHODS = ("get", "head", "options")
 
