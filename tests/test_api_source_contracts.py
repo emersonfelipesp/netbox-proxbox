@@ -612,7 +612,7 @@ def test_vm_resource_api_filters_full_queryset_before_limit_offset_pagination():
     assert "paginator = LimitOffsetPagination()" in source
     assert "paginator.default_limit = 1000" in source
     assert "paginator.max_limit = 5000" in source
-    assert '"count": qs.count()' in source
+    assert '"count": len(results)' in source
     assert '"next": None' in source
     assert '"previous": None' in source
     assert "paginator.paginate_queryset(qs, request, view=self)" in source
