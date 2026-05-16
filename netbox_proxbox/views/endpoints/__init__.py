@@ -20,6 +20,7 @@ from .netbox import (
     NetBoxExportQuickAddTokenView,
 )
 from .proxmox import (
+    ProxmoxEndpointBulkDeleteView,
     ProxmoxEndpointBulkImportView,
     ProxmoxEndpointDeleteView,
     ProxmoxEndpointEditView,
