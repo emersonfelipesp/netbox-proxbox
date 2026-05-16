@@ -20,23 +20,21 @@ Proxbox discovers and syncs the following from Proxmox into NetBox:
 
 Sync runs on-demand from the NetBox UI or scheduled automatically via NetBox's job system.
 
-## What's New in v0.0.15.post1
+## What's New in v0.0.15.post2
 
-Paired with backend [`proxbox-api 0.0.11.post1`](https://github.com/emersonfelipesp/proxbox-api).
+Paired with backend [`proxbox-api 0.0.11.post2`](https://github.com/emersonfelipesp/proxbox-api).
 
-- **VM/LXC resource API pagination** — `/api/plugins/proxbox/resources/virtual-machines/` and `/api/plugins/proxbox/resources/lxc-containers/` now filter the full proxbox-tagged VM set before applying optional `limit`/`offset` pagination, fixing the 100-object truncation regression.
-- **PVE 9.x HA rules** — Cluster HA dashboard now renders the new `rules` field exposed by `proxbox-api` so PVE 9.x clusters (where `cluster/ha/groups` was replaced by `cluster/ha/rules`) get a populated HA view instead of an empty one.
-- **Cloud template updates** — REST API now accepts PUT/PATCH on cloud image templates via the `CloudImageTemplateSerializer` delegation through `NetBoxModelSerializer`.
-- **Bulk-delete fix** — `ProxmoxEndpointBulkDeleteView` resolves the 404 hit when bulk-deleting proxmox endpoints from the list view.
-- **Sync resilience** — Full update now skips optional stages (backups, snapshots, task history) on individual stage failure instead of aborting the whole sync; required stages still surface errors.
-- **Read-only reflection path is unchanged.** No NetBox compatibility rotation ships in this patch release.
+- **Build PVE template action** — `ProxmoxEndpointViewSet` exposes a `build-pve-template` action so operators can build PVE-installer cloud-init templates against an endpoint from the plugin REST API; mirrors the `/cloud/templates/pve` route added in `proxbox-api 0.0.11.post2`.
+- **Backend pickup of proxmox-sdk 0.0.5.post1** — The paired `proxbox-api 0.0.11.post2` lifts its `proxmox-sdk` pin from `0.0.4.post3` to `0.0.5.post1`, which adds the new `proxmox_sdk.pdm` subpackage (full PDM SDK + CLI + TUI + mock server). This release is the foundation cut before the plugin-side PDM model + UI work tracked in [#449](https://github.com/emersonfelipesp/netbox-proxbox/issues/449).
+- **Read-only reflection path is unchanged.** No NetBox compatibility rotation ships in this patch release. Carries forward every fix shipped in `v0.0.15.post1`.
 
-Full notes: [Release Notes — v0.0.15.post1](https://emersonfelipesp.github.io/netbox-proxbox/release-notes/version-0.0.15.post1/).
+Full notes: [Release Notes — v0.0.15.post2](https://emersonfelipesp.github.io/netbox-proxbox/release-notes/version-0.0.15.post2/).
 
 ## Compatibility Matrix
 
 | NetBox   | netbox-proxbox | proxbox-api | netbox-sdk     | proxmox-sdk    |
 |----------|----------------|-------------|----------------|----------------|
+| >=4.5.8  | v0.0.15.post2        | v0.0.11.post2    | v0.0.8.post1   | v0.0.5.post1   |
 | >=4.5.8  | v0.0.15.post1        | v0.0.11.post1    | v0.0.8.post1   | v0.0.3.post1   |
 | >=4.5.8  | v0.0.15              | v0.0.11          | v0.0.8.post1   | v0.0.3.post1   |
 | >=4.5.8  | v0.0.14              | v0.0.10.post2    | v0.0.8.post1   | v0.0.3.post1   |
