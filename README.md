@@ -20,20 +20,24 @@ Proxbox discovers and syncs the following from Proxmox into NetBox:
 
 Sync runs on-demand from the NetBox UI or scheduled automatically via NetBox's job system.
 
-## What's New in v0.0.16
+## What's New in v0.0.15.post1
 
-Paired with backend [`proxbox-api 0.0.11`](https://github.com/emersonfelipesp/proxbox-api).
+Paired with backend [`proxbox-api 0.0.11.post1`](https://github.com/emersonfelipesp/proxbox-api).
 
 - **VM/LXC resource API pagination** — `/api/plugins/proxbox/resources/virtual-machines/` and `/api/plugins/proxbox/resources/lxc-containers/` now filter the full proxbox-tagged VM set before applying optional `limit`/`offset` pagination, fixing the 100-object truncation regression.
-- **Read-only reflection path is unchanged.** No NetBox compatibility rotation or backend dependency change ships in this patch release.
+- **PVE 9.x HA rules** — Cluster HA dashboard now renders the new `rules` field exposed by `proxbox-api` so PVE 9.x clusters (where `cluster/ha/groups` was replaced by `cluster/ha/rules`) get a populated HA view instead of an empty one.
+- **Cloud template updates** — REST API now accepts PUT/PATCH on cloud image templates via the `CloudImageTemplateSerializer` delegation through `NetBoxModelSerializer`.
+- **Bulk-delete fix** — `ProxmoxEndpointBulkDeleteView` resolves the 404 hit when bulk-deleting proxmox endpoints from the list view.
+- **Sync resilience** — Full update now skips optional stages (backups, snapshots, task history) on individual stage failure instead of aborting the whole sync; required stages still surface errors.
+- **Read-only reflection path is unchanged.** No NetBox compatibility rotation ships in this patch release.
 
-Full notes: [Release Notes — v0.0.16](https://emersonfelipesp.github.io/netbox-proxbox/release-notes/version-0.0.16/).
+Full notes: [Release Notes — v0.0.15.post1](https://emersonfelipesp.github.io/netbox-proxbox/release-notes/version-0.0.15.post1/).
 
 ## Compatibility Matrix
 
 | NetBox   | netbox-proxbox | proxbox-api | netbox-sdk     | proxmox-sdk    |
 |----------|----------------|-------------|----------------|----------------|
-| >=4.5.8  | v0.0.16              | v0.0.11          | v0.0.8.post1   | v0.0.3.post1   |
+| >=4.5.8  | v0.0.15.post1        | v0.0.11.post1    | v0.0.8.post1   | v0.0.3.post1   |
 | >=4.5.8  | v0.0.15              | v0.0.11          | v0.0.8.post1   | v0.0.3.post1   |
 | >=4.5.8  | v0.0.14              | v0.0.10.post2    | v0.0.8.post1   | v0.0.3.post1   |
 | >=4.5.8  | v0.0.13.post4        | v0.0.9.post2     | v0.0.7.post6   | v0.0.3.post1   |

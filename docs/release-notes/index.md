@@ -4,13 +4,13 @@ This section tracks the release line represented by this repository and keeps ol
 
 ## Current Release Line
 
-The plugin source in this repository is currently `0.0.16`.
+The plugin source in this repository is currently `0.0.15.post1`.
 
 ## Highlights By Version
 
 | Version | Summary |
 |---------|---------|
-| `0.0.16` | Fixes VM/LXC resource API truncation by filtering the full proxbox-tagged VM queryset before optional `limit`/`offset` pagination. No NetBox compatibility or backend pairing rotation. |
+| `0.0.15.post1` | Post-release patch on stable `0.0.15`: VM/LXC resource API pagination (fixes 100-object truncation), PVE 9.x HA rules in the cluster HA dashboard, cloud image template PUT/PATCH support, `ProxmoxEndpointBulkDeleteView` bulk-delete 404 fix, `NetBoxModelSerializer` MRO delegation for create/update, and full-update resilience (skip optional stages on failure). Paired with backend `proxbox-api 0.0.11.post1`. No NetBox compatibility rotation. |
 | `0.0.15` | Adds the opt-in **NetBox → Proxmox intent** path (issue #377, twelve sub-PRs A–L): typed-confirmation master flag, branch-merge `post_merge` hook, plan validator, CREATE/UPDATE dispatchers, safe-delete with `DeletionRequest` four-eyes approval flow, cloud-init payload mapping, and the apply-job + deletion-request UIs. Also decouples HTTPS scheme from `Verify SSL` on `FastAPIEndpoint` (issue #352); adds `overwrite_ip_address_dns_name` so the backend can populate `IPAddress.dns_name` from Proxmox guest hostnames (issue #354); ships a per-VM **HA tab**, a cluster-wide **HA Status** page (issue #243), and the forward-compatible SSH hardware-discovery credential surface for issue #374. Pairs with backend `proxbox-api 0.0.11`, which ships both the reflection/HA surface and the `/intent/*` HTTP surface. With `netbox_to_proxmox_enabled=False` (default), no behavior changes from the read-only reflection path. |
 | `0.0.14` | Certification bump for the separate `proxbox-api` backend release `0.0.10.post2`. No plugin source changes; REST / SSE / WebSocket / auth / overwrite-flag contracts remain compatible with backend `0.0.9.post2`. Backend internally adopts `netbox-sdk==0.0.8.post1` and supports NetBox `4.5.8`, `4.5.9`, and official `4.6.0`. |
 | `0.0.13.post4` | Re-pins `proxbox-api==0.0.9.post2` (fixes `create_storages()` `TypeError` regression in `0.0.9.post1`); certifies NetBox `4.5.8` and `4.5.9` for issue #349. Supersedes `0.0.13.post3` which never reached PyPI due to a stale `uv.lock`. |
