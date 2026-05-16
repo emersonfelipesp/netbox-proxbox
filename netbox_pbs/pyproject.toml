@@ -1,0 +1,20 @@
+[build-system]
+requires = ['setuptools>=61', 'wheel']
+build-backend = 'setuptools.build_meta'
+
+[tool.setuptools.packages.find]
+include = ['netbox_pbs*']
+
+[project]
+name = 'netbox-pbs'
+version = '0.0.1'
+description = 'NetBox plugin for Proxmox Backup Server (PBS) inventory through proxbox-api'
+readme = 'README.md'
+requires-python = '>=3.11'
+dependencies = ['requests>=2.33.0']
+
+[project.optional-dependencies]
+test = ['pytest>=9.0.3']
+
+# proxmox-sdk==0.0.5.post1 is the PBS backend contract reference.
+# It is intentionally not a required runtime dependency of this NetBox plugin.

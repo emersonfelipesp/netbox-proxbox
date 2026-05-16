@@ -281,6 +281,8 @@ class CloudImageOSFamilyChoices(ChoiceSet):
     ROCKY = "rocky"
     ALPINE = "alpine"
     GENERIC = "generic"
+    PROXMOX_PBS = "proxmox-pbs"
+    PROXMOX_PDM = "proxmox-pdm"
 
     CHOICES = [
         (UBUNTU, _("Ubuntu"), "orange"),
@@ -288,6 +290,8 @@ class CloudImageOSFamilyChoices(ChoiceSet):
         (ROCKY, _("Rocky Linux"), "green"),
         (ALPINE, _("Alpine Linux"), "blue"),
         (GENERIC, _("Generic Linux"), "gray"),
+        (PROXMOX_PBS, _("Proxmox Backup Server"), "purple"),
+        (PROXMOX_PDM, _("Proxmox Datacenter Manager"), "cyan"),
     ]
 
 

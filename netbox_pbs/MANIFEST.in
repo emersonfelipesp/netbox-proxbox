@@ -1,0 +1,2 @@
+recursive-include netbox_pbs/templates *.html
+recursive-include netbox_pbs/migrations *.py
