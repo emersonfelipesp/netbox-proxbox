@@ -30,12 +30,15 @@ from .serializers import (
     ProxmoxNodeSerializer,
     ProxmoxStorageSerializer,
     ProxmoxVMCloudInitSerializer,
+    PVETemplateBuildRequestSerializer,
+    PVETemplateBuildResponseSerializer,
     ReplicationSerializer,
     ScheduleSyncRequestSerializer,
     VMBackupSerializer,
     VMSnapshotSerializer,
     VMTaskHistorySerializer,
 )
+from netbox_proxbox.api.build_pve_template import build_pve_template_via_backend
 
 
 class ProxBoxRootView(APIRootView):
@@ -183,6 +186,40 @@ class ProxmoxEndpointViewSet(NetBoxModelViewSet):
     )
     serializer_class = ProxmoxEndpointSerializer
     filterset_class = filtersets.ProxmoxEndpointFilterSet
+
+    @extend_schema(
+        request=PVETemplateBuildRequestSerializer,
+        responses={
+            201: PVETemplateBuildResponseSerializer,
+            502: OpenApiTypes.OBJECT,
+            503: OpenApiTypes.OBJECT,
+        },
+        operation_id="proxbox_proxmox_endpoint_build_pve_template",
+    )
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="build-pve-template",
+        url_name="build-pve-template",
+        permission_classes=[IsAuthenticated],
+    )
+    def build_pve_template(self, request: Request, pk: int | None = None) -> Response:
+        """Trigger a PVE-installer cloud-init template build via proxbox-api.
+
+        Validates the request body against ``PVETemplateBuildRequestSerializer``,
+        injects ``endpoint_id`` from the URL path, then proxies the call to
+        the companion ``POST /cloud/templates/pve`` endpoint on proxbox-api.
+        The response is the upstream body verbatim — including the rendered
+        cloud-init snippets the operator must drop into
+        ``/var/lib/vz/snippets/`` on the target host.
+        """
+        endpoint = self.get_object()
+        serializer = PVETemplateBuildRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        payload = dict(serializer.validated_data)
+        payload["endpoint_id"] = endpoint.pk
+        body, status_code = build_pve_template_via_backend(payload)
+        return Response(body, status=status_code)
 
 
 class NetBoxEndpointViewSet(NetBoxModelViewSet):
