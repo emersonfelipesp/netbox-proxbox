@@ -22,11 +22,17 @@ Sync runs on-demand from the NetBox UI or scheduled automatically via NetBox's j
 
 ## Sibling Plugins
 
-| Plugin | Purpose | Status |
-|--------|---------|--------|
-| `netbox_ceph` | Read-only Ceph inventory reflected through Proxmox/proxbox-api | Available |
-| `netbox_pbs` | Proxmox Backup Server inventory reflected through proxbox-api | Available |
-| `netbox_packer` | Packer-backed Proxmox image factory scaffold | Scaffold |
+Starting with the `v0.0.16` line, the sibling plugins live in standalone
+repositories under [@emersonfelipesp](https://github.com/emersonfelipesp) and
+each declares `netbox-proxbox>=0.0.16` as a dependency. They all reuse the
+same `proxbox-api` backend.
+
+| Plugin | Repository | Purpose |
+|--------|------------|---------|
+| `netbox_pbs` | [`emersonfelipesp/netbox-pbs`](https://github.com/emersonfelipesp/netbox-pbs) | Proxmox Backup Server inventory |
+| `netbox_ceph` | [`emersonfelipesp/netbox-ceph`](https://github.com/emersonfelipesp/netbox-ceph) | Read-only Proxmox-managed Ceph inventory |
+| `netbox_pdm` | [`emersonfelipesp/netbox-pdm`](https://github.com/emersonfelipesp/netbox-pdm) | Proxmox Datacenter Manager inventory |
+| `netbox_packer` | [`emersonfelipesp/netbox-packer`](https://github.com/emersonfelipesp/netbox-packer) | HashiCorp Packer image-factory for Proxmox |
 
 ## What's New in v0.0.16
 

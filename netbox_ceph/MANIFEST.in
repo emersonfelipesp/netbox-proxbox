@@ -1,2 +1,0 @@
-recursive-include netbox_ceph/templates *.html
-recursive-include netbox_ceph/migrations *.py
