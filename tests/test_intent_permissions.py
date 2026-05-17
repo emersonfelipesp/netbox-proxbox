@@ -105,10 +105,7 @@ def test_migration_0038_lists_both_models():
         for node in ast.walk(module)
         if isinstance(node, ast.Call)
         and (
-            (
-                isinstance(node.func, ast.Attribute)
-                and node.func.attr == "CreateModel"
-            )
+            (isinstance(node.func, ast.Attribute) and node.func.attr == "CreateModel")
             or (
                 isinstance(node.func, ast.Name)
                 and node.func.id == "create_model_idempotent"
