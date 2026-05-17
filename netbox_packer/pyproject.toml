@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["netbox_packer*"]
+
+[project]
+name = "netbox-packer"
+version = "0.0.1"
+description = "NetBox plugin for Proxmox VM image (template) builds backed by HashiCorp Packer via proxbox-api"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "netbox-proxbox>=0.0.16",
+    "requests>=2.33.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=9.0.3"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]

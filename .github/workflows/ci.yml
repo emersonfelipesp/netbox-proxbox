@@ -68,7 +68,7 @@ jobs:
           python -m pip install -e ".[test]"
 
       - name: Compile package
-        run: python -m compileall netbox_proxbox tests
+        run: python -m compileall netbox_proxbox netbox_packer tests
 
   test:
     runs-on: ubuntu-latest

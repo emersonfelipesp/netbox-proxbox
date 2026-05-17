@@ -20,6 +20,14 @@ Proxbox discovers and syncs the following from Proxmox into NetBox:
 
 Sync runs on-demand from the NetBox UI or scheduled automatically via NetBox's job system.
 
+## Sibling Plugins
+
+| Plugin | Purpose | Status |
+|--------|---------|--------|
+| `netbox_ceph` | Read-only Ceph inventory reflected through Proxmox/proxbox-api | Available |
+| `netbox_pbs` | Proxmox Backup Server inventory reflected through proxbox-api | Available |
+| `netbox_packer` | Packer-backed Proxmox image factory scaffold | Scaffold |
+
 ## What's New in v0.0.16
 
 Paired with backend [`proxbox-api 0.0.11`](https://github.com/emersonfelipesp/proxbox-api).
