@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from django.contrib import messages
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
@@ -17,14 +18,17 @@ from utilities.views import (
 
 from core.models import Job
 from netbox_packer import filtersets, forms, tables
+from netbox_packer.choices import PackerBuildStatusChoices
+from netbox_packer.jobs import PackerImageBuildJob
 from netbox_packer.models import (
     PackerImageBuild,
     PackerImageDefinition,
     PackerPluginSettings,
 )
-
-PHASE4_BUILD_MESSAGE = "Build queueing wired in PHASE4"
-PHASE4_CANCEL_MESSAGE = "Cancel wired in PHASE4"
+from netbox_packer.services.http_client import (
+    ImageFactoryBackendError,
+    cancel_image_build,
+)
 
 
 class PackerHomeView(ConditionalLoginRequiredMixin, generic.ObjectListView):
@@ -174,7 +178,7 @@ class PackerImageBuildSubmitView(
     ContentTypePermissionRequiredMixin,
     View,
 ):
-    """POST-only PHASE3 build action placeholder."""
+    """POST-only view that creates a PackerImageBuild and enqueues the job."""
 
     http_method_names = ["post"]
     additional_permissions = [
@@ -192,9 +196,59 @@ class PackerImageBuildSubmitView(
         form = forms.PackerImageBuildSubmitForm(request.POST, definition=definition)
         if not form.is_valid():
             return HttpResponse(form.errors.as_json(), status=400)
-        return HttpResponse(
-            f'<div class="alert alert-info">{PHASE4_BUILD_MESSAGE}</div>',
-            status=202,
+
+        # --- PHASE6: feature gate checks ---
+        settings = PackerPluginSettings.get_solo()
+
+        if not settings.image_factory_enabled:
+            messages.error(request, "Image factory is disabled in Packer plugin settings.")
+            return HttpResponse("Image factory disabled.", status=403)
+
+        if not definition.proxmox_endpoint.allow_writes:
+            messages.error(
+                request,
+                f"Proxmox endpoint '{definition.proxmox_endpoint}' does not allow writes.",
+            )
+            return HttpResponse("Proxmox endpoint writes disabled.", status=403)
+
+        running_count = PackerImageBuild.objects.filter(
+            status=PackerBuildStatusChoices.RUNNING
+        ).count()
+        if running_count >= settings.image_factory_max_concurrent_builds:
+            messages.error(
+                request,
+                f"Maximum concurrent image builds ({settings.image_factory_max_concurrent_builds}) reached.",
+            )
+            return HttpResponse("Too many concurrent builds.", status=429)
+
+        # --- Create build record ---
+        cd = form.cleaned_data
+        build = PackerImageBuild.objects.create(
+            definition=definition,
+            proxmox_endpoint=definition.proxmox_endpoint,
+            target_node=definition.target_node,
+            output_vmid=cd["output_vmid"],
+            output_name=cd["output_name"],
+            image_version=cd["image_version"],
+            status=PackerBuildStatusChoices.PENDING,
+            created_by=request.user,
+        )
+
+        # --- Enqueue job ---
+        job = PackerImageBuildJob.enqueue(
+            instance=build,
+            user=request.user,
+            job_timeout=settings.image_factory_default_job_timeout,
+            force=cd["force"],
+            dry_run=cd["dry_run"],
+        )
+
+        build.netbox_job_id = job.pk
+        build.save(update_fields=["netbox_job_id"])
+
+        messages.success(request, f"Packer image build queued (build #{build.pk}).")
+        return redirect(
+            reverse("plugins:netbox_packer:packerimagebuild", args=[build.pk])
         )
 
 
@@ -243,7 +297,7 @@ class PackerImageBuildCancelView(
     ContentTypePermissionRequiredMixin,
     View,
 ):
-    """POST-only PHASE3 cancel action placeholder."""
+    """POST-only view that cancels a running or pending Packer image build."""
 
     http_method_names = ["post"]
     additional_permissions = [
@@ -254,11 +308,34 @@ class PackerImageBuildCancelView(
         return get_permission_for_model(Job, "delete")
 
     def post(self, request: HttpRequest, pk: int | str) -> HttpResponse:
-        get_object_or_404(
+        build = get_object_or_404(
             PackerImageBuild.objects.restrict(request.user, "view"),
             pk=pk,
         )
-        return HttpResponse(
-            f'<div class="alert alert-info">{PHASE4_CANCEL_MESSAGE}</div>',
-            status=202,
+
+        if build.status not in (
+            PackerBuildStatusChoices.PENDING,
+            PackerBuildStatusChoices.RUNNING,
+        ):
+            messages.warning(request, f"Build #{build.pk} is not cancellable (status: {build.status}).")
+            return redirect(
+                reverse("plugins:netbox_packer:packerimagebuild", args=[build.pk])
+            )
+
+        # Cancel backend build if one was started.
+        if build.backend_build_id:
+            try:
+                cancel_image_build(backend_build_id=build.backend_build_id)
+            except ImageFactoryBackendError as exc:
+                messages.warning(
+                    request,
+                    f"Backend cancel call failed (build may still stop): {exc}",
+                )
+
+        build.status = PackerBuildStatusChoices.CANCELLED
+        build.save(update_fields=["status", "last_updated"])
+
+        messages.success(request, f"Build #{build.pk} cancelled.")
+        return redirect(
+            reverse("plugins:netbox_packer:packerimagebuild", args=[build.pk])
         )
