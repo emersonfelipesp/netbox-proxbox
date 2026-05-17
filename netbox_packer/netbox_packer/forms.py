@@ -82,6 +82,12 @@ class PackerImageDefinitionForm(NetBoxModelForm):
             "default_variables",
             name=_("Image defaults"),
         ),
+        FieldSet(
+            "iso_storage",
+            "iso_url",
+            "iso_checksum",
+            name=_("ISO builder (proxmox-iso only)"),
+        ),
         FieldSet("allowed_tenants", name=_("Tenant scope")),
     )
 
@@ -104,6 +110,9 @@ class PackerImageDefinitionForm(NetBoxModelForm):
             "default_ciuser",
             "provisioner_recipe",
             "default_variables",
+            "iso_storage",
+            "iso_url",
+            "iso_checksum",
             "allowed_tenants",
             "tags",
             "comments",

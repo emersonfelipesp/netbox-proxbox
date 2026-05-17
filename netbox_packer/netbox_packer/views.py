@@ -211,6 +211,15 @@ class PackerImageBuildSubmitView(
             )
             return HttpResponse("Proxmox endpoint writes disabled.", status=403)
 
+        from netbox_packer.choices import PackerBuilderTypeChoices
+
+        if (
+            definition.builder_type == PackerBuilderTypeChoices.PROXMOX_ISO
+            and not settings.image_factory_allow_iso_builds
+        ):
+            messages.error(request, "ISO-based image builds are not enabled in Packer plugin settings.")
+            return HttpResponse("ISO builds disabled.", status=403)
+
         running_count = PackerImageBuild.objects.filter(
             status=PackerBuildStatusChoices.RUNNING
         ).count()

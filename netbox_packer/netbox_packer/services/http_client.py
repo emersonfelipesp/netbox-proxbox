@@ -46,11 +46,10 @@ def _build_payload(
 ) -> dict[str, Any]:
     """Assemble a PackerImageBuildRequest payload dict from a PackerImageBuild instance."""
     definition = build.definition
-    return {
+    payload: dict[str, Any] = {
         "endpoint_id": definition.proxmox_endpoint_id,
         "target_node": definition.target_node,
         "builder_type": definition.builder_type,
-        "template_vmid": definition.source_template_vmid,
         "output_vmid": build.output_vmid,
         "output_name": build.output_name,
         "os_family": definition.os_family,
@@ -63,6 +62,17 @@ def _build_payload(
         "force": force,
         "dry_run": dry_run,
     }
+    if definition.builder_type == "proxmox-clone":
+        payload["template_vmid"] = definition.source_template_vmid
+    elif definition.builder_type == "proxmox-iso":
+        # Prefer explicit storage ref; fall back to URL.
+        iso_file = definition.iso_storage or ""
+        iso_url = definition.iso_url or ""
+        payload["iso_file"] = iso_file or iso_url
+        payload["iso_checksum"] = definition.iso_checksum or "none"
+        if definition.iso_storage:
+            payload["iso_storage"] = definition.iso_storage
+    return payload
 
 
 def submit_image_build(

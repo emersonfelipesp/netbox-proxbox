@@ -52,7 +52,31 @@ class PackerImageDefinition(NetBoxModel):
     )
     target_node = models.CharField(max_length=255, verbose_name=_("Target node"))
     source_template_vmid = models.PositiveIntegerField(
+        null=True,
+        blank=True,
         verbose_name=_("Source template VMID"),
+        help_text=_("Required for proxmox-clone builder type."),
+    )
+    iso_url = models.URLField(
+        max_length=512,
+        blank=True,
+        verbose_name=_("ISO URL"),
+        help_text=_("Direct URL of the ISO image (proxmox-iso builder only)."),
+    )
+    iso_checksum = models.CharField(
+        max_length=128,
+        blank=True,
+        verbose_name=_("ISO checksum"),
+        help_text=_("SHA-256 checksum prefixed with 'sha256:' (proxmox-iso builder only)."),
+    )
+    iso_storage = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name=_("ISO storage reference"),
+        help_text=_(
+            "Proxmox storage reference for a pre-uploaded ISO "
+            "(e.g. local:iso/ubuntu-22.04.iso). Overrides iso_url if set."
+        ),
     )
     default_storage = models.CharField(
         max_length=255,
@@ -109,18 +133,26 @@ class PackerImageDefinition(NetBoxModel):
 
     def clean(self) -> None:
         super().clean()
-        if (
-            self.builder_type == PackerBuilderTypeChoices.PROXMOX_CLONE
-            and self.target_cluster_id is None
-        ):
-            raise ValidationError(
-                {
-                    "target_cluster": _(
+        errors: dict[str, str] = {}
+        if self.builder_type == PackerBuilderTypeChoices.PROXMOX_CLONE:
+            if self.target_cluster_id is None:
+                errors["target_cluster"] = str(
+                    _(
                         "Target cluster is required for proxmox-clone image "
                         "definitions that publish to the cloud image catalog."
                     )
-                }
-            )
+                )
+            if not self.source_template_vmid:
+                errors["source_template_vmid"] = str(
+                    _("Source template VMID is required for the proxmox-clone builder.")
+                )
+        elif self.builder_type == PackerBuilderTypeChoices.PROXMOX_ISO:
+            if not self.iso_storage and not self.iso_url:
+                errors["iso_storage"] = str(
+                    _("Either ISO storage reference or ISO URL is required for proxmox-iso builder.")
+                )
+        if errors:
+            raise ValidationError(errors)
 
     def get_absolute_url(self) -> str:
         return reverse("plugins:netbox_packer:packerimagedefinition", args=[self.pk])

@@ -12,9 +12,11 @@ class PackerBuilderTypeChoices(ChoiceSet):
     key = "PackerImageDefinition.builder_type"
 
     PROXMOX_CLONE = "proxmox-clone"
+    PROXMOX_ISO = "proxmox-iso"
 
     CHOICES = [
         (PROXMOX_CLONE, _("Proxmox clone"), "blue"),
+        (PROXMOX_ISO, _("Proxmox ISO"), "purple"),
     ]
 
 
