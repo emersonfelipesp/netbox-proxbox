@@ -15,6 +15,7 @@ from stack_common import (
     extract_status_value,
     get_vm_by_proxmox_vmid,
     list_records,
+    log_service_skip,
     require_one,
     snapshot_proxbox_job_ids,
 )
@@ -365,7 +366,11 @@ def assert_task_history_sync_data(
     netbox_token: str,
     *,
     vm_id_101: int,
+    service: str = "pve",
 ) -> None:
+    if service != "pve":
+        log_service_skip(service, "task history sync data assertion")
+        return
     headers = {"Authorization": f"Token {netbox_token}"}
     records = list_records(
         f"{netbox_base_url}/api/plugins/proxbox/task-history/",
@@ -514,8 +519,11 @@ def assert_vm_status_transition(
 
 
 def assert_backend_stream(
-    proxbox_base_url: str, *, proxbox_api_key: str = ""
+    proxbox_base_url: str, *, proxbox_api_key: str = "", service: str = "pve"
 ) -> dict[str, Any]:
+    if service != "pve":
+        log_service_skip(service, "proxbox-api full-update stream")
+        return {}
     auth_headers: dict[str, str] = (
         {"X-Proxbox-API-Key": proxbox_api_key} if proxbox_api_key else {}
     )
@@ -589,7 +597,34 @@ def run_and_assert_all_sync_operations(
     netbox_base_url: str,
     netbox_token: str,
     proxmox_mock_base_url: str,
+    *,
+    service: str = "pve",
 ) -> None:
+    if service != "pve":
+        for name in (
+            "sync devices job",
+            "PVE device data assertion (pve01/e2e-cluster)",
+            "sync storage job",
+            "PVE storage data assertion",
+            "sync virtual machines job",
+            "PVE virtual machine data assertion",
+            "sync virtual disks job",
+            "PVE virtual disk data assertion",
+            "sync VM backups job",
+            "PVE backup data assertion",
+            "sync VM snapshots job",
+            "PVE snapshot data assertion",
+            "sync network interfaces job",
+            "sync IP addresses job",
+            "PVE network/IP data assertion",
+            "sync replications job",
+            "sync backup routines job",
+            "PVE replication/backup routine data assertion",
+            "sync full update job",
+            "PVE VM status transition assertion",
+        ):
+            log_service_skip(service, name)
+        return
     trigger_and_wait_sync(
         netbox_base_url,
         netbox_token,

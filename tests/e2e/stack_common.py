@@ -5,9 +5,23 @@ from __future__ import annotations
 import os
 import time
 from collections.abc import Iterable
+from dataclasses import dataclass
 from typing import Any
 
 import requests
+
+VALID_PROXMOX_SERVICES = ("pve", "pbs", "pdm")
+
+
+@dataclass(frozen=True)
+class StackContext:
+    netbox_base_url: str
+    proxbox_base_url: str
+    proxmox_mock_base_url: str
+    netbox_public_url: str
+    netbox_token: str
+    netbox_token_id: int
+    service: str
 
 
 def must_getenv(name: str) -> str:
@@ -17,12 +31,38 @@ def must_getenv(name: str) -> str:
     return value
 
 
-def wait_http_ok(url: str, *, timeout_seconds: int = 300) -> None:
+def get_proxmox_service() -> str:
+    service = (os.getenv("PROXMOX_SERVICE") or "pve").strip().lower()
+    if service not in VALID_PROXMOX_SERVICES:
+        valid = ", ".join(VALID_PROXMOX_SERVICES)
+        raise RuntimeError(f"Invalid PROXMOX_SERVICE={service!r}; expected one of: {valid}")
+    return service
+
+
+def load_stack_context() -> StackContext:
+    return StackContext(
+        netbox_base_url=must_getenv("NETBOX_BASE_URL"),
+        proxbox_base_url=must_getenv("PROXBOX_BASE_URL"),
+        proxmox_mock_base_url=must_getenv("PROXMOX_MOCK_BASE_URL"),
+        netbox_public_url=must_getenv("NETBOX_PUBLIC_URL"),
+        netbox_token=must_getenv("NETBOX_API_TOKEN"),
+        netbox_token_id=int(must_getenv("NETBOX_TOKEN_ID")),
+        service=get_proxmox_service(),
+    )
+
+
+def log_service_skip(service: str, name: str) -> None:
+    print(f"service={service}: skipping {name}")
+
+
+def wait_http_ok(
+    url: str, *, timeout_seconds: int = 300, verify: bool = True
+) -> None:
     deadline = time.time() + timeout_seconds
     last_error = ""
     while time.time() < deadline:
         try:
-            response = requests.get(url, timeout=5)
+            response = requests.get(url, timeout=5, verify=verify)
             if response.status_code < 500:
                 return
             last_error = f"HTTP {response.status_code}"

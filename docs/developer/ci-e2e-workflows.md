@@ -53,6 +53,14 @@ The reusable inputs select what is under test:
 | `dependency_mode` | `dev`, `published`, `testpypi-package`, `pypi-package` | Selects how the separate `proxbox-api` container is built or installed. |
 | `proxbox_api_version` | Version string | Pins the backend package version for TestPyPI/PyPI package-index E2E modes. |
 | `netbox_image` | Full image ref | Overrides the NetBox image; default matrix covers `v4.5.8`, `v4.5.9`, and `v4.6.0`. |
+| `proxmox_service` | `pve`, `pbs`, `pdm`, `all` | Selects the proxmox-sdk mock image suffix. `all` runs the full per-service matrix. |
+
+### Proxmox Service Matrix
+
+The mock container is split by service: `emersonfelipesp/proxmox-sdk:latest-pve`,
+`latest-pbs`, and `latest-pdm`. The default `proxmox_service: all` expands all
+three. `pve` runs the full sync flow; `pbs` and `pdm` run stack health and
+plugin-internal contract checks while skipping PVE-specific object assertions.
 
 ## Release Validation
 

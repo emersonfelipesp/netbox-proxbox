@@ -23,6 +23,11 @@ on:
         required: false
         type: string
         default: ""
+      proxmox_service:
+        description: "Proxmox service mock selection: pve, pbs, pdm, or all"
+        required: false
+        type: string
+        default: all
   workflow_dispatch:
     inputs:
       install_source:
@@ -56,6 +61,16 @@ on:
         required: false
         type: string
         default: ""
+      proxmox_service:
+        description: "Proxmox service mock"
+        required: false
+        type: choice
+        options:
+          - all
+          - pve
+          - pbs
+          - pdm
+        default: all
   schedule:
     - cron: "31 2 * * *"
 
@@ -63,11 +78,12 @@ env:
   PROXBOX_API_RELEASE_VERSION: 0.0.11
   PROXBOX_API_IMAGE: emersonfelipesp/proxbox-api
   PROXMOX_SDK_IMAGE: emersonfelipesp/proxmox-sdk
+  PROXMOX_SDK_TAG_PREFIX: latest
   PROXBOX_ENCRYPTION_KEY: proxbox-ci-only-encryption-key-not-a-secret
 
 jobs:
   e2e-docker-stack:
-    name: E2E Docker / ${{ matrix.install_source }} / ${{ matrix.netbox_image }} [${{ matrix.network_stack }}]
+    name: E2E Docker / ${{ matrix.install_source }} / ${{ matrix.netbox_image }} / proxmox=${{ matrix.proxmox_service }} [${{ matrix.network_stack }}]
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -78,6 +94,7 @@ jobs:
         install_source: ${{ fromJSON(inputs.install_source != 'both' && format('["{0}"]', inputs.install_source) || '["local","pypi","container"]') }}
         netbox_image: ${{ fromJSON(inputs.netbox_image != '' && format('["{0}"]', inputs.netbox_image) || '["netboxcommunity/netbox:v4.5.8","netboxcommunity/netbox:v4.5.9","netboxcommunity/netbox:v4.6.0"]') }}
         network_stack: [ipv4]
+        proxmox_service: ${{ fromJSON((inputs.proxmox_service == 'pve' || inputs.proxmox_service == 'pbs' || inputs.proxmox_service == 'pdm') && format('["{0}"]', inputs.proxmox_service) || '["pve","pbs","pdm"]') }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -180,7 +197,7 @@ jobs:
             fi
           done
 
-          docker pull "${PROXMOX_SDK_IMAGE}:dev-nginx"
+          docker pull "${PROXMOX_SDK_IMAGE}:${PROXMOX_SDK_TAG_PREFIX}-${{ matrix.proxmox_service }}"
           if ! docker pull "${NETBOX_IMAGE}" 2>/dev/null; then
             NETBOX_VERSION="${NETBOX_IMAGE##*:}"
             git clone --depth 1 https://github.com/netbox-community/netbox-docker.git /tmp/netbox-docker
@@ -198,7 +215,7 @@ jobs:
             -e PROXMOX_MOCK_DATA_PATH=/data/mock-data.json \
             -e PROXMOX_MOCK_SCHEMA_VERSION=none \
             -e APP_MODULE=proxmox_sdk.mock_main:app \
-            "${PROXMOX_SDK_IMAGE}:dev-nginx"
+            "${PROXMOX_SDK_IMAGE}:${PROXMOX_SDK_TAG_PREFIX}-${{ matrix.proxmox_service }}"
 
           if [ "${{ matrix.network_stack }}" = "ipv6" ]; then
             PROXBOX_BIND_HOST_VALUE="::"
@@ -458,6 +475,7 @@ jobs:
           NETBOX_PUBLIC_URL: http://${{ env.NETBOX_PUBLIC_HOST }}:8080
           NETBOX_TOKEN_ID: ${{ env.NETBOX_TOKEN_ID }}
           NETBOX_API_TOKEN: ${{ env.NETBOX_API_TOKEN }}
+          PROXMOX_SERVICE: ${{ matrix.proxmox_service }}
         run: |
           python tests/e2e/e2e_stack_check.py
 
@@ -465,7 +483,7 @@ jobs:
         # Run only against the local install source: published wheels on
         # v0.0.14 and earlier do not yet ship `proxbox_sync`. Other install
         # sources start exercising this once v0.0.15 is on PyPI.
-        if: matrix.install_source == 'local'
+        if: matrix.install_source == 'local' && matrix.proxmox_service == 'pve'
         env:
           NETBOX_IMAGE: ${{ matrix.netbox_image }}
         run: |
@@ -506,7 +524,7 @@ jobs:
           docker logs netbox-e2e-rqworker || true
           echo "=== Proxbox API logs ==="
           docker logs proxbox-e2e-api || true
-          echo "=== Proxmox Mock logs ==="
+          echo "=== Proxmox Mock logs (${PROXMOX_SDK_IMAGE}:${PROXMOX_SDK_TAG_PREFIX}-${{ matrix.proxmox_service }}) ==="
           docker logs proxmox-e2e-mock || true
           echo "=== Postgres logs ==="
           docker logs netbox-e2e-postgres || true

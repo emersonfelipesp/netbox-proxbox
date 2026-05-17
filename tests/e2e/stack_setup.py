@@ -3,13 +3,220 @@
 from __future__ import annotations
 
 import os
-import requests
+import subprocess
+from typing import Any
 from urllib.parse import urlparse
 
-from stack_common import assert_ok, post_json
+import requests
+
+from stack_common import assert_ok, list_records, log_service_skip, post_json
 
 # Fixed E2E API key registered with proxbox-api before any management calls.
 _E2E_PROXBOX_API_KEY = "proxbox-e2e-api-key-for-e2e-testing"
+
+
+def assert_proxmox_mock_contract(proxmox_mock_base_url: str, service: str) -> None:
+    print(f"Checking Proxmox mock health for service={service}")
+    try:
+        health = requests.get(
+            f"{proxmox_mock_base_url}/health", timeout=15, verify=False
+        )
+    except requests.exceptions.RequestException as exc:
+        raise AssertionError(f"Proxmox mock health probe failed: {exc}") from exc
+    if health.status_code >= 400:
+        raise AssertionError(
+            f"Proxmox mock health failed: HTTP {health.status_code} {health.text[:300]}"
+        )
+
+    try:
+        version = requests.get(
+            f"{proxmox_mock_base_url}/api2/json/version", timeout=15, verify=False
+        )
+    except requests.exceptions.RequestException as exc:
+        raise AssertionError(f"Proxmox mock version probe failed: {exc}") from exc
+
+    if service == "pve":
+        payload = assert_ok(version, context="proxmox mock pve version")
+        if not isinstance(payload.get("data"), dict):
+            raise AssertionError(f"PVE mock version payload missing data object: {payload}")
+        return
+
+    if version.status_code >= 500:
+        raise AssertionError(
+            f"{service} mock schema probe failed with server error: "
+            f"HTTP {version.status_code} {version.text[:300]}"
+        )
+    if version.status_code >= 400:
+        print(
+            f"service={service}: accepted mock schema probe HTTP "
+            f"{version.status_code} (no schema yet)"
+        )
+        return
+
+    try:
+        version.json()
+    except ValueError as exc:
+        raise AssertionError(
+            f"{service} mock schema probe returned non-JSON success: {version.text[:300]}"
+        ) from exc
+
+
+def _assert_status_shape(payload: dict[str, Any], *, context: str) -> None:
+    required = {"status", "target_address", "target_port", "authentication", "api_access"}
+    missing = sorted(required - set(payload))
+    if missing:
+        raise AssertionError(f"{context} payload missing keys {missing}: {payload}")
+
+
+def assert_tag_bootstrap(netbox_base_url: str, netbox_token: str) -> None:
+    headers = {"Authorization": f"Token {netbox_token}"}
+    expected_slugs = (
+        "proxbox",
+        "proxbox-discovered-qemu",
+        "proxbox-discovered-lxc",
+        "proxbox-discovered-cluster",
+        "proxbox-discovered-node",
+    )
+    for slug in expected_slugs:
+        records = list_records(
+            f"{netbox_base_url}/api/extras/tags/",
+            headers,
+            context=f"tag bootstrap {slug}",
+            params={"slug": slug, "limit": 2},
+        )
+        if not records:
+            raise AssertionError(f"Missing bootstrapped tag slug={slug!r}")
+
+
+def assert_endpoint_singletons(
+    netbox_base_url: str,
+    netbox_token: str,
+    endpoint_ids: dict[str, int],
+) -> None:
+    headers = {"Authorization": f"Token {netbox_token}"}
+    checks = (
+        ("NetBoxEndpoint", "netbox", "netbox_pk"),
+        ("FastAPIEndpoint", "fastapi", "fastapi_pk"),
+    )
+    for label, route, id_key in checks:
+        records = list_records(
+            f"{netbox_base_url}/api/plugins/proxbox/endpoints/{route}/",
+            headers,
+            context=f"{label} singleton",
+            params={"limit": 50},
+        )
+        if len(records) != 1:
+            raise AssertionError(f"Expected one {label}, found {len(records)}")
+        if int(records[0].get("id") or 0) != endpoint_ids[id_key]:
+            raise AssertionError(f"{label} singleton id mismatch: {records[0]}")
+
+
+def assert_discovery_api_contracts(netbox_base_url: str, netbox_token: str) -> None:
+    headers = {"Authorization": f"Token {netbox_token}"}
+    root_payload = assert_ok(
+        requests.get(
+            f"{netbox_base_url}/api/plugins/proxbox/", headers=headers, timeout=30
+        ),
+        context="plugin api root",
+    )
+    for key in ("endpoints", "settings", "resources", "schedule_sync"):
+        if key not in root_payload:
+            raise AssertionError(f"Plugin API root missing {key!r}: {root_payload}")
+
+    endpoints_payload = assert_ok(
+        requests.get(
+            f"{netbox_base_url}/api/plugins/proxbox/endpoints/",
+            headers=headers,
+            timeout=30,
+        ),
+        context="plugin endpoints api root",
+    )
+    for key in ("proxmox", "netbox", "fastapi"):
+        if key not in endpoints_payload:
+            raise AssertionError(
+                f"Plugin endpoints API root missing {key!r}: {endpoints_payload}"
+            )
+
+    discovery_routes = (
+        "resources/clusters",
+        "resources/nodes",
+        "resources/virtual-machines",
+        "resources/lxc-containers",
+        "resources/interfaces",
+        "resources/ip-addresses",
+        "resources/virtual-disks",
+    )
+    for route in discovery_routes:
+        payload = assert_ok(
+            requests.get(
+                f"{netbox_base_url}/api/plugins/proxbox/{route}/",
+                headers=headers,
+                timeout=30,
+            ),
+            context=f"plugin discovery {route}",
+        )
+        if not isinstance(payload, dict):
+            raise AssertionError(f"Discovery route {route} returned non-object: {payload}")
+
+
+def assert_settings_endpoint_reachable(netbox_base_url: str, netbox_token: str) -> None:
+    headers = {"Authorization": f"Token {netbox_token}"}
+    payload = assert_ok(
+        requests.get(
+            f"{netbox_base_url}/api/plugins/proxbox/settings/runtime/",
+            headers=headers,
+            timeout=30,
+        ),
+        context="plugin settings runtime",
+    )
+    for key in ("bulk_batch_size", "netbox_timeout", "encryption_key_configured"):
+        if key not in payload:
+            raise AssertionError(f"Settings runtime payload missing {key!r}: {payload}")
+
+
+def assert_rq_default_queue_contract() -> None:
+    script = (
+        "from netbox.constants import RQ_QUEUE_DEFAULT; "
+        "from netbox_proxbox.jobs import PROXBOX_SYNC_QUEUE_NAME; "
+        "print(f'{PROXBOX_SYNC_QUEUE_NAME}:{RQ_QUEUE_DEFAULT}')"
+    )
+    cmd = [
+        "docker",
+        "exec",
+        "netbox-e2e",
+        "/opt/netbox/venv/bin/python",
+        "/opt/netbox/netbox/manage.py",
+        "shell",
+        "-c",
+        script,
+    ]
+    try:
+        result = subprocess.run(
+            cmd, check=True, capture_output=True, text=True, timeout=60
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise AssertionError(f"Unable to inspect NetBox RQ queue contract: {exc}") from exc
+
+    output_lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    if not output_lines:
+        raise AssertionError("RQ queue contract check returned no output")
+    queue_name, default_queue = output_lines[-1].split(":", 1)
+    if queue_name != default_queue or queue_name != "default":
+        raise AssertionError(
+            f"Expected PROXBOX_SYNC_QUEUE_NAME to equal default, got {output_lines[-1]!r}"
+        )
+
+
+def assert_plugin_internal_contracts(
+    netbox_base_url: str,
+    netbox_token: str,
+    endpoint_ids: dict[str, int],
+) -> None:
+    assert_discovery_api_contracts(netbox_base_url, netbox_token)
+    assert_tag_bootstrap(netbox_base_url, netbox_token)
+    assert_endpoint_singletons(netbox_base_url, netbox_token, endpoint_ids)
+    assert_settings_endpoint_reachable(netbox_base_url, netbox_token)
+    assert_rq_default_queue_contract()
 
 
 def register_proxbox_api_key(proxbox_base_url: str) -> str:
@@ -197,6 +404,8 @@ def assert_plugin_routes(
     netbox_base_url: str,
     netbox_token: str,
     endpoint_ids: dict[str, int],
+    *,
+    service: str = "pve",
 ) -> None:
     headers = {"Authorization": f"Token {netbox_token}"}
     route_checks = [
@@ -263,17 +472,33 @@ def assert_plugin_routes(
         )
 
     keepalive_checks = [
-        f"{netbox_base_url}/plugins/proxbox/keepalive-status/fastapi/{endpoint_ids['fastapi_pk']}/",
-        f"{netbox_base_url}/plugins/proxbox/keepalive-status/proxmox/{endpoint_ids['proxmox_pk']}/",
-        f"{netbox_base_url}/plugins/proxbox/keepalive-status/netbox/{endpoint_ids['netbox_pk']}/",
+        (
+            "fastapi",
+            f"{netbox_base_url}/plugins/proxbox/keepalive-status/fastapi/{endpoint_ids['fastapi_pk']}/",
+        ),
+        (
+            "netbox",
+            f"{netbox_base_url}/plugins/proxbox/keepalive-status/netbox/{endpoint_ids['netbox_pk']}/",
+        ),
     ]
-    for url in keepalive_checks:
+    if service == "pve":
+        keepalive_checks.append(
+            (
+                "proxmox",
+                f"{netbox_base_url}/plugins/proxbox/keepalive-status/proxmox/{endpoint_ids['proxmox_pk']}/",
+            )
+        )
+    else:
+        log_service_skip(service, "Proxmox keepalive status check")
+
+    for service_slug, url in keepalive_checks:
         print(f"Checking keepalive: {url}")
         response = requests.get(url, headers=headers, timeout=30)
         print(
             f"Keepalive response: HTTP {response.status_code} - {response.text[:500]}"
         )
         payload = assert_ok(response, context=f"keepalive {url}")
+        _assert_status_shape(payload, context=f"keepalive {service_slug}")
         if payload.get("status") != "success":
             raise AssertionError(f"Keepalive failed for {url}: {payload}")
 
