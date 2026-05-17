@@ -212,6 +212,9 @@ class DashboardView(
                     cluster_summary, dashboard["nodes"]
                 )
             )
+            dashboard["nodes"] = dashboard_data.append_unsynced_node_placeholders(
+                dashboard["nodes"], cluster_node_names
+            )
 
             dashboard["endpoint_ip"] = dashboard_data.get_endpoint_display_ip(endpoint)
 
