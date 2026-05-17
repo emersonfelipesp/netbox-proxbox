@@ -145,23 +145,37 @@ def test_environment_field_imported_in_model() -> None:
 
 
 def test_migration_exists_and_chains_after_0044() -> None:
-    """0045 must depend on 0044 and add the environment column additively."""
+    """0045 must depend on 0044 and add the environment column additively.
+
+    Accepts either the raw ``migrations.AddField(...)`` form or the
+    idempotent ``add_field_idempotent(...)`` wrapper introduced by issue
+    #454 so the post-0036 chain stays reporter-safe.
+    """
     assert MIGRATION_PATH.exists(), (
         "Migration 0045_proxmoxendpoint_environment.py is missing"
     )
     src = MIGRATION_PATH.read_text()
     assert '("netbox_proxbox", "0044_cloud_image_template")' in src
-    assert "migrations.AddField(" in src
+    assert ("migrations.AddField(" in src) or ("add_field_idempotent(" in src), (
+        "Migration 0045 must add the environment column via either "
+        "migrations.AddField(...) or add_field_idempotent(...)"
+    )
     assert 'name="environment"' in src
     assert 'model_name="proxmoxendpoint"' in src
     assert "blank=True" in src
     assert "null=True" in src
 
 
-def test_migration_uses_plain_addfield_not_separate_state() -> None:
-    """A brand-new column does not need SeparateDatabaseAndState gymnastics."""
+def test_migration_uses_plain_addfield_or_idempotent_wrapper() -> None:
+    """Raw SQL is still off-limits; SeparateDatabaseAndState may only appear
+    indirectly through ``add_field_idempotent`` (whose helper module owns the
+    wrapper). The migration file itself must not import ``RunSQL`` or hand-roll
+    a ``SeparateDatabaseAndState`` literal."""
     src = MIGRATION_PATH.read_text()
-    assert "SeparateDatabaseAndState" not in src
+    assert "SeparateDatabaseAndState" not in src, (
+        "Use add_field_idempotent(...) instead of hand-rolling "
+        "SeparateDatabaseAndState in the migration file."
+    )
     assert "RunSQL" not in src
 
 
