@@ -20,21 +20,20 @@ Proxbox discovers and syncs the following from Proxmox into NetBox:
 
 Sync runs on-demand from the NetBox UI or scheduled automatically via NetBox's job system.
 
-## What's New in v0.0.15.post2
+## What's New in v0.0.16
 
-Paired with backend [`proxbox-api 0.0.11.post2`](https://github.com/emersonfelipesp/proxbox-api).
+Paired with backend [`proxbox-api 0.0.11`](https://github.com/emersonfelipesp/proxbox-api).
 
-- **PDM / PBS endpoint models** — New `PBSEndpoint`, `PDMEndpoint`, and `PDMRemote` Django models land the ForeignKey plumbing for Proxmox Datacenter Manager support per [#449](https://github.com/emersonfelipesp/netbox-proxbox/issues/449). `PDMEndpoint` declares `proxmox_endpoints` (M2M to `ProxmoxEndpoint`) and `pbs_endpoints` (M2M to `PBSEndpoint`) so operators can register which PVE/PBS instances each PDM federates. UI / API surfaces land in Phase 2 (v0.0.16.x).
-- **Build PVE template action** — `ProxmoxEndpointViewSet` exposes a `build-pve-template` action so operators can build PVE-installer cloud-init templates against an endpoint from the plugin REST API; mirrors the `/cloud/templates/pve` route added in `proxbox-api 0.0.11.post2`.
-- **Backend pickup of proxmox-sdk 0.0.5.post1** — The paired `proxbox-api 0.0.11.post2` lifts its `proxmox-sdk` pin from `0.0.4.post3` to `0.0.5.post1`, which adds the new `proxmox_sdk.pdm` subpackage (full PDM SDK + CLI + TUI + mock server).
-- **Read-only reflection path is unchanged.** No NetBox compatibility rotation ships in this patch release. Carries forward every fix shipped in `v0.0.15.post1`.
+- **Cluster dashboard panel — correct node totals.** Fixes [#455](https://github.com/emersonfelipesp/netbox-proxbox/issues/455). The cluster summary panel now preserves API-reported node totals when the live node rows are truncated, falls back to all `ProxmoxNode` rows under the cluster name when scoped sibling lookup is empty, and renders placeholder rows for cluster members that have not yet been synced. Operators see the true online/offline/total counts even when individual nodes are still pending discovery.
+- **Read-only reflection path is unchanged.** No NetBox compatibility rotation ships in this minor release.
 
-Full notes: [Release Notes — v0.0.15.post2](https://emersonfelipesp.github.io/netbox-proxbox/release-notes/version-0.0.15.post2/).
+Full notes: [Release Notes — v0.0.16](https://emersonfelipesp.github.io/netbox-proxbox/release-notes/version-0.0.16/).
 
 ## Compatibility Matrix
 
 | NetBox   | netbox-proxbox | proxbox-api | netbox-sdk     | proxmox-sdk    |
 |----------|----------------|-------------|----------------|----------------|
+| >=4.5.8  | v0.0.16              | v0.0.11          | v0.0.8.post1   | v0.0.3.post1   |
 | >=4.5.8  | v0.0.15.post2        | v0.0.11.post2    | v0.0.8.post1   | v0.0.5.post1   |
 | >=4.5.8  | v0.0.15.post1        | v0.0.11.post1    | v0.0.8.post1   | v0.0.3.post1   |
 | >=4.5.8  | v0.0.15              | v0.0.11          | v0.0.8.post1   | v0.0.3.post1   |
