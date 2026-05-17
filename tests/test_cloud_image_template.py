@@ -45,6 +45,7 @@ def test_cloud_image_template_ui_surface_is_registered():
     urls = _read("netbox_proxbox/urls.py")
     views = _read("netbox_proxbox/views/cloud_image_templates.py")
     nav = _read("netbox_proxbox/navigation.py")
+    choices = _read("netbox_proxbox/choices.py")
 
     assert '"cloud-image-templates/<int:pk>/"' in urls
     assert 'get_model_urls("netbox_proxbox", "cloudimagetemplate")' in urls
@@ -53,6 +54,9 @@ def test_cloud_image_template_ui_surface_is_registered():
     assert "CloudImageTemplateTable" in views
     assert "cloudimagetemplate_list" in nav
     assert "cloudimagetemplate_add" in nav
+    assert "Cloud Image Build Pipeline" in nav
+    assert "PFSENSE" in choices
+    assert "OPNSENSE" in choices
 
 
 def test_cloud_image_template_api_surface_is_registered():

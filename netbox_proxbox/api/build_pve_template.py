@@ -1,8 +1,8 @@
-"""HTTP client helper that proxies Build-PVE-Template to proxbox-api.
+"""HTTP client helper that proxies Cloud Image Build Pipeline requests.
 
 The single ``FastAPIEndpoint`` row is the source of truth for the backend
 URL and API key. The plugin posts the request body verbatim to
-``POST /cloud/templates/pve`` on proxbox-api and returns the upstream
+``POST /cloud/templates/images`` on proxbox-api and returns the upstream
 JSON / status pair to the caller.
 
 Error handling mirrors ``services/backend_proxy.request_backend_resource``:
@@ -23,10 +23,10 @@ from netbox_proxbox.services.backend_proxy import get_fastapi_request_context
 logger = logging.getLogger("netbox_proxbox.api.build_pve_template")
 
 
-def build_pve_template_via_backend(
+def build_cloud_image_pipeline_via_backend(
     payload: dict[str, Any],
 ) -> tuple[dict[str, Any], int]:
-    """Proxy a PVE template build request to proxbox-api.
+    """Proxy a Cloud Image Build Pipeline request to proxbox-api.
 
     Returns the body + HTTP status that should be sent back to the caller
     of the NetBox plugin endpoint. Always returns JSON-serialisable data.
@@ -42,7 +42,7 @@ def build_pve_template_via_backend(
             503,
         )
 
-    url = http_url.rstrip("/") + "/cloud/templates/pve"
+    url = http_url.rstrip("/") + "/cloud/templates/images"
     headers = dict(getattr(context, "headers", {}) or {})
     headers.setdefault("Content-Type", "application/json")
     verify_ssl = bool(getattr(context, "verify_ssl", True))
@@ -56,7 +56,7 @@ def build_pve_template_via_backend(
             timeout=(10, 600),
         )
     except requests.exceptions.RequestException as exc:
-        logger.error("build-pve-template request to %s failed: %s", url, exc)
+        logger.error("cloud image build pipeline request to %s failed: %s", url, exc)
         return (
             {
                 "queued": False,
@@ -73,3 +73,11 @@ def build_pve_template_via_backend(
     if not isinstance(body, dict):
         body = {"result": body}
     return body, response.status_code
+
+
+def build_pve_template_via_backend(
+    payload: dict[str, Any],
+) -> tuple[dict[str, Any], int]:
+    """Backward-compatible helper for the original PVE-only action."""
+    payload = {**payload, "product_type": "pve"}
+    return build_cloud_image_pipeline_via_backend(payload)

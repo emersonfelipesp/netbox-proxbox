@@ -116,7 +116,7 @@ vm_cloudinit_item = PluginMenuItem(
 
 cloud_images_item = PluginMenuItem(
     link="plugins:netbox_proxbox:cloudimagetemplate_list",
-    link_text="Cloud Images",
+    link_text="Cloud Image Build Pipeline",
     buttons=(
         PluginMenuButton(
             "plugins:netbox_proxbox:cloudimagetemplate_add",

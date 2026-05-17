@@ -38,7 +38,10 @@ from .serializers import (
     VMSnapshotSerializer,
     VMTaskHistorySerializer,
 )
-from netbox_proxbox.api.build_pve_template import build_pve_template_via_backend
+from netbox_proxbox.api.build_pve_template import (
+    build_cloud_image_pipeline_via_backend,
+    build_pve_template_via_backend,
+)
 
 
 class ProxBoxRootView(APIRootView):
@@ -208,10 +211,9 @@ class ProxmoxEndpointViewSet(NetBoxModelViewSet):
 
         Validates the request body against ``PVETemplateBuildRequestSerializer``,
         injects ``endpoint_id`` from the URL path, then proxies the call to
-        the companion ``POST /cloud/templates/pve`` endpoint on proxbox-api.
+        the Cloud Image Build Pipeline compatibility endpoint on proxbox-api.
         The response is the upstream body verbatim — including the rendered
-        cloud-init snippets the operator must drop into
-        ``/var/lib/vz/snippets/`` on the target host.
+        build script and cloud-init snippets for the target host.
         """
         endpoint = self.get_object()
         serializer = PVETemplateBuildRequestSerializer(data=request.data)
@@ -219,6 +221,38 @@ class ProxmoxEndpointViewSet(NetBoxModelViewSet):
         payload = dict(serializer.validated_data)
         payload["endpoint_id"] = endpoint.pk
         body, status_code = build_pve_template_via_backend(payload)
+        return Response(body, status=status_code)
+
+    @extend_schema(
+        request=PVETemplateBuildRequestSerializer,
+        responses={
+            200: PVETemplateBuildResponseSerializer,
+            201: PVETemplateBuildResponseSerializer,
+            403: OpenApiTypes.OBJECT,
+            502: OpenApiTypes.OBJECT,
+            503: OpenApiTypes.OBJECT,
+        },
+        operation_id="proxbox_proxmox_endpoint_cloud_image_build_pipeline",
+    )
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="cloud-image-build-pipeline",
+        url_name="cloud-image-build-pipeline",
+        permission_classes=[IsAuthenticated],
+    )
+    def cloud_image_build_pipeline(
+        self,
+        request: Request,
+        pk: int | None = None,
+    ) -> Response:
+        """Trigger the Cloud Image Build Pipeline via proxbox-api."""
+        endpoint = self.get_object()
+        serializer = PVETemplateBuildRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        payload = dict(serializer.validated_data)
+        payload["endpoint_id"] = endpoint.pk
+        body, status_code = build_cloud_image_pipeline_via_backend(payload)
         return Response(body, status=status_code)
 
 
