@@ -133,7 +133,7 @@ prepare-release
     └── e2e-docker-pypi (install_source=pypi, dependency_mode=pypi-package)
 ```
 
-Normal and `.postN` tag pushes publish to TestPyPI. `rcN` tag pushes, GitHub releases, and manual dispatch with `publish_target=pypi` publish to PyPI.
+`rcN` tag pushes publish to TestPyPI for release-candidate validation. Non-rc tag pushes (`vX.Y.Z`, `vX.Y.Z.postN`), GitHub releases, and manual dispatch with `publish_target=pypi` publish to PyPI.
 
 TestPyPI validation installs both `netbox-proxbox` and the configured `proxbox-api` from TestPyPI. PyPI candidate/final validation uses PyPI `proxbox-api` for backend package-index E2E.
 

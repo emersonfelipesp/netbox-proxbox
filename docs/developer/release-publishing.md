@@ -14,32 +14,24 @@ For the broader CI job map and Docker E2E matrix, see
 flowchart TD
     Start([Choose target release\nX.Y.Z])
     Bump[Bump package version\npyproject.toml + netbox_proxbox/__init__.py + uv.lock]
-    TagTest[Create tag vX.Y.Z\nor vX.Y.Z.postN]
-    TestCI[CI builds dist\nvalidates tag/version/lockfile]
-    TestUpload[Upload to TestPyPI\nwithout --skip-existing]
-    TestValidate[Install netbox-proxbox from TestPyPI\nrun package checks]
-    TestE2E[E2E Docker\nnetbox-proxbox from TestPyPI\nproxbox-api from TestPyPI]
-    TestFailed{Any TestPyPI\nvalidation failed?}
-    RCBump[Bump to next vX.Y.Z.postN\nfor code or packaging fixes]
-    RCTag[Create PyPI candidate tag\nvX.Y.ZrcN]
-    RCValidate[Run PyPI candidate checks\nlocal package + E2E against PyPI proxbox-api]
-    RCUpload[Upload vX.Y.ZrcN to PyPI]
-    RCInstall[Install rcN from PyPI\nrun post-upload checks]
-    RCFailed{RC failed?}
+    RCTag[Create release-candidate tag\nvX.Y.ZrcN]
+    RCCI[CI builds dist\nvalidates tag/version/lockfile]
+    RCUpload[Upload vX.Y.ZrcN to TestPyPI\nwithout --skip-existing]
+    RCValidate[Install rcN from TestPyPI\nrun package checks]
+    RCE2E[E2E Docker\nnetbox-proxbox rcN from TestPyPI\nproxbox-api rcN from TestPyPI]
+    RCFailed{Any TestPyPI\nvalidation failed?}
     NextRC[Bump to vX.Y.ZrcN+1]
     FinalTag[Create or dispatch final tag\nvX.Y.Z]
     FinalUpload[Upload vX.Y.Z to PyPI]
     FinalValidate[Install final from PyPI\nrun post-upload E2E]
     FinalFailed{Post-release fix needed?}
-    Post[Bump to vX.Y.Z.postN\nrepeat TestPyPI then PyPI]
+    Post[Bump to vX.Y.Z.postN\npublish .postN to PyPI]
     Done([Release is green])
 
-    Start --> Bump --> TagTest --> TestCI --> TestUpload --> TestValidate --> TestE2E --> TestFailed
-    TestFailed -- yes --> RCBump --> TagTest
-    TestFailed -- no --> RCTag --> RCValidate --> RCUpload --> RCInstall --> RCFailed
+    Start --> Bump --> RCTag --> RCCI --> RCUpload --> RCValidate --> RCE2E --> RCFailed
     RCFailed -- yes --> NextRC --> RCTag
     RCFailed -- no --> FinalTag --> FinalUpload --> FinalValidate --> FinalFailed
-    FinalFailed -- yes --> Post --> TagTest
+    FinalFailed -- yes --> Post --> FinalTag
     FinalFailed -- no --> Done
 ```
 
@@ -59,17 +51,17 @@ sequenceDiagram
     participant NB as NetBox container
     participant API as proxbox-api container
 
-    Tag->>WF: vX.Y.Z or vX.Y.Z.postN
+    Tag->>WF: vX.Y.ZrcN
     WF->>TP: Upload netbox-proxbox package
     WF->>E2E: install_source=testpypi, dependency_mode=testpypi-package
-    E2E->>NB: pip install netbox-proxbox==X.Y.Z from TestPyPI
+    E2E->>NB: pip install netbox-proxbox==X.Y.ZrcN from TestPyPI
     E2E->>API: pip install proxbox-api==configured version from TestPyPI
-    E2E-->>WF: Full stack sync checks pass
+    E2E-->>WF: Release-candidate checks pass
 
-    Tag->>WF: vX.Y.ZrcN or publish_target=pypi
+    Tag->>WF: vX.Y.Z, vX.Y.Z.postN, or publish_target=pypi
     WF->>PY: Upload netbox-proxbox package
     WF->>E2E: install_source=pypi, dependency_mode=pypi-package
-    E2E->>NB: pip install netbox-proxbox==X.Y.ZrcN or X.Y.Z from PyPI
+    E2E->>NB: pip install netbox-proxbox==X.Y.Z or X.Y.Z.postN from PyPI
     E2E->>API: pip install proxbox-api==configured version from PyPI
     E2E-->>WF: Post-publish checks pass
 ```
@@ -78,9 +70,9 @@ sequenceDiagram
 
 - `pyproject.toml`, `netbox_proxbox/__init__.py`, `uv.lock`, and the Git tag
   must all describe the same version.
-- Normal and `.postN` tag pushes publish to TestPyPI.
-- `rcN` tag pushes, GitHub releases, or manual dispatch with
-  `publish_target=pypi` publish to PyPI.
+- `rcN` tag pushes publish to TestPyPI for release-candidate validation.
+- Non-rc tag pushes (`vX.Y.Z`, `vX.Y.Z.postN`), GitHub releases, or manual
+  dispatch with `publish_target=pypi` publish to PyPI.
 - Package uploads intentionally omit `twine --skip-existing`; a consumed version
   must move forward to the next `.postN` or `rcN`.
 - `proxbox_api_version` can be supplied manually. If omitted, the workflow reads

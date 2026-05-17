@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       publish_target:
-        description: "Package index to publish to. Tag pushes use TestPyPI except rc tags; releases use PyPI."
+        description: "Package index to publish to. rc tag pushes use TestPyPI; non-rc tag pushes and GitHub releases use PyPI."
         required: true
         type: choice
         options:
@@ -136,9 +136,9 @@ jobs:
           elif event == 'release':
               publish_target = 'pypi'
           elif event == 'push' and re.search(r'rc\d+$', version):
-              publish_target = 'pypi'
-          else:
               publish_target = 'testpypi'
+          else:
+              publish_target = 'pypi'
 
           proxbox_api_version = os.getenv('PROXBOX_API_VERSION_INPUT', '') or ''
           if not proxbox_api_version:
