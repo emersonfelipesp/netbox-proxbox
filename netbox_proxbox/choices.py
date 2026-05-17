@@ -283,6 +283,8 @@ class CloudImageOSFamilyChoices(ChoiceSet):
     GENERIC = "generic"
     PROXMOX_PBS = "proxmox-pbs"
     PROXMOX_PDM = "proxmox-pdm"
+    PFSENSE = "pfsense"
+    OPNSENSE = "opnsense"
 
     CHOICES = [
         (UBUNTU, _("Ubuntu"), "orange"),
@@ -292,6 +294,8 @@ class CloudImageOSFamilyChoices(ChoiceSet):
         (GENERIC, _("Generic Linux"), "gray"),
         (PROXMOX_PBS, _("Proxmox Backup Server"), "purple"),
         (PROXMOX_PDM, _("Proxmox Datacenter Manager"), "cyan"),
+        (PFSENSE, _("pfSense"), "red"),
+        (OPNSENSE, _("OPNsense"), "orange"),
     ]
 
 
