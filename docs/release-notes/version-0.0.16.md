@@ -6,7 +6,7 @@ Version `0.0.16` fixes the operational cluster dashboard panel so it reports
 the correct node totals when Proxmox cluster members exceed what the live
 `/proxmox/cluster/status` payload returns and when sibling `ProxmoxNode`
 rows are only discoverable by cluster name. It pairs with backend
-`proxbox-api 0.0.11` (unchanged) — the entire fix lives in the plugin's
+`proxbox-api 0.0.12` — the entire fix lives in the plugin's
 dashboard data layer; no migration, no model change, no new persisted state.
 
 It fixes one issue:
@@ -71,7 +71,7 @@ Three new tests in `tests/test_dashboard.py` pin the fix:
 
 | NetBox | netbox-proxbox | proxbox-api | netbox-sdk | proxmox-sdk |
 |--------|----------------|-------------|------------|-------------|
-| >=4.5.8 | v0.0.16 | v0.0.11 | v0.0.8.post1 | v0.0.3.post1 |
+| >=4.5.8 | v0.0.16 | v0.0.12 | v0.0.8.post1 | v0.0.3.post1 |
 | >=4.5.8 | v0.0.15 | v0.0.11 | v0.0.8.post1 | v0.0.3.post1 |
 
 NetBox compatibility range: `4.5.8` – `4.6.99` (unchanged). Certified
@@ -81,5 +81,5 @@ simultaneously against NetBox `v4.5.8`, `v4.5.9`, and official `v4.6.0`.
 
 - No database migration. No model change. No `OVERWRITE_FIELDS` change.
 - Restart the NetBox WSGI process so the patched dashboard module is loaded.
-- The plugin continues to pair with `proxbox-api 0.0.11`; the panel fix does
+- The plugin pairs with `proxbox-api 0.0.12`; the dashboard panel fix does
   not depend on backend changes.
