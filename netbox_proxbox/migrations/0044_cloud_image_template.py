@@ -1,4 +1,9 @@
-"""Add tenant-scoped cloud image templates for Cloud Portal provisioning."""
+"""Add tenant-scoped cloud image templates for Cloud Portal provisioning.
+
+Idempotent: the ``CreateModel`` is wrapped through ``create_model_idempotent``
+so reporter-style installs whose legacy lineage already created this table do
+not abort with ``DuplicateTable``.
+"""
 
 from __future__ import annotations
 
@@ -6,6 +11,8 @@ import django.db.models.deletion
 import taggit.managers
 import utilities.json
 from django.db import migrations, models
+
+from netbox_proxbox.migrations._idempotent_ops import create_model_idempotent
 
 
 class Migration(migrations.Migration):
@@ -18,7 +25,7 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.CreateModel(
+        create_model_idempotent(
             name="CloudImageTemplate",
             fields=[
                 (
