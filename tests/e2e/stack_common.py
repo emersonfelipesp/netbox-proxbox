@@ -35,7 +35,9 @@ def get_proxmox_service() -> str:
     service = (os.getenv("PROXMOX_SERVICE") or "pve").strip().lower()
     if service not in VALID_PROXMOX_SERVICES:
         valid = ", ".join(VALID_PROXMOX_SERVICES)
-        raise RuntimeError(f"Invalid PROXMOX_SERVICE={service!r}; expected one of: {valid}")
+        raise RuntimeError(
+            f"Invalid PROXMOX_SERVICE={service!r}; expected one of: {valid}"
+        )
     return service
 
 
@@ -55,9 +57,7 @@ def log_service_skip(service: str, name: str) -> None:
     print(f"service={service}: skipping {name}")
 
 
-def wait_http_ok(
-    url: str, *, timeout_seconds: int = 300, verify: bool = True
-) -> None:
+def wait_http_ok(url: str, *, timeout_seconds: int = 300, verify: bool = True) -> None:
     deadline = time.time() + timeout_seconds
     last_error = ""
     while time.time() < deadline:
