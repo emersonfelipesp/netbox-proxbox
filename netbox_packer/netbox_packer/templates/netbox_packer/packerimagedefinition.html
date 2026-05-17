@@ -1,0 +1,171 @@
+{% extends 'generic/object.html' %}
+{% load form_helpers %}
+{% load helpers %}
+{% load i18n %}
+
+{% block extra_controls %}
+  {% if perms.core.add_job and perms.netbox_packer.add_packerimagebuild %}
+    <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#packer-build-modal">
+      <i class="mdi mdi-hammer-wrench" aria-hidden="true"></i>
+      {% trans "Build" %}
+    </button>
+  {% endif %}
+{% endblock extra_controls %}
+
+{% block content %}
+<div class="row mb-3">
+  <div class="col col-md-6">
+    <div class="card mb-3">
+      <h5 class="card-header">{% trans "Image Definition" %}</h5>
+      <div class="card-body">
+        <table class="table table-hover attr-table">
+          <tr>
+            <th scope="row">{% trans "Name" %}</th>
+            <td>{{ object.name }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Slug" %}</th>
+            <td>{{ object.slug }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Description" %}</th>
+            <td>{{ object.description|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Enabled" %}</th>
+            <td>
+              {% if object.enabled %}
+                <span class="text-success"><i class="mdi mdi-check"></i> {% trans "Yes" %}</span>
+              {% else %}
+                <span class="text-danger"><i class="mdi mdi-close"></i> {% trans "No" %}</span>
+              {% endif %}
+            </td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Builder type" %}</th>
+            <td>{{ object.get_builder_type_display }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Provisioner recipe" %}</th>
+            <td>{{ object.get_provisioner_recipe_display }}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <h5 class="card-header">{% trans "Proxmox Target" %}</h5>
+      <div class="card-body">
+        <table class="table table-hover attr-table">
+          <tr>
+            <th scope="row">{% trans "Endpoint" %}</th>
+            <td>{{ object.proxmox_endpoint|linkify }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Target cluster" %}</th>
+            <td>{{ object.target_cluster|linkify|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Target node" %}</th>
+            <td>{{ object.target_node }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Source template VMID" %}</th>
+            <td>{{ object.source_template_vmid }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Default storage" %}</th>
+            <td>{{ object.default_storage }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Default bridge" %}</th>
+            <td>{{ object.default_bridge }}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    {% include 'inc/panels/custom_fields.html' %}
+  </div>
+
+  <div class="col col-md-6">
+    <div class="card mb-3">
+      <h5 class="card-header">{% trans "Image Defaults" %}</h5>
+      <div class="card-body">
+        <table class="table table-hover attr-table">
+          <tr>
+            <th scope="row">{% trans "OS family" %}</th>
+            <td>{{ object.get_os_family_display }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "OS release" %}</th>
+            <td>{{ object.os_release }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Default cloud-init user" %}</th>
+            <td>{{ object.default_ciuser }}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <h5 class="card-header">{% trans "Default Variables" %}</h5>
+      <div class="card-body">
+        <pre class="mb-0"><code>{{ object.default_variables|default:"{}" }}</code></pre>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <h5 class="card-header">{% trans "Tenant Scope" %}</h5>
+      <div class="card-body">
+        {% if object.allowed_tenants.exists %}
+          <ul class="list-unstyled mb-0">
+            {% for tenant in object.allowed_tenants.all %}
+              <li>{{ tenant|linkify }}</li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <span class="text-muted">{% trans "All tenants" %}</span>
+        {% endif %}
+      </div>
+    </div>
+
+    {% include 'inc/panels/tags.html' %}
+    {% include 'inc/panels/comments.html' %}
+  </div>
+</div>
+{% endblock content %}
+
+{% block modals %}
+  {{ block.super }}
+  {% if perms.core.add_job and perms.netbox_packer.add_packerimagebuild %}
+    <div class="modal fade" id="packer-build-modal" tabindex="-1" aria-labelledby="packer-build-modal-label" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <form method="post" action="{{ build_url }}">
+            {% csrf_token %}
+            <div class="modal-header">
+              <h5 class="modal-title" id="packer-build-modal-label">{% trans "Build image" %}</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{% trans 'Close' %}"></button>
+            </div>
+            <div class="modal-body">
+              {% render_field build_form.output_vmid %}
+              {% render_field build_form.output_name %}
+              {% render_field build_form.image_version %}
+              {% render_field build_form.dry_run %}
+              {% render_field build_form.force %}
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">{% trans "Cancel" %}</button>
+              <button type="submit" class="btn btn-primary">
+                <i class="mdi mdi-hammer-wrench" aria-hidden="true"></i>
+                {% trans "Build" %}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+{% endblock modals %}

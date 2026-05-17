@@ -1,0 +1,145 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load i18n %}
+
+{% block extra_controls %}
+  {% if perms.core.delete_job and perms.netbox_packer.change_packerimagebuild %}
+    <form method="post" action="{% url 'plugins:netbox_packer:packerimagebuild_cancel' pk=object.pk %}" class="d-inline">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-outline-danger">
+        <i class="mdi mdi-close-circle-outline" aria-hidden="true"></i>
+        {% trans "Cancel" %}
+      </button>
+    </form>
+  {% endif %}
+{% endblock extra_controls %}
+
+{% block content %}
+<div class="row mb-3">
+  <div class="col col-md-6">
+    <div class="card mb-3">
+      <h5 class="card-header">{% trans "Image Build" %}</h5>
+      <div class="card-body">
+        <table class="table table-hover attr-table">
+          <tr>
+            <th scope="row">{% trans "Definition" %}</th>
+            <td>{{ object.definition|linkify }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Status" %}</th>
+            <td>
+              {% if object.status == "completed" %}
+                <span class="badge text-bg-green">{{ object.get_status_display }}</span>
+              {% elif object.status == "running" %}
+                <span class="badge text-bg-blue">{{ object.get_status_display }}</span>
+              {% elif object.status == "failed" %}
+                <span class="badge text-bg-red">{{ object.get_status_display }}</span>
+              {% elif object.status == "cancelled" %}
+                <span class="badge text-bg-yellow">{{ object.get_status_display }}</span>
+              {% else %}
+                <span class="badge text-bg-secondary">{{ object.get_status_display }}</span>
+              {% endif %}
+            </td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Backend build ID" %}</th>
+            <td>{{ object.backend_build_id|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Created by" %}</th>
+            <td>{{ object.created_by|linkify }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "NetBox job ID" %}</th>
+            <td>{{ object.netbox_job_id|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Cloud image template" %}</th>
+            <td>{{ object.cloud_image_template|linkify|placeholder }}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <h5 class="card-header">{% trans "Output" %}</h5>
+      <div class="card-body">
+        <table class="table table-hover attr-table">
+          <tr>
+            <th scope="row">{% trans "Endpoint" %}</th>
+            <td>{{ object.proxmox_endpoint|linkify }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Target node" %}</th>
+            <td>{{ object.target_node }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Output VMID" %}</th>
+            <td>{{ object.output_vmid }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Output name" %}</th>
+            <td>{{ object.output_name }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Image version" %}</th>
+            <td>{{ object.image_version }}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    {% include 'inc/panels/custom_fields.html' %}
+  </div>
+
+  <div class="col col-md-6">
+    <div class="card mb-3">
+      <h5 class="card-header">{% trans "Timeline" %}</h5>
+      <div class="card-body">
+        <table class="table table-hover attr-table">
+          <tr>
+            <th scope="row">{% trans "Started" %}</th>
+            <td>{{ object.started_at|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Completed" %}</th>
+            <td>{{ object.completed_at|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Created" %}</th>
+            <td>{{ object.created|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Last updated" %}</th>
+            <td>{{ object.last_updated|placeholder }}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <h5 class="card-header">{% trans "Logs" %}</h5>
+      <div class="card-body">
+        <p class="text-muted mb-0">{% trans "Logs stream once builds are wired in PHASE4" %}</p>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <h5 class="card-header">{% trans "Backend Response" %}</h5>
+      <div class="card-body">
+        <pre class="mb-0"><code>{{ object.backend_response|default:"{}" }}</code></pre>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <h5 class="card-header">{% trans "Error" %}</h5>
+      <div class="card-body">
+        <pre class="mb-0"><code>{{ object.error|placeholder }}</code></pre>
+      </div>
+    </div>
+
+    {% include 'inc/panels/tags.html' %}
+    {% include 'inc/panels/comments.html' %}
+  </div>
+</div>
+{% endblock content %}
