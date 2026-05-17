@@ -10,8 +10,8 @@ from pathlib import Path
 import pytest
 
 
-PACKER_ROOT = Path(__file__).resolve().parents[1]
-REPO_ROOT = PACKER_ROOT.parent
+REPO_ROOT = Path(__file__).resolve().parents[1]
+PACKER_ROOT = REPO_ROOT / "netbox_packer"
 NETBOX_ROOTS = (
     Path("/opt/netbox/netbox"),
     REPO_ROOT.parent / "netbox" / "netbox",

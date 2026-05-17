@@ -93,7 +93,7 @@ jobs:
           python -m pip install -e ".[test]"
 
       - name: Run mocked test suite
-        run: pytest --cov=netbox_proxbox --cov-report=term-missing --cov-report=xml tests netbox_packer/tests
+        run: pytest --cov=netbox_proxbox --cov-report=term-missing --cov-report=xml tests
 
       - name: Upload coverage report
         if: matrix.python-version == '3.12'
