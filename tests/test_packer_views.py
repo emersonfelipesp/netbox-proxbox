@@ -66,7 +66,9 @@ class PackerViewTest(TestCase):
     def setUpTestData(cls) -> None:
         cls.endpoint = ProxmoxEndpoint.objects.create(name="pve-ui")
         cls.cluster_type = ClusterType.objects.create(name="Proxmox", slug="proxmox")
-        cls.cluster = Cluster.objects.create(name="pve-ui-cluster", type=cls.cluster_type)
+        cls.cluster = Cluster.objects.create(
+            name="pve-ui-cluster", type=cls.cluster_type
+        )
         cls.view_user = get_user_model().objects.create_user(
             username="packer-view",
             is_staff=True,

@@ -71,7 +71,9 @@ class PackerSettingsSingletonRedirectView(
     def get_required_permission(self) -> str:
         return "netbox_packer.change_packerpluginsettings"
 
-    def get(self, request: HttpRequest, *args: object, **kwargs: object) -> HttpResponse:
+    def get(
+        self, request: HttpRequest, *args: object, **kwargs: object
+    ) -> HttpResponse:
         obj = PackerPluginSettings.get_solo()
         return redirect("plugins:netbox_packer:packerpluginsettings_edit", pk=obj.pk)
 
