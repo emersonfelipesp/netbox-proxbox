@@ -1,9 +1,16 @@
-"""Add deletion authorization settings for Sub-PR I."""
+"""Add deletion authorization settings for Sub-PR I.
+
+Idempotent: every ``AddField`` is wrapped through ``add_field_idempotent``
+so reporter-style installs whose legacy lineage already added these columns
+do not abort with ``DuplicateColumn``.
+"""
 
 from __future__ import annotations
 
 import django.core.validators
 from django.db import migrations, models
+
+from netbox_proxbox.migrations._idempotent_ops import add_field_idempotent
 
 
 class Migration(migrations.Migration):
@@ -13,9 +20,9 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AddField(
+        add_field_idempotent(
             model_name="proxboxpluginsettings",
-            name="intent_apply_authorization_self_approve_allowed",
+            field_name="intent_apply_authorization_self_approve_allowed",
             field=models.BooleanField(
                 default=False,
                 help_text=(
@@ -25,9 +32,9 @@ class Migration(migrations.Migration):
                 verbose_name="Allow deletion request self-approval",
             ),
         ),
-        migrations.AddField(
+        add_field_idempotent(
             model_name="proxboxpluginsettings",
-            name="intent_deletion_request_ttl_days",
+            field_name="intent_deletion_request_ttl_days",
             field=models.IntegerField(
                 default=7,
                 help_text=(

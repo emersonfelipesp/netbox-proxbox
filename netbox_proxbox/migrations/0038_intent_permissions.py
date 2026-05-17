@@ -22,6 +22,11 @@ Both models are promoted to their full schemas in later sub-PRs:
 
   * Sub-PR E (0040_apply_job_full)        — ProxmoxApplyJob
   * Sub-PR H (0041_deletion_request_full) — DeletionRequest
+
+Idempotent schema ops: every ``CreateModel`` is routed through
+``create_model_idempotent`` so reporter-style installs that already created
+these tables under the deleted legacy lineage do not abort with
+``DuplicateTable``. See ``_idempotent_ops`` for the wrapper contract.
 """
 
 from __future__ import annotations
@@ -30,6 +35,8 @@ import netbox.models.deletion
 import taggit.managers
 import utilities.json
 from django.db import migrations, models
+
+from netbox_proxbox.migrations._idempotent_ops import create_model_idempotent
 
 
 class Migration(migrations.Migration):
@@ -40,7 +47,7 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.CreateModel(
+        create_model_idempotent(
             name='ProxmoxApplyJob',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False)),
@@ -65,7 +72,7 @@ class Migration(migrations.Migration):
             },
             bases=(netbox.models.deletion.DeleteMixin, models.Model),
         ),
-        migrations.CreateModel(
+        create_model_idempotent(
             name='DeletionRequest',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False)),

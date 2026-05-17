@@ -1,4 +1,9 @@
-"""Sub-PR E (#382): promote ProxmoxApplyJob to the full intent apply schema."""
+"""Sub-PR E (#382): promote ProxmoxApplyJob to the full intent apply schema.
+
+Idempotent: every ``AddField`` is wrapped through ``add_field_idempotent``
+so reporter-style installs whose legacy lineage already added these columns
+do not abort with ``DuplicateColumn``.
+"""
 
 from __future__ import annotations
 
@@ -8,6 +13,8 @@ import django.db.models.deletion
 from django.conf import settings
 from django.db import migrations, models
 
+from netbox_proxbox.migrations._idempotent_ops import add_field_idempotent
+
 
 class Migration(migrations.Migration):
 
@@ -16,9 +23,9 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AddField(
+        add_field_idempotent(
             model_name="proxmoxapplyjob",
-            name="branch_id",
+            field_name="branch_id",
             field=models.IntegerField(
                 blank=True,
                 help_text=(
@@ -29,9 +36,9 @@ class Migration(migrations.Migration):
                 verbose_name="Branch ID",
             ),
         ),
-        migrations.AddField(
+        add_field_idempotent(
             model_name="proxmoxapplyjob",
-            name="branch_name",
+            field_name="branch_name",
             field=models.CharField(
                 blank=True,
                 default="",
@@ -40,9 +47,9 @@ class Migration(migrations.Migration):
                 verbose_name="Branch name",
             ),
         ),
-        migrations.AddField(
+        add_field_idempotent(
             model_name="proxmoxapplyjob",
-            name="user",
+            field_name="user",
             field=models.ForeignKey(
                 blank=True,
                 help_text="User associated with the branch merge that queued this run.",
@@ -53,9 +60,9 @@ class Migration(migrations.Migration):
                 verbose_name="User",
             ),
         ),
-        migrations.AddField(
+        add_field_idempotent(
             model_name="proxmoxapplyjob",
-            name="run_uuid",
+            field_name="run_uuid",
             field=models.UUIDField(
                 default=uuid.uuid4,
                 editable=False,
@@ -64,9 +71,9 @@ class Migration(migrations.Migration):
                 verbose_name="Run UUID",
             ),
         ),
-        migrations.AddField(
+        add_field_idempotent(
             model_name="proxmoxapplyjob",
-            name="state",
+            field_name="state",
             field=models.CharField(
                 choices=[
                     ("queued", "Queued"),
@@ -81,9 +88,9 @@ class Migration(migrations.Migration):
                 verbose_name="State",
             ),
         ),
-        migrations.AddField(
+        add_field_idempotent(
             model_name="proxmoxapplyjob",
-            name="per_vm_results",
+            field_name="per_vm_results",
             field=models.JSONField(
                 blank=True,
                 default=dict,
@@ -91,18 +98,18 @@ class Migration(migrations.Migration):
                 verbose_name="Per-VM results",
             ),
         ),
-        migrations.AddField(
+        add_field_idempotent(
             model_name="proxmoxapplyjob",
-            name="started_at",
+            field_name="started_at",
             field=models.DateTimeField(
                 blank=True,
                 null=True,
                 verbose_name="Started at",
             ),
         ),
-        migrations.AddField(
+        add_field_idempotent(
             model_name="proxmoxapplyjob",
-            name="finished_at",
+            field_name="finished_at",
             field=models.DateTimeField(
                 blank=True,
                 null=True,

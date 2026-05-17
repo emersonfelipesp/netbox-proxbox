@@ -2,6 +2,38 @@
 
 This directory contains Django schema migrations for the plugin models.
 
+## Idempotent additive operations (post-0036)
+
+Every additive schema operation in the post-``0036_add_overwrite_vm_type``
+chain (``0037`` through ``0046``) is wrapped through the helpers in
+[`_idempotent_ops.py`](./_idempotent_ops.py) — ``add_field_idempotent()``
+for ``AddField`` and ``create_model_idempotent()`` for ``CreateModel``.
+Each helper returns a ``SeparateDatabaseAndState`` whose ``database_operations``
+introspect the live schema and only invoke the actual schema change when
+the target column / table is missing. The ``state_operations`` keep the
+original ``AddField`` / ``CreateModel`` verbatim so Django's project state,
+serializer parity, and ``makemigrations --check`` output match the
+non-idempotent original.
+
+Use these helpers for every new additive migration in this chain. The
+consolidated ``0037_v0_0_15_release`` migration also declares
+``replaces = [...]`` covering every deleted migration from both the
+v0.0.15 and develop branches; databases that fully applied the old
+lineage are marked applied without re-running operations.
+
+This combined policy (``replaces`` + idempotent ops) makes the chain
+safe to run against:
+
+* Clean v0.0.15+ installs (helpers no-op the existence check, then run
+  Django's normal schema add).
+* Reporter-style partial-legacy installs (helpers skip the columns or
+  tables the legacy lineage already added, then run the rest).
+* Fully-applied legacy installs (``replaces`` short-circuits the squash;
+  helpers never run).
+
+See [`_idempotent_ops.py`](./_idempotent_ops.py) for the wrapper
+contract and issue #454 for the bug history.
+
 ## Contents
 
 - **0001–0008:** Historical chain for the original VM resource and endpoint models.

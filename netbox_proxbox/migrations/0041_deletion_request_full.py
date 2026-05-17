@@ -1,10 +1,17 @@
-"""Sub-PR H (#385): promote DeletionRequest to the full safe-delete schema."""
+"""Sub-PR H (#385): promote DeletionRequest to the full safe-delete schema.
+
+Idempotent: every ``AddField`` is wrapped through ``add_field_idempotent``
+so reporter-style installs whose legacy lineage already added these columns
+do not abort with ``DuplicateColumn``.
+"""
 
 from __future__ import annotations
 
 import django.db.models.deletion
 from django.conf import settings
 from django.db import migrations, models
+
+from netbox_proxbox.migrations._idempotent_ops import add_field_idempotent
 
 
 class Migration(migrations.Migration):
@@ -14,19 +21,19 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AddField(
+        add_field_idempotent(
             model_name="deletionrequest",
-            name="branch_id",
+            field_name="branch_id",
             field=models.IntegerField(blank=True, null=True),
         ),
-        migrations.AddField(
+        add_field_idempotent(
             model_name="deletionrequest",
-            name="branch_name",
+            field_name="branch_name",
             field=models.CharField(blank=True, default="", max_length=255),
         ),
-        migrations.AddField(
+        add_field_idempotent(
             model_name="deletionrequest",
-            name="requested_by",
+            field_name="requested_by",
             field=models.ForeignKey(
                 blank=True,
                 null=True,
@@ -35,9 +42,9 @@ class Migration(migrations.Migration):
                 to=settings.AUTH_USER_MODEL,
             ),
         ),
-        migrations.AddField(
+        add_field_idempotent(
             model_name="deletionrequest",
-            name="authorizer",
+            field_name="authorizer",
             field=models.ForeignKey(
                 blank=True,
                 null=True,
@@ -46,9 +53,9 @@ class Migration(migrations.Migration):
                 to=settings.AUTH_USER_MODEL,
             ),
         ),
-        migrations.AddField(
+        add_field_idempotent(
             model_name="deletionrequest",
-            name="state",
+            field_name="state",
             field=models.CharField(
                 choices=[
                     ("pending", "Pending"),
@@ -62,53 +69,53 @@ class Migration(migrations.Migration):
                 max_length=16,
             ),
         ),
-        migrations.AddField(
+        add_field_idempotent(
             model_name="deletionrequest",
-            name="vmid",
+            field_name="vmid",
             field=models.IntegerField(blank=True, null=True),
         ),
-        migrations.AddField(
+        add_field_idempotent(
             model_name="deletionrequest",
-            name="node",
+            field_name="node",
             field=models.CharField(blank=True, default="", max_length=64),
         ),
-        migrations.AddField(
+        add_field_idempotent(
             model_name="deletionrequest",
-            name="kind",
+            field_name="kind",
             field=models.CharField(
                 choices=[("qemu", "qemu"), ("lxc", "lxc")],
                 default="qemu",
                 max_length=8,
             ),
         ),
-        migrations.AddField(
+        add_field_idempotent(
             model_name="deletionrequest",
-            name="metadata_snapshot",
+            field_name="metadata_snapshot",
             field=models.JSONField(blank=True, default=dict),
         ),
-        migrations.AddField(
+        add_field_idempotent(
             model_name="deletionrequest",
-            name="reject_reason",
+            field_name="reject_reason",
             field=models.CharField(blank=True, default="", max_length=255),
         ),
-        migrations.AddField(
+        add_field_idempotent(
             model_name="deletionrequest",
-            name="executor_run_uuid",
+            field_name="executor_run_uuid",
             field=models.UUIDField(blank=True, null=True),
         ),
-        migrations.AddField(
+        add_field_idempotent(
             model_name="deletionrequest",
-            name="requested_at",
+            field_name="requested_at",
             field=models.DateTimeField(blank=True, null=True),
         ),
-        migrations.AddField(
+        add_field_idempotent(
             model_name="deletionrequest",
-            name="approved_at",
+            field_name="approved_at",
             field=models.DateTimeField(blank=True, null=True),
         ),
-        migrations.AddField(
+        add_field_idempotent(
             model_name="deletionrequest",
-            name="executed_at",
+            field_name="executed_at",
             field=models.DateTimeField(blank=True, null=True),
         ),
     ]
