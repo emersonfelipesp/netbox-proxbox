@@ -1,0 +1,2 @@
+recursive-include netbox_packer/templates *
+recursive-include netbox_packer/migrations *.py
