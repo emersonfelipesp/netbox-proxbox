@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
-from stack_common import extract_id, get_vm_by_proxmox_vmid, load_stack_context, log_service_skip, wait_http_ok
+from stack_common import (
+    extract_id,
+    get_vm_by_proxmox_vmid,
+    load_stack_context,
+    log_service_skip,
+    wait_http_ok,
+)
 from stack_setup import (
     assert_plugin_internal_contracts,
     assert_plugin_routes,
@@ -53,7 +59,9 @@ def main() -> None:
         stack.netbox_token,
         endpoint_ids,
     )
-    create_proxbox_custom_fields(stack.proxbox_base_url, proxbox_api_key=proxbox_api_key)
+    create_proxbox_custom_fields(
+        stack.proxbox_base_url, proxbox_api_key=proxbox_api_key
+    )
     run_and_assert_all_sync_operations(
         stack.netbox_base_url,
         stack.netbox_token,

@@ -25,6 +25,7 @@ from netbox_proxbox.schemas import (
 from netbox_proxbox.schemas._formatters import iter_node_records, iter_scalar_records
 
 __all__ = (
+    "append_unsynced_node_placeholders",
     "build_cluster_summary",
     "build_guest_summary",
     "build_local_node_rows",
@@ -90,17 +91,22 @@ def build_local_node_rows(
         .select_related("proxmox_cluster", "netbox_device")
         .order_by("name")
     )
-    # Nodes matching cluster name from the live API (cross-endpoint fallback)
+    # Nodes matching cluster name from the live API (cross-endpoint fallback).
+    # Fires whenever the cluster name is known, even when the scoped
+    # sibling-name set is empty — this covers freshly imported clusters that
+    # have not yet linked any ProxmoxNode rows to this endpoint.
     scoped_cluster_names = {
         node_name for node_name in (cluster_node_names or set()) if node_name
     }
     name_matched_nodes: list[object] = []
-    if cluster_name and scoped_cluster_names:
+    if cluster_name:
+        name_filter_kwargs: dict[str, object] = {
+            "proxmox_cluster__name": cluster_name,
+        }
+        if scoped_cluster_names:
+            name_filter_kwargs["name__in"] = sorted(scoped_cluster_names)
         name_matched_nodes = list(
-            ProxmoxNode.objects.filter(
-                proxmox_cluster__name=cluster_name,
-                name__in=sorted(scoped_cluster_names),
-            )
+            ProxmoxNode.objects.filter(**name_filter_kwargs)
             .select_related("proxmox_cluster", "netbox_device")
             .order_by("name")
         )
@@ -162,13 +168,61 @@ def cluster_summary_from_node_rows(
     if not node_rows:
         return cluster_summary
 
-    online_nodes = sum(1 for row in node_rows if row.get("status") == "online")
-    total_nodes = len(node_rows)
+    rows_online = sum(1 for row in node_rows if row.get("status") == "online")
+    rows_total = len(node_rows)
+
+    # When the API summary already reports more members than we have rendered
+    # rows for, the live rows are a strict subset of the cluster membership
+    # (e.g. truncated `/cluster/status` payload, or members that have not been
+    # synced yet). Preserve the API totals in that case so the dashboard panel
+    # does not under-report the cluster size.
+    api_total_raw = cluster_summary.get("nodes_total")
+    api_online_raw = cluster_summary.get("nodes_online")
+    api_total = api_total_raw if isinstance(api_total_raw, int) else 0
+    api_online = api_online_raw if isinstance(api_online_raw, int) else 0
+
+    if api_total > rows_total:
+        resolved_total = api_total
+        resolved_online = max(api_online, rows_online)
+    else:
+        resolved_total = rows_total
+        resolved_online = rows_online
+
     return cluster_summary | {
-        "nodes_total": total_nodes,
-        "nodes_online": online_nodes,
-        "nodes_offline": max(total_nodes - online_nodes, 0),
+        "nodes_total": resolved_total,
+        "nodes_online": resolved_online,
+        "nodes_offline": max(resolved_total - resolved_online, 0),
     }
+
+
+def append_unsynced_node_placeholders(
+    node_rows: list[dict[str, object]],
+    cluster_node_names: set[str] | None,
+) -> list[dict[str, object]]:
+    """Append `status="unknown"` placeholder rows for cluster members not in node_rows.
+
+    Cluster members named by the live API status payload that have no matching
+    local `ProxmoxNode` (and no live row from `/nodes`) are otherwise invisible
+    on the dashboard panel. This helper surfaces them with a distinguishing
+    ``status="unknown"`` so operators can tell "synced and offline" apart from
+    "not yet discovered".
+    """
+    if not cluster_node_names:
+        return node_rows
+
+    seen_names = {
+        str(row.get("name", "")).strip()
+        for row in node_rows
+        if str(row.get("name", "")).strip()
+    }
+    placeholders = [
+        {"name": member, "status": "unknown"}
+        for member in sorted(name.strip() for name in cluster_node_names if name)
+        if member and member not in seen_names
+    ]
+    if not placeholders:
+        return node_rows
+    return sorted([*node_rows, *placeholders], key=lambda row: str(row.get("name", "")))
 
 
 def build_object_summaries(

@@ -38,7 +38,9 @@ def assert_proxmox_mock_contract(proxmox_mock_base_url: str, service: str) -> No
     if service == "pve":
         payload = assert_ok(version, context="proxmox mock pve version")
         if not isinstance(payload.get("data"), dict):
-            raise AssertionError(f"PVE mock version payload missing data object: {payload}")
+            raise AssertionError(
+                f"PVE mock version payload missing data object: {payload}"
+            )
         return
 
     if version.status_code >= 500:
@@ -62,7 +64,13 @@ def assert_proxmox_mock_contract(proxmox_mock_base_url: str, service: str) -> No
 
 
 def _assert_status_shape(payload: dict[str, Any], *, context: str) -> None:
-    required = {"status", "target_address", "target_port", "authentication", "api_access"}
+    required = {
+        "status",
+        "target_address",
+        "target_port",
+        "authentication",
+        "api_access",
+    }
     missing = sorted(required - set(payload))
     if missing:
         raise AssertionError(f"{context} payload missing keys {missing}: {payload}")
@@ -156,7 +164,9 @@ def assert_discovery_api_contracts(netbox_base_url: str, netbox_token: str) -> N
             context=f"plugin discovery {route}",
         )
         if not isinstance(payload, dict):
-            raise AssertionError(f"Discovery route {route} returned non-object: {payload}")
+            raise AssertionError(
+                f"Discovery route {route} returned non-object: {payload}"
+            )
 
 
 def assert_settings_endpoint_reachable(netbox_base_url: str, netbox_token: str) -> None:
@@ -195,7 +205,9 @@ def assert_rq_default_queue_contract() -> None:
             cmd, check=True, capture_output=True, text=True, timeout=60
         )
     except (OSError, subprocess.SubprocessError) as exc:
-        raise AssertionError(f"Unable to inspect NetBox RQ queue contract: {exc}") from exc
+        raise AssertionError(
+            f"Unable to inspect NetBox RQ queue contract: {exc}"
+        ) from exc
 
     output_lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
     if not output_lines:
