@@ -222,9 +222,7 @@ def append_unsynced_node_placeholders(
     ]
     if not placeholders:
         return node_rows
-    return sorted(
-        [*node_rows, *placeholders], key=lambda row: str(row.get("name", ""))
-    )
+    return sorted([*node_rows, *placeholders], key=lambda row: str(row.get("name", "")))
 
 
 def build_object_summaries(
