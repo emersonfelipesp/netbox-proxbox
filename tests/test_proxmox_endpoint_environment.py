@@ -156,9 +156,7 @@ def test_migration_exists_and_chains_after_0044() -> None:
     ``0038_v0_0_16_release`` squash (which references the original migration
     name in its ``replaces`` list).
     """
-    assert MIGRATION_PATH.exists(), (
-        f"{MIGRATION_PATH.name} is missing"
-    )
+    assert MIGRATION_PATH.exists(), f"{MIGRATION_PATH.name} is missing"
     src = MIGRATION_PATH.read_text()
     assert "'0044_cloud_image_template'" in src
     assert "0045_proxmoxendpoint_environment" in src
@@ -168,8 +166,7 @@ def test_migration_exists_and_chains_after_0044() -> None:
     )
     assert "field_name='environment'" in src or 'name="environment"' in src
     assert (
-        "model_name='proxmoxendpoint'" in src
-        or 'model_name="proxmoxendpoint"' in src
+        "model_name='proxmoxendpoint'" in src or 'model_name="proxmoxendpoint"' in src
     )
     assert "blank=True" in src
     assert "null=True" in src
@@ -192,7 +189,7 @@ def test_environment_addfield_uses_idempotent_wrapper() -> None:
     assert env_block_start != -1, (
         "Squash must include the 0045_proxmoxendpoint_environment section."
     )
-    block = src[env_block_start:env_block_start + 4000]
+    block = src[env_block_start : env_block_start + 4000]
     addfield_idx = block.find("add_field_idempotent(")
     env_idx = block.find("field_name='environment'")
     assert addfield_idx != -1 and env_idx != -1, (
