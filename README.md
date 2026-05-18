@@ -20,9 +20,23 @@ Proxbox discovers and syncs the following from Proxmox into NetBox:
 
 Sync runs on-demand from the NetBox UI or scheduled automatically via NetBox's job system.
 
+## Sibling Plugins
+
+Starting with the `v0.0.16` line, the sibling plugins live in standalone
+repositories under [@emersonfelipesp](https://github.com/emersonfelipesp) and
+each declares `netbox-proxbox>=0.0.16` as a dependency. They all reuse the
+same `proxbox-api` backend.
+
+| Plugin | Repository | Purpose |
+|--------|------------|---------|
+| `netbox_pbs` | [`emersonfelipesp/netbox-pbs`](https://github.com/emersonfelipesp/netbox-pbs) | Proxmox Backup Server inventory |
+| `netbox_ceph` | [`emersonfelipesp/netbox-ceph`](https://github.com/emersonfelipesp/netbox-ceph) | Read-only Proxmox-managed Ceph inventory |
+| `netbox_pdm` | [`emersonfelipesp/netbox-pdm`](https://github.com/emersonfelipesp/netbox-pdm) | Proxmox Datacenter Manager inventory |
+| `netbox_packer` | [`emersonfelipesp/netbox-packer`](https://github.com/emersonfelipesp/netbox-packer) | HashiCorp Packer image-factory for Proxmox |
+
 ## What's New in v0.0.16
 
-Paired with backend [`proxbox-api 0.0.11`](https://github.com/emersonfelipesp/proxbox-api).
+Paired with backend [`proxbox-api 0.0.12`](https://github.com/emersonfelipesp/proxbox-api).
 
 - **Cluster dashboard panel — correct node totals.** Fixes [#455](https://github.com/emersonfelipesp/netbox-proxbox/issues/455). The cluster summary panel now preserves API-reported node totals when the live node rows are truncated, falls back to all `ProxmoxNode` rows under the cluster name when scoped sibling lookup is empty, and renders placeholder rows for cluster members that have not yet been synced. Operators see the true online/offline/total counts even when individual nodes are still pending discovery.
 - **Read-only reflection path is unchanged.** No NetBox compatibility rotation ships in this minor release.
@@ -33,7 +47,7 @@ Full notes: [Release Notes — v0.0.16](https://emersonfelipesp.github.io/netbox
 
 | NetBox   | netbox-proxbox | proxbox-api | netbox-sdk     | proxmox-sdk    |
 |----------|----------------|-------------|----------------|----------------|
-| >=4.5.8  | v0.0.16              | v0.0.11          | v0.0.8.post1   | v0.0.3.post1   |
+| >=4.5.8  | v0.0.16              | v0.0.12          | v0.0.8.post1   | v0.0.3.post1   |
 | >=4.5.8  | v0.0.15.post2        | v0.0.11.post2    | v0.0.8.post1   | v0.0.5.post1   |
 | >=4.5.8  | v0.0.15.post1        | v0.0.11.post1    | v0.0.8.post1   | v0.0.3.post1   |
 | >=4.5.8  | v0.0.15              | v0.0.11          | v0.0.8.post1   | v0.0.3.post1   |

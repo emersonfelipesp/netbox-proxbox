@@ -41,11 +41,11 @@ This repository packages the `netbox_proxbox` NetBox plugin. The plugin adds end
 - Docker-based plugin installation docs are maintained at [`docs/installation/3-installing-plugin-docker.md`](./docs/installation/3-installing-plugin-docker.md), including `plugin_requirements.txt` and `configuration/plugins.py` usage.
 - Backend Docker examples map host `8800` to container `8000` (`-p 8800:8000`) because the published `proxbox-api` image serves through nginx on container port `8000`.
 
-The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxbox/__init__.py). It declares plugin version `0.0.16` and NetBox compatibility `4.5.8` through `4.6.99` (certified simultaneously against `4.5.8`, `4.5.9`, and official `4.6.0`). The `0.0.16` release is certified with the separate `proxbox-api` backend release `0.0.11` (unchanged from `0.0.15`) and fixes the Cluster Dashboard panel node-totals bug per [#455](https://github.com/emersonfelipesp/netbox-proxbox/issues/455); the entire fix lives in `netbox_proxbox/views/dashboard_data.py` and `netbox_proxbox/views/dashboard.py`, with no DB migration. The `0.0.15.post2` release is certified with backend `0.0.11.post2`, which lifts the `proxmox-sdk` pin to `0.0.5.post1`. `proxbox-api` is not a Python dependency of this plugin; the services communicate over HTTP.
+The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxbox/__init__.py). It declares plugin version `0.0.16` and NetBox compatibility `4.5.8` through `4.6.99` (certified simultaneously against `4.5.8`, `4.5.9`, and official `4.6.0`). The `0.0.16` release is certified with the separate `proxbox-api` backend release `0.0.12` and fixes the Cluster Dashboard panel node-totals bug per [#455](https://github.com/emersonfelipesp/netbox-proxbox/issues/455); the entire fix lives in `netbox_proxbox/views/dashboard_data.py` and `netbox_proxbox/views/dashboard.py`, with no DB migration. The `0.0.15.post2` release is certified with backend `0.0.11.post2`, which lifts the `proxmox-sdk` pin to `0.0.5.post1`. `proxbox-api` is not a Python dependency of this plugin; the services communicate over HTTP.
 
 **Companion repos (cross-link map):**
 
-- Backend service: [`emersonfelipesp/proxbox-api`](https://github.com/emersonfelipesp/proxbox-api) — the HA REST shim and `overwrite_ip_address_dns_name` write paths in this release pair with `proxbox-api 0.0.11`. See its [`docs/api/cluster-ha.md`](https://github.com/emersonfelipesp/proxbox-api/blob/main/docs/api/cluster-ha.md) for the upstream contract this plugin proxies.
+- Backend service: [`emersonfelipesp/proxbox-api`](https://github.com/emersonfelipesp/proxbox-api) — the HA REST shim and `overwrite_ip_address_dns_name` write paths in this release pair with `proxbox-api 0.0.12`. See its [`docs/api/cluster-ha.md`](https://github.com/emersonfelipesp/proxbox-api/blob/main/docs/api/cluster-ha.md) for the upstream contract this plugin proxies.
 - Workspace context: [`personal-context/claude-reference/netbox-proxbox.md`](https://github.com/emersonfelipesp/personal-context/blob/main/claude-reference/netbox-proxbox.md) — N-MultiCloud workspace-level notes (cross-repo deps, NetBox compatibility rotation policy).
 
 ## Architecture Summary
@@ -133,7 +133,7 @@ prepare-release
     └── e2e-docker-pypi (install_source=pypi, dependency_mode=pypi-package)
 ```
 
-Normal and `.postN` tag pushes publish to TestPyPI. `rcN` tag pushes, GitHub releases, and manual dispatch with `publish_target=pypi` publish to PyPI.
+`rcN` tag pushes publish to TestPyPI for release-candidate validation. Non-rc tag pushes (`vX.Y.Z`, `vX.Y.Z.postN`), GitHub releases, and manual dispatch with `publish_target=pypi` publish to PyPI.
 
 TestPyPI validation installs both `netbox-proxbox` and the configured `proxbox-api` from TestPyPI. PyPI candidate/final validation uses PyPI `proxbox-api` for backend package-index E2E.
 

@@ -64,7 +64,6 @@ nav:
       - Using pip: 'installation/1-installing-plugin.md'
       - Using git (recommended): 'installation/2-installing-plugin-git.md'
       - Using Docker: 'installation/3-installing-plugin-docker.md'
-    - Ceph Plugin (sibling): 'installation/ceph-plugin.md'
     - Backend Setup: 'installation/backend-setup.md'
     - Upgrading: 'installation/upgrading.md'
   - Backend:
@@ -143,7 +142,6 @@ nav:
     - Backup Routines: 'features/backup-routines.md'
     - Replications: 'features/replications.md'
     - HA Status: 'features/ha.md'
-    - Ceph (Proxmox-managed): 'features/ceph.md'
     - Backend Logs: 'features/backend-logs.md'
     - Monitoring: 'features/monitoring.md'
     - API Integration: 'features/api-integration.md'

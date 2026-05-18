@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       publish_target:
-        description: "Package index to publish to. Tag pushes use TestPyPI except rc tags; releases use PyPI."
+        description: "Package index to publish to. rc tag pushes use TestPyPI; non-rc tag pushes and GitHub releases use PyPI."
         required: true
         type: choice
         options:
@@ -36,9 +36,9 @@ permissions:
   contents: read
 
 env:
-  PROXBOX_API_DEFAULT_VERSION: ${{ vars.PROXBOX_API_RELEASE_VERSION || '0.0.11' }}
-  PROXBOX_API_TESTPYPI_VERSION: ${{ vars.PROXBOX_API_TESTPYPI_VERSION || vars.PROXBOX_API_RELEASE_VERSION || '0.0.11' }}
-  PROXBOX_API_PYPI_VERSION: ${{ vars.PROXBOX_API_PYPI_VERSION || vars.PROXBOX_API_RELEASE_VERSION || '0.0.11' }}
+  PROXBOX_API_DEFAULT_VERSION: ${{ vars.PROXBOX_API_RELEASE_VERSION || '0.0.12' }}
+  PROXBOX_API_TESTPYPI_VERSION: ${{ vars.PROXBOX_API_TESTPYPI_VERSION || vars.PROXBOX_API_RELEASE_VERSION || '0.0.12' }}
+  PROXBOX_API_PYPI_VERSION: ${{ vars.PROXBOX_API_PYPI_VERSION || vars.PROXBOX_API_RELEASE_VERSION || '0.0.12' }}
 
 jobs:
   prepare-release:
@@ -136,9 +136,9 @@ jobs:
           elif event == 'release':
               publish_target = 'pypi'
           elif event == 'push' and re.search(r'rc\d+$', version):
-              publish_target = 'pypi'
-          else:
               publish_target = 'testpypi'
+          else:
+              publish_target = 'pypi'
 
           proxbox_api_version = os.getenv('PROXBOX_API_VERSION_INPUT', '') or ''
           if not proxbox_api_version:
@@ -229,11 +229,12 @@ jobs:
           set -eux
           uv venv --python "${{ matrix.python-version }}" .package-smoke
           installed=0
-          for i in $(seq 1 30); do
+          for i in $(seq 1 90); do
             if uv pip install \
               --python .package-smoke/bin/python \
               --index-url https://test.pypi.org/simple/ \
               --extra-index-url https://pypi.org/simple/ \
+              --index-strategy unsafe-best-match \
               "${PACKAGE_NAME}==${PACKAGE_VERSION}"; then
               installed=1
               break
@@ -275,7 +276,7 @@ jobs:
     uses: ./.github/workflows/e2e-docker.yml
     with:
       install_source: testpypi
-      dependency_mode: dev
+      dependency_mode: testpypi-package
       proxbox_api_version: ${{ needs.prepare-release.outputs.proxbox_api_version }}
 
   validate-pypi-candidate:
@@ -320,7 +321,7 @@ jobs:
     uses: ./.github/workflows/e2e-docker.yml
     with:
       install_source: local
-      dependency_mode: dev
+      dependency_mode: pypi-package
       proxbox_api_version: ${{ needs.prepare-release.outputs.proxbox_api_version }}
 
   publish-pypi:
@@ -381,7 +382,7 @@ jobs:
           set -eux
           uv venv --python "${{ matrix.python-version }}" .package-smoke
           installed=0
-          for i in $(seq 1 30); do
+          for i in $(seq 1 90); do
             if uv pip install \
               --python .package-smoke/bin/python \
               --index-url https://pypi.org/simple/ \
@@ -414,5 +415,5 @@ jobs:
     uses: ./.github/workflows/e2e-docker.yml
     with:
       install_source: pypi
-      dependency_mode: dev
+      dependency_mode: pypi-package
       proxbox_api_version: ${{ needs.prepare-release.outputs.proxbox_api_version }}

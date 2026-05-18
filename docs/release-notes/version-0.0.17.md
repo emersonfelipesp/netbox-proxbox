@@ -1,99 +1,55 @@
-# Version 0.0.17
+# Version 0.0.17 (split out)
 
-## Summary
+Starting with the `v0.0.16` line, the previously co-developed sibling plugins
+have been **extracted from this monorepo** into independent repositories under
+[@emersonfelipesp](https://github.com/emersonfelipesp). The `0.0.17` release
+line is no longer produced from this repository.
 
-Version `0.0.17` introduces a sibling **read-only Ceph plugin** packaged as
-`netbox-ceph 0.0.1` from this repository. It is the third integration
-direction tracked by the Proxbox project, after read-only Proxmox →
-NetBox reflection (`netbox-proxbox`) and opt-in NetBox → Proxmox intent
-(also in `netbox-proxbox`, shipped in `0.0.15`). Ceph inventory is
-**Proxmox-managed only** in v1: no direct Ceph Dashboard / Prometheus / RGW
-/ RBD / external-cluster integration, and no NetBox → Ceph write path.
+## New repository layout
 
-Tracking issues:
+| Repository | Plugin module | Depends on |
+|---|---|---|
+| [`emersonfelipesp/netbox-proxbox`](https://github.com/emersonfelipesp/netbox-proxbox) | `netbox_proxbox` (base) | NetBox |
+| [`emersonfelipesp/netbox-pbs`](https://github.com/emersonfelipesp/netbox-pbs) | `netbox_pbs` (Proxmox Backup Server) | `netbox-proxbox>=0.0.16` |
+| [`emersonfelipesp/netbox-pdm`](https://github.com/emersonfelipesp/netbox-pdm) | `netbox_pdm` (Proxmox Datacenter Manager) | `netbox-proxbox>=0.0.16` |
+| [`emersonfelipesp/netbox-ceph`](https://github.com/emersonfelipesp/netbox-ceph) | `netbox_ceph` (Proxmox-managed Ceph) | `netbox-proxbox>=0.0.16` |
+| [`emersonfelipesp/netbox-packer`](https://github.com/emersonfelipesp/netbox-packer) | `netbox_packer` (HashiCorp Packer image factory) | `netbox-proxbox>=0.0.16` |
 
-- Parent: [#424](https://github.com/emersonfelipesp/netbox-proxbox/issues/424)
-- Sub-issues:
-  [`#11` proxmox-sdk](https://github.com/emersonfelipesp/proxmox-sdk/issues/11),
-  [`#92` proxbox-api](https://github.com/emersonfelipesp/proxbox-api/issues/92),
-  [`#428` scaffold](https://github.com/emersonfelipesp/netbox-proxbox/issues/428),
-  [`#430` sync job + HTTP client](https://github.com/emersonfelipesp/netbox-proxbox/issues/430),
-  [`#429` docs + release + smoke](https://github.com/emersonfelipesp/netbox-proxbox/issues/429).
+All five plugins continue to talk to the same shared `proxbox-api` backend.
+Each sibling repository ships its own documentation site (Material for
+MkDocs), CI test suite, E2E workflow, and PyPI release pipeline. Install only
+the plugins you need — the sibling plugins are optional, and `netbox-proxbox`
+does **not** depend on any of them.
 
-## What's new
+## What changed in this repository
 
-### `netbox-ceph` sibling plugin
+- Removed `netbox_pbs/`, `netbox_ceph/`, and `netbox_packer/` source trees.
+- Removed `tests/test_ceph_*.py` and `tests/test_packer_*.py`.
+- Removed `docs/features/ceph.md` and `docs/installation/ceph-plugin.md`.
+- Removed Ceph and PBS entries from the docs navigation.
+- Reverted `tests/netbox_test_configuration.py` to load only `netbox_proxbox`.
+- Updated CI to compile only `netbox_proxbox tests`.
 
-- New wheel `netbox-ceph 0.0.1` declared in `netbox_ceph/pyproject.toml`,
-  installed alongside `netbox-proxbox` (`required_plugins = ["netbox_proxbox"]`).
-- Nine Django models — `CephPluginSettings` (singleton), `CephCluster`,
-  `CephDaemon`, `CephOSD`, `CephPool`, `CephFilesystem`, `CephCrushRule`,
-  `CephFlag`, `CephHealthCheck` — with permissive `payload` JSON fields so
-  the UI can render upstream data without lossy serialization.
-- Initial migration `0001_initial` depends on `netbox_proxbox` + `extras`
-  and namespaces every `UniqueConstraint` under `netbox_ceph_*`.
-- `NetBoxModelViewSet` per model with
-  `http_method_names = ("get", "head", "options")` mounted at
-  `/api/plugins/ceph/`; generic `ObjectListView` / `ObjectView` per model
-  with `register_model_view`; filter-only `NetBoxModelFilterSetForm` per
-  model with lazy `ProxmoxEndpoint` queryset binding; child tabs on
-  `CephCluster` for daemons, OSDs, and pools; plugin home view.
+The `netbox_packer` image-factory code (PRs #457, #458, #459, #460, #461,
+#462) was carried over to the standalone
+[`emersonfelipesp/netbox-packer`](https://github.com/emersonfelipesp/netbox-packer)
+repository before this commit removed it from the monorepo, so the work is
+preserved in the new repository's `main` branch and remains available in this
+branch's git history.
 
-### Branch-aware `CephSyncJob`
+## Migration notes for operators
 
-- `netbox_ceph.jobs.CephSyncJob` runs on NetBox's `default` RQ queue with
-  a `7200s` `job_timeout`, the same long-budget convention as
-  `ProxboxSyncJob`.
-- `netbox_ceph.services.http_client` calls `proxbox-api`'s `/ceph/status`
-  and `/ceph/sync/{status,daemons,osds,pools,filesystems,crush,flags,full}`
-  plain JSON GETs; reuses
-  `netbox_proxbox.services.backend_context.get_fastapi_request_context` so
-  no new authentication or endpoint-resolution path is introduced.
-- `netbox_ceph.services.branch_lifecycle` re-exports the netbox-proxbox
-  branch helpers and adds `branching_enabled_settings()` reading
-  `CephPluginSettings.get_solo()` with defaults `prefix="ceph-sync"` and
-  `on_conflict="fail"`. When branching is unavailable or disabled, the job
-  runs against `main`.
-- Per-resource progress is persisted under `job.data["ceph_sync"]` as a
-  `{params, runtime_seconds, response: {stages: [...]}}` structure mirroring
-  the Proxbox sync job's `proxbox_sync` key.
-- On error, the branch is left open for inspection; on success with a
-  branch, `merge_branch` is called.
+If you previously installed in-tree sibling plugins:
 
-### Documentation
+1. Uninstall the in-tree wheels (`pip uninstall netbox-pbs netbox-ceph
+   netbox-pdm netbox-packer`).
+2. Install the standalone wheels from PyPI once each sibling repository
+   publishes its first release, or from source against the standalone
+   repository.
+3. Keep your `PLUGINS` list in NetBox's `configuration.py` — the Python
+   module names (`netbox_pbs`, `netbox_ceph`, `netbox_pdm`, `netbox_packer`)
+   are unchanged.
 
-- New feature doc: [Features → Ceph (Proxmox-managed)](../features/ceph.md).
-- New installation doc:
-  [Installation → Ceph Plugin](../installation/ceph-plugin.md).
-- Top-level docs nav entries for both pages.
-
-## Compatibility
-
-- NetBox: `4.5.8` – `4.6.99` (unchanged from `0.0.15`).
-- Paired backend: `proxbox-api >= 0.0.11` (same floor as `0.0.15`'s HA
-  surface). The `/ceph/*` routes ship in the backend release that
-  introduced the HA REST shim; no further backend bump is required.
-- Companion Proxmox SDK: `proxmox-sdk` with `proxmox_sdk/ceph/` facade.
-
-## Out of scope for v1
-
-Deferred to future releases:
-
-- Direct Ceph Dashboard API integration.
-- Prometheus metric ingestion.
-- RGW / S3 bucket inventory.
-- RBD image inventory.
-- External non-Proxmox Ceph clusters.
-- Any NetBox → Ceph write operation (pool create, OSD `in/out`, daemon
-  start/stop, flag mutation, CephFS destroy, etc.).
-
-## Verification
-
-- `uv run ruff check .` — clean.
-- `uv run pytest tests/test_ceph_*.py -q` — 25 passed; AST/source-contract
-  pattern (no Django bootstrap), matching the repo convention.
-- Repo-wide collection: 794 tests (769 prior + 25 new), no collection
-  errors.
-- Live `proxbox-api` `/ceph/status` route returns `HTTP 401` (auth-gated,
-  i.e. registered) from the dev endpoint at
-  `http://10.0.30.207:8000/ceph/status`.
+Backend (`proxbox-api`) configuration is unchanged: every plugin still
+authenticates against the same `FastAPIEndpoint` row in `netbox-proxbox` and
+uses the same `/ceph/*`, `/pbs/*`, `/packer/*`, and related routes.

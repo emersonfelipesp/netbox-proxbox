@@ -3,5 +3,4 @@
 from netbox.configuration_testing import *  # noqa: F403
 from netbox.configuration_testing import PLUGINS as BASE_PLUGINS
 
-
 PLUGINS = [*BASE_PLUGINS, "netbox_proxbox"]
