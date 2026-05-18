@@ -201,7 +201,17 @@ jobs:
             fi
           done
 
-          docker pull "${PROXMOX_SDK_IMAGE}:${PROXMOX_SDK_TAG_PREFIX}-${{ matrix.proxmox_service }}"
+          # PVE needs HTTPS because the plugin's ProxmoxEndpoint always connects via TLS;
+          # the published latest-pve image (pypi-raw target) is HTTP-only.  Pull
+          # latest-nginx for PVE (mkcert-fronted TLS on port 8000) and override
+          # PROXMOX_MOCK_SERVICE at runtime.  PDM/PBS keep the HTTP per-service tag.
+          if [ "${{ matrix.proxmox_service }}" = "pve" ]; then
+            PROXMOX_MOCK_IMAGE_REF="${PROXMOX_SDK_IMAGE}:${PROXMOX_SDK_TAG_PREFIX}-nginx"
+          else
+            PROXMOX_MOCK_IMAGE_REF="${PROXMOX_SDK_IMAGE}:${PROXMOX_SDK_TAG_PREFIX}-${{ matrix.proxmox_service }}"
+          fi
+          echo "PROXMOX_MOCK_IMAGE_REF=${PROXMOX_MOCK_IMAGE_REF}" >> "$GITHUB_ENV"
+          docker pull "${PROXMOX_MOCK_IMAGE_REF}"
           if ! docker pull "${NETBOX_IMAGE}" 2>/dev/null; then
             NETBOX_VERSION="${NETBOX_IMAGE##*:}"
             git clone --depth 1 https://github.com/netbox-community/netbox-docker.git /tmp/netbox-docker
@@ -218,8 +228,21 @@ jobs:
             -v "$PWD/tests/e2e/proxmox_openapi_mock_data.json:/data/mock-data.json:ro" \
             -e PROXMOX_MOCK_DATA_PATH=/data/mock-data.json \
             -e PROXMOX_MOCK_SCHEMA_VERSION=none \
+            -e PROXMOX_MOCK_SERVICE="${{ matrix.proxmox_service }}" \
             -e APP_MODULE=proxmox_sdk.mock_main:app \
-            "${PROXMOX_SDK_IMAGE}:${PROXMOX_SDK_TAG_PREFIX}-${{ matrix.proxmox_service }}"
+            "${PROXMOX_MOCK_IMAGE_REF}"
+
+          # Per-service mock URLs.  PVE serves HTTPS via the nginx image with a
+          # self-signed mkcert cert; PDM/PBS serve plain HTTP from pypi-raw.
+          if [ "${{ matrix.proxmox_service }}" = "pve" ]; then
+            echo "PROXMOX_MOCK_PROBE_URL=https://${TEST_HOST}:18006/health" >> "$GITHUB_ENV"
+            echo "PROXMOX_MOCK_PROBE_FLAGS=-sk" >> "$GITHUB_ENV"
+            echo "PROXMOX_MOCK_BASE_URL=https://${TEST_HOST}:18006" >> "$GITHUB_ENV"
+          else
+            echo "PROXMOX_MOCK_PROBE_URL=http://${TEST_HOST}:18006/health" >> "$GITHUB_ENV"
+            echo "PROXMOX_MOCK_PROBE_FLAGS=-s" >> "$GITHUB_ENV"
+            echo "PROXMOX_MOCK_BASE_URL=http://${TEST_HOST}:18006" >> "$GITHUB_ENV"
+          fi
 
           if [ "${{ matrix.network_stack }}" = "ipv6" ]; then
             PROXBOX_BIND_HOST_VALUE="::"
@@ -364,7 +387,8 @@ jobs:
           done
 
           for i in $(seq 1 90); do
-            if curl -s --max-time 5 "http://${TEST_HOST}:18006/health" >/dev/null 2>&1; then
+            # shellcheck disable=SC2086
+            if curl ${PROXMOX_MOCK_PROBE_FLAGS} --max-time 5 "${PROXMOX_MOCK_PROBE_URL}" >/dev/null 2>&1; then
               break
             fi
             sleep 2
@@ -472,7 +496,7 @@ jobs:
         env:
           NETBOX_BASE_URL: http://${{ env.TEST_HOST }}:18080
           PROXBOX_BASE_URL: http://${{ env.TEST_HOST }}:18800
-          PROXMOX_MOCK_BASE_URL: http://${{ env.TEST_HOST }}:18006
+          PROXMOX_MOCK_BASE_URL: ${{ env.PROXMOX_MOCK_BASE_URL }}
           PROXMOX_MOCK_IP: ${{ env.PROXMOX_MOCK_IP }}
           NETBOX_IP: ${{ env.NETBOX_IP }}
           PROXBOX_API_IP: ${{ env.PROXBOX_API_IP }}
@@ -528,7 +552,7 @@ jobs:
           docker logs netbox-e2e-rqworker || true
           echo "=== Proxbox API logs ==="
           docker logs proxbox-e2e-api || true
-          echo "=== Proxmox Mock logs (${PROXMOX_SDK_IMAGE}:${PROXMOX_SDK_TAG_PREFIX}-${{ matrix.proxmox_service }}) ==="
+          echo "=== Proxmox Mock logs (${PROXMOX_MOCK_IMAGE_REF:-${PROXMOX_SDK_IMAGE}:${PROXMOX_SDK_TAG_PREFIX}-${{ matrix.proxmox_service }}}) ==="
           docker logs proxmox-e2e-mock || true
           echo "=== Postgres logs ==="
           docker logs netbox-e2e-postgres || true
