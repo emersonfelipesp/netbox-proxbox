@@ -5,7 +5,7 @@ This directory contains Django schema migrations for the plugin models.
 ## Idempotent additive operations (post-0036)
 
 Every additive schema operation in the post-``0036_add_overwrite_vm_type``
-chain (``0037`` through ``0046``) is wrapped through the helpers in
+chain (``0037`` through ``0048``) is wrapped through the helpers in
 [`_idempotent_ops.py`](./_idempotent_ops.py) — ``add_field_idempotent()``
 for ``AddField`` and ``create_model_idempotent()`` for ``CreateModel``.
 Each helper returns a ``SeparateDatabaseAndState`` whose ``database_operations``
@@ -15,10 +15,10 @@ original ``AddField`` / ``CreateModel`` verbatim so Django's project state,
 serializer parity, and ``makemigrations --check`` output match the
 non-idempotent original.
 
-Use these helpers for every new additive migration in this chain. The
-consolidated ``0037_v0_0_15_release`` migration also declares
-``replaces = [...]`` covering every deleted migration from both the
-v0.0.15 and develop branches; databases that fully applied the old
+Use these helpers for every new additive migration in this chain. Both
+``0037_v0_0_15_release`` and ``0038_v0_0_16_release`` declare
+``replaces = [...]`` covering every deleted migration from their
+respective release branches; databases that fully applied the old
 lineage are marked applied without re-running operations.
 
 This combined policy (``replaces`` + idempotent ops) makes the chain
@@ -69,6 +69,7 @@ contract and issue #454 for the bug history.
 - **0027** (v0.0.11+): Converts `VMTaskHistory.pstart` from `IntegerField` to `BigIntegerField` to accommodate large kernel start-time values.
 - **0028** (v0.0.11+): Makes `FastAPIEndpoint.websocket_port` nullable with `default=None`. A data migration resets existing rows where `websocket_port=8800` (the old hardcoded default) to `NULL` so the URL-builder falls back to the HTTP port.
 - **0029** (v0.0.11+): Adds `primary_ip_preference` (`CharField`, choices `ipv4`/`ipv6`, default `ipv4`) to `ProxboxPluginSettings`. Controls which IP family Proxbox selects as the VM primary IP. Databases missing this migration will return HTTP 500 on `GET /plugins/proxbox/settings/` because the ORM selects all model columns. Run `manage.py migrate netbox_proxbox` to apply.
+- **0038_v0_0_16_release** (v0.0.16+): Manually-constructed squash of migrations 0038–0047 (11 files, including the 0044 fork pair). Replaces: `0038_intent_permissions`, `0039_intent_custom_fields`, `0040_apply_job_full`, `0041_deletion_request_full`, `0042_pluginsettings_self_approve`, `0043_pluginsettings_warn_plaintext`, `0044_cloud_image_template`, `0044_overwrite_vm_proxmox_tags`, `0045_proxmoxendpoint_environment`, `0046_pluginsettings_embed_description_metadata`, `0047_legacy_lineage_schema_repair`. The repair RunPython from 0047 is omitted — all tables and columns are already covered by the idempotent ops in the squash.
 - If an install was partially upgraded into the post-squash branch, use the repair migration chain in this directory rather than hand-editing `django_migrations`.
 
 ## Dependencies
@@ -79,7 +80,7 @@ contract and issue #454 for the bug history.
 ## Release Timeline
 
 - **v0.0.10** (and earlier): Migrations 0001-0021 (21 files)
-- **v0.0.11** (current): Migrations 0001-0021, 0022_squashed, 0023-0029 (28 files on disk — no 0011)
+- **v0.0.11**: Migrations 0001-0021, 0022_squashed, 0023-0029 (28 files on disk — no 0011)
   - 0022_squashed adds 5 changes (FastAPI tokens, SSRF settings, backend logging, operational settings, constraint conversion) consolidated into one squashed migration
   - 0023 adds `encryption_key` to `ProxboxPluginSettings`
   - 0024 extends `Replication` with `endpoint`, `status`, and `raw_config`
@@ -88,6 +89,10 @@ contract and issue #454 for the bug history.
   - 0027 converts `VMTaskHistory.pstart` to BigIntegerField
   - 0028 makes `FastAPIEndpoint.websocket_port` nullable (resets legacy 8800 default to NULL)
   - 0029 adds `primary_ip_preference` to `ProxboxPluginSettings`
+- **v0.0.16** (current): Migrations 0001-0021, 0022_squashed, 0023-0029, 0030-0037, 0038_v0_0_16_release (squashed), 0048+ (on-disk chain has no 0011, no 0038–0047 individual files)
+  - 0030-0036: incremental v0.0.12–v0.0.15 pre-release fields (VMTaskHistory status, ProxmoxEndpoint site/tenant/timeout, ProxboxPluginSettings controlled/overwrite fields)
+  - 0037_v0_0_15_release: manually-constructed squash of the full v0.0.15 and develop branch delta (20 replaced migrations)
+  - 0038_v0_0_16_release: manually-constructed squash of the full v0.0.16 intent/apply/deletion/cloud-image delta (11 replaced migrations)
 
 ## Notes
 

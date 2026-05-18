@@ -22,7 +22,7 @@ class Migration(migrations.Migration):
         ("dcim", "0227_alter_interface_speed_bigint"),
         ("extras", "0134_owner"),
         ("ipam", "0076_natural_ordering"),
-        ("netbox_proxbox", "0047_legacy_lineage_schema_repair"),
+        ("netbox_proxbox", "0038_v0_0_16_release"),
         ("tenancy", "0023_add_mptt_tree_indexes"),
     ]
 
