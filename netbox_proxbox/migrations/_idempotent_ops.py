@@ -33,6 +33,8 @@ from __future__ import annotations
 
 from typing import Any, Callable, Iterable
 
+from django.apps import apps as live_apps
+from django.core.exceptions import FieldDoesNotExist
 from django.db import migrations
 
 APP_LABEL = "netbox_proxbox"
@@ -55,34 +57,52 @@ def _column_exists(schema_editor, table: str, column: str) -> bool:
         }
 
 
-def _bind_field(field, field_name: str):
-    bound = field.clone()
-    bound.set_attributes_from_name(field_name)
-    return bound
+def _live_field(model_name: str, field_name: str):
+    """Return the fully-bound field from the live model registry, or None.
+
+    The historical apps state passed to ``RunPython`` inside
+    ``SeparateDatabaseAndState`` does not include the same operation's
+    ``state_operations``, so ``apps.get_model(...).._meta.get_field(name)``
+    raises ``FieldDoesNotExist`` for the field being added. The live model
+    registry always has the current field with its app/model bindings
+    resolved (necessary for ``ForeignKey.target_field`` lookup).
+    """
+    try:
+        model = live_apps.get_model(APP_LABEL, model_name)
+    except LookupError:
+        return None
+    try:
+        return model._meta.get_field(field_name)
+    except FieldDoesNotExist:
+        return None
 
 
-def _add_field_if_missing(model_name: str, field_name: str, field) -> Callable:
+def _add_field_if_missing(model_name: str, field_name: str) -> Callable:
     def forwards(apps, schema_editor):
         model = apps.get_model(APP_LABEL, model_name)
-        bound_field = _bind_field(field, field_name)
+        field = _live_field(model_name, field_name)
+        if field is None:
+            return
         if not _table_exists(schema_editor, model._meta.db_table):
             return
-        if _column_exists(schema_editor, model._meta.db_table, bound_field.column):
+        if _column_exists(schema_editor, model._meta.db_table, field.column):
             return
-        schema_editor.add_field(model, bound_field)
+        schema_editor.add_field(model, field)
 
     return forwards
 
 
-def _remove_field_if_present(model_name: str, field_name: str, field) -> Callable:
+def _remove_field_if_present(model_name: str, field_name: str) -> Callable:
     def reverse(apps, schema_editor):
         model = apps.get_model(APP_LABEL, model_name)
-        bound_field = _bind_field(field, field_name)
+        field = _live_field(model_name, field_name)
+        if field is None:
+            return
         if not _table_exists(schema_editor, model._meta.db_table):
             return
-        if not _column_exists(schema_editor, model._meta.db_table, bound_field.column):
+        if not _column_exists(schema_editor, model._meta.db_table, field.column):
             return
-        schema_editor.remove_field(model, bound_field)
+        schema_editor.remove_field(model, field)
 
     return reverse
 
@@ -132,8 +152,8 @@ def add_field_idempotent(
     return migrations.SeparateDatabaseAndState(
         database_operations=[
             migrations.RunPython(
-                _add_field_if_missing(model_name, field_name, field),
-                reverse_code=_remove_field_if_present(model_name, field_name, field),
+                _add_field_if_missing(model_name, field_name),
+                reverse_code=_remove_field_if_present(model_name, field_name),
             ),
         ],
         state_operations=[
