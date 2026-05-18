@@ -141,6 +141,92 @@ Package uploads intentionally do not use `twine --skip-existing`; if a version i
 
 For public docs, keep [`docs/developer/ci-e2e-workflows.md`](./docs/developer/ci-e2e-workflows.md) and [`docs/developer/release-publishing.md`](./docs/developer/release-publishing.md) aligned with this section.
 
+### Release Procedure (manual steps around the workflow)
+
+The publish workflow fires on **both** `push: tags: v*` and
+`release: types: [published]`. A single non-rc tag push is enough to
+trigger PyPI publish. Creating a GitHub release **after** the tag spawns a
+*duplicate* publish run that must be cancelled — the dist already exists on
+PyPI so the duplicate upload step would fail anyway, but the run still
+spends CI minutes and clutters the actions tab.
+
+Standard release flow (used for `v0.0.16` / `v0.0.16.post3`):
+
+1. **Land the release on the release branch and bump versions.** Update
+   `pyproject.toml` and the `PluginConfig.version` in
+   [`netbox_proxbox/__init__.py`](./netbox_proxbox/__init__.py). Update the
+   assertion in [`tests/test_version.py`](./tests/test_version.py). Verify
+   locally:
+   ```bash
+   python -m compileall netbox_proxbox tests
+   rtk ruff check .
+   rtk pytest tests/
+   ```
+2. **Annotated tag.** Non-rc tags publish to PyPI; rc tags publish to
+   TestPyPI for the rcN gate.
+   ```bash
+   git tag -a vX.Y.Z -m "Release vX.Y.Z"
+   git push origin vX.Y.Z
+   gh run watch <run-id> --repo emersonfelipesp/netbox-proxbox
+   ```
+3. **Verify the dist is live on PyPI:**
+   ```bash
+   curl -s https://pypi.org/pypi/netbox-proxbox/json | jq '.releases | keys'
+   ```
+4. **Create the GitHub release:**
+   ```bash
+   gh release create vX.Y.Z \
+     --repo emersonfelipesp/netbox-proxbox \
+     --title vX.Y.Z \
+     --generate-notes
+   ```
+5. **Cancel the duplicate publish run** that the GitHub release just
+   spawned. `release: published` re-fires the workflow against the same tag.
+   ```bash
+   gh run list --repo emersonfelipesp/netbox-proxbox --event release \
+     --limit 5 --json databaseId,name,status
+   gh run cancel <run-id> --repo emersonfelipesp/netbox-proxbox
+   ```
+   For netbox-proxbox the duplicate run is `Release validation and publish`.
+6. **Reconcile release line back into `develop`.** netbox-proxbox's
+   primary branch is `develop`. After a release on a `vX.Y.Z` branch,
+   merge the release branch back into `develop` with a normal merge
+   commit (`git merge --no-ff origin/vX.Y.Z`) so the develop history
+   carries the released versions, then delete the release branch
+   locally and on the remote.
+
+What was done for v0.0.16 / v0.0.16.post3:
+
+- Released `0.0.16`, `0.0.16.post1`, `0.0.16.post2`, and `0.0.16.post3`
+  in sequence (PEP 440 fix-forward — never `twine --skip-existing`). Final
+  PyPI dist is `netbox-proxbox 0.0.16.post3`.
+- After PyPI was green, merged the `v0.0.16` branch into `develop` via a
+  two-parent merge commit (`merge --no-ff`, parents `[136966c, 934fd8a]`).
+  Pushed the resulting commit (`4eec556`) as a fast-forward of `develop`.
+- Created the GitHub release with
+  `gh release create v0.0.16.post3 --repo emersonfelipesp/netbox-proxbox
+  --title v0.0.16.post3 --generate-notes`.
+- Cancelled the duplicate `Release validation and publish` run that the
+  GitHub release spawned with `gh run cancel`.
+- Deleted the `v0.0.16` branch locally and on the remote. Only `develop`
+  and `gh-pages` remain on origin.
+
+Sibling-plugin releases (`netbox-pbs`, `netbox-pdm`, `netbox-ceph`,
+`netbox-packer`) follow the same five-step pattern. Note that on those
+repos `release: published` against an already-published tag triggered an
+**immediate failure** (not a duplicate publish) because the workflow tried
+to upload an already-consumed version — that failed run can still be left
+alone, but cancelling it before it fails is cleaner.
+
+Don't:
+
+- Don't add `twine --skip-existing`. Fix forward with `.postN` per PEP 440.
+- Don't force-push a release branch to "rewrite history" of a published
+  tag. Tags on the remote are immutable.
+- Don't skip the cancel step in (5). The duplicate run will eventually
+  fail at the upload step, but leaving it in_progress for ~10 minutes
+  wastes runners and makes future release diagnostics harder.
+
 ---
 
 ## How To Navigate
