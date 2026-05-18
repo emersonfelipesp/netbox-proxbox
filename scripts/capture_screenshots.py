@@ -165,7 +165,9 @@ def seed_data(
         proxbox_api_key=proxbox_api_key,
     )
 
-    print("Triggering Proxmox keepalive to register endpoint with proxbox-api backend...")
+    print(
+        "Triggering Proxmox keepalive to register endpoint with proxbox-api backend..."
+    )
     keepalive_resp = requests.get(
         f"{netbox_base_url}/plugins/proxbox/keepalive-status/proxmox/{endpoint_ids['proxmox_pk']}/",
         headers={"Authorization": f"Token {netbox_token}"},
