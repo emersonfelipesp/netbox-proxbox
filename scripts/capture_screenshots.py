@@ -157,13 +157,21 @@ def seed_data(
     )
 
     print("Creating NetBox plugin endpoint objects...")
-    ensure_netbox_plugin_endpoints(
+    endpoint_ids = ensure_netbox_plugin_endpoints(
         netbox_base_url,
         netbox_token,
         netbox_token_id,
         netbox_public_url=netbox_public_url,
         proxbox_api_key=proxbox_api_key,
     )
+
+    print("Triggering Proxmox keepalive to register endpoint with proxbox-api backend...")
+    keepalive_resp = requests.get(
+        f"{netbox_base_url}/plugins/proxbox/keepalive-status/proxmox/{endpoint_ids['proxmox_pk']}/",
+        headers={"Authorization": f"Token {netbox_token}"},
+        timeout=30,
+    )
+    keepalive_resp.raise_for_status()
 
     print("Creating Proxbox custom fields...")
     create_proxbox_custom_fields(proxbox_base_url, proxbox_api_key=proxbox_api_key)
