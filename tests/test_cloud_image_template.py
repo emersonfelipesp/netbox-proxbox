@@ -34,11 +34,18 @@ def test_cloud_image_template_model_defines_catalog_fields_and_permission():
 
 
 def test_cloud_image_template_migration_exists_on_current_develop_head():
-    src = _read("netbox_proxbox/migrations/0044_cloud_image_template.py")
-    assert '("netbox_proxbox", "0043_pluginsettings_warn_plaintext")' in src
-    assert 'name="CloudImageTemplate"' in src
-    assert '"provision_cloud_vm"' in src
-    assert '"unique_together": {("cluster", "source_vmid")}' in src
+    """Pins CloudImageTemplate model creation in the v0.0.16 release migration.
+
+    Originally shipped as ``0044_cloud_image_template``; now consolidated
+    into ``0038_v0_0_16_release`` (squash references the original migration
+    name in its ``replaces`` list).
+    """
+    src = _read("netbox_proxbox/migrations/0038_v0_0_16_release.py")
+    assert "'0043_pluginsettings_warn_plaintext'" in src
+    assert "0044_cloud_image_template" in src
+    assert "name='CloudImageTemplate'" in src
+    assert "'provision_cloud_vm'" in src
+    assert "'unique_together': {('cluster', 'source_vmid')}" in src
 
 
 def test_cloud_image_template_ui_surface_is_registered():

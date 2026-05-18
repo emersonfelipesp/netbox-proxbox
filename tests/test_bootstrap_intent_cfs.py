@@ -6,8 +6,10 @@ AST-only — does not bootstrap Django. Pins:
   * It declares ``VM_INTENT_FIELDS`` (10 entries) and
     ``BRANCH_INTENT_FIELDS`` (2 entries) with the exact field-name set
     required by Sub-PRs F/G/H/K.
-  * Migration ``0039_intent_custom_fields`` is a ``RunPython`` calling
-    the registration helper.
+  * The v0.0.16 release migration is a ``RunPython`` calling
+    the registration helper. Originally shipped as
+    ``0039_intent_custom_fields``; now consolidated into
+    ``0038_v0_0_16_release``.
   * The helper guards Branch CFs behind a ``ContentType.DoesNotExist``
     fallback so the migration survives when ``netbox_branching`` is not
     installed.
@@ -20,7 +22,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DATA_MODULE = REPO_ROOT / "netbox_proxbox" / "migrations" / "_v0_0_16_release_data.py"
-MIGRATION = REPO_ROOT / "netbox_proxbox" / "migrations" / "0039_intent_custom_fields.py"
+MIGRATION = REPO_ROOT / "netbox_proxbox" / "migrations" / "0038_v0_0_16_release.py"
 
 EXPECTED_VM_CFS = {
     "proxmox_node",
@@ -113,7 +115,7 @@ def test_branch_intent_fields_match_expected_set():
 
 
 def test_migration_0039_runs_python_helpers():
-    """Migration 0039 must be a RunPython calling the helper pair."""
+    """The release migration must run the intent-CF registration helpers."""
     module = _module_ast(MIGRATION)
     run_python_calls = [
         node
@@ -123,16 +125,25 @@ def test_migration_0039_runs_python_helpers():
         and node.func.attr == "RunPython"
     ]
     assert run_python_calls, (
-        "Migration 0039 must declare a migrations.RunPython operation."
+        "Release migration must declare a migrations.RunPython operation "
+        "calling the intent-CF registration helpers."
     )
-    call = run_python_calls[0]
-    forward = call.args[0] if call.args else None
+    matching = [
+        call
+        for call in run_python_calls
+        if call.args
+        and isinstance(call.args[0], ast.Name)
+        and call.args[0].id == "register_intent_custom_fields"
+    ]
+    assert matching, (
+        "Release migration must call migrations.RunPython("
+        "register_intent_custom_fields, ...)."
+    )
+    call = matching[0]
     reverse = next(
         (kw.value for kw in call.keywords if kw.arg == "reverse_code"),
         None,
     )
-    assert isinstance(forward, ast.Name)
-    assert forward.id == "register_intent_custom_fields"
     assert isinstance(reverse, ast.Name)
     assert reverse.id == "unregister_intent_custom_fields"
 
@@ -152,8 +163,16 @@ def test_helper_guards_missing_content_type():
 
 
 def test_migration_depends_on_0038():
+    """The release migration must still reference 0038_intent_permissions.
+
+    Originally a ``dependencies`` entry on the standalone
+    ``0039_intent_custom_fields`` migration; now appears in the
+    ``replaces`` list of the consolidated ``0038_v0_0_16_release`` squash
+    so historical databases that applied the individual chain remain
+    auditable.
+    """
     text = MIGRATION.read_text()
     assert "'0038_intent_permissions'" in text, (
-        "0039 must declare ('netbox_proxbox', '0038_intent_permissions') "
-        "in dependencies to keep the migration chain auditable."
+        "Release migration must reference ('netbox_proxbox', "
+        "'0038_intent_permissions') so the migration chain stays auditable."
     )

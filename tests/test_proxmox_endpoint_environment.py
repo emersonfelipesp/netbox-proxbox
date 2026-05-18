@@ -10,8 +10,10 @@ Pinned wiring:
   slugs and is keyed for plugin admin override (``ProxmoxEndpoint.environment``).
 - The ``environment`` model field is a nullable ``CharField`` with
   ``blank=True`` so the field is optional in forms and admin.
-- A new ``0045_proxmoxendpoint_environment`` additive migration registers the
-  column on top of ``0044_cloud_image_template``.
+- The v0.0.16 release migration registers the column via
+  ``add_field_idempotent`` (originally shipped as
+  ``0045_proxmoxendpoint_environment`` on top of ``0044_cloud_image_template``;
+  now consolidated into ``0038_v0_0_16_release``).
 - The form, filterset, table, serializer, and template all surface the new
   field next to ``mode``.
 - The plugin's sync paths never overwrite the field (regex grep over the
@@ -31,7 +33,7 @@ PLUGIN_ROOT = REPO_ROOT / "netbox_proxbox"
 
 CHOICES_PATH = PLUGIN_ROOT / "choices.py"
 MODEL_PATH = PLUGIN_ROOT / "models" / "proxmox_endpoint.py"
-MIGRATION_PATH = PLUGIN_ROOT / "migrations" / "0045_proxmoxendpoint_environment.py"
+MIGRATION_PATH = PLUGIN_ROOT / "migrations" / "0038_v0_0_16_release.py"
 FORM_PATH = PLUGIN_ROOT / "forms" / "proxmox.py"
 FILTERSET_PATH = PLUGIN_ROOT / "filtersets.py"
 TABLE_PATH = PLUGIN_ROOT / "tables" / "__init__.py"
@@ -145,38 +147,60 @@ def test_environment_field_imported_in_model() -> None:
 
 
 def test_migration_exists_and_chains_after_0044() -> None:
-    """0045 must depend on 0044 and add the environment column additively.
+    """Release migration must reference 0044 and add the environment column.
 
     Accepts either the raw ``migrations.AddField(...)`` form or the
     idempotent ``add_field_idempotent(...)`` wrapper introduced by issue
-    #454 so the post-0036 chain stays reporter-safe.
+    #454 so the post-0036 chain stays reporter-safe. Originally shipped as
+    ``0045_proxmoxendpoint_environment``; now consolidated into the
+    ``0038_v0_0_16_release`` squash (which references the original migration
+    name in its ``replaces`` list).
     """
     assert MIGRATION_PATH.exists(), (
-        "Migration 0045_proxmoxendpoint_environment.py is missing"
+        f"{MIGRATION_PATH.name} is missing"
     )
     src = MIGRATION_PATH.read_text()
-    assert '("netbox_proxbox", "0044_cloud_image_template")' in src
+    assert "'0044_cloud_image_template'" in src
+    assert "0045_proxmoxendpoint_environment" in src
     assert ("migrations.AddField(" in src) or ("add_field_idempotent(" in src), (
-        "Migration 0045 must add the environment column via either "
+        "Release migration must add the environment column via either "
         "migrations.AddField(...) or add_field_idempotent(...)"
     )
-    assert 'name="environment"' in src
-    assert 'model_name="proxmoxendpoint"' in src
+    assert "field_name='environment'" in src or 'name="environment"' in src
+    assert (
+        "model_name='proxmoxendpoint'" in src
+        or 'model_name="proxmoxendpoint"' in src
+    )
     assert "blank=True" in src
     assert "null=True" in src
 
 
-def test_migration_uses_plain_addfield_or_idempotent_wrapper() -> None:
-    """Raw SQL is still off-limits; SeparateDatabaseAndState may only appear
-    indirectly through ``add_field_idempotent`` (whose helper module owns the
-    wrapper). The migration file itself must not import ``RunSQL`` or hand-roll
-    a ``SeparateDatabaseAndState`` literal."""
+def test_environment_addfield_uses_idempotent_wrapper() -> None:
+    """The environment AddField must use ``add_field_idempotent``.
+
+    The consolidated squash may use raw ``RunSQL`` for other absorbed
+    migrations (notably ``0044_overwrite_vm_proxmox_tags``), but the
+    environment column itself must go through the idempotent wrapper so
+    reporter-style partial installs stay safe."""
     src = MIGRATION_PATH.read_text()
-    assert "SeparateDatabaseAndState" not in src, (
-        "Use add_field_idempotent(...) instead of hand-rolling "
-        "SeparateDatabaseAndState in the migration file."
+    # Anchor on the section-comment marker for the absorbed migration so we
+    # land on the operations block, not the ``replaces`` tuple entry at the
+    # top of the file.
+    env_block_start = src.find("# ── 0045_proxmoxendpoint_environment")
+    if env_block_start == -1:
+        env_block_start = src.find("0045_proxmoxendpoint_environment ──")
+    assert env_block_start != -1, (
+        "Squash must include the 0045_proxmoxendpoint_environment section."
     )
-    assert "RunSQL" not in src
+    block = src[env_block_start:env_block_start + 4000]
+    addfield_idx = block.find("add_field_idempotent(")
+    env_idx = block.find("field_name='environment'")
+    assert addfield_idx != -1 and env_idx != -1, (
+        "Environment column must be added via add_field_idempotent(...)."
+    )
+    assert addfield_idx < env_idx, (
+        "add_field_idempotent(...) must wrap the environment field declaration."
+    )
 
 
 # ---------------------------------------------------------------------------
