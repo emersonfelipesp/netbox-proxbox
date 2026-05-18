@@ -91,14 +91,16 @@ def test_deletion_request_meta_permissions():
 
 
 def test_migration_0038_lists_both_models():
-    """Migration 0038 must CreateModel both shells with matching permissions.
+    """Release migration must CreateModel both shells with matching permissions.
 
     Accepts either raw ``migrations.CreateModel(name=...)`` calls or the
     idempotent wrapper ``create_model_idempotent(name=...)`` introduced by
-    issue #454 so the chain stays reporter-safe.
+    issue #454 so the chain stays reporter-safe. Originally shipped as
+    ``0038_intent_permissions``; now consolidated into the
+    ``0038_v0_0_16_release`` squash.
     """
     module = _parse(
-        REPO_ROOT / "netbox_proxbox" / "migrations" / "0038_intent_permissions.py"
+        REPO_ROOT / "netbox_proxbox" / "migrations" / "0038_v0_0_16_release.py"
     )
     create_calls = [
         node
