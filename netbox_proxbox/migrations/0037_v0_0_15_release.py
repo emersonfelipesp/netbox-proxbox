@@ -1,25 +1,28 @@
 """Consolidated v0.0.15 release migration.
 
-Squashes every migration that previously lived between
+Folds every migration that previously lived between
 ``0036_add_overwrite_vm_type`` and the v0.0.15 release tip (across both
 the v0.0.15 and develop branches) into a single forward-only delta.
 
-Two layers of safety make this migration production-safe for every
-upgrade path observed in issue #454:
+This migration is the only file on disk between ``0036_add_overwrite_vm_type``
+and ``0038_v0_0_16_release``. There is intentionally no ``replaces = [...]``
+attribute: Django's squash auto-apply path requires *every* replaced
+migration to be present in ``django_migrations``, which fails for the
+realistic pre-v0.0.15 → v0.0.15 upgrade where the legacy lineage only ever
+applied a subset of the 20-name fork before the squash was authored. The
+``replaces`` reconciliation also forces graph rewrites that error out
+(``multiple leaf nodes``) when partial state is detected. Treating this as
+a plain forward migration sidesteps both problems.
 
-* **Layer A — ``replaces = [...]``** lists every migration this squash
-  consumes. Django marks the squash as applied without re-running
-  operations when *all* original migrations are already in
-  ``django_migrations``.
-* **Layer B — idempotent schema ops.** Every ``AddField`` and
-  ``CreateModel`` is wrapped via the helpers in
-  ``_idempotent_ops``. ``database_operations`` introspect the live
-  schema and only invoke the actual schema change when the column or
-  table is missing; ``state_operations`` keep the original
-  ``AddField`` / ``CreateModel`` verbatim so Django's project state,
-  serializer parity, and ``makemigrations --check`` output match the
-  non-idempotent original. This protects reporter-style installs that
-  applied the legacy lineage only partially.
+Safety comes from idempotent schema ops. Every ``AddField`` and
+``CreateModel`` is wrapped via the helpers in ``_idempotent_ops``.
+``database_operations`` introspect the live schema and only invoke the
+actual schema change when the column or table is missing;
+``state_operations`` keep the original ``AddField`` / ``CreateModel``
+verbatim so Django's project state, serializer parity, and
+``makemigrations --check`` output match the non-idempotent original. This
+protects reporter-style installs that applied the legacy lineage only
+partially.
 
 The five RunPython data callables below are carried over verbatim from
 the original per-migration sources so existing rollouts upgrading from
@@ -56,29 +59,6 @@ from netbox_proxbox.migrations._v0_0_15_release_data import (
 
 
 class Migration(migrations.Migration):
-
-    replaces = [
-        ('netbox_proxbox', '0037_pluginsettings_runtime_tunables'),
-        ('netbox_proxbox', '0038_fastapiendpoint_use_https'),
-        ('netbox_proxbox', '0039_pluginsettings_overwrite_ip_address_dns_name'),
-        ('netbox_proxbox', '0040_pluginsettings_ensure_netbox_objects'),
-        ('netbox_proxbox', '0040_pluginsettings_parse_description_metadata'),
-        ('netbox_proxbox', '0040_proxmoxendpoint_allow_writes'),
-        ('netbox_proxbox', '0041_run_proxmox_action_permission'),
-        ('netbox_proxbox', '0042_tenant_name_regex'),
-        ('netbox_proxbox', '0043_pluginsettings_branching_fields'),
-        ('netbox_proxbox', '0043_proxmoxvmcloudinit'),
-        ('netbox_proxbox', '0044_default_role_fk_fields'),
-        ('netbox_proxbox', '0044_overwrite_vm_cloudinit'),
-        ('netbox_proxbox', '0045_pluginsettings_branching_fields'),
-        ('netbox_proxbox', '0045_seed_default_vm_roles'),
-        ('netbox_proxbox', '0046_pluginsettings_delete_orphans'),
-        ('netbox_proxbox', '0046_register_last_synced_role_cf'),
-        ('netbox_proxbox', '0047_merge_0040_leaves'),
-        ('netbox_proxbox', '0047_pluginsettings_hardware_discovery'),
-        ('netbox_proxbox', '0048_node_ssh_credential'),
-        ('netbox_proxbox', '0049_register_hardware_discovery_cfs'),
-    ]
 
     dependencies = [
         ('auth', '0012_alter_user_first_name_max_length'),
