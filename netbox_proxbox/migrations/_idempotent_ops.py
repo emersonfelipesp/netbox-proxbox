@@ -107,9 +107,27 @@ def _remove_field_if_present(model_name: str, field_name: str) -> Callable:
     return reverse
 
 
+def _live_model(model_name: str):
+    """Return the model from the live registry, or None.
+
+    Mirrors ``_live_field``: the historical apps state passed to ``RunPython``
+    inside ``SeparateDatabaseAndState`` does not include the same operation's
+    ``state_operations``, so ``apps.get_model(APP_LABEL, name)`` raises
+    ``LookupError`` for the model being created. The live model registry always
+    has the fully-bound model with its fields, M2M ``through`` tables, and
+    ForeignKey ``target_field`` lookups resolved.
+    """
+    try:
+        return live_apps.get_model(APP_LABEL, model_name)
+    except LookupError:
+        return None
+
+
 def _create_model_if_missing(model_name: str) -> Callable:
     def forwards(apps, schema_editor):
-        model = apps.get_model(APP_LABEL, model_name)
+        model = _live_model(model_name)
+        if model is None:
+            return
         if not _table_exists(schema_editor, model._meta.db_table):
             schema_editor.create_model(model)
         for field in model._meta.local_many_to_many:
@@ -126,7 +144,9 @@ def _create_model_if_missing(model_name: str) -> Callable:
 
 def _delete_model_if_present(model_name: str) -> Callable:
     def reverse(apps, schema_editor):
-        model = apps.get_model(APP_LABEL, model_name)
+        model = _live_model(model_name)
+        if model is None:
+            return
         for field in model._meta.local_many_to_many:
             through = field.remote_field.through
             if (

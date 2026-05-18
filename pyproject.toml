@@ -1,6 +1,6 @@
 [project]
 name = "netbox-proxbox"
-version = "0.0.16rc10"
+version = "0.0.16rc11"
 description = "Netbox Plugin - Integrate Proxmox and Netbox"
 readme = "README.md"
 authors = [
