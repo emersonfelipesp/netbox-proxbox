@@ -85,7 +85,7 @@ Key points shared by all companion plugins:
 
 - Sync jobs run on NetBox's **`default`** RQ queue. A stock `manage.py rqworker` (no extra arguments) picks them up.
 - Each plugin sets a **7200 s** job timeout so slow syncs are not killed by RQ's default 300 s wall-clock limit.
-- **Branch-aware sync** (optional, requires `netbox-branching`) creates an isolated NetBox branch, runs the sync against it, and merges on success. The conflict policy (`abort` or `overwrite`) is configurable per plugin from the plugin's **Plugin Settings** singleton.
+- **Branch-aware sync** (optional, requires `netbox-branching`) creates an isolated NetBox branch, runs the sync against it, and merges on success. The conflict policy is configurable per plugin from its **Plugin Settings** singleton — see each plugin's page for the specific choices.
 
 ## Plugin Dependency Map
 
