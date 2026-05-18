@@ -33,10 +33,11 @@ operations above, and the ``replaces`` list ensures databases that applied
 The three ``CreateModel`` operations from ``0048_pdm_pbs_endpoint_models``
 (``PBSEndpoint``, ``PDMEndpoint``, ``PDMRemote``) are wrapped with
 ``create_model_idempotent`` for consistency with the rest of the chain.
-The accompanying ``AddConstraint`` operations are carried over verbatim;
-they run only on freshly-created tables (clean installs) or are bypassed
-entirely via the ``replaces`` list for databases that applied 0048
-individually.
+The ``UniqueConstraint`` for each model is declared in the ``options``
+dict of its ``create_model_idempotent`` call so the constraint is created
+atomically with the table via ``schema_editor.create_model``. Using bare
+``migrations.AddConstraint`` after an idempotent create would duplicate the
+constraint on a fresh install because ``create_model`` already registers it.
 """
 
 from __future__ import annotations
@@ -700,14 +701,13 @@ class Migration(migrations.Migration):
                 'verbose_name': 'PBS endpoint',
                 'verbose_name_plural': 'PBS endpoints',
                 'ordering': ('name', 'pk'),
+                'constraints': [
+                    models.UniqueConstraint(
+                        fields=('name', 'ip_address', 'domain'),
+                        name='netbox_proxbox_pbsendpoint_identity',
+                    ),
+                ],
             },
-        ),
-        migrations.AddConstraint(
-            model_name='pbsendpoint',
-            constraint=models.UniqueConstraint(
-                fields=('name', 'ip_address', 'domain'),
-                name='netbox_proxbox_pbsendpoint_identity',
-            ),
         ),
         create_model_idempotent(
             name='PDMEndpoint',
@@ -805,14 +805,13 @@ class Migration(migrations.Migration):
                 'verbose_name': 'PDM endpoint',
                 'verbose_name_plural': 'PDM endpoints',
                 'ordering': ('name', 'pk'),
+                'constraints': [
+                    models.UniqueConstraint(
+                        fields=('name', 'ip_address', 'domain'),
+                        name='netbox_proxbox_pdmendpoint_identity',
+                    ),
+                ],
             },
-        ),
-        migrations.AddConstraint(
-            model_name='pdmendpoint',
-            constraint=models.UniqueConstraint(
-                fields=('name', 'ip_address', 'domain'),
-                name='netbox_proxbox_pdmendpoint_identity',
-            ),
         ),
         create_model_idempotent(
             name='PDMRemote',
@@ -883,13 +882,12 @@ class Migration(migrations.Migration):
                 'verbose_name': 'PDM remote',
                 'verbose_name_plural': 'PDM remotes',
                 'ordering': ('pdm_endpoint', 'name'),
+                'constraints': [
+                    models.UniqueConstraint(
+                        fields=('pdm_endpoint', 'name'),
+                        name='netbox_proxbox_pdmremote_unique_endpoint_name',
+                    ),
+                ],
             },
-        ),
-        migrations.AddConstraint(
-            model_name='pdmremote',
-            constraint=models.UniqueConstraint(
-                fields=('pdm_endpoint', 'name'),
-                name='netbox_proxbox_pdmremote_unique_endpoint_name',
-            ),
         ),
     ]
