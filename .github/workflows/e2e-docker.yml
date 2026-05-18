@@ -364,7 +364,7 @@ jobs:
           done
 
           for i in $(seq 1 90); do
-            if curl -sk --max-time 5 "https://${TEST_HOST}:18006/health" >/dev/null 2>&1; then
+            if curl -s --max-time 5 "http://${TEST_HOST}:18006/health" >/dev/null 2>&1; then
               break
             fi
             sleep 2
@@ -472,7 +472,7 @@ jobs:
         env:
           NETBOX_BASE_URL: http://${{ env.TEST_HOST }}:18080
           PROXBOX_BASE_URL: http://${{ env.TEST_HOST }}:18800
-          PROXMOX_MOCK_BASE_URL: https://${{ env.TEST_HOST }}:18006
+          PROXMOX_MOCK_BASE_URL: http://${{ env.TEST_HOST }}:18006
           PROXMOX_MOCK_IP: ${{ env.PROXMOX_MOCK_IP }}
           NETBOX_IP: ${{ env.NETBOX_IP }}
           PROXBOX_API_IP: ${{ env.PROXBOX_API_IP }}
