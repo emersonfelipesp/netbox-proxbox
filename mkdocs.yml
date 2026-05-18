@@ -66,6 +66,12 @@ nav:
       - Using Docker: 'installation/3-installing-plugin-docker.md'
     - Backend Setup: 'installation/backend-setup.md'
     - Upgrading: 'installation/upgrading.md'
+  - Companion Plugins:
+    - Overview: 'companion-plugins/index.md'
+    - netbox-pbs: 'companion-plugins/netbox-pbs.md'
+    - netbox-pdm: 'companion-plugins/netbox-pdm.md'
+    - netbox-ceph: 'companion-plugins/netbox-ceph.md'
+    - netbox-packer: 'companion-plugins/netbox-packer.md'
   - Backend:
     - Overview: 'backend/index.md'
     - Using pip: 'backend/using-pip.md'
