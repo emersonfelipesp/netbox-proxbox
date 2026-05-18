@@ -99,6 +99,7 @@ def test_migration_0038_lists_both_models():
     ``0038_intent_permissions``; now consolidated into the
     ``0038_v0_0_16_release`` squash.
     """
+    # 0038_intent_permissions was absorbed into the 0038_v0_0_16_release squash.
     module = _parse(
         REPO_ROOT / "netbox_proxbox" / "migrations" / "0038_v0_0_16_release.py"
     )
