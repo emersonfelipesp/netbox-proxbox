@@ -350,13 +350,13 @@ jobs:
       - name: Wait for stack readiness and create NetBox API token
         run: |
           set -eux
-          for i in $(seq 1 240); do
+          for i in $(seq 1 600); do
             http_code="$(curl -sS --max-time 5 -o /dev/null -w '%{http_code}' "http://${TEST_HOST}:18080/api/" 2>/dev/null || true)"
             if [ "$http_code" -ge 100 ] 2>/dev/null && [ "$http_code" -lt 500 ]; then
               break
             fi
             sleep 2
-            if [ "$i" -eq 240 ]; then
+            if [ "$i" -eq 600 ]; then
               echo "NetBox did not become ready"
               docker logs netbox-e2e || true
               exit 1
