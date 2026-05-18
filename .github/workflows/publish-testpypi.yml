@@ -229,7 +229,7 @@ jobs:
           set -eux
           uv venv --python "${{ matrix.python-version }}" .package-smoke
           installed=0
-          for i in $(seq 1 30); do
+          for i in $(seq 1 90); do
             if uv pip install \
               --python .package-smoke/bin/python \
               --index-url https://test.pypi.org/simple/ \
@@ -382,7 +382,7 @@ jobs:
           set -eux
           uv venv --python "${{ matrix.python-version }}" .package-smoke
           installed=0
-          for i in $(seq 1 30); do
+          for i in $(seq 1 90); do
             if uv pip install \
               --python .package-smoke/bin/python \
               --index-url https://pypi.org/simple/ \
