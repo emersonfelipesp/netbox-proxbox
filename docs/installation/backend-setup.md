@@ -59,6 +59,34 @@ set:
 Earlier releases coupled them, which made the `*-nginx` + self-signed-cert combo
 unreachable from the UI.
 
+### Custom certificates
+
+If you supply your own CA-signed, Let's Encrypt, or corporate certificates,
+the `*-nginx` and `*-granian` images detect them automatically and skip
+mkcert generation. Mount the certificate directory read-only:
+
+```bash
+docker run -d --name proxbox-api-tls \
+  -p 8800:8000 \
+  -v /path/to/certs:/certs:ro \
+  emersonfelipesp/proxbox-api:latest-nginx
+```
+
+The `/certs` directory must contain `cert.pem` and `key.pem`. If either file is
+absent, mkcert auto-generation runs as normal.
+
+When using a publicly trusted or internally-trusted certificate (not self-signed),
+you can enable certificate verification on the FastAPIEndpoint:
+
+| Field | Value |
+|---|---|
+| **Use HTTPS** | ✓ enabled |
+| **Verify SSL** | ✓ enabled |
+| **Port** | host port mapped to container `8000` |
+
+For the granian image, see the full certificate handling notes in the
+[proxbox-api installation docs](https://emersonfelipesp.github.io/proxbox-api/getting-started/installation/#mounting-custom-certificates).
+
 ## Option 3: Run It As A systemd Service
 
 This repository includes sample service files:
