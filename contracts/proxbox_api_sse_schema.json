@@ -27,6 +27,7 @@
       "progress",
       "bootstrap_done",
       "duplicate_name_resolved",
+      "hardware_discovery",
       "migrate_dispatched",
       "migrate_progress",
       "migrate_succeeded",

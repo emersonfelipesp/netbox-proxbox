@@ -1,6 +1,6 @@
 # Cluster HA API
 
-The plugin exposes a thin REST shim that proxies Proxmox cluster High-Availability data from the paired `proxbox-api` backend (≥ `0.0.11`). Both endpoints are **read-only**, fetched live on every request, and return the upstream JSON shape unchanged.
+The plugin exposes a thin REST shim that proxies Proxmox cluster High-Availability data from the paired `proxbox-api` backend (≥ `0.0.12`). Both endpoints are **read-only**, fetched live on every request, and return the upstream JSON shape unchanged.
 
 ```
 GET /api/plugins/proxbox/ha/summary/
@@ -15,8 +15,8 @@ For common API conventions (authentication, pagination), see [API Overview](inde
 
 | Plugin path | Proxied to | Required `proxbox-api` |
 |---|---|---|
-| `GET /api/plugins/proxbox/ha/summary/` | `GET /proxmox/cluster/ha/summary` | ≥ `0.0.11` |
-| `GET /api/plugins/proxbox/ha/vm/{vmid}/` | `GET /proxmox/cluster/ha/resources/by-vm/{vmid}` | ≥ `0.0.11` |
+| `GET /api/plugins/proxbox/ha/summary/` | `GET /proxmox/cluster/ha/summary` | ≥ `0.0.12` |
+| `GET /api/plugins/proxbox/ha/vm/{vmid}/` | `GET /proxmox/cluster/ha/resources/by-vm/{vmid}` | ≥ `0.0.12` |
 
 If the backend is older, both endpoints return **HTTP 503** with a body that explicitly tells the operator to upgrade `proxbox-api`. This mirrors the inline banner the UI surfaces in the same scenario.
 
@@ -121,7 +121,7 @@ The corresponding **HA tab** on the `VirtualMachine` detail page only registers 
 |---|---|
 | `200` | Normal upstream response (JSON forwarded unchanged). The per-VM endpoint also returns `200` with `{}` when the VM is not HA-managed. |
 | `502` | Backend connection failure, non-OK upstream status (other than 404), non-JSON body, or any `requests.RequestException` (timeout, SSL error, DNS failure). Detail is built from `services._endpoint_errors.translate_request_exception`. |
-| `503` | `FastAPIEndpoint` singleton is missing **or** the backend returned `404` on the HA path. The 404 case is treated as "backend too old" and the body carries the literal hint `Backend does not support HA endpoints — upgrade proxbox-api to v0.0.11 or later.` |
+| `503` | `FastAPIEndpoint` singleton is missing **or** the backend returned `404` on the HA path. The 404 case is treated as "backend too old" and the body carries the literal hint `Backend does not support HA endpoints — upgrade proxbox-api to v0.0.12 or later.` |
 
 Per-call hard timeouts: `15s` on `/summary/` and `10s` on `/vm/{vmid}/`. Both elapse to `502` through `translate_request_exception`.
 

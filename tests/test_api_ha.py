@@ -49,7 +49,7 @@ def test_ha_api_calls_expected_proxbox_endpoints() -> None:
 def test_ha_api_translates_upstream_404_to_503() -> None:
     """Match the user-facing copy used by the HTML views in views/ha.py."""
     source = HA_API_PATH.read_text(encoding="utf-8")
-    assert "upgrade proxbox-api to v0.0.11 or later" in source
+    assert "upgrade proxbox-api to v0.0.12 or later" in source
     assert "HTTP_503_SERVICE_UNAVAILABLE" in source
 
 

@@ -44,7 +44,7 @@ class HAClusterView(
             if response.status_code == 404:
                 context["detail"] = (
                     "Backend does not support HA endpoints — "
-                    "upgrade proxbox-api to v0.0.11 or later."
+                    "upgrade proxbox-api to v0.0.12 or later."
                 )
                 return render(request, self.template_name, context)
             response.raise_for_status()

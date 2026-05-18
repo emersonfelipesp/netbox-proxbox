@@ -2,7 +2,7 @@
 
 `HAClusterView` (`netbox_proxbox/views/ha.py`) and `ProxmoxVMHATabView`
 (`netbox_proxbox/views/vm_ha.py`) render Django HTML pages by calling
-proxbox-api 0.0.11+ at `/proxmox/cluster/ha/summary` and
+proxbox-api 0.0.12+ at `/proxmox/cluster/ha/summary` and
 `/proxmox/cluster/ha/resources/by-vm/{vmid}`. The frontend (and any other
 JSON consumer routed through the existing nms-backend
 `/netbox/netbox-proxbox/plugin/{path}` proxy) needs the same data without
@@ -10,7 +10,7 @@ parsing HTML, so we expose the two upstream calls as plain DRF
 `APIView`s under `/api/plugins/proxbox/ha/`.
 
 Any 404 from upstream is rebadged as 503 with the same hint the HTML
-pages already render: "upgrade proxbox-api to v0.0.11 or later".
+pages already render: "upgrade proxbox-api to v0.0.12 or later".
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ from netbox_proxbox.services.backend_context import get_fastapi_request_context
 
 _BACKEND_NOT_CONFIGURED = "No FastAPI backend endpoint is configured."
 _BACKEND_TOO_OLD = (
-    "Backend does not support HA endpoints — upgrade proxbox-api to v0.0.11 or later."
+    "Backend does not support HA endpoints — upgrade proxbox-api to v0.0.12 or later."
 )
 _HA_REQUEST_TIMEOUT = 15
 

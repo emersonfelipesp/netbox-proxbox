@@ -33,7 +33,7 @@ class SseEventType(str, Enum):
     HARDWARE_DISCOVERY = "hardware_discovery"
     # Migrate verb SSE channel (operational-verbs.md §7.1) — emitted on
     # /proxmox/{vm_type}/{vmid}/migrate/{task_upid}/stream by proxbox-api
-    # 0.0.11; mirrored here so the test_sse_schema_mirror canary catches
+    # 0.0.12; mirrored here so the test_sse_schema_mirror canary catches
     # any drift in either direction.
     MIGRATE_DISPATCHED = "migrate_dispatched"
     MIGRATE_PROGRESS = "migrate_progress"

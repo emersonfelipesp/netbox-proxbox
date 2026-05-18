@@ -186,7 +186,7 @@ def test_proxy_get_translates_404_to_503_with_upgrade_hint(ha_api_module: Any) -
             "http://api/x", headers={}, verify=True, timeout=10
         )
     assert resp.status_code == 503
-    assert "upgrade proxbox-api to v0.0.11 or later" in resp.data["detail"]
+    assert "upgrade proxbox-api to v0.0.12 or later" in resp.data["detail"]
 
 
 def test_proxy_get_returns_502_on_non_ok_status(ha_api_module: Any) -> None:

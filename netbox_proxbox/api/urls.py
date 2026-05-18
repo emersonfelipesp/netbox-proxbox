@@ -105,7 +105,7 @@ urlpatterns = [
     ),
     path("sync/schedule/", ScheduleSyncAPIView.as_view(), name="api-schedule-sync"),
     path("logs/", BackendLogsAPIView.as_view(), name="api-logs"),
-    # Proxbox-api 0.0.11+ HA proxy (mirrors UI views/ha.py + views/vm_ha.py).
+    # Proxbox-api 0.0.12+ HA proxy (mirrors UI views/ha.py + views/vm_ha.py).
     path("ha/summary/", HAClusterSummaryAPIView.as_view(), name="api-ha-summary"),
     path(
         "ha/vm/<int:vmid>/",

@@ -10,7 +10,7 @@ There are two entry points:
 Both views are **read-only** and **fetched live** from the proxbox-api backend on every request. There is no NetBox-side caching, no persisted HA model, and no migration. Stop the proxbox-api service and the pages render an inline error banner instead of a 500.
 
 !!! info "Backend floor"
-    HA views require **`proxbox-api >= 0.0.11`**. Older backends return `404` on the new routes and both views show an inline upgrade banner instead of failing. The full upstream contract lives in [`proxbox-api` Cluster HA API](https://github.com/emersonfelipesp/proxbox-api/blob/main/docs/api/cluster-ha.md).
+    HA views require **`proxbox-api >= 0.0.12`**. Older backends return `404` on the new routes and both views show an inline upgrade banner instead of failing. The full upstream contract lives in [`proxbox-api` Cluster HA API](https://github.com/emersonfelipesp/proxbox-api/blob/main/docs/api/cluster-ha.md).
 
 ## Visibility
 
@@ -32,7 +32,7 @@ The backend tries SID `vm:{vmid}` first and falls back to `ct:{vmid}`, returning
 - **Counters** — max-restart, max-relocate, failback.
 - **Empty state** — "This VM is not HA-managed in Proxmox." with a link to the cluster page.
 
-If the proxbox-api backend is too old to expose the HA endpoints (i.e. `< 0.0.11`), the tab surfaces a clear "upgrade proxbox-api to v0.0.11 or later" message.
+If the proxbox-api backend is too old to expose the HA endpoints (i.e. `< 0.0.12`), the tab surfaces a clear "upgrade proxbox-api to v0.0.12 or later" message.
 
 ## Cluster-wide HA Status Page
 
