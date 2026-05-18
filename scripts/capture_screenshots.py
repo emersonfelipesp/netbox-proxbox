@@ -33,6 +33,7 @@ import requests  # noqa: E402
 
 from stack_common import must_getenv, wait_http_ok  # noqa: E402
 from stack_setup import (  # noqa: E402
+    create_proxbox_custom_fields,
     ensure_netbox_plugin_endpoints,
     ensure_proxbox_backend_endpoints,
     register_proxbox_api_key,
@@ -155,94 +156,6 @@ def seed_data(
         proxbox_api_key=proxbox_api_key,
     )
 
-    # proxbox-api 0.0.7 registers proxmox_last_updated with only 6 object types
-    # (missing dcim.device, virtualization.cluster, virtualization.virtualmachine etc.)
-    # via its CreateCustomFieldsDep dependency that runs at VM-sync startup.
-    # Strategy:
-    #   1. Pre-call proxbox-api's create_custom_fields endpoint to populate its
-    #      module-level cache. Subsequent CreateCustomFieldsDep calls during VM sync
-    #      return the cached result without re-contacting NetBox, so our broader
-    #      13-type registration below is never overwritten.
-    #   2. PATCH proxmox_last_updated in NetBox to include all types the sync code uses.
-    print("Pre-loading proxbox-api custom fields cache...")
-    _warmup_resp = requests.get(
-        f"{proxbox_base_url}/extras/extras/custom-fields/create",
-        headers={"X-Proxbox-API-Key": proxbox_api_key},
-        timeout=120,
-    )
-    if _warmup_resp.status_code == 200:
-        print("Proxbox-api custom fields cache populated successfully")
-    else:
-        print(
-            f"Warning: custom fields warmup returned HTTP {_warmup_resp.status_code} — "
-            "continuing; VM sync may still fail if CreateCustomFieldsDep overwrites the field"
-        )
-
-    # Ensure proxmox_last_updated covers ALL types used by 0.0.7's sync code.
-    # This runs after the warmup so the cache is already warm and won't re-patch.
-    print("Ensuring proxmox_last_updated covers all required object types...")
-    _CF_OBJECT_TYPES = [
-        "dcim.device",
-        "dcim.devicerole",
-        "dcim.devicetype",
-        "dcim.interface",
-        "dcim.manufacturer",
-        "dcim.site",
-        "ipam.ipaddress",
-        "ipam.vlan",
-        "virtualization.cluster",
-        "virtualization.clustertype",
-        "virtualization.virtualdisk",
-        "virtualization.virtualmachine",
-        "virtualization.vminterface",
-    ]
-    _CF_PAYLOAD = {
-        "object_types": _CF_OBJECT_TYPES,
-        "type": "datetime",
-        "name": "proxmox_last_updated",
-        "label": "Last Updated",
-        "description": "Proxmox Plugin last modified this object",
-        "ui_visible": "always",
-        "ui_editable": "hidden",
-        "weight": 200,
-        "filter_logic": "loose",
-        "search_weight": 1000,
-        "group_name": "Proxmox",
-    }
-    _cf_headers = {
-        "Authorization": f"Token {netbox_token}",
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-    }
-    # Look up the field to decide create vs patch.
-    _lookup_resp = requests.get(
-        f"{netbox_base_url}/api/extras/custom-fields/",
-        params={"name": "proxmox_last_updated"},
-        headers=_cf_headers,
-        timeout=30,
-    )
-    _lookup_resp.raise_for_status()
-    _existing = _lookup_resp.json().get("results", [])
-    if _existing:
-        _field_id = _existing[0]["id"]
-        _patch_resp = requests.patch(
-            f"{netbox_base_url}/api/extras/custom-fields/{_field_id}/",
-            json={"object_types": _CF_OBJECT_TYPES},
-            headers=_cf_headers,
-            timeout=30,
-        )
-        _patch_resp.raise_for_status()
-        print("Custom field proxmox_last_updated: patched to 13 object types")
-    else:
-        _create_resp = requests.post(
-            f"{netbox_base_url}/api/extras/custom-fields/",
-            json=_CF_PAYLOAD,
-            headers=_cf_headers,
-            timeout=30,
-        )
-        _create_resp.raise_for_status()
-        print("Custom field proxmox_last_updated: created with 13 object types")
-
     print("Creating NetBox plugin endpoint objects...")
     ensure_netbox_plugin_endpoints(
         netbox_base_url,
@@ -251,6 +164,9 @@ def seed_data(
         netbox_public_url=netbox_public_url,
         proxbox_api_key=proxbox_api_key,
     )
+
+    print("Creating Proxbox custom fields...")
+    create_proxbox_custom_fields(proxbox_base_url, proxbox_api_key=proxbox_api_key)
 
     # Run each sync stage individually in dependency order (same as e2e tests).
     # The full-update route streams all stages in one proxbox-api call and fails
