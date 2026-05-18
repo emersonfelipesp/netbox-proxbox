@@ -126,7 +126,11 @@ jobs:
           elif [ "${{ matrix.install_source }}" = "testpypi" ]; then
             VERSION=$(python -c "import pathlib, tomllib; print(tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8'))['project']['version'])")
             echo "NETBOX_PLUGIN_INSTALL_SPEC=netbox-proxbox==${VERSION}" >> "$GITHUB_ENV"
-            echo "NETBOX_PLUGIN_INSTALL_INDEX=--index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/" >> "$GITHUB_ENV"
+            # uv refuses to mix indexes for the same package by default
+            # ("dependency confusion attack" protection). netbox-proxbox lives on
+            # both PyPI (older stable) and TestPyPI (current rcN); we need uv to
+            # consider both, hence --index-strategy unsafe-best-match.
+            echo "NETBOX_PLUGIN_INSTALL_INDEX=--index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ --index-strategy unsafe-best-match" >> "$GITHUB_ENV"
             echo "NETBOX_PLUGIN_MOUNT=" >> "$GITHUB_ENV"
           else
             # Keep 'container' mode for workflow compatibility, but use package install.
