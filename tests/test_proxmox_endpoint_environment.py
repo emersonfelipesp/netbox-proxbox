@@ -153,13 +153,13 @@ def test_migration_exists_and_chains_after_0044() -> None:
     idempotent ``add_field_idempotent(...)`` wrapper introduced by issue
     #454 so the post-0036 chain stays reporter-safe. Originally shipped as
     ``0045_proxmoxendpoint_environment``; now consolidated into the
-    ``0038_v0_0_16_release`` squash (which references the original migration
-    name in its ``replaces`` list).
+    ``0038_v0_0_16_release`` migration under a section comment tagged with
+    the original migration name.
     """
     assert MIGRATION_PATH.exists(), f"{MIGRATION_PATH.name} is missing"
     src = MIGRATION_PATH.read_text()
-    assert "'0044_cloud_image_template'" in src
-    assert "0045_proxmoxendpoint_environment" in src
+    assert "# ── 0044_cloud_image_template" in src
+    assert "# ── 0045_proxmoxendpoint_environment" in src
     assert ("migrations.AddField(" in src) or ("add_field_idempotent(" in src), (
         "Release migration must add the environment column via either "
         "migrations.AddField(...) or add_field_idempotent(...)"
@@ -181,8 +181,7 @@ def test_environment_addfield_uses_idempotent_wrapper() -> None:
     reporter-style partial installs stay safe."""
     src = MIGRATION_PATH.read_text()
     # Anchor on the section-comment marker for the absorbed migration so we
-    # land on the operations block, not the ``replaces`` tuple entry at the
-    # top of the file.
+    # land on the operations block, not an incidental docstring mention.
     env_block_start = src.find("# ── 0045_proxmoxendpoint_environment")
     if env_block_start == -1:
         env_block_start = src.find("0045_proxmoxendpoint_environment ──")

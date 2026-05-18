@@ -1,43 +1,61 @@
 """Consolidated v0.0.16 release migration.
 
-Squashes all migrations added between ``0037_v0_0_15_release`` and the
-v0.0.16 release tip (0038–0048, including both 0044 forks) into a single
-forward-only delta.
+Folds all schema changes added between ``0037_v0_0_15_release`` and the
+v0.0.16 release tip (formerly 0038–0048, including both 0044 forks) into a
+single forward-only delta.
 
-Two layers of safety make this migration production-safe for every upgrade
-path:
+This migration is the only file on disk between ``0037_v0_0_15_release`` and
+the v0.0.16 tip. There is intentionally no ``replaces = [...]`` attribute:
+Django's squash auto-apply path requires *every* replaced migration to be
+present in ``django_migrations``, which fails for the realistic v0.0.15 →
+v0.0.16 upgrade where the legacy lineage stopped at 0047 (no 0048). The
+``replaces`` reconciliation also forces graph rewrites that error out when
+downstream plugins (e.g. ``netbox-packer.0001_initial``) still depend on
+individual replaced migrations by name. Treating this as a plain forward
+migration sidesteps both problems.
 
-* **Layer A — ``replaces = [...]``** lists every migration this squash
-  consumes. Django marks the squash as applied without re-running operations
-  when *all* original migrations are already in ``django_migrations``.
-* **Layer B — idempotent schema ops.** Every ``AddField`` and ``CreateModel``
-  is wrapped via the helpers in ``_idempotent_ops``. ``database_operations``
-  introspect the live schema and only invoke the actual schema change when the
-  column or table is missing; ``state_operations`` keep the original
-  ``AddField`` / ``CreateModel`` verbatim so Django's project state, serializer
-  parity, and ``makemigrations --check`` output match the non-idempotent
-  original.  The two ``SeparateDatabaseAndState`` operations from
-  ``0044_overwrite_vm_proxmox_tags`` use ``RunSQL … IF NOT EXISTS`` directly
-  and are carried over verbatim.
+Safety comes from idempotent schema ops. Every ``AddField`` and
+``CreateModel`` is wrapped via the helpers in ``_idempotent_ops``.
+``database_operations`` introspect the live schema and only invoke the
+actual schema change when the column or table is missing;
+``state_operations`` keep the original ``AddField`` / ``CreateModel``
+verbatim so Django's project state, serializer parity, and
+``makemigrations --check`` output match the non-idempotent original. The
+two ``SeparateDatabaseAndState`` operations from
+``0044_overwrite_vm_proxmox_tags`` use ``RunSQL … IF NOT EXISTS`` directly
+and are carried over verbatim.
 
 The RunPython data callable is carried over verbatim from the original
 per-migration source:
 
   * register_intent_custom_fields  (was 0039_intent_custom_fields)
 
-The ``0047_legacy_lineage_schema_repair`` RunPython is omitted: every table
-and column it would create is already covered by the idempotent schema
-operations above, and the ``replaces`` list ensures databases that applied
-0047 individually will not re-run any operations.
+The legacy-lineage RunPython from ``0047_legacy_lineage_schema_repair`` is
+omitted: every table and column it would create is already covered by the
+idempotent schema operations above.
 
-The three ``CreateModel`` operations from ``0048_pdm_pbs_endpoint_models``
-(``PBSEndpoint``, ``PDMEndpoint``, ``PDMRemote``) are wrapped with
+The three ``CreateModel`` operations for the v0.0.16 PDM/PBS endpoint
+tables (``PBSEndpoint``, ``PDMEndpoint``, ``PDMRemote``) are wrapped with
 ``create_model_idempotent`` for consistency with the rest of the chain.
 The ``UniqueConstraint`` for each model is declared in the ``options``
 dict of its ``create_model_idempotent`` call so the constraint is created
 atomically with the table via ``schema_editor.create_model``. Using bare
 ``migrations.AddConstraint`` after an idempotent create would duplicate the
 constraint on a fresh install because ``create_model`` already registers it.
+
+Upgrade paths covered:
+
+* **Fresh v0.0.16 install** — every idempotent op finds no existing schema
+  and runs Django's normal create/add path. End state: all v0.0.16 tables
+  and columns present, ``django_migrations`` has this row.
+* **v0.0.15 partial-legacy upgrade** — ``django_migrations`` already has
+  rows for 0038–0047. Each idempotent op short-circuits the schema change
+  it would otherwise duplicate and only the genuinely-new v0.0.16 PDM/PBS
+  tables are created. The orphaned 0038–0047 rows are left in place;
+  Django ignores them because no on-disk file claims those names.
+* **Pre-0037 install upgrading straight to v0.0.16** — ``0037_v0_0_15_release``
+  runs first (the v0.0.15 squash), then this migration runs the remaining
+  delta.
 """
 
 from __future__ import annotations
@@ -64,21 +82,6 @@ from netbox_proxbox.migrations._v0_0_16_release_data import (
 
 
 class Migration(migrations.Migration):
-
-    replaces = [
-        ('netbox_proxbox', '0038_intent_permissions'),
-        ('netbox_proxbox', '0039_intent_custom_fields'),
-        ('netbox_proxbox', '0040_apply_job_full'),
-        ('netbox_proxbox', '0041_deletion_request_full'),
-        ('netbox_proxbox', '0042_pluginsettings_self_approve'),
-        ('netbox_proxbox', '0043_pluginsettings_warn_plaintext'),
-        ('netbox_proxbox', '0044_cloud_image_template'),
-        ('netbox_proxbox', '0044_overwrite_vm_proxmox_tags'),
-        ('netbox_proxbox', '0045_proxmoxendpoint_environment'),
-        ('netbox_proxbox', '0046_pluginsettings_embed_description_metadata'),
-        ('netbox_proxbox', '0047_legacy_lineage_schema_repair'),
-        ('netbox_proxbox', '0048_pdm_pbs_endpoint_models'),
-    ]
 
     dependencies = [
         ('auth', '0012_alter_user_first_name_max_length'),

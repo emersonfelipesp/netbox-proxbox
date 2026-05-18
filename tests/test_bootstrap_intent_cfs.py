@@ -166,13 +166,13 @@ def test_migration_depends_on_0038():
     """The release migration must still reference 0038_intent_permissions.
 
     Originally a ``dependencies`` entry on the standalone
-    ``0039_intent_custom_fields`` migration; now appears in the
-    ``replaces`` list of the consolidated ``0038_v0_0_16_release`` squash
-    so historical databases that applied the individual chain remain
-    auditable.
+    ``0039_intent_custom_fields`` migration. The consolidated
+    ``0038_v0_0_16_release`` migration now carries the operations under
+    section comments tagged with the original migration name so the
+    chain stays auditable.
     """
     text = MIGRATION.read_text()
-    assert "'0038_intent_permissions'" in text, (
-        "Release migration must reference ('netbox_proxbox', "
-        "'0038_intent_permissions') so the migration chain stays auditable."
+    assert "# ── 0038_intent_permissions" in text, (
+        "Release migration must include a # ── 0038_intent_permissions section "
+        "comment so the migration chain stays auditable."
     )
