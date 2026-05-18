@@ -82,8 +82,9 @@ jobs:
             -v "$PWD/tests/e2e/proxmox_openapi_mock_data.json:/data/mock-data.json:ro" \
             -e PROXMOX_MOCK_DATA_PATH=/data/mock-data.json \
             -e PROXMOX_MOCK_SCHEMA_VERSION=none \
+            -e PROXMOX_MOCK_SERVICE=pve \
             -e APP_MODULE=proxmox_sdk.mock_main:app \
-            "${PROXMOX_SDK_IMAGE}:dev-nginx"
+            "${PROXMOX_SDK_IMAGE}:latest-nginx"
 
           docker run -d --name proxbox-e2e-api --network proxbox-e2e -p 18800:8000 \
             -e PROXBOX_SKIP_NETBOX_BOOTSTRAP=true \
