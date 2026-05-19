@@ -24,11 +24,7 @@ def _method_names_in_class(source: str, class_name: str) -> list[str]:
     tree = ast.parse(source)
     for node in ast.walk(tree):
         if isinstance(node, ast.ClassDef) and node.name == class_name:
-            return [
-                n.name
-                for n in ast.walk(node)
-                if isinstance(n, ast.FunctionDef)
-            ]
+            return [n.name for n in ast.walk(node) if isinstance(n, ast.FunctionDef)]
     return []
 
 
@@ -66,9 +62,7 @@ def test_vmsnapshot_model_color_methods_use_choices_colors():
 
 
 def test_vmsnapshot_template_does_not_use_get_bg_color():
-    src = _src(
-        "netbox_proxbox/templates/netbox_proxbox/vmsnapshot.html"
-    )
+    src = _src("netbox_proxbox/templates/netbox_proxbox/vmsnapshot.html")
     assert "get_bg_color" not in src, (
         "vmsnapshot.html must not call the non-existent 'get_bg_color' "
         "Django template filter. Use bg_color=object.get_status_color "
@@ -77,9 +71,7 @@ def test_vmsnapshot_template_does_not_use_get_bg_color():
 
 
 def test_vmsnapshot_template_uses_get_status_color():
-    src = _src(
-        "netbox_proxbox/templates/netbox_proxbox/vmsnapshot.html"
-    )
+    src = _src("netbox_proxbox/templates/netbox_proxbox/vmsnapshot.html")
     assert "object.get_status_color" in src, (
         "vmsnapshot.html must use bg_color=object.get_status_color "
         "for the Status badge."
@@ -87,9 +79,7 @@ def test_vmsnapshot_template_uses_get_status_color():
 
 
 def test_vmsnapshot_template_uses_get_subtype_color():
-    src = _src(
-        "netbox_proxbox/templates/netbox_proxbox/vmsnapshot.html"
-    )
+    src = _src("netbox_proxbox/templates/netbox_proxbox/vmsnapshot.html")
     assert "object.get_subtype_color" in src, (
         "vmsnapshot.html must use bg_color=object.get_subtype_color "
         "for the Subtype badge."
