@@ -58,6 +58,7 @@ from .endpoints import (
     ProxmoxEndpointView,
 )
 from .external_pages import discord_redirect, discussions_redirect, telegram_redirect
+from .home_quick_edit import HomeQuickEditView
 from .keepalive_status import get_service_status
 from .logs import BackendLogPathUpdateView, BackendLogsView
 from .replication import (

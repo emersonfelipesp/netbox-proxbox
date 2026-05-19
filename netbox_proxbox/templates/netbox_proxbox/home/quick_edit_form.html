@@ -1,0 +1,58 @@
+{% load i18n %}
+{# Minimal form fragment rendered inside the quick-edit Bootstrap modal. #}
+{# No <html>/<body> wrapper — injected via fetch() into #proxbox-quick-edit-body. #}
+
+<form
+    method="post"
+    action="{% url 'plugins:netbox_proxbox:home_quick_edit' endpoint_type object.pk %}"
+    id="proxbox-quick-edit-form"
+    class="proxbox-quick-edit-form"
+>
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+        <div class="alert alert-danger">
+            {% for error in form.non_field_errors %}
+                <div>{{ error }}</div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    {% for field in form.visible_fields %}
+        <div class="mb-3 row{% if field.errors %} has-validation{% endif %}">
+            <label class="col-sm-3 col-form-label fw-bold" for="{{ field.id_for_label }}">
+                {{ field.label }}
+                {% if field.field.required %}<span class="text-danger ms-1" aria-hidden="true">*</span>{% endif %}
+            </label>
+            <div class="col-sm-9">
+                {{ field }}
+                {% if field.help_text %}
+                    <div class="form-text text-muted">{{ field.help_text }}</div>
+                {% endif %}
+                {% for error in field.errors %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                {% endfor %}
+            </div>
+        </div>
+    {% endfor %}
+
+    {# Hidden fields (e.g. object_id from GenericForeignKey fields) #}
+    {% for field in form.hidden_fields %}
+        {{ field }}
+    {% endfor %}
+
+    <div class="modal-footer px-0 pb-0">
+        <a
+            class="btn btn-outline-secondary"
+            href="{{ object.get_absolute_url }}"
+            target="_blank"
+        >
+            <i class="mdi mdi-open-in-new"></i>
+            {% trans "Full edit page" %}
+        </a>
+        <button type="submit" class="btn btn-primary ms-auto">
+            <i class="mdi mdi-content-save"></i>
+            {% trans "Save" %}
+        </button>
+    </div>
+</form>

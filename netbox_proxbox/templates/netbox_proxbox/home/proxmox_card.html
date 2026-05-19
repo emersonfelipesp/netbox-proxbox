@@ -99,6 +99,16 @@
                 target="_blank"
                 href="https://github.com/emersonfelipesp/netbox-proxbox#13-configure-plugin"
             >Show Example</a>
+            {% if perms.netbox_proxbox.change_proxmoxendpoint %}
+            <button
+                type="button"
+                class="btn btn-outline-warning btn-sm"
+                data-proxbox-quick-edit-url="{% url 'plugins:netbox_proxbox:home_quick_edit' 'proxmox' object.pk %}"
+                title="Quick edit this Proxmox endpoint"
+            >
+                <i class="mdi mdi-pencil" aria-hidden="true"></i> Edit
+            </button>
+            {% endif %}
         </div>
     </div>
 </div>

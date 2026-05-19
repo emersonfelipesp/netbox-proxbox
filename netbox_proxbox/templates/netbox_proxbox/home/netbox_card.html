@@ -37,12 +37,22 @@
                 <tr><th scope="row"><strong>Token</strong></th><td>{% if object.has_configured_token %}<span class="badge text-bg-gray">Token will not show here for security.</span>{% else %}<span class="badge text-bg-grey">Not configured</span>{% endif %}</td></tr>
                 <tr><th scope="row"><strong>SSL</strong></th><td>{% if object.verify_ssl %}<span class="text-success"><i class="mdi mdi-check-bold"></i></span>{% else %}<span class="text-danger"><i class="mdi mdi-close-thick"></i></span>{% endif %}</td></tr>
             </table>
-            <div align="right">
+            <div class="d-flex justify-content-between">
                 <a
                     class="btn btn-outline-primary"
                     target="_blank"
                     href="https://github.com/emersonfelipesp/netbox-proxbox/blob/develop/netbox_proxbox/__init__.py"
                 >Show Example</a>
+                {% if perms.netbox_proxbox.change_netboxendpoint %}
+                <button
+                    type="button"
+                    class="btn btn-outline-warning btn-sm"
+                    data-proxbox-quick-edit-url="{% url 'plugins:netbox_proxbox:home_quick_edit' 'netbox' object.pk %}"
+                    title="Quick edit this NetBox endpoint"
+                >
+                    <i class="mdi mdi-pencil" aria-hidden="true"></i> Edit
+                </button>
+                {% endif %}
             </div>
         </div>
     </div>
