@@ -34,19 +34,22 @@ same `proxbox-api` backend.
 | `netbox_pdm` | [`emersonfelipesp/netbox-pdm`](https://github.com/emersonfelipesp/netbox-pdm) | Proxmox Datacenter Manager inventory |
 | `netbox_packer` | [`emersonfelipesp/netbox-packer`](https://github.com/emersonfelipesp/netbox-packer) | HashiCorp Packer image-factory for Proxmox |
 
-## What's New in v0.0.16
+## What's New in v0.0.17
 
-Paired with backend [`proxbox-api 0.0.12`](https://github.com/emersonfelipesp/proxbox-api).
+Paired with backend [`proxbox-api 0.0.13`](https://github.com/emersonfelipesp/proxbox-api).
 
-- **Cluster dashboard panel — correct node totals.** Fixes [#455](https://github.com/emersonfelipesp/netbox-proxbox/issues/455). The cluster summary panel now preserves API-reported node totals when the live node rows are truncated, falls back to all `ProxmoxNode` rows under the cluster name when scoped sibling lookup is empty, and renders placeholder rows for cluster members that have not yet been synced. Operators see the true online/offline/total counts even when individual nodes are still pending discovery.
-- **Read-only reflection path is unchanged.** No NetBox compatibility rotation ships in this minor release.
+- **Read-only Proxmox VE firewall sync.** Closes [#326](https://github.com/emersonfelipesp/netbox-proxbox/issues/326). The plugin now consumes the backend's `/proxmox/firewall/*` routes for every PVE firewall zone — datacenter, per-node, per-VM (QEMU + LXC), and per-VNet (SDN). Rules, security groups, IP sets, aliases, and zone options surface as read-only data; firewall write-back to Proxmox is out of scope for this release.
+- **NetBox `v4.6.1` certified.** Added to the certified support matrix alongside `v4.5.8`, `v4.5.9`, and `v4.6.0`. CI matrix updated.
+- **Quick Edit button on home cards (#474).** Endpoint cards on the Proxbox home page expose a Quick Edit modal so operators can fix endpoint URLs / tokens without leaving the dashboard.
+- **Read-only reflection path is otherwise unchanged.** No DB migration ships in this release; firewall objects are reflected through HTTP and not yet persisted as Django models.
 
-Full notes: [Release Notes — v0.0.16](https://emersonfelipesp.github.io/netbox-proxbox/release-notes/version-0.0.16/).
+Full notes: [Release Notes — v0.0.17](https://emersonfelipesp.github.io/netbox-proxbox/release-notes/version-0.0.17/).
 
 ## Compatibility Matrix
 
 | NetBox   | netbox-proxbox | proxbox-api | netbox-sdk     | proxmox-sdk    |
 |----------|----------------|-------------|----------------|----------------|
+| >=4.5.8  | v0.0.17              | v0.0.13          | v0.0.8.post1   | v0.0.3.post1   |
 | >=4.5.8  | v0.0.16              | v0.0.12          | v0.0.8.post1   | v0.0.3.post1   |
 | >=4.5.8  | v0.0.15.post2        | v0.0.11.post2    | v0.0.8.post1   | v0.0.5.post1   |
 | >=4.5.8  | v0.0.15.post1        | v0.0.11.post1    | v0.0.8.post1   | v0.0.3.post1   |
@@ -65,7 +68,7 @@ REST, SSE, and WebSocket.
 ## Requirements
 
 - NetBox 4.5.8, 4.5.9, or 4.6.x
-- Verified with NetBox v4.5.8, v4.5.9, and official v4.6.0
+- Verified with NetBox v4.5.8, v4.5.9, v4.6.0, and official v4.6.1
 - Python 3.12+
 - Proxmox VE 7.x, 8.x, or 9.x (PVE 9 requires `VM.GuestAgent.Audit` on the API role; see "Troubleshooting" below for the PVE 9 auth checklist)
 - Proxbox API backend as a separately deployed service (see below)
