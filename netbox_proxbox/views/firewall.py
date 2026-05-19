@@ -44,6 +44,7 @@ class ProxmoxFirewallSecurityGroupView(ObjectView):
     queryset = _SG_QS
 
 
+@register_model_view(models.ProxmoxFirewallSecurityGroup, "add", detail=False)
 @register_model_view(models.ProxmoxFirewallSecurityGroup, "edit")
 class ProxmoxFirewallSecurityGroupEditView(ObjectEditView):
     queryset = _SG_QS
@@ -73,6 +74,7 @@ class ProxmoxFirewallRuleView(ObjectView):
     queryset = _RULE_QS
 
 
+@register_model_view(models.ProxmoxFirewallRule, "add", detail=False)
 @register_model_view(models.ProxmoxFirewallRule, "edit")
 class ProxmoxFirewallRuleEditView(ObjectEditView):
     queryset = _RULE_QS
@@ -102,6 +104,7 @@ class ProxmoxFirewallIPSetView(ObjectView):
     queryset = _IPSET_QS
 
 
+@register_model_view(models.ProxmoxFirewallIPSet, "add", detail=False)
 @register_model_view(models.ProxmoxFirewallIPSet, "edit")
 class ProxmoxFirewallIPSetEditView(ObjectEditView):
     queryset = _IPSET_QS
@@ -131,6 +134,7 @@ class ProxmoxFirewallIPSetEntryView(ObjectView):
     queryset = _IPSET_ENTRY_QS
 
 
+@register_model_view(models.ProxmoxFirewallIPSetEntry, "add", detail=False)
 @register_model_view(models.ProxmoxFirewallIPSetEntry, "edit")
 class ProxmoxFirewallIPSetEntryEditView(ObjectEditView):
     queryset = _IPSET_ENTRY_QS
@@ -160,6 +164,7 @@ class ProxmoxFirewallAliasView(ObjectView):
     queryset = _ALIAS_QS
 
 
+@register_model_view(models.ProxmoxFirewallAlias, "add", detail=False)
 @register_model_view(models.ProxmoxFirewallAlias, "edit")
 class ProxmoxFirewallAliasEditView(ObjectEditView):
     queryset = _ALIAS_QS
@@ -189,6 +194,7 @@ class ProxmoxFirewallOptionsView(ObjectView):
     queryset = _OPTIONS_QS
 
 
+@register_model_view(models.ProxmoxFirewallOptions, "add", detail=False)
 @register_model_view(models.ProxmoxFirewallOptions, "edit")
 class ProxmoxFirewallOptionsEditView(ObjectEditView):
     queryset = _OPTIONS_QS
