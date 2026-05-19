@@ -1,5 +1,15 @@
 """Re-export plugin API serializers for `netbox_proxbox.api.serializers`."""
 
+from netbox_proxbox.api.serializers.firewall import (
+    NestedProxmoxFirewallIPSetSerializer,
+    NestedProxmoxFirewallSecurityGroupSerializer,
+    ProxmoxFirewallAliasSerializer,
+    ProxmoxFirewallIPSetEntrySerializer,
+    ProxmoxFirewallIPSetSerializer,
+    ProxmoxFirewallOptionsSerializer,
+    ProxmoxFirewallRuleSerializer,
+    ProxmoxFirewallSecurityGroupSerializer,
+)
 from netbox_proxbox.api.serializers.resource_views import (
     DeviceResourceSerializer,
     InterfaceResourceSerializer,
@@ -56,6 +66,8 @@ __all__ = (
     "NestedCloudImageTemplateSerializer",
     "NestedProxmoxClusterSerializer",
     "NestedProxmoxEndpointSerializer",
+    "NestedProxmoxFirewallIPSetSerializer",
+    "NestedProxmoxFirewallSecurityGroupSerializer",
     "NestedTokenSerializer",
     "NetBoxEndpointSerializer",
     "NestedProxmoxStorageSerializer",

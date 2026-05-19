@@ -180,6 +180,59 @@ ssh_credentials_item = PluginMenuItem(
     ),
 )
 
+firewall_rules_item = PluginMenuItem(
+    link="plugins:netbox_proxbox:proxmoxfirewallrule_list",
+    link_text="Firewall Rules",
+    buttons=(
+        PluginMenuButton(
+            "plugins:netbox_proxbox:proxmoxfirewallrule_add",
+            "Add Rule",
+            "mdi mdi-plus",
+        ),
+    ),
+)
+
+firewall_security_groups_item = PluginMenuItem(
+    link="plugins:netbox_proxbox:proxmoxfirewallsecuritygroup_list",
+    link_text="Security Groups",
+    buttons=(
+        PluginMenuButton(
+            "plugins:netbox_proxbox:proxmoxfirewallsecuritygroup_add",
+            "Add Security Group",
+            "mdi mdi-plus",
+        ),
+    ),
+)
+
+firewall_ipsets_item = PluginMenuItem(
+    link="plugins:netbox_proxbox:proxmoxfirewallipset_list",
+    link_text="IP Sets",
+    buttons=(
+        PluginMenuButton(
+            "plugins:netbox_proxbox:proxmoxfirewallipset_add",
+            "Add IP Set",
+            "mdi mdi-plus",
+        ),
+    ),
+)
+
+firewall_aliases_item = PluginMenuItem(
+    link="plugins:netbox_proxbox:proxmoxfirewallalias_list",
+    link_text="Aliases",
+    buttons=(
+        PluginMenuButton(
+            "plugins:netbox_proxbox:proxmoxfirewallalias_add",
+            "Add Alias",
+            "mdi mdi-plus",
+        ),
+    ),
+)
+
+firewall_options_item = PluginMenuItem(
+    link="plugins:netbox_proxbox:proxmoxfirewalloptions_list",
+    link_text="Firewall Options",
+)
+
 community_item = PluginMenuItem(
     link="plugins:netbox_proxbox:community",
     link_text="Community",
@@ -232,6 +285,16 @@ menu = PluginMenu(
                 ip_addresses_item,
                 vm_cloudinit_item,
                 cloud_images_item,
+            ),
+        ),
+        (
+            "Security",
+            (
+                firewall_rules_item,
+                firewall_security_groups_item,
+                firewall_ipsets_item,
+                firewall_aliases_item,
+                firewall_options_item,
             ),
         ),
         (

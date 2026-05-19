@@ -1,6 +1,20 @@
 """Re-export the plugin's model and filter form classes."""
 
 from .backup_routine import *
+from .firewall import (
+    ProxmoxFirewallAliasFilterForm,
+    ProxmoxFirewallAliasForm,
+    ProxmoxFirewallIPSetEntryFilterForm,
+    ProxmoxFirewallIPSetEntryForm,
+    ProxmoxFirewallIPSetFilterForm,
+    ProxmoxFirewallIPSetForm,
+    ProxmoxFirewallOptionsFilterForm,
+    ProxmoxFirewallOptionsForm,
+    ProxmoxFirewallRuleFilterForm,
+    ProxmoxFirewallRuleForm,
+    ProxmoxFirewallSecurityGroupFilterForm,
+    ProxmoxFirewallSecurityGroupForm,
+)
 from .cloud_image_template import *
 from .deletion_request_approve import *
 from .deletion_request_reject import *

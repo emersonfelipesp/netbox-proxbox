@@ -311,3 +311,91 @@ class ProxmoxVMTypeChoices(ChoiceSet):
         (QEMU, _("QEMU"), "green"),
         (LXC, _("LXC"), "blue"),
     ]
+
+
+class FirewallSyncStatusChoices(ChoiceSet):
+    """Active or stale sync state for firewall objects."""
+
+    key = "FirewallSync.status"
+    ACTIVE = "active"
+    STALE = "stale"
+    CHOICES = [
+        (ACTIVE, _("Active"), "green"),
+        (STALE, _("Stale"), "orange"),
+    ]
+
+
+class FirewallZoneChoices(ChoiceSet):
+    """Proxmox firewall zone/level."""
+
+    key = "FirewallRule.zone"
+    DATACENTER = "datacenter"
+    NODE = "node"
+    VM_QEMU = "vm_qemu"
+    VM_LXC = "vm_lxc"
+    SECURITY_GROUP = "security_group"
+    VNET = "vnet"
+    CHOICES = [
+        (DATACENTER, _("Datacenter"), "blue"),
+        (NODE, _("Node"), "cyan"),
+        (VM_QEMU, _("VM (QEMU)"), "green"),
+        (VM_LXC, _("CT (LXC)"), "teal"),
+        (SECURITY_GROUP, _("Security Group"), "purple"),
+        (VNET, _("VNet (SDN)"), "gray"),
+    ]
+
+
+class FirewallScopeChoices(ChoiceSet):
+    """Scope for firewall IPSets and Aliases."""
+
+    key = "FirewallIPSet.scope"
+    DATACENTER = "datacenter"
+    VM_QEMU = "vm_qemu"
+    VM_LXC = "vm_lxc"
+    CHOICES = [
+        (DATACENTER, _("Datacenter"), "blue"),
+        (VM_QEMU, _("VM (QEMU)"), "green"),
+        (VM_LXC, _("CT (LXC)"), "teal"),
+    ]
+
+
+class FirewallRuleTypeChoices(ChoiceSet):
+    """Firewall rule direction type."""
+
+    key = "FirewallRule.rule_type"
+    IN = "in"
+    OUT = "out"
+    FORWARD = "forward"
+    GROUP = "group"
+    CHOICES = [
+        (IN, _("In"), "green"),
+        (OUT, _("Out"), "red"),
+        (FORWARD, _("Forward"), "blue"),
+        (GROUP, _("Group"), "purple"),
+    ]
+
+
+class FirewallLogLevelChoices(ChoiceSet):
+    """Firewall rule log level."""
+
+    key = "FirewallRule.log"
+    NOLOG = "nolog"
+    EMERG = "emerg"
+    ALERT = "alert"
+    CRIT = "crit"
+    ERR = "err"
+    WARNING = "warning"
+    NOTICE = "notice"
+    INFO = "info"
+    DEBUG = "debug"
+    CHOICES = [
+        (NOLOG, _("No Log"), "gray"),
+        (EMERG, _("Emergency"), "red"),
+        (ALERT, _("Alert"), "red"),
+        (CRIT, _("Critical"), "red"),
+        (ERR, _("Error"), "orange"),
+        (WARNING, _("Warning"), "yellow"),
+        (NOTICE, _("Notice"), "blue"),
+        (INFO, _("Info"), "cyan"),
+        (DEBUG, _("Debug"), "gray"),
+    ]

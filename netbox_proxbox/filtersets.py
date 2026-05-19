@@ -19,6 +19,12 @@ from .models import (
     NodeSSHCredential,
     ProxmoxCluster,
     ProxmoxEndpoint,
+    ProxmoxFirewallAlias,
+    ProxmoxFirewallIPSet,
+    ProxmoxFirewallIPSetEntry,
+    ProxmoxFirewallOptions,
+    ProxmoxFirewallRule,
+    ProxmoxFirewallSecurityGroup,
     ProxmoxNode,
     ProxmoxStorage,
     ProxmoxVMCloudInit,
@@ -469,3 +475,100 @@ class ReplicationFilterSet(ProxboxModelFilterSet):
             | Q(comment__icontains=value)
             | Q(source__icontains=value)
         )
+
+
+@register_filterset
+class ProxmoxFirewallSecurityGroupFilterSet(ProxboxModelFilterSet):
+    """Filter Proxmox firewall security groups."""
+
+    class Meta:
+        model = ProxmoxFirewallSecurityGroup
+        fields = ("id", "endpoint", "name", "status")
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        if not value.strip():
+            return queryset
+        return queryset.filter(Q(name__icontains=value) | Q(comment__icontains=value))
+
+
+@register_filterset
+class ProxmoxFirewallRuleFilterSet(ProxboxModelFilterSet):
+    """Filter Proxmox firewall rules."""
+
+    class Meta:
+        model = ProxmoxFirewallRule
+        fields = (
+            "id", "endpoint", "zone", "proxmox_node", "virtual_machine",
+            "security_group", "rule_type", "action", "enable", "status",
+        )
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        if not value.strip():
+            return queryset
+        return queryset.filter(
+            Q(action__icontains=value)
+            | Q(source__icontains=value)
+            | Q(dest__icontains=value)
+            | Q(comment__icontains=value)
+            | Q(macro__icontains=value)
+        )
+
+
+@register_filterset
+class ProxmoxFirewallIPSetFilterSet(ProxboxModelFilterSet):
+    """Filter Proxmox firewall IP sets."""
+
+    class Meta:
+        model = ProxmoxFirewallIPSet
+        fields = ("id", "endpoint", "scope", "virtual_machine", "name", "status")
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        if not value.strip():
+            return queryset
+        return queryset.filter(Q(name__icontains=value) | Q(comment__icontains=value))
+
+
+@register_filterset
+class ProxmoxFirewallIPSetEntryFilterSet(ProxboxModelFilterSet):
+    """Filter Proxmox firewall IP set entries."""
+
+    class Meta:
+        model = ProxmoxFirewallIPSetEntry
+        fields = ("id", "ipset", "cidr", "nomatch")
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        if not value.strip():
+            return queryset
+        return queryset.filter(Q(cidr__icontains=value) | Q(comment__icontains=value))
+
+
+@register_filterset
+class ProxmoxFirewallAliasFilterSet(ProxboxModelFilterSet):
+    """Filter Proxmox firewall aliases."""
+
+    class Meta:
+        model = ProxmoxFirewallAlias
+        fields = ("id", "endpoint", "scope", "virtual_machine", "name", "status")
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        if not value.strip():
+            return queryset
+        return queryset.filter(
+            Q(name__icontains=value)
+            | Q(cidr__icontains=value)
+            | Q(comment__icontains=value)
+        )
+
+
+@register_filterset
+class ProxmoxFirewallOptionsFilterSet(ProxboxModelFilterSet):
+    """Filter Proxmox firewall options."""
+
+    class Meta:
+        model = ProxmoxFirewallOptions
+        fields = ("id", "endpoint", "zone", "proxmox_node", "virtual_machine", "enable")
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        if not value.strip():
+            return queryset
+        return queryset.filter(Q(policy_in__icontains=value) | Q(policy_out__icontains=value))

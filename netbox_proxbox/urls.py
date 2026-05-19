@@ -145,6 +145,55 @@ urlpatterns = [
             get_model_urls("netbox_proxbox", "cloudimagetemplate", detail=False),
         ),
     ),
+    # Firewall models
+    path(
+        "firewall/security-groups/<int:pk>/",
+        include(get_model_urls("netbox_proxbox", "proxmoxfirewallsecuritygroup")),
+    ),
+    path(
+        "firewall/security-groups/",
+        include(get_model_urls("netbox_proxbox", "proxmoxfirewallsecuritygroup", detail=False)),
+    ),
+    path(
+        "firewall/rules/<int:pk>/",
+        include(get_model_urls("netbox_proxbox", "proxmoxfirewallrule")),
+    ),
+    path(
+        "firewall/rules/",
+        include(get_model_urls("netbox_proxbox", "proxmoxfirewallrule", detail=False)),
+    ),
+    path(
+        "firewall/ipsets/<int:pk>/",
+        include(get_model_urls("netbox_proxbox", "proxmoxfirewallipset")),
+    ),
+    path(
+        "firewall/ipsets/",
+        include(get_model_urls("netbox_proxbox", "proxmoxfirewallipset", detail=False)),
+    ),
+    path(
+        "firewall/ipset-entries/<int:pk>/",
+        include(get_model_urls("netbox_proxbox", "proxmoxfirewallipsetentry")),
+    ),
+    path(
+        "firewall/ipset-entries/",
+        include(get_model_urls("netbox_proxbox", "proxmoxfirewallipsetentry", detail=False)),
+    ),
+    path(
+        "firewall/aliases/<int:pk>/",
+        include(get_model_urls("netbox_proxbox", "proxmoxfirewallalias")),
+    ),
+    path(
+        "firewall/aliases/",
+        include(get_model_urls("netbox_proxbox", "proxmoxfirewallalias", detail=False)),
+    ),
+    path(
+        "firewall/options/<int:pk>/",
+        include(get_model_urls("netbox_proxbox", "proxmoxfirewalloptions")),
+    ),
+    path(
+        "firewall/options/",
+        include(get_model_urls("netbox_proxbox", "proxmoxfirewalloptions", detail=False)),
+    ),
     path("sync/devices/", views.sync_devices, name="sync_devices"),
     path("sync/storage/", views.sync_storage, name="sync_storage"),
     path(

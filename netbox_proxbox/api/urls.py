@@ -67,6 +67,36 @@ router.register(
     views.NodeSSHCredentialViewSet,
     basename="nodesshcredential",
 )
+router.register(
+    "firewall/security-groups",
+    views.ProxmoxFirewallSecurityGroupViewSet,
+    basename="proxmoxfirewallsecuritygroup",
+)
+router.register(
+    "firewall/rules",
+    views.ProxmoxFirewallRuleViewSet,
+    basename="proxmoxfirewallrule",
+)
+router.register(
+    "firewall/ipsets",
+    views.ProxmoxFirewallIPSetViewSet,
+    basename="proxmoxfirewallipset",
+)
+router.register(
+    "firewall/ipset-entries",
+    views.ProxmoxFirewallIPSetEntryViewSet,
+    basename="proxmoxfirewallipsetentry",
+)
+router.register(
+    "firewall/aliases",
+    views.ProxmoxFirewallAliasViewSet,
+    basename="proxmoxfirewallalias",
+)
+router.register(
+    "firewall/options",
+    views.ProxmoxFirewallOptionsViewSet,
+    basename="proxmoxfirewalloptions",
+)
 
 urlpatterns = [
     path(
