@@ -43,11 +43,11 @@
 				</tr>
 				<tr>
 					<th scope="row">{% trans "Subtype" %}</th>
-					<td>{% badge object.get_subtype_display bg_color=object.subtype|get_bg_color %}</td>
+					<td>{% badge object.get_subtype_display bg_color=object.get_subtype_color %}</td>
 				</tr>
 				<tr>
 					<th scope="row">{% trans "Status" %}</th>
-					<td>{% badge object.get_status_display bg_color=object.status|get_bg_color %}</td>
+					<td>{% badge object.get_status_display bg_color=object.get_status_color %}</td>
 				</tr>
 			</table>
 		</div>

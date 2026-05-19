@@ -95,3 +95,9 @@ class VMSnapshot(NetBoxModel):
     def get_absolute_url(self) -> str:
         """Plugin UI URL for this snapshot's detail page."""
         return reverse("plugins:netbox_proxbox:vmsnapshot", args=[self.pk])
+
+    def get_status_color(self) -> str | None:
+        return ProxmoxSnapshotStatusChoices.colors.get(self.status)
+
+    def get_subtype_color(self) -> str | None:
+        return ProxmoxSnapshotSubtypeChoices.colors.get(self.subtype)
