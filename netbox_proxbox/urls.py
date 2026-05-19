@@ -140,16 +140,6 @@ urlpatterns = [
         "vm-cloudinit/",
         include(get_model_urls("netbox_proxbox", "proxmoxvmcloudinit", detail=False)),
     ),
-    path(
-        "cloud-image-templates/<int:pk>/",
-        include(get_model_urls("netbox_proxbox", "cloudimagetemplate")),
-    ),
-    path(
-        "cloud-image-templates/",
-        include(
-            get_model_urls("netbox_proxbox", "cloudimagetemplate", detail=False),
-        ),
-    ),
     # Firewall models
     path(
         "firewall/security-groups/<int:pk>/",

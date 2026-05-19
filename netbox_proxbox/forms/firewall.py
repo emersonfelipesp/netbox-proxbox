@@ -14,35 +14,28 @@ from netbox_proxbox.choices import (
     FirewallZoneChoices,
 )
 
+_FIREWALL_STATUS_CHOICES = [("", "---------")] + list(FirewallSyncStatusChoices.CHOICES)
 
-class ProxmoxFirewallSecurityGroupForm(NetBoxModelForm):
+
+class _FirewallEndpointMixin:
     endpoint = DynamicModelChoiceField(
         queryset=models.ProxmoxEndpoint.objects.all(),
         required=False,
     )
 
+
+class ProxmoxFirewallSecurityGroupForm(_FirewallEndpointMixin, NetBoxModelForm):
     class Meta:
         model = models.ProxmoxFirewallSecurityGroup
         fields = ("endpoint", "name", "comment", "status", "raw_config", "tags")
 
 
-class ProxmoxFirewallSecurityGroupFilterForm(NetBoxModelFilterSetForm):
+class ProxmoxFirewallSecurityGroupFilterForm(_FirewallEndpointMixin, NetBoxModelFilterSetForm):
     model = models.ProxmoxFirewallSecurityGroup
-    endpoint = DynamicModelChoiceField(
-        queryset=models.ProxmoxEndpoint.objects.all(),
-        required=False,
-    )
-    status = forms.ChoiceField(
-        choices=[("", "---------")] + list(FirewallSyncStatusChoices.CHOICES),
-        required=False,
-    )
+    status = forms.ChoiceField(choices=_FIREWALL_STATUS_CHOICES, required=False)
 
 
-class ProxmoxFirewallRuleForm(NetBoxModelForm):
-    endpoint = DynamicModelChoiceField(
-        queryset=models.ProxmoxEndpoint.objects.all(),
-        required=False,
-    )
+class ProxmoxFirewallRuleForm(_FirewallEndpointMixin, NetBoxModelForm):
     proxmox_node = DynamicModelChoiceField(
         queryset=models.ProxmoxNode.objects.all(),
         required=False,
@@ -80,12 +73,8 @@ class ProxmoxFirewallRuleForm(NetBoxModelForm):
         )
 
 
-class ProxmoxFirewallRuleFilterForm(NetBoxModelFilterSetForm):
+class ProxmoxFirewallRuleFilterForm(_FirewallEndpointMixin, NetBoxModelFilterSetForm):
     model = models.ProxmoxFirewallRule
-    endpoint = DynamicModelChoiceField(
-        queryset=models.ProxmoxEndpoint.objects.all(),
-        required=False,
-    )
     zone = forms.ChoiceField(
         choices=[("", "---------")] + list(FirewallZoneChoices.CHOICES),
         required=False,
@@ -94,18 +83,10 @@ class ProxmoxFirewallRuleFilterForm(NetBoxModelFilterSetForm):
         choices=[("", "---------")] + list(FirewallRuleTypeChoices.CHOICES),
         required=False,
     )
-    status = forms.ChoiceField(
-        choices=[("", "---------")] + list(FirewallSyncStatusChoices.CHOICES),
-        required=False,
-    )
+    status = forms.ChoiceField(choices=_FIREWALL_STATUS_CHOICES, required=False)
 
 
-class ProxmoxFirewallIPSetForm(NetBoxModelForm):
-    endpoint = DynamicModelChoiceField(
-        queryset=models.ProxmoxEndpoint.objects.all(),
-        required=False,
-    )
-
+class ProxmoxFirewallIPSetForm(_FirewallEndpointMixin, NetBoxModelForm):
     class Meta:
         model = models.ProxmoxFirewallIPSet
         fields = ("endpoint", "scope", "virtual_machine", "name", "comment", "status", "raw_config", "tags")
@@ -114,20 +95,13 @@ class ProxmoxFirewallIPSetForm(NetBoxModelForm):
         }
 
 
-class ProxmoxFirewallIPSetFilterForm(NetBoxModelFilterSetForm):
+class ProxmoxFirewallIPSetFilterForm(_FirewallEndpointMixin, NetBoxModelFilterSetForm):
     model = models.ProxmoxFirewallIPSet
-    endpoint = DynamicModelChoiceField(
-        queryset=models.ProxmoxEndpoint.objects.all(),
-        required=False,
-    )
     scope = forms.ChoiceField(
         choices=[("", "---------")] + list(FirewallScopeChoices.CHOICES),
         required=False,
     )
-    status = forms.ChoiceField(
-        choices=[("", "---------")] + list(FirewallSyncStatusChoices.CHOICES),
-        required=False,
-    )
+    status = forms.ChoiceField(choices=_FIREWALL_STATUS_CHOICES, required=False)
 
 
 class ProxmoxFirewallIPSetEntryForm(NetBoxModelForm):
@@ -148,12 +122,7 @@ class ProxmoxFirewallIPSetEntryFilterForm(NetBoxModelFilterSetForm):
     )
 
 
-class ProxmoxFirewallAliasForm(NetBoxModelForm):
-    endpoint = DynamicModelChoiceField(
-        queryset=models.ProxmoxEndpoint.objects.all(),
-        required=False,
-    )
-
+class ProxmoxFirewallAliasForm(_FirewallEndpointMixin, NetBoxModelForm):
     class Meta:
         model = models.ProxmoxFirewallAlias
         fields = ("endpoint", "scope", "virtual_machine", "name", "cidr", "comment", "status", "tags")
@@ -162,27 +131,16 @@ class ProxmoxFirewallAliasForm(NetBoxModelForm):
         }
 
 
-class ProxmoxFirewallAliasFilterForm(NetBoxModelFilterSetForm):
+class ProxmoxFirewallAliasFilterForm(_FirewallEndpointMixin, NetBoxModelFilterSetForm):
     model = models.ProxmoxFirewallAlias
-    endpoint = DynamicModelChoiceField(
-        queryset=models.ProxmoxEndpoint.objects.all(),
-        required=False,
-    )
     scope = forms.ChoiceField(
         choices=[("", "---------")] + list(FirewallScopeChoices.CHOICES),
         required=False,
     )
-    status = forms.ChoiceField(
-        choices=[("", "---------")] + list(FirewallSyncStatusChoices.CHOICES),
-        required=False,
-    )
+    status = forms.ChoiceField(choices=_FIREWALL_STATUS_CHOICES, required=False)
 
 
-class ProxmoxFirewallOptionsForm(NetBoxModelForm):
-    endpoint = DynamicModelChoiceField(
-        queryset=models.ProxmoxEndpoint.objects.all(),
-        required=False,
-    )
+class ProxmoxFirewallOptionsForm(_FirewallEndpointMixin, NetBoxModelForm):
     proxmox_node = DynamicModelChoiceField(
         queryset=models.ProxmoxNode.objects.all(),
         required=False,
@@ -207,13 +165,10 @@ class ProxmoxFirewallOptionsForm(NetBoxModelForm):
         }
 
 
-class ProxmoxFirewallOptionsFilterForm(NetBoxModelFilterSetForm):
+class ProxmoxFirewallOptionsFilterForm(_FirewallEndpointMixin, NetBoxModelFilterSetForm):
     model = models.ProxmoxFirewallOptions
-    endpoint = DynamicModelChoiceField(
-        queryset=models.ProxmoxEndpoint.objects.all(),
-        required=False,
-    )
     zone = forms.ChoiceField(
         choices=[("", "---------")] + list(FirewallZoneChoices.CHOICES),
         required=False,
     )
+    status = forms.ChoiceField(choices=_FIREWALL_STATUS_CHOICES, required=False)

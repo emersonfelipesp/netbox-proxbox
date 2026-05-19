@@ -11,12 +11,23 @@ from utilities.views import register_model_view
 
 from netbox_proxbox import filtersets, forms, models, tables
 
+_SG_QS = models.ProxmoxFirewallSecurityGroup.objects.select_related("endpoint")
+_RULE_QS = models.ProxmoxFirewallRule.objects.select_related(
+    "endpoint", "proxmox_node", "virtual_machine", "security_group"
+)
+_IPSET_QS = models.ProxmoxFirewallIPSet.objects.select_related("endpoint", "virtual_machine")
+_IPSET_ENTRY_QS = models.ProxmoxFirewallIPSetEntry.objects.select_related("ipset")
+_ALIAS_QS = models.ProxmoxFirewallAlias.objects.select_related("endpoint", "virtual_machine")
+_OPTIONS_QS = models.ProxmoxFirewallOptions.objects.select_related(
+    "endpoint", "proxmox_node", "virtual_machine"
+)
+
 
 # ── ProxmoxFirewallSecurityGroup ─────────────────────────────────────────────
 
 @register_model_view(models.ProxmoxFirewallSecurityGroup, "list", path="", detail=False)
 class ProxmoxFirewallSecurityGroupListView(ObjectListView):
-    queryset = models.ProxmoxFirewallSecurityGroup.objects.select_related("endpoint")
+    queryset = _SG_QS
     table = tables.ProxmoxFirewallSecurityGroupTable
     filterset = filtersets.ProxmoxFirewallSecurityGroupFilterSet
     filterset_form = forms.ProxmoxFirewallSecurityGroupFilterForm
@@ -24,19 +35,19 @@ class ProxmoxFirewallSecurityGroupListView(ObjectListView):
 
 @register_model_view(models.ProxmoxFirewallSecurityGroup)
 class ProxmoxFirewallSecurityGroupView(ObjectView):
-    queryset = models.ProxmoxFirewallSecurityGroup.objects.select_related("endpoint")
+    queryset = _SG_QS
 
 
 @register_model_view(models.ProxmoxFirewallSecurityGroup, "edit")
 class ProxmoxFirewallSecurityGroupEditView(ObjectEditView):
-    queryset = models.ProxmoxFirewallSecurityGroup.objects.select_related("endpoint")
+    queryset = _SG_QS
     form = forms.ProxmoxFirewallSecurityGroupForm
     default_return_url = "plugins:netbox_proxbox:proxmoxfirewallsecuritygroup_list"
 
 
 @register_model_view(models.ProxmoxFirewallSecurityGroup, "delete")
 class ProxmoxFirewallSecurityGroupDeleteView(ObjectDeleteView):
-    queryset = models.ProxmoxFirewallSecurityGroup.objects.all()
+    queryset = _SG_QS
     default_return_url = "plugins:netbox_proxbox:proxmoxfirewallsecuritygroup_list"
 
 
@@ -44,9 +55,7 @@ class ProxmoxFirewallSecurityGroupDeleteView(ObjectDeleteView):
 
 @register_model_view(models.ProxmoxFirewallRule, "list", path="", detail=False)
 class ProxmoxFirewallRuleListView(ObjectListView):
-    queryset = models.ProxmoxFirewallRule.objects.select_related(
-        "endpoint", "proxmox_node", "virtual_machine", "security_group"
-    )
+    queryset = _RULE_QS
     table = tables.ProxmoxFirewallRuleTable
     filterset = filtersets.ProxmoxFirewallRuleFilterSet
     filterset_form = forms.ProxmoxFirewallRuleFilterForm
@@ -54,23 +63,19 @@ class ProxmoxFirewallRuleListView(ObjectListView):
 
 @register_model_view(models.ProxmoxFirewallRule)
 class ProxmoxFirewallRuleView(ObjectView):
-    queryset = models.ProxmoxFirewallRule.objects.select_related(
-        "endpoint", "proxmox_node", "virtual_machine", "security_group"
-    )
+    queryset = _RULE_QS
 
 
 @register_model_view(models.ProxmoxFirewallRule, "edit")
 class ProxmoxFirewallRuleEditView(ObjectEditView):
-    queryset = models.ProxmoxFirewallRule.objects.select_related(
-        "endpoint", "proxmox_node", "virtual_machine", "security_group"
-    )
+    queryset = _RULE_QS
     form = forms.ProxmoxFirewallRuleForm
     default_return_url = "plugins:netbox_proxbox:proxmoxfirewallrule_list"
 
 
 @register_model_view(models.ProxmoxFirewallRule, "delete")
 class ProxmoxFirewallRuleDeleteView(ObjectDeleteView):
-    queryset = models.ProxmoxFirewallRule.objects.all()
+    queryset = _RULE_QS
     default_return_url = "plugins:netbox_proxbox:proxmoxfirewallrule_list"
 
 
@@ -78,7 +83,7 @@ class ProxmoxFirewallRuleDeleteView(ObjectDeleteView):
 
 @register_model_view(models.ProxmoxFirewallIPSet, "list", path="", detail=False)
 class ProxmoxFirewallIPSetListView(ObjectListView):
-    queryset = models.ProxmoxFirewallIPSet.objects.select_related("endpoint", "virtual_machine")
+    queryset = _IPSET_QS
     table = tables.ProxmoxFirewallIPSetTable
     filterset = filtersets.ProxmoxFirewallIPSetFilterSet
     filterset_form = forms.ProxmoxFirewallIPSetFilterForm
@@ -86,19 +91,19 @@ class ProxmoxFirewallIPSetListView(ObjectListView):
 
 @register_model_view(models.ProxmoxFirewallIPSet)
 class ProxmoxFirewallIPSetView(ObjectView):
-    queryset = models.ProxmoxFirewallIPSet.objects.select_related("endpoint", "virtual_machine")
+    queryset = _IPSET_QS
 
 
 @register_model_view(models.ProxmoxFirewallIPSet, "edit")
 class ProxmoxFirewallIPSetEditView(ObjectEditView):
-    queryset = models.ProxmoxFirewallIPSet.objects.select_related("endpoint", "virtual_machine")
+    queryset = _IPSET_QS
     form = forms.ProxmoxFirewallIPSetForm
     default_return_url = "plugins:netbox_proxbox:proxmoxfirewallipset_list"
 
 
 @register_model_view(models.ProxmoxFirewallIPSet, "delete")
 class ProxmoxFirewallIPSetDeleteView(ObjectDeleteView):
-    queryset = models.ProxmoxFirewallIPSet.objects.all()
+    queryset = _IPSET_QS
     default_return_url = "plugins:netbox_proxbox:proxmoxfirewallipset_list"
 
 
@@ -106,7 +111,7 @@ class ProxmoxFirewallIPSetDeleteView(ObjectDeleteView):
 
 @register_model_view(models.ProxmoxFirewallIPSetEntry, "list", path="", detail=False)
 class ProxmoxFirewallIPSetEntryListView(ObjectListView):
-    queryset = models.ProxmoxFirewallIPSetEntry.objects.select_related("ipset")
+    queryset = _IPSET_ENTRY_QS
     table = tables.ProxmoxFirewallIPSetEntryTable
     filterset = filtersets.ProxmoxFirewallIPSetEntryFilterSet
     filterset_form = forms.ProxmoxFirewallIPSetEntryFilterForm
@@ -114,19 +119,19 @@ class ProxmoxFirewallIPSetEntryListView(ObjectListView):
 
 @register_model_view(models.ProxmoxFirewallIPSetEntry)
 class ProxmoxFirewallIPSetEntryView(ObjectView):
-    queryset = models.ProxmoxFirewallIPSetEntry.objects.select_related("ipset")
+    queryset = _IPSET_ENTRY_QS
 
 
 @register_model_view(models.ProxmoxFirewallIPSetEntry, "edit")
 class ProxmoxFirewallIPSetEntryEditView(ObjectEditView):
-    queryset = models.ProxmoxFirewallIPSetEntry.objects.select_related("ipset")
+    queryset = _IPSET_ENTRY_QS
     form = forms.ProxmoxFirewallIPSetEntryForm
     default_return_url = "plugins:netbox_proxbox:proxmoxfirewallipsetentry_list"
 
 
 @register_model_view(models.ProxmoxFirewallIPSetEntry, "delete")
 class ProxmoxFirewallIPSetEntryDeleteView(ObjectDeleteView):
-    queryset = models.ProxmoxFirewallIPSetEntry.objects.all()
+    queryset = _IPSET_ENTRY_QS
     default_return_url = "plugins:netbox_proxbox:proxmoxfirewallipsetentry_list"
 
 
@@ -134,7 +139,7 @@ class ProxmoxFirewallIPSetEntryDeleteView(ObjectDeleteView):
 
 @register_model_view(models.ProxmoxFirewallAlias, "list", path="", detail=False)
 class ProxmoxFirewallAliasListView(ObjectListView):
-    queryset = models.ProxmoxFirewallAlias.objects.select_related("endpoint", "virtual_machine")
+    queryset = _ALIAS_QS
     table = tables.ProxmoxFirewallAliasTable
     filterset = filtersets.ProxmoxFirewallAliasFilterSet
     filterset_form = forms.ProxmoxFirewallAliasFilterForm
@@ -142,19 +147,19 @@ class ProxmoxFirewallAliasListView(ObjectListView):
 
 @register_model_view(models.ProxmoxFirewallAlias)
 class ProxmoxFirewallAliasView(ObjectView):
-    queryset = models.ProxmoxFirewallAlias.objects.select_related("endpoint", "virtual_machine")
+    queryset = _ALIAS_QS
 
 
 @register_model_view(models.ProxmoxFirewallAlias, "edit")
 class ProxmoxFirewallAliasEditView(ObjectEditView):
-    queryset = models.ProxmoxFirewallAlias.objects.select_related("endpoint", "virtual_machine")
+    queryset = _ALIAS_QS
     form = forms.ProxmoxFirewallAliasForm
     default_return_url = "plugins:netbox_proxbox:proxmoxfirewallalias_list"
 
 
 @register_model_view(models.ProxmoxFirewallAlias, "delete")
 class ProxmoxFirewallAliasDeleteView(ObjectDeleteView):
-    queryset = models.ProxmoxFirewallAlias.objects.all()
+    queryset = _ALIAS_QS
     default_return_url = "plugins:netbox_proxbox:proxmoxfirewallalias_list"
 
 
@@ -162,9 +167,7 @@ class ProxmoxFirewallAliasDeleteView(ObjectDeleteView):
 
 @register_model_view(models.ProxmoxFirewallOptions, "list", path="", detail=False)
 class ProxmoxFirewallOptionsListView(ObjectListView):
-    queryset = models.ProxmoxFirewallOptions.objects.select_related(
-        "endpoint", "proxmox_node", "virtual_machine"
-    )
+    queryset = _OPTIONS_QS
     table = tables.ProxmoxFirewallOptionsTable
     filterset = filtersets.ProxmoxFirewallOptionsFilterSet
     filterset_form = forms.ProxmoxFirewallOptionsFilterForm
@@ -172,21 +175,17 @@ class ProxmoxFirewallOptionsListView(ObjectListView):
 
 @register_model_view(models.ProxmoxFirewallOptions)
 class ProxmoxFirewallOptionsView(ObjectView):
-    queryset = models.ProxmoxFirewallOptions.objects.select_related(
-        "endpoint", "proxmox_node", "virtual_machine"
-    )
+    queryset = _OPTIONS_QS
 
 
 @register_model_view(models.ProxmoxFirewallOptions, "edit")
 class ProxmoxFirewallOptionsEditView(ObjectEditView):
-    queryset = models.ProxmoxFirewallOptions.objects.select_related(
-        "endpoint", "proxmox_node", "virtual_machine"
-    )
+    queryset = _OPTIONS_QS
     form = forms.ProxmoxFirewallOptionsForm
     default_return_url = "plugins:netbox_proxbox:proxmoxfirewalloptions_list"
 
 
 @register_model_view(models.ProxmoxFirewallOptions, "delete")
 class ProxmoxFirewallOptionsDeleteView(ObjectDeleteView):
-    queryset = models.ProxmoxFirewallOptions.objects.all()
+    queryset = _OPTIONS_QS
     default_return_url = "plugins:netbox_proxbox:proxmoxfirewalloptions_list"

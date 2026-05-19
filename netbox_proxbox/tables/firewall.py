@@ -11,7 +11,6 @@ class ProxmoxFirewallSecurityGroupTable(NetBoxTable):
     name = tables.Column(linkify=True)
     endpoint = tables.Column(linkify=True)
     status = columns.ChoiceFieldColumn()
-    rule_count = tables.Column(verbose_name="Rules", empty_values=())
 
     class Meta(NetBoxTable.Meta):
         model = models.ProxmoxFirewallSecurityGroup

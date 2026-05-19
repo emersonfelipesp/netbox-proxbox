@@ -228,6 +228,18 @@ firewall_aliases_item = PluginMenuItem(
     ),
 )
 
+firewall_ipset_entries_item = PluginMenuItem(
+    link="plugins:netbox_proxbox:proxmoxfirewallipsetentry_list",
+    link_text="IP Set Entries",
+    buttons=(
+        PluginMenuButton(
+            "plugins:netbox_proxbox:proxmoxfirewallipsetentry_add",
+            "Add IP Set Entry",
+            "mdi mdi-plus",
+        ),
+    ),
+)
+
 firewall_options_item = PluginMenuItem(
     link="plugins:netbox_proxbox:proxmoxfirewalloptions_list",
     link_text="Firewall Options",
@@ -293,6 +305,7 @@ menu = PluginMenu(
                 firewall_rules_item,
                 firewall_security_groups_item,
                 firewall_ipsets_item,
+                firewall_ipset_entries_item,
                 firewall_aliases_item,
                 firewall_options_item,
             ),
