@@ -92,7 +92,12 @@ jobs:
       fail-fast: false
       matrix:
         install_source: ${{ fromJSON(inputs.install_source != 'both' && format('["{0}"]', inputs.install_source) || '["local","pypi","container"]') }}
-        netbox_image: ${{ fromJSON(inputs.netbox_image != '' && format('["{0}"]', inputs.netbox_image) || '["netboxcommunity/netbox:v4.5.8","netboxcommunity/netbox:v4.5.9","netboxcommunity/netbox:v4.6.0","netboxcommunity/netbox:v4.6.1"]') }}
+        # NetBox 4.6.1 is supported in code (min/max range covers it) but is omitted
+        # from e2e because netboxcommunity/netbox:v4.6.1 is not yet published on
+        # Docker Hub and the upstream netbox-docker source-build fallback fails on
+        # Ubuntu 24.04 (libxmlsec1-openssl1 apt package no longer available).
+        # Re-add once netbox-community/netbox-docker ships the v4.6.1 image.
+        netbox_image: ${{ fromJSON(inputs.netbox_image != '' && format('["{0}"]', inputs.netbox_image) || '["netboxcommunity/netbox:v4.5.8","netboxcommunity/netbox:v4.5.9","netboxcommunity/netbox:v4.6.0"]') }}
         network_stack: [ipv4]
         proxmox_service: ${{ fromJSON((inputs.proxmox_service == 'pve' || inputs.proxmox_service == 'pbs' || inputs.proxmox_service == 'pdm') && format('["{0}"]', inputs.proxmox_service) || '["pve","pbs","pdm"]') }}
     steps:
