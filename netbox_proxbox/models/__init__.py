@@ -1,6 +1,11 @@
 """Re-export ProxBox plugin models for stable `from netbox_proxbox.models import ...`."""
 
 from netbox_proxbox.models.apply_job import ProxmoxApplyJob
+from netbox_proxbox.models.firewall_alias import ProxmoxFirewallAlias
+from netbox_proxbox.models.firewall_ipset import ProxmoxFirewallIPSet, ProxmoxFirewallIPSetEntry
+from netbox_proxbox.models.firewall_options import ProxmoxFirewallOptions
+from netbox_proxbox.models.firewall_rule import ProxmoxFirewallRule
+from netbox_proxbox.models.firewall_security_group import ProxmoxFirewallSecurityGroup
 from netbox_proxbox.models.backup_routine import BackupRoutine
 from netbox_proxbox.models.base import PORT_VALIDATORS, CommonProperties, EndpointBase
 from netbox_proxbox.models.cloud_image_template import CloudImageTemplate
@@ -24,6 +29,12 @@ from netbox_proxbox.models.vm_task_history import VMTaskHistory
 
 __all__ = (
     "BackupRoutine",
+    "ProxmoxFirewallAlias",
+    "ProxmoxFirewallIPSet",
+    "ProxmoxFirewallIPSetEntry",
+    "ProxmoxFirewallOptions",
+    "ProxmoxFirewallRule",
+    "ProxmoxFirewallSecurityGroup",
     "CloudImageTemplate",
     "DeletionRequest",
     "FastAPIEndpoint",

@@ -21,6 +21,32 @@ from netbox_proxbox.views.proxbox_access import (
     permission_view_fastapi_endpoint,
 )
 
+from .firewall import (
+    ProxmoxFirewallAliasDeleteView,
+    ProxmoxFirewallAliasEditView,
+    ProxmoxFirewallAliasListView,
+    ProxmoxFirewallAliasView,
+    ProxmoxFirewallIPSetDeleteView,
+    ProxmoxFirewallIPSetEditView,
+    ProxmoxFirewallIPSetEntryDeleteView,
+    ProxmoxFirewallIPSetEntryEditView,
+    ProxmoxFirewallIPSetEntryListView,
+    ProxmoxFirewallIPSetEntryView,
+    ProxmoxFirewallIPSetListView,
+    ProxmoxFirewallIPSetView,
+    ProxmoxFirewallOptionsDeleteView,
+    ProxmoxFirewallOptionsEditView,
+    ProxmoxFirewallOptionsListView,
+    ProxmoxFirewallOptionsView,
+    ProxmoxFirewallRuleDeleteView,
+    ProxmoxFirewallRuleEditView,
+    ProxmoxFirewallRuleListView,
+    ProxmoxFirewallRuleView,
+    ProxmoxFirewallSecurityGroupDeleteView,
+    ProxmoxFirewallSecurityGroupEditView,
+    ProxmoxFirewallSecurityGroupListView,
+    ProxmoxFirewallSecurityGroupView,
+)
 from .backup_routine import (
     BackupRoutineBulkDeleteView,
     BackupRoutineDeleteView,

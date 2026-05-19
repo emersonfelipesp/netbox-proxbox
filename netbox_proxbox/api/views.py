@@ -27,6 +27,12 @@ from .serializers import (
     ProxboxPluginSettingsSerializer,
     ProxmoxClusterSerializer,
     ProxmoxEndpointSerializer,
+    ProxmoxFirewallAliasSerializer,
+    ProxmoxFirewallIPSetEntrySerializer,
+    ProxmoxFirewallIPSetSerializer,
+    ProxmoxFirewallOptionsSerializer,
+    ProxmoxFirewallRuleSerializer,
+    ProxmoxFirewallSecurityGroupSerializer,
     ProxmoxNodeSerializer,
     ProxmoxStorageSerializer,
     ProxmoxVMCloudInitSerializer,
@@ -1252,3 +1258,57 @@ class BackendLogsAPIView(APIView):
                 ),
             }
         )
+
+
+# ── Firewall ViewSets ─────────────────────────────────────────────────────────
+
+class ProxmoxFirewallSecurityGroupViewSet(NetBoxModelViewSet):
+    """REST API for Proxmox firewall security groups."""
+
+    queryset = models.ProxmoxFirewallSecurityGroup.objects.select_related("endpoint")
+    serializer_class = ProxmoxFirewallSecurityGroupSerializer
+    filterset_class = filtersets.ProxmoxFirewallSecurityGroupFilterSet
+
+
+class ProxmoxFirewallRuleViewSet(NetBoxModelViewSet):
+    """REST API for Proxmox firewall rules."""
+
+    queryset = models.ProxmoxFirewallRule.objects.select_related(
+        "endpoint", "proxmox_node", "virtual_machine", "security_group"
+    )
+    serializer_class = ProxmoxFirewallRuleSerializer
+    filterset_class = filtersets.ProxmoxFirewallRuleFilterSet
+
+
+class ProxmoxFirewallIPSetViewSet(NetBoxModelViewSet):
+    """REST API for Proxmox firewall IP sets."""
+
+    queryset = models.ProxmoxFirewallIPSet.objects.select_related("endpoint", "virtual_machine")
+    serializer_class = ProxmoxFirewallIPSetSerializer
+    filterset_class = filtersets.ProxmoxFirewallIPSetFilterSet
+
+
+class ProxmoxFirewallIPSetEntryViewSet(NetBoxModelViewSet):
+    """REST API for Proxmox firewall IP set entries."""
+
+    queryset = models.ProxmoxFirewallIPSetEntry.objects.select_related("ipset")
+    serializer_class = ProxmoxFirewallIPSetEntrySerializer
+    filterset_class = filtersets.ProxmoxFirewallIPSetEntryFilterSet
+
+
+class ProxmoxFirewallAliasViewSet(NetBoxModelViewSet):
+    """REST API for Proxmox firewall aliases."""
+
+    queryset = models.ProxmoxFirewallAlias.objects.select_related("endpoint", "virtual_machine")
+    serializer_class = ProxmoxFirewallAliasSerializer
+    filterset_class = filtersets.ProxmoxFirewallAliasFilterSet
+
+
+class ProxmoxFirewallOptionsViewSet(NetBoxModelViewSet):
+    """REST API for Proxmox firewall options snapshots."""
+
+    queryset = models.ProxmoxFirewallOptions.objects.select_related(
+        "endpoint", "proxmox_node", "virtual_machine"
+    )
+    serializer_class = ProxmoxFirewallOptionsSerializer
+    filterset_class = filtersets.ProxmoxFirewallOptionsFilterSet
