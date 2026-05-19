@@ -1262,6 +1262,7 @@ class BackendLogsAPIView(APIView):
 
 # ── Firewall ViewSets ─────────────────────────────────────────────────────────
 
+
 class ProxmoxFirewallSecurityGroupViewSet(NetBoxModelViewSet):
     """REST API for Proxmox firewall security groups."""
 
@@ -1283,7 +1284,9 @@ class ProxmoxFirewallRuleViewSet(NetBoxModelViewSet):
 class ProxmoxFirewallIPSetViewSet(NetBoxModelViewSet):
     """REST API for Proxmox firewall IP sets."""
 
-    queryset = models.ProxmoxFirewallIPSet.objects.select_related("endpoint", "virtual_machine")
+    queryset = models.ProxmoxFirewallIPSet.objects.select_related(
+        "endpoint", "virtual_machine"
+    )
     serializer_class = ProxmoxFirewallIPSetSerializer
     filterset_class = filtersets.ProxmoxFirewallIPSetFilterSet
 
@@ -1299,7 +1302,9 @@ class ProxmoxFirewallIPSetEntryViewSet(NetBoxModelViewSet):
 class ProxmoxFirewallAliasViewSet(NetBoxModelViewSet):
     """REST API for Proxmox firewall aliases."""
 
-    queryset = models.ProxmoxFirewallAlias.objects.select_related("endpoint", "virtual_machine")
+    queryset = models.ProxmoxFirewallAlias.objects.select_related(
+        "endpoint", "virtual_machine"
+    )
     serializer_class = ProxmoxFirewallAliasSerializer
     filterset_class = filtersets.ProxmoxFirewallAliasFilterSet
 

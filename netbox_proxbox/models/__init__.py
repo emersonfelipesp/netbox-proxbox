@@ -2,7 +2,10 @@
 
 from netbox_proxbox.models.apply_job import ProxmoxApplyJob
 from netbox_proxbox.models.firewall_alias import ProxmoxFirewallAlias
-from netbox_proxbox.models.firewall_ipset import ProxmoxFirewallIPSet, ProxmoxFirewallIPSetEntry
+from netbox_proxbox.models.firewall_ipset import (
+    ProxmoxFirewallIPSet,
+    ProxmoxFirewallIPSetEntry,
+)
 from netbox_proxbox.models.firewall_options import ProxmoxFirewallOptions
 from netbox_proxbox.models.firewall_rule import ProxmoxFirewallRule
 from netbox_proxbox.models.firewall_security_group import ProxmoxFirewallSecurityGroup

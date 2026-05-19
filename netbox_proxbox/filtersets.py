@@ -498,8 +498,16 @@ class ProxmoxFirewallRuleFilterSet(ProxboxModelFilterSet):
     class Meta:
         model = ProxmoxFirewallRule
         fields = (
-            "id", "endpoint", "zone", "proxmox_node", "virtual_machine",
-            "security_group", "rule_type", "action", "enable", "status",
+            "id",
+            "endpoint",
+            "zone",
+            "proxmox_node",
+            "virtual_machine",
+            "security_group",
+            "rule_type",
+            "action",
+            "enable",
+            "status",
         )
 
     def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
@@ -571,4 +579,6 @@ class ProxmoxFirewallOptionsFilterSet(ProxboxModelFilterSet):
     def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
         if not value.strip():
             return queryset
-        return queryset.filter(Q(policy_in__icontains=value) | Q(policy_out__icontains=value))
+        return queryset.filter(
+            Q(policy_in__icontains=value) | Q(policy_out__icontains=value)
+        )

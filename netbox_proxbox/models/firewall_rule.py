@@ -1,4 +1,5 @@
 """ProxmoxFirewallRule model."""
+
 from __future__ import annotations
 
 from django.db import models
@@ -65,12 +66,22 @@ class ProxmoxFirewallRule(NetBoxModel):
         help_text=_("ACCEPT, DROP, REJECT, or security group name."),
     )
     enable = models.BooleanField(default=True, help_text=_("Rule enabled flag."))
-    macro = models.CharField(max_length=128, blank=True, help_text=_("Predefined macro name."))
-    iface = models.CharField(max_length=64, blank=True, help_text=_("Network interface."))
-    source = models.CharField(max_length=512, blank=True, help_text=_("Source address/IP set/alias."))
-    dest = models.CharField(max_length=512, blank=True, help_text=_("Destination address/IP set/alias."))
+    macro = models.CharField(
+        max_length=128, blank=True, help_text=_("Predefined macro name.")
+    )
+    iface = models.CharField(
+        max_length=64, blank=True, help_text=_("Network interface.")
+    )
+    source = models.CharField(
+        max_length=512, blank=True, help_text=_("Source address/IP set/alias.")
+    )
+    dest = models.CharField(
+        max_length=512, blank=True, help_text=_("Destination address/IP set/alias.")
+    )
     proto = models.CharField(max_length=32, blank=True, help_text=_("IP protocol."))
-    dport = models.CharField(max_length=128, blank=True, help_text=_("Destination port(s)."))
+    dport = models.CharField(
+        max_length=128, blank=True, help_text=_("Destination port(s).")
+    )
     sport = models.CharField(max_length=128, blank=True, help_text=_("Source port(s)."))
     log = models.CharField(
         max_length=16,
@@ -98,7 +109,14 @@ class ProxmoxFirewallRule(NetBoxModel):
         ordering = ("endpoint", "zone", "pos")
         constraints = [
             models.UniqueConstraint(
-                fields=["endpoint", "zone", "pos", "proxmox_node", "virtual_machine", "security_group"],
+                fields=[
+                    "endpoint",
+                    "zone",
+                    "pos",
+                    "proxmox_node",
+                    "virtual_machine",
+                    "security_group",
+                ],
                 name="netbox_proxbox_firewallrule_unique_endpoint_zone_pos",
             )
         ]

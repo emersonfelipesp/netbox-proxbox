@@ -1,4 +1,5 @@
 """NetBox CRUD views for Proxmox firewall models."""
+
 from __future__ import annotations
 
 from netbox.views.generic import (
@@ -15,15 +16,20 @@ _SG_QS = models.ProxmoxFirewallSecurityGroup.objects.select_related("endpoint")
 _RULE_QS = models.ProxmoxFirewallRule.objects.select_related(
     "endpoint", "proxmox_node", "virtual_machine", "security_group"
 )
-_IPSET_QS = models.ProxmoxFirewallIPSet.objects.select_related("endpoint", "virtual_machine")
+_IPSET_QS = models.ProxmoxFirewallIPSet.objects.select_related(
+    "endpoint", "virtual_machine"
+)
 _IPSET_ENTRY_QS = models.ProxmoxFirewallIPSetEntry.objects.select_related("ipset")
-_ALIAS_QS = models.ProxmoxFirewallAlias.objects.select_related("endpoint", "virtual_machine")
+_ALIAS_QS = models.ProxmoxFirewallAlias.objects.select_related(
+    "endpoint", "virtual_machine"
+)
 _OPTIONS_QS = models.ProxmoxFirewallOptions.objects.select_related(
     "endpoint", "proxmox_node", "virtual_machine"
 )
 
 
 # ── ProxmoxFirewallSecurityGroup ─────────────────────────────────────────────
+
 
 @register_model_view(models.ProxmoxFirewallSecurityGroup, "list", path="", detail=False)
 class ProxmoxFirewallSecurityGroupListView(ObjectListView):
@@ -53,6 +59,7 @@ class ProxmoxFirewallSecurityGroupDeleteView(ObjectDeleteView):
 
 # ── ProxmoxFirewallRule ───────────────────────────────────────────────────────
 
+
 @register_model_view(models.ProxmoxFirewallRule, "list", path="", detail=False)
 class ProxmoxFirewallRuleListView(ObjectListView):
     queryset = _RULE_QS
@@ -80,6 +87,7 @@ class ProxmoxFirewallRuleDeleteView(ObjectDeleteView):
 
 
 # ── ProxmoxFirewallIPSet ──────────────────────────────────────────────────────
+
 
 @register_model_view(models.ProxmoxFirewallIPSet, "list", path="", detail=False)
 class ProxmoxFirewallIPSetListView(ObjectListView):
@@ -109,6 +117,7 @@ class ProxmoxFirewallIPSetDeleteView(ObjectDeleteView):
 
 # ── ProxmoxFirewallIPSetEntry ─────────────────────────────────────────────────
 
+
 @register_model_view(models.ProxmoxFirewallIPSetEntry, "list", path="", detail=False)
 class ProxmoxFirewallIPSetEntryListView(ObjectListView):
     queryset = _IPSET_ENTRY_QS
@@ -137,6 +146,7 @@ class ProxmoxFirewallIPSetEntryDeleteView(ObjectDeleteView):
 
 # ── ProxmoxFirewallAlias ──────────────────────────────────────────────────────
 
+
 @register_model_view(models.ProxmoxFirewallAlias, "list", path="", detail=False)
 class ProxmoxFirewallAliasListView(ObjectListView):
     queryset = _ALIAS_QS
@@ -164,6 +174,7 @@ class ProxmoxFirewallAliasDeleteView(ObjectDeleteView):
 
 
 # ── ProxmoxFirewallOptions ────────────────────────────────────────────────────
+
 
 @register_model_view(models.ProxmoxFirewallOptions, "list", path="", detail=False)
 class ProxmoxFirewallOptionsListView(ObjectListView):

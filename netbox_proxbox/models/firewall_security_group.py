@@ -1,4 +1,5 @@
 """ProxmoxFirewallSecurityGroup model."""
+
 from __future__ import annotations
 
 from django.db import models
@@ -44,4 +45,6 @@ class ProxmoxFirewallSecurityGroup(NetBoxModel):
         return f"{self.endpoint} / {self.name}"
 
     def get_absolute_url(self):
-        return reverse("plugins:netbox_proxbox:proxmoxfirewallsecuritygroup", args=[self.pk])
+        return reverse(
+            "plugins:netbox_proxbox:proxmoxfirewallsecuritygroup", args=[self.pk]
+        )

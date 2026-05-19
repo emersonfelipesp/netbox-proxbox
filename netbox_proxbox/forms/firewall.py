@@ -1,4 +1,5 @@
 """Create/edit and filter forms for Proxmox firewall models."""
+
 from __future__ import annotations
 
 from django import forms
@@ -30,7 +31,9 @@ class ProxmoxFirewallSecurityGroupForm(_FirewallEndpointMixin, NetBoxModelForm):
         fields = ("endpoint", "name", "comment", "status", "raw_config", "tags")
 
 
-class ProxmoxFirewallSecurityGroupFilterForm(_FirewallEndpointMixin, NetBoxModelFilterSetForm):
+class ProxmoxFirewallSecurityGroupFilterForm(
+    _FirewallEndpointMixin, NetBoxModelFilterSetForm
+):
     model = models.ProxmoxFirewallSecurityGroup
     status = forms.ChoiceField(choices=_FIREWALL_STATUS_CHOICES, required=False)
 
@@ -89,7 +92,16 @@ class ProxmoxFirewallRuleFilterForm(_FirewallEndpointMixin, NetBoxModelFilterSet
 class ProxmoxFirewallIPSetForm(_FirewallEndpointMixin, NetBoxModelForm):
     class Meta:
         model = models.ProxmoxFirewallIPSet
-        fields = ("endpoint", "scope", "virtual_machine", "name", "comment", "status", "raw_config", "tags")
+        fields = (
+            "endpoint",
+            "scope",
+            "virtual_machine",
+            "name",
+            "comment",
+            "status",
+            "raw_config",
+            "tags",
+        )
         widgets = {
             "virtual_machine": forms.Select,
         }
@@ -125,7 +137,16 @@ class ProxmoxFirewallIPSetEntryFilterForm(NetBoxModelFilterSetForm):
 class ProxmoxFirewallAliasForm(_FirewallEndpointMixin, NetBoxModelForm):
     class Meta:
         model = models.ProxmoxFirewallAlias
-        fields = ("endpoint", "scope", "virtual_machine", "name", "cidr", "comment", "status", "tags")
+        fields = (
+            "endpoint",
+            "scope",
+            "virtual_machine",
+            "name",
+            "cidr",
+            "comment",
+            "status",
+            "tags",
+        )
         widgets = {
             "virtual_machine": forms.Select,
         }
@@ -165,7 +186,9 @@ class ProxmoxFirewallOptionsForm(_FirewallEndpointMixin, NetBoxModelForm):
         }
 
 
-class ProxmoxFirewallOptionsFilterForm(_FirewallEndpointMixin, NetBoxModelFilterSetForm):
+class ProxmoxFirewallOptionsFilterForm(
+    _FirewallEndpointMixin, NetBoxModelFilterSetForm
+):
     model = models.ProxmoxFirewallOptions
     zone = forms.ChoiceField(
         choices=[("", "---------")] + list(FirewallZoneChoices.CHOICES),

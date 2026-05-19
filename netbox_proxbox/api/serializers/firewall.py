@@ -1,4 +1,5 @@
 """API serializers for Proxmox firewall models."""
+
 from __future__ import annotations
 
 from netbox.api.fields import ChoiceField
@@ -48,9 +49,18 @@ class ProxmoxFirewallSecurityGroupSerializer(NetBoxModelSerializer):
     class Meta:
         model = ProxmoxFirewallSecurityGroup
         fields = (
-            "id", "url", "display", "endpoint", "name", "comment",
-            "status", "raw_config", "tags", "custom_fields",
-            "created", "last_updated",
+            "id",
+            "url",
+            "display",
+            "endpoint",
+            "name",
+            "comment",
+            "status",
+            "raw_config",
+            "tags",
+            "custom_fields",
+            "created",
+            "last_updated",
         )
         brief_fields = ("id", "url", "display", "name", "status")
 
@@ -62,7 +72,9 @@ class ProxmoxFirewallRuleSerializer(NetBoxModelSerializer):
     endpoint = NestedProxmoxEndpointSerializer(required=False, allow_null=True)
     proxmox_node = NestedProxmoxNodeSerializer(required=False, allow_null=True)
     virtual_machine = NestedVirtualMachineSerializer(required=False, allow_null=True)
-    security_group = NestedProxmoxFirewallSecurityGroupSerializer(required=False, allow_null=True)
+    security_group = NestedProxmoxFirewallSecurityGroupSerializer(
+        required=False, allow_null=True
+    )
     zone = ChoiceField(choices=FirewallZoneChoices)
     rule_type = ChoiceField(choices=FirewallRuleTypeChoices)
     log = ChoiceField(choices=FirewallLogLevelChoices, required=False, allow_blank=True)
@@ -71,13 +83,47 @@ class ProxmoxFirewallRuleSerializer(NetBoxModelSerializer):
     class Meta:
         model = ProxmoxFirewallRule
         fields = (
-            "id", "url", "display", "endpoint", "zone", "proxmox_node",
-            "virtual_machine", "security_group", "pos", "rule_type", "action",
-            "enable", "macro", "iface", "source", "dest", "proto", "dport",
-            "sport", "log", "icmp_type", "comment", "digest", "status",
-            "raw_config", "tags", "custom_fields", "created", "last_updated",
+            "id",
+            "url",
+            "display",
+            "endpoint",
+            "zone",
+            "proxmox_node",
+            "virtual_machine",
+            "security_group",
+            "pos",
+            "rule_type",
+            "action",
+            "enable",
+            "macro",
+            "iface",
+            "source",
+            "dest",
+            "proto",
+            "dport",
+            "sport",
+            "log",
+            "icmp_type",
+            "comment",
+            "digest",
+            "status",
+            "raw_config",
+            "tags",
+            "custom_fields",
+            "created",
+            "last_updated",
         )
-        brief_fields = ("id", "url", "display", "zone", "pos", "rule_type", "action", "enable", "status")
+        brief_fields = (
+            "id",
+            "url",
+            "display",
+            "zone",
+            "pos",
+            "rule_type",
+            "action",
+            "enable",
+            "status",
+        )
 
 
 class ProxmoxFirewallIPSetSerializer(NetBoxModelSerializer):
@@ -92,9 +138,20 @@ class ProxmoxFirewallIPSetSerializer(NetBoxModelSerializer):
     class Meta:
         model = ProxmoxFirewallIPSet
         fields = (
-            "id", "url", "display", "endpoint", "scope", "virtual_machine",
-            "name", "comment", "status", "raw_config", "tags", "custom_fields",
-            "created", "last_updated",
+            "id",
+            "url",
+            "display",
+            "endpoint",
+            "scope",
+            "virtual_machine",
+            "name",
+            "comment",
+            "status",
+            "raw_config",
+            "tags",
+            "custom_fields",
+            "created",
+            "last_updated",
         )
         brief_fields = ("id", "url", "display", "name", "scope", "status")
 
@@ -119,9 +176,18 @@ class ProxmoxFirewallIPSetEntrySerializer(NetBoxModelSerializer):
     class Meta:
         model = ProxmoxFirewallIPSetEntry
         fields = (
-            "id", "url", "display", "ipset", "cidr", "comment",
-            "nomatch", "raw_config", "tags", "custom_fields",
-            "created", "last_updated",
+            "id",
+            "url",
+            "display",
+            "ipset",
+            "cidr",
+            "comment",
+            "nomatch",
+            "raw_config",
+            "tags",
+            "custom_fields",
+            "created",
+            "last_updated",
         )
         brief_fields = ("id", "url", "display", "cidr", "nomatch")
 
@@ -138,9 +204,20 @@ class ProxmoxFirewallAliasSerializer(NetBoxModelSerializer):
     class Meta:
         model = ProxmoxFirewallAlias
         fields = (
-            "id", "url", "display", "endpoint", "scope", "virtual_machine",
-            "name", "cidr", "comment", "status", "tags", "custom_fields",
-            "created", "last_updated",
+            "id",
+            "url",
+            "display",
+            "endpoint",
+            "scope",
+            "virtual_machine",
+            "name",
+            "cidr",
+            "comment",
+            "status",
+            "tags",
+            "custom_fields",
+            "created",
+            "last_updated",
         )
         brief_fields = ("id", "url", "display", "name", "cidr", "scope", "status")
 
@@ -157,9 +234,29 @@ class ProxmoxFirewallOptionsSerializer(NetBoxModelSerializer):
     class Meta:
         model = ProxmoxFirewallOptions
         fields = (
-            "id", "url", "display", "endpoint", "zone", "proxmox_node",
-            "virtual_machine", "enable", "policy_in", "policy_out",
-            "options", "raw_config", "tags", "custom_fields",
-            "created", "last_updated",
+            "id",
+            "url",
+            "display",
+            "endpoint",
+            "zone",
+            "proxmox_node",
+            "virtual_machine",
+            "enable",
+            "policy_in",
+            "policy_out",
+            "options",
+            "raw_config",
+            "tags",
+            "custom_fields",
+            "created",
+            "last_updated",
         )
-        brief_fields = ("id", "url", "display", "zone", "enable", "policy_in", "policy_out")
+        brief_fields = (
+            "id",
+            "url",
+            "display",
+            "zone",
+            "enable",
+            "policy_in",
+            "policy_out",
+        )

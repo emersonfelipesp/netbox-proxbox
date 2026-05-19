@@ -40,6 +40,7 @@ class HomeQuickEditView(ConditionalLoginRequiredMixin, View):
     def _resolve(self, endpoint_type: str, pk: int, user):
         if endpoint_type not in _ENDPOINT_MAP:
             from django.http import Http404
+
             raise Http404(f"Unknown endpoint type: {endpoint_type!r}")
         model_cls, form_cls, _perm = _ENDPOINT_MAP[endpoint_type]
         obj = get_object_or_404(model_cls.objects.restrict(user, "change"), pk=pk)

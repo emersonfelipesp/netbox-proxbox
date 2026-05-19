@@ -147,7 +147,11 @@ urlpatterns = [
     ),
     path(
         "firewall/security-groups/",
-        include(get_model_urls("netbox_proxbox", "proxmoxfirewallsecuritygroup", detail=False)),
+        include(
+            get_model_urls(
+                "netbox_proxbox", "proxmoxfirewallsecuritygroup", detail=False
+            )
+        ),
     ),
     path(
         "firewall/rules/<int:pk>/",
@@ -171,7 +175,9 @@ urlpatterns = [
     ),
     path(
         "firewall/ipset-entries/",
-        include(get_model_urls("netbox_proxbox", "proxmoxfirewallipsetentry", detail=False)),
+        include(
+            get_model_urls("netbox_proxbox", "proxmoxfirewallipsetentry", detail=False)
+        ),
     ),
     path(
         "firewall/aliases/<int:pk>/",
@@ -187,7 +193,9 @@ urlpatterns = [
     ),
     path(
         "firewall/options/",
-        include(get_model_urls("netbox_proxbox", "proxmoxfirewalloptions", detail=False)),
+        include(
+            get_model_urls("netbox_proxbox", "proxmoxfirewalloptions", detail=False)
+        ),
     ),
     path("sync/devices/", views.sync_devices, name="sync_devices"),
     path("sync/storage/", views.sync_storage, name="sync_storage"),
