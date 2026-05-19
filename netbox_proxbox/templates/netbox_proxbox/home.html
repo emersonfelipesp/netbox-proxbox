@@ -21,6 +21,97 @@
         <link rel="stylesheet" href="{% static 'netbox_proxbox/css/quick_schedule_home.css' %}">
         {{ quick_schedule_form.media }}
     {% endif %}
+    <script>
+    (function () {
+        "use strict";
+
+        function getCsrfToken() {
+            const name = "csrftoken";
+            const cookies = document.cookie.split(";");
+            for (const c of cookies) {
+                const [k, v] = c.trim().split("=");
+                if (k === name) return decodeURIComponent(v);
+            }
+            return "";
+        }
+
+        document.addEventListener("DOMContentLoaded", function () {
+            const modalEl = document.getElementById("proxbox-quick-edit-modal");
+            if (!modalEl) return;
+
+            const bsModal = new bootstrap.Modal(modalEl);
+            const modalBody = document.getElementById("proxbox-quick-edit-body");
+            const modalTitle = modalEl.querySelector(".modal-title");
+
+            const spinner = '<div class="text-center p-4"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading…</span></div></div>';
+
+            function attachFormHandler(form) {
+                form.addEventListener("submit", function (e) {
+                    e.preventDefault();
+                    const submitBtn = form.querySelector('[type="submit"]');
+                    if (submitBtn) { submitBtn.disabled = true; }
+
+                    fetch(form.action, {
+                        method: "POST",
+                        headers: {
+                            "X-CSRFToken": getCsrfToken(),
+                            "X-Requested-With": "XMLHttpRequest",
+                        },
+                        body: new FormData(form),
+                    })
+                    .then(function (r) {
+                        if (r.ok) {
+                            r.json().then(function () {
+                                bsModal.hide();
+                                location.reload();
+                            });
+                        } else {
+                            r.text().then(function (html) {
+                                modalBody.innerHTML = html;
+                                const newForm = modalBody.querySelector("form");
+                                if (newForm) attachFormHandler(newForm);
+                            });
+                        }
+                    })
+                    .catch(function () {
+                        if (submitBtn) { submitBtn.disabled = false; }
+                    });
+                });
+            }
+
+            document.querySelectorAll("[data-proxbox-quick-edit-url]").forEach(function (btn) {
+                btn.addEventListener("click", function () {
+                    const url = btn.dataset.proxboxQuickEditUrl;
+                    modalBody.innerHTML = spinner;
+                    if (modalTitle) {
+                        const cardHeader = btn.closest(".card");
+                        const headerText = cardHeader ? cardHeader.querySelector(".card-header") : null;
+                        modalTitle.textContent = headerText
+                            ? "Edit " + headerText.textContent.trim()
+                            : "Edit Endpoint";
+                    }
+                    bsModal.show();
+
+                    fetch(url, {
+                        headers: { "X-Requested-With": "XMLHttpRequest" },
+                    })
+                    .then(function (r) {
+                        if (!r.ok) throw new Error("HTTP " + r.status);
+                        return r.text();
+                    })
+                    .then(function (html) {
+                        modalBody.innerHTML = html;
+                        const form = modalBody.querySelector("form");
+                        if (form) attachFormHandler(form);
+                    })
+                    .catch(function (err) {
+                        modalBody.innerHTML = '<div class="alert alert-danger">Failed to load the edit form. ' + err.message + "</div>";
+                    });
+                });
+            });
+        });
+    }());
+    </script>
 {% endblock %}
 
 {% block content %}
@@ -158,4 +249,32 @@
 {% block footer_links %}
     {{ block.super }}
     {% include "netbox_proxbox/footer.html" %}
+{% endblock %}
+
+{% block modals %}
+    {{ block.super }}
+    {# Shared modal used by the quick-edit buttons on the homepage endpoint cards. #}
+    <div
+        class="modal fade"
+        id="proxbox-quick-edit-modal"
+        tabindex="-1"
+        aria-labelledby="proxbox-quick-edit-modal-label"
+        aria-hidden="true"
+    >
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="proxbox-quick-edit-modal-label">Edit Endpoint</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="proxbox-quick-edit-body">
+                    <div class="text-center p-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading…</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 {% endblock %}

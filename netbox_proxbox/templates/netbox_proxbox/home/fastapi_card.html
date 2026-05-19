@@ -35,14 +35,22 @@
                 {% if fastapi_websocket_url and object.use_websocket %}<tr><th scope="row"><strong>WebSocket URL</strong></th><td><a href="{{ fastapi_websocket_url }}" target="_blank">{{ fastapi_websocket_url }}</a></td></tr>{% endif %}
                 <tr><th scope="row"><strong>Port</strong></th><td>{{ object.port }}</td></tr>
             </table>
-            <div class="d-flex flex-row justify-content-center align-items-center p-2 mt-1">
-                <div class="d-flex ms-auto" style="margin: 0 40px 0 0">
-                    <a
-                        class="btn btn-outline-primary"
-                        target="_blank"
-                        href="https://fastapi.tiangolo.com/deployment/manually/"
-                    >Show Example</a>
-                </div>
+            <div class="d-flex justify-content-between align-items-center p-2 mt-1">
+                <a
+                    class="btn btn-outline-primary"
+                    target="_blank"
+                    href="https://fastapi.tiangolo.com/deployment/manually/"
+                >Show Example</a>
+                {% if perms.netbox_proxbox.change_fastapiendpoint %}
+                <button
+                    type="button"
+                    class="btn btn-outline-warning btn-sm"
+                    data-proxbox-quick-edit-url="{% url 'plugins:netbox_proxbox:home_quick_edit' 'fastapi' object.pk %}"
+                    title="Quick edit this FastAPI endpoint"
+                >
+                    <i class="mdi mdi-pencil" aria-hidden="true"></i> Edit
+                </button>
+                {% endif %}
             </div>
         </div>
     </div>

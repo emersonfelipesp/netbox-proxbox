@@ -22,6 +22,11 @@ app_name = "netbox_proxbox"
 
 urlpatterns = [
     path("", views.HomeView.as_view(), name="home"),
+    path(
+        "quick-edit/<str:endpoint_type>/<int:pk>/",
+        views.HomeQuickEditView.as_view(),
+        name="home_quick_edit",
+    ),
     path("dashboard/", views.DashboardView.as_view(), name="dashboard"),
     path("ha/", views.HAClusterView.as_view(), name="ha"),
     path("clusters/", views.ClustersView.as_view(), name="clusters"),
