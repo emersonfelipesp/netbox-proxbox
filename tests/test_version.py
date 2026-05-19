@@ -107,7 +107,7 @@ def test_certified_netbox_versions_are_documented():
 
 def test_certified_netbox_versions_are_in_e2e_matrix():
     workflow = E2E_WORKFLOW_PATH.read_text(encoding="utf-8")
-    for version in ("v4.5.8", "v4.5.9", "v4.6.0"):
+    for version in ("v4.5.8", "v4.5.9", "v4.6.0", "v4.6.1"):
         assert f"netboxcommunity/netbox:{version}" in workflow
     assert "netboxcommunity/netbox:v4.6.0-beta2" not in workflow
 
