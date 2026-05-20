@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+from importlib.metadata import version as _pkg_version
+
 from django.http import HttpRequest, HttpResponse
 from django.views import View
 from utilities.views import ConditionalLoginRequiredMixin
 
-from netbox_proxbox import __version__
+try:
+    _PLUGIN_VERSION = _pkg_version("netbox-proxbox")
+except Exception:  # noqa: BLE001
+    _PLUGIN_VERSION = "unknown"
 
 _PLUGIN = "plugins/proxbox"
 
@@ -136,7 +141,7 @@ _PK_PAGES: list[tuple[str, str]] = [
 def _build_sitemap(base: str) -> list[str]:
     plugin_base = f"{base}/{_PLUGIN}"
     lines: list[str] = [
-        f"# Proxbox plugin sitemap  —  netbox-proxbox {__version__}",
+        f"# Proxbox plugin sitemap  —  netbox-proxbox {_PLUGIN_VERSION}",
         f"# Base: {plugin_base}",
         "",
     ]
