@@ -53,6 +53,7 @@ class ProxmoxEndpointTable(NetBoxTable):
     mode = ChoiceFieldColumn()
     environment = ChoiceFieldColumn()
     verify_ssl = BooleanColumn()
+    enabled = BooleanColumn()
     status = tables.TemplateColumn(
         template_code=STATUS_BADGE_TEMPLATE.replace("{{ service }}", "proxmox"),
         verbose_name=_("Status"),
@@ -75,6 +76,7 @@ class ProxmoxEndpointTable(NetBoxTable):
             "username",
             "token_name",
             "verify_ssl",
+            "enabled",
             "timeout",
             "max_retries",
             "retry_backoff",
@@ -104,6 +106,7 @@ class NetBoxEndpointTable(NetBoxTable):
     name = tables.Column(linkify=True)
     ip_address = tables.Column(linkify=True)
     verify_ssl = BooleanColumn()
+    enabled = BooleanColumn()
     token = tables.Column(linkify=True)
     status = tables.TemplateColumn(
         template_code=STATUS_BADGE_TEMPLATE.replace("{{ service }}", "netbox"),
@@ -120,6 +123,7 @@ class NetBoxEndpointTable(NetBoxTable):
             "ip_address",
             "port",
             "verify_ssl",
+            "enabled",
             "token",
             "status",
             "actions",
@@ -132,6 +136,7 @@ class NetBoxEndpointTable(NetBoxTable):
             "port",
             "status",
             "verify_ssl",
+            "enabled",
             "token",
         )
 
@@ -143,6 +148,7 @@ class FastAPIEndpointTable(NetBoxTable):
     ip_address = tables.Column(linkify=True)
     use_https = BooleanColumn()
     verify_ssl = BooleanColumn()
+    enabled = BooleanColumn()
     status = tables.TemplateColumn(
         template_code=STATUS_BADGE_TEMPLATE.replace("{{ service }}", "fastapi"),
         verbose_name=_("Status"),
@@ -160,6 +166,7 @@ class FastAPIEndpointTable(NetBoxTable):
             "port",
             "use_https",
             "verify_ssl",
+            "enabled",
             "use_websocket",
             "websocket_domain",
             "websocket_port",

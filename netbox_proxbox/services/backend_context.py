@@ -55,15 +55,15 @@ def get_fastapi_endpoint_with_token(
         context = get_fastapi_request_context(endpoint_id=endpoint_id)
         return endpoint, context
 
-    count = FastAPIEndpoint.objects.count()
+    count = FastAPIEndpoint.objects.filter(enabled=True).count()
     if count == 0:
         return None, None
     if count == 1:
-        endpoint = FastAPIEndpoint.objects.first()
+        endpoint = FastAPIEndpoint.objects.filter(enabled=True).first()
         context = get_fastapi_request_context(endpoint_id=getattr(endpoint, "pk", None))
         return endpoint, context
 
-    endpoint = FastAPIEndpoint.objects.order_by("pk").first()
+    endpoint = FastAPIEndpoint.objects.filter(enabled=True).order_by("pk").first()
     if endpoint is None:
         return None, None
     context = get_fastapi_request_context(endpoint_id=getattr(endpoint, "pk", None))

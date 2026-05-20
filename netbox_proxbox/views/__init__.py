@@ -225,7 +225,11 @@ class TestWebSocketView(
 
     def get(self, request: HttpRequest) -> HttpResponse:
         """Render the test template with HTTP and WS base URLs from the first endpoint."""
-        fastapi_object = FastAPIEndpoint.objects.restrict(request.user, "view").first()
+        fastapi_object = (
+            FastAPIEndpoint.objects.restrict(request.user, "view")
+            .filter(enabled=True)
+            .first()
+        )
         if fastapi_object is None:
             return render(request, self.template_name, {})
 

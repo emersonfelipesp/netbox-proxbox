@@ -211,6 +211,20 @@ What was done for v0.0.16 / v0.0.16.post3:
 - Deleted the `v0.0.16` branch locally and on the remote. Only `develop`
   and `gh-pages` remain on origin.
 
+What was done for v0.0.16.post4 → v0.0.16.post6 (fix-forward series):
+
+- **v0.0.16.post4** — migration squash: folded migrations 0038–0047 into
+  `0038_v0_0_16_release` so fresh installs run one squashed migration instead of
+  ten incremental ones. Added companion-plugins documentation (netbox-pbs,
+  netbox-pdm, netbox-ceph, netbox-packer) in `docs/companion-plugins/`.
+- **v0.0.16.post5** — migration fix-forward: dropped `replaces` from
+  `0037_v0_0_15_release` and `0038_v0_0_16_release` to resolve post-squash
+  migration graph errors that appeared on upgrades from 0.0.15.
+- **v0.0.16.post6** — security: upgraded `idna` to 3.15 to resolve
+  CVE-2024-3651 (domain label validation bypass). Published with
+  `gh release create v0.0.16.post6 --repo emersonfelipesp/netbox-proxbox
+  --title v0.0.16.post6 --generate-notes`.
+
 Sibling-plugin releases (`netbox-pbs`, `netbox-pdm`, `netbox-ceph`,
 `netbox-packer`) follow the same five-step pattern. Note that on those
 repos `release: published` against an already-published tag triggered an

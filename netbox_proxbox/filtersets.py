@@ -142,6 +142,7 @@ class ProxmoxEndpointFilterSet(ProxboxModelFilterSet):
             "environment",
             "site",
             "tenant",
+            "enabled",
         )
 
     def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
@@ -157,7 +158,7 @@ class NetBoxEndpointFilterSet(ProxboxModelFilterSet):
 
     class Meta:
         model = NetBoxEndpoint
-        fields = ("id", "name", "domain", "ip_address")
+        fields = ("id", "name", "domain", "ip_address", "enabled")
 
     def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
         """Match the search term against endpoint name or domain."""
@@ -172,7 +173,7 @@ class FastAPIEndpointFilterSet(ProxboxModelFilterSet):
 
     class Meta:
         model = FastAPIEndpoint
-        fields = ("id", "name", "domain", "ip_address")
+        fields = ("id", "name", "domain", "ip_address", "enabled")
 
     def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
         """Match the search term against endpoint name or domain."""
