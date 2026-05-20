@@ -51,6 +51,7 @@ class ProxmoxVMCloudInitView(generic.ObjectView):
     queryset = ProxmoxVMCloudInit.objects.select_related("virtual_machine")
 
 
+@register_model_view(ProxmoxVMCloudInit, "add", detail=False)
 @register_model_view(ProxmoxVMCloudInit, "edit")
 class ProxmoxVMCloudInitEditView(generic.ObjectEditView):
     """Edit view kept for permission parity. The form disables all fields."""

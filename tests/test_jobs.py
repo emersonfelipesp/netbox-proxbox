@@ -123,9 +123,9 @@ def proxbox_sync_job_module(monkeypatch):
         sys.modules, "netbox_proxbox.services.sync_cluster", sync_cluster_mod
     )
 
-    # Stub netbox_proxbox.services.sync_firewall so the lazy import in jobs.py resolves.
+    # Stub netbox_proxbox.services.sync_firewall so the deferred import in jobs.py resolves.
     sync_firewall_mod = types.ModuleType("netbox_proxbox.services.sync_firewall")
-    sync_firewall_mod.sync_firewall = lambda: SimpleNamespace(
+    sync_firewall_mod.sync_firewall = lambda *a, **kw: SimpleNamespace(
         success=True,
         error=None,
         endpoint_id=None,

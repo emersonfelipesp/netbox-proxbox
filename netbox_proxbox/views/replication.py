@@ -58,6 +58,7 @@ class ReplicationView(generic.ObjectView):
     template_name = "netbox_proxbox/replication.html"
 
 
+@register_model_view(Replication, "add", detail=False)
 @register_model_view(Replication, "edit")
 class ReplicationEditView(generic.ObjectEditView):
     """Create or edit a replication record."""

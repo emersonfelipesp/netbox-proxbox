@@ -159,10 +159,14 @@ def _upsert_rule(
     sg_obj: ProxmoxFirewallSecurityGroup | None = None,
 ) -> None:
     """Upsert a ProxmoxFirewallRule."""
-    raw_zone = raw.get("zone") or ""
+    # Skip "vnet" (and any other future skip zones) before applying the
+    # caller's zone_override so the raw payload zone still gates the filter.
+    raw_zone = raw.get("zone")
     if raw_zone in _SKIP_ZONES:
         return
     zone = zone_override or raw_zone or FirewallZoneChoices.DATACENTER
+    if zone in _SKIP_ZONES:
+        return
 
     pos_raw = raw.get("pos")
     if pos_raw is None:
@@ -448,7 +452,10 @@ def _sync_one_endpoint(
         )
         result.aliases_stale += stale_aliases
 
-        stale_opts = (
+        # ProxmoxFirewallOptions has no status field; stale rows are deleted
+        # so the (endpoint, zone, node, vm) unique constraint stays in sync
+        # with the Proxmox cluster.
+        stale_opts, _ = (
             ProxmoxFirewallOptions.objects.filter(
                 endpoint=endpoint,
                 zone=FirewallZoneChoices.DATACENTER,
@@ -456,7 +463,7 @@ def _sync_one_endpoint(
                 virtual_machine=None,
             )
             .exclude(pk__in=synced_opts_ids)
-            .update(status=FirewallSyncStatusChoices.STALE)
+            .delete()
         )
         result.options_stale += stale_opts
 

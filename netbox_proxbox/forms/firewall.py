@@ -194,4 +194,3 @@ class ProxmoxFirewallOptionsFilterForm(
         choices=[("", "---------")] + list(FirewallZoneChoices.CHOICES),
         required=False,
     )
-    status = forms.ChoiceField(choices=_FIREWALL_STATUS_CHOICES, required=False)
