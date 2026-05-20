@@ -166,10 +166,15 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
+  page-coverage:
+    name: Page Coverage gate
+    needs: prepare-release
+    uses: ./.github/workflows/page-coverage.yml
+
   publish-testpypi:
     name: publish to TestPyPI
     if: needs.prepare-release.outputs.publish_target == 'testpypi'
-    needs: prepare-release
+    needs: [prepare-release, page-coverage]
     runs-on: ubuntu-latest
     steps:
       - name: Set up Python 3.13
@@ -327,7 +332,7 @@ jobs:
   publish-pypi:
     name: publish to PyPI
     if: needs.prepare-release.outputs.publish_target == 'pypi'
-    needs: [prepare-release, validate-pypi-candidate, e2e-docker-pypi-candidate]
+    needs: [prepare-release, validate-pypi-candidate, e2e-docker-pypi-candidate, page-coverage]
     runs-on: ubuntu-latest
     steps:
       - name: Set up Python 3.13

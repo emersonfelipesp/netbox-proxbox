@@ -29,6 +29,7 @@ urlpatterns = [
     ),
     path("dashboard/", views.DashboardView.as_view(), name="dashboard"),
     path("ha/", views.HAClusterView.as_view(), name="ha"),
+    path("sitemap.txt", views.SitemapView.as_view(), name="sitemap"),
     path("clusters/", views.ClustersView.as_view(), name="clusters"),
     path("nodes/", views.NodesView.as_view(), name="nodes"),
     path(
