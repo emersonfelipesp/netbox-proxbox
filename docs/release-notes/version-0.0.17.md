@@ -1,55 +1,89 @@
-# Version 0.0.17 (split out)
+# Version 0.0.17
 
-Starting with the `v0.0.16` line, the previously co-developed sibling plugins
-have been **extracted from this monorepo** into independent repositories under
-[@emersonfelipesp](https://github.com/emersonfelipesp). The `0.0.17` release
-line is no longer produced from this repository.
+## Summary
 
-## New repository layout
+Version `0.0.17` adds **read-only Proxmox VE firewall sync** to the plugin
+(closes issue [#326](https://github.com/emersonfelipesp/netbox-proxbox/issues/326))
+and certifies the plugin against the newest patch release of NetBox 4.6.x.
+It pairs with backend
+[`proxbox-api 0.0.13`](https://github.com/emersonfelipesp/proxbox-api), which
+ships the matching read-only `/proxmox/firewall/*` HTTP surface plus
+operational tag helpers and stability fixes carried over from
+`0.0.12.post2`.
 
-| Repository | Plugin module | Depends on |
-|---|---|---|
-| [`emersonfelipesp/netbox-proxbox`](https://github.com/emersonfelipesp/netbox-proxbox) | `netbox_proxbox` (base) | NetBox |
-| [`emersonfelipesp/netbox-pbs`](https://github.com/emersonfelipesp/netbox-pbs) | `netbox_pbs` (Proxmox Backup Server) | `netbox-proxbox>=0.0.16` |
-| [`emersonfelipesp/netbox-pdm`](https://github.com/emersonfelipesp/netbox-pdm) | `netbox_pdm` (Proxmox Datacenter Manager) | `netbox-proxbox>=0.0.16` |
-| [`emersonfelipesp/netbox-ceph`](https://github.com/emersonfelipesp/netbox-ceph) | `netbox_ceph` (Proxmox-managed Ceph) | `netbox-proxbox>=0.0.16` |
-| [`emersonfelipesp/netbox-packer`](https://github.com/emersonfelipesp/netbox-packer) | `netbox_packer` (HashiCorp Packer image factory) | `netbox-proxbox>=0.0.16` |
+There is **no DB migration** required for the firewall surface in this
+release — firewall data is reflected through schemas exposed by the backend
+and not yet persisted in NetBox. The NetBox compatibility range remains
+`4.5.8` – `4.6.99` (`min_version` / `max_version` unchanged).
 
-All five plugins continue to talk to the same shared `proxbox-api` backend.
-Each sibling repository ships its own documentation site (Material for
-MkDocs), CI test suite, E2E workflow, and PyPI release pipeline. Install only
-the plugins you need — the sibling plugins are optional, and `netbox-proxbox`
-does **not** depend on any of them.
+## What's New In The Plugin
 
-## What changed in this repository
+- **Read-only PVE firewall sync (#326).** The plugin now consumes the
+  backend's firewall surface for all Proxmox firewall zones — datacenter,
+  per-node, per-VM (QEMU and LXC), and per-VNet (SDN). It surfaces
+  firewall rules, security groups, IP sets, aliases, and zone options as
+  read-only data without writing back to Proxmox.
+- **NetBox `v4.6.1` certified.** Added to the certified support matrix
+  alongside `v4.5.8`, `v4.5.9`, and `v4.6.0`. CI matrix updated.
+- **Quick Edit button on the plugin home cards (#474).** Endpoint cards
+  on the Proxbox home page now expose a Quick Edit modal so operators can
+  fix endpoint URLs / tokens without leaving the dashboard.
+- **`idna` upgraded to `3.15`** to clear Dependabot alert #75
+  (CVE-2024-3651 bypass).
 
-- Removed `netbox_pbs/`, `netbox_ceph/`, and `netbox_packer/` source trees.
-- Removed `tests/test_ceph_*.py` and `tests/test_packer_*.py`.
-- Removed `docs/features/ceph.md` and `docs/installation/ceph-plugin.md`.
-- Removed Ceph and PBS entries from the docs navigation.
-- Reverted `tests/netbox_test_configuration.py` to load only `netbox_proxbox`.
-- Updated CI to compile only `netbox_proxbox tests`.
+## What's New In The Backend (`proxbox-api 0.0.13`)
 
-The `netbox_packer` image-factory code (PRs #457, #458, #459, #460, #461,
-#462) was carried over to the standalone
-[`emersonfelipesp/netbox-packer`](https://github.com/emersonfelipesp/netbox-packer)
-repository before this commit removed it from the monorepo, so the work is
-preserved in the new repository's `main` branch and remains available in this
-branch's git history.
+The plugin requires `proxbox-api >= 0.0.13`. The backend release adds:
 
-## Migration notes for operators
+- **`/proxmox/firewall/*` read routes** for every PVE firewall zone:
+  datacenter (`/cluster/firewall/{rules,groups,ipset,aliases,options}`),
+  per-node (`/nodes/{node}/firewall/{rules,options,log}`), per-VM
+  (`/nodes/{node}/qemu|lxc/{vmid}/firewall/{rules,aliases,ipset,options,log,refs}`),
+  and per-VNet (`/cluster/sdn/vnets/{vnet}/firewall/{rules,options}`).
+  Twelve endpoints total. All read-only.
+- **`PUT /intent/tag-pending-deletion` and
+  `PUT /intent/untag-pending-deletion`** intent-tag helpers used by the
+  plugin's safe-delete flow to mark Proxmox VMs with the
+  `proxbox-pending-deletion` tag before authorized destruction.
+- **Stability fixes** carried over from `0.0.12.post1` / `0.0.12.post2`:
+  skip bootstrap when no NetBox endpoint is configured (#130), replace
+  deprecated nginx `listen ... http2` with the `http2` directive (#137),
+  add `PROXBOX_LOG_LEVEL` env var and suppress `netbox_sdk.client`
+  verbosity at non-DEBUG levels (#133), bypass `cluster_status`
+  preflight in `resolve_vm_config` (#134), and guard against
+  FastAPI `Query` defaults leaking as `run_id` (#132).
 
-If you previously installed in-tree sibling plugins:
+## Compatibility
 
-1. Uninstall the in-tree wheels (`pip uninstall netbox-pbs netbox-ceph
-   netbox-pdm netbox-packer`).
-2. Install the standalone wheels from PyPI once each sibling repository
-   publishes its first release, or from source against the standalone
-   repository.
-3. Keep your `PLUGINS` list in NetBox's `configuration.py` — the Python
-   module names (`netbox_pbs`, `netbox_ceph`, `netbox_pdm`, `netbox_packer`)
-   are unchanged.
+| NetBox   | netbox-proxbox | proxbox-api | netbox-sdk     | proxmox-sdk    |
+|----------|----------------|-------------|----------------|----------------|
+| >=4.5.8  | v0.0.17 | v0.0.13 | v0.0.8.post1 | v0.0.3.post1 |
+| >=4.5.8  | v0.0.16 | v0.0.12 | v0.0.8.post1 | v0.0.3.post1 |
 
-Backend (`proxbox-api`) configuration is unchanged: every plugin still
-authenticates against the same `FastAPIEndpoint` row in `netbox-proxbox` and
-uses the same `/ceph/*`, `/pbs/*`, `/packer/*`, and related routes.
+NetBox compatibility range: `4.5.8` – `4.6.99` (unchanged). Certified
+simultaneously against NetBox `v4.5.8`, `v4.5.9`, `v4.6.0`, and
+official `v4.6.1`.
+
+## Upgrade Notes
+
+- **No database migration** for the firewall surface — it is reflected
+  read-only through the backend HTTP routes.
+- **Upgrade the backend to `proxbox-api 0.0.13`** before the plugin so
+  the `/proxmox/firewall/*` routes are available when the plugin asks
+  for them.
+- Restart the NetBox WSGI process so the updated plugin views and any
+  bundled static assets are picked up.
+- The read-only reflection path is unchanged for non-firewall objects.
+  The opt-in NetBox → Proxmox intent path introduced in `0.0.15` is
+  unchanged in `0.0.17`; the firewall surface is reflection-only and
+  does not extend the intent path.
+
+## Known Gaps
+
+- Firewall objects are surfaced from the backend but are **not yet
+  persisted** as Django models on the NetBox side. A follow-up release
+  will add a `FirewallRule` / `SecurityGroup` model plus full bulk-import
+  and CSV/JSON/YAML export parity with the existing endpoint pages.
+- Write-back to Proxmox firewall objects is **out of scope** for
+  `0.0.17`; the firewall integration is read-only by design and is not
+  routed through the `/intent/*` apply path.
