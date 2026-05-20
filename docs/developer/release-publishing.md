@@ -70,9 +70,12 @@ sequenceDiagram
 
 - `pyproject.toml`, `netbox_proxbox/__init__.py`, `uv.lock`, and the Git tag
   must all describe the same version.
-- `rcN` tag pushes publish to TestPyPI for release-candidate validation.
-- Non-rc tag pushes (`vX.Y.Z`, `vX.Y.Z.postN`), GitHub releases, or manual
-  dispatch with `publish_target=pypi` publish to PyPI.
+- `rcN` tag pushes (pattern `v*rc*`) publish to TestPyPI for release-candidate
+  validation.
+- Official releases (`vX.Y.Z`, `vX.Y.Z.postN`) are triggered **only** by GitHub
+  release creation (`release: published`) cut from the `develop` branch. Plain
+  non-rc tag pushes do **not** trigger the publish workflow. Manual workflow
+  dispatch with `publish_target=pypi` also publishes to PyPI.
 - Package uploads intentionally omit `twine --skip-existing`; a consumed version
   must move forward to the next `.postN` or `rcN`.
 - `proxbox_api_version` can be supplied manually. If omitted, the workflow reads

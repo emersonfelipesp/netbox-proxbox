@@ -50,6 +50,22 @@ template — and existing fields plus migration
 show the pattern. See [`CLAUDE.md → Plugin settings and configuration`](./CLAUDE.md)
 for the full keep-list.
 
+## Release Procedure (summary)
+
+Official releases are cut **from `develop`** and triggered **only** by
+GitHub release creation. The publish workflow listens to:
+
+- `push: tags: v*rc*` → TestPyPI (release-candidate gate)
+- `release: published` → PyPI (official releases)
+
+Plain non-rc tag pushes (`vX.Y.Z`, `vX.Y.Z.postN`) do **not** trigger
+publish. Use `gh release create vX.Y.Z --target develop --verify-tag
+--title vX.Y.Z --notes-file docs/release-notes/version-X.Y.Z.md` to fire
+the `release: published` event after the version bump commits are merged
+into `develop`. Never `twine --skip-existing` — fix forward with the next
+`.postN` or `rcN` per PEP 440. Full step-by-step in
+[`CLAUDE.md → Release Procedure`](./CLAUDE.md).
+
 ## Navigation
 
 Read [`CLAUDE.md`](./CLAUDE.md) first for the plugin architecture and documentation map. Use the lower-level `CLAUDE.md` files when working in a specific directory or when changing only one layer of the plugin.

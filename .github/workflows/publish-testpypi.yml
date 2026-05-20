@@ -1,9 +1,13 @@
 name: Release validation and publish
 
 on:
+  # rc tags publish to TestPyPI via plain tag push (`v*rc*`); official
+  # releases (`vX.Y.Z`, `vX.Y.Z.postN`) must be cut via `gh release create`
+  # so the `release: published` event is the sole trigger for PyPI uploads.
+  # See CLAUDE.md → Release Procedure.
   push:
     tags:
-      - "v*"
+      - "v*rc*"
   release:
     types: [published]
   workflow_dispatch:

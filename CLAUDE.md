@@ -133,7 +133,7 @@ prepare-release
     └── e2e-docker-pypi (install_source=pypi, dependency_mode=pypi-package)
 ```
 
-`rcN` tag pushes publish to TestPyPI for release-candidate validation. Non-rc tag pushes (`vX.Y.Z`, `vX.Y.Z.postN`), GitHub releases, and manual dispatch with `publish_target=pypi` publish to PyPI.
+`rcN` tag pushes (pattern `v*rc*`) publish to TestPyPI for release-candidate validation. **Official releases (`vX.Y.Z`, `vX.Y.Z.postN`) are triggered exclusively by GitHub release creation (`release: published`) — non-rc plain tag pushes no longer trigger the publish workflow.** Manual dispatch with `publish_target=pypi` also publishes to PyPI.
 
 TestPyPI validation installs both `netbox-proxbox` and the configured `proxbox-api` from TestPyPI. PyPI candidate/final validation uses PyPI `proxbox-api` for backend package-index E2E.
 
@@ -143,59 +143,110 @@ For public docs, keep [`docs/developer/ci-e2e-workflows.md`](./docs/developer/ci
 
 ### Release Procedure (manual steps around the workflow)
 
-The publish workflow fires on **both** `push: tags: v*` and
-`release: types: [published]`. A single non-rc tag push is enough to
-trigger PyPI publish. Creating a GitHub release **after** the tag spawns a
-*duplicate* publish run that must be cancelled — the dist already exists on
-PyPI so the duplicate upload step would fail anyway, but the run still
-spends CI minutes and clutters the actions tab.
+**Two trigger rules — official releases are always cut from `develop` via
+GitHub release creation.**
 
-Standard release flow (used for `v0.0.16` / `v0.0.16.post3`):
+| Trigger | Use for | Publishes to |
+|---------|---------|--------------|
+| `push: tags: v*rc*` (plain tag push) | Release candidates `vX.Y.ZrcN` | TestPyPI |
+| `release: published` (GitHub release) | Official `vX.Y.Z` and `vX.Y.Z.postN` | PyPI |
 
-1. **Land the release on the release branch and bump versions.** Update
-   `pyproject.toml` and the `PluginConfig.version` in
-   [`netbox_proxbox/__init__.py`](./netbox_proxbox/__init__.py). Update the
-   assertion in [`tests/test_version.py`](./tests/test_version.py). Verify
-   locally:
+Plain non-rc tag pushes (`vX.Y.Z`, `vX.Y.Z.postN`) **do not** trigger the
+publish workflow — the trigger pattern is `v*rc*`, so only rc tags fire it.
+This makes the GitHub release creation the **single, authoritative trigger**
+for official PyPI publishing and eliminates the duplicate-run problem the
+old dual-trigger flow created.
+
+**RC flow (TestPyPI gate, repeatable):**
+
+1. From an rc branch, bump to `X.Y.ZrcN` in `pyproject.toml`,
+   `netbox_proxbox/__init__.py`, and `uv.lock`. Local verify:
    ```bash
    python -m compileall netbox_proxbox tests
    rtk ruff check .
    rtk pytest tests/
    ```
-2. **Annotated tag.** Non-rc tags publish to PyPI; rc tags publish to
-   TestPyPI for the rcN gate.
+2. Annotated tag, push:
    ```bash
-   git tag -a vX.Y.Z -m "Release vX.Y.Z"
-   git push origin vX.Y.Z
+   git tag -a vX.Y.ZrcN -m "Release vX.Y.ZrcN"
+   git push origin vX.Y.ZrcN
    gh run watch <run-id> --repo emersonfelipesp/netbox-proxbox
    ```
-3. **Verify the dist is live on PyPI:**
+3. If anything fails, fix-forward with `rcN+1` — never `twine --skip-existing`.
+
+**Official-release flow (cut from `develop`):**
+
+1. **Merge the validated rc line into `develop`.** Once `rcN` is green on
+   TestPyPI + the full E2E matrix + Page Coverage, bump versions on the rc
+   branch to the final `X.Y.Z`, commit, then merge that branch into
+   `develop` with a normal merge commit (`git merge --no-ff`). Push
+   `develop`. The released version's commits MUST be on `develop` before
+   the GitHub release is created.
+2. **Verify `develop` has the version bumps you intend to release:**
    ```bash
-   curl -s https://pypi.org/pypi/netbox-proxbox/json | jq '.releases | keys'
+   git log --oneline origin/develop | head -5
+   grep '^version' pyproject.toml
+   grep 'version = ' netbox_proxbox/__init__.py
    ```
-4. **Create the GitHub release:**
+3. **Create the GitHub release pointing at `develop`.** This is the only
+   step that fires the publish workflow:
    ```bash
    gh release create vX.Y.Z \
      --repo emersonfelipesp/netbox-proxbox \
+     --target develop \
+     --verify-tag \
      --title vX.Y.Z \
-     --generate-notes
+     --notes-file docs/release-notes/version-X.Y.Z.md
    ```
-5. **Cancel the duplicate publish run** that the GitHub release just
-   spawned. `release: published` re-fires the workflow against the same tag.
+   - Use `--verify-tag` when the tag already exists at the right commit
+     (e.g. from a prior rc → final tag move). Otherwise omit it and
+     `gh release create` will create the tag at the tip of `--target develop`.
+   - Use `--notes-file` to point at the curated release notes; fall back to
+     `--generate-notes` only for posts that have no curated file.
+4. **Watch the publish run:**
    ```bash
    gh run list --repo emersonfelipesp/netbox-proxbox --event release \
-     --limit 5 --json databaseId,name,status
-   gh run cancel <run-id> --repo emersonfelipesp/netbox-proxbox
+     --limit 3 --json databaseId,name,status,conclusion
+   gh run watch <run-id> --repo emersonfelipesp/netbox-proxbox
    ```
-   For netbox-proxbox the duplicate run is `Release validation and publish`.
-6. **Reconcile release line back into `develop`.** netbox-proxbox's
-   primary branch is `develop`. After a release on a `vX.Y.Z` branch,
-   merge the release branch back into `develop` with a normal merge
-   commit (`git merge --no-ff origin/vX.Y.Z`) so the develop history
-   carries the released versions, then delete the release branch
-   locally and on the remote.
+5. **Verify the dist is live on PyPI:**
+   ```bash
+   curl -s https://pypi.org/pypi/netbox-proxbox/json | jq '.releases | keys'
+   ```
+6. **Delete the rc branch** (local + remote) once PyPI is green. Only
+   `develop` and `gh-pages` should remain on `origin`.
 
-What was done for v0.0.16 / v0.0.16.post3:
+**Do not:**
+
+- Do not push a non-rc tag with `git push origin vX.Y.Z` and expect publish
+  to fire. The trigger pattern is `v*rc*`; the tag push will succeed on
+  GitHub but no workflow runs. Use `gh release create` instead.
+- Do not cut official releases from a `release/*` or `vX.Y.Z` branch and
+  then merge into `develop` afterwards. The new policy is the reverse:
+  land on `develop` first, then create the GitHub release pointing at
+  `develop`.
+- Do not add `twine --skip-existing`. Fix forward with `.postN` per PEP 440.
+- Do not force-push to a published tag. Tags on the remote are immutable.
+
+What was done for v0.0.17 (first release under the develop-first policy):
+
+- `0.0.17rc1` → `0.0.17rc10` cycled on TestPyPI via `push: tags: v*rc*`
+  fix-forward until Page Coverage + full E2E matrix (NetBox v4.5.8 / v4.5.9
+  / v4.6.0 × pve/pbs/pdm) + TestPyPI validate all went green.
+- Merged `release/v0.0.17` into `develop` with a normal merge commit
+  resolving the firewall.py conflict (took the `_choices_2tuple` helper
+  side, the validated rc10 fix). Pushed `develop`.
+- Created the GitHub release with
+  `gh release create v0.0.17 --repo emersonfelipesp/netbox-proxbox
+  --target develop --verify-tag --title v0.0.17 --notes-file
+  docs/release-notes/version-0.0.17.md`. That single command fired the
+  `release: published` event and the publish workflow. **No duplicate run
+  to cancel** — the workflow trigger had already been narrowed to
+  `v*rc*` plus `release: published`, so the tag itself (which existed at
+  the rc10 commit before `gh release create`) did not re-fire publish.
+- Deleted the `release/v0.0.17` branch locally and on the remote.
+
+What was done for v0.0.16 / v0.0.16.post3 (legacy dual-trigger flow):
 
 - Released `0.0.16`, `0.0.16.post1`, `0.0.16.post2`, and `0.0.16.post3`
   in sequence (PEP 440 fix-forward — never `twine --skip-existing`). Final
@@ -207,7 +258,8 @@ What was done for v0.0.16 / v0.0.16.post3:
   `gh release create v0.0.16.post3 --repo emersonfelipesp/netbox-proxbox
   --title v0.0.16.post3 --generate-notes`.
 - Cancelled the duplicate `Release validation and publish` run that the
-  GitHub release spawned with `gh run cancel`.
+  GitHub release spawned with `gh run cancel`. **This duplicate-run cancel
+  step is no longer needed under the v0.0.17+ workflow trigger config.**
 - Deleted the `v0.0.16` branch locally and on the remote. Only `develop`
   and `gh-pages` remain on origin.
 
@@ -226,20 +278,9 @@ What was done for v0.0.16.post4 → v0.0.16.post6 (fix-forward series):
   --title v0.0.16.post6 --generate-notes`.
 
 Sibling-plugin releases (`netbox-pbs`, `netbox-pdm`, `netbox-ceph`,
-`netbox-packer`) follow the same five-step pattern. Note that on those
-repos `release: published` against an already-published tag triggered an
-**immediate failure** (not a duplicate publish) because the workflow tried
-to upload an already-consumed version — that failed run can still be left
-alone, but cancelling it before it fails is cleaner.
-
-Don't:
-
-- Don't add `twine --skip-existing`. Fix forward with `.postN` per PEP 440.
-- Don't force-push a release branch to "rewrite history" of a published
-  tag. Tags on the remote are immutable.
-- Don't skip the cancel step in (5). The duplicate run will eventually
-  fail at the upload step, but leaving it in_progress for ~10 minutes
-  wastes runners and makes future release diagnostics harder.
+`netbox-packer`) should adopt the same develop-first + GH-release-triggered
+policy when their next release cycle begins. Until they do, the older
+"cancel duplicate" step still applies on those repos.
 
 ---
 
