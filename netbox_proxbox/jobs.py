@@ -488,6 +488,27 @@ class ProxboxSyncJob(JobRunner):
                         f"Cluster/node sync for endpoint {eid} failed: {cluster_result.error}"
                     )
 
+            # Sync datacenter-level firewall objects (security groups, rules,
+            # IP sets, aliases, options) after cluster/node records exist so
+            # the endpoint lookup via ProxmoxCluster.name can resolve.
+            # A failure here is logged as a warning and does not abort the run.
+            from netbox_proxbox.services.sync_firewall import sync_firewall  # noqa: PLC0415
+
+            self.logger.info("Syncing firewall objects from proxbox-api")
+            fw_result = sync_firewall()
+            if fw_result.success:
+                self.logger.info(
+                    f"Firewall sync complete: {fw_result.endpoints_processed} endpoint(s), "
+                    f"{fw_result.security_groups_created} sg created, "
+                    f"{fw_result.rules_created} rules created, "
+                    f"{fw_result.ipsets_created} ipsets created, "
+                    f"{fw_result.aliases_created} aliases created"
+                )
+            else:
+                self.logger.warning(
+                    f"Firewall sync failed or partially failed: {fw_result.error or 'see per_endpoint log'}"
+                )
+
             stages_out = _run_all_stages_sync(self, stages, params, run_started)
 
             for stage in stages_out:
