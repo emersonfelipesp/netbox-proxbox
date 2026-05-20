@@ -194,6 +194,7 @@ class ProxmoxFirewallOptionsView(ObjectView):
     queryset = _OPTIONS_QS
 
 
+@register_model_view(models.ProxmoxFirewallOptions, "add", detail=False)
 @register_model_view(models.ProxmoxFirewallOptions, "edit")
 class ProxmoxFirewallOptionsEditView(ObjectEditView):
     queryset = _OPTIONS_QS
