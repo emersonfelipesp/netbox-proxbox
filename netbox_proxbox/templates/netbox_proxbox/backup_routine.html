@@ -31,15 +31,15 @@
                         </tr>
                         <tr>
                             <th scope="row">{% trans "Node" %}</th>
-                            <td>{{ object.node|linkify|placeholder:"All Nodes" }}</td>
+                            <td>{{ object.node|linkify|default:"All Nodes" }}</td>
                         </tr>
                         <tr>
                             <th scope="row">{% trans "Schedule" %}</th>
-                            <td>{{ object.schedule|placeholder:"—" }}</td>
+                            <td>{{ object.schedule|placeholder }}</td>
                         </tr>
                         <tr>
                             <th scope="row">{% trans "Next Run" %}</th>
-                            <td>{{ object.next_run|placeholder:"—" }}</td>
+                            <td>{{ object.next_run|placeholder }}</td>
                         </tr>
                         <tr>
                             <th scope="row">{% trans "Storage" %}</th>
@@ -47,11 +47,11 @@
                         </tr>
                         <tr>
                             <th scope="row">{% trans "Selection" %}</th>
-                            <td>{{ object.selection_display|placeholder:"All VMs" }}</td>
+                            <td>{{ object.selection_display|default:"All VMs" }}</td>
                         </tr>
                         <tr>
                             <th scope="row">{% trans "Comment" %}</th>
-                            <td>{{ object.comment|placeholder:"—" }}</td>
+                            <td>{{ object.comment|placeholder }}</td>
                         </tr>
                     </table>
                 </div>
@@ -130,7 +130,7 @@
                         </tr>
                         <tr>
                             <th scope="row">{% trans "Fleecing" %}</th>
-                            <td>{{ object.fleecing|placeholder:"—" }}</td>
+                            <td>{{ object.fleecing|placeholder }}</td>
                         </tr>
                         <tr>
                             <th scope="row">{% trans "Fleecing Storage" %}</th>
@@ -148,7 +148,7 @@
                         </tr>
                         <tr>
                             <th scope="row">{% trans "PBS Change Detection Mode" %}</th>
-                            <td>{{ object.pbs_change_detection_mode|placeholder:"—" }}</td>
+                            <td>{{ object.pbs_change_detection_mode|placeholder }}</td>
                         </tr>
                     </table>
                 </div>

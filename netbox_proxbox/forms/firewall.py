@@ -15,7 +15,7 @@ from netbox_proxbox.choices import (
     FirewallZoneChoices,
 )
 
-_FIREWALL_STATUS_CHOICES = [("", "---------")] + list(FirewallSyncStatusChoices.CHOICES)
+_FIREWALL_STATUS_CHOICES = [("", "---------")] + list(FirewallSyncStatusChoices)
 
 
 class _FirewallEndpointMixin:
@@ -79,11 +79,11 @@ class ProxmoxFirewallRuleForm(_FirewallEndpointMixin, NetBoxModelForm):
 class ProxmoxFirewallRuleFilterForm(_FirewallEndpointMixin, NetBoxModelFilterSetForm):
     model = models.ProxmoxFirewallRule
     zone = forms.ChoiceField(
-        choices=[("", "---------")] + list(FirewallZoneChoices.CHOICES),
+        choices=[("", "---------")] + list(FirewallZoneChoices),
         required=False,
     )
     rule_type = forms.ChoiceField(
-        choices=[("", "---------")] + list(FirewallRuleTypeChoices.CHOICES),
+        choices=[("", "---------")] + list(FirewallRuleTypeChoices),
         required=False,
     )
     status = forms.ChoiceField(choices=_FIREWALL_STATUS_CHOICES, required=False)
@@ -110,7 +110,7 @@ class ProxmoxFirewallIPSetForm(_FirewallEndpointMixin, NetBoxModelForm):
 class ProxmoxFirewallIPSetFilterForm(_FirewallEndpointMixin, NetBoxModelFilterSetForm):
     model = models.ProxmoxFirewallIPSet
     scope = forms.ChoiceField(
-        choices=[("", "---------")] + list(FirewallScopeChoices.CHOICES),
+        choices=[("", "---------")] + list(FirewallScopeChoices),
         required=False,
     )
     status = forms.ChoiceField(choices=_FIREWALL_STATUS_CHOICES, required=False)
@@ -155,7 +155,7 @@ class ProxmoxFirewallAliasForm(_FirewallEndpointMixin, NetBoxModelForm):
 class ProxmoxFirewallAliasFilterForm(_FirewallEndpointMixin, NetBoxModelFilterSetForm):
     model = models.ProxmoxFirewallAlias
     scope = forms.ChoiceField(
-        choices=[("", "---------")] + list(FirewallScopeChoices.CHOICES),
+        choices=[("", "---------")] + list(FirewallScopeChoices),
         required=False,
     )
     status = forms.ChoiceField(choices=_FIREWALL_STATUS_CHOICES, required=False)
@@ -191,6 +191,6 @@ class ProxmoxFirewallOptionsFilterForm(
 ):
     model = models.ProxmoxFirewallOptions
     zone = forms.ChoiceField(
-        choices=[("", "---------")] + list(FirewallZoneChoices.CHOICES),
+        choices=[("", "---------")] + list(FirewallZoneChoices),
         required=False,
     )

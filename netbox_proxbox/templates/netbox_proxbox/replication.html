@@ -35,11 +35,11 @@
                         </tr>
                         <tr>
                             <th scope="row">{% trans "Schedule" %}</th>
-                            <td>{{ object.schedule|placeholder:"—" }}</td>
+                            <td>{{ object.schedule|placeholder }}</td>
                         </tr>
                         <tr>
                             <th scope="row">{% trans "Rate" %}</th>
-                            <td>{{ object.rate|placeholder:"—" }}</td>
+                            <td>{{ object.rate|placeholder }}</td>
                         </tr>
                         <tr>
                             <th scope="row">{% trans "Disabled" %}</th>
@@ -53,7 +53,7 @@
                         </tr>
                         <tr>
                             <th scope="row">{% trans "Source" %}</th>
-                            <td>{{ object.source|placeholder:"—" }}</td>
+                            <td>{{ object.source|placeholder }}</td>
                         </tr>
                         <tr>
                             <th scope="row">{% trans "Job Number" %}</th>
@@ -61,11 +61,11 @@
                         </tr>
                         <tr>
                             <th scope="row">{% trans "Remove Job" %}</th>
-                            <td>{{ object.get_remove_job_display|placeholder:"—" }}</td>
+                            <td>{{ object.get_remove_job_display|placeholder }}</td>
                         </tr>
                         <tr>
                             <th scope="row">{% trans "Comment" %}</th>
-                            <td>{{ object.comment|placeholder:"—" }}</td>
+                            <td>{{ object.comment|placeholder }}</td>
                         </tr>
                     </table>
                 </div>
