@@ -162,6 +162,7 @@ from .vm_cloudinit import (
 
 # Task History tab and detail views live in ``vm_task_history``.
 from .ha import HAClusterView
+from .sitemap import SitemapView
 from .vm_config import ProxmoxVMConfigTabView
 from .vm_ha import ProxmoxVMHATabView
 from .vm_snapshot import (
