@@ -65,9 +65,7 @@ MINIMAL_SUMMARY = [
                 ],
             }
         ],
-        "aliases": [
-            {"name": "gw", "cidr": "10.0.0.1", "comment": "Default gateway"}
-        ],
+        "aliases": [{"name": "gw", "cidr": "10.0.0.1", "comment": "Default gateway"}],
         "options": {
             "enable": 1,
             "policy_in": "DROP",
@@ -330,8 +328,16 @@ def test_unresolvable_cluster_name_is_skipped(sync_fw_module, monkeypatch):
         "_resolve_endpoint_by_cluster_name",
         lambda _name: None,
     )
-    summary = [{"cluster_name": "unknown-cluster", "rules": [], "security_groups": [],
-                "ip_sets": [], "aliases": [], "options": None}]
+    summary = [
+        {
+            "cluster_name": "unknown-cluster",
+            "rules": [],
+            "security_groups": [],
+            "ip_sets": [],
+            "aliases": [],
+            "options": None,
+        }
+    ]
     mock_resp = MagicMock()
     mock_resp.raise_for_status.return_value = None
     mock_resp.json.return_value = summary
@@ -388,7 +394,15 @@ def test_skip_zone_vnet_rules_are_ignored(sync_fw_module, monkeypatch):
     summary = [
         {
             "cluster_name": CLUSTER_NAME,
-            "rules": [{"pos": 0, "type": "in", "action": "ACCEPT", "enable": 1, "zone": "vnet"}],
+            "rules": [
+                {
+                    "pos": 0,
+                    "type": "in",
+                    "action": "ACCEPT",
+                    "enable": 1,
+                    "zone": "vnet",
+                }
+            ],
             "security_groups": [],
             "ip_sets": [],
             "aliases": [],
