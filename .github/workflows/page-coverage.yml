@@ -1,0 +1,248 @@
+name: Page Coverage
+
+on:
+  workflow_call: {}
+  push:
+    branches: [develop]
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+env:
+  NETBOX_IMAGE: netboxcommunity/netbox:v4.6.1
+  PROXMOX_SDK_IMAGE: emersonfelipesp/proxmox-sdk
+  PROXBOX_ENCRYPTION_KEY: proxbox-ci-only-encryption-key-not-a-secret
+  SECRET_KEY: proxbox-e2e-secret-key-proxbox-e2e-secret-key-proxbox-e2e-secret-key
+
+concurrency:
+  group: page-coverage-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  page-coverage:
+    name: Page Coverage / netboxcommunity/netbox:v4.6.1 / local / pve
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    # Run on:  push to develop  |  workflow_call (from publish pipeline)
+    #          PR opened/sync/reopened against develop
+    #          PR merged to any branch
+    if: |
+      github.event_name == 'push' ||
+      github.event_name == 'workflow_call' ||
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.base.ref == 'develop' &&
+       github.event.action != 'closed') ||
+      (github.event_name == 'pull_request' &&
+       github.event.action == 'closed' &&
+       github.event.pull_request.merged == true)
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: "pip"
+
+      - name: Install test dependencies
+        run: python -m pip install --upgrade pip requests
+
+      - name: Start E2E stack (PVE / local / v4.6.1)
+        run: |
+          set -eux
+          docker network create proxbox-e2e || true
+          TEST_HOST="127.0.0.1"
+          echo "TEST_HOST=${TEST_HOST}" >> "$GITHUB_ENV"
+
+          docker rm -f netbox-e2e-postgres netbox-e2e-redis netbox-e2e netbox-e2e-rqworker \
+            proxbox-e2e-api proxmox-e2e-mock 2>/dev/null || true
+
+          # Postgres
+          docker run -d --name netbox-e2e-postgres --network proxbox-e2e \
+            -e POSTGRES_DB=netbox \
+            -e POSTGRES_USER=netbox \
+            -e POSTGRES_PASSWORD=netbox \
+            --health-cmd="pg_isready -U netbox -d netbox" \
+            --health-interval=2s \
+            --health-timeout=2s \
+            --health-retries=30 \
+            postgres:16-alpine
+
+          # Redis
+          docker run -d --name netbox-e2e-redis --network proxbox-e2e \
+            redis:7-alpine
+
+          # Wait for postgres
+          for i in $(seq 1 60); do
+            health="$(docker inspect --format '{{.State.Health.Status}}' netbox-e2e-postgres 2>/dev/null || echo unknown)"
+            [ "$health" = "healthy" ] && break
+            sleep 1
+            [ "$i" -eq 60 ] && { echo "postgres did not become healthy"; docker logs netbox-e2e-postgres; exit 1; }
+          done
+
+          # Proxmox PVE mock (nginx TLS on port 8000 → host 18006)
+          PROXMOX_MOCK_IMAGE_REF="${PROXMOX_SDK_IMAGE}:latest-nginx"
+          docker pull "${PROXMOX_MOCK_IMAGE_REF}"
+          docker run -d --name proxmox-e2e-mock --network proxbox-e2e -p "18006:8000" \
+            -v "$PWD/tests/e2e/proxmox_openapi_mock_data.json:/data/mock-data.json:ro" \
+            -e PROXMOX_MOCK_DATA_PATH=/data/mock-data.json \
+            -e PROXMOX_MOCK_SCHEMA_VERSION=none \
+            -e PROXMOX_MOCK_SERVICE=pve \
+            -e APP_MODULE=proxmox_sdk.mock_main:app \
+            "${PROXMOX_MOCK_IMAGE_REF}"
+          echo "PROXMOX_MOCK_PROBE_URL=https://${TEST_HOST}:18006/health" >> "$GITHUB_ENV"
+          echo "PROXMOX_MOCK_PROBE_FLAGS=-sk" >> "$GITHUB_ENV"
+          echo "PROXMOX_MOCK_BASE_URL=https://${TEST_HOST}:18006" >> "$GITHUB_ENV"
+
+          # proxbox-api (built from GitHub HEAD, dev target)
+          git clone --depth 1 https://github.com/emersonfelipesp/proxbox-api.git /tmp/proxbox-api-src
+          docker build --target raw -t proxbox-api-e2e:dev /tmp/proxbox-api-src
+          docker run -d --name proxbox-e2e-api --network proxbox-e2e -p "18800:8000" \
+            -e PROXBOX_SKIP_NETBOX_BOOTSTRAP=true \
+            -e PROXBOX_ENCRYPTION_KEY \
+            -e PROXBOX_BIND_HOST=0.0.0.0 \
+            proxbox-api-e2e:dev
+
+          # Pull NetBox image
+          docker pull "${NETBOX_IMAGE}"
+
+          # NetBox with local plugin mount
+          docker run -d --name netbox-e2e --network proxbox-e2e -p "18080:8080" \
+            -v "$PWD:/tmp/netbox-proxbox:ro" \
+            -e DB_HOST=netbox-e2e-postgres \
+            -e DB_NAME=netbox \
+            -e DB_USER=netbox \
+            -e DB_PASSWORD=netbox \
+            -e DB_WAIT_DEBUG=1 \
+            -e REDIS_HOST=netbox-e2e-redis \
+            -e REDIS_DATABASE=0 \
+            -e REDIS_CACHE_HOST=netbox-e2e-redis \
+            -e REDIS_CACHE_DATABASE=1 \
+            -e REDIS_TASK_HOST=netbox-e2e-redis \
+            -e REDIS_TASK_DATABASE=2 \
+            -e SECRET_KEY="$SECRET_KEY" \
+            -e SUPERUSER_NAME=admin \
+            -e SUPERUSER_EMAIL=admin@example.com \
+            -e SUPERUSER_PASSWORD=admin \
+            -e ALLOWED_HOSTS="* localhost 127.0.0.1 ::1 netbox" \
+            -e LOGIN_REQUIRED=True \
+            --entrypoint /bin/bash \
+            "${NETBOX_IMAGE}" -ec \
+              "i=0; until uv pip install --upgrade /tmp/netbox-proxbox; do i=\$((i+1)); [ \$i -ge 30 ] && exit 1; sleep 10; done && mkdir -p /etc/netbox/config && printf 'PLUGINS = [\"netbox_proxbox\"]\n' > /etc/netbox/config/plugins.py && /opt/netbox/docker-entrypoint.sh /opt/netbox/launch-netbox.sh"
+
+      - name: Get container IPs
+        run: |
+          set -eux
+          sleep 5
+          PROXMOX_MOCK_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' proxmox-e2e-mock)
+          NETBOX_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' netbox-e2e)
+          PROXBOX_API_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' proxbox-e2e-api)
+          {
+            echo "PROXMOX_MOCK_IP=$PROXMOX_MOCK_IP"
+            echo "NETBOX_IP=$NETBOX_IP"
+            echo "NETBOX_PUBLIC_HOST=$NETBOX_IP"
+            echo "PROXBOX_API_IP=$PROXBOX_API_IP"
+          } >> "$GITHUB_ENV"
+
+      - name: Wait for stack readiness and create NetBox API token
+        run: |
+          set -eux
+          for i in $(seq 1 600); do
+            http_code="$(curl -sS --max-time 5 -o /dev/null -w '%{http_code}' "http://${TEST_HOST}:18080/api/" 2>/dev/null || true)"
+            if [ "$http_code" -ge 100 ] 2>/dev/null && [ "$http_code" -lt 500 ]; then break; fi
+            sleep 2
+            [ "$i" -eq 600 ] && { echo "NetBox did not become ready"; docker logs netbox-e2e; exit 1; }
+          done
+          for i in $(seq 1 90); do
+            curl -sk --max-time 5 "${PROXMOX_MOCK_PROBE_URL}" >/dev/null 2>&1 && break
+            sleep 2
+            [ "$i" -eq 90 ] && { echo "proxmox mock did not become ready"; docker logs proxmox-e2e-mock; exit 1; }
+          done
+          for i in $(seq 1 90); do
+            http_code="$(curl -sS --max-time 5 -o /dev/null -w '%{http_code}' "http://${TEST_HOST}:18800/" 2>/dev/null || true)"
+            if [ "$http_code" -ge 100 ] 2>/dev/null && [ "$http_code" -lt 500 ]; then break; fi
+            sleep 2
+            [ "$i" -eq 90 ] && { echo "proxbox-api did not become ready"; docker logs proxbox-e2e-api; exit 1; }
+          done
+          TOKEN_OUTPUT=$(docker exec netbox-e2e /opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py shell -c \
+            "from users.models import Token, User; u=User.objects.get(username='admin'); t=Token.objects.create(user=u, version=1, token='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'); print(f'{t.id}:{t.plaintext}')")
+          TOKEN_ID=$(printf '%s' "$TOKEN_OUTPUT" | tail -n 1 | cut -d: -f1)
+          TOKEN_VALUE=$(printf '%s' "$TOKEN_OUTPUT" | tail -n 1 | cut -d: -f2)
+          echo "NETBOX_TOKEN_ID=$TOKEN_ID" >> "$GITHUB_ENV"
+          echo "NETBOX_API_TOKEN=$TOKEN_VALUE" >> "$GITHUB_ENV"
+
+      - name: Seed proxbox discovery tags in NetBox
+        run: |
+          set -eu
+          AUTH="Authorization: Token ${NETBOX_API_TOKEN}"
+          CT="Content-Type: application/json"
+          URL="http://${TEST_HOST}:18080/api/extras/tags/"
+          create_tag() {
+            name="$1"; slug="$2"; color="$3"
+            body=$(printf '{"name":"%s","slug":"%s","color":"%s"}' "$name" "$slug" "$color")
+            http_code=$(curl -sS -o /tmp/tag.out -w '%{http_code}' \
+              -X POST -H "$AUTH" -H "$CT" -d "$body" "$URL")
+            if [ "$http_code" = "201" ]; then
+              echo "Created tag: $name"
+            elif [ "$http_code" = "400" ] && grep -q "already exists" /tmp/tag.out; then
+              echo "Tag already exists: $name"
+            else
+              echo "Failed to create tag $name (HTTP $http_code):" >&2
+              cat /tmp/tag.out >&2 || true; exit 1
+            fi
+          }
+          create_tag "Proxbox" "proxbox" "ff5722"
+          create_tag "proxbox-discovered-qemu" "proxbox-discovered-qemu" "9c27b0"
+          create_tag "proxbox-discovered-lxc" "proxbox-discovered-lxc" "9c27b0"
+          create_tag "proxbox-discovered-cluster" "proxbox-discovered-cluster" "9c27b0"
+          create_tag "proxbox-discovered-node" "proxbox-discovered-node" "9c27b0"
+
+      - name: Start NetBox rqworker
+        run: |
+          set -eux
+          docker run -d --name netbox-e2e-rqworker --network proxbox-e2e \
+            -v "$PWD:/tmp/netbox-proxbox:ro" \
+            -e DB_HOST=netbox-e2e-postgres \
+            -e DB_NAME=netbox \
+            -e DB_USER=netbox \
+            -e DB_PASSWORD=netbox \
+            -e REDIS_HOST=netbox-e2e-redis \
+            -e REDIS_DATABASE=0 \
+            -e REDIS_CACHE_HOST=netbox-e2e-redis \
+            -e REDIS_CACHE_DATABASE=1 \
+            -e REDIS_TASK_HOST=netbox-e2e-redis \
+            -e REDIS_TASK_DATABASE=2 \
+            -e SECRET_KEY="$SECRET_KEY" \
+            --entrypoint /bin/bash \
+            "${NETBOX_IMAGE}" -ec \
+              "i=0; until uv pip install --upgrade /tmp/netbox-proxbox; do i=\$((i+1)); [ \$i -ge 30 ] && exit 1; sleep 10; done && mkdir -p /etc/netbox/config && printf 'PLUGINS = [\"netbox_proxbox\"]\n' > /etc/netbox/config/plugins.py && /opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py rqworker"
+
+      - name: Bootstrap stack and run sync
+        env:
+          NETBOX_BASE_URL: http://${{ env.TEST_HOST }}:18080
+          PROXBOX_BASE_URL: http://${{ env.TEST_HOST }}:18800
+          PROXMOX_MOCK_BASE_URL: ${{ env.PROXMOX_MOCK_BASE_URL }}
+          PROXMOX_MOCK_IP: ${{ env.PROXMOX_MOCK_IP }}
+          NETBOX_IP: ${{ env.NETBOX_IP }}
+          PROXBOX_API_IP: ${{ env.PROXBOX_API_IP }}
+          NETBOX_PUBLIC_URL: http://${{ env.NETBOX_PUBLIC_HOST }}:8080
+          NETBOX_TOKEN_ID: ${{ env.NETBOX_TOKEN_ID }}
+          NETBOX_API_TOKEN: ${{ env.NETBOX_API_TOKEN }}
+          PROXMOX_SERVICE: pve
+        run: python tests/e2e/e2e_stack_check.py
+
+      - name: Run page coverage check
+        env:
+          NETBOX_BASE_URL: http://${{ env.TEST_HOST }}:18080
+          NETBOX_API_TOKEN: ${{ env.NETBOX_API_TOKEN }}
+        run: python tests/e2e/page_coverage_check.py
+
+      - name: Dump Docker logs on failure
+        if: failure()
+        run: |
+          for name in netbox-e2e netbox-e2e-rqworker proxbox-e2e-api proxmox-e2e-mock; do
+            echo "=== $name ==="
+            docker logs "$name" 2>&1 | tail -100 || true
+          done
