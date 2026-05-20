@@ -76,12 +76,12 @@ def test_endpoint_lookup_handles_three_branches():
     source = BACKEND_CONTEXT_PATH.read_text(encoding="utf-8")
     # explicit id branch:
     assert "filter(pk=endpoint_id)" in source
-    # single-row branch:
-    assert "objects.first()" in source
+    # single-row branch (enabled filter + first):
+    assert "filter(enabled=True).first()" in source
     # multi-row branch:
     assert 'order_by("pk")' in source
-    # count gate before the multi-row pick:
-    assert "objects.count()" in source
+    # count gate before the multi-row pick (enabled filter + count):
+    assert "filter(enabled=True).count()" in source
 
 
 def test_auth_retry_helper_returns_two_tuple_with_retry_flag():

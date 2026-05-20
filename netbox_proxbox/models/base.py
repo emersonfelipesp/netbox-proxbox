@@ -61,6 +61,10 @@ class EndpointBase(CommonProperties, NetBoxModel):
     verify_ssl = models.BooleanField(
         verbose_name=_("Verify SSL"),
     )
+    enabled = models.BooleanField(
+        default=True,
+        verbose_name=_("Enabled"),
+    )
 
     class Meta:
         abstract = True

@@ -83,7 +83,7 @@ def get_first_fastapi_context(
     """
     from netbox_proxbox.models import FastAPIEndpoint
 
-    count = FastAPIEndpoint.objects.count()
+    count = FastAPIEndpoint.objects.filter(enabled=True).count()
     if count == 0:
         return None
 
@@ -94,10 +94,10 @@ def get_first_fastapi_context(
         return get_fastapi_context(fastapi_obj)
 
     if count == 1:
-        fastapi_obj = FastAPIEndpoint.objects.first()
+        fastapi_obj = FastAPIEndpoint.objects.filter(enabled=True).first()
         return get_fastapi_context(fastapi_obj) if fastapi_obj else None
 
-    fastapi_obj = FastAPIEndpoint.objects.order_by("pk").first()
+    fastapi_obj = FastAPIEndpoint.objects.filter(enabled=True).order_by("pk").first()
     if fastapi_obj is None:
         return None
     return get_fastapi_context(fastapi_obj)
@@ -124,7 +124,7 @@ def get_fastapi_context_for_request(request: HttpRequest) -> dict[str, object]:
     """Get FastAPI URL context for a request, respecting object-level permissions."""
     from netbox_proxbox.models import FastAPIEndpoint
 
-    fastapi_endpoint = FastAPIEndpoint.objects.restrict(request.user, "view").first()
+    fastapi_endpoint = FastAPIEndpoint.objects.restrict(request.user, "view").filter(enabled=True).first()
     if fastapi_endpoint:
         return get_fastapi_url(fastapi_endpoint) or {}
     return {}

@@ -77,7 +77,7 @@ class ProxboxProxmoxCardView(
             pk=pk,
         )
 
-        fastapi_object = FastAPIEndpoint.objects.restrict(request.user, "view").first()
+        fastapi_object = FastAPIEndpoint.objects.restrict(request.user, "view").filter(enabled=True).first()
         if fastapi_object is None:
             return JsonResponse(
                 {

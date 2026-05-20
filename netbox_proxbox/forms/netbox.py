@@ -87,6 +87,7 @@ class NetBoxEndpointForm(NetBoxModelForm):
             "token_key",
             "token_secret",
             "verify_ssl",
+            "enabled",
             "tags",
         )
 
@@ -201,6 +202,7 @@ class NetBoxEndpointImportForm(NetBoxModelImportForm):
             "token_key",
             "token_secret",
             "verify_ssl",
+            "enabled",
             "tags",
         )
 

@@ -156,8 +156,8 @@ def _ensure_backend_endpoints(
     auth_headers = dict(context.headers or {})
     backend_verify_ssl = bool(context.verify_ssl)
 
-    # Push all NetBox endpoints (singleton in practice).
-    for nb_ep in NetBoxEndpoint.objects.all():
+    # Push all enabled NetBox endpoints (singleton in practice).
+    for nb_ep in NetBoxEndpoint.objects.filter(enabled=True):
         ok, err, _ = sync_netbox_endpoint_to_backend(
             nb_ep,
             base_url=base_url,
@@ -183,9 +183,9 @@ def _ensure_backend_endpoints(
             logger=job.logger,
             context="preflight endpoint push",
         )
-        proxmox_qs = ProxmoxEndpoint.objects.filter(pk__in=valid_endpoint_ids)
+        proxmox_qs = ProxmoxEndpoint.objects.filter(pk__in=valid_endpoint_ids, enabled=True)
     else:
-        proxmox_qs = ProxmoxEndpoint.objects.all()
+        proxmox_qs = ProxmoxEndpoint.objects.filter(enabled=True)
 
     for px_ep in proxmox_qs:
         ok, err, _ = sync_proxmox_endpoint_to_backend(
