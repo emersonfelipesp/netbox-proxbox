@@ -159,9 +159,10 @@ def _upsert_rule(
     sg_obj: ProxmoxFirewallSecurityGroup | None = None,
 ) -> None:
     """Upsert a ProxmoxFirewallRule."""
-    zone = zone_override or raw.get("zone") or FirewallZoneChoices.DATACENTER
-    if zone in _SKIP_ZONES:
+    raw_zone = raw.get("zone") or ""
+    if raw_zone in _SKIP_ZONES:
         return
+    zone = zone_override or raw_zone or FirewallZoneChoices.DATACENTER
 
     pos_raw = raw.get("pos")
     if pos_raw is None:

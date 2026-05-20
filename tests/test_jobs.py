@@ -123,6 +123,38 @@ def proxbox_sync_job_module(monkeypatch):
         sys.modules, "netbox_proxbox.services.sync_cluster", sync_cluster_mod
     )
 
+    # Stub netbox_proxbox.services.sync_firewall so the lazy import in jobs.py resolves.
+    sync_firewall_mod = types.ModuleType("netbox_proxbox.services.sync_firewall")
+    sync_firewall_mod.sync_firewall = lambda: SimpleNamespace(
+        success=True,
+        error=None,
+        endpoint_id=None,
+        endpoint_name="",
+        endpoints_processed=0,
+        security_groups_created=0,
+        security_groups_updated=0,
+        security_groups_stale=0,
+        rules_created=0,
+        rules_updated=0,
+        rules_stale=0,
+        ipsets_created=0,
+        ipsets_updated=0,
+        ipsets_stale=0,
+        ipset_entries_created=0,
+        ipset_entries_updated=0,
+        ipset_entries_stale=0,
+        aliases_created=0,
+        aliases_updated=0,
+        aliases_stale=0,
+        options_created=0,
+        options_updated=0,
+        options_stale=0,
+        per_endpoint=[],
+    )
+    monkeypatch.setitem(
+        sys.modules, "netbox_proxbox.services.sync_firewall", sync_firewall_mod
+    )
+
     sys.modules.pop("netbox_proxbox.jobs", None)
     path = root / "netbox_proxbox" / "jobs.py"
     spec = importlib.util.spec_from_file_location("netbox_proxbox.jobs", path)
