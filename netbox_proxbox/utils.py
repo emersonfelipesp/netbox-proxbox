@@ -124,7 +124,11 @@ def get_fastapi_context_for_request(request: HttpRequest) -> dict[str, object]:
     """Get FastAPI URL context for a request, respecting object-level permissions."""
     from netbox_proxbox.models import FastAPIEndpoint
 
-    fastapi_endpoint = FastAPIEndpoint.objects.restrict(request.user, "view").filter(enabled=True).first()
+    fastapi_endpoint = (
+        FastAPIEndpoint.objects.restrict(request.user, "view")
+        .filter(enabled=True)
+        .first()
+    )
     if fastapi_endpoint:
         return get_fastapi_url(fastapi_endpoint) or {}
     return {}

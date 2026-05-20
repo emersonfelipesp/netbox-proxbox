@@ -73,7 +73,11 @@ def get_service_status_impl(
             pk=pk,
         )
 
-    fastapi_object = FastAPIEndpoint.objects.restrict(request.user, "view").filter(enabled=True).first()
+    fastapi_object = (
+        FastAPIEndpoint.objects.restrict(request.user, "view")
+        .filter(enabled=True)
+        .first()
+    )
     if fastapi_object is None:
         logger.error("No FastAPI endpoints found")
         return JsonResponse(

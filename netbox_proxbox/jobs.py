@@ -183,7 +183,9 @@ def _ensure_backend_endpoints(
             logger=job.logger,
             context="preflight endpoint push",
         )
-        proxmox_qs = ProxmoxEndpoint.objects.filter(pk__in=valid_endpoint_ids, enabled=True)
+        proxmox_qs = ProxmoxEndpoint.objects.filter(
+            pk__in=valid_endpoint_ids, enabled=True
+        )
     else:
         proxmox_qs = ProxmoxEndpoint.objects.filter(enabled=True)
 
