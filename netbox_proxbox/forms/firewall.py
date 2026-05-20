@@ -15,12 +15,15 @@ from netbox_proxbox.choices import (
     FirewallZoneChoices,
 )
 
+
 def _choices_2tuple(choice_set):
     """Strip color from a NetBox ChoiceSet so Django's ChoiceField can iterate."""
     return [(value, label) for value, label, *_ in choice_set.CHOICES]
 
 
-_FIREWALL_STATUS_CHOICES = [("", "---------")] + _choices_2tuple(FirewallSyncStatusChoices)
+_FIREWALL_STATUS_CHOICES = [("", "---------")] + _choices_2tuple(
+    FirewallSyncStatusChoices
+)
 
 
 class _FirewallEndpointMixin:
