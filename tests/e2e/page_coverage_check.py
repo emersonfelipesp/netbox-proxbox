@@ -16,7 +16,9 @@ from typing import NamedTuple
 
 import requests
 
-_NETBOX_BASE_URL = os.environ.get("NETBOX_BASE_URL", "http://127.0.0.1:18080").rstrip("/")
+_NETBOX_BASE_URL = os.environ.get("NETBOX_BASE_URL", "http://127.0.0.1:18080").rstrip(
+    "/"
+)
 _NETBOX_API_TOKEN = os.environ.get("NETBOX_API_TOKEN", "")
 
 
@@ -82,6 +84,7 @@ LIST_PAGES: list[tuple[str, str]] = [
     ("contributing", "/plugins/proxbox/contributing/"),
     ("community", "/plugins/proxbox/community/"),
 ]
+
 
 # ── Detail pages (require object discovery via API) ──────────────────────────
 # (label, url-template-with-{id}, api-endpoint)
@@ -193,7 +196,9 @@ def check_page(
     body = resp.text
     if "Internal Server Error" in body or "Traceback (most recent call last)" in body:
         failures.append(f"{label}: Django 500 body detected")
-        print(f"  FAIL  {label}: Django 500 content in HTTP {resp.status_code} response  ({url})")
+        print(
+            f"  FAIL  {label}: Django 500 content in HTTP {resp.status_code} response  ({url})"
+        )
         return
 
     print(f"  OK    {label}  HTTP {resp.status_code}")
@@ -224,7 +229,9 @@ def main() -> None:
         sys.exit(1)
 
     print(f"Page coverage check against {_NETBOX_BASE_URL}")
-    print(f"  {len(LIST_PAGES)} list/add pages + up to {len(DETAIL_SPECS)} detail pages")
+    print(
+        f"  {len(LIST_PAGES)} list/add pages + up to {len(DETAIL_SPECS)} detail pages"
+    )
     print()
 
     session = login_session(_NETBOX_BASE_URL)
