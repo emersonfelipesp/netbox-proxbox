@@ -24,11 +24,19 @@ jobs:
     timeout-minutes: 30
 
     # Run on:  push to develop  |  workflow_call (from publish pipeline)
+    #          release: published (from publish pipeline, official releases)
+    #          workflow_dispatch (manual publish dispatch)
     #          PR opened/sync/reopened against develop
     #          PR merged to any branch
+    # NOTE: when this workflow is reached via `uses:` from publish-testpypi.yml,
+    # `github.event_name` is inherited from the *calling* workflow (e.g. `release`
+    # or `workflow_dispatch`), not `workflow_call`. The `release` and
+    # `workflow_dispatch` cases below cover those paths.
     if: |
       github.event_name == 'push' ||
       github.event_name == 'workflow_call' ||
+      github.event_name == 'release' ||
+      github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' &&
        github.event.pull_request.base.ref == 'develop' &&
        github.event.action != 'closed') ||
