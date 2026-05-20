@@ -43,6 +43,7 @@ class BackupRoutineView(generic.ObjectView):
     template_name = "netbox_proxbox/backup_routine.html"
 
 
+@register_model_view(BackupRoutine, "add", detail=False)
 @register_model_view(BackupRoutine, "edit")
 class BackupRoutineEditView(generic.ObjectEditView):
     """Create or edit a backup routine record."""

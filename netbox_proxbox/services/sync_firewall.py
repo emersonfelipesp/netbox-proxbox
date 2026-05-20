@@ -128,7 +128,9 @@ def _upsert_security_group(
     """Upsert a ProxmoxFirewallSecurityGroup and track its ID."""
     name = raw.get("name") or raw.get("group")
     if not name:
-        logger.debug("Skipping security group with no name for endpoint %s", endpoint.pk)
+        logger.debug(
+            "Skipping security group with no name for endpoint %s", endpoint.pk
+        )
         return None
     sg, created = ProxmoxFirewallSecurityGroup.objects.update_or_create(
         endpoint=endpoint,
@@ -157,7 +159,12 @@ def _upsert_rule(
     sg_obj: ProxmoxFirewallSecurityGroup | None = None,
 ) -> None:
     """Upsert a ProxmoxFirewallRule."""
-    zone = zone_override or raw.get("zone") or FirewallZoneChoices.DATACENTER
+    # Skip "vnet" (and any other future skip zones) before applying the
+    # caller's zone_override so the raw payload zone still gates the filter.
+    raw_zone = raw.get("zone")
+    if raw_zone in _SKIP_ZONES:
+        return
+    zone = zone_override or raw_zone or FirewallZoneChoices.DATACENTER
     if zone in _SKIP_ZONES:
         return
 
@@ -266,7 +273,9 @@ def _upsert_alias(
     name = raw.get("name")
     cidr = raw.get("cidr") or raw.get("ip")
     if not name or not cidr:
-        logger.debug("Skipping alias with missing name or cidr for endpoint %s", endpoint.pk)
+        logger.debug(
+            "Skipping alias with missing name or cidr for endpoint %s", endpoint.pk
+        )
         return
 
     alias, created = ProxmoxFirewallAlias.objects.update_or_create(
@@ -300,7 +309,9 @@ def _upsert_options(
     enable_raw = raw.get("enable")
     enable = bool(int(enable_raw)) if enable_raw is not None else None
 
-    extra = {k: v for k, v in raw.items() if k not in ("enable", "policy_in", "policy_out")}
+    extra = {
+        k: v for k, v in raw.items() if k not in ("enable", "policy_in", "policy_out")
+    }
 
     opts, created = ProxmoxFirewallOptions.objects.update_or_create(
         endpoint=endpoint,
@@ -368,7 +379,9 @@ def _sync_one_endpoint(
 
         # -- IP sets (with embedded entries) ------------------------------
         for raw_ipset in summary_entry.get("ip_sets") or []:
-            _upsert_ipset(endpoint, raw_ipset, synced_ipset_ids, synced_entry_ids, result)
+            _upsert_ipset(
+                endpoint, raw_ipset, synced_ipset_ids, synced_entry_ids, result
+            )
 
         # -- Aliases -------------------------------------------------------
         for raw_alias in summary_entry.get("aliases") or []:
@@ -439,7 +452,10 @@ def _sync_one_endpoint(
         )
         result.aliases_stale += stale_aliases
 
-        stale_opts = (
+        # ProxmoxFirewallOptions has no status field; stale rows are deleted
+        # so the (endpoint, zone, node, vm) unique constraint stays in sync
+        # with the Proxmox cluster.
+        stale_opts, _ = (
             ProxmoxFirewallOptions.objects.filter(
                 endpoint=endpoint,
                 zone=FirewallZoneChoices.DATACENTER,
@@ -447,7 +463,7 @@ def _sync_one_endpoint(
                 virtual_machine=None,
             )
             .exclude(pk__in=synced_opts_ids)
-            .update(status=FirewallSyncStatusChoices.STALE)
+            .delete()
         )
         result.options_stale += stale_opts
 
@@ -518,7 +534,9 @@ def sync_firewall(
     # -----------------------------------------------------------------------
     for entry in summary_list:
         cluster_name = entry.get("cluster_name") or ""
-        endpoint = _resolve_endpoint_by_cluster_name(cluster_name) if cluster_name else None
+        endpoint = (
+            _resolve_endpoint_by_cluster_name(cluster_name) if cluster_name else None
+        )
 
         if endpoint is None:
             logger.warning(
@@ -556,7 +574,11 @@ def sync_firewall(
 
         result.per_endpoint.append(ep_result)
 
-    result.success = all(ep.get("success", False) for ep in result.per_endpoint) if result.per_endpoint else True
+    result.success = (
+        all(ep.get("success", False) for ep in result.per_endpoint)
+        if result.per_endpoint
+        else True
+    )
     logger.info(
         "Firewall sync complete: %d endpoint(s) processed, success=%s",
         result.endpoints_processed,

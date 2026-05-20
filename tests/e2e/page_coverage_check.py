@@ -174,6 +174,15 @@ def login_session(base_url: str) -> requests.Session:
     return session
 
 
+def _print_body_excerpt(body: str, label: str) -> None:
+    """Print the first ~2000 chars of a failure response to aid debugging."""
+    snippet = body[:2000]
+    print(f"  ---- response body excerpt for {label} ----")
+    for line in snippet.splitlines():
+        print(f"  | {line}")
+    print(f"  ---- end excerpt ({len(body)} bytes total) ----")
+
+
 def check_page(
     session: requests.Session,
     url: str,
@@ -191,6 +200,7 @@ def check_page(
     if not (200 <= resp.status_code < 400):
         failures.append(f"{label}: HTTP {resp.status_code}")
         print(f"  FAIL  {label}: HTTP {resp.status_code}  ({url})")
+        _print_body_excerpt(resp.text, label)
         return
 
     body = resp.text
@@ -199,6 +209,7 @@ def check_page(
         print(
             f"  FAIL  {label}: Django 500 content in HTTP {resp.status_code} response  ({url})"
         )
+        _print_body_excerpt(body, label)
         return
 
     print(f"  OK    {label}  HTTP {resp.status_code}")

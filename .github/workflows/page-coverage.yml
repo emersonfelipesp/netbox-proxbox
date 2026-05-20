@@ -243,6 +243,9 @@ jobs:
         if: failure()
         run: |
           for name in netbox-e2e netbox-e2e-rqworker proxbox-e2e-api proxmox-e2e-mock; do
-            echo "=== $name ==="
-            docker logs "$name" 2>&1 | tail -100 || true
+            echo "=== $name (last 400 lines, stderr+stdout) ==="
+            docker logs "$name" 2>&1 | tail -400 || true
           done
+          echo "=== netbox-e2e (full stderr) ==="
+          docker logs netbox-e2e 1>/dev/null 2> /tmp/netbox-e2e-stderr.log || true
+          tail -400 /tmp/netbox-e2e-stderr.log || true

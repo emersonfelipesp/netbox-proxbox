@@ -189,6 +189,7 @@ class ProxmoxStorageView(generic.ObjectView):
         }
 
 
+@register_model_view(ProxmoxStorage, "add", detail=False)
 @register_model_view(ProxmoxStorage, "edit")
 class ProxmoxStorageEditView(generic.ObjectEditView):
     """Create or edit a Proxmox storage row."""
