@@ -534,6 +534,7 @@ def test_plugin_api_routes_register_all_plugin_objects():
     assert set(root_registers) == {
         "backup-routines",
         "cloud-image-templates",
+        "datacenter-cpu-models",
         "firewall/aliases",
         "firewall/ipset-entries",
         "firewall/ipsets",
@@ -543,6 +544,9 @@ def test_plugin_api_routes_register_all_plugin_objects():
         "proxmox-clusters",
         "proxmox-nodes",
         "replications",
+        "sdn-fabrics",
+        "sdn-prefix-lists",
+        "sdn-route-maps",
         "settings",
         "ssh-credentials",
         "storage",

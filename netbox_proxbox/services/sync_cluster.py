@@ -194,6 +194,7 @@ def sync_cluster_and_nodes(
                             "max_memory": detail.maxmem,
                             "ssl_fingerprint": detail.ssl_fingerprint or "",
                             "support_level": detail.level or "",
+                            "location": detail.location or "",
                         }
                     )
 

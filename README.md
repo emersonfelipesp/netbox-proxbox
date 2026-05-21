@@ -34,21 +34,19 @@ same `proxbox-api` backend.
 | `netbox_pdm` | [`emersonfelipesp/netbox-pdm`](https://github.com/emersonfelipesp/netbox-pdm) | Proxmox Datacenter Manager inventory |
 | `netbox_packer` | [`emersonfelipesp/netbox-packer`](https://github.com/emersonfelipesp/netbox-packer) | HashiCorp Packer image-factory for Proxmox |
 
-## What's New in v0.0.17
+## What's New in v0.0.18
 
-Paired with backend [`proxbox-api 0.0.13`](https://github.com/emersonfelipesp/proxbox-api).
+Paired with backend [`proxbox-api 0.0.14`](https://github.com/emersonfelipesp/proxbox-api).
 
-- **Read-only Proxmox VE firewall sync.** Closes [#326](https://github.com/emersonfelipesp/netbox-proxbox/issues/326). The plugin now consumes the backend's `/proxmox/firewall/*` routes for every PVE firewall zone — datacenter, per-node, per-VM (QEMU + LXC), and per-VNet (SDN). Rules, security groups, IP sets, aliases, and zone options surface as read-only data; firewall write-back to Proxmox is out of scope for this release.
-- **NetBox `v4.6.1` certified.** Added to the certified support matrix alongside `v4.5.8`, `v4.5.9`, and `v4.6.0`. CI matrix updated.
-- **Quick Edit button on home cards (#474).** Endpoint cards on the Proxbox home page expose a Quick Edit modal so operators can fix endpoint URLs / tokens without leaving the dashboard.
-- **Read-only reflection path is otherwise unchanged.** No DB migration ships in this release; firewall objects are reflected through HTTP and not yet persisted as Django models.
+- **Full PVE 9.2 support.** New models for SDN fabrics, route maps, prefix lists, and custom datacenter CPU models, plus automated sync services. Completed per-node firewall sync. HA arm/disarm action views. `ProxmoxNode.location` field.
 
-Full notes: [Release Notes — v0.0.17](https://emersonfelipesp.github.io/netbox-proxbox/release-notes/version-0.0.17/).
+Full notes: [Release Notes — v0.0.18](https://emersonfelipesp.github.io/netbox-proxbox/release-notes/version-0.0.18/).
 
 ## Compatibility Matrix
 
 | NetBox   | netbox-proxbox | proxbox-api | netbox-sdk     | proxmox-sdk    |
 |----------|----------------|-------------|----------------|----------------|
+| >=4.5.8  | v0.0.18              | v0.0.14          | v0.0.8.post1   | v0.0.3.post1   |
 | >=4.5.8  | v0.0.17              | v0.0.13          | v0.0.8.post1   | v0.0.3.post1   |
 | >=4.5.8  | v0.0.16              | v0.0.12          | v0.0.8.post1   | v0.0.3.post1   |
 | >=4.5.8  | v0.0.15.post2        | v0.0.11.post2    | v0.0.8.post1   | v0.0.5.post1   |

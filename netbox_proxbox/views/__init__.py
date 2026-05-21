@@ -47,6 +47,27 @@ from .firewall import (
     ProxmoxFirewallSecurityGroupListView,
     ProxmoxFirewallSecurityGroupView,
 )
+from .sdn import (
+    ProxmoxSdnFabricDeleteView,
+    ProxmoxSdnFabricEditView,
+    ProxmoxSdnFabricListView,
+    ProxmoxSdnFabricView,
+    ProxmoxSdnPrefixListDeleteView,
+    ProxmoxSdnPrefixListEditView,
+    ProxmoxSdnPrefixListListView,
+    ProxmoxSdnPrefixListView,
+    ProxmoxSdnRouteMapDeleteView,
+    ProxmoxSdnRouteMapEditView,
+    ProxmoxSdnRouteMapListView,
+    ProxmoxSdnRouteMapView,
+)
+from .datacenter import (
+    ProxmoxDatacenterCpuModelDeleteView,
+    ProxmoxDatacenterCpuModelEditView,
+    ProxmoxDatacenterCpuModelListView,
+    ProxmoxDatacenterCpuModelView,
+)
+from .ha_actions import HaArmView, HaDisarmView
 from .backup_routine import (
     BackupRoutineBulkDeleteView,
     BackupRoutineDeleteView,

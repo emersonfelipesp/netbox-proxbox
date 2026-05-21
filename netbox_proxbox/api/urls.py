@@ -97,6 +97,26 @@ router.register(
     views.ProxmoxFirewallOptionsViewSet,
     basename="proxmoxfirewalloptions",
 )
+router.register(
+    "sdn-fabrics",
+    views.ProxmoxSdnFabricViewSet,
+    basename="proxmoxsdnfabric",
+)
+router.register(
+    "sdn-route-maps",
+    views.ProxmoxSdnRouteMapViewSet,
+    basename="proxmoxsdnroutemap",
+)
+router.register(
+    "sdn-prefix-lists",
+    views.ProxmoxSdnPrefixListViewSet,
+    basename="proxmoxsdnprefixlist",
+)
+router.register(
+    "datacenter-cpu-models",
+    views.ProxmoxDatacenterCpuModelViewSet,
+    basename="proxmoxdatacentercpumodel",
+)
 
 urlpatterns = [
     path(

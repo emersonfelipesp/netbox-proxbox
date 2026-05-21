@@ -25,6 +25,12 @@ from netbox_proxbox.tables.firewall import (
     ProxmoxFirewallRuleTable,
     ProxmoxFirewallSecurityGroupTable,
 )
+from netbox_proxbox.tables.sdn import (
+    ProxmoxSdnFabricTable,
+    ProxmoxSdnRouteMapTable,
+    ProxmoxSdnPrefixListTable,
+)
+from netbox_proxbox.tables.datacenter import ProxmoxDatacenterCpuModelTable
 from netbox_proxbox.tables.cloud_image_template import CloudImageTemplateTable
 from netbox_proxbox.tables.cluster import ProxmoxClusterTable, ProxmoxNodeTable
 from netbox_proxbox.tables.deletion_requests import DeletionRequestTable

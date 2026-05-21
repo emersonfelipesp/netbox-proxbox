@@ -245,6 +245,54 @@ firewall_options_item = PluginMenuItem(
     link_text="Firewall Options",
 )
 
+sdn_fabrics_item = PluginMenuItem(
+    link="plugins:netbox_proxbox:proxmoxsdnfabric_list",
+    link_text="Fabrics",
+    buttons=(
+        PluginMenuButton(
+            "plugins:netbox_proxbox:proxmoxsdnfabric_add",
+            "Add Fabric",
+            "mdi mdi-plus",
+        ),
+    ),
+)
+
+sdn_route_maps_item = PluginMenuItem(
+    link="plugins:netbox_proxbox:proxmoxsdnroutemap_list",
+    link_text="Route Maps",
+    buttons=(
+        PluginMenuButton(
+            "plugins:netbox_proxbox:proxmoxsdnroutemap_add",
+            "Add Route Map",
+            "mdi mdi-plus",
+        ),
+    ),
+)
+
+sdn_prefix_lists_item = PluginMenuItem(
+    link="plugins:netbox_proxbox:proxmoxsdnprefixlist_list",
+    link_text="Prefix Lists",
+    buttons=(
+        PluginMenuButton(
+            "plugins:netbox_proxbox:proxmoxsdnprefixlist_add",
+            "Add Prefix List",
+            "mdi mdi-plus",
+        ),
+    ),
+)
+
+datacenter_cpu_models_item = PluginMenuItem(
+    link="plugins:netbox_proxbox:proxmoxdatacentercpumodel_list",
+    link_text="CPU Models",
+    buttons=(
+        PluginMenuButton(
+            "plugins:netbox_proxbox:proxmoxdatacentercpumodel_add",
+            "Add CPU Model",
+            "mdi mdi-plus",
+        ),
+    ),
+)
+
 community_item = PluginMenuItem(
     link="plugins:netbox_proxbox:community",
     link_text="Community",
@@ -285,6 +333,7 @@ menu = PluginMenu(
                 nodes_item,
                 storage_item,
                 ha_item,
+                datacenter_cpu_models_item,
             ),
         ),
         (
@@ -308,6 +357,14 @@ menu = PluginMenu(
                 firewall_ipset_entries_item,
                 firewall_aliases_item,
                 firewall_options_item,
+            ),
+        ),
+        (
+            "SDN",
+            (
+                sdn_fabrics_item,
+                sdn_route_maps_item,
+                sdn_prefix_lists_item,
             ),
         ),
         (

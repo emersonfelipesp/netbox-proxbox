@@ -33,7 +33,11 @@ from .serializers import (
     ProxmoxFirewallOptionsSerializer,
     ProxmoxFirewallRuleSerializer,
     ProxmoxFirewallSecurityGroupSerializer,
+    ProxmoxDatacenterCpuModelSerializer,
     ProxmoxNodeSerializer,
+    ProxmoxSdnFabricSerializer,
+    ProxmoxSdnPrefixListSerializer,
+    ProxmoxSdnRouteMapSerializer,
     ProxmoxStorageSerializer,
     ProxmoxVMCloudInitSerializer,
     PVETemplateBuildRequestSerializer,
@@ -1317,3 +1321,41 @@ class ProxmoxFirewallOptionsViewSet(NetBoxModelViewSet):
     )
     serializer_class = ProxmoxFirewallOptionsSerializer
     filterset_class = filtersets.ProxmoxFirewallOptionsFilterSet
+
+
+# ── SDN ViewSets ──────────────────────────────────────────────────────────────
+
+
+class ProxmoxSdnFabricViewSet(NetBoxModelViewSet):
+    """REST API for Proxmox SDN fabrics."""
+
+    queryset = models.ProxmoxSdnFabric.objects.select_related("endpoint")
+    serializer_class = ProxmoxSdnFabricSerializer
+    filterset_class = filtersets.ProxmoxSdnFabricFilterSet
+
+
+class ProxmoxSdnRouteMapViewSet(NetBoxModelViewSet):
+    """REST API for Proxmox SDN route maps."""
+
+    queryset = models.ProxmoxSdnRouteMap.objects.select_related("endpoint")
+    serializer_class = ProxmoxSdnRouteMapSerializer
+    filterset_class = filtersets.ProxmoxSdnRouteMapFilterSet
+
+
+class ProxmoxSdnPrefixListViewSet(NetBoxModelViewSet):
+    """REST API for Proxmox SDN prefix lists."""
+
+    queryset = models.ProxmoxSdnPrefixList.objects.select_related("endpoint")
+    serializer_class = ProxmoxSdnPrefixListSerializer
+    filterset_class = filtersets.ProxmoxSdnPrefixListFilterSet
+
+
+# ── Datacenter ViewSets ───────────────────────────────────────────────────────
+
+
+class ProxmoxDatacenterCpuModelViewSet(NetBoxModelViewSet):
+    """REST API for Proxmox datacenter custom CPU models."""
+
+    queryset = models.ProxmoxDatacenterCpuModel.objects.select_related("endpoint")
+    serializer_class = ProxmoxDatacenterCpuModelSerializer
+    filterset_class = filtersets.ProxmoxDatacenterCpuModelFilterSet

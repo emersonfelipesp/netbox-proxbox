@@ -9,6 +9,10 @@ from netbox_proxbox.models.firewall_ipset import (
 from netbox_proxbox.models.firewall_options import ProxmoxFirewallOptions
 from netbox_proxbox.models.firewall_rule import ProxmoxFirewallRule
 from netbox_proxbox.models.firewall_security_group import ProxmoxFirewallSecurityGroup
+from netbox_proxbox.models.sdn_fabric import ProxmoxSdnFabric
+from netbox_proxbox.models.sdn_route_map import ProxmoxSdnRouteMap
+from netbox_proxbox.models.sdn_prefix_list import ProxmoxSdnPrefixList
+from netbox_proxbox.models.datacenter_cpu_model import ProxmoxDatacenterCpuModel
 from netbox_proxbox.models.backup_routine import BackupRoutine
 from netbox_proxbox.models.base import PORT_VALIDATORS, CommonProperties, EndpointBase
 from netbox_proxbox.models.cloud_image_template import CloudImageTemplate
@@ -38,6 +42,10 @@ __all__ = (
     "ProxmoxFirewallOptions",
     "ProxmoxFirewallRule",
     "ProxmoxFirewallSecurityGroup",
+    "ProxmoxSdnFabric",
+    "ProxmoxSdnRouteMap",
+    "ProxmoxSdnPrefixList",
+    "ProxmoxDatacenterCpuModel",
     "CloudImageTemplate",
     "DeletionRequest",
     "FastAPIEndpoint",

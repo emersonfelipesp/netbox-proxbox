@@ -198,6 +198,45 @@ urlpatterns = [
             get_model_urls("netbox_proxbox", "proxmoxfirewalloptions", detail=False)
         ),
     ),
+    # SDN models
+    path(
+        "sdn/fabrics/<int:pk>/",
+        include(get_model_urls("netbox_proxbox", "proxmoxsdnfabric")),
+    ),
+    path(
+        "sdn/fabrics/",
+        include(get_model_urls("netbox_proxbox", "proxmoxsdnfabric", detail=False)),
+    ),
+    path(
+        "sdn/route-maps/<int:pk>/",
+        include(get_model_urls("netbox_proxbox", "proxmoxsdnroutemap")),
+    ),
+    path(
+        "sdn/route-maps/",
+        include(get_model_urls("netbox_proxbox", "proxmoxsdnroutemap", detail=False)),
+    ),
+    path(
+        "sdn/prefix-lists/<int:pk>/",
+        include(get_model_urls("netbox_proxbox", "proxmoxsdnprefixlist")),
+    ),
+    path(
+        "sdn/prefix-lists/",
+        include(get_model_urls("netbox_proxbox", "proxmoxsdnprefixlist", detail=False)),
+    ),
+    # Datacenter models
+    path(
+        "datacenter/cpu-models/<int:pk>/",
+        include(get_model_urls("netbox_proxbox", "proxmoxdatacentercpumodel")),
+    ),
+    path(
+        "datacenter/cpu-models/",
+        include(
+            get_model_urls("netbox_proxbox", "proxmoxdatacentercpumodel", detail=False)
+        ),
+    ),
+    # HA operational actions (AJAX POST)
+    path("ha/arm/", views.HaArmView.as_view(), name="ha_arm"),
+    path("ha/disarm/", views.HaDisarmView.as_view(), name="ha_disarm"),
     path("sync/devices/", views.sync_devices, name="sync_devices"),
     path("sync/storage/", views.sync_storage, name="sync_storage"),
     path(

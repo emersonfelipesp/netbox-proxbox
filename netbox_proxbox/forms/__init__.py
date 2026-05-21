@@ -15,6 +15,18 @@ from .firewall import (
     ProxmoxFirewallSecurityGroupFilterForm,
     ProxmoxFirewallSecurityGroupForm,
 )
+from .sdn import (
+    ProxmoxSdnFabricFilterForm,
+    ProxmoxSdnFabricForm,
+    ProxmoxSdnPrefixListFilterForm,
+    ProxmoxSdnPrefixListForm,
+    ProxmoxSdnRouteMapFilterForm,
+    ProxmoxSdnRouteMapForm,
+)
+from .datacenter import (
+    ProxmoxDatacenterCpuModelFilterForm,
+    ProxmoxDatacenterCpuModelForm,
+)
 from .cloud_image_template import *
 from .deletion_request_approve import *
 from .deletion_request_reject import *

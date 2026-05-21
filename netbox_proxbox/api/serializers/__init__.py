@@ -43,6 +43,14 @@ from netbox_proxbox.api.serializers.endpoints import (
     NetBoxEndpointSerializer,
     ProxmoxEndpointSerializer,
 )
+from netbox_proxbox.api.serializers.datacenter import (
+    ProxmoxDatacenterCpuModelSerializer,
+)
+from netbox_proxbox.api.serializers.sdn import (
+    ProxmoxSdnFabricSerializer,
+    ProxmoxSdnPrefixListSerializer,
+    ProxmoxSdnRouteMapSerializer,
+)
 from netbox_proxbox.api.serializers.replication import ReplicationSerializer
 from netbox_proxbox.api.serializers.settings import ProxboxPluginSettingsSerializer
 from netbox_proxbox.api.serializers.ssh_credential import NodeSSHCredentialSerializer
@@ -74,8 +82,12 @@ __all__ = (
     "NodeSSHCredentialSerializer",
     "ProxboxPluginSettingsSerializer",
     "ProxmoxClusterSerializer",
+    "ProxmoxDatacenterCpuModelSerializer",
     "ProxmoxEndpointSerializer",
     "ProxmoxNodeSerializer",
+    "ProxmoxSdnFabricSerializer",
+    "ProxmoxSdnPrefixListSerializer",
+    "ProxmoxSdnRouteMapSerializer",
     "ProxmoxVMCloudInitSerializer",
     "PVETemplateBuildRequestSerializer",
     "PVETemplateBuildResponseSerializer",
