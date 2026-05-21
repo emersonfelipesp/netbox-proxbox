@@ -101,6 +101,12 @@ class ProxmoxNode(NetBoxModel):
         verbose_name=_("Support level"),
         help_text=_("Proxmox subscription/support level."),
     )
+    location = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name=_("Location"),
+        help_text=_("Geographic or physical location of the node (PVE 9.2+)."),
+    )
     default_role_qemu = models.ForeignKey(
         to="dcim.DeviceRole",
         on_delete=models.SET_NULL,

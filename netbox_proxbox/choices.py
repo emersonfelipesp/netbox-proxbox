@@ -399,3 +399,19 @@ class FirewallLogLevelChoices(ChoiceSet):
         (INFO, _("Info"), "cyan"),
         (DEBUG, _("Debug"), "gray"),
     ]
+
+
+class SdnFabricTypeChoices(ChoiceSet):
+    """Proxmox SDN fabric type."""
+
+    key = "ProxmoxSdnFabric.fabric_type"
+    WIREGUARD = "wireguard"
+    BGP = "bgp"
+    VXLAN = "vxlan"
+    OSPF = "ospf"
+    CHOICES = [
+        (WIREGUARD, _("WireGuard"), "purple"),
+        (BGP, _("BGP"), "blue"),
+        (VXLAN, _("VXLAN"), "cyan"),
+        (OSPF, _("OSPF"), "green"),
+    ]

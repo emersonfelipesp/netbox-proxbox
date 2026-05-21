@@ -585,3 +585,181 @@ def sync_firewall(
         result.success,
     )
     return result
+
+
+# ---------------------------------------------------------------------------
+# Node-level and VM-level firewall helpers (PVE 9.2+)
+# ---------------------------------------------------------------------------
+
+
+def sync_node_firewall(
+    endpoint: ProxmoxEndpoint,
+    node_name: str,
+    fastapi_url: str,
+    auth_headers: dict,
+    verify_ssl: bool = True,
+) -> None:
+    """Sync firewall rules and options for a single Proxmox node.
+
+    Calls GET /proxmox/firewall/nodes/{node}/rules and
+    GET /proxmox/firewall/nodes/{node}/options, then upserts
+    ProxmoxFirewallRule rows with zone='node' and the matching
+    ProxmoxNode FK set.
+    """
+    from netbox_proxbox.models import ProxmoxNode  # noqa: PLC0415
+
+    node_obj = ProxmoxNode.objects.filter(endpoint=endpoint, name=node_name).first()
+    if node_obj is None:
+        logger.debug("Node %r not found in DB for endpoint %s — skipping node firewall sync", node_name, endpoint.pk)
+        return
+
+    # Fetch node rules
+    try:
+        resp = requests.get(
+            f"{fastapi_url}/proxmox/firewall/nodes/{node_name}/rules",
+            headers=auth_headers,
+            verify=verify_ssl,
+            timeout=SYNC_TIMEOUT,
+        )
+        resp.raise_for_status()
+        rules = resp.json() if isinstance(resp.json(), list) else []
+    except requests.RequestException as exc:
+        logger.warning("Failed to fetch node %r firewall rules: %s", node_name, exc)
+        rules = []
+
+    synced_rule_ids: set[int] = set()
+
+    with transaction.atomic():
+        for raw in rules:
+            pos_raw = raw.get("pos")
+            if pos_raw is None:
+                continue
+            pos = int(pos_raw)
+            enable_raw = raw.get("enable", 1)
+            enable = bool(int(enable_raw)) if enable_raw is not None else True
+            defaults = {
+                "rule_type": raw.get("type") or "",
+                "action": raw.get("action") or "",
+                "enable": enable,
+                "macro": raw.get("macro") or "",
+                "iface": raw.get("iface") or "",
+                "source": raw.get("source") or "",
+                "dest": raw.get("dest") or "",
+                "proto": raw.get("proto") or "",
+                "dport": raw.get("dport") or "",
+                "sport": raw.get("sport") or "",
+                "log": raw.get("log") or "",
+                "icmp_type": raw.get("icmp_type") or "",
+                "comment": raw.get("comment") or None,
+                "digest": raw.get("digest") or "",
+                "status": FirewallSyncStatusChoices.ACTIVE,
+                "raw_config": raw,
+            }
+            rule, _ = ProxmoxFirewallRule.objects.update_or_create(
+                endpoint=endpoint,
+                zone=FirewallZoneChoices.NODE,
+                pos=pos,
+                proxmox_node=node_obj,
+                virtual_machine=None,
+                security_group=None,
+                defaults=defaults,
+            )
+            synced_rule_ids.add(rule.pk)
+
+        # Mark removed node rules as stale
+        ProxmoxFirewallRule.objects.filter(
+            endpoint=endpoint,
+            zone=FirewallZoneChoices.NODE,
+            proxmox_node=node_obj,
+        ).exclude(pk__in=synced_rule_ids).update(status=FirewallSyncStatusChoices.STALE)
+
+    logger.debug("Node %r firewall sync: %d rules upserted", node_name, len(synced_rule_ids))
+
+
+def sync_vm_firewall(
+    endpoint: ProxmoxEndpoint,
+    vmid: int,
+    vm_type: str,
+    fastapi_url: str,
+    auth_headers: dict,
+    verify_ssl: bool = True,
+) -> None:
+    """Sync firewall rules for a single Proxmox VM or container.
+
+    Calls GET /proxmox/firewall/vms/{vmid}/rules (with vm_type query param),
+    then upserts ProxmoxFirewallRule rows with zone='vm_qemu' or 'vm_lxc' and
+    the matching VirtualMachine FK set.
+
+    vm_type should be 'qemu' or 'lxc'.
+    """
+    from virtualization.models import VirtualMachine  # noqa: PLC0415
+
+    vm_obj = VirtualMachine.objects.filter(
+        custom_field_data__proxmox_vm_id=vmid
+    ).first()
+    if vm_obj is None:
+        logger.debug("VM with proxmox_vm_id=%d not found in DB — skipping VM firewall sync", vmid)
+        return
+
+    zone = FirewallZoneChoices.VM_QEMU if vm_type == "qemu" else FirewallZoneChoices.VM_LXC
+
+    try:
+        resp = requests.get(
+            f"{fastapi_url}/proxmox/firewall/vms/{vmid}/rules",
+            headers=auth_headers,
+            verify=verify_ssl,
+            timeout=SYNC_TIMEOUT,
+            params={"vm_type": vm_type},
+        )
+        resp.raise_for_status()
+        rules = resp.json() if isinstance(resp.json(), list) else []
+    except requests.RequestException as exc:
+        logger.warning("Failed to fetch VM %d firewall rules: %s", vmid, exc)
+        rules = []
+
+    synced_rule_ids: set[int] = set()
+
+    with transaction.atomic():
+        for raw in rules:
+            pos_raw = raw.get("pos")
+            if pos_raw is None:
+                continue
+            pos = int(pos_raw)
+            enable_raw = raw.get("enable", 1)
+            enable = bool(int(enable_raw)) if enable_raw is not None else True
+            defaults = {
+                "rule_type": raw.get("type") or "",
+                "action": raw.get("action") or "",
+                "enable": enable,
+                "macro": raw.get("macro") or "",
+                "iface": raw.get("iface") or "",
+                "source": raw.get("source") or "",
+                "dest": raw.get("dest") or "",
+                "proto": raw.get("proto") or "",
+                "dport": raw.get("dport") or "",
+                "sport": raw.get("sport") or "",
+                "log": raw.get("log") or "",
+                "icmp_type": raw.get("icmp_type") or "",
+                "comment": raw.get("comment") or None,
+                "digest": raw.get("digest") or "",
+                "status": FirewallSyncStatusChoices.ACTIVE,
+                "raw_config": raw,
+            }
+            rule, _ = ProxmoxFirewallRule.objects.update_or_create(
+                endpoint=endpoint,
+                zone=zone,
+                pos=pos,
+                proxmox_node=None,
+                virtual_machine=vm_obj,
+                security_group=None,
+                defaults=defaults,
+            )
+            synced_rule_ids.add(rule.pk)
+
+        ProxmoxFirewallRule.objects.filter(
+            endpoint=endpoint,
+            zone=zone,
+            virtual_machine=vm_obj,
+        ).exclude(pk__in=synced_rule_ids).update(status=FirewallSyncStatusChoices.STALE)
+
+    logger.debug("VM %d (%s) firewall sync: %d rules upserted", vmid, vm_type, len(synced_rule_ids))

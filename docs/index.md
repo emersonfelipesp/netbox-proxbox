@@ -6,6 +6,7 @@ Proxbox is a NetBox plugin that integrates Proxmox with NetBox through a separat
 
 | NetBox   | netbox-proxbox | proxbox-api | netbox-sdk     | proxmox-sdk    |
 |----------|----------------|-------------|----------------|----------------|
+| >=4.5.8  | v0.0.18 | v0.0.14 | v0.0.8.post1 | v0.0.3.post1 |
 | >=4.5.8  | v0.0.17 | v0.0.13 | v0.0.8.post1 | v0.0.3.post1 |
 | >=4.5.8  | v0.0.16 | v0.0.12 | v0.0.8.post1 | v0.0.3.post1 |
 | >=4.5.8  | v0.0.15.post2 | v0.0.11.post2 | v0.0.8.post1 | v0.0.5.post1 |
@@ -25,14 +26,14 @@ and WebSocket.
 The current repository code declares support for:
 
 - NetBox `4.5.8`, `4.5.9`, and `4.6.x`
-- Plugin version `0.0.17` in source
+- Plugin version `0.0.18` in source
 
 That support comes directly from the plugin config in this repository:
 
 - `min_version = "4.5.8"`
 - `max_version = "4.6.99"`
 
-This compatibility line is certified simultaneously against NetBox `v4.5.8`, `v4.5.9`, `v4.6.0`, and official `v4.6.1`. It adds read-only Proxmox VE firewall sync for every PVE firewall zone (datacenter, node, per-VM QEMU + LXC, per-VNet SDN), keeps per-endpoint Settings tabs and every `overwrite_*` flag in the plugin UI, enforces VM-sync device flags on the proxbox-api side, and ships endpoint CSV/JSON/YAML import/export pages.
+This compatibility line is certified simultaneously against NetBox `v4.5.8`, `v4.5.9`, `v4.6.0`, and official `v4.6.1`. It adds full PVE 9.2 support: SDN fabric, route map, and prefix list models; custom datacenter CPU model persistence; completed per-node and per-VM firewall sync; HA arm/disarm action views; and the `ProxmoxNode.location` field.
 
 ## Important Packaging Note
 

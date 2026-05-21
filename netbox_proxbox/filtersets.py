@@ -25,6 +25,10 @@ from .models import (
     ProxmoxFirewallOptions,
     ProxmoxFirewallRule,
     ProxmoxFirewallSecurityGroup,
+    ProxmoxSdnFabric,
+    ProxmoxSdnRouteMap,
+    ProxmoxSdnPrefixList,
+    ProxmoxDatacenterCpuModel,
     ProxmoxNode,
     ProxmoxStorage,
     ProxmoxVMCloudInit,
@@ -582,4 +586,72 @@ class ProxmoxFirewallOptionsFilterSet(ProxboxModelFilterSet):
             return queryset
         return queryset.filter(
             Q(policy_in__icontains=value) | Q(policy_out__icontains=value)
+        )
+
+
+@register_filterset
+class ProxmoxSdnFabricFilterSet(ProxboxModelFilterSet):
+    """Filter Proxmox SDN fabrics."""
+
+    class Meta:
+        model = ProxmoxSdnFabric
+        fields = ("id", "endpoint", "cluster_name", "fabric_name", "fabric_type", "status")
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        if not value.strip():
+            return queryset
+        return queryset.filter(
+            Q(fabric_name__icontains=value) | Q(cluster_name__icontains=value)
+        )
+
+
+@register_filterset
+class ProxmoxSdnRouteMapFilterSet(ProxboxModelFilterSet):
+    """Filter Proxmox SDN route maps."""
+
+    class Meta:
+        model = ProxmoxSdnRouteMap
+        fields = ("id", "endpoint", "cluster_name", "name", "action", "status")
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        if not value.strip():
+            return queryset
+        return queryset.filter(
+            Q(name__icontains=value) | Q(cluster_name__icontains=value)
+        )
+
+
+@register_filterset
+class ProxmoxSdnPrefixListFilterSet(ProxboxModelFilterSet):
+    """Filter Proxmox SDN prefix lists."""
+
+    class Meta:
+        model = ProxmoxSdnPrefixList
+        fields = ("id", "endpoint", "cluster_name", "name", "action", "status")
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        if not value.strip():
+            return queryset
+        return queryset.filter(
+            Q(name__icontains=value)
+            | Q(cidr__icontains=value)
+            | Q(cluster_name__icontains=value)
+        )
+
+
+@register_filterset
+class ProxmoxDatacenterCpuModelFilterSet(ProxboxModelFilterSet):
+    """Filter Proxmox datacenter custom CPU models."""
+
+    class Meta:
+        model = ProxmoxDatacenterCpuModel
+        fields = ("id", "endpoint", "cluster_name", "cputype", "base_cputype", "status")
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        if not value.strip():
+            return queryset
+        return queryset.filter(
+            Q(cputype__icontains=value)
+            | Q(base_cputype__icontains=value)
+            | Q(cluster_name__icontains=value)
         )
