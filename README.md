@@ -38,7 +38,7 @@ same `proxbox-api` backend.
 
 Paired with backend [`proxbox-api 0.0.14`](https://github.com/emersonfelipesp/proxbox-api).
 
-- **Full PVE 9.2 support.** New models for SDN fabrics, route maps, prefix lists, and custom datacenter CPU models, plus automated sync services. Completed per-node and per-VM firewall sync. HA arm/disarm action views. `ProxmoxNode.location` field.
+- **Full PVE 9.2 support.** New models for SDN fabrics, route maps, prefix lists, and custom datacenter CPU models, plus automated sync services. Completed per-node firewall sync. HA arm/disarm action views. `ProxmoxNode.location` field.
 
 Full notes: [Release Notes — v0.0.18](https://emersonfelipesp.github.io/netbox-proxbox/release-notes/version-0.0.18/).
 

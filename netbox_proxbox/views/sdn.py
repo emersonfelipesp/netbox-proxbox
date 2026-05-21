@@ -33,6 +33,7 @@ class ProxmoxSdnFabricView(ObjectView):
     queryset = _FABRIC_QS
 
 
+@register_model_view(models.ProxmoxSdnFabric, "add", detail=False)
 @register_model_view(models.ProxmoxSdnFabric, "edit")
 class ProxmoxSdnFabricEditView(ObjectEditView):
     queryset = _FABRIC_QS
@@ -60,6 +61,7 @@ class ProxmoxSdnRouteMapView(ObjectView):
     queryset = _ROUTEMAP_QS
 
 
+@register_model_view(models.ProxmoxSdnRouteMap, "add", detail=False)
 @register_model_view(models.ProxmoxSdnRouteMap, "edit")
 class ProxmoxSdnRouteMapEditView(ObjectEditView):
     queryset = _ROUTEMAP_QS
@@ -87,6 +89,7 @@ class ProxmoxSdnPrefixListView(ObjectView):
     queryset = _PREFIXLIST_QS
 
 
+@register_model_view(models.ProxmoxSdnPrefixList, "add", detail=False)
 @register_model_view(models.ProxmoxSdnPrefixList, "edit")
 class ProxmoxSdnPrefixListEditView(ObjectEditView):
     queryset = _PREFIXLIST_QS

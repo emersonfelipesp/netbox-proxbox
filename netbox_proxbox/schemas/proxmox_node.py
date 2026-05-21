@@ -106,7 +106,7 @@ class ProxmoxNodeDetail(ProxboxLenientModel):
     maxdisk: int | None = None
     ssl_fingerprint: str | None = None
     level: str | None = None
-    location: str = ""
+    location: str | None = None
     loadavg: list[float] | None = None
 
     @field_validator("cpu", mode="before")

@@ -657,10 +657,11 @@ def sync_node_firewall(
             timeout=SYNC_TIMEOUT,
         )
         resp.raise_for_status()
-        rules = resp.json() if isinstance(resp.json(), list) else []
+        data = resp.json()
+        rules = data if isinstance(data, list) else []
     except requests.RequestException as exc:
         logger.warning("Failed to fetch node %r firewall rules: %s", node_name, exc)
-        rules = []
+        return
 
     synced_rule_ids: set[int] = set()
 
@@ -761,10 +762,11 @@ def sync_vm_firewall(
             params={"vm_type": vm_type},
         )
         resp.raise_for_status()
-        rules = resp.json() if isinstance(resp.json(), list) else []
+        data = resp.json()
+        rules = data if isinstance(data, list) else []
     except requests.RequestException as exc:
         logger.warning("Failed to fetch VM %d firewall rules: %s", vmid, exc)
-        rules = []
+        return
 
     synced_rule_ids: set[int] = set()
 

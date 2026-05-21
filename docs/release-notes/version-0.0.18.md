@@ -5,7 +5,7 @@
 Version `0.0.18` adds **full Proxmox VE 9.2 support** to the plugin, including
 persisted Django models for SDN fabrics, route maps, prefix lists, and custom
 datacenter CPU models; automated sync services for these new objects; completed
-node- and VM-level firewall sync; and HA arm/disarm action views. It pairs with
+node-level firewall sync; and HA arm/disarm action views. It pairs with
 backend [`proxbox-api 0.0.14`](https://github.com/emersonfelipesp/proxbox-api),
 which ships the SDN, CPU-model, and datacenter-options endpoints that power
 the new sync services.
@@ -27,10 +27,11 @@ and one new column; run `manage.py migrate netbox_proxbox` after upgrade.
   `GET /proxmox/sdn/fabrics`, `/sdn/route-maps`, and `/sdn/prefix-lists`.
   `services/sync_datacenter.py` calls `GET /proxmox/datacenter/cpu-models`.
   Both upsert records and mark removed rows stale.
-- **Completed firewall sync.** `services/sync_firewall.py` gains
+- **Completed node-level firewall sync.** `services/sync_firewall.py` gains
   `sync_node_firewall()` (calls `GET /proxmox/firewall/nodes/{node}/rules`)
-  and `sync_vm_firewall()` (calls `GET /proxmox/firewall/vms/{vmid}/rules`)
-  so per-node and per-VM `ProxmoxFirewallRule` rows are populated automatically.
+  so per-node `ProxmoxFirewallRule` rows are populated automatically during
+  the sync job. `sync_vm_firewall()` is also implemented and available for
+  per-VM rule ingestion, but is not yet wired into the automatic sync job.
 - **HA arm/disarm action views.** `HaArmView` and `HaDisarmView` proxy to
   `POST /proxmox/cluster/ha/arm` and `POST /proxmox/cluster/ha/disarm` on
   the backend. Both require `change_proxmoxendpoint` permission and return

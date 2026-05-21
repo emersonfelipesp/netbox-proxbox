@@ -226,6 +226,9 @@ def sync_sdn(
         return result
 
     processed_endpoints: set[int] = set()
+    synced_fabric_pks: set[int] = set()
+    synced_route_map_pks: set[int] = set()
+    synced_prefix_list_pks: set[int] = set()
 
     with transaction.atomic():
         for item in fabrics:
@@ -241,7 +244,9 @@ def sync_sdn(
                     cluster_name,
                 )
                 continue
-            _upsert_fabric(endpoint, item, result)
+            pk = _upsert_fabric(endpoint, item, result)
+            if pk:
+                synced_fabric_pks.add(pk)
             processed_endpoints.add(endpoint.pk)
 
         for item in route_maps:
@@ -253,7 +258,9 @@ def sync_sdn(
             )
             if endpoint is None:
                 continue
-            _upsert_route_map(endpoint, item, result)
+            pk = _upsert_route_map(endpoint, item, result)
+            if pk:
+                synced_route_map_pks.add(pk)
             processed_endpoints.add(endpoint.pk)
 
         for item in prefix_lists:
@@ -265,8 +272,27 @@ def sync_sdn(
             )
             if endpoint is None:
                 continue
-            _upsert_prefix_list(endpoint, item, result)
+            pk = _upsert_prefix_list(endpoint, item, result)
+            if pk:
+                synced_prefix_list_pks.add(pk)
             processed_endpoints.add(endpoint.pk)
+
+        if processed_endpoints:
+            ProxmoxSdnFabric.objects.filter(
+                endpoint_id__in=processed_endpoints
+            ).exclude(pk__in=synced_fabric_pks).update(
+                status=FirewallSyncStatusChoices.STALE
+            )
+            ProxmoxSdnRouteMap.objects.filter(
+                endpoint_id__in=processed_endpoints
+            ).exclude(pk__in=synced_route_map_pks).update(
+                status=FirewallSyncStatusChoices.STALE
+            )
+            ProxmoxSdnPrefixList.objects.filter(
+                endpoint_id__in=processed_endpoints
+            ).exclude(pk__in=synced_prefix_list_pks).update(
+                status=FirewallSyncStatusChoices.STALE
+            )
 
     result.endpoints_processed = len(processed_endpoints)
     result.success = True

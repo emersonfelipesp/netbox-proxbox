@@ -31,6 +31,7 @@ class ProxmoxDatacenterCpuModelView(ObjectView):
     queryset = _CPU_QS
 
 
+@register_model_view(models.ProxmoxDatacenterCpuModel, "add", detail=False)
 @register_model_view(models.ProxmoxDatacenterCpuModel, "edit")
 class ProxmoxDatacenterCpuModelEditView(ObjectEditView):
     queryset = _CPU_QS
