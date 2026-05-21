@@ -112,16 +112,17 @@ def _upsert_route_map(
     name = item.get("name", "")
     if not name:
         return 0
+    order = item.get("order", 0)
     obj, created = ProxmoxSdnRouteMap.objects.get_or_create(
         endpoint=endpoint,
         cluster_name=cluster_name,
         name=name,
+        order=order,
         defaults={
             "action": item.get("action", ""),
             "match_peer": item.get("match_peer", ""),
             "match_ip": item.get("match_ip", ""),
             "set_community": item.get("set_community", ""),
-            "order": item.get("order", 0),
             "status": FirewallSyncStatusChoices.ACTIVE,
             "raw_config": item,
         },
@@ -133,7 +134,6 @@ def _upsert_route_map(
         obj.match_peer = item.get("match_peer", obj.match_peer)
         obj.match_ip = item.get("match_ip", obj.match_ip)
         obj.set_community = item.get("set_community", obj.set_community)
-        obj.order = item.get("order", obj.order)
         obj.status = FirewallSyncStatusChoices.ACTIVE
         obj.raw_config = item
         obj.save()
@@ -210,18 +210,20 @@ def sync_sdn(
     if auth_headers is None:
         auth_headers = {}
 
-    fabrics = (
-        _fetch_list(f"{fastapi_url}/proxmox/sdn/fabrics", auth_headers, verify_ssl)
-        or []
+    fabrics = _fetch_list(
+        f"{fastapi_url}/proxmox/sdn/fabrics", auth_headers, verify_ssl
     )
-    route_maps = (
-        _fetch_list(f"{fastapi_url}/proxmox/sdn/route-maps", auth_headers, verify_ssl)
-        or []
+    route_maps = _fetch_list(
+        f"{fastapi_url}/proxmox/sdn/route-maps", auth_headers, verify_ssl
     )
-    prefix_lists = (
-        _fetch_list(f"{fastapi_url}/proxmox/sdn/prefix-lists", auth_headers, verify_ssl)
-        or []
+    prefix_lists = _fetch_list(
+        f"{fastapi_url}/proxmox/sdn/prefix-lists", auth_headers, verify_ssl
     )
+
+    if fabrics is None or route_maps is None or prefix_lists is None:
+        result.error = "Failed to fetch one or more SDN endpoints from proxbox-api"
+        logger.error(result.error)
+        return result
 
     processed_endpoints: set[int] = set()
 

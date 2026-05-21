@@ -43,8 +43,8 @@ class ProxmoxSdnRouteMap(NetBoxModel):
         ordering = ("endpoint", "cluster_name", "name", "order")
         constraints = [
             models.UniqueConstraint(
-                fields=["endpoint", "cluster_name", "name"],
-                name="netbox_proxbox_sdnroutemap_unique_endpoint_cluster_name",
+                fields=["endpoint", "cluster_name", "name", "order"],
+                name="netbox_proxbox_sdnroutemap_unique_endpoint_cluster_name_order",
             )
         ]
 

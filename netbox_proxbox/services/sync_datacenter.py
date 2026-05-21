@@ -149,11 +149,10 @@ def sync_datacenter(
                 synced_pks.append(pk)
             processed_endpoints.add(endpoint.pk)
 
-        if synced_pks:
-            stale = ProxmoxDatacenterCpuModel.objects.exclude(pk__in=synced_pks).update(
-                status=FirewallSyncStatusChoices.STALE
-            )
-            result.cpu_models_stale += stale
+        stale = ProxmoxDatacenterCpuModel.objects.exclude(pk__in=synced_pks).update(
+            status=FirewallSyncStatusChoices.STALE
+        )
+        result.cpu_models_stale += stale
 
     result.endpoints_processed = len(processed_endpoints)
     result.success = True
