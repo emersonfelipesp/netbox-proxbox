@@ -155,6 +155,40 @@ def proxbox_sync_job_module(monkeypatch):
         sys.modules, "netbox_proxbox.services.sync_firewall", sync_firewall_mod
     )
 
+    # Stub sync_sdn so the deferred import in jobs.py resolves.
+    sync_sdn_mod = types.ModuleType("netbox_proxbox.services.sync_sdn")
+    sync_sdn_mod.sync_sdn = lambda *a, **kw: SimpleNamespace(
+        success=True,
+        error=None,
+        endpoints_processed=0,
+        fabrics_created=0,
+        fabrics_updated=0,
+        fabrics_stale=0,
+        route_maps_created=0,
+        route_maps_updated=0,
+        route_maps_stale=0,
+        prefix_lists_created=0,
+        prefix_lists_updated=0,
+        prefix_lists_stale=0,
+        per_endpoint=[],
+    )
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services.sync_sdn", sync_sdn_mod)
+
+    # Stub sync_datacenter so the deferred import in jobs.py resolves.
+    sync_datacenter_mod = types.ModuleType("netbox_proxbox.services.sync_datacenter")
+    sync_datacenter_mod.sync_datacenter = lambda *a, **kw: SimpleNamespace(
+        success=True,
+        error=None,
+        endpoints_processed=0,
+        cpu_models_created=0,
+        cpu_models_updated=0,
+        cpu_models_stale=0,
+        per_endpoint=[],
+    )
+    monkeypatch.setitem(
+        sys.modules, "netbox_proxbox.services.sync_datacenter", sync_datacenter_mod
+    )
+
     sys.modules.pop("netbox_proxbox.jobs", None)
     path = root / "netbox_proxbox" / "jobs.py"
     spec = importlib.util.spec_from_file_location("netbox_proxbox.jobs", path)

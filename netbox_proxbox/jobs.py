@@ -511,6 +511,39 @@ class ProxboxSyncJob(JobRunner):
                     f"Firewall sync failed or partially failed: {fw_result.error or 'see per_endpoint log'}"
                 )
 
+            # Sync SDN objects (fabrics, route maps, prefix lists).
+            from netbox_proxbox.services.sync_sdn import sync_sdn  # noqa: PLC0415
+
+            self.logger.info("Syncing SDN objects from proxbox-api")
+            sdn_result = sync_sdn()
+            if sdn_result.success:
+                self.logger.info(
+                    f"SDN sync complete: {sdn_result.endpoints_processed} endpoint(s), "
+                    f"fabrics={sdn_result.fabrics_created}/{sdn_result.fabrics_updated}, "
+                    f"route_maps={sdn_result.route_maps_created}/{sdn_result.route_maps_updated}, "
+                    f"prefix_lists={sdn_result.prefix_lists_created}/{sdn_result.prefix_lists_updated}"
+                )
+            else:
+                self.logger.warning(
+                    f"SDN sync failed or partially failed: {sdn_result.error or 'see per_endpoint log'}"
+                )
+
+            # Sync datacenter CPU models.
+            from netbox_proxbox.services.sync_datacenter import sync_datacenter  # noqa: PLC0415
+
+            self.logger.info("Syncing datacenter CPU models from proxbox-api")
+            dc_result = sync_datacenter()
+            if dc_result.success:
+                self.logger.info(
+                    f"Datacenter CPU model sync complete: {dc_result.endpoints_processed} endpoint(s), "
+                    f"created={dc_result.cpu_models_created}, updated={dc_result.cpu_models_updated}, "
+                    f"stale={dc_result.cpu_models_stale}"
+                )
+            else:
+                self.logger.warning(
+                    f"Datacenter CPU model sync failed: {dc_result.error or 'unknown error'}"
+                )
+
             stages_out = _run_all_stages_sync(self, stages, params, run_started)
 
             for stage in stages_out:

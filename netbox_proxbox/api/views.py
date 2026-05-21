@@ -1331,6 +1331,7 @@ class ProxmoxSdnFabricViewSet(NetBoxModelViewSet):
 
     queryset = models.ProxmoxSdnFabric.objects.select_related("endpoint")
     serializer_class = ProxmoxSdnFabricSerializer
+    filterset_class = filtersets.ProxmoxSdnFabricFilterSet
 
 
 class ProxmoxSdnRouteMapViewSet(NetBoxModelViewSet):
@@ -1338,6 +1339,7 @@ class ProxmoxSdnRouteMapViewSet(NetBoxModelViewSet):
 
     queryset = models.ProxmoxSdnRouteMap.objects.select_related("endpoint")
     serializer_class = ProxmoxSdnRouteMapSerializer
+    filterset_class = filtersets.ProxmoxSdnRouteMapFilterSet
 
 
 class ProxmoxSdnPrefixListViewSet(NetBoxModelViewSet):
@@ -1345,6 +1347,7 @@ class ProxmoxSdnPrefixListViewSet(NetBoxModelViewSet):
 
     queryset = models.ProxmoxSdnPrefixList.objects.select_related("endpoint")
     serializer_class = ProxmoxSdnPrefixListSerializer
+    filterset_class = filtersets.ProxmoxSdnPrefixListFilterSet
 
 
 # ── Datacenter ViewSets ───────────────────────────────────────────────────────
@@ -1355,3 +1358,4 @@ class ProxmoxDatacenterCpuModelViewSet(NetBoxModelViewSet):
 
     queryset = models.ProxmoxDatacenterCpuModel.objects.select_related("endpoint")
     serializer_class = ProxmoxDatacenterCpuModelSerializer
+    filterset_class = filtersets.ProxmoxDatacenterCpuModelFilterSet

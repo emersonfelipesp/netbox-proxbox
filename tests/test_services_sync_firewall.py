@@ -226,6 +226,10 @@ def sync_fw_module(monkeypatch):
         DoesNotExist = _DoesNotExist
         objects = _opts_mgr
 
+    class _ProxmoxNode:
+        DoesNotExist = _DoesNotExist
+        objects = _MockManager()
+
     models = types.ModuleType("netbox_proxbox.models")
     models.ProxmoxEndpoint = _ProxmoxEndpoint
     models.ProxmoxFirewallSecurityGroup = _SG
@@ -234,6 +238,7 @@ def sync_fw_module(monkeypatch):
     models.ProxmoxFirewallIPSetEntry = _IPSetEntry
     models.ProxmoxFirewallAlias = _Alias
     models.ProxmoxFirewallOptions = _Opts
+    models.ProxmoxNode = _ProxmoxNode
     monkeypatch.setitem(sys.modules, "netbox_proxbox.models", models)
 
     # ---- services.backend_proxy ----

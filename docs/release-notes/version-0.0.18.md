@@ -11,7 +11,7 @@ which ships the SDN, CPU-model, and datacenter-options endpoints that power
 the new sync services.
 
 The NetBox compatibility range remains `4.5.8` – `4.6.99` (`min_version` /
-`max_version` unchanged). Django migration `0041_pve_9_2.py` adds five tables
+`max_version` unchanged). Django migration `0041_pve_9_2.py` adds four tables
 and one new column; run `manage.py migrate netbox_proxbox` after upgrade.
 
 ## What's New In The Plugin

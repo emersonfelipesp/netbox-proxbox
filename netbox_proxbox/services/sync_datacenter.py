@@ -149,8 +149,12 @@ def sync_datacenter(
                 synced_pks.append(pk)
             processed_endpoints.add(endpoint.pk)
 
-        stale = ProxmoxDatacenterCpuModel.objects.exclude(pk__in=synced_pks).update(
-            status=FirewallSyncStatusChoices.STALE
+        stale = (
+            ProxmoxDatacenterCpuModel.objects.filter(
+                endpoint_id__in=processed_endpoints
+            )
+            .exclude(pk__in=synced_pks)
+            .update(status=FirewallSyncStatusChoices.STALE)
         )
         result.cpu_models_stale += stale
 

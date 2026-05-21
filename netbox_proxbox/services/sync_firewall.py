@@ -6,9 +6,10 @@ with their entries, aliases, and datacenter firewall options) for every
 configured Proxmox endpoint, then upserts the results into the six
 firewall Django models.
 
-Node-level and per-VM firewall objects are intentionally outside the scope of
-this call — the summary endpoint omits them by design.  They can be added in a
-future release using the per-node and per-VM backend routes.
+After the datacenter pass, node-level firewall rules are synced for every
+``ProxmoxNode`` row belonging to a successfully-resolved endpoint by calling
+the per-node backend route.  Per-VM firewall sync is deferred until a reliable
+per-VM ``vm_type`` (qemu vs lxc) source is available from the DB.
 """
 
 from __future__ import annotations
@@ -532,6 +533,8 @@ def sync_firewall(
     # -----------------------------------------------------------------------
     # DB phase — one atomic block per endpoint.
     # -----------------------------------------------------------------------
+    resolved_endpoints: list[ProxmoxEndpoint] = []
+
     for entry in summary_list:
         cluster_name = entry.get("cluster_name") or ""
         endpoint = (
@@ -550,6 +553,7 @@ def sync_firewall(
             _sync_one_endpoint(endpoint, entry, result)
             ep_result["success"] = True
             result.endpoints_processed += 1
+            resolved_endpoints.append(endpoint)
             logger.info(
                 "Firewall sync for endpoint %s (%s): "
                 "%d sg, %d rules, %d ipsets, %d entries, %d aliases, %d opts created/updated",
@@ -573,6 +577,34 @@ def sync_firewall(
             )
 
         result.per_endpoint.append(ep_result)
+
+    # -----------------------------------------------------------------------
+    # Node-level firewall sync — runs after datacenter pass so ProxmoxNode
+    # rows already exist for newly-synced endpoints.
+    # -----------------------------------------------------------------------
+    if resolved_endpoints:
+        from netbox_proxbox.models import ProxmoxNode  # noqa: PLC0415
+
+        for endpoint in resolved_endpoints:
+            nodes = ProxmoxNode.objects.filter(endpoint=endpoint).values_list(
+                "name", flat=True
+            )
+            for node_name in nodes:
+                try:
+                    sync_node_firewall(
+                        endpoint=endpoint,
+                        node_name=node_name,
+                        fastapi_url=fastapi_url,
+                        auth_headers=auth_headers,
+                        verify_ssl=verify_ssl,
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "Node firewall sync failed for endpoint=%s node=%r: %s",
+                        endpoint.pk,
+                        node_name,
+                        exc,
+                    )
 
     result.success = (
         all(ep.get("success", False) for ep in result.per_endpoint)
@@ -599,10 +631,9 @@ def sync_node_firewall(
     auth_headers: dict,
     verify_ssl: bool = True,
 ) -> None:
-    """Sync firewall rules and options for a single Proxmox node.
+    """Sync firewall rules for a single Proxmox node.
 
-    Calls GET /proxmox/firewall/nodes/{node}/rules and
-    GET /proxmox/firewall/nodes/{node}/options, then upserts
+    Calls GET /proxmox/firewall/nodes/{node}/rules, then upserts
     ProxmoxFirewallRule rows with zone='node' and the matching
     ProxmoxNode FK set.
     """
@@ -698,6 +729,14 @@ def sync_vm_firewall(
 
     vm_type should be 'qemu' or 'lxc'.
     """
+    if vm_type not in ("qemu", "lxc"):
+        logger.warning(
+            "sync_vm_firewall called with unknown vm_type=%r for vmid=%d — skipping",
+            vm_type,
+            vmid,
+        )
+        return
+
     from virtualization.models import VirtualMachine  # noqa: PLC0415
 
     vm_obj = VirtualMachine.objects.filter(
