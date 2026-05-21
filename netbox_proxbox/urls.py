@@ -221,9 +221,7 @@ urlpatterns = [
     ),
     path(
         "sdn/prefix-lists/",
-        include(
-            get_model_urls("netbox_proxbox", "proxmoxsdnprefixlist", detail=False)
-        ),
+        include(get_model_urls("netbox_proxbox", "proxmoxsdnprefixlist", detail=False)),
     ),
     # Datacenter models
     path(

@@ -21,8 +21,12 @@ class ProxmoxSdnFabric(NetBoxModel):
         blank=True,
         verbose_name=_("Proxmox endpoint"),
     )
-    cluster_name = models.CharField(max_length=255, help_text=_("Proxmox cluster name."))
-    fabric_name = models.CharField(max_length=255, help_text=_("SDN fabric identifier."))
+    cluster_name = models.CharField(
+        max_length=255, help_text=_("Proxmox cluster name.")
+    )
+    fabric_name = models.CharField(
+        max_length=255, help_text=_("SDN fabric identifier.")
+    )
     fabric_type = models.CharField(
         max_length=32,
         choices=SdnFabricTypeChoices,

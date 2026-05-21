@@ -23,7 +23,9 @@ class _HaActionBaseView(ContentTypePermissionRequiredMixin, View):
     def post(self, request: HttpRequest) -> JsonResponse:
         ctx = get_fastapi_request_context()
         if ctx is None or not ctx.http_url:
-            return JsonResponse({"error": "No FastAPI backend endpoint is configured."}, status=503)
+            return JsonResponse(
+                {"error": "No FastAPI backend endpoint is configured."}, status=503
+            )
 
         url = f"{ctx.http_url}/proxmox/cluster/ha/{self._proxbox_action}"
         results: list[dict] = []
@@ -36,19 +38,23 @@ class _HaActionBaseView(ContentTypePermissionRequiredMixin, View):
                     timeout=30,
                     verify=ctx.verify_ssl,
                 )
-                results.append({
-                    "endpoint_id": endpoint.pk,
-                    "endpoint_name": str(endpoint),
-                    "status_code": resp.status_code,
-                    "ok": resp.ok,
-                })
+                results.append(
+                    {
+                        "endpoint_id": endpoint.pk,
+                        "endpoint_name": str(endpoint),
+                        "status_code": resp.status_code,
+                        "ok": resp.ok,
+                    }
+                )
             except requests.exceptions.RequestException as exc:
-                results.append({
-                    "endpoint_id": endpoint.pk,
-                    "endpoint_name": str(endpoint),
-                    "error": translate_request_exception(exc),
-                    "ok": False,
-                })
+                results.append(
+                    {
+                        "endpoint_id": endpoint.pk,
+                        "endpoint_name": str(endpoint),
+                        "error": translate_request_exception(exc),
+                        "ok": False,
+                    }
+                )
 
         return JsonResponse({"action": self._proxbox_action, "results": results})
 

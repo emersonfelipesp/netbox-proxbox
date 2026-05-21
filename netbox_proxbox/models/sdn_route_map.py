@@ -21,7 +21,9 @@ class ProxmoxSdnRouteMap(NetBoxModel):
         blank=True,
         verbose_name=_("Proxmox endpoint"),
     )
-    cluster_name = models.CharField(max_length=255, help_text=_("Proxmox cluster name."))
+    cluster_name = models.CharField(
+        max_length=255, help_text=_("Proxmox cluster name.")
+    )
     name = models.CharField(max_length=255, help_text=_("Route-map name."))
     action = models.CharField(max_length=16, blank=True, help_text=_("permit or deny."))
     match_peer = models.CharField(max_length=255, blank=True)

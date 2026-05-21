@@ -30,4 +30,10 @@ class ProxmoxDatacenterCpuModelTable(NetBoxTable):
             "created",
             "last_updated",
         )
-        default_columns = ("cputype", "cluster_name", "endpoint", "base_cputype", "status")
+        default_columns = (
+            "cputype",
+            "cluster_name",
+            "endpoint",
+            "base_cputype",
+            "status",
+        )

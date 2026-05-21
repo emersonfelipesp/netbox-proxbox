@@ -29,7 +29,14 @@ class ProxmoxSdnFabricTable(NetBoxTable):
             "created",
             "last_updated",
         )
-        default_columns = ("fabric_name", "cluster_name", "endpoint", "fabric_type", "asn", "status")
+        default_columns = (
+            "fabric_name",
+            "cluster_name",
+            "endpoint",
+            "fabric_type",
+            "asn",
+            "status",
+        )
 
 
 class ProxmoxSdnRouteMapTable(NetBoxTable):
@@ -52,7 +59,14 @@ class ProxmoxSdnRouteMapTable(NetBoxTable):
             "created",
             "last_updated",
         )
-        default_columns = ("name", "cluster_name", "endpoint", "action", "order", "status")
+        default_columns = (
+            "name",
+            "cluster_name",
+            "endpoint",
+            "action",
+            "order",
+            "status",
+        )
 
 
 class ProxmoxSdnPrefixListTable(NetBoxTable):
@@ -75,4 +89,11 @@ class ProxmoxSdnPrefixListTable(NetBoxTable):
             "created",
             "last_updated",
         )
-        default_columns = ("name", "cluster_name", "endpoint", "cidr", "action", "status")
+        default_columns = (
+            "name",
+            "cluster_name",
+            "endpoint",
+            "cidr",
+            "action",
+            "status",
+        )

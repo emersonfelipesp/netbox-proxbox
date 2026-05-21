@@ -43,7 +43,9 @@ from netbox_proxbox.api.serializers.endpoints import (
     NetBoxEndpointSerializer,
     ProxmoxEndpointSerializer,
 )
-from netbox_proxbox.api.serializers.datacenter import ProxmoxDatacenterCpuModelSerializer
+from netbox_proxbox.api.serializers.datacenter import (
+    ProxmoxDatacenterCpuModelSerializer,
+)
 from netbox_proxbox.api.serializers.sdn import (
     ProxmoxSdnFabricSerializer,
     ProxmoxSdnPrefixListSerializer,

@@ -610,7 +610,11 @@ def sync_node_firewall(
 
     node_obj = ProxmoxNode.objects.filter(endpoint=endpoint, name=node_name).first()
     if node_obj is None:
-        logger.debug("Node %r not found in DB for endpoint %s — skipping node firewall sync", node_name, endpoint.pk)
+        logger.debug(
+            "Node %r not found in DB for endpoint %s — skipping node firewall sync",
+            node_name,
+            endpoint.pk,
+        )
         return
 
     # Fetch node rules
@@ -673,7 +677,9 @@ def sync_node_firewall(
             proxmox_node=node_obj,
         ).exclude(pk__in=synced_rule_ids).update(status=FirewallSyncStatusChoices.STALE)
 
-    logger.debug("Node %r firewall sync: %d rules upserted", node_name, len(synced_rule_ids))
+    logger.debug(
+        "Node %r firewall sync: %d rules upserted", node_name, len(synced_rule_ids)
+    )
 
 
 def sync_vm_firewall(
@@ -698,10 +704,14 @@ def sync_vm_firewall(
         custom_field_data__proxmox_vm_id=vmid
     ).first()
     if vm_obj is None:
-        logger.debug("VM with proxmox_vm_id=%d not found in DB — skipping VM firewall sync", vmid)
+        logger.debug(
+            "VM with proxmox_vm_id=%d not found in DB — skipping VM firewall sync", vmid
+        )
         return
 
-    zone = FirewallZoneChoices.VM_QEMU if vm_type == "qemu" else FirewallZoneChoices.VM_LXC
+    zone = (
+        FirewallZoneChoices.VM_QEMU if vm_type == "qemu" else FirewallZoneChoices.VM_LXC
+    )
 
     try:
         resp = requests.get(
@@ -762,4 +772,9 @@ def sync_vm_firewall(
             virtual_machine=vm_obj,
         ).exclude(pk__in=synced_rule_ids).update(status=FirewallSyncStatusChoices.STALE)
 
-    logger.debug("VM %d (%s) firewall sync: %d rules upserted", vmid, vm_type, len(synced_rule_ids))
+    logger.debug(
+        "VM %d (%s) firewall sync: %d rules upserted",
+        vmid,
+        vm_type,
+        len(synced_rule_ids),
+    )

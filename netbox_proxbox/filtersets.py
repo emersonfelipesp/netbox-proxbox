@@ -595,7 +595,14 @@ class ProxmoxSdnFabricFilterSet(ProxboxModelFilterSet):
 
     class Meta:
         model = ProxmoxSdnFabric
-        fields = ("id", "endpoint", "cluster_name", "fabric_name", "fabric_type", "status")
+        fields = (
+            "id",
+            "endpoint",
+            "cluster_name",
+            "fabric_name",
+            "fabric_type",
+            "status",
+        )
 
     def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
         if not value.strip():

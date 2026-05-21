@@ -6,7 +6,11 @@ from netbox.api.fields import ChoiceField
 from netbox.api.serializers import NetBoxModelSerializer
 
 from netbox_proxbox.choices import FirewallSyncStatusChoices, SdnFabricTypeChoices
-from netbox_proxbox.models import ProxmoxSdnFabric, ProxmoxSdnPrefixList, ProxmoxSdnRouteMap
+from netbox_proxbox.models import (
+    ProxmoxSdnFabric,
+    ProxmoxSdnPrefixList,
+    ProxmoxSdnRouteMap,
+)
 
 
 class ProxmoxSdnFabricSerializer(NetBoxModelSerializer):

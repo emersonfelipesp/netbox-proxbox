@@ -76,7 +76,9 @@ def _upsert_fabric(endpoint: ProxmoxEndpoint, item: dict, result: SdnSyncResult)
             "fabric_type": item.get("type", ""),
             "asn": item.get("asn"),
             "advertise_subnets": bool(item.get("advertise_subnets", False)),
-            "disable_arp_nd_suppression": bool(item.get("disable_arp_nd_suppression", False)),
+            "disable_arp_nd_suppression": bool(
+                item.get("disable_arp_nd_suppression", False)
+            ),
             "vrf_vxlan": item.get("vrf_vxlan"),
             "peers": item.get("peers", []),
             "status": FirewallSyncStatusChoices.ACTIVE,
@@ -88,8 +90,12 @@ def _upsert_fabric(endpoint: ProxmoxEndpoint, item: dict, result: SdnSyncResult)
     else:
         obj.fabric_type = item.get("type", obj.fabric_type)
         obj.asn = item.get("asn", obj.asn)
-        obj.advertise_subnets = bool(item.get("advertise_subnets", obj.advertise_subnets))
-        obj.disable_arp_nd_suppression = bool(item.get("disable_arp_nd_suppression", obj.disable_arp_nd_suppression))
+        obj.advertise_subnets = bool(
+            item.get("advertise_subnets", obj.advertise_subnets)
+        )
+        obj.disable_arp_nd_suppression = bool(
+            item.get("disable_arp_nd_suppression", obj.disable_arp_nd_suppression)
+        )
         obj.vrf_vxlan = item.get("vrf_vxlan", obj.vrf_vxlan)
         obj.peers = item.get("peers", obj.peers)
         obj.status = FirewallSyncStatusChoices.ACTIVE
@@ -99,7 +105,9 @@ def _upsert_fabric(endpoint: ProxmoxEndpoint, item: dict, result: SdnSyncResult)
     return obj.pk
 
 
-def _upsert_route_map(endpoint: ProxmoxEndpoint, item: dict, result: SdnSyncResult) -> int:
+def _upsert_route_map(
+    endpoint: ProxmoxEndpoint, item: dict, result: SdnSyncResult
+) -> int:
     cluster_name = item.get("cluster_name", "")
     name = item.get("name", "")
     if not name:
@@ -133,7 +141,9 @@ def _upsert_route_map(endpoint: ProxmoxEndpoint, item: dict, result: SdnSyncResu
     return obj.pk
 
 
-def _upsert_prefix_list(endpoint: ProxmoxEndpoint, item: dict, result: SdnSyncResult) -> int:
+def _upsert_prefix_list(
+    endpoint: ProxmoxEndpoint, item: dict, result: SdnSyncResult
+) -> int:
     cluster_name = item.get("cluster_name", "")
     name = item.get("name", "")
     if not name:
@@ -167,7 +177,9 @@ def _upsert_prefix_list(endpoint: ProxmoxEndpoint, item: dict, result: SdnSyncRe
 
 def _fetch_list(url: str, headers: dict, verify_ssl: bool) -> list[dict] | None:
     try:
-        resp = requests.get(url, headers=headers, verify=verify_ssl, timeout=SYNC_TIMEOUT)
+        resp = requests.get(
+            url, headers=headers, verify=verify_ssl, timeout=SYNC_TIMEOUT
+        )
         resp.raise_for_status()
         data = resp.json()
         return data if isinstance(data, list) else None
@@ -198,25 +210,45 @@ def sync_sdn(
     if auth_headers is None:
         auth_headers = {}
 
-    fabrics = _fetch_list(f"{fastapi_url}/proxmox/sdn/fabrics", auth_headers, verify_ssl) or []
-    route_maps = _fetch_list(f"{fastapi_url}/proxmox/sdn/route-maps", auth_headers, verify_ssl) or []
-    prefix_lists = _fetch_list(f"{fastapi_url}/proxmox/sdn/prefix-lists", auth_headers, verify_ssl) or []
+    fabrics = (
+        _fetch_list(f"{fastapi_url}/proxmox/sdn/fabrics", auth_headers, verify_ssl)
+        or []
+    )
+    route_maps = (
+        _fetch_list(f"{fastapi_url}/proxmox/sdn/route-maps", auth_headers, verify_ssl)
+        or []
+    )
+    prefix_lists = (
+        _fetch_list(f"{fastapi_url}/proxmox/sdn/prefix-lists", auth_headers, verify_ssl)
+        or []
+    )
 
     processed_endpoints: set[int] = set()
 
     with transaction.atomic():
         for item in fabrics:
             cluster_name = item.get("cluster_name", "")
-            endpoint = _resolve_endpoint_by_cluster_name(cluster_name) if cluster_name else None
+            endpoint = (
+                _resolve_endpoint_by_cluster_name(cluster_name)
+                if cluster_name
+                else None
+            )
             if endpoint is None:
-                logger.warning("Cannot resolve endpoint for cluster_name=%r, skipping SDN fabric", cluster_name)
+                logger.warning(
+                    "Cannot resolve endpoint for cluster_name=%r, skipping SDN fabric",
+                    cluster_name,
+                )
                 continue
             _upsert_fabric(endpoint, item, result)
             processed_endpoints.add(endpoint.pk)
 
         for item in route_maps:
             cluster_name = item.get("cluster_name", "")
-            endpoint = _resolve_endpoint_by_cluster_name(cluster_name) if cluster_name else None
+            endpoint = (
+                _resolve_endpoint_by_cluster_name(cluster_name)
+                if cluster_name
+                else None
+            )
             if endpoint is None:
                 continue
             _upsert_route_map(endpoint, item, result)
@@ -224,7 +256,11 @@ def sync_sdn(
 
         for item in prefix_lists:
             cluster_name = item.get("cluster_name", "")
-            endpoint = _resolve_endpoint_by_cluster_name(cluster_name) if cluster_name else None
+            endpoint = (
+                _resolve_endpoint_by_cluster_name(cluster_name)
+                if cluster_name
+                else None
+            )
             if endpoint is None:
                 continue
             _upsert_prefix_list(endpoint, item, result)
@@ -236,8 +272,11 @@ def sync_sdn(
         "SDN sync complete: %d endpoint(s) processed, "
         "fabrics=%d/%d, route_maps=%d/%d, prefix_lists=%d/%d",
         result.endpoints_processed,
-        result.fabrics_created, result.fabrics_updated,
-        result.route_maps_created, result.route_maps_updated,
-        result.prefix_lists_created, result.prefix_lists_updated,
+        result.fabrics_created,
+        result.fabrics_updated,
+        result.route_maps_created,
+        result.route_maps_updated,
+        result.prefix_lists_created,
+        result.prefix_lists_updated,
     )
     return result

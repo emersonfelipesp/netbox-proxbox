@@ -21,11 +21,21 @@ class ProxmoxDatacenterCpuModel(NetBoxModel):
         blank=True,
         verbose_name=_("Proxmox endpoint"),
     )
-    cluster_name = models.CharField(max_length=255, help_text=_("Proxmox cluster name."))
-    cputype = models.CharField(max_length=255, help_text=_("Custom CPU type identifier."))
-    base_cputype = models.CharField(max_length=255, blank=True, help_text=_("Base CPU type."))
-    flags = models.CharField(max_length=512, blank=True, help_text=_("CPU feature flags."))
-    vendor_id = models.CharField(max_length=255, blank=True, help_text=_("CPUID vendor ID string."))
+    cluster_name = models.CharField(
+        max_length=255, help_text=_("Proxmox cluster name.")
+    )
+    cputype = models.CharField(
+        max_length=255, help_text=_("Custom CPU type identifier.")
+    )
+    base_cputype = models.CharField(
+        max_length=255, blank=True, help_text=_("Base CPU type.")
+    )
+    flags = models.CharField(
+        max_length=512, blank=True, help_text=_("CPU feature flags.")
+    )
+    vendor_id = models.CharField(
+        max_length=255, blank=True, help_text=_("CPUID vendor ID string.")
+    )
     level = models.IntegerField(null=True, blank=True, help_text=_("CPUID level."))
     description = models.TextField(blank=True)
     status = models.CharField(
@@ -50,4 +60,6 @@ class ProxmoxDatacenterCpuModel(NetBoxModel):
         return f"{self.cluster_name} / {self.cputype}"
 
     def get_absolute_url(self):
-        return reverse("plugins:netbox_proxbox:proxmoxdatacentercpumodel", args=[self.pk])
+        return reverse(
+            "plugins:netbox_proxbox:proxmoxdatacentercpumodel", args=[self.pk]
+        )

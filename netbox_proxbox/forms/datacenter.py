@@ -42,6 +42,8 @@ class ProxmoxDatacenterCpuModelForm(_DatacenterEndpointMixin, NetBoxModelForm):
         )
 
 
-class ProxmoxDatacenterCpuModelFilterForm(_DatacenterEndpointMixin, NetBoxModelFilterSetForm):
+class ProxmoxDatacenterCpuModelFilterForm(
+    _DatacenterEndpointMixin, NetBoxModelFilterSetForm
+):
     model = models.ProxmoxDatacenterCpuModel
     status = forms.ChoiceField(choices=_STATUS_CHOICES, required=False)

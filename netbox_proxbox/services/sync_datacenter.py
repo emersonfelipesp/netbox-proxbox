@@ -133,9 +133,16 @@ def sync_datacenter(
         synced_pks: list[int] = []
         for item in cpu_models_list:
             cluster_name = item.get("cluster_name", "")
-            endpoint = _resolve_endpoint_by_cluster_name(cluster_name) if cluster_name else None
+            endpoint = (
+                _resolve_endpoint_by_cluster_name(cluster_name)
+                if cluster_name
+                else None
+            )
             if endpoint is None:
-                logger.warning("Cannot resolve endpoint for cluster_name=%r, skipping CPU model", cluster_name)
+                logger.warning(
+                    "Cannot resolve endpoint for cluster_name=%r, skipping CPU model",
+                    cluster_name,
+                )
                 continue
             pk = _upsert_cpu_model(endpoint, item, result)
             if pk:
@@ -143,9 +150,8 @@ def sync_datacenter(
             processed_endpoints.add(endpoint.pk)
 
         if synced_pks:
-            stale = (
-                ProxmoxDatacenterCpuModel.objects.exclude(pk__in=synced_pks)
-                .update(status=FirewallSyncStatusChoices.STALE)
+            stale = ProxmoxDatacenterCpuModel.objects.exclude(pk__in=synced_pks).update(
+                status=FirewallSyncStatusChoices.STALE
             )
             result.cpu_models_stale += stale
 
