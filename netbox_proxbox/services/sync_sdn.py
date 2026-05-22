@@ -276,26 +276,32 @@ def sync_sdn(
                 processed_prefix_list_endpoints.add(endpoint.pk)
 
         if processed_fabric_endpoints:
-            stale_fabrics = ProxmoxSdnFabric.objects.filter(
-                endpoint_id__in=processed_fabric_endpoints
-            ).exclude(pk__in=synced_fabric_pks).update(
-                status=FirewallSyncStatusChoices.STALE
+            stale_fabrics = (
+                ProxmoxSdnFabric.objects.filter(
+                    endpoint_id__in=processed_fabric_endpoints
+                )
+                .exclude(pk__in=synced_fabric_pks)
+                .update(status=FirewallSyncStatusChoices.STALE)
             )
             result.fabrics_stale += stale_fabrics
 
         if processed_route_map_endpoints:
-            stale_route_maps = ProxmoxSdnRouteMap.objects.filter(
-                endpoint_id__in=processed_route_map_endpoints
-            ).exclude(pk__in=synced_route_map_pks).update(
-                status=FirewallSyncStatusChoices.STALE
+            stale_route_maps = (
+                ProxmoxSdnRouteMap.objects.filter(
+                    endpoint_id__in=processed_route_map_endpoints
+                )
+                .exclude(pk__in=synced_route_map_pks)
+                .update(status=FirewallSyncStatusChoices.STALE)
             )
             result.route_maps_stale += stale_route_maps
 
         if processed_prefix_list_endpoints:
-            stale_prefix_lists = ProxmoxSdnPrefixList.objects.filter(
-                endpoint_id__in=processed_prefix_list_endpoints
-            ).exclude(pk__in=synced_prefix_list_pks).update(
-                status=FirewallSyncStatusChoices.STALE
+            stale_prefix_lists = (
+                ProxmoxSdnPrefixList.objects.filter(
+                    endpoint_id__in=processed_prefix_list_endpoints
+                )
+                .exclude(pk__in=synced_prefix_list_pks)
+                .update(status=FirewallSyncStatusChoices.STALE)
             )
             result.prefix_lists_stale += stale_prefix_lists
 
