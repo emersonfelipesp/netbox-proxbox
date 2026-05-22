@@ -70,7 +70,9 @@ def test_models_init_exports_cpu_model():
 # ---------------------------------------------------------------------------
 
 
-_SQUASH_MIGRATION = "netbox_proxbox/migrations/0039_squashed_0039_0042_pve_9_2_firewall_sdn.py"
+_SQUASH_MIGRATION = (
+    "netbox_proxbox/migrations/0039_squashed_0039_0042_pve_9_2_firewall_sdn.py"
+)
 
 
 def test_migration_0041_creates_cpu_model_table():

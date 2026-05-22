@@ -89,10 +89,12 @@ contract and issue #454 for the bug history.
   - 0027 converts `VMTaskHistory.pstart` to BigIntegerField
   - 0028 makes `FastAPIEndpoint.websocket_port` nullable (resets legacy 8800 default to NULL)
   - 0029 adds `primary_ip_preference` to `ProxboxPluginSettings`
-- **v0.0.16** (current): Migrations 0001-0021, 0022_squashed, 0023-0029, 0030-0037, 0038_v0_0_16_release (squashed), 0048+ (on-disk chain has no 0011, no 0038–0047 individual files)
+- **v0.0.16**: Migrations 0001-0021, 0022_squashed, 0023-0029, 0030-0037, 0038_v0_0_16_release (squashed), 0048+ (on-disk chain has no 0011, no 0038–0047 individual files)
   - 0030-0036: incremental v0.0.12–v0.0.15 pre-release fields (VMTaskHistory status, ProxmoxEndpoint site/tenant/timeout, ProxboxPluginSettings controlled/overwrite fields)
   - 0037_v0_0_15_release: manually-constructed squash of the full v0.0.15 and develop branch delta (20 replaced migrations)
   - 0038_v0_0_16_release: manually-constructed squash of the full v0.0.16 intent/apply/deletion/cloud-image delta (11 replaced migrations)
+- **v0.0.18** (current): same chain as v0.0.16 plus `0039_squashed_0039_0042_pve_9_2_firewall_sdn` (replaces individual 0039–0042; no `replaces = [...]` attribute per post-squash policy)
+  - 0039_squashed_0039_0042_pve_9_2_firewall_sdn: manually-constructed squash of migrations 0039 (PVE firewall models), 0040 (endpoint `enabled` field + PBS/PDM gap fix), 0041 (SDN/datacenter models + `ProxmoxNode.location`), and 0042 (SDN prefix list constraint rename). Uses idempotent `create_model_idempotent` / `add_field_idempotent` helpers throughout. Constraint rename is handled by a `_fix_sdn_prefix_list_constraint` RunPython that inspects `information_schema.table_constraints` and is safe for all three DB states: fresh install, partial upgrade, and fully-upgraded.
 
 ## Notes
 
