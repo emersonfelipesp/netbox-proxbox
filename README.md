@@ -322,13 +322,6 @@ Key pages:
 - [Certification Evidence](https://emersonfelipesp.github.io/netbox-proxbox/certification/)
 - [Application Packet](https://emersonfelipesp.github.io/netbox-proxbox/application-packet/)
 
-## Certification Status
-
-Certification evidence is tracked in [CERTIFICATION.md](./CERTIFICATION.md).
-The repository includes Apache-2.0 licensing, PyPI metadata, compatibility
-metadata, GitHub Actions CI, release validation, docs publishing, screenshots,
-page coverage, and a family-level application packet.
-
 ## Community
 
 - GitHub Discussions: https://github.com/orgs/emersonfelipesp/discussions
