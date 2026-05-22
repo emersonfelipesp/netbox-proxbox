@@ -12,6 +12,7 @@ from netbox_proxbox.schemas.service_status import (
     FastAPIStatusResult,
     ServiceCheckResult,
 )
+from netbox_proxbox.services.backend_version import backend_version_advisories
 from netbox_proxbox.utils import (
     get_backend_auth_headers,
     get_fastapi_url,
@@ -194,6 +195,82 @@ class ServiceStatus:
             "token_key": None,
         }
 
+    def _probe_backend_version(
+        self,
+        *,
+        base_url: str,
+        fastapi_obj: FastAPIEndpoint,
+        verify_ssl: bool,
+    ) -> tuple[str | None, list[str], str | None]:
+        """Fetch proxbox-api version and return (version, warnings, blocking_error)."""
+        version_url = f"{base_url.rstrip('/')}/version"
+        try:
+            response = requests.get(
+                version_url,
+                headers=self.backend_auth_headers(fastapi_obj),
+                verify=verify_ssl,
+                timeout=self.request_timeout,
+            )
+            response.raise_for_status()
+            payload = response.json()
+        except requests.exceptions.RequestException as exc:
+            detail, _ = self._extract_error_detail(exc)
+            return (
+                None,
+                [
+                    (
+                        "ProxBox backend is reachable, but its version could not be "
+                        f"verified at {version_url}: {detail}"
+                    )
+                ],
+                None,
+            )
+        except ValueError:
+            return (
+                None,
+                [
+                    (
+                        "ProxBox backend is reachable, but its /version endpoint "
+                        "returned a non-JSON response."
+                    )
+                ],
+                None,
+            )
+
+        version = None
+        if isinstance(payload, dict):
+            raw_version = payload.get("version")
+            if raw_version not in (None, ""):
+                version = str(raw_version)
+
+        if not version:
+            return (
+                None,
+                [
+                    (
+                        "ProxBox backend is reachable, but its /version response did "
+                        "not include a version string."
+                    )
+                ],
+                None,
+            )
+
+        advisories = backend_version_advisories(version)
+        warning_messages = [
+            advisory.message
+            for advisory in advisories
+            if advisory.severity == "warning"
+        ]
+        blocking_error = next(
+            (
+                advisory.message
+                for advisory in advisories
+                if advisory.severity == "error"
+            ),
+            None,
+        )
+        return version, warning_messages, blocking_error
+
     def fastapi_status(self, pk: int) -> FastAPIStatusResult:
         """Return connectivity info for the FastAPI endpoint primary key."""
         connected = False
@@ -202,6 +279,8 @@ class ServiceStatus:
         self._clear_error()
         target_address = None
         target_port = None
+        backend_version = None
+        warnings: list[str] = []
 
         try:
             fastapi_service_obj = FastAPIEndpoint.objects.get(pk=pk)
@@ -290,17 +369,28 @@ class ServiceStatus:
                 auth_headers=self.backend_auth_headers(fastapi_service_obj),
                 backend_verify_ssl=connected_verify_ssl,
             )
+            backend_version, warnings, blocking_error = self._probe_backend_version(
+                base_url=self.connected_url,
+                fastapi_obj=fastapi_service_obj,
+                verify_ssl=connected_verify_ssl,
+            )
+            if blocking_error:
+                self._set_error(blocking_error)
 
         return FastAPIStatusResult(
             url=fastapi_url,
+            backend_version=backend_version,
             connected=connected,
             connected_verify_ssl=connected_verify_ssl,
             target_address=target_address if connected else None,
             target_port=target_port if connected else None,
             authentication="success" if connected else "error",
-            api_access="success" if connected else "error",
+            api_access=(
+                "success" if connected and self.last_error_detail is None else "error"
+            ),
             detail=self.last_error_detail,
             http_status=self.last_error_http_status,
+            warnings=warnings,
         )
 
     def _build_netbox_payload(

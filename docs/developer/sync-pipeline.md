@@ -68,6 +68,11 @@ The sequential order is not arbitrary — each stage depends on objects created 
 - **Stage 3 → 9**: VMs must exist before their VM interfaces can be created
 - **Stage 9 → 10**: VM interfaces must exist before IP addresses can be assigned to them
 
+For upgraded installs, Stage 10 also depends on the `proxmox_vm_id` custom
+field that Stage 3 writes to each NetBox VM. VMs created by affected backend
+versions before the VM config fix may need one Full Update on a fixed
+`proxbox-api` build before the IP-address stage can match them reliably.
+
 ---
 
 ## SSE Stream Mode

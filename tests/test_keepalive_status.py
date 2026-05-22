@@ -26,10 +26,12 @@ def test_fastapi_status_falls_back_to_ip_after_ssl_error(
     ss = _service_status_module()
     calls = []
 
-    def fake_get(url, verify=True, timeout=None):
-        calls.append((url, verify))
+    def fake_get(url, verify=True, timeout=None, headers=None):
+        calls.append((url, verify, headers))
         if "proxbox.local" in url:
             raise requests.exceptions.SSLError("bad cert")
+        if url.endswith("/version"):
+            return ResponseStub({"version": "0.0.15"})
         return ResponseStub({"ok": True})
 
     monkeypatch.setattr(ss.requests, "get", fake_get)
@@ -37,10 +39,104 @@ def test_fastapi_status_falls_back_to_ip_after_ssl_error(
     status = ss.ServiceStatus().fastapi_status(1)
     assert status["connected"] is True
     assert status["connected_verify_ssl"] is False
+    assert status["backend_version"] == "0.0.15"
     assert calls == [
-        ("https://proxbox.local:8800", True),
-        ("https://10.0.0.5:8800", False),
+        ("https://proxbox.local:8800", True, None),
+        ("https://10.0.0.5:8800", False, None),
+        (
+            "https://10.0.0.5:8800/version",
+            False,
+            {"Authorization": "Bearer backend-token"},
+        ),
     ]
+
+
+def test_fastapi_status_warns_for_agent_kv_affected_backend(
+    monkeypatch,
+    fastapi_endpoint,
+):
+    load_plugin_module(
+        "netbox_proxbox.views.keepalive_status",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+    )
+    ss = _service_status_module()
+
+    def fake_get(url, verify=True, timeout=None, headers=None):
+        if url.endswith("/version"):
+            return ResponseStub({"version": "0.0.14"})
+        return ResponseStub({"ok": True})
+
+    monkeypatch.setattr(ss.requests, "get", fake_get)
+
+    status = ss.ServiceStatus().fastapi_status(1)
+
+    assert status["connected"] is True
+    assert status["api_access"] == "success"
+    assert status["backend_version"] == "0.0.14"
+    assert len(status["warnings"]) == 1
+    assert "PR #156" in status["warnings"][0]
+
+
+def test_fastapi_status_errors_for_backend_before_vm_ip_config_fix(
+    monkeypatch,
+    fastapi_endpoint,
+):
+    load_plugin_module(
+        "netbox_proxbox.views.keepalive_status",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+    )
+    ss = _service_status_module()
+
+    def fake_get(url, verify=True, timeout=None, headers=None):
+        if url.endswith("/version"):
+            return ResponseStub({"version": "0.0.12"})
+        return ResponseStub({"ok": True})
+
+    monkeypatch.setattr(ss.requests, "get", fake_get)
+
+    status = ss.ServiceStatus().fastapi_status(1)
+
+    assert status["connected"] is True
+    assert status["api_access"] == "error"
+    assert status["backend_version"] == "0.0.12"
+    assert "too old for reliable VM IP sync" in status["detail"]
+
+
+def test_fastapi_keepalive_payload_exposes_backend_version_warning(
+    monkeypatch,
+    fastapi_endpoint,
+):
+    module = load_plugin_module(
+        "netbox_proxbox.views.keepalive_status",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+    )
+    ss = _service_status_module()
+
+    def fake_get(url, verify=True, timeout=None, headers=None):
+        if url.endswith("/version"):
+            return ResponseStub({"version": "0.0.14"})
+        return ResponseStub({"ok": True})
+
+    monkeypatch.setattr(ss.requests, "get", fake_get)
+
+    request = SimpleNamespace(
+        user=SimpleNamespace(
+            is_authenticated=True,
+            has_perms=lambda *a, **k: True,
+            has_perm=lambda *a, **k: True,
+        ),
+        method="GET",
+    )
+
+    response = module.get_service_status_impl(request, "fastapi", 1)
+
+    assert response.payload["status"] == "success"
+    assert response.payload["backend_version"] == "0.0.14"
+    assert len(response.payload["warnings"]) == 1
+    assert "PR #156" in response.payload["detail"]
 
 
 def test_netbox_status_succeeds_without_backend_round_trip(

@@ -38,14 +38,23 @@ def get_service_status_impl(
             pk=pk,
         )
         fastapi_response = service_status.fastapi_status(pk)
-        status = "success" if fastapi_response.connected else "error"
+        status = (
+            "success"
+            if fastapi_response.connected and fastapi_response.api_access != "error"
+            else "error"
+        )
         payload = {
             "status": status,
+            "backend_version": fastapi_response.backend_version,
             "target_address": fastapi_response.target_address,
             "target_port": fastapi_response.target_port,
             "authentication": fastapi_response.authentication,
             "api_access": fastapi_response.api_access,
         }
+        if fastapi_response.warnings:
+            payload["warnings"] = fastapi_response.warnings
+            if not fastapi_response.detail:
+                payload["detail"] = " ".join(fastapi_response.warnings)
         if fastapi_response.detail:
             payload["detail"] = fastapi_response.detail
         return JsonResponse(payload)

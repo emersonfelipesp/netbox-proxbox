@@ -131,7 +131,10 @@ def test_netbox_endpoint_home_card_uses_configured_token_state():
 def test_home_javascript_passes_error_detail_to_badge_state():
     """Sync buttons POST via native forms; home.js handles status badges and Proxmox cards."""
     contents = _read("netbox_proxbox/static/netbox_proxbox/js/home.js")
-    assert "setBadgeState(element, payload.status, payload.detail" in contents
+    assert "setBadgeState(element, payload.status, statusDetail(payload))" in contents
+    assert "payload.warnings" in contents
+    assert "renderServiceStatusMessage" in contents
+    assert "-connection-error-" in contents
     assert 'setBadgeState(element, "error", error.message' in contents
     assert "proxmox-connection-error-" in contents
     assert "payload.detail && badge" in contents
