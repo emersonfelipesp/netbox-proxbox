@@ -16,6 +16,7 @@ class FastAPIStatusResult(ProxboxBaseModel):
     """Return value from ``ServiceStatus.fastapi_status(pk)``."""
 
     url: str | None = None
+    backend_version: str | None = None
     connected: bool = False
     connected_verify_ssl: bool = True
     target_address: str | None = None
@@ -24,6 +25,7 @@ class FastAPIStatusResult(ProxboxBaseModel):
     api_access: AuthStatusLiteral = "error"
     detail: str | None = None
     http_status: int | None = None
+    warnings: list[str] = Field(default_factory=list)
 
 
 class ServiceCheckResult(ProxboxBaseModel):
@@ -41,9 +43,11 @@ class KeepalivePayload(ProxboxBaseModel):
     """JSON response body for ``GetServiceStatusView``."""
 
     status: StatusLiteral = "unknown"
+    backend_version: str | None = None
     target_address: str | None = None
     target_port: int | None = None
     authentication: AuthStatusLiteral | None = None
     api_access: AuthStatusLiteral | None = None
     detail: str | None = None
     http_status: int | None = None
+    warnings: list[str] = Field(default_factory=list)

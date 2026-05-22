@@ -90,6 +90,49 @@
         return statusUrl.indexOf("/keepalive-status/fastapi/") !== -1;
     }
 
+    function statusDetail(payload) {
+        if (payload.detail) {
+            return payload.detail;
+        }
+        if (Array.isArray(payload.warnings) && payload.warnings.length > 0) {
+            return payload.warnings.join(" ");
+        }
+        return "";
+    }
+
+    function statusMessageContainer(element) {
+        var statusUrl = element.dataset.serviceStatusUrl || "";
+        var match = statusUrl.match(/\/keepalive-status\/([^/]+)\/(\d+)\//);
+        if (!match) {
+            return null;
+        }
+        return document.getElementById(match[1] + "-connection-error-" + match[2]);
+    }
+
+    function renderServiceStatusMessage(element, payload) {
+        var container = statusMessageContainer(element);
+        if (!container) {
+            return;
+        }
+
+        var detail = statusDetail(payload).trim();
+        var hasWarnings = Array.isArray(payload.warnings) && payload.warnings.length > 0;
+        var shouldRender = detail && (payload.status !== "success" || hasWarnings);
+        if (!shouldRender) {
+            container.innerHTML = "";
+            return;
+        }
+
+        var alert = document.createElement("div");
+        alert.className =
+            "alert " +
+            (payload.status === "error" ? "alert-danger" : "alert-warning") +
+            " py-2 px-3 mb-0";
+        alert.textContent = detail;
+        container.innerHTML = "";
+        container.appendChild(alert);
+    }
+
     async function refreshStatusBadges() {
         var elements = Array.prototype.slice.call(
             document.querySelectorAll("[data-service-status-url]"),
@@ -103,12 +146,17 @@
             fastapiElements.map(async function (element) {
                 try {
                     var payload = await fetchJson(element.dataset.serviceStatusUrl);
-                    setBadgeState(element, payload.status, payload.detail || "");
+                    setBadgeState(element, payload.status, statusDetail(payload));
+                    renderServiceStatusMessage(element, payload);
                     if (payload.status === "success") {
                         fastapiConnected = true;
                     }
                 } catch (error) {
                     setBadgeState(element, "error", error.message || "Unknown error");
+                    renderServiceStatusMessage(element, {
+                        status: "error",
+                        detail: error.message || "Unknown error",
+                    });
                 }
             }),
         );
@@ -119,6 +167,10 @@
                     "error",
                     "Skipped because FastAPI backend keepalive is not successful.",
                 );
+                renderServiceStatusMessage(dependentElements[i], {
+                    status: "error",
+                    detail: "Skipped because FastAPI backend keepalive is not successful.",
+                });
             }
             return false;
         }
@@ -126,9 +178,14 @@
             dependentElements.map(async function (element) {
                 try {
                     var payload = await fetchJson(element.dataset.serviceStatusUrl);
-                    setBadgeState(element, payload.status, payload.detail || "");
+                    setBadgeState(element, payload.status, statusDetail(payload));
+                    renderServiceStatusMessage(element, payload);
                 } catch (error) {
                     setBadgeState(element, "error", error.message || "Unknown error");
+                    renderServiceStatusMessage(element, {
+                        status: "error",
+                        detail: error.message || "Unknown error",
+                    });
                 }
             }),
         );

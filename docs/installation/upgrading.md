@@ -40,3 +40,11 @@ sudo systemctl restart proxbox
 ```
 
 If you run the backend in Docker, pull the new image tag and recreate the container.
+
+After upgrading from a backend older than `0.0.13`, run a **Full Update** from
+the Proxbox home page. That pass repopulates the `proxmox_vm_id` custom field
+on VMs created before the VM config fix; the VM IP-address stage depends on
+that field when it matches Proxmox VMs back to NetBox objects. If the FastAPI
+card shows the PR #156 advisory for `proxbox-api` `0.0.13` or `0.0.14`, install
+a backend build containing that fix, or the next fixed backend release, before
+re-testing VM IP sync.
