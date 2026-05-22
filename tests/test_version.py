@@ -129,6 +129,23 @@ def test_proxbox_api_is_not_a_python_dependency():
     )
 
 
+def test_pyproject_metadata_is_certification_ready():
+    pyproject = tomllib.loads(PYPROJECT_PATH.read_text(encoding="utf-8"))
+    project = pyproject["project"]
+
+    assert project["version"] == "0.0.18.post1"
+    assert project["license"] == "Apache-2.0"
+    assert project["license-files"] == ["LICENSE"]
+    assert (
+        "License :: OSI Approved :: Apache Software License"
+        not in project["classifiers"]
+    )
+    assert project["urls"]["Documentation"] == (
+        "https://emersonfelipesp.github.io/netbox-proxbox/"
+    )
+    assert (REPO_ROOT / "LICENSE").is_file()
+
+
 def test_workflows_pin_proxbox_api_runtime_release_without_installing_package():
     e2e_workflow = E2E_WORKFLOW_PATH.read_text(encoding="utf-8")
     nightly_workflow = NIGHTLY_WORKFLOW_PATH.read_text(encoding="utf-8")

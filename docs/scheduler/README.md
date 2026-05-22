@@ -5,11 +5,11 @@ Version: ships in `netbox-proxbox 0.0.15`
 
 A standalone container that fires periodic Proxbox sync triggers without
 asking the operator to install a cron unit on the NetBox host. Code and
-build artefacts live in [`proxbox_scheduler/`](../../proxbox_scheduler/).
+build artefacts live in [`proxbox_scheduler/`](https://github.com/emersonfelipesp/netbox-proxbox/tree/develop/proxbox_scheduler).
 
 This page is the operator-facing summary. For the full
 environment-variable reference and developer notes, see
-[`proxbox_scheduler/README.md`](../../proxbox_scheduler/README.md).
+[`proxbox_scheduler/README.md`](https://github.com/emersonfelipesp/netbox-proxbox/blob/develop/proxbox_scheduler/README.md).
 
 ## When to use it
 
@@ -75,7 +75,7 @@ the cron evaluation timezone.
 ## Running it
 
 The minimal Compose snippet lives at
-[`proxbox_scheduler/docker-compose.example.yml`](../../proxbox_scheduler/docker-compose.example.yml).
+[`proxbox_scheduler/docker-compose.example.yml`](https://github.com/emersonfelipesp/netbox-proxbox/blob/develop/proxbox_scheduler/docker-compose.example.yml).
 Copy it into your stack and edit the env vars to match your environment.
 
 ```bash
@@ -91,7 +91,7 @@ docker run --rm \
 ## Acceptance-criteria checklist
 
 These items are covered by the test suite in
-[`proxbox_scheduler/tests/`](../../proxbox_scheduler/tests/) and by
+[`proxbox_scheduler/tests/`](https://github.com/emersonfelipesp/netbox-proxbox/tree/develop/proxbox_scheduler/tests) and by
 `tests/management/test_proxbox_sync.py`:
 
 - [x] `off`, `interval`, `continuous`, and `cron` modes all parse from env

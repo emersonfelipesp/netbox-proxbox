@@ -1,9 +1,9 @@
 # Operational Verbs — Design Contract
 
 Tracking: [issue #376](https://github.com/emersonfelipesp/netbox-proxbox/issues/376).
-Source specs: [`reference/IMPLEMENTATION-ROADMAP.md`](../../reference/IMPLEMENTATION-ROADMAP.md)
+Source specs: [`reference/IMPLEMENTATION-ROADMAP.md`](https://github.com/emersonfelipesp/netbox-proxbox/blob/develop/reference/IMPLEMENTATION-ROADMAP.md)
 §5.5 and
-[`reference/PROXMOX-AUTOMATION-VALID-TO-IMPLEMENT.md`](../../reference/PROXMOX-AUTOMATION-VALID-TO-IMPLEMENT.md)
+[`reference/PROXMOX-AUTOMATION-VALID-TO-IMPLEMENT.md`](https://github.com/emersonfelipesp/netbox-proxbox/blob/develop/reference/PROXMOX-AUTOMATION-VALID-TO-IMPLEMENT.md)
 §4.7.
 
 This document pins the contract for the operational-verbs carve-out
@@ -112,7 +112,7 @@ One permission, not four. The codename is
 **`core.run_proxmox_action`** — content-type-scoped on
 `virtualization.virtualmachine` and registered via the existing
 `ContentTypePermissionRequiredMixin` pattern in
-[`netbox_proxbox/views/proxbox_access.py`](../../netbox_proxbox/views/proxbox_access.py).
+[`netbox_proxbox/views/proxbox_access.py`](https://github.com/emersonfelipesp/netbox-proxbox/blob/develop/netbox_proxbox/views/proxbox_access.py).
 
 ### 3.1 Why one, not per-verb
 
@@ -536,4 +536,4 @@ This carve-out does not:
 Operators who want the upstream event-rule + webhook shape can
 continue to run `netbox-proxmox-automation` alongside this stack;
 the two systems coexist per §10 of
-[`PROXBOX-AND-PROXMOX-AUTOMATION.md`](../../reference/PROXBOX-AND-PROXMOX-AUTOMATION.md).
+[`PROXBOX-AND-PROXMOX-AUTOMATION.md`](https://github.com/emersonfelipesp/netbox-proxbox/blob/develop/reference/PROXBOX-AND-PROXMOX-AUTOMATION.md).

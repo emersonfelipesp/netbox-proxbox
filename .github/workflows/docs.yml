@@ -34,7 +34,7 @@ jobs:
           python -m pip install -r requirements-docs.txt
 
       - name: Build docs
-        run: mkdocs build
+        run: mkdocs build --strict
 
       - name: Deploy to gh-pages
         if: github.event_name == 'push'

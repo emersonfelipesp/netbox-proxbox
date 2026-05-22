@@ -1,13 +1,28 @@
 [project]
 name = "netbox-proxbox"
-version = "0.0.18"
+version = "0.0.18.post1"
 description = "Netbox Plugin - Integrate Proxmox and Netbox"
 readme = "README.md"
 authors = [
     {name = "Emerson Felipe", email = "emersonfelipe.2003@gmail.com"}
 ]
 license = "Apache-2.0"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: Django",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "Natural Language :: English",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: System :: Systems Administration",
+]
 dependencies = [
     "cryptography>=43.0.0",
     "pydantic==2.13.4",
@@ -17,6 +32,12 @@ dependencies = [
 
 [project.scripts]
 pxb = "proxbox_cli:main"
+
+[project.urls]
+Homepage = "https://github.com/emersonfelipesp/netbox-proxbox"
+Documentation = "https://emersonfelipesp.github.io/netbox-proxbox/"
+Source = "https://github.com/emersonfelipesp/netbox-proxbox"
+Issues = "https://github.com/emersonfelipesp/netbox-proxbox/issues"
 
 [project.optional-dependencies]
 cli = [

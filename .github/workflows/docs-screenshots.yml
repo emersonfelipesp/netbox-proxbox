@@ -268,7 +268,7 @@ jobs:
 
       - name: Build and deploy docs
         run: |
-          mkdocs build
+          mkdocs build --strict
           ghp-import -n -p -f -m "Deploy docs with updated screenshots [${GITHUB_SHA}]" site
 
       - name: Dump container logs on failure

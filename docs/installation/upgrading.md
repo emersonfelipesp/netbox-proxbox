@@ -21,7 +21,7 @@ pip install -e /opt/netbox/netbox/netbox-proxbox
 
 ## Important Notes
 
-- Proxbox `0.0.18` is the current release for NetBox `4.5.8`, `4.5.9`, and `4.6.x` (certified simultaneously against `v4.5.8`, `v4.5.9`, `v4.6.0`, and official `v4.6.1`; declared compatibility range `4.5.8` through `4.6.99`). It is certified with the separate `proxbox-api` backend release `0.0.14`, which ships the SDN, CPU-model, and datacenter-options endpoints that power the new sync services. `proxbox-api` is not installed as a plugin dependency. The previous `0.0.17` release pairs with backend `0.0.13`.
+- Proxbox `0.0.18.post1` is the current release for NetBox `4.5.8`, `4.5.9`, and `4.6.x` (validated against `v4.5.8`, `v4.5.9`, `v4.6.0`, and official `v4.6.1`; declared compatibility range `4.5.8` through `4.6.99`). It is prepared for certification with the separate `proxbox-api` backend release `0.0.14`, which ships the SDN, CPU-model, and datacenter-options endpoints that power the new sync services. `proxbox-api` is not installed as a plugin dependency. The previous `0.0.17` release pairs with backend `0.0.13`.
 - This release adds one new migration: `0041_pve_9_2` (four new tables — `ProxmoxSdnFabric`, `ProxmoxSdnRouteMap`, `ProxmoxSdnPrefixList`, `ProxmoxDatacenterCpuModel` — and one new column `ProxmoxNode.location`). Run `python manage.py migrate netbox_proxbox` after upgrade.
 - If you operate the proxbox-api `*-nginx` image and previously could not connect, edit the FastAPI endpoint after upgrade and tick **Use HTTPS** (and untick **Verify SSL** if you use the bundled mkcert cert).
 - Recent releases moved sync execution to NetBox Jobs and the default RQ queue, so keep a standard NetBox RQ worker running after upgrade.
