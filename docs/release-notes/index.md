@@ -4,12 +4,19 @@ This section tracks the release line represented by this repository and keeps ol
 
 ## Current Release Line
 
-The plugin source in this repository is currently `0.0.18` on the `feat/pve-9.2-sdn-cpu-ha` branch. The sibling plugins (`netbox-pbs`, `netbox-ceph`, `netbox-pdm`, `netbox-packer`) live in standalone repositories under [@emersonfelipesp](https://github.com/emersonfelipesp); each declares `netbox-proxbox>=0.0.16` as an install-time dependency and reuses the shared `proxbox-api` backend.
+The plugin source in this repository is currently `0.0.18.post1` on the
+certification-readiness line. The sibling plugins (`netbox-pbs`,
+`netbox-ceph`, and `netbox-pdm`) live in standalone repositories under
+[@emersonfelipesp](https://github.com/emersonfelipesp) and declare
+`netbox-proxbox>=0.0.18,<0.1.0` as an install-time dependency.
+`netbox-packer` is installable standalone but is prepared for certification as
+part of the same plugin family.
 
 ## Highlights By Version
 
 | Version | Summary |
 |---------|---------|
+| `0.0.18.post1` | Certification-readiness post release: package metadata, project URLs, Apache-2.0 evidence, certification checklist, family application packet, and support links. No runtime sync behavior changes. |
 | `0.0.18` | Full PVE 9.2 support: SDN fabric/route-map/prefix-list models and sync, custom datacenter CPU model persistence, completed per-node firewall sync (per-VM sync implemented, not yet wired automatically), HA arm/disarm action views, and `ProxmoxNode.location` field. Migration `0041_pve_9_2.py`. Pairs with backend [`proxbox-api 0.0.14`](https://github.com/emersonfelipesp/proxbox-api). |
 | `0.0.17` | Adds read-only Proxmox VE firewall sync (closes [#326](https://github.com/emersonfelipesp/netbox-proxbox/issues/326)): consumes the backend's `/proxmox/firewall/*` surface for datacenter, node, per-VM (QEMU + LXC), and per-VNet (SDN) zones — rules, security groups, IP sets, aliases, and options. Certifies NetBox `v4.6.1` alongside `v4.5.8` / `v4.5.9` / `v4.6.0`. Pairs with backend [`proxbox-api 0.0.13`](https://github.com/emersonfelipesp/proxbox-api), which ships the matching twelve firewall read routes plus `PUT /intent/tag-pending-deletion` and `PUT /intent/untag-pending-deletion` intent-tag helpers and the `0.0.12.post1` / `0.0.12.post2` stability fixes. No DB migration; firewall objects are reflected read-only through HTTP and are not yet persisted as Django models. |
 | `0.0.16` | Fixes the operational Cluster Dashboard panel on the Proxmox endpoint detail page (issue [#455](https://github.com/emersonfelipesp/netbox-proxbox/issues/455)): preserves API-reported `nodes_total` / `nodes_online` when live rows are a strict subset of the cluster membership, broadens `build_local_node_rows` to fall back to all `ProxmoxNode` rows under the cluster name when scoped sibling lookup is empty, and renders placeholder rows (`status="unknown"`) for cluster members named by the API status payload that have not yet been synced. Pairs with backend `proxbox-api 0.0.12`. No DB migration, no model change, no NetBox compatibility rotation. |

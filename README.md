@@ -24,8 +24,10 @@ Sync runs on-demand from the NetBox UI or scheduled automatically via NetBox's j
 
 Starting with the `v0.0.16` line, the sibling plugins live in standalone
 repositories under [@emersonfelipesp](https://github.com/emersonfelipesp) and
-each declares `netbox-proxbox>=0.0.16` as a dependency. They all reuse the
-same `proxbox-api` backend.
+the infrastructure inventory plugins declare `netbox-proxbox>=0.0.18` as a
+dependency. `netbox-packer` is installable standalone but is prepared for
+certification as part of the same plugin family. They all reuse the same operational conventions and
+the shared `proxbox-api` backend where applicable.
 
 | Plugin | Repository | Purpose |
 |--------|------------|---------|
@@ -33,6 +35,15 @@ same `proxbox-api` backend.
 | `netbox_ceph` | [`emersonfelipesp/netbox-ceph`](https://github.com/emersonfelipesp/netbox-ceph) | Read-only Proxmox-managed Ceph inventory |
 | `netbox_pdm` | [`emersonfelipesp/netbox-pdm`](https://github.com/emersonfelipesp/netbox-pdm) | Proxmox Datacenter Manager inventory |
 | `netbox_packer` | [`emersonfelipesp/netbox-packer`](https://github.com/emersonfelipesp/netbox-packer) | HashiCorp Packer image-factory for Proxmox |
+
+## What's New in v0.0.18.post1
+
+This post release prepares the Proxbox plugin family for the NetBox Plugin
+Certification Program. It adds certification evidence, PyPI project metadata,
+repository URLs, an application packet, and release-note coverage without
+changing sync behavior.
+
+Full notes: [Release Notes — v0.0.18.post1](https://emersonfelipesp.github.io/netbox-proxbox/release-notes/version-0.0.18.post1/).
 
 ## What's New in v0.0.18
 
@@ -46,6 +57,7 @@ Full notes: [Release Notes — v0.0.18](https://emersonfelipesp.github.io/netbox
 
 | NetBox   | netbox-proxbox | proxbox-api | netbox-sdk     | proxmox-sdk    |
 |----------|----------------|-------------|----------------|----------------|
+| >=4.5.8  | v0.0.18.post1        | v0.0.14          | v0.0.8.post1   | v0.0.3.post1   |
 | >=4.5.8  | v0.0.18              | v0.0.14          | v0.0.8.post1   | v0.0.3.post1   |
 | >=4.5.8  | v0.0.17              | v0.0.13          | v0.0.8.post1   | v0.0.3.post1   |
 | >=4.5.8  | v0.0.16              | v0.0.12          | v0.0.8.post1   | v0.0.3.post1   |
@@ -252,6 +264,15 @@ Key pages:
 - [Installation Guide](https://emersonfelipesp.github.io/netbox-proxbox/installation/2-installing-plugin-git/)
 - [Backend Setup](https://emersonfelipesp.github.io/netbox-proxbox/installation/backend-setup/)
 - [Scheduled Sync](https://emersonfelipesp.github.io/netbox-proxbox/features/scheduled-sync/)
+- [Certification Evidence](https://emersonfelipesp.github.io/netbox-proxbox/certification/)
+- [Application Packet](https://emersonfelipesp.github.io/netbox-proxbox/application-packet/)
+
+## Certification Status
+
+Certification evidence is tracked in [CERTIFICATION.md](./CERTIFICATION.md).
+The repository includes Apache-2.0 licensing, PyPI metadata, compatibility
+metadata, GitHub Actions CI, release validation, docs publishing, screenshots,
+page coverage, and a family-level application packet.
 
 ## Community
 

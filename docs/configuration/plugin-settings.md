@@ -148,7 +148,7 @@ These fields configure the optional **branching-enabled sync** mode where every 
 
 ## NetBox → Proxmox intent direction
 
-These fields gate the optional write-back direction in which merging a branch flagged `apply_to_proxmox=True` dispatches CREATE / UPDATE writes to Proxmox via `proxbox-api`. See the [Safety Model](../../CLAUDE.md#safety-model) for the full five-lock invariant chain.
+These fields gate the optional write-back direction in which merging a branch flagged `apply_to_proxmox=True` dispatches CREATE / UPDATE writes to Proxmox via `proxbox-api`. See the [Safety Model](https://github.com/emersonfelipesp/netbox-proxbox/blob/develop/CLAUDE.md#safety-model) for the full five-lock invariant chain.
 
 | Field | Default | Env override | Description |
 |---|---|---|---|

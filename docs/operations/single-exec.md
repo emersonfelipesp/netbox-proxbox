@@ -145,10 +145,10 @@ and the plugin endpoints are configured, the workflow runs
 `docker compose -f docs/installation/docker-compose-single-exec.yml run --rm netbox`
 attached to the e2e network and asserts exit code `0`.
 
-[e2e]: ../../.github/workflows/e2e-docker.yml
+[e2e]: https://github.com/emersonfelipesp/netbox-proxbox/blob/develop/.github/workflows/e2e-docker.yml
 
 ## Related
 
 - [`proxbox_sync` flag and exit-code reference](./headless-sync.md)
 - [Installing the plugin in a Docker NetBox deployment](../installation/3-installing-plugin-docker.md)
-- [`netbox_proxbox/jobs.py`](../../netbox_proxbox/jobs.py) for the RQ job model
+- [`netbox_proxbox/jobs.py`](https://github.com/emersonfelipesp/netbox-proxbox/blob/develop/netbox_proxbox/jobs.py) for the RQ job model
