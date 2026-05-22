@@ -109,8 +109,8 @@ def _resolve_endpoint_by_cluster_name(cluster_name: str) -> ProxmoxEndpoint | No
         )
         if cluster and cluster.endpoint_id:
             return cluster.endpoint
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("DB error resolving cluster %r: %s", cluster_name, exc)
 
     return ProxmoxEndpoint.objects.filter(name=cluster_name).first()
 
@@ -533,7 +533,7 @@ def sync_firewall(
     # -----------------------------------------------------------------------
     # DB phase — one atomic block per endpoint.
     # -----------------------------------------------------------------------
-    resolved_endpoints: list[ProxmoxEndpoint] = []
+    resolved_endpoints: dict[int, ProxmoxEndpoint] = {}
 
     for entry in summary_list:
         cluster_name = entry.get("cluster_name") or ""
@@ -553,7 +553,7 @@ def sync_firewall(
             _sync_one_endpoint(endpoint, entry, result)
             ep_result["success"] = True
             result.endpoints_processed += 1
-            resolved_endpoints.append(endpoint)
+            resolved_endpoints[endpoint.pk] = endpoint
             logger.info(
                 "Firewall sync for endpoint %s (%s): "
                 "%d sg, %d rules, %d ipsets, %d entries, %d aliases, %d opts created/updated",
@@ -585,7 +585,7 @@ def sync_firewall(
     if resolved_endpoints:
         from netbox_proxbox.models import ProxmoxNode  # noqa: PLC0415
 
-        for endpoint in resolved_endpoints:
+        for endpoint in resolved_endpoints.values():
             nodes = ProxmoxNode.objects.filter(endpoint=endpoint).values_list(
                 "name", flat=True
             )
@@ -658,7 +658,14 @@ def sync_node_firewall(
         )
         resp.raise_for_status()
         data = resp.json()
-        rules = data if isinstance(data, list) else []
+        if not isinstance(data, list):
+            logger.warning(
+                "Node %r firewall rules response is not a list (got %s) — skipping node firewall sync",
+                node_name,
+                type(data).__name__,
+            )
+            return
+        rules = data
     except requests.RequestException as exc:
         logger.warning("Failed to fetch node %r firewall rules: %s", node_name, exc)
         return
@@ -670,9 +677,26 @@ def sync_node_firewall(
             pos_raw = raw.get("pos")
             if pos_raw is None:
                 continue
-            pos = int(pos_raw)
+            try:
+                pos = int(pos_raw)
+            except (ValueError, TypeError):
+                logger.warning(
+                    "Skipping node %r firewall rule with invalid pos=%r",
+                    node_name,
+                    pos_raw,
+                )
+                continue
             enable_raw = raw.get("enable", 1)
-            enable = bool(int(enable_raw)) if enable_raw is not None else True
+            try:
+                enable = bool(int(enable_raw)) if enable_raw is not None else True
+            except (ValueError, TypeError):
+                logger.warning(
+                    "Node %r firewall rule at pos=%s has invalid enable=%r; defaulting to enabled",
+                    node_name,
+                    pos,
+                    enable_raw,
+                )
+                enable = True
             defaults = {
                 "rule_type": raw.get("type") or "",
                 "action": raw.get("action") or "",

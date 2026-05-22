@@ -45,8 +45,8 @@ def _resolve_endpoint_by_cluster_name(cluster_name: str) -> ProxmoxEndpoint | No
         )
         if cluster and cluster.endpoint_id:
             return cluster.endpoint
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("DB error resolving cluster %r: %s", cluster_name, exc)
     return ProxmoxEndpoint.objects.filter(name=cluster_name).first()
 
 
@@ -74,11 +74,11 @@ def _upsert_cpu_model(
     if created:
         result.cpu_models_created += 1
     else:
-        obj.base_cputype = item.get("base_cputype", obj.base_cputype)
-        obj.flags = item.get("flags", obj.flags)
-        obj.vendor_id = item.get("vendor-id", item.get("vendor_id", obj.vendor_id))
-        obj.level = item.get("level", obj.level)
-        obj.description = item.get("description", obj.description)
+        obj.base_cputype = item.get("base_cputype") or ""
+        obj.flags = item.get("flags") or ""
+        obj.vendor_id = item.get("vendor-id", item.get("vendor_id")) or ""
+        obj.level = item.get("level")
+        obj.description = item.get("description") or ""
         obj.status = FirewallSyncStatusChoices.ACTIVE
         obj.raw_config = item
         obj.save()
@@ -147,7 +147,7 @@ def sync_datacenter(
             pk = _upsert_cpu_model(endpoint, item, result)
             if pk:
                 synced_pks.append(pk)
-            processed_endpoints.add(endpoint.pk)
+                processed_endpoints.add(endpoint.pk)
 
         stale = (
             ProxmoxDatacenterCpuModel.objects.filter(

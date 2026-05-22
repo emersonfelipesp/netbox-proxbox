@@ -58,8 +58,8 @@ def _resolve_endpoint_by_cluster_name(cluster_name: str) -> ProxmoxEndpoint | No
         )
         if cluster and cluster.endpoint_id:
             return cluster.endpoint
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("DB error resolving cluster %r: %s", cluster_name, exc)
     return ProxmoxEndpoint.objects.filter(name=cluster_name).first()
 
 
@@ -73,7 +73,7 @@ def _upsert_fabric(endpoint: ProxmoxEndpoint, item: dict, result: SdnSyncResult)
         cluster_name=cluster_name,
         fabric_name=fabric_name,
         defaults={
-            "fabric_type": item.get("type", ""),
+            "fabric_type": item.get("type") or "",
             "asn": item.get("asn"),
             "advertise_subnets": bool(item.get("advertise_subnets", False)),
             "disable_arp_nd_suppression": bool(
@@ -88,16 +88,12 @@ def _upsert_fabric(endpoint: ProxmoxEndpoint, item: dict, result: SdnSyncResult)
     if created:
         result.fabrics_created += 1
     else:
-        obj.fabric_type = item.get("type", obj.fabric_type)
-        obj.asn = item.get("asn", obj.asn)
-        obj.advertise_subnets = bool(
-            item.get("advertise_subnets", obj.advertise_subnets)
-        )
-        obj.disable_arp_nd_suppression = bool(
-            item.get("disable_arp_nd_suppression", obj.disable_arp_nd_suppression)
-        )
-        obj.vrf_vxlan = item.get("vrf_vxlan", obj.vrf_vxlan)
-        obj.peers = item.get("peers", obj.peers)
+        obj.fabric_type = item.get("type") or obj.fabric_type
+        obj.asn = item.get("asn")
+        obj.advertise_subnets = bool(item.get("advertise_subnets"))
+        obj.disable_arp_nd_suppression = bool(item.get("disable_arp_nd_suppression"))
+        obj.vrf_vxlan = item.get("vrf_vxlan")
+        obj.peers = item.get("peers") if item.get("peers") is not None else obj.peers
         obj.status = FirewallSyncStatusChoices.ACTIVE
         obj.raw_config = item
         obj.save()
@@ -112,7 +108,7 @@ def _upsert_route_map(
     name = item.get("name", "")
     if not name:
         return 0
-    order = item.get("order", 0)
+    order = item.get("order") or 0
     obj, created = ProxmoxSdnRouteMap.objects.get_or_create(
         endpoint=endpoint,
         cluster_name=cluster_name,
@@ -152,8 +148,8 @@ def _upsert_prefix_list(
         endpoint=endpoint,
         cluster_name=cluster_name,
         name=name,
+        cidr=item.get("cidr", ""),
         defaults={
-            "cidr": item.get("cidr", ""),
             "action": item.get("action", ""),
             "le": item.get("le"),
             "ge": item.get("ge"),
@@ -166,8 +162,8 @@ def _upsert_prefix_list(
     else:
         obj.cidr = item.get("cidr", obj.cidr)
         obj.action = item.get("action", obj.action)
-        obj.le = item.get("le", obj.le)
-        obj.ge = item.get("ge", obj.ge)
+        obj.le = item.get("le")
+        obj.ge = item.get("ge")
         obj.status = FirewallSyncStatusChoices.ACTIVE
         obj.raw_config = item
         obj.save()
@@ -225,7 +221,9 @@ def sync_sdn(
         logger.error(result.error)
         return result
 
-    processed_endpoints: set[int] = set()
+    processed_fabric_endpoints: set[int] = set()
+    processed_route_map_endpoints: set[int] = set()
+    processed_prefix_list_endpoints: set[int] = set()
     synced_fabric_pks: set[int] = set()
     synced_route_map_pks: set[int] = set()
     synced_prefix_list_pks: set[int] = set()
@@ -247,7 +245,7 @@ def sync_sdn(
             pk = _upsert_fabric(endpoint, item, result)
             if pk:
                 synced_fabric_pks.add(pk)
-            processed_endpoints.add(endpoint.pk)
+                processed_fabric_endpoints.add(endpoint.pk)
 
         for item in route_maps:
             cluster_name = item.get("cluster_name", "")
@@ -261,7 +259,7 @@ def sync_sdn(
             pk = _upsert_route_map(endpoint, item, result)
             if pk:
                 synced_route_map_pks.add(pk)
-            processed_endpoints.add(endpoint.pk)
+                processed_route_map_endpoints.add(endpoint.pk)
 
         for item in prefix_lists:
             cluster_name = item.get("cluster_name", "")
@@ -275,26 +273,37 @@ def sync_sdn(
             pk = _upsert_prefix_list(endpoint, item, result)
             if pk:
                 synced_prefix_list_pks.add(pk)
-            processed_endpoints.add(endpoint.pk)
+                processed_prefix_list_endpoints.add(endpoint.pk)
 
-        if processed_endpoints:
-            ProxmoxSdnFabric.objects.filter(
-                endpoint_id__in=processed_endpoints
+        if processed_fabric_endpoints:
+            stale_fabrics = ProxmoxSdnFabric.objects.filter(
+                endpoint_id__in=processed_fabric_endpoints
             ).exclude(pk__in=synced_fabric_pks).update(
                 status=FirewallSyncStatusChoices.STALE
             )
-            ProxmoxSdnRouteMap.objects.filter(
-                endpoint_id__in=processed_endpoints
+            result.fabrics_stale += stale_fabrics
+
+        if processed_route_map_endpoints:
+            stale_route_maps = ProxmoxSdnRouteMap.objects.filter(
+                endpoint_id__in=processed_route_map_endpoints
             ).exclude(pk__in=synced_route_map_pks).update(
                 status=FirewallSyncStatusChoices.STALE
             )
-            ProxmoxSdnPrefixList.objects.filter(
-                endpoint_id__in=processed_endpoints
+            result.route_maps_stale += stale_route_maps
+
+        if processed_prefix_list_endpoints:
+            stale_prefix_lists = ProxmoxSdnPrefixList.objects.filter(
+                endpoint_id__in=processed_prefix_list_endpoints
             ).exclude(pk__in=synced_prefix_list_pks).update(
                 status=FirewallSyncStatusChoices.STALE
             )
+            result.prefix_lists_stale += stale_prefix_lists
 
-    result.endpoints_processed = len(processed_endpoints)
+    result.endpoints_processed = len(
+        processed_fabric_endpoints
+        | processed_route_map_endpoints
+        | processed_prefix_list_endpoints
+    )
     result.success = True
     logger.info(
         "SDN sync complete: %d endpoint(s) processed, "

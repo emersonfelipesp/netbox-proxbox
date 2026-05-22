@@ -38,12 +38,17 @@ class _HaActionBaseView(ContentTypePermissionRequiredMixin, View):
                     timeout=30,
                     verify=ctx.verify_ssl,
                 )
+                try:
+                    body = resp.json()
+                except Exception:
+                    body = None
                 results.append(
                     {
                         "endpoint_id": endpoint.pk,
                         "endpoint_name": str(endpoint),
                         "status_code": resp.status_code,
                         "ok": resp.ok,
+                        "body": body,
                     }
                 )
             except requests.exceptions.RequestException as exc:
