@@ -406,6 +406,7 @@ class ProxmoxNodeFilterSet(ProxboxModelFilterSet):
             "ip_address",
             "online",
             "local",
+            "location",
         )
 
     def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:

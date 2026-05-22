@@ -133,6 +133,7 @@ class ProxmoxNodeSerializer(NetBoxModelSerializer):
             "memory_usage_percent",
             "max_memory",
             "ssl_fingerprint",
+            "location",
             "support_level",
             "default_role_qemu",
             "default_role_lxc",
