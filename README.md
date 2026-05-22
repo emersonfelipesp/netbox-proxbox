@@ -331,8 +331,6 @@ page coverage, and a family-level application packet.
 ## Community
 
 - GitHub Discussions: https://github.com/orgs/emersonfelipesp/discussions
-- Discord: https://discord.gg/X6FudvXW
-- Telegram: https://t.me/netboxbr
 
 ## Contributing
 

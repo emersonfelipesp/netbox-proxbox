@@ -302,16 +302,6 @@ community_item = PluginMenuItem(
             "GitHub Discussions",
             "mdi mdi-github",
         ),
-        PluginMenuButton(
-            "plugins:netbox_proxbox:discord",
-            "Discord Community",
-            "mdi mdi-forum",
-        ),
-        PluginMenuButton(
-            "plugins:netbox_proxbox:telegram",
-            "Telegram Community",
-            "mdi mdi-send",
-        ),
     ],
 )
 

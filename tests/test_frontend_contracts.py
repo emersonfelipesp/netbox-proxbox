@@ -403,6 +403,33 @@ def test_endpoint_tables_use_record_pk_for_keepalive_reverse():
     assert "record.pk" in contents
 
 
+def test_community_surface_excludes_discord_and_telegram_links():
+    paths = [
+        "README.md",
+        "netbox_proxbox/navigation.py",
+        "netbox_proxbox/urls.py",
+        "netbox_proxbox/views/__init__.py",
+        "netbox_proxbox/views/external_pages.py",
+        "netbox_proxbox/templates/netbox_proxbox/community.html",
+        "netbox_proxbox/static/netbox_proxbox/CLAUDE.md",
+    ]
+    forbidden = (
+        "discord",
+        "telegram",
+        "discord.gg",
+        "discord.com",
+        "t.me/netboxbr",
+        "netboxbr",
+        "9N3V4mp",
+        "X6Fudv",
+    )
+
+    for path in paths:
+        contents = _read(path).lower()
+        for token in forbidden:
+            assert token.lower() not in contents
+
+
 def test_settings_page_is_wired_in_urls_navigation_and_template():
     urls = _read("netbox_proxbox/urls.py")
     navigation = _read("netbox_proxbox/navigation.py")
