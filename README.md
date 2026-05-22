@@ -20,21 +20,75 @@ Proxbox discovers and syncs the following from Proxmox into NetBox:
 
 Sync runs on-demand from the NetBox UI or scheduled automatically via NetBox's job system.
 
-## Sibling Plugins
+## Additional Optional Plugins
 
-Starting with the `v0.0.16` line, the sibling plugins live in standalone
-repositories under [@emersonfelipesp](https://github.com/emersonfelipesp) and
-the infrastructure inventory plugins declare `netbox-proxbox>=0.0.18` as a
-dependency. `netbox-packer` is installable standalone but is prepared for
-certification as part of the same plugin family. They all reuse the same operational conventions and
-the shared `proxbox-api` backend where applicable.
+Proxbox can be extended with standalone companion plugins. Install only the
+plugins you need; `netbox-proxbox` remains the base plugin and must be enabled
+before any companion plugin. The infrastructure inventory plugins declare
+`netbox-proxbox>=0.0.18` as a dependency, and `netbox-packer` follows the same
+operational conventions for the Proxbox plugin family.
 
-| Plugin | Repository | Purpose |
-|--------|------------|---------|
-| `netbox_pbs` | [`emersonfelipesp/netbox-pbs`](https://github.com/emersonfelipesp/netbox-pbs) | Proxmox Backup Server inventory |
-| `netbox_ceph` | [`emersonfelipesp/netbox-ceph`](https://github.com/emersonfelipesp/netbox-ceph) | Read-only Proxmox-managed Ceph inventory |
-| `netbox_pdm` | [`emersonfelipesp/netbox-pdm`](https://github.com/emersonfelipesp/netbox-pdm) | Proxmox Datacenter Manager inventory |
-| `netbox_packer` | [`emersonfelipesp/netbox-packer`](https://github.com/emersonfelipesp/netbox-packer) | HashiCorp Packer image-factory for Proxmox |
+| Package | NetBox plugin | What it adds |
+|---------|---------------|--------------|
+| [`netbox-pdm`](https://github.com/emersonfelipesp/netbox-pdm) | `netbox_pdm` | Inventories Proxmox Datacenter Manager endpoints and the PVE/PBS remotes managed by PDM. It links PDM remotes back to Proxbox Proxmox endpoints and, when installed, `netbox-pbs` backup servers. |
+| [`netbox-pbs`](https://github.com/emersonfelipesp/netbox-pbs) | `netbox_pbs` | Inventories Proxmox Backup Server infrastructure, including PBS servers, datastores, backup snapshots, and scheduled job history. |
+| [`netbox-ceph`](https://github.com/emersonfelipesp/netbox-ceph) | `netbox_ceph` | Adds read-only Ceph cluster inventory for Proxmox-managed Ceph: clusters, daemons, OSDs, pools, filesystems, CRUSH rules, flags, and health checks. |
+| [`netbox-packer`](https://github.com/emersonfelipesp/netbox-packer) | `netbox_packer` | Tracks HashiCorp Packer image definitions and build execution records for Proxmox VM templates and image-factory workflows. |
+
+For a standard NetBox virtualenv install, activate the NetBox environment and
+install the packages you want:
+
+```bash
+source /opt/netbox/venv/bin/activate
+pip install netbox-pbs netbox-pdm netbox-ceph netbox-packer
+```
+
+Enable the selected plugins in `netbox/netbox/configuration.py`. Keep
+`netbox_proxbox` first. If you enable `netbox_pdm`, enable `netbox_pbs` before
+it because PDM can link to PBS server records.
+
+```python
+PLUGINS = [
+    "netbox_proxbox",
+    "netbox_pbs",
+    "netbox_pdm",
+    "netbox_ceph",
+    "netbox_packer",
+]
+```
+
+Run migrations for the selected plugins, preserving the same order:
+
+```bash
+cd /opt/netbox/netbox
+python3 manage.py migrate netbox_proxbox
+python3 manage.py migrate netbox_pbs
+python3 manage.py migrate netbox_pdm
+python3 manage.py migrate netbox_ceph
+python3 manage.py migrate netbox_packer
+python3 manage.py collectstatic --no-input
+sudo systemctl restart netbox netbox-rq
+```
+
+For `netbox-docker`, add the selected packages to `plugin_requirements.txt`,
+enable the matching plugin module names in `configuration/plugins.py`, rebuild,
+and run migrations:
+
+```txt
+netbox-pbs
+netbox-pdm
+netbox-ceph
+netbox-packer
+```
+
+```bash
+docker compose build
+docker compose up -d
+docker compose exec netbox /opt/netbox/netbox/manage.py migrate
+```
+
+Full companion-plugin details live under
+[docs/companion-plugins/](./docs/companion-plugins/).
 
 ## What's New in v0.0.18.post1
 
