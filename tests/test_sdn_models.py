@@ -132,20 +132,25 @@ def test_models_init_exports_sdn_models():
 # ---------------------------------------------------------------------------
 
 
+_SQUASH_MIGRATION = "netbox_proxbox/migrations/0039_squashed_0039_0042_pve_9_2_firewall_sdn.py"
+
+
 def test_migration_0041_exists():
-    assert (REPO_ROOT / "netbox_proxbox/migrations/0041_pve_9_2.py").exists()
+    # 0041_pve_9_2 was folded into the consolidated squash migration.
+    assert (REPO_ROOT / _SQUASH_MIGRATION).exists()
 
 
 def test_migration_0041_creates_sdn_tables():
-    content = _read("netbox_proxbox/migrations/0041_pve_9_2.py")
+    content = _read(_SQUASH_MIGRATION)
     assert "proxmoxsdnfabric" in content.lower()
     assert "proxmoxsdnroutemap" in content.lower()
     assert "proxmoxsdnprefixlist" in content.lower()
 
 
 def test_migration_0041_depends_on_0040():
-    content = _read("netbox_proxbox/migrations/0041_pve_9_2.py")
-    assert "0040_endpoint_enabled" in content
+    # The squash covers 0039–0042; its base dependency is 0038_v0_0_16_release.
+    content = _read(_SQUASH_MIGRATION)
+    assert "0038_v0_0_16_release" in content
 
 
 # ---------------------------------------------------------------------------
