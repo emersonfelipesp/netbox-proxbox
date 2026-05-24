@@ -8,6 +8,7 @@ from .ha import HAClusterSummaryAPIView, HAVMResourceAPIView
 from .ssh_credentials import (
     NodeSSHCredentialByNodeAPIView,
     NodeSSHCredentialSecretsAPIView,
+    ProxmoxEndpointSSHCredentialSecretsAPIView,
 )
 from .views import (
     BackendLogsAPIView,
@@ -172,6 +173,11 @@ urlpatterns = [
         "ssh-credentials/by-node/<int:node_id>/credentials/",
         NodeSSHCredentialSecretsAPIView.as_view(),
         name="api-ssh-credential-secrets",
+    ),
+    path(
+        "ssh-credentials/by-endpoint/<int:endpoint_id>/credentials/",
+        ProxmoxEndpointSSHCredentialSecretsAPIView.as_view(),
+        name="api-ssh-credential-endpoint-secrets",
     ),
     # Model CRUD router (ProxmoxCluster/Node at proxmox-clusters/proxmox-nodes/)
     path("", include(router.urls)),

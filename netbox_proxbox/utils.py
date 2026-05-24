@@ -62,8 +62,10 @@ def get_fastapi_context(endpoint: FastAPIUrlSource) -> dict[str, object] | None:
     url_dict = get_fastapi_url(endpoint)
 
     return {
+        "domain": url_dict.get("domain"),
         "http_url": url_dict.get("http_url"),
         "ip_address_url": url_dict.get("ip_address_url"),
+        "websocket_url": url_dict.get("websocket_url"),
         "verify_ssl": bool(url_dict.get("verify_ssl", True)),
         "headers": get_backend_auth_headers(endpoint),
     }

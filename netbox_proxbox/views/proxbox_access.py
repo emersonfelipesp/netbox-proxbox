@@ -29,12 +29,14 @@ __all__ = (
     "permission_intent_delete_vm",
     "permission_intent_update_lxc",
     "permission_intent_update_vm",
+    "permission_open_ssh_terminal",
     "permission_run_proxmox_action",
     "permission_view_fastapi_endpoint",
     "user_may_access_proxbox_dashboard",
 )
 
 PROXMOX_ACTION_PERMISSION = "core.run_proxmox_action"
+SSH_TERMINAL_PERMISSION = "netbox_proxbox.open_ssh_terminal"
 
 
 class RequireProxboxDashboardAccessMixin(AccessMixin):
@@ -74,6 +76,11 @@ def permission_run_proxmox_action() -> str:
     ``docs/design/operational-verbs.md`` for the full contract.
     """
     return PROXMOX_ACTION_PERMISSION
+
+
+def permission_open_ssh_terminal() -> str:
+    """Required to open browser SSH terminal sessions through proxbox-api."""
+    return SSH_TERMINAL_PERMISSION
 
 
 def permission_view_fastapi_endpoint() -> str:

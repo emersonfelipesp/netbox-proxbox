@@ -1,0 +1,40 @@
+{% extends 'generic/object_edit.html' %}
+{% load form_helpers %}
+{% load i18n %}
+
+{% block title %}
+  {% blocktrans trimmed with object=object %}SSH settings for {{ object }}{% endblocktrans %}
+{% endblock title %}
+
+{% block form %}
+  {% for field in form.hidden_fields %}
+    {{ field }}
+  {% endfor %}
+
+  <div class="card mb-3">
+    <h5 class="card-header">
+      <i class="mdi mdi-console-network"></i>
+      {% trans "Endpoint SSH fallback" %}
+    </h5>
+    <div class="card-body">
+      {% render_field form.ssh_username %}
+      {% render_field form.ssh_port %}
+      {% render_field form.ssh_auth_method %}
+      {% render_field form.ssh_known_host_fingerprint %}
+      {% render_field form.ssh_password %}
+      {% render_field form.ssh_private_key %}
+      {% if form.clear_ssh_password %}
+        {% render_field form.clear_ssh_password %}
+      {% endif %}
+      {% if form.clear_ssh_private_key %}
+        {% render_field form.clear_ssh_private_key %}
+      {% endif %}
+    </div>
+  </div>
+
+  {% if form.changelog_message %}
+    <div class="bg-primary-subtle border border-primary rounded-1 pt-3 px-3 mb-3">
+      {% render_field form.changelog_message %}
+    </div>
+  {% endif %}
+{% endblock form %}

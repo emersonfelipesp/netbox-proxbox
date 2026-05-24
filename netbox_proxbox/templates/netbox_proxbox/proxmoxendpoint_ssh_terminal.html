@@ -1,0 +1,59 @@
+{% extends 'generic/object.html' %}
+{% load static %}
+{% load i18n %}
+
+{% block content %}
+{{ node_options|json_script:"proxbox-ssh-nodes" }}
+<link rel="stylesheet" href="{% static 'netbox_proxbox/vendor/xterm/xterm.css' %}">
+<link rel="stylesheet" href="{% static 'netbox_proxbox/css/ssh_terminal.css' %}">
+
+<div class="row">
+  <div class="col-12">
+    <div class="card proxbox-terminal-card">
+      <div class="card-header d-flex flex-wrap gap-2 align-items-center justify-content-between">
+        <strong>{% trans "SSH Terminal" %}</strong>
+        <span id="proxbox-terminal-status" class="badge text-bg-secondary">{% trans "Disconnected" %}</span>
+      </div>
+      <div class="card-body">
+        <div class="proxbox-terminal-toolbar mb-3">
+          <label class="visually-hidden" for="proxbox-terminal-target">{% trans "Target" %}</label>
+          <select id="proxbox-terminal-target" class="form-select form-select-sm">
+            <option value="node" {% if not node_options %}disabled{% endif %}>{% trans "Node" %}</option>
+            <option value="endpoint" {% if not endpoint_ssh_ready %}disabled{% endif %}>{% trans "Endpoint" %}</option>
+          </select>
+
+          <label class="visually-hidden" for="proxbox-terminal-node">{% trans "Node" %}</label>
+          <select id="proxbox-terminal-node" class="form-select form-select-sm" {% if not node_options %}disabled{% endif %}>
+            {% for node in node_options %}
+              <option value="{{ node.id }}" data-host="{{ node.host }}">
+                {{ node.name }} ({{ node.host }})
+              </option>
+            {% endfor %}
+          </select>
+
+          <button id="proxbox-terminal-connect" type="button" class="btn btn-primary btn-sm">
+            <i class="mdi mdi-console-line"></i>
+            {% trans "Connect" %}
+          </button>
+          <button id="proxbox-terminal-disconnect" type="button" class="btn btn-outline-secondary btn-sm" disabled>
+            <i class="mdi mdi-close-network-outline"></i>
+            {% trans "Disconnect" %}
+          </button>
+        </div>
+
+        <div
+          id="proxbox-ssh-terminal"
+          class="proxbox-ssh-terminal"
+          data-session-url="{% url 'plugins:netbox_proxbox:proxmoxendpoint_ssh_terminal_session' object.pk %}"
+          data-endpoint-id="{{ object.pk }}"
+          data-csrf-token="{{ csrf_token }}"
+          data-endpoint-ready="{% if endpoint_ssh_ready %}true{% else %}false{% endif %}"
+        ></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="{% static 'netbox_proxbox/vendor/xterm/xterm.js' %}"></script>
+<script src="{% static 'netbox_proxbox/js/ssh_terminal.js' %}"></script>
+{% endblock content %}
