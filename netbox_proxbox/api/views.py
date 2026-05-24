@@ -29,6 +29,10 @@ from .serializers import (
     BackupRoutineSerializer,
     CloudImageTemplateSerializer,
     FastAPIEndpointSerializer,
+    FirecrackerHostPoolSerializer,
+    FirecrackerHostSerializer,
+    FirecrackerImageTemplateSerializer,
+    FirecrackerMicroVMSerializer,
     NetBoxEndpointSerializer,
     NodeSSHCredentialSerializer,
     ProxboxPluginSettingsSerializer,
@@ -81,6 +85,7 @@ class ProxBoxRootView(APIRootView):
             "nodes": f"{base}/resources/nodes/",
             "virtual_machines": f"{base}/resources/virtual-machines/",
             "lxc_containers": f"{base}/resources/lxc-containers/",
+            "firecracker_microvms": f"{base}/resources/firecracker-microvms/",
             "interfaces": f"{base}/resources/interfaces/",
             "ip_addresses": f"{base}/resources/ip-addresses/",
             "virtual_disks": f"{base}/resources/virtual-disks/",
@@ -88,6 +93,12 @@ class ProxBoxRootView(APIRootView):
         response.data["schedule_sync"] = f"{base}/sync/schedule/"
         response.data["logs"] = f"{base}/logs/"
         response.data["cloud_image_templates"] = f"{base}/cloud-image-templates/"
+        response.data["firecracker"] = {
+            "host_pools": f"{base}/firecracker-host-pools/",
+            "hosts": f"{base}/firecracker-hosts/",
+            "image_templates": f"{base}/firecracker-image-templates/",
+            "microvms": f"{base}/firecracker-microvms/",
+        }
         response.data["ha"] = {
             "summary": f"{base}/ha/summary/",
             "vm": f"{base}/ha/vm/",
@@ -157,6 +168,53 @@ class CloudImageTemplateViewSet(NetBoxModelViewSet):
     ).prefetch_related("allowed_tenants", "tags")
     serializer_class = CloudImageTemplateSerializer
     filterset_class = filtersets.CloudImageTemplateFilterSet
+
+
+class FirecrackerHostPoolViewSet(NetBoxModelViewSet):
+    """REST API for Firecracker host pools."""
+
+    queryset = models.FirecrackerHostPool.objects.prefetch_related(
+        "allowed_tenants",
+        "tags",
+    )
+    serializer_class = FirecrackerHostPoolSerializer
+    filterset_class = filtersets.FirecrackerHostPoolFilterSet
+
+
+class FirecrackerHostViewSet(NetBoxModelViewSet):
+    """REST API for Firecracker host-agent VMs."""
+
+    queryset = models.FirecrackerHost.objects.select_related(
+        "pool",
+        "host_vm",
+        "proxmox_node",
+    ).prefetch_related("tags")
+    serializer_class = FirecrackerHostSerializer
+    filterset_class = filtersets.FirecrackerHostFilterSet
+
+
+class FirecrackerImageTemplateViewSet(NetBoxModelViewSet):
+    """REST API for Firecracker kernel/rootfs image templates."""
+
+    queryset = models.FirecrackerImageTemplate.objects.prefetch_related(
+        "allowed_tenants",
+        "tags",
+    )
+    serializer_class = FirecrackerImageTemplateSerializer
+    filterset_class = filtersets.FirecrackerImageTemplateFilterSet
+
+
+class FirecrackerMicroVMViewSet(NetBoxModelViewSet):
+    """REST API for Firecracker micro-VM instances."""
+
+    queryset = models.FirecrackerMicroVM.objects.select_related(
+        "tenant",
+        "host",
+        "host__pool",
+        "image",
+    ).prefetch_related("tags")
+    serializer_class = FirecrackerMicroVMSerializer
+    filterset_class = filtersets.FirecrackerMicroVMFilterSet
 
 
 class VMSnapshotViewSet(NetBoxModelViewSet):
@@ -436,6 +494,40 @@ def _serialize_vm(vm: object, request: Request) -> dict:
         "tenant": _nested(vm.tenant, request),
         "platform": _nested(vm.platform, request),
         "interfaces": _serialize_interfaces(vm.interfaces, request),
+    }
+
+
+def _serialize_firecracker_microvm(microvm: object, request: Request) -> dict:
+    """Serialize a Firecracker micro-VM in the Cloud resource-list shape."""
+    try:
+        url = request.build_absolute_uri(microvm.get_absolute_url())
+    except Exception:
+        url = None
+    return {
+        "id": microvm.pk,
+        "instance_ref": microvm.instance_ref,
+        "kind": "firecracker",
+        "name": microvm.name,
+        "url": url,
+        "status": {
+            "value": microvm.status,
+            "label": microvm.get_status_display(),
+        },
+        "tenant": _nested(microvm.tenant, request),
+        "host": _nested(microvm.host, request),
+        "host_pool": _nested(microvm.host.pool, request) if microvm.host_id else None,
+        "image": _nested(microvm.image, request),
+        "network_mode": {
+            "value": microvm.network_mode,
+            "label": microvm.get_network_mode_display(),
+        },
+        "vcpus": microvm.vcpus,
+        "memory_mib": microvm.memory_mib,
+        "disk_mib": microvm.disk_mib,
+        "guest_ip": str(microvm.guest_ip) if microvm.guest_ip else None,
+        "mac_address": microvm.mac_address or None,
+        "started_at": microvm.started_at.isoformat() if microvm.started_at else None,
+        "stopped_at": microvm.stopped_at.isoformat() if microvm.stopped_at else None,
     }
 
 
@@ -872,6 +964,41 @@ class LXCContainersAPIView(_ProxboxVMListAPIView):
 
     vm_type = ProxmoxVMTypeChoices.LXC
     vm_type_slug = "lxc-container"
+
+
+class FirecrackerMicroVMsAPIView(APIView):
+    """API mirror for Firecracker micro-VM resources exposed to NMS Cloud."""
+
+    permission_classes = [IsAuthenticatedOrLoginNotRequired]
+
+    @extend_schema(responses={200: OpenApiTypes.OBJECT})
+    def get(self, request: Request) -> Response:
+        """Return Firecracker micro-VMs with Cloud-compatible metadata."""
+        qs = (
+            models.FirecrackerMicroVM.objects.restrict(request.user, "view")
+            .select_related("tenant", "host", "host__pool", "image")
+            .order_by("name")
+        )
+
+        if "limit" not in request.query_params and "offset" not in request.query_params:
+            results = [
+                _serialize_firecracker_microvm(microvm, request) for microvm in qs
+            ]
+            return Response(
+                {
+                    "count": len(results),
+                    "next": None,
+                    "previous": None,
+                    "results": results,
+                }
+            )
+
+        paginator = LimitOffsetPagination()
+        paginator.default_limit = 1000
+        paginator.max_limit = 5000
+        page = paginator.paginate_queryset(qs, request, view=self)
+        results = [_serialize_firecracker_microvm(microvm, request) for microvm in page]
+        return paginator.get_paginated_response(results)
 
 
 class InterfacesAPIView(APIView):

@@ -13,6 +13,7 @@ from .views import (
     BackendLogsAPIView,
     ClustersAPIView,
     DashboardAPIView,
+    FirecrackerMicroVMsAPIView,
     HomeAPIView,
     InterfacesAPIView,
     IPAddressesAPIView,
@@ -49,6 +50,26 @@ router.register(
     "cloud-image-templates",
     views.CloudImageTemplateViewSet,
     basename="cloudimagetemplate",
+)
+router.register(
+    "firecracker-host-pools",
+    views.FirecrackerHostPoolViewSet,
+    basename="firecrackerhostpool",
+)
+router.register(
+    "firecracker-hosts",
+    views.FirecrackerHostViewSet,
+    basename="firecrackerhost",
+)
+router.register(
+    "firecracker-image-templates",
+    views.FirecrackerImageTemplateViewSet,
+    basename="firecrackerimagetemplate",
+)
+router.register(
+    "firecracker-microvms",
+    views.FirecrackerMicroVMViewSet,
+    basename="firecrackermicrovm",
 )
 router.register("storage", views.ProxmoxStorageViewSet, basename="storage")
 router.register("backups", views.VMBackupViewSet)
@@ -137,6 +158,11 @@ urlpatterns = [
         "resources/lxc-containers/",
         LXCContainersAPIView.as_view(),
         name="api-lxc-containers",
+    ),
+    path(
+        "resources/firecracker-microvms/",
+        FirecrackerMicroVMsAPIView.as_view(),
+        name="api-firecracker-microvms",
     ),
     path(
         "resources/interfaces/",
