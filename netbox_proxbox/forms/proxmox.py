@@ -396,7 +396,9 @@ class ProxmoxEndpointSSHSettingsForm(NetBoxModelForm):
                 "ssh_password",
                 _("Password authentication requires a stored SSH password."),
             )
-        if (password or private_key) and not ProxboxPluginSettings.get_solo().encryption_key:
+        if (
+            password or private_key
+        ) and not ProxboxPluginSettings.get_solo().encryption_key:
             self.add_error(
                 "ssh_private_key" if private_key else "ssh_password",
                 _(

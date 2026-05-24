@@ -15,12 +15,16 @@ TEMPLATE_PATH = (
     / "netbox_proxbox"
     / "proxmoxendpoint_ssh_terminal.html"
 )
-JS_PATH = REPO_ROOT / "netbox_proxbox" / "static" / "netbox_proxbox" / "js" / "ssh_terminal.js"
-MIGRATION_PATH = (
+JS_PATH = (
     REPO_ROOT
     / "netbox_proxbox"
-    / "migrations"
-    / "0040_proxmoxendpoint_ssh_terminal.py"
+    / "static"
+    / "netbox_proxbox"
+    / "js"
+    / "ssh_terminal.js"
+)
+MIGRATION_PATH = (
+    REPO_ROOT / "netbox_proxbox" / "migrations" / "0040_proxmoxendpoint_ssh_terminal.py"
 )
 
 
@@ -50,7 +54,10 @@ def test_open_ssh_terminal_permission_is_declared() -> None:
 
 def test_terminal_views_are_registered_and_backend_ticketed() -> None:
     src = VIEW_PATH.read_text()
-    assert '@register_model_view(ProxmoxEndpoint, "ssh_terminal", path="ssh-terminal")' in src
+    assert (
+        '@register_model_view(ProxmoxEndpoint, "ssh_terminal", path="ssh-terminal")'
+        in src
+    )
     assert '"ssh_terminal_session"' in src
     assert 'path="ssh-terminal/session"' in src
     assert "permission_open_ssh_terminal()" in src

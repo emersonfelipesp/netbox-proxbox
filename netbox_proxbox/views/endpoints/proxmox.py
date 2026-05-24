@@ -425,7 +425,9 @@ class ProxmoxEndpointSSHTerminalSessionView(View):
             node_id = body.get("node_id")
             node = ProxmoxNode.objects.filter(endpoint=endpoint, pk=node_id).first()
             if node is None:
-                return JsonResponse({"error": "Node not found for endpoint."}, status=404)
+                return JsonResponse(
+                    {"error": "Node not found for endpoint."}, status=404
+                )
             backend_payload["node_id"] = node.pk
             backend_payload["host"] = node.ip_address
         elif target_type == "endpoint":
@@ -440,7 +442,9 @@ class ProxmoxEndpointSSHTerminalSessionView(View):
 
         fastapi_endpoint, context = get_fastapi_endpoint_with_token()
         if fastapi_endpoint is None or context is None or not context.http_url:
-            return JsonResponse({"error": "No FastAPI endpoint configured."}, status=503)
+            return JsonResponse(
+                {"error": "No FastAPI endpoint configured."}, status=503
+            )
 
         headers = dict(context.headers)
         headers["X-Proxbox-Actor"] = backend_payload["actor"]
@@ -466,7 +470,10 @@ class ProxmoxEndpointSSHTerminalSessionView(View):
                 continue
             if response.status_code >= 400:
                 return JsonResponse(
-                    {"error": response.text or "proxbox-api rejected terminal session."},
+                    {
+                        "error": response.text
+                        or "proxbox-api rejected terminal session."
+                    },
                     status=response.status_code if response.status_code < 500 else 502,
                 )
             try:
@@ -476,9 +483,8 @@ class ProxmoxEndpointSSHTerminalSessionView(View):
                     {"error": "proxbox-api returned a non-JSON terminal response."},
                     status=502,
                 )
-            websocket_base = (
-                context.detail.get("websocket_url")
-                or getattr(fastapi_endpoint, "websocket_url", "")
+            websocket_base = context.detail.get("websocket_url") or getattr(
+                fastapi_endpoint, "websocket_url", ""
             )
             if not websocket_base:
                 return JsonResponse(
