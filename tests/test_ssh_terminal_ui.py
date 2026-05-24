@@ -24,7 +24,7 @@ JS_PATH = (
     / "ssh_terminal.js"
 )
 MIGRATION_PATH = (
-    REPO_ROOT / "netbox_proxbox" / "migrations" / "0041_proxmoxendpoint_ssh_terminal.py"
+    REPO_ROOT / "netbox_proxbox" / "migrations" / "0042_proxmoxendpoint_ssh_terminal.py"
 )
 
 

@@ -6,7 +6,7 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("netbox_proxbox", "0040_firewall_write_status"),
+        ("netbox_proxbox", "0041_firecracker_cloud"),
     ]
 
     operations = [
