@@ -13,8 +13,9 @@ What the contract pins down:
 * ``get_fastapi_endpoint_with_token`` falls back from "explicit endpoint_id" →
   "single endpoint" → "first endpoint" — the three branches that view code
   relies on.
-* Module imports the ``BackendRequestContext`` schema and the
-  ``ensure_backend_key_registered`` helper used by the auth-retry path.
+* Module imports the ``BackendRequestContext`` schema, and the auth-retry path
+  imports ``ensure_backend_key_registered`` lazily to avoid NetBox startup
+  import cycles.
 """
 
 from __future__ import annotations
@@ -39,6 +40,27 @@ def test_module_imports_required_collaborators():
     assert "from netbox_proxbox.models import FastAPIEndpoint" in source
     assert "BackendRequestContext" in source
     assert "ensure_backend_key_registered" in source
+
+
+def test_backend_auth_import_stays_lazy():
+    module = _module()
+    for node in module.body:
+        if isinstance(node, ast.ImportFrom):
+            assert node.module != "netbox_proxbox.services.backend_auth", (
+                "backend_auth imports view helpers, so importing it at module load "
+                "time can create NetBox startup cycles"
+            )
+
+    helper = _functions_by_name(module)["_handle_auth_registration_and_retry"]
+    local_imports = [
+        node
+        for node in ast.walk(helper)
+        if isinstance(node, ast.ImportFrom)
+        and node.module == "netbox_proxbox.services.backend_auth"
+    ]
+    assert local_imports, (
+        "_handle_auth_registration_and_retry must import backend_auth lazily"
+    )
 
 
 def test_get_fastapi_request_context_signature_is_stable():
