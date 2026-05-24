@@ -6,6 +6,7 @@ from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
 from netbox.api.authentication import IsAuthenticatedOrLoginNotRequired
 from netbox.api.viewsets import NetBoxModelViewSet
+from rest_framework import status as drf_status
 from rest_framework.decorators import action
 from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.permissions import BasePermission, IsAuthenticated
@@ -16,6 +17,12 @@ from rest_framework.views import APIView
 from utilities.permissions import get_permission_for_model
 
 from netbox_proxbox.choices import ProxmoxVMTypeChoices
+from netbox_proxbox.intent.firewall_common import (
+    FirewallPushError,
+    preview_firewall_object,
+    push_firewall_object,
+)
+from netbox_proxbox.views.proxbox_access import permission_run_proxmox_action
 
 from .. import filtersets, models
 from .serializers import (
@@ -1271,7 +1278,66 @@ class BackendLogsAPIView(APIView):
 # ── Firewall ViewSets ─────────────────────────────────────────────────────────
 
 
-class ProxmoxFirewallSecurityGroupViewSet(NetBoxModelViewSet):
+class _FirewallPushActionMixin:
+    """DRF action for pushing one firewall object to Proxmox."""
+
+    @extend_schema(responses={200: OpenApiTypes.OBJECT})
+    @action(detail=True, methods=["post"], url_path="push")
+    def push(self, request: Request, pk: int | str | None = None) -> Response:
+        """Push this firewall object to the linked Proxmox endpoint."""
+        if not request.user.has_perm(permission_run_proxmox_action()):
+            return Response(
+                {
+                    "status": "error",
+                    "reason": "permission_denied",
+                    "detail": "Missing core.run_proxmox_action permission.",
+                },
+                status=drf_status.HTTP_403_FORBIDDEN,
+            )
+
+        obj = self.get_object()
+        actor = _actor_from_request(request)
+        try:
+            result = push_firewall_object(obj, actor=actor)
+        except FirewallPushError as exc:
+            return Response(
+                {
+                    "status": "error",
+                    "reason": exc.reason,
+                    "detail": exc.detail,
+                    "response": exc.response,
+                },
+                status=exc.status_code,
+            )
+        return Response(result.to_response(), status=drf_status.HTTP_200_OK)
+
+    @extend_schema(responses={200: OpenApiTypes.OBJECT})
+    @action(detail=True, methods=["get"], url_path="preview")
+    def preview(self, request: Request, pk: int | str | None = None) -> Response:
+        """Return NetBox state, live Proxmox state, and differing fields."""
+        del pk
+        if not request.user.has_perm(permission_run_proxmox_action()):
+            return Response(
+                {
+                    "status": "error",
+                    "reason": "permission_denied",
+                    "detail": "Missing core.run_proxmox_action permission.",
+                },
+                status=drf_status.HTTP_403_FORBIDDEN,
+            )
+        result = preview_firewall_object(self.get_object())
+        return Response(result.to_response(), status=drf_status.HTTP_200_OK)
+
+
+def _actor_from_request(request: Request) -> str:
+    user = getattr(request, "user", None)
+    get_username = getattr(user, "get_username", None)
+    if callable(get_username):
+        return str(get_username())
+    return str(getattr(user, "username", "") or getattr(user, "pk", "") or "netbox")
+
+
+class ProxmoxFirewallSecurityGroupViewSet(_FirewallPushActionMixin, NetBoxModelViewSet):
     """REST API for Proxmox firewall security groups."""
 
     queryset = models.ProxmoxFirewallSecurityGroup.objects.select_related("endpoint")
@@ -1279,7 +1345,7 @@ class ProxmoxFirewallSecurityGroupViewSet(NetBoxModelViewSet):
     filterset_class = filtersets.ProxmoxFirewallSecurityGroupFilterSet
 
 
-class ProxmoxFirewallRuleViewSet(NetBoxModelViewSet):
+class ProxmoxFirewallRuleViewSet(_FirewallPushActionMixin, NetBoxModelViewSet):
     """REST API for Proxmox firewall rules."""
 
     queryset = models.ProxmoxFirewallRule.objects.select_related(
@@ -1288,8 +1354,43 @@ class ProxmoxFirewallRuleViewSet(NetBoxModelViewSet):
     serializer_class = ProxmoxFirewallRuleSerializer
     filterset_class = filtersets.ProxmoxFirewallRuleFilterSet
 
+    @extend_schema(responses={200: OpenApiTypes.OBJECT})
+    @action(detail=False, methods=["post"], url_path="push")
+    def bulk_push(self, request: Request) -> Response:
+        """Push selected firewall rules to Proxmox."""
+        if not request.user.has_perm(permission_run_proxmox_action()):
+            return Response(
+                {
+                    "status": "error",
+                    "reason": "permission_denied",
+                    "detail": "Missing core.run_proxmox_action permission.",
+                },
+                status=drf_status.HTTP_403_FORBIDDEN,
+            )
+        ids = request.data.get("ids") or request.data.get("pk") or []
+        if not isinstance(ids, list):
+            ids = [ids]
+        actor = _actor_from_request(request)
+        results = []
+        for rule in self.get_queryset().filter(pk__in=ids):
+            try:
+                results.append(push_firewall_object(rule, actor=actor).to_response())
+            except FirewallPushError as exc:
+                results.append(
+                    {
+                        "id": rule.pk,
+                        "status": "error",
+                        "reason": exc.reason,
+                        "detail": exc.detail,
+                    }
+                )
+        return Response(
+            {"status": "completed", "count": len(results), "results": results},
+            status=drf_status.HTTP_200_OK,
+        )
 
-class ProxmoxFirewallIPSetViewSet(NetBoxModelViewSet):
+
+class ProxmoxFirewallIPSetViewSet(_FirewallPushActionMixin, NetBoxModelViewSet):
     """REST API for Proxmox firewall IP sets."""
 
     queryset = models.ProxmoxFirewallIPSet.objects.select_related(
@@ -1299,7 +1400,7 @@ class ProxmoxFirewallIPSetViewSet(NetBoxModelViewSet):
     filterset_class = filtersets.ProxmoxFirewallIPSetFilterSet
 
 
-class ProxmoxFirewallIPSetEntryViewSet(NetBoxModelViewSet):
+class ProxmoxFirewallIPSetEntryViewSet(_FirewallPushActionMixin, NetBoxModelViewSet):
     """REST API for Proxmox firewall IP set entries."""
 
     queryset = models.ProxmoxFirewallIPSetEntry.objects.select_related("ipset")
@@ -1307,7 +1408,7 @@ class ProxmoxFirewallIPSetEntryViewSet(NetBoxModelViewSet):
     filterset_class = filtersets.ProxmoxFirewallIPSetEntryFilterSet
 
 
-class ProxmoxFirewallAliasViewSet(NetBoxModelViewSet):
+class ProxmoxFirewallAliasViewSet(_FirewallPushActionMixin, NetBoxModelViewSet):
     """REST API for Proxmox firewall aliases."""
 
     queryset = models.ProxmoxFirewallAlias.objects.select_related(
@@ -1317,7 +1418,7 @@ class ProxmoxFirewallAliasViewSet(NetBoxModelViewSet):
     filterset_class = filtersets.ProxmoxFirewallAliasFilterSet
 
 
-class ProxmoxFirewallOptionsViewSet(NetBoxModelViewSet):
+class ProxmoxFirewallOptionsViewSet(_FirewallPushActionMixin, NetBoxModelViewSet):
     """REST API for Proxmox firewall options snapshots."""
 
     queryset = models.ProxmoxFirewallOptions.objects.select_related(

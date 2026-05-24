@@ -6,6 +6,7 @@ from urllib.parse import quote
 
 from core.choices import JobStatusChoices
 from core.models import Job
+from django.urls import reverse
 from django.utils.safestring import mark_safe
 from netbox.plugins import PluginTemplateExtension
 from utilities.permissions import get_permission_for_model
@@ -13,8 +14,15 @@ from virtualization.models import VirtualMachine
 
 from netbox_proxbox.jobs import is_proxbox_sync_job
 from netbox_proxbox.utils import resolve_vm_type
+from netbox_proxbox.intent.firewall_common import resolve_firewall_endpoint
 from netbox_proxbox.models import (
     ProxmoxCluster,
+    ProxmoxFirewallAlias,
+    ProxmoxFirewallIPSet,
+    ProxmoxFirewallIPSetEntry,
+    ProxmoxFirewallOptions,
+    ProxmoxFirewallRule,
+    ProxmoxFirewallSecurityGroup,
     ProxmoxNode,
     ProxmoxStorage,
     VMBackup,
@@ -31,6 +39,7 @@ __all__ = (
     "ProxboxJobTemplateExtension",
     "ProxboxVirtualMachineTemplateExtension",
     "ProxmoxClusterTemplateExtension",
+    "ProxmoxFirewallPushTemplateExtension",
     "ProxmoxNodeTemplateExtension",
     "ProxmoxStorageTemplateExtension",
     "VMBackupTemplateExtension",
@@ -304,6 +313,71 @@ class VMTaskHistoryTemplateExtension(_SyncNowButtonExtension):
     model_class = VMTaskHistory
 
 
+class ProxmoxFirewallPushTemplateExtension(PluginTemplateExtension):
+    """Inject a Push to Proxmox button on firewall object detail pages."""
+
+    models = [
+        "netbox_proxbox.proxmoxfirewallsecuritygroup",
+        "netbox_proxbox.proxmoxfirewallrule",
+        "netbox_proxbox.proxmoxfirewallipset",
+        "netbox_proxbox.proxmoxfirewallipsetentry",
+        "netbox_proxbox.proxmoxfirewallalias",
+        "netbox_proxbox.proxmoxfirewalloptions",
+    ]
+    model_classes = (
+        ProxmoxFirewallSecurityGroup,
+        ProxmoxFirewallRule,
+        ProxmoxFirewallIPSet,
+        ProxmoxFirewallIPSetEntry,
+        ProxmoxFirewallAlias,
+        ProxmoxFirewallOptions,
+    )
+
+    def buttons(self) -> str:
+        """Render Push to Proxmox for supported firewall objects."""
+        obj = self.context["object"]
+        if not isinstance(obj, self.model_classes):
+            return ""
+        user = self.context["request"].user
+        if not user.has_perm(permission_run_proxmox_action()):
+            return ""
+        endpoint = resolve_firewall_endpoint(obj)
+        allow_writes = bool(endpoint and getattr(endpoint, "allow_writes", False))
+        return self.render(
+            "netbox_proxbox/inc/firewall_push_button.html",
+            {
+                "object": obj,
+                "allow_writes": allow_writes,
+                "action_url": f"{obj.get_absolute_url()}push-to-proxmox/",
+                "api_push_url": _firewall_api_action_url(obj, "push"),
+            },
+        ) + self.render("netbox_proxbox/inc/firewall_push_assets.html", {})
+
+    def right_page(self) -> str:
+        """Render a NetBox-vs-Proxmox preview panel."""
+        obj = self.context["object"]
+        if not isinstance(obj, self.model_classes):
+            return ""
+        user = self.context["request"].user
+        if not user.has_perm(permission_run_proxmox_action()):
+            return ""
+        return self.render(
+            "netbox_proxbox/inc/firewall_preview_panel.html",
+            {
+                "object": obj,
+                "api_preview_url": _firewall_api_action_url(obj, "preview"),
+            },
+        )
+
+
+def _firewall_api_action_url(obj: object, action: str) -> str:
+    basename = obj._meta.model_name
+    return reverse(
+        f"plugins-api:netbox_proxbox-api:{basename}-{action}",
+        kwargs={"pk": obj.pk},
+    )
+
+
 template_extensions = [
     ProxboxJobTemplateExtension,
     ProxboxVirtualMachineTemplateExtension,
@@ -313,4 +387,5 @@ template_extensions = [
     VMBackupTemplateExtension,
     VMSnapshotTemplateExtension,
     VMTaskHistoryTemplateExtension,
+    ProxmoxFirewallPushTemplateExtension,
 ]

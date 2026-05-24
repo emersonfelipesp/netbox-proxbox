@@ -319,9 +319,11 @@ class FirewallSyncStatusChoices(ChoiceSet):
     key = "FirewallSync.status"
     ACTIVE = "active"
     STALE = "stale"
+    ERROR = "error"
     CHOICES = [
         (ACTIVE, _("Active"), "green"),
         (STALE, _("Stale"), "orange"),
+        (ERROR, _("Error"), "red"),
     ]
 
 
