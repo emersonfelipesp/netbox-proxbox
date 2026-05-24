@@ -43,6 +43,15 @@ from netbox_proxbox.api.serializers.endpoints import (
     NetBoxEndpointSerializer,
     ProxmoxEndpointSerializer,
 )
+from netbox_proxbox.api.serializers.firecracker import (
+    FirecrackerHostPoolSerializer,
+    FirecrackerHostSerializer,
+    FirecrackerImageTemplateSerializer,
+    FirecrackerMicroVMSerializer,
+    NestedFirecrackerHostPoolSerializer,
+    NestedFirecrackerHostSerializer,
+    NestedFirecrackerImageTemplateSerializer,
+)
 from netbox_proxbox.api.serializers.datacenter import (
     ProxmoxDatacenterCpuModelSerializer,
 )
@@ -68,10 +77,17 @@ __all__ = (
     "CloudImageTemplateSerializer",
     "DeviceResourceSerializer",
     "FastAPIEndpointSerializer",
+    "FirecrackerHostPoolSerializer",
+    "FirecrackerHostSerializer",
+    "FirecrackerImageTemplateSerializer",
+    "FirecrackerMicroVMSerializer",
     "InterfaceResourceSerializer",
     "IPAddressResourceSerializer",
     "NestedBackupRoutineSerializer",
     "NestedCloudImageTemplateSerializer",
+    "NestedFirecrackerHostPoolSerializer",
+    "NestedFirecrackerHostSerializer",
+    "NestedFirecrackerImageTemplateSerializer",
     "NestedProxmoxClusterSerializer",
     "NestedProxmoxEndpointSerializer",
     "NestedProxmoxFirewallIPSetSerializer",
