@@ -10,11 +10,20 @@ from utilities.filtersets import register_filterset
 from utilities.filters import MultiValueNumberFilter
 from virtualization.models import Cluster
 
-from .choices import CloudImageOSFamilyChoices
+from .choices import (
+    CloudImageOSFamilyChoices,
+    FirecrackerHostStatusChoices,
+    FirecrackerMicroVMStatusChoices,
+    FirecrackerNetworkModeChoices,
+)
 from .models import (
     BackupRoutine,
     CloudImageTemplate,
     FastAPIEndpoint,
+    FirecrackerHost,
+    FirecrackerHostPool,
+    FirecrackerImageTemplate,
+    FirecrackerMicroVM,
     NetBoxEndpoint,
     NodeSSHCredential,
     ProxmoxCluster,
@@ -128,6 +137,201 @@ class CloudImageTemplateFilterSet(ProxboxModelFilterSet):
         )
         if value.isdigit():
             query |= Q(source_vmid=int(value))
+        return queryset.filter(query)
+
+
+@register_filterset
+class FirecrackerHostPoolFilterSet(ProxboxModelFilterSet):
+    """Filter Firecracker host pools exposed to Cloud provisioning."""
+
+    default_network_mode = django_filters.MultipleChoiceFilter(
+        choices=FirecrackerNetworkModeChoices,
+    )
+    allowed_tenants_id = django_filters.ModelMultipleChoiceFilter(
+        field_name="allowed_tenants",
+        queryset=Tenant.objects.all(),
+    )
+    allowed_tenants = django_filters.ModelMultipleChoiceFilter(
+        field_name="allowed_tenants__slug",
+        to_field_name="slug",
+        queryset=Tenant.objects.all(),
+    )
+    allowed_tenants__id__in = MultiValueNumberFilter(
+        field_name="allowed_tenants__id",
+        lookup_expr="in",
+    )
+    allowed_tenants__isnull = django_filters.BooleanFilter(
+        field_name="allowed_tenants",
+        lookup_expr="isnull",
+    )
+
+    class Meta:
+        model = FirecrackerHostPool
+        fields = (
+            "id",
+            "name",
+            "slug",
+            "default_network_mode",
+            "allowed_tenants",
+            "allowed_tenants_id",
+            "allowed_tenants__id__in",
+            "allowed_tenants__isnull",
+            "is_active",
+        )
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        if not value.strip():
+            return queryset
+        return queryset.filter(Q(name__icontains=value) | Q(slug__icontains=value))
+
+
+@register_filterset
+class FirecrackerHostFilterSet(ProxboxModelFilterSet):
+    """Filter Firecracker host-agent VMs."""
+
+    pool_id = django_filters.ModelMultipleChoiceFilter(
+        field_name="pool",
+        queryset=FirecrackerHostPool.objects.all(),
+    )
+    pool = django_filters.ModelMultipleChoiceFilter(
+        field_name="pool__slug",
+        to_field_name="slug",
+        queryset=FirecrackerHostPool.objects.all(),
+    )
+    status = django_filters.MultipleChoiceFilter(choices=FirecrackerHostStatusChoices)
+
+    class Meta:
+        model = FirecrackerHost
+        fields = (
+            "id",
+            "pool",
+            "pool_id",
+            "name",
+            "status",
+            "host_vm",
+            "proxmox_node",
+            "kvm_available",
+            "supports_nat",
+            "supports_bridge",
+        )
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        if not value.strip():
+            return queryset
+        return queryset.filter(
+            Q(name__icontains=value)
+            | Q(pool__name__icontains=value)
+            | Q(agent_base_url__icontains=value)
+        )
+
+
+@register_filterset
+class FirecrackerImageTemplateFilterSet(ProxboxModelFilterSet):
+    """Filter Firecracker image templates exposed through Cloud provisioning."""
+
+    os_family = django_filters.MultipleChoiceFilter(choices=CloudImageOSFamilyChoices)
+    allowed_tenants_id = django_filters.ModelMultipleChoiceFilter(
+        field_name="allowed_tenants",
+        queryset=Tenant.objects.all(),
+    )
+    allowed_tenants = django_filters.ModelMultipleChoiceFilter(
+        field_name="allowed_tenants__slug",
+        to_field_name="slug",
+        queryset=Tenant.objects.all(),
+    )
+    allowed_tenants__id__in = MultiValueNumberFilter(
+        field_name="allowed_tenants__id",
+        lookup_expr="in",
+    )
+    allowed_tenants__isnull = django_filters.BooleanFilter(
+        field_name="allowed_tenants",
+        lookup_expr="isnull",
+    )
+
+    class Meta:
+        model = FirecrackerImageTemplate
+        fields = (
+            "id",
+            "name",
+            "slug",
+            "architecture",
+            "os_family",
+            "os_release",
+            "allowed_tenants",
+            "allowed_tenants_id",
+            "allowed_tenants__id__in",
+            "allowed_tenants__isnull",
+            "is_active",
+        )
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        if not value.strip():
+            return queryset
+        return queryset.filter(
+            Q(name__icontains=value)
+            | Q(slug__icontains=value)
+            | Q(os_release__icontains=value)
+            | Q(architecture__icontains=value)
+        )
+
+
+@register_filterset
+class FirecrackerMicroVMFilterSet(ProxboxModelFilterSet):
+    """Filter provisioned Firecracker micro-VMs."""
+
+    status = django_filters.MultipleChoiceFilter(
+        choices=FirecrackerMicroVMStatusChoices,
+    )
+    network_mode = django_filters.MultipleChoiceFilter(
+        choices=FirecrackerNetworkModeChoices,
+    )
+    tenant_id = django_filters.ModelMultipleChoiceFilter(
+        field_name="tenant",
+        queryset=Tenant.objects.all(),
+    )
+    tenant = django_filters.ModelMultipleChoiceFilter(
+        field_name="tenant__slug",
+        to_field_name="slug",
+        queryset=Tenant.objects.all(),
+    )
+    host_id = django_filters.ModelMultipleChoiceFilter(
+        field_name="host",
+        queryset=FirecrackerHost.objects.all(),
+    )
+    image_id = django_filters.ModelMultipleChoiceFilter(
+        field_name="image",
+        queryset=FirecrackerImageTemplate.objects.all(),
+    )
+
+    class Meta:
+        model = FirecrackerMicroVM
+        fields = (
+            "id",
+            "microvm_id",
+            "name",
+            "tenant",
+            "tenant_id",
+            "host",
+            "host_id",
+            "image",
+            "image_id",
+            "status",
+            "network_mode",
+        )
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        if not value.strip():
+            return queryset
+        query = (
+            Q(name__icontains=value)
+            | Q(tenant__name__icontains=value)
+            | Q(host__name__icontains=value)
+            | Q(image__name__icontains=value)
+        )
+        try:
+            query |= Q(microvm_id=value)
+        except (TypeError, ValueError):
+            pass
         return queryset.filter(query)
 
 

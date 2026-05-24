@@ -299,6 +299,58 @@ class CloudImageOSFamilyChoices(ChoiceSet):
     ]
 
 
+class FirecrackerHostStatusChoices(ChoiceSet):
+    """Operational status for a Firecracker host-agent VM."""
+
+    key = "FirecrackerHost.status"
+
+    READY = "ready"
+    DRAINING = "draining"
+    OFFLINE = "offline"
+    ERROR = "error"
+
+    CHOICES = [
+        (READY, _("Ready"), "green"),
+        (DRAINING, _("Draining"), "orange"),
+        (OFFLINE, _("Offline"), "gray"),
+        (ERROR, _("Error"), "red"),
+    ]
+
+
+class FirecrackerMicroVMStatusChoices(ChoiceSet):
+    """Lifecycle status for a Firecracker micro-VM."""
+
+    key = "FirecrackerMicroVM.status"
+
+    PROVISIONING = "provisioning"
+    RUNNING = "running"
+    STOPPED = "stopped"
+    ERROR = "error"
+    DELETED = "deleted"
+
+    CHOICES = [
+        (PROVISIONING, _("Provisioning"), "blue"),
+        (RUNNING, _("Running"), "green"),
+        (STOPPED, _("Stopped"), "gray"),
+        (ERROR, _("Error"), "red"),
+        (DELETED, _("Deleted"), "black"),
+    ]
+
+
+class FirecrackerNetworkModeChoices(ChoiceSet):
+    """Network attachment mode requested for a Firecracker micro-VM."""
+
+    key = "Firecracker.network_mode"
+
+    NAT = "nat"
+    BRIDGE = "bridge"
+
+    CHOICES = [
+        (NAT, _("NAT"), "blue"),
+        (BRIDGE, _("Bridge"), "green"),
+    ]
+
+
 class ProxmoxVMTypeChoices(ChoiceSet):
     """Proxmox hypervisor VM type (QEMU vs LXC) as stored in the proxmox_vm_type custom field."""
 
