@@ -6,7 +6,7 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("netbox_proxbox", "0039_squashed_0039_0042_pve_9_2_firewall_sdn"),
+        ("netbox_proxbox", "0040_firewall_write_status"),
     ]
 
     operations = [
