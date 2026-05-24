@@ -2,6 +2,8 @@
 
 Proxbox is a NetBox plugin that synchronizes Proxmox infrastructure data into NetBox. It keeps your DCIM up-to-date with real Proxmox clusters, nodes, virtual machines, containers, and backups.
 
+![netbox-proxbox architecture](docs/assets/netbox-proxbox-architecture.svg)
+
 ## What It Does
 
 Proxbox discovers and syncs the following from Proxmox into NetBox:
@@ -108,6 +110,12 @@ Paired with backend [`proxbox-api 0.0.14`](https://github.com/emersonfelipesp/pr
 Full notes: [Release Notes — v0.0.18](https://emersonfelipesp.github.io/netbox-proxbox/release-notes/version-0.0.18/).
 
 ## Compatibility Matrix
+
+| NetBox | netbox-proxbox | proxbox-api | netbox-sdk | proxmox-sdk |
+|--------|----------------|-------------|------------|-------------|
+| >=4.5.8 | v0.0.18.post1 | v0.0.14 | v0.0.8.post1 | v0.0.3.post1 |
+| >=4.5.8 | v0.0.18 | v0.0.14 | v0.0.8.post1 | v0.0.3.post1 |
+| >=4.5.8 | v0.0.17 | v0.0.13 | v0.0.8.post1 | v0.0.3.post1 |
 
 See [COMPATIBILITY.md](COMPATIBILITY.md) for the full version compatibility table.
 
