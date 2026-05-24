@@ -1,0 +1,20 @@
+{% load i18n static %}
+<div class="card" data-firewall-preview-panel data-firewall-preview-url="{{ api_preview_url }}">
+  <h2 class="card-header">{% trans "Proxmox State" %}</h2>
+  <div class="card-body">
+    <div class="text-muted small" data-firewall-preview-status>{% trans "Loading live state..." %}</div>
+    <div class="table-responsive mt-2 d-none" data-firewall-preview-table-wrap>
+      <table class="table table-sm mb-0">
+        <thead>
+          <tr>
+            <th>{% trans "Field" %}</th>
+            <th>{% trans "NetBox" %}</th>
+            <th>{% trans "Proxmox" %}</th>
+          </tr>
+        </thead>
+        <tbody data-firewall-preview-rows></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<script src="{% static 'netbox_proxbox/js/firewall_push.js' %}" defer></script>

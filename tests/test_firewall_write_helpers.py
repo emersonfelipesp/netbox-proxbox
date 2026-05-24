@@ -44,6 +44,10 @@ class _Client:
         self.calls.append(("put", url, kwargs))
         return self.response
 
+    def get(self, url: str, **kwargs):
+        self.calls.append(("get", url, kwargs))
+        return self.response
+
 
 @pytest.fixture
 def fw_common(monkeypatch):
@@ -265,3 +269,35 @@ def test_rule_validation_requires_vm_id_and_vnet_name(fw_common):
 
     assert "virtual_machine" in vm_errors
     assert "iface" in vnet_errors
+
+
+def test_preview_compares_live_proxmox_state(fw_common):
+    endpoint = _endpoint(fw_common)
+    rule = _rule(fw_common, endpoint)
+    client = _Client(
+        _Response(
+            [
+                {
+                    "cluster_name": "pve01",
+                    "pos": 7,
+                    "type": "in",
+                    "action": "DROP",
+                    "enable": 1,
+                    "source": "10.0.0.0/8",
+                    "proto": "tcp",
+                    "dport": "22",
+                    "comment": "Allow SSH",
+                }
+            ]
+        )
+    )
+
+    result = fw_common.preview_firewall_object(rule, client=client)
+
+    method, url, kwargs = client.calls[0]
+    assert method == "get"
+    assert url == "https://proxbox-api.local/proxmox/firewall/datacenter/rules"
+    assert kwargs["headers"]["Authorization"] == "Bearer token"
+    assert result.status == "ready"
+    assert result.proxmox_state["action"] == "DROP"
+    assert "action" in result.differing_fields

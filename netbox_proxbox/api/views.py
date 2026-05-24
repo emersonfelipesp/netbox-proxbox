@@ -19,6 +19,7 @@ from utilities.permissions import get_permission_for_model
 from netbox_proxbox.choices import ProxmoxVMTypeChoices
 from netbox_proxbox.intent.firewall_common import (
     FirewallPushError,
+    preview_firewall_object,
     push_firewall_object,
 )
 from netbox_proxbox.views.proxbox_access import permission_run_proxmox_action
@@ -1306,6 +1307,14 @@ class _FirewallPushActionMixin:
             )
         return Response(result.to_response(), status=drf_status.HTTP_200_OK)
 
+    @extend_schema(responses={200: OpenApiTypes.OBJECT})
+    @action(detail=True, methods=["get"], url_path="preview")
+    def preview(self, request: Request, pk: int | str | None = None) -> Response:
+        """Return NetBox state, live Proxmox state, and differing fields."""
+        del request, pk
+        result = preview_firewall_object(self.get_object())
+        return Response(result.to_response(), status=drf_status.HTTP_200_OK)
+
 
 def _actor_from_request(request: Request) -> str:
     user = getattr(request, "user", None)
@@ -1331,6 +1340,41 @@ class ProxmoxFirewallRuleViewSet(_FirewallPushActionMixin, NetBoxModelViewSet):
     )
     serializer_class = ProxmoxFirewallRuleSerializer
     filterset_class = filtersets.ProxmoxFirewallRuleFilterSet
+
+    @extend_schema(responses={200: OpenApiTypes.OBJECT})
+    @action(detail=False, methods=["post"], url_path="push")
+    def bulk_push(self, request: Request) -> Response:
+        """Push selected firewall rules to Proxmox."""
+        if not request.user.has_perm(permission_run_proxmox_action()):
+            return Response(
+                {
+                    "status": "error",
+                    "reason": "permission_denied",
+                    "detail": "Missing core.run_proxmox_action permission.",
+                },
+                status=drf_status.HTTP_403_FORBIDDEN,
+            )
+        ids = request.data.get("ids") or request.data.get("pk") or []
+        if not isinstance(ids, list):
+            ids = [ids]
+        actor = _actor_from_request(request)
+        results = []
+        for rule in self.get_queryset().filter(pk__in=ids):
+            try:
+                results.append(push_firewall_object(rule, actor=actor).to_response())
+            except FirewallPushError as exc:
+                results.append(
+                    {
+                        "id": rule.pk,
+                        "status": "error",
+                        "reason": exc.reason,
+                        "detail": exc.detail,
+                    }
+                )
+        return Response(
+            {"status": "completed", "count": len(results), "results": results},
+            status=drf_status.HTTP_200_OK,
+        )
 
 
 class ProxmoxFirewallIPSetViewSet(_FirewallPushActionMixin, NetBoxModelViewSet):

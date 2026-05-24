@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from typing import Any
 from urllib.parse import quote
 
@@ -45,6 +45,22 @@ class FirewallPushResult:
     reason: str | None = None
     detail: str | None = None
     http_status: int = 200
+
+    def to_response(self) -> dict[str, Any]:
+        """Return a JSON-serializable API response payload."""
+        return asdict(self)
+
+
+@dataclass
+class FirewallPreviewResult:
+    """NetBox-vs-Proxmox preview for one firewall object."""
+
+    status: str
+    netbox_state: dict[str, Any]
+    proxmox_state: dict[str, Any] | None = None
+    differing_fields: list[str] = field(default_factory=list)
+    reason: str | None = None
+    detail: str | None = None
 
     def to_response(self) -> dict[str, Any]:
         """Return a JSON-serializable API response payload."""
@@ -219,6 +235,106 @@ def push_firewall_object(
         f"{type(obj).__name__} cannot be pushed to Proxmox firewall endpoints.",
         status_code=400,
     )
+
+
+def preview_firewall_object(
+    obj: object,
+    *,
+    client: HttpClient | None = None,
+) -> FirewallPreviewResult:
+    """Fetch live Proxmox state and compare it with the NetBox object."""
+    netbox_state = firewall_object_state(obj)
+    endpoint = resolve_firewall_endpoint(obj)
+    if endpoint is None:
+        return FirewallPreviewResult(
+            status="error",
+            netbox_state=netbox_state,
+            reason="endpoint_required",
+            detail="This firewall object is not linked to a Proxmox endpoint.",
+        )
+
+    path, params = _preview_read_target(obj)
+    if not path:
+        return FirewallPreviewResult(
+            status="skipped",
+            netbox_state=netbox_state,
+            reason="firewall_preview_not_available",
+            detail="Live preview is not available for this firewall object.",
+        )
+
+    context = get_fastapi_request_context()
+    if context is None or not context.http_url:
+        return FirewallPreviewResult(
+            status="error",
+            netbox_state=netbox_state,
+            reason="fastapi_endpoint_required",
+            detail="No FastAPI backend endpoint is configured.",
+        )
+
+    http_client = client or get_default_http_client()
+    try:
+        response = http_client.get(
+            f"{context.http_url.rstrip('/')}{path}",
+            params=params,
+            headers=dict(context.headers or {}),
+            verify=bool(context.verify_ssl),
+            timeout=FIREWALL_PUSH_TIMEOUT_SECONDS,
+        )
+    except HttpError as exc:
+        return FirewallPreviewResult(
+            status="error",
+            netbox_state=netbox_state,
+            reason="backend_request_failed",
+            detail=translate_request_exception(exc),
+        )
+
+    payload = _response_json(response)
+    if response.status_code >= 400:
+        return FirewallPreviewResult(
+            status="error",
+            netbox_state=netbox_state,
+            reason=str(_payload_value(payload, "reason") or "firewall_preview_failed"),
+            detail=str(_payload_value(payload, "detail") or response.text),
+        )
+
+    proxmox_state = _select_proxmox_state(obj, payload, endpoint)
+    differing_fields = _differing_fields(netbox_state, proxmox_state or {})
+    return FirewallPreviewResult(
+        status="ready" if proxmox_state is not None else "missing",
+        netbox_state=netbox_state,
+        proxmox_state=proxmox_state,
+        differing_fields=differing_fields,
+        reason=None if proxmox_state is not None else "proxmox_object_not_found",
+        detail=None if proxmox_state is not None else "No matching live Proxmox object was found.",
+    )
+
+
+def firewall_object_state(obj: object) -> dict[str, Any]:
+    """Return comparable NetBox state for a firewall object."""
+    if isinstance(obj, ProxmoxFirewallSecurityGroup):
+        return _drop_empty({"name": obj.name, "comment": obj.comment})
+    if isinstance(obj, ProxmoxFirewallRule):
+        return _rule_payload(obj)
+    if isinstance(obj, ProxmoxFirewallIPSet):
+        return _drop_empty({"name": obj.name, "comment": obj.comment})
+    if isinstance(obj, ProxmoxFirewallIPSetEntry):
+        return _drop_empty(
+            {"cidr": obj.cidr, "comment": obj.comment, "nomatch": obj.nomatch}
+        )
+    if isinstance(obj, ProxmoxFirewallAlias):
+        return _drop_empty(
+            {"name": obj.name, "cidr": obj.cidr, "comment": obj.comment}
+        )
+    if isinstance(obj, ProxmoxFirewallOptions):
+        return _drop_empty(
+            {
+                "enable": obj.enable,
+                "policy_in": obj.policy_in,
+                "policy_out": obj.policy_out,
+                **dict(obj.options or {}),
+            }
+        )
+    return {}
 
 
 def push_security_group(
@@ -444,6 +560,158 @@ def _call_firewall_backend(
     else:
         save_status_for_firewall_object(obj, FirewallSyncStatusChoices.ACTIVE)
     return result
+
+
+def _preview_read_target(obj: object) -> tuple[str, dict[str, str] | None]:
+    if isinstance(obj, ProxmoxFirewallSecurityGroup):
+        return "/proxmox/firewall/datacenter/groups", None
+    if isinstance(obj, ProxmoxFirewallRule):
+        return _rule_preview_target(obj)
+    if isinstance(obj, ProxmoxFirewallIPSet):
+        return _scoped_preview_target(obj, "ipsets")
+    if isinstance(obj, ProxmoxFirewallIPSetEntry):
+        return _scoped_preview_target(obj.ipset, "ipsets")
+    if isinstance(obj, ProxmoxFirewallAlias):
+        return _scoped_preview_target(obj, "aliases")
+    if isinstance(obj, ProxmoxFirewallOptions):
+        return _options_preview_target(obj)
+    return "", None
+
+
+def _rule_preview_target(rule: ProxmoxFirewallRule) -> tuple[str, dict[str, str] | None]:
+    if rule.zone == FirewallZoneChoices.DATACENTER:
+        return "/proxmox/firewall/datacenter/rules", None
+    if rule.zone == FirewallZoneChoices.SECURITY_GROUP:
+        return "/proxmox/firewall/datacenter/groups", None
+    if rule.zone == FirewallZoneChoices.NODE:
+        return f"/proxmox/firewall/nodes/{quote(_node_name(rule.proxmox_node), safe='')}/rules", None
+    if rule.zone in {FirewallZoneChoices.VM_QEMU, FirewallZoneChoices.VM_LXC}:
+        vmid, node, vm_type = _vm_context(rule.virtual_machine, zone=rule.zone)
+        return (
+            f"/proxmox/firewall/vms/{vmid}/rules",
+            {"node": node, "vm_type": vm_type},
+        )
+    if rule.zone == FirewallZoneChoices.VNET:
+        return "", None
+    return "", None
+
+
+def _scoped_preview_target(
+    obj: ProxmoxFirewallIPSet | ProxmoxFirewallAlias,
+    noun: str,
+) -> tuple[str, dict[str, str] | None]:
+    if obj.scope == FirewallScopeChoices.DATACENTER:
+        return f"/proxmox/firewall/datacenter/{noun}", None
+    if obj.scope in {FirewallScopeChoices.VM_QEMU, FirewallScopeChoices.VM_LXC}:
+        vmid, node, vm_type = _vm_context(obj.virtual_machine, scope=obj.scope)
+        return (
+            f"/proxmox/firewall/vms/{vmid}/{noun}",
+            {"node": node, "vm_type": vm_type},
+        )
+    return "", None
+
+
+def _options_preview_target(
+    options: ProxmoxFirewallOptions,
+) -> tuple[str, dict[str, str] | None]:
+    if options.zone == FirewallZoneChoices.DATACENTER:
+        return "/proxmox/firewall/datacenter/options", None
+    if options.zone == FirewallZoneChoices.NODE:
+        return f"/proxmox/firewall/nodes/{quote(_node_name(options.proxmox_node), safe='')}/options", None
+    if options.zone in {FirewallZoneChoices.VM_QEMU, FirewallZoneChoices.VM_LXC}:
+        vmid, node, vm_type = _vm_context(options.virtual_machine, zone=options.zone)
+        return (
+            f"/proxmox/firewall/vms/{vmid}/options",
+            {"node": node, "vm_type": vm_type},
+        )
+    return "", None
+
+
+def _select_proxmox_state(
+    obj: object,
+    payload: object,
+    endpoint: ProxmoxEndpoint,
+) -> dict[str, Any] | None:
+    cluster_name = getattr(endpoint, "name", None)
+    if isinstance(obj, ProxmoxFirewallOptions):
+        return payload if isinstance(payload, dict) else None
+    if isinstance(obj, ProxmoxFirewallSecurityGroup):
+        return _find_item(payload, name=obj.name, cluster_name=cluster_name)
+    if isinstance(obj, ProxmoxFirewallRule):
+        if obj.zone == FirewallZoneChoices.SECURITY_GROUP:
+            group = getattr(obj.security_group, "name", None)
+            sg_state = _find_item(payload, name=group, cluster_name=cluster_name)
+            return _find_item((sg_state or {}).get("rules"), pos=obj.pos)
+        return _find_item(payload, pos=obj.pos, cluster_name=cluster_name)
+    if isinstance(obj, ProxmoxFirewallIPSet):
+        return _find_item(payload, name=obj.name, cluster_name=cluster_name)
+    if isinstance(obj, ProxmoxFirewallIPSetEntry):
+        ipset_state = _find_item(payload, name=obj.ipset.name, cluster_name=cluster_name)
+        return _find_item((ipset_state or {}).get("entries"), cidr=obj.cidr)
+    if isinstance(obj, ProxmoxFirewallAlias):
+        return _find_item(payload, name=obj.name, cluster_name=cluster_name)
+    return None
+
+
+def _find_item(
+    payload: object,
+    *,
+    cluster_name: str | None = None,
+    name: str | None = None,
+    pos: int | None = None,
+    cidr: str | None = None,
+) -> dict[str, Any] | None:
+    if isinstance(payload, dict):
+        items = [payload]
+    elif isinstance(payload, list):
+        items = [item for item in payload if isinstance(item, dict)]
+    else:
+        return None
+
+    for item in items:
+        if cluster_name and item.get("cluster_name") not in {None, cluster_name}:
+            continue
+        if name is not None and (item.get("name") or item.get("group")) != name:
+            continue
+        if pos is not None and _coerce_int(item.get("pos")) != int(pos):
+            continue
+        if cidr is not None and item.get("cidr") != cidr:
+            continue
+        return item
+    return None
+
+
+def _differing_fields(
+    netbox_state: dict[str, Any],
+    proxmox_state: dict[str, Any],
+) -> list[str]:
+    fields = sorted(set(netbox_state) | set(proxmox_state))
+    differing: list[str] = []
+    for field_name in fields:
+        netbox_value = _normalize_compare_value(netbox_state.get(field_name))
+        proxmox_value = _normalize_compare_value(
+            proxmox_state.get(field_name)
+            if field_name != "icmp-type"
+            else proxmox_state.get("icmp-type") or proxmox_state.get("icmp_type")
+        )
+        if netbox_value != proxmox_value:
+            differing.append(field_name)
+    return differing
+
+
+def _normalize_compare_value(value: Any) -> Any:
+    if isinstance(value, bool):
+        return int(value)
+    if value is None:
+        return ""
+    return value
+
+
+def _coerce_int(value: object) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _rule_push_target(rule: ProxmoxFirewallRule) -> tuple[str, str]:

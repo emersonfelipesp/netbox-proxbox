@@ -9,6 +9,15 @@ from django.http import HttpRequest, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
 from django.views import View
+from netbox.object_actions import (
+    AddObject,
+    BulkDelete,
+    BulkEdit,
+    BulkExport,
+    BulkImport,
+    BulkRename,
+    ObjectAction,
+)
 from netbox.views.generic import (
     ObjectDeleteView,
     ObjectEditView,
@@ -93,6 +102,68 @@ class _FirewallPushView(
         return HttpResponseRedirect(redirect_to)
 
 
+class FirewallBulkPushAction(ObjectAction):
+    """List-view action for pushing selected firewall rules."""
+
+    name = "bulk_push"
+    label = _("Push Selected")
+    multi = True
+    permissions_required = {"change"}
+    template_name = "netbox_proxbox/buttons/firewall_bulk_push.html"
+
+
+class ProxmoxFirewallRuleBulkPushView(
+    TokenConditionalLoginRequiredMixin,
+    ContentTypePermissionRequiredMixin,
+    View,
+):
+    """Push selected firewall rules and summarize per-record results."""
+
+    http_method_names: ClassVar[list[str]] = ["post"]
+
+    def get_required_permission(self) -> str:
+        """Require the Proxmox write permission for bulk firewall push."""
+        return permission_run_proxmox_action()
+
+    def post(self, request: HttpRequest) -> HttpResponseRedirect:
+        """Push selected firewall rules and redirect back to the list."""
+        selected_ids = request.POST.getlist("pk") or request.POST.getlist("pk[]")
+        redirect_to = request.POST.get("return_url") or request.META.get(
+            "HTTP_REFERER",
+            "/",
+        )
+        if not selected_ids:
+            messages.error(request, _("Select at least one firewall rule to push."))
+            return HttpResponseRedirect(redirect_to)
+
+        actor = _actor_from_request(request)
+        success_count = 0
+        failures: list[str] = []
+        queryset = _RULE_QS.restrict(request.user, "view")
+        for rule in queryset.filter(pk__in=selected_ids):
+            try:
+                push_firewall_object(rule, actor=actor)
+                success_count += 1
+            except FirewallPushError as exc:
+                failures.append(f"#{rule.pk}: {exc.reason}")
+
+        if success_count:
+            messages.success(
+                request,
+                _("Pushed {count} firewall rule(s) to Proxmox.").format(
+                    count=success_count
+                ),
+            )
+        if failures:
+            messages.error(
+                request,
+                _("Firewall push failures: {failures}").format(
+                    failures=", ".join(failures)
+                ),
+            )
+        return HttpResponseRedirect(redirect_to)
+
+
 def _actor_from_request(request: HttpRequest) -> str:
     user = getattr(request, "user", None)
     get_username = getattr(user, "get_username", None)
@@ -150,6 +221,15 @@ class ProxmoxFirewallRuleListView(ObjectListView):
     table = tables.ProxmoxFirewallRuleTable
     filterset = filtersets.ProxmoxFirewallRuleFilterSet
     filterset_form = forms.ProxmoxFirewallRuleFilterForm
+    actions = (
+        AddObject,
+        BulkImport,
+        BulkExport,
+        BulkEdit,
+        BulkRename,
+        FirewallBulkPushAction,
+        BulkDelete,
+    )
 
 
 @register_model_view(models.ProxmoxFirewallRule)
@@ -179,6 +259,16 @@ class ProxmoxFirewallRuleDeleteView(ObjectDeleteView):
 class ProxmoxFirewallRulePushView(_FirewallPushView):
     model = models.ProxmoxFirewallRule
     queryset = _RULE_QS
+
+
+@register_model_view(
+    models.ProxmoxFirewallRule,
+    "bulk_push",
+    path="push-selected",
+    detail=False,
+)
+class ProxmoxFirewallRuleBulkPushActionView(ProxmoxFirewallRuleBulkPushView):
+    """Registered route for selected firewall rule pushes."""
 
 
 # ── ProxmoxFirewallIPSet ──────────────────────────────────────────────────────

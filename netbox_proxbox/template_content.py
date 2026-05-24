@@ -6,6 +6,7 @@ from urllib.parse import quote
 
 from core.choices import JobStatusChoices
 from core.models import Job
+from django.urls import reverse
 from django.utils.safestring import mark_safe
 from netbox.plugins import PluginTemplateExtension
 from utilities.permissions import get_permission_for_model
@@ -348,8 +349,30 @@ class ProxmoxFirewallPushTemplateExtension(PluginTemplateExtension):
                 "object": obj,
                 "allow_writes": allow_writes,
                 "action_url": f"{obj.get_absolute_url()}push-to-proxmox/",
+                "api_push_url": _firewall_api_action_url(obj, "push"),
             },
         )
+
+    def right_page(self) -> str:
+        """Render a NetBox-vs-Proxmox preview panel."""
+        obj = self.context["object"]
+        if not isinstance(obj, self.model_classes):
+            return ""
+        return self.render(
+            "netbox_proxbox/inc/firewall_preview_panel.html",
+            {
+                "object": obj,
+                "api_preview_url": _firewall_api_action_url(obj, "preview"),
+            },
+        )
+
+
+def _firewall_api_action_url(obj: object, action: str) -> str:
+    basename = obj._meta.model_name
+    return reverse(
+        f"plugins-api:netbox_proxbox-api:{basename}-{action}",
+        kwargs={"pk": obj.pk},
+    )
 
 
 template_extensions = [

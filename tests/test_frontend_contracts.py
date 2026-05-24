@@ -159,6 +159,41 @@ def test_vm_detail_sync_now_button_contract():
     assert "Sync Now" in button_contents
 
 
+def test_firewall_push_and_preview_ui_contracts():
+    extension_contents = _read("netbox_proxbox/template_content.py")
+    view_contents = _read("netbox_proxbox/views/firewall.py")
+    api_view_contents = _read("netbox_proxbox/api/views.py")
+    push_button = _read(
+        "netbox_proxbox/templates/netbox_proxbox/inc/firewall_push_button.html"
+    )
+    preview_panel = _read(
+        "netbox_proxbox/templates/netbox_proxbox/inc/firewall_preview_panel.html"
+    )
+    bulk_button = _read(
+        "netbox_proxbox/templates/netbox_proxbox/buttons/firewall_bulk_push.html"
+    )
+    runtime_js = _read("netbox_proxbox/static/netbox_proxbox/js/firewall_push.js")
+
+    assert "ProxmoxFirewallPushTemplateExtension" in extension_contents
+    assert "right_page" in extension_contents
+    assert "api_push_url" in extension_contents
+    assert "api_preview_url" in extension_contents
+    assert "FirewallBulkPushAction" in view_contents
+    assert 'name = "bulk_push"' in view_contents
+    assert 'path="push-selected"' in view_contents
+    assert "preview_firewall_object" in api_view_contents
+    assert 'url_path="preview"' in api_view_contents
+    assert 'url_path="push"' in api_view_contents
+    assert "data-firewall-push-form" in push_button
+    assert "data-firewall-api-url" in push_button
+    assert "data-firewall-preview-panel" in preview_panel
+    assert "data-firewall-preview-url" in preview_panel
+    assert "table-warning" in runtime_js
+    assert "X-CSRFToken" in runtime_js
+    assert "fetch(apiUrl" in runtime_js
+    assert "{% formaction %}" in bulk_button
+
+
 def test_job_live_poll_alert_spans_the_card_width_and_keeps_streaming_messages():
     contents = _read(
         "netbox_proxbox/templates/netbox_proxbox/inc/job_live_poll_alert.html"
