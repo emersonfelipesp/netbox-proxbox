@@ -324,6 +324,7 @@ def _upsert_options(
             "policy_in": raw.get("policy_in") or "",
             "policy_out": raw.get("policy_out") or "",
             "options": extra,
+            "status": FirewallSyncStatusChoices.ACTIVE,
             "raw_config": raw,
         },
     )
@@ -453,10 +454,7 @@ def _sync_one_endpoint(
         )
         result.aliases_stale += stale_aliases
 
-        # ProxmoxFirewallOptions has no status field; stale rows are deleted
-        # so the (endpoint, zone, node, vm) unique constraint stays in sync
-        # with the Proxmox cluster.
-        stale_opts, _ = (
+        stale_opts = (
             ProxmoxFirewallOptions.objects.filter(
                 endpoint=endpoint,
                 zone=FirewallZoneChoices.DATACENTER,
@@ -464,7 +462,7 @@ def _sync_one_endpoint(
                 virtual_machine=None,
             )
             .exclude(pk__in=synced_opts_ids)
-            .delete()
+            .update(status=FirewallSyncStatusChoices.STALE)
         )
         result.options_stale += stale_opts
 

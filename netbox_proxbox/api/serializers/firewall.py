@@ -26,6 +26,11 @@ from netbox_proxbox.models import (
     ProxmoxFirewallRule,
     ProxmoxFirewallSecurityGroup,
 )
+from netbox_proxbox.intent.firewall_common import (
+    validation_errors_for_options,
+    validation_errors_for_rule,
+    validation_errors_for_scoped_object,
+)
 
 
 class NestedProxmoxFirewallSecurityGroupSerializer(NetBoxModelSerializer):
@@ -125,6 +130,12 @@ class ProxmoxFirewallRuleSerializer(NetBoxModelSerializer):
             "status",
         )
 
+    def validate(self, attrs):
+        errors = validation_errors_for_rule(attrs, instance=self.instance)
+        if errors:
+            raise serializers.ValidationError(errors)
+        return super().validate(attrs)
+
 
 class ProxmoxFirewallIPSetSerializer(NetBoxModelSerializer):
     url = serializers.HyperlinkedIdentityField(
@@ -154,6 +165,12 @@ class ProxmoxFirewallIPSetSerializer(NetBoxModelSerializer):
             "last_updated",
         )
         brief_fields = ("id", "url", "display", "name", "scope", "status")
+
+    def validate(self, attrs):
+        errors = validation_errors_for_scoped_object(attrs, instance=self.instance)
+        if errors:
+            raise serializers.ValidationError(errors)
+        return super().validate(attrs)
 
 
 class NestedProxmoxFirewallIPSetSerializer(NetBoxModelSerializer):
@@ -221,6 +238,12 @@ class ProxmoxFirewallAliasSerializer(NetBoxModelSerializer):
         )
         brief_fields = ("id", "url", "display", "name", "cidr", "scope", "status")
 
+    def validate(self, attrs):
+        errors = validation_errors_for_scoped_object(attrs, instance=self.instance)
+        if errors:
+            raise serializers.ValidationError(errors)
+        return super().validate(attrs)
+
 
 class ProxmoxFirewallOptionsSerializer(NetBoxModelSerializer):
     url = serializers.HyperlinkedIdentityField(
@@ -230,6 +253,7 @@ class ProxmoxFirewallOptionsSerializer(NetBoxModelSerializer):
     proxmox_node = NestedProxmoxNodeSerializer(required=False, allow_null=True)
     virtual_machine = NestedVirtualMachineSerializer(required=False, allow_null=True)
     zone = ChoiceField(choices=FirewallZoneChoices)
+    status = ChoiceField(choices=FirewallSyncStatusChoices, required=False)
 
     class Meta:
         model = ProxmoxFirewallOptions
@@ -245,6 +269,7 @@ class ProxmoxFirewallOptionsSerializer(NetBoxModelSerializer):
             "policy_in",
             "policy_out",
             "options",
+            "status",
             "raw_config",
             "tags",
             "custom_fields",
@@ -259,4 +284,11 @@ class ProxmoxFirewallOptionsSerializer(NetBoxModelSerializer):
             "enable",
             "policy_in",
             "policy_out",
+            "status",
         )
+
+    def validate(self, attrs):
+        errors = validation_errors_for_options(attrs, instance=self.instance)
+        if errors:
+            raise serializers.ValidationError(errors)
+        return super().validate(attrs)
