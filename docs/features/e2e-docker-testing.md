@@ -16,7 +16,7 @@ pipeline that reuses this workflow), see
 
 ## Matrix Shape
 
-`e2e-docker.yml` fans the test out across four axes. Each cell runs on its
+`e2e-docker.yml` fans the test out across five axes. Each cell runs on its
 own GitHub Actions runner with `fail-fast: false`, so failures in one cell
 do not abort the others.
 
@@ -25,11 +25,27 @@ do not abort the others.
 | `install_source` | `local`, `pypi`, `container` | How `netbox-proxbox` is installed inside NetBox. |
 | `netbox_image` | `v4.5.8`, `v4.5.9`, `v4.6.0` | The three NetBox releases the plugin is currently certified against. |
 | `network_stack` | `ipv4` | Reserved for future dual-stack runs. |
+| `proxbox_api_runtime` | `python`, `pyo3-rust` | Runs each cell against the default Python backend and the experimental PyO3/Rust reconciliation backend. |
 | `proxmox_service` | `pve`, `pbs`, `pdm` | Selects which `proxmox-sdk` mock service image is used as the Proxmox side. |
 
-The default cross-product is **3 × 3 × 1 × 3 = 27 cells**. Manual
+The default cross-product is **3 × 3 × 1 × 2 × 3 = 54 cells**. Manual
 dispatch (`workflow_dispatch`) and reusable callers can pin any axis to a
 single value (for example `proxmox_service: pve`) to run a narrower slice.
+
+### proxbox-api Runtime Axis
+
+The backend container is split between the stable Python reconciliation path
+and the experimental PyO3/Rust reconciliation path:
+
+| Runtime | Dev mode | Published Docker mode | Package-index mode |
+|---|---|---|---|
+| `python` | Builds `proxbox-api` target `raw`. | Pulls `emersonfelipesp/proxbox-api:<version>`. | Installs `proxbox-api==<version>`. |
+| `pyo3-rust` | Builds target `raw-pyo3-rust`. | Pulls `emersonfelipesp/proxbox-api:<version>-pyo3-rust`. | Tries `proxbox-api[pyo3-rust]==<version>`, then falls back to the matching `-pyo3-rust` Docker image with a workflow warning. |
+
+Rust cells set `PROXBOX_RECONCILIATION_ENGINE=rust` and run an early
+`rust_available()` assertion inside the backend container before the NetBox
+sync checks begin. A Rust import or runtime mismatch therefore fails the E2E
+cell before package publication can proceed.
 
 ### Proxmox Service Axis
 
@@ -72,7 +88,7 @@ flowchart LR
   subgraph D[Docker network: proxbox-e2e]
     NB[NetBox container<br>netbox-proxbox installed]
     RQ[NetBox rqworker<br>manage.py rqworker]
-    API[proxbox-api container]
+    API[proxbox-api container<br>python / pyo3-rust runtime]
     PM[proxmox-sdk mock<br>tag latest-pve / latest-pbs / latest-pdm]
     PG[(PostgreSQL)]
     RD[(Redis)]
@@ -231,6 +247,7 @@ env:
 ```bash
 # Pick the cell you want to reproduce
 export PROXMOX_SERVICE=pbs
+export PROXBOX_API_RUNTIME=pyo3-rust
 export NETBOX_IMAGE=netboxcommunity/netbox:v4.6.0
 
 # Stand up the stack the way the workflow does
