@@ -29,10 +29,12 @@ from rest_framework.permissions import BasePermission
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from utilities.permissions import get_permission_for_model
 
 from netbox_proxbox.models import (
     NodeSSHCredential,
     ProxboxPluginSettings,
+    ProxmoxEndpoint,
 )
 from netbox_proxbox.utils import encryption as enc_helpers
 
@@ -57,6 +59,19 @@ def _metadata_payload(cred: NodeSSHCredential) -> dict:
     }
 
 
+def _endpoint_metadata_payload(endpoint: ProxmoxEndpoint) -> dict:
+    return {
+        "endpoint_id": endpoint.pk,
+        "host": endpoint.ssh_host,
+        "username": endpoint.ssh_username,
+        "port": endpoint.ssh_port,
+        "auth_method": endpoint.ssh_auth_method,
+        "known_host_fingerprint": endpoint.ssh_known_host_fingerprint,
+        "has_password": bool(endpoint.ssh_password_enc),
+        "has_private_key": bool(endpoint.ssh_private_key_enc),
+    }
+
+
 def _credential_for_node_identifier(node_id: int) -> NodeSSHCredential:
     """Resolve credentials by ProxmoxNode PK, with NetBox device PK fallback.
 
@@ -71,13 +86,15 @@ def _credential_for_node_identifier(node_id: int) -> NodeSSHCredential:
         return get_object_or_404(queryset, node__netbox_device_id=node_id)
 
 
-class _NetBoxTokenCanViewNodeSSHCredential(BasePermission):
-    """Allow only NetBox API tokens with credential view permission.
+class _NetBoxTokenPermission(BasePermission):
+    """Allow only NetBox API tokens with all required permissions.
 
     Browser sessions are intentionally rejected: decrypted SSH secrets are only
     returned when the request carries a NetBox API token, which is the header
     shape sent by ``proxbox-api`` through ``netbox-sdk``.
     """
+
+    required_permissions: tuple[str, ...] = ()
 
     def has_permission(self, request: Request, view: object) -> bool:  # type: ignore[override]
         auth = request.headers.get("Authorization", "")
@@ -92,10 +109,28 @@ class _NetBoxTokenCanViewNodeSSHCredential(BasePermission):
         user, _token = auth_result
         if not getattr(user, "is_authenticated", False):
             return False
+        request.user = user
+        request.auth = _token
         has_perm = getattr(user, "has_perm", None)
         return bool(
-            callable(has_perm) and has_perm("netbox_proxbox.view_nodesshcredential")
+            callable(has_perm)
+            and all(has_perm(permission) for permission in self.required_permissions)
         )
+
+
+class _NetBoxTokenCanViewNodeSSHCredential(_NetBoxTokenPermission):
+    """Allow node credential secret reads for NetBox API-token callers."""
+
+    required_permissions = ("netbox_proxbox.view_nodesshcredential",)
+
+
+class _NetBoxTokenCanReadEndpointSSHCredential(_NetBoxTokenPermission):
+    """Allow endpoint fallback secret reads for terminal-capable API-token callers."""
+
+    required_permissions = (
+        get_permission_for_model(ProxmoxEndpoint, "view"),
+        get_permission_for_model(ProxmoxEndpoint, "open_ssh_terminal"),
+    )
 
 
 class NodeSSHCredentialByNodeAPIView(APIView):
@@ -150,6 +185,60 @@ class NodeSSHCredentialSecretsAPIView(APIView):
             )
 
         payload = _metadata_payload(cred)
+        payload["password"] = password
+        payload["private_key"] = private_key
+        return Response(payload)
+
+
+class ProxmoxEndpointSSHCredentialSecretsAPIView(APIView):
+    """Return decrypted endpoint fallback SSH credentials for proxbox-api."""
+
+    permission_classes = [_NetBoxTokenCanReadEndpointSSHCredential]
+
+    def get(self, request: Request, endpoint_id: int) -> Response:
+        """Return endpoint fallback SSH secrets for API-token callers only."""
+        if not django_settings.DEBUG and not request.is_secure():
+            return Response(
+                {"detail": "HTTPS required to retrieve SSH credentials."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        endpoint = get_object_or_404(
+            ProxmoxEndpoint.objects.restrict(request.user, "view").restrict(
+                request.user, "open_ssh_terminal"
+            ),
+            pk=endpoint_id,
+        )
+        if not endpoint.has_ssh_terminal_credentials:
+            return Response(
+                {"detail": "No endpoint SSH fallback credential configured."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        settings_obj = ProxboxPluginSettings.get_solo()
+        key = settings_obj.encryption_key or ""
+        if not key:
+            return Response(
+                {"detail": _ENCRYPTION_KEY_MISSING},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        try:
+            password = (
+                endpoint.get_ssh_password(key=key) if endpoint.ssh_password_enc else ""
+            )
+            private_key = (
+                endpoint.get_ssh_private_key(key=key)
+                if endpoint.ssh_private_key_enc
+                else ""
+            )
+        except enc_helpers.EncryptionError as exc:
+            return Response(
+                {"detail": str(exc)},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        payload = _endpoint_metadata_payload(endpoint)
         payload["password"] = password
         payload["private_key"] = private_key
         return Response(payload)

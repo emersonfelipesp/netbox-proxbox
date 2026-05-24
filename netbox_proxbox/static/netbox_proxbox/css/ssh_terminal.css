@@ -1,0 +1,35 @@
+.proxbox-terminal-card {
+  min-height: 620px;
+}
+
+.proxbox-terminal-toolbar {
+  display: grid;
+  grid-template-columns: minmax(110px, 150px) minmax(220px, 1fr) auto auto;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.proxbox-ssh-terminal {
+  background: #101418;
+  border: 1px solid var(--bs-border-color);
+  border-radius: 4px;
+  height: min(64vh, 720px);
+  min-height: 420px;
+  overflow: hidden;
+  padding: 0.25rem;
+}
+
+.proxbox-ssh-terminal .terminal {
+  height: 100%;
+}
+
+@media (max-width: 768px) {
+  .proxbox-terminal-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .proxbox-ssh-terminal {
+    height: 62vh;
+    min-height: 360px;
+  }
+}
