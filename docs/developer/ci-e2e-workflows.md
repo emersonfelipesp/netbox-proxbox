@@ -52,8 +52,16 @@ The reusable inputs select what is under test:
 | `install_source` | `local`, `pypi`, `testpypi`, `container`, `both` | Selects how `netbox-proxbox` is installed inside the NetBox container. |
 | `dependency_mode` | `dev`, `published`, `testpypi-package`, `pypi-package` | Selects how the separate `proxbox-api` container is built or installed. |
 | `proxbox_api_version` | Version string | Pins the backend package version for TestPyPI/PyPI package-index E2E modes. |
+| `proxbox_api_runtime` | `python`, `pyo3-rust`, `both` | Selects the backend reconciliation runtime. `both` is the default and doubles the matrix. |
 | `netbox_image` | Full image ref | Overrides the NetBox image; default matrix covers `v4.5.8`, `v4.5.9`, and `v4.6.0`. |
 | `proxmox_service` | `pve`, `pbs`, `pdm`, `all` | Selects the proxmox-sdk mock image suffix. `all` runs the full per-service matrix. |
+
+The `pyo3-rust` runtime uses the `proxbox-api` `raw-pyo3-rust` Docker target in
+development mode, `<version>-pyo3-rust` Docker tags in published-image mode, and
+`proxbox-api[pyo3-rust]` in package-index modes with a fallback to the matching
+Docker tag when the selected backend package has not shipped the extra yet.
+Each Rust cell asserts `PROXBOX_RECONCILIATION_ENGINE=rust` and
+`rust_available()` before running sync checks.
 
 ### Proxmox Service Matrix
 
@@ -79,17 +87,17 @@ sequenceDiagram
 
     Tag->>WF: vX.Y.Z or vX.Y.Z.postN
     WF->>TP: Upload netbox-proxbox
-    WF->>E2E: install_source=testpypi + dependency_mode=testpypi-package
+    WF->>E2E: install_source=testpypi + dependency_mode=testpypi-package + runtime=both
     E2E->>NB: Install netbox-proxbox==X.Y.Z from TestPyPI
-    E2E->>API: Install proxbox-api==configured version from TestPyPI
-    E2E-->>WF: Full stack E2E passed
+    E2E->>API: Validate proxbox-api Python and PyO3/Rust runtimes
+    E2E-->>WF: Full stack E2E passed for both runtimes
 
     Tag->>WF: vX.Y.ZrcN or publish_target=pypi
     WF->>PY: Upload netbox-proxbox
-    WF->>E2E: install_source=pypi/local + dependency_mode=pypi-package
+    WF->>E2E: install_source=pypi/local + dependency_mode=pypi-package + runtime=both
     E2E->>NB: Install netbox-proxbox from PyPI or current checkout
-    E2E->>API: Install proxbox-api==configured version from PyPI
-    E2E-->>WF: Candidate/final E2E passed
+    E2E->>API: Validate proxbox-api Python and PyO3/Rust runtimes
+    E2E-->>WF: Candidate/final E2E passed for both runtimes
 ```
 
 ## Developer Checklist
@@ -98,6 +106,8 @@ sequenceDiagram
   `netbox_proxbox/__init__.py`, `uv.lock`, and the Git tag.
 - Use TestPyPI `proxbox-api` for TestPyPI `netbox-proxbox` E2E.
 - Use PyPI `proxbox-api` for PyPI release-candidate and final E2E.
+- Keep `proxbox_api_runtime: both` in release workflow callers so PyPI
+  publication is blocked when Rust-backed sync fails.
 - Do not add `twine --skip-existing`; consumed versions are immutable and must
   be fixed forward.
 - When changing sync contracts shared with the backend, run the mocked tests,

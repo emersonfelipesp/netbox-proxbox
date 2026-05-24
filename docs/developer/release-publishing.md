@@ -55,15 +55,15 @@ sequenceDiagram
     WF->>TP: Upload netbox-proxbox package
     WF->>E2E: install_source=testpypi, dependency_mode=testpypi-package
     E2E->>NB: pip install netbox-proxbox==X.Y.ZrcN from TestPyPI
-    E2E->>API: pip install proxbox-api==configured version from TestPyPI
-    E2E-->>WF: Release-candidate checks pass
+    E2E->>API: validate proxbox-api Python and PyO3/Rust runtimes
+    E2E-->>WF: Release-candidate checks pass for both runtimes
 
     Tag->>WF: vX.Y.Z, vX.Y.Z.postN, or publish_target=pypi
     WF->>PY: Upload netbox-proxbox package
     WF->>E2E: install_source=pypi, dependency_mode=pypi-package
     E2E->>NB: pip install netbox-proxbox==X.Y.Z or X.Y.Z.postN from PyPI
-    E2E->>API: pip install proxbox-api==configured version from PyPI
-    E2E-->>WF: Post-publish checks pass
+    E2E->>API: validate proxbox-api Python and PyO3/Rust runtimes
+    E2E-->>WF: Post-publish checks pass for both runtimes
 ```
 
 ## Workflow Rules
@@ -78,6 +78,11 @@ sequenceDiagram
   dispatch with `publish_target=pypi` also publishes to PyPI.
 - Package uploads intentionally omit `twine --skip-existing`; a consumed version
   must move forward to the next `.postN` or `rcN`.
+- Release E2E runs with `proxbox_api_runtime: both`. The Python backend and the
+  PyO3/Rust backend must both pass before PyPI publication can proceed.
+- In package-index E2E, Rust mode tries `proxbox-api[pyo3-rust]` first and
+  falls back to the matching `<version>-pyo3-rust` Docker image when the backend
+  package has not published that extra yet.
 - `proxbox_api_version` can be supplied manually. If omitted, the workflow reads
   repository variables in this order:
   `PROXBOX_API_TESTPYPI_VERSION` / `PROXBOX_API_PYPI_VERSION`,

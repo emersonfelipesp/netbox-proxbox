@@ -18,6 +18,11 @@ on:
         required: false
         type: string
         default: ""
+      proxbox_api_runtime:
+        description: "proxbox-api runtime selection: both, python, or pyo3-rust"
+        required: false
+        type: string
+        default: both
       netbox_image:
         description: "Override NetBox image (e.g. netboxcommunity/netbox:v4.6.0). Empty = workflow default."
         required: false
@@ -56,6 +61,15 @@ on:
         required: false
         type: string
         default: ""
+      proxbox_api_runtime:
+        description: "proxbox-api runtime"
+        required: false
+        type: choice
+        options:
+          - both
+          - python
+          - pyo3-rust
+        default: both
       netbox_image:
         description: "Override NetBox image (full ref). Leave empty for workflow default."
         required: false
@@ -83,7 +97,7 @@ env:
 
 jobs:
   e2e-docker-stack:
-    name: E2E Docker / ${{ matrix.install_source }} / ${{ matrix.netbox_image }} / proxmox=${{ matrix.proxmox_service }} [${{ matrix.network_stack }}]
+    name: E2E Docker / ${{ matrix.install_source }} / ${{ matrix.netbox_image }} / api=${{ matrix.proxbox_api_runtime }} / proxmox=${{ matrix.proxmox_service }} [${{ matrix.network_stack }}]
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -99,6 +113,7 @@ jobs:
         # Re-add once netbox-community/netbox-docker ships the v4.6.1 image.
         netbox_image: ${{ fromJSON(inputs.netbox_image != '' && format('["{0}"]', inputs.netbox_image) || '["netboxcommunity/netbox:v4.5.8","netboxcommunity/netbox:v4.5.9","netboxcommunity/netbox:v4.6.0"]') }}
         network_stack: [ipv4]
+        proxbox_api_runtime: ${{ fromJSON((inputs.proxbox_api_runtime == 'python' || inputs.proxbox_api_runtime == 'pyo3-rust') && format('["{0}"]', inputs.proxbox_api_runtime) || '["python","pyo3-rust"]') }}
         proxmox_service: ${{ fromJSON((inputs.proxmox_service == 'pve' || inputs.proxmox_service == 'pbs' || inputs.proxmox_service == 'pdm') && format('["{0}"]', inputs.proxmox_service) || '["pve","pbs","pdm"]') }}
     steps:
       - name: Checkout repository
@@ -151,11 +166,24 @@ jobs:
             PROXBOX_API_VERSION="${PROXBOX_API_RELEASE_VERSION}"
           fi
           echo "PROXBOX_API_VERSION=${PROXBOX_API_VERSION}" >> "$GITHUB_ENV"
+          echo "PROXBOX_API_RUNTIME=${{ matrix.proxbox_api_runtime }}" >> "$GITHUB_ENV"
           echo "PROXBOX_API_PACKAGE_INDEX=" >> "$GITHUB_ENV"
           if [ "${{ inputs.dependency_mode }}" = "testpypi-package" ]; then
             echo "PROXBOX_API_PACKAGE_INDEX=--index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/" >> "$GITHUB_ENV"
           elif [ "${{ inputs.dependency_mode }}" = "pypi-package" ]; then
             echo "PROXBOX_API_PACKAGE_INDEX=--index-url https://pypi.org/simple/" >> "$GITHUB_ENV"
+          fi
+          if [ "${{ matrix.proxbox_api_runtime }}" = "pyo3-rust" ]; then
+            echo "PROXBOX_API_BUILD_TARGET=raw-pyo3-rust" >> "$GITHUB_ENV"
+            echo "PROXBOX_API_DOCKER_TAG=${PROXBOX_API_VERSION}-pyo3-rust" >> "$GITHUB_ENV"
+            echo "PROXBOX_API_PACKAGE_SPEC=proxbox-api[pyo3-rust]==${PROXBOX_API_VERSION}" >> "$GITHUB_ENV"
+          elif [ "${{ matrix.proxbox_api_runtime }}" = "python" ]; then
+            echo "PROXBOX_API_BUILD_TARGET=raw" >> "$GITHUB_ENV"
+            echo "PROXBOX_API_DOCKER_TAG=${PROXBOX_API_VERSION}" >> "$GITHUB_ENV"
+            echo "PROXBOX_API_PACKAGE_SPEC=proxbox-api==${PROXBOX_API_VERSION}" >> "$GITHUB_ENV"
+          else
+            echo "Unsupported proxbox-api runtime: ${{ matrix.proxbox_api_runtime }}" >&2
+            exit 1
           fi
 
       - name: Start E2E stack
@@ -255,41 +283,51 @@ jobs:
             PROXBOX_BIND_HOST_VALUE="0.0.0.0"
           fi
 
-          if [ "${{ inputs.dependency_mode }}" = "published" ]; then
-            docker pull "${PROXBOX_API_IMAGE}:${PROXBOX_API_VERSION}"
+          PROXBOX_API_RUNTIME_ARGS=()
+          if [ "${PROXBOX_API_RUNTIME}" = "pyo3-rust" ]; then
+            PROXBOX_API_RUNTIME_ARGS=(-e PROXBOX_RECONCILIATION_ENGINE=rust)
+          fi
+
+          start_proxbox_api_container() {
+            image_ref="$1"
             docker run -d --name proxbox-e2e-api --network proxbox-e2e -p "${HOST_BIND}18800:8000" \
               -e PROXBOX_SKIP_NETBOX_BOOTSTRAP=true \
               -e PROXBOX_ENCRYPTION_KEY \
               -e PROXBOX_BIND_HOST="${PROXBOX_BIND_HOST_VALUE}" \
-              "${PROXBOX_API_IMAGE}:${PROXBOX_API_VERSION}"
+              "${PROXBOX_API_RUNTIME_ARGS[@]}" \
+              "${image_ref}"
+          }
+
+          if [ "${{ inputs.dependency_mode }}" = "published" ]; then
+            docker pull "${PROXBOX_API_IMAGE}:${PROXBOX_API_DOCKER_TAG}"
+            start_proxbox_api_container "${PROXBOX_API_IMAGE}:${PROXBOX_API_DOCKER_TAG}"
           elif [ "${{ inputs.dependency_mode }}" = "testpypi-package" ] || [ "${{ inputs.dependency_mode }}" = "pypi-package" ]; then
             cat > /tmp/proxbox-api-package.Dockerfile <<'EOF'
           FROM python:3.13-slim
           RUN python -m pip install --upgrade pip
-          ARG PROXBOX_API_VERSION
           ARG PROXBOX_API_PACKAGE_INDEX
-          RUN python -m pip install --no-cache-dir ${PROXBOX_API_PACKAGE_INDEX} "proxbox-api==${PROXBOX_API_VERSION}"
+          ARG PROXBOX_API_PACKAGE_SPEC
+          RUN python -m pip install --no-cache-dir ${PROXBOX_API_PACKAGE_INDEX} "${PROXBOX_API_PACKAGE_SPEC}"
           CMD ["python", "-m", "uvicorn", "proxbox_api.main:app", "--host", "0.0.0.0", "--port", "8000"]
           EOF
-            docker build \
-              --build-arg "PROXBOX_API_VERSION=${PROXBOX_API_VERSION}" \
+            if docker build \
               --build-arg "PROXBOX_API_PACKAGE_INDEX=${PROXBOX_API_PACKAGE_INDEX}" \
+              --build-arg "PROXBOX_API_PACKAGE_SPEC=${PROXBOX_API_PACKAGE_SPEC}" \
               -t proxbox-api-e2e:package \
               -f /tmp/proxbox-api-package.Dockerfile \
-              /tmp
-            docker run -d --name proxbox-e2e-api --network proxbox-e2e -p "${HOST_BIND}18800:8000" \
-              -e PROXBOX_SKIP_NETBOX_BOOTSTRAP=true \
-              -e PROXBOX_ENCRYPTION_KEY \
-              -e PROXBOX_BIND_HOST="${PROXBOX_BIND_HOST_VALUE}" \
-              proxbox-api-e2e:package
+              /tmp; then
+              start_proxbox_api_container proxbox-api-e2e:package
+            elif [ "${PROXBOX_API_RUNTIME}" = "pyo3-rust" ]; then
+              echo "::warning title=proxbox-api pyo3-rust package extra unavailable::Falling back to ${PROXBOX_API_IMAGE}:${PROXBOX_API_DOCKER_TAG}"
+              docker pull "${PROXBOX_API_IMAGE}:${PROXBOX_API_DOCKER_TAG}"
+              start_proxbox_api_container "${PROXBOX_API_IMAGE}:${PROXBOX_API_DOCKER_TAG}"
+            else
+              exit 1
+            fi
           else
             git clone --depth 1 https://github.com/emersonfelipesp/proxbox-api.git /tmp/proxbox-api-src
-            docker build --target raw -t proxbox-api-e2e:dev /tmp/proxbox-api-src
-            docker run -d --name proxbox-e2e-api --network proxbox-e2e -p "${HOST_BIND}18800:8000" \
-              -e PROXBOX_SKIP_NETBOX_BOOTSTRAP=true \
-              -e PROXBOX_ENCRYPTION_KEY \
-              -e PROXBOX_BIND_HOST="${PROXBOX_BIND_HOST_VALUE}" \
-              proxbox-api-e2e:dev
+            docker build --target "${PROXBOX_API_BUILD_TARGET}" -t proxbox-api-e2e:dev /tmp/proxbox-api-src
+            start_proxbox_api_container proxbox-api-e2e:dev
           fi
 
           if [ -n "${NETBOX_PLUGIN_MOUNT}" ]; then
@@ -336,6 +374,12 @@ jobs:
               --entrypoint /bin/bash \
               "${NETBOX_IMAGE}" -ec "i=0; until uv pip install --upgrade ${NETBOX_PLUGIN_INSTALL_INDEX} ${NETBOX_PLUGIN_INSTALL_SPEC}; do i=\$((i+1)); [ \$i -ge 30 ] && exit 1; sleep 10; done && mkdir -p /etc/netbox/config && printf 'PLUGINS = [\"netbox_proxbox\"]\n' > /etc/netbox/config/plugins.py && /opt/netbox/docker-entrypoint.sh /opt/netbox/launch-netbox.sh"
           fi
+
+      - name: Verify proxbox-api PyO3/Rust runtime
+        if: matrix.proxbox_api_runtime == 'pyo3-rust'
+        run: |
+          set -eux
+          docker exec proxbox-e2e-api python -c "import os; from proxbox_api.services.sync.reconciliation.rust_bridge import rust_available; assert os.environ.get('PROXBOX_RECONCILIATION_ENGINE') == 'rust'; assert rust_available()"
 
       - name: Get container IPs
         run: |
