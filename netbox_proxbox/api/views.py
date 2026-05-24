@@ -478,6 +478,7 @@ class HomeAPIView(APIView):
         from netbox_proxbox.jobs import PROXBOX_SYNC_QUEUE_NAME, is_proxbox_sync_job
         from netbox_proxbox.schedule_hints import has_recurring_proxbox_sync_all
         from netbox_proxbox.utils import get_fastapi_url
+        from netbox_proxbox.views.home_context import build_companion_endpoint_groups
         from core.choices import JobStatusChoices
         from core.models import Job
 
@@ -534,6 +535,9 @@ class HomeAPIView(APIView):
                 "fastapi_endpoints": [_endpoint_dict(ep) for ep in fastapi_qs],
                 "fastapi_url": fastapi_info.get("http_url", ""),
                 "fastapi_websocket_url": fastapi_info.get("websocket_url", ""),
+                "companion_endpoint_groups": build_companion_endpoint_groups(
+                    request, absolute_urls=True
+                ),
                 "show_quick_full_sync_banner": not has_recurring_proxbox_sync_all(
                     request.user
                 ),
