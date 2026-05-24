@@ -116,7 +116,8 @@ class ProxmoxFirewallRuleForm(
         )
 
     def clean(self):
-        cleaned_data = super().clean()
+        super().clean()
+        cleaned_data = self.cleaned_data
         errors = validation_errors_for_rule(cleaned_data, instance=self.instance)
         if errors:
             raise ValidationError(errors)
@@ -161,7 +162,8 @@ class ProxmoxFirewallIPSetForm(
         }
 
     def clean(self):
-        cleaned_data = super().clean()
+        super().clean()
+        cleaned_data = self.cleaned_data
         errors = validation_errors_for_scoped_object(
             cleaned_data, instance=self.instance
         )
@@ -222,7 +224,8 @@ class ProxmoxFirewallAliasForm(
         }
 
     def clean(self):
-        cleaned_data = super().clean()
+        super().clean()
+        cleaned_data = self.cleaned_data
         errors = validation_errors_for_scoped_object(
             cleaned_data, instance=self.instance
         )
@@ -272,7 +275,8 @@ class ProxmoxFirewallOptionsForm(
         }
 
     def clean(self):
-        cleaned_data = super().clean()
+        super().clean()
+        cleaned_data = self.cleaned_data
         errors = validation_errors_for_options(cleaned_data, instance=self.instance)
         if errors:
             raise ValidationError(errors)
