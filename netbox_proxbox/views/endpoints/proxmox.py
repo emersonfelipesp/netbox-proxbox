@@ -399,7 +399,9 @@ class ProxmoxEndpointSSHTerminalSessionView(View):
             return JsonResponse({"error": "Permission denied."}, status=403)
 
         endpoint = get_object_or_404(
-            ProxmoxEndpoint.objects.restrict(request.user, "view"),
+            ProxmoxEndpoint.objects.restrict(request.user, "view").restrict(
+                request.user, "open_ssh_terminal"
+            ),
             pk=pk,
         )
         try:

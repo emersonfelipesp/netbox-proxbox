@@ -36,7 +36,7 @@ __all__ = (
 )
 
 PROXMOX_ACTION_PERMISSION = "core.run_proxmox_action"
-SSH_TERMINAL_PERMISSION = "netbox_proxbox.open_ssh_terminal"
+SSH_TERMINAL_ACTION = "open_ssh_terminal"
 
 
 class RequireProxboxDashboardAccessMixin(AccessMixin):
@@ -80,7 +80,7 @@ def permission_run_proxmox_action() -> str:
 
 def permission_open_ssh_terminal() -> str:
     """Required to open browser SSH terminal sessions through proxbox-api."""
-    return SSH_TERMINAL_PERMISSION
+    return get_permission_for_model(ProxmoxEndpoint, SSH_TERMINAL_ACTION)
 
 
 def permission_view_fastapi_endpoint() -> str:

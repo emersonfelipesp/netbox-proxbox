@@ -72,7 +72,7 @@ def _stub_for_ssh_credentials(
                 return has_perm and permission in (
                     "netbox_proxbox.view_nodesshcredential",
                     "netbox_proxbox.view_proxmoxendpoint",
-                    "netbox_proxbox.open_ssh_terminal",
+                    "netbox_proxbox.open_ssh_terminal_proxmoxendpoint",
                 )
 
             user.has_perm = _has_perm
@@ -81,6 +81,13 @@ def _stub_for_ssh_credentials(
     netbox_api_auth.TokenAuthentication = _TokenAuthentication
     netbox.api = netbox_api
     netbox_api.authentication = netbox_api_auth
+
+    utilities = types.ModuleType("utilities")
+    utilities.__path__ = []
+    utilities_permissions = types.ModuleType("utilities.permissions")
+    utilities_permissions.get_permission_for_model = lambda _model, action: (
+        f"netbox_proxbox.{action}_proxmoxendpoint"
+    )
 
     rest_framework = types.ModuleType("rest_framework")
     rest_framework.__path__ = []
@@ -151,6 +158,8 @@ def _stub_for_ssh_credentials(
         ("netbox", netbox),
         ("netbox.api", netbox_api),
         ("netbox.api.authentication", netbox_api_auth),
+        ("utilities", utilities),
+        ("utilities.permissions", utilities_permissions),
         ("rest_framework", rest_framework),
         ("rest_framework.status", rf_status),
         ("rest_framework.permissions", rf_permissions),
@@ -236,6 +245,16 @@ def test_netbox_token_accepts_bearer_scheme(monkeypatch):
         perm.has_permission(_request(header="Bearer nbt_key.expected-secret"), object())
         is True
     )
+
+
+def test_netbox_token_stores_authenticated_user_for_object_permissions(monkeypatch):
+    module, _ = _load_ssh_credentials_view(monkeypatch)
+    request = _request(header="Bearer nbt_key.expected-secret")
+    perm = module._NetBoxTokenCanReadEndpointSSHCredential()
+
+    assert perm.has_permission(request, object()) is True
+    assert request.user.is_authenticated is True
+    assert request.auth.key == "nbt_key.expected-secret"
 
 
 def test_netbox_token_rejects_user_without_permission(monkeypatch):
@@ -422,7 +441,18 @@ def test_endpoint_secrets_view_uses_terminal_permission(api_ast):
     src = ast.get_source_segment(API_PATH.read_text(), cls)
     assert src is not None
     assert "_NetBoxTokenCanReadEndpointSSHCredential" in src
-    assert "netbox_proxbox.open_ssh_terminal" in API_PATH.read_text()
+    assert (
+        'get_permission_for_model(ProxmoxEndpoint, "open_ssh_terminal")'
+        in API_PATH.read_text()
+    )
+
+
+def test_endpoint_secrets_view_restricts_by_view_and_terminal_permissions(api_ast):
+    cls = _class_def(api_ast, "ProxmoxEndpointSSHCredentialSecretsAPIView")
+    src = ast.get_source_segment(API_PATH.read_text(), cls)
+    assert src is not None
+    assert 'restrict(request.user, "view")' in src
+    assert 'request.user, "open_ssh_terminal"' in src
 
 
 def test_secrets_view_blocks_non_https_in_production(api_ast):

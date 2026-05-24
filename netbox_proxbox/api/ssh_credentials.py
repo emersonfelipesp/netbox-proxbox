@@ -29,6 +29,7 @@ from rest_framework.permissions import BasePermission
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from utilities.permissions import get_permission_for_model
 
 from netbox_proxbox.models import (
     NodeSSHCredential,
@@ -108,6 +109,8 @@ class _NetBoxTokenPermission(BasePermission):
         user, _token = auth_result
         if not getattr(user, "is_authenticated", False):
             return False
+        request.user = user
+        request.auth = _token
         has_perm = getattr(user, "has_perm", None)
         return bool(
             callable(has_perm)
@@ -125,8 +128,8 @@ class _NetBoxTokenCanReadEndpointSSHCredential(_NetBoxTokenPermission):
     """Allow endpoint fallback secret reads for terminal-capable API-token callers."""
 
     required_permissions = (
-        "netbox_proxbox.view_proxmoxendpoint",
-        "netbox_proxbox.open_ssh_terminal",
+        get_permission_for_model(ProxmoxEndpoint, "view"),
+        get_permission_for_model(ProxmoxEndpoint, "open_ssh_terminal"),
     )
 
 
@@ -200,7 +203,12 @@ class ProxmoxEndpointSSHCredentialSecretsAPIView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        endpoint = get_object_or_404(ProxmoxEndpoint.objects.all(), pk=endpoint_id)
+        endpoint = get_object_or_404(
+            ProxmoxEndpoint.objects.restrict(request.user, "view").restrict(
+                request.user, "open_ssh_terminal"
+            ),
+            pk=endpoint_id,
+        )
         if not endpoint.has_ssh_terminal_credentials:
             return Response(
                 {"detail": "No endpoint SSH fallback credential configured."},

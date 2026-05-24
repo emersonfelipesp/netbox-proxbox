@@ -48,7 +48,10 @@ def test_open_ssh_terminal_permission_is_declared() -> None:
     assert "open_ssh_terminal" in MODEL_PATH.read_text()
     assert "open_ssh_terminal" in MIGRATION_PATH.read_text()
     access_src = ACCESS_PATH.read_text()
-    assert 'SSH_TERMINAL_PERMISSION = "netbox_proxbox.open_ssh_terminal"' in access_src
+    assert 'SSH_TERMINAL_ACTION = "open_ssh_terminal"' in access_src
+    assert (
+        "get_permission_for_model(ProxmoxEndpoint, SSH_TERMINAL_ACTION)" in access_src
+    )
     assert "def permission_open_ssh_terminal" in access_src
 
 
@@ -64,6 +67,12 @@ def test_terminal_views_are_registered_and_backend_ticketed() -> None:
     assert "requests.post" in src
     assert '"ssh/sessions"' in src
     assert '"X-Proxbox-Actor"' in src
+
+
+def test_terminal_session_creation_restricts_by_terminal_object_permission() -> None:
+    src = VIEW_PATH.read_text()
+    assert 'restrict(request.user, "view")' in src
+    assert 'request.user, "open_ssh_terminal"' in src
 
 
 def test_terminal_template_uses_xterm_and_exposes_no_backend_api_key() -> None:
