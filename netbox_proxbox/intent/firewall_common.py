@@ -114,7 +114,9 @@ def validation_errors_for_rule(
             )
 
     if zone == FirewallZoneChoices.VNET and not _value(data, instance, "iface"):
-        errors["iface"] = "VNet firewall rules use the interface field as the VNet name."
+        errors["iface"] = (
+            "VNet firewall rules use the interface field as the VNet name."
+        )
 
     return errors
 
@@ -162,7 +164,9 @@ def validation_errors_for_options(
             )
 
     if zone in {FirewallZoneChoices.SECURITY_GROUP, FirewallZoneChoices.VNET}:
-        errors["zone"] = "Firewall options are only supported for datacenter, node, and VM zones."
+        errors["zone"] = (
+            "Firewall options are only supported for datacenter, node, and VM zones."
+        )
 
     return errors
 
@@ -200,7 +204,10 @@ def resolve_firewall_endpoint(obj: object) -> ProxmoxEndpoint | None:
         return node.endpoint
 
     security_group = getattr(obj, "security_group", None)
-    if security_group is not None and getattr(security_group, "endpoint", None) is not None:
+    if (
+        security_group is not None
+        and getattr(security_group, "endpoint", None) is not None
+    ):
         return security_group.endpoint
 
     vm = getattr(obj, "virtual_machine", None)
@@ -305,7 +312,9 @@ def preview_firewall_object(
         proxmox_state=proxmox_state,
         differing_fields=differing_fields,
         reason=None if proxmox_state is not None else "proxmox_object_not_found",
-        detail=None if proxmox_state is not None else "No matching live Proxmox object was found.",
+        detail=None
+        if proxmox_state is not None
+        else "No matching live Proxmox object was found.",
     )
 
 
@@ -322,9 +331,7 @@ def firewall_object_state(obj: object) -> dict[str, Any]:
             {"cidr": obj.cidr, "comment": obj.comment, "nomatch": obj.nomatch}
         )
     if isinstance(obj, ProxmoxFirewallAlias):
-        return _drop_empty(
-            {"name": obj.name, "cidr": obj.cidr, "comment": obj.comment}
-        )
+        return _drop_empty({"name": obj.name, "cidr": obj.cidr, "comment": obj.comment})
     if isinstance(obj, ProxmoxFirewallOptions):
         return _drop_empty(
             {
@@ -578,13 +585,18 @@ def _preview_read_target(obj: object) -> tuple[str, dict[str, str] | None]:
     return "", None
 
 
-def _rule_preview_target(rule: ProxmoxFirewallRule) -> tuple[str, dict[str, str] | None]:
+def _rule_preview_target(
+    rule: ProxmoxFirewallRule,
+) -> tuple[str, dict[str, str] | None]:
     if rule.zone == FirewallZoneChoices.DATACENTER:
         return "/proxmox/firewall/datacenter/rules", None
     if rule.zone == FirewallZoneChoices.SECURITY_GROUP:
         return "/proxmox/firewall/datacenter/groups", None
     if rule.zone == FirewallZoneChoices.NODE:
-        return f"/proxmox/firewall/nodes/{quote(_node_name(rule.proxmox_node), safe='')}/rules", None
+        return (
+            f"/proxmox/firewall/nodes/{quote(_node_name(rule.proxmox_node), safe='')}/rules",
+            None,
+        )
     if rule.zone in {FirewallZoneChoices.VM_QEMU, FirewallZoneChoices.VM_LXC}:
         vmid, node, vm_type = _vm_context(rule.virtual_machine, zone=rule.zone)
         return (
@@ -617,7 +629,10 @@ def _options_preview_target(
     if options.zone == FirewallZoneChoices.DATACENTER:
         return "/proxmox/firewall/datacenter/options", None
     if options.zone == FirewallZoneChoices.NODE:
-        return f"/proxmox/firewall/nodes/{quote(_node_name(options.proxmox_node), safe='')}/options", None
+        return (
+            f"/proxmox/firewall/nodes/{quote(_node_name(options.proxmox_node), safe='')}/options",
+            None,
+        )
     if options.zone in {FirewallZoneChoices.VM_QEMU, FirewallZoneChoices.VM_LXC}:
         vmid, node, vm_type = _vm_context(options.virtual_machine, zone=options.zone)
         return (
@@ -646,7 +661,9 @@ def _select_proxmox_state(
     if isinstance(obj, ProxmoxFirewallIPSet):
         return _find_item(payload, name=obj.name, cluster_name=cluster_name)
     if isinstance(obj, ProxmoxFirewallIPSetEntry):
-        ipset_state = _find_item(payload, name=obj.ipset.name, cluster_name=cluster_name)
+        ipset_state = _find_item(
+            payload, name=obj.ipset.name, cluster_name=cluster_name
+        )
         return _find_item((ipset_state or {}).get("entries"), cidr=obj.cidr)
     if isinstance(obj, ProxmoxFirewallAlias):
         return _find_item(payload, name=obj.name, cluster_name=cluster_name)
@@ -724,7 +741,10 @@ def _rule_push_target(rule: ProxmoxFirewallRule) -> tuple[str, str]:
 
     if rule.zone == FirewallZoneChoices.NODE:
         node_name = _node_name(rule.proxmox_node)
-        return method, f"/proxmox/firewall/nodes/{quote(node_name, safe='')}/rules{suffix}"
+        return (
+            method,
+            f"/proxmox/firewall/nodes/{quote(node_name, safe='')}/rules{suffix}",
+        )
 
     if rule.zone == FirewallZoneChoices.SECURITY_GROUP:
         group_name = getattr(rule.security_group, "name", None)
@@ -788,7 +808,9 @@ def _scoped_collection_path(
 def _ipset_entry_path(entry: ProxmoxFirewallIPSetEntry) -> tuple[str, dict[str, str]]:
     ipset = entry.ipset
     collection, params = _scoped_collection_path(ipset, "ipsets")
-    return _path_add_segments(collection, quote(str(ipset.name), safe=""), "entries"), params
+    return _path_add_segments(
+        collection, quote(str(ipset.name), safe=""), "entries"
+    ), params
 
 
 def _options_path(options: ProxmoxFirewallOptions) -> str:
@@ -813,7 +835,9 @@ def _options_path(options: ProxmoxFirewallOptions) -> str:
 def _path_add_segments(path: str, *segments: str) -> str:
     """Append path segments before any query string."""
     base, separator, query = path.partition("?")
-    updated = "/".join([base.rstrip("/"), *[segment.strip("/") for segment in segments]])
+    updated = "/".join(
+        [base.rstrip("/"), *[segment.strip("/") for segment in segments]]
+    )
     return f"{updated}{separator}{query}" if separator else updated
 
 

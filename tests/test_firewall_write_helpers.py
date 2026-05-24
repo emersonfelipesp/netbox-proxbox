@@ -194,13 +194,18 @@ def _rule(fw_common, endpoint):
 def test_datacenter_rule_push_uses_backend_put_and_actor_header(fw_common):
     endpoint = _endpoint(fw_common)
     rule = _rule(fw_common, endpoint)
-    client = _Client(_Response({"status": "pushed", "path": "cluster/firewall/rules/7"}))
+    client = _Client(
+        _Response({"status": "pushed", "path": "cluster/firewall/rules/7"})
+    )
 
     result = fw_common.push_firewall_object(rule, actor="alice", client=client)
 
     method, url, kwargs = client.calls[0]
     assert method == "put"
-    assert url == "https://proxbox-api.local/proxmox/firewall/datacenter/rules/7?endpoint_id=1"
+    assert (
+        url
+        == "https://proxbox-api.local/proxmox/firewall/datacenter/rules/7?endpoint_id=1"
+    )
     assert kwargs["headers"]["X-Proxbox-Actor"] == "alice"
     assert kwargs["headers"]["Authorization"] == "Bearer token"
     assert kwargs["json"]["type"] == "in"
