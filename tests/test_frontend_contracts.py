@@ -84,6 +84,20 @@ def test_home_template_exposes_prefilled_endpoint_quick_add_buttons():
     assert "token mode" in contents
 
 
+def test_home_template_renders_companion_plugin_endpoint_groups():
+    contents = _read("netbox_proxbox/templates/netbox_proxbox/home.html")
+    partial = _read(
+        "netbox_proxbox/templates/netbox_proxbox/home/companion_endpoint_card.html"
+    )
+
+    assert "companion_endpoint_groups" in contents
+    assert "Additional Proxbox Plugin Endpoints" in contents
+    assert "companion_endpoint_card.html" in contents
+    assert "endpoint_group.plugin_name" in partial
+    assert "companion_endpoint.fields" in partial
+    assert "endpoint_group.plugin_package" in partial
+
+
 def test_home_quick_schedule_banner_posts_to_quick_schedule_url():
     contents = _read(
         "netbox_proxbox/templates/netbox_proxbox/home/quick_schedule_banner.html"

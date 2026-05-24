@@ -236,6 +236,27 @@
             </div>
             <hr>
         {% endif %}
+
+        {% if companion_endpoint_groups %}
+            <div class="col-12 mt-3">
+                <div class="d-flex justify-content-center flex-nowrap" style="margin-bottom: 15px;">
+                    <h2>Additional Proxbox Plugin Endpoints</h2>
+                </div>
+            </div>
+            {% for endpoint_group in companion_endpoint_groups %}
+                {% for companion_endpoint in endpoint_group.endpoints %}
+                    {% if endpoint_group.endpoints|length == 1 %}
+                        <div class="col">
+                    {% elif endpoint_group.endpoints|length == 2 %}
+                        <div class="col col-md-6">
+                    {% else %}
+                        <div class="col col-md-4">
+                    {% endif %}
+                            {% include "netbox_proxbox/home/companion_endpoint_card.html" with endpoint_group=endpoint_group companion_endpoint=companion_endpoint %}
+                        </div>
+                {% endfor %}
+            {% endfor %}
+        {% endif %}
     </div>
 
     <div class="text-center mt-4 mb-2">

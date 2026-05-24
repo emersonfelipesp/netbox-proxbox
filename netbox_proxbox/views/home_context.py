@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+from collections.abc import Iterable
 from urllib.parse import urlencode
 
 from core.choices import JobStatusChoices
@@ -21,7 +23,35 @@ from netbox_proxbox.schedule_hints import (
 from netbox_proxbox.utils import get_fastapi_url
 from netbox_proxbox.views.proxbox_access import permission_enqueue_proxbox_sync
 
-__all__ = ("build_home_dashboard_context",)
+__all__ = ("build_companion_endpoint_groups", "build_home_dashboard_context")
+
+logger = logging.getLogger(__name__)
+
+_COMPANION_PLUGIN_REQUIREMENT = "netbox_proxbox"
+_COMPANION_ENDPOINT_FIELD_LABELS = (
+    ("host", "Host"),
+    ("domain", "Domain"),
+    ("ip_address", "IP Address"),
+    ("port", "Port"),
+    ("status", "Status"),
+    ("version", "Version"),
+    ("verify_ssl", "Verify SSL"),
+    ("enabled", "Enabled"),
+    ("last_seen_at", "Last seen"),
+)
+_SENSITIVE_COMPANION_FIELDS = {
+    "api_key",
+    "fingerprint",
+    "key",
+    "password",
+    "proxbox_api_key",
+    "secret",
+    "token",
+    "token_id",
+    "token_name",
+    "token_secret",
+    "token_value",
+}
 
 
 def _build_add_url(view_name: str, params: dict[str, object]) -> str:
@@ -46,6 +76,220 @@ def _get_latest_active_proxbox_job(request: HttpRequest) -> Job | None:
         if is_proxbox_sync_job(job):
             return job
     return None
+
+
+def _model_field_names(model: type[object]) -> set[str]:
+    try:
+        return {field.name for field in model._meta.get_fields()}
+    except Exception:
+        return set()
+
+
+def _is_companion_plugin(app_config: object) -> bool:
+    plugin_name = getattr(app_config, "name", "")
+    required_plugins = getattr(app_config, "required_plugins", None) or ()
+    return (
+        plugin_name != _COMPANION_PLUGIN_REQUIREMENT
+        and _COMPANION_PLUGIN_REQUIREMENT in required_plugins
+    )
+
+
+def _iter_installed_companion_plugins() -> Iterable[object]:
+    try:
+        from django.apps import apps
+        from netbox.registry import registry
+    except Exception:
+        return ()
+
+    plugin_names = registry.get("plugins", {}).get("installed", ()) or ()
+    companion_plugins = []
+    for plugin_name in plugin_names:
+        try:
+            app_config = apps.get_app_config(plugin_name)
+        except Exception:
+            logger.debug(
+                "Unable to resolve installed plugin app config for %s",
+                plugin_name,
+                exc_info=True,
+            )
+            continue
+        if _is_companion_plugin(app_config):
+            companion_plugins.append(app_config)
+    return companion_plugins
+
+
+def _is_endpoint_like_model(model: type[object]) -> bool:
+    model_name = model.__name__.lower()
+    if "settings" in model_name:
+        return False
+
+    field_names = _model_field_names(model)
+    has_host_field = bool({"domain", "host", "ip_address"} & field_names)
+    has_http_shape = has_host_field and "port" in field_names
+    name_suggests_endpoint = model_name.endswith(("endpoint", "server"))
+    return has_http_shape and name_suggests_endpoint
+
+
+def _iter_visible_model_objects(model: type[object], user: object) -> Iterable[object]:
+    manager = getattr(model, "objects", None)
+    if manager is None:
+        return ()
+
+    try:
+        queryset = manager.restrict(user, "view")
+    except AttributeError:
+        all_objects = getattr(manager, "all", None)
+        queryset = all_objects() if callable(all_objects) else manager
+    except Exception:
+        logger.debug(
+            "Unable to restrict companion endpoint queryset for %s",
+            getattr(model, "__name__", model),
+            exc_info=True,
+        )
+        return ()
+
+    ordering = getattr(getattr(model, "_meta", None), "ordering", ()) or ("pk",)
+    try:
+        queryset = queryset.order_by(*ordering)
+    except Exception:
+        pass
+
+    try:
+        if not queryset.exists():
+            return ()
+    except Exception:
+        pass
+
+    try:
+        return list(queryset)
+    except Exception:
+        logger.debug(
+            "Unable to evaluate companion endpoint queryset for %s",
+            getattr(model, "__name__", model),
+            exc_info=True,
+        )
+        return ()
+
+
+def _object_url(obj: object, request: HttpRequest, *, absolute_urls: bool) -> str:
+    get_absolute_url = getattr(obj, "get_absolute_url", None)
+    if not callable(get_absolute_url):
+        return ""
+    try:
+        url = get_absolute_url()
+    except Exception:
+        return ""
+    if not absolute_urls:
+        return url
+    try:
+        return request.build_absolute_uri(url)
+    except Exception:
+        return url
+
+
+def _field_display_value(obj: object, field_name: str) -> str:
+    display_method = getattr(obj, f"get_{field_name}_display", None)
+    if callable(display_method):
+        try:
+            value = display_method()
+        except Exception:
+            value = getattr(obj, field_name, None)
+    else:
+        value = getattr(obj, field_name, None)
+
+    if value in (None, ""):
+        return ""
+    if isinstance(value, bool):
+        return "Yes" if value else "No"
+    if hasattr(value, "isoformat"):
+        try:
+            return value.isoformat()
+        except Exception:
+            pass
+    return str(value)
+
+
+def _serialize_companion_endpoint(
+    obj: object, request: HttpRequest, *, absolute_urls: bool
+) -> dict[str, object]:
+    field_names = _model_field_names(obj.__class__)
+    fields = []
+    for field_name, label in _COMPANION_ENDPOINT_FIELD_LABELS:
+        if field_name not in field_names or field_name in _SENSITIVE_COMPANION_FIELDS:
+            continue
+        value = _field_display_value(obj, field_name)
+        if value:
+            fields.append({"name": field_name, "label": label, "value": value})
+
+    return {
+        "id": getattr(obj, "pk", getattr(obj, "id", None)),
+        "name": str(obj),
+        "url": _object_url(obj, request, absolute_urls=absolute_urls),
+        "fields": fields,
+    }
+
+
+def build_companion_endpoint_groups(
+    request: HttpRequest, *, absolute_urls: bool = False
+) -> list[dict[str, object]]:
+    """
+    Return endpoint rows owned by installed Proxbox companion plugins.
+
+    This mirrors NetBox's installed-plugins API source server-side so the home
+    page can remain useful to non-superusers; the API itself is superuser-only.
+    """
+    groups = []
+    user = getattr(request, "user", None)
+
+    for app_config in _iter_installed_companion_plugins():
+        try:
+            models = app_config.get_models()
+        except Exception:
+            logger.debug(
+                "Unable to enumerate models for companion plugin %s",
+                getattr(app_config, "name", app_config),
+                exc_info=True,
+            )
+            continue
+
+        for model in models:
+            if not _is_endpoint_like_model(model):
+                continue
+            objects = list(_iter_visible_model_objects(model, user))
+            if not objects:
+                continue
+
+            model_meta = getattr(model, "_meta", None)
+            groups.append(
+                {
+                    "plugin_name": str(
+                        getattr(app_config, "verbose_name", "")
+                        or getattr(app_config, "name", "")
+                    ),
+                    "plugin_package": getattr(app_config, "name", ""),
+                    "plugin_version": getattr(app_config, "version", ""),
+                    "plugin_base_url": getattr(
+                        app_config, "base_url", getattr(app_config, "label", "")
+                    ),
+                    "model_name": getattr(model, "__name__", ""),
+                    "model_label": str(
+                        getattr(model_meta, "verbose_name", None)
+                        or getattr(model, "__name__", "Endpoint")
+                    ),
+                    "model_label_plural": str(
+                        getattr(model_meta, "verbose_name_plural", None)
+                        or getattr(model, "__name__", "Endpoints")
+                    ),
+                    "endpoints": [
+                        _serialize_companion_endpoint(
+                            obj, request, absolute_urls=absolute_urls
+                        )
+                        for obj in objects
+                    ],
+                }
+            )
+
+    return groups
 
 
 def build_home_dashboard_context(
@@ -117,4 +361,5 @@ def build_home_dashboard_context(
         "can_quick_schedule_sync": can_quick_schedule_sync,
         "quick_schedule_form": quick_schedule_form,
         "active_proxbox_job": active_proxbox_job,
+        "companion_endpoint_groups": build_companion_endpoint_groups(request),
     }
