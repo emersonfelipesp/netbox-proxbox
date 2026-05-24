@@ -194,7 +194,14 @@ def test_e2e_workflow_supports_proxbox_api_package_index_runtime_modes():
     assert "--index-url https://test.pypi.org/simple/" in e2e_workflow
     assert "--extra-index-url https://pypi.org/simple/" in e2e_workflow
     assert "--index-url https://pypi.org/simple/" in e2e_workflow
-    assert '"proxbox-api==${PROXBOX_API_VERSION}"' in e2e_workflow
+    assert (
+        "PROXBOX_API_PACKAGE_SPEC=proxbox-api==${PROXBOX_API_VERSION}" in e2e_workflow
+    )
+    assert (
+        "PROXBOX_API_PACKAGE_SPEC=proxbox-api[pyo3-rust]==${PROXBOX_API_VERSION}"
+        in e2e_workflow
+    )
+    assert '"${PROXBOX_API_PACKAGE_SPEC}"' in e2e_workflow
 
 
 def test_current_release_pairing_is_documented_in_primary_docs():
