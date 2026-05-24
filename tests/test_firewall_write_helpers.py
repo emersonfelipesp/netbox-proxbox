@@ -339,3 +339,18 @@ def test_preview_compares_live_proxmox_state(fw_common):
     assert result.status == "ready"
     assert result.proxmox_state["action"] == "DROP"
     assert "action" in result.differing_fields
+
+
+def test_firewall_options_status_migration_is_idempotent():
+    migration = (
+        REPO_ROOT / "netbox_proxbox" / "migrations" / "0040_firewall_write_status.py"
+    )
+    source = migration.read_text(encoding="utf-8")
+
+    assert (
+        "from netbox_proxbox.migrations._idempotent_ops import add_field_idempotent"
+        in source
+    )
+    assert "add_field_idempotent(" in source
+    assert 'model_name="proxmoxfirewalloptions"' in source
+    assert 'field_name="status"' in source

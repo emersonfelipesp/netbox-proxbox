@@ -1,5 +1,7 @@
 from django.db import migrations, models
 
+from netbox_proxbox.migrations._idempotent_ops import add_field_idempotent
+
 
 class Migration(migrations.Migration):
     dependencies = [
@@ -7,9 +9,9 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AddField(
+        add_field_idempotent(
             model_name="proxmoxfirewalloptions",
-            name="status",
+            field_name="status",
             field=models.CharField(
                 choices=[
                     ("active", "Active"),
