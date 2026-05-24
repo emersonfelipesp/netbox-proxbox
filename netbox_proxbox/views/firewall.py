@@ -73,7 +73,7 @@ class _FirewallPushView(
         qs = self.queryset
         restrict = getattr(qs, "restrict", None)
         if callable(restrict):
-            qs = restrict(request.user, "view")
+            qs = restrict(request.user, "change")
         obj = get_object_or_404(qs, pk=pk)
         redirect_to = obj.get_absolute_url()
         actor = _actor_from_request(request)
@@ -139,7 +139,7 @@ class ProxmoxFirewallRuleBulkPushView(
         actor = _actor_from_request(request)
         success_count = 0
         failures: list[str] = []
-        queryset = _RULE_QS.restrict(request.user, "view")
+        queryset = _RULE_QS.restrict(request.user, "change")
         for rule in queryset.filter(pk__in=selected_ids):
             try:
                 push_firewall_object(rule, actor=actor)

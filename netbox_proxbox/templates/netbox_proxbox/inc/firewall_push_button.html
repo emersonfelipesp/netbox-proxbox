@@ -1,4 +1,4 @@
-{% load i18n static %}
+{% load i18n %}
 {% if allow_writes %}
 <form method="post" action="{{ action_url }}" class="d-inline" data-firewall-push-form data-firewall-api-url="{{ api_push_url }}">
   {% csrf_token %}
@@ -15,4 +15,3 @@
   {% trans "Push to Proxmox" %}
 </button>
 {% endif %}
-<script src="{% static 'netbox_proxbox/js/firewall_push.js' %}" defer></script>

@@ -1311,7 +1311,16 @@ class _FirewallPushActionMixin:
     @action(detail=True, methods=["get"], url_path="preview")
     def preview(self, request: Request, pk: int | str | None = None) -> Response:
         """Return NetBox state, live Proxmox state, and differing fields."""
-        del request, pk
+        del pk
+        if not request.user.has_perm(permission_run_proxmox_action()):
+            return Response(
+                {
+                    "status": "error",
+                    "reason": "permission_denied",
+                    "detail": "Missing core.run_proxmox_action permission.",
+                },
+                status=drf_status.HTTP_403_FORBIDDEN,
+            )
         result = preview_firewall_object(self.get_object())
         return Response(result.to_response(), status=drf_status.HTTP_200_OK)
 

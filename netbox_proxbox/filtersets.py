@@ -580,7 +580,15 @@ class ProxmoxFirewallOptionsFilterSet(ProxboxModelFilterSet):
 
     class Meta:
         model = ProxmoxFirewallOptions
-        fields = ("id", "endpoint", "zone", "proxmox_node", "virtual_machine", "enable")
+        fields = (
+            "id",
+            "endpoint",
+            "zone",
+            "proxmox_node",
+            "virtual_machine",
+            "enable",
+            "status",
+        )
 
     def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
         if not value.strip():

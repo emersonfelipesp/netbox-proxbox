@@ -244,6 +244,69 @@ def push_firewall_object(
     )
 
 
+def validate_vm_firewall_scope(
+    obj: object,
+    *,
+    endpoint: ProxmoxEndpoint,
+    vmid: int,
+    node: str,
+    vm_type: str,
+) -> None:
+    """Validate that a VM-scoped helper object matches its explicit scope."""
+    expected_scope = (
+        FirewallZoneChoices.VM_LXC if vm_type == "lxc" else FirewallZoneChoices.VM_QEMU
+    )
+    actual_scope = _firewall_scope_for_object(obj)
+    if actual_scope != expected_scope:
+        raise FirewallPushError(
+            "firewall_scope_mismatch",
+            f"Expected {expected_scope} firewall object, got {actual_scope or 'unknown'}.",
+            status_code=400,
+        )
+
+    _validate_endpoint_scope(obj, endpoint)
+    actual_vmid, actual_node, actual_vm_type = _vm_context(
+        _virtual_machine_for_scope(obj),
+        zone=expected_scope,
+    )
+    if (
+        int(actual_vmid) != int(vmid)
+        or actual_node != str(node)
+        or actual_vm_type != vm_type
+    ):
+        raise FirewallPushError(
+            "firewall_scope_mismatch",
+            (
+                "Firewall object VM scope does not match the requested "
+                f"{vm_type}/{vmid} on node {node}."
+            ),
+            status_code=400,
+        )
+
+
+def validate_vnet_firewall_scope(
+    rule: ProxmoxFirewallRule,
+    *,
+    endpoint: ProxmoxEndpoint,
+    vnet: str,
+) -> None:
+    """Validate that a VNet rule belongs to the requested endpoint and VNet."""
+    if rule.zone != FirewallZoneChoices.VNET:
+        raise FirewallPushError(
+            "firewall_scope_mismatch",
+            f"Expected vnet firewall rule, got {rule.zone or 'unknown'}.",
+            status_code=400,
+        )
+    _validate_endpoint_scope(rule, endpoint)
+    actual_vnet = (rule.iface or "").strip()
+    if actual_vnet != str(vnet):
+        raise FirewallPushError(
+            "firewall_scope_mismatch",
+            f"Firewall rule VNet {actual_vnet or 'unknown'} does not match {vnet}.",
+            status_code=400,
+        )
+
+
 def preview_firewall_object(
     obj: object,
     *,
@@ -977,3 +1040,37 @@ def _payload_value(payload: object, key: str) -> Any:
         if isinstance(detail, dict):
             return detail.get(key)
     return None
+
+
+def _firewall_scope_for_object(obj: object) -> str | None:
+    if isinstance(obj, ProxmoxFirewallRule):
+        return obj.zone
+    if isinstance(obj, ProxmoxFirewallOptions):
+        return obj.zone
+    if isinstance(obj, ProxmoxFirewallIPSetEntry):
+        return getattr(obj.ipset, "scope", None)
+    if isinstance(obj, (ProxmoxFirewallIPSet, ProxmoxFirewallAlias)):
+        return obj.scope
+    return None
+
+
+def _virtual_machine_for_scope(obj: object) -> object | None:
+    if isinstance(obj, ProxmoxFirewallIPSetEntry):
+        return getattr(obj.ipset, "virtual_machine", None)
+    return getattr(obj, "virtual_machine", None)
+
+
+def _validate_endpoint_scope(obj: object, endpoint: ProxmoxEndpoint) -> None:
+    actual_endpoint = resolve_firewall_endpoint(obj)
+    if _object_pk(actual_endpoint) != _object_pk(endpoint):
+        raise FirewallPushError(
+            "firewall_scope_mismatch",
+            "Firewall object endpoint does not match the requested Proxmox endpoint.",
+            status_code=400,
+        )
+
+
+def _object_pk(obj: object | None) -> object:
+    if obj is None:
+        return None
+    return getattr(obj, "pk", getattr(obj, "id", obj))

@@ -166,6 +166,9 @@ def test_firewall_push_and_preview_ui_contracts():
     push_button = _read(
         "netbox_proxbox/templates/netbox_proxbox/inc/firewall_push_button.html"
     )
+    push_assets = _read(
+        "netbox_proxbox/templates/netbox_proxbox/inc/firewall_push_assets.html"
+    )
     preview_panel = _read(
         "netbox_proxbox/templates/netbox_proxbox/inc/firewall_preview_panel.html"
     )
@@ -173,21 +176,51 @@ def test_firewall_push_and_preview_ui_contracts():
         "netbox_proxbox/templates/netbox_proxbox/buttons/firewall_bulk_push.html"
     )
     runtime_js = _read("netbox_proxbox/static/netbox_proxbox/js/firewall_push.js")
+    filtersets = _read("netbox_proxbox/filtersets.py")
+    qemu_wrappers = _read("netbox_proxbox/intent/firewall_vm_qemu.py")
+    lxc_wrappers = _read("netbox_proxbox/intent/firewall_vm_lxc.py")
+    vnet_wrappers = _read("netbox_proxbox/intent/firewall_vnet.py")
+    api_preview_source = api_view_contents[
+        api_view_contents.index("    def preview(") : api_view_contents.index(
+            "def _actor_from_request",
+        )
+    ]
+    right_page_source = extension_contents[
+        extension_contents.index("    def right_page(") : extension_contents.index(
+            "def _firewall_api_action_url",
+        )
+    ]
 
     assert "ProxmoxFirewallPushTemplateExtension" in extension_contents
     assert "right_page" in extension_contents
+    assert "firewall_push_assets.html" in extension_contents
     assert "api_push_url" in extension_contents
     assert "api_preview_url" in extension_contents
+    assert "user.has_perm(permission_run_proxmox_action())" in right_page_source
     assert "FirewallBulkPushAction" in view_contents
     assert 'name = "bulk_push"' in view_contents
     assert 'path="push-selected"' in view_contents
+    assert 'restrict(request.user, "change")' in view_contents
     assert "preview_firewall_object" in api_view_contents
     assert 'url_path="preview"' in api_view_contents
     assert 'url_path="push"' in api_view_contents
+    assert (
+        "request.user.has_perm(permission_run_proxmox_action())" in api_preview_source
+    )
     assert "data-firewall-push-form" in push_button
     assert "data-firewall-api-url" in push_button
+    assert "firewall_push.js" not in push_button
+    assert "firewall_push.js" in push_assets
     assert "data-firewall-preview-panel" in preview_panel
     assert "data-firewall-preview-url" in preview_panel
+    assert "firewall_push.js" not in preview_panel
+    assert '"status",' in filtersets
+    assert "validate_vm_firewall_scope(" in qemu_wrappers
+    assert "validate_vm_firewall_scope(" in lxc_wrappers
+    assert "validate_vnet_firewall_scope(" in vnet_wrappers
+    assert "del endpoint, vmid, node" not in qemu_wrappers
+    assert "del endpoint, vmid, node" not in lxc_wrappers
+    assert "del endpoint, vnet" not in vnet_wrappers
     assert "table-warning" in runtime_js
     assert "X-CSRFToken" in runtime_js
     assert "fetch(apiUrl" in runtime_js

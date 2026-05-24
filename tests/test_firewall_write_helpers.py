@@ -276,6 +276,39 @@ def test_rule_validation_requires_vm_id_and_vnet_name(fw_common):
     assert "iface" in vnet_errors
 
 
+def test_vm_scope_validation_rejects_mismatched_vmid(fw_common):
+    endpoint = _endpoint(fw_common)
+    vm = SimpleNamespace(
+        custom_field_data={"proxmox_vm_id": "101", "proxmox_node": "pve-a"},
+    )
+    rule = _rule(fw_common, endpoint)
+    rule.zone = fw_common.FirewallZoneChoices.VM_QEMU
+    rule.virtual_machine = vm
+
+    with pytest.raises(fw_common.FirewallPushError) as exc:
+        fw_common.validate_vm_firewall_scope(
+            rule,
+            endpoint=endpoint,
+            vmid=102,
+            node="pve-a",
+            vm_type="qemu",
+        )
+
+    assert exc.value.reason == "firewall_scope_mismatch"
+
+
+def test_vnet_scope_validation_rejects_mismatched_vnet(fw_common):
+    endpoint = _endpoint(fw_common)
+    rule = _rule(fw_common, endpoint)
+    rule.zone = fw_common.FirewallZoneChoices.VNET
+    rule.iface = "tenant-a"
+
+    with pytest.raises(fw_common.FirewallPushError) as exc:
+        fw_common.validate_vnet_firewall_scope(rule, endpoint=endpoint, vnet="tenant-b")
+
+    assert exc.value.reason == "firewall_scope_mismatch"
+
+
 def test_preview_compares_live_proxmox_state(fw_common):
     endpoint = _endpoint(fw_common)
     rule = _rule(fw_common, endpoint)

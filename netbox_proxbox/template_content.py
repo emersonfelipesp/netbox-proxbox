@@ -351,12 +351,15 @@ class ProxmoxFirewallPushTemplateExtension(PluginTemplateExtension):
                 "action_url": f"{obj.get_absolute_url()}push-to-proxmox/",
                 "api_push_url": _firewall_api_action_url(obj, "push"),
             },
-        )
+        ) + self.render("netbox_proxbox/inc/firewall_push_assets.html", {})
 
     def right_page(self) -> str:
         """Render a NetBox-vs-Proxmox preview panel."""
         obj = self.context["object"]
         if not isinstance(obj, self.model_classes):
+            return ""
+        user = self.context["request"].user
+        if not user.has_perm(permission_run_proxmox_action()):
             return ""
         return self.render(
             "netbox_proxbox/inc/firewall_preview_panel.html",

@@ -1,4 +1,4 @@
-{% load i18n static %}
+{% load i18n %}
 <div class="card" data-firewall-preview-panel data-firewall-preview-url="{{ api_preview_url }}">
   <h2 class="card-header">{% trans "Proxmox State" %}</h2>
   <div class="card-body">
@@ -17,4 +17,3 @@
     </div>
   </div>
 </div>
-<script src="{% static 'netbox_proxbox/js/firewall_push.js' %}" defer></script>

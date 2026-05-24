@@ -9,6 +9,7 @@ from netbox_proxbox.intent.firewall_common import (
     push_ipset_entry,
     push_options,
     push_rule,
+    validate_vm_firewall_scope,
 )
 from netbox_proxbox.models import (
     ProxmoxEndpoint,
@@ -31,7 +32,10 @@ def push_vm_rules(
     client: HttpClient | None = None,
 ) -> list[FirewallPushResult]:
     """Push QEMU VM firewall rules."""
-    del endpoint, vmid, node
+    for rule in rules:
+        validate_vm_firewall_scope(
+            rule, endpoint=endpoint, vmid=vmid, node=node, vm_type="qemu"
+        )
     return [push_rule(rule, actor=actor, client=client) for rule in rules]
 
 
@@ -45,7 +49,10 @@ def push_vm_ipsets(
     client: HttpClient | None = None,
 ) -> list[FirewallPushResult]:
     """Push QEMU VM IP sets."""
-    del endpoint, vmid, node
+    for ipset in ipsets:
+        validate_vm_firewall_scope(
+            ipset, endpoint=endpoint, vmid=vmid, node=node, vm_type="qemu"
+        )
     return [push_ipset(ipset, actor=actor, client=client) for ipset in ipsets]
 
 
@@ -59,7 +66,10 @@ def push_vm_ipset_entries(
     client: HttpClient | None = None,
 ) -> list[FirewallPushResult]:
     """Push QEMU VM IP set entries."""
-    del endpoint, vmid, node
+    for entry in entries:
+        validate_vm_firewall_scope(
+            entry, endpoint=endpoint, vmid=vmid, node=node, vm_type="qemu"
+        )
     return [push_ipset_entry(entry, actor=actor, client=client) for entry in entries]
 
 
@@ -73,7 +83,10 @@ def push_vm_aliases(
     client: HttpClient | None = None,
 ) -> list[FirewallPushResult]:
     """Push QEMU VM aliases."""
-    del endpoint, vmid, node
+    for alias in aliases:
+        validate_vm_firewall_scope(
+            alias, endpoint=endpoint, vmid=vmid, node=node, vm_type="qemu"
+        )
     return [push_alias(alias, actor=actor, client=client) for alias in aliases]
 
 
@@ -87,5 +100,7 @@ def push_vm_options(
     client: HttpClient | None = None,
 ) -> FirewallPushResult:
     """Push QEMU VM firewall options."""
-    del endpoint, vmid, node
+    validate_vm_firewall_scope(
+        options, endpoint=endpoint, vmid=vmid, node=node, vm_type="qemu"
+    )
     return push_options(options, actor=actor, client=client)
