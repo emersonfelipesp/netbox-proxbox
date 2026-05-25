@@ -193,7 +193,10 @@ def _body_for(
     if obj is not None:
         if model_name == "proxmoxfirewallsecuritygroup":
             return _drop_empty(
-                {"group": getattr(obj, "name", None), "comment": getattr(obj, "comment", None)}
+                {
+                    "group": getattr(obj, "name", None),
+                    "comment": getattr(obj, "comment", None),
+                }
             )
         if model_name == "proxmoxfirewallalias" and op == "update":
             body = firewall_object_state(obj)
@@ -234,7 +237,11 @@ def _body_for(
             }
         )
     if model_name == "proxmoxfirewallalias":
-        body = {"name": data.get("name"), "cidr": data.get("cidr"), "comment": data.get("comment")}
+        body = {
+            "name": data.get("name"),
+            "cidr": data.get("cidr"),
+            "comment": data.get("comment"),
+        }
         if op == "update":
             body.pop("name", None)
         return _drop_empty(body)
@@ -291,7 +298,9 @@ def _vmid_for(model_name: str, obj: object | None, data: dict[str, Any]) -> int 
     return None
 
 
-def _vm_type_for(model_name: str, obj: object | None, data: dict[str, Any]) -> str | None:
+def _vm_type_for(
+    model_name: str, obj: object | None, data: dict[str, Any]
+) -> str | None:
     zone = _zone_for(model_name, obj, data)
     if zone == FirewallZoneChoices.VM_QEMU:
         return "qemu"
@@ -425,7 +434,9 @@ def _object_name(value: object | None) -> str | None:
 def _object_id(value: object | None) -> int | None:
     if isinstance(value, dict):
         return _int_or_none(value.get("id") or value.get("pk"))
-    return _int_or_none(getattr(value, "pk", None) or getattr(value, "id", None) or value)
+    return _int_or_none(
+        getattr(value, "pk", None) or getattr(value, "id", None) or value
+    )
 
 
 def _vmid(vm: object | None, data: dict[str, Any]) -> int | None:
