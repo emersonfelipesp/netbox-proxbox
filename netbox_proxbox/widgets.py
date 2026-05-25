@@ -37,7 +37,7 @@ def _safe_count(model, request):
 class ProxboxSyncStatusWidget(DashboardWidget):
     default_title = "Proxbox Sync Status"
     description = "Last Proxbox sync job status and synced object summary."
-    width = 6
+    width = 4
     height = 4
 
     def render(self, request):
@@ -133,7 +133,7 @@ class ProxboxObjectCountsWidget(DashboardWidget):
 class ProxboxEndpointStatusWidget(DashboardWidget):
     default_title = "Proxbox Endpoints"
     description = "Overview of configured Proxmox, NetBox, and FastAPI endpoints."
-    width = 6
+    width = 4
     height = 3
 
     def render(self, request):
