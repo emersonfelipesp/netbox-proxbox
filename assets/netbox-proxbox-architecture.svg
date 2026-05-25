@@ -1,0 +1,150 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title desc">
+  <title id="title">netbox-proxbox plugin architecture</title>
+  <desc id="desc">NetBox runs the netbox-proxbox plugin, which triggers RQ jobs and streams sync progress from the proxbox-api FastAPI backend. The backend talks to Proxmox VE and NetBox REST APIs, while companion plugins such as netbox-pbs, netbox-pdm, netbox-ceph, and netbox-packer extend the same Proxbox ecosystem.</desc>
+  <defs>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M 32 0 H 0 V 32" class="grid-line"/>
+    </pattern>
+    <marker id="arrow" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto" markerUnits="strokeWidth">
+      <path d="M 0 0 L 9 4.5 L 0 9 Z" class="arrow-head"/>
+    </marker>
+    <style>
+      .bg { fill: #001423; }
+      .grid-line { fill: none; stroke: #2E3C51; stroke-opacity: 0.2; stroke-width: 1; }
+      .grid-fill { fill: url(#grid); opacity: 0.65; }
+      .frame { fill: #081B2A; stroke: #2E3C51; stroke-width: 1.5; }
+      .panel { fill: #081B2A; stroke: #2E3C51; stroke-width: 1.4; }
+      .panel-top { fill: #18212F; stroke: #2E3C51; stroke-width: 1.4; }
+      .node { fill: #001423; stroke: #2E3C51; stroke-width: 1.3; }
+      .node-strong { fill: #00F2D4; fill-opacity: 0.1; stroke: #00F2D4; stroke-width: 1.6; }
+      .node-soft { fill: #081B2A; stroke: #00F2D4; stroke-opacity: 0.62; stroke-width: 1.3; }
+      .band { fill: #001423; stroke: #2E3C51; stroke-width: 1.2; }
+      .connector { fill: none; stroke: #9CA3AF; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; marker-end: url(#arrow); }
+      .connector-muted { stroke-opacity: 0.72; }
+      .connector-dashed { stroke-dasharray: 6 6; stroke-opacity: 0.72; }
+      .arrow-head { fill: #9CA3AF; }
+      .title { fill: #E2E8F0; font: 700 24px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+      .subtitle { fill: #9CA3AF; font: 500 13px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+      .prompt { fill: #E2E8F0; font: 500 16px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+      .label { fill: #E2E8F0; font: 700 15px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; text-anchor: middle; }
+      .label-left { fill: #E2E8F0; font: 700 15px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+      .small { fill: #9CA3AF; font: 600 11px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; text-anchor: middle; }
+      .tiny { fill: #9CA3AF; font: 600 10px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; text-anchor: middle; letter-spacing: 0.7px; }
+      .accent { fill: #00F2D4; }
+      .accent-2 { fill: #00857D; }
+      .muted { fill: #9CA3AF; }
+      .flow-label { fill: #9CA3AF; font: 700 10px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; text-anchor: middle; letter-spacing: 0.8px; text-transform: uppercase; }
+      .scan { fill: #00F2D4; opacity: 0.045; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1280" height="640"/>
+  <rect class="grid-fill" width="1280" height="640"/>
+  <path class="scan" d="M 0 110 H 1280 V 206 H 0 Z"/>
+  <path class="scan" d="M 0 468 H 1280 V 556 H 0 Z"/>
+
+  <rect class="frame" x="32" y="24" width="1216" height="592"/>
+  <rect class="panel-top" x="32" y="24" width="1216" height="44"/>
+  <circle cx="58" cy="46" r="5" fill="#D63939"/>
+  <circle cx="76" cy="46" r="5" fill="#F59F00"/>
+  <circle cx="94" cy="46" r="5" fill="#2FB344"/>
+  <text class="prompt" x="124" y="52">
+    <tspan class="accent">netbox</tspan><tspan class="muted">@</tspan><tspan class="accent-2">proxbox</tspan><tspan class="muted">:~$ </tspan><tspan>./describe --plugin-architecture</tspan>
+  </text>
+  <text class="tiny" x="1130" y="51">netbox-dark</text>
+
+  <text class="title" x="64" y="99">netbox-proxbox architecture</text>
+  <text class="subtitle" x="64" y="121">Core NetBox plugin, proxbox-api backend, Proxmox infrastructure, and companion plugins in one deployment model.</text>
+
+  <g id="panels">
+    <rect class="panel" x="64" y="146" width="328" height="310"/>
+    <rect class="panel-top" x="64" y="146" width="328" height="34"/>
+    <text class="label-left accent" x="86" y="168">NetBox runtime</text>
+
+    <rect class="panel" x="476" y="146" width="328" height="310"/>
+    <rect class="panel-top" x="476" y="146" width="328" height="34"/>
+    <text class="label-left accent" x="498" y="168">proxbox-api backend</text>
+
+    <rect class="panel" x="888" y="146" width="328" height="310"/>
+    <rect class="panel-top" x="888" y="146" width="328" height="34"/>
+    <text class="label-left accent" x="910" y="168">Proxmox estate</text>
+  </g>
+
+  <g id="netbox-panel">
+    <rect class="node-strong" x="112" y="206" width="232" height="48"/>
+    <text class="label accent" x="228" y="235">[ netbox-proxbox ]</text>
+    <rect class="node-soft" x="93" y="282" width="124" height="34"/>
+    <text class="small" x="155" y="303">Django views</text>
+    <rect class="node-soft" x="239" y="282" width="124" height="34"/>
+    <text class="small" x="301" y="303">Plugin REST API</text>
+    <rect class="node-soft" x="93" y="334" width="124" height="34"/>
+    <text class="small" x="155" y="355">RQ sync jobs</text>
+    <rect class="node-soft" x="239" y="334" width="124" height="34"/>
+    <text class="small" x="301" y="355">Endpoint models</text>
+    <rect class="node" x="112" y="392" width="232" height="34"/>
+    <text class="small" x="228" y="413">clusters / nodes / VMs / LXC</text>
+  </g>
+
+  <g id="backend-panel">
+    <rect class="node-strong" x="524" y="206" width="232" height="48"/>
+    <text class="label accent" x="640" y="235">[ proxbox-api ]</text>
+    <rect class="node-soft" x="505" y="282" width="124" height="34"/>
+    <text class="small" x="567" y="303">FastAPI routes</text>
+    <rect class="node-soft" x="651" y="282" width="124" height="34"/>
+    <text class="small" x="713" y="303">SSE / WS</text>
+    <rect class="node-soft" x="505" y="334" width="124" height="34"/>
+    <text class="small" x="567" y="355">sync services</text>
+    <rect class="node-soft" x="651" y="334" width="124" height="34"/>
+    <text class="small" x="713" y="355">netbox-sdk</text>
+    <rect class="node" x="524" y="392" width="232" height="34"/>
+    <text class="small" x="640" y="413">/full-update/stream + REST</text>
+  </g>
+
+  <g id="proxmox-panel">
+    <rect class="node-strong" x="936" y="206" width="232" height="48"/>
+    <text class="label accent" x="1052" y="235">[ Proxmox VE ]</text>
+    <rect class="node-soft" x="917" y="282" width="124" height="34"/>
+    <text class="small" x="979" y="303">clusters / nodes</text>
+    <rect class="node-soft" x="1063" y="282" width="124" height="34"/>
+    <text class="small" x="1125" y="303">VMs + LXC</text>
+    <rect class="node-soft" x="917" y="334" width="124" height="34"/>
+    <text class="small" x="979" y="355">storage + backups</text>
+    <rect class="node-soft" x="1063" y="334" width="124" height="34"/>
+    <text class="small" x="1125" y="355">SDN / HA / firewall</text>
+    <rect class="node" x="936" y="392" width="232" height="34"/>
+    <text class="small" x="1052" y="413">PVE API + guest agent data</text>
+  </g>
+
+  <g id="main-flows">
+    <line class="connector" x1="344" y1="230" x2="516" y2="230"/>
+    <text class="flow-label" x="430" y="218">HTTP / SSE / WS</text>
+    <line class="connector" x1="756" y1="230" x2="928" y2="230"/>
+    <text class="flow-label" x="842" y="218">Proxmox API</text>
+    <path class="connector connector-muted" d="M 640 392 C 640 480, 228 480, 228 426"/>
+    <text class="flow-label" x="430" y="446">NetBox REST writes via netbox-sdk</text>
+    <path class="connector connector-dashed" d="M 228 254 C 228 126, 1052 126, 1052 206"/>
+    <text class="flow-label" x="640" y="138">Optional branch intent: NetBox -&gt; proxbox-api -&gt; Proxmox</text>
+  </g>
+
+  <g id="companion-band">
+    <rect class="band" x="64" y="488" width="1152" height="100"/>
+    <text class="label-left accent" x="86" y="518">Companion plugin family</text>
+    <text class="subtitle" x="86" y="540">Install only what you need. netbox-proxbox is the required base; proxbox-api exposes the shared backend surfaces.</text>
+
+    <rect class="node-soft" x="96" y="554" width="190" height="30"/>
+    <text class="small accent" x="191" y="573">netbox-pbs</text>
+    <rect class="node-soft" x="318" y="554" width="190" height="30"/>
+    <text class="small accent" x="413" y="573">netbox-pdm</text>
+    <rect class="node-soft" x="540" y="554" width="190" height="30"/>
+    <text class="small accent" x="635" y="573">netbox-ceph</text>
+    <rect class="node-soft" x="762" y="554" width="190" height="30"/>
+    <text class="small accent" x="857" y="573">netbox-packer</text>
+    <rect class="node" x="984" y="554" width="190" height="30"/>
+    <text class="small" x="1079" y="573">optional branching</text>
+
+    <path class="connector connector-muted" d="M 228 456 V 488"/>
+    <text class="flow-label" x="174" y="480">base dependency</text>
+    <path class="connector connector-muted" d="M 640 456 V 488"/>
+    <text class="flow-label" x="732" y="480">/pbs /pdm /ceph /packer APIs</text>
+  </g>
+</svg>

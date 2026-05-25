@@ -1,0 +1,798 @@
+{
+  "meta": {
+    "generated_at": "2026-04-01T19:39:49.416217+00:00",
+    "python": "3.13.3",
+    "platform": "Linux-6.8.12-4-pve-x86_64-with-glibc2.41"
+  },
+  "generated_by": "proxbox_cli.docgen",
+  "command_count": 63,
+  "group_count": 14,
+  "commands": [
+    {
+      "path": [],
+      "command": "pxb",
+      "kind": "group",
+      "summary": "Proxbox CLI \u2014 interact with the proxbox-api backend.",
+      "example": "pxb --help"
+    },
+    {
+      "path": [
+        "cache"
+      ],
+      "command": "pxb cache",
+      "kind": "command",
+      "summary": "Show the in-memory cache contents.",
+      "example": "pxb cache"
+    },
+    {
+      "path": [
+        "clear-cache"
+      ],
+      "command": "pxb clear-cache",
+      "kind": "command",
+      "summary": "Clear the in-memory cache on the proxbox-api server.",
+      "example": "pxb clear-cache"
+    },
+    {
+      "path": [
+        "config"
+      ],
+      "command": "pxb config",
+      "kind": "command",
+      "summary": "Show the current CLI configuration.",
+      "example": "pxb config"
+    },
+    {
+      "path": [
+        "dcim"
+      ],
+      "command": "pxb dcim",
+      "kind": "group",
+      "summary": "DCIM (datacenter infrastructure) commands.",
+      "example": "pxb dcim --help"
+    },
+    {
+      "path": [
+        "dcim",
+        "devices"
+      ],
+      "command": "pxb dcim devices",
+      "kind": "command",
+      "summary": "List devices.",
+      "example": "pxb dcim devices"
+    },
+    {
+      "path": [
+        "dcim",
+        "devices-create"
+      ],
+      "command": "pxb dcim devices-create",
+      "kind": "command",
+      "summary": "Sync Proxmox nodes to NetBox devices. [NOTE: triggers a full node sync]",
+      "example": "pxb dcim devices-create"
+    },
+    {
+      "path": [
+        "dcim",
+        "interfaces-create"
+      ],
+      "command": "pxb dcim interfaces-create",
+      "kind": "command",
+      "summary": "Create interfaces and IPs for a specific node device.",
+      "example": "pxb dcim interfaces-create <NODE>"
+    },
+    {
+      "path": [
+        "dcim",
+        "interfaces-create-all"
+      ],
+      "command": "pxb dcim interfaces-create-all",
+      "kind": "command",
+      "summary": "Create interfaces for all node devices.",
+      "example": "pxb dcim interfaces-create-all"
+    },
+    {
+      "path": [
+        "docs"
+      ],
+      "command": "pxb docs",
+      "kind": "group",
+      "summary": "Documentation generation commands.",
+      "example": "pxb docs --help"
+    },
+    {
+      "path": [
+        "docs",
+        "generate-capture"
+      ],
+      "command": "pxb docs generate-capture",
+      "kind": "command",
+      "summary": "Generate machine-readable CLI docs artifacts for the MkDocs site.",
+      "example": "pxb docs generate-capture"
+    },
+    {
+      "path": [
+        "extras"
+      ],
+      "command": "pxb extras",
+      "kind": "group",
+      "summary": "Extras commands (custom fields, etc.).",
+      "example": "pxb extras --help"
+    },
+    {
+      "path": [
+        "extras",
+        "custom-fields-create"
+      ],
+      "command": "pxb extras custom-fields-create",
+      "kind": "command",
+      "summary": "Create predefined Proxbox custom fields in NetBox (proxmox_vm_id, start_at_boot, etc.).",
+      "example": "pxb extras custom-fields-create"
+    },
+    {
+      "path": [
+        "full-update"
+      ],
+      "command": "pxb full-update",
+      "kind": "command",
+      "summary": "Run a full sync: creates devices (nodes) then VMs. [NOTE: long-running operation]",
+      "example": "pxb full-update"
+    },
+    {
+      "path": [
+        "info"
+      ],
+      "command": "pxb info",
+      "kind": "command",
+      "summary": "Show proxbox-api project info.",
+      "example": "pxb info"
+    },
+    {
+      "path": [
+        "init"
+      ],
+      "command": "pxb init",
+      "kind": "command",
+      "summary": "Interactively configure the proxbox-api base URL.",
+      "example": "pxb init"
+    },
+    {
+      "path": [
+        "netbox"
+      ],
+      "command": "pxb netbox",
+      "kind": "group",
+      "summary": "NetBox integration commands.",
+      "example": "pxb netbox --help"
+    },
+    {
+      "path": [
+        "netbox",
+        "endpoint"
+      ],
+      "command": "pxb netbox endpoint",
+      "kind": "group",
+      "summary": "NetBox endpoint CRUD.",
+      "example": "pxb netbox endpoint --help"
+    },
+    {
+      "path": [
+        "netbox",
+        "endpoint",
+        "create"
+      ],
+      "command": "pxb netbox endpoint create",
+      "kind": "command",
+      "summary": "Create a NetBox endpoint record.",
+      "example": "pxb netbox endpoint create"
+    },
+    {
+      "path": [
+        "netbox",
+        "endpoint",
+        "delete"
+      ],
+      "command": "pxb netbox endpoint delete",
+      "kind": "command",
+      "summary": "Delete a NetBox endpoint record.",
+      "example": "pxb netbox endpoint delete <NETBOX-ID>"
+    },
+    {
+      "path": [
+        "netbox",
+        "endpoint",
+        "get"
+      ],
+      "command": "pxb netbox endpoint get",
+      "kind": "command",
+      "summary": "Get a single NetBox endpoint by ID.",
+      "example": "pxb netbox endpoint get <NETBOX-ID>"
+    },
+    {
+      "path": [
+        "netbox",
+        "endpoint",
+        "list"
+      ],
+      "command": "pxb netbox endpoint list",
+      "kind": "command",
+      "summary": "List NetBox endpoint records.",
+      "example": "pxb netbox endpoint list"
+    },
+    {
+      "path": [
+        "netbox",
+        "endpoint",
+        "update"
+      ],
+      "command": "pxb netbox endpoint update",
+      "kind": "command",
+      "summary": "Update a NetBox endpoint record.",
+      "example": "pxb netbox endpoint update <NETBOX-ID>"
+    },
+    {
+      "path": [
+        "netbox",
+        "openapi"
+      ],
+      "command": "pxb netbox openapi",
+      "kind": "command",
+      "summary": "Fetch the NetBox OpenAPI schema.",
+      "example": "pxb netbox openapi"
+    },
+    {
+      "path": [
+        "netbox",
+        "status"
+      ],
+      "command": "pxb netbox status",
+      "kind": "command",
+      "summary": "Show NetBox API status.",
+      "example": "pxb netbox status"
+    },
+    {
+      "path": [
+        "proxbox"
+      ],
+      "command": "pxb proxbox",
+      "kind": "group",
+      "summary": "Proxbox plugin and backend info commands.",
+      "example": "pxb proxbox --help"
+    },
+    {
+      "path": [
+        "proxbox",
+        "default-settings"
+      ],
+      "command": "pxb proxbox default-settings",
+      "kind": "command",
+      "summary": "Show Proxbox default settings from the NetBox plugin config.",
+      "example": "pxb proxbox default-settings"
+    },
+    {
+      "path": [
+        "proxbox",
+        "plugins-config"
+      ],
+      "command": "pxb proxbox plugins-config",
+      "kind": "command",
+      "summary": "Show plugin configuration from NetBox PLUGINS_CONFIG.",
+      "example": "pxb proxbox plugins-config"
+    },
+    {
+      "path": [
+        "proxbox",
+        "settings"
+      ],
+      "command": "pxb proxbox settings",
+      "kind": "command",
+      "summary": "Show resolved Proxbox plugin configuration from NetBox.",
+      "example": "pxb proxbox settings"
+    },
+    {
+      "path": [
+        "proxmox"
+      ],
+      "command": "pxb proxmox",
+      "kind": "group",
+      "summary": "Proxmox integration commands.",
+      "example": "pxb proxmox --help"
+    },
+    {
+      "path": [
+        "proxmox",
+        "cluster"
+      ],
+      "command": "pxb proxmox cluster",
+      "kind": "group",
+      "summary": "Proxmox cluster commands.",
+      "example": "pxb proxmox cluster --help"
+    },
+    {
+      "path": [
+        "proxmox",
+        "cluster",
+        "resources"
+      ],
+      "command": "pxb proxmox cluster resources",
+      "kind": "command",
+      "summary": "Get cluster resources, optionally filtered by type.",
+      "example": "pxb proxmox cluster resources"
+    },
+    {
+      "path": [
+        "proxmox",
+        "cluster",
+        "status"
+      ],
+      "command": "pxb proxmox cluster status",
+      "kind": "command",
+      "summary": "Get cluster status (name, nodes, quorate, mode).",
+      "example": "pxb proxmox cluster status"
+    },
+    {
+      "path": [
+        "proxmox",
+        "endpoints"
+      ],
+      "command": "pxb proxmox endpoints",
+      "kind": "group",
+      "summary": "Proxmox endpoint CRUD (local DB).",
+      "example": "pxb proxmox endpoints --help"
+    },
+    {
+      "path": [
+        "proxmox",
+        "endpoints",
+        "create"
+      ],
+      "command": "pxb proxmox endpoints create",
+      "kind": "command",
+      "summary": "Create a Proxmox endpoint record.",
+      "example": "pxb proxmox endpoints create"
+    },
+    {
+      "path": [
+        "proxmox",
+        "endpoints",
+        "delete"
+      ],
+      "command": "pxb proxmox endpoints delete",
+      "kind": "command",
+      "summary": "Delete a Proxmox endpoint record.",
+      "example": "pxb proxmox endpoints delete <ENDPOINT-ID>"
+    },
+    {
+      "path": [
+        "proxmox",
+        "endpoints",
+        "get"
+      ],
+      "command": "pxb proxmox endpoints get",
+      "kind": "command",
+      "summary": "Get a single Proxmox endpoint by ID.",
+      "example": "pxb proxmox endpoints get <ENDPOINT-ID>"
+    },
+    {
+      "path": [
+        "proxmox",
+        "endpoints",
+        "list"
+      ],
+      "command": "pxb proxmox endpoints list",
+      "kind": "command",
+      "summary": "List Proxmox endpoint records.",
+      "example": "pxb proxmox endpoints list"
+    },
+    {
+      "path": [
+        "proxmox",
+        "endpoints",
+        "update"
+      ],
+      "command": "pxb proxmox endpoints update",
+      "kind": "command",
+      "summary": "Update a Proxmox endpoint record.",
+      "example": "pxb proxmox endpoints update <ENDPOINT-ID>"
+    },
+    {
+      "path": [
+        "proxmox",
+        "nodes"
+      ],
+      "command": "pxb proxmox nodes",
+      "kind": "group",
+      "summary": "Proxmox node commands.",
+      "example": "pxb proxmox nodes --help"
+    },
+    {
+      "path": [
+        "proxmox",
+        "nodes",
+        "list"
+      ],
+      "command": "pxb proxmox nodes list",
+      "kind": "command",
+      "summary": "Get node info (cpu, mem, status, fingerprint) from all sessions.",
+      "example": "pxb proxmox nodes list"
+    },
+    {
+      "path": [
+        "proxmox",
+        "nodes",
+        "lxc"
+      ],
+      "command": "pxb proxmox nodes lxc",
+      "kind": "command",
+      "summary": "List LXC containers on a specific node.",
+      "example": "pxb proxmox nodes lxc <NODE>"
+    },
+    {
+      "path": [
+        "proxmox",
+        "nodes",
+        "network"
+      ],
+      "command": "pxb proxmox nodes network",
+      "kind": "command",
+      "summary": "Get network interfaces for a node.",
+      "example": "pxb proxmox nodes network <NODE>"
+    },
+    {
+      "path": [
+        "proxmox",
+        "nodes",
+        "qemu"
+      ],
+      "command": "pxb proxmox nodes qemu",
+      "kind": "command",
+      "summary": "List QEMU VMs on a specific node.",
+      "example": "pxb proxmox nodes qemu <NODE>"
+    },
+    {
+      "path": [
+        "proxmox",
+        "overview"
+      ],
+      "command": "pxb proxmox overview",
+      "kind": "command",
+      "summary": "Show Proxmox overview (access, cluster, nodes, pools, storage, version).",
+      "example": "pxb proxmox overview"
+    },
+    {
+      "path": [
+        "proxmox",
+        "sessions"
+      ],
+      "command": "pxb proxmox sessions",
+      "kind": "command",
+      "summary": "List all active Proxmox sessions.",
+      "example": "pxb proxmox sessions"
+    },
+    {
+      "path": [
+        "proxmox",
+        "storage"
+      ],
+      "command": "pxb proxmox storage",
+      "kind": "command",
+      "summary": "Get storage info from all Proxmox sessions.",
+      "example": "pxb proxmox storage"
+    },
+    {
+      "path": [
+        "proxmox",
+        "storage-content"
+      ],
+      "command": "pxb proxmox storage-content",
+      "kind": "command",
+      "summary": "Get storage content (backups, images) for a node and storage.",
+      "example": "pxb proxmox storage-content <NODE> <STORAGE-ID>"
+    },
+    {
+      "path": [
+        "proxmox",
+        "top-level"
+      ],
+      "command": "pxb proxmox top-level",
+      "kind": "command",
+      "summary": "Query a dynamic top-level Proxmox path.",
+      "example": "pxb proxmox top-level <PATH>"
+    },
+    {
+      "path": [
+        "proxmox",
+        "version"
+      ],
+      "command": "pxb proxmox version",
+      "kind": "command",
+      "summary": "Get Proxmox version from all connected sessions.",
+      "example": "pxb proxmox version"
+    },
+    {
+      "path": [
+        "proxmox",
+        "viewer"
+      ],
+      "command": "pxb proxmox viewer",
+      "kind": "group",
+      "summary": "Proxmox API codegen and viewer commands.",
+      "example": "pxb proxmox viewer --help"
+    },
+    {
+      "path": [
+        "proxmox",
+        "viewer",
+        "contracts"
+      ],
+      "command": "pxb proxmox viewer contracts",
+      "kind": "command",
+      "summary": "Report Proxmox and NetBox schema contract diagnostics.",
+      "example": "pxb proxmox viewer contracts"
+    },
+    {
+      "path": [
+        "proxmox",
+        "viewer",
+        "generate"
+      ],
+      "command": "pxb proxmox viewer generate",
+      "kind": "command",
+      "summary": "Run the Proxmox API Viewer crawl and code generation pipeline.",
+      "example": "pxb proxmox viewer generate"
+    },
+    {
+      "path": [
+        "proxmox",
+        "viewer",
+        "openapi"
+      ],
+      "command": "pxb proxmox viewer openapi",
+      "kind": "command",
+      "summary": "Return the generated Proxmox OpenAPI schema.",
+      "example": "pxb proxmox viewer openapi"
+    },
+    {
+      "path": [
+        "proxmox",
+        "viewer",
+        "openapi-embedded"
+      ],
+      "command": "pxb proxmox viewer openapi-embedded",
+      "kind": "command",
+      "summary": "Return the Proxmox OpenAPI as embedded in the FastAPI custom schema.",
+      "example": "pxb proxmox viewer openapi-embedded"
+    },
+    {
+      "path": [
+        "proxmox",
+        "viewer",
+        "pydantic"
+      ],
+      "command": "pxb proxmox viewer pydantic",
+      "kind": "command",
+      "summary": "Print the generated Pydantic v2 model source code.",
+      "example": "pxb proxmox viewer pydantic"
+    },
+    {
+      "path": [
+        "proxmox",
+        "vm-config"
+      ],
+      "command": "pxb proxmox vm-config",
+      "kind": "command",
+      "summary": "Get VM config for a specific VM.",
+      "example": "pxb proxmox vm-config <NODE> <VM-TYPE> <VMID>"
+    },
+    {
+      "path": [
+        "test"
+      ],
+      "command": "pxb test",
+      "kind": "command",
+      "summary": "Test connectivity to the proxbox-api server.",
+      "example": "pxb test"
+    },
+    {
+      "path": [
+        "version"
+      ],
+      "command": "pxb version",
+      "kind": "command",
+      "summary": "Show the proxbox-api backend version.",
+      "example": "pxb version"
+    },
+    {
+      "path": [
+        "virtualization"
+      ],
+      "command": "pxb virtualization",
+      "kind": "group",
+      "summary": "Virtualization commands.",
+      "example": "pxb virtualization --help"
+    },
+    {
+      "path": [
+        "virtualization",
+        "cluster-types-create"
+      ],
+      "command": "pxb virtualization cluster-types-create",
+      "kind": "command",
+      "summary": "Create cluster types in NetBox.",
+      "example": "pxb virtualization cluster-types-create"
+    },
+    {
+      "path": [
+        "virtualization",
+        "clusters-create"
+      ],
+      "command": "pxb virtualization clusters-create",
+      "kind": "command",
+      "summary": "Create clusters in NetBox.",
+      "example": "pxb virtualization clusters-create"
+    },
+    {
+      "path": [
+        "virtualization",
+        "storage-create"
+      ],
+      "command": "pxb virtualization storage-create",
+      "kind": "command",
+      "summary": "Sync Proxmox storage definitions into NetBox. [NOTE: triggers sync]",
+      "example": "pxb virtualization storage-create"
+    },
+    {
+      "path": [
+        "virtualization",
+        "vms"
+      ],
+      "command": "pxb virtualization vms",
+      "kind": "group",
+      "summary": "Virtual machine commands.",
+      "example": "pxb virtualization vms --help"
+    },
+    {
+      "path": [
+        "virtualization",
+        "vms",
+        "backups-create"
+      ],
+      "command": "pxb virtualization vms backups-create",
+      "kind": "command",
+      "summary": "Create backups for a specific node/storage. [NOTE: triggers sync]",
+      "example": "pxb virtualization vms backups-create"
+    },
+    {
+      "path": [
+        "virtualization",
+        "vms",
+        "backups-sync-all"
+      ],
+      "command": "pxb virtualization vms backups-sync-all",
+      "kind": "command",
+      "summary": "Sync ALL backups across all clusters/nodes/storages. [NOTE: long-running sync]",
+      "example": "pxb virtualization vms backups-sync-all"
+    },
+    {
+      "path": [
+        "virtualization",
+        "vms",
+        "create"
+      ],
+      "command": "pxb virtualization vms create",
+      "kind": "command",
+      "summary": "Sync VMs from Proxmox to NetBox (creates VMs, interfaces, IPs). [NOTE: triggers full sync]",
+      "example": "pxb virtualization vms create"
+    },
+    {
+      "path": [
+        "virtualization",
+        "vms",
+        "create-test"
+      ],
+      "command": "pxb virtualization vms create-test",
+      "kind": "command",
+      "summary": "Create a hardcoded test VM in NetBox.",
+      "example": "pxb virtualization vms create-test"
+    },
+    {
+      "path": [
+        "virtualization",
+        "vms",
+        "disks-create"
+      ],
+      "command": "pxb virtualization vms disks-create",
+      "kind": "command",
+      "summary": "Create virtual disks for VMs in NetBox. [NOTE: triggers sync]",
+      "example": "pxb virtualization vms disks-create"
+    },
+    {
+      "path": [
+        "virtualization",
+        "vms",
+        "get"
+      ],
+      "command": "pxb virtualization vms get",
+      "kind": "command",
+      "summary": "Get a single VM by ID.",
+      "example": "pxb virtualization vms get <VM-ID>"
+    },
+    {
+      "path": [
+        "virtualization",
+        "vms",
+        "interfaces-create"
+      ],
+      "command": "pxb virtualization vms interfaces-create",
+      "kind": "command",
+      "summary": "Create VM interfaces in NetBox. [NOTE: triggers sync]",
+      "example": "pxb virtualization vms interfaces-create"
+    },
+    {
+      "path": [
+        "virtualization",
+        "vms",
+        "ip-address-create"
+      ],
+      "command": "pxb virtualization vms ip-address-create",
+      "kind": "command",
+      "summary": "Create IP addresses for VM interfaces in NetBox. [NOTE: triggers sync]",
+      "example": "pxb virtualization vms ip-address-create"
+    },
+    {
+      "path": [
+        "virtualization",
+        "vms",
+        "list"
+      ],
+      "command": "pxb virtualization vms list",
+      "kind": "command",
+      "summary": "List all virtual machines from NetBox.",
+      "example": "pxb virtualization vms list"
+    },
+    {
+      "path": [
+        "virtualization",
+        "vms",
+        "snapshots-create"
+      ],
+      "command": "pxb virtualization vms snapshots-create",
+      "kind": "command",
+      "summary": "Sync VM snapshots for all VMs or a specific VM. [NOTE: triggers sync]",
+      "example": "pxb virtualization vms snapshots-create"
+    },
+    {
+      "path": [
+        "virtualization",
+        "vms",
+        "snapshots-sync-all"
+      ],
+      "command": "pxb virtualization vms snapshots-sync-all",
+      "kind": "command",
+      "summary": "Sync ALL VM snapshots across all clusters/nodes. [NOTE: long-running sync]",
+      "example": "pxb virtualization vms snapshots-sync-all"
+    },
+    {
+      "path": [
+        "virtualization",
+        "vms",
+        "summary"
+      ],
+      "command": "pxb virtualization vms summary",
+      "kind": "command",
+      "summary": "Get summary for a specific VM by ID.",
+      "example": "pxb virtualization vms summary <VM-ID>"
+    },
+    {
+      "path": [
+        "virtualization",
+        "vms",
+        "summary-example"
+      ],
+      "command": "pxb virtualization vms summary-example",
+      "kind": "command",
+      "summary": "Return an example VirtualMachineSummary response.",
+      "example": "pxb virtualization vms summary-example"
+    }
+  ]
+}
