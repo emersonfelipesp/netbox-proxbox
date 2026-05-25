@@ -11,6 +11,7 @@ Results are upserted into the three SDN Django models.
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass, field
 
 import requests
@@ -227,6 +228,16 @@ def sync_sdn(
     synced_fabric_pks: set[int] = set()
     synced_route_map_pks: set[int] = set()
     synced_prefix_list_pks: set[int] = set()
+    endpoint_runtime_seconds: dict[int, float] = {}
+    endpoint_names: dict[int, str] = {}
+
+    def record_endpoint_runtime(
+        endpoint: ProxmoxEndpoint, runtime_seconds: float
+    ) -> None:
+        endpoint_names.setdefault(endpoint.pk, str(endpoint))
+        endpoint_runtime_seconds[endpoint.pk] = (
+            endpoint_runtime_seconds.get(endpoint.pk, 0.0) + runtime_seconds
+        )
 
     with transaction.atomic():
         for item in fabrics:
@@ -242,8 +253,11 @@ def sync_sdn(
                     cluster_name,
                 )
                 continue
+            upsert_started = time.monotonic()
             pk = _upsert_fabric(endpoint, item, result)
+            upsert_runtime = time.monotonic() - upsert_started
             if pk:
+                record_endpoint_runtime(endpoint, upsert_runtime)
                 synced_fabric_pks.add(pk)
                 processed_fabric_endpoints.add(endpoint.pk)
 
@@ -256,8 +270,11 @@ def sync_sdn(
             )
             if endpoint is None:
                 continue
+            upsert_started = time.monotonic()
             pk = _upsert_route_map(endpoint, item, result)
+            upsert_runtime = time.monotonic() - upsert_started
             if pk:
+                record_endpoint_runtime(endpoint, upsert_runtime)
                 synced_route_map_pks.add(pk)
                 processed_route_map_endpoints.add(endpoint.pk)
 
@@ -270,8 +287,11 @@ def sync_sdn(
             )
             if endpoint is None:
                 continue
+            upsert_started = time.monotonic()
             pk = _upsert_prefix_list(endpoint, item, result)
+            upsert_runtime = time.monotonic() - upsert_started
             if pk:
+                record_endpoint_runtime(endpoint, upsert_runtime)
                 synced_prefix_list_pks.add(pk)
                 processed_prefix_list_endpoints.add(endpoint.pk)
 
@@ -310,6 +330,15 @@ def sync_sdn(
         | processed_route_map_endpoints
         | processed_prefix_list_endpoints
     )
+    result.per_endpoint = [
+        {
+            "endpoint_id": endpoint_id,
+            "endpoint_name": endpoint_names.get(endpoint_id, f"Endpoint {endpoint_id}"),
+            "success": True,
+            "runtime_seconds": round(runtime_seconds, 3),
+        }
+        for endpoint_id, runtime_seconds in endpoint_runtime_seconds.items()
+    ]
     result.success = True
     logger.info(
         "SDN sync complete: %d endpoint(s) processed, "

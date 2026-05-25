@@ -1,17 +1,99 @@
 {% load i18n %}
 {% with block=job.data.proxbox_sync %}
     {% if block %}
-        <div class="card">
-            <h5 class="card-header">{% trans "Proxbox sync" %}</h5>
-            <div class="card-body">
-                {% if block.runtime_seconds is not None %}
-                    <p class="mb-2"><strong>{% trans "Runtime" %}:</strong> {{ block.runtime_seconds }}s</p>
-                {% endif %}
-                {% if block.params.sync_types %}
-                    <p class="mb-0"><strong>{% trans "Sync types" %}:</strong> {{ block.params.sync_types|join:", " }}</p>
-                {% endif %}
-                {% if block.response.stages %}
-                    <hr class="my-2">
+        {% with summary=block.response.runtime_summary %}
+            <div class="card">
+                <h5 class="card-header">{% trans "Proxbox sync summary" %}</h5>
+                <div class="card-body">
+                    <dl class="row mb-0">
+                        {% if block.runtime_seconds is not None %}
+                            <dt class="col-6">{% trans "Job runtime" %}</dt>
+                            <dd class="col-6 text-end font-monospace">{{ block.runtime_seconds|floatformat:1 }}s</dd>
+                        {% endif %}
+                        {% if summary %}
+                            {% if summary.endpoint_count is not None %}
+                                <dt class="col-6">{% trans "Synced endpoints" %}</dt>
+                                <dd class="col-6 text-end font-monospace">{{ summary.endpoint_count }}</dd>
+                            {% endif %}
+                            {% if summary.endpoint_runtime_seconds is not None %}
+                                <dt class="col-6">{% trans "Endpoint runtime" %}</dt>
+                                <dd class="col-6 text-end font-monospace">{{ summary.endpoint_runtime_seconds|floatformat:1 }}s</dd>
+                            {% endif %}
+                            {% if summary.other_runtime_seconds is not None %}
+                                <dt class="col-6">{% trans "Other runtime" %}</dt>
+                                <dd class="col-6 text-end font-monospace">{{ summary.other_runtime_seconds|floatformat:1 }}s</dd>
+                            {% endif %}
+                        {% endif %}
+                        {% if block.params.sync_types %}
+                            <dt class="col-6">{% trans "Sync types" %}</dt>
+                            <dd class="col-6 text-end">{{ block.params.sync_types|join:", " }}</dd>
+                        {% endif %}
+                    </dl>
+                </div>
+            </div>
+        {% endwith %}
+
+        {% if block.response.endpoint_runtimes %}
+            {% for endpoint_runtime in block.response.endpoint_runtimes %}
+                <div class="card">
+                    <h5 class="card-header">
+                        {% if endpoint_runtime.endpoint_name %}
+                            {{ endpoint_runtime.endpoint_name }}
+                        {% else %}
+                            {% trans "Proxmox endpoint" %} {{ endpoint_runtime.endpoint_id }}
+                        {% endif %}
+                    </h5>
+                    <div class="card-body">
+                        <p class="mb-2">
+                            <strong>{% trans "Endpoint runtime" %}:</strong>
+                            <span class="font-monospace">{{ endpoint_runtime.runtime_seconds|floatformat:1 }}s</span>
+                            {% if endpoint_runtime.endpoint_id %}
+                                <span class="text-muted">({% trans "ID" %} {{ endpoint_runtime.endpoint_id }})</span>
+                            {% endif %}
+                        </p>
+                        {% if endpoint_runtime.phases %}
+                            <table class="table table-sm table-borderless mb-0">
+                                <thead>
+                                    <tr>
+                                        <th class="ps-0">{% trans "Stage" %}</th>
+                                        <th>{% trans "Status" %}</th>
+                                        <th>{% trans "Summary" %}</th>
+                                        <th class="text-end pe-0">{% trans "Runtime" %}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for phase in endpoint_runtime.phases %}
+                                        <tr>
+                                            <td class="ps-0 text-nowrap">{{ phase.label }}</td>
+                                            <td class="text-nowrap">
+                                                {% if phase.status == "success" %}
+                                                    <span class="badge text-bg-success">{% trans "Success" %}</span>
+                                                {% elif phase.status == "warning" %}
+                                                    <span class="badge text-bg-warning">{% trans "Warning" %}</span>
+                                                {% else %}
+                                                    <span class="badge text-bg-secondary">{{ phase.status }}</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>{{ phase.summary }}</td>
+                                            <td class="text-end pe-0 font-monospace text-nowrap">
+                                                {% if phase.runtime_seconds is not None and phase.runtime_seconds != "" %}
+                                                    {{ phase.runtime_seconds|floatformat:1 }}s
+                                                {% else %}
+                                                    &mdash;
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endfor %}
+        {% elif block.response.stages %}
+            <div class="card">
+                <h5 class="card-header">{% trans "Proxbox sync stages" %}</h5>
+                <div class="card-body">
                     <p class="mb-1"><strong>{% trans "Stage breakdown" %}:</strong></p>
                     <table class="table table-sm table-borderless mb-0">
                         <thead>
@@ -35,8 +117,8 @@
                             {% endfor %}
                         </tbody>
                     </table>
-                {% endif %}
+                </div>
             </div>
-        </div>
+        {% endif %}
     {% endif %}
 {% endwith %}

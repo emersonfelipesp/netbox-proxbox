@@ -176,6 +176,20 @@ def test_vm_detail_sync_now_button_contract():
     assert "Sync Now" in button_contents
 
 
+def test_job_runtime_panel_renders_endpoint_runtime_cards():
+    contents = _read(
+        "netbox_proxbox/templates/netbox_proxbox/inc/job_runtime_panel.html"
+    )
+
+    assert "Proxbox sync summary" in contents
+    assert "block.response.runtime_summary" in contents
+    assert "block.response.endpoint_runtimes" in contents
+    assert "endpoint_runtime.phases" in contents
+    assert "phase.runtime_seconds" in contents
+    assert "block.response.stages" in contents
+    assert "Proxbox sync stages" in contents
+
+
 def test_firewall_push_and_preview_ui_contracts():
     extension_contents = _read("netbox_proxbox/template_content.py")
     view_contents = _read("netbox_proxbox/views/firewall.py")
