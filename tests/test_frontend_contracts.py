@@ -485,6 +485,19 @@ def test_fastapi_openapi_tab_view_and_template_contract():
     assert "Last Refreshed" in template_contents
 
 
+def test_settings_page_exposes_reconciliation_engine_controls():
+    template = _read("netbox_proxbox/templates/netbox_proxbox/settings.html")
+    view = _read("netbox_proxbox/views/settings.py")
+    form = _read("netbox_proxbox/forms/settings.py")
+
+    assert "reconciliation_engine" in template
+    assert "reconciliation_compare_strict" in template
+    assert "reconciliation_engine" in view
+    assert "reconciliation_compare_strict" in view
+    assert "VM reconciliation engine" in form
+    assert "Strict Rust comparison" in form
+
+
 def test_endpoint_tables_use_record_pk_for_keepalive_reverse():
     contents = _read("netbox_proxbox/tables/__init__.py")
     assert "keepalive_status" in contents

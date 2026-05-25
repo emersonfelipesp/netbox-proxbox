@@ -45,6 +45,7 @@ class ProxboxPluginSettingsSerializer(NetBoxModelSerializer):
             "backup_batch_delay_ms",
             "vm_sync_max_concurrency",
             "reconciliation_engine",
+            "reconciliation_compare_strict",
             "custom_fields_request_delay",
             "backend_log_file_path",
             "debug_cache",

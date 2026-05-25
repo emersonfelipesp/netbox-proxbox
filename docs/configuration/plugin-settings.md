@@ -74,7 +74,8 @@ These fields control batching, concurrency, and pacing for the Proxmox-to-NetBox
 | Field | Default | Env override | Description |
 |---|---|---|---|
 | **VM sync max concurrency** | `4` | `PROXBOX_VM_SYNC_MAX_CONCURRENCY` | Maximum number of VMs synced in parallel during a full update. |
-| **VM reconciliation engine** | `python` | `PROXBOX_RECONCILIATION_ENGINE` | Engine used by proxbox-api to build VM operation queues. `python` is the safe default, `compare` runs Python and Rust then returns Python output for parity validation, and `rust` uses the optional `proxbox-reconcile-rs` PyO3 extension. |
+| **VM reconciliation engine** | `python` | _(plugin only)_ | Engine used by proxbox-api to build VM operation queues: `python`, `compare`, or `rust`. Use `rust` for the PyO3-backed `proxbox-reconcile-rs` engine. |
+| **Strict Rust comparison** | `false` | _(plugin only)_ | In `compare` mode, fail the sync on Rust/Python mismatch instead of only logging it. |
 | **Bulk batch size** | `50` | `PROXBOX_BULK_BATCH_SIZE` | Number of records per batch during bulk create/update operations. |
 | **Bulk batch delay (ms)** | `500` | `PROXBOX_BULK_BATCH_DELAY_MS` | Milliseconds to pause between bulk batches to avoid overwhelming NetBox. |
 | **Backup batch size** | `5` | `PROXBOX_BACKUP_BATCH_SIZE` | Records per batch during backup/snapshot reconciliation (kept lower than bulk batches because each item triggers Proxmox calls). |

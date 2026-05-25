@@ -272,6 +272,14 @@ class ProxboxPluginSettingsForm(forms.Form):
             "rust requires proxbox-reconcile-rs or a PyO3-enabled backend image."
         ),
     )
+    reconciliation_compare_strict = forms.BooleanField(
+        required=False,
+        label="Strict Rust comparison",
+        help_text=(
+            "Only applies to compare mode. When enabled, a Rust/Python mismatch fails "
+            "the sync instead of only logging the mismatch."
+        ),
+    )
     custom_fields_request_delay = forms.DecimalField(
         required=False,
         min_value=0,

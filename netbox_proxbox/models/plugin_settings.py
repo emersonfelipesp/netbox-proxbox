@@ -214,6 +214,14 @@ class ProxboxPluginSettings(NetBoxModel):
             "output; rust requires the optional proxbox-reconcile-rs PyO3 package."
         ),
     )
+    reconciliation_compare_strict = models.BooleanField(
+        default=False,
+        verbose_name=_("Strict Rust comparison"),
+        help_text=_(
+            "When VM reconciliation engine is compare, raise an error if Rust output "
+            "differs from Python output. Use for validation, not normal production sync."
+        ),
+    )
     custom_fields_request_delay = models.DecimalField(
         max_digits=5,
         decimal_places=2,
