@@ -7,7 +7,6 @@ Each widget performs DB-only reads — no synchronous HTTP calls in ``render()``
 from __future__ import annotations
 
 from django.template.loader import render_to_string
-from django.utils.translation import gettext_lazy as _
 from extras.dashboard.utils import register_widget
 from extras.dashboard.widgets import DashboardWidget
 
@@ -36,8 +35,8 @@ def _safe_count(model, request):
 
 @register_widget
 class ProxboxSyncStatusWidget(DashboardWidget):
-    default_title = _("Proxbox Sync Status")
-    description = _("Last Proxbox sync job status and synced object summary.")
+    default_title = "Proxbox Sync Status"
+    description = "Last Proxbox sync job status and synced object summary."
     width = 6
     height = 4
 
@@ -83,8 +82,8 @@ class ProxboxSyncStatusWidget(DashboardWidget):
 
 @register_widget
 class ProxboxObjectCountsWidget(DashboardWidget):
-    default_title = _("Proxbox Object Counts")
-    description = _("Counts of all Proxbox plugin model objects.")
+    default_title = "Proxbox Object Counts"
+    description = "Counts of all Proxbox plugin model objects."
     width = 4
     height = 4
 
@@ -132,8 +131,8 @@ class ProxboxObjectCountsWidget(DashboardWidget):
 
 @register_widget
 class ProxboxEndpointStatusWidget(DashboardWidget):
-    default_title = _("Proxbox Endpoints")
-    description = _("Overview of configured Proxmox, NetBox, and FastAPI endpoints.")
+    default_title = "Proxbox Endpoints"
+    description = "Overview of configured Proxmox, NetBox, and FastAPI endpoints."
     width = 6
     height = 3
 
