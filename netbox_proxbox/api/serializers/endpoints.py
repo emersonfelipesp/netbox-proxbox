@@ -47,6 +47,9 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
     )
     site = SiteSerializer(nested=True, required=False, allow_null=True)
     tenant = TenantSerializer(nested=True, required=False, allow_null=True)
+    has_ssh_password = serializers.BooleanField(read_only=True)
+    has_ssh_private_key = serializers.BooleanField(read_only=True)
+    has_ssh_terminal_credentials = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = ProxmoxEndpoint
@@ -71,6 +74,13 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
             "timeout",
             "max_retries",
             "retry_backoff",
+            "ssh_username",
+            "ssh_port",
+            "ssh_auth_method",
+            "ssh_known_host_fingerprint",
+            "has_ssh_password",
+            "has_ssh_private_key",
+            "has_ssh_terminal_credentials",
             "default_role_qemu",
             "default_role_lxc",
             *OVERWRITE_FIELDS,

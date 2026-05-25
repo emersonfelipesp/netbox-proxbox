@@ -6,7 +6,6 @@ import logging
 
 from netbox_proxbox.models import FastAPIEndpoint
 from netbox_proxbox.schemas.backend_proxy import BackendRequestContext
-from netbox_proxbox.services.backend_auth import ensure_backend_key_registered
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +95,8 @@ def _handle_auth_registration_and_retry(
     Returns (new_headers, retry_flag). If registration succeeds, returns new headers
     and True to indicate the caller should retry the request.
     """
+    from netbox_proxbox.services.backend_auth import ensure_backend_key_registered
+
     logger.info("Backend returned 'no API key' error; attempting key registration")
     reg_ok, reg_msg = ensure_backend_key_registered(endpoint_id=endpoint_id)
     if reg_ok:

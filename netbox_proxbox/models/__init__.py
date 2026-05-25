@@ -18,6 +18,12 @@ from netbox_proxbox.models.base import PORT_VALIDATORS, CommonProperties, Endpoi
 from netbox_proxbox.models.cloud_image_template import CloudImageTemplate
 from netbox_proxbox.models.deletion_request import DeletionRequest
 from netbox_proxbox.models.fastapi_endpoint import FastAPIEndpoint
+from netbox_proxbox.models.firecracker import (
+    FirecrackerHost,
+    FirecrackerHostPool,
+    FirecrackerImageTemplate,
+    FirecrackerMicroVM,
+)
 from netbox_proxbox.models.netbox_endpoint import NetBoxEndpoint
 from netbox_proxbox.models.pbs_endpoint import PBSEndpoint
 from netbox_proxbox.models.pdm_endpoint import PDMEndpoint
@@ -49,6 +55,10 @@ __all__ = (
     "CloudImageTemplate",
     "DeletionRequest",
     "FastAPIEndpoint",
+    "FirecrackerHost",
+    "FirecrackerHostPool",
+    "FirecrackerImageTemplate",
+    "FirecrackerMicroVM",
     "NetBoxEndpoint",
     "NodeSSHCredential",
     "PBSEndpoint",

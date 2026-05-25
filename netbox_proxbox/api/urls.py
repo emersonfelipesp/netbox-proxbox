@@ -8,11 +8,13 @@ from .ha import HAClusterSummaryAPIView, HAVMResourceAPIView
 from .ssh_credentials import (
     NodeSSHCredentialByNodeAPIView,
     NodeSSHCredentialSecretsAPIView,
+    ProxmoxEndpointSSHCredentialSecretsAPIView,
 )
 from .views import (
     BackendLogsAPIView,
     ClustersAPIView,
     DashboardAPIView,
+    FirecrackerMicroVMsAPIView,
     HomeAPIView,
     InterfacesAPIView,
     IPAddressesAPIView,
@@ -49,6 +51,26 @@ router.register(
     "cloud-image-templates",
     views.CloudImageTemplateViewSet,
     basename="cloudimagetemplate",
+)
+router.register(
+    "firecracker-host-pools",
+    views.FirecrackerHostPoolViewSet,
+    basename="firecrackerhostpool",
+)
+router.register(
+    "firecracker-hosts",
+    views.FirecrackerHostViewSet,
+    basename="firecrackerhost",
+)
+router.register(
+    "firecracker-image-templates",
+    views.FirecrackerImageTemplateViewSet,
+    basename="firecrackerimagetemplate",
+)
+router.register(
+    "firecracker-microvms",
+    views.FirecrackerMicroVMViewSet,
+    basename="firecrackermicrovm",
 )
 router.register("storage", views.ProxmoxStorageViewSet, basename="storage")
 router.register("backups", views.VMBackupViewSet)
@@ -139,6 +161,11 @@ urlpatterns = [
         name="api-lxc-containers",
     ),
     path(
+        "resources/firecracker-microvms/",
+        FirecrackerMicroVMsAPIView.as_view(),
+        name="api-firecracker-microvms",
+    ),
+    path(
         "resources/interfaces/",
         InterfacesAPIView.as_view(),
         name="api-interfaces",
@@ -172,6 +199,11 @@ urlpatterns = [
         "ssh-credentials/by-node/<int:node_id>/credentials/",
         NodeSSHCredentialSecretsAPIView.as_view(),
         name="api-ssh-credential-secrets",
+    ),
+    path(
+        "ssh-credentials/by-endpoint/<int:endpoint_id>/credentials/",
+        ProxmoxEndpointSSHCredentialSecretsAPIView.as_view(),
+        name="api-ssh-credential-endpoint-secrets",
     ),
     # Model CRUD router (ProxmoxCluster/Node at proxmox-clusters/proxmox-nodes/)
     path("", include(router.urls)),

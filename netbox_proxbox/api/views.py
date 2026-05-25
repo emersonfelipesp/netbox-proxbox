@@ -6,6 +6,7 @@ from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
 from netbox.api.authentication import IsAuthenticatedOrLoginNotRequired
 from netbox.api.viewsets import NetBoxModelViewSet
+from rest_framework import status as drf_status
 from rest_framework.decorators import action
 from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.permissions import BasePermission, IsAuthenticated
@@ -16,12 +17,22 @@ from rest_framework.views import APIView
 from utilities.permissions import get_permission_for_model
 
 from netbox_proxbox.choices import ProxmoxVMTypeChoices
+from netbox_proxbox.intent.firewall_common import (
+    FirewallPushError,
+    preview_firewall_object,
+    push_firewall_object,
+)
+from netbox_proxbox.views.proxbox_access import permission_run_proxmox_action
 
 from .. import filtersets, models
 from .serializers import (
     BackupRoutineSerializer,
     CloudImageTemplateSerializer,
     FastAPIEndpointSerializer,
+    FirecrackerHostPoolSerializer,
+    FirecrackerHostSerializer,
+    FirecrackerImageTemplateSerializer,
+    FirecrackerMicroVMSerializer,
     NetBoxEndpointSerializer,
     NodeSSHCredentialSerializer,
     ProxboxPluginSettingsSerializer,
@@ -74,6 +85,7 @@ class ProxBoxRootView(APIRootView):
             "nodes": f"{base}/resources/nodes/",
             "virtual_machines": f"{base}/resources/virtual-machines/",
             "lxc_containers": f"{base}/resources/lxc-containers/",
+            "firecracker_microvms": f"{base}/resources/firecracker-microvms/",
             "interfaces": f"{base}/resources/interfaces/",
             "ip_addresses": f"{base}/resources/ip-addresses/",
             "virtual_disks": f"{base}/resources/virtual-disks/",
@@ -81,6 +93,12 @@ class ProxBoxRootView(APIRootView):
         response.data["schedule_sync"] = f"{base}/sync/schedule/"
         response.data["logs"] = f"{base}/logs/"
         response.data["cloud_image_templates"] = f"{base}/cloud-image-templates/"
+        response.data["firecracker"] = {
+            "host_pools": f"{base}/firecracker-host-pools/",
+            "hosts": f"{base}/firecracker-hosts/",
+            "image_templates": f"{base}/firecracker-image-templates/",
+            "microvms": f"{base}/firecracker-microvms/",
+        }
         response.data["ha"] = {
             "summary": f"{base}/ha/summary/",
             "vm": f"{base}/ha/vm/",
@@ -150,6 +168,53 @@ class CloudImageTemplateViewSet(NetBoxModelViewSet):
     ).prefetch_related("allowed_tenants", "tags")
     serializer_class = CloudImageTemplateSerializer
     filterset_class = filtersets.CloudImageTemplateFilterSet
+
+
+class FirecrackerHostPoolViewSet(NetBoxModelViewSet):
+    """REST API for Firecracker host pools."""
+
+    queryset = models.FirecrackerHostPool.objects.prefetch_related(
+        "allowed_tenants",
+        "tags",
+    )
+    serializer_class = FirecrackerHostPoolSerializer
+    filterset_class = filtersets.FirecrackerHostPoolFilterSet
+
+
+class FirecrackerHostViewSet(NetBoxModelViewSet):
+    """REST API for Firecracker host-agent VMs."""
+
+    queryset = models.FirecrackerHost.objects.select_related(
+        "pool",
+        "host_vm",
+        "proxmox_node",
+    ).prefetch_related("tags")
+    serializer_class = FirecrackerHostSerializer
+    filterset_class = filtersets.FirecrackerHostFilterSet
+
+
+class FirecrackerImageTemplateViewSet(NetBoxModelViewSet):
+    """REST API for Firecracker kernel/rootfs image templates."""
+
+    queryset = models.FirecrackerImageTemplate.objects.prefetch_related(
+        "allowed_tenants",
+        "tags",
+    )
+    serializer_class = FirecrackerImageTemplateSerializer
+    filterset_class = filtersets.FirecrackerImageTemplateFilterSet
+
+
+class FirecrackerMicroVMViewSet(NetBoxModelViewSet):
+    """REST API for Firecracker micro-VM instances."""
+
+    queryset = models.FirecrackerMicroVM.objects.select_related(
+        "tenant",
+        "host",
+        "host__pool",
+        "image",
+    ).prefetch_related("tags")
+    serializer_class = FirecrackerMicroVMSerializer
+    filterset_class = filtersets.FirecrackerMicroVMFilterSet
 
 
 class VMSnapshotViewSet(NetBoxModelViewSet):
@@ -429,6 +494,40 @@ def _serialize_vm(vm: object, request: Request) -> dict:
         "tenant": _nested(vm.tenant, request),
         "platform": _nested(vm.platform, request),
         "interfaces": _serialize_interfaces(vm.interfaces, request),
+    }
+
+
+def _serialize_firecracker_microvm(microvm: object, request: Request) -> dict:
+    """Serialize a Firecracker micro-VM in the Cloud resource-list shape."""
+    try:
+        url = request.build_absolute_uri(microvm.get_absolute_url())
+    except Exception:
+        url = None
+    return {
+        "id": microvm.pk,
+        "instance_ref": microvm.instance_ref,
+        "kind": "firecracker",
+        "name": microvm.name,
+        "url": url,
+        "status": {
+            "value": microvm.status,
+            "label": microvm.get_status_display(),
+        },
+        "tenant": _nested(microvm.tenant, request),
+        "host": _nested(microvm.host, request),
+        "host_pool": _nested(microvm.host.pool, request) if microvm.host_id else None,
+        "image": _nested(microvm.image, request),
+        "network_mode": {
+            "value": microvm.network_mode,
+            "label": microvm.get_network_mode_display(),
+        },
+        "vcpus": microvm.vcpus,
+        "memory_mib": microvm.memory_mib,
+        "disk_mib": microvm.disk_mib,
+        "guest_ip": str(microvm.guest_ip) if microvm.guest_ip else None,
+        "mac_address": microvm.mac_address or None,
+        "started_at": microvm.started_at.isoformat() if microvm.started_at else None,
+        "stopped_at": microvm.stopped_at.isoformat() if microvm.stopped_at else None,
     }
 
 
@@ -867,6 +966,41 @@ class LXCContainersAPIView(_ProxboxVMListAPIView):
     vm_type_slug = "lxc-container"
 
 
+class FirecrackerMicroVMsAPIView(APIView):
+    """API mirror for Firecracker micro-VM resources exposed to NMS Cloud."""
+
+    permission_classes = [IsAuthenticatedOrLoginNotRequired]
+
+    @extend_schema(responses={200: OpenApiTypes.OBJECT})
+    def get(self, request: Request) -> Response:
+        """Return Firecracker micro-VMs with Cloud-compatible metadata."""
+        qs = (
+            models.FirecrackerMicroVM.objects.restrict(request.user, "view")
+            .select_related("tenant", "host", "host__pool", "image")
+            .order_by("name")
+        )
+
+        if "limit" not in request.query_params and "offset" not in request.query_params:
+            results = [
+                _serialize_firecracker_microvm(microvm, request) for microvm in qs
+            ]
+            return Response(
+                {
+                    "count": len(results),
+                    "next": None,
+                    "previous": None,
+                    "results": results,
+                }
+            )
+
+        paginator = LimitOffsetPagination()
+        paginator.default_limit = 1000
+        paginator.max_limit = 5000
+        page = paginator.paginate_queryset(qs, request, view=self)
+        results = [_serialize_firecracker_microvm(microvm, request) for microvm in page]
+        return paginator.get_paginated_response(results)
+
+
 class InterfacesAPIView(APIView):
     """API mirror of the Proxbox interfaces page (/plugins/proxbox/interfaces/).
 
@@ -1271,7 +1405,66 @@ class BackendLogsAPIView(APIView):
 # ── Firewall ViewSets ─────────────────────────────────────────────────────────
 
 
-class ProxmoxFirewallSecurityGroupViewSet(NetBoxModelViewSet):
+class _FirewallPushActionMixin:
+    """DRF action for pushing one firewall object to Proxmox."""
+
+    @extend_schema(responses={200: OpenApiTypes.OBJECT})
+    @action(detail=True, methods=["post"], url_path="push")
+    def push(self, request: Request, pk: int | str | None = None) -> Response:
+        """Push this firewall object to the linked Proxmox endpoint."""
+        if not request.user.has_perm(permission_run_proxmox_action()):
+            return Response(
+                {
+                    "status": "error",
+                    "reason": "permission_denied",
+                    "detail": "Missing core.run_proxmox_action permission.",
+                },
+                status=drf_status.HTTP_403_FORBIDDEN,
+            )
+
+        obj = self.get_object()
+        actor = _actor_from_request(request)
+        try:
+            result = push_firewall_object(obj, actor=actor)
+        except FirewallPushError as exc:
+            return Response(
+                {
+                    "status": "error",
+                    "reason": exc.reason,
+                    "detail": exc.detail,
+                    "response": exc.response,
+                },
+                status=exc.status_code,
+            )
+        return Response(result.to_response(), status=drf_status.HTTP_200_OK)
+
+    @extend_schema(responses={200: OpenApiTypes.OBJECT})
+    @action(detail=True, methods=["get"], url_path="preview")
+    def preview(self, request: Request, pk: int | str | None = None) -> Response:
+        """Return NetBox state, live Proxmox state, and differing fields."""
+        del pk
+        if not request.user.has_perm(permission_run_proxmox_action()):
+            return Response(
+                {
+                    "status": "error",
+                    "reason": "permission_denied",
+                    "detail": "Missing core.run_proxmox_action permission.",
+                },
+                status=drf_status.HTTP_403_FORBIDDEN,
+            )
+        result = preview_firewall_object(self.get_object())
+        return Response(result.to_response(), status=drf_status.HTTP_200_OK)
+
+
+def _actor_from_request(request: Request) -> str:
+    user = getattr(request, "user", None)
+    get_username = getattr(user, "get_username", None)
+    if callable(get_username):
+        return str(get_username())
+    return str(getattr(user, "username", "") or getattr(user, "pk", "") or "netbox")
+
+
+class ProxmoxFirewallSecurityGroupViewSet(_FirewallPushActionMixin, NetBoxModelViewSet):
     """REST API for Proxmox firewall security groups."""
 
     queryset = models.ProxmoxFirewallSecurityGroup.objects.select_related("endpoint")
@@ -1279,7 +1472,7 @@ class ProxmoxFirewallSecurityGroupViewSet(NetBoxModelViewSet):
     filterset_class = filtersets.ProxmoxFirewallSecurityGroupFilterSet
 
 
-class ProxmoxFirewallRuleViewSet(NetBoxModelViewSet):
+class ProxmoxFirewallRuleViewSet(_FirewallPushActionMixin, NetBoxModelViewSet):
     """REST API for Proxmox firewall rules."""
 
     queryset = models.ProxmoxFirewallRule.objects.select_related(
@@ -1288,8 +1481,43 @@ class ProxmoxFirewallRuleViewSet(NetBoxModelViewSet):
     serializer_class = ProxmoxFirewallRuleSerializer
     filterset_class = filtersets.ProxmoxFirewallRuleFilterSet
 
+    @extend_schema(responses={200: OpenApiTypes.OBJECT})
+    @action(detail=False, methods=["post"], url_path="push")
+    def bulk_push(self, request: Request) -> Response:
+        """Push selected firewall rules to Proxmox."""
+        if not request.user.has_perm(permission_run_proxmox_action()):
+            return Response(
+                {
+                    "status": "error",
+                    "reason": "permission_denied",
+                    "detail": "Missing core.run_proxmox_action permission.",
+                },
+                status=drf_status.HTTP_403_FORBIDDEN,
+            )
+        ids = request.data.get("ids") or request.data.get("pk") or []
+        if not isinstance(ids, list):
+            ids = [ids]
+        actor = _actor_from_request(request)
+        results = []
+        for rule in self.get_queryset().filter(pk__in=ids):
+            try:
+                results.append(push_firewall_object(rule, actor=actor).to_response())
+            except FirewallPushError as exc:
+                results.append(
+                    {
+                        "id": rule.pk,
+                        "status": "error",
+                        "reason": exc.reason,
+                        "detail": exc.detail,
+                    }
+                )
+        return Response(
+            {"status": "completed", "count": len(results), "results": results},
+            status=drf_status.HTTP_200_OK,
+        )
 
-class ProxmoxFirewallIPSetViewSet(NetBoxModelViewSet):
+
+class ProxmoxFirewallIPSetViewSet(_FirewallPushActionMixin, NetBoxModelViewSet):
     """REST API for Proxmox firewall IP sets."""
 
     queryset = models.ProxmoxFirewallIPSet.objects.select_related(
@@ -1299,7 +1527,7 @@ class ProxmoxFirewallIPSetViewSet(NetBoxModelViewSet):
     filterset_class = filtersets.ProxmoxFirewallIPSetFilterSet
 
 
-class ProxmoxFirewallIPSetEntryViewSet(NetBoxModelViewSet):
+class ProxmoxFirewallIPSetEntryViewSet(_FirewallPushActionMixin, NetBoxModelViewSet):
     """REST API for Proxmox firewall IP set entries."""
 
     queryset = models.ProxmoxFirewallIPSetEntry.objects.select_related("ipset")
@@ -1307,7 +1535,7 @@ class ProxmoxFirewallIPSetEntryViewSet(NetBoxModelViewSet):
     filterset_class = filtersets.ProxmoxFirewallIPSetEntryFilterSet
 
 
-class ProxmoxFirewallAliasViewSet(NetBoxModelViewSet):
+class ProxmoxFirewallAliasViewSet(_FirewallPushActionMixin, NetBoxModelViewSet):
     """REST API for Proxmox firewall aliases."""
 
     queryset = models.ProxmoxFirewallAlias.objects.select_related(
@@ -1317,7 +1545,7 @@ class ProxmoxFirewallAliasViewSet(NetBoxModelViewSet):
     filterset_class = filtersets.ProxmoxFirewallAliasFilterSet
 
 
-class ProxmoxFirewallOptionsViewSet(NetBoxModelViewSet):
+class ProxmoxFirewallOptionsViewSet(_FirewallPushActionMixin, NetBoxModelViewSet):
     """REST API for Proxmox firewall options snapshots."""
 
     queryset = models.ProxmoxFirewallOptions.objects.select_related(

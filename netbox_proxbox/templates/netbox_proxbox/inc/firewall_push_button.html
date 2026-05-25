@@ -1,0 +1,17 @@
+{% load i18n %}
+{% if allow_writes %}
+<form method="post" action="{{ action_url }}" class="d-inline" data-firewall-push-form data-firewall-api-url="{{ api_push_url }}">
+  {% csrf_token %}
+  <button type="submit" class="btn btn-primary" title="{% trans 'Push this firewall object to Proxmox' %}">
+    <i class="mdi mdi-upload" aria-hidden="true"></i>
+    {% trans "Push to Proxmox" %}
+  </button>
+  <span class="ms-2 small text-muted" data-firewall-push-status aria-live="polite"></span>
+</form>
+{% else %}
+{% trans "This endpoint does not allow writes. Enable allow_writes on the ProxmoxEndpoint to push firewall changes." as disabled_tooltip %}
+<button type="button" class="btn btn-primary" disabled title="{{ disabled_tooltip }}">
+  <i class="mdi mdi-upload" aria-hidden="true"></i>
+  {% trans "Push to Proxmox" %}
+</button>
+{% endif %}

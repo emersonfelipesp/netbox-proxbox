@@ -209,6 +209,37 @@ def _field_display_value(obj: object, field_name: str) -> str:
     return str(value)
 
 
+def _companion_endpoint_status_service(obj: object) -> str:
+    model_meta = getattr(obj.__class__, "_meta", None)
+    app_label = getattr(model_meta, "app_label", "")
+    model_name = getattr(model_meta, "model_name", "")
+    class_name = obj.__class__.__name__
+    if (
+        app_label == "netbox_pbs"
+        and model_name == "pbsserver"
+        and class_name == "PBSServer"
+    ):
+        return "pbs"
+    return ""
+
+
+def _companion_endpoint_connection_status(obj: object) -> dict[str, object] | None:
+    service = _companion_endpoint_status_service(obj)
+    endpoint_id = getattr(obj, "pk", getattr(obj, "id", None))
+    if not service or endpoint_id is None:
+        return None
+    return {
+        "label": "Connection Status",
+        "service": service,
+        "badge_id": f"{service}-status-badge-{endpoint_id}",
+        "message_id": f"{service}-connection-error-{endpoint_id}",
+        "url": reverse(
+            "plugins:netbox_proxbox:keepalive_status",
+            args=[service, endpoint_id],
+        ),
+    }
+
+
 def _serialize_companion_endpoint(
     obj: object, request: HttpRequest, *, absolute_urls: bool
 ) -> dict[str, object]:
@@ -226,6 +257,7 @@ def _serialize_companion_endpoint(
         "name": str(obj),
         "url": _object_url(obj, request, absolute_urls=absolute_urls),
         "fields": fields,
+        "connection_status": _companion_endpoint_connection_status(obj),
     }
 
 
