@@ -3,15 +3,65 @@
 from __future__ import annotations
 
 import importlib
+import sys
+import types
 from types import SimpleNamespace
 
 import requests
 
-from tests.conftest import ResponseStub, load_plugin_module
+from tests.conftest import ResponseStub, _make_model_class, load_plugin_module
 
 
 def _service_status_module():
     return importlib.import_module("netbox_proxbox.services.service_status")
+
+
+def _install_pbs_server_stub(monkeypatch, pbs_server):
+    netbox_pbs_module = types.ModuleType("netbox_pbs")
+    models_module = types.ModuleType("netbox_pbs.models")
+    models_module.PBSServer = _make_model_class(
+        "PBSServer",
+        first=pbs_server,
+        objects_by_pk={getattr(pbs_server, "pk", 1): pbs_server},
+    )
+    netbox_pbs_module.models = models_module
+    monkeypatch.setitem(sys.modules, "netbox_pbs", netbox_pbs_module)
+    monkeypatch.setitem(sys.modules, "netbox_pbs.models", models_module)
+
+
+def _keepalive_request():
+    return SimpleNamespace(
+        user=SimpleNamespace(
+            is_authenticated=True,
+            has_perms=lambda *a, **k: True,
+            has_perm=lambda *a, **k: True,
+        ),
+        method="GET",
+    )
+
+
+def _pbs_server():
+    return SimpleNamespace(
+        id=7,
+        pk=7,
+        name="PBS01",
+        host="10.0.30.134",
+        port=8007,
+        verify_ssl=True,
+    )
+
+
+def _patch_backend_and_pbs_status(monkeypatch, ss, status_payload):
+    def fake_get(url, verify=True, timeout=None, params=None, headers=None):
+        if url == "https://proxbox.local:8800":
+            return ResponseStub({"ok": True})
+        if url.endswith("/version"):
+            return ResponseStub({"version": "0.0.15"})
+        if url.endswith("/pbs/status"):
+            return ResponseStub(status_payload)
+        raise AssertionError(url)
+
+    monkeypatch.setattr(ss.requests, "get", fake_get)
 
 
 def test_fastapi_status_falls_back_to_ip_after_ssl_error(
@@ -579,6 +629,118 @@ def test_proxmox_status_returns_sync_error_before_backend_version_call(
     assert calls == []
 
 
+def test_pbs_keepalive_uses_backend_status_host_fallback(
+    monkeypatch,
+    fastapi_endpoint,
+):
+    module = load_plugin_module(
+        "netbox_proxbox.views.keepalive_status",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+    )
+    pbs_server = _pbs_server()
+    _install_pbs_server_stub(monkeypatch, pbs_server)
+    ss = _service_status_module()
+    _patch_backend_and_pbs_status(
+        monkeypatch,
+        ss,
+        {
+            "items": [
+                {
+                    "endpoint_id": 99,
+                    "name": "Backend PBS",
+                    "host": "10.0.30.134",
+                    "port": 8007,
+                    "reachable": True,
+                    "version": "3.3.2",
+                }
+            ]
+        },
+    )
+
+    response = module.get_service_status_impl(_keepalive_request(), "pbs", 7)
+
+    assert response.status_code == 200
+    assert response.payload["status"] == "success"
+    assert response.payload["target_address"] == "10.0.30.134"
+    assert response.payload["target_port"] == 8007
+    assert response.payload["authentication"] == "success"
+    assert response.payload["api_access"] == "success"
+
+
+def test_pbs_keepalive_reports_unreachable_reason(
+    monkeypatch,
+    fastapi_endpoint,
+):
+    module = load_plugin_module(
+        "netbox_proxbox.views.keepalive_status",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+    )
+    pbs_server = _pbs_server()
+    _install_pbs_server_stub(monkeypatch, pbs_server)
+    ss = _service_status_module()
+    _patch_backend_and_pbs_status(
+        monkeypatch,
+        ss,
+        {
+            "items": [
+                {
+                    "endpoint_id": 7,
+                    "name": "PBS01",
+                    "host": "10.0.30.134",
+                    "port": 8007,
+                    "reachable": False,
+                    "reason": "Token rejected",
+                }
+            ]
+        },
+    )
+
+    response = module.get_service_status_impl(_keepalive_request(), "pbs", 7)
+
+    assert response.status_code == 200
+    assert response.payload["status"] == "error"
+    assert response.payload["authentication"] == "success"
+    assert response.payload["api_access"] == "error"
+    assert response.payload["detail"] == "Token rejected"
+
+
+def test_pbs_keepalive_reports_missing_backend_match(
+    monkeypatch,
+    fastapi_endpoint,
+):
+    module = load_plugin_module(
+        "netbox_proxbox.views.keepalive_status",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+    )
+    pbs_server = _pbs_server()
+    _install_pbs_server_stub(monkeypatch, pbs_server)
+    ss = _service_status_module()
+    _patch_backend_and_pbs_status(
+        monkeypatch,
+        ss,
+        {
+            "items": [
+                {
+                    "endpoint_id": 42,
+                    "name": "Other PBS",
+                    "host": "10.0.30.200",
+                    "port": 8007,
+                    "reachable": True,
+                }
+            ]
+        },
+    )
+
+    response = module.get_service_status_impl(_keepalive_request(), "pbs", 7)
+
+    assert response.status_code == 200
+    assert response.payload["status"] == "error"
+    assert "PBS status for PBS01 was not returned" in response.payload["detail"]
+
+
 def test_get_service_status_unknown_service_returns_400(monkeypatch, fastapi_endpoint):
     module = load_plugin_module(
         "netbox_proxbox.views.keepalive_status",
@@ -598,3 +760,4 @@ def test_get_service_status_unknown_service_returns_400(monkeypatch, fastapi_end
     assert resp.payload["status"] == "error"
     assert "not-a-service" in resp.payload["detail"]
     assert "fastapi" in resp.payload["detail"]
+    assert "pbs" in resp.payload["detail"]

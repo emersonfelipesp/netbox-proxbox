@@ -181,6 +181,13 @@ def test_companion_endpoint_groups_render_required_plugin_endpoint_models(monkey
                     "id": 7,
                     "name": "PBS01",
                     "url": "https://netbox.example/plugins/pbs/servers/7/",
+                    "connection_status": {
+                        "label": "Connection Status",
+                        "service": "pbs",
+                        "badge_id": "pbs-status-badge-7",
+                        "message_id": "pbs-connection-error-7",
+                        "url": "/dummy/",
+                    },
                     "fields": [
                         {"name": "host", "label": "Host", "value": "10.0.30.134"},
                         {"name": "port", "label": "Port", "value": "8007"},
