@@ -7,7 +7,7 @@ from netbox_proxbox.migrations._idempotent_ops import add_field_idempotent
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("netbox_proxbox", "0039_squashed_0039_0042_pve_9_2_firewall_sdn"),
+        ("netbox_proxbox", "0042_proxmoxendpoint_ssh_terminal"),
     ]
 
     operations = [
