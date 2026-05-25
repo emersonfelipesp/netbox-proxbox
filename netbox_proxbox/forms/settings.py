@@ -269,7 +269,7 @@ class ProxboxPluginSettingsForm(forms.Form):
         help_text=(
             "Choose how proxbox-api builds VM operation queues. Python is the safe "
             "default; compare validates Rust parity while returning Python output; "
-            "rust uses the PyO3-backed proxbox-reconcile-rs engine."
+            "rust requires proxbox-reconcile-rs or a PyO3-enabled backend image."
         ),
     )
     reconciliation_compare_strict = forms.BooleanField(

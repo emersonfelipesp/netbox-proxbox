@@ -108,6 +108,7 @@ These fields are set by the system and cannot be modified via PATCH:
 |---|---|---|
 | `proxbox_fetch_max_concurrency` | integer | Maximum number of concurrent Proxmox API fetch operations |
 | `vm_sync_max_concurrency` | integer | Maximum number of VMs synced in parallel per sync run |
+| `reconciliation_engine` | string | VM operation-queue engine used by proxbox-api: `python`, `compare`, or `rust` |
 | `bulk_batch_size` | integer | Number of objects per batch in bulk NetBox write operations |
 | `bulk_batch_delay_ms` | integer | Delay in milliseconds between bulk write batches |
 | `backup_batch_size` | integer | Records per batch during backup/snapshot reconciliation (kept lower than bulk batches because each item triggers Proxmox calls). Default `5`. |

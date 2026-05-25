@@ -468,8 +468,9 @@ def parser_module(monkeypatch):
         ("acknowledge", "acknowledge"),
     ]
     plugin_settings_mod.RECONCILIATION_ENGINE_CHOICES = [
-        ("python", "Python"),
-        ("rust", "Rust"),
+        ("python", "Python (default)"),
+        ("compare", "Compare Python and Rust"),
+        ("rust", "Rust + PyO3"),
     ]
     plugin_settings_mod.NETBOX_TO_PROXMOX_TYPED_PHRASE = "allow-edit-and-add-actions"
     monkeypatch.setitem(
