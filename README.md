@@ -1,6 +1,6 @@
 # Proxbox
 
-Proxbox is a NetBox plugin that synchronizes Proxmox infrastructure data into NetBox. It keeps your DCIM up-to-date with real Proxmox clusters, nodes, virtual machines, containers, and backups.
+Proxbox is a NetBox plugin that synchronizes Proxmox infrastructure data into NetBox. It keeps your DCIM up-to-date with real Proxmox clusters, nodes, virtual machines, containers, backups, and Firecracker micro-VM inventory used by the NMS Cloud runtime.
 
 ![netbox-proxbox architecture](docs/assets/netbox-proxbox-architecture.svg)
 
@@ -11,6 +11,7 @@ Proxbox discovers and syncs the following from Proxmox into NetBox:
 - **Clusters and Nodes** — Proxmox cluster name, mode (cluster/standalone), quorum status, node count, and Proxmox VE version. Each node includes online status, IP address, CPU usage, memory usage, and uptime at sync time. Optionally link to NetBox Cluster and Device objects.
 - **Virtual Machines** — VM status, resources, and configuration
 - **Containers (LXC)** — Container details and settings
+- **Firecracker Cloud inventory** — Host pools, host-agent VMs, image templates, and provisioned micro-VMs exposed separately from QEMU/LXC for NMS Cloud provisioning
 - **VM Snapshots** — Point-in-time snapshots for recovery
 - **VM Backups** — Backup jobs and restore points
 - **Storage** — Datastores and storage content
