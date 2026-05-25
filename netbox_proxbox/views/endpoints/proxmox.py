@@ -10,6 +10,8 @@ from utilities.permissions import get_permission_for_model
 from utilities.query import reapply_model_ordering
 from utilities.views import ViewTab, register_model_view
 
+from netbox.object_actions import AddObject, BulkDelete, BulkExport, BulkImport
+
 from netbox_proxbox.filtersets import ProxmoxEndpointFilterSet
 from netbox_proxbox.forms import (
     ProxmoxEndpointFilterForm,
@@ -75,6 +77,7 @@ class ProxmoxEndpointListView(generic.ObjectListView):
     filterset = ProxmoxEndpointFilterSet
     filterset_form = ProxmoxEndpointFilterForm
     template_name = "netbox_proxbox/proxmoxendpoint_list.html"
+    actions = (AddObject, BulkImport, BulkExport, BulkDelete)
 
 
 @register_model_view(ProxmoxEndpoint, "bulk_import", path="import", detail=False)

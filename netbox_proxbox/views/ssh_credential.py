@@ -1,5 +1,6 @@
 """NetBox CRUD views for hardware-discovery SSH credentials."""
 
+from netbox.object_actions import AddObject, BulkDelete, BulkExport, BulkImport
 from netbox.views import generic
 from utilities.views import register_model_view
 
@@ -24,6 +25,7 @@ class NodeSSHCredentialListView(generic.ObjectListView):
     table = NodeSSHCredentialTable
     filterset = NodeSSHCredentialFilterSet
     filterset_form = NodeSSHCredentialFilterForm
+    actions = (AddObject, BulkImport, BulkExport, BulkDelete)
 
 
 @register_model_view(NodeSSHCredential, "add", detail=False)

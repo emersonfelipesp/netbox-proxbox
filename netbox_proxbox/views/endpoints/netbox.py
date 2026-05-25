@@ -52,6 +52,7 @@ class NetBoxEndpointListView(generic.ObjectListView):
     filterset = NetBoxEndpointFilterSet
     filterset_form = NetBoxEndpointFilterForm
     template_name = "netbox_proxbox/netboxendpoint_list.html"
+    actions = {}
 
 
 @register_model_view(NetBoxEndpoint, "bulk_import", path="import", detail=False)
