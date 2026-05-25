@@ -1,0 +1,16 @@
+{% load i18n %}
+
+{% if rows %}
+  <div class="list-group list-group-flush">
+    {% for row in rows %}
+      <a {% if row.url %}href="{{ row.url }}"{% endif %} class="list-group-item list-group-item-action px-1 py-2">
+        <div class="d-flex w-100 justify-content-between align-items-center">
+          {{ row.label }}
+          <strong>{{ row.count }}</strong>
+        </div>
+      </a>
+    {% endfor %}
+  </div>
+{% else %}
+  <p class="text-muted px-2 py-1"><em>{% trans "No Proxbox objects found." %}</em></p>
+{% endif %}
