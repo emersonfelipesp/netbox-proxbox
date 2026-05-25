@@ -35,6 +35,11 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from netbox_proxbox.intent.firewall_payload import (
+    build_firewall_plan_diffs,
+    default_proxmox_endpoint_id,
+    first_endpoint_id_from_diffs,
+)
 from netbox_proxbox.intent.plan_client import (
     PlanClientError,
     PlanClientResult,
@@ -202,8 +207,8 @@ def _plaintext_password_warnings(branch: Any) -> list[dict[str, str]]:
     return warnings
 
 
-def _has_delete(diffs: list[dict[str, Any]]) -> bool:
-    return any(d.get("op") == "delete" for d in diffs)
+def _has_vm_delete(diffs: list[dict[str, Any]]) -> bool:
+    return any(d.get("op") == "delete" and d.get("kind") != "firewall" for d in diffs)
 
 
 def _format_remote_failure(result: PlanClientResult) -> str:
@@ -253,17 +258,18 @@ def validate_proxmox_intent(
         return _indicator(True)
 
     diffs = _classify_vm_diffs(branch)
+    diffs.extend(build_firewall_plan_diffs(branch))
     if not diffs:
         return _indicator(
             True,
-            "No VM diffs on branch; Proxmox merge will be a no-op.",
+            "No VM or firewall diffs on branch; Proxmox merge will be a no-op.",
         )
 
     # Local Safety Model invariant 3: DELETE diffs require the
     # per-branch ``apply_destroy_confirmed`` toggle BEFORE any
     # backend probe. Surface this at plan time so the operator can
     # fix it without round-tripping proxbox-api.
-    if _has_delete(diffs) and not _branch_destroy_confirmed(branch):
+    if _has_vm_delete(diffs) and not _branch_destroy_confirmed(branch):
         return _indicator(
             False,
             (
@@ -274,7 +280,15 @@ def validate_proxmox_intent(
         )
 
     local_warnings = _plaintext_password_warnings(branch)
+    endpoint_id = first_endpoint_id_from_diffs(diffs) or default_proxmox_endpoint_id()
+    if endpoint_id is None:
+        return _indicator(
+            False,
+            "No ProxmoxEndpoint is configured; cannot validate Proxmox intent.",
+        )
+
     payload: dict[str, Any] = {
+        "endpoint_id": endpoint_id,
         "branch_id": getattr(branch, "pk", None),
         "actor": getattr(user, "username", None) if user else None,
         "diffs": diffs,

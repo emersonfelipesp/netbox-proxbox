@@ -155,6 +155,21 @@ def fw_common(monkeypatch):
     return module
 
 
+@pytest.fixture
+def fw_payload(monkeypatch, fw_common):
+    module_name = "netbox_proxbox.intent.firewall_payload"
+    sys.modules.pop(module_name, None)
+    spec = importlib.util.spec_from_file_location(
+        module_name,
+        REPO_ROOT / "netbox_proxbox" / "intent" / "firewall_payload.py",
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
 def _endpoint(fw_common, *, allow_writes=True):
     endpoint = fw_common.ProxmoxEndpoint()
     endpoint.pk = 1
@@ -354,3 +369,127 @@ def test_firewall_options_status_migration_is_idempotent():
     assert "add_field_idempotent(" in source
     assert 'model_name="proxmoxfirewalloptions"' in source
     assert 'field_name="status"' in source
+
+
+def test_firewall_rule_changediff_builds_apply_payload(fw_common, fw_payload):
+    endpoint = _endpoint(fw_common)
+    rule = _rule(fw_common, endpoint)
+    row = SimpleNamespace(
+        action="create",
+        object=rule,
+        object_id=77,
+        object_repr="allow-ssh",
+        object_type=SimpleNamespace(model="proxmoxfirewallrule"),
+        prechange_data=None,
+        postchange_data={"zone": fw_common.FirewallZoneChoices.DATACENTER},
+    )
+
+    apply_diff = fw_payload.build_firewall_apply_diff(row)
+
+    assert apply_diff is not None
+    assert apply_diff.endpoint_id == 1
+    assert apply_diff.diff["op"] == "create"
+    assert apply_diff.diff["kind"] == "firewall"
+    payload = apply_diff.diff["payload"]
+    assert payload["action"] == "firewall.rule.create"
+    assert payload["zone"] == fw_common.FirewallZoneChoices.DATACENTER
+    assert payload["pos"] == 7
+    assert payload["body"]["type"] == "in"
+
+
+def test_firewall_ipset_entry_changediff_targets_parent_ipset(fw_common, fw_payload):
+    endpoint = _endpoint(fw_common)
+    ipset = fw_common.ProxmoxFirewallIPSet()
+    ipset.endpoint = endpoint
+    ipset.scope = fw_common.FirewallScopeChoices.DATACENTER
+    ipset.name = "mgmt"
+    ipset.status = "stale"
+
+    entry = fw_common.ProxmoxFirewallIPSetEntry()
+    entry.ipset = ipset
+    entry.cidr = "10.0.0.0/8"
+    entry.comment = "management"
+    entry.nomatch = False
+    entry.raw_config = {"cidr": entry.cidr}
+
+    row = SimpleNamespace(
+        action="update",
+        object=entry,
+        object_id=88,
+        object_repr="mgmt:10.0.0.0/8",
+        object_type=SimpleNamespace(model="proxmoxfirewallipsetentry"),
+        prechange_data={"cidr": entry.cidr},
+        postchange_data={"cidr": entry.cidr, "comment": entry.comment},
+    )
+
+    apply_diff = fw_payload.build_firewall_apply_diff(row)
+
+    assert apply_diff is not None
+    payload = apply_diff.diff["payload"]
+    assert payload["action"] == "firewall.ipset.entry.update"
+    assert payload["zone"] == fw_common.FirewallZoneChoices.DATACENTER
+    assert payload["name"] == "mgmt"
+    assert payload["cidr"] == "10.0.0.0/8"
+
+
+def test_firewall_security_group_changediff_uses_group_payload(fw_common, fw_payload):
+    endpoint = _endpoint(fw_common)
+    group = fw_common.ProxmoxFirewallSecurityGroup()
+    group.endpoint = endpoint
+    group.name = "web"
+    group.comment = "Web ingress"
+
+    row = SimpleNamespace(
+        action="create",
+        object=group,
+        object_id=89,
+        object_repr="web",
+        object_type=SimpleNamespace(model="proxmoxfirewallsecuritygroup"),
+        prechange_data=None,
+        postchange_data={"name": group.name},
+    )
+
+    apply_diff = fw_payload.build_firewall_apply_diff(row)
+
+    assert apply_diff is not None
+    payload = apply_diff.diff["payload"]
+    assert payload["action"] == "firewall.group.create"
+    assert payload["group"] == "web"
+    assert payload["body"] == {"group": "web", "comment": "Web ingress"}
+
+
+def test_firewall_alias_update_changediff_does_not_rename_alias(fw_common, fw_payload):
+    endpoint = _endpoint(fw_common)
+    alias = fw_common.ProxmoxFirewallAlias()
+    alias.endpoint = endpoint
+    alias.scope = fw_common.FirewallScopeChoices.DATACENTER
+    alias.name = "web"
+    alias.cidr = "10.0.0.10"
+    alias.comment = "frontend"
+
+    row = SimpleNamespace(
+        action="update",
+        object=alias,
+        object_id=90,
+        object_repr="web",
+        object_type=SimpleNamespace(model="proxmoxfirewallalias"),
+        prechange_data={"name": alias.name},
+        postchange_data={"name": alias.name, "cidr": alias.cidr},
+    )
+
+    apply_diff = fw_payload.build_firewall_apply_diff(row)
+
+    assert apply_diff is not None
+    payload = apply_diff.diff["payload"]
+    assert payload["action"] == "firewall.alias.update"
+    assert payload["name"] == "web"
+    assert payload["body"] == {"cidr": "10.0.0.10", "comment": "frontend"}
+
+
+def test_firewall_payload_does_not_import_firewall_common_at_module_load():
+    source = (
+        REPO_ROOT / "netbox_proxbox" / "intent" / "firewall_payload.py"
+    ).read_text(encoding="utf-8")
+    header = source.split("FIREWALL_MODEL_NAMES", 1)[0]
+
+    assert "netbox_proxbox.intent.firewall_common" not in header
