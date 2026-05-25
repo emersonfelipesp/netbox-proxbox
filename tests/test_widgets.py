@@ -38,9 +38,7 @@ def _decorated_classes(tree: ast.Module) -> dict[str, list[str]]:
 def _function_names_in_class(tree: ast.Module, class_name: str) -> list[str]:
     for node in ast.walk(tree):
         if isinstance(node, ast.ClassDef) and node.name == class_name:
-            return [
-                n.name for n in ast.walk(node) if isinstance(n, ast.FunctionDef)
-            ]
+            return [n.name for n in ast.walk(node) if isinstance(n, ast.FunctionDef)]
     return []
 
 
@@ -56,7 +54,9 @@ class TestWidgetModuleStructure:
             "ProxboxObjectCountsWidget",
             "ProxboxEndpointStatusWidget",
         }
-        assert expected.issubset(set(names)), f"Missing widget classes: {expected - set(names)}"
+        assert expected.issubset(set(names)), (
+            f"Missing widget classes: {expected - set(names)}"
+        )
 
     def test_all_widgets_decorated_with_register_widget(self):
         tree = _parse_widgets_module()
@@ -106,7 +106,9 @@ class TestWidgetTemplates:
     )
 
     def test_template_directory_exists(self):
-        assert self.TEMPLATE_DIR.is_dir(), f"Expected template dir at {self.TEMPLATE_DIR}"
+        assert self.TEMPLATE_DIR.is_dir(), (
+            f"Expected template dir at {self.TEMPLATE_DIR}"
+        )
 
     def test_sync_status_template_exists(self):
         assert (self.TEMPLATE_DIR / "sync_status.html").exists()

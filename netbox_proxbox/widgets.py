@@ -54,7 +54,10 @@ class ProxboxSyncStatusWidget(DashboardWidget):
                 continue
             if latest_job is None:
                 latest_job = job
-            if active_job is None and job.status in JobStatusChoices.ENQUEUED_STATE_CHOICES:
+            if (
+                active_job is None
+                and job.status in JobStatusChoices.ENQUEUED_STATE_CHOICES
+            ):
                 active_job = job
             if latest_job and active_job:
                 break
@@ -89,15 +92,27 @@ class ProxboxObjectCountsWidget(DashboardWidget):
         from django.urls import NoReverseMatch, reverse
 
         items = [
-            ("Proxmox Endpoints", ProxmoxEndpoint, "plugins:netbox_proxbox:proxmoxendpoint_list"),
+            (
+                "Proxmox Endpoints",
+                ProxmoxEndpoint,
+                "plugins:netbox_proxbox:proxmoxendpoint_list",
+            ),
             ("Clusters", ProxmoxCluster, "plugins:netbox_proxbox:proxmoxcluster_list"),
             ("Nodes", ProxmoxNode, "plugins:netbox_proxbox:proxmoxnode_list"),
             ("Storage", ProxmoxStorage, "plugins:netbox_proxbox:proxmoxstorage_list"),
             ("VM Backups", VMBackup, "plugins:netbox_proxbox:vmbackup_list"),
             ("VM Snapshots", VMSnapshot, "plugins:netbox_proxbox:vmsnapshot_list"),
-            ("Backup Routines", BackupRoutine, "plugins:netbox_proxbox:backuproutine_list"),
+            (
+                "Backup Routines",
+                BackupRoutine,
+                "plugins:netbox_proxbox:backuproutine_list",
+            ),
             ("Replications", Replication, "plugins:netbox_proxbox:replication_list"),
-            ("Task History", VMTaskHistory, "plugins:netbox_proxbox:vmtaskhistory_list"),
+            (
+                "Task History",
+                VMTaskHistory,
+                "plugins:netbox_proxbox:vmtaskhistory_list",
+            ),
         ]
 
         rows = []
@@ -131,11 +146,13 @@ class ProxboxEndpointStatusWidget(DashboardWidget):
         except AttributeError:
             qs = ProxmoxEndpoint.objects.all()
         for ep in qs:
-            proxmox_endpoints.append({
-                "name": str(ep),
-                "ip": get_endpoint_display_ip(ep),
-                "mode": getattr(ep, "mode", "—"),
-            })
+            proxmox_endpoints.append(
+                {
+                    "name": str(ep),
+                    "ip": get_endpoint_display_ip(ep),
+                    "mode": getattr(ep, "mode", "—"),
+                }
+            )
 
         netbox_ep = None
         try:
