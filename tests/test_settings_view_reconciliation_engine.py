@@ -12,7 +12,9 @@ from tests.test_settings_view_encryption import (
 )
 
 
-def _settings_with_engine(engine: str = "python", strict: bool = False) -> SimpleNamespace:
+def _settings_with_engine(
+    engine: str = "python", strict: bool = False
+) -> SimpleNamespace:
     obj = _fake_settings_obj()
     obj.reconciliation_engine = engine
     obj.reconciliation_compare_strict = strict
