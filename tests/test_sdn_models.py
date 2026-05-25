@@ -312,3 +312,5 @@ def test_sync_sdn_service_has_result_dataclass():
     assert "fabrics_created" in content
     assert "route_maps_created" in content
     assert "prefix_lists_created" in content
+    assert "per_endpoint" in content
+    assert "runtime_seconds" in content

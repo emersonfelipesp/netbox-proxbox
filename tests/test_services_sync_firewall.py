@@ -375,6 +375,9 @@ def test_happy_path_calls_upsert_for_all_object_types(sync_fw_module, monkeypatc
 
     assert result.success is True
     assert result.endpoints_processed == 1
+    assert result.per_endpoint[0]["endpoint_id"] == 1
+    assert "runtime_seconds" in result.per_endpoint[0]
+    assert result.per_endpoint[0]["runtime_seconds"] >= 0
     # 1 security group
     assert result.security_groups_created == 1
     # 1 datacenter rule + 1 security group rule

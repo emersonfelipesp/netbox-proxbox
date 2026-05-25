@@ -15,6 +15,7 @@ per-VM ``vm_type`` (qemu vs lxc) source is available from the DB.
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass, field
 
 import requests
@@ -532,6 +533,8 @@ def sync_firewall(
     # DB phase — one atomic block per endpoint.
     # -----------------------------------------------------------------------
     resolved_endpoints: dict[int, ProxmoxEndpoint] = {}
+    endpoint_started_at: dict[int, float] = {}
+    per_endpoint_by_id: dict[int, dict] = {}
 
     for entry in summary_list:
         cluster_name = entry.get("cluster_name") or ""
@@ -547,6 +550,8 @@ def sync_firewall(
             continue
 
         ep_result: dict = {"endpoint_id": endpoint.pk, "endpoint_name": str(endpoint)}
+        endpoint_started_at[endpoint.pk] = time.monotonic()
+        per_endpoint_by_id[endpoint.pk] = ep_result
         try:
             _sync_one_endpoint(endpoint, entry, result)
             ep_result["success"] = True
@@ -572,6 +577,11 @@ def sync_firewall(
                 endpoint.pk,
                 endpoint,
                 exc,
+            )
+        finally:
+            ep_result["runtime_seconds"] = round(
+                time.monotonic() - endpoint_started_at[endpoint.pk],
+                3,
             )
 
         result.per_endpoint.append(ep_result)
@@ -603,6 +613,12 @@ def sync_firewall(
                         node_name,
                         exc,
                     )
+            ep_result = per_endpoint_by_id.get(endpoint.pk)
+            if ep_result is not None:
+                ep_result["runtime_seconds"] = round(
+                    time.monotonic() - endpoint_started_at[endpoint.pk],
+                    3,
+                )
 
     result.success = (
         all(ep.get("success", False) for ep in result.per_endpoint)

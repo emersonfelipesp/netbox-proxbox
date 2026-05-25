@@ -235,6 +235,8 @@ def test_sync_datacenter_service_has_result_dataclass():
     content = _read("netbox_proxbox/services/sync_datacenter.py")
     assert "DatacenterSyncResult" in content
     assert "cpu_models_created" in content
+    assert "per_endpoint" in content
+    assert "runtime_seconds" in content
 
 
 # ---------------------------------------------------------------------------

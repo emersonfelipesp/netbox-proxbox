@@ -398,10 +398,9 @@ def _run_all_stages_sync(
     )
 
     for endpoint_scope in endpoint_scopes:
+        endpoint_id = endpoint_scope[0] if endpoint_scope else None
         if endpoint_scope:
-            job.logger.info(
-                "Running SSE sync for Proxmox endpoint %s", endpoint_scope[0]
-            )
+            job.logger.info("Running SSE sync for Proxmox endpoint %s", endpoint_id)
         else:
             job.logger.info("Running SSE sync with no Proxmox endpoint filter")
         base_query = _build_base_query_params(
@@ -442,6 +441,8 @@ def _run_all_stages_sync(
                 stages_out.append(
                     {
                         "sync_type": st,
+                        "endpoint_id": endpoint_id,
+                        "stream_path": stream_path,
                         "runtime_seconds": stage_runtime,
                         "result_summary": {
                             "path": payload.get("path"),

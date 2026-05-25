@@ -731,6 +731,177 @@ def test_proxbox_sync_job_run_multi_stage_in_dependency_order(
     assert len(saved["proxbox_sync"]["response"]["stages"]) == 2
 
 
+def test_proxbox_sync_job_persists_endpoint_runtime_breakdown(
+    monkeypatch, proxbox_sync_job_module
+):
+    """Endpoint-scoped runs persist cards with local phases and SSE stage timings."""
+    services_mod = types.ModuleType("netbox_proxbox.services")
+
+    def run_sync_stream(path, query_params=None, **stream_kwargs):
+        return ({"stream": True, "response": {"ok": True}, "path": path}, 200)
+
+    services_mod.run_sync_stream = run_sync_stream
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
+
+    class _EndpointQuerySet(list):
+        def first(self):
+            return self[0] if self else None
+
+    class _EndpointManager:
+        def filter(self, **kwargs):
+            endpoints = [
+                SimpleNamespace(pk=1, name="pve-a", effective_overwrites=lambda: {}),
+                SimpleNamespace(pk=2, name="pve-b", effective_overwrites=lambda: {}),
+            ]
+            if "pk__in" in kwargs:
+                ids = {int(value) for value in kwargs.get("pk__in", [])}
+                return _EndpointQuerySet(
+                    [endpoint for endpoint in endpoints if endpoint.pk in ids]
+                )
+            if "pk" in kwargs:
+                return _EndpointQuerySet(
+                    [
+                        endpoint
+                        for endpoint in endpoints
+                        if endpoint.pk == int(kwargs["pk"])
+                    ]
+                )
+            return _EndpointQuerySet(endpoints)
+
+        def values_list(self, *args, **kwargs):
+            return [1, 2]
+
+    proxbox_sync_job_module.ProxmoxEndpoint.objects = _EndpointManager()
+
+    sync_cluster_mod = sys.modules["netbox_proxbox.services.sync_cluster"]
+    sync_cluster_mod.sync_cluster_and_nodes = lambda endpoint_id=None: SimpleNamespace(
+        success=True,
+        endpoint_id=endpoint_id,
+        endpoint_name=f"pve-{endpoint_id}",
+        clusters_created=0,
+        clusters_updated=1,
+        nodes_created=0,
+        nodes_updated=2,
+        error=None,
+    )
+
+    sys.modules["netbox_proxbox.services.sync_firewall"].sync_firewall = (
+        lambda *a, **kw: SimpleNamespace(
+            success=True,
+            error=None,
+            endpoints_processed=2,
+            security_groups_created=0,
+            security_groups_updated=0,
+            rules_created=0,
+            ipsets_created=0,
+            aliases_created=0,
+            per_endpoint=[
+                {
+                    "endpoint_id": 1,
+                    "endpoint_name": "pve-1",
+                    "success": True,
+                    "runtime_seconds": 1.25,
+                },
+                {
+                    "endpoint_id": 2,
+                    "endpoint_name": "pve-2",
+                    "success": True,
+                    "runtime_seconds": 1.5,
+                },
+            ],
+        )
+    )
+    sys.modules["netbox_proxbox.services.sync_sdn"].sync_sdn = lambda *a, **kw: (
+        SimpleNamespace(
+            success=True,
+            error=None,
+            endpoints_processed=2,
+            fabrics_created=0,
+            fabrics_updated=0,
+            route_maps_created=0,
+            route_maps_updated=0,
+            prefix_lists_created=0,
+            prefix_lists_updated=0,
+            per_endpoint=[
+                {
+                    "endpoint_id": 1,
+                    "endpoint_name": "pve-1",
+                    "success": True,
+                    "runtime_seconds": 0.5,
+                },
+                {
+                    "endpoint_id": 2,
+                    "endpoint_name": "pve-2",
+                    "success": True,
+                    "runtime_seconds": 0.75,
+                },
+            ],
+        )
+    )
+    sys.modules["netbox_proxbox.services.sync_datacenter"].sync_datacenter = (
+        lambda *a, **kw: SimpleNamespace(
+            success=True,
+            error=None,
+            endpoints_processed=2,
+            cpu_models_created=0,
+            cpu_models_updated=0,
+            cpu_models_stale=0,
+            per_endpoint=[
+                {
+                    "endpoint_id": 1,
+                    "endpoint_name": "pve-1",
+                    "success": True,
+                    "runtime_seconds": 0.25,
+                },
+                {
+                    "endpoint_id": 2,
+                    "endpoint_name": "pve-2",
+                    "success": True,
+                    "runtime_seconds": 0.35,
+                },
+            ],
+        )
+    )
+
+    ticks = {"value": 100.0}
+
+    def monotonic():
+        ticks["value"] += 1.0
+        return ticks["value"]
+
+    monkeypatch.setattr(proxbox_sync_job_module.time, "monotonic", monotonic)
+
+    ProxboxSyncJob = proxbox_sync_job_module.ProxboxSyncJob
+    job = ProxboxSyncJob()
+    job.logger = logging.getLogger("test_proxbox_endpoint_runtime")
+    job.job = MagicMock()
+    job.job.data = None
+
+    st = proxbox_sync_job_module.SyncTypeChoices
+    ProxboxSyncJob.run(job, sync_types=[st.DEVICES], proxmox_endpoint_ids=["1", "2"])
+
+    response = job.job.data["proxbox_sync"]["response"]
+    assert len(response["stages"]) == 2
+    assert [stage["endpoint_id"] for stage in response["stages"]] == ["1", "2"]
+    assert {stage["sync_type"] for stage in response["stages"]} == {st.DEVICES}
+
+    endpoint_runtimes = response["endpoint_runtimes"]
+    assert len(endpoint_runtimes) == 2
+    assert {entry["endpoint_id"] for entry in endpoint_runtimes} == {1, 2}
+    assert response["runtime_summary"]["endpoint_count"] == 2
+
+    for entry in endpoint_runtimes:
+        labels = [phase["label"] for phase in entry["phases"]]
+        assert labels[:4] == [
+            "Cluster/node sync",
+            "Firewall sync",
+            "SDN sync",
+            "Datacenter sync",
+        ]
+        assert st.DEVICES in labels
+        assert entry["runtime_seconds"] > 0
+
+
 def test_proxbox_sync_job_run_targets_single_vm_route_when_requested(
     monkeypatch, proxbox_sync_job_module
 ):
