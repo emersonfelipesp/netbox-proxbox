@@ -15,7 +15,7 @@ Create these objects under **Plugins > Proxbox** before running a sync:
 The plugin exposes a singleton-style **Proxbox plugin settings** object for runtime behavior, organized into three groups:
 
 - **Core behavior** — guest-agent interface naming, Proxmox fetch concurrency, IPv6 link-local filtering.
-- **NetBox integration** — concurrency limits, retry policy, GET cache TTL, bulk-batch tuning, and VM sync parallelism.
+- **NetBox integration** — concurrency limits, retry policy, GET cache TTL, bulk-batch tuning, VM sync parallelism, and plugin-controlled VM reconciliation-engine selection.
 - **SSRF protection** — enable/disable endpoint IP validation, private IP allowances, and explicit CIDR block/allow lists.
 
 See [Plugin Settings](./plugin-settings.md) for the full field reference.

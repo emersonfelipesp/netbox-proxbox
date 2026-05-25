@@ -15,6 +15,7 @@ per-VM ``vm_type`` (qemu vs lxc) source is available from the DB.
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass, field
 
 import requests
@@ -324,6 +325,7 @@ def _upsert_options(
             "policy_in": raw.get("policy_in") or "",
             "policy_out": raw.get("policy_out") or "",
             "options": extra,
+            "status": FirewallSyncStatusChoices.ACTIVE,
             "raw_config": raw,
         },
     )
@@ -453,10 +455,7 @@ def _sync_one_endpoint(
         )
         result.aliases_stale += stale_aliases
 
-        # ProxmoxFirewallOptions has no status field; stale rows are deleted
-        # so the (endpoint, zone, node, vm) unique constraint stays in sync
-        # with the Proxmox cluster.
-        stale_opts, _ = (
+        stale_opts = (
             ProxmoxFirewallOptions.objects.filter(
                 endpoint=endpoint,
                 zone=FirewallZoneChoices.DATACENTER,
@@ -464,7 +463,7 @@ def _sync_one_endpoint(
                 virtual_machine=None,
             )
             .exclude(pk__in=synced_opts_ids)
-            .delete()
+            .update(status=FirewallSyncStatusChoices.STALE)
         )
         result.options_stale += stale_opts
 
@@ -534,6 +533,8 @@ def sync_firewall(
     # DB phase — one atomic block per endpoint.
     # -----------------------------------------------------------------------
     resolved_endpoints: dict[int, ProxmoxEndpoint] = {}
+    endpoint_started_at: dict[int, float] = {}
+    per_endpoint_by_id: dict[int, dict] = {}
 
     for entry in summary_list:
         cluster_name = entry.get("cluster_name") or ""
@@ -549,6 +550,8 @@ def sync_firewall(
             continue
 
         ep_result: dict = {"endpoint_id": endpoint.pk, "endpoint_name": str(endpoint)}
+        endpoint_started_at[endpoint.pk] = time.monotonic()
+        per_endpoint_by_id[endpoint.pk] = ep_result
         try:
             _sync_one_endpoint(endpoint, entry, result)
             ep_result["success"] = True
@@ -574,6 +577,11 @@ def sync_firewall(
                 endpoint.pk,
                 endpoint,
                 exc,
+            )
+        finally:
+            ep_result["runtime_seconds"] = round(
+                time.monotonic() - endpoint_started_at[endpoint.pk],
+                3,
             )
 
         result.per_endpoint.append(ep_result)
@@ -605,6 +613,12 @@ def sync_firewall(
                         node_name,
                         exc,
                     )
+            ep_result = per_endpoint_by_id.get(endpoint.pk)
+            if ep_result is not None:
+                ep_result["runtime_seconds"] = round(
+                    time.monotonic() - endpoint_started_at[endpoint.pk],
+                    3,
+                )
 
     result.success = (
         all(ep.get("success", False) for ep in result.per_endpoint)

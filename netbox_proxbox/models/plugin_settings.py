@@ -23,6 +23,12 @@ BRANCH_ON_CONFLICT_CHOICES = (
     ("acknowledge", _("Acknowledge and merge anyway")),
 )
 
+RECONCILIATION_ENGINE_CHOICES = (
+    ("python", _("Python (default)")),
+    ("compare", _("Compare Python and Rust")),
+    ("rust", _("Rust + PyO3")),
+)
+
 NETBOX_TO_PROXMOX_TYPED_PHRASE = "allow-edit-and-add-actions"
 
 
@@ -196,6 +202,25 @@ class ProxboxPluginSettings(NetBoxModel):
         default=4,
         verbose_name=_("VM sync max concurrency"),
         help_text=_("Maximum number of VMs synced in parallel during a full update."),
+    )
+    reconciliation_engine = models.CharField(
+        max_length=16,
+        choices=RECONCILIATION_ENGINE_CHOICES,
+        default="python",
+        verbose_name=_("VM reconciliation engine"),
+        help_text=_(
+            "Engine used by proxbox-api to build VM operation queues. Python is the "
+            "default implementation; compare runs Python and Rust then returns Python "
+            "output; rust requires the optional proxbox-reconcile-rs PyO3 package."
+        ),
+    )
+    reconciliation_compare_strict = models.BooleanField(
+        default=False,
+        verbose_name=_("Strict Rust comparison"),
+        help_text=_(
+            "When VM reconciliation engine is compare, raise an error if Rust output "
+            "differs from Python output. Use for validation, not normal production sync."
+        ),
     )
     custom_fields_request_delay = models.DecimalField(
         max_digits=5,

@@ -120,10 +120,217 @@ def _run_all_stages_sync(*args: object, **kwargs: object) -> list[dict[str, obje
     return sync_stages._run_all_stages_sync(*args, **kwargs)
 
 
+def _runtime_seconds_since(started: float) -> float:
+    """Return a rounded elapsed runtime for persisted job metadata."""
+    return round(max(time.monotonic() - started, 0.0), 3)
+
+
+def _normalize_endpoint_id(value: object) -> int | str | None:
+    """Normalize endpoint identifiers used in job metadata."""
+    if value in (None, ""):
+        return None
+    try:
+        return int(str(value))
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def _coerce_runtime_seconds(value: object) -> float | None:
+    """Return a rounded float runtime when a metadata value is numeric."""
+    if value in (None, ""):
+        return None
+    try:
+        return round(float(value), 3)
+    except (TypeError, ValueError):
+        return None
+
+
+def _endpoint_name_map(endpoint_ids: set[int | str]) -> dict[str, str]:
+    """Resolve endpoint labels for runtime cards with safe fallbacks."""
+    numeric_ids: list[int] = []
+    for endpoint_id in endpoint_ids:
+        try:
+            numeric_ids.append(int(str(endpoint_id)))
+        except (TypeError, ValueError):
+            continue
+
+    names: dict[str, str] = {}
+    if numeric_ids:
+        try:
+            for endpoint in ProxmoxEndpoint.objects.filter(pk__in=numeric_ids):
+                pk = _normalize_endpoint_id(getattr(endpoint, "pk", None))
+                if pk is None:
+                    continue
+                label = getattr(endpoint, "name", None) or str(endpoint)
+                names[str(pk)] = str(label)
+        except Exception:  # noqa: BLE001 - runtime panel metadata must not break sync
+            names = {}
+
+    for endpoint_id in endpoint_ids:
+        names.setdefault(str(endpoint_id), f"Endpoint {endpoint_id}")
+    return names
+
+
+def _endpoint_runtime_phase(
+    *,
+    endpoint_id: object,
+    endpoint_name: object = "",
+    kind: str,
+    label: str,
+    runtime_seconds: object,
+    status: str,
+    summary: str = "",
+    sync_type: object | None = None,
+    stream_path: object | None = None,
+) -> dict[str, object]:
+    """Build one persisted endpoint runtime phase."""
+    phase: dict[str, object] = {
+        "kind": kind,
+        "label": label,
+        "runtime_seconds": _coerce_runtime_seconds(runtime_seconds),
+        "status": status,
+        "summary": summary,
+    }
+    normalized_endpoint_id = _normalize_endpoint_id(endpoint_id)
+    if normalized_endpoint_id is not None:
+        phase["endpoint_id"] = normalized_endpoint_id
+    if endpoint_name:
+        phase["endpoint_name"] = str(endpoint_name)
+    if sync_type:
+        phase["sync_type"] = str(sync_type)
+    if stream_path:
+        phase["stream_path"] = str(stream_path)
+    return phase
+
+
+def _phases_from_service_result(
+    result: object,
+    *,
+    kind: str,
+    label: str,
+) -> list[dict[str, object]]:
+    """Convert service ``per_endpoint`` entries into runtime phases."""
+    phases: list[dict[str, object]] = []
+    per_endpoint = getattr(result, "per_endpoint", []) or []
+    for item in per_endpoint:
+        if not isinstance(item, dict):
+            continue
+        success = item.get("success")
+        status = "success" if success is not False else "warning"
+        summary = str(item.get("error") or f"{label} completed")
+        phases.append(
+            _endpoint_runtime_phase(
+                endpoint_id=item.get("endpoint_id"),
+                endpoint_name=item.get("endpoint_name", ""),
+                kind=kind,
+                label=label,
+                runtime_seconds=item.get("runtime_seconds"),
+                status=status,
+                summary=summary,
+            )
+        )
+    return phases
+
+
+def _phases_from_stage_results(
+    stages_out: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    """Convert SSE stage results into endpoint runtime phases."""
+    phases: list[dict[str, object]] = []
+    for stage in stages_out:
+        result_summary = stage.get("result_summary")
+        if not isinstance(result_summary, dict):
+            result_summary = {}
+        ok = result_summary.get("ok")
+        sync_type = stage.get("sync_type") or "sync stage"
+        stream_path = stage.get("stream_path") or result_summary.get("path")
+        phases.append(
+            _endpoint_runtime_phase(
+                endpoint_id=stage.get("endpoint_id"),
+                endpoint_name=stage.get("endpoint_name", ""),
+                kind="sse_stage",
+                label=str(sync_type),
+                runtime_seconds=stage.get("runtime_seconds"),
+                status="success" if ok is not False else "warning",
+                summary=str(stream_path or "Backend SSE stage completed"),
+                sync_type=sync_type,
+                stream_path=stream_path,
+            )
+        )
+    return phases
+
+
+def _build_endpoint_runtimes(
+    phases: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    """Group recorded runtime phases into per-endpoint cards."""
+    buckets: dict[str, dict[str, object]] = {}
+    endpoint_ids: set[int | str] = set()
+
+    for phase in phases:
+        endpoint_id = _normalize_endpoint_id(phase.get("endpoint_id"))
+        if endpoint_id is None:
+            continue
+        endpoint_ids.add(endpoint_id)
+        key = str(endpoint_id)
+        bucket = buckets.setdefault(
+            key,
+            {
+                "endpoint_id": endpoint_id,
+                "endpoint_name": "",
+                "runtime_seconds": 0.0,
+                "phases": [],
+            },
+        )
+        endpoint_name = str(phase.get("endpoint_name") or "").strip()
+        if endpoint_name:
+            bucket["endpoint_name"] = endpoint_name
+        bucket_phases = bucket["phases"]
+        if isinstance(bucket_phases, list):
+            bucket_phases.append(phase)
+        phase_runtime = _coerce_runtime_seconds(phase.get("runtime_seconds"))
+        if phase_runtime is not None:
+            bucket["runtime_seconds"] = round(
+                float(bucket["runtime_seconds"]) + phase_runtime,
+                3,
+            )
+
+    names = _endpoint_name_map(endpoint_ids)
+    endpoint_runtimes = list(buckets.values())
+    for endpoint_runtime in endpoint_runtimes:
+        key = str(endpoint_runtime["endpoint_id"])
+        if not endpoint_runtime.get("endpoint_name"):
+            endpoint_runtime["endpoint_name"] = names.get(key, f"Endpoint {key}")
+    endpoint_runtimes.sort(key=lambda item: str(item.get("endpoint_name") or ""))
+    return endpoint_runtimes
+
+
+def _runtime_summary(
+    *,
+    runtime_seconds: float,
+    endpoint_runtimes: list[dict[str, object]],
+) -> dict[str, object]:
+    """Build whole-job summary fields for the runtime panel."""
+    endpoint_runtime_seconds = round(
+        sum(float(item.get("runtime_seconds") or 0.0) for item in endpoint_runtimes),
+        3,
+    )
+    other_runtime_seconds = round(
+        max(runtime_seconds - endpoint_runtime_seconds, 0.0),
+        3,
+    )
+    return {
+        "runtime_seconds": runtime_seconds,
+        "endpoint_count": len(endpoint_runtimes),
+        "endpoint_runtime_seconds": endpoint_runtime_seconds,
+        "other_runtime_seconds": other_runtime_seconds,
+    }
+
+
 def _ensure_backend_endpoints(
     job: "ProxboxSyncJob",
     proxmox_endpoint_ids: list[str] | None = None,
-) -> None:
+) -> list[dict[str, object]]:
     """Push NetBox and Proxmox endpoint data to the proxbox-api backend before sync.
 
     Best-effort — logs warnings on failure but never raises so the sync can still
@@ -150,7 +357,7 @@ def _ensure_backend_endpoints(
         job.logger.warning(
             "No FastAPIEndpoint configured — cannot push endpoint data to backend"
         )
-        return
+        return []
 
     base_url = context.http_url.rstrip("/")
     auth_headers = dict(context.headers or {})
@@ -189,7 +396,9 @@ def _ensure_backend_endpoints(
     else:
         proxmox_qs = ProxmoxEndpoint.objects.filter(enabled=True)
 
+    phases: list[dict[str, object]] = []
     for px_ep in proxmox_qs:
+        endpoint_started = time.monotonic()
         ok, err, _ = sync_proxmox_endpoint_to_backend(
             px_ep,
             base_url=base_url,
@@ -207,6 +416,22 @@ def _ensure_backend_endpoints(
                 getattr(px_ep, "name", px_ep.pk),
                 err,
             )
+        phases.append(
+            _endpoint_runtime_phase(
+                endpoint_id=getattr(px_ep, "pk", None),
+                endpoint_name=getattr(px_ep, "name", None) or str(px_ep),
+                kind="preflight",
+                label="Backend endpoint push",
+                runtime_seconds=_runtime_seconds_since(endpoint_started),
+                status="success" if ok else "warning",
+                summary=(
+                    "Proxmox endpoint pushed to proxbox-api"
+                    if ok
+                    else f"Proxmox endpoint push failed: {err}"
+                ),
+            )
+        )
+    return phases
 
 
 def _coerce_endpoint_ids(
@@ -453,12 +678,16 @@ class ProxboxSyncJob(JobRunner):
             if netbox_vm_ids:
                 self.logger.info(f"NetBox virtual machines: {netbox_vm_ids}")
 
+            endpoint_runtime_phases: list[dict[str, object]] = []
+
             # Push NetBox and Proxmox endpoint configuration to the proxbox-api
             # backend before any SSE stage runs.  The backend needs its own copy
             # of these records to open NetBox and Proxmox sessions; the post_save
             # signals are best-effort and may have missed a push if the backend
             # was offline when the endpoints were first saved.
-            _ensure_backend_endpoints(self, proxmox_endpoint_ids or [])
+            endpoint_runtime_phases.extend(
+                _ensure_backend_endpoints(self, proxmox_endpoint_ids or [])
+            )
 
             # Sync cluster and node data before SSE stages so cluster/node records
             # are populated regardless of which stages are selected.
@@ -476,19 +705,37 @@ class ProxboxSyncJob(JobRunner):
             )
             for eid in endpoint_ids_to_sync:
                 self.logger.info(f"Syncing cluster/nodes for endpoint {eid}")
+                cluster_started = time.monotonic()
                 cluster_result = sync_cluster_and_nodes(endpoint_id=eid)
+                cluster_runtime = _runtime_seconds_since(cluster_started)
                 if cluster_result.success:
-                    self.logger.info(
-                        f"Cluster/node sync for endpoint {eid}: "
+                    cluster_summary = (
                         f"{cluster_result.clusters_created} cluster(s) created, "
                         f"{cluster_result.clusters_updated} updated, "
                         f"{cluster_result.nodes_created} node(s) created, "
                         f"{cluster_result.nodes_updated} updated"
                     )
+                    self.logger.info(
+                        f"Cluster/node sync for endpoint {eid}: {cluster_summary}"
+                    )
                 else:
+                    cluster_summary = str(
+                        cluster_result.error or "cluster/node sync failed"
+                    )
                     self.logger.warning(
                         f"Cluster/node sync for endpoint {eid} failed: {cluster_result.error}"
                     )
+                endpoint_runtime_phases.append(
+                    _endpoint_runtime_phase(
+                        endpoint_id=getattr(cluster_result, "endpoint_id", None) or eid,
+                        endpoint_name=getattr(cluster_result, "endpoint_name", ""),
+                        kind="cluster",
+                        label="Cluster/node sync",
+                        runtime_seconds=cluster_runtime,
+                        status="success" if cluster_result.success else "warning",
+                        summary=cluster_summary,
+                    )
+                )
 
             # Sync datacenter-level firewall objects (security groups, rules,
             # IP sets, aliases, options) after cluster/node records exist so
@@ -510,6 +757,13 @@ class ProxboxSyncJob(JobRunner):
                 self.logger.warning(
                     f"Firewall sync failed or partially failed: {fw_result.error or 'see per_endpoint log'}"
                 )
+            endpoint_runtime_phases.extend(
+                _phases_from_service_result(
+                    fw_result,
+                    kind="firewall",
+                    label="Firewall sync",
+                )
+            )
 
             # Sync SDN objects (fabrics, route maps, prefix lists).
             from netbox_proxbox.services.sync_sdn import sync_sdn  # noqa: PLC0415
@@ -527,6 +781,13 @@ class ProxboxSyncJob(JobRunner):
                 self.logger.warning(
                     f"SDN sync failed or partially failed: {sdn_result.error or 'see per_endpoint log'}"
                 )
+            endpoint_runtime_phases.extend(
+                _phases_from_service_result(
+                    sdn_result,
+                    kind="sdn",
+                    label="SDN sync",
+                )
+            )
 
             # Sync datacenter CPU models.
             from netbox_proxbox.services.sync_datacenter import sync_datacenter  # noqa: PLC0415
@@ -543,8 +804,16 @@ class ProxboxSyncJob(JobRunner):
                 self.logger.warning(
                     f"Datacenter CPU model sync failed: {dc_result.error or 'unknown error'}"
                 )
+            endpoint_runtime_phases.extend(
+                _phases_from_service_result(
+                    dc_result,
+                    kind="datacenter",
+                    label="Datacenter sync",
+                )
+            )
 
             stages_out = _run_all_stages_sync(self, stages, params, run_started)
+            endpoint_runtime_phases.extend(_phases_from_stage_results(stages_out))
 
             for stage in stages_out:
                 if stage.get("runtime_seconds") is None:
@@ -553,11 +822,19 @@ class ProxboxSyncJob(JobRunner):
                     )
 
             runtime_seconds = round(time.monotonic() - run_started, 3)
+            endpoint_runtimes = _build_endpoint_runtimes(endpoint_runtime_phases)
             self.job.data = {
                 "proxbox_sync": {
                     "params": params,
                     "runtime_seconds": runtime_seconds,
-                    "response": {"stages": stages_out},
+                    "response": {
+                        "stages": stages_out,
+                        "endpoint_runtimes": endpoint_runtimes,
+                        "runtime_summary": _runtime_summary(
+                            runtime_seconds=runtime_seconds,
+                            endpoint_runtimes=endpoint_runtimes,
+                        ),
+                    },
                 }
             }
             self.job.save(update_fields=["data"])

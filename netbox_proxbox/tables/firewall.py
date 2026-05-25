@@ -159,6 +159,7 @@ class ProxmoxFirewallOptionsTable(NetBoxTable):
     proxmox_node = tables.Column(linkify=True)
     virtual_machine = tables.Column(linkify=True)
     enable = columns.BooleanColumn()
+    status = columns.ChoiceFieldColumn()
 
     class Meta(NetBoxTable.Meta):
         model = models.ProxmoxFirewallOptions
@@ -172,6 +173,7 @@ class ProxmoxFirewallOptionsTable(NetBoxTable):
             "enable",
             "policy_in",
             "policy_out",
+            "status",
             "tags",
             "created",
             "last_updated",
@@ -184,4 +186,5 @@ class ProxmoxFirewallOptionsTable(NetBoxTable):
             "enable",
             "policy_in",
             "policy_out",
+            "status",
         )

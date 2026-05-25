@@ -2,15 +2,40 @@
 
 from __future__ import annotations
 
+from typing import ClassVar
+
+from django.contrib import messages
+from django.http import HttpRequest, HttpResponseRedirect
+from django.shortcuts import get_object_or_404
+from django.utils.translation import gettext_lazy as _
+from django.views import View
+from netbox.object_actions import (
+    AddObject,
+    BulkDelete,
+    BulkEdit,
+    BulkExport,
+    BulkImport,
+    BulkRename,
+    ObjectAction,
+)
 from netbox.views.generic import (
     ObjectDeleteView,
     ObjectEditView,
     ObjectListView,
     ObjectView,
 )
-from utilities.views import register_model_view
+from utilities.views import (
+    ContentTypePermissionRequiredMixin,
+    TokenConditionalLoginRequiredMixin,
+    register_model_view,
+)
 
 from netbox_proxbox import filtersets, forms, models, tables
+from netbox_proxbox.intent.firewall_common import (
+    FirewallPushError,
+    push_firewall_object,
+)
+from netbox_proxbox.views.proxbox_access import permission_run_proxmox_action
 
 _SG_QS = models.ProxmoxFirewallSecurityGroup.objects.select_related("endpoint")
 _RULE_QS = models.ProxmoxFirewallRule.objects.select_related(
@@ -26,6 +51,125 @@ _ALIAS_QS = models.ProxmoxFirewallAlias.objects.select_related(
 _OPTIONS_QS = models.ProxmoxFirewallOptions.objects.select_related(
     "endpoint", "proxmox_node", "virtual_machine"
 )
+
+
+class _FirewallPushView(
+    TokenConditionalLoginRequiredMixin,
+    ContentTypePermissionRequiredMixin,
+    View,
+):
+    """Shared detail action for pushing a firewall object to Proxmox."""
+
+    model: ClassVar[type]
+    queryset: ClassVar[object]
+    http_method_names: ClassVar[list[str]] = ["post"]
+
+    def get_required_permission(self) -> str:
+        """Require the Proxmox write permission for every firewall push."""
+        return permission_run_proxmox_action()
+
+    def post(self, request: HttpRequest, pk: int | str) -> HttpResponseRedirect:
+        """Forward the push to proxbox-api and redirect back to the object."""
+        qs = self.queryset
+        restrict = getattr(qs, "restrict", None)
+        if callable(restrict):
+            qs = restrict(request.user, "change")
+        obj = get_object_or_404(qs, pk=pk)
+        redirect_to = obj.get_absolute_url()
+        actor = _actor_from_request(request)
+        try:
+            result = push_firewall_object(obj, actor=actor)
+        except FirewallPushError as exc:
+            messages.error(
+                request,
+                _("Firewall push failed: {reason}. {detail}").format(
+                    reason=exc.reason,
+                    detail=exc.detail,
+                ),
+            )
+            return HttpResponseRedirect(redirect_to)
+
+        if result.status == "skipped":
+            messages.warning(
+                request,
+                _("Firewall push skipped: {reason}. {detail}").format(
+                    reason=result.reason or "unsupported",
+                    detail=result.detail or "",
+                ),
+            )
+        else:
+            messages.success(request, _("Firewall object pushed to Proxmox."))
+        return HttpResponseRedirect(redirect_to)
+
+
+class FirewallBulkPushAction(ObjectAction):
+    """List-view action for pushing selected firewall rules."""
+
+    name = "bulk_push"
+    label = _("Push Selected")
+    multi = True
+    permissions_required = {"change"}
+    template_name = "netbox_proxbox/buttons/firewall_bulk_push.html"
+
+
+class ProxmoxFirewallRuleBulkPushView(
+    TokenConditionalLoginRequiredMixin,
+    ContentTypePermissionRequiredMixin,
+    View,
+):
+    """Push selected firewall rules and summarize per-record results."""
+
+    http_method_names: ClassVar[list[str]] = ["post"]
+
+    def get_required_permission(self) -> str:
+        """Require the Proxmox write permission for bulk firewall push."""
+        return permission_run_proxmox_action()
+
+    def post(self, request: HttpRequest) -> HttpResponseRedirect:
+        """Push selected firewall rules and redirect back to the list."""
+        selected_ids = request.POST.getlist("pk") or request.POST.getlist("pk[]")
+        redirect_to = request.POST.get("return_url") or request.META.get(
+            "HTTP_REFERER",
+            "/",
+        )
+        if not selected_ids:
+            messages.error(request, _("Select at least one firewall rule to push."))
+            return HttpResponseRedirect(redirect_to)
+
+        actor = _actor_from_request(request)
+        success_count = 0
+        failures: list[str] = []
+        queryset = _RULE_QS.restrict(request.user, "change")
+        for rule in queryset.filter(pk__in=selected_ids):
+            try:
+                push_firewall_object(rule, actor=actor)
+                success_count += 1
+            except FirewallPushError as exc:
+                failures.append(f"#{rule.pk}: {exc.reason}")
+
+        if success_count:
+            messages.success(
+                request,
+                _("Pushed {count} firewall rule(s) to Proxmox.").format(
+                    count=success_count
+                ),
+            )
+        if failures:
+            messages.error(
+                request,
+                _("Firewall push failures: {failures}").format(
+                    failures=", ".join(failures)
+                ),
+            )
+        return HttpResponseRedirect(redirect_to)
+
+
+def _actor_from_request(request: HttpRequest) -> str:
+    user = getattr(request, "user", None)
+    get_username = getattr(user, "get_username", None)
+    if callable(get_username):
+        return str(get_username())
+    return str(getattr(user, "username", "") or getattr(user, "pk", "") or "netbox")
 
 
 # ── ProxmoxFirewallSecurityGroup ─────────────────────────────────────────────
@@ -59,6 +203,16 @@ class ProxmoxFirewallSecurityGroupDeleteView(ObjectDeleteView):
     default_return_url = "plugins:netbox_proxbox:proxmoxfirewallsecuritygroup_list"
 
 
+@register_model_view(
+    models.ProxmoxFirewallSecurityGroup,
+    "push_to_proxmox",
+    path="push-to-proxmox",
+)
+class ProxmoxFirewallSecurityGroupPushView(_FirewallPushView):
+    model = models.ProxmoxFirewallSecurityGroup
+    queryset = _SG_QS
+
+
 # ── ProxmoxFirewallRule ───────────────────────────────────────────────────────
 
 
@@ -68,7 +222,13 @@ class ProxmoxFirewallRuleListView(ObjectListView):
     table = tables.ProxmoxFirewallRuleTable
     filterset = filtersets.ProxmoxFirewallRuleFilterSet
     filterset_form = forms.ProxmoxFirewallRuleFilterForm
-    actions = {}
+    actions = (
+        AddObject,
+        BulkImport,
+        BulkExport,
+        FirewallBulkPushAction,
+        BulkDelete,
+    )
 
 
 @register_model_view(models.ProxmoxFirewallRule)
@@ -88,6 +248,26 @@ class ProxmoxFirewallRuleEditView(ObjectEditView):
 class ProxmoxFirewallRuleDeleteView(ObjectDeleteView):
     queryset = _RULE_QS
     default_return_url = "plugins:netbox_proxbox:proxmoxfirewallrule_list"
+
+
+@register_model_view(
+    models.ProxmoxFirewallRule,
+    "push_to_proxmox",
+    path="push-to-proxmox",
+)
+class ProxmoxFirewallRulePushView(_FirewallPushView):
+    model = models.ProxmoxFirewallRule
+    queryset = _RULE_QS
+
+
+@register_model_view(
+    models.ProxmoxFirewallRule,
+    "bulk_push",
+    path="push-selected",
+    detail=False,
+)
+class ProxmoxFirewallRuleBulkPushActionView(ProxmoxFirewallRuleBulkPushView):
+    """Registered route for selected firewall rule pushes."""
 
 
 # ── ProxmoxFirewallIPSet ──────────────────────────────────────────────────────
@@ -121,6 +301,16 @@ class ProxmoxFirewallIPSetDeleteView(ObjectDeleteView):
     default_return_url = "plugins:netbox_proxbox:proxmoxfirewallipset_list"
 
 
+@register_model_view(
+    models.ProxmoxFirewallIPSet,
+    "push_to_proxmox",
+    path="push-to-proxmox",
+)
+class ProxmoxFirewallIPSetPushView(_FirewallPushView):
+    model = models.ProxmoxFirewallIPSet
+    queryset = _IPSET_QS
+
+
 # ── ProxmoxFirewallIPSetEntry ─────────────────────────────────────────────────
 
 
@@ -150,6 +340,16 @@ class ProxmoxFirewallIPSetEntryEditView(ObjectEditView):
 class ProxmoxFirewallIPSetEntryDeleteView(ObjectDeleteView):
     queryset = _IPSET_ENTRY_QS
     default_return_url = "plugins:netbox_proxbox:proxmoxfirewallipsetentry_list"
+
+
+@register_model_view(
+    models.ProxmoxFirewallIPSetEntry,
+    "push_to_proxmox",
+    path="push-to-proxmox",
+)
+class ProxmoxFirewallIPSetEntryPushView(_FirewallPushView):
+    model = models.ProxmoxFirewallIPSetEntry
+    queryset = _IPSET_ENTRY_QS
 
 
 # ── ProxmoxFirewallAlias ──────────────────────────────────────────────────────
@@ -183,6 +383,16 @@ class ProxmoxFirewallAliasDeleteView(ObjectDeleteView):
     default_return_url = "plugins:netbox_proxbox:proxmoxfirewallalias_list"
 
 
+@register_model_view(
+    models.ProxmoxFirewallAlias,
+    "push_to_proxmox",
+    path="push-to-proxmox",
+)
+class ProxmoxFirewallAliasPushView(_FirewallPushView):
+    model = models.ProxmoxFirewallAlias
+    queryset = _ALIAS_QS
+
+
 # ── ProxmoxFirewallOptions ────────────────────────────────────────────────────
 
 
@@ -212,3 +422,13 @@ class ProxmoxFirewallOptionsEditView(ObjectEditView):
 class ProxmoxFirewallOptionsDeleteView(ObjectDeleteView):
     queryset = _OPTIONS_QS
     default_return_url = "plugins:netbox_proxbox:proxmoxfirewalloptions_list"
+
+
+@register_model_view(
+    models.ProxmoxFirewallOptions,
+    "push_to_proxmox",
+    path="push-to-proxmox",
+)
+class ProxmoxFirewallOptionsPushView(_FirewallPushView):
+    model = models.ProxmoxFirewallOptions
+    queryset = _OPTIONS_QS

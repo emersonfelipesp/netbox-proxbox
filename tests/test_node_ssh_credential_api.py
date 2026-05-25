@@ -69,8 +69,10 @@ def _stub_for_ssh_credentials(
             user = SimpleNamespace(is_authenticated=authenticated)
 
             def _has_perm(permission):
-                return (
-                    has_perm and permission == "netbox_proxbox.view_nodesshcredential"
+                return has_perm and permission in (
+                    "netbox_proxbox.view_nodesshcredential",
+                    "netbox_proxbox.view_proxmoxendpoint",
+                    "netbox_proxbox.open_ssh_terminal_proxmoxendpoint",
                 )
 
             user.has_perm = _has_perm
@@ -80,9 +82,17 @@ def _stub_for_ssh_credentials(
     netbox.api = netbox_api
     netbox_api.authentication = netbox_api_auth
 
+    utilities = types.ModuleType("utilities")
+    utilities.__path__ = []
+    utilities_permissions = types.ModuleType("utilities.permissions")
+    utilities_permissions.get_permission_for_model = lambda _model, action: (
+        f"netbox_proxbox.{action}_proxmoxendpoint"
+    )
+
     rest_framework = types.ModuleType("rest_framework")
     rest_framework.__path__ = []
     rf_status = types.ModuleType("rest_framework.status")
+    rf_status.HTTP_404_NOT_FOUND = 404
     rf_status.HTTP_403_FORBIDDEN = 403
     rf_status.HTTP_503_SERVICE_UNAVAILABLE = 503
 
@@ -121,9 +131,13 @@ def _stub_for_ssh_credentials(
         class DoesNotExist(Exception):
             pass
 
+    class _ProxmoxEndpoint:
+        pass
+
     np_models = types.ModuleType("netbox_proxbox.models")
     np_models.NodeSSHCredential = _NodeSSHCredential
     np_models.ProxboxPluginSettings = _ProxboxPluginSettings
+    np_models.ProxmoxEndpoint = _ProxmoxEndpoint
 
     enc_mod = types.ModuleType("netbox_proxbox.utils.encryption")
 
@@ -144,6 +158,8 @@ def _stub_for_ssh_credentials(
         ("netbox", netbox),
         ("netbox.api", netbox_api),
         ("netbox.api.authentication", netbox_api_auth),
+        ("utilities", utilities),
+        ("utilities.permissions", utilities_permissions),
         ("rest_framework", rest_framework),
         ("rest_framework.status", rf_status),
         ("rest_framework.permissions", rf_permissions),
@@ -159,6 +175,7 @@ def _stub_for_ssh_credentials(
     return SimpleNamespace(
         NodeSSHCredential=_NodeSSHCredential,
         ProxboxPluginSettings=_ProxboxPluginSettings,
+        ProxmoxEndpoint=_ProxmoxEndpoint,
     )
 
 
@@ -228,6 +245,16 @@ def test_netbox_token_accepts_bearer_scheme(monkeypatch):
         perm.has_permission(_request(header="Bearer nbt_key.expected-secret"), object())
         is True
     )
+
+
+def test_netbox_token_stores_authenticated_user_for_object_permissions(monkeypatch):
+    module, _ = _load_ssh_credentials_view(monkeypatch)
+    request = _request(header="Bearer nbt_key.expected-secret")
+    perm = module._NetBoxTokenCanReadEndpointSSHCredential()
+
+    assert perm.has_permission(request, object()) is True
+    assert request.user.is_authenticated is True
+    assert request.auth.key == "nbt_key.expected-secret"
 
 
 def test_netbox_token_rejects_user_without_permission(monkeypatch):
@@ -343,6 +370,35 @@ def test_metadata_payload_omits_secrets(monkeypatch):
     assert "private_key" not in payload
 
 
+def test_endpoint_metadata_payload_omits_secrets(monkeypatch):
+    module, _ = _load_ssh_credentials_view(monkeypatch)
+    endpoint = SimpleNamespace(
+        pk=3,
+        ssh_host="pve.example.com",
+        ssh_username="proxbox",
+        ssh_port=22,
+        ssh_auth_method="key",
+        ssh_known_host_fingerprint="SHA256:" + "A" * 43,
+        ssh_password_enc="ciphertext-password",
+        ssh_private_key_enc="ciphertext-key",
+    )
+    payload = module._endpoint_metadata_payload(endpoint)
+    assert payload == {
+        "endpoint_id": 3,
+        "host": "pve.example.com",
+        "username": "proxbox",
+        "port": 22,
+        "auth_method": "key",
+        "known_host_fingerprint": "SHA256:" + "A" * 43,
+        "has_password": True,
+        "has_private_key": True,
+    }
+    assert "ssh_password_enc" not in payload
+    assert "ssh_private_key_enc" not in payload
+    assert "password" not in payload
+    assert "private_key" not in payload
+
+
 # ---------------------------------------------------------------------------
 # AST contract on the two APIView classes
 # ---------------------------------------------------------------------------
@@ -380,6 +436,25 @@ def test_secrets_view_uses_netbox_token_permission(api_ast):
     assert src is not None and "_NetBoxTokenCanViewNodeSSHCredential" in src
 
 
+def test_endpoint_secrets_view_uses_terminal_permission(api_ast):
+    cls = _class_def(api_ast, "ProxmoxEndpointSSHCredentialSecretsAPIView")
+    src = ast.get_source_segment(API_PATH.read_text(), cls)
+    assert src is not None
+    assert "_NetBoxTokenCanReadEndpointSSHCredential" in src
+    assert (
+        'get_permission_for_model(ProxmoxEndpoint, "open_ssh_terminal")'
+        in API_PATH.read_text()
+    )
+
+
+def test_endpoint_secrets_view_restricts_by_view_and_terminal_permissions(api_ast):
+    cls = _class_def(api_ast, "ProxmoxEndpointSSHCredentialSecretsAPIView")
+    src = ast.get_source_segment(API_PATH.read_text(), cls)
+    assert src is not None
+    assert 'restrict(request.user, "view")' in src
+    assert 'request.user, "open_ssh_terminal"' in src
+
+
 def test_secrets_view_blocks_non_https_in_production(api_ast):
     """The secrets view must refuse non-HTTPS requests when DEBUG is False."""
     src = API_PATH.read_text()
@@ -411,6 +486,13 @@ def test_urls_register_secrets_route():
     assert "ssh-credentials/by-node/<int:node_id>/credentials/" in src
     assert "NodeSSHCredentialSecretsAPIView" in src
     assert "api-ssh-credential-secrets" in src
+
+
+def test_urls_register_endpoint_secrets_route():
+    src = URLS_PATH.read_text()
+    assert "ssh-credentials/by-endpoint/<int:endpoint_id>/credentials/" in src
+    assert "ProxmoxEndpointSSHCredentialSecretsAPIView" in src
+    assert "api-ssh-credential-endpoint-secrets" in src
 
 
 def test_urls_register_crud_router():

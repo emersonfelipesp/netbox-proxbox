@@ -6,7 +6,7 @@ This page documents all persisted models in the Proxbox ecosystem — the Django
 
 ## Plugin Models (NetBox PostgreSQL)
 
-The netbox-proxbox plugin defines 13 Django models. They inherit from `NetBoxModel` (which provides `tags`, `custom_fields`, timestamps, and `ObjectChange` tracking) or from `NetBoxModel` through `EndpointBase`.
+The netbox-proxbox plugin defines Django models for endpoint configuration, Proxmox inventory, Cloud image templates, Firecracker micro-VM inventory, operational records, and plugin settings. They inherit from `NetBoxModel` (which provides `tags`, `custom_fields`, timestamps, and `ObjectChange` tracking) or from `NetBoxModel` through `EndpointBase`.
 
 ### Entity Relationship Diagram
 
@@ -100,6 +100,49 @@ erDiagram
         string  type
         fk      virtual_machine
     }
+    FirecrackerHostPool {
+        int     id
+        string  name
+        string  slug
+        string  default_network_mode
+        bool    is_active
+    }
+    FirecrackerHost {
+        int     id
+        string  name
+        url     agent_base_url
+        string  status
+        bool    kvm_available
+        int     capacity_vcpus
+        int     capacity_memory_mib
+        fk      pool
+        fk      host_vm
+        fk      proxmox_node
+    }
+    FirecrackerImageTemplate {
+        int     id
+        string  name
+        string  slug
+        string  architecture
+        string  os_family
+        string  kernel_image_url
+        string  rootfs_image_url
+        bool    is_active
+    }
+    FirecrackerMicroVM {
+        int     id
+        uuid    microvm_id
+        string  name
+        string  status
+        string  network_mode
+        int     vcpus
+        int     memory_mib
+        int     disk_mib
+        string  guest_ip
+        fk      tenant
+        fk      host
+        fk      image
+    }
     ProxboxPluginSettings {
         int     id
         bool    sync_enabled
@@ -113,6 +156,10 @@ erDiagram
     ProxmoxEndpoint ||--o{ Replication : "has"
     ProxmoxCluster ||--o{ ProxmoxNode : "contains"
     ProxmoxStorage ||--o{ ProxmoxStorageVirtualDisk : "links"
+    FirecrackerHostPool ||--o{ FirecrackerHost : "contains"
+    FirecrackerHost ||--o{ FirecrackerMicroVM : "runs"
+    FirecrackerImageTemplate ||--o{ FirecrackerMicroVM : "boots"
+    ProxmoxNode ||--o{ FirecrackerHost : "hosts agent VM"
 ```
 
 > **NetBox core relationships** — Plugin models link to standard NetBox objects via foreign keys:
@@ -123,6 +170,9 @@ erDiagram
 > - `VMSnapshot.virtual_machine` → `virtualization.VirtualMachine`
 > - `VMTaskHistory.virtual_machine` → `virtualization.VirtualMachine`
 > - `ProxmoxEndpoint.ip_address` → `ipam.IPAddress`
+> - `FirecrackerHost.host_vm` → `virtualization.VirtualMachine` for the Proxmox VM running the host agent
+> - `FirecrackerHost.proxmox_node` → `netbox_proxbox.ProxmoxNode`
+> - `FirecrackerMicroVM.tenant` → `tenancy.Tenant`
 
 ### VM-Centric Models
 
@@ -235,6 +285,17 @@ erDiagram
         datetime last_attempt
     }
 ```
+
+### Firecracker Cloud Models
+
+Firecracker inventory is separate from NetBox core `VirtualMachine` rows. The NMS Cloud UI uses these models when the user chooses the Firecracker runtime, while the existing QEMU path continues to use `CloudImageTemplate` and NetBox virtualization objects.
+
+| Model | FK to | Purpose |
+|---|---|---|
+| `FirecrackerHostPool` | `Tenant` M2M | Tenant-visible capacity pool for Firecracker host-agent VMs |
+| `FirecrackerHost` | `FirecrackerHostPool`, optional `VirtualMachine`, optional `ProxmoxNode` | A host-agent VM capable of launching Firecracker micro-VMs |
+| `FirecrackerImageTemplate` | `Tenant` M2M | Kernel/rootfs image bundle shown in the NMS Cloud runtime selector |
+| `FirecrackerMicroVM` | `FirecrackerHost`, `FirecrackerImageTemplate`, optional `Tenant` | Provisioned Firecracker instance tracked with `instance_ref="firecracker:<id>"` |
 
 !!! info "Two NetBoxEndpoint concepts"
     The `NetBoxEndpoint` in the NetBox plugin (PostgreSQL) stores the remote NetBox address from the plugin's perspective. The `NetBoxEndpoint` in proxbox-api's SQLite stores the same information from the backend's perspective. They are kept in sync via Django signals and the `FastAPIEndpoint.signals` auto-registration flow.

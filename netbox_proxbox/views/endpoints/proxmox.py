@@ -1,11 +1,14 @@
 """Provide NetBox CRUD views for Proxmox endpoint records."""
 
+import json
+
 from django.contrib import messages
 from django.http import HttpRequest, HttpResponse, JsonResponse
-from django.shortcuts import redirect
+from django.shortcuts import get_object_or_404, redirect
 from django.views import View
 from netbox.api.authentication import TokenAuthentication
 from netbox.views import generic
+import requests
 from utilities.permissions import get_permission_for_model
 from utilities.query import reapply_model_ordering
 from utilities.views import ViewTab, register_model_view
@@ -17,10 +20,16 @@ from netbox_proxbox.forms import (
     ProxmoxEndpointFilterForm,
     ProxmoxEndpointForm,
     ProxmoxEndpointImportForm,
+    ProxmoxEndpointSSHSettingsForm,
     ProxmoxEndpointSettingsForm,
 )
-from netbox_proxbox.models import ProxmoxEndpoint
+from netbox_proxbox.models import ProxmoxEndpoint, ProxmoxNode
+from netbox_proxbox.services.backend_context import (
+    _build_request_candidates,
+    get_fastapi_endpoint_with_token,
+)
 from netbox_proxbox.tables import ProxmoxEndpointTable
+from netbox_proxbox.views.proxbox_access import permission_open_ssh_terminal
 from netbox_proxbox.views.endpoints.proxmox_export import (
     _proxmox_export_fieldnames,
     _serialize_proxmox_endpoint,
@@ -31,6 +40,9 @@ __all__ = (
     "ProxmoxEndpointListView",
     "ProxmoxEndpointEditView",
     "ProxmoxEndpointSettingsView",
+    "ProxmoxEndpointSSHSettingsView",
+    "ProxmoxEndpointSSHTerminalView",
+    "ProxmoxEndpointSSHTerminalSessionView",
     "ProxmoxEndpointDeleteView",
     "ProxmoxEndpointBulkDeleteView",
     "ProxmoxEndpointBulkImportView",
@@ -318,6 +330,185 @@ class ProxmoxEndpointSettingsView(generic.ObjectEditView):
         from netbox_proxbox.constants import OVERWRITE_FIELD_GROUPS
 
         return {"overwrite_field_groups": OVERWRITE_FIELD_GROUPS}
+
+
+@register_model_view(ProxmoxEndpoint, "ssh_settings", path="ssh-settings")
+class ProxmoxEndpointSSHSettingsView(generic.ObjectEditView):
+    """Edit endpoint-level SSH fallback credentials for browser terminals."""
+
+    queryset = ProxmoxEndpoint.objects.all()
+    form = ProxmoxEndpointSSHSettingsForm
+    template_name = "netbox_proxbox/proxmoxendpoint_ssh_settings.html"
+    tab = ViewTab(
+        label="SSH",
+        permission="netbox_proxbox.change_proxmoxendpoint",
+        weight=925,
+    )
+
+
+def _terminal_websocket_url(base_websocket_url: str, websocket_path: str) -> str:
+    """Append the SSH session path to the configured browser WebSocket base URL."""
+    base = (base_websocket_url or "").rstrip("/")
+    if base.endswith("/ws"):
+        base = base[:-3]
+    return f"{base}{websocket_path}"
+
+
+@register_model_view(ProxmoxEndpoint, "ssh_terminal", path="ssh-terminal")
+class ProxmoxEndpointSSHTerminalView(generic.ObjectView):
+    """Browser terminal tab for Proxmox endpoint and node SSH sessions."""
+
+    queryset = ProxmoxEndpoint.objects.all()
+    template_name = "netbox_proxbox/proxmoxendpoint_ssh_terminal.html"
+    tab = ViewTab(
+        label="Terminal",
+        permission=permission_open_ssh_terminal(),
+        weight=950,
+    )
+
+    def get_extra_context(
+        self, request: HttpRequest, instance: ProxmoxEndpoint
+    ) -> dict[str, object]:
+        nodes = ProxmoxNode.objects.filter(endpoint=instance).order_by("name")
+        node_options = [
+            {
+                "id": node.pk,
+                "name": node.name,
+                "host": node.ip_address,
+                "online": node.online,
+            }
+            for node in nodes
+        ]
+        return {
+            "node_options": node_options,
+            "endpoint_host": instance.ssh_host,
+            "endpoint_ssh_ready": instance.has_ssh_terminal_credentials,
+            "terminal_permission": permission_open_ssh_terminal(),
+        }
+
+
+@register_model_view(
+    ProxmoxEndpoint,
+    "ssh_terminal_session",
+    path="ssh-terminal/session",
+)
+class ProxmoxEndpointSSHTerminalSessionView(View):
+    """Create proxbox-api SSH terminal tickets without exposing backend API keys."""
+
+    def post(self, request: HttpRequest, pk: int) -> JsonResponse:
+        if not request.user.is_authenticated:
+            return JsonResponse({"error": "Authentication required."}, status=401)
+        if not request.user.has_perm(permission_open_ssh_terminal()):
+            return JsonResponse({"error": "Permission denied."}, status=403)
+
+        endpoint = get_object_or_404(
+            ProxmoxEndpoint.objects.restrict(request.user, "view").restrict(
+                request.user, "open_ssh_terminal"
+            ),
+            pk=pk,
+        )
+        try:
+            body = json.loads(request.body.decode() or "{}")
+        except json.JSONDecodeError:
+            return JsonResponse({"error": "Invalid JSON payload."}, status=400)
+
+        try:
+            cols = max(20, min(400, int(body.get("cols") or 120)))
+            rows = max(5, min(200, int(body.get("rows") or 32)))
+        except (TypeError, ValueError):
+            return JsonResponse({"error": "Invalid terminal size."}, status=400)
+
+        target_type = body.get("target_type")
+        backend_payload = {
+            "target_type": target_type,
+            "endpoint_id": endpoint.pk,
+            "actor": getattr(request.user, "username", "") or str(request.user),
+            "cols": cols,
+            "rows": rows,
+        }
+        if target_type == "node":
+            node_id = body.get("node_id")
+            node = ProxmoxNode.objects.filter(endpoint=endpoint, pk=node_id).first()
+            if node is None:
+                return JsonResponse(
+                    {"error": "Node not found for endpoint."}, status=404
+                )
+            backend_payload["node_id"] = node.pk
+            backend_payload["host"] = node.ip_address
+        elif target_type == "endpoint":
+            if not endpoint.has_ssh_terminal_credentials:
+                return JsonResponse(
+                    {"error": "Endpoint SSH fallback credentials are not configured."},
+                    status=409,
+                )
+            backend_payload["host"] = endpoint.ssh_host
+        else:
+            return JsonResponse({"error": "Unsupported terminal target."}, status=400)
+
+        fastapi_endpoint, context = get_fastapi_endpoint_with_token()
+        if fastapi_endpoint is None or context is None or not context.http_url:
+            return JsonResponse(
+                {"error": "No FastAPI endpoint configured."}, status=503
+            )
+
+        headers = dict(context.headers)
+        headers["X-Proxbox-Actor"] = backend_payload["actor"]
+        candidates = _build_request_candidates(
+            context.http_url.rstrip("/"),
+            context.ip_address_url.rstrip("/") if context.ip_address_url else None,
+            "ssh/sessions",
+            context.verify_ssl,
+        )
+
+        last_error = "Unable to reach proxbox-api."
+        for url, verify_ssl in candidates:
+            try:
+                response = requests.post(
+                    url,
+                    json=backend_payload,
+                    headers=headers,
+                    verify=verify_ssl,
+                    timeout=10,
+                )
+            except requests.RequestException as exc:
+                last_error = str(exc)
+                continue
+            if response.status_code >= 400:
+                return JsonResponse(
+                    {
+                        "error": response.text
+                        or "proxbox-api rejected terminal session."
+                    },
+                    status=response.status_code if response.status_code < 500 else 502,
+                )
+            try:
+                data = response.json()
+            except ValueError:
+                return JsonResponse(
+                    {"error": "proxbox-api returned a non-JSON terminal response."},
+                    status=502,
+                )
+            websocket_base = context.detail.get("websocket_url") or getattr(
+                fastapi_endpoint, "websocket_url", ""
+            )
+            if not websocket_base:
+                return JsonResponse(
+                    {"error": "FastAPI endpoint WebSocket URL is not configured."},
+                    status=503,
+                )
+            return JsonResponse(
+                {
+                    "session_id": data.get("session_id"),
+                    "ticket": data.get("ticket"),
+                    "websocket_url": _terminal_websocket_url(
+                        str(websocket_base),
+                        str(data.get("websocket_path") or ""),
+                    ),
+                    "expires_at": data.get("expires_at"),
+                }
+            )
+
+        return JsonResponse({"error": last_error}, status=502)
 
 
 @register_model_view(ProxmoxEndpoint, "delete")

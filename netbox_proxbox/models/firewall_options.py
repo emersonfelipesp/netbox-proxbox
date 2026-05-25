@@ -7,7 +7,7 @@ from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from netbox.models import NetBoxModel
 
-from netbox_proxbox.choices import FirewallZoneChoices
+from netbox_proxbox.choices import FirewallSyncStatusChoices, FirewallZoneChoices
 
 
 class ProxmoxFirewallOptions(NetBoxModel):
@@ -51,6 +51,11 @@ class ProxmoxFirewallOptions(NetBoxModel):
         help_text=_(
             "Zone-specific options (nosmurfs, tcpflags, conntrack, dhcp, ipfilter, etc.)."
         ),
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=FirewallSyncStatusChoices,
+        default=FirewallSyncStatusChoices.ACTIVE,
     )
     raw_config = models.JSONField(default=dict, blank=True)
 

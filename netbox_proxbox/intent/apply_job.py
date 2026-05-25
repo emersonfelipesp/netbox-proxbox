@@ -18,6 +18,14 @@ except ImportError:  # pragma: no cover - test stubs expose only JobRunner
 
 from netbox_proxbox.intent.cf_writes import stamp_intent_state
 from netbox_proxbox.intent.diff_classify import classify_diff
+from netbox_proxbox.intent.firewall_common import save_status_for_firewall_object
+from netbox_proxbox.intent.firewall_payload import (
+    build_firewall_apply_diff,
+    default_proxmox_endpoint_id,
+    firewall_changediffs,
+    firewall_result_key,
+    unsupported_firewall_diff_message,
+)
 from netbox_proxbox.intent.payload import (
     build_lxc_payload,
     build_update_delta,
@@ -101,6 +109,7 @@ def _call_apply_endpoint(
     payload: dict[str, Any],
     *,
     actor_username: str | None,
+    endpoint_id: int | None = None,
     timeout: float = PROXBOX_APPLY_JOB_TIMEOUT,
 ) -> dict[str, Any]:
     context = get_fastapi_request_context()
@@ -112,14 +121,18 @@ def _call_apply_endpoint(
         raise RuntimeError("FastAPIEndpoint has no resolvable http_url.")
 
     url = f"{http_url.rstrip('/')}/intent/apply"
+    if endpoint_id is not None:
+        url = f"{url}?endpoint_id={int(endpoint_id)}"
     headers = dict(context.headers or {})
     headers.setdefault("Content-Type", "application/json")
     headers["X-Proxbox-Actor"] = actor_username or ""
+    request_payload = dict(payload)
+    request_payload.setdefault("actor", actor_username)
 
     try:
         response = requests.post(
             url,
-            json=payload,
+            json=request_payload,
             headers=headers,
             timeout=timeout,
             verify=bool(context.verify_ssl),
@@ -431,6 +444,7 @@ class ProxmoxApplyJob(JobRunner):
                         body = _call_apply_endpoint(
                             apply_payload,
                             actor_username=actor_username,
+                            endpoint_id=default_proxmox_endpoint_id(),
                         )
                         item = _first_apply_result(body)
                         status = str(item.get("status") or "failed")
@@ -481,6 +495,7 @@ class ProxmoxApplyJob(JobRunner):
                     body = _call_apply_endpoint(
                         apply_payload,
                         actor_username=actor_username,
+                        endpoint_id=default_proxmox_endpoint_id(),
                     )
                     item = _first_apply_result(body)
                     status = str(item.get("status") or "failed")
@@ -508,6 +523,59 @@ class ProxmoxApplyJob(JobRunner):
                         vmid=vmid,
                         op=op,
                         kind=kind,
+                        status="failed",
+                        message=str(exc),
+                    )
+
+            for index, row in enumerate(firewall_changediffs(branch), start=1):
+                key = firewall_result_key(row, index)
+                op = "update"
+                try:
+                    apply_diff = build_firewall_apply_diff(row)
+                    if apply_diff is None:
+                        results[key] = _result_entry(
+                            vmid=0,
+                            op=getattr(row, "action", None) or op,
+                            kind="firewall",
+                            status="skipped",
+                            message=unsupported_firewall_diff_message(row),
+                        )
+                        continue
+
+                    op = str(apply_diff.diff.get("op") or op)
+                    apply_payload = {
+                        "diffs": [apply_diff.diff],
+                        "run_uuid": str(normalized_uuid),
+                    }
+                    body = _call_apply_endpoint(
+                        apply_payload,
+                        actor_username=actor_username,
+                        endpoint_id=apply_diff.endpoint_id,
+                    )
+                    item = _first_apply_result(body)
+                    status = str(item.get("status") or "failed")
+                    proxmox_upid = item.get("proxmox_upid") or item.get("upid")
+                    results[key] = _result_entry(
+                        vmid=item.get("vmid", 0),
+                        op=op,
+                        kind="firewall",
+                        status=status,
+                        message=str(item.get("message") or ""),
+                        proxmox_upid=proxmox_upid,
+                    )
+                    if _status_is_success(status) and apply_diff.obj is not None:
+                        save_status_for_firewall_object(apply_diff.obj, "active")
+                except Exception as exc:  # noqa: BLE001
+                    logger.exception(
+                        "Proxmox apply %s failed for firewall ChangeDiff %s: %s",
+                        run_uuid,
+                        key,
+                        exc,
+                    )
+                    results[key] = _result_entry(
+                        vmid=0,
+                        op=op,
+                        kind="firewall",
                         status="failed",
                         message=str(exc),
                     )

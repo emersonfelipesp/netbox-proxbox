@@ -69,6 +69,8 @@ curl -X PATCH \
   "backup_batch_size": 5,
   "backup_batch_delay_ms": 200,
   "vm_sync_max_concurrency": 4,
+  "reconciliation_engine": "python",
+  "reconciliation_compare_strict": false,
   "custom_fields_request_delay": "0.00",
   "backend_log_file_path": "/var/log/proxbox.log",
   "ssrf_protection_enabled": true,
@@ -106,10 +108,13 @@ These fields are set by the system and cannot be modified via PATCH:
 |---|---|---|
 | `proxbox_fetch_max_concurrency` | integer | Maximum number of concurrent Proxmox API fetch operations |
 | `vm_sync_max_concurrency` | integer | Maximum number of VMs synced in parallel per sync run |
+| `reconciliation_engine` | string | VM operation-queue engine used by proxbox-api: `python`, `compare`, or `rust` |
 | `bulk_batch_size` | integer | Number of objects per batch in bulk NetBox write operations |
 | `bulk_batch_delay_ms` | integer | Delay in milliseconds between bulk write batches |
 | `backup_batch_size` | integer | Records per batch during backup/snapshot reconciliation (kept lower than bulk batches because each item triggers Proxmox calls). Default `5`. |
 | `backup_batch_delay_ms` | integer | Milliseconds to pause between backup batches. Default `200`. |
+| `reconciliation_engine` | string | VM operation-queue engine used by proxbox-api: `python`, `compare`, or `rust`. Controlled by ProxboxPluginSettings, not backend environment variables. |
+| `reconciliation_compare_strict` | boolean | In `compare` mode, fail the sync on Rust/Python mismatch instead of only logging it. |
 | `custom_fields_request_delay` | decimal | Delay in seconds between custom field update requests |
 | `delete_orphans` | boolean | When `true`, full-update may delete Proxbox-discovered VMs with stale or missing `proxbox_last_run_id` stamps |
 

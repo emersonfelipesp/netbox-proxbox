@@ -1,0 +1,79 @@
+{% load i18n %}
+
+<div class="px-2 py-1">
+  {% if latest_job %}
+    <div class="mb-3">
+      <h6 class="text-muted mb-1">{% trans "Last Sync" %}</h6>
+      <div class="d-flex align-items-center gap-2">
+        {% if latest_job.status == 'completed' %}
+          <span class="badge text-bg-success">{% trans "Completed" %}</span>
+        {% elif latest_job.status == 'running' %}
+          <span class="badge text-bg-primary">{% trans "Running" %}</span>
+        {% elif latest_job.status == 'pending' %}
+          <span class="badge text-bg-warning">{% trans "Pending" %}</span>
+        {% elif latest_job.status == 'errored' %}
+          <span class="badge text-bg-danger">{% trans "Errored" %}</span>
+        {% elif latest_job.status == 'failed' %}
+          <span class="badge text-bg-danger">{% trans "Failed" %}</span>
+        {% else %}
+          <span class="badge text-bg-secondary">{{ latest_job.status }}</span>
+        {% endif %}
+        <small class="text-muted">{{ latest_job.created }}</small>
+      </div>
+    </div>
+  {% else %}
+    <p class="text-muted mb-3"><em>{% trans "No sync jobs found." %}</em></p>
+  {% endif %}
+
+  {% if active_job %}
+    <div class="mb-3">
+      <h6 class="text-muted mb-1">{% trans "Active Job" %}</h6>
+      <div class="d-flex align-items-center gap-2">
+        <span class="badge text-bg-primary">
+          <i class="mdi mdi-sync mdi-spin"></i> {{ active_job.status }}
+        </span>
+        <small class="text-muted">{% trans "Started" %} {{ active_job.created }}</small>
+      </div>
+    </div>
+  {% endif %}
+
+  <h6 class="text-muted mb-1">{% trans "Synced Objects" %}</h6>
+  <div class="row g-2">
+    <div class="col-4">
+      <div class="text-center">
+        <div class="fs-4 fw-bold">{{ counts.clusters }}</div>
+        <small class="text-muted">{% trans "Clusters" %}</small>
+      </div>
+    </div>
+    <div class="col-4">
+      <div class="text-center">
+        <div class="fs-4 fw-bold">{{ counts.nodes }}</div>
+        <small class="text-muted">{% trans "Nodes" %}</small>
+      </div>
+    </div>
+    <div class="col-4">
+      <div class="text-center">
+        <div class="fs-4 fw-bold">{{ counts.endpoints }}</div>
+        <small class="text-muted">{% trans "Endpoints" %}</small>
+      </div>
+    </div>
+    <div class="col-4">
+      <div class="text-center">
+        <div class="fs-4 fw-bold">{{ counts.storage }}</div>
+        <small class="text-muted">{% trans "Storage" %}</small>
+      </div>
+    </div>
+    <div class="col-4">
+      <div class="text-center">
+        <div class="fs-4 fw-bold">{{ counts.backups }}</div>
+        <small class="text-muted">{% trans "Backups" %}</small>
+      </div>
+    </div>
+    <div class="col-4">
+      <div class="text-center">
+        <div class="fs-4 fw-bold">{{ counts.snapshots }}</div>
+        <small class="text-muted">{% trans "Snapshots" %}</small>
+      </div>
+    </div>
+  </div>
+</div>

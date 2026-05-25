@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from django import forms
+from django.core.exceptions import ValidationError
 from netbox.forms import NetBoxModelFilterSetForm, NetBoxModelForm
 from utilities.forms.fields import DynamicModelChoiceField
+from virtualization.models import VirtualMachine
 
 from netbox_proxbox import models
 from netbox_proxbox.choices import (
@@ -13,6 +15,12 @@ from netbox_proxbox.choices import (
     FirewallScopeChoices,
     FirewallSyncStatusChoices,
     FirewallZoneChoices,
+)
+from netbox_proxbox.intent.firewall_common import (
+    mark_firewall_object_stale,
+    validation_errors_for_options,
+    validation_errors_for_rule,
+    validation_errors_for_scoped_object,
 )
 
 
@@ -33,7 +41,24 @@ class _FirewallEndpointMixin:
     )
 
 
-class ProxmoxFirewallSecurityGroupForm(_FirewallEndpointMixin, NetBoxModelForm):
+class _FirewallManualEditMixin:
+    """Mark manually edited firewall objects stale until pushed or re-synced."""
+
+    def save(self, commit=True):
+        obj = super().save(commit=False)
+        mark_firewall_object_stale(obj)
+        if commit:
+            obj.save()
+            self.save_m2m()
+            status_target = getattr(obj, "ipset", None)
+            if status_target is not None and hasattr(status_target, "save"):
+                status_target.save(update_fields=["status"])
+        return obj
+
+
+class ProxmoxFirewallSecurityGroupForm(
+    _FirewallManualEditMixin, _FirewallEndpointMixin, NetBoxModelForm
+):
     class Meta:
         model = models.ProxmoxFirewallSecurityGroup
         fields = ("endpoint", "name", "comment", "status", "raw_config", "tags")
@@ -46,9 +71,15 @@ class ProxmoxFirewallSecurityGroupFilterForm(
     status = forms.ChoiceField(choices=_FIREWALL_STATUS_CHOICES, required=False)
 
 
-class ProxmoxFirewallRuleForm(_FirewallEndpointMixin, NetBoxModelForm):
+class ProxmoxFirewallRuleForm(
+    _FirewallManualEditMixin, _FirewallEndpointMixin, NetBoxModelForm
+):
     proxmox_node = DynamicModelChoiceField(
         queryset=models.ProxmoxNode.objects.all(),
+        required=False,
+    )
+    virtual_machine = DynamicModelChoiceField(
+        queryset=VirtualMachine.objects.all(),
         required=False,
     )
     security_group = DynamicModelChoiceField(
@@ -62,6 +93,7 @@ class ProxmoxFirewallRuleForm(_FirewallEndpointMixin, NetBoxModelForm):
             "endpoint",
             "zone",
             "proxmox_node",
+            "virtual_machine",
             "security_group",
             "pos",
             "rule_type",
@@ -83,6 +115,14 @@ class ProxmoxFirewallRuleForm(_FirewallEndpointMixin, NetBoxModelForm):
             "tags",
         )
 
+    def clean(self):
+        super().clean()
+        cleaned_data = self.cleaned_data
+        errors = validation_errors_for_rule(cleaned_data, instance=self.instance)
+        if errors:
+            raise ValidationError(errors)
+        return cleaned_data
+
 
 class ProxmoxFirewallRuleFilterForm(_FirewallEndpointMixin, NetBoxModelFilterSetForm):
     model = models.ProxmoxFirewallRule
@@ -97,7 +137,14 @@ class ProxmoxFirewallRuleFilterForm(_FirewallEndpointMixin, NetBoxModelFilterSet
     status = forms.ChoiceField(choices=_FIREWALL_STATUS_CHOICES, required=False)
 
 
-class ProxmoxFirewallIPSetForm(_FirewallEndpointMixin, NetBoxModelForm):
+class ProxmoxFirewallIPSetForm(
+    _FirewallManualEditMixin, _FirewallEndpointMixin, NetBoxModelForm
+):
+    virtual_machine = DynamicModelChoiceField(
+        queryset=VirtualMachine.objects.all(),
+        required=False,
+    )
+
     class Meta:
         model = models.ProxmoxFirewallIPSet
         fields = (
@@ -114,6 +161,16 @@ class ProxmoxFirewallIPSetForm(_FirewallEndpointMixin, NetBoxModelForm):
             "virtual_machine": forms.Select,
         }
 
+    def clean(self):
+        super().clean()
+        cleaned_data = self.cleaned_data
+        errors = validation_errors_for_scoped_object(
+            cleaned_data, instance=self.instance
+        )
+        if errors:
+            raise ValidationError(errors)
+        return cleaned_data
+
 
 class ProxmoxFirewallIPSetFilterForm(_FirewallEndpointMixin, NetBoxModelFilterSetForm):
     model = models.ProxmoxFirewallIPSet
@@ -124,7 +181,7 @@ class ProxmoxFirewallIPSetFilterForm(_FirewallEndpointMixin, NetBoxModelFilterSe
     status = forms.ChoiceField(choices=_FIREWALL_STATUS_CHOICES, required=False)
 
 
-class ProxmoxFirewallIPSetEntryForm(NetBoxModelForm):
+class ProxmoxFirewallIPSetEntryForm(_FirewallManualEditMixin, NetBoxModelForm):
     ipset = DynamicModelChoiceField(
         queryset=models.ProxmoxFirewallIPSet.objects.all(),
     )
@@ -142,7 +199,14 @@ class ProxmoxFirewallIPSetEntryFilterForm(NetBoxModelFilterSetForm):
     )
 
 
-class ProxmoxFirewallAliasForm(_FirewallEndpointMixin, NetBoxModelForm):
+class ProxmoxFirewallAliasForm(
+    _FirewallManualEditMixin, _FirewallEndpointMixin, NetBoxModelForm
+):
+    virtual_machine = DynamicModelChoiceField(
+        queryset=VirtualMachine.objects.all(),
+        required=False,
+    )
+
     class Meta:
         model = models.ProxmoxFirewallAlias
         fields = (
@@ -159,6 +223,16 @@ class ProxmoxFirewallAliasForm(_FirewallEndpointMixin, NetBoxModelForm):
             "virtual_machine": forms.Select,
         }
 
+    def clean(self):
+        super().clean()
+        cleaned_data = self.cleaned_data
+        errors = validation_errors_for_scoped_object(
+            cleaned_data, instance=self.instance
+        )
+        if errors:
+            raise ValidationError(errors)
+        return cleaned_data
+
 
 class ProxmoxFirewallAliasFilterForm(_FirewallEndpointMixin, NetBoxModelFilterSetForm):
     model = models.ProxmoxFirewallAlias
@@ -169,9 +243,15 @@ class ProxmoxFirewallAliasFilterForm(_FirewallEndpointMixin, NetBoxModelFilterSe
     status = forms.ChoiceField(choices=_FIREWALL_STATUS_CHOICES, required=False)
 
 
-class ProxmoxFirewallOptionsForm(_FirewallEndpointMixin, NetBoxModelForm):
+class ProxmoxFirewallOptionsForm(
+    _FirewallManualEditMixin, _FirewallEndpointMixin, NetBoxModelForm
+):
     proxmox_node = DynamicModelChoiceField(
         queryset=models.ProxmoxNode.objects.all(),
+        required=False,
+    )
+    virtual_machine = DynamicModelChoiceField(
+        queryset=VirtualMachine.objects.all(),
         required=False,
     )
 
@@ -186,12 +266,21 @@ class ProxmoxFirewallOptionsForm(_FirewallEndpointMixin, NetBoxModelForm):
             "policy_in",
             "policy_out",
             "options",
+            "status",
             "raw_config",
             "tags",
         )
         widgets = {
             "virtual_machine": forms.Select,
         }
+
+    def clean(self):
+        super().clean()
+        cleaned_data = self.cleaned_data
+        errors = validation_errors_for_options(cleaned_data, instance=self.instance)
+        if errors:
+            raise ValidationError(errors)
+        return cleaned_data
 
 
 class ProxmoxFirewallOptionsFilterForm(
@@ -202,3 +291,4 @@ class ProxmoxFirewallOptionsFilterForm(
         choices=[("", "---------")] + _choices_2tuple(FirewallZoneChoices),
         required=False,
     )
+    status = forms.ChoiceField(choices=_FIREWALL_STATUS_CHOICES, required=False)

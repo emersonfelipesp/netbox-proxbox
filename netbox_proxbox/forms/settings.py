@@ -14,6 +14,7 @@ from netbox_proxbox.models.plugin_settings import (
     BRANCH_ON_CONFLICT_CHOICES,
     DEFAULT_BACKEND_LOG_FILE_PATH,
     NETBOX_TO_PROXMOX_TYPED_PHRASE,
+    RECONCILIATION_ENGINE_CHOICES,
 )
 
 
@@ -259,6 +260,25 @@ class ProxboxPluginSettingsForm(forms.Form):
         initial=4,
         label="VM sync max concurrency",
         help_text="Maximum number of VMs synced in parallel during a full update.",
+    )
+    reconciliation_engine = forms.ChoiceField(
+        required=True,
+        choices=RECONCILIATION_ENGINE_CHOICES,
+        initial="python",
+        label="VM reconciliation engine",
+        help_text=(
+            "Choose how proxbox-api builds VM operation queues. Python is the safe "
+            "default; compare validates Rust parity while returning Python output; "
+            "rust requires proxbox-reconcile-rs or a PyO3-enabled backend image."
+        ),
+    )
+    reconciliation_compare_strict = forms.BooleanField(
+        required=False,
+        label="Strict Rust comparison",
+        help_text=(
+            "Only applies to compare mode. When enabled, a Rust/Python mismatch fails "
+            "the sync instead of only logging the mismatch."
+        ),
     )
     custom_fields_request_delay = forms.DecimalField(
         required=False,

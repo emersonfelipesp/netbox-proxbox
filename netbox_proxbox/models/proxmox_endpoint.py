@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
@@ -10,6 +11,13 @@ from netbox_proxbox.choices import ProxmoxEndpointEnvironmentChoices, ProxmoxMod
 from netbox_proxbox.constants import OVERWRITE_FIELDS
 from netbox_proxbox.fields import DomainField
 from netbox_proxbox.models.base import PORT_VALIDATORS, EndpointBase
+from netbox_proxbox.models.ssh_credential import (
+    AUTH_METHOD_CHOICES,
+    AUTH_METHOD_KEY,
+    AUTH_METHOD_PASSWORD,
+    normalize_fingerprint,
+)
+from netbox_proxbox.utils import encryption as enc_helpers
 
 
 class ProxmoxEndpoint(EndpointBase):
@@ -134,6 +142,51 @@ class ProxmoxEndpoint(EndpointBase):
             "Per-endpoint exponential back-off base delay in seconds between retries. "
             "Leave blank to use the global default."
         ),
+    )
+    ssh_username = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        verbose_name=_("SSH username"),
+        help_text=_(
+            "Fallback SSH username for the endpoint itself when no per-node "
+            "NodeSSHCredential is selected."
+        ),
+    )
+    ssh_port = models.PositiveIntegerField(
+        default=22,
+        validators=PORT_VALIDATORS,
+        verbose_name=_("SSH port"),
+        help_text=_("Fallback SSH listener port for this endpoint."),
+    )
+    ssh_auth_method = models.CharField(
+        max_length=8,
+        choices=AUTH_METHOD_CHOICES,
+        default=AUTH_METHOD_KEY,
+        verbose_name=_("SSH authentication method"),
+        help_text=_("Prefer key-based authentication. Password is a fallback."),
+    )
+    ssh_known_host_fingerprint = models.CharField(
+        max_length=128,
+        blank=True,
+        default="",
+        verbose_name=_("Pinned SSH host-key SHA-256 fingerprint"),
+        help_text=_(
+            "Canonical SHA256:<base64> form. Proxbox refuses terminal access "
+            "unless the host key matches this exact value."
+        ),
+    )
+    ssh_password_enc = models.TextField(
+        blank=True,
+        default="",
+        verbose_name=_("Encrypted SSH password"),
+        help_text=_("Fernet-encrypted fallback SSH password ciphertext. Internal."),
+    )
+    ssh_private_key_enc = models.TextField(
+        blank=True,
+        default="",
+        verbose_name=_("Encrypted SSH private key"),
+        help_text=_("Fernet-encrypted fallback SSH private key ciphertext. Internal."),
     )
     overwrite_device_role = models.BooleanField(
         null=True,
@@ -395,8 +448,10 @@ class ProxmoxEndpoint(EndpointBase):
     )
 
     class Meta(EndpointBase.Meta):
+        ordering = ("name", "pk")
         verbose_name = _("Proxmox endpoint")
         verbose_name_plural = _("Proxmox endpoints")
+        permissions = (("open_ssh_terminal", _("Can open Proxbox SSH terminal")),)
         constraints = (
             models.UniqueConstraint(
                 fields=("name", "ip_address", "domain"),
@@ -407,6 +462,84 @@ class ProxmoxEndpoint(EndpointBase):
     def get_absolute_url(self) -> str:
         """Plugin UI URL for this Proxmox endpoint detail view."""
         return reverse("plugins:netbox_proxbox:proxmoxendpoint", args=[self.pk])
+
+    @property
+    def ssh_host(self) -> str:
+        """Host string used by the endpoint-level SSH terminal fallback."""
+        return (self.domain or self.ip or "").strip()
+
+    @property
+    def has_ssh_password(self) -> bool:
+        """Return whether an endpoint fallback SSH password ciphertext is stored."""
+        return bool(self.ssh_password_enc)
+
+    @property
+    def has_ssh_private_key(self) -> bool:
+        """Return whether an endpoint fallback SSH private-key ciphertext is stored."""
+        return bool(self.ssh_private_key_enc)
+
+    @property
+    def has_ssh_terminal_credentials(self) -> bool:
+        """Return whether endpoint fallback SSH is complete enough to use."""
+        has_secret = (
+            self.has_ssh_private_key
+            if self.ssh_auth_method == AUTH_METHOD_KEY
+            else self.has_ssh_password
+        )
+        return bool(
+            self.ssh_host
+            and self.ssh_username
+            and self.ssh_known_host_fingerprint
+            and has_secret
+        )
+
+    def set_ssh_password(self, plaintext: str, *, key: str) -> None:
+        """Encrypt and store the endpoint fallback SSH password."""
+        self.ssh_password_enc = enc_helpers.encrypt(plaintext, key=key)
+
+    def get_ssh_password(self, *, key: str) -> str:
+        """Decrypt and return the endpoint fallback SSH password."""
+        return enc_helpers.decrypt(self.ssh_password_enc, key=key)
+
+    def set_ssh_private_key(self, plaintext: str, *, key: str) -> None:
+        """Encrypt and store the endpoint fallback SSH private key."""
+        self.ssh_private_key_enc = enc_helpers.encrypt(plaintext, key=key)
+
+    def get_ssh_private_key(self, *, key: str) -> str:
+        """Decrypt and return the endpoint fallback SSH private key."""
+        return enc_helpers.decrypt(self.ssh_private_key_enc, key=key)
+
+    def clean(self) -> None:
+        """Validate endpoint identity plus optional SSH terminal fallback fields."""
+        super().clean()
+        if self.ssh_known_host_fingerprint:
+            self.ssh_known_host_fingerprint = normalize_fingerprint(
+                self.ssh_known_host_fingerprint
+            )
+        has_any_ssh = any(
+            (
+                self.ssh_username,
+                self.ssh_known_host_fingerprint,
+                self.ssh_password_enc,
+                self.ssh_private_key_enc,
+            )
+        )
+        if not has_any_ssh:
+            return
+
+        errors: dict[str, str] = {}
+        if not self.ssh_username:
+            errors["ssh_username"] = "SSH username is required for endpoint fallback."
+        if not self.ssh_known_host_fingerprint:
+            errors["ssh_known_host_fingerprint"] = (
+                "Pinned host-key fingerprint is required for endpoint fallback."
+            )
+        if self.ssh_auth_method == AUTH_METHOD_KEY and not self.ssh_private_key_enc:
+            errors["ssh_auth_method"] = "Key authentication requires a private key."
+        if self.ssh_auth_method == AUTH_METHOD_PASSWORD and not self.ssh_password_enc:
+            errors["ssh_auth_method"] = "Password authentication requires a password."
+        if errors:
+            raise ValidationError(errors)
 
     def effective_overwrites(self) -> dict[str, bool]:
         """Resolve overwrite flags by falling back to the global plugin singleton when NULL."""

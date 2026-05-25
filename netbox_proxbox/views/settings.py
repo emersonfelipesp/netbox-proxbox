@@ -56,6 +56,10 @@ class SettingsView(
             "backup_batch_size": settings_obj.backup_batch_size,
             "backup_batch_delay_ms": settings_obj.backup_batch_delay_ms,
             "vm_sync_max_concurrency": settings_obj.vm_sync_max_concurrency,
+            "reconciliation_engine": settings_obj.reconciliation_engine,
+            "reconciliation_compare_strict": (
+                settings_obj.reconciliation_compare_strict
+            ),
             "custom_fields_request_delay": settings_obj.custom_fields_request_delay,
             "backend_log_file_path": settings_obj.backend_log_file_path,
             "debug_cache": settings_obj.debug_cache,
@@ -193,6 +197,13 @@ class SettingsView(
             settings_obj.vm_sync_max_concurrency = form.cleaned_data[
                 "vm_sync_max_concurrency"
             ]
+            settings_obj.reconciliation_engine = form.cleaned_data[
+                "reconciliation_engine"
+            ]
+            settings_obj.reconciliation_compare_strict = form.cleaned_data.get(
+                "reconciliation_compare_strict",
+                False,
+            )
             settings_obj.custom_fields_request_delay = form.cleaned_data.get(
                 "custom_fields_request_delay", 0
             )
@@ -305,6 +316,8 @@ class SettingsView(
                     "backup_batch_size",
                     "backup_batch_delay_ms",
                     "vm_sync_max_concurrency",
+                    "reconciliation_engine",
+                    "reconciliation_compare_strict",
                     "custom_fields_request_delay",
                     "backend_log_file_path",
                     "debug_cache",

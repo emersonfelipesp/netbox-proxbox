@@ -94,6 +94,9 @@ def test_home_template_renders_companion_plugin_endpoint_groups():
     assert "Additional Proxbox Plugin Endpoints" in contents
     assert "companion_endpoint_card.html" in contents
     assert "endpoint_group.plugin_name" in partial
+    assert "companion_endpoint.connection_status" in partial
+    assert "connection_status.label" in partial
+    assert "data-service-status-url" in partial
     assert "companion_endpoint.fields" in partial
     assert "endpoint_group.plugin_package" in partial
 
@@ -171,6 +174,88 @@ def test_vm_detail_sync_now_button_contract():
     assert 'method="post"' in button_contents
     assert "{% csrf_token %}" in button_contents
     assert "Sync Now" in button_contents
+
+
+def test_job_runtime_panel_renders_endpoint_runtime_cards():
+    contents = _read(
+        "netbox_proxbox/templates/netbox_proxbox/inc/job_runtime_panel.html"
+    )
+
+    assert "Proxbox sync summary" in contents
+    assert "block.response.runtime_summary" in contents
+    assert "block.response.endpoint_runtimes" in contents
+    assert "endpoint_runtime.phases" in contents
+    assert "phase.runtime_seconds" in contents
+    assert "block.response.stages" in contents
+    assert "Proxbox sync stages" in contents
+
+
+def test_firewall_push_and_preview_ui_contracts():
+    extension_contents = _read("netbox_proxbox/template_content.py")
+    view_contents = _read("netbox_proxbox/views/firewall.py")
+    api_view_contents = _read("netbox_proxbox/api/views.py")
+    push_button = _read(
+        "netbox_proxbox/templates/netbox_proxbox/inc/firewall_push_button.html"
+    )
+    push_assets = _read(
+        "netbox_proxbox/templates/netbox_proxbox/inc/firewall_push_assets.html"
+    )
+    preview_panel = _read(
+        "netbox_proxbox/templates/netbox_proxbox/inc/firewall_preview_panel.html"
+    )
+    bulk_button = _read(
+        "netbox_proxbox/templates/netbox_proxbox/buttons/firewall_bulk_push.html"
+    )
+    runtime_js = _read("netbox_proxbox/static/netbox_proxbox/js/firewall_push.js")
+    filtersets = _read("netbox_proxbox/filtersets.py")
+    qemu_wrappers = _read("netbox_proxbox/intent/firewall_vm_qemu.py")
+    lxc_wrappers = _read("netbox_proxbox/intent/firewall_vm_lxc.py")
+    vnet_wrappers = _read("netbox_proxbox/intent/firewall_vnet.py")
+    api_preview_source = api_view_contents[
+        api_view_contents.index("    def preview(") : api_view_contents.index(
+            "def _actor_from_request",
+        )
+    ]
+    right_page_source = extension_contents[
+        extension_contents.index("    def right_page(") : extension_contents.index(
+            "def _firewall_api_action_url",
+        )
+    ]
+
+    assert "ProxmoxFirewallPushTemplateExtension" in extension_contents
+    assert "right_page" in extension_contents
+    assert "firewall_push_assets.html" in extension_contents
+    assert "api_push_url" in extension_contents
+    assert "api_preview_url" in extension_contents
+    assert "user.has_perm(permission_run_proxmox_action())" in right_page_source
+    assert "FirewallBulkPushAction" in view_contents
+    assert 'name = "bulk_push"' in view_contents
+    assert 'path="push-selected"' in view_contents
+    assert 'restrict(request.user, "change")' in view_contents
+    assert "preview_firewall_object" in api_view_contents
+    assert 'url_path="preview"' in api_view_contents
+    assert 'url_path="push"' in api_view_contents
+    assert (
+        "request.user.has_perm(permission_run_proxmox_action())" in api_preview_source
+    )
+    assert "data-firewall-push-form" in push_button
+    assert "data-firewall-api-url" in push_button
+    assert "firewall_push.js" not in push_button
+    assert "firewall_push.js" in push_assets
+    assert "data-firewall-preview-panel" in preview_panel
+    assert "data-firewall-preview-url" in preview_panel
+    assert "firewall_push.js" not in preview_panel
+    assert '"status",' in filtersets
+    assert "validate_vm_firewall_scope(" in qemu_wrappers
+    assert "validate_vm_firewall_scope(" in lxc_wrappers
+    assert "validate_vnet_firewall_scope(" in vnet_wrappers
+    assert "del endpoint, vmid, node" not in qemu_wrappers
+    assert "del endpoint, vmid, node" not in lxc_wrappers
+    assert "del endpoint, vnet" not in vnet_wrappers
+    assert "table-warning" in runtime_js
+    assert "X-CSRFToken" in runtime_js
+    assert "fetch(apiUrl" in runtime_js
+    assert "{% formaction %}" in bulk_button
 
 
 def test_job_live_poll_alert_spans_the_card_width_and_keeps_streaming_messages():
@@ -414,6 +499,19 @@ def test_fastapi_openapi_tab_view_and_template_contract():
     assert "Last Refreshed" in template_contents
 
 
+def test_settings_page_exposes_reconciliation_engine_controls():
+    template = _read("netbox_proxbox/templates/netbox_proxbox/settings.html")
+    view = _read("netbox_proxbox/views/settings.py")
+    form = _read("netbox_proxbox/forms/settings.py")
+
+    assert "reconciliation_engine" in template
+    assert "reconciliation_compare_strict" in template
+    assert "reconciliation_engine" in view
+    assert "reconciliation_compare_strict" in view
+    assert "VM reconciliation engine" in form
+    assert "Strict Rust comparison" in form
+
+
 def test_endpoint_tables_use_record_pk_for_keepalive_reverse():
     contents = _read("netbox_proxbox/tables/__init__.py")
     assert "keepalive_status" in contents
@@ -461,12 +559,14 @@ def test_settings_page_is_wired_in_urls_navigation_and_template():
     assert "ignore_ipv6_link_local_addresses" in template
     assert "primary_ip_preference" in template
     assert "backend_log_file_path" in template
+    assert "reconciliation_engine" in template
     assert "encryption_enabled" in template
     assert "encryption_key" in template
     assert "inc/field.html" not in template
     assert "class SettingsView(" in view
     assert "encryption_key" in view
     assert "encryption_enabled" in view
+    assert "reconciliation_engine" in view
 
 
 def test_proxmox_list_template_exposes_import_export_controls_and_warning_modal():

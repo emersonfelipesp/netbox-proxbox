@@ -33,7 +33,7 @@ Follow the same dependency order agents use (see [`AGENTS.md`](./AGENTS.md)):
 
 ---
 
-This repository packages the `netbox_proxbox` NetBox plugin. The plugin adds endpoint inventory for Proxmox, NetBox, and the companion ProxBox FastAPI backend; UI pages for sync operations, cluster summaries, status checks, and job actions; REST API endpoints for the core plugin models; and a small amount of browser-side JavaScript and styling for the plugin pages.
+This repository packages the `netbox_proxbox` NetBox plugin. The plugin adds endpoint inventory for Proxmox, NetBox, and the companion ProxBox FastAPI backend; UI pages for sync operations, cluster summaries, status checks, and job actions; REST API endpoints for the core plugin models; Firecracker host-pool, image-template, and micro-VM inventory for NMS Cloud; and a small amount of browser-side JavaScript and styling for the plugin pages.
 
 ## Installation documentation truths
 
@@ -45,12 +45,13 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
 
 **Companion repos (cross-link map):**
 
-- Backend service: [`emersonfelipesp/proxbox-api`](https://github.com/emersonfelipesp/proxbox-api) — the full v0.0.17 feature set (firewall model scaffolding, intent tag helpers at `PUT /intent/tag-pending-deletion` and `PUT /intent/untag-pending-deletion`, HA REST shim) requires `proxbox-api >= 0.0.13`. HA endpoints alone require `>= 0.0.12`. See its [`docs/api/cluster-ha.md`](https://github.com/emersonfelipesp/proxbox-api/blob/main/docs/api/cluster-ha.md) for the upstream contract this plugin proxies.
+- Backend service: [`emersonfelipesp/proxbox-api`](https://github.com/emersonfelipesp/proxbox-api) — the full v0.0.17 feature set (firewall model scaffolding, intent tag helpers at `PUT /intent/tag-pending-deletion` and `PUT /intent/untag-pending-deletion`, HA REST shim) requires `proxbox-api >= 0.0.13`. HA endpoints alone require `>= 0.0.12`. Firecracker Cloud provisioning uses proxbox-api `/cloud/firecracker/provision` and `/cloud/firecracker/provision/stream` after this plugin creates or exposes the NetBox-side `FirecrackerMicroVM` record. See its [`docs/api/cluster-ha.md`](https://github.com/emersonfelipesp/proxbox-api/blob/main/docs/api/cluster-ha.md) for the upstream HA contract this plugin proxies.
 - Workspace context: [`personal-context/claude-reference/netbox-proxbox.md`](https://github.com/emersonfelipesp/personal-context/blob/main/claude-reference/netbox-proxbox.md) — N-MultiCloud workspace-level notes (cross-repo deps, NetBox compatibility rotation policy).
 
 ## Architecture Summary
 
-- `ProxmoxEndpoint`, `NetBoxEndpoint`, `FastAPIEndpoint`, `ProxmoxCluster`, `ProxmoxNode`, `ProxmoxStorage`, `BackupRoutine`, `Replication`, `VMBackup`, `VMSnapshot`, `VMTaskHistory`, and `ProxboxPluginSettings` are the plugin's main persisted models.
+- `ProxmoxEndpoint`, `NetBoxEndpoint`, `FastAPIEndpoint`, `ProxmoxCluster`, `ProxmoxNode`, `ProxmoxStorage`, `BackupRoutine`, `Replication`, `VMBackup`, `VMSnapshot`, `VMTaskHistory`, and `ProxboxPluginSettings` are the plugin's core Proxmox reflection models.
+- Firecracker Cloud uses separate `FirecrackerHostPool`, `FirecrackerHost`, `FirecrackerImageTemplate`, and `FirecrackerMicroVM` models. A micro-VM is not a NetBox core `VirtualMachine`; API clients identify it with `kind="firecracker"` and `instance_ref="firecracker:<id>"`.
 - **`NetBoxEndpoint` and `FastAPIEndpoint` are singletons** — the backend proxy and dashboard always use the first row of each, so only one should exist. Their bulk-import views enforce this by prompting for confirmation before replacing an existing record.
 - NetBox UI routes live in [`netbox_proxbox/urls.py`](./netbox_proxbox/urls.py) and are implemented primarily in `netbox_proxbox/views/`.
 - The plugin also exposes a NetBox plugin API under `netbox_proxbox/api/`, using serializers, filtersets, and standard `NetBoxModelViewSet` classes.
