@@ -26,6 +26,7 @@ class ProxmoxSdnFabricListView(ObjectListView):
     table = tables.ProxmoxSdnFabricTable
     filterset = filtersets.ProxmoxSdnFabricFilterSet
     filterset_form = forms.ProxmoxSdnFabricFilterForm
+    actions = {}
 
 
 @register_model_view(models.ProxmoxSdnFabric)
@@ -54,6 +55,7 @@ class ProxmoxSdnRouteMapListView(ObjectListView):
     table = tables.ProxmoxSdnRouteMapTable
     filterset = filtersets.ProxmoxSdnRouteMapFilterSet
     filterset_form = forms.ProxmoxSdnRouteMapFilterForm
+    actions = {}
 
 
 @register_model_view(models.ProxmoxSdnRouteMap)
@@ -82,6 +84,7 @@ class ProxmoxSdnPrefixListListView(ObjectListView):
     table = tables.ProxmoxSdnPrefixListTable
     filterset = filtersets.ProxmoxSdnPrefixListFilterSet
     filterset_form = forms.ProxmoxSdnPrefixListFilterForm
+    actions = {}
 
 
 @register_model_view(models.ProxmoxSdnPrefixList)

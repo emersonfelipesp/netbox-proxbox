@@ -82,6 +82,7 @@ class FastAPIEndpointListView(generic.ObjectListView):
     filterset = FastAPIEndpointFilterSet
     filterset_form = FastAPIEndpointFilterForm
     template_name = "netbox_proxbox/fastapiendpoint_list.html"
+    actions = {}
 
 
 @register_model_view(FastAPIEndpoint, "bulk_import", path="import", detail=False)

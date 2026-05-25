@@ -181,6 +181,7 @@ class ProxmoxFirewallSecurityGroupListView(ObjectListView):
     table = tables.ProxmoxFirewallSecurityGroupTable
     filterset = filtersets.ProxmoxFirewallSecurityGroupFilterSet
     filterset_form = forms.ProxmoxFirewallSecurityGroupFilterForm
+    actions = {}
 
 
 @register_model_view(models.ProxmoxFirewallSecurityGroup)
@@ -225,8 +226,6 @@ class ProxmoxFirewallRuleListView(ObjectListView):
         AddObject,
         BulkImport,
         BulkExport,
-        BulkEdit,
-        BulkRename,
         FirewallBulkPushAction,
         BulkDelete,
     )
@@ -280,6 +279,7 @@ class ProxmoxFirewallIPSetListView(ObjectListView):
     table = tables.ProxmoxFirewallIPSetTable
     filterset = filtersets.ProxmoxFirewallIPSetFilterSet
     filterset_form = forms.ProxmoxFirewallIPSetFilterForm
+    actions = {}
 
 
 @register_model_view(models.ProxmoxFirewallIPSet)
@@ -320,6 +320,7 @@ class ProxmoxFirewallIPSetEntryListView(ObjectListView):
     table = tables.ProxmoxFirewallIPSetEntryTable
     filterset = filtersets.ProxmoxFirewallIPSetEntryFilterSet
     filterset_form = forms.ProxmoxFirewallIPSetEntryFilterForm
+    actions = {}
 
 
 @register_model_view(models.ProxmoxFirewallIPSetEntry)
@@ -360,6 +361,7 @@ class ProxmoxFirewallAliasListView(ObjectListView):
     table = tables.ProxmoxFirewallAliasTable
     filterset = filtersets.ProxmoxFirewallAliasFilterSet
     filterset_form = forms.ProxmoxFirewallAliasFilterForm
+    actions = {}
 
 
 @register_model_view(models.ProxmoxFirewallAlias)
@@ -400,6 +402,7 @@ class ProxmoxFirewallOptionsListView(ObjectListView):
     table = tables.ProxmoxFirewallOptionsTable
     filterset = filtersets.ProxmoxFirewallOptionsFilterSet
     filterset_form = forms.ProxmoxFirewallOptionsFilterForm
+    actions = {}
 
 
 @register_model_view(models.ProxmoxFirewallOptions)
