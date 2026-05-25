@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
+from typing import Any
 
 import requests
 
@@ -21,6 +22,7 @@ from netbox_proxbox.utils import (
 from netbox_proxbox.views.error_utils import (
     extract_backend_error_detail,
     extract_proxmox_backend_error_detail,
+    parse_requests_response_json,
 )
 
 logger = logging.getLogger(__name__)
@@ -609,5 +611,146 @@ class ServiceStatus:
             target_port=target_port,
             authentication=authentication,
             api_access=api_access,
+            detail=self.last_error_detail,
+        )
+
+    @staticmethod
+    def _pbs_status_item_value(item: object, key: str) -> object:
+        if isinstance(item, dict):
+            return item.get(key)
+        return getattr(item, key, None)
+
+    @classmethod
+    def _match_pbs_status_item(
+        cls,
+        *,
+        items: list[object],
+        endpoint_id: int | None,
+        host: str,
+        port: int,
+        name: str,
+    ) -> object | None:
+        for item in items:
+            if cls._pbs_status_item_value(item, "endpoint_id") == endpoint_id:
+                return item
+
+        for item in items:
+            item_host = str(cls._pbs_status_item_value(item, "host") or "")
+            item_port = cls._pbs_status_item_value(item, "port")
+            if item_host == host and item_port == port:
+                return item
+
+        for item in items:
+            if str(cls._pbs_status_item_value(item, "name") or "") == name:
+                return item
+
+        return None
+
+    def pbs_status(
+        self,
+        endpoint: object,
+        base_url: str,
+        auth_headers: dict[str, str] | None = None,
+        backend_verify_ssl: bool = True,
+    ) -> tuple[str, ServiceCheckResult]:
+        """Fetch proxbox-api PBS reachability and normalize it for a home badge."""
+        status = "error"
+        self._clear_error()
+
+        endpoint_id = getattr(endpoint, "pk", getattr(endpoint, "id", None))
+        name = str(getattr(endpoint, "name", "") or endpoint)
+        host = str(
+            getattr(endpoint, "host", "")
+            or getattr(endpoint, "domain", "")
+            or get_ip_address_host(getattr(endpoint, "ip_address", None))
+        )
+        port = int(getattr(endpoint, "port", 8007) or 8007)
+        request_headers = auth_headers or {}
+        url = f"{base_url.rstrip('/')}/pbs/status"
+
+        try:
+            response = requests.get(
+                url,
+                headers=request_headers,
+                verify=backend_verify_ssl,
+                timeout=self.request_timeout,
+            )
+            response.raise_for_status()
+            payload, json_err = parse_requests_response_json(
+                response, log_label="pbs/status"
+            )
+        except requests.exceptions.RequestException as exc:
+            detail, http_status = self._extract_error_detail(exc)
+            self._set_error(
+                f"Failed to check PBS status through ProxBox backend: {detail}",
+                http_status=http_status,
+            )
+            return status, ServiceCheckResult(
+                target_address=host,
+                target_port=port,
+                authentication="error",
+                api_access="error",
+                detail=self.last_error_detail,
+                http_status=self.last_error_http_status,
+            )
+
+        if json_err:
+            self._set_error(json_err)
+            return status, ServiceCheckResult(
+                target_address=host,
+                target_port=port,
+                authentication="success",
+                api_access="error",
+                detail=self.last_error_detail,
+            )
+
+        items: list[Any] = []
+        if isinstance(payload, dict) and isinstance(payload.get("items"), list):
+            items = payload["items"]
+        else:
+            self._set_error("ProxBox backend returned invalid PBS status payload.")
+            return status, ServiceCheckResult(
+                target_address=host,
+                target_port=port,
+                authentication="success",
+                api_access="error",
+                detail=self.last_error_detail,
+            )
+
+        item = self._match_pbs_status_item(
+            items=items,
+            endpoint_id=endpoint_id,
+            host=host,
+            port=port,
+            name=name,
+        )
+        if item is None:
+            self._set_error(f"PBS status for {name} was not returned by proxbox-api.")
+            return status, ServiceCheckResult(
+                target_address=host,
+                target_port=port,
+                authentication="success",
+                api_access="error",
+                detail=self.last_error_detail,
+            )
+
+        if bool(self._pbs_status_item_value(item, "reachable")):
+            self._clear_error()
+            return "success", ServiceCheckResult(
+                target_address=host,
+                target_port=port,
+                authentication="success",
+                api_access="success",
+            )
+
+        reason = self._pbs_status_item_value(item, "reason")
+        self._set_error(
+            str(reason) if reason else f"PBS endpoint {name} is not reachable."
+        )
+        return status, ServiceCheckResult(
+            target_address=host,
+            target_port=port,
+            authentication="success",
+            api_access="error",
             detail=self.last_error_detail,
         )

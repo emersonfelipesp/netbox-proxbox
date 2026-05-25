@@ -1,4 +1,4 @@
-"""Check backend, NetBox, and Proxmox service reachability for the plugin UI."""
+"""Check backend, NetBox, Proxmox, and PBS service reachability for the UI."""
 
 from __future__ import annotations
 
@@ -14,6 +14,21 @@ from utilities.views import TokenConditionalLoginRequiredMixin
 
 logger = logging.getLogger(__name__)
 
+DEPENDENT_SERVICES = ("netbox", "proxmox", "pbs")
+KNOWN_SERVICES = ("fastapi", *DEPENDENT_SERVICES)
+
+
+def _visible_pbs_server(request: HttpRequest, pk: int) -> object | None:
+    try:
+        from netbox_pbs.models import PBSServer  # noqa: PLC0415
+    except ImportError:
+        return None
+
+    return get_object_or_404(
+        PBSServer.objects.restrict(request.user, "view"),
+        pk=pk,
+    )
+
 
 class GetServiceStatusView(TokenConditionalLoginRequiredMixin, View):
     """JSON keepalive; object visibility enforced via QuerySet.restrict per service."""
@@ -28,9 +43,10 @@ class GetServiceStatusView(TokenConditionalLoginRequiredMixin, View):
 def get_service_status_impl(
     request: HttpRequest, service: str, pk: int
 ) -> JsonResponse:
-    """Build JSON status for fastapi, netbox, or proxmox service checks."""
+    """Build JSON status for fastapi, netbox, proxmox, or pbs service checks."""
     status = "unknown"
     service_status = ServiceStatus()
+    pbs_server = None
 
     if service == "fastapi":
         get_object_or_404(
@@ -59,13 +75,13 @@ def get_service_status_impl(
             payload["detail"] = fastapi_response.detail
         return JsonResponse(payload)
 
-    if service not in ("netbox", "proxmox"):
+    if service not in DEPENDENT_SERVICES:
         return JsonResponse(
             {
                 "status": "error",
                 "detail": (
                     f"Unknown service {service!r}. "
-                    "Expected fastapi, netbox, or proxmox."
+                    f"Expected {', '.join(KNOWN_SERVICES[:-1])}, or {KNOWN_SERVICES[-1]}."
                 ),
             },
             status=400,
@@ -81,6 +97,16 @@ def get_service_status_impl(
             ProxmoxEndpoint.objects.restrict(request.user, "view"),
             pk=pk,
         )
+    elif service == "pbs":
+        pbs_server = _visible_pbs_server(request, pk)
+        if pbs_server is None:
+            return JsonResponse(
+                {
+                    "status": "error",
+                    "detail": "netbox-pbs is not installed.",
+                },
+                status=404,
+            )
 
     fastapi_object = (
         FastAPIEndpoint.objects.restrict(request.user, "view")
@@ -133,6 +159,13 @@ def get_service_status_impl(
     elif service == "proxmox":
         status, details = service_status.proxmox_status(
             pk=pk,
+            base_url=connected_url,
+            auth_headers=auth_headers,
+            backend_verify_ssl=service_status.connected_verify_ssl,
+        )
+    elif service == "pbs" and pbs_server is not None:
+        status, details = service_status.pbs_status(
+            endpoint=pbs_server,
             base_url=connected_url,
             auth_headers=auth_headers,
             backend_verify_ssl=service_status.connected_verify_ssl,

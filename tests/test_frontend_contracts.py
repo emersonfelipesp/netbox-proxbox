@@ -94,6 +94,9 @@ def test_home_template_renders_companion_plugin_endpoint_groups():
     assert "Additional Proxbox Plugin Endpoints" in contents
     assert "companion_endpoint_card.html" in contents
     assert "endpoint_group.plugin_name" in partial
+    assert "companion_endpoint.connection_status" in partial
+    assert "connection_status.label" in partial
+    assert "data-service-status-url" in partial
     assert "companion_endpoint.fields" in partial
     assert "endpoint_group.plugin_package" in partial
 

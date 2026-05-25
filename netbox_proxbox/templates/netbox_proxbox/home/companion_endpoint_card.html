@@ -2,6 +2,9 @@
     <h2 class="card-header">{{ endpoint_group.plugin_name }}</h2>
 
     <div class="card-body">
+        {% if companion_endpoint.connection_status %}
+            <div class="p-1" id="{{ companion_endpoint.connection_status.message_id }}"></div>
+        {% endif %}
         <table class="table table-hover attr-table">
             <tr>
                 <th scope="row"><strong>{{ endpoint_group.model_label }}</strong></th>
@@ -13,6 +16,18 @@
                     {% endif %}
                 </td>
             </tr>
+            {% if companion_endpoint.connection_status %}
+                <tr>
+                    <th scope="row"><strong>{{ companion_endpoint.connection_status.label }}</strong></th>
+                    <td>
+                        <span
+                            id="{{ companion_endpoint.connection_status.badge_id }}"
+                            class="badge p-1"
+                            data-service-status-url="{{ companion_endpoint.connection_status.url }}"
+                        >Unknown</span>
+                    </td>
+                </tr>
+            {% endif %}
             {% for field in companion_endpoint.fields %}
                 <tr>
                     <th scope="row"><strong>{{ field.label }}</strong></th>
