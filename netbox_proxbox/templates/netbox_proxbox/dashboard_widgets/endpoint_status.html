@@ -1,0 +1,56 @@
+{% load i18n %}
+
+<div class="px-2 py-1">
+  <h6 class="text-muted mb-2">{% trans "Proxmox" %}</h6>
+  {% if proxmox_endpoints %}
+    <div class="list-group list-group-flush mb-3">
+      {% for ep in proxmox_endpoints %}
+        <div class="list-group-item px-1 py-2">
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <i class="mdi mdi-server text-primary"></i>
+              <strong>{{ ep.name }}</strong>
+            </div>
+            <small class="text-muted">{{ ep.ip }}</small>
+          </div>
+          {% if ep.mode and ep.mode != "—" %}
+            <small class="text-muted">{% trans "Mode" %}: {{ ep.mode }}</small>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="text-muted"><em>{% trans "No Proxmox endpoints configured." %}</em></p>
+  {% endif %}
+
+  <div class="row">
+    <div class="col-6">
+      <h6 class="text-muted mb-1">{% trans "NetBox" %}</h6>
+      {% if netbox_endpoint %}
+        <div class="d-flex align-items-center gap-1">
+          <i class="mdi mdi-circle text-success" style="font-size: 0.6rem;"></i>
+          <small>{% trans "Configured" %}</small>
+        </div>
+      {% else %}
+        <div class="d-flex align-items-center gap-1">
+          <i class="mdi mdi-circle text-secondary" style="font-size: 0.6rem;"></i>
+          <small class="text-muted">{% trans "Not configured" %}</small>
+        </div>
+      {% endif %}
+    </div>
+    <div class="col-6">
+      <h6 class="text-muted mb-1">{% trans "FastAPI" %}</h6>
+      {% if fastapi_endpoint %}
+        <div class="d-flex align-items-center gap-1">
+          <i class="mdi mdi-circle text-success" style="font-size: 0.6rem;"></i>
+          <small>{% trans "Configured" %}</small>
+        </div>
+      {% else %}
+        <div class="d-flex align-items-center gap-1">
+          <i class="mdi mdi-circle text-secondary" style="font-size: 0.6rem;"></i>
+          <small class="text-muted">{% trans "Not configured" %}</small>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
