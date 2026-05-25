@@ -332,6 +332,14 @@ def test_settings_runtime_action_preserves_secret_gate():
     assert '"encryption_key": {"write_only": True}' in serializers_contents
 
 
+def test_reconciliation_engine_settings_are_exposed_to_backend_runtime_settings():
+    """proxbox-api reads these fields from the plugin settings API."""
+    serializers_contents = _serializers_package_source_text()
+
+    assert '"reconciliation_engine"' in serializers_contents
+    assert '"reconciliation_compare_strict"' in serializers_contents
+
+
 def test_task_history_route_and_viewset_are_registered():
     views_contents = VIEWS_PATH.read_text()
     urls_contents = URLS_PATH.read_text()
