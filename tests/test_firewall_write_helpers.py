@@ -484,3 +484,12 @@ def test_firewall_alias_update_changediff_does_not_rename_alias(fw_common, fw_pa
     assert payload["action"] == "firewall.alias.update"
     assert payload["name"] == "web"
     assert payload["body"] == {"cidr": "10.0.0.10", "comment": "frontend"}
+
+
+def test_firewall_payload_does_not_import_firewall_common_at_module_load():
+    source = (
+        REPO_ROOT / "netbox_proxbox" / "intent" / "firewall_payload.py"
+    ).read_text(encoding="utf-8")
+    header = source.split("FIREWALL_MODEL_NAMES", 1)[0]
+
+    assert "netbox_proxbox.intent.firewall_common" not in header

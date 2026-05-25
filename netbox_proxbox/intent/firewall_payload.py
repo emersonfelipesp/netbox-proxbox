@@ -6,10 +6,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from netbox_proxbox.choices import FirewallScopeChoices, FirewallZoneChoices
-from netbox_proxbox.intent.firewall_common import (
-    firewall_object_state,
-    resolve_firewall_endpoint,
-)
 
 FIREWALL_MODEL_NAMES = (
     "proxmoxfirewallsecuritygroup",
@@ -199,10 +195,10 @@ def _body_for(
                 }
             )
         if model_name == "proxmoxfirewallalias" and op == "update":
-            body = firewall_object_state(obj)
+            body = _firewall_object_state(obj)
             body.pop("name", None)
             return body
-        return firewall_object_state(obj)
+        return _firewall_object_state(obj)
 
     if model_name == "proxmoxfirewallrule":
         return _drop_empty(
@@ -340,10 +336,26 @@ def _vm_for(model_name: str, obj: object | None, data: dict[str, Any]) -> object
     return _related(obj, data, "virtual_machine")
 
 
+def _firewall_object_state(obj: object) -> dict[str, Any]:
+    from netbox_proxbox.intent.firewall_common import (  # noqa: PLC0415
+        firewall_object_state,
+    )
+
+    return firewall_object_state(obj)
+
+
+def _resolve_firewall_endpoint(obj: object) -> object | None:
+    from netbox_proxbox.intent.firewall_common import (  # noqa: PLC0415
+        resolve_firewall_endpoint,
+    )
+
+    return resolve_firewall_endpoint(obj)
+
+
 def _endpoint_id_for(obj: object | None, data: dict[str, Any]) -> int | None:
     if obj is not None:
         try:
-            endpoint = resolve_firewall_endpoint(obj)
+            endpoint = _resolve_firewall_endpoint(obj)
         except Exception:  # noqa: BLE001
             endpoint = None
         endpoint_id = _object_id(endpoint)
