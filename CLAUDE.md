@@ -106,9 +106,10 @@ from Gitea Actions and mirrors only the approved branches to the equivalent
 GitHub repository: `develop` and `main`. `main` is a future trigger only; do
 not create a missing `main` branch just for mirroring.
 
-The job requires the Gitea Actions secret `GH_MIRROR_TOKEN`. It installs `gh`
-when missing, authenticates with `gh`, validates the GitHub repo, configures
-GitHub git credentials with `gh auth setup-git`, and pushes only
+The job requires the Gitea Actions secret `GH_MIRROR_TOKEN` and the dedicated
+`mirror-host` runner label. It installs `gh` when missing, authenticates with
+`gh`, validates the GitHub repo, configures GitHub git credentials with
+`gh auth setup-git`, and pushes only
 `HEAD:refs/heads/${{ gitea.ref_name }}`. It must never sync tags, use
 `git push --all`, or use `git push --mirror`.
 

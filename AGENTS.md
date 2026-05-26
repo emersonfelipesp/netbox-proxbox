@@ -72,8 +72,9 @@ The Gitea workflow at `.gitea/workflows/mirror-github.yml` mirrors only
 approved source branches to the matching GitHub repository. For this repo the
 allow-list is `develop` and `main`; `main` is included for future branch
 creation, but agents must not create it only for mirroring. The workflow uses
-the Gitea Actions secret `GH_MIRROR_TOKEN`, authenticates with `gh`, configures
-GitHub git credentials through `gh auth setup-git`, and pushes only
+the Gitea Actions secret `GH_MIRROR_TOKEN`, runs on the dedicated
+`mirror-host` runner label, authenticates with `gh`, configures GitHub git
+credentials through `gh auth setup-git`, and pushes only
 `HEAD:refs/heads/${{ gitea.ref_name }}`. Do not replace it with `git push
 --all`, `git push --mirror`, or tag synchronization.
 
