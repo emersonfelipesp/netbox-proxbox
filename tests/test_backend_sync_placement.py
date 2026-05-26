@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import sys
 import types
+from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -63,6 +64,9 @@ def test_proxmox_backend_payload_includes_site_and_tenant_metadata(monkeypatch) 
         username="root@pam",
         password="secret",
         verify_ssl=False,
+        timeout=30,
+        max_retries=3,
+        retry_backoff=Decimal("1.25"),
         token_name=None,
         token_value=None,
         site=SimpleNamespace(pk=42, slug="dc1", name="DC 1"),
@@ -71,6 +75,10 @@ def test_proxmox_backend_payload_includes_site_and_tenant_metadata(monkeypatch) 
 
     payload = backend_sync._proxmox_backend_payload(endpoint)
 
+    assert payload["verify_ssl"] is False
+    assert payload["timeout"] == 30
+    assert payload["max_retries"] == 3
+    assert payload["retry_backoff"] == 1.25
     assert payload["site_id"] == 42
     assert payload["site_slug"] == "dc1"
     assert payload["site_name"] == "DC 1"
