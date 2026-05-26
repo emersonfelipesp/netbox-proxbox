@@ -98,7 +98,9 @@ Full companion-plugin details live under
 This post release prepares the Proxbox plugin family for the NetBox Plugin
 Certification Program. It adds certification evidence, PyPI project metadata,
 repository URLs, an application packet, and release-note coverage without
-changing sync behavior.
+changing sync behavior. It also includes an idempotent migration repair for
+affected v0.0.18 databases where PBS/PDM endpoint tables are missing the
+shared endpoint `enabled` column.
 
 Full notes: [Release Notes — v0.0.18.post1](https://emersonfelipesp.github.io/netbox-proxbox/release-notes/version-0.0.18.post1/).
 
