@@ -14,16 +14,8 @@ jobs:
       GH_TOKEN: ${{ secrets.GH_MIRROR_TOKEN }}
       GITHUB_TOKEN: ${{ secrets.GH_MIRROR_TOKEN }}
       GITHUB_OWNER: emersonfelipesp
-      SOURCE_REPOSITORY: ${{ gitea.repository }}
-      MIRROR_BRANCH: ${{ gitea.ref_name }}
 
     steps:
-      - name: Check out Gitea branch
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
       - name: Install GitHub CLI
         shell: bash
         run: |
@@ -70,22 +62,32 @@ jobs:
             exit 1
           fi
 
-          case "${MIRROR_BRANCH}" in
+          mirror_branch="${GITHUB_REF_NAME:?}"
+          source_repository="${GITHUB_REPOSITORY:?}"
+
+          case "${mirror_branch}" in
             develop|main)
               ;;
             *)
-              echo "::error::Ref ${MIRROR_BRANCH} is not approved for GitHub mirroring."
+              echo "::error::Ref ${mirror_branch} is not approved for GitHub mirroring."
               exit 1
               ;;
           esac
 
-          repo_name="${SOURCE_REPOSITORY#*/}"
+          repo_name="${source_repository#*/}"
           target_repo="${GITHUB_OWNER}/${repo_name}"
+          source_url="https://git.nmulti.cloud/${source_repository}.git"
+          worktree="$(mktemp -d)"
+          trap 'rm -rf "${worktree}"' EXIT
+
+          git init "${worktree}"
+          git -C "${worktree}" remote add gitea "${source_url}"
+          git -C "${worktree}" fetch --depth=1 gitea "refs/heads/${mirror_branch}"
+          git -C "${worktree}" checkout --detach FETCH_HEAD
 
           gh auth status --hostname github.com
           gh repo view "${target_repo}" --json nameWithOwner --jq '.nameWithOwner'
           gh auth setup-git --hostname github.com --force
 
-          git remote remove github 2>/dev/null || true
-          git remote add github "https://github.com/${target_repo}.git"
-          git push github "HEAD:refs/heads/${MIRROR_BRANCH}"
+          git -C "${worktree}" remote add github "https://github.com/${target_repo}.git"
+          git -C "${worktree}" push github "HEAD:refs/heads/${mirror_branch}"
