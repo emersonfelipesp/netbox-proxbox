@@ -84,7 +84,7 @@ jobs:
 
           git init "${worktree}"
           git -C "${worktree}" remote add gitea "${source_url}"
-          git -C "${worktree}" fetch --depth=1 gitea "refs/heads/${mirror_branch}"
+          git -C "${worktree}" fetch --no-tags gitea "refs/heads/${mirror_branch}"
           git -C "${worktree}" checkout --detach FETCH_HEAD
 
           gh auth status --hostname github.com
