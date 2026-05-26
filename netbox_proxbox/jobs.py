@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+import uuid
 from netbox.constants import RQ_QUEUE_DEFAULT
 from netbox.jobs import JobRunner
 
@@ -546,6 +547,7 @@ class ProxboxSyncJob(JobRunner):
             )
             batch_object_ids = _normalize_batch_object_ids(batch_object_ids)
             run_started = time.monotonic()
+            sync_run_id = str(uuid.uuid4())
             _sync_stage_settings()
 
             try:
@@ -597,6 +599,7 @@ class ProxboxSyncJob(JobRunner):
                 "batch_object_type": batch_object_type,
                 "batch_object_ids": batch_object_ids,
                 "fastapi_endpoint_id": fastapi_endpoint_id,
+                "run_id": sync_run_id,
             }
             self.job.data = {
                 "proxbox_sync": {

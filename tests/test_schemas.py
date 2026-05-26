@@ -146,13 +146,20 @@ def test_openapi_summary_rejects_non_object_payload():
 def test_sync_job_data_from_job_reads_nested_params():
     job = SimpleNamespace(
         data={
-            "proxbox_sync": {"params": {"sync_types": ["all"], "netbox_vm_ids": ["1"]}}
+            "proxbox_sync": {
+                "params": {
+                    "sync_types": ["all"],
+                    "netbox_vm_ids": ["1"],
+                    "run_id": "issue-519-run",
+                }
+            }
         }
     )
 
     data = SyncJobData.from_job(job)
     assert data.params.sync_types == ["all"]
     assert data.params.netbox_vm_ids == ["1"]
+    assert data.params.run_id == "issue-519-run"
 
 
 def test_backend_request_context_defaults_headers():

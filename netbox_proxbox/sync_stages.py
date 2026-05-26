@@ -227,6 +227,7 @@ def _build_stage_query_params(
     sync_type: str,
     target_vm_ids: list[str],
     disable_vm_network_on_vm_stage: bool = False,
+    run_id: str | None = None,
 ) -> dict[str, str]:
     """Build query parameters for a specific sync stage."""
     query_params = dict(base_query)
@@ -237,6 +238,8 @@ def _build_stage_query_params(
     if sync_type == SyncTypeChoices.VIRTUAL_MACHINES and disable_vm_network_on_vm_stage:
         # Full sync runs dedicated VM interface/IP stages; skip network work in VM stage.
         query_params["sync_vm_network"] = "false"
+    if sync_type == SyncTypeChoices.VIRTUAL_MACHINES and run_id:
+        query_params["run_id"] = run_id
     if target_vm_ids:
         query_params["netbox_vm_ids"] = ",".join(target_vm_ids)
     return query_params
@@ -392,6 +395,7 @@ def _run_all_stages_sync(
     target_vm_ids = [str(x) for x in list(params.get("netbox_vm_ids") or []) if str(x)]
     fastapi_endpoint_id = params.get("fastapi_endpoint_id")
     netbox_branch_schema_id = params.get("netbox_branch_schema_id")
+    sync_run_id = str(params.get("run_id") or "").strip() or None
     disable_vm_network_on_vm_stage = SyncTypeChoices.VIRTUAL_MACHINES in stages and (
         SyncTypeChoices.VM_INTERFACES in stages
         or SyncTypeChoices.IP_ADDRESSES in stages
@@ -416,6 +420,7 @@ def _run_all_stages_sync(
                 st,
                 target_vm_ids,
                 disable_vm_network_on_vm_stage=disable_vm_network_on_vm_stage,
+                run_id=sync_run_id,
             )
             stage_paths = _sync_stream_paths_for_stage(st, target_vm_ids)
 
