@@ -92,4 +92,11 @@ jobs:
           gh auth setup-git --hostname github.com --force
 
           git -C "${worktree}" remote add github "https://github.com/${target_repo}.git"
-          git -C "${worktree}" push github "HEAD:refs/heads/${mirror_branch}"
+          if expected_remote_sha="$(git -C "${worktree}" ls-remote github "refs/heads/${mirror_branch}" | awk '{print $1}')" \
+            && [ -n "${expected_remote_sha}" ]; then
+            git -C "${worktree}" push \
+              --force-with-lease="refs/heads/${mirror_branch}:${expected_remote_sha}" \
+              github "HEAD:refs/heads/${mirror_branch}"
+          else
+            git -C "${worktree}" push github "HEAD:refs/heads/${mirror_branch}"
+          fi
