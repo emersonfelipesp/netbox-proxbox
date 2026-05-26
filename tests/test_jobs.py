@@ -7,6 +7,7 @@ import importlib.util
 import logging
 import sys
 import types
+import uuid
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -978,11 +979,13 @@ def test_proxbox_sync_job_run_targets_each_requested_vm_route(
     monkeypatch, proxbox_sync_job_module
 ):
     paths: list[str] = []
+    captured_query_params: list[dict[str, object]] = []
 
     services_mod = types.ModuleType("netbox_proxbox.services")
 
     def run_sync_stream(path, query_params=None, **stream_kwargs):
         paths.append(path)
+        captured_query_params.append(dict(query_params or {}))
         return ({"stream": True, "response": {"ok": True}}, 200)
 
     services_mod.run_sync_stream = run_sync_stream
@@ -1005,6 +1008,9 @@ def test_proxbox_sync_job_run_targets_each_requested_vm_route(
         "virtualization/virtual-machines/512/create/stream",
         "virtualization/virtual-machines/777/create/stream",
     ]
+    run_ids = {str(qp["run_id"]) for qp in captured_query_params}
+    assert len(run_ids) == 1
+    assert str(uuid.UUID(next(iter(run_ids)))) == next(iter(run_ids))
 
 
 def test_proxbox_sync_job_query_flag_tracks_plugin_setting(
@@ -1128,6 +1134,14 @@ def test_full_sync_disables_vm_network_inside_virtual_machines_stage(
         if path == "virtualization/virtual-machines/create/stream"
     )
     assert vm_stage["sync_vm_network"] == "false"
+    vm_run_id = str(vm_stage["run_id"])
+    assert str(uuid.UUID(vm_run_id)) == vm_run_id
+    assert job.job.data["proxbox_sync"]["params"]["run_id"] == vm_run_id
+    assert all(
+        "run_id" not in qp
+        for path, qp in captured
+        if path != "virtualization/virtual-machines/create/stream"
+    )
 
 
 def test_vm_only_stage_keeps_default_vm_network_behavior(
@@ -1158,6 +1172,7 @@ def test_vm_only_stage_keeps_default_vm_network_behavior(
         if path == "virtualization/virtual-machines/create/stream"
     )
     assert "sync_vm_network" not in vm_stage
+    assert str(uuid.UUID(str(vm_stage["run_id"]))) == vm_stage["run_id"]
 
 
 def test_proxbox_sync_job_run_all_invokes_each_stage_stream(

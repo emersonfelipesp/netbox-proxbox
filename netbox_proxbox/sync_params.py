@@ -215,6 +215,7 @@ def _serialize_sync_params(
     batch_object_type: str | None = None,
     batch_object_ids: list[str] | None = None,
     fastapi_endpoint_id: int | None = None,
+    run_id: str | None = None,
 ) -> dict[str, object]:
     """Return a backward-compatible params block for Job.data."""
     if len(sync_types) == 1:
@@ -235,6 +236,8 @@ def _serialize_sync_params(
     }
     if fastapi_endpoint_id is not None:
         result["fastapi_endpoint_id"] = fastapi_endpoint_id
+    if run_id:
+        result["run_id"] = run_id
     return result
 
 
