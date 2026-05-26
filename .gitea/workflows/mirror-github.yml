@@ -13,6 +13,7 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GH_MIRROR_TOKEN }}
       GITHUB_TOKEN: ${{ secrets.GH_MIRROR_TOKEN }}
+      GITEA_SOURCE_TOKEN: ${{ secrets.SOURCE_MIRROR_TOKEN }}
       GITHUB_OWNER: emersonfelipesp
 
     steps:
@@ -61,6 +62,10 @@ jobs:
             echo "::error::Missing required Gitea Actions secret GH_MIRROR_TOKEN."
             exit 1
           fi
+          if [ -z "${GITEA_SOURCE_TOKEN:-}" ]; then
+            echo "::error::Missing required Gitea Actions secret SOURCE_MIRROR_TOKEN."
+            exit 1
+          fi
 
           mirror_branch="${GITHUB_REF_NAME:?}"
           source_repository="${GITHUB_REPOSITORY:?}"
@@ -81,10 +86,21 @@ jobs:
           trap 'rm -rf "${worktree}"' EXIT
           export HOME="${worktree}/home"
           mkdir -p "${HOME}"
+          gitea_askpass="${worktree}/gitea-askpass.sh"
+          cat > "${gitea_askpass}" <<'EOF'
+          #!/usr/bin/env bash
+          case "$1" in
+            *Username*) printf '%s\n' x-access-token ;;
+            *Password*) printf '%s\n' "${GITEA_SOURCE_TOKEN}" ;;
+            *) printf '\n' ;;
+          esac
+          EOF
+          chmod 700 "${gitea_askpass}"
 
           git init "${worktree}"
           git -C "${worktree}" remote add gitea "${source_url}"
-          git -C "${worktree}" fetch --no-tags gitea "refs/heads/${mirror_branch}"
+          GIT_ASKPASS="${gitea_askpass}" GIT_TERMINAL_PROMPT=0 \
+            git -C "${worktree}" fetch --no-tags gitea "refs/heads/${mirror_branch}"
           git -C "${worktree}" checkout --detach FETCH_HEAD
 
           gh auth status --hostname github.com
