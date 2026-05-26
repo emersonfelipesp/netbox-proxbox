@@ -1,0 +1,91 @@
+name: Mirror selected branches to GitHub
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+
+jobs:
+  mirror:
+    name: Push branch to GitHub
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GH_MIRROR_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.GH_MIRROR_TOKEN }}
+      GITHUB_OWNER: emersonfelipesp
+      SOURCE_REPOSITORY: ${{ gitea.repository }}
+      MIRROR_BRANCH: ${{ gitea.ref_name }}
+
+    steps:
+      - name: Check out Gitea branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install GitHub CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if command -v gh >/dev/null 2>&1; then
+            gh --version
+            exit 0
+          fi
+
+          if [ "$(uname -s)" != "Linux" ] || ! command -v apt-get >/dev/null 2>&1; then
+            echo "::error::GitHub CLI is not installed and this workflow can only install it on Debian/Ubuntu-style Linux runners."
+            exit 1
+          fi
+
+          sudo_cmd=()
+          if [ "$(id -u)" -ne 0 ]; then
+            if ! command -v sudo >/dev/null 2>&1; then
+              echo "::error::GitHub CLI is missing and sudo is unavailable for installation."
+              exit 1
+            fi
+            sudo_cmd=(sudo -n)
+          fi
+
+          "${sudo_cmd[@]}" apt-get update
+          "${sudo_cmd[@]}" apt-get install -y ca-certificates curl gnupg
+          "${sudo_cmd[@]}" mkdir -p -m 755 /etc/apt/keyrings
+          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+            | "${sudo_cmd[@]}" tee /etc/apt/keyrings/githubcli-archive-keyring.gpg >/dev/null
+          "${sudo_cmd[@]}" chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+            | "${sudo_cmd[@]}" tee /etc/apt/sources.list.d/github-cli.list >/dev/null
+          "${sudo_cmd[@]}" apt-get update
+          "${sudo_cmd[@]}" apt-get install -y gh
+          gh --version
+
+      - name: Mirror triggering branch
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::Missing required Gitea Actions secret GH_MIRROR_TOKEN."
+            exit 1
+          fi
+
+          case "${MIRROR_BRANCH}" in
+            develop|main)
+              ;;
+            *)
+              echo "::error::Ref ${MIRROR_BRANCH} is not approved for GitHub mirroring."
+              exit 1
+              ;;
+          esac
+
+          repo_name="${SOURCE_REPOSITORY#*/}"
+          target_repo="${GITHUB_OWNER}/${repo_name}"
+
+          gh auth status --hostname github.com
+          gh repo view "${target_repo}" --json nameWithOwner --jq '.nameWithOwner'
+          gh auth setup-git --hostname github.com --force
+
+          git remote remove github 2>/dev/null || true
+          git remote add github "https://github.com/${target_repo}.git"
+          git push github "HEAD:refs/heads/${MIRROR_BRANCH}"

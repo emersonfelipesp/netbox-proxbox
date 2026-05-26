@@ -66,6 +66,17 @@ into `develop`. Never `twine --skip-existing` — fix forward with the next
 `.postN` or `rcN` per PEP 440. Full step-by-step in
 [`CLAUDE.md → Release Procedure`](./CLAUDE.md).
 
+## Gitea-to-GitHub Mirror
+
+The Gitea workflow at `.gitea/workflows/mirror-github.yml` mirrors only
+approved source branches to the matching GitHub repository. For this repo the
+allow-list is `develop` and `main`; `main` is included for future branch
+creation, but agents must not create it only for mirroring. The workflow uses
+the Gitea Actions secret `GH_MIRROR_TOKEN`, authenticates with `gh`, configures
+GitHub git credentials through `gh auth setup-git`, and pushes only
+`HEAD:refs/heads/${{ gitea.ref_name }}`. Do not replace it with `git push
+--all`, `git push --mirror`, or tag synchronization.
+
 ## Navigation
 
 Read [`CLAUDE.md`](./CLAUDE.md) first for the plugin architecture and documentation map. Use the lower-level `CLAUDE.md` files when working in a specific directory or when changing only one layer of the plugin.
