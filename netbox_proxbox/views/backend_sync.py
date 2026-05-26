@@ -46,6 +46,24 @@ def _related_object_metadata(
     }
 
 
+def _int_or_none(value: object) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _float_or_none(value: object) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _proxmox_backend_payload(endpoint: ProxmoxEndpoint) -> dict[str, object]:
     """JSON body for POST/PUT ``/proxmox/endpoints`` from a ``ProxmoxEndpoint`` row."""
     return {
@@ -57,6 +75,9 @@ def _proxmox_backend_payload(endpoint: ProxmoxEndpoint) -> dict[str, object]:
         or "root@pam",
         "password": (getattr(endpoint, "password", "") or "").strip() or None,
         "verify_ssl": bool(getattr(endpoint, "verify_ssl", False)),
+        "timeout": _int_or_none(getattr(endpoint, "timeout", None)),
+        "max_retries": _int_or_none(getattr(endpoint, "max_retries", None)),
+        "retry_backoff": _float_or_none(getattr(endpoint, "retry_backoff", None)),
         "token_name": (getattr(endpoint, "token_name", "") or "").strip() or None,
         "token_value": (getattr(endpoint, "token_value", "") or "").strip() or None,
         **_related_object_metadata("site", getattr(endpoint, "site", None)),

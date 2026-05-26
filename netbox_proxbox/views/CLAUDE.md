@@ -5,7 +5,7 @@ This directory implements the plugin's NetBox UI behavior, including dashboard p
 ## Files And Ownership
 
 - [`__init__.py`](./__init__.py): top-level page views and re-exports for endpoint views, cluster views, dashboard pages, sync enqueue actions, status checks, settings/storage views, backup/replication views, snapshot/task views, and job integration helpers.
-- [`backend_sync.py`](./backend_sync.py): shared helper that ensures a Proxmox endpoint is synchronized to proxbox-api before live reads.
+- [`backend_sync.py`](./backend_sync.py): shared helper that ensures a Proxmox endpoint is synchronized to proxbox-api before live reads, including TLS verification and per-endpoint Proxmox request tuning fields.
 - [`dashboard_data.py`](./dashboard_data.py): assembles endpoint and cluster summary data for the dashboard page context.
 - [`mixins.py`](./mixins.py): shared view mixins used across multiple view modules.
 - [`resource_list_views.py`](./resource_list_views.py): list views for resource objects (nodes, VMs, LXC containers, interfaces, IP addresses).
