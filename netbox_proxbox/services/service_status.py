@@ -32,6 +32,10 @@ logger = logging.getLogger(__name__)
 _last_netbox_endpoint_push: float = 0.0
 _NETBOX_PUSH_THROTTLE_SECONDS: float = 300.0  # 5 minutes
 
+# Per-endpoint throttle for the keepalive Proxmox mode detection.
+_last_proxmox_mode_check: dict[int, float] = {}
+_PROXMOX_MODE_CHECK_THROTTLE_SECONDS: float = 300.0  # 5 minutes
+
 
 def _maybe_push_netbox_endpoints_to_backend(
     base_url: str,
@@ -123,6 +127,74 @@ def sync_proxmox_endpoint_to_backend(
         backend_verify_ssl=backend_verify_ssl,
         timeout=timeout,
     )
+
+
+def _maybe_update_proxmox_endpoint_mode(
+    endpoint: ProxmoxEndpoint,
+    base_url: str,
+    auth_headers: dict[str, str],
+    query_params: dict[str, str],
+    backend_verify_ssl: bool,
+) -> None:
+    """Detect standalone-vs-cluster topology and persist it on the endpoint.
+
+    Best-effort: logs debug on failure but never raises.
+    Throttled per endpoint pk (once per 5 minutes) so it adds no measurable
+    overhead to the keepalive dashboard poll.
+    """
+    global _last_proxmox_mode_check
+
+    try:
+        pk = getattr(endpoint, "pk", getattr(endpoint, "id", None))
+        if pk is None:
+            return
+
+        now = time.monotonic()
+        if now - _last_proxmox_mode_check.get(pk, 0.0) < _PROXMOX_MODE_CHECK_THROTTLE_SECONDS:
+            return
+
+        from netbox_proxbox.schemas import ProxmoxClusterStatusResponse  # noqa: PLC0415
+
+        resp = requests.get(
+            f"{base_url}/proxmox/cluster/status",
+            params=query_params,
+            headers=auth_headers,
+            verify=backend_verify_ssl,
+            timeout=10,
+        )
+        resp.raise_for_status()
+        cluster_data = ProxmoxClusterStatusResponse.model_validate(resp.json())
+
+        cluster_record = cluster_data.cluster_record
+        node_records = cluster_data.node_records
+
+        if cluster_record and len(node_records) > 1:
+            mode = "cluster"
+        elif len(node_records) == 1:
+            mode = "standalone"
+        else:
+            mode = "undefined"
+
+        current_mode = getattr(endpoint, "mode", None)
+        if current_mode != mode:
+            endpoint.mode = mode
+            if callable(getattr(endpoint, "save", None)):
+                endpoint.save(update_fields=["mode"])
+            logger.info(
+                "Keepalive mode update: endpoint '%s' (pk=%s) mode set to %s",
+                getattr(endpoint, "name", pk),
+                pk,
+                mode,
+            )
+
+        _last_proxmox_mode_check[pk] = now
+
+    except Exception:  # noqa: BLE001
+        logger.debug(
+            "Keepalive mode update: failed to detect mode for endpoint pk=%s",
+            getattr(endpoint, "pk", getattr(endpoint, "id", "?")),
+            exc_info=True,
+        )
 
 
 class ServiceStatus:
@@ -604,6 +676,15 @@ class ServiceStatus:
                 )
                 if attempt < max_retries - 1:
                     time.sleep(retry_delay)
+
+        if status == "success":
+            _maybe_update_proxmox_endpoint_mode(
+                endpoint=proxmox_service_obj,
+                base_url=base_url,
+                auth_headers=request_headers,
+                query_params=query_params,
+                backend_verify_ssl=backend_verify_ssl,
+            )
 
         api_access = status
         return status, ServiceCheckResult(
