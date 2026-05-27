@@ -20,6 +20,7 @@ from netbox_proxbox.schedule_hints import (
     has_recurring_proxbox_sync_all,
     quick_schedule_home_form_kwargs,
 )
+from netbox_proxbox.tables import FastAPIEndpointTable, NetBoxEndpointTable, ProxmoxEndpointTable
 from netbox_proxbox.utils import get_fastapi_url
 from netbox_proxbox.views.proxbox_access import permission_enqueue_proxbox_sync
 
@@ -372,6 +373,15 @@ def build_home_dashboard_context(
 
     active_proxbox_job = _get_latest_active_proxbox_job(request)
 
+    proxmox_endpoint_table = ProxmoxEndpointTable(proxmox_endpoint_obj)
+    proxmox_endpoint_table.configure(request)
+
+    netbox_endpoint_table = NetBoxEndpointTable(netbox_endpoint_obj)
+    netbox_endpoint_table.configure(request)
+
+    fastapi_endpoint_table = FastAPIEndpointTable(fastapi_endpoint_obj)
+    fastapi_endpoint_table.configure(request)
+
     return {
         "default_config": default_config,
         "proxmox_endpoint_list": proxmox_endpoint_obj
@@ -383,6 +393,9 @@ def build_home_dashboard_context(
         "fastapi_endpoint_list": fastapi_endpoint_obj
         if fastapi_endpoint_obj.exists()
         else None,
+        "proxmox_endpoint_table": proxmox_endpoint_table,
+        "netbox_endpoint_table": netbox_endpoint_table,
+        "fastapi_endpoint_table": fastapi_endpoint_table,
         "netbox_quick_add_url": netbox_quick_add_url,
         "fastapi_quick_add_url": fastapi_quick_add_url,
         "fastapi_url": fastapi_info.get("http_url", fastapi_example_url),
