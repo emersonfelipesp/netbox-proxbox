@@ -172,91 +172,145 @@
             {% endfor %}
         {% endif %}
 
-        <div class="d-flex justify-content-center flex-nowrap" style="margin-bottom: 15px;">
-            <h2>Proxbox Configuration</h2>
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2" style="margin-bottom: 15px;">
+            <h2 class="mb-0">Proxbox Configuration</h2>
+            <div class="btn-group" role="group" aria-label="Endpoint view mode" id="proxbox-view-toggle">
+                <button type="button" class="btn btn-sm btn-outline-secondary active" id="proxbox-toggle-cards" aria-pressed="true">
+                    <i class="mdi mdi-card-text-outline" aria-hidden="true"></i> Cards
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="proxbox-toggle-table" aria-pressed="false">
+                    <i class="mdi mdi-table" aria-hidden="true"></i> Table
+                </button>
+            </div>
         </div>
 
-        {% if netbox_endpoint_list and netbox_endpoint_list|length > 0 %}
-            {% for object in netbox_endpoint_list %}
-                {% include "netbox_proxbox/home/netbox_card.html" %}
-            {% endfor %}
-        {% else %}
-            <div class="d-flex flex-column align-items-center gap-2" style="margin-bottom: 15px;">
-                <div><h2>There is no NetBox Endpoint configured.</h2></div>
-                <p class="small text-muted text-center mb-0">
-                    Quick add starts with localhost, 127.0.0.1/32, and v1 token mode. Change any value before saving.
-                </p>
-                <div class="d-flex flex-wrap justify-content-center gap-2">
-                    <a href="{{ netbox_quick_add_url }}" class="btn btn-primary">Quick add NetBox Endpoint</a>
-                    <a href="{% url 'plugins:netbox_proxbox:netboxendpoint_add' %}" class="btn btn-outline-secondary">Open blank form</a>
-                    <a href="{% url 'plugins:netbox_proxbox:netboxendpoint_bulk_import' %}" class="btn btn-outline-primary"><i class="mdi mdi-upload" aria-hidden="true"></i> Import from CSV</a>
-                </div>
-            </div>
-            <hr>
-        {% endif %}
-
-        {% if fastapi_endpoint_list and fastapi_endpoint_list|length > 0 %}
-            {% for object in fastapi_endpoint_list %}
-                {% include "netbox_proxbox/home/fastapi_card.html" %}
-            {% endfor %}
-        {% else %}
-            <div class="d-flex flex-column align-items-center gap-2" style="margin-bottom: 15px;">
-                <div><h2>There is no FastAPI Endpoint configured.</h2></div>
-                <p class="small text-muted text-center mb-0">
-                    Quick add starts with localhost and 127.0.0.1/32. Change the host or IP before saving.
-                </p>
-                <div class="d-flex flex-wrap justify-content-center gap-2">
-                    <a href="{{ fastapi_quick_add_url }}" class="btn btn-primary">Quick add FastAPI Endpoint</a>
-                    <a href="{% url 'plugins:netbox_proxbox:fastapiendpoint_add' %}" class="btn btn-outline-secondary">Open blank form</a>
-                    <a href="{% url 'plugins:netbox_proxbox:fastapiendpoint_bulk_import' %}" class="btn btn-outline-primary"><i class="mdi mdi-upload" aria-hidden="true"></i> Import from CSV</a>
-                </div>
-            </div>
-            <hr>
-        {% endif %}
-
-        {% if proxmox_endpoint_list and proxmox_endpoint_list|length > 0 %}
-            {% for object in proxmox_endpoint_list %}
-                {% if proxmox_endpoint_list|length == 1 %}
-                    <div class="col">
-                {% elif proxmox_endpoint_list|length == 2 %}
-                    <div class="col col-md-6">
-                {% else %}
-                    <div class="col col-md-4">
-                {% endif %}
-                        {% include "netbox_proxbox/home/proxmox_card.html" %}
+        {# — Card view (default) — #}
+        <div id="proxbox-config-cards">
+            {% if netbox_endpoint_list and netbox_endpoint_list|length > 0 %}
+                {% for object in netbox_endpoint_list %}
+                    {% include "netbox_proxbox/home/netbox_card.html" %}
+                {% endfor %}
+            {% else %}
+                <div class="d-flex flex-column align-items-center gap-2" style="margin-bottom: 15px;">
+                    <div><h2>There is no NetBox Endpoint configured.</h2></div>
+                    <p class="small text-muted text-center mb-0">
+                        Quick add starts with localhost, 127.0.0.1/32, and v1 token mode. Change any value before saving.
+                    </p>
+                    <div class="d-flex flex-wrap justify-content-center gap-2">
+                        <a href="{{ netbox_quick_add_url }}" class="btn btn-primary">Quick add NetBox Endpoint</a>
+                        <a href="{% url 'plugins:netbox_proxbox:netboxendpoint_add' %}" class="btn btn-outline-secondary">Open blank form</a>
+                        <a href="{% url 'plugins:netbox_proxbox:netboxendpoint_bulk_import' %}" class="btn btn-outline-primary"><i class="mdi mdi-upload" aria-hidden="true"></i> Import from CSV</a>
                     </div>
-            {% endfor %}
-        {% else %}
-            <div class="d-flex flex-column align-items-center" style="margin-bottom: 15px;">
-                <div><h2>There are no Proxmox Endpoints configured.</h2></div>
-                <div class="d-flex flex-wrap justify-content-center gap-2">
-                    <a href="{% url 'plugins:netbox_proxbox:proxmoxendpoint_add' %}" class="btn btn-primary">Create new Proxmox Endpoint</a>
-                    <a href="{% url 'plugins:netbox_proxbox:proxmoxendpoint_bulk_import' %}" class="btn btn-outline-primary"><i class="mdi mdi-upload" aria-hidden="true"></i> Import from CSV</a>
                 </div>
-            </div>
-            <hr>
-        {% endif %}
+                <hr>
+            {% endif %}
 
-        {% if companion_endpoint_groups %}
-            <div class="col-12 mt-3">
-                <div class="d-flex justify-content-center flex-nowrap" style="margin-bottom: 15px;">
-                    <h2>Additional Proxbox Plugin Endpoints</h2>
+            {% if fastapi_endpoint_list and fastapi_endpoint_list|length > 0 %}
+                {% for object in fastapi_endpoint_list %}
+                    {% include "netbox_proxbox/home/fastapi_card.html" %}
+                {% endfor %}
+            {% else %}
+                <div class="d-flex flex-column align-items-center gap-2" style="margin-bottom: 15px;">
+                    <div><h2>There is no FastAPI Endpoint configured.</h2></div>
+                    <p class="small text-muted text-center mb-0">
+                        Quick add starts with localhost and 127.0.0.1/32. Change the host or IP before saving.
+                    </p>
+                    <div class="d-flex flex-wrap justify-content-center gap-2">
+                        <a href="{{ fastapi_quick_add_url }}" class="btn btn-primary">Quick add FastAPI Endpoint</a>
+                        <a href="{% url 'plugins:netbox_proxbox:fastapiendpoint_add' %}" class="btn btn-outline-secondary">Open blank form</a>
+                        <a href="{% url 'plugins:netbox_proxbox:fastapiendpoint_bulk_import' %}" class="btn btn-outline-primary"><i class="mdi mdi-upload" aria-hidden="true"></i> Import from CSV</a>
+                    </div>
                 </div>
-            </div>
-            {% for endpoint_group in companion_endpoint_groups %}
-                {% for companion_endpoint in endpoint_group.endpoints %}
-                    {% if endpoint_group.endpoints|length == 1 %}
+                <hr>
+            {% endif %}
+
+            {% if proxmox_endpoint_list and proxmox_endpoint_list|length > 0 %}
+                {% for object in proxmox_endpoint_list %}
+                    {% if proxmox_endpoint_list|length == 1 %}
                         <div class="col">
-                    {% elif endpoint_group.endpoints|length == 2 %}
+                    {% elif proxmox_endpoint_list|length == 2 %}
                         <div class="col col-md-6">
                     {% else %}
                         <div class="col col-md-4">
                     {% endif %}
-                            {% include "netbox_proxbox/home/companion_endpoint_card.html" with endpoint_group=endpoint_group companion_endpoint=companion_endpoint %}
+                            {% include "netbox_proxbox/home/proxmox_card.html" %}
                         </div>
                 {% endfor %}
-            {% endfor %}
-        {% endif %}
+            {% else %}
+                <div class="d-flex flex-column align-items-center" style="margin-bottom: 15px;">
+                    <div><h2>There are no Proxmox Endpoints configured.</h2></div>
+                    <div class="d-flex flex-wrap justify-content-center gap-2">
+                        <a href="{% url 'plugins:netbox_proxbox:proxmoxendpoint_add' %}" class="btn btn-primary">Create new Proxmox Endpoint</a>
+                        <a href="{% url 'plugins:netbox_proxbox:proxmoxendpoint_bulk_import' %}" class="btn btn-outline-primary"><i class="mdi mdi-upload" aria-hidden="true"></i> Import from CSV</a>
+                    </div>
+                </div>
+                <hr>
+            {% endif %}
+
+            {% if companion_endpoint_groups %}
+                <div class="col-12 mt-3">
+                    <div class="d-flex justify-content-center flex-nowrap" style="margin-bottom: 15px;">
+                        <h2>Additional Proxbox Plugin Endpoints</h2>
+                    </div>
+                </div>
+                {% for endpoint_group in companion_endpoint_groups %}
+                    {% for companion_endpoint in endpoint_group.endpoints %}
+                        {% if endpoint_group.endpoints|length == 1 %}
+                            <div class="col">
+                        {% elif endpoint_group.endpoints|length == 2 %}
+                            <div class="col col-md-6">
+                        {% else %}
+                            <div class="col col-md-4">
+                        {% endif %}
+                                {% include "netbox_proxbox/home/companion_endpoint_card.html" with endpoint_group=endpoint_group companion_endpoint=companion_endpoint %}
+                            </div>
+                    {% endfor %}
+                {% endfor %}
+            {% endif %}
+        </div>{# /proxbox-config-cards #}
+
+        {# — Table view — #}
+        <div id="proxbox-config-table" style="display: none;">
+            {% include "netbox_proxbox/home/endpoint_tables.html" %}
+        </div>{# /proxbox-config-table #}
+
+        <script>
+        (function () {
+            "use strict";
+            var STORAGE_KEY = "proxbox_endpoint_view";
+            var cardsEl = document.getElementById("proxbox-config-cards");
+            var tableEl = document.getElementById("proxbox-config-table");
+            var btnCards = document.getElementById("proxbox-toggle-cards");
+            var btnTable = document.getElementById("proxbox-toggle-table");
+
+            function showCards() {
+                cardsEl.style.display = "";
+                tableEl.style.display = "none";
+                btnCards.classList.add("active");
+                btnCards.setAttribute("aria-pressed", "true");
+                btnTable.classList.remove("active");
+                btnTable.setAttribute("aria-pressed", "false");
+                try { localStorage.setItem(STORAGE_KEY, "cards"); } catch (e) {}
+            }
+
+            function showTable() {
+                cardsEl.style.display = "none";
+                tableEl.style.display = "";
+                btnTable.classList.add("active");
+                btnTable.setAttribute("aria-pressed", "true");
+                btnCards.classList.remove("active");
+                btnCards.setAttribute("aria-pressed", "false");
+                try { localStorage.setItem(STORAGE_KEY, "table"); } catch (e) {}
+            }
+
+            btnCards.addEventListener("click", showCards);
+            btnTable.addEventListener("click", showTable);
+
+            try {
+                if (localStorage.getItem(STORAGE_KEY) === "table") { showTable(); }
+            } catch (e) {}
+        }());
+        </script>
     </div>
 
     <div class="text-center mt-4 mb-2">
