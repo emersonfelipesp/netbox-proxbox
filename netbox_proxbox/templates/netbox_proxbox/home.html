@@ -175,17 +175,17 @@
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2" style="margin-bottom: 15px;">
             <h2 class="mb-0">Proxbox Configuration</h2>
             <div class="btn-group" role="group" aria-label="Endpoint view mode" id="proxbox-view-toggle">
-                <button type="button" class="btn btn-sm btn-outline-secondary active" id="proxbox-toggle-cards" aria-pressed="true">
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="proxbox-toggle-cards" aria-pressed="false">
                     <i class="mdi mdi-card-text-outline" aria-hidden="true"></i> Cards
                 </button>
-                <button type="button" class="btn btn-sm btn-outline-secondary" id="proxbox-toggle-table" aria-pressed="false">
+                <button type="button" class="btn btn-sm btn-outline-secondary active" id="proxbox-toggle-table" aria-pressed="true">
                     <i class="mdi mdi-table" aria-hidden="true"></i> Table
                 </button>
             </div>
         </div>
 
-        {# — Card view (default) — #}
-        <div id="proxbox-config-cards">
+        {# — Card view — #}
+        <div id="proxbox-config-cards" style="display: none;">
             {% if netbox_endpoint_list and netbox_endpoint_list|length > 0 %}
                 {% for object in netbox_endpoint_list %}
                     {% include "netbox_proxbox/home/netbox_card.html" %}
@@ -269,8 +269,8 @@
             {% endif %}
         </div>{# /proxbox-config-cards #}
 
-        {# — Table view — #}
-        <div id="proxbox-config-table" style="display: none;">
+        {# — Table view (default) — #}
+        <div id="proxbox-config-table">
             {% include "netbox_proxbox/home/endpoint_tables.html" %}
         </div>{# /proxbox-config-table #}
 
@@ -307,7 +307,7 @@
             btnTable.addEventListener("click", showTable);
 
             try {
-                if (localStorage.getItem(STORAGE_KEY) === "table") { showTable(); }
+                if (localStorage.getItem(STORAGE_KEY) === "cards") { showCards(); }
             } catch (e) {}
         }());
         </script>
