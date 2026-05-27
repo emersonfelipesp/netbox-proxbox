@@ -460,10 +460,13 @@ def test_proxmox_status_uses_domain_query_when_available(
         "sync_proxmox_endpoint_to_backend",
         lambda *args, **kwargs: (True, None, None),
     )
+    monkeypatch.setattr(ss, "_last_proxmox_mode_check", {})
     requested = []
 
     def fake_get(url, verify=True, timeout=None, params=None, headers=None):
         requested.append((url, params, headers, verify))
+        if url.endswith("/proxmox/cluster/status"):
+            return ResponseStub([{"type": "node", "name": "pve01"}])
         return ResponseStub([{"pve01": {"version": "8.3.0"}}])
 
     monkeypatch.setattr(ss.requests, "get", fake_get)
@@ -482,7 +485,13 @@ def test_proxmox_status_uses_domain_query_when_available(
             {"source": "database", "domain": "pve.local"},
             {"Authorization": "Bearer backend-token"},
             True,
-        )
+        ),
+        (
+            "https://proxbox.local:8800/proxmox/cluster/status",
+            {"source": "database", "domain": "pve.local"},
+            {"Authorization": "Bearer backend-token"},
+            True,
+        ),
     ]
 
 
@@ -510,10 +519,13 @@ def test_proxmox_status_uses_ip_query_when_domain_missing(
         "sync_proxmox_endpoint_to_backend",
         lambda *args, **kwargs: (True, None, None),
     )
+    monkeypatch.setattr(ss, "_last_proxmox_mode_check", {})
     requested = []
 
     def fake_get(url, verify=True, timeout=None, params=None, headers=None):
         requested.append((url, params, headers, verify))
+        if url.endswith("/proxmox/cluster/status"):
+            return ResponseStub([{"type": "node", "name": "pve01"}])
         return ResponseStub([{"pve01": {"version": "8.3.0"}}])
 
     monkeypatch.setattr(ss.requests, "get", fake_get)
@@ -532,7 +544,13 @@ def test_proxmox_status_uses_ip_query_when_domain_missing(
             {"source": "database", "ip_address": "10.0.0.30"},
             {"Authorization": "Bearer backend-token"},
             False,
-        )
+        ),
+        (
+            "https://proxbox.local:8800/proxmox/cluster/status",
+            {"source": "database", "ip_address": "10.0.0.30"},
+            {"Authorization": "Bearer backend-token"},
+            False,
+        ),
     ]
 
 
@@ -761,3 +779,58 @@ def test_get_service_status_unknown_service_returns_400(monkeypatch, fastapi_end
     assert "not-a-service" in resp.payload["detail"]
     assert "fastapi" in resp.payload["detail"]
     assert "pbs" in resp.payload["detail"]
+
+
+def test_proxmox_mode_detected_on_successful_keepalive(
+    monkeypatch,
+    fastapi_endpoint,
+):
+    """Keepalive sets endpoint.mode to 'cluster' when cluster/status returns topology."""
+    saved_calls = []
+    proxmox_endpoint = SimpleNamespace(
+        id=1,
+        pk=1,
+        name="pve01",
+        domain="pve.local",
+        ip_address="10.0.0.30/24",
+        port=8006,
+        verify_ssl=False,
+        mode="undefined",
+        save=lambda update_fields=None: saved_calls.append(update_fields),
+    )
+    load_plugin_module(
+        "netbox_proxbox.views.keepalive_status",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+        proxmox_endpoint=proxmox_endpoint,
+    )
+    ss = _service_status_module()
+    monkeypatch.setattr(ss.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(
+        ss,
+        "sync_proxmox_endpoint_to_backend",
+        lambda *args, **kwargs: (True, None, None),
+    )
+    monkeypatch.setattr(ss, "_last_proxmox_mode_check", {})
+
+    def fake_get(url, verify=True, timeout=None, params=None, headers=None):
+        if url.endswith("/proxmox/cluster/status"):
+            return ResponseStub([
+                {"type": "cluster", "name": "pve-cluster"},
+                {"type": "node", "name": "pve01"},
+                {"type": "node", "name": "pve02"},
+            ])
+        return ResponseStub([{"pve01": {"version": "8.3.0"}}])
+
+    monkeypatch.setattr(ss.requests, "get", fake_get)
+
+    status, details = ss.ServiceStatus().proxmox_status(
+        1,
+        "https://proxbox.local:8800",
+        auth_headers={"Authorization": "Bearer backend-token"},
+        backend_verify_ssl=False,
+    )
+
+    assert status == "success"
+    assert proxmox_endpoint.mode == "cluster"
+    assert saved_calls == [["mode"]]
