@@ -60,3 +60,63 @@
         {% endif %}
     </div>
 </div>
+
+{# Companion Plugin Endpoints (PBS, PDM, Ceph, etc.) #}
+{% if companion_endpoint_groups %}
+    {% for endpoint_group in companion_endpoint_groups %}
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <strong>{{ endpoint_group.plugin_name }}</strong>
+                <div>
+                    <span class="badge text-bg-secondary">{{ endpoint_group.plugin_package }}</span>
+                    {% if endpoint_group.plugin_version %}
+                        <span class="small text-muted ms-1">v{{ endpoint_group.plugin_version }}</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>{{ endpoint_group.model_label }}</th>
+                            {% if endpoint_group.endpoints.0.connection_status %}
+                                <th>{% trans "Connection Status" %}</th>
+                            {% endif %}
+                            {% for field in endpoint_group.endpoints.0.fields %}
+                                <th>{{ field.label }}</th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for ep in endpoint_group.endpoints %}
+                            <tr>
+                                <td>
+                                    {% if ep.connection_status %}
+                                        <div id="{{ ep.connection_status.message_id }}" class="small text-danger"></div>
+                                    {% endif %}
+                                    {% if ep.url %}
+                                        <a href="{{ ep.url }}">{{ ep.name }}</a>
+                                    {% else %}
+                                        {{ ep.name }}
+                                    {% endif %}
+                                </td>
+                                {% if ep.connection_status %}
+                                    <td>
+                                        <span
+                                            id="{{ ep.connection_status.badge_id }}"
+                                            class="badge p-1"
+                                            data-service-status-url="{{ ep.connection_status.url }}"
+                                        >Unknown</span>
+                                    </td>
+                                {% endif %}
+                                {% for field in ep.fields %}
+                                    <td>{{ field.value }}</td>
+                                {% endfor %}
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    {% endfor %}
+{% endif %}
