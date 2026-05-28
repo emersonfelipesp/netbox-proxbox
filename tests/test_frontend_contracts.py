@@ -31,6 +31,24 @@ def test_runtime_code_no_longer_depends_on_django_htmx():
         assert "hx-" not in contents
 
 
+def test_home_template_comment_is_not_multiline_inline_syntax():
+    """Django's {# #} syntax only suppresses single-line comments; multi-line
+    {# ... #} blocks are not recognised as comments and the raw text is emitted
+    into the rendered HTML, which browsers can display visibly.  This test
+    ensures the issue-#355 explanation comment uses the correct block-comment
+    tag so it never leaks to the page.
+
+    See https://github.com/emersonfelipesp/netbox-proxbox/issues/541
+    """
+    contents = _read("netbox_proxbox/templates/netbox_proxbox/home.html")
+    # The comment text must NOT appear as a bare inline {# ... #} comment.
+    assert "{# Dashboard hydration is inlined" not in contents
+    # It must use the block comment tag that Django supports across multiple lines.
+    assert "{% comment %}" in contents
+    assert "Dashboard hydration is inlined" in contents
+    assert "{% endcomment %}" in contents
+
+
 def test_home_template_uses_plugin_vanilla_js_entrypoint():
     contents = _read("netbox_proxbox/templates/netbox_proxbox/home.html")
     assert "netbox_proxbox/home/quick_schedule_banner.html" in contents
