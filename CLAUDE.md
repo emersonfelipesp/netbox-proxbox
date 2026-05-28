@@ -71,6 +71,24 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
 - **Run now on Job detail:** Shown only when the job is in a **terminal** state (**completed**, **errored**, or **failed**), including after **Cancel** (failed). It is **not** shown for **pending**, **scheduled**, or **running**—use **Cancel** first if a queued run should be abandoned, then **Run now** on the finished row to queue a new sync with the same parameters.
 - **Full update (UI vs jobs):** The plugin home may still use non-streaming helpers such as [`sync_full_update_resource`](./netbox_proxbox/services/backend_proxy.py) for JSON/redirect flows. Scheduled or immediate **Proxbox Sync** jobs use **`full-update/stream`** on proxbox-api and execute the full stage chain in one stream: devices, storage, virtual machines, virtual disks, backups, snapshots, network interfaces, IP addresses, VM interfaces, backup routines, and replications.
 
+### SSL Certificate Verification
+
+The `verify_ssl` setting that controls whether proxbox-api verifies NetBox's SSL certificate **belongs in proxbox-api, not in this plugin**. It is configured in the proxbox-api admin UI (typically `http://proxbox-api-host:8000`), not in the NetBox plugin settings.
+
+**Common mistake:** Users encountering SSL verification errors may look for the setting in the NetBox Proxbox plugin or the `FastAPIEndpoint.verify_ssl` field in NetBox. These are incorrect locations. The relevant setting is:
+- **In:** proxbox-api admin UI → **NetBox Endpoint** → **Verify SSL** checkbox
+- **Not in:** NetBox Proxbox plugin settings
+- **Not in:** `FastAPIEndpoint.verify_ssl` (that field controls the plugin's connection to proxbox-api, not proxbox-api's connection to NetBox)
+
+**Minimum version:** proxbox-api **v0.0.14+** (released May 2026) is required for SSL verification settings to work correctly. Earlier versions had a bug where `verify_ssl=False` was ignored due to missing database migrations and incorrect connector logic. If you are experiencing "SSL certificate verify failed" errors despite unchecking `verify_ssl` in the proxbox-api admin UI, upgrade to **v0.0.14 or later** (see [issue #544](https://github.com/emersonfelipesp/netbox-proxbox/issues/544) for details).
+
+**Manual workaround** (before upgrading):
+```bash
+sqlite3 /path/to/proxbox-api/database.db \
+  "UPDATE netboxendpoint SET verify_ssl = 0 WHERE name = 'your-endpoint-name';"
+```
+Then restart proxbox-api.
+
 ## Plugin settings and configuration
 
 **Configuration policy — prefer DB-backed plugin settings.**
