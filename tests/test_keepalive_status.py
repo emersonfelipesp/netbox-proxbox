@@ -455,6 +455,9 @@ def test_proxmox_status_uses_domain_query_when_available(
     )
     ss = _service_status_module()
     monkeypatch.setattr(ss.time, "sleep", lambda seconds: None)
+    # Ensure the 5-minute throttle check never fires on freshly started CI runners
+    # where time.monotonic() may still be below the throttle threshold.
+    monkeypatch.setattr(ss.time, "monotonic", lambda: 1_000_000)
     monkeypatch.setattr(
         ss,
         "sync_proxmox_endpoint_to_backend",
@@ -514,6 +517,8 @@ def test_proxmox_status_uses_ip_query_when_domain_missing(
         proxmox_endpoint=proxmox_endpoint,
     )
     ss = _service_status_module()
+    # Ensure the 5-minute throttle check never fires on freshly started CI runners.
+    monkeypatch.setattr(ss.time, "monotonic", lambda: 1_000_000)
     monkeypatch.setattr(
         ss,
         "sync_proxmox_endpoint_to_backend",
@@ -806,6 +811,8 @@ def test_proxmox_mode_detected_on_successful_keepalive(
     )
     ss = _service_status_module()
     monkeypatch.setattr(ss.time, "sleep", lambda seconds: None)
+    # Ensure the 5-minute throttle check never fires on freshly started CI runners.
+    monkeypatch.setattr(ss.time, "monotonic", lambda: 1_000_000)
     monkeypatch.setattr(
         ss,
         "sync_proxmox_endpoint_to_backend",

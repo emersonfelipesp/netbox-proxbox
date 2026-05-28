@@ -495,6 +495,52 @@ def load_plugin_module(
 
     utils_module.resolve_vm_type = _resolve_vm_type_stub
 
+    # django_tables2 stub — needed by netbox_proxbox.tables which home_context imports.
+    django_tables2_mod = types.ModuleType("django_tables2")
+
+    class _StubTable:
+        class Meta:
+            pass
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+    django_tables2_mod.Table = _StubTable
+    for _col_name in ("Column", "LinkColumn", "TemplateColumn", "CheckBoxColumn"):
+        setattr(
+            django_tables2_mod,
+            _col_name,
+            type(_col_name, (), {"__init__": lambda s, *a, **kw: None}),
+        )
+
+    netbox_tables_mod = types.ModuleType("netbox.tables")
+
+    class _StubNetBoxTable(_StubTable):
+        pass
+
+    netbox_tables_mod.NetBoxTable = _StubNetBoxTable
+    netbox_tables_mod.ChoiceFieldColumn = type(
+        "ChoiceFieldColumn", (), {"__init__": lambda s, *a, **kw: None}
+    )
+    netbox_tables_columns_mod = types.ModuleType("netbox.tables.columns")
+    netbox_tables_columns_mod.BooleanColumn = type(
+        "BooleanColumn", (), {"__init__": lambda s, *a, **kw: None}
+    )
+    netbox_tables_columns_mod.ColoredLabelColumn = type(
+        "ColoredLabelColumn", (), {"__init__": lambda s, *a, **kw: None}
+    )
+
+    nbp_tables_mod = types.ModuleType("netbox_proxbox.tables")
+    nbp_tables_mod.FastAPIEndpointTable = type(
+        "FastAPIEndpointTable", (_StubNetBoxTable,), {}
+    )
+    nbp_tables_mod.NetBoxEndpointTable = type(
+        "NetBoxEndpointTable", (_StubNetBoxTable,), {}
+    )
+    nbp_tables_mod.ProxmoxEndpointTable = type(
+        "ProxmoxEndpointTable", (_StubNetBoxTable,), {}
+    )
+
     stub_modules = {
         "django": django_module,
         "django.http": django_http,
@@ -530,6 +576,10 @@ def load_plugin_module(
         "netbox_proxbox.utils": utils_module,
         "utilities.permissions": utilities_permissions,
         "utilities.views": utilities_views,
+        "django_tables2": django_tables2_mod,
+        "netbox.tables": netbox_tables_mod,
+        "netbox.tables.columns": netbox_tables_columns_mod,
+        "netbox_proxbox.tables": nbp_tables_mod,
     }
 
     django_rq_mod = types.ModuleType("django_rq")
