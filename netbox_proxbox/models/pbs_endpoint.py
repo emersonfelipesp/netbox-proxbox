@@ -97,6 +97,26 @@ class PBSEndpoint(EndpointBase):
             ),
         )
 
+    @property
+    def host(self) -> str:
+        """Plain hostname string expected by proxbox-api's PBSEndpoint SQLite model.
+
+        proxbox-api stores endpoints with a single ``host`` field; the Django model
+        uses ``domain`` and ``ip_address`` from ``EndpointBase``. This property
+        provides a compatible value so sync code can use the same field name.
+        """
+        return self.domain or self.ip or ""
+
+    @property
+    def timeout_seconds(self) -> int:
+        """Timeout in seconds matching proxbox-api's ``PBSEndpoint.timeout_seconds`` field.
+
+        proxbox-api names the field ``timeout_seconds``; Django uses ``timeout``.
+        This property bridges the name difference so sync code can reference either
+        model interchangeably.
+        """
+        return self.timeout if self.timeout is not None else 30
+
     def get_absolute_url(self) -> str:
         """Plugin UI URL for this PBS endpoint detail view.
 
