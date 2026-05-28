@@ -151,7 +151,7 @@ def _maybe_update_proxmox_endpoint_mode(
 
         now = time.monotonic()
         if (
-            now - _last_proxmox_mode_check.get(pk, 0.0)
+            now - _last_proxmox_mode_check.get(pk, float("-inf"))
             < _PROXMOX_MODE_CHECK_THROTTLE_SECONDS
         ):
             return

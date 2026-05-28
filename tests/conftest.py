@@ -567,6 +567,21 @@ def load_plugin_module(
     stub_modules["rq.exceptions"] = rq_exceptions
     stub_modules["rq.job"] = rq_job_mod
 
+    # Stub netbox_proxbox.tables so home_context.py can import table classes
+    # without django_tables2 being installed in the test environment.
+    class _TableStub:
+        def __init__(self, queryset=None, *args, **kwargs):
+            self.queryset = queryset
+
+        def configure(self, request):
+            pass
+
+    _tables_stub = types.ModuleType("netbox_proxbox.tables")
+    _tables_stub.ProxmoxEndpointTable = _TableStub
+    _tables_stub.NetBoxEndpointTable = _TableStub
+    _tables_stub.FastAPIEndpointTable = _TableStub
+    stub_modules["netbox_proxbox.tables"] = _tables_stub
+
     for name, module in stub_modules.items():
         monkeypatch.setitem(sys.modules, name, module)
 
