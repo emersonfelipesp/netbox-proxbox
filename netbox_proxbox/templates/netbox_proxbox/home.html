@@ -13,9 +13,9 @@
     {% if active_proxbox_job %}
         {% include "netbox_proxbox/inc/job_log_assets.html" %}
     {% endif %}
-    {# Dashboard hydration is inlined (issue #355) so logos, status badges,
+    {% comment %}Dashboard hydration is inlined (issue #355) so logos, status badges,
        and cluster cards render even when ``manage.py collectstatic`` was
-       not run after installing/upgrading the plugin. #}
+       not run after installing/upgrading the plugin.{% endcomment %}
     <script>{% inline_static_script 'netbox_proxbox/js/home_inline.js' %}</script>
     {% if quick_schedule_form %}
         <link rel="stylesheet" href="{% static 'netbox_proxbox/css/quick_schedule_home.css' %}">
