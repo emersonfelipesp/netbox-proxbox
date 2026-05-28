@@ -505,6 +505,9 @@ def load_plugin_module(
         def __init__(self, *args, **kwargs):
             pass
 
+        def configure(self, request):
+            pass
+
     django_tables2_mod.Table = _StubTable
     for _col_name in ("Column", "LinkColumn", "TemplateColumn", "CheckBoxColumn"):
         setattr(
