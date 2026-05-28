@@ -145,7 +145,9 @@ class FastAPIEndpoint(EndpointBase):
         if self.pk and not is_new_token:
             try:
                 prior = type(self).objects.only("token").get(pk=self.pk)
-                token_explicitly_changed = bool(prior.token) and prior.token != self.token
+                token_explicitly_changed = (
+                    bool(prior.token) and prior.token != self.token
+                )
             except type(self).DoesNotExist:
                 pass
 
