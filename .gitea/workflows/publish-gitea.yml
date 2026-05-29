@@ -21,12 +21,15 @@ jobs:
     steps:
       - name: Determine tag
         id: resolve_tag
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag_name }}
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TAG="${{ inputs.tag_name }}"
-          elif [ "${{ github.event_name }}" = "create" ]; then
-            # create events fire for branches too — skip non-tag refs
+          TAG_PATTERN='^v[0-9]+\.[0-9]+\.[0-9]+(rc[0-9]+|\.post[0-9]+)?$'
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            TAG="$INPUT_TAG"
+          elif [ "$EVENT_NAME" = "create" ]; then
             if [[ "${GITHUB_REF}" != refs/tags/* ]]; then
               echo "Skipping create event for non-tag ref: ${GITHUB_REF}"
               exit 0
@@ -34,6 +37,10 @@ jobs:
             TAG="${GITHUB_REF_NAME}"
           else
             TAG="${GITHUB_REF_NAME}"
+          fi
+          if ! echo "${TAG}" | grep -qE "${TAG_PATTERN}"; then
+            echo "ERROR: tag '${TAG}' does not match expected pattern ${TAG_PATTERN}"
+            exit 1
           fi
           echo "tag=${TAG}" >> "$GITHUB_ENV"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
@@ -45,9 +52,10 @@ jobs:
 
       - id: extract
         name: Extract and validate version
+        env:
+          TAG: ${{ steps.resolve_tag.outputs.tag }}
         run: |
           set -euo pipefail
-          TAG="${{ steps.resolve_tag.outputs.tag }}"
           VERSION="${TAG#v}"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
