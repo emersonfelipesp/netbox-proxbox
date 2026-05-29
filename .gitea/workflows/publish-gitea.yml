@@ -1,0 +1,171 @@
+name: Gitea Package Registry — Publish
+
+on:
+  push:
+    tags:
+      - 'v[0-9]*'
+
+jobs:
+  validate-version:
+    runs-on: mirror-host
+    outputs:
+      version: ${{ steps.extract.outputs.version }}
+      is_rc: ${{ steps.extract.outputs.is_rc }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - id: extract
+        name: Extract and validate version
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          if echo "${VERSION}" | grep -qE 'rc[0-9]+$'; then
+            echo "is_rc=true" >> "$GITHUB_OUTPUT"
+            echo "RC release: ${VERSION}"
+          else
+            echo "is_rc=false" >> "$GITHUB_OUTPUT"
+            echo "Official release: ${VERSION}"
+          fi
+          # Validate pyproject.toml matches tag
+          PYVER=$(grep '^version' pyproject.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          if [ "${VERSION}" != "${PYVER}" ]; then
+            echo "ERROR: tag ${TAG} (${VERSION}) does not match pyproject.toml version ${PYVER}"
+            exit 1
+          fi
+          # Validate __init__.py version matches
+          INITVER=$(grep 'version = ' netbox_proxbox/__init__.py | grep -v '#' | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          if [ "${VERSION}" != "${INITVER}" ]; then
+            echo "ERROR: tag ${TAG} (${VERSION}) does not match __init__.py version ${INITVER}"
+            exit 1
+          fi
+          echo "Version ${VERSION} validated against pyproject.toml and __init__.py"
+
+  publish-gitea:
+    needs: validate-version
+    runs-on: mirror-host
+    env:
+      VERSION: ${{ needs.validate-version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          set -euo pipefail
+          if ! command -v uv >/dev/null 2>&1; then
+            apt-get update -qq
+            apt-get install -y curl python3 2>/dev/null || true
+            curl -LsSf https://astral.sh/uv/install.sh | sh -s -- --no-modify-path
+            export PATH="${HOME}/.local/bin:${PATH}"
+          fi
+          uv --version
+
+      - name: Build distributions
+        run: |
+          export PATH="${HOME}/.local/bin:${PATH}"
+          uv build
+          ls dist/
+
+      - name: Publish to Gitea Package Registry
+        env:
+          TWINE_USERNAME: emersonfelipesp
+          TWINE_PASSWORD: ${{ secrets.PKG_TOKEN }}
+          TWINE_REPOSITORY_URL: https://git.nmulti.cloud/api/packages/emersonfelipesp/pypi
+        run: |
+          export PATH="${HOME}/.local/bin:${PATH}"
+          uv run --with twine twine upload --non-interactive dist/*
+
+      - name: Verify package in Gitea registry
+        env:
+          GITEA_TOKEN: ${{ secrets.PKG_TOKEN }}
+          VERSION: ${{ needs.validate-version.outputs.version }}
+        run: |
+          set -euo pipefail
+          PKG_NAME=$(grep '^name' pyproject.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          sleep 5
+          COUNT=$(curl -sf \
+            "https://git.nmulti.cloud/api/v1/packages/emersonfelipesp?type=pypi&q=${PKG_NAME}&limit=50" \
+            -H "Authorization: token ${GITEA_TOKEN}" \
+            | python3 -c "
+import sys, json, os
+v = os.environ['VERSION']
+pkgs = json.load(sys.stdin)
+found = [p for p in pkgs if p.get('version') == v]
+print(len(found))
+")
+          echo "Found ${COUNT} package(s) matching ${PKG_NAME} ${VERSION}"
+          if [ "${COUNT}" -lt 1 ]; then
+            echo "ERROR: Package ${PKG_NAME} ${VERSION} not found in Gitea registry"
+            exit 1
+          fi
+
+  push-to-github:
+    needs: [validate-version, publish-gitea]
+    runs-on: mirror-host
+    env:
+      VERSION: ${{ needs.validate-version.outputs.version }}
+      IS_RC: ${{ needs.validate-version.outputs.is_rc }}
+      GH_TOKEN: ${{ secrets.GH_MIRROR_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.GH_MIRROR_TOKEN }}
+    steps:
+      - name: Install GitHub CLI
+        run: |
+          set -euo pipefail
+          if command -v gh >/dev/null 2>&1; then gh --version; exit 0; fi
+          apt-get update -qq
+          apt-get install -y ca-certificates curl gnupg
+          mkdir -p -m 755 /etc/apt/keyrings
+          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+            | tee /etc/apt/keyrings/githubcli-archive-keyring.gpg >/dev/null
+          chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+            | tee /etc/apt/sources.list.d/github-cli.list >/dev/null
+          apt-get update -qq
+          apt-get install -y gh
+          gh --version
+
+      - name: Checkout (with tags)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Push tag to GitHub
+        env:
+          VERSION: ${{ needs.validate-version.outputs.version }}
+        run: |
+          set -euo pipefail
+          TAG="v${VERSION}"
+          REPO_NAME="${GITHUB_REPOSITORY#*/}"
+          git config user.email "gitea-actions@git.nmulti.cloud"
+          git config user.name "Gitea Actions"
+          gh auth setup-git --hostname github.com --force
+          git remote add github "https://github.com/emersonfelipesp/${REPO_NAME}.git" \
+            || git remote set-url github "https://github.com/emersonfelipesp/${REPO_NAME}.git"
+          git push github "refs/tags/${TAG}:refs/tags/${TAG}"
+          echo "Tag ${TAG} pushed to GitHub"
+
+      - name: Create GitHub Release (non-RC only)
+        if: env.IS_RC == 'false'
+        env:
+          VERSION: ${{ needs.validate-version.outputs.version }}
+        run: |
+          set -euo pipefail
+          TAG="v${VERSION}"
+          REPO_NAME="${GITHUB_REPOSITORY#*/}"
+          GH_REPO="emersonfelipesp/${REPO_NAME}"
+          NOTES_FILE="docs/release-notes/version-${VERSION}.md"
+          if [ -f "${NOTES_FILE}" ]; then
+            NOTES_ARGS="--notes-file ${NOTES_FILE}"
+          else
+            NOTES_ARGS="--generate-notes"
+          fi
+          gh release create "${TAG}" \
+            --repo "${GH_REPO}" \
+            --target develop \
+            --title "${TAG}" \
+            ${NOTES_ARGS}
+          echo "GitHub release ${TAG} created for ${GH_REPO}"
