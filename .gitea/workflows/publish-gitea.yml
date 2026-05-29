@@ -3,7 +3,13 @@ name: Gitea Package Registry — Publish
 on:
   push:
     tags:
-      - 'v[0-9]*'
+      - 'v*'
+  create:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Tag to publish (e.g. v0.0.16rc1 or v0.0.16)'
+        required: true
 
 jobs:
   validate-version:
@@ -11,17 +17,40 @@ jobs:
     outputs:
       version: ${{ steps.extract.outputs.version }}
       is_rc: ${{ steps.extract.outputs.is_rc }}
+      tag: ${{ steps.extract.outputs.tag }}
     steps:
-      - name: Checkout
+      - name: Determine tag
+        id: resolve_tag
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag_name }}"
+          elif [ "${{ github.event_name }}" = "create" ]; then
+            # create events fire for branches too — skip non-tag refs
+            if [[ "${GITHUB_REF}" != refs/tags/* ]]; then
+              echo "Skipping create event for non-tag ref: ${GITHUB_REF}"
+              exit 0
+            fi
+            TAG="${GITHUB_REF_NAME}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_ENV"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout tag
         uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.resolve_tag.outputs.tag }}
 
       - id: extract
         name: Extract and validate version
         run: |
           set -euo pipefail
-          TAG="${GITHUB_REF_NAME}"
+          TAG="${{ steps.resolve_tag.outputs.tag }}"
           VERSION="${TAG#v}"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           if echo "${VERSION}" | grep -qE 'rc[0-9]+$'; then
             echo "is_rc=true" >> "$GITHUB_OUTPUT"
             echo "RC release: ${VERSION}"
@@ -35,22 +64,30 @@ jobs:
             echo "ERROR: tag ${TAG} (${VERSION}) does not match pyproject.toml version ${PYVER}"
             exit 1
           fi
+          echo "Version ${VERSION} validated against pyproject.toml"
           # Validate __init__.py version matches
-          INITVER=$(grep 'version = ' netbox_proxbox/__init__.py | grep -v '#' | head -1 | sed 's/.*"\(.*\)".*/\1/')
-          if [ "${VERSION}" != "${INITVER}" ]; then
-            echo "ERROR: tag ${TAG} (${VERSION}) does not match __init__.py version ${INITVER}"
-            exit 1
+          if [ -f "netbox_proxbox/__init__.py" ]; then
+            INITVER=$(grep 'version = ' netbox_proxbox/__init__.py | grep -v '#' | head -1 | sed 's/.*"\(.*\)".*/\1/')
+            if [ "${VERSION}" != "${INITVER}" ]; then
+              echo "ERROR: tag ${TAG} (${VERSION}) does not match __init__.py version ${INITVER}"
+              exit 1
+            fi
+            echo "Version ${VERSION} validated against __init__.py"
           fi
-          echo "Version ${VERSION} validated against pyproject.toml and __init__.py"
+
 
   publish-gitea:
     needs: validate-version
+    if: ${{ needs.validate-version.outputs.version != '' }}
     runs-on: mirror-host
     env:
       VERSION: ${{ needs.validate-version.outputs.version }}
+      TAG: ${{ needs.validate-version.outputs.tag }}
     steps:
-      - name: Checkout
+      - name: Checkout tag
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate-version.outputs.tag }}
 
       - name: Install build tools
         run: |
@@ -61,6 +98,7 @@ jobs:
             curl -LsSf https://astral.sh/uv/install.sh | sh -s -- --no-modify-path
             export PATH="${HOME}/.local/bin:${PATH}"
           fi
+          export PATH="${HOME}/.local/bin:${PATH}"
           uv --version
 
       - name: Build distributions
@@ -81,7 +119,6 @@ jobs:
       - name: Verify package in Gitea registry
         env:
           GITEA_TOKEN: ${{ secrets.PKG_TOKEN }}
-          VERSION: ${{ needs.validate-version.outputs.version }}
         run: |
           set -euo pipefail
           PKG_NAME=$(grep '^name' pyproject.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
@@ -101,12 +138,15 @@ print(len(found))
             echo "ERROR: Package ${PKG_NAME} ${VERSION} not found in Gitea registry"
             exit 1
           fi
+          echo "Package ${PKG_NAME} ${VERSION} successfully published to Gitea registry"
 
   push-to-github:
     needs: [validate-version, publish-gitea]
+    if: ${{ needs.validate-version.outputs.version != '' }}
     runs-on: mirror-host
     env:
       VERSION: ${{ needs.validate-version.outputs.version }}
+      TAG: ${{ needs.validate-version.outputs.tag }}
       IS_RC: ${{ needs.validate-version.outputs.is_rc }}
       GH_TOKEN: ${{ secrets.GH_MIRROR_TOKEN }}
       GITHUB_TOKEN: ${{ secrets.GH_MIRROR_TOKEN }}
@@ -127,18 +167,16 @@ print(len(found))
           apt-get install -y gh
           gh --version
 
-      - name: Checkout (with tags)
+      - name: Checkout tag
         uses: actions/checkout@v4
         with:
+          ref: ${{ needs.validate-version.outputs.tag }}
           fetch-depth: 0
           fetch-tags: true
 
       - name: Push tag to GitHub
-        env:
-          VERSION: ${{ needs.validate-version.outputs.version }}
         run: |
           set -euo pipefail
-          TAG="v${VERSION}"
           REPO_NAME="${GITHUB_REPOSITORY#*/}"
           git config user.email "gitea-actions@git.nmulti.cloud"
           git config user.name "Gitea Actions"
@@ -150,11 +188,8 @@ print(len(found))
 
       - name: Create GitHub Release (non-RC only)
         if: env.IS_RC == 'false'
-        env:
-          VERSION: ${{ needs.validate-version.outputs.version }}
         run: |
           set -euo pipefail
-          TAG="v${VERSION}"
           REPO_NAME="${GITHUB_REPOSITORY#*/}"
           GH_REPO="emersonfelipesp/${REPO_NAME}"
           NOTES_FILE="docs/release-notes/version-${VERSION}.md"
@@ -163,9 +198,10 @@ print(len(found))
           else
             NOTES_ARGS="--generate-notes"
           fi
+          TARGET_BRANCH="develop"
           gh release create "${TAG}" \
             --repo "${GH_REPO}" \
-            --target develop \
+            --target "${TARGET_BRANCH}" \
             --title "${TAG}" \
             ${NOTES_ARGS}
           echo "GitHub release ${TAG} created for ${GH_REPO}"
