@@ -132,6 +132,13 @@ credentials with `gh auth setup-git`, and pushes only
 `HEAD:refs/heads/${{ gitea.ref_name }}`. It must never sync tags, use
 `git push --all`, or use `git push --mirror`.
 
+### Gitea Package Registry publish (`.gitea/workflows/publish-gitea.yml`)
+
+Added to `develop` in v0.0.19. Handles `push: tags:`, `create`, and `workflow_dispatch`.
+Due to Gitea 1.26.2 limitations, packages are published via direct upload until the
+trigger issues are resolved. See `proxbox-api/CLAUDE.md` for the exact upload command.
+Secret name: `PKG_TOKEN` (GITEA_ prefix is reserved by Gitea, cannot be used).
+
 ### E2E Docker workflow (`e2e-docker.yml`)
 
 Accepts four main inputs:
@@ -321,9 +328,13 @@ What was done for v0.0.19:
 - Fixes database and API compatibility issues between the plugin and proxbox-api:
   `FastAPIEndpoint` token-drift fix (re-register on explicit token change),
   `PBSEndpoint`/`PDMEndpoint` `host` and `timeout_seconds` bridging properties.
-- Gitea-first publish pipeline: added `.gitea/workflows/publish-gitea.yml` which
-  publishes to the Gitea PyPI package registry first, then mirrors the tag to GitHub
-  to trigger the TestPyPI/PyPI downstream workflows.
+- **Gitea-first publish pipeline**: added `.gitea/workflows/publish-gitea.yml` to
+  `develop`. The workflow handles `push: tags:`, `create`, and `workflow_dispatch`
+  events but Gitea 1.26.2's dispatch API returns 500 and tag triggers don't fire on
+  this instance. Until resolved, packages are published via direct `uv build` +
+  `twine upload` to `https://git.nmulti.cloud/api/packages/emersonfelipesp/pypi`
+  using the `PKG_TOKEN` secret (GITEA_ prefix is reserved by Gitea, cannot be used).
+  See `proxbox-api/CLAUDE.md` for the full upload command.
 - Paired backend: `proxbox-api v0.0.16`.
 
 ---
