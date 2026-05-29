@@ -93,16 +93,14 @@ docker compose exec netbox /opt/netbox/netbox/manage.py migrate
 Full companion-plugin details live under
 [docs/companion-plugins/](./docs/companion-plugins/).
 
-## What's New in v0.0.18.post1
+## What's New in v0.0.19rc1
 
-This post release prepares the Proxbox plugin family for the NetBox Plugin
-Certification Program. It adds certification evidence, PyPI project metadata,
-repository URLs, an application packet, and release-note coverage without
-changing sync behavior. It also includes an idempotent migration repair for
-affected v0.0.18 databases where PBS/PDM endpoint tables are missing the
-shared endpoint `enabled` column.
+Paired with backend [`proxbox-api 0.0.16`](https://github.com/emersonfelipesp/proxbox-api).
 
-Full notes: [Release Notes — v0.0.18.post1](https://emersonfelipesp.github.io/netbox-proxbox/release-notes/version-0.0.18.post1/).
+- **FastAPI endpoint token drift fix.** `FastAPIEndpoint.save()` re-registers the API key on explicit token changes.
+- **PBS/PDM host and timeout_seconds bridging properties.** Compatibility shim for the proxbox-api SQLite column naming difference.
+
+Full notes: [Release Notes — v0.0.19](https://emersonfelipesp.github.io/netbox-proxbox/release-notes/version-0.0.19/).
 
 ## What's New in v0.0.18
 
@@ -116,6 +114,7 @@ Full notes: [Release Notes — v0.0.18](https://emersonfelipesp.github.io/netbox
 
 | NetBox | netbox-proxbox | proxbox-api | netbox-sdk | proxmox-sdk |
 |--------|----------------|-------------|------------|-------------|
+| >=4.5.8 | v0.0.19 | v0.0.16 | v0.0.8.post1 | v0.0.9 |
 | >=4.5.8 | v0.0.18.post1 | v0.0.14 | v0.0.8.post1 | v0.0.3.post1 |
 | >=4.5.8 | v0.0.18 | v0.0.14 | v0.0.8.post1 | v0.0.3.post1 |
 | >=4.5.8 | v0.0.17 | v0.0.13 | v0.0.8.post1 | v0.0.3.post1 |

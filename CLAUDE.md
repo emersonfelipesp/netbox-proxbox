@@ -41,7 +41,7 @@ This repository packages the `netbox_proxbox` NetBox plugin. The plugin adds end
 - Docker-based plugin installation docs are maintained at [`docs/installation/3-installing-plugin-docker.md`](./docs/installation/3-installing-plugin-docker.md), including `plugin_requirements.txt` and `configuration/plugins.py` usage.
 - Backend Docker examples map host `8800` to container `8000` (`-p 8800:8000`) because the published `proxbox-api` image serves through nginx on container port `8000`.
 
-The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxbox/__init__.py). It declares plugin version `0.0.18.post1` and NetBox compatibility `4.5.8` through `4.6.99` (validated against `4.5.8`, `4.5.9`, `4.6.0`, and official `4.6.1`). The `0.0.18.post1` release is prepared for certification with the separate `proxbox-api` backend release `0.0.14` and adds certification evidence on top of the `0.0.18` PVE 9.2 line: `ProxmoxSdnFabric`, `ProxmoxSdnRouteMap`, `ProxmoxSdnPrefixList`, and `ProxmoxDatacenterCpuModel` models via migration `0041_pve_9_2.py`; automated sync services; completed per-node and per-VM firewall sync; HA arm/disarm action views; and `ProxmoxNode.location`. The previous `0.0.17` release pairs with backend `0.0.13`. `proxbox-api` is not a Python dependency of this plugin; the services communicate over HTTP.
+The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxbox/__init__.py). It declares plugin version `0.0.19rc1` and NetBox compatibility `4.5.8` through `4.6.99` (validated against `4.5.8`, `4.5.9`, `4.6.0`, and official `4.6.1`). The `0.0.19` release fixes database and integration compatibility issues with the separate `proxbox-api` backend release `0.0.16`: `FastAPIEndpoint` token-drift fix, `PBSEndpoint`/`PDMEndpoint` `host` and `timeout_seconds` bridging properties. The previous `0.0.18`/`0.0.18.post1` release pairs with backend `0.0.14`. `proxbox-api` is not a Python dependency of this plugin; the services communicate over HTTP.
 
 **Companion repos (cross-link map):**
 
@@ -315,6 +315,16 @@ Sibling-plugin releases (`netbox-pbs`, `netbox-pdm`, `netbox-ceph`,
 `netbox-packer`) should adopt the same develop-first + GH-release-triggered
 policy when their next release cycle begins. Until they do, the older
 "cancel duplicate" step still applies on those repos.
+
+What was done for v0.0.19:
+
+- Fixes database and API compatibility issues between the plugin and proxbox-api:
+  `FastAPIEndpoint` token-drift fix (re-register on explicit token change),
+  `PBSEndpoint`/`PDMEndpoint` `host` and `timeout_seconds` bridging properties.
+- Gitea-first publish pipeline: added `.gitea/workflows/publish-gitea.yml` which
+  publishes to the Gitea PyPI package registry first, then mirrors the tag to GitHub
+  to trigger the TestPyPI/PyPI downstream workflows.
+- Paired backend: `proxbox-api v0.0.16`.
 
 ---
 
