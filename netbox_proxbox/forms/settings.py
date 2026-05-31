@@ -9,13 +9,25 @@ from django import forms
 from dcim.models import DeviceRole
 from utilities.forms.fields import DynamicModelChoiceField
 
-from netbox_proxbox.constants import OVERWRITE_FIELDS
+from netbox_proxbox.choices import SyncModeChoices
+from netbox_proxbox.constants import OVERWRITE_FIELDS, SYNC_MODE_FIELDS
 from netbox_proxbox.models.plugin_settings import (
     BRANCH_ON_CONFLICT_CHOICES,
     DEFAULT_BACKEND_LOG_FILE_PATH,
     NETBOX_TO_PROXMOX_TYPED_PHRASE,
     RECONCILIATION_ENGINE_CHOICES,
 )
+
+
+def _sync_mode_choice_options(
+    *, include_inherit: bool = False
+) -> tuple[tuple[str, str], ...]:
+    choices = tuple(
+        (value, str(label)) for value, label, _color in SyncModeChoices.CHOICES
+    )
+    if include_inherit:
+        return (("", "Inherit global setting"), *choices)
+    return choices
 
 
 def _parse_tenant_regex_rules(
@@ -549,6 +561,30 @@ class ProxboxPluginSettingsForm(forms.Form):
 
     def __init__(self, *args: object, **kwargs: object) -> None:
         super().__init__(*args, **kwargs)
+        sync_mode_labels = {
+            "sync_mode_vm": "VM sync mode",
+            "sync_mode_vm_template": "VM template sync mode",
+            "sync_mode_cluster": "Cluster sync mode",
+            "sync_mode_node": "Node sync mode",
+            "sync_mode_storage": "Storage sync mode",
+            "sync_mode_ip_address": "IP address sync mode",
+        }
+        sync_mode_help = {
+            "sync_mode_vm": "Controls non-template VM sync.",
+            "sync_mode_vm_template": "Controls Proxmox template VM sync.",
+            "sync_mode_cluster": "Controls Proxmox cluster tracking sync.",
+            "sync_mode_node": "Controls Proxmox node tracking sync.",
+            "sync_mode_storage": "Controls Proxmox storage sync.",
+            "sync_mode_ip_address": "Controls IP address sync from VM interfaces.",
+        }
+        for name in SYNC_MODE_FIELDS:
+            self.fields[name] = forms.ChoiceField(
+                required=True,
+                choices=_sync_mode_choice_options(),
+                initial=SyncModeChoices.ALWAYS,
+                label=sync_mode_labels[name],
+                help_text=sync_mode_help[name],
+            )
         for name in OVERWRITE_FIELDS:
             label = name.removeprefix("overwrite_").replace("_", " ").capitalize()
             if name == "overwrite_vm_tags":

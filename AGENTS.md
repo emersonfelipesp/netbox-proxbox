@@ -50,6 +50,21 @@ template — and existing fields plus migration
 show the pattern. See [`CLAUDE.md → Plugin settings and configuration`](./CLAUDE.md)
 for the full keep-list.
 
+## Sync Mode Controls
+
+Per-resource sync modes control how each Proxmox resource type is reflected into NetBox.
+Three modes per type (global and per-endpoint — endpoint takes priority):
+
+- **`always`** — sync on every run (default)
+- **`bootstrap_only`** — create once, tag with `bootstrap-only`, never patch/delete again
+- **`disabled`** — skip entirely, leave existing objects untouched
+
+Six resource types: `sync_mode_vm`, `sync_mode_vm_template`, `sync_mode_cluster`, `sync_mode_node`, `sync_mode_storage`, `sync_mode_ip_address`.
+
+**VM templates** are stored in `ProxmoxVMTemplate` (not `VirtualMachine`). The model has optional FKs to `VirtualMachine` (`source_vm` and M2M `cloned_vms`), `ProxmoxCluster`, and `ProxmoxNode`.
+
+Key files: `choices.py` (SyncModeChoices), `constants.py` (SYNC_MODE_FIELDS), `models/plugin_settings.py` (global fields), `models/proxmox_endpoint.py` (per-endpoint fields + `effective_sync_mode()`), `models/vm_template.py` (ProxmoxVMTemplate), `sync_stages.py` (gating helpers), `netbox_bootstrap.py` (bootstrap-only tag creation), `services/sync_vm_template.py` (template sync service), `docs/configuration/sync-modes.md` (user docs).
+
 ## Release Procedure (summary)
 
 Official releases are cut **from `develop`** and triggered **only** by

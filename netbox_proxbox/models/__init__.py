@@ -39,6 +39,7 @@ from netbox_proxbox.models.vm_backup import VMBackup
 from netbox_proxbox.models.vm_cloudinit import ProxmoxVMCloudInit
 from netbox_proxbox.models.vm_snapshot import VMSnapshot
 from netbox_proxbox.models.vm_task_history import VMTaskHistory
+from netbox_proxbox.models.vm_template import ProxmoxVMTemplate
 
 __all__ = (
     "BackupRoutine",
@@ -77,4 +78,5 @@ __all__ = (
     "VMBackup",
     "VMSnapshot",
     "VMTaskHistory",
+    "ProxmoxVMTemplate",
 )

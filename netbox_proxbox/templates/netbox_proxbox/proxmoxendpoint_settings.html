@@ -32,6 +32,28 @@
 
   <div class="card mb-3">
     <h5 class="card-header">
+      <i class="mdi mdi-source-branch-sync"></i>
+      {% trans "Sync mode overrides" %}
+    </h5>
+    <div class="card-body">
+      <p class="text-muted">
+        {% blocktrans trimmed %}
+        Override whether this endpoint syncs each resource on every run, only
+        bootstraps newly-created records, or skips the resource entirely. Leave
+        blank to inherit the global plugin setting.
+        {% endblocktrans %}
+      </p>
+      {% for group_label, group_fields in sync_mode_field_groups %}
+        <h6 class="mt-3">{{ group_label }}</h6>
+        {% for field_name in group_fields %}
+          {% render_field form|form_field:field_name %}
+        {% endfor %}
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <h5 class="card-header">
       <i class="mdi mdi-pencil-circle"></i>
       {% trans "Sync overwrite overrides" %}
     </h5>

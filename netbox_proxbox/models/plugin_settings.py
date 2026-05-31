@@ -11,6 +11,8 @@ from django.utils.translation import gettext_lazy as _
 
 from netbox.models import NetBoxModel
 
+from netbox_proxbox.choices import SyncModeChoices
+
 DEFAULT_BACKEND_LOG_FILE_PATH = "/var/log/proxbox.log"
 
 PRIMARY_IP_PREFERENCE_CHOICES = (
@@ -91,6 +93,55 @@ class ProxboxPluginSettings(NetBoxModel):
             "When enabled, full-update runs will delete Proxbox-discovered VMs "
             "that were not touched by the current sync run. Review a dry-run "
             "preview before enabling in production."
+        ),
+    )
+    sync_mode_vm = models.CharField(
+        max_length=16,
+        choices=SyncModeChoices,
+        default=SyncModeChoices.ALWAYS,
+        verbose_name=_("VM sync mode"),
+        help_text=_(
+            "Controls non-template VM synchronization: always sync, create once "
+            "and tag bootstrap-only, or skip entirely."
+        ),
+    )
+    sync_mode_vm_template = models.CharField(
+        max_length=16,
+        choices=SyncModeChoices,
+        default=SyncModeChoices.ALWAYS,
+        verbose_name=_("VM template sync mode"),
+        help_text=_(
+            "Controls Proxmox template VM synchronization separately from normal VMs."
+        ),
+    )
+    sync_mode_cluster = models.CharField(
+        max_length=16,
+        choices=SyncModeChoices,
+        default=SyncModeChoices.ALWAYS,
+        verbose_name=_("Cluster sync mode"),
+        help_text=_("Controls synchronization of Proxmox cluster tracking rows."),
+    )
+    sync_mode_node = models.CharField(
+        max_length=16,
+        choices=SyncModeChoices,
+        default=SyncModeChoices.ALWAYS,
+        verbose_name=_("Node sync mode"),
+        help_text=_("Controls synchronization of Proxmox node tracking rows."),
+    )
+    sync_mode_storage = models.CharField(
+        max_length=16,
+        choices=SyncModeChoices,
+        default=SyncModeChoices.ALWAYS,
+        verbose_name=_("Storage sync mode"),
+        help_text=_("Controls synchronization of Proxmox storage inventory."),
+    )
+    sync_mode_ip_address = models.CharField(
+        max_length=16,
+        choices=SyncModeChoices,
+        default=SyncModeChoices.ALWAYS,
+        verbose_name=_("IP address sync mode"),
+        help_text=_(
+            "Controls synchronization of IP addresses discovered from VM interfaces."
         ),
     )
     primary_ip_preference = models.CharField(

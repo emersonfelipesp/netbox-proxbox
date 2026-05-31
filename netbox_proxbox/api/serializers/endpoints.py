@@ -17,7 +17,7 @@ from netbox_proxbox.choices import (
     ProxmoxEndpointEnvironmentChoices,
     ProxmoxModeChoices,
 )
-from netbox_proxbox.constants import OVERWRITE_FIELDS
+from netbox_proxbox.constants import OVERWRITE_FIELDS, SYNC_MODE_FIELDS
 from netbox_proxbox.models import FastAPIEndpoint, NetBoxEndpoint, ProxmoxEndpoint
 
 
@@ -83,6 +83,7 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
             "has_ssh_terminal_credentials",
             "default_role_qemu",
             "default_role_lxc",
+            *SYNC_MODE_FIELDS,
             *OVERWRITE_FIELDS,
             "site",
             "tenant",

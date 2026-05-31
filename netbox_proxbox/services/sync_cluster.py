@@ -11,6 +11,16 @@ import requests
 
 from django.db import transaction
 
+try:
+    from netbox_proxbox.choices import SyncModeChoices
+except ImportError:  # pragma: no cover - compatibility for focused import stubs
+
+    class SyncModeChoices:  # type: ignore[no-redef]
+        ALWAYS = "always"
+        BOOTSTRAP_ONLY = "bootstrap_only"
+        DISABLED = "disabled"
+
+
 from netbox_proxbox.models import ProxmoxCluster, ProxmoxEndpoint, ProxmoxNode
 from netbox_proxbox.schemas import (
     ClusterSyncResult,
@@ -19,8 +29,20 @@ from netbox_proxbox.schemas import (
 )
 from netbox_proxbox.schemas._formatters import iter_node_records, iter_scalar_records
 from netbox_proxbox.services.backend_proxy import get_fastapi_request_context
+from netbox_proxbox.sync_stages import (
+    _add_bootstrap_only_tag,
+    _bootstrap_only_should_skip_existing,
+    _has_bootstrap_only_tag,
+)
 
 logger = logging.getLogger(__name__)
+
+
+def _endpoint_sync_mode(endpoint: ProxmoxEndpoint, resource_type: str) -> str:
+    try:
+        return endpoint.effective_sync_mode(resource_type)
+    except (AttributeError, ValueError):
+        return SyncModeChoices.ALWAYS
 
 
 def sync_cluster_and_nodes(
@@ -64,6 +86,18 @@ def sync_cluster_and_nodes(
         endpoint_id=endpoint_id,
         endpoint_name=str(endpoint),
     )
+    cluster_mode = _endpoint_sync_mode(endpoint, "cluster")
+    node_mode = _endpoint_sync_mode(endpoint, "node")
+    if (
+        cluster_mode == SyncModeChoices.DISABLED
+        and node_mode == SyncModeChoices.DISABLED
+    ):
+        result.success = True
+        logger.info(
+            "Skipping cluster/node sync for endpoint %s: cluster and node sync modes are disabled",
+            endpoint_id,
+        )
+        return result
 
     # ------------------------------------------------------------------
     # HTTP phase — fetch all data before opening any DB transaction.
@@ -130,7 +164,7 @@ def sync_cluster_and_nodes(
             else:
                 mode = "undefined"
 
-            if endpoint.mode != mode:
+            if cluster_mode != SyncModeChoices.DISABLED and endpoint.mode != mode:
                 endpoint.mode = mode
                 endpoint.save(update_fields=["mode"])
                 result.mode_updated = True
@@ -138,7 +172,7 @@ def sync_cluster_and_nodes(
 
             # Sync cluster record when present.
             proxmox_cluster = None
-            if cluster_record:
+            if cluster_record and cluster_mode != SyncModeChoices.DISABLED:
                 cluster_name = cluster_record.name or endpoint.name
                 cluster_defaults = {
                     "cluster_id": cluster_record.id or "",
@@ -147,21 +181,44 @@ def sync_cluster_and_nodes(
                     "quorate": bool(cluster_record.quorate or 0),
                     "version": cluster_record.version,
                 }
-                proxmox_cluster, created = ProxmoxCluster.objects.update_or_create(
+                proxmox_cluster = ProxmoxCluster.objects.filter(
                     endpoint=endpoint,
                     name=cluster_name,
-                    defaults=cluster_defaults,
-                )
-                if created:
-                    result.clusters_created += 1
+                ).first()
+                if proxmox_cluster and _bootstrap_only_should_skip_existing(
+                    proxmox_cluster,
+                    cluster_mode,
+                ):
                     logger.info(
-                        "Created cluster %s for endpoint %s", cluster_name, endpoint_id
+                        "Skipped bootstrap-only cluster %s for endpoint %s",
+                        cluster_name,
+                        endpoint_id,
                     )
-                else:
+                elif proxmox_cluster:
+                    for field_name, value in cluster_defaults.items():
+                        setattr(proxmox_cluster, field_name, value)
+                    proxmox_cluster.save(update_fields=list(cluster_defaults))
                     result.clusters_updated += 1
                     logger.info(
                         "Updated cluster %s for endpoint %s", cluster_name, endpoint_id
                     )
+                else:
+                    proxmox_cluster = ProxmoxCluster.objects.create(
+                        endpoint=endpoint,
+                        name=cluster_name,
+                        **cluster_defaults,
+                    )
+                    if cluster_mode == SyncModeChoices.BOOTSTRAP_ONLY:
+                        _add_bootstrap_only_tag(proxmox_cluster)
+                    result.clusters_created += 1
+                    logger.info(
+                        "Created cluster %s for endpoint %s", cluster_name, endpoint_id
+                    )
+            elif cluster_record and cluster_mode == SyncModeChoices.DISABLED:
+                proxmox_cluster = ProxmoxCluster.objects.filter(
+                    endpoint=endpoint,
+                    name=cluster_record.name or endpoint.name,
+                ).first()
 
             # Build a lookup of detailed node metrics from the pre-fetched response.
             node_details_by_name: dict[str, ProxmoxNodeDetail] = {
@@ -170,6 +227,8 @@ def sync_cluster_and_nodes(
 
             # Sync each node record.
             for node_record in node_records:
+                if node_mode == SyncModeChoices.DISABLED:
+                    continue
                 node_name = node_record.name or node_record.id or node_record.node
                 if not node_name:
                     continue
@@ -198,25 +257,48 @@ def sync_cluster_and_nodes(
                         }
                     )
 
-                node, created = ProxmoxNode.objects.update_or_create(
+                node = ProxmoxNode.objects.filter(
                     endpoint=endpoint,
                     name=node_name,
-                    defaults=node_defaults,
-                )
-                if created:
+                ).first()
+                if node and _bootstrap_only_should_skip_existing(node, node_mode):
+                    logger.info(
+                        "Skipped bootstrap-only node %s for endpoint %s",
+                        node_name,
+                        endpoint_id,
+                    )
+                elif node:
+                    for field_name, value in node_defaults.items():
+                        setattr(node, field_name, value)
+                    node.save(update_fields=list(node_defaults))
+                    result.nodes_updated += 1
+                else:
+                    node = ProxmoxNode.objects.create(
+                        endpoint=endpoint,
+                        name=node_name,
+                        **node_defaults,
+                    )
+                    if node_mode == SyncModeChoices.BOOTSTRAP_ONLY:
+                        _add_bootstrap_only_tag(node)
                     result.nodes_created += 1
                     logger.info(
                         "Created node %s for endpoint %s", node_name, endpoint_id
                     )
-                else:
-                    result.nodes_updated += 1
 
             # Delete nodes that no longer exist in Proxmox.
             stale_names = existing_node_names - synced_node_names
-            if stale_names:
-                deleted_count, _ = ProxmoxNode.objects.filter(
+            if stale_names and node_mode != SyncModeChoices.DISABLED:
+                stale_qs = ProxmoxNode.objects.filter(
                     endpoint=endpoint, name__in=stale_names
-                ).delete()
+                )
+                if node_mode == SyncModeChoices.BOOTSTRAP_ONLY:
+                    stale_ids = [
+                        node.pk
+                        for node in stale_qs
+                        if not _has_bootstrap_only_tag(node)
+                    ]
+                    stale_qs = stale_qs.filter(pk__in=stale_ids)
+                deleted_count, _ = stale_qs.delete()
                 result.nodes_deleted = deleted_count
                 logger.info(
                     "Deleted %s stale nodes for endpoint %s", deleted_count, endpoint_id

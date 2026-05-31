@@ -42,3 +42,4 @@ from .vm_backup import *
 from .vm_cloudinit import *
 from .vm_snapshot import *
 from .vm_task_history import *
+from .vm_template import *
