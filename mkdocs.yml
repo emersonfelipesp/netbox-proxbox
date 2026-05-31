@@ -84,6 +84,7 @@ nav:
     - Required Parameters: 'configuration/required-parameters.md'
     - Plugin Settings: 'configuration/plugin-settings.md'
     - Sync Overwrite Flags: 'configuration/sync-overwrite-flags.md'
+    - Sync Mode Controls: 'configuration/sync-modes.md'
     - Hardware Discovery: 'configuration/hardware-discovery.md'
   - CLI:
     - Overview: 'cli/index.md'

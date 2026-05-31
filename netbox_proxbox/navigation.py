@@ -27,6 +27,11 @@ virtual_machines_item = PluginMenuItem(
     link_text="Virtual Machines",
 )
 
+vm_templates_item = PluginMenuItem(
+    link="plugins:netbox_proxbox:proxmoxvmtemplate_list",
+    link_text="VM Templates",
+)
+
 lxc_containers_item = PluginMenuItem(
     link="plugins:netbox_proxbox:lxc_containers",
     link_text="LXC Containers",
@@ -330,6 +335,7 @@ menu = PluginMenu(
             "Virtualization",
             (
                 virtual_machines_item,
+                vm_templates_item,
                 lxc_containers_item,
                 virtual_disks_item,
                 interfaces_item,

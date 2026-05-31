@@ -82,6 +82,9 @@ router.register(
     "vm-cloudinit", views.ProxmoxVMCloudInitViewSet, basename="proxmoxvmcloudinit"
 )
 router.register(
+    "vm-templates", views.ProxmoxVMTemplateViewSet, basename="proxmoxvmtemplate"
+)
+router.register(
     "settings", views.ProxboxPluginSettingsViewSet, basename="proxboxpluginsettings"
 )
 router.register(

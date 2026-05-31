@@ -115,6 +115,49 @@ template — and the existing fields plus migration
 show the pattern (`SeparateDatabaseAndState` + `IF NOT EXISTS` for production-safe
 additive schema changes).
 
+## Sync Mode Controls
+
+Per-resource sync modes let operators control how each Proxmox resource type is
+reflected into NetBox. Three modes are available:
+
+- **`always`** (default) — sync on every run; objects are created, updated, and deleted as Proxmox changes.
+- **`bootstrap_only`** — sync the object once on first discovery, tag it with `bootstrap-only` in NetBox, and leave it completely untouched on all subsequent runs.
+- **`disabled`** — skip this resource type entirely; existing objects are not modified or removed.
+
+Controlled resource types: `sync_mode_vm`, `sync_mode_vm_template`, `sync_mode_cluster`, `sync_mode_node`, `sync_mode_storage`, `sync_mode_ip_address`.
+
+Resolution priority: **endpoint-level setting takes priority over the global default**. An endpoint field set to null inherits the global `ProxboxPluginSettings` value.
+
+### VM Templates
+
+Proxmox VM templates (`template=True` in the Proxmox API) are stored in the dedicated `ProxmoxVMTemplate` model, NOT as `virtualization.VirtualMachine` rows. Key fields:
+
+- `proxmox_endpoint` (required FK → ProxmoxEndpoint)
+- `cluster`, `node` (optional FKs, SET_NULL)
+- `source_vm` (optional FK → VirtualMachine, SET_NULL) — the VM this template was made from
+- `cloned_vms` (optional M2M → VirtualMachine) — VMs cloned from this template
+- Full config snapshot: `vcpus`, `memory`, `disk`, `os_type`, `net_config`, `disk_config`, `raw_config`
+
+`sync_mode_vm` and `sync_mode_vm_template` are independent — disabling VMs does not disable template sync.
+
+### Bootstrap-only tag
+
+The `bootstrap-only` tag (slug `bootstrap-only`) is auto-created by `netbox_proxbox/netbox_bootstrap.py`. The tag is attached to objects when they are first created in `bootstrap_only` mode. Removing the tag manually causes the next sync to treat the object as a normal `always`-mode resource.
+
+### Key files
+
+- `netbox_proxbox/choices.py` — `SyncModeChoices` (always / bootstrap_only / disabled)
+- `netbox_proxbox/constants.py` — `SYNC_MODE_FIELDS`, `SYNC_MODE_RESOURCE_TYPES`
+- `netbox_proxbox/models/plugin_settings.py` — global `sync_mode_*` fields
+- `netbox_proxbox/models/proxmox_endpoint.py` — per-endpoint nullable `sync_mode_*` fields + `effective_sync_mode(resource_type)` method
+- `netbox_proxbox/models/vm_template.py` — `ProxmoxVMTemplate` model
+- `netbox_proxbox/migrations/0046_sync_modes.py` — migration for sync mode fields
+- `netbox_proxbox/migrations/0047_proxmox_vm_template.py` — migration for ProxmoxVMTemplate table
+- `netbox_proxbox/sync_stages.py` — `_vm_resource_allowed_by_sync_mode()`, `_has_bootstrap_only_tag()`, `_bootstrap_only_should_skip_existing()`, `_add_bootstrap_only_tag()`
+- `netbox_proxbox/netbox_bootstrap.py` — `ensure_proxbox_tags()`, `ensure_bootstrap_only_tag()`
+- `netbox_proxbox/services/sync_vm_template.py` — `sync_vm_templates()` service
+- `docs/configuration/sync-modes.md` — user-facing documentation
+
 ## CI/CD Workflows
 
 ### Gitea-to-GitHub mirror (`.gitea/workflows/mirror-github.yml`)

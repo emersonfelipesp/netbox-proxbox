@@ -7,7 +7,12 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.views import View
 
-from netbox_proxbox.constants import OVERWRITE_FIELD_GROUPS, OVERWRITE_FIELDS
+from netbox_proxbox.constants import (
+    OVERWRITE_FIELD_GROUPS,
+    OVERWRITE_FIELDS,
+    SYNC_MODE_FIELD_GROUPS,
+    SYNC_MODE_FIELDS,
+)
 from netbox_proxbox.forms.settings import ProxboxPluginSettingsForm
 from netbox_proxbox.models import ProxboxPluginSettings
 from netbox_proxbox.views.proxbox_access import (
@@ -106,13 +111,19 @@ class SettingsView(
             ),
             "hardware_discovery_enabled": settings_obj.hardware_discovery_enabled,
         }
+        for name in SYNC_MODE_FIELDS:
+            initial[name] = getattr(settings_obj, name, "always")
         for name in OVERWRITE_FIELDS:
             initial[name] = getattr(settings_obj, name)
         form = ProxboxPluginSettingsForm(initial=initial)
         return render(
             request,
             self.template_name,
-            {"form": form, "overwrite_field_groups": OVERWRITE_FIELD_GROUPS},
+            {
+                "form": form,
+                "overwrite_field_groups": OVERWRITE_FIELD_GROUPS,
+                "sync_mode_field_groups": SYNC_MODE_FIELD_GROUPS,
+            },
         )
 
     def post(self, request: HttpRequest) -> HttpResponse:
@@ -280,6 +291,12 @@ class SettingsView(
             settings_obj.hardware_discovery_enabled = form.cleaned_data.get(
                 "hardware_discovery_enabled", False
             )
+            for _sync_mode_field in SYNC_MODE_FIELDS:
+                setattr(
+                    settings_obj,
+                    _sync_mode_field,
+                    form.cleaned_data.get(_sync_mode_field, "always"),
+                )
             for _overwrite_field in OVERWRITE_FIELDS:
                 setattr(
                     settings_obj,
@@ -346,6 +363,7 @@ class SettingsView(
                     "intent_apply_authorization_self_approve_allowed",
                     "intent_deletion_request_ttl_days",
                     "hardware_discovery_enabled",
+                    *SYNC_MODE_FIELDS,
                     *OVERWRITE_FIELDS,
                 ]
             )
@@ -354,5 +372,9 @@ class SettingsView(
         return render(
             request,
             self.template_name,
-            {"form": form, "overwrite_field_groups": OVERWRITE_FIELD_GROUPS},
+            {
+                "form": form,
+                "overwrite_field_groups": OVERWRITE_FIELD_GROUPS,
+                "sync_mode_field_groups": SYNC_MODE_FIELD_GROUPS,
+            },
         )

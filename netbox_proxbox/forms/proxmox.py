@@ -19,10 +19,10 @@ from tenancy.models import Tenant
 from django.utils.translation import gettext as _
 
 # Proxbox Imports
-from ..constants import OVERWRITE_FIELDS
+from ..constants import OVERWRITE_FIELDS, SYNC_MODE_FIELDS
 from ..models import ProxmoxEndpoint
 from ..choices import ProxmoxEndpointEnvironmentChoices, ProxmoxModeChoices
-from .settings import _parse_tenant_regex_rules
+from .settings import _parse_tenant_regex_rules, _sync_mode_choice_options
 
 from .import_utils import validate_endpoint_import_headers
 from ..models import ProxboxPluginSettings
@@ -240,11 +240,29 @@ class ProxmoxEndpointSettingsForm(NetBoxModelForm):
             "default_role_lxc",
             "enable_tenant_name_regex",
             "tenant_name_regex_rules",
+            *SYNC_MODE_FIELDS,
             *OVERWRITE_FIELDS,
         )
 
     def __init__(self, *args: object, **kwargs: object) -> None:
         super().__init__(*args, **kwargs)
+        sync_mode_labels = {
+            "sync_mode_vm": "VM sync mode",
+            "sync_mode_vm_template": "VM template sync mode",
+            "sync_mode_cluster": "Cluster sync mode",
+            "sync_mode_node": "Node sync mode",
+            "sync_mode_storage": "Storage sync mode",
+            "sync_mode_ip_address": "IP address sync mode",
+        }
+        for name in SYNC_MODE_FIELDS:
+            self.fields[name] = forms.ChoiceField(
+                required=False,
+                choices=_sync_mode_choice_options(include_inherit=True),
+                label=_(sync_mode_labels[name]),
+                help_text=_(
+                    "Leave blank to inherit the global Proxbox plugin setting."
+                ),
+            )
         for name in OVERWRITE_FIELDS:
             label = name.removeprefix("overwrite_").replace("_", " ").capitalize()
             if name == "overwrite_vm_tags":

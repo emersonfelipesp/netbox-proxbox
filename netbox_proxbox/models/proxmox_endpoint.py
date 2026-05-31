@@ -7,8 +7,12 @@ from django.db import models
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 
-from netbox_proxbox.choices import ProxmoxEndpointEnvironmentChoices, ProxmoxModeChoices
-from netbox_proxbox.constants import OVERWRITE_FIELDS
+from netbox_proxbox.choices import (
+    ProxmoxEndpointEnvironmentChoices,
+    ProxmoxModeChoices,
+    SyncModeChoices,
+)
+from netbox_proxbox.constants import OVERWRITE_FIELDS, SYNC_MODE_RESOURCE_TYPES
 from netbox_proxbox.fields import DomainField
 from netbox_proxbox.models.base import PORT_VALIDATORS, EndpointBase
 from netbox_proxbox.models.ssh_credential import (
@@ -141,6 +145,66 @@ class ProxmoxEndpoint(EndpointBase):
         help_text=_(
             "Per-endpoint exponential back-off base delay in seconds between retries. "
             "Leave blank to use the global default."
+        ),
+    )
+    sync_mode_vm = models.CharField(
+        max_length=16,
+        choices=SyncModeChoices,
+        null=True,
+        blank=True,
+        verbose_name=_("VM sync mode"),
+        help_text=_(
+            "Per-endpoint override for non-template VM synchronization. Leave blank to inherit."
+        ),
+    )
+    sync_mode_vm_template = models.CharField(
+        max_length=16,
+        choices=SyncModeChoices,
+        null=True,
+        blank=True,
+        verbose_name=_("VM template sync mode"),
+        help_text=_(
+            "Per-endpoint override for Proxmox template VM synchronization. Leave blank to inherit."
+        ),
+    )
+    sync_mode_cluster = models.CharField(
+        max_length=16,
+        choices=SyncModeChoices,
+        null=True,
+        blank=True,
+        verbose_name=_("Cluster sync mode"),
+        help_text=_(
+            "Per-endpoint override for Proxmox cluster tracking sync. Leave blank to inherit."
+        ),
+    )
+    sync_mode_node = models.CharField(
+        max_length=16,
+        choices=SyncModeChoices,
+        null=True,
+        blank=True,
+        verbose_name=_("Node sync mode"),
+        help_text=_(
+            "Per-endpoint override for Proxmox node tracking sync. Leave blank to inherit."
+        ),
+    )
+    sync_mode_storage = models.CharField(
+        max_length=16,
+        choices=SyncModeChoices,
+        null=True,
+        blank=True,
+        verbose_name=_("Storage sync mode"),
+        help_text=_(
+            "Per-endpoint override for Proxmox storage sync. Leave blank to inherit."
+        ),
+    )
+    sync_mode_ip_address = models.CharField(
+        max_length=16,
+        choices=SyncModeChoices,
+        null=True,
+        blank=True,
+        verbose_name=_("IP address sync mode"),
+        help_text=_(
+            "Per-endpoint override for IP address sync. Leave blank to inherit."
         ),
     )
     ssh_username = models.CharField(
@@ -552,3 +616,19 @@ class ProxmoxEndpoint(EndpointBase):
             else getattr(settings, name)
             for name in OVERWRITE_FIELDS
         }
+
+    def effective_sync_mode(self, resource_type: str) -> str:
+        """Resolve a per-resource sync mode, falling back to the global singleton."""
+        from netbox_proxbox.models.plugin_settings import ProxboxPluginSettings
+
+        normalized = str(resource_type or "").strip().lower().replace("-", "_")
+        normalized = normalized.removeprefix("sync_mode_")
+        if normalized not in SYNC_MODE_RESOURCE_TYPES:
+            raise ValueError(f"Unsupported sync mode resource type: {resource_type!r}")
+
+        field_name = f"sync_mode_{normalized}"
+        endpoint_value = getattr(self, field_name, None)
+        if endpoint_value:
+            return str(endpoint_value)
+        settings = ProxboxPluginSettings.get_solo()
+        return str(getattr(settings, field_name, SyncModeChoices.ALWAYS))

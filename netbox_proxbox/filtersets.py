@@ -41,6 +41,7 @@ from .models import (
     ProxmoxNode,
     ProxmoxStorage,
     ProxmoxVMCloudInit,
+    ProxmoxVMTemplate,
     Replication,
     VMBackup,
     VMSnapshot,
@@ -622,6 +623,41 @@ class ProxmoxNodeFilterSet(ProxboxModelFilterSet):
             | Q(ip_address__icontains=value)
             | Q(ssl_fingerprint__icontains=value)
         )
+
+
+@register_filterset
+class ProxmoxVMTemplateFilterSet(ProxboxModelFilterSet):
+    """Filter dedicated Proxmox VM template records."""
+
+    class Meta:
+        model = ProxmoxVMTemplate
+        fields = (
+            "id",
+            "proxmox_endpoint",
+            "cluster",
+            "node",
+            "source_vm",
+            "vmid",
+            "name",
+            "node_name",
+            "proxmox_type",
+            "status",
+            "cloud_init_enabled",
+        )
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        """Match template name, VMID, node, type, or status."""
+        if not value.strip():
+            return queryset
+        query = (
+            Q(name__icontains=value)
+            | Q(node_name__icontains=value)
+            | Q(proxmox_type__icontains=value)
+            | Q(status__icontains=value)
+        )
+        if value.isdigit():
+            query |= Q(vmid=int(value))
+        return queryset.filter(query)
 
 
 @register_filterset

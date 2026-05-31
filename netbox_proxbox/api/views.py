@@ -51,6 +51,7 @@ from .serializers import (
     ProxmoxSdnRouteMapSerializer,
     ProxmoxStorageSerializer,
     ProxmoxVMCloudInitSerializer,
+    ProxmoxVMTemplateSerializer,
     PVETemplateBuildRequestSerializer,
     PVETemplateBuildResponseSerializer,
     ReplicationSerializer,
@@ -85,6 +86,7 @@ class ProxBoxRootView(APIRootView):
             "nodes": f"{base}/resources/nodes/",
             "virtual_machines": f"{base}/resources/virtual-machines/",
             "lxc_containers": f"{base}/resources/lxc-containers/",
+            "vm_templates": f"{base}/vm-templates/",
             "firecracker_microvms": f"{base}/resources/firecracker-microvms/",
             "interfaces": f"{base}/resources/interfaces/",
             "ip_addresses": f"{base}/resources/ip-addresses/",
@@ -246,6 +248,19 @@ class ProxmoxVMCloudInitViewSet(NetBoxModelViewSet):
     queryset = models.ProxmoxVMCloudInit.objects.select_related("virtual_machine")
     serializer_class = ProxmoxVMCloudInitSerializer
     filterset_class = filtersets.ProxmoxVMCloudInitFilterSet
+
+
+class ProxmoxVMTemplateViewSet(NetBoxModelViewSet):
+    """REST API for dedicated Proxmox VM template inventory."""
+
+    queryset = models.ProxmoxVMTemplate.objects.select_related(
+        "proxmox_endpoint",
+        "cluster",
+        "node",
+        "source_vm",
+    ).prefetch_related("cloned_vms", "tags")
+    serializer_class = ProxmoxVMTemplateSerializer
+    filterset_class = filtersets.ProxmoxVMTemplateFilterSet
 
 
 class ProxmoxStorageViewSet(NetBoxModelViewSet):
