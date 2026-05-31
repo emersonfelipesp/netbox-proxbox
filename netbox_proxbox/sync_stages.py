@@ -536,6 +536,7 @@ def _run_all_stages_sync(
     disable_vm_network_on_vm_stage = SyncTypeChoices.VIRTUAL_MACHINES in stages and (
         SyncTypeChoices.VM_INTERFACES in stages
         or SyncTypeChoices.IP_ADDRESSES in stages
+        or _sync_mode_for_resource("ip_address") == SyncModeChoices.DISABLED
     )
 
     for endpoint_scope in endpoint_scopes:
