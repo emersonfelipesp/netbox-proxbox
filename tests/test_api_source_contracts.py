@@ -9,8 +9,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
-def _load_overwrite_fields() -> tuple[str, ...]:
-    """Load `OVERWRITE_FIELDS` from `constants.py` without importing the package.
+def _load_constant_fields(name: str) -> tuple[str, ...]:
+    """Load a tuple constant from `constants.py` without importing the package.
 
     The plugin's `__init__.py` requires a live NetBox install, which is not
     available during unit-test collection — bypass it by loading the
@@ -23,13 +23,15 @@ def _load_overwrite_fields() -> tuple[str, ...]:
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return tuple(module.OVERWRITE_FIELDS)
+    return tuple(getattr(module, name))
 
 
-OVERWRITE_FIELDS = _load_overwrite_fields()
+OVERWRITE_FIELDS = _load_constant_fields("OVERWRITE_FIELDS")
+SYNC_MODE_FIELDS = _load_constant_fields("SYNC_MODE_FIELDS")
 
 _STARRED_CONSTANTS: dict[str, tuple[str, ...]] = {
     "OVERWRITE_FIELDS": OVERWRITE_FIELDS,
+    "SYNC_MODE_FIELDS": SYNC_MODE_FIELDS,
 }
 SERIALIZERS_PACKAGE = REPO_ROOT / "netbox_proxbox" / "api" / "serializers"
 VIEWS_PATH = REPO_ROOT / "netbox_proxbox" / "api" / "views.py"
@@ -566,6 +568,7 @@ def test_plugin_api_routes_register_all_plugin_objects():
         "snapshots",
         "task-history",
         "vm-cloudinit",
+        "vm-templates",
     }
 
 

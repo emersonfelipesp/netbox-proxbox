@@ -45,6 +45,7 @@ LIST_PAGES: list[tuple[str, str]] = [
     ("vm-cloudinit-add", "/plugins/proxbox/vm-cloudinit/add/"),
     ("cloud-image-templates-list", "/plugins/proxbox/cloud-image-templates/"),
     ("cloud-image-templates-add", "/plugins/proxbox/cloud-image-templates/add/"),
+    ("proxmox-vm-templates-list", "/plugins/proxbox/vm-templates/"),
     # Firewall / Security
     ("firewall-rules-list", "/plugins/proxbox/firewall/rules/"),
     ("firewall-rules-add", "/plugins/proxbox/firewall/rules/add/"),
@@ -104,6 +105,11 @@ DETAIL_SPECS: list[DetailSpec] = [
         "proxmox-endpoint-settings",
         "/plugins/proxbox/endpoints/proxmox/{id}/settings/",
         "/api/plugins/proxbox/endpoints/proxmox/",
+    ),
+    DetailSpec(
+        "proxmox-vm-template-detail",
+        "/plugins/proxbox/vm-templates/{id}/",
+        "/api/plugins/proxbox/vm-templates/",
     ),
     DetailSpec(
         "netbox-endpoint-detail",

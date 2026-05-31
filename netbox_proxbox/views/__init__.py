@@ -218,6 +218,13 @@ from .vm_task_history import (
     VMTaskHistoryTabView,
     VMTaskHistoryView,
 )
+from .vm_template import (
+    ProxmoxVMTemplateBulkDeleteView,
+    ProxmoxVMTemplateDeleteView,
+    ProxmoxVMTemplateEditView,
+    ProxmoxVMTemplateListView,
+    ProxmoxVMTemplateView,
+)
 
 
 class HomeView(

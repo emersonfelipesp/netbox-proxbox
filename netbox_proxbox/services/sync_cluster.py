@@ -194,25 +194,25 @@ def sync_cluster_and_nodes(
                         cluster_name,
                         endpoint_id,
                     )
-                elif proxmox_cluster:
-                    for field_name, value in cluster_defaults.items():
-                        setattr(proxmox_cluster, field_name, value)
-                    proxmox_cluster.save(update_fields=list(cluster_defaults))
-                    result.clusters_updated += 1
-                    logger.info(
-                        "Updated cluster %s for endpoint %s", cluster_name, endpoint_id
-                    )
                 else:
-                    proxmox_cluster = ProxmoxCluster.objects.create(
+                    proxmox_cluster, created = ProxmoxCluster.objects.update_or_create(
                         endpoint=endpoint,
                         name=cluster_name,
-                        **cluster_defaults,
+                        defaults=cluster_defaults,
                     )
-                    if cluster_mode == SyncModeChoices.BOOTSTRAP_ONLY:
+                    if created and cluster_mode == SyncModeChoices.BOOTSTRAP_ONLY:
                         _add_bootstrap_only_tag(proxmox_cluster)
-                    result.clusters_created += 1
+                    if created:
+                        result.clusters_created += 1
+                        log_action = "Created"
+                    else:
+                        result.clusters_updated += 1
+                        log_action = "Updated"
                     logger.info(
-                        "Created cluster %s for endpoint %s", cluster_name, endpoint_id
+                        "%s cluster %s for endpoint %s",
+                        log_action,
+                        cluster_name,
+                        endpoint_id,
                     )
             elif cluster_record and cluster_mode == SyncModeChoices.DISABLED:
                 proxmox_cluster = ProxmoxCluster.objects.filter(
@@ -267,22 +267,25 @@ def sync_cluster_and_nodes(
                         node_name,
                         endpoint_id,
                     )
-                elif node:
-                    for field_name, value in node_defaults.items():
-                        setattr(node, field_name, value)
-                    node.save(update_fields=list(node_defaults))
-                    result.nodes_updated += 1
                 else:
-                    node = ProxmoxNode.objects.create(
+                    node, created = ProxmoxNode.objects.update_or_create(
                         endpoint=endpoint,
                         name=node_name,
-                        **node_defaults,
+                        defaults=node_defaults,
                     )
-                    if node_mode == SyncModeChoices.BOOTSTRAP_ONLY:
+                    if created and node_mode == SyncModeChoices.BOOTSTRAP_ONLY:
                         _add_bootstrap_only_tag(node)
-                    result.nodes_created += 1
+                    if created:
+                        result.nodes_created += 1
+                        log_action = "Created"
+                    else:
+                        result.nodes_updated += 1
+                        log_action = "Updated"
                     logger.info(
-                        "Created node %s for endpoint %s", node_name, endpoint_id
+                        "%s node %s for endpoint %s",
+                        log_action,
+                        node_name,
+                        endpoint_id,
                     )
 
             # Delete nodes that no longer exist in Proxmox.

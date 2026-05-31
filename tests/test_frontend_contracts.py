@@ -208,6 +208,28 @@ def test_job_runtime_panel_renders_endpoint_runtime_cards():
     assert "Proxbox sync stages" in contents
 
 
+def test_proxmox_vm_template_navigation_has_registered_views():
+    view_contents = _read("netbox_proxbox/views/vm_template.py")
+    init_contents = _read("netbox_proxbox/views/__init__.py")
+    navigation_contents = _read("netbox_proxbox/navigation.py")
+    page_coverage_contents = _read("tests/e2e/page_coverage_check.py")
+
+    assert 'link="plugins:netbox_proxbox:proxmoxvmtemplate_list"' in navigation_contents
+    assert (
+        '@register_model_view(ProxmoxVMTemplate, "list", path="", detail=False)'
+        in view_contents
+    )
+    assert "@register_model_view(ProxmoxVMTemplate)" in view_contents
+    assert '@register_model_view(ProxmoxVMTemplate, "edit")' in view_contents
+    assert (
+        'default_return_url = "plugins:netbox_proxbox:proxmoxvmtemplate_list"'
+        in view_contents
+    )
+    assert "ProxmoxVMTemplateListView" in init_contents
+    assert "/plugins/proxbox/vm-templates/" in page_coverage_contents
+    assert "proxmox-vm-template-detail" in page_coverage_contents
+
+
 def test_firewall_push_and_preview_ui_contracts():
     extension_contents = _read("netbox_proxbox/template_content.py")
     view_contents = _read("netbox_proxbox/views/firewall.py")

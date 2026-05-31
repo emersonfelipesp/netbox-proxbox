@@ -36,6 +36,19 @@ if TYPE_CHECKING:
     )
 
 
+def _queryset_first(value: object) -> object | None:
+    """Return the first item from a Django queryset or lightweight test stub."""
+    first = getattr(value, "first", None)
+    if callable(first):
+        return first()
+    try:
+        return next(iter(value))  # type: ignore[arg-type]
+    except StopIteration:
+        return None
+    except TypeError:
+        return None
+
+
 def _use_guest_agent_interface_name_setting() -> bool:
     """Return current plugin setting for guest-agent VM interface naming."""
     try:
@@ -181,7 +194,9 @@ def effective_overwrites_for_endpoint(
     try:
         from netbox_proxbox.models import ProxmoxEndpoint
 
-        endpoint = ProxmoxEndpoint.objects.filter(pk=int(proxmox_endpoint_id)).first()
+        endpoint = _queryset_first(
+            ProxmoxEndpoint.objects.filter(pk=int(proxmox_endpoint_id))
+        )
     except (ImportError, RuntimeError, ValueError, TypeError):
         return _global_overwrites()
     if endpoint is None:
@@ -201,7 +216,9 @@ def effective_sync_modes_for_endpoint(
     try:
         from netbox_proxbox.models import ProxmoxEndpoint
 
-        endpoint = ProxmoxEndpoint.objects.filter(pk=int(proxmox_endpoint_id)).first()
+        endpoint = _queryset_first(
+            ProxmoxEndpoint.objects.filter(pk=int(proxmox_endpoint_id))
+        )
     except (ImportError, RuntimeError, ValueError, TypeError):
         return global_modes
     if endpoint is None:
@@ -243,7 +260,9 @@ def effective_tenant_regex_for_endpoint(
     try:
         from netbox_proxbox.models import ProxmoxEndpoint
 
-        endpoint = ProxmoxEndpoint.objects.filter(pk=int(proxmox_endpoint_id)).first()
+        endpoint = _queryset_first(
+            ProxmoxEndpoint.objects.filter(pk=int(proxmox_endpoint_id))
+        )
     except (ImportError, RuntimeError, ValueError, TypeError):
         return enabled, rules
     if endpoint is None:
