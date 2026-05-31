@@ -66,6 +66,35 @@ into `develop`. Never `twine --skip-existing` — fix forward with the next
 `.postN` or `rcN` per PEP 440. Full step-by-step in
 [`CLAUDE.md → Release Procedure`](./CLAUDE.md).
 
+## CI/CD Workflows
+
+### End-to-end release pipeline (Gitea-first)
+
+The official release pipeline runs in this order:
+
+1. **Gitea tag push** — push an annotated tag to Gitea (`git tag -a vX.Y.Z && git push gitea vX.Y.Z`).
+2. **Gitea Actions: `.gitea/workflows/publish-gitea.yml`** — fires on every tag push. Builds and uploads the dist to the Gitea Package Registry, then calls `push-to-github` to push the tag to GitHub. For non-RC tags it also creates (or publishes an existing draft) GitHub release via `gh release create / gh release edit --draft=false`.
+3. **GitHub Actions: `.github/workflows/publish-testpypi.yml` — `release: published` trigger** — fires when `publish-gitea.yml` creates the non-draft GitHub release. Validates version, builds dist, checks if version already on PyPI (skip if yes), uploads to PyPI, runs validate-pypi and E2E checks.
+4. **GitHub Actions: Docker Hub** — called by `publish-testpypi.yml` after PyPI validation.
+
+### RC (release-candidate) pipeline
+
+1. Push a `vX.Y.ZrcN` tag to GitHub directly (`git push origin vX.Y.ZrcN`).
+2. `.github/workflows/publish-testpypi.yml` fires on `push: tags: v*rc*` → publishes to TestPyPI.
+
+### Idempotency guarantee (PyPI upload)
+
+The `publish-pypi` job in `.github/workflows/publish-testpypi.yml` checks the PyPI API before uploading. If the version already exists (HTTP 200), the upload step is skipped and the job succeeds. This prevents duplicate-upload failures when `release: published` fires after a tag-push run already published to PyPI, and allows safe re-triggering of the workflow.
+
+### Gitea Package Registry
+
+Use `PKG_TOKEN` (not `GITEA_TOKEN` — GITEA_ prefix is reserved and will fail). The registry URL is `https://git.nmulti.cloud/api/packages/emersonfelipesp/pypi`.
+
+### Security
+
+- `publish-gitea.yml` uses `env:` indirection for `inputs.tag_name` and `github.event_name` to prevent CI/CD expression injection.
+- Tag pattern validation (`^v[0-9]+\.[0-9]+\.[0-9]+(rc[0-9]+|\.post[0-9]+)?$`) rejects unexpected refs before any build step.
+
 ## Gitea-to-GitHub Mirror
 
 The Gitea workflow at `.gitea/workflows/mirror-github.yml` mirrors only

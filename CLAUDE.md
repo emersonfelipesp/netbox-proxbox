@@ -190,13 +190,20 @@ GitHub release creation.**
 | Trigger | Use for | Publishes to |
 |---------|---------|--------------|
 | `push: tags: v*rc*` (plain tag push) | Release candidates `vX.Y.ZrcN` | TestPyPI |
-| `release: published` (GitHub release) | Official `vX.Y.Z` and `vX.Y.Z.postN` | PyPI |
+| `release: published` (GitHub release) | Official `vX.Y.Z` and `vX.Y.Z.postN` | PyPI (Created automatically by `.gitea/workflows/publish-gitea.yml` for future releases) |
 
 Plain non-rc tag pushes (`vX.Y.Z`, `vX.Y.Z.postN`) **do not** trigger the
 publish workflow — the trigger pattern is `v*rc*`, so only rc tags fire it.
 This makes the GitHub release creation the **single, authoritative trigger**
 for official PyPI publishing and eliminates the duplicate-run problem the
 old dual-trigger flow created.
+
+For future releases, `.gitea/workflows/publish-gitea.yml` (Gitea Actions) pushes
+the tag to GitHub **and** creates the non-draft GitHub release automatically via the
+`push-to-github` → "Create GitHub Release" step, which fires `release: published`
+and triggers the GitHub Actions publish workflow. Manually running `gh release create`
+is only needed if `publish-gitea.yml` was not yet added, or for hotfix releases done
+directly on GitHub.
 
 **RC flow (TestPyPI gate, repeatable):**
 
@@ -336,6 +343,7 @@ What was done for v0.0.19:
   using the `PKG_TOKEN` secret (GITEA_ prefix is reserved by Gitea, cannot be used).
   See `proxbox-api/CLAUDE.md` for the full upload command.
 - Paired backend: `proxbox-api v0.0.16`.
+- **GitHub release**: The draft GitHub release `v0.0.19` was published via `gh release edit v0.0.19 --repo emersonfelipesp/netbox-proxbox --draft=false` (one-time cleanup for releases created as drafts before `publish-gitea.yml` was added). For future releases, `.gitea/workflows/publish-gitea.yml` creates the non-draft GitHub release automatically via the `push-to-github` → "Create GitHub Release" step, which fires `release: published` and triggers the GitHub Actions publish workflow.
 
 ---
 

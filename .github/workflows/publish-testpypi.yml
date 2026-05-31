@@ -355,7 +355,23 @@ jobs:
           name: dist
           path: dist
 
+      - name: Check if version already on PyPI
+        id: pypi_check
+        env:
+          VERSION: ${{ needs.prepare-release.outputs.version }}
+        run: |
+          HTTP_STATUS=$(curl -o /dev/null -s -w "%{http_code}" \
+            "https://pypi.org/pypi/netbox-proxbox/${VERSION}/json")
+          if [ "$HTTP_STATUS" = "200" ]; then
+            echo "already_on_pypi=true" >> "$GITHUB_OUTPUT"
+            echo "netbox-proxbox ${VERSION} already on PyPI — upload skipped"
+          else
+            echo "already_on_pypi=false" >> "$GITHUB_OUTPUT"
+            echo "netbox-proxbox ${VERSION} not found on PyPI (HTTP ${HTTP_STATUS})"
+          fi
+
       - name: Upload to PyPI
+        if: steps.pypi_check.outputs.already_on_pypi != 'true'
         env:
           PYPI_USERNAME: ${{ secrets.PYPI_USERNAME }}
           PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
