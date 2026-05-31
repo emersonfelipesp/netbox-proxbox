@@ -207,9 +207,15 @@ print(len(found))
             NOTES_ARGS="--generate-notes"
           fi
           TARGET_BRANCH="develop"
-          gh release create "${TAG}" \
-            --repo "${GH_REPO}" \
-            --target "${TARGET_BRANCH}" \
-            --title "${TAG}" \
-            ${NOTES_ARGS}
-          echo "GitHub release ${TAG} created for ${GH_REPO}"
+          if gh release view "${TAG}" --repo "${GH_REPO}" >/dev/null 2>&1; then
+            echo "Release ${TAG} already exists — ensuring it is not a draft"
+            gh release edit "${TAG}" --repo "${GH_REPO}" --draft=false
+            echo "Release ${TAG} published (was draft)"
+          else
+            gh release create "${TAG}" \
+              --repo "${GH_REPO}" \
+              --target "${TARGET_BRANCH}" \
+              --title "${TAG}" \
+              ${NOTES_ARGS}
+            echo "GitHub release ${TAG} created for ${GH_REPO}"
+          fi
