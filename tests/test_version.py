@@ -137,7 +137,9 @@ def test_pyproject_metadata_is_certification_ready():
     assert re.fullmatch(
         rf"^{re.escape(CURRENT_PLUGIN_VERSION)}(rc\d+|\.post\d+)?$",
         project["version"],
-    ), f"pyproject.toml version {project['version']!r} does not match {CURRENT_PLUGIN_VERSION}"
+    ), (
+        f"pyproject.toml version {project['version']!r} does not match {CURRENT_PLUGIN_VERSION}"
+    )
     assert project["license"] == "Apache-2.0"
     assert project["license-files"] == ["LICENSE"]
     assert (
