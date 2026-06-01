@@ -134,13 +134,7 @@ jobs:
           COUNT=$(curl -sf \
             "https://git.nmulti.cloud/api/v1/packages/emersonfelipesp?type=pypi&q=${PKG_NAME}&limit=50" \
             -H "Authorization: token ${GITEA_TOKEN}" \
-            | python3 -c "
-import sys, json, os
-v = os.environ['VERSION']
-pkgs = json.load(sys.stdin)
-found = [p for p in pkgs if p.get('version') == v]
-print(len(found))
-")
+            | VERSION="${VERSION}" python3 -c 'import json, os, sys; pkgs = json.load(sys.stdin); print(sum(1 for p in pkgs if p.get("version") == os.environ["VERSION"]))')
           echo "Found ${COUNT} package(s) matching ${PKG_NAME} ${VERSION}"
           if [ "${COUNT}" -lt 1 ]; then
             echo "ERROR: Package ${PKG_NAME} ${VERSION} not found in Gitea registry"
