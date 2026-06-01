@@ -64,14 +64,17 @@ class TestHTTPTimeoutForSyncPath:
         """Normal sync paths should return default timeout."""
         bp = backend_proxy_module
         assert bp.http_timeout_for_sync_path("dcim/devices/create") == 5
-        # VM sync paths use extended timeout due to large interface/IP/VLAN sync
+
+    def test_vm_sync_path_returns_long_timeout(self, backend_proxy_module):
+        """VM sync paths use extended timeout due to large interface/IP/VLAN sync."""
+        bp = backend_proxy_module
         assert (
             bp.http_timeout_for_sync_path("virtualization/virtual-machines/create")
             == (5, 3600)
         )
 
     def test_backup_path_returns_long_timeout(self, backend_proxy_module):
-        """Backup sync path should return long timeout."""
+        """Backup sync path should return long timeout (covered by VM marker)."""
         bp = backend_proxy_module
         timeout = bp.http_timeout_for_sync_path(
             "virtualization/virtual-machines/backups/all/create"
@@ -79,11 +82,17 @@ class TestHTTPTimeoutForSyncPath:
         assert timeout == (5, 3600)
 
     def test_snapshot_path_returns_long_timeout(self, backend_proxy_module):
-        """Snapshot sync path should return long timeout."""
+        """Snapshot sync path should return long timeout (covered by VM marker)."""
         bp = backend_proxy_module
         timeout = bp.http_timeout_for_sync_path(
             "virtualization/virtual-machines/snapshots/all/create"
         )
+        assert timeout == (5, 3600)
+
+    def test_full_update_path_returns_long_timeout(self, backend_proxy_module):
+        """Full-update sync path should return long timeout."""
+        bp = backend_proxy_module
+        timeout = bp.http_timeout_for_sync_path("full-update")
         assert timeout == (5, 3600)
 
 

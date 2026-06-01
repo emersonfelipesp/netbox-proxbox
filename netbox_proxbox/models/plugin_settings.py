@@ -256,6 +256,7 @@ class ProxboxPluginSettings(NetBoxModel):
     )
     interface_batch_size = models.PositiveSmallIntegerField(
         default=5,
+        validators=[MinValueValidator(1)],
         verbose_name=_("Interface batch size"),
         help_text=_(
             "Number of VM interfaces (and their IP addresses, subnets, VLANs) synced "
