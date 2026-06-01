@@ -389,6 +389,48 @@ What was done for v0.0.19:
 - Paired backend: `proxbox-api v0.0.16`.
 - **GitHub release**: The draft GitHub release `v0.0.19` was published via `gh release edit v0.0.19 --repo emersonfelipesp/netbox-proxbox --draft=false` (one-time cleanup for releases created as drafts before `publish-gitea.yml` was added). For future releases, `.gitea/workflows/publish-gitea.yml` creates the non-draft GitHub release automatically via the `push-to-github` → "Create GitHub Release" step, which fires `release: published` and triggers the GitHub Actions publish workflow.
 
+### Automatic Production Deployment (`.gitea/workflows/publish-gitea.yml`)
+
+**Starting with v0.0.19**, non-release-candidate (`vX.Y.Z`, `vX.Y.Z.postN`) releases automatically deploy to `netbox.nmulti.cloud` after successful Gitea package registry publish and GitHub release creation.
+
+**Deploy job:**
+- Runs after `push-to-github` job completes (requires validated tag and GitHub Release created)
+- Condition: only for non-RC releases (`is_rc == false`)
+- Runs on `prod-deploy` runner with SSH access to production host
+- Executes: `ssh nmc-prod-207 -- deploy-plugin netbox-proxbox "$TAG"`
+
+**Security hardening:**
+- TAG is passed via environment variable, not direct GitHub Actions context interpolation
+- Bash case statement validates tag format before SSH (accepts `v<X>.<Y>.<Z>` patterns)
+- StrictHostKeyChecking=accept-new prevents MITM attacks
+- Quoted variable interpolation prevents shell injection
+
+**Deployment flow:**
+1. Git fetch/checkout of the released tag in the plugin submodule
+2. pip install -e to refresh editable install
+3. manage.py migrate to apply any pending migrations
+4. manage.py collectstatic to collect new/updated static files
+5. systemctl reload netbox-production (graceful gunicorn reload)
+6. systemctl restart netbox-rq (RQ worker restart for code changes)
+7. Health check: curl -sf http://127.0.0.1:18001/api/ to verify
+
+**Monitoring deployment:**
+- Watch the `publish-gitea.yml` workflow run in Gitea Actions
+- Check the `deploy` job logs for SSH output and health check results
+- Verify production health: `ssh nmc-prod-207 -- health netbox`
+- Check service logs: `ssh nmc-prod-207 -- logs netbox`
+
+**Manual deployment for hotfixes or rollbacks:**
+```bash
+# Deploy a specific tag or branch
+ssh nmc-prod-207 -- deploy-plugin netbox-proxbox v0.0.19.post1
+
+# List recent deploys (check system journal)
+ssh nmc-prod-207 -- journalctl -u netbox-production -n 50 --no-pager
+```
+
+For detailed production deployment infrastructure and cross-plugin coordination, see `/root/personal-context/nmulticloud-context/CLAUDE.md` "Automatic Plugin Deployment to Production" section.
+
 ---
 
 ## Software Engineering Life Cycle Requirements
