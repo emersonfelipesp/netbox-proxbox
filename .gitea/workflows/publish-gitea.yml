@@ -89,6 +89,7 @@ jobs:
     if: ${{ needs.validate-version.outputs.version != '' }}
     runs-on: mirror-host
     env:
+      HOME: /root
       VERSION: ${{ needs.validate-version.outputs.version }}
       TAG: ${{ needs.validate-version.outputs.tag }}
     steps:
@@ -147,6 +148,7 @@ jobs:
     if: ${{ needs.validate-version.outputs.version != '' }}
     runs-on: mirror-host
     env:
+      HOME: /root
       VERSION: ${{ needs.validate-version.outputs.version }}
       TAG: ${{ needs.validate-version.outputs.tag }}
       IS_RC: ${{ needs.validate-version.outputs.is_rc }}
