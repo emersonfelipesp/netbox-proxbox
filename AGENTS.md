@@ -135,6 +135,69 @@ Key architectural invariants to keep in mind:
 - **Export JS is inlined, not a separate static file.** All three endpoint list templates contain the export-modal IIFE directly in `{% block javascript %}`. Do not move it to a `.js` file — it would then require `collectstatic` to be served.
 - **Import forms auto-create IPAddress objects.** All three import forms call `IPAddress.objects.get_or_create` in `clean_ip_address()`. Do not replace this with `CSVModelChoiceField` for `ip_address` — that would break cross-instance imports.
 
+## Code Quality Standards
+
+All changes to netbox-proxbox MUST conform to these quality gates before PR review:
+
+### Code Coverage
+- Maintain ≥85% coverage: `rtk pytest tests/ --cov=netbox_proxbox --cov-report=term-missing`
+- Coverage is enforced in CI; failing coverage blocks merge
+- Document uncovered code with a rationale comment (e.g., "except: pass for legacy compat")
+
+### Regression Testing
+- Add a test that fails on pre-fix code before implementing any fix
+- Run the full test suite: `rtk pytest tests/ --timeout=30 -v`
+- Run integration tests: `rtk pytest tests/integration/ -v --timeout=30`
+- Validate against E2E Docker stack before release
+
+### Static Analysis
+
+**Ruff (linting):**
+```bash
+rtk ruff check .          # Errors, style, unused imports
+rtk ruff format --check . # Code formatting
+```
+Fixes errors before pushing. All violations block CI.
+
+**Type Checking (Pyright strict):**
+```bash
+rtk ty check proxbox_cli
+```
+Type mismatches block merge. Use `# type: ignore` only with justification.
+
+**Defect Categories Detected:**
+- Undefined variables, imports, method/attribute access
+- Unused imports and dead code
+- Security: SQL injection, unsafe eval, XSS vectors
+- Type mismatches (via Pyright strict)
+
+### Requirements Validation
+
+Before writing code, confirm:
+1. The feature is traceable to a GitHub issue (link it in the PR description)
+2. The design is documented (update nearest CLAUDE.md with architecture notes)
+3. You understand how it affects the backend integration (proxbox-api contracts)
+4. You've identified all derived requirements (e.g., "sync behavior must be gated")
+
+### Configuration Control
+
+Changes to these configuration items require explicit PR description and CLAUDE.md update:
+- Plugin version (`netbox_proxbox/__init__.py` `__version__`)
+- NetBox compatibility floor/ceiling (`min_version`, `max_version`)
+- Backend service minimum version (`proxbox_api` floor in `pyproject.toml`)
+- Database schema (any model/migration change)
+- Backend integration contracts (sync routes, SSE payloads, job queue names)
+
+### Safety Model (Intent Workflows)
+
+If your change touches the Proxmox-side mutation path:
+1. Verify the default direction remains Proxmox → NetBox (read-only)
+2. Confirm that master flag `netbox_to_proxmox_enabled` requires typed confirmation
+3. Check that DELETE goes through `DeletionRequest` (no direct destroy calls)
+4. Verify authorization permission is separate from the request permission
+
+Violating any of these four invariants is a regression.
+
 ## CLAUDE.md Index
 
 Read the nearest scoped guide for the code you are changing.
