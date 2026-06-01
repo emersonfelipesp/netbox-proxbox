@@ -215,3 +215,16 @@ jobs:
               ${NOTES_ARGS}
             echo "GitHub release ${TAG} created for ${GH_REPO}"
           fi
+
+  deploy:
+    name: Deploy to production (netbox.nmulti.cloud)
+    needs: [validate-version, push-to-github]
+    if: ${{ !fromJSON(needs.validate-version.outputs.is_rc) }}
+    runs-on: prod-deploy
+    steps:
+      - name: Deploy plugin
+        run: |
+          ssh -o StrictHostKeyChecking=no \
+              -o ServerAliveInterval=30 \
+              -o ServerAliveCountMax=20 \
+              nmc-prod-207 -- deploy-plugin netbox-proxbox ${{ needs.validate-version.outputs.tag }}
