@@ -254,6 +254,22 @@ class ProxboxPluginSettings(NetBoxModel):
         verbose_name=_("VM sync max concurrency"),
         help_text=_("Maximum number of VMs synced in parallel during a full update."),
     )
+    interface_batch_size = models.PositiveSmallIntegerField(
+        default=5,
+        verbose_name=_("Interface batch size"),
+        help_text=_(
+            "Number of VM interfaces (and their IP addresses, subnets, VLANs) synced "
+            "per batch. Large VMs (50+ interfaces) may timeout if synced all at once; "
+            "batching prevents overwhelming NetBox with concurrent API calls."
+        ),
+    )
+    interface_batch_delay_ms = models.PositiveIntegerField(
+        default=100,
+        verbose_name=_("Interface batch delay (ms)"),
+        help_text=_(
+            "Milliseconds to wait between interface batches to throttle NetBox load."
+        ),
+    )
     reconciliation_engine = models.CharField(
         max_length=16,
         choices=RECONCILIATION_ENGINE_CHOICES,
