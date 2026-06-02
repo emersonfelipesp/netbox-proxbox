@@ -162,6 +162,128 @@ def sync_proxmox_endpoint_to_backend(
         )
 
 
+def _list_backend_proxmox_endpoints(
+    *,
+    base_url: str,
+    auth_headers: dict[str, str] | None = None,
+    backend_verify_ssl: bool = True,
+    timeout: int = 15,
+) -> tuple[list[dict[str, object]] | None, str | None]:
+    """GET ``/proxmox/endpoints`` and return the parsed list (or an error string)."""
+    list_url = f"{base_url}/proxmox/endpoints"
+    headers = auth_headers or {}
+    try:
+        list_response = requests.get(
+            list_url,
+            headers=headers,
+            verify=backend_verify_ssl,
+            timeout=timeout,
+        )
+        list_response.raise_for_status()
+    except requests.exceptions.RequestException as exc:
+        detail, _ = extract_backend_error_detail(exc)
+        return None, f"Failed to list Proxmox endpoints on ProxBox backend: {detail}"
+
+    endpoints, json_err = parse_requests_response_json(
+        list_response, log_label="proxmox/endpoints"
+    )
+    if json_err:
+        return None, f"Failed to read Proxmox endpoint list: {json_err}"
+    if not isinstance(endpoints, list):
+        return None, "ProxBox backend returned invalid endpoint list payload."
+    return [item for item in endpoints if isinstance(item, dict)], None
+
+
+def _backend_id_for_name(
+    endpoints: list[dict[str, object]], target_name: str
+) -> int | None:
+    """Return the backend id whose ``name`` equals ``target_name`` (or ``None``)."""
+    match = next(
+        (item for item in endpoints if item.get("name") == target_name),
+        None,
+    )
+    if match is None:
+        return None
+    return _int_or_none(match.get("id"))
+
+
+def resolve_backend_endpoint_id(
+    endpoint: ProxmoxEndpoint,
+    *,
+    base_url: str,
+    auth_headers: dict[str, str] | None = None,
+    backend_verify_ssl: bool = True,
+    timeout: int = 15,
+) -> tuple[int | None, str | None]:
+    """Resolve a plugin ``ProxmoxEndpoint`` to its proxbox-api backend database id.
+
+    The backend assigns its own autoincrement ids and stores each endpoint under
+    the name produced by :func:`proxmox_backend_name` (which embeds the NetBox
+    primary key as a ``(nb:<pk>)`` suffix). Plugin primary keys therefore do not
+    match backend ids; scoped sync calls must translate the plugin endpoint to
+    the backend id by **name** before sending ``proxmox_endpoint_ids``.
+
+    Returns ``(backend_id, None)`` on success, or ``(None, error_message)`` when
+    the endpoint cannot be resolved. Callers must treat ``None`` as fatal for the
+    scoped request rather than silently syncing every endpoint.
+    """
+    endpoints, list_error = _list_backend_proxmox_endpoints(
+        base_url=base_url,
+        auth_headers=auth_headers,
+        backend_verify_ssl=backend_verify_ssl,
+        timeout=timeout,
+    )
+    if endpoints is None:
+        return None, list_error
+
+    target_name = proxmox_backend_name(endpoint)
+    backend_id = _backend_id_for_name(endpoints, target_name)
+    if backend_id is None:
+        return (
+            None,
+            f"Proxmox endpoint '{target_name}' is not registered on the ProxBox "
+            "backend yet; cannot scope sync to a single endpoint.",
+        )
+    return backend_id, None
+
+
+def resolve_backend_endpoint_ids(
+    endpoints: list[ProxmoxEndpoint],
+    *,
+    base_url: str,
+    auth_headers: dict[str, str] | None = None,
+    backend_verify_ssl: bool = True,
+    timeout: int = 15,
+) -> tuple[dict[int, int], str | None]:
+    """Batch-resolve plugin ``ProxmoxEndpoint`` rows to backend ids in one call.
+
+    Returns ``({plugin_pk: backend_id}, error)``. Plugin endpoints with no
+    matching backend row are simply omitted from the map so the caller can detect
+    and skip them; ``error`` is only set when the backend list itself could not be
+    fetched.
+    """
+    backend_rows, list_error = _list_backend_proxmox_endpoints(
+        base_url=base_url,
+        auth_headers=auth_headers,
+        backend_verify_ssl=backend_verify_ssl,
+        timeout=timeout,
+    )
+    if backend_rows is None:
+        return {}, list_error
+
+    mapping: dict[int, int] = {}
+    for endpoint in endpoints:
+        pk = getattr(endpoint, "pk", getattr(endpoint, "id", None))
+        if pk is None:
+            continue
+        backend_id = _backend_id_for_name(
+            backend_rows, proxmox_backend_name(endpoint)
+        )
+        if backend_id is not None:
+            mapping[int(pk)] = backend_id
+    return mapping, None
+
+
 def _netbox_endpoint_backend_payload(endpoint: NetBoxEndpoint) -> dict[str, object]:
     """JSON body for POST/PUT ``/netbox/endpoint`` from a ``NetBoxEndpoint`` row."""
     # Resolve IP address string — fall back to loopback when only a domain is set.

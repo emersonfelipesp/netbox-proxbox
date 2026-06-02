@@ -60,7 +60,9 @@ class VirtualMachineSyncNowView(
             sync_types=list(_VM_SYNC_NOW_SYNC_TYPES),
             netbox_vm_ids=[str(vm.pk)],
             proxmox_endpoint_ids=list(
-                ProxmoxEndpoint.objects.values_list("pk", flat=True)
+                ProxmoxEndpoint.objects.filter(enabled=True).values_list(
+                    "pk", flat=True
+                )
             ),
         )
         messages.success(

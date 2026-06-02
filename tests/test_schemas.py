@@ -78,6 +78,52 @@ def test_cluster_status_response_wraps_list_payload():
     assert len(response.node_records) == 2
 
 
+def test_cluster_status_response_flattens_nested_node_list():
+    """The real backend nests nodes under ``node_list`` (one cluster per session).
+
+    Regression: a single nested cluster object must yield the cluster record AND
+    hoist its ``node_list`` members to top-level node records, otherwise
+    ``node_records`` is empty and cluster/node sync writes zero nodes.
+    """
+    response = ProxmoxClusterStatusResponse.model_validate(
+        [
+            {
+                "type": "cluster",
+                "name": "pve",
+                "nodes": 2,
+                "quorate": 1,
+                "node_list": [
+                    {"type": "node", "name": "node-1", "online": 1},
+                    {"type": "node", "name": "node-2", "online": 0},
+                ],
+            }
+        ]
+    )
+
+    assert response.cluster_record is not None
+    assert response.cluster_record.name == "pve"
+    assert {node.name for node in response.node_records} == {"node-1", "node-2"}
+
+
+def test_cluster_status_response_flattens_session_keyed_dict():
+    """A dict keyed by session name (legacy shape) is flattened across values."""
+    response = ProxmoxClusterStatusResponse.model_validate(
+        {
+            "pve": [
+                {
+                    "type": "cluster",
+                    "name": "pve",
+                    "node_list": [{"type": "node", "name": "node-1", "online": 1}],
+                }
+            ]
+        }
+    )
+
+    assert response.cluster_record is not None
+    assert response.cluster_record.name == "pve"
+    assert [node.name for node in response.node_records] == ["node-1"]
+
+
 def test_proxmox_node_row_builds_from_persisted_node_model():
     node = SimpleNamespace(
         name="pve-02",

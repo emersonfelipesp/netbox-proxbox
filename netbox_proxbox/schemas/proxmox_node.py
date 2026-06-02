@@ -67,19 +67,37 @@ class ProxmoxClusterStatusResponse(ProxboxBaseModel):
     @model_validator(mode="before")
     @classmethod
     def _accept_list_or_dict(cls, v: object) -> dict[str, object]:
-        """Wrap bare list from Proxmox into ``{'records': [...]}``.
+        """Normalise the ``/proxmox/cluster/status`` payload into flat records.
 
-        The API returns either a plain list or a dict of session_name → list.
+        The backend returns one entry per Proxmox session. Each entry is a
+        *cluster* object that carries its members under a nested ``node_list``
+        (``[{"type": "cluster", ..., "node_list": [{"type": "node", ...}]}]``).
+        Older/standalone shapes may instead return a flat list mixing
+        ``cluster`` and ``node`` records, or a dict of session_name → list.
+
+        Flatten every shape into a single ``records`` list so ``cluster_record``
+        and ``node_records`` work regardless of nesting: each cluster object is
+        kept *and* its ``node_list`` members are hoisted to top-level node
+        records.
         """
+        raw_items: list[object] = []
         if isinstance(v, list):
-            return {"records": v}
-        if isinstance(v, dict):
-            all_records: list[object] = []
+            raw_items = list(v)
+        elif isinstance(v, dict):
             for val in v.values():
                 if isinstance(val, list):
-                    all_records.extend(val)
-            return {"records": all_records}
-        return {"records": []}
+                    raw_items.extend(val)
+        else:
+            return {"records": []}
+
+        records: list[object] = []
+        for item in raw_items:
+            records.append(item)
+            if isinstance(item, dict):
+                nested_nodes = item.get("node_list")
+                if isinstance(nested_nodes, list):
+                    records.extend(nested_nodes)
+        return {"records": records}
 
     @property
     def cluster_record(self) -> ProxmoxClusterStatusRecord | None:
