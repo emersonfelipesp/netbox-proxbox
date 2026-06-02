@@ -139,9 +139,26 @@ class FastAPIEndpoint(EndpointBase):
         is_new_token = not (self.token or "").strip()
         if is_new_token:
             self.token = secrets.token_urlsafe(48)
+
+        # Detect an explicit token change on an existing row so we can re-register.
+        token_explicitly_changed = False
+        if self.pk and not is_new_token:
+            try:
+                prior = type(self).objects.only("token").get(pk=self.pk)
+                token_explicitly_changed = (
+                    bool(prior.token) and prior.token != self.token
+                )
+            except type(self).DoesNotExist:
+                pass
+
         super().save(*args, **kwargs)
         if is_new_token:
             self._register_key_with_backend()
+        elif token_explicitly_changed:
+            # Force-register the new token even though the backend already has keys.
+            # This handles the case where the backend key was rotated and the operator
+            # sets a fresh token value here to re-synchronise.
+            self._register_key_with_backend(skip_bootstrap_check=True)
 
     def _is_bootstrap_needed(self, base_url: str) -> bool:
         """Check whether the proxbox-api backend still needs its API key bootstrapped."""
@@ -159,8 +176,14 @@ class FastAPIEndpoint(EndpointBase):
             logger.debug("Could not check bootstrap status: %s", exc)
         return True
 
-    def _register_key_with_backend(self) -> None:
-        """Best-effort: register the auto-generated token with the proxbox-api backend."""
+    def _register_key_with_backend(self, skip_bootstrap_check: bool = False) -> None:
+        """Best-effort: register the current token with the proxbox-api backend.
+
+        Args:
+            skip_bootstrap_check: When True, register even if the backend already has
+                keys (used when the operator explicitly sets a new token value to
+                re-synchronise after a backend key rotation).
+        """
         from netbox_proxbox.utils import get_fastapi_url
 
         try:
@@ -170,7 +193,7 @@ class FastAPIEndpoint(EndpointBase):
                 logger.warning("No FastAPI URL configured, cannot register API key.")
                 return
 
-            if not self._is_bootstrap_needed(base_url):
+            if not skip_bootstrap_check and not self._is_bootstrap_needed(base_url):
                 logger.debug(
                     "proxbox-api already has API key configured; skipping registration."
                 )

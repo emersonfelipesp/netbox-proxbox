@@ -6,6 +6,18 @@ from typing import TYPE_CHECKING
 
 from netbox_proxbox.choices import SyncTypeChoices
 from netbox_proxbox.constants import OVERWRITE_FIELDS
+
+try:
+    from netbox_proxbox.constants import SYNC_MODE_FIELDS
+except ImportError:  # pragma: no cover - compatibility for focused import stubs
+    SYNC_MODE_FIELDS = (
+        "sync_mode_vm",
+        "sync_mode_vm_template",
+        "sync_mode_cluster",
+        "sync_mode_node",
+        "sync_mode_storage",
+        "sync_mode_ip_address",
+    )
 from netbox_proxbox.sync_types import (
     _TARGETED_VM_JOB_NAME_RE,
     _TARGETED_VM_SYNC_TYPES,
@@ -22,6 +34,19 @@ if TYPE_CHECKING:
         VMSnapshot,
         VMTaskHistory,
     )
+
+
+def _queryset_first(value: object) -> object | None:
+    """Return the first item from a Django queryset or lightweight test stub."""
+    first = getattr(value, "first", None)
+    if callable(first):
+        return first()
+    try:
+        return next(iter(value))  # type: ignore[arg-type]
+    except StopIteration:
+        return None
+    except TypeError:
+        return None
 
 
 def _use_guest_agent_interface_name_setting() -> bool:
@@ -141,6 +166,20 @@ def _global_overwrites() -> dict[str, bool]:
         return {name: True for name in OVERWRITE_FIELDS}
 
 
+def _global_sync_modes() -> dict[str, str]:
+    """Return sync modes from the global plugin settings singleton."""
+    try:
+        from netbox_proxbox.models import ProxboxPluginSettings
+
+        settings = ProxboxPluginSettings.get_solo()
+        return {
+            name: str(getattr(settings, name, "always") or "always")
+            for name in SYNC_MODE_FIELDS
+        }
+    except (ImportError, RuntimeError, AttributeError):
+        return {name: "always" for name in SYNC_MODE_FIELDS}
+
+
 def effective_overwrites_for_endpoint(
     proxmox_endpoint_id: int | str | None,
 ) -> dict[str, bool]:
@@ -155,7 +194,9 @@ def effective_overwrites_for_endpoint(
     try:
         from netbox_proxbox.models import ProxmoxEndpoint
 
-        endpoint = ProxmoxEndpoint.objects.filter(pk=int(proxmox_endpoint_id)).first()
+        endpoint = _queryset_first(
+            ProxmoxEndpoint.objects.filter(pk=int(proxmox_endpoint_id))
+        )
     except (ImportError, RuntimeError, ValueError, TypeError):
         return _global_overwrites()
     if endpoint is None:
@@ -163,6 +204,33 @@ def effective_overwrites_for_endpoint(
     return {
         name: bool(value) for name, value in endpoint.effective_overwrites().items()
     }
+
+
+def effective_sync_modes_for_endpoint(
+    proxmox_endpoint_id: int | str | None,
+) -> dict[str, str]:
+    """Resolve sync modes for a single endpoint, falling back to global defaults."""
+    global_modes = _global_sync_modes()
+    if proxmox_endpoint_id in (None, "", 0, "0"):
+        return global_modes
+    try:
+        from netbox_proxbox.models import ProxmoxEndpoint
+
+        endpoint = _queryset_first(
+            ProxmoxEndpoint.objects.filter(pk=int(proxmox_endpoint_id))
+        )
+    except (ImportError, RuntimeError, ValueError, TypeError):
+        return global_modes
+    if endpoint is None:
+        return global_modes
+    modes: dict[str, str] = {}
+    for field_name in SYNC_MODE_FIELDS:
+        resource_type = field_name.removeprefix("sync_mode_")
+        try:
+            modes[field_name] = str(endpoint.effective_sync_mode(resource_type))
+        except (AttributeError, ValueError):
+            modes[field_name] = global_modes[field_name]
+    return modes
 
 
 def effective_tenant_regex_for_endpoint(
@@ -192,7 +260,9 @@ def effective_tenant_regex_for_endpoint(
     try:
         from netbox_proxbox.models import ProxmoxEndpoint
 
-        endpoint = ProxmoxEndpoint.objects.filter(pk=int(proxmox_endpoint_id)).first()
+        endpoint = _queryset_first(
+            ProxmoxEndpoint.objects.filter(pk=int(proxmox_endpoint_id))
+        )
     except (ImportError, RuntimeError, ValueError, TypeError):
         return enabled, rules
     if endpoint is None:

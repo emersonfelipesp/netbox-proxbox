@@ -13,18 +13,24 @@ from netbox_proxbox.views.error_utils import extract_backend_error_detail
 
 logger = logging.getLogger(__name__)
 
-_LONG_RUNNING_BACKUP_PATH_MARKER = "virtualization/virtual-machines/backups/all/create"
-_LONG_RUNNING_SNAPSHOT_PATH_MARKER = (
-    "virtualization/virtual-machines/snapshots/all/create"
-)
+_LONG_RUNNING_VM_SYNC_MARKER = "virtualization/virtual-machines"
+_LONG_RUNNING_FULL_UPDATE_MARKER = "full-update"
 _LONG_HTTP_READ_TIMEOUT = (5, 3600)
 
 
 def http_timeout_for_sync_path(path: str) -> float | tuple[int, int]:
-    """Return read timeout for a backend sync path (long for backup/snapshot bulk ops)."""
-    if _LONG_RUNNING_BACKUP_PATH_MARKER in path:
+    """Return read timeout for a backend sync path (long for bulk/full-update ops).
+
+    VMs with 50+ interfaces require extended time to sync all interfaces, IPs, and VLANs.
+    Full-update runs all sync stages sequentially, potentially taking 30+ minutes for
+    large Proxmox clusters. Use 1-hour read timeout for these operations.
+
+    Note: The VM marker subsumes backup and snapshot paths (they all contain
+    'virtualization/virtual-machines'), so only the broader markers need to be checked.
+    """
+    if _LONG_RUNNING_VM_SYNC_MARKER in path:
         return _LONG_HTTP_READ_TIMEOUT
-    if _LONG_RUNNING_SNAPSHOT_PATH_MARKER in path:
+    if _LONG_RUNNING_FULL_UPDATE_MARKER in path:
         return _LONG_HTTP_READ_TIMEOUT
     return 5
 

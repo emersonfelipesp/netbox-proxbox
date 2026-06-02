@@ -42,7 +42,7 @@ class NetBoxEndpointForm(NetBoxModelForm):
     )
 
     token = DynamicModelChoiceField(
-        queryset=Token.objects.all(),
+        queryset=Token.objects.filter(version=1),
         required=False,
         help_text="Choose an existing NetBox v1 API token. For NetBox v2 authentication, provide token key and token secret below.",
         label="API Token",

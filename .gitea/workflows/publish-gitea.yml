@@ -1,0 +1,237 @@
+name: Gitea Package Registry — Publish
+
+on:
+  push:
+    tags:
+      - 'v*'
+  create:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Tag to publish (e.g. v0.0.16rc1 or v0.0.16)'
+        required: true
+
+jobs:
+  validate-version:
+    runs-on: mirror-host
+    outputs:
+      version: ${{ steps.extract.outputs.version }}
+      is_rc: ${{ steps.extract.outputs.is_rc }}
+      tag: ${{ steps.extract.outputs.tag }}
+    steps:
+      - name: Determine tag
+        id: resolve_tag
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag_name }}
+        run: |
+          set -euo pipefail
+          TAG_PATTERN='^v[0-9]+\.[0-9]+\.[0-9]+(rc[0-9]+|\.post[0-9]+)?$'
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            TAG="$INPUT_TAG"
+          elif [ "$EVENT_NAME" = "create" ]; then
+            if [[ "${GITHUB_REF}" != refs/tags/* ]]; then
+              echo "Skipping create event for non-tag ref: ${GITHUB_REF}"
+              exit 0
+            fi
+            TAG="${GITHUB_REF_NAME}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          if ! echo "${TAG}" | grep -qE "${TAG_PATTERN}"; then
+            echo "ERROR: tag '${TAG}' does not match expected pattern ${TAG_PATTERN}"
+            exit 1
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_ENV"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.resolve_tag.outputs.tag }}
+
+      - id: extract
+        name: Extract and validate version
+        env:
+          TAG: ${{ steps.resolve_tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          VERSION="${TAG#v}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          if echo "${VERSION}" | grep -qE 'rc[0-9]+$'; then
+            echo "is_rc=true" >> "$GITHUB_OUTPUT"
+            echo "RC release: ${VERSION}"
+          else
+            echo "is_rc=false" >> "$GITHUB_OUTPUT"
+            echo "Official release: ${VERSION}"
+          fi
+          # Validate pyproject.toml matches tag
+          PYVER=$(grep '^version' pyproject.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          if [ "${VERSION}" != "${PYVER}" ]; then
+            echo "ERROR: tag ${TAG} (${VERSION}) does not match pyproject.toml version ${PYVER}"
+            exit 1
+          fi
+          echo "Version ${VERSION} validated against pyproject.toml"
+          # Validate __init__.py version matches
+          if [ -f "netbox_proxbox/__init__.py" ]; then
+            INITVER=$(grep 'version = ' netbox_proxbox/__init__.py | grep -v '#' | head -1 | sed 's/.*"\(.*\)".*/\1/')
+            if [ "${VERSION}" != "${INITVER}" ]; then
+              echo "ERROR: tag ${TAG} (${VERSION}) does not match __init__.py version ${INITVER}"
+              exit 1
+            fi
+            echo "Version ${VERSION} validated against __init__.py"
+          fi
+
+
+  publish-gitea:
+    needs: validate-version
+    if: ${{ needs.validate-version.outputs.version != '' }}
+    runs-on: mirror-host
+    env:
+      HOME: /root
+      VERSION: ${{ needs.validate-version.outputs.version }}
+      TAG: ${{ needs.validate-version.outputs.tag }}
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate-version.outputs.tag }}
+
+      - name: Install build tools
+        run: |
+          set -euo pipefail
+          if ! command -v uv >/dev/null 2>&1; then
+            apt-get update -qq
+            apt-get install -y curl python3 2>/dev/null || true
+            curl -LsSf https://astral.sh/uv/install.sh | sh -s -- --no-modify-path
+            export PATH="${HOME}/.local/bin:${PATH}"
+          fi
+          export PATH="${HOME}/.local/bin:${PATH}"
+          uv --version
+
+      - name: Build distributions
+        run: |
+          export PATH="${HOME}/.local/bin:${PATH}"
+          uv build
+          ls dist/
+
+      - name: Publish to Gitea Package Registry
+        env:
+          TWINE_USERNAME: emersonfelipesp
+          TWINE_PASSWORD: ${{ secrets.PKG_TOKEN }}
+          TWINE_REPOSITORY_URL: https://git.nmulti.cloud/api/packages/emersonfelipesp/pypi
+        run: |
+          export PATH="${HOME}/.local/bin:${PATH}"
+          uv run --with twine twine upload --non-interactive dist/*
+
+      - name: Verify package in Gitea registry
+        env:
+          GITEA_TOKEN: ${{ secrets.PKG_TOKEN }}
+        run: |
+          set -euo pipefail
+          PKG_NAME=$(grep '^name' pyproject.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          sleep 5
+          COUNT=$(curl -sf \
+            "https://git.nmulti.cloud/api/v1/packages/emersonfelipesp?type=pypi&q=${PKG_NAME}&limit=50" \
+            -H "Authorization: token ${GITEA_TOKEN}" \
+            | VERSION="${VERSION}" python3 -c 'import json, os, sys; pkgs = json.load(sys.stdin); print(sum(1 for p in pkgs if p.get("version") == os.environ["VERSION"]))')
+          echo "Found ${COUNT} package(s) matching ${PKG_NAME} ${VERSION}"
+          if [ "${COUNT}" -lt 1 ]; then
+            echo "ERROR: Package ${PKG_NAME} ${VERSION} not found in Gitea registry"
+            exit 1
+          fi
+          echo "Package ${PKG_NAME} ${VERSION} successfully published to Gitea registry"
+
+  push-to-github:
+    needs: [validate-version, publish-gitea]
+    if: ${{ needs.validate-version.outputs.version != '' }}
+    runs-on: mirror-host
+    env:
+      HOME: /root
+      VERSION: ${{ needs.validate-version.outputs.version }}
+      TAG: ${{ needs.validate-version.outputs.tag }}
+      IS_RC: ${{ needs.validate-version.outputs.is_rc }}
+      GH_TOKEN: ${{ secrets.GH_MIRROR_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.GH_MIRROR_TOKEN }}
+    steps:
+      - name: Install GitHub CLI
+        run: |
+          set -euo pipefail
+          if command -v gh >/dev/null 2>&1; then gh --version; exit 0; fi
+          apt-get update -qq
+          apt-get install -y ca-certificates curl gnupg
+          mkdir -p -m 755 /etc/apt/keyrings
+          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+            | tee /etc/apt/keyrings/githubcli-archive-keyring.gpg >/dev/null
+          chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+            | tee /etc/apt/sources.list.d/github-cli.list >/dev/null
+          apt-get update -qq
+          apt-get install -y gh
+          gh --version
+
+      - name: Checkout tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate-version.outputs.tag }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Push tag to GitHub
+        run: |
+          set -euo pipefail
+          REPO_NAME="${GITHUB_REPOSITORY#*/}"
+          git config user.email "gitea-actions@git.nmulti.cloud"
+          git config user.name "Gitea Actions"
+          gh auth setup-git --hostname github.com --force
+          git remote add github "https://github.com/emersonfelipesp/${REPO_NAME}.git" \
+            || git remote set-url github "https://github.com/emersonfelipesp/${REPO_NAME}.git"
+          git push github "refs/tags/${TAG}:refs/tags/${TAG}"
+          echo "Tag ${TAG} pushed to GitHub"
+
+      - name: Create GitHub Release (non-RC only)
+        if: env.IS_RC == 'false'
+        run: |
+          set -euo pipefail
+          REPO_NAME="${GITHUB_REPOSITORY#*/}"
+          GH_REPO="emersonfelipesp/${REPO_NAME}"
+          NOTES_FILE="docs/release-notes/version-${VERSION}.md"
+          if [ -f "${NOTES_FILE}" ]; then
+            NOTES_ARGS="--notes-file ${NOTES_FILE}"
+          else
+            NOTES_ARGS="--generate-notes"
+          fi
+          TARGET_BRANCH="develop"
+          if gh release view "${TAG}" --repo "${GH_REPO}" >/dev/null 2>&1; then
+            echo "Release ${TAG} already exists — ensuring it is not a draft"
+            gh release edit "${TAG}" --repo "${GH_REPO}" --draft=false
+            echo "Release ${TAG} published (was draft)"
+          else
+            gh release create "${TAG}" \
+              --repo "${GH_REPO}" \
+              --target "${TARGET_BRANCH}" \
+              --title "${TAG}" \
+              ${NOTES_ARGS}
+            echo "GitHub release ${TAG} created for ${GH_REPO}"
+          fi
+
+  deploy:
+    name: Deploy to production (netbox.nmulti.cloud)
+    needs: [validate-version, push-to-github]
+    if: ${{ !fromJSON(needs.validate-version.outputs.is_rc) }}
+    runs-on: prod-deploy
+    env:
+      TAG: ${{ needs.validate-version.outputs.tag }}
+    steps:
+      - name: Deploy plugin
+        run: |
+          # Validate tag format defensively
+          case "$TAG" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "ERROR: Invalid tag format: $TAG"; exit 1 ;;
+          esac
+          ssh -o StrictHostKeyChecking=accept-new \
+              -o ServerAliveInterval=30 \
+              -o ServerAliveCountMax=20 \
+              nmc-prod-207 -- deploy-plugin netbox-proxbox "$TAG"

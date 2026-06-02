@@ -93,6 +93,14 @@ urlpatterns = [
         "backups/", include(get_model_urls("netbox_proxbox", "vmbackup", detail=False))
     ),
     path(
+        "vm-templates/<int:pk>/",
+        include(get_model_urls("netbox_proxbox", "proxmoxvmtemplate")),
+    ),
+    path(
+        "vm-templates/",
+        include(get_model_urls("netbox_proxbox", "proxmoxvmtemplate", detail=False)),
+    ),
+    path(
         "backup-routines/<int:pk>/",
         include(get_model_urls("netbox_proxbox", "backuproutine")),
     ),

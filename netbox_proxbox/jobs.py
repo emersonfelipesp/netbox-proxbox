@@ -33,6 +33,7 @@ from netbox_proxbox.sync_params import (
     _proxbox_fetch_max_concurrency_setting,
     _serialize_sync_params,
     _use_guest_agent_interface_name_setting,
+    effective_sync_modes_for_endpoint,
 )
 import netbox_proxbox.sync_stages as sync_stages
 from netbox_proxbox.sync_ownership import (
@@ -107,6 +108,7 @@ def _sync_stage_settings() -> None:
         _ignore_ipv6_link_local_addresses_setting
     )
     sync_stages._primary_ip_preference_setting = _primary_ip_preference_setting
+    sync_stages.effective_sync_modes_for_endpoint = effective_sync_modes_for_endpoint
 
 
 async def _run_batch_selected_sync(

@@ -8,7 +8,28 @@ import time
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from netbox_proxbox.choices import SyncTypeChoices
+try:
+    from netbox_proxbox.choices import SyncModeChoices, SyncTypeChoices
+except ImportError:  # pragma: no cover - compatibility for focused import stubs
+    from netbox_proxbox.choices import SyncTypeChoices
+
+    class SyncModeChoices:  # type: ignore[no-redef]
+        ALWAYS = "always"
+        BOOTSTRAP_ONLY = "bootstrap_only"
+        DISABLED = "disabled"
+
+
+try:
+    from netbox_proxbox.constants import SYNC_MODE_FIELDS
+except ImportError:  # pragma: no cover - compatibility for focused import stubs
+    SYNC_MODE_FIELDS = (
+        "sync_mode_vm",
+        "sync_mode_vm_template",
+        "sync_mode_cluster",
+        "sync_mode_node",
+        "sync_mode_storage",
+        "sync_mode_ip_address",
+    )
 from netbox_proxbox.sync_types import (
     _format_seconds,
     _extract_backend_error_text,
@@ -31,6 +52,7 @@ from netbox_proxbox.sync_params import (
     _primary_ip_preference_setting,
     _serialize_sync_params,
     effective_overwrites_for_endpoint,
+    effective_sync_modes_for_endpoint,
 )
 from netbox_proxbox.sync_ownership import (
     _claim_rq_sync_ownership,
@@ -43,6 +65,17 @@ if TYPE_CHECKING:
 _HEARTBEAT_SECONDS = 20.0
 _STAGE_RETRY_MAX = 2
 _STAGE_RETRY_DELAY = 8.0
+try:
+    from netbox_proxbox.netbox_bootstrap import BOOTSTRAP_ONLY_TAG_SLUG
+except ImportError:  # pragma: no cover - compatibility for focused import stubs
+    BOOTSTRAP_ONLY_TAG_SLUG = "bootstrap-only"
+
+sync_mode_vm = SyncModeChoices.ALWAYS
+sync_mode_vm_template = SyncModeChoices.ALWAYS
+sync_mode_cluster = SyncModeChoices.ALWAYS
+sync_mode_node = SyncModeChoices.ALWAYS
+sync_mode_storage = SyncModeChoices.ALWAYS
+sync_mode_ip_address = SyncModeChoices.ALWAYS
 
 # Stages that are supplementary/optional: a failure logs a warning and the sync
 # continues.  Required stages (devices, VMs, storage, interfaces, IPs) are NOT
@@ -54,6 +87,105 @@ _SKIPPABLE_STAGES: frozenset[str] = frozenset(
         SyncTypeChoices.TASK_HISTORY,  # "task-history"
     }
 )
+
+
+def _set_sync_mode_vars(modes: dict[str, str]) -> None:
+    """Update module-level sync-mode vars for the active endpoint scope."""
+    for field_name in SYNC_MODE_FIELDS:
+        globals()[field_name] = str(
+            modes.get(field_name) or getattr(SyncModeChoices, "ALWAYS", "always")
+        )
+
+
+def _active_sync_modes() -> dict[str, str]:
+    """Return the currently resolved module-level sync modes."""
+    return {
+        field_name: str(
+            globals().get(field_name) or getattr(SyncModeChoices, "ALWAYS", "always")
+        )
+        for field_name in SYNC_MODE_FIELDS
+    }
+
+
+def _sync_mode_for_resource(resource_type: str) -> str:
+    field_name = f"sync_mode_{resource_type}"
+    return _active_sync_modes().get(field_name, SyncModeChoices.ALWAYS)
+
+
+def _has_bootstrap_only_tag(obj: object) -> bool:
+    """Return True when a NetBox object already has the bootstrap-only tag."""
+    tags = getattr(obj, "tags", None)
+    if tags is None:
+        return False
+    try:
+        return bool(tags.filter(slug=BOOTSTRAP_ONLY_TAG_SLUG).exists())
+    except Exception:  # noqa: BLE001 - tag managers vary across NetBox/test stubs
+        return False
+
+
+def _get_bootstrap_only_tag() -> object | None:
+    """Return the bootstrap-only Tag, creating it when NetBox's Tag model exists."""
+    try:
+        from netbox_proxbox.netbox_bootstrap import ensure_bootstrap_only_tag
+    except (ImportError, RuntimeError):
+        return None
+    try:
+        return ensure_bootstrap_only_tag()
+    except Exception:  # noqa: BLE001 - bootstrap tagging must not abort sync
+        return None
+
+
+def _add_bootstrap_only_tag(obj: object) -> None:
+    """Attach the bootstrap-only tag to a newly created object when possible."""
+    tag = _get_bootstrap_only_tag()
+    tags = getattr(obj, "tags", None)
+    if tag is None or tags is None:
+        return
+    try:
+        tags.add(tag)
+    except Exception:  # noqa: BLE001 - bootstrap tagging must not abort sync
+        return
+
+
+def _bootstrap_only_should_skip_existing(obj: object, mode: str) -> bool:
+    """Gate updates/deletes for objects already tagged bootstrap-only."""
+    return mode == SyncModeChoices.BOOTSTRAP_ONLY and _has_bootstrap_only_tag(obj)
+
+
+def _vm_resource_allowed_by_sync_mode(resource: object) -> bool:
+    """Return whether a Proxmox VM record should be sent based on template mode."""
+    is_template = bool(getattr(resource, "template", False))
+    if is_template:
+        return _sync_mode_for_resource("vm_template") != SyncModeChoices.DISABLED
+    return _sync_mode_for_resource("vm") != SyncModeChoices.DISABLED
+
+
+def _stage_skip_reason(sync_type: str) -> str | None:
+    """Return why a stage should be skipped for the active sync modes."""
+    disabled = SyncModeChoices.DISABLED
+    vm_disabled = _sync_mode_for_resource("vm") == disabled
+    template_disabled = _sync_mode_for_resource("vm_template") == disabled
+    stage_resource_map = {
+        SyncTypeChoices.DEVICES: "node",
+        SyncTypeChoices.NETWORK_INTERFACES: "node",
+        SyncTypeChoices.STORAGE: "storage",
+        SyncTypeChoices.IP_ADDRESSES: "ip_address",
+    }
+    resource_type = stage_resource_map.get(sync_type)
+    if resource_type and _sync_mode_for_resource(resource_type) == disabled:
+        return f"sync_mode_{resource_type}=disabled"
+    if sync_type == SyncTypeChoices.VIRTUAL_MACHINES and (
+        vm_disabled and template_disabled
+    ):
+        return "sync_mode_vm=disabled and sync_mode_vm_template=disabled"
+    if sync_type in {
+        SyncTypeChoices.VIRTUAL_MACHINES_DISKS,
+        SyncTypeChoices.VIRTUAL_MACHINES_BACKUPS,
+        SyncTypeChoices.VIRTUAL_MACHINES_SNAPSHOTS,
+        SyncTypeChoices.VM_INTERFACES,
+    } and (vm_disabled and template_disabled):
+        return "VM and VM template sync modes are disabled"
+    return None
 
 
 async def _run_batch_selected_sync(
@@ -214,6 +346,11 @@ def _build_base_query_params(
     overwrites = effective_overwrites_for_endpoint(single_endpoint_id)
     for name, value in overwrites.items():
         base_query[name] = "true" if value else "false"
+
+    sync_modes = effective_sync_modes_for_endpoint(single_endpoint_id)
+    _set_sync_mode_vars(sync_modes)
+    for name, value in sync_modes.items():
+        base_query[name] = value
 
     if proxmox_endpoint_ids:
         base_query["proxmox_endpoint_ids"] = ",".join(proxmox_endpoint_ids)
@@ -399,6 +536,7 @@ def _run_all_stages_sync(
     disable_vm_network_on_vm_stage = SyncTypeChoices.VIRTUAL_MACHINES in stages and (
         SyncTypeChoices.VM_INTERFACES in stages
         or SyncTypeChoices.IP_ADDRESSES in stages
+        or _sync_mode_for_resource("ip_address") == SyncModeChoices.DISABLED
     )
 
     for endpoint_scope in endpoint_scopes:
@@ -415,6 +553,28 @@ def _run_all_stages_sync(
             base_query["netbox_branch_schema_id"] = str(netbox_branch_schema_id)
 
         for st in stages:
+            skip_reason = _stage_skip_reason(st)
+            if skip_reason:
+                job.logger.info(
+                    "Skipping stage %s for endpoint %s: %s",
+                    st,
+                    endpoint_id or "unscoped",
+                    skip_reason,
+                )
+                stages_out.append(
+                    {
+                        "sync_type": st,
+                        "endpoint_id": endpoint_id,
+                        "stream_path": None,
+                        "runtime_seconds": 0.0,
+                        "result_summary": {
+                            "ok": True,
+                            "skipped": True,
+                            "reason": skip_reason,
+                        },
+                    }
+                )
+                continue
             query_params = _build_stage_query_params(
                 base_query,
                 st,

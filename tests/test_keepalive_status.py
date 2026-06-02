@@ -815,11 +815,13 @@ def test_proxmox_mode_detected_on_successful_keepalive(
 
     def fake_get(url, verify=True, timeout=None, params=None, headers=None):
         if url.endswith("/proxmox/cluster/status"):
-            return ResponseStub([
-                {"type": "cluster", "name": "pve-cluster"},
-                {"type": "node", "name": "pve01"},
-                {"type": "node", "name": "pve02"},
-            ])
+            return ResponseStub(
+                [
+                    {"type": "cluster", "name": "pve-cluster"},
+                    {"type": "node", "name": "pve01"},
+                    {"type": "node", "name": "pve02"},
+                ]
+            )
         return ResponseStub([{"pve01": {"version": "8.3.0"}}])
 
     monkeypatch.setattr(ss.requests, "get", fake_get)

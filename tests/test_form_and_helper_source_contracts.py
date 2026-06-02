@@ -147,6 +147,16 @@ def test_netbox_endpoint_form_rejects_unusable_v1_selected_token():
     )
 
 
+def test_netbox_endpoint_form_excludes_v2_tokens_from_dropdown():
+    """Token dropdown must only show v1 tokens — v2 secrets are not retrievable via FK."""
+    contents = _read("netbox_proxbox/forms/netbox.py")
+    assert "Token.objects.filter(version=1)" in contents, (
+        "NetBoxEndpointForm.token queryset must filter to version=1 so v2 tokens "
+        "never appear in the dropdown (their secrets cannot be retrieved via FK). "
+        "See GitHub issue #545."
+    )
+
+
 def test_endpoint_forms_require_domain_or_ip_address():
     files = [
         "netbox_proxbox/forms/proxmox.py",

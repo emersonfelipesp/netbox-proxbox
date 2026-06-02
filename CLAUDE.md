@@ -41,7 +41,7 @@ This repository packages the `netbox_proxbox` NetBox plugin. The plugin adds end
 - Docker-based plugin installation docs are maintained at [`docs/installation/3-installing-plugin-docker.md`](./docs/installation/3-installing-plugin-docker.md), including `plugin_requirements.txt` and `configuration/plugins.py` usage.
 - Backend Docker examples map host `8800` to container `8000` (`-p 8800:8000`) because the published `proxbox-api` image serves through nginx on container port `8000`.
 
-The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxbox/__init__.py). It declares plugin version `0.0.18.post1` and NetBox compatibility `4.5.8` through `4.6.99` (validated against `4.5.8`, `4.5.9`, `4.6.0`, and official `4.6.1`). The `0.0.18.post1` release is prepared for certification with the separate `proxbox-api` backend release `0.0.14` and adds certification evidence on top of the `0.0.18` PVE 9.2 line: `ProxmoxSdnFabric`, `ProxmoxSdnRouteMap`, `ProxmoxSdnPrefixList`, and `ProxmoxDatacenterCpuModel` models via migration `0041_pve_9_2.py`; automated sync services; completed per-node and per-VM firewall sync; HA arm/disarm action views; and `ProxmoxNode.location`. The previous `0.0.17` release pairs with backend `0.0.13`. `proxbox-api` is not a Python dependency of this plugin; the services communicate over HTTP.
+The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxbox/__init__.py). It declares plugin version `0.0.19rc1` and NetBox compatibility `4.5.8` through `4.6.99` (validated against `4.5.8`, `4.5.9`, `4.6.0`, and official `4.6.1`). The `0.0.19` release fixes database and integration compatibility issues with the separate `proxbox-api` backend release `0.0.16`: `FastAPIEndpoint` token-drift fix, `PBSEndpoint`/`PDMEndpoint` `host` and `timeout_seconds` bridging properties. The previous `0.0.18`/`0.0.18.post1` release pairs with backend `0.0.14`. `proxbox-api` is not a Python dependency of this plugin; the services communicate over HTTP.
 
 **Companion repos (cross-link map):**
 
@@ -66,10 +66,29 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
 - **Single FastAPI row:** HTTP and WebSocket helpers such as `get_fastapi_request_context()` in [`netbox_proxbox/services/backend_proxy.py`](./netbox_proxbox/services/backend_proxy.py), `websocket_client`, and several dashboard views resolve the backend via `FastAPIEndpoint.objects.first()` (or the first row from a restricted queryset). If multiple FastAPI endpoints exist, whichever row sorts first is used; plan automation and operator docs accordingly.
 - **Background Proxbox sync jobs (RQ):** `ProxboxSyncJob` enqueues on NetBox’s **`default`** RQ queue (`RQ_QUEUE_DEFAULT`) so a stock **`manage.py rqworker`** (no queue arguments) picks them up. NetBox’s default worker only listens to **`high`**, **`default`**, and **`low`**; the extra django-rq queue **`netbox_proxbox.sync`** is legacy only. Older Job rows may still show **`netbox_proxbox.sync`** in **Queue**; cancel/RQ lookup uses the stored name. Jobs call proxbox-api **SSE** via [`run_sync_stream`](./netbox_proxbox/services/backend_proxy.py) until a terminal `complete` event.
 - **RQ timeout vs HTTP stream:** NetBox’s default **`RQ_DEFAULT_TIMEOUT`** (often **300s** via `configuration.py`) applies to RQ jobs unless overridden. Long syncs were previously killed by RQ while `requests` was still reading the SSE body. The plugin sets a default **`job_timeout`** of **`PROXBOX_SYNC_JOB_TIMEOUT`** (7200s) in [`ProxboxSyncJob.enqueue`](./netbox_proxbox/jobs.py); pass a larger `job_timeout=` to `enqueue()` if needed. That is separate from the HTTP **between-chunk read** timeout (3600s) inside [`run_sync_stream`](./netbox_proxbox/services/backend_proxy.py).
+- **HTTP timeouts for large syncs:** VM sync operations and full-update runs use a 3600-second (1-hour) read timeout instead of the default 5 seconds. VMs with 50+ interfaces require extended time because each interface needs multiple sequential API calls to NetBox (VLAN, bridge, MAC, IPs). See [`http_timeout_for_sync_path`](./netbox_proxbox/services/backend_auth.py) for timeout configuration per sync path.
 - **When a job looks “stuck”:** **pending** usually means **no RQ worker** is running (or it does not listen to **`default`**). **running** for a long time usually means proxbox-api is still syncing or the stream is slow/buffered; **errored** with **`JobTimeoutException`** means RQ’s wall-clock limit was hit—increase `job_timeout` or `PROXBOX_SYNC_JOB_TIMEOUT`. Inspect the job **log** and **error** fields before changing code.
 - **Cancel on Job detail:** For Proxbox Sync rows in **pending**, **scheduled**, or **running** state, the plugin adds **Cancel job** (POST to `proxbox-cancel`). It requires **delete** permission on the core **Job** model, cancels or stops the linked RQ job when possible, then marks the NetBox job **failed** with a “Cancelled by user.” message. Stopping a **running** job is best-effort (RQ stop + long HTTP reads may not abort instantly).
 - **Run now on Job detail:** Shown only when the job is in a **terminal** state (**completed**, **errored**, or **failed**), including after **Cancel** (failed). It is **not** shown for **pending**, **scheduled**, or **running**—use **Cancel** first if a queued run should be abandoned, then **Run now** on the finished row to queue a new sync with the same parameters.
 - **Full update (UI vs jobs):** The plugin home may still use non-streaming helpers such as [`sync_full_update_resource`](./netbox_proxbox/services/backend_proxy.py) for JSON/redirect flows. Scheduled or immediate **Proxbox Sync** jobs use **`full-update/stream`** on proxbox-api and execute the full stage chain in one stream: devices, storage, virtual machines, virtual disks, backups, snapshots, network interfaces, IP addresses, VM interfaces, backup routines, and replications.
+
+### SSL Certificate Verification
+
+The `verify_ssl` setting that controls whether proxbox-api verifies NetBox's SSL certificate **belongs in proxbox-api, not in this plugin**. It is configured in the proxbox-api admin UI (typically `http://proxbox-api-host:8000`), not in the NetBox plugin settings.
+
+**Common mistake:** Users encountering SSL verification errors may look for the setting in the NetBox Proxbox plugin or the `FastAPIEndpoint.verify_ssl` field in NetBox. These are incorrect locations. The relevant setting is:
+- **In:** proxbox-api admin UI → **NetBox Endpoint** → **Verify SSL** checkbox
+- **Not in:** NetBox Proxbox plugin settings
+- **Not in:** `FastAPIEndpoint.verify_ssl` (that field controls the plugin's connection to proxbox-api, not proxbox-api's connection to NetBox)
+
+**Minimum version:** proxbox-api **v0.0.14+** (released May 2026) is required for SSL verification settings to work correctly. Earlier versions had a bug where `verify_ssl=False` was ignored due to missing database migrations and incorrect connector logic. If you are experiencing "SSL certificate verify failed" errors despite unchecking `verify_ssl` in the proxbox-api admin UI, upgrade to **v0.0.14 or later** (see [issue #544](https://github.com/emersonfelipesp/netbox-proxbox/issues/544) for details).
+
+**Manual workaround** (before upgrading):
+```bash
+sqlite3 /path/to/proxbox-api/database.db \
+  "UPDATE netboxendpoint SET verify_ssl = 0 WHERE name = 'your-endpoint-name';"
+```
+Then restart proxbox-api.
 
 ## Plugin settings and configuration
 
@@ -97,6 +116,49 @@ template — and the existing fields plus migration
 show the pattern (`SeparateDatabaseAndState` + `IF NOT EXISTS` for production-safe
 additive schema changes).
 
+## Sync Mode Controls
+
+Per-resource sync modes let operators control how each Proxmox resource type is
+reflected into NetBox. Three modes are available:
+
+- **`always`** (default) — sync on every run; objects are created, updated, and deleted as Proxmox changes.
+- **`bootstrap_only`** — sync the object once on first discovery, tag it with `bootstrap-only` in NetBox, and leave it completely untouched on all subsequent runs.
+- **`disabled`** — skip this resource type entirely; existing objects are not modified or removed.
+
+Controlled resource types: `sync_mode_vm`, `sync_mode_vm_template`, `sync_mode_cluster`, `sync_mode_node`, `sync_mode_storage`, `sync_mode_ip_address`.
+
+Resolution priority: **endpoint-level setting takes priority over the global default**. An endpoint field set to null inherits the global `ProxboxPluginSettings` value.
+
+### VM Templates
+
+Proxmox VM templates (`template=True` in the Proxmox API) are stored in the dedicated `ProxmoxVMTemplate` model, NOT as `virtualization.VirtualMachine` rows. Key fields:
+
+- `proxmox_endpoint` (required FK → ProxmoxEndpoint)
+- `cluster`, `node` (optional FKs, SET_NULL)
+- `source_vm` (optional FK → VirtualMachine, SET_NULL) — the VM this template was made from
+- `cloned_vms` (optional M2M → VirtualMachine) — VMs cloned from this template
+- Full config snapshot: `vcpus`, `memory`, `disk`, `os_type`, `net_config`, `disk_config`, `raw_config`
+
+`sync_mode_vm` and `sync_mode_vm_template` are independent — disabling VMs does not disable template sync.
+
+### Bootstrap-only tag
+
+The `bootstrap-only` tag (slug `bootstrap-only`) is auto-created by `netbox_proxbox/netbox_bootstrap.py`. The tag is attached to objects when they are first created in `bootstrap_only` mode. Removing the tag manually causes the next sync to treat the object as a normal `always`-mode resource.
+
+### Key files
+
+- `netbox_proxbox/choices.py` — `SyncModeChoices` (always / bootstrap_only / disabled)
+- `netbox_proxbox/constants.py` — `SYNC_MODE_FIELDS`, `SYNC_MODE_RESOURCE_TYPES`
+- `netbox_proxbox/models/plugin_settings.py` — global `sync_mode_*` fields
+- `netbox_proxbox/models/proxmox_endpoint.py` — per-endpoint nullable `sync_mode_*` fields + `effective_sync_mode(resource_type)` method
+- `netbox_proxbox/models/vm_template.py` — `ProxmoxVMTemplate` model
+- `netbox_proxbox/migrations/0046_sync_modes.py` — migration for sync mode fields
+- `netbox_proxbox/migrations/0047_proxmox_vm_template.py` — migration for ProxmoxVMTemplate table
+- `netbox_proxbox/sync_stages.py` — `_vm_resource_allowed_by_sync_mode()`, `_has_bootstrap_only_tag()`, `_bootstrap_only_should_skip_existing()`, `_add_bootstrap_only_tag()`
+- `netbox_proxbox/netbox_bootstrap.py` — `ensure_proxbox_tags()`, `ensure_bootstrap_only_tag()`
+- `netbox_proxbox/services/sync_vm_template.py` — `sync_vm_templates()` service
+- `docs/configuration/sync-modes.md` — user-facing documentation
+
 ## CI/CD Workflows
 
 ### Gitea-to-GitHub mirror (`.gitea/workflows/mirror-github.yml`)
@@ -113,6 +175,13 @@ authenticates with `gh`, validates the GitHub repo, configures GitHub git
 credentials with `gh auth setup-git`, and pushes only
 `HEAD:refs/heads/${{ gitea.ref_name }}`. It must never sync tags, use
 `git push --all`, or use `git push --mirror`.
+
+### Gitea Package Registry publish (`.gitea/workflows/publish-gitea.yml`)
+
+Added to `develop` in v0.0.19. Handles `push: tags:`, `create`, and `workflow_dispatch`.
+Due to Gitea 1.26.2 limitations, packages are published via direct upload until the
+trigger issues are resolved. See `proxbox-api/CLAUDE.md` for the exact upload command.
+Secret name: `PKG_TOKEN` (GITEA_ prefix is reserved by Gitea, cannot be used).
 
 ### E2E Docker workflow (`e2e-docker.yml`)
 
@@ -165,13 +234,20 @@ GitHub release creation.**
 | Trigger | Use for | Publishes to |
 |---------|---------|--------------|
 | `push: tags: v*rc*` (plain tag push) | Release candidates `vX.Y.ZrcN` | TestPyPI |
-| `release: published` (GitHub release) | Official `vX.Y.Z` and `vX.Y.Z.postN` | PyPI |
+| `release: published` (GitHub release) | Official `vX.Y.Z` and `vX.Y.Z.postN` | PyPI (Created automatically by `.gitea/workflows/publish-gitea.yml` for future releases) |
 
 Plain non-rc tag pushes (`vX.Y.Z`, `vX.Y.Z.postN`) **do not** trigger the
 publish workflow — the trigger pattern is `v*rc*`, so only rc tags fire it.
 This makes the GitHub release creation the **single, authoritative trigger**
 for official PyPI publishing and eliminates the duplicate-run problem the
 old dual-trigger flow created.
+
+For future releases, `.gitea/workflows/publish-gitea.yml` (Gitea Actions) pushes
+the tag to GitHub **and** creates the non-draft GitHub release automatically via the
+`push-to-github` → "Create GitHub Release" step, which fires `release: published`
+and triggers the GitHub Actions publish workflow. Manually running `gh release create`
+is only needed if `publish-gitea.yml` was not yet added, or for hotfix releases done
+directly on GitHub.
 
 **RC flow (TestPyPI gate, repeatable):**
 
@@ -297,6 +373,202 @@ Sibling-plugin releases (`netbox-pbs`, `netbox-pdm`, `netbox-ceph`,
 `netbox-packer`) should adopt the same develop-first + GH-release-triggered
 policy when their next release cycle begins. Until they do, the older
 "cancel duplicate" step still applies on those repos.
+
+What was done for v0.0.19:
+
+- Fixes database and API compatibility issues between the plugin and proxbox-api:
+  `FastAPIEndpoint` token-drift fix (re-register on explicit token change),
+  `PBSEndpoint`/`PDMEndpoint` `host` and `timeout_seconds` bridging properties.
+- **Gitea-first publish pipeline**: added `.gitea/workflows/publish-gitea.yml` to
+  `develop`. The workflow handles `push: tags:`, `create`, and `workflow_dispatch`
+  events but Gitea 1.26.2's dispatch API returns 500 and tag triggers don't fire on
+  this instance. Until resolved, packages are published via direct `uv build` +
+  `twine upload` to `https://git.nmulti.cloud/api/packages/emersonfelipesp/pypi`
+  using the `PKG_TOKEN` secret (GITEA_ prefix is reserved by Gitea, cannot be used).
+  See `proxbox-api/CLAUDE.md` for the full upload command.
+- Paired backend: `proxbox-api v0.0.16`.
+- **GitHub release**: The draft GitHub release `v0.0.19` was published via `gh release edit v0.0.19 --repo emersonfelipesp/netbox-proxbox --draft=false` (one-time cleanup for releases created as drafts before `publish-gitea.yml` was added). For future releases, `.gitea/workflows/publish-gitea.yml` creates the non-draft GitHub release automatically via the `push-to-github` → "Create GitHub Release" step, which fires `release: published` and triggers the GitHub Actions publish workflow.
+
+### Automatic Production Deployment (`.gitea/workflows/publish-gitea.yml`)
+
+**Starting with v0.0.19**, non-release-candidate (`vX.Y.Z`, `vX.Y.Z.postN`) releases automatically deploy to `netbox.nmulti.cloud` after successful Gitea package registry publish and GitHub release creation.
+
+**Deploy job:**
+- Runs after `push-to-github` job completes (requires validated tag and GitHub Release created)
+- Condition: only for non-RC releases (`is_rc == false`)
+- Runs on `prod-deploy` runner with SSH access to production host
+- Executes: `ssh nmc-prod-207 -- deploy-plugin netbox-proxbox "$TAG"`
+
+**Security hardening:**
+- TAG is passed via environment variable, not direct GitHub Actions context interpolation
+- Bash case statement validates tag format before SSH (accepts `v<X>.<Y>.<Z>` patterns)
+- StrictHostKeyChecking=accept-new prevents MITM attacks
+- Quoted variable interpolation prevents shell injection
+
+**Deployment flow:**
+1. Git fetch/checkout of the released tag in the plugin submodule
+2. pip install -e to refresh editable install
+3. manage.py migrate to apply any pending migrations
+4. manage.py collectstatic to collect new/updated static files
+5. systemctl reload netbox-production (graceful gunicorn reload)
+6. systemctl restart netbox-rq (RQ worker restart for code changes)
+7. Health check: curl -sf http://127.0.0.1:18001/api/ to verify
+
+**Monitoring deployment:**
+- Watch the `publish-gitea.yml` workflow run in Gitea Actions
+- Check the `deploy` job logs for SSH output and health check results
+- Verify production health: `ssh nmc-prod-207 -- health netbox`
+- Check service logs: `ssh nmc-prod-207 -- logs netbox`
+
+**Manual deployment for hotfixes or rollbacks:**
+```bash
+# Deploy a specific tag or branch
+ssh nmc-prod-207 -- deploy-plugin netbox-proxbox v0.0.19.post1
+
+# List recent deploys (check system journal)
+ssh nmc-prod-207 -- journalctl -u netbox-production -n 50 --no-pager
+```
+
+For detailed production deployment infrastructure and cross-plugin coordination, see `/root/personal-context/nmulticloud-context/CLAUDE.md` "Automatic Plugin Deployment to Production" section.
+
+---
+
+## Software Engineering Life Cycle Requirements
+
+This section establishes project-wide quality standards derived from industry-standard software engineering practices. All changes must conform to these requirements before release.
+
+### Requirements Traceability and Design Documentation
+
+**Architectural Design:** The plugin's architecture is defined across:
+- **Plugin models** (`netbox_proxbox/models/`) — subsystem decomposition
+- **Service layers** (`netbox_proxbox/services/`) — dependency definitions and evolution rules
+- **API contracts** (`netbox_proxbox/api/`, `netbox_proxbox/schemas/`) — interface specifications
+- **Integration surface** (backend proxy routes, sync job contracts) — cross-subsystem dependencies
+
+Changes to plugin models, service APIs, or backend contracts MUST include an updated architecture note in the closest CLAUDE.md explaining:
+- What subsystem or interface changed
+- Why the change is necessary (traceability to an issue or feature)
+- What downstream systems are affected
+- Any breaking changes or migration steps
+
+**Derived Requirements:** All plugin features must support the derived requirement that NetBox remains the source of truth for sync data. Features that mutate Proxmox directly (intent workflows) must be explicitly gated and safety-locked.
+
+**Verification:** Before opening a PR, confirm that:
+1. Models and schemas match their CLAUDE.md documentation
+2. All new public methods have docstrings explaining purpose and contracts
+3. Integration points (backend proxies, SSE contracts, webhook handlers) are documented in the nearest CLAUDE.md
+
+### Code Coverage and Quality Metrics
+
+**Coverage Target:** Maintain ≥85% code coverage for the `netbox_proxbox/` package. Coverage is measured by `pytest-cov` and reported in CI.
+
+**Coverage Reporting:** 
+- `rtk pytest tests/ --cov=netbox_proxbox --cov-report=term-missing` runs locally
+- GitHub Actions CI enforces coverage thresholds on every push
+- Uncovered code MUST be documented with a rationale (e.g., "except: pass for legacy API compatibility")
+
+**Exclusions:** The following are exempt from coverage requirements:
+- `netbox_proxbox/static/` (JavaScript), `netbox_proxbox/templates/` (Django templates)
+- Database migration files (`netbox_proxbox/migrations/`)
+- Unreachable exception handlers and platform-specific branches
+
+### Testing and Regression Requirements
+
+**Test Suite:** All changes must include unit and integration tests:
+- **Unit tests** (`tests/test_*.py`) — verify individual functions and models in isolation
+- **Integration tests** (`tests/integration/`) — verify plugin + NetBox + proxbox-api workflows end-to-end
+- **Regression tests** — always include a test that would fail on the pre-fix code
+
+**Regression Testing:** Before release, run:
+```bash
+rtk pytest tests/integration/ -v --timeout=30
+rtk pytest tests/ -v --cov=netbox_proxbox --cov-report=term-missing
+```
+This verifies that no previously passing test was broken by the change.
+
+**E2E Validation:** Changes to sync workflows, backend integration, or Proxmox VM models must be validated against the full E2E Docker stack:
+```bash
+docker compose -f e2e/docker/docker-compose.yml up --build -d
+bash e2e/docker/wait-for-stack.sh
+bash e2e/docker/smoke.sh
+```
+
+### Static Analysis and Quality Gates
+
+**Linting:** All code must pass `ruff` static analysis:
+```bash
+rtk ruff check .          # Detect errors, style violations, unused imports
+rtk ruff format --check . # Enforce code formatting
+```
+
+**Type Checking:** All Python files MUST pass `ty` (Pyright strict):
+```bash
+rtk ty check proxbox_cli
+```
+
+**Defect Categories Detected:**
+- Undefined variables and imports
+- Incorrect method/attribute access
+- Unused imports and dead code
+- Security issues (SQL injection, unsafe eval, XSS vectors)
+- Type mismatches (via Pyright strict mode)
+
+**Pre-commit Enforcement:** The pre-commit checklist at the top of this file MUST pass before committing ANY change:
+```bash
+python -m compileall netbox_proxbox tests
+rtk ruff check .
+rtk pytest tests/
+rtk ty check proxbox_cli
+```
+
+### Configuration Control and Change Management
+
+**Configuration Items:** The following are managed under strict change control:
+- Plugin version (`netbox_proxbox/__init__.py` `__version__`, `pyproject.toml` version field)
+- NetBox compatibility floor (`netbox_proxbox/__init__.py` `min_version` and `max_version`)
+- Backend service minimum version (`proxbox_api` version floor in `pyproject.toml` dependencies and CI matrix)
+- Plugin models and migrations (all changes require `makemigrations --check --dry-run` validation)
+- Backend integration contracts (sync routes, job queue names, SSE payload schemas)
+
+**Change Control Process:**
+1. **Before changing a configuration item**, post a comment on the related GitHub issue or PR explaining the change and impact.
+2. **After merging**, update the relevant CLAUDE.md file to document the new floor or requirement.
+3. **Release notes** MUST include breaking changes to configuration items (e.g., "requires proxbox-api ≥0.0.14").
+
+**Version Management:** Follow PEP 440:
+- Use `X.Y.ZrcN` for release candidates (TestPyPI validation only)
+- Use `X.Y.Z` for official releases
+- Use `X.Y.Z.postN` for bug-fix releases (never `X.Y.Z.devN` or `twine --skip-existing`)
+
+### Pre-Release Verification Checklist
+
+**Before opening a release PR, verify ALL of the following:**
+
+- [ ] All requirements are implemented and verified in code
+- [ ] Code passes pre-commit checklist (syntax, lint, tests, type checking)
+- [ ] Coverage is ≥85% (`pytest-cov --cov-report=term-missing`)
+- [ ] Regression testing passes against E2E Docker stack
+- [ ] Changelog (`docs/release-notes/version-X.Y.Z.md`) is complete
+- [ ] Architecture documentation (CLAUDE.md files) is updated
+- [ ] Backend compatibility (proxbox-api version floor) is documented
+- [ ] NetBox compatibility matrix is current (`min_version`, `max_version`)
+- [ ] All CI checks are green (GitHub Actions)
+- [ ] Integration with latest NetBox official release is confirmed
+
+**After merging to develop**, before creating GitHub release:
+
+- [ ] RC cycle is complete (all TestPyPI validation passed)
+- [ ] Merged commit is on `develop` branch
+- [ ] Version bumps are finalized (`X.Y.Z`, not `rcN`)
+- [ ] Release notes are approved
+- [ ] No uncommitted changes remain in the working tree
+
+**During release publishing**:
+
+- [ ] Only use `gh release create` to trigger the publish workflow
+- [ ] Never manually push tags with `git push origin vX.Y.Z` (use GitHub release)
+- [ ] Monitor CI/CD for successful PyPI and Docker Hub publication
+- [ ] Verify dist is live on PyPI before declaring success
 
 ---
 

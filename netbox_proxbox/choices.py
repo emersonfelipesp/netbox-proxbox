@@ -81,6 +81,22 @@ class SyncTypeChoices(ChoiceSet):
     ]
 
 
+class SyncModeChoices(ChoiceSet):
+    """Per-resource sync behavior for reflected Proxmox inventory."""
+
+    key = "ProxboxPluginSettings.sync_mode"
+
+    ALWAYS = "always"
+    BOOTSTRAP_ONLY = "bootstrap_only"
+    DISABLED = "disabled"
+
+    CHOICES = [
+        (ALWAYS, _("Always"), "green"),
+        (BOOTSTRAP_ONLY, _("Bootstrap only"), "yellow"),
+        (DISABLED, _("Disabled"), "red"),
+    ]
+
+
 class NetBoxTokenVersionChoices(ChoiceSet):
     """NetBox REST API token style for remote endpoint authentication."""
 

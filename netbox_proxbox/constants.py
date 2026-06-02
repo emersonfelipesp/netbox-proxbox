@@ -2,6 +2,33 @@
 
 from __future__ import annotations
 
+SYNC_MODE_FIELD_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    (
+        "Virtual Machine",
+        (
+            "sync_mode_vm",
+            "sync_mode_vm_template",
+        ),
+    ),
+    (
+        "Infrastructure",
+        (
+            "sync_mode_cluster",
+            "sync_mode_node",
+            "sync_mode_storage",
+            "sync_mode_ip_address",
+        ),
+    ),
+)
+
+SYNC_MODE_FIELDS: tuple[str, ...] = tuple(
+    field for _, fields in SYNC_MODE_FIELD_GROUPS for field in fields
+)
+
+SYNC_MODE_RESOURCE_TYPES: tuple[str, ...] = tuple(
+    field.removeprefix("sync_mode_") for field in SYNC_MODE_FIELDS
+)
+
 OVERWRITE_FIELD_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
     (
         "Device",

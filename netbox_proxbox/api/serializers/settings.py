@@ -3,7 +3,7 @@
 from netbox.api.serializers import NetBoxModelSerializer
 from rest_framework import serializers
 
-from netbox_proxbox.constants import OVERWRITE_FIELDS
+from netbox_proxbox.constants import OVERWRITE_FIELDS, SYNC_MODE_FIELDS
 from netbox_proxbox.models import ProxboxPluginSettings
 
 
@@ -25,6 +25,7 @@ class ProxboxPluginSettingsSerializer(NetBoxModelSerializer):
             "ignore_ipv6_link_local_addresses",
             "ensure_netbox_objects",
             "delete_orphans",
+            *SYNC_MODE_FIELDS,
             "parse_description_metadata",
             "embed_description_metadata",
             "enable_tenant_name_regex",
@@ -44,6 +45,8 @@ class ProxboxPluginSettingsSerializer(NetBoxModelSerializer):
             "backup_batch_size",
             "backup_batch_delay_ms",
             "vm_sync_max_concurrency",
+            "interface_batch_size",
+            "interface_batch_delay_ms",
             "reconciliation_engine",
             "reconciliation_compare_strict",
             "custom_fields_request_delay",

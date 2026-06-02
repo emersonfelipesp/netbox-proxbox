@@ -50,6 +50,21 @@ template — and existing fields plus migration
 show the pattern. See [`CLAUDE.md → Plugin settings and configuration`](./CLAUDE.md)
 for the full keep-list.
 
+## Sync Mode Controls
+
+Per-resource sync modes control how each Proxmox resource type is reflected into NetBox.
+Three modes per type (global and per-endpoint — endpoint takes priority):
+
+- **`always`** — sync on every run (default)
+- **`bootstrap_only`** — create once, tag with `bootstrap-only`, never patch/delete again
+- **`disabled`** — skip entirely, leave existing objects untouched
+
+Six resource types: `sync_mode_vm`, `sync_mode_vm_template`, `sync_mode_cluster`, `sync_mode_node`, `sync_mode_storage`, `sync_mode_ip_address`.
+
+**VM templates** are stored in `ProxmoxVMTemplate` (not `VirtualMachine`). The model has optional FKs to `VirtualMachine` (`source_vm` and M2M `cloned_vms`), `ProxmoxCluster`, and `ProxmoxNode`.
+
+Key files: `choices.py` (SyncModeChoices), `constants.py` (SYNC_MODE_FIELDS), `models/plugin_settings.py` (global fields), `models/proxmox_endpoint.py` (per-endpoint fields + `effective_sync_mode()`), `models/vm_template.py` (ProxmoxVMTemplate), `sync_stages.py` (gating helpers), `netbox_bootstrap.py` (bootstrap-only tag creation), `services/sync_vm_template.py` (template sync service), `docs/configuration/sync-modes.md` (user docs).
+
 ## Release Procedure (summary)
 
 Official releases are cut **from `develop`** and triggered **only** by
@@ -65,6 +80,35 @@ the `release: published` event after the version bump commits are merged
 into `develop`. Never `twine --skip-existing` — fix forward with the next
 `.postN` or `rcN` per PEP 440. Full step-by-step in
 [`CLAUDE.md → Release Procedure`](./CLAUDE.md).
+
+## CI/CD Workflows
+
+### End-to-end release pipeline (Gitea-first)
+
+The official release pipeline runs in this order:
+
+1. **Gitea tag push** — push an annotated tag to Gitea (`git tag -a vX.Y.Z && git push gitea vX.Y.Z`).
+2. **Gitea Actions: `.gitea/workflows/publish-gitea.yml`** — fires on every tag push. Builds and uploads the dist to the Gitea Package Registry, then calls `push-to-github` to push the tag to GitHub. For non-RC tags it also creates (or publishes an existing draft) GitHub release via `gh release create / gh release edit --draft=false`.
+3. **GitHub Actions: `.github/workflows/publish-testpypi.yml` — `release: published` trigger** — fires when `publish-gitea.yml` creates the non-draft GitHub release. Validates version, builds dist, checks if version already on PyPI (skip if yes), uploads to PyPI, runs validate-pypi and E2E checks.
+4. **GitHub Actions: Docker Hub** — called by `publish-testpypi.yml` after PyPI validation.
+
+### RC (release-candidate) pipeline
+
+1. Push a `vX.Y.ZrcN` tag to GitHub directly (`git push origin vX.Y.ZrcN`).
+2. `.github/workflows/publish-testpypi.yml` fires on `push: tags: v*rc*` → publishes to TestPyPI.
+
+### Idempotency guarantee (PyPI upload)
+
+The `publish-pypi` job in `.github/workflows/publish-testpypi.yml` checks the PyPI API before uploading. If the version already exists (HTTP 200), the upload step is skipped and the job succeeds. This prevents duplicate-upload failures when `release: published` fires after a tag-push run already published to PyPI, and allows safe re-triggering of the workflow.
+
+### Gitea Package Registry
+
+Use `PKG_TOKEN` (not `GITEA_TOKEN` — GITEA_ prefix is reserved and will fail). The registry URL is `https://git.nmulti.cloud/api/packages/emersonfelipesp/pypi`.
+
+### Security
+
+- `publish-gitea.yml` uses `env:` indirection for `inputs.tag_name` and `github.event_name` to prevent CI/CD expression injection.
+- Tag pattern validation (`^v[0-9]+\.[0-9]+\.[0-9]+(rc[0-9]+|\.post[0-9]+)?$`) rejects unexpected refs before any build step.
 
 ## Gitea-to-GitHub Mirror
 
@@ -90,6 +134,69 @@ Key architectural invariants to keep in mind:
 - **Endpoint export views require token proof for sensitive fields.** `_validate_sensitive_export_token()` supports v1 (dropdown or manual) and v2 (key + secret) modes. Never bypass this check or expose credential fields without it.
 - **Export JS is inlined, not a separate static file.** All three endpoint list templates contain the export-modal IIFE directly in `{% block javascript %}`. Do not move it to a `.js` file — it would then require `collectstatic` to be served.
 - **Import forms auto-create IPAddress objects.** All three import forms call `IPAddress.objects.get_or_create` in `clean_ip_address()`. Do not replace this with `CSVModelChoiceField` for `ip_address` — that would break cross-instance imports.
+
+## Code Quality Standards
+
+All changes to netbox-proxbox MUST conform to these quality gates before PR review:
+
+### Code Coverage
+- Maintain ≥85% coverage: `rtk pytest tests/ --cov=netbox_proxbox --cov-report=term-missing`
+- Coverage is enforced in CI; failing coverage blocks merge
+- Document uncovered code with a rationale comment (e.g., "except: pass for legacy compat")
+
+### Regression Testing
+- Add a test that fails on pre-fix code before implementing any fix
+- Run the full test suite: `rtk pytest tests/ --timeout=30 -v`
+- Run integration tests: `rtk pytest tests/integration/ -v --timeout=30`
+- Validate against E2E Docker stack before release
+
+### Static Analysis
+
+**Ruff (linting):**
+```bash
+rtk ruff check .          # Errors, style, unused imports
+rtk ruff format --check . # Code formatting
+```
+Fixes errors before pushing. All violations block CI.
+
+**Type Checking (Pyright strict):**
+```bash
+rtk ty check proxbox_cli
+```
+Type mismatches block merge. Use `# type: ignore` only with justification.
+
+**Defect Categories Detected:**
+- Undefined variables, imports, method/attribute access
+- Unused imports and dead code
+- Security: SQL injection, unsafe eval, XSS vectors
+- Type mismatches (via Pyright strict)
+
+### Requirements Validation
+
+Before writing code, confirm:
+1. The feature is traceable to a GitHub issue (link it in the PR description)
+2. The design is documented (update nearest CLAUDE.md with architecture notes)
+3. You understand how it affects the backend integration (proxbox-api contracts)
+4. You've identified all derived requirements (e.g., "sync behavior must be gated")
+
+### Configuration Control
+
+Changes to these configuration items require explicit PR description and CLAUDE.md update:
+- Plugin version (`netbox_proxbox/__init__.py` `__version__`)
+- NetBox compatibility floor/ceiling (`min_version`, `max_version`)
+- Backend service minimum version (`proxbox_api` floor in `pyproject.toml`)
+- Database schema (any model/migration change)
+- Backend integration contracts (sync routes, SSE payloads, job queue names)
+
+### Safety Model (Intent Workflows)
+
+If your change touches the Proxmox-side mutation path:
+1. Verify the default direction remains Proxmox → NetBox (read-only)
+2. Confirm that master flag `netbox_to_proxmox_enabled` requires typed confirmation
+3. Check that DELETE goes through `DeletionRequest` (no direct destroy calls)
+4. Verify authorization permission is separate from the request permission
+
+Violating any of these four invariants is a regression.
 
 ## CLAUDE.md Index
 

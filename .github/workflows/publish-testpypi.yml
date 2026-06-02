@@ -40,9 +40,9 @@ permissions:
   contents: read
 
 env:
-  PROXBOX_API_DEFAULT_VERSION: ${{ vars.PROXBOX_API_RELEASE_VERSION || '0.0.12' }}
-  PROXBOX_API_TESTPYPI_VERSION: ${{ vars.PROXBOX_API_TESTPYPI_VERSION || vars.PROXBOX_API_RELEASE_VERSION || '0.0.12' }}
-  PROXBOX_API_PYPI_VERSION: ${{ vars.PROXBOX_API_PYPI_VERSION || vars.PROXBOX_API_RELEASE_VERSION || '0.0.12' }}
+  PROXBOX_API_DEFAULT_VERSION: ${{ vars.PROXBOX_API_RELEASE_VERSION || '0.0.16.post1' }}
+  PROXBOX_API_TESTPYPI_VERSION: ${{ vars.PROXBOX_API_TESTPYPI_VERSION || vars.PROXBOX_API_RELEASE_VERSION || '0.0.16.post1' }}
+  PROXBOX_API_PYPI_VERSION: ${{ vars.PROXBOX_API_PYPI_VERSION || vars.PROXBOX_API_RELEASE_VERSION || '0.0.16.post1' }}
 
 jobs:
   prepare-release:
@@ -355,7 +355,23 @@ jobs:
           name: dist
           path: dist
 
+      - name: Check if version already on PyPI
+        id: pypi_check
+        env:
+          VERSION: ${{ needs.prepare-release.outputs.version }}
+        run: |
+          HTTP_STATUS=$(curl -o /dev/null -s -w "%{http_code}" \
+            "https://pypi.org/pypi/netbox-proxbox/${VERSION}/json")
+          if [ "$HTTP_STATUS" = "200" ]; then
+            echo "already_on_pypi=true" >> "$GITHUB_OUTPUT"
+            echo "netbox-proxbox ${VERSION} already on PyPI — upload skipped"
+          else
+            echo "already_on_pypi=false" >> "$GITHUB_OUTPUT"
+            echo "netbox-proxbox ${VERSION} not found on PyPI (HTTP ${HTTP_STATUS})"
+          fi
+
       - name: Upload to PyPI
+        if: steps.pypi_check.outputs.already_on_pypi != 'true'
         env:
           PYPI_USERNAME: ${{ secrets.PYPI_USERNAME }}
           PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}

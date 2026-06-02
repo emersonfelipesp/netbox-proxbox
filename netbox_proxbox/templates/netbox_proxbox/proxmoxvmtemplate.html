@@ -1,0 +1,80 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load i18n %}
+
+{% block content %}
+<div class="row">
+  <div class="col-md-6">
+    <div class="card">
+      <h5 class="card-header">{% trans "Proxmox VM Template" %}</h5>
+      <table class="table table-hover attr-table">
+        <tr>
+          <th scope="row">{% trans "Name" %}</th>
+          <td>{{ object.name }}</td>
+        </tr>
+        <tr>
+          <th scope="row">{% trans "VMID" %}</th>
+          <td>{{ object.vmid }}</td>
+        </tr>
+        <tr>
+          <th scope="row">{% trans "Endpoint" %}</th>
+          <td>{{ object.proxmox_endpoint|linkify }}</td>
+        </tr>
+        <tr>
+          <th scope="row">{% trans "Cluster" %}</th>
+          <td>{{ object.cluster|linkify|placeholder }}</td>
+        </tr>
+        <tr>
+          <th scope="row">{% trans "Node" %}</th>
+          <td>{{ object.node|linkify|placeholder }}</td>
+        </tr>
+        <tr>
+          <th scope="row">{% trans "Node Name" %}</th>
+          <td>{{ object.node_name|placeholder }}</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card">
+      <h5 class="card-header">{% trans "Template Configuration" %}</h5>
+      <table class="table table-hover attr-table">
+        <tr>
+          <th scope="row">{% trans "Proxmox Type" %}</th>
+          <td>{{ object.proxmox_type|placeholder }}</td>
+        </tr>
+        <tr>
+          <th scope="row">{% trans "Status" %}</th>
+          <td>{{ object.status|placeholder }}</td>
+        </tr>
+        <tr>
+          <th scope="row">{% trans "vCPUs" %}</th>
+          <td>{{ object.vcpus|placeholder }}</td>
+        </tr>
+        <tr>
+          <th scope="row">{% trans "Memory" %}</th>
+          <td>{% if object.memory %}{{ object.memory }} MB{% else %}{{ ""|placeholder }}{% endif %}</td>
+        </tr>
+        <tr>
+          <th scope="row">{% trans "Disk" %}</th>
+          <td>{% if object.disk %}{{ object.disk }} GB{% else %}{{ ""|placeholder }}{% endif %}</td>
+        </tr>
+        <tr>
+          <th scope="row">{% trans "Cloud-init Enabled" %}</th>
+          <td>{% checkmark object.cloud_init_enabled %}</td>
+        </tr>
+        <tr>
+          <th scope="row">{% trans "Source VM" %}</th>
+          <td>{{ object.source_vm|linkify|placeholder }}</td>
+        </tr>
+        <tr>
+          <th scope="row">{% trans "Last Synced" %}</th>
+          <td>{{ object.last_synced|placeholder }}</td>
+        </tr>
+      </table>
+    </div>
+    {% include 'inc/panels/tags.html' %}
+    {% include 'inc/panels/custom_fields.html' %}
+  </div>
+</div>
+{% endblock %}

@@ -31,6 +31,24 @@ def test_runtime_code_no_longer_depends_on_django_htmx():
         assert "hx-" not in contents
 
 
+def test_home_template_comment_is_not_multiline_inline_syntax():
+    """Django's {# #} syntax only suppresses single-line comments; multi-line
+    {# ... #} blocks are not recognised as comments and the raw text is emitted
+    into the rendered HTML, which browsers can display visibly.  This test
+    ensures the issue-#355 explanation comment uses the correct block-comment
+    tag so it never leaks to the page.
+
+    See https://github.com/emersonfelipesp/netbox-proxbox/issues/541
+    """
+    contents = _read("netbox_proxbox/templates/netbox_proxbox/home.html")
+    # The comment text must NOT appear as a bare inline {# ... #} comment.
+    assert "{# Dashboard hydration is inlined" not in contents
+    # It must use the block comment tag that Django supports across multiple lines.
+    assert "{% comment %}" in contents
+    assert "Dashboard hydration is inlined" in contents
+    assert "{% endcomment %}" in contents
+
+
 def test_home_template_uses_plugin_vanilla_js_entrypoint():
     contents = _read("netbox_proxbox/templates/netbox_proxbox/home.html")
     assert "netbox_proxbox/home/quick_schedule_banner.html" in contents
@@ -188,6 +206,28 @@ def test_job_runtime_panel_renders_endpoint_runtime_cards():
     assert "phase.runtime_seconds" in contents
     assert "block.response.stages" in contents
     assert "Proxbox sync stages" in contents
+
+
+def test_proxmox_vm_template_navigation_has_registered_views():
+    view_contents = _read("netbox_proxbox/views/vm_template.py")
+    init_contents = _read("netbox_proxbox/views/__init__.py")
+    navigation_contents = _read("netbox_proxbox/navigation.py")
+    page_coverage_contents = _read("tests/e2e/page_coverage_check.py")
+
+    assert 'link="plugins:netbox_proxbox:proxmoxvmtemplate_list"' in navigation_contents
+    assert (
+        '@register_model_view(ProxmoxVMTemplate, "list", path="", detail=False)'
+        in view_contents
+    )
+    assert "@register_model_view(ProxmoxVMTemplate)" in view_contents
+    assert '@register_model_view(ProxmoxVMTemplate, "edit")' in view_contents
+    assert (
+        'default_return_url = "plugins:netbox_proxbox:proxmoxvmtemplate_list"'
+        in view_contents
+    )
+    assert "ProxmoxVMTemplateListView" in init_contents
+    assert "/plugins/proxbox/vm-templates/" in page_coverage_contents
+    assert "proxmox-vm-template-detail" in page_coverage_contents
 
 
 def test_firewall_push_and_preview_ui_contracts():

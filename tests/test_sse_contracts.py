@@ -261,9 +261,10 @@ class TestHTTPTimeoutForSyncPath:
         """Normal sync paths should return default timeout."""
         bp = backend_proxy_module
         assert bp.http_timeout_for_sync_path("dcim/devices/create") == 5
-        assert (
-            bp.http_timeout_for_sync_path("virtualization/virtual-machines/create") == 5
-        )
+        # VM sync paths use extended timeout due to large interface/IP/VLAN sync
+        assert bp.http_timeout_for_sync_path(
+            "virtualization/virtual-machines/create"
+        ) == (5, 3600)
 
     def test_backup_path_returns_long_timeout(self, backend_proxy_module):
         """Backup sync path should return long timeout."""

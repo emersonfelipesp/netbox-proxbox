@@ -11,6 +11,8 @@ from django.utils.translation import gettext_lazy as _
 
 from netbox.models import NetBoxModel
 
+from netbox_proxbox.choices import SyncModeChoices
+
 DEFAULT_BACKEND_LOG_FILE_PATH = "/var/log/proxbox.log"
 
 PRIMARY_IP_PREFERENCE_CHOICES = (
@@ -91,6 +93,55 @@ class ProxboxPluginSettings(NetBoxModel):
             "When enabled, full-update runs will delete Proxbox-discovered VMs "
             "that were not touched by the current sync run. Review a dry-run "
             "preview before enabling in production."
+        ),
+    )
+    sync_mode_vm = models.CharField(
+        max_length=16,
+        choices=SyncModeChoices,
+        default=SyncModeChoices.ALWAYS,
+        verbose_name=_("VM sync mode"),
+        help_text=_(
+            "Controls non-template VM synchronization: always sync, create once "
+            "and tag bootstrap-only, or skip entirely."
+        ),
+    )
+    sync_mode_vm_template = models.CharField(
+        max_length=16,
+        choices=SyncModeChoices,
+        default=SyncModeChoices.ALWAYS,
+        verbose_name=_("VM template sync mode"),
+        help_text=_(
+            "Controls Proxmox template VM synchronization separately from normal VMs."
+        ),
+    )
+    sync_mode_cluster = models.CharField(
+        max_length=16,
+        choices=SyncModeChoices,
+        default=SyncModeChoices.ALWAYS,
+        verbose_name=_("Cluster sync mode"),
+        help_text=_("Controls synchronization of Proxmox cluster tracking rows."),
+    )
+    sync_mode_node = models.CharField(
+        max_length=16,
+        choices=SyncModeChoices,
+        default=SyncModeChoices.ALWAYS,
+        verbose_name=_("Node sync mode"),
+        help_text=_("Controls synchronization of Proxmox node tracking rows."),
+    )
+    sync_mode_storage = models.CharField(
+        max_length=16,
+        choices=SyncModeChoices,
+        default=SyncModeChoices.ALWAYS,
+        verbose_name=_("Storage sync mode"),
+        help_text=_("Controls synchronization of Proxmox storage inventory."),
+    )
+    sync_mode_ip_address = models.CharField(
+        max_length=16,
+        choices=SyncModeChoices,
+        default=SyncModeChoices.ALWAYS,
+        verbose_name=_("IP address sync mode"),
+        help_text=_(
+            "Controls synchronization of IP addresses discovered from VM interfaces."
         ),
     )
     primary_ip_preference = models.CharField(
@@ -202,6 +253,23 @@ class ProxboxPluginSettings(NetBoxModel):
         default=4,
         verbose_name=_("VM sync max concurrency"),
         help_text=_("Maximum number of VMs synced in parallel during a full update."),
+    )
+    interface_batch_size = models.PositiveSmallIntegerField(
+        default=5,
+        validators=[MinValueValidator(1)],
+        verbose_name=_("Interface batch size"),
+        help_text=_(
+            "Number of VM interfaces (and their IP addresses, subnets, VLANs) synced "
+            "per batch. Large VMs (50+ interfaces) may timeout if synced all at once; "
+            "batching prevents overwhelming NetBox with concurrent API calls."
+        ),
+    )
+    interface_batch_delay_ms = models.PositiveIntegerField(
+        default=100,
+        verbose_name=_("Interface batch delay (ms)"),
+        help_text=_(
+            "Milliseconds to wait between interface batches to throttle NetBox load."
+        ),
     )
     reconciliation_engine = models.CharField(
         max_length=16,

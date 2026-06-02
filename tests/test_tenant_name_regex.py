@@ -412,9 +412,20 @@ def parser_module(monkeypatch):
     monkeypatch.setitem(sys.modules, "django", django_pkg)
     monkeypatch.setitem(sys.modules, "django.forms", forms_mod)
 
+    choices_mod = types.ModuleType("netbox_proxbox.choices")
+    choices_mod.SyncModeChoices = SimpleNamespace(
+        CHOICES=(
+            ("always", "Always", "green"),
+            ("bootstrap_only", "Bootstrap only", "blue"),
+            ("disabled", "Disabled", "red"),
+        )
+    )
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.choices", choices_mod)
+
     # Stub the relative imports that forms/settings.py performs.
     constants_mod = types.ModuleType("netbox_proxbox.constants")
     constants_mod.OVERWRITE_FIELDS = ()
+    constants_mod.SYNC_MODE_FIELDS = ()
     monkeypatch.setitem(sys.modules, "netbox_proxbox.constants", constants_mod)
 
     # Stub dcim.models so `from dcim.models import DeviceRole` succeeds —

@@ -327,9 +327,15 @@ class ProxmoxEndpointSettingsView(generic.ObjectEditView):
         self, request: HttpRequest, instance: ProxmoxEndpoint
     ) -> dict[str, object]:
         """Expose grouped overwrite metadata so the template can render category cards."""
-        from netbox_proxbox.constants import OVERWRITE_FIELD_GROUPS
+        from netbox_proxbox.constants import (
+            OVERWRITE_FIELD_GROUPS,
+            SYNC_MODE_FIELD_GROUPS,
+        )
 
-        return {"overwrite_field_groups": OVERWRITE_FIELD_GROUPS}
+        return {
+            "overwrite_field_groups": OVERWRITE_FIELD_GROUPS,
+            "sync_mode_field_groups": SYNC_MODE_FIELD_GROUPS,
+        }
 
 
 @register_model_view(ProxmoxEndpoint, "ssh_settings", path="ssh-settings")

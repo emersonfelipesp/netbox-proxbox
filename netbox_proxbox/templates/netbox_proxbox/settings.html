@@ -36,6 +36,28 @@
                     {% render_field form.backend_log_file_path %}
                 </div>
             </div>
+            {# Sync Mode Controls #}
+            <div class="card mb-3">
+                <h5 class="card-header">
+                    <i class="mdi mdi-source-branch-sync"></i>
+                    {% trans "Sync Mode Controls" %}
+                </h5>
+                <div class="card-body">
+                    <p class="text-muted">
+                        {% blocktrans trimmed %}
+                        Control whether each resource type syncs every run, only bootstraps new
+                        records, or is skipped entirely. Individual Proxmox endpoints can override
+                        these global defaults.
+                        {% endblocktrans %}
+                    </p>
+                    {% for group_label, group_fields in sync_mode_field_groups %}
+                        <h6 class="mt-3">{{ group_label }}</h6>
+                        {% for field_name in group_fields %}
+                            {% render_field form|form_field:field_name %}
+                        {% endfor %}
+                    {% endfor %}
+                </div>
+            </div>
             {# NetBox Integration Card #}
             <div class="card mb-3">
                 <h5 class="card-header">
@@ -62,6 +84,8 @@
                     {% render_field form.backup_batch_size %}
                     {% render_field form.backup_batch_delay_ms %}
                     {% render_field form.vm_sync_max_concurrency %}
+                    {% render_field form.interface_batch_size %}
+                    {% render_field form.interface_batch_delay_ms %}
                     {% render_field form.reconciliation_engine %}
                     {% render_field form.reconciliation_compare_strict %}
                     {% render_field form.custom_fields_request_delay %}
