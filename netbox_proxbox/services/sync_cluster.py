@@ -29,6 +29,7 @@ from netbox_proxbox.schemas import (
 )
 from netbox_proxbox.schemas._formatters import iter_node_records, iter_scalar_records
 from netbox_proxbox.services.backend_proxy import get_fastapi_request_context
+from netbox_proxbox.views.backend_sync import resolve_backend_endpoint_id
 from netbox_proxbox.sync_stages import (
     _add_bootstrap_only_tag,
     _bootstrap_only_should_skip_existing,
@@ -100,12 +101,37 @@ def sync_cluster_and_nodes(
         return result
 
     # ------------------------------------------------------------------
+    # Endpoint identity — translate this plugin endpoint to the backend's
+    # own database id so the status/node reads return ONLY this endpoint's
+    # records. Without this scope the backend returns one record per enabled
+    # endpoint and the plugin would attribute foreign clusters/nodes to this
+    # endpoint. Fail loud rather than syncing the wrong endpoint.
+    # ------------------------------------------------------------------
+    backend_endpoint_id, resolve_error = resolve_backend_endpoint_id(
+        endpoint,
+        base_url=fastapi_url,
+        auth_headers=auth_headers,
+        backend_verify_ssl=verify_ssl,
+    )
+    if backend_endpoint_id is None:
+        logger.error(
+            "Could not resolve backend endpoint id for endpoint %s: %s",
+            endpoint_id,
+            resolve_error,
+        )
+        result.error = resolve_error or "Could not resolve backend Proxmox endpoint id"
+        return result
+
+    scope_params = {"proxmox_endpoint_ids": str(backend_endpoint_id)}
+
+    # ------------------------------------------------------------------
     # HTTP phase — fetch all data before opening any DB transaction.
     # ------------------------------------------------------------------
     try:
         cluster_resp = requests.get(
             f"{fastapi_url}/proxmox/cluster/status",
             headers=auth_headers,
+            params=scope_params,
             verify=verify_ssl,
             timeout=30,
         )
@@ -121,6 +147,7 @@ def sync_cluster_and_nodes(
         node_detail_resp = requests.get(
             f"{fastapi_url}/proxmox/nodes/",
             headers=auth_headers,
+            params=scope_params,
             verify=verify_ssl,
             timeout=30,
         )

@@ -30,6 +30,7 @@ from netbox_proxbox.models import (
     ProxmoxVMTemplate,
 )
 from netbox_proxbox.services.backend_proxy import get_fastapi_request_context
+from netbox_proxbox.views.backend_sync import resolve_backend_endpoint_id
 from netbox_proxbox.sync_stages import (
     _add_bootstrap_only_tag,
     _bootstrap_only_should_skip_existing,
@@ -167,7 +168,7 @@ def _fetch_template_config(
     fastapi_url: str,
     auth_headers: dict[str, str],
     verify_ssl: bool,
-    endpoint_id: int,
+    backend_endpoint_id: int,
     node_name: str,
     proxmox_type: str,
     vmid: int,
@@ -179,7 +180,7 @@ def _fetch_template_config(
             f"{fastapi_url}/proxmox/{node_name}/{proxmox_type}/{vmid}/config",
             params={
                 "source": "database",
-                "proxmox_endpoint_ids": str(endpoint_id),
+                "proxmox_endpoint_ids": str(backend_endpoint_id),
             },
             headers=auth_headers,
             verify=verify_ssl,
@@ -189,8 +190,8 @@ def _fetch_template_config(
         payload = response.json()
     except requests.RequestException as exc:
         logger.debug(
-            "Could not fetch Proxmox template config for endpoint=%s vmid=%s: %s",
-            endpoint_id,
+            "Could not fetch Proxmox template config for backend endpoint=%s vmid=%s: %s",
+            backend_endpoint_id,
             vmid,
             exc,
         )
@@ -321,6 +322,21 @@ def sync_vm_templates(
     if auth_headers is None:
         auth_headers = {}
 
+    backend_endpoint_id, resolve_error = resolve_backend_endpoint_id(
+        endpoint,
+        base_url=fastapi_url,
+        auth_headers=auth_headers,
+        backend_verify_ssl=verify_ssl,
+    )
+    if backend_endpoint_id is None:
+        result.error = resolve_error or "Could not resolve backend Proxmox endpoint id"
+        logger.error(
+            "Could not resolve backend endpoint id for endpoint %s: %s",
+            endpoint_id,
+            resolve_error,
+        )
+        return result
+
     started = time.monotonic()
     try:
         response = requests.get(
@@ -328,7 +344,7 @@ def sync_vm_templates(
             params={
                 "type": "vm",
                 "source": "database",
-                "proxmox_endpoint_ids": str(endpoint_id),
+                "proxmox_endpoint_ids": str(backend_endpoint_id),
             },
             headers=auth_headers,
             verify=verify_ssl,
@@ -358,7 +374,7 @@ def sync_vm_templates(
                 fastapi_url=fastapi_url,
                 auth_headers=auth_headers,
                 verify_ssl=verify_ssl,
-                endpoint_id=endpoint_id,
+                backend_endpoint_id=backend_endpoint_id,
                 node_name=node_name,
                 proxmox_type=proxmox_type,
                 vmid=vmid,

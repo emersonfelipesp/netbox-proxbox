@@ -330,6 +330,13 @@ def test_proxbox_sync_job_skips_invalid_proxmox_endpoint_ids(
         "effective_overwrites_for_endpoint",
         lambda _endpoint_id: {},
     )
+    # Plugin endpoint pks are translated to backend database ids before going on
+    # the wire; stub that resolution (pk -> pk+"00") so no real backend is needed.
+    monkeypatch.setattr(
+        proxbox_sync_job_module.sync_stages,
+        "_resolve_wire_endpoint_ids",
+        lambda scopes: ({scope[0]: scope[0] + "00" for scope in scopes if scope}, None),
+    )
 
     ProxboxSyncJob = proxbox_sync_job_module.ProxboxSyncJob
     job = ProxboxSyncJob()
@@ -773,6 +780,14 @@ def test_proxbox_sync_job_persists_endpoint_runtime_breakdown(
             return [1, 2]
 
     proxbox_sync_job_module.ProxmoxEndpoint.objects = _EndpointManager()
+
+    # Plugin endpoint pks are translated to backend database ids before the wire
+    # request; stub that resolution (pk -> pk+"00") so no real backend is needed.
+    monkeypatch.setattr(
+        proxbox_sync_job_module.sync_stages,
+        "_resolve_wire_endpoint_ids",
+        lambda scopes: ({scope[0]: scope[0] + "00" for scope in scopes if scope}, None),
+    )
 
     sync_cluster_mod = sys.modules["netbox_proxbox.services.sync_cluster"]
     sync_cluster_mod.sync_cluster_and_nodes = lambda endpoint_id=None: SimpleNamespace(
@@ -1442,6 +1457,13 @@ def test_proxbox_sync_job_full_update_uses_single_endpoint_overrides(
         "effective_overwrites_for_endpoint",
         effective_overwrites_for_endpoint,
     )
+    # Overwrite flags resolve by plugin pk ("1"); the wire id is the translated
+    # backend database id ("100"). Stub the translation (pk -> pk+"00").
+    monkeypatch.setattr(
+        proxbox_sync_job_module.sync_stages,
+        "_resolve_wire_endpoint_ids",
+        lambda scopes: ({scope[0]: scope[0] + "00" for scope in scopes if scope}, None),
+    )
 
     ProxboxSyncJob = proxbox_sync_job_module.ProxboxSyncJob
     job = ProxboxSyncJob()
@@ -1453,7 +1475,7 @@ def test_proxbox_sync_job_full_update_uses_single_endpoint_overrides(
     ProxboxSyncJob.run(job, sync_types=[st.ALL], proxmox_endpoint_ids=["1"])
 
     assert captured
-    assert {query["proxmox_endpoint_ids"] for query in captured} == {"1"}
+    assert {query["proxmox_endpoint_ids"] for query in captured} == {"100"}
     for query in captured:
         overwrite_keys = [key for key in query if key.startswith("overwrite_")]
         assert len(overwrite_keys) == 25
@@ -1494,6 +1516,13 @@ def test_proxbox_sync_job_loops_multiple_endpoint_scopes_with_distinct_overrides
         "effective_overwrites_for_endpoint",
         effective_overwrites_for_endpoint,
     )
+    # Overwrite flags resolve by plugin pk ("1"/"2"); the wire ids are the
+    # translated backend database ids ("100"/"200"). Stub the translation.
+    monkeypatch.setattr(
+        proxbox_sync_job_module.sync_stages,
+        "_resolve_wire_endpoint_ids",
+        lambda scopes: ({scope[0]: scope[0] + "00" for scope in scopes if scope}, None),
+    )
 
     ProxboxSyncJob = proxbox_sync_job_module.ProxboxSyncJob
     job = ProxboxSyncJob()
@@ -1504,7 +1533,7 @@ def test_proxbox_sync_job_loops_multiple_endpoint_scopes_with_distinct_overrides
     st = proxbox_sync_job_module.SyncTypeChoices
     ProxboxSyncJob.run(job, sync_types=[st.DEVICES], proxmox_endpoint_ids=["1", "2"])
 
-    assert [query["proxmox_endpoint_ids"] for query in captured] == ["1", "2"]
+    assert [query["proxmox_endpoint_ids"] for query in captured] == ["100", "200"]
     for query in captured:
         overwrite_keys = [key for key in query if key.startswith("overwrite_")]
         assert len(overwrite_keys) == 25
@@ -1524,3 +1553,124 @@ def test_proxbox_sync_job_loops_multiple_endpoint_scopes_with_distinct_overrides
         "overwrite_device_type": "false",
         "overwrite_device_tags": "false",
     }
+
+
+def test_build_base_query_params_separates_plugin_and_wire_ids(
+    monkeypatch, proxbox_sync_job_module
+):
+    """Overwrite flags resolve by plugin pk; the wire carries the backend id."""
+    sync_stages = proxbox_sync_job_module.sync_stages
+    seen_ids: list[object] = []
+
+    def effective_overwrites_for_endpoint(endpoint_id):
+        seen_ids.append(endpoint_id)
+        return {}
+
+    monkeypatch.setattr(
+        sync_stages,
+        "effective_overwrites_for_endpoint",
+        effective_overwrites_for_endpoint,
+    )
+    monkeypatch.setattr(
+        sync_stages, "effective_sync_modes_for_endpoint", lambda _endpoint_id: {}
+    )
+
+    base_query = sync_stages._build_base_query_params(
+        ["1"], None, wire_proxmox_endpoint_ids=["100"]
+    )
+
+    # Plugin pk "1" drove the per-endpoint overwrite resolution...
+    assert seen_ids == ["1"]
+    # ...but the backend database id "100" is what goes on the wire.
+    assert base_query["proxmox_endpoint_ids"] == "100"
+
+
+def test_build_base_query_params_defaults_wire_ids_to_plugin_ids(
+    monkeypatch, proxbox_sync_job_module
+):
+    """Legacy single-id-space callers (no wire ids) keep the old behavior."""
+    sync_stages = proxbox_sync_job_module.sync_stages
+    monkeypatch.setattr(
+        sync_stages, "effective_overwrites_for_endpoint", lambda _e: {}
+    )
+    monkeypatch.setattr(
+        sync_stages, "effective_sync_modes_for_endpoint", lambda _e: {}
+    )
+
+    base_query = sync_stages._build_base_query_params(["1"], None)
+    assert base_query["proxmox_endpoint_ids"] == "1"
+
+
+def test_proxmox_endpoint_scopes_excludes_disabled_endpoints(
+    monkeypatch, proxbox_sync_job_module
+):
+    """Disabled Proxmox endpoints must not appear in the default sync scopes."""
+    sync_stages = proxbox_sync_job_module.sync_stages
+    captured_filter: dict[str, object] = {}
+
+    class _QS(list):
+        def values_list(self, *args, **kwargs):
+            return list(self)
+
+    class _Manager:
+        def filter(self, **kwargs):
+            captured_filter.update(kwargs)
+            # Only the enabled endpoint (pk 1) is returned; pk 2 is disabled.
+            return _QS([1])
+
+    models_mod = sys.modules["netbox_proxbox.models"]
+    monkeypatch.setattr(
+        models_mod, "ProxmoxEndpoint", SimpleNamespace(objects=_Manager())
+    )
+
+    scopes = sync_stages._proxmox_endpoint_scopes(None)
+
+    assert captured_filter == {"enabled": True}
+    assert scopes == [["1"]]
+
+
+def test_run_all_stages_skips_endpoint_that_does_not_resolve(
+    monkeypatch, proxbox_sync_job_module
+):
+    """When a plugin endpoint has no backend id, its stages must NOT run."""
+    captured: list[dict[str, object]] = []
+    services_mod = types.ModuleType("netbox_proxbox.services")
+
+    def run_sync_stream(path, query_params=None, **stream_kwargs):
+        captured.append(dict(query_params or {}))
+        return ({"stream": True, "response": {"ok": True}}, 200)
+
+    services_mod.run_sync_stream = run_sync_stream
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
+
+    monkeypatch.setattr(
+        proxbox_sync_job_module.sync_stages,
+        "effective_overwrites_for_endpoint",
+        lambda _endpoint_id: {},
+    )
+    # The endpoint cannot be translated to a backend id (fail-loud path).
+    monkeypatch.setattr(
+        proxbox_sync_job_module.sync_stages,
+        "_resolve_wire_endpoint_ids",
+        lambda scopes: ({}, "endpoint not registered on backend"),
+    )
+
+    ProxboxSyncJob = proxbox_sync_job_module.ProxboxSyncJob
+    job = ProxboxSyncJob()
+    job.logger = logging.getLogger("test_proxbox_job_skip_unresolved")
+    job.job = MagicMock()
+    job.job.data = None
+
+    st = proxbox_sync_job_module.SyncTypeChoices
+    ProxboxSyncJob.run(job, sync_types=[st.DEVICES], proxmox_endpoint_ids=["1"])
+
+    # No SSE stage ran (we never sync an unresolved endpoint unscoped).
+    assert captured == []
+    stages = job.job.data["proxbox_sync"]["response"]["stages"]
+    scope_errors = [
+        stage
+        for stage in stages
+        if stage.get("sync_type") == "endpoint-scope"
+        and not stage["result_summary"].get("ok", True)
+    ]
+    assert scope_errors, "expected a fail-loud endpoint-scope error stage"

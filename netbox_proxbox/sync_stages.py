@@ -315,6 +315,7 @@ async def _run_batch_selected_sync(
 def _build_base_query_params(
     proxmox_endpoint_ids: list[str] | None,
     netbox_endpoint_ids: list[str] | None,
+    wire_proxmox_endpoint_ids: list[str] | None = None,
 ) -> dict[str, str]:
     """Build base query parameters for sync stages.
 
@@ -324,6 +325,13 @@ def _build_base_query_params(
     accepts one flat overwrite flag group per request. Direct helper calls
     without a concrete endpoint fall back to the global
     ``ProxboxPluginSettings`` singleton.
+
+    ``proxmox_endpoint_ids`` are **plugin** ``ProxmoxEndpoint`` primary keys and
+    are used only to resolve plugin-side per-endpoint overwrite flags and sync
+    modes. ``wire_proxmox_endpoint_ids`` are the **backend** database ids the
+    proxbox-api ``proxmox_sessions`` dependency filters on; they are what gets
+    sent on the wire. When the backend ids are not supplied the plugin pks are
+    used as-is (legacy single-id-space callers/tests).
     """
     base_query: dict[str, str] = {}
     base_query["use_guest_agent_interface_name"] = (
@@ -352,8 +360,13 @@ def _build_base_query_params(
     for name, value in sync_modes.items():
         base_query[name] = value
 
-    if proxmox_endpoint_ids:
-        base_query["proxmox_endpoint_ids"] = ",".join(proxmox_endpoint_ids)
+    wire_ids = (
+        wire_proxmox_endpoint_ids
+        if wire_proxmox_endpoint_ids is not None
+        else proxmox_endpoint_ids
+    )
+    if wire_ids:
+        base_query["proxmox_endpoint_ids"] = ",".join(wire_ids)
     if netbox_endpoint_ids:
         base_query["netbox_endpoint_ids"] = ",".join(netbox_endpoint_ids)
     return base_query
@@ -489,13 +502,56 @@ def _proxmox_endpoint_scopes(
         from netbox_proxbox.models import ProxmoxEndpoint
 
         endpoint_ids = [
-            str(pk) for pk in ProxmoxEndpoint.objects.values_list("pk", flat=True)
+            str(pk)
+            for pk in ProxmoxEndpoint.objects.filter(enabled=True).values_list(
+                "pk", flat=True
+            )
         ]
     except (ImportError, RuntimeError, AttributeError):
         endpoint_ids = []
     if not endpoint_ids:
         return [[]]
     return [[endpoint_id] for endpoint_id in endpoint_ids]
+
+
+def _resolve_wire_endpoint_ids(
+    endpoint_scopes: list[list[str]],
+) -> tuple[dict[str, str], str | None]:
+    """Map plugin ``ProxmoxEndpoint`` pks (used in scopes) to backend database ids.
+
+    The backend's ``proxmox_sessions`` dependency filters on its *own* endpoint
+    ids, which differ from NetBox plugin primary keys. Returns
+    ``({plugin_pk_str: backend_id_str}, error)``; ``error`` is set only when the
+    backend endpoint list could not be fetched. Plugin pks with no backend match
+    are omitted so the caller can fail loud per endpoint rather than syncing an
+    unscoped (all-endpoint) request.
+    """
+    plugin_pks = {
+        scope[0] for scope in endpoint_scopes if scope and str(scope[0]).strip()
+    }
+    if not plugin_pks:
+        return {}, None
+
+    from netbox_proxbox.models import ProxmoxEndpoint
+    from netbox_proxbox.services.backend_proxy import get_fastapi_request_context
+    from netbox_proxbox.views.backend_sync import resolve_backend_endpoint_ids
+
+    ctx = get_fastapi_request_context()
+    if ctx is None or not ctx.http_url:
+        return {}, "FastAPI endpoint not configured; cannot resolve backend endpoint ids"
+
+    endpoints = list(
+        ProxmoxEndpoint.objects.filter(pk__in=[int(pk) for pk in plugin_pks])
+    )
+    mapping, error = resolve_backend_endpoint_ids(
+        endpoints,
+        base_url=ctx.http_url,
+        auth_headers=ctx.headers or {},
+        backend_verify_ssl=bool(ctx.verify_ssl),
+    )
+    if error:
+        return {}, error
+    return {str(pk): str(backend_id) for pk, backend_id in mapping.items()}, None
 
 
 def _run_all_stages_sync(
@@ -506,6 +562,7 @@ def _run_all_stages_sync(
 ) -> list[dict[str, object]]:
     """Run all sync stages in order and return stage results."""
     endpoint_scopes = _proxmox_endpoint_scopes(params.get("proxmox_endpoint_ids"))
+    backend_id_by_pk, wire_resolve_error = _resolve_wire_endpoint_ids(endpoint_scopes)
 
     flush_interval = 2.0
     log_throttle = 1.5
@@ -541,13 +598,45 @@ def _run_all_stages_sync(
 
     for endpoint_scope in endpoint_scopes:
         endpoint_id = endpoint_scope[0] if endpoint_scope else None
+        wire_scope: list[str] | None = None
         if endpoint_scope:
-            job.logger.info("Running SSE sync for Proxmox endpoint %s", endpoint_id)
+            # Translate the plugin endpoint pk to the backend's own database id so
+            # the SSE stages sync ONLY this endpoint. Failing to resolve must skip
+            # this endpoint, never fall back to an unscoped (all-endpoint) request.
+            backend_id = backend_id_by_pk.get(str(endpoint_id))
+            if backend_id is None:
+                reason = (
+                    wire_resolve_error
+                    or f"Proxmox endpoint {endpoint_id} is not registered on the "
+                    "ProxBox backend; skipping to avoid syncing the wrong endpoint"
+                )
+                job.logger.error(
+                    "Skipping SSE sync for Proxmox endpoint %s: %s",
+                    endpoint_id,
+                    reason,
+                )
+                stages_out.append(
+                    {
+                        "sync_type": "endpoint-scope",
+                        "endpoint_id": endpoint_id,
+                        "stream_path": None,
+                        "runtime_seconds": 0.0,
+                        "result_summary": {"ok": False, "error": reason},
+                    }
+                )
+                continue
+            wire_scope = [backend_id]
+            job.logger.info(
+                "Running SSE sync for Proxmox endpoint %s (backend id %s)",
+                endpoint_id,
+                backend_id,
+            )
         else:
             job.logger.info("Running SSE sync with no Proxmox endpoint filter")
         base_query = _build_base_query_params(
             endpoint_scope,
             params.get("netbox_endpoint_ids"),
+            wire_proxmox_endpoint_ids=wire_scope,
         )
         if netbox_branch_schema_id:
             base_query["netbox_branch_schema_id"] = str(netbox_branch_schema_id)

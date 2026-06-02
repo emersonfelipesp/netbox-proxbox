@@ -100,8 +100,14 @@ def build_local_node_rows(
     }
     name_matched_nodes: list[object] = []
     if cluster_name:
+        # Scope the name fallback to a cluster OWNED BY THIS ENDPOINT. A global
+        # ``proxmox_cluster__name`` match would pull in a different endpoint's
+        # nodes when two endpoints have same-named clusters (the multi-endpoint
+        # corruption from this fix). Endpoint-scoped sync (sync_cluster) ensures
+        # each endpoint owns its own ProxmoxCluster(endpoint, name) row.
         name_filter_kwargs: dict[str, object] = {
             "proxmox_cluster__name": cluster_name,
+            "proxmox_cluster__endpoint": endpoint,
         }
         if scoped_cluster_names:
             name_filter_kwargs["name__in"] = sorted(scoped_cluster_names)
