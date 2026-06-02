@@ -538,7 +538,10 @@ def _resolve_wire_endpoint_ids(
 
     ctx = get_fastapi_request_context()
     if ctx is None or not ctx.http_url:
-        return {}, "FastAPI endpoint not configured; cannot resolve backend endpoint ids"
+        return (
+            {},
+            "FastAPI endpoint not configured; cannot resolve backend endpoint ids",
+        )
 
     endpoints = list(
         ProxmoxEndpoint.objects.filter(pk__in=[int(pk) for pk in plugin_pks])

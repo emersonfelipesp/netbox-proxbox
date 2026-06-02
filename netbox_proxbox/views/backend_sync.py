@@ -276,9 +276,7 @@ def resolve_backend_endpoint_ids(
         pk = getattr(endpoint, "pk", getattr(endpoint, "id", None))
         if pk is None:
             continue
-        backend_id = _backend_id_for_name(
-            backend_rows, proxmox_backend_name(endpoint)
-        )
+        backend_id = _backend_id_for_name(backend_rows, proxmox_backend_name(endpoint))
         if backend_id is not None:
             mapping[int(pk)] = backend_id
     return mapping, None

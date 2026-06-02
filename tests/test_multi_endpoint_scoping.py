@@ -57,8 +57,9 @@ def _load_backend_sync_module(monkeypatch, *, endpoints_payload):
 
     error_utils_mod = types.ModuleType("netbox_proxbox.views.error_utils")
     error_utils_mod.extract_backend_error_detail = lambda exc: (str(exc), None)
-    error_utils_mod.parse_requests_response_json = (
-        lambda response, log_label=None: (response.json(), None)
+    error_utils_mod.parse_requests_response_json = lambda response, log_label=None: (
+        response.json(),
+        None,
     )
     monkeypatch.setitem(
         sys.modules, "netbox_proxbox.views.error_utils", error_utils_mod
