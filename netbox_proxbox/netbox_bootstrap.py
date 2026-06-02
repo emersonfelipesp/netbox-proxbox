@@ -9,7 +9,11 @@ PROXBOX_TAG_DEFINITIONS: tuple[dict[str, str], ...] = (
         "name": "Proxbox",
         "slug": "proxbox",
         "color": "4caf50",
-        "description": "Objects discovered and managed by Proxbox sync.",
+        "description": (
+            "Objects discovered and managed by Proxbox sync. Assign this tag to a "
+            "pre-existing NetBox object (e.g. a Device for a physical hypervisor) to "
+            "let Proxbox reuse it during sync instead of creating a duplicate."
+        ),
     },
     {
         "name": "Bootstrap only",
