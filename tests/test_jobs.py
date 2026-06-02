@@ -1590,12 +1590,8 @@ def test_build_base_query_params_defaults_wire_ids_to_plugin_ids(
 ):
     """Legacy single-id-space callers (no wire ids) keep the old behavior."""
     sync_stages = proxbox_sync_job_module.sync_stages
-    monkeypatch.setattr(
-        sync_stages, "effective_overwrites_for_endpoint", lambda _e: {}
-    )
-    monkeypatch.setattr(
-        sync_stages, "effective_sync_modes_for_endpoint", lambda _e: {}
-    )
+    monkeypatch.setattr(sync_stages, "effective_overwrites_for_endpoint", lambda _e: {})
+    monkeypatch.setattr(sync_stages, "effective_sync_modes_for_endpoint", lambda _e: {})
 
     base_query = sync_stages._build_base_query_params(["1"], None)
     assert base_query["proxmox_endpoint_ids"] == "1"
