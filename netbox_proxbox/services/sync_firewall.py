@@ -86,7 +86,7 @@ class FirewallSyncResult:
     options_updated: int = 0
     options_stale: int = 0
 
-    per_endpoint: list[dict] = field(default_factory=list)
+    per_endpoint: list[dict[str, object]] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -123,7 +123,7 @@ def _resolve_endpoint_by_cluster_name(cluster_name: str) -> ProxmoxEndpoint | No
 
 def _upsert_security_group(
     endpoint: ProxmoxEndpoint,
-    raw: dict,
+    raw: dict[str, object],
     synced_ids: set[int],
     result: FirewallSyncResult,
 ) -> ProxmoxFirewallSecurityGroup | None:
@@ -153,7 +153,7 @@ def _upsert_security_group(
 
 def _upsert_rule(
     endpoint: ProxmoxEndpoint,
-    raw: dict,
+    raw: dict[str, object],
     synced_ids: set[int],
     result: FirewallSyncResult,
     *,
@@ -216,7 +216,7 @@ def _upsert_rule(
 
 def _upsert_ipset(
     endpoint: ProxmoxEndpoint,
-    raw: dict,
+    raw: dict[str, object],
     synced_sg_ids: set[int],
     synced_entry_ids: set[int],
     result: FirewallSyncResult,
@@ -267,7 +267,7 @@ def _upsert_ipset(
 
 def _upsert_alias(
     endpoint: ProxmoxEndpoint,
-    raw: dict,
+    raw: dict[str, object],
     synced_ids: set[int],
     result: FirewallSyncResult,
 ) -> None:
@@ -300,7 +300,7 @@ def _upsert_alias(
 
 def _upsert_options(
     endpoint: ProxmoxEndpoint,
-    raw: dict | None,
+    raw: dict[str, object] | None,
     synced_ids: set[int],
     result: FirewallSyncResult,
 ) -> None:
@@ -343,7 +343,7 @@ def _upsert_options(
 
 def _sync_one_endpoint(
     endpoint: ProxmoxEndpoint,
-    summary_entry: dict,
+    summary_entry: dict[str, object],
     result: FirewallSyncResult,
 ) -> None:
     """Upsert all datacenter-level firewall objects for one endpoint."""
@@ -475,7 +475,7 @@ def _sync_one_endpoint(
 
 def sync_firewall(
     fastapi_url: str | None = None,
-    auth_headers: dict | None = None,
+    auth_headers: dict[str, str] | None = None,
 ) -> FirewallSyncResult:
     """Sync datacenter-level firewall objects for all Proxmox endpoints.
 
@@ -534,7 +534,7 @@ def sync_firewall(
     # -----------------------------------------------------------------------
     resolved_endpoints: dict[int, ProxmoxEndpoint] = {}
     endpoint_started_at: dict[int, float] = {}
-    per_endpoint_by_id: dict[int, dict] = {}
+    per_endpoint_by_id: dict[int, dict[str, object]] = {}
 
     for entry in summary_list:
         cluster_name = entry.get("cluster_name") or ""
@@ -549,7 +549,10 @@ def sync_firewall(
             )
             continue
 
-        ep_result: dict = {"endpoint_id": endpoint.pk, "endpoint_name": str(endpoint)}
+        ep_result: dict[str, object] = {
+            "endpoint_id": endpoint.pk,
+            "endpoint_name": str(endpoint),
+        }
         endpoint_started_at[endpoint.pk] = time.monotonic()
         per_endpoint_by_id[endpoint.pk] = ep_result
         try:
@@ -642,7 +645,7 @@ def sync_node_firewall(
     endpoint: ProxmoxEndpoint,
     node_name: str,
     fastapi_url: str,
-    auth_headers: dict,
+    auth_headers: dict[str, str],
     verify_ssl: bool = True,
 ) -> None:
     """Sync firewall rules for a single Proxmox node.
@@ -757,7 +760,7 @@ def sync_vm_firewall(
     vmid: int,
     vm_type: str,
     fastapi_url: str,
-    auth_headers: dict,
+    auth_headers: dict[str, str],
     verify_ssl: bool = True,
 ) -> None:
     """Sync firewall rules for a single Proxmox VM or container.
