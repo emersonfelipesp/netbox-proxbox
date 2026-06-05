@@ -44,6 +44,19 @@ This directory implements the plugin's NetBox UI behavior, including dashboard p
 - `HomeView` is the main dashboard entrypoint and assembles endpoint lists plus derived backend URLs for the templates.
 - Most changes to user-visible behavior land here first, then cascade into templates, static assets, and tests.
 - When adding or changing sync actions, update `urls.py`, `sync.py`, scheduling forms/views, template extensions, and relevant frontend/tests that assert button routes and job flow.
+- **URL namespace for tabs registered on core models.** When `register_model_view`
+  attaches a tab/view to a NetBox **core** model (e.g. `virtualization.Cluster`,
+  `virtualization.VirtualMachine`, `core.Job`), NetBox names that URL under the
+  **core** model's namespace, not the plugin namespace — `get_viewname` only
+  prepends `plugins:` for models that belong to a `PluginConfig`. So reverse
+  these as `virtualization:cluster_<name>` / `virtualization:virtualmachine_<name>`
+  (e.g. `virtualization:cluster_proxbox-storages` for
+  `register_model_view(Cluster, "proxbox-storages", ...)`), **never**
+  `plugins:netbox_proxbox:cluster_<name>`. Only the plugin's *own* models use the
+  `plugins:netbox_proxbox:` namespace. Using the wrong namespace raises
+  `NoReverseMatch` at template-render time and returns HTTP 500 (this caused the
+  cluster summary crash). `tests/test_frontend_contracts.py` guards the cluster
+  summary template against this regression.
 
 ## Links
 

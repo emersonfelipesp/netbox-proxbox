@@ -29,7 +29,7 @@
               <th scope="row">{% trans "Storage Count" %}</th>
               <td>
                 {% if storage_count %}
-                  <a href="{% url 'plugins:netbox_proxbox:cluster_proxbox-storages' pk=object.pk %}">
+                  <a href="{% url 'virtualization:cluster_proxbox-storages' pk=object.pk %}">
                     {{ storage_count }}
                   </a>
                 {% else %}
@@ -48,7 +48,7 @@
         </h5>
         <div class="card-body">
           <div class="d-grid gap-2">
-            <a href="{% url 'plugins:netbox_proxbox:cluster_proxbox-storages' pk=object.pk %}" class="btn btn-outline-primary">
+            <a href="{% url 'virtualization:cluster_proxbox-storages' pk=object.pk %}" class="btn btn-outline-primary">
               <i class="mdi mdi-harddisk" aria-hidden="true"></i> {% trans "View Storages" %}
             </a>
             {% if proxmox_endpoint %}
@@ -69,7 +69,7 @@
           <h5 class="card-header">
             {% trans "Recent Storages" %}
             <div class="card-actions">
-              <a href="{% url 'plugins:netbox_proxbox:cluster_proxbox-storages' pk=object.pk %}" class="btn btn-sm btn-primary">
+              <a href="{% url 'virtualization:cluster_proxbox-storages' pk=object.pk %}" class="btn btn-sm btn-primary">
                 {% trans "View All" %}
               </a>
             </div>

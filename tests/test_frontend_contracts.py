@@ -853,3 +853,37 @@ def test_resource_list_page_templates_include_paginator():
     )
     assert 'page_param="vm_page"' in ip_partial
     assert 'page_param="node_page"' in ip_partial
+
+
+def test_cluster_summary_reverses_storages_tab_under_core_namespace():
+    """Regression test for the Proxmox cluster summary crash.
+
+    ``ClusterStoragesTabView`` is registered on the *core*
+    ``virtualization.Cluster`` model via ``register_model_view``. NetBox builds
+    such a view's URL name as ``<app_label>:<model>_<name>`` and only prepends
+    ``plugins:`` when the model belongs to a plugin (see
+    ``utilities.views.get_viewname``). ``Cluster`` is a core model, so the
+    correct reverse target is ``virtualization:cluster_proxbox-storages`` — NOT
+    ``plugins:netbox_proxbox:cluster_proxbox-storages``.
+
+    The wrong namespace raised ``django.urls.exceptions.NoReverseMatch`` and
+    returned HTTP 500 for ``/virtualization/clusters/<id>/summary/``.
+
+    See https://github.com/emersonfelipesp/netbox-proxbox/issues/565
+    """
+    view_contents = _read("netbox_proxbox/views/cluster.py")
+    template = _read(
+        "netbox_proxbox/templates/netbox_proxbox/cluster/cluster_summary.html"
+    )
+
+    # The storages tab is attached to the core virtualization.Cluster model.
+    assert "from virtualization.models import Cluster" in view_contents
+    assert (
+        '@register_model_view(Cluster, "proxbox-storages", path="storages")'
+        in view_contents
+    )
+
+    # Therefore the summary template must reverse it under the core
+    # virtualization namespace, never the plugin namespace.
+    assert "virtualization:cluster_proxbox-storages" in template
+    assert "plugins:netbox_proxbox:cluster_proxbox-storages" not in template
