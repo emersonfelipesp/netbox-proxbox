@@ -240,6 +240,7 @@ class ProxmoxEndpointSettingsForm(NetBoxModelForm):
             "default_role_lxc",
             "enable_tenant_name_regex",
             "tenant_name_regex_rules",
+            "enable_tenant_tag_assignment",
             *SYNC_MODE_FIELDS,
             *OVERWRITE_FIELDS,
         )
@@ -302,6 +303,15 @@ class ProxmoxEndpointSettingsForm(NetBoxModelForm):
             help_text=_(
                 "JSON list. Leave blank to inherit the global list. Use '[]' to "
                 "explicitly disable all global rules for this endpoint."
+            ),
+        )
+        self.fields["enable_tenant_tag_assignment"] = forms.NullBooleanField(
+            required=False,
+            widget=forms.NullBooleanSelect,
+            label=_("Enable tenant tag assignment (override)"),
+            help_text=_(
+                "Per-endpoint override for the global tenant tag-assignment toggle. "
+                "Leave blank to inherit."
             ),
         )
 

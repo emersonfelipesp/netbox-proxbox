@@ -73,6 +73,15 @@ resolves env > plugin settings > default with a 5-minute cache. See
 [top-level `CLAUDE.md` → Plugin settings and configuration](../CLAUDE.md) for the full
 policy and the short list of `.env`-only operator infrastructure variables.
 
+Tenant assignment for Proxmox-synced NetBox `VirtualMachine` rows is plugin-side
+post-sync behavior. Regex assignment is controlled by
+`enable_tenant_name_regex` plus `tenant_name_regex_rules`; tag assignment is
+controlled by `enable_tenant_tag_assignment`. The tag resolver requires both a
+`cloud-customer` marker tag and exactly one `tenant-<slug>` tag, never overwrites
+an existing VM tenant, and auto-creates missing `Tenant` rows under the
+`cloud-customers` `TenantGroup`. Per-`ProxmoxEndpoint` overrides inherit from the
+global plugin settings when left null.
+
 ## Installation Docs
 
 - Docker-based NetBox installation guidance is documented at [`../docs/installation/3-installing-plugin-docker.md`](../docs/installation/3-installing-plugin-docker.md).

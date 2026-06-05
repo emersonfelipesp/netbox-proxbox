@@ -1,4 +1,4 @@
-"""Post-sync VM tenant assignment driven by operator-defined regex rules.
+"""Post-sync VM tenant assignment driven by operator-defined rules.
 
 The feature is disabled by default. Operators opt in globally via
 ``ProxboxPluginSettings.enable_tenant_name_regex`` and may override the toggle
@@ -12,7 +12,15 @@ from __future__ import annotations
 import logging
 import re
 
-from netbox_proxbox.sync_params import effective_tenant_regex_for_endpoint
+from netbox_proxbox.sync_params import (
+    effective_tenant_regex_for_endpoint,
+    effective_tenant_tag_assignment_for_endpoint,
+)
+
+CLOUD_CUSTOMER_MARKER_SLUG = "cloud-customer"
+TENANT_TAG_PREFIX = "tenant-"
+CLOUD_CUSTOMERS_GROUP_NAME = "Cloud Customers"
+CLOUD_CUSTOMERS_GROUP_SLUG = "cloud-customers"
 
 
 def _endpoint_id_for_vm(vm: object) -> int | None:
@@ -98,3 +106,96 @@ def maybe_assign_tenant_from_regex(
         )
         return True
     return False
+
+
+def _vm_tag_slugs(vm: object, tag_model: type[object]) -> list[str]:
+    """Return NetBox tag slugs attached to ``vm``."""
+    tags_manager = getattr(vm, "tags", None)
+    all_tags = getattr(tags_manager, "all", None)
+    if not callable(all_tags):
+        return []
+    slugs: list[str] = []
+    for tag in all_tags():
+        if not isinstance(tag, tag_model) and not getattr(tag, "slug", None):
+            continue
+        slug = str(getattr(tag, "slug", "") or "").strip()
+        if slug:
+            slugs.append(slug)
+    return slugs
+
+
+def maybe_assign_tenant_from_tags(
+    vm: object,
+    *,
+    endpoint_id: int | None = None,
+    logger: logging.Logger | None = None,
+) -> bool:
+    """Assign a tenant from the ``cloud-customer`` + ``tenant-<slug>`` tag pair."""
+    log = logger or logging.getLogger(__name__)
+    if endpoint_id is None:
+        endpoint_id = _endpoint_id_for_vm(vm)
+    if not effective_tenant_tag_assignment_for_endpoint(endpoint_id):
+        return False
+    if getattr(vm, "tenant_id", None) is not None:
+        return False
+
+    try:
+        from extras.models import Tag
+        from tenancy.models import Tenant, TenantGroup
+    except (ImportError, RuntimeError):
+        return False
+
+    name = getattr(vm, "name", "") or ""
+    tag_slugs = _vm_tag_slugs(vm, Tag)
+    if CLOUD_CUSTOMER_MARKER_SLUG not in tag_slugs:
+        return False
+
+    tenant_tag_slugs = [
+        slug for slug in tag_slugs if slug.startswith(TENANT_TAG_PREFIX)
+    ]
+    if not tenant_tag_slugs:
+        return False
+    if len(tenant_tag_slugs) > 1:
+        log.warning(
+            "[tenant-tags] vm=%s has ambiguous tenant tags=%s; skipping.",
+            name,
+            sorted(tenant_tag_slugs),
+        )
+        return False
+
+    tenant_tag_slug = tenant_tag_slugs[0]
+    tenant_slug = tenant_tag_slug[len(TENANT_TAG_PREFIX) :]
+    if not tenant_slug:
+        return False
+
+    tenant = Tenant.objects.filter(slug=tenant_slug).first()
+    if tenant is None:
+        group, group_created = TenantGroup.objects.get_or_create(
+            slug=CLOUD_CUSTOMERS_GROUP_SLUG,
+            defaults={"name": CLOUD_CUSTOMERS_GROUP_NAME},
+        )
+        if group_created:
+            log.info(
+                "[tenant-tags] created tenant group slug=%s",
+                CLOUD_CUSTOMERS_GROUP_SLUG,
+            )
+        tenant, tenant_created = Tenant.objects.get_or_create(
+            slug=tenant_slug,
+            defaults={"name": tenant_slug.title(), "group": group},
+        )
+        if tenant_created:
+            log.info(
+                "[tenant-tags] created tenant slug=%s group=%s",
+                tenant_slug,
+                CLOUD_CUSTOMERS_GROUP_SLUG,
+            )
+
+    vm.tenant = tenant
+    vm.save(update_fields=["tenant"])
+    log.info(
+        "[tenant-tags] vm=%s → tenant=%s (tag=%s)",
+        name,
+        tenant.slug,
+        tenant_tag_slug,
+    )
+    return True

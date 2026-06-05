@@ -1,11 +1,12 @@
-# Tenant assignment by VM-name regex
+# Tenant assignment by VM-name regex or tags
 
 Tracking issue: [#365](https://github.com/emersonfelipesp/netbox-proxbox/issues/365).
 
 The plugin can resolve a NetBox `tenancy.Tenant` for newly-synced VMs by
-matching the VM name against a list of operator-defined regex patterns. The
-feature is **disabled by default**; operators opt in globally and may
-override the toggle and/or the rule list on a per-`ProxmoxEndpoint` basis.
+matching the VM name against a list of operator-defined regex patterns, or by
+reading a Proxmox-sourced NetBox tag convention. Both features are **disabled by
+default**; operators opt in globally and may override the toggles on a
+per-`ProxmoxEndpoint` basis.
 
 ## Configuration
 
@@ -15,10 +16,14 @@ Two model fields, present at both scopes:
 |---|---|---|---|
 | `enable_tenant_name_regex` | `ProxboxPluginSettings` | `False` | — |
 | `tenant_name_regex_rules` | `ProxboxPluginSettings` | `[]` | — |
+| `enable_tenant_tag_assignment` | `ProxboxPluginSettings` | `False` | — |
 | `enable_tenant_name_regex` | `ProxmoxEndpoint` | `None` (inherit) | `None` → use global; `True`/`False` → override |
 | `tenant_name_regex_rules` | `ProxmoxEndpoint` | `None` (inherit) | `None` → use global; non-null list → **replaces** global list |
+| `enable_tenant_tag_assignment` | `ProxmoxEndpoint` | `None` (inherit) | `None` → use global; `True`/`False` → override |
 
-Resolution helper: `netbox_proxbox.sync_params.effective_tenant_regex_for_endpoint(endpoint_id)`.
+Resolution helpers:
+`netbox_proxbox.sync_params.effective_tenant_regex_for_endpoint(endpoint_id)` and
+`netbox_proxbox.sync_params.effective_tenant_tag_assignment_for_endpoint(endpoint_id)`.
 
 ### Rule shape
 
@@ -40,6 +45,22 @@ The list is **ordered**. Resolution is **first-match-wins** — put more
 specific patterns before less specific ones (e.g. `^cust-acme-` before
 `^cust-`).
 
+### Tag convention
+
+Tag assignment runs after regex assignment. It requires both:
+
+- Marker tag: `cloud-customer`
+- Tenant tag: exactly one tag whose slug starts with `tenant-`, for example
+  `tenant-confitec`
+
+The tenant slug is the part after `tenant-`. If the VM has no marker, no
+tenant tag, an empty `tenant-` tag, or more than one `tenant-*` tag, assignment
+is a no-op. Ambiguous multiple tenant tags are logged as a warning.
+
+If the derived tenant does not exist, the plugin creates a `TenantGroup` with
+slug `cloud-customers` and name `Cloud Customers` if needed, then creates the
+tenant with `slug=<derived slug>`, `name=<derived slug>.title()`, and that group.
+
 ## Resolution semantics
 
 - The resolver runs **after** the proxbox-api sync writes the VM, in two
@@ -49,6 +70,8 @@ specific patterns before less specific ones (e.g. `^cust-acme-` before
 - The resolver **never overwrites** an existing `vm.tenant` assignment. If
   an operator has set the tenant manually (or a prior run assigned it), the
   resolver leaves it alone.
+- Regex assignment runs first. Tag assignment only fills the tenant when the VM
+  is still unassigned.
 - If a rule's `tenant_slug` no longer resolves to a NetBox tenant at sync
   time, the resolver logs a warning via `logging.warning` and **stops**
   (it does not fall through to the next rule — operator intent was specific).
@@ -92,4 +115,5 @@ On the per-endpoint form:
   in the VM create body, so the plugin's assignment is stable across
   subsequent re-syncs.
 - Warnings about missing tenant slugs land in the standard NetBox plugin
-  logger; they do not surface as a dedicated SSE frame.
+  logger; tag ambiguity warnings use the same logging path. They do not surface
+  as dedicated SSE frames.

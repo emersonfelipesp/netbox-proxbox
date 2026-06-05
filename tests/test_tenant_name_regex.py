@@ -37,6 +37,7 @@ def sync_params_module(monkeypatch):
     state: dict[str, object] = {
         "global_enabled": False,
         "global_rules": [],
+        "global_tag_enabled": False,
         "endpoints_by_pk": {},
     }
 
@@ -46,6 +47,7 @@ def sync_params_module(monkeypatch):
             return SimpleNamespace(
                 enable_tenant_name_regex=state["global_enabled"],
                 tenant_name_regex_rules=state["global_rules"],
+                enable_tenant_tag_assignment=state["global_tag_enabled"],
             )
 
     class _Manager:
@@ -97,10 +99,11 @@ def sync_params_module(monkeypatch):
     return module
 
 
-def _endpoint(*, enable=None, rules=None):
+def _endpoint(*, enable=None, rules=None, tag_enable=None):
     return SimpleNamespace(
         enable_tenant_name_regex=enable,
         tenant_name_regex_rules=rules,
+        enable_tenant_tag_assignment=tag_enable,
     )
 
 
@@ -174,6 +177,24 @@ def test_endpoint_missing_returns_global(sync_params_module):
     assert rules == [{"pattern": "^g-", "tenant_slug": "g"}]
 
 
+def test_tenant_tag_assignment_inherits_global(sync_params_module):
+    sync_params_module._stubs["global_tag_enabled"] = True
+    sync_params_module._stubs["endpoints_by_pk"] = {7: _endpoint()}
+
+    enabled = sync_params_module.effective_tenant_tag_assignment_for_endpoint(7)
+
+    assert enabled is True
+
+
+def test_tenant_tag_assignment_endpoint_override(sync_params_module):
+    sync_params_module._stubs["global_tag_enabled"] = True
+    sync_params_module._stubs["endpoints_by_pk"] = {7: _endpoint(tag_enable=False)}
+
+    enabled = sync_params_module.effective_tenant_tag_assignment_for_endpoint(7)
+
+    assert enabled is False
+
+
 # ---------------------------------------------------------------------------
 # services.tenant_assignment.maybe_assign_tenant_from_regex
 # ---------------------------------------------------------------------------
@@ -183,10 +204,13 @@ def test_endpoint_missing_returns_global(sync_params_module):
 def tenant_assignment_module(monkeypatch, sync_params_module):
     """Load tenant_assignment.py with a stubbed tenancy.Tenant model."""
     tenants: dict[str, object] = {}
+    tenant_groups: dict[str, object] = {}
 
     class _Tenant:
-        def __init__(self, slug):
+        def __init__(self, slug, name=None, group=None):
             self.slug = slug
+            self.name = name or slug
+            self.group = group
             self.pk = id(self)
 
     class _TenantManager:
@@ -198,12 +222,54 @@ def tenant_assignment_module(monkeypatch, sync_params_module):
                 exists=lambda: slug in tenants,
             )
 
+        @staticmethod
+        def get_or_create(slug, defaults=None):
+            if slug in tenants:
+                return tenants[slug], False
+            defaults = defaults or {}
+            tenant = _Tenant(
+                slug=slug,
+                name=defaults.get("name"),
+                group=defaults.get("group"),
+            )
+            tenants[slug] = tenant
+            return tenant, True
+
+    class _TenantGroup:
+        def __init__(self, slug, name=None):
+            self.slug = slug
+            self.name = name or slug
+            self.pk = id(self)
+
+    class _TenantGroupManager:
+        @staticmethod
+        def get_or_create(slug, defaults=None):
+            if slug in tenant_groups:
+                return tenant_groups[slug], False
+            defaults = defaults or {}
+            group = _TenantGroup(slug=slug, name=defaults.get("name"))
+            tenant_groups[slug] = group
+            return group, True
+
     tenancy_models = types.ModuleType("tenancy.models")
     tenancy_models.Tenant = SimpleNamespace(objects=_TenantManager)
+    tenancy_models.TenantGroup = SimpleNamespace(objects=_TenantGroupManager)
     tenancy_pkg = types.ModuleType("tenancy")
     tenancy_pkg.models = tenancy_models
     monkeypatch.setitem(sys.modules, "tenancy", tenancy_pkg)
     monkeypatch.setitem(sys.modules, "tenancy.models", tenancy_models)
+
+    extras_models = types.ModuleType("extras.models")
+
+    class _Tag:
+        def __init__(self, slug):
+            self.slug = slug
+
+    extras_models.Tag = _Tag
+    extras_pkg = types.ModuleType("extras")
+    extras_pkg.models = extras_models
+    monkeypatch.setitem(sys.modules, "extras", extras_pkg)
+    monkeypatch.setitem(sys.modules, "extras.models", extras_models)
 
     # Provide ProxmoxCluster used by _endpoint_id_for_vm.
     models_mod = sys.modules["netbox_proxbox.models"]
@@ -230,14 +296,25 @@ def tenant_assignment_module(monkeypatch, sync_params_module):
     sys.modules["netbox_proxbox.services.tenant_assignment"] = module
     spec.loader.exec_module(module)
     module._tenants = tenants  # type: ignore[attr-defined]
+    module._tenant_groups = tenant_groups  # type: ignore[attr-defined]
+    module._Tag = _Tag  # type: ignore[attr-defined]
     return module
 
 
+class _TagList:
+    def __init__(self, slugs):
+        self._tags = [SimpleNamespace(slug=slug) for slug in slugs]
+
+    def all(self):
+        return list(self._tags)
+
+
 class _FakeVM:
-    def __init__(self, name, tenant_id=None):
+    def __init__(self, name, tenant_id=None, tags=None):
         self.name = name
         self.tenant = None
         self.tenant_id = tenant_id
+        self.tags = _TagList(tags or [])
         self.saved_with: list[list[str]] = []
 
     def save(self, update_fields=None):
@@ -338,6 +415,104 @@ def test_no_match_leaves_vm_alone(tenant_assignment_module, sync_params_module):
 
     assert assigned is False
     assert vm.tenant is None
+
+
+def test_tag_assignment_no_marker_no_op(
+    tenant_assignment_module, sync_params_module
+):
+    sync_params_module._stubs["global_tag_enabled"] = True
+    vm = _FakeVM("cust-confitec-001", tags=["tenant-confitec"])
+
+    assigned = tenant_assignment_module.maybe_assign_tenant_from_tags(
+        vm, endpoint_id=None
+    )
+
+    assert assigned is False
+    assert vm.tenant is None
+    assert vm.saved_with == []
+
+
+def test_tag_assignment_creates_and_assigns_tenant(
+    tenant_assignment_module, sync_params_module
+):
+    sync_params_module._stubs["global_tag_enabled"] = True
+    vm = _FakeVM(
+        "cust-confitec-001",
+        tags=["cloud-customer", "tenant-confitec"],
+    )
+
+    assigned = tenant_assignment_module.maybe_assign_tenant_from_tags(
+        vm, endpoint_id=None
+    )
+
+    assert assigned is True
+    assert vm.tenant.slug == "confitec"
+    assert vm.tenant.name == "Confitec"
+    assert vm.tenant.group.slug == "cloud-customers"
+    assert vm.tenant.group.name == "Cloud Customers"
+    assert tenant_assignment_module._tenants["confitec"] is vm.tenant
+    assert vm.saved_with == [["tenant"]]
+
+
+def test_tag_assignment_existing_tenant_preserved(
+    tenant_assignment_module, sync_params_module
+):
+    sync_params_module._stubs["global_tag_enabled"] = True
+    vm = _FakeVM(
+        "cust-confitec-001",
+        tenant_id=99,
+        tags=["cloud-customer", "tenant-confitec"],
+    )
+
+    assigned = tenant_assignment_module.maybe_assign_tenant_from_tags(
+        vm, endpoint_id=None
+    )
+
+    assert assigned is False
+    assert vm.tenant is None
+    assert vm.saved_with == []
+    assert tenant_assignment_module._tenants == {}
+
+
+def test_tag_assignment_ambiguous_tags_no_op_with_warning(
+    tenant_assignment_module, sync_params_module, caplog
+):
+    sync_params_module._stubs["global_tag_enabled"] = True
+    vm = _FakeVM(
+        "cust-confitec-001",
+        tags=["cloud-customer", "tenant-confitec", "tenant-acme"],
+    )
+    import logging
+
+    with caplog.at_level(logging.WARNING):
+        assigned = tenant_assignment_module.maybe_assign_tenant_from_tags(
+            vm, endpoint_id=None
+        )
+
+    assert assigned is False
+    assert vm.tenant is None
+    assert vm.saved_with == []
+    assert tenant_assignment_module._tenants == {}
+    assert any("ambiguous" in rec.getMessage() for rec in caplog.records)
+
+
+def test_tag_assignment_disabled_setting_no_op(
+    tenant_assignment_module, sync_params_module
+):
+    sync_params_module._stubs["global_tag_enabled"] = False
+    vm = _FakeVM(
+        "cust-confitec-001",
+        tags=["cloud-customer", "tenant-confitec"],
+    )
+
+    assigned = tenant_assignment_module.maybe_assign_tenant_from_tags(
+        vm, endpoint_id=None
+    )
+
+    assert assigned is False
+    assert vm.tenant is None
+    assert vm.saved_with == []
+    assert tenant_assignment_module._tenants == {}
 
 
 # ---------------------------------------------------------------------------

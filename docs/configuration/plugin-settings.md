@@ -125,14 +125,15 @@ See [Sync Overwrite Flags](./sync-overwrite-flags.md) for the full flag matrix.
 
 ## Tenant Mapping
 
-These fields drive the optional VM-name → Tenant resolver. Existing tenant assignments are never overwritten by this rule set.
+These fields drive the optional post-sync Tenant resolvers. Existing tenant assignments are never overwritten by either resolver.
 
 | Field | Default | Env override | Description |
 |---|---|---|---|
 | **Enable tenant assignment by VM-name regex** | `false` | _(plugin only)_ | When enabled, sync resolves a NetBox Tenant for each VM by matching its name against the rules below. |
 | **Tenant name regex rules** | `[]` | _(plugin only)_ | Ordered list of `{pattern, tenant_slug, [label]}` dicts. First match wins; specificity-first ordering is recommended (e.g. `^cust-acme-` before `^cust-`). Patterns are compiled and tenant slugs are verified at save time. |
+| **Enable tenant assignment by tags** | `false` | _(plugin only)_ | When enabled, sync assigns a Tenant to VMs carrying both `cloud-customer` and exactly one `tenant-<slug>` tag. Missing tenants are created under the `cloud-customers` TenantGroup. |
 
-See [Tenant Mapping operations](../operations/tenant-mapping.md) for runbook-level guidance, pattern examples, and the audit-tag emitted on each match.
+See [Tenant Mapping operations](../operations/tenant-mapping.md) for runbook-level guidance, pattern examples, and tag-convention details.
 
 ---
 

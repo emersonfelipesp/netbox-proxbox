@@ -494,6 +494,16 @@ class ProxmoxEndpoint(EndpointBase):
             "When set (even to an empty list), replaces the global list for this endpoint."
         ),
     )
+    enable_tenant_tag_assignment = models.BooleanField(
+        null=True,
+        blank=True,
+        default=None,
+        verbose_name=_("Enable tenant tag assignment (override)"),
+        help_text=_(
+            "Per-endpoint override for the global tenant tag-assignment toggle. "
+            "Leave blank to inherit."
+        ),
+    )
     site = models.ForeignKey(
         to="dcim.Site",
         on_delete=models.SET_NULL,

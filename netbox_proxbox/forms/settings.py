@@ -483,6 +483,15 @@ class ProxboxPluginSettingsForm(forms.Form):
             "slugs are verified on save."
         ),
     )
+    enable_tenant_tag_assignment = forms.BooleanField(
+        required=False,
+        label="Enable tenant assignment by tags",
+        help_text=(
+            "When enabled, sync assigns a tenant to VMs carrying both the "
+            "cloud-customer marker tag and exactly one tenant-<slug> tag. Existing "
+            "tenant assignments are never overwritten."
+        ),
+    )
     branching_enabled = forms.BooleanField(
         required=False,
         label="Branching-enabled sync (Proxmox → NetBox)",

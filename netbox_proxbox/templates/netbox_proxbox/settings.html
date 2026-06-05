@@ -120,6 +120,24 @@
                 </div>
             </div>
             {% endfor %}
+            {# Tenant Assignment Card #}
+            <div class="card mb-3">
+                <h5 class="card-header">
+                    <i class="mdi mdi-account-switch"></i>
+                    {% trans "Tenant Assignment" %}
+                </h5>
+                <div class="card-body">
+                    <p class="text-muted">
+                        {% blocktrans trimmed %}
+                        Configure optional post-sync Tenant assignment for synced virtual machines.
+                        Existing Tenant values are preserved.
+                        {% endblocktrans %}
+                    </p>
+                    {% render_field form.enable_tenant_name_regex %}
+                    {% render_field form.tenant_name_regex_rules %}
+                    {% render_field form.enable_tenant_tag_assignment %}
+                </div>
+            </div>
             {# Proxmox API Card #}
             <div class="card mb-3">
                 <h5 class="card-header">

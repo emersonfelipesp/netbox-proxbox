@@ -650,6 +650,15 @@ class ProxboxPluginSettings(NetBoxModel):
             "at save time."
         ),
     )
+    enable_tenant_tag_assignment = models.BooleanField(
+        default=False,
+        verbose_name=_("Enable tenant assignment by tags"),
+        help_text=_(
+            "When enabled, sync resolves a NetBox Tenant for VMs carrying both the "
+            "`cloud-customer` marker tag and exactly one `tenant-<slug>` tag. "
+            "Existing tenant assignments are never overwritten."
+        ),
+    )
     branching_enabled = models.BooleanField(
         default=False,
         verbose_name=_("Branching-enabled sync (Proxmox → NetBox)"),

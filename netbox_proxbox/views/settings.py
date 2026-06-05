@@ -86,6 +86,11 @@ class SettingsView(
                 settings_obj.tenant_name_regex_rules or [],
                 indent=2,
             ),
+            "enable_tenant_tag_assignment": getattr(
+                settings_obj,
+                "enable_tenant_tag_assignment",
+                False,
+            ),
             "branching_enabled": settings_obj.branching_enabled,
             "branch_name_prefix": settings_obj.branch_name_prefix,
             "branch_on_conflict": settings_obj.branch_on_conflict,
@@ -256,6 +261,9 @@ class SettingsView(
             settings_obj.tenant_name_regex_rules = form.cleaned_data.get(
                 "tenant_name_regex_rules", []
             )
+            settings_obj.enable_tenant_tag_assignment = form.cleaned_data.get(
+                "enable_tenant_tag_assignment", False
+            )
             settings_obj.branching_enabled = form.cleaned_data.get(
                 "branching_enabled", False
             )
@@ -353,6 +361,7 @@ class SettingsView(
                     "default_role_lxc",
                     "enable_tenant_name_regex",
                     "tenant_name_regex_rules",
+                    "enable_tenant_tag_assignment",
                     "branching_enabled",
                     "branch_name_prefix",
                     "branch_on_conflict",

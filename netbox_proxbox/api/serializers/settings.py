@@ -30,6 +30,7 @@ class ProxboxPluginSettingsSerializer(NetBoxModelSerializer):
             "embed_description_metadata",
             "enable_tenant_name_regex",
             "tenant_name_regex_rules",
+            "enable_tenant_tag_assignment",
             "primary_ip_preference",
             "netbox_max_concurrent",
             "netbox_timeout",

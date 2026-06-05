@@ -17,7 +17,10 @@ from netbox_proxbox.models import ProxmoxCluster
 from netbox_proxbox.utils import resolve_vm_type
 from netbox_proxbox.services.branch_lifecycle import get_active_branch_schema_id
 from netbox_proxbox.services.individual_sync import sync_individual_with_dependencies
-from netbox_proxbox.services.tenant_assignment import maybe_assign_tenant_from_regex
+from netbox_proxbox.services.tenant_assignment import (
+    maybe_assign_tenant_from_regex,
+    maybe_assign_tenant_from_tags,
+)
 from netbox_proxbox.views.proxbox_access import permission_enqueue_proxbox_sync
 from netbox_proxbox.views.sync_now import _handle_sync_response
 
@@ -89,6 +92,7 @@ class VirtualMachineSyncNowView(
             vm.refresh_from_db()
             endpoint_id = proxmox_cluster.endpoint_id if proxmox_cluster else None
             maybe_assign_tenant_from_regex(vm, endpoint_id=endpoint_id)
+            maybe_assign_tenant_from_tags(vm, endpoint_id=endpoint_id)
 
         return _handle_sync_response(
             request,

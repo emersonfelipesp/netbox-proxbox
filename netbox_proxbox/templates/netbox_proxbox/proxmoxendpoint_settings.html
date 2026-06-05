@@ -82,6 +82,24 @@
   </div>
   {% endfor %}
 
+  <div class="card mb-3">
+    <h5 class="card-header">
+      <i class="mdi mdi-account-switch"></i>
+      {% trans "Tenant assignment overrides" %}
+    </h5>
+    <div class="card-body">
+      <p class="text-muted">
+        {% blocktrans trimmed %}
+        Override post-sync Tenant assignment behavior for virtual machines from
+        this endpoint. Leave toggle fields blank to inherit the global setting.
+        {% endblocktrans %}
+      </p>
+      {% render_field form.enable_tenant_name_regex %}
+      {% render_field form.tenant_name_regex_rules %}
+      {% render_field form.enable_tenant_tag_assignment %}
+    </div>
+  </div>
+
   {% if form.changelog_message %}
     <div class="bg-primary-subtle border border-primary rounded-1 pt-3 px-3 mb-3">
       {% render_field form.changelog_message %}
