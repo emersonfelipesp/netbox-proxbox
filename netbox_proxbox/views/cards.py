@@ -16,7 +16,10 @@ from netbox_proxbox.utils import (
     get_fastapi_url,
     get_ip_address_host,
 )
-from netbox_proxbox.views.backend_sync import sync_proxmox_endpoint_to_backend
+from netbox_proxbox.views.backend_sync import (
+    resolve_backend_endpoint_id,
+    sync_proxmox_endpoint_to_backend,
+)
 from netbox_proxbox.views.error_utils import (
     extract_proxmox_backend_error_detail,
     parse_requests_response_json,
@@ -109,11 +112,6 @@ class ProxboxProxmoxCardView(
         domain = (proxmox_object.domain or "").strip()
         ip_address = get_ip_address_host(proxmox_object.ip_address)
         proxmox_host = domain or ip_address
-        query_params = {"source": "database"}
-        if domain:
-            query_params["domain"] = domain
-        else:
-            query_params["ip_address"] = ip_address
 
         version_endpoint = f"{fastapi_url}/proxmox/version"
         cluster_endpoint = f"{fastapi_url}/proxmox/sessions"
@@ -148,6 +146,39 @@ class ProxboxProxmoxCardView(
             if sync_http_status is not None:
                 payload["http_status"] = sync_http_status
             return JsonResponse(payload)
+
+        backend_endpoint_id, resolve_error = resolve_backend_endpoint_id(
+            proxmox_object,
+            base_url=fastapi_url,
+            auth_headers=backend_headers,
+            backend_verify_ssl=backend_verify_ssl,
+            timeout=5,
+        )
+        if backend_endpoint_id is None:
+            return JsonResponse(
+                {
+                    "cluster_data": {},
+                    "object": {
+                        "pk": getattr(
+                            proxmox_object,
+                            "pk",
+                            getattr(proxmox_object, "id", None),
+                        ),
+                        "name": proxmox_object.name,
+                        "domain": proxmox_object.domain,
+                        "ip_address": str(proxmox_object.ip_address)
+                        if proxmox_object.ip_address
+                        else None,
+                    },
+                    "detail": resolve_error
+                    or "Failed to resolve Proxmox endpoint on ProxBox backend.",
+                }
+            )
+
+        query_params = {
+            "source": "database",
+            "proxmox_endpoint_ids": str(backend_endpoint_id),
+        }
 
         try:
             version_response = requests.get(

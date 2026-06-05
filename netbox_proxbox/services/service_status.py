@@ -129,6 +129,28 @@ def sync_proxmox_endpoint_to_backend(
     )
 
 
+def resolve_backend_endpoint_id(
+    endpoint: ProxmoxEndpoint,
+    *,
+    base_url: str,
+    auth_headers: dict[str, str] | None = None,
+    backend_verify_ssl: bool = True,
+    timeout: int = 15,
+) -> tuple[int | None, str | None]:
+    """Compatibility wrapper for callers that patch this service module symbol."""
+    from netbox_proxbox.views.backend_sync import (  # noqa: PLC0415
+        resolve_backend_endpoint_id as _resolve,
+    )
+
+    return _resolve(
+        endpoint,
+        base_url=base_url,
+        auth_headers=auth_headers,
+        backend_verify_ssl=backend_verify_ssl,
+        timeout=timeout,
+    )
+
+
 def _maybe_update_proxmox_endpoint_mode(
     endpoint: ProxmoxEndpoint,
     base_url: str,
@@ -647,11 +669,29 @@ class ServiceStatus:
         authentication = "success"
 
         url = f"{base_url}/proxmox/version"
-        query_params = {"source": "database"}
-        if proxmox_domain:
-            query_params["domain"] = proxmox_domain
-        else:
-            query_params["ip_address"] = proxmox_ip_address
+        backend_endpoint_id, resolve_error = resolve_backend_endpoint_id(
+            proxmox_service_obj,
+            base_url=base_url,
+            auth_headers=request_headers,
+            backend_verify_ssl=backend_verify_ssl,
+            timeout=self.request_timeout,
+        )
+        if backend_endpoint_id is None:
+            self._set_error(
+                resolve_error
+                or "Failed to resolve Proxmox endpoint on ProxBox backend."
+            )
+            return status, ServiceCheckResult(
+                target_address=target_address,
+                target_port=target_port,
+                authentication=authentication,
+                api_access="error",
+                detail=self.last_error_detail,
+            )
+        query_params = {
+            "source": "database",
+            "proxmox_endpoint_ids": str(backend_endpoint_id),
+        }
 
         for attempt in range(max_retries):
             try:

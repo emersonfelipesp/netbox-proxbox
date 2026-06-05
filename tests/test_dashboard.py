@@ -64,6 +64,94 @@ def _dashboard_request():
     )
 
 
+def _scope_dashboard_to_backend_id(monkeypatch, module, backend_id=1):
+    monkeypatch.setattr(
+        module,
+        "resolve_backend_endpoint_id",
+        lambda *args, **kwargs: (backend_id, None),
+    )
+
+
+def test_dashboard_live_reads_use_resolved_backend_endpoint_id(
+    monkeypatch,
+    fastapi_endpoint,
+    proxmox_endpoint,
+):
+    module = load_plugin_module(
+        "netbox_proxbox.views.dashboard",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+        proxmox_endpoint=proxmox_endpoint,
+    )
+    monkeypatch.setattr(
+        module,
+        "sync_proxmox_endpoint_to_backend",
+        lambda *args, **kwargs: (True, None, None),
+    )
+    _scope_dashboard_to_backend_id(monkeypatch, module, backend_id=2)
+    monkeypatch.setattr(module.ProxmoxNode, "objects", _NodeQuerySet(), raising=False)
+
+    scoped_calls = []
+
+    def fake_get(url, timeout=None, params=None, headers=None, verify=None):
+        scoped_calls.append((url, params))
+        if "/proxmox/cluster/status" in url:
+            return ResponseStub(
+                [
+                    {
+                        "type": "cluster",
+                        "name": "pve-cluster",
+                        "nodes": 1,
+                        "quorate": 1,
+                    },
+                    {"type": "node", "name": "pve-01", "status": "online", "online": 1},
+                ]
+            )
+        if "/proxmox/cluster/resources" in url:
+            return ResponseStub([])
+        if "/proxmox/nodes/" in url:
+            return ResponseStub(
+                [
+                    {
+                        "node": "pve-01",
+                        "status": "online",
+                        "uptime": 60,
+                        "cpu": 0.1,
+                        "maxcpu": 4,
+                        "loadavg": [0.0, 0.0, 0.0],
+                        "mem": 1 * 1024**3,
+                        "maxmem": 8 * 1024**3,
+                        "disk": 10 * 1024**3,
+                        "maxdisk": 50 * 1024**3,
+                    }
+                ]
+            )
+        raise AssertionError(url)
+
+    monkeypatch.setattr(module.requests, "get", fake_get)
+
+    response = module.DashboardView.as_view()(_dashboard_request())
+
+    assert response["context"]["dashboards"][0]["detail"] is None
+    assert scoped_calls == [
+        (
+            "https://proxbox.local:8800/proxmox/cluster/status",
+            {"source": "database", "proxmox_endpoint_ids": "2"},
+        ),
+        (
+            "https://proxbox.local:8800/proxmox/cluster/resources",
+            {"source": "database", "proxmox_endpoint_ids": "2"},
+        ),
+        (
+            "https://proxbox.local:8800/proxmox/nodes/",
+            {"source": "database", "proxmox_endpoint_ids": "2"},
+        ),
+    ]
+    for _, params in scoped_calls:
+        assert "domain" not in params
+        assert "ip_address" not in params
+
+
 def test_dashboard_nodes_summary_uses_all_persisted_nodes(
     monkeypatch,
     fastapi_endpoint,
@@ -80,6 +168,7 @@ def test_dashboard_nodes_summary_uses_all_persisted_nodes(
         "sync_proxmox_endpoint_to_backend",
         lambda *args, **kwargs: (True, None, None),
     )
+    _scope_dashboard_to_backend_id(monkeypatch, module)
     monkeypatch.setattr(
         module.ProxmoxNode,
         "objects",
@@ -181,6 +270,7 @@ def test_dashboard_nodes_summary_falls_back_to_live_payload_when_needed(
         "sync_proxmox_endpoint_to_backend",
         lambda *args, **kwargs: (True, None, None),
     )
+    _scope_dashboard_to_backend_id(monkeypatch, module)
     monkeypatch.setattr(module.ProxmoxNode, "objects", _NodeQuerySet(), raising=False)
 
     def fake_get(url, timeout=None, params=None, headers=None, verify=None):
@@ -266,6 +356,7 @@ def test_dashboard_nodes_summary_includes_live_nodes_missing_from_database(
         "sync_proxmox_endpoint_to_backend",
         lambda *args, **kwargs: (True, None, None),
     )
+    _scope_dashboard_to_backend_id(monkeypatch, module)
     monkeypatch.setattr(
         module.ProxmoxNode,
         "objects",
@@ -371,6 +462,7 @@ def test_dashboard_nodes_summary_includes_cluster_sibling_nodes_from_database(
         "sync_proxmox_endpoint_to_backend",
         lambda *args, **kwargs: (True, None, None),
     )
+    _scope_dashboard_to_backend_id(monkeypatch, module)
 
     cluster = SimpleNamespace(name="pve-cluster")
     sibling_endpoint = SimpleNamespace(name="pve-02-endpoint")
@@ -482,6 +574,7 @@ def test_dashboard_includes_cluster_siblings_via_proxmox_cluster_endpoint(
         "sync_proxmox_endpoint_to_backend",
         lambda *args, **kwargs: (True, None, None),
     )
+    _scope_dashboard_to_backend_id(monkeypatch, module)
 
     # pve-01 is directly linked to the endpoint; pve-02 has its proxmox_cluster
     # owned by the same endpoint but its own endpoint FK is a sibling endpoint.
@@ -586,6 +679,7 @@ def test_dashboard_object_summaries_present_in_context(
         "sync_proxmox_endpoint_to_backend",
         lambda *args, **kwargs: (True, None, None),
     )
+    _scope_dashboard_to_backend_id(monkeypatch, module)
     monkeypatch.setattr(module.ProxmoxNode, "objects", _NodeQuerySet(), raising=False)
 
     def fake_get(url, timeout=None, params=None, headers=None, verify=None):
@@ -660,6 +754,7 @@ def test_dashboard_cluster_summary_preserves_api_totals_when_live_rows_truncated
         "sync_proxmox_endpoint_to_backend",
         lambda *args, **kwargs: (True, None, None),
     )
+    _scope_dashboard_to_backend_id(monkeypatch, module)
     monkeypatch.setattr(module.ProxmoxNode, "objects", _NodeQuerySet(), raising=False)
 
     def fake_get(url, timeout=None, params=None, headers=None, verify=None):
@@ -739,6 +834,7 @@ def test_dashboard_nodes_include_placeholders_for_unsynced_cluster_members(
         "sync_proxmox_endpoint_to_backend",
         lambda *args, **kwargs: (True, None, None),
     )
+    _scope_dashboard_to_backend_id(monkeypatch, module)
     monkeypatch.setattr(module.ProxmoxNode, "objects", _NodeQuerySet(), raising=False)
 
     def fake_get(url, timeout=None, params=None, headers=None, verify=None):

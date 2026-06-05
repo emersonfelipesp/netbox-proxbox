@@ -43,9 +43,13 @@ identity**, not its NetBox primary key:
   overwrite/sync-mode resolution but translates them to backend ids for the wire
   `proxmox_endpoint_ids` param via `_resolve_wire_endpoint_ids()`; an endpoint
   that does not resolve is skipped with a fail-loud `endpoint-scope` error stage.
-- Dashboards already scope live reads by `domain`/`ip_address` (endpoint-unique),
-  so they need no pk translation; `views/dashboard_data.py::build_local_node_rows`
-  bounds its name fallback to `proxmox_cluster__endpoint=<this endpoint>`.
+- Dashboard card, endpoint status, and dashboard per-endpoint live reads also
+  resolve the backend id via `resolve_backend_endpoint_id()` and send
+  `?proxmox_endpoint_ids=<backend_id>` to proxbox-api. They do **not** fall back
+  to `domain`/`ip_address` selectors, so duplicate Proxmox domains and stale
+  backend endpoint rows cannot bind reads to the first matching session.
+  `views/dashboard_data.py::build_local_node_rows` bounds its name fallback to
+  `proxmox_cluster__endpoint=<this endpoint>`.
 
 `schemas/proxmox_node.py::ProxmoxClusterStatusResponse` flattens the backend's
 nested `node_list` (one cluster object per session) into top-level node records,

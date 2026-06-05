@@ -13,7 +13,10 @@ from virtualization.models import Cluster
 import netbox_proxbox.views.dashboard_data as dashboard_data
 from netbox_proxbox.models import FastAPIEndpoint, ProxmoxEndpoint, ProxmoxNode
 from netbox_proxbox.utils import get_backend_auth_headers, get_fastapi_url
-from netbox_proxbox.views.backend_sync import sync_proxmox_endpoint_to_backend
+from netbox_proxbox.views.backend_sync import (
+    resolve_backend_endpoint_id,
+    sync_proxmox_endpoint_to_backend,
+)
 from netbox_proxbox.views.error_utils import (
     extract_proxmox_backend_error_detail,
     parse_requests_response_json,
@@ -47,13 +50,10 @@ class DashboardView(
     template_name = "netbox_proxbox/dashboard.html"
     request_timeout = 8
 
-    def _endpoint_query_params(self, endpoint: ProxmoxEndpoint) -> dict[str, str]:
-        domain = (endpoint.domain or "").strip()
-        if domain:
-            return {"source": "database", "domain": domain}
+    def _endpoint_query_params(self, backend_endpoint_id: int) -> dict[str, str]:
         return {
             "source": "database",
-            "ip_address": str(endpoint.ip_address).split("/")[0],
+            "proxmox_endpoint_ids": str(backend_endpoint_id),
         }
 
     def _fetch_json(
@@ -121,7 +121,22 @@ class DashboardView(
                 dashboards.append(dashboard)
                 continue
 
-            query_params = self._endpoint_query_params(endpoint)
+            backend_endpoint_id, resolve_error = resolve_backend_endpoint_id(
+                endpoint,
+                base_url=fastapi_url,
+                auth_headers=backend_headers,
+                backend_verify_ssl=backend_verify_ssl,
+                timeout=self.request_timeout,
+            )
+            if backend_endpoint_id is None:
+                dashboard["detail"] = (
+                    resolve_error
+                    or "Failed to resolve Proxmox endpoint on ProxBox backend."
+                )
+                dashboards.append(dashboard)
+                continue
+
+            query_params = self._endpoint_query_params(backend_endpoint_id)
 
             try:
                 cluster_payload, cluster_err = self._fetch_json(

@@ -442,7 +442,7 @@ def test_extract_error_detail_rewrites_timeout_to_clear_backend_message(
     assert "Verify network reachability" in detail
 
 
-def test_proxmox_status_uses_domain_query_when_available(
+def test_proxmox_status_uses_backend_endpoint_id_query_when_domain_available(
     monkeypatch,
     fastapi_endpoint,
     proxmox_endpoint,
@@ -459,6 +459,11 @@ def test_proxmox_status_uses_domain_query_when_available(
         ss,
         "sync_proxmox_endpoint_to_backend",
         lambda *args, **kwargs: (True, None, None),
+    )
+    monkeypatch.setattr(
+        ss,
+        "resolve_backend_endpoint_id",
+        lambda *args, **kwargs: (11, None),
     )
     monkeypatch.setattr(ss, "_last_proxmox_mode_check", {})
     requested = []
@@ -482,20 +487,20 @@ def test_proxmox_status_uses_domain_query_when_available(
     assert requested == [
         (
             "https://proxbox.local:8800/proxmox/version",
-            {"source": "database", "domain": "pve.local"},
+            {"source": "database", "proxmox_endpoint_ids": "11"},
             {"Authorization": "Bearer backend-token"},
             True,
         ),
         (
             "https://proxbox.local:8800/proxmox/cluster/status",
-            {"source": "database", "domain": "pve.local"},
+            {"source": "database", "proxmox_endpoint_ids": "11"},
             {"Authorization": "Bearer backend-token"},
             True,
         ),
     ]
 
 
-def test_proxmox_status_uses_ip_query_when_domain_missing(
+def test_proxmox_status_uses_backend_endpoint_id_query_when_domain_missing(
     monkeypatch,
     fastapi_endpoint,
 ):
@@ -519,6 +524,11 @@ def test_proxmox_status_uses_ip_query_when_domain_missing(
         "sync_proxmox_endpoint_to_backend",
         lambda *args, **kwargs: (True, None, None),
     )
+    monkeypatch.setattr(
+        ss,
+        "resolve_backend_endpoint_id",
+        lambda *args, **kwargs: (12, None),
+    )
     monkeypatch.setattr(ss, "_last_proxmox_mode_check", {})
     requested = []
 
@@ -541,17 +551,94 @@ def test_proxmox_status_uses_ip_query_when_domain_missing(
     assert requested == [
         (
             "https://proxbox.local:8800/proxmox/version",
-            {"source": "database", "ip_address": "10.0.0.30"},
+            {"source": "database", "proxmox_endpoint_ids": "12"},
             {"Authorization": "Bearer backend-token"},
             False,
         ),
         (
             "https://proxbox.local:8800/proxmox/cluster/status",
-            {"source": "database", "ip_address": "10.0.0.30"},
+            {"source": "database", "proxmox_endpoint_ids": "12"},
             {"Authorization": "Bearer backend-token"},
             False,
         ),
     ]
+
+
+def test_proxmox_status_scopes_duplicate_domain_by_backend_id(
+    monkeypatch,
+    fastapi_endpoint,
+):
+    proxmox_endpoint = SimpleNamespace(
+        id=2,
+        pk=2,
+        name="PVE",
+        domain="pve.local",
+        ip_address="10.0.0.31/24",
+        port=8006,
+        verify_ssl=False,
+        mode="undefined",
+    )
+    load_plugin_module(
+        "netbox_proxbox.views.keepalive_status",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+        proxmox_endpoint=proxmox_endpoint,
+    )
+    ss = _service_status_module()
+    ss.ProxmoxEndpoint.objects = _make_model_class(
+        "ProxmoxEndpoint",
+        first=proxmox_endpoint,
+        objects_by_pk={2: proxmox_endpoint},
+    ).objects
+    monkeypatch.setattr(ss.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(
+        ss,
+        "sync_proxmox_endpoint_to_backend",
+        lambda *args, **kwargs: (True, None, None),
+    )
+    monkeypatch.setattr(ss, "_last_proxmox_mode_check", {})
+    scoped_calls = []
+
+    def fake_get(url, verify=True, timeout=None, params=None, headers=None):
+        if url.endswith("/proxmox/endpoints"):
+            return ResponseStub(
+                [
+                    {"id": 1, "name": "PVE (nb:1)", "domain": "pve.local"},
+                    {"id": 2, "name": "PVE (nb:2)", "domain": "pve.local"},
+                ]
+            )
+        if url.endswith("/proxmox/version"):
+            scoped_calls.append((url, params))
+            return ResponseStub([{"PVE": {"version": "8.3.0"}}])
+        if url.endswith("/proxmox/cluster/status"):
+            scoped_calls.append((url, params))
+            return ResponseStub([{"type": "node", "name": "pve01"}])
+        raise AssertionError(url)
+
+    monkeypatch.setattr(ss.requests, "get", fake_get)
+
+    status, details = ss.ServiceStatus().proxmox_status(
+        2,
+        "https://proxbox.local:8800",
+        auth_headers={"Authorization": "Bearer backend-token"},
+        backend_verify_ssl=True,
+    )
+
+    assert status == "success"
+    assert details["api_access"] == "success"
+    assert scoped_calls == [
+        (
+            "https://proxbox.local:8800/proxmox/version",
+            {"source": "database", "proxmox_endpoint_ids": "2"},
+        ),
+        (
+            "https://proxbox.local:8800/proxmox/cluster/status",
+            {"source": "database", "proxmox_endpoint_ids": "2"},
+        ),
+    ]
+    for _, params in scoped_calls:
+        assert "domain" not in params
+        assert "ip_address" not in params
 
 
 def test_proxmox_status_normalizes_backend_connection_refused(
@@ -572,11 +659,16 @@ def test_proxmox_status_normalizes_backend_connection_refused(
         "sync_proxmox_endpoint_to_backend",
         lambda *args, **kwargs: (True, None, None),
     )
+    monkeypatch.setattr(
+        ss,
+        "resolve_backend_endpoint_id",
+        lambda *args, **kwargs: (1, None),
+    )
 
     def fake_get(url, verify=True, timeout=None, params=None, headers=None):
         raise requests.exceptions.ConnectionError(
             "HTTPConnectionPool(host='10.0.30.207', port=8000): Max retries exceeded "
-            "with url: /proxmox/version?source=database&domain=pve.local "
+            "with url: /proxmox/version?source=database&proxmox_endpoint_ids=1 "
             '(Caused by NewConnectionError("Failed to establish a new connection: '
             '[Errno 111] Connection refused"))'
         )
@@ -599,7 +691,7 @@ def test_proxmox_status_normalizes_backend_connection_refused(
         == "ProxBox backend could not connect to the configured Proxmox endpoint "
         "(pve.local:8006). Backend route: https://proxbox.local:8800/proxmox/version. "
         "Upstream error: HTTPConnectionPool(host='10.0.30.207', port=8000): Max "
-        "retries exceeded with url: /proxmox/version?source=database&domain=pve.local "
+        "retries exceeded with url: /proxmox/version?source=database&proxmox_endpoint_ids=1 "
         '(Caused by NewConnectionError("Failed to establish a new connection: '
         '[Errno 111] Connection refused"))'
     )
@@ -810,6 +902,11 @@ def test_proxmox_mode_detected_on_successful_keepalive(
         ss,
         "sync_proxmox_endpoint_to_backend",
         lambda *args, **kwargs: (True, None, None),
+    )
+    monkeypatch.setattr(
+        ss,
+        "resolve_backend_endpoint_id",
+        lambda *args, **kwargs: (1, None),
     )
     monkeypatch.setattr(ss, "_last_proxmox_mode_check", {})
 
