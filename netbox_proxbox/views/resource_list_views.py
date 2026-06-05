@@ -488,9 +488,9 @@ class IPAddressesView(ConditionalLoginRequiredMixin, View):
         )
 
         node_interface_ids = list(
-            DCIMInterface.objects.filter(
-                device_id__in=tagged_device_ids
-            ).values_list("id", flat=True)
+            DCIMInterface.objects.filter(device_id__in=tagged_device_ids).values_list(
+                "id", flat=True
+            )
         )
         node_ips_qs = (
             IPAddress.objects.restrict(request.user, "view")

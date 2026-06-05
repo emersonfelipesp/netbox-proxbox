@@ -812,7 +812,10 @@ def test_resource_list_views_use_netbox_pagination():
     Proxbox list pages) capped at 100 rows with no pagination controls.
     """
     contents = _read("netbox_proxbox/views/resource_list_views.py")
-    assert "from utilities.paginator import EnhancedPaginator, get_paginate_count" in contents
+    assert (
+        "from utilities.paginator import EnhancedPaginator, get_paginate_count"
+        in contents
+    )
     assert "def paginate_object_list(" in contents
     # The hard 100-row caps that truncated the list pages must be gone.
     assert "[:100]" not in contents

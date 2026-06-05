@@ -293,7 +293,9 @@ def test_proxbox_paginate_url_overrides_existing_page(monkeypatch):
 def test_proxbox_paginate_url_independent_page_params(monkeypatch):
     """Aggregate pages drive two tables with vm_page / node_page independently."""
     tags = _load_proxbox_tags(monkeypatch)
-    request = _FakeRequest("/plugins/proxbox/interfaces/", {"vm_page": "1", "node_page": "1"})
+    request = _FakeRequest(
+        "/plugins/proxbox/interfaces/", {"vm_page": "1", "node_page": "1"}
+    )
     context = {"request": request}
 
     result = tags.proxbox_paginate_url(context, "node_page", 4)
