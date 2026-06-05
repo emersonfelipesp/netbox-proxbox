@@ -27,7 +27,7 @@ def _load_proxbox_tags(monkeypatch):
                 return decorator(func)
             return decorator
 
-        def simple_tag(self, func=None, name=None):
+        def simple_tag(self, func=None, name=None, takes_context=False):
             def decorator(f):
                 self._tags[name or f.__name__] = f
                 return f
@@ -244,3 +244,81 @@ def test_form_field_is_registered_under_explicit_name(monkeypatch):
     """The decorator uses ``name="form_field"`` — verify the registry sees it."""
     tags = _load_proxbox_tags(monkeypatch)
     assert tags.register._filters.get("form_field") is tags.form_field
+
+
+# ── proxbox_paginate_url ──────────────────────────────────────────────────────
+
+
+class _FakeQueryDict(dict):
+    """Minimal stand-in for Django's QueryDict used in paginator URL tests."""
+
+    def copy(self) -> "_FakeQueryDict":
+        return _FakeQueryDict(self)
+
+    def urlencode(self) -> str:
+        from urllib.parse import urlencode
+
+        return urlencode(self)
+
+
+class _FakeRequest:
+    def __init__(self, path: str, params: dict):
+        self.path = path
+        self.GET = _FakeQueryDict(params)
+
+
+def test_proxbox_paginate_url_sets_page_and_preserves_other_params(monkeypatch):
+    tags = _load_proxbox_tags(monkeypatch)
+    request = _FakeRequest("/plugins/proxbox/virtual_machines/", {"per_page": "50"})
+    context = {"request": request}
+
+    result = tags.proxbox_paginate_url(context, "page", 3)
+
+    assert result.startswith("/plugins/proxbox/virtual_machines/?")
+    assert "page=3" in result
+    assert "per_page=50" in result
+
+
+def test_proxbox_paginate_url_overrides_existing_page(monkeypatch):
+    tags = _load_proxbox_tags(monkeypatch)
+    request = _FakeRequest("/plugins/proxbox/nodes/", {"page": "2"})
+    context = {"request": request}
+
+    result = tags.proxbox_paginate_url(context, "page", 5)
+
+    assert "page=5" in result
+    assert "page=2" not in result
+
+
+def test_proxbox_paginate_url_independent_page_params(monkeypatch):
+    """Aggregate pages drive two tables with vm_page / node_page independently."""
+    tags = _load_proxbox_tags(monkeypatch)
+    request = _FakeRequest("/plugins/proxbox/interfaces/", {"vm_page": "1", "node_page": "1"})
+    context = {"request": request}
+
+    result = tags.proxbox_paginate_url(context, "node_page", 4)
+
+    assert "node_page=4" in result
+    assert "vm_page=1" in result
+
+
+def test_proxbox_paginate_url_per_page_resets_page_numbers(monkeypatch):
+    tags = _load_proxbox_tags(monkeypatch)
+    request = _FakeRequest(
+        "/plugins/proxbox/interfaces/",
+        {"page": "3", "vm_page": "2", "node_page": "5"},
+    )
+    context = {"request": request}
+
+    result = tags.proxbox_paginate_url(context, "per_page", 100)
+
+    # Only the per_page parameter should survive; every page cursor is dropped.
+    assert result.split("?", 1)[1] == "per_page=100"
+    assert "vm_page=" not in result
+    assert "node_page=" not in result
+
+
+def test_proxbox_paginate_url_without_request_is_safe(monkeypatch):
+    tags = _load_proxbox_tags(monkeypatch)
+
+    assert tags.proxbox_paginate_url({}, "page", 2) == "?page=2"

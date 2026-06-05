@@ -803,3 +803,53 @@ def test_proxmox_storage_detail_template_exists():
     assert "Storage Usage (Live)" in detail_template
     assert "inc/panels/tags.html" in detail_template
     assert "inc/panels/custom_fields.html" in detail_template
+
+
+def test_resource_list_views_use_netbox_pagination():
+    """All custom list views must paginate via NetBox's EnhancedPaginator.
+
+    Regression guard for the bug where the Virtual Machines page (and other
+    Proxbox list pages) capped at 100 rows with no pagination controls.
+    """
+    contents = _read("netbox_proxbox/views/resource_list_views.py")
+    assert "from utilities.paginator import EnhancedPaginator, get_paginate_count" in contents
+    assert "def paginate_object_list(" in contents
+    # The hard 100-row caps that truncated the list pages must be gone.
+    assert "[:100]" not in contents
+    # Each of the nine list tables feeds its queryset through the shared
+    # paginator helper (1 helper definition + 9 call sites = 10 occurrences).
+    assert contents.count("paginate_object_list(") >= 10
+
+
+def test_resource_list_paginator_partial_exists_without_htmx():
+    partial = _read("netbox_proxbox/templates/netbox_proxbox/inc/paginator.html")
+    assert "proxbox_paginate_url" in partial
+    assert "smart_pages" in partial
+    assert "Per Page" in partial
+    # The plugin paginator must stay plain GET navigation (no htmx coupling).
+    assert "hx-" not in partial
+
+
+def test_resource_list_page_templates_include_paginator():
+    single_table_pages = [
+        "netbox_proxbox/templates/netbox_proxbox/virtual_machines.html",
+        "netbox_proxbox/templates/netbox_proxbox/lxc_containers.html",
+        "netbox_proxbox/templates/netbox_proxbox/devices.html",
+        "netbox_proxbox/templates/netbox_proxbox/virtual_disks.html",
+        "netbox_proxbox/templates/netbox_proxbox/clusters.html",
+    ]
+    for path in single_table_pages:
+        assert "netbox_proxbox/inc/paginator.html" in _read(path), path
+
+    # The two aggregate pages paginate each table independently.
+    interfaces_partial = _read(
+        "netbox_proxbox/templates/netbox_proxbox/table/interfaces.html"
+    )
+    assert 'page_param="vm_page"' in interfaces_partial
+    assert 'page_param="node_page"' in interfaces_partial
+
+    ip_partial = _read(
+        "netbox_proxbox/templates/netbox_proxbox/table/ip_addresses.html"
+    )
+    assert 'page_param="vm_page"' in ip_partial
+    assert 'page_param="node_page"' in ip_partial

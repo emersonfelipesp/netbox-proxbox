@@ -1,7 +1,7 @@
 {% load helpers %}
 <div id="virtual-disks-div" class="form form-horizontal">
     <h2 id="proxmox-virtual-disks-table" class="text-center">Virtual Disks</h2>
-    <h3>Synced Virtual Disks: <span id='synced-disk-count'>{% if virtual_disks %}{{ virtual_disks|length }}{% else %}0{% endif %}</span></h3>
+    <h3>Synced Virtual Disks: <span id='synced-disk-count'>{% if virtual_disks_total %}{{ virtual_disks_total }}{% elif virtual_disks %}{{ virtual_disks|length }}{% else %}0{% endif %}</span></h3>
     <div class="card">
         <div class="table-responsive">
             <table class="table table-hover object-list">

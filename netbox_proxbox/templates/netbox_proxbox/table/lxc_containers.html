@@ -1,7 +1,7 @@
 {% load helpers %}
 <div id="lxc-containers-div" class="form form-horizontal">
     <h2 id="proxmox-lxc-containers-table" class="text-center">LXC Containers</h2>
-    <h3>Synced LXC Containers: <span id='synced-lxc-count'>{% if lxc_containers %}{{ lxc_containers|length }}{% else %}0{% endif %}</span></h3>
+    <h3>Synced LXC Containers: <span id='synced-lxc-count'>{% if lxc_containers_total %}{{ lxc_containers_total }}{% elif lxc_containers %}{{ lxc_containers|length }}{% else %}0{% endif %}</span></h3>
     <div class="card">
         <div class="table-responsive">
             <table class="table table-hover object-list">

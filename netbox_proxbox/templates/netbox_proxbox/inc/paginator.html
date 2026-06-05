@@ -1,0 +1,75 @@
+{% load proxbox_tags %}
+{% load i18n %}
+{# Reusable NetBox-style paginator for plugin list pages.
+
+   Context:
+     page       - a django.core.paginator.Page (EnhancedPage) instance
+     paginator  - the EnhancedPaginator that produced ``page``
+     page_param - the query-string parameter that selects the page number
+                  (defaults to "page"; aggregate pages use "vm_page"/"node_page")
+#}
+{% with page_param=page_param|default:"page" %}
+{% if page %}
+  <div class="d-flex justify-content-between align-items-center border-top p-2">
+
+    {# Pages carousel #}
+    {% if paginator.num_pages > 1 %}
+      <nav aria-label="{% trans "Page selection" %}">
+        <ul class="pagination mb-0">
+
+          {% if page.has_previous %}
+            <li class="page-item">
+              <a href="{% proxbox_paginate_url page_param page.previous_page_number %}" class="page-link" aria-label="{% trans "Previous page" %}">
+                <i class="mdi mdi-chevron-left" aria-hidden="true"></i>
+              </a>
+            </li>
+          {% endif %}
+
+          {% for p in page.smart_pages %}
+            {% if p %}
+              <li class="page-item{% if page.number == p %} active{% endif %}"{% if page.number == p %} aria-current="page"{% endif %}>
+                <a href="{% proxbox_paginate_url page_param p %}" class="page-link" aria-label="{% blocktrans with num=p %}Page {{ num }}{% endblocktrans %}">{{ p }}</a>
+              </li>
+            {% else %}
+              <li class="page-item disabled"><span class="page-link" aria-hidden="true">&hellip;</span></li>
+            {% endif %}
+          {% endfor %}
+
+          {% if page.has_next %}
+            <li class="page-item">
+              <a href="{% proxbox_paginate_url page_param page.next_page_number %}" class="page-link" aria-label="{% trans "Next page" %}">
+                <i class="mdi mdi-chevron-right" aria-hidden="true"></i>
+              </a>
+            </li>
+          {% endif %}
+
+        </ul>
+      </nav>
+    {% endif %}
+
+    {# Showing #}
+    <small class="text-end text-muted">
+      {% blocktrans trimmed with start=page.start_index end=page.end_index total=page.paginator.count %}
+        Showing {{ start }}-{{ end }} of {{ total }}
+      {% endblocktrans %}
+    </small>
+
+    {# Per-page selector #}
+    <nav aria-label="{% trans "Pagination options" %}">
+      <div class="dropdown dropdown-menu-end">
+        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+          {% trans "Per Page" %}
+        </button>
+        <ul class="dropdown-menu">
+          {% for n in page.paginator.get_page_lengths %}
+            <li>
+              <a class="dropdown-item{% if n == page.paginator.per_page %} active{% endif %}" href="{% proxbox_paginate_url 'per_page' n %}">{{ n }}</a>
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </nav>
+
+  </div>
+{% endif %}
+{% endwith %}

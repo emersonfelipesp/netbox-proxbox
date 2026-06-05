@@ -28,7 +28,7 @@
     </div>
 
     {% if vm_ips or node_ips %}
-    <h3 class="mt-3">IP Addresses Assigned to VM Interfaces ({{ vm_ips|length }})</h3>
+    <h3 class="mt-3">IP Addresses Assigned to VM Interfaces ({{ vm_ips_count|default:0 }})</h3>
     <div class="card mb-3">
         <div class="table-responsive">
             <table class="table table-hover object-list">
@@ -74,9 +74,10 @@
                 </tbody>
             </table>
         </div>
+        {% include "netbox_proxbox/inc/paginator.html" with page=vm_ips paginator=vm_ips_paginator page_param="vm_page" %}
     </div>
 
-    <h3 class="mt-3">IP Addresses Assigned to Node Interfaces ({{ node_ips|length }})</h3>
+    <h3 class="mt-3">IP Addresses Assigned to Node Interfaces ({{ node_ips_count|default:0 }})</h3>
     <div class="card">
         <div class="table-responsive">
             <table class="table table-hover object-list">
@@ -122,6 +123,7 @@
                 </tbody>
             </table>
         </div>
+        {% include "netbox_proxbox/inc/paginator.html" with page=node_ips paginator=node_ips_paginator page_param="node_page" %}
     </div>
     {% else %}
     <div class="card">

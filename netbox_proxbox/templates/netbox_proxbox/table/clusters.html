@@ -1,7 +1,7 @@
 {% load helpers %}
 <div id="clusters-div" class="form form-horizontal">
     <h2 id="proxmox-clusters-table" class="text-center">Clusters</h2>
-    <h3>Synced Clusters: <span id='synced-cluster-count'>{% if clusters %}{{ clusters|length }}{% else %}0{% endif %}</span></h3>
+    <h3>Synced Clusters: <span id='synced-cluster-count'>{% if clusters_total %}{{ clusters_total }}{% elif clusters %}{{ clusters|length }}{% else %}0{% endif %}</span></h3>
     <div class="card">
         <div class="table-responsive">
             <table class="table table-hover object-list">
