@@ -1,7 +1,7 @@
 {% load helpers %}
 <div id="device-div" class="form form-horizontal">
     <h2 id="proxmox-nodes-table" class="text-center">Nodes</h2>
-    <h3>Synced Devices (Nodes): <span id='synced-device-count'>{% if devices %}{{ devices|length }}{% else %}0{% endif %}</span></h3>
+    <h3>Synced Devices (Nodes): <span id='synced-device-count'>{% if devices_total %}{{ devices_total }}{% elif devices %}{{ devices|length }}{% else %}0{% endif %}</span></h3>
     <div class="card">
         <div class="table-responsive">
             <table class="table table-hover object-list">

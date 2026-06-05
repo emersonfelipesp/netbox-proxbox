@@ -24,6 +24,14 @@ In templates:
 
 - Template tags are registered in the `proxbox_tags` library.
 - Tags provide helper functions for rendering ProxBox-specific template content.
+- `proxbox_paginate_url(param_name, value)` (a `takes_context=True` simple tag)
+  builds a pagination URL that preserves the current query string while setting
+  one page parameter. It backs the shared paginator partial at
+  `templates/netbox_proxbox/inc/paginator.html`, which is included by the custom
+  list pages (devices, virtual machines, LXC containers, virtual disks, clusters)
+  and — with `page_param="vm_page"` / `page_param="node_page"` — by the
+  two-table interfaces and IP-address pages. Changing `per_page` resets every
+  page cursor so the user is never stranded on an out-of-range page.
 
 ## Links
 

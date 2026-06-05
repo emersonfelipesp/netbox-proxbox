@@ -126,6 +126,28 @@ def inline_static_script(relative_path: str) -> str:
     return mark_safe(payload.decode("utf-8"))  # nosec
 
 
+@register.simple_tag(takes_context=True)
+def proxbox_paginate_url(context, param_name: str, value) -> str:
+    """Build a pagination URL preserving the current query string.
+
+    Returns the current request path with ``param_name`` set to ``value`` and
+    every other query parameter retained. Used by the plugin paginator partial
+    so that list pages with more than one paginated table can each drive their
+    own page parameter (e.g. ``vm_page`` / ``node_page``).
+    """
+    request = context.get("request")
+    if request is None:
+        return f"?{param_name}={value}"
+    params = request.GET.copy()
+    params[param_name] = value
+    # When changing the page size, reset back to the first page so the user is
+    # never stranded on an out-of-range page number.
+    if param_name == "per_page":
+        for page_key in ("page", "vm_page", "node_page"):
+            params.pop(page_key, None)
+    return f"{request.path}?{params.urlencode()}"
+
+
 @register.filter
 def sync_type_label(slug: str) -> str:
     """Convert sync type slug to user-friendly label."""
