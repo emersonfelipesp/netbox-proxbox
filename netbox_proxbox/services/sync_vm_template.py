@@ -34,6 +34,7 @@ from netbox_proxbox.views.backend_sync import resolve_backend_endpoint_id
 from netbox_proxbox.sync_stages import (
     _add_bootstrap_only_tag,
     _bootstrap_only_should_skip_existing,
+    _has_bootstrap_only_tag,
 )
 
 logger = logging.getLogger(__name__)
@@ -54,6 +55,7 @@ class VMTemplateSyncResult:
     templates_created: int = 0
     templates_updated: int = 0
     templates_skipped: int = 0
+    templates_deleted: int = 0
     per_endpoint: list[dict[str, object]] = field(default_factory=list)
 
 
@@ -357,28 +359,39 @@ def sync_vm_templates(
         logger.error(result.error)
         return result
 
+    template_rows: list[tuple[str | None, dict[str, Any], dict[str, Any]]] = []
+    for cluster_name, resource in _iter_cluster_resource_rows(resources_payload):
+        if not _coerce_bool(resource.get("template")):
+            continue
+        proxmox_type = _template_type(resource)
+        if proxmox_type not in {"qemu", "lxc"}:
+            continue
+        vmid = _coerce_int(resource.get("vmid"))
+        if vmid is None:
+            continue
+
+        node_name = str(resource.get("node") or "")
+        config = _fetch_template_config(
+            fastapi_url=fastapi_url,
+            auth_headers=auth_headers,
+            verify_ssl=verify_ssl,
+            backend_endpoint_id=backend_endpoint_id,
+            node_name=node_name,
+            proxmox_type=proxmox_type,
+            vmid=vmid,
+        )
+        template_rows.append((cluster_name, resource, config))
+
     processed = 0
     with transaction.atomic():
-        for cluster_name, resource in _iter_cluster_resource_rows(resources_payload):
-            if not _coerce_bool(resource.get("template")):
-                continue
-            proxmox_type = _template_type(resource)
-            if proxmox_type not in {"qemu", "lxc"}:
-                continue
-            vmid = _coerce_int(resource.get("vmid"))
-            if vmid is None:
-                continue
+        existing_keys = set(
+            ProxmoxVMTemplate.objects.filter(
+                proxmox_endpoint=endpoint
+            ).values_list("vmid", "proxmox_type")
+        )
+        synced_keys: set[tuple[int, str]] = set()
 
-            node_name = str(resource.get("node") or "")
-            config = _fetch_template_config(
-                fastapi_url=fastapi_url,
-                auth_headers=auth_headers,
-                verify_ssl=verify_ssl,
-                backend_endpoint_id=backend_endpoint_id,
-                node_name=node_name,
-                proxmox_type=proxmox_type,
-                vmid=vmid,
-            )
+        for cluster_name, resource, config in template_rows:
             defaults = _template_defaults(
                 endpoint=endpoint,
                 cluster_name=cluster_name,
@@ -394,7 +407,24 @@ def sync_vm_templates(
                 result=result,
             )
             if template is not None:
+                synced_keys.add((int(defaults["vmid"]), str(defaults["proxmox_type"])))
                 processed += 1
+
+        stale_keys = existing_keys - synced_keys
+        if stale_keys:
+            stale_ids = [
+                template.pk
+                for template in ProxmoxVMTemplate.objects.filter(
+                    proxmox_endpoint=endpoint
+                )
+                if (template.vmid, template.proxmox_type) in stale_keys
+                and not _has_bootstrap_only_tag(template)
+            ]
+            if stale_ids:
+                deleted_count, _ = ProxmoxVMTemplate.objects.filter(
+                    pk__in=stale_ids
+                ).delete()
+                result.templates_deleted += deleted_count
 
     runtime_seconds = round(time.monotonic() - started, 3)
     result.success = True
@@ -405,14 +435,16 @@ def sync_vm_templates(
             "endpoint_name": result.endpoint_name,
             "success": True,
             "runtime_seconds": runtime_seconds,
+            "templates_deleted": result.templates_deleted,
         }
     )
     logger.info(
-        "VM template sync for endpoint %s complete: processed=%s created=%s updated=%s skipped=%s",
+        "VM template sync for endpoint %s complete: processed=%s created=%s updated=%s skipped=%s deleted=%s",
         endpoint_id,
         processed,
         result.templates_created,
         result.templates_updated,
         result.templates_skipped,
+        result.templates_deleted,
     )
     return result

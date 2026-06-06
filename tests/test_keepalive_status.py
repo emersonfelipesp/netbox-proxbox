@@ -68,10 +68,17 @@ def test_fastapi_status_falls_back_to_ip_after_ssl_error(
     monkeypatch,
     fastapi_endpoint,
 ):
+    fastapi_endpoint.verify_ssl = False
     load_plugin_module(
         "netbox_proxbox.views.keepalive_status",
         monkeypatch=monkeypatch,
         fastapi_endpoint=fastapi_endpoint,
+        get_fastapi_url=lambda obj: {
+            "http_url": "https://proxbox.local:8800",
+            "ip_address_url": "https://10.0.0.5:8800",
+            "verify_ssl": False,
+            "websocket_url": "wss://proxbox.local:8801/ws",
+        },
     )
     ss = _service_status_module()
     calls = []
@@ -91,7 +98,7 @@ def test_fastapi_status_falls_back_to_ip_after_ssl_error(
     assert status["connected_verify_ssl"] is False
     assert status["backend_version"] == "0.0.15"
     assert calls == [
-        ("https://proxbox.local:8800", True, None),
+        ("https://proxbox.local:8800", False, None),
         ("https://10.0.0.5:8800", False, None),
         (
             "https://10.0.0.5:8800/version",
@@ -99,6 +106,33 @@ def test_fastapi_status_falls_back_to_ip_after_ssl_error(
             {"Authorization": "Bearer backend-token"},
         ),
     ]
+
+
+def test_fastapi_status_does_not_retry_insecurely_when_verify_ssl_enabled(
+    monkeypatch,
+    fastapi_endpoint,
+):
+    load_plugin_module(
+        "netbox_proxbox.views.keepalive_status",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+    )
+    ss = _service_status_module()
+    calls = []
+
+    def fake_get(url, verify=True, timeout=None, headers=None):
+        calls.append((url, verify, headers))
+        if "proxbox.local" in url:
+            raise requests.exceptions.SSLError("bad cert")
+        raise AssertionError("verify_ssl=True must not retry with verify=False")
+
+    monkeypatch.setattr(ss.requests, "get", fake_get)
+
+    status = ss.ServiceStatus().fastapi_status(1)
+    assert status["connected"] is False
+    assert status["api_access"] == "error"
+    assert "FastAPI URL check failed" in status["detail"]
+    assert calls == [("https://proxbox.local:8800", True, None)]
 
 
 def test_fastapi_status_warns_for_agent_kv_affected_backend(

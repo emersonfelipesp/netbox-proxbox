@@ -418,37 +418,49 @@ class ServiceStatus:
                 self.connected_url = fastapi_url
                 self.connected_verify_ssl = fastapi_verify_ssl
                 connected_verify_ssl = fastapi_verify_ssl
-            except requests.exceptions.SSLError:
-                ip_url = fastapi_detail.get("ip_address_url")
-                if ip_url:
-                    try:
-                        # Intentional fallback to IP URL after SSL hostname
-                        # failure; the endpoint operator already opted into
-                        # verify=False at config time on the FastAPIEndpoint.
-                        response = requests.get(
-                            ip_url,
-                            verify=False,  # nosec B501
-                            timeout=self.request_timeout,
-                        )
-                        response.raise_for_status()
-                        connected = True
-                        self.connected_url = ip_url
-                        self.connected_verify_ssl = False
-                        connected_verify_ssl = False
-                        target_address = (
-                            fastapi_detail.get("ip_address") or target_address
-                        )
-                    except requests.exceptions.RequestException as exc:
-                        detail, http_status = self._extract_error_detail(exc)
-                        self._set_error(
-                            f"FastAPI fallback URL check failed: {detail}",
-                            http_status=http_status,
-                        )
-                        logger.error(
-                            "Failed to connect to FastAPI fallback URL %s: %s",
-                            ip_url,
-                            exc,
-                        )
+            except requests.exceptions.SSLError as exc:
+                detail, http_status = self._extract_error_detail(exc)
+                if fastapi_verify_ssl:
+                    self._set_error(
+                        f"FastAPI URL check failed: {detail}",
+                        http_status=http_status,
+                    )
+                    logger.error(
+                        "SSL error connecting to FastAPI at %s with verify_ssl=True: %s",
+                        fastapi_url,
+                        exc,
+                    )
+                else:
+                    ip_url = fastapi_detail.get("ip_address_url")
+                    if ip_url:
+                        try:
+                            # Intentional fallback to IP URL after SSL hostname
+                            # failure; the endpoint operator already opted into
+                            # verify=False at config time on the FastAPIEndpoint.
+                            response = requests.get(
+                                ip_url,
+                                verify=False,  # nosec B501
+                                timeout=self.request_timeout,
+                            )
+                            response.raise_for_status()
+                            connected = True
+                            self.connected_url = ip_url
+                            self.connected_verify_ssl = False
+                            connected_verify_ssl = False
+                            target_address = (
+                                fastapi_detail.get("ip_address") or target_address
+                            )
+                        except requests.exceptions.RequestException as exc:
+                            detail, http_status = self._extract_error_detail(exc)
+                            self._set_error(
+                                f"FastAPI fallback URL check failed: {detail}",
+                                http_status=http_status,
+                            )
+                            logger.error(
+                                "Failed to connect to FastAPI fallback URL %s: %s",
+                                ip_url,
+                                exc,
+                            )
             except requests.exceptions.RequestException as exc:
                 detail, http_status = self._extract_error_detail(exc)
                 self._set_error(

@@ -17,7 +17,7 @@ except ImportError:  # pragma: no cover - test stubs expose only JobRunner
 
     Job = Any  # type: ignore[misc,assignment]
 
-from netbox_proxbox.choices import SyncTypeChoices
+from netbox_proxbox.choices import SyncModeChoices, SyncTypeChoices
 from netbox_proxbox.models import ProxmoxEndpoint
 from netbox_proxbox.schemas import SyncJobData
 from netbox_proxbox.sync_types import (
@@ -219,7 +219,7 @@ def _phases_from_service_result(
         if not isinstance(item, dict):
             continue
         success = item.get("success")
-        status = "success" if success is not False else "warning"
+        status = "success" if success is True else "warning"
         summary = str(item.get("error") or f"{label} completed")
         phases.append(
             _endpoint_runtime_phase(
@@ -254,7 +254,7 @@ def _phases_from_stage_results(
                 kind="sse_stage",
                 label=str(sync_type),
                 runtime_seconds=stage.get("runtime_seconds"),
-                status="success" if ok is not False else "warning",
+                status="success" if ok is True else "warning",
                 summary=str(stream_path or "Backend SSE stage completed"),
                 sync_type=sync_type,
                 stream_path=stream_path,
@@ -816,6 +816,59 @@ class ProxboxSyncJob(JobRunner):
                     label="Datacenter sync",
                 )
             )
+
+            # Sync dedicated Proxmox VM template inventory after datacenter-level
+            # service syncs and before VM SSE stages consume backend VM data.
+            from netbox_proxbox.services.sync_vm_template import sync_vm_templates  # noqa: PLC0415
+
+            global_vm_template_mode = sync_stages.effective_sync_modes_for_endpoint(
+                None
+            ).get("sync_mode_vm_template", SyncModeChoices.ALWAYS)
+            if global_vm_template_mode == SyncModeChoices.DISABLED:
+                self.logger.info(
+                    "Skipping VM template sync: sync_mode_vm_template=disabled"
+                )
+            else:
+                for eid in endpoint_ids_to_sync:
+                    self.logger.info(f"Syncing VM templates for endpoint {eid}")
+                    template_started = time.monotonic()
+                    template_result = sync_vm_templates(endpoint_id=eid)
+                    template_runtime = _runtime_seconds_since(template_started)
+                    if template_result.success:
+                        template_summary = (
+                            f"{template_result.templates_created} template(s) created, "
+                            f"{template_result.templates_updated} updated, "
+                            f"{template_result.templates_skipped} skipped, "
+                            f"{template_result.templates_deleted} deleted"
+                        )
+                        self.logger.info(
+                            f"VM template sync for endpoint {eid}: {template_summary}"
+                        )
+                    else:
+                        template_summary = str(
+                            template_result.error or "VM template sync failed"
+                        )
+                        self.logger.warning(
+                            f"VM template sync for endpoint {eid} failed: {template_result.error}"
+                        )
+                    endpoint_runtime_phases.append(
+                        _endpoint_runtime_phase(
+                            endpoint_id=getattr(template_result, "endpoint_id", None)
+                            or eid,
+                            endpoint_name=getattr(
+                                template_result, "endpoint_name", ""
+                            ),
+                            kind="vm_template",
+                            label="VM template sync",
+                            runtime_seconds=template_runtime,
+                            status=(
+                                "success"
+                                if template_result.success is True
+                                else "warning"
+                            ),
+                            summary=template_summary,
+                        )
+                    )
 
             stages_out = _run_all_stages_sync(self, stages, params, run_started)
             endpoint_runtime_phases.extend(_phases_from_stage_results(stages_out))

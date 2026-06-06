@@ -3,8 +3,8 @@
   "version": 1,
   "source": {
     "project": "proxbox-api",
-    "release": "0.0.12",
-    "release_url": "https://github.com/emersonfelipesp/proxbox-api/releases/tag/v0.0.12",
+    "release": "0.0.17",
+    "release_url": "https://github.com/emersonfelipesp/proxbox-api/releases/tag/v0.0.17",
     "modules": [
       "proxbox_api.enum.proxmox",
       "proxbox_api.schemas.stream_messages"
@@ -19,6 +19,9 @@
     "ProxmoxVMStatus": ["running", "stopped", "paused", "suspended", "prelaunch"],
     "DiskFormat": ["qcow2", "raw", "vmdk", "subvol"],
     "StreamMessageType": [
+      "complete",
+      "error",
+      "step",
       "discovery",
       "substep",
       "item_progress",

@@ -94,13 +94,10 @@ class TestProxmoxEnumMirrors:
 
 
 def test_stream_message_types_covered_by_sse_event_type():
-    """Every backend stream event value must appear in SseEventType."""
+    """The committed stream event contract must match the local SSE enum."""
     from netbox_proxbox.schemas.backend_proxy import SseEventType
 
-    missing = _contract_enum_values("StreamMessageType") - _values(SseEventType)
-    assert not missing, (
-        f"proxbox-api stream event values not covered by SseEventType: {missing}"
-    )
+    assert _contract_enum_values("StreamMessageType") == _values(SseEventType)
 
 
 _PAYLOAD_PAIRS = [
@@ -133,7 +130,7 @@ def test_contract_identifies_proxbox_api_release():
     source = _contract()["source"]
     assert isinstance(source, dict)
     assert source["project"] == "proxbox-api"
-    assert source["release"] == "0.0.12"
+    assert source["release"] == "0.0.17"
 
 
 def test_contract_test_does_not_import_proxbox_api():

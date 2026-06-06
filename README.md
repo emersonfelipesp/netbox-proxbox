@@ -93,14 +93,14 @@ docker compose exec netbox /opt/netbox/netbox/manage.py migrate
 Full companion-plugin details live under
 [docs/companion-plugins/](./docs/companion-plugins/).
 
-## What's New in v0.0.19rc1
+## What's New in v0.0.20
 
-Paired with backend [`proxbox-api 0.0.16`](https://github.com/emersonfelipesp/proxbox-api).
+Paired with backend [`proxbox-api 0.0.17`](https://github.com/emersonfelipesp/proxbox-api).
 
-- **FastAPI endpoint token drift fix.** `FastAPIEndpoint.save()` re-registers the API key on explicit token changes.
-- **PBS/PDM host and timeout_seconds bridging properties.** Compatibility shim for the proxbox-api SQLite column naming difference.
+- **IP-address ownership safety.** The paired backend prevents VM-interface IP sync from taking over an address that already belongs to another interface.
+- **Interface-batch settings persistence.** `interface_batch_size` and `interface_batch_delay_ms` entered on the plugin Settings page now persist to the database.
 
-Full notes: [Release Notes — v0.0.19](https://emersonfelipesp.github.io/netbox-proxbox/release-notes/version-0.0.19/).
+Full notes: [Release Notes - v0.0.20](docs/release-notes/version-0.0.20.md).
 
 ## What's New in v0.0.18
 

@@ -46,6 +46,11 @@ def proxbox_sync_job_module(monkeypatch):
         IP_ADDRESSES="ip-addresses",
         ALL="all",
     )
+    choices_mod.SyncModeChoices = SimpleNamespace(
+        ALWAYS="always",
+        BOOTSTRAP_ONLY="bootstrap_only",
+        DISABLED="disabled",
+    )
     monkeypatch.setitem(sys.modules, "netbox_proxbox.choices", choices_mod)
 
     root = Path(__file__).resolve().parents[1]
@@ -190,6 +195,26 @@ def proxbox_sync_job_module(monkeypatch):
         sys.modules, "netbox_proxbox.services.sync_datacenter", sync_datacenter_mod
     )
 
+    # Stub sync_vm_template so the deferred import in jobs.py resolves.
+    sync_vm_template_mod = types.ModuleType(
+        "netbox_proxbox.services.sync_vm_template"
+    )
+    sync_vm_template_mod.sync_vm_templates = lambda endpoint_id=None: SimpleNamespace(
+        success=True,
+        error=None,
+        endpoint_id=endpoint_id,
+        endpoint_name=f"pve-{endpoint_id}",
+        endpoints_processed=1,
+        templates_created=0,
+        templates_updated=0,
+        templates_skipped=0,
+        templates_deleted=0,
+        per_endpoint=[],
+    )
+    monkeypatch.setitem(
+        sys.modules, "netbox_proxbox.services.sync_vm_template", sync_vm_template_mod
+    )
+
     sys.modules.pop("netbox_proxbox.jobs", None)
     path = root / "netbox_proxbox" / "jobs.py"
     spec = importlib.util.spec_from_file_location("netbox_proxbox.jobs", path)
@@ -293,6 +318,109 @@ def test_proxbox_sync_job_network_interfaces_includes_vm_interfaces_stage(
         "dcim/devices/interfaces/create/stream",
         "virtualization/virtual-machines/interfaces/create/stream",
     ]
+
+
+def test_proxbox_sync_job_run_wires_vm_template_sync_per_endpoint(
+    monkeypatch, proxbox_sync_job_module
+):
+    """The RQ sync job must call the dedicated VM-template service per endpoint."""
+    paths: list[str] = []
+    template_endpoint_ids: list[int] = []
+
+    services_mod = types.ModuleType("netbox_proxbox.services")
+
+    def run_sync_stream(path, query_params=None, **stream_kwargs):
+        paths.append(path)
+        return ({"stream": True, "response": {"ok": True}}, 200)
+
+    services_mod.run_sync_stream = run_sync_stream
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
+
+    def sync_vm_templates(endpoint_id=None):
+        template_endpoint_ids.append(endpoint_id)
+        return SimpleNamespace(
+            success=True,
+            error=None,
+            endpoint_id=endpoint_id,
+            endpoint_name=f"pve-{endpoint_id}",
+            templates_created=1,
+            templates_updated=2,
+            templates_skipped=3,
+            templates_deleted=4,
+        )
+
+    sys.modules[
+        "netbox_proxbox.services.sync_vm_template"
+    ].sync_vm_templates = sync_vm_templates
+    monkeypatch.setattr(
+        proxbox_sync_job_module.sync_stages,
+        "_resolve_wire_endpoint_ids",
+        lambda scopes: ({scope[0]: scope[0] + "00" for scope in scopes if scope}, None),
+    )
+
+    ProxboxSyncJob = proxbox_sync_job_module.ProxboxSyncJob
+    job = ProxboxSyncJob()
+    job.logger = logging.getLogger("test_proxbox_job_vm_templates")
+    job.job = MagicMock()
+    job.job.data = None
+
+    st = proxbox_sync_job_module.SyncTypeChoices
+    ProxboxSyncJob.run(job, sync_type=st.DEVICES, proxmox_endpoint_ids=["1", "2"])
+
+    assert template_endpoint_ids == [1, 2]
+    assert paths == ["dcim/devices/create/stream", "dcim/devices/create/stream"]
+    endpoint_runtimes = job.job.data["proxbox_sync"]["response"][
+        "endpoint_runtimes"
+    ]
+    assert {
+        phase["label"]
+        for entry in endpoint_runtimes
+        for phase in entry["phases"]
+    } >= {"VM template sync"}
+
+
+def test_proxbox_sync_job_skips_vm_template_sync_when_global_mode_disabled(
+    monkeypatch, proxbox_sync_job_module
+):
+    """A globally disabled vm_template sync mode skips the job-level service call."""
+    paths: list[str] = []
+    template_endpoint_ids: list[int] = []
+
+    services_mod = types.ModuleType("netbox_proxbox.services")
+
+    def run_sync_stream(path, query_params=None, **stream_kwargs):
+        paths.append(path)
+        return ({"stream": True, "response": {"ok": True}}, 200)
+
+    services_mod.run_sync_stream = run_sync_stream
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
+    sys.modules[
+        "netbox_proxbox.services.sync_vm_template"
+    ].sync_vm_templates = lambda endpoint_id=None: template_endpoint_ids.append(
+        endpoint_id
+    )
+    monkeypatch.setattr(
+        proxbox_sync_job_module,
+        "effective_sync_modes_for_endpoint",
+        lambda _endpoint_id: {"sync_mode_vm_template": "disabled"},
+    )
+    monkeypatch.setattr(
+        proxbox_sync_job_module.sync_stages,
+        "_resolve_wire_endpoint_ids",
+        lambda scopes: ({scope[0]: scope[0] + "00" for scope in scopes if scope}, None),
+    )
+
+    ProxboxSyncJob = proxbox_sync_job_module.ProxboxSyncJob
+    job = ProxboxSyncJob()
+    job.logger = logging.getLogger("test_proxbox_job_vm_templates_disabled")
+    job.job = MagicMock()
+    job.job.data = None
+
+    st = proxbox_sync_job_module.SyncTypeChoices
+    ProxboxSyncJob.run(job, sync_type=st.DEVICES, proxmox_endpoint_ids=["1"])
+
+    assert template_endpoint_ids == []
+    assert paths == ["dcim/devices/create/stream"]
 
 
 def test_proxbox_sync_job_skips_invalid_proxmox_endpoint_ids(
@@ -419,6 +547,44 @@ def test_is_proxbox_sync_job_by_queue_and_legacy_name(proxbox_sync_job_module):
     assert fn(SimpleNamespace(queue_name=legacy, name="Other", data={}))
     assert fn(SimpleNamespace(queue_name="", name="Proxbox Sync", data={}))
     assert fn(SimpleNamespace(queue_name=None, name="Proxbox Sync", data={}))
+
+
+def test_runtime_phase_status_requires_explicit_true(proxbox_sync_job_module):
+    service_result = SimpleNamespace(
+        per_endpoint=[
+            {"endpoint_id": 1, "success": True},
+            {"endpoint_id": 2, "success": False},
+            {"endpoint_id": 3, "success": None},
+            {"endpoint_id": 4},
+        ]
+    )
+
+    service_phases = proxbox_sync_job_module._phases_from_service_result(
+        service_result,
+        kind="service",
+        label="Service sync",
+    )
+    assert [phase["status"] for phase in service_phases] == [
+        "success",
+        "warning",
+        "warning",
+        "warning",
+    ]
+
+    stage_phases = proxbox_sync_job_module._phases_from_stage_results(
+        [
+            {"endpoint_id": 1, "result_summary": {"ok": True}},
+            {"endpoint_id": 2, "result_summary": {"ok": False}},
+            {"endpoint_id": 3, "result_summary": {"ok": None}},
+            {"endpoint_id": 4, "result_summary": {}},
+        ]
+    )
+    assert [phase["status"] for phase in stage_phases] == [
+        "success",
+        "warning",
+        "warning",
+        "warning",
+    ]
 
 
 def test_proxbox_sync_params_from_job_stored(proxbox_sync_job_module):

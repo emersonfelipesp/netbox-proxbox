@@ -84,6 +84,11 @@ def schedule_hints(monkeypatch):
         IP_ADDRESSES="ip-addresses",
         ALL="all",
     )
+    choices_mod.SyncModeChoices = SimpleNamespace(
+        ALWAYS="always",
+        BOOTSTRAP_ONLY="bootstrap_only",
+        DISABLED="disabled",
+    )
     monkeypatch.setitem(sys.modules, "netbox_proxbox.choices", choices_mod)
 
     root = Path(__file__).resolve().parents[1]
