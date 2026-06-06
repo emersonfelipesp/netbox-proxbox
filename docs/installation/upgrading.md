@@ -48,3 +48,6 @@ that field when it matches Proxmox VMs back to NetBox objects. If the FastAPI
 card shows the PR #156 advisory for `proxbox-api` `0.0.13` or `0.0.14`, install
 a backend build containing that fix, or the next fixed backend release, before
 re-testing VM IP sync.
+
+
+> **Current release:** netbox-proxbox `0.0.20` pairs with proxbox-api `0.0.17` (NetBox `4.5.8`–`4.6.99`).
