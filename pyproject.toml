@@ -41,7 +41,7 @@ Issues = "https://github.com/emersonfelipesp/netbox-proxbox/issues"
 
 [project.optional-dependencies]
 cli = [
-    "aiohttp>=3.12.15",
+    "aiohttp>=3.14.0",
     "click>=8.3.0",
     "PyYAML>=6.0.3",
     "rich>=14.1.0",
