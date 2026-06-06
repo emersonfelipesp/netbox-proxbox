@@ -60,6 +60,8 @@ class SettingsView(
             "bulk_batch_delay_ms": settings_obj.bulk_batch_delay_ms,
             "backup_batch_size": settings_obj.backup_batch_size,
             "backup_batch_delay_ms": settings_obj.backup_batch_delay_ms,
+            "interface_batch_size": settings_obj.interface_batch_size,
+            "interface_batch_delay_ms": settings_obj.interface_batch_delay_ms,
             "vm_sync_max_concurrency": settings_obj.vm_sync_max_concurrency,
             "reconciliation_engine": settings_obj.reconciliation_engine,
             "reconciliation_compare_strict": (
@@ -167,22 +169,6 @@ class SettingsView(
             settings_obj.explicitly_blocked_ip_ranges = form.cleaned_data.get(
                 "explicitly_blocked_ip_ranges", ""
             )
-            settings_obj.use_guest_agent_interface_name = form.cleaned_data[
-                "use_guest_agent_interface_name"
-            ]
-            settings_obj.proxbox_fetch_max_concurrency = form.cleaned_data[
-                "proxbox_fetch_max_concurrency"
-            ]
-            settings_obj.ignore_ipv6_link_local_addresses = form.cleaned_data[
-                "ignore_ipv6_link_local_addresses"
-            ]
-            settings_obj.ensure_netbox_objects = form.cleaned_data.get(
-                "ensure_netbox_objects", True
-            )
-            settings_obj.delete_orphans = form.cleaned_data.get("delete_orphans", False)
-            settings_obj.primary_ip_preference = form.cleaned_data[
-                "primary_ip_preference"
-            ]
             settings_obj.netbox_max_concurrent = form.cleaned_data[
                 "netbox_max_concurrent"
             ]
@@ -210,6 +196,12 @@ class SettingsView(
             settings_obj.backup_batch_delay_ms = form.cleaned_data[
                 "backup_batch_delay_ms"
             ]
+            settings_obj.interface_batch_size = form.cleaned_data[
+                "interface_batch_size"
+            ]
+            settings_obj.interface_batch_delay_ms = form.cleaned_data[
+                "interface_batch_delay_ms"
+            ]
             settings_obj.vm_sync_max_concurrency = form.cleaned_data[
                 "vm_sync_max_concurrency"
             ]
@@ -232,21 +224,6 @@ class SettingsView(
             )
             settings_obj.embed_description_metadata = form.cleaned_data.get(
                 "embed_description_metadata", False
-            )
-            settings_obj.backend_log_file_path = form.cleaned_data[
-                "backend_log_file_path"
-            ]
-            settings_obj.ssrf_protection_enabled = form.cleaned_data.get(
-                "ssrf_protection_enabled", False
-            )
-            settings_obj.allow_private_ips = form.cleaned_data.get(
-                "allow_private_ips", False
-            )
-            settings_obj.additional_allowed_ip_ranges = form.cleaned_data.get(
-                "additional_allowed_ip_ranges", ""
-            )
-            settings_obj.explicitly_blocked_ip_ranges = form.cleaned_data.get(
-                "explicitly_blocked_ip_ranges", ""
             )
             settings_obj.proxmox_timeout = form.cleaned_data["proxmox_timeout"]
             settings_obj.proxmox_max_retries = form.cleaned_data["proxmox_max_retries"]
@@ -340,6 +317,8 @@ class SettingsView(
                     "bulk_batch_delay_ms",
                     "backup_batch_size",
                     "backup_batch_delay_ms",
+                    "interface_batch_size",
+                    "interface_batch_delay_ms",
                     "vm_sync_max_concurrency",
                     "reconciliation_engine",
                     "reconciliation_compare_strict",
