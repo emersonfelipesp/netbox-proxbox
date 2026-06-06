@@ -417,9 +417,7 @@ def test_no_match_leaves_vm_alone(tenant_assignment_module, sync_params_module):
     assert vm.tenant is None
 
 
-def test_tag_assignment_no_marker_no_op(
-    tenant_assignment_module, sync_params_module
-):
+def test_tag_assignment_no_marker_no_op(tenant_assignment_module, sync_params_module):
     sync_params_module._stubs["global_tag_enabled"] = True
     vm = _FakeVM("cust-confitec-001", tags=["tenant-confitec"])
 
