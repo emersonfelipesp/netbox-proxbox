@@ -42,3 +42,6 @@ part of the same plugin family.
 
 - `0.0.7` through `0.0.9.post4` are the most relevant pages for current upgrade planning.
 - Older pages are intentionally brief because the repository does not preserve fuller release-note prose for those versions.
+
+
+> **Current release:** netbox-proxbox `0.0.20` pairs with proxbox-api `0.0.17` (NetBox `4.5.8`–`4.6.99`).
