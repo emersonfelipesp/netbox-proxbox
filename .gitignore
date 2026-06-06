@@ -142,3 +142,7 @@ dmypy.json
 
 # other stuff
 .vscode
+
+# Claude Code local state and git worktrees (never commit worktree gitlinks)
+.claude/
+.worktrees/
