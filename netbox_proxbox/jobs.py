@@ -855,9 +855,7 @@ class ProxboxSyncJob(JobRunner):
                         _endpoint_runtime_phase(
                             endpoint_id=getattr(template_result, "endpoint_id", None)
                             or eid,
-                            endpoint_name=getattr(
-                                template_result, "endpoint_name", ""
-                            ),
+                            endpoint_name=getattr(template_result, "endpoint_name", ""),
                             kind="vm_template",
                             label="VM template sync",
                             runtime_seconds=template_runtime,

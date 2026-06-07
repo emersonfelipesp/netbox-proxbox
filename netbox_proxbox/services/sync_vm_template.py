@@ -385,9 +385,9 @@ def sync_vm_templates(
     processed = 0
     with transaction.atomic():
         existing_keys = set(
-            ProxmoxVMTemplate.objects.filter(
-                proxmox_endpoint=endpoint
-            ).values_list("vmid", "proxmox_type")
+            ProxmoxVMTemplate.objects.filter(proxmox_endpoint=endpoint).values_list(
+                "vmid", "proxmox_type"
+            )
         )
         synced_keys: set[tuple[int, str]] = set()
 

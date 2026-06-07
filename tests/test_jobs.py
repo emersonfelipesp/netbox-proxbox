@@ -196,9 +196,7 @@ def proxbox_sync_job_module(monkeypatch):
     )
 
     # Stub sync_vm_template so the deferred import in jobs.py resolves.
-    sync_vm_template_mod = types.ModuleType(
-        "netbox_proxbox.services.sync_vm_template"
-    )
+    sync_vm_template_mod = types.ModuleType("netbox_proxbox.services.sync_vm_template")
     sync_vm_template_mod.sync_vm_templates = lambda endpoint_id=None: SimpleNamespace(
         success=True,
         error=None,
@@ -369,13 +367,9 @@ def test_proxbox_sync_job_run_wires_vm_template_sync_per_endpoint(
 
     assert template_endpoint_ids == [1, 2]
     assert paths == ["dcim/devices/create/stream", "dcim/devices/create/stream"]
-    endpoint_runtimes = job.job.data["proxbox_sync"]["response"][
-        "endpoint_runtimes"
-    ]
+    endpoint_runtimes = job.job.data["proxbox_sync"]["response"]["endpoint_runtimes"]
     assert {
-        phase["label"]
-        for entry in endpoint_runtimes
-        for phase in entry["phases"]
+        phase["label"] for entry in endpoint_runtimes for phase in entry["phases"]
     } >= {"VM template sync"}
 
 
@@ -394,10 +388,8 @@ def test_proxbox_sync_job_skips_vm_template_sync_when_global_mode_disabled(
 
     services_mod.run_sync_stream = run_sync_stream
     monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
-    sys.modules[
-        "netbox_proxbox.services.sync_vm_template"
-    ].sync_vm_templates = lambda endpoint_id=None: template_endpoint_ids.append(
-        endpoint_id
+    sys.modules["netbox_proxbox.services.sync_vm_template"].sync_vm_templates = (
+        lambda endpoint_id=None: template_endpoint_ids.append(endpoint_id)
     )
     monkeypatch.setattr(
         proxbox_sync_job_module,

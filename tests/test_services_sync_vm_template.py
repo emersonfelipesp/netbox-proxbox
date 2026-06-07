@@ -191,9 +191,8 @@ def sync_vm_template_module(monkeypatch):
     sync_stages._has_bootstrap_only_tag = lambda obj: bool(
         getattr(obj, "bootstrap_only", False)
     )
-    sync_stages._bootstrap_only_should_skip_existing = (
-        lambda obj, mode: mode == "bootstrap_only"
-        and sync_stages._has_bootstrap_only_tag(obj)
+    sync_stages._bootstrap_only_should_skip_existing = lambda obj, mode: (
+        mode == "bootstrap_only" and sync_stages._has_bootstrap_only_tag(obj)
     )
     monkeypatch.setitem(sys.modules, "netbox_proxbox.sync_stages", sync_stages)
 
