@@ -93,6 +93,14 @@ docker compose exec netbox /opt/netbox/netbox/manage.py migrate
 Full companion-plugin details live under
 [docs/companion-plugins/](./docs/companion-plugins/).
 
+## What's New in v0.0.20.post1
+
+Paired with backend [`proxbox-api 0.0.17.post1`](https://github.com/emersonfelipesp/proxbox-api).
+
+- **VM-template sync job wiring.** `ProxboxSyncJob` now calls the existing `sync_vm_templates()` stage, so `ProxmoxVMTemplate` inventory is populated during full/scheduled syncs instead of staying empty.
+
+Full notes: [Release Notes - v0.0.20.post1](docs/release-notes/version-0.0.20.post1.md).
+
 ## What's New in v0.0.20
 
 Paired with backend [`proxbox-api 0.0.17`](https://github.com/emersonfelipesp/proxbox-api).
@@ -114,6 +122,7 @@ Full notes: [Release Notes — v0.0.18](https://emersonfelipesp.github.io/netbox
 
 | NetBox | netbox-proxbox | proxbox-api | netbox-sdk | proxmox-sdk |
 |--------|----------------|-------------|------------|-------------|
+| >=4.5.8 | v0.0.20.post1 | v0.0.17.post1 | v0.0.9.post1 | v0.0.11.post1 |
 | >=4.5.8 | v0.0.20 | v0.0.17 | v0.0.8.post1 | v0.0.11 |
 | >=4.5.8 | v0.0.19 | v0.0.16 | v0.0.8.post1 | v0.0.9 |
 | >=4.5.8 | v0.0.18.post1 | v0.0.14 | v0.0.8.post1 | v0.0.3.post1 |

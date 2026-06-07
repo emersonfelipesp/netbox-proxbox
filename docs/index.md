@@ -6,6 +6,7 @@ Proxbox is a NetBox plugin that integrates Proxmox with NetBox through a separat
 
 | NetBox   | netbox-proxbox | proxbox-api | netbox-sdk     | proxmox-sdk    |
 |----------|----------------|-------------|----------------|----------------|
+| >=4.5.8  | v0.0.20.post1 | v0.0.17.post1 | v0.0.9.post1 | v0.0.11.post1 |
 | >=4.5.8  | v0.0.20 | v0.0.17 | v0.0.8.post1 | v0.0.11 |
 | >=4.5.8  | v0.0.19 | v0.0.16 | v0.0.8.post1 | v0.0.9 |
 | >=4.5.8  | v0.0.18.post1 | v0.0.14 | v0.0.8.post1 | v0.0.3.post1 |
@@ -29,7 +30,7 @@ and WebSocket.
 The current repository code declares support for:
 
 - NetBox `4.5.8`, `4.5.9`, and `4.6.x`
-- Plugin version `0.0.19rc1` in source
+- Plugin version `0.0.20.post1` in source
 
 That support comes directly from the plugin config in this repository:
 
@@ -37,13 +38,12 @@ That support comes directly from the plugin config in this repository:
 - `max_version = "4.6.99"`
 
 This compatibility line is validated against NetBox `v4.5.8`, `v4.5.9`,
-`v4.6.0`, and official `v4.6.1`. It fixes database and integration
-compatibility issues: `allow_writes` exposed in the ProxmoxEndpoint API,
-`verify_ssl` migration guards, FastAPI endpoint token-drift fix, and PBS/PDM
-host/timeout_seconds bridging properties.
+`v4.6.0`, and official `v4.6.1`. It includes the NP-F1 VM-template sync job
+wiring fix so `ProxmoxVMTemplate` inventory is populated during full/scheduled
+syncs.
 
-The `0.0.19` release pairs with the separate `proxbox-api` backend release
-`0.0.16`.
+The `0.0.20.post1` release pairs with the separate `proxbox-api` backend
+release `0.0.17.post1`.
 
 ## Important Packaging Note
 

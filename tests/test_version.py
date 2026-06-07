@@ -30,6 +30,9 @@ RELEASE_NOTES_017_PATH = REPO_ROOT / "docs" / "release-notes" / "version-0.0.17.
 RELEASE_NOTES_018_PATH = REPO_ROOT / "docs" / "release-notes" / "version-0.0.18.md"
 RELEASE_NOTES_019_PATH = REPO_ROOT / "docs" / "release-notes" / "version-0.0.19.md"
 RELEASE_NOTES_020_PATH = REPO_ROOT / "docs" / "release-notes" / "version-0.0.20.md"
+RELEASE_NOTES_020_POST1_PATH = (
+    REPO_ROOT / "docs" / "release-notes" / "version-0.0.20.post1.md"
+)
 E2E_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "e2e-docker.yml"
 PUBLISH_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "publish-testpypi.yml"
 NIGHTLY_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "nightly-contracts.yml"
@@ -38,7 +41,8 @@ DOCS_SCREENSHOTS_WORKFLOW_PATH = (
 )
 
 CURRENT_PLUGIN_VERSION = "0.0.20"
-CURRENT_PROXBOX_API_VERSION = "0.0.17"
+CURRENT_RELEASE_VERSION = "0.0.20.post1"
+CURRENT_PROXBOX_API_VERSION = "0.0.17.post1"
 CURRENT_NETBOX_MIN_VERSION = "4.5.8"
 CURRENT_NETBOX_MAX_VERSION = "4.6.99"
 PREVIOUS_PLUGIN_VERSION = "0.0.19"
@@ -101,7 +105,7 @@ def test_certified_netbox_versions_are_documented():
         DOCS_INDEX_PATH,
         INSTALL_GIT_PATH,
         UPGRADING_PATH,
-        RELEASE_NOTES_020_PATH,
+        RELEASE_NOTES_020_POST1_PATH,
     )
     for path in docs_with_explicit_range:
         text = _read(path)
@@ -214,12 +218,12 @@ def test_e2e_workflow_supports_proxbox_api_package_index_runtime_modes():
 def test_current_release_pairing_is_documented_in_primary_docs():
     current_row = (
         f">={CURRENT_NETBOX_MIN_VERSION}",
-        f"v{CURRENT_PLUGIN_VERSION}",
+        f"v{CURRENT_RELEASE_VERSION}",
         f"v{CURRENT_PROXBOX_API_VERSION}",
-        "v0.0.8.post1",
-        "v0.0.11",
+        "v0.0.9.post1",
+        "v0.0.11.post1",
     )
-    for path in (README_PATH, DOCS_INDEX_PATH, RELEASE_NOTES_020_PATH):
+    for path in (README_PATH, DOCS_INDEX_PATH, RELEASE_NOTES_020_POST1_PATH):
         text = _read(path)
         _assert_markdown_table_row(text, current_row)
 
@@ -228,9 +232,10 @@ def test_current_release_pairing_is_documented_in_primary_docs():
         DOCS_INDEX_PATH,
         UPGRADING_PATH,
         RELEASE_NOTES_INDEX_PATH,
-        RELEASE_NOTES_020_PATH,
+        RELEASE_NOTES_020_POST1_PATH,
     ):
         text = _read(path)
+        assert CURRENT_RELEASE_VERSION in text, f"{path} missing release version"
         assert CURRENT_PLUGIN_VERSION in text, f"{path} missing plugin version"
         assert CURRENT_PROXBOX_API_VERSION in text, f"{path} missing backend pin"
 

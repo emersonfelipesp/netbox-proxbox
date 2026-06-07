@@ -4,7 +4,7 @@ This section tracks the release line represented by this repository and keeps ol
 
 ## Current Release Line
 
-The plugin source in this repository is currently `0.0.19rc1` on the
+The plugin source in this repository is currently `0.0.20.post1` on the
 development line. The sibling plugins (`netbox-pbs`,
 `netbox-ceph`, and `netbox-pdm`) live in standalone repositories under
 [@emersonfelipesp](https://github.com/emersonfelipesp) and declare
@@ -16,6 +16,8 @@ part of the same plugin family.
 
 | Version | Summary |
 |---------|---------|
+| `0.0.20.post1` | Post-release patch for the NP-F1 VM-template sync fix: `sync_vm_templates()` was implemented but never called, so `ProxmoxVMTemplate` inventory was never populated. The stage is now wired into `ProxboxSyncJob` through commits `0f843083` and `aae76f13`. Pairs with backend [`proxbox-api 0.0.17.post1`](https://github.com/emersonfelipesp/proxbox-api), `proxmox-sdk 0.0.11.post1`, and `netbox-sdk 0.0.9.post1`. |
+| `0.0.20` | IP-address ownership safety and interface-batch settings persistence. The paired backend prevents VM-interface IP sync from taking over an address that already belongs to another interface, and plugin Settings page values for `interface_batch_size` / `interface_batch_delay_ms` now persist to the database. Pairs with backend [`proxbox-api 0.0.17`](https://github.com/emersonfelipesp/proxbox-api). |
 | `0.0.19` | Database and integration compatibility fixes: `allow_writes` in ProxmoxEndpoint API, `verify_ssl` migration guards, FastAPI endpoint token-drift fix, PBS/PDM host/timeout_seconds bridging properties. Pairs with backend [`proxbox-api 0.0.16`](https://github.com/emersonfelipesp/proxbox-api). |
 | `0.0.18.post1` | Certification-readiness post release: package metadata, project URLs, Apache-2.0 evidence, certification checklist, family application packet, support links, and a database-only repair migration for missing `PBSEndpoint.enabled` / `PDMEndpoint.enabled` columns on affected v0.0.18 installs. No runtime sync behavior changes. |
 | `0.0.18` | Full PVE 9.2 support: SDN fabric/route-map/prefix-list models and sync, custom datacenter CPU model persistence, completed per-node firewall sync (per-VM sync implemented, not yet wired automatically), HA arm/disarm action views, and `ProxmoxNode.location` field. Migration `0041_pve_9_2.py`. Pairs with backend [`proxbox-api 0.0.14`](https://github.com/emersonfelipesp/proxbox-api). |
@@ -44,4 +46,4 @@ part of the same plugin family.
 - Older pages are intentionally brief because the repository does not preserve fuller release-note prose for those versions.
 
 
-> **Current release:** netbox-proxbox `0.0.20` pairs with proxbox-api `0.0.17` (NetBox `4.5.8`–`4.6.99`).
+> **Current release:** netbox-proxbox `0.0.20.post1` pairs with proxbox-api `0.0.17.post1` (NetBox `4.5.8`–`4.6.99`).
