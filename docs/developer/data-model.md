@@ -220,6 +220,9 @@ erDiagram
 | `ProxmoxEndpoint` | domain, port (8006), username, token_name, token_value, mode, version | Credentials and address for one Proxmox VE instance or cluster |
 | `NetBoxEndpoint` | domain, port (8000), token_version (v1/v2), token_name, token_secret, token_key | Address and credentials for a remote NetBox instance |
 | `FastAPIEndpoint` | domain, port (8000), backend_token, verify_ssl, websocket_url | Address and auth token for the `proxbox-api` backend |
+| `PBSEndpoint` | domain, port, token, verify_ssl | Proxmox Backup Server connection record |
+| `PDMEndpoint` | domain, port, token, verify_ssl | Proxmox Datacenter Manager connection record |
+| `PDMRemote` | name, pdm_endpoint, remote_type | PDM-managed remote (links to PBS or PVE remotes managed by PDM) |
 
 !!! warning "Single FastAPIEndpoint constraint"
     The plugin's HTTP and WebSocket helpers resolve the backend via `FastAPIEndpoint.objects.first()`. If multiple `FastAPIEndpoint` rows exist, whichever sorts first in the queryset is used for all backend communication. Keep exactly one row in production.
@@ -232,6 +235,8 @@ erDiagram
 | `ProxmoxNode` | `ProxmoxEndpoint`, `Device` (NetBox core), `ProxmoxCluster` | Mirrors a Proxmox hypervisor node into a NetBox Device |
 | `ProxmoxStorage` | `ProxmoxEndpoint` | Inventory of storage pools/directories on a Proxmox cluster |
 | `ProxmoxStorageVirtualDisk` | `ProxmoxStorage`, `VirtualDisk` (NetBox core) | Join table linking storage entries to NetBox virtual disk objects |
+| `NodeSSHCredential` | `ProxmoxNode` | SSH credentials for per-node hardware-discovery SSH sessions |
+| `ProxmoxDatacenterCpuModel` | `ProxmoxEndpoint` | Custom CPU model definitions synced from Proxmox datacenter config |
 
 ### VM Data Models
 
@@ -240,6 +245,30 @@ erDiagram
 | `VMBackup` | `VirtualMachine` (NetBox core) | Per-VM backup inventory (volid, format, size) |
 | `VMSnapshot` | `VirtualMachine` (NetBox core) | Per-VM snapshot inventory (name, description, parent) |
 | `VMTaskHistory` | `VirtualMachine` (NetBox core) | Per-VM task history from the Proxmox task log (UPID, status, type) |
+| `ProxmoxVMTemplate` | `ProxmoxCluster`, `ProxmoxNode`, `VirtualMachine` (optional) | VM template inventory; `source_vm` and `cloned_vms` M2M track lineage |
+| `ProxmoxVMCloudInit` | `VirtualMachine` (NetBox core) | Cloud-init configuration record for a VM |
+| `CloudImageTemplate` | — | Image factory catalog entry for QEMU/cloud-image provisioning |
+
+### Firewall Models
+
+Six read-only models persist Proxmox VE firewall objects synced from proxbox-api:
+
+| Model | Purpose |
+|---|---|
+| `ProxmoxFirewallSecurityGroup` | Named firewall security group (with inline rules) |
+| `ProxmoxFirewallRule` | Individual firewall rule (datacenter or per-VM) |
+| `ProxmoxFirewallIPSet` | IP set definition |
+| `ProxmoxFirewallIPSetEntry` | Entry within an IP set |
+| `ProxmoxFirewallAlias` | IP alias definition |
+| `ProxmoxFirewallOptions` | Firewall options object (per datacenter or per VM) |
+
+### SDN Models (PVE 9.2+)
+
+| Model | Purpose |
+|---|---|
+| `ProxmoxSdnFabric` | SDN fabric definition synced from Proxmox |
+| `ProxmoxSdnRouteMap` | SDN route-map definition |
+| `ProxmoxSdnPrefixList` | SDN prefix-list definition |
 
 ### Operational Models
 
@@ -247,7 +276,9 @@ erDiagram
 |---|---|
 | `BackupRoutine` | Backup routine definitions synced from Proxmox (vzdump jobs) |
 | `Replication` | Replication job definitions synced from Proxmox |
-| `ProxboxPluginSettings` | Singleton plugin settings (sync scheduling, feature flags) |
+| `ProxmoxApplyJob` | Tracks a NetBox-to-Proxmox intent apply job |
+| `DeletionRequest` | Auditable delete-request workflow requiring explicit authorization |
+| `ProxboxPluginSettings` | Singleton plugin settings including sync modes, batch tunables, and feature flags |
 
 ---
 

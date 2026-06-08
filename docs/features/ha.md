@@ -52,12 +52,28 @@ The page renders three sections:
 
 When the cluster has no HA configured, each section renders an empty-state row instead of a missing table.
 
+## HA Arm / Disarm
+
+Two AJAX POST endpoints allow operators to arm (enable HA management) or disarm (remove from HA management) a Proxmox resource directly from the NetBox UI:
+
+```
+POST /plugins/proxbox/ha/arm/
+POST /plugins/proxbox/ha/disarm/
+```
+
+These routes map to `HAResourceArmView` and `HAResourceDisarmView` respectively (see `netbox_proxbox/urls.py`). Both views forward the request to the `proxbox-api` backend which issues the corresponding Proxmox HA manager API call. The endpoints are AJAX-friendly and return JSON status responses.
+
+!!! info "Backend requirement"
+    HA arm/disarm requires `proxbox-api >= 0.0.14`. Earlier backends do not expose the corresponding action routes.
+
 ## Backend Paths
 
 | Plugin view | Backend endpoint | Purpose |
 |---|---|---|
 | VM HA tab | `GET /proxmox/cluster/ha/resources/by-vm/{vmid}` | Single resource for one VM/CT (`null` if unmanaged) |
 | HA Status page | `GET /proxmox/cluster/ha/summary` | Composed `{nodes, groups, resources, status}` envelope |
+| HA arm | `POST /plugins/proxbox/ha/arm/` | Arm a Proxmox resource for HA management |
+| HA disarm | `POST /plugins/proxbox/ha/disarm/` | Remove a Proxmox resource from HA management |
 
 The plugin's REST shim that exposes both backend calls as JSON for non-HTML consumers is documented in [Cluster HA API](../api/ha.md).
 

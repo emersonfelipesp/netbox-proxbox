@@ -110,6 +110,16 @@ Paired with backend [`proxbox-api 0.0.17`](https://github.com/emersonfelipesp/pr
 
 Full notes: [Release Notes - v0.0.20](docs/release-notes/version-0.0.20.md).
 
+## What's New in v0.0.19
+
+Paired with backend [`proxbox-api 0.0.16`](https://github.com/emersonfelipesp/proxbox-api).
+
+- **FastAPI endpoint token drift fix.** `FastAPIEndpoint.save()` now detects explicit token changes on existing rows and calls `_register_key_with_backend(skip_bootstrap_check=True)` so operators can recover from a proxbox-api key rotation without direct database surgery.
+- **PBS/PDM `host` compatibility property.** `PBSEndpoint` and `PDMEndpoint` now expose a `host` property bridging the field-name difference with proxbox-api's SQLite column.
+- **PBS/PDM `timeout_seconds` compatibility property.** Both models now expose a `timeout_seconds` property to match the proxbox-api SQLite column name.
+
+Full notes: [Release Notes — v0.0.19](docs/release-notes/version-0.0.19.md).
+
 ## What's New in v0.0.18
 
 Paired with backend [`proxbox-api 0.0.14`](https://github.com/emersonfelipesp/proxbox-api).

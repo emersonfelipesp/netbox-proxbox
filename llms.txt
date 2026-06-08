@@ -18,15 +18,15 @@ netbox-proxbox is a NetBox plugin that synchronizes Proxmox infrastructure data 
 
 ### Requirements
 
-- NetBox 4.5.x
+- NetBox 4.5.8 through 4.6.99
 - Python 3.12+
-- Proxmox VE 7.x or 8.x
+- Proxmox VE 7.x, 8.x, or 9.x
 - proxbox-api backend (FastAPI service)
 
 ### Version
 
-- Plugin version: `0.0.10`
-- NetBox compatibility: `4.5.0` through `4.5.99`
+- Plugin version: `0.0.20.post1`
+- NetBox compatibility: `4.5.8` through `4.6.99`
 
 ---
 
@@ -216,6 +216,122 @@ Singleton plugin settings for runtime behavior.
 class ProxboxPluginSettings(NetBoxModel):
     use_guest_agent_interface_name = models.BooleanField(default=True)
     proxbox_fetch_max_concurrency = models.PositiveIntegerField(default=8)
+    sync_mode_vm_interface = models.CharField(...)  # added in migration 0051
+    sync_mode_mac = models.CharField(...)            # added in migration 0051
+    interface_batch_size = models.PositiveSmallIntegerField(default=5)
+    interface_batch_delay_ms = models.PositiveIntegerField(default=100)
+```
+
+### PBSEndpoint / PDMEndpoint / PDMRemote
+
+Companion endpoint models for Proxmox Backup Server and Proxmox Datacenter Manager inventory.
+
+```python
+# Location: netbox_proxbox/models/pbs_endpoint.py
+class PBSEndpoint(EndpointBase): ...
+
+# Location: netbox_proxbox/models/pdm_endpoint.py
+class PDMEndpoint(EndpointBase): ...
+
+# Location: netbox_proxbox/models/pdm_remote.py
+class PDMRemote(NetBoxModel): ...
+```
+
+### NodeSSHCredential
+
+Stores SSH credentials for ProxmoxNode hardware-discovery SSH sessions.
+
+```python
+# Location: netbox_proxbox/models/ssh_credential.py
+class NodeSSHCredential(NetBoxModel): ...
+```
+
+### ProxmoxDatacenterCpuModel
+
+Custom datacenter-level CPU model definitions synced from Proxmox.
+
+```python
+# Location: netbox_proxbox/models/datacenter_cpu_model.py
+class ProxmoxDatacenterCpuModel(NetBoxModel): ...
+```
+
+### ProxmoxVMTemplate / ProxmoxVMCloudInit / CloudImageTemplate
+
+VM template inventory and cloud-init configuration records.
+
+```python
+# Location: netbox_proxbox/models/vm_template.py
+class ProxmoxVMTemplate(NetBoxModel): ...
+
+# Location: netbox_proxbox/models/vm_cloudinit.py
+class ProxmoxVMCloudInit(NetBoxModel): ...
+
+# Location: netbox_proxbox/models/cloud_image_template.py
+class CloudImageTemplate(NetBoxModel): ...
+```
+
+### ProxmoxApplyJob / DeletionRequest / ProxmoxStorageVirtualDisk
+
+Operational and linkage models.
+
+```python
+# Location: netbox_proxbox/models/apply_job.py
+class ProxmoxApplyJob(NetBoxModel): ...
+
+# Location: netbox_proxbox/models/deletion_request.py
+class DeletionRequest(NetBoxModel): ...
+
+# Location: netbox_proxbox/models/storage.py
+class ProxmoxStorageVirtualDisk(NetBoxModel): ...  # join table: ProxmoxStorage ↔ VirtualDisk
+```
+
+### Firewall Models (6)
+
+Per-datacenter and per-VM Proxmox firewall inventory, read-only synced from proxbox-api.
+
+```python
+# Location: netbox_proxbox/models/firewall_security_group.py
+class ProxmoxFirewallSecurityGroup(NetBoxModel): ...
+
+# Location: netbox_proxbox/models/firewall_rule.py
+class ProxmoxFirewallRule(NetBoxModel): ...
+
+# Location: netbox_proxbox/models/firewall_ipset.py
+class ProxmoxFirewallIPSet(NetBoxModel): ...
+class ProxmoxFirewallIPSetEntry(NetBoxModel): ...
+
+# Location: netbox_proxbox/models/firewall_alias.py
+class ProxmoxFirewallAlias(NetBoxModel): ...
+
+# Location: netbox_proxbox/models/firewall_options.py
+class ProxmoxFirewallOptions(NetBoxModel): ...
+```
+
+### SDN Models (3)
+
+Proxmox Software-Defined Networking inventory (PVE 9.2+).
+
+```python
+# Location: netbox_proxbox/models/sdn_fabric.py
+class ProxmoxSdnFabric(NetBoxModel): ...
+
+# Location: netbox_proxbox/models/sdn_route_map.py
+class ProxmoxSdnRouteMap(NetBoxModel): ...
+
+# Location: netbox_proxbox/models/sdn_prefix_list.py
+class ProxmoxSdnPrefixList(NetBoxModel): ...
+```
+
+### Firecracker Models (4)
+
+NMS Cloud micro-VM inventory. Firecracker instances are not NetBox core `VirtualMachine` rows; they use `kind="firecracker"` and `instance_ref="firecracker:<id>"`.
+
+```python
+# Location: netbox_proxbox/models/firecracker.py
+class FirecrackerHostPool(NetBoxModel): ...
+class FirecrackerHost(NetBoxModel): ...
+class FirecrackerImageTemplate(NetBoxModel): ...
+class FirecrackerMicroVM(NetBoxModel): ...
 ```
 
 ---

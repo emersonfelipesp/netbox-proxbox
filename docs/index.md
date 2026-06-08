@@ -59,14 +59,20 @@ The current codebase includes NetBox models for:
 - Proxmox endpoints (with per-endpoint sync overwrite flags and Settings tab)
 - NetBox endpoints (singleton)
 - FastAPI endpoints (singleton)
+- PBS endpoints (`PBSEndpoint`) and PDM endpoints (`PDMEndpoint`, `PDMRemote`) for companion plugin inventory
 - Proxmox clusters and hypervisor nodes (with links to NetBox Cluster and Device objects)
-- Proxmox storage rows
+- Proxmox storage rows and virtual-disk join table (`ProxmoxStorageVirtualDisk`)
+- Node SSH credentials (`NodeSSHCredential`) for SSH-based hardware discovery
+- Custom datacenter CPU models (`ProxmoxDatacenterCpuModel`)
+- VM templates (`ProxmoxVMTemplate`), cloud-init config (`ProxmoxVMCloudInit`), and cloud image templates (`CloudImageTemplate`)
 - Backup routines (Proxmox vzdump schedules with retention policies)
 - Replications (Proxmox storage replication metadata)
-- VM backups
-- VM snapshots
-- VM task history
-- Plugin-wide settings (`ProxboxPluginSettings`)
+- VM backups, VM snapshots, and VM task history
+- Proxmox VE firewall inventory: `ProxmoxFirewallSecurityGroup`, `ProxmoxFirewallRule`, `ProxmoxFirewallIPSet`, `ProxmoxFirewallIPSetEntry`, `ProxmoxFirewallAlias`, `ProxmoxFirewallOptions` (read-only, synced from proxbox-api)
+- SDN inventory (PVE 9.2+): `ProxmoxSdnFabric`, `ProxmoxSdnRouteMap`, `ProxmoxSdnPrefixList`
+- Firecracker Cloud inventory: `FirecrackerHostPool`, `FirecrackerHost`, `FirecrackerImageTemplate`, `FirecrackerMicroVM`
+- Operational models: `ProxmoxApplyJob`, `DeletionRequest`
+- Plugin-wide settings (`ProxboxPluginSettings`), including sync mode controls for interfaces and MACs (migration 0051) and interface-batch tunables
 
 The plugin UI exposes sync actions for:
 

@@ -18,7 +18,7 @@ All endpoints require authentication. Three methods are supported:
 
 ```bash
 curl -H "Authorization: Token <your-netbox-token>" \
-     http://netbox.example.com/api/plugins/proxbox/clusters/
+     http://netbox.example.com/api/plugins/proxbox/proxmox-clusters/
 ```
 
 **Session authentication**: Used automatically by the NetBox web UI. Browser requests that include a valid Django session cookie are accepted.
@@ -51,7 +51,7 @@ All list endpoints accept a `?q=` query parameter for free-text search. Each mod
 
 ```bash
 curl -H "Authorization: Token <token>" \
-     "http://netbox.example.com/api/plugins/proxbox/clusters/?q=pve"
+     "http://netbox.example.com/api/plugins/proxbox/proxmox-clusters/?q=pve"
 ```
 
 ## Common Response Fields
@@ -119,10 +119,10 @@ Two models perform an **upsert** on POST — if a matching record already exists
 | `/api/plugins/proxbox/endpoints/netbox/{id}/` | GET PUT PATCH DELETE | [NetBoxEndpoint](endpoints.md#netbox-endpoint) |
 | `/api/plugins/proxbox/endpoints/fastapi/` | GET POST | [FastAPIEndpoint](endpoints.md#fastapi-endpoint) |
 | `/api/plugins/proxbox/endpoints/fastapi/{id}/` | GET PUT PATCH DELETE | [FastAPIEndpoint](endpoints.md#fastapi-endpoint) |
-| `/api/plugins/proxbox/clusters/` | GET POST | [ProxmoxCluster](infrastructure.md#proxmox-cluster) |
-| `/api/plugins/proxbox/clusters/{id}/` | GET PUT PATCH DELETE | [ProxmoxCluster](infrastructure.md#proxmox-cluster) |
-| `/api/plugins/proxbox/nodes/` | GET POST | [ProxmoxNode](infrastructure.md#proxmox-node) |
-| `/api/plugins/proxbox/nodes/{id}/` | GET PUT PATCH DELETE | [ProxmoxNode](infrastructure.md#proxmox-node) |
+| `/api/plugins/proxbox/proxmox-clusters/` | GET POST | [ProxmoxCluster](infrastructure.md#proxmox-cluster) |
+| `/api/plugins/proxbox/proxmox-clusters/{id}/` | GET PUT PATCH DELETE | [ProxmoxCluster](infrastructure.md#proxmox-cluster) |
+| `/api/plugins/proxbox/proxmox-nodes/` | GET POST | [ProxmoxNode](infrastructure.md#proxmox-node) |
+| `/api/plugins/proxbox/proxmox-nodes/{id}/` | GET PUT PATCH DELETE | [ProxmoxNode](infrastructure.md#proxmox-node) |
 | `/api/plugins/proxbox/storage/` | GET POST | [ProxmoxStorage](infrastructure.md#proxmox-storage) |
 | `/api/plugins/proxbox/storage/{id}/` | GET PUT PATCH DELETE | [ProxmoxStorage](infrastructure.md#proxmox-storage) |
 | `/api/plugins/proxbox/backups/` | GET POST | [VMBackup](vm-data.md#vm-backup) |
@@ -139,3 +139,46 @@ Two models perform an **upsert** on POST — if a matching record already exists
 | `/api/plugins/proxbox/settings/{id}/` | GET PATCH | [Plugin Settings](settings.md) |
 | `/api/plugins/proxbox/ha/summary/` | GET | [Cluster HA](ha.md) |
 | `/api/plugins/proxbox/ha/vm/{vmid}/` | GET | [Cluster HA](ha.md) |
+| `/api/plugins/proxbox/firecracker-host-pools/` | GET POST | FirecrackerHostPool CRUD |
+| `/api/plugins/proxbox/firecracker-host-pools/{id}/` | GET PUT PATCH DELETE | FirecrackerHostPool CRUD |
+| `/api/plugins/proxbox/firecracker-hosts/` | GET POST | FirecrackerHost CRUD |
+| `/api/plugins/proxbox/firecracker-hosts/{id}/` | GET PUT PATCH DELETE | FirecrackerHost CRUD |
+| `/api/plugins/proxbox/firecracker-image-templates/` | GET POST | FirecrackerImageTemplate CRUD |
+| `/api/plugins/proxbox/firecracker-image-templates/{id}/` | GET PUT PATCH DELETE | FirecrackerImageTemplate CRUD |
+| `/api/plugins/proxbox/firecracker-microvms/` | GET POST | FirecrackerMicroVM CRUD |
+| `/api/plugins/proxbox/firecracker-microvms/{id}/` | GET PUT PATCH DELETE | FirecrackerMicroVM CRUD |
+| `/api/plugins/proxbox/cloud-image-templates/` | GET POST | CloudImageTemplate CRUD |
+| `/api/plugins/proxbox/cloud-image-templates/{id}/` | GET PUT PATCH DELETE | CloudImageTemplate CRUD |
+| `/api/plugins/proxbox/vm-cloudinit/` | GET POST | ProxmoxVMCloudInit CRUD |
+| `/api/plugins/proxbox/vm-cloudinit/{id}/` | GET PUT PATCH DELETE | ProxmoxVMCloudInit CRUD |
+| `/api/plugins/proxbox/vm-templates/` | GET POST | ProxmoxVMTemplate CRUD |
+| `/api/plugins/proxbox/vm-templates/{id}/` | GET PUT PATCH DELETE | ProxmoxVMTemplate CRUD |
+| `/api/plugins/proxbox/ssh-credentials/` | GET POST | NodeSSHCredential CRUD |
+| `/api/plugins/proxbox/ssh-credentials/{id}/` | GET PUT PATCH DELETE | NodeSSHCredential CRUD |
+| `/api/plugins/proxbox/ssh-credentials/by-node/{node_id}/` | GET | Lookup SSH credential by ProxmoxNode |
+| `/api/plugins/proxbox/ssh-credentials/by-node/{node_id}/credentials/` | GET | Retrieve decrypted SSH credential secrets by node |
+| `/api/plugins/proxbox/ssh-credentials/by-endpoint/{endpoint_id}/credentials/` | GET | Retrieve decrypted SSH credential secrets by endpoint |
+| `/api/plugins/proxbox/firewall/security-groups/` | GET POST | ProxmoxFirewallSecurityGroup CRUD |
+| `/api/plugins/proxbox/firewall/security-groups/{id}/` | GET PUT PATCH DELETE | ProxmoxFirewallSecurityGroup CRUD |
+| `/api/plugins/proxbox/firewall/rules/` | GET POST | ProxmoxFirewallRule CRUD |
+| `/api/plugins/proxbox/firewall/rules/{id}/` | GET PUT PATCH DELETE | ProxmoxFirewallRule CRUD |
+| `/api/plugins/proxbox/firewall/ipsets/` | GET POST | ProxmoxFirewallIPSet CRUD |
+| `/api/plugins/proxbox/firewall/ipsets/{id}/` | GET PUT PATCH DELETE | ProxmoxFirewallIPSet CRUD |
+| `/api/plugins/proxbox/firewall/ipset-entries/` | GET POST | ProxmoxFirewallIPSetEntry CRUD |
+| `/api/plugins/proxbox/firewall/ipset-entries/{id}/` | GET PUT PATCH DELETE | ProxmoxFirewallIPSetEntry CRUD |
+| `/api/plugins/proxbox/firewall/aliases/` | GET POST | ProxmoxFirewallAlias CRUD |
+| `/api/plugins/proxbox/firewall/aliases/{id}/` | GET PUT PATCH DELETE | ProxmoxFirewallAlias CRUD |
+| `/api/plugins/proxbox/firewall/options/` | GET POST | ProxmoxFirewallOptions CRUD |
+| `/api/plugins/proxbox/firewall/options/{id}/` | GET PUT PATCH DELETE | ProxmoxFirewallOptions CRUD |
+| `/api/plugins/proxbox/sdn-fabrics/` | GET POST | ProxmoxSdnFabric CRUD |
+| `/api/plugins/proxbox/sdn-fabrics/{id}/` | GET PUT PATCH DELETE | ProxmoxSdnFabric CRUD |
+| `/api/plugins/proxbox/sdn-route-maps/` | GET POST | ProxmoxSdnRouteMap CRUD |
+| `/api/plugins/proxbox/sdn-route-maps/{id}/` | GET PUT PATCH DELETE | ProxmoxSdnRouteMap CRUD |
+| `/api/plugins/proxbox/sdn-prefix-lists/` | GET POST | ProxmoxSdnPrefixList CRUD |
+| `/api/plugins/proxbox/sdn-prefix-lists/{id}/` | GET PUT PATCH DELETE | ProxmoxSdnPrefixList CRUD |
+| `/api/plugins/proxbox/datacenter-cpu-models/` | GET POST | ProxmoxDatacenterCpuModel CRUD |
+| `/api/plugins/proxbox/datacenter-cpu-models/{id}/` | GET PUT PATCH DELETE | ProxmoxDatacenterCpuModel CRUD |
+| `/api/plugins/proxbox/resources/firecracker-microvms/` | GET | NMS-compatible Firecracker micro-VM list (non-model view) |
+| `/api/plugins/proxbox/resources/interfaces/` | GET | Aggregated VM interface list (non-model view) |
+| `/api/plugins/proxbox/resources/ip-addresses/` | GET | Aggregated IP address list (non-model view) |
+| `/api/plugins/proxbox/resources/virtual-disks/` | GET | Aggregated virtual disk list (non-model view) |

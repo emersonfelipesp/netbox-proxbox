@@ -46,7 +46,7 @@ Do **not** invent shadow config layers (parallel JSON/YAML files, ad-hoc dotenv
 sections, module-level constants meant as overrides) to dodge the migration cost.
 A new field touches all five wiring points — model, migration, form, serializer,
 template — and existing fields plus migration
-[`0037_pluginsettings_runtime_tunables.py`](./netbox_proxbox/migrations/0037_pluginsettings_runtime_tunables.py)
+[`0037_v0_0_15_release.py`](./netbox_proxbox/migrations/0037_v0_0_15_release.py)
 show the pattern. See [`CLAUDE.md → Plugin settings and configuration`](./CLAUDE.md)
 for the full keep-list.
 

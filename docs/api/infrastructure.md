@@ -13,26 +13,26 @@ For the operational guide — how to trigger cluster/node syncs, link to NetBox 
 A Proxmox VE cluster record, optionally linked to a NetBox `virtualization.Cluster`.
 
 ```
-GET    /api/plugins/proxbox/clusters/
-GET    /api/plugins/proxbox/clusters/{id}/
-POST   /api/plugins/proxbox/clusters/
-PUT    /api/plugins/proxbox/clusters/{id}/
-PATCH  /api/plugins/proxbox/clusters/{id}/
-DELETE /api/plugins/proxbox/clusters/{id}/
+GET    /api/plugins/proxbox/proxmox-clusters/
+GET    /api/plugins/proxbox/proxmox-clusters/{id}/
+POST   /api/plugins/proxbox/proxmox-clusters/
+PUT    /api/plugins/proxbox/proxmox-clusters/{id}/
+PATCH  /api/plugins/proxbox/proxmox-clusters/{id}/
+DELETE /api/plugins/proxbox/proxmox-clusters/{id}/
 ```
 
 **Example — list all clusters:**
 
 ```bash
 curl -H "Authorization: Token <token>" \
-     http://netbox.example.com/api/plugins/proxbox/clusters/
+     http://netbox.example.com/api/plugins/proxbox/proxmox-clusters/
 ```
 
 **Example — filter for cluster-mode only:**
 
 ```bash
 curl -H "Authorization: Token <token>" \
-     "http://netbox.example.com/api/plugins/proxbox/clusters/?mode=cluster"
+     "http://netbox.example.com/api/plugins/proxbox/proxmox-clusters/?mode=cluster"
 ```
 
 **Example — link a cluster to a NetBox Cluster object:**
@@ -42,7 +42,7 @@ curl -X PATCH \
      -H "Authorization: Token <token>" \
      -H "Content-Type: application/json" \
      -d '{"netbox_cluster": 5}' \
-     http://netbox.example.com/api/plugins/proxbox/clusters/1/
+     http://netbox.example.com/api/plugins/proxbox/proxmox-clusters/1/
 ```
 
 **Filterable fields:** `id`, `endpoint`, `netbox_cluster`, `name`, `mode`, `quorate`
@@ -54,7 +54,7 @@ curl -X PATCH \
 ```json
 {
   "id": 1,
-  "url": "/api/plugins/proxbox/clusters/1/",
+  "url": "/api/plugins/proxbox/proxmox-clusters/1/",
   "display": "pve-cluster",
   "endpoint": {
     "id": 1,
@@ -103,26 +103,26 @@ curl -X PATCH \
 A Proxmox VE hypervisor node, optionally linked to a NetBox `dcim.Device`.
 
 ```
-GET    /api/plugins/proxbox/nodes/
-GET    /api/plugins/proxbox/nodes/{id}/
-POST   /api/plugins/proxbox/nodes/
-PUT    /api/plugins/proxbox/nodes/{id}/
-PATCH  /api/plugins/proxbox/nodes/{id}/
-DELETE /api/plugins/proxbox/nodes/{id}/
+GET    /api/plugins/proxbox/proxmox-nodes/
+GET    /api/plugins/proxbox/proxmox-nodes/{id}/
+POST   /api/plugins/proxbox/proxmox-nodes/
+PUT    /api/plugins/proxbox/proxmox-nodes/{id}/
+PATCH  /api/plugins/proxbox/proxmox-nodes/{id}/
+DELETE /api/plugins/proxbox/proxmox-nodes/{id}/
 ```
 
 **Example — list all nodes for a specific endpoint:**
 
 ```bash
 curl -H "Authorization: Token <token>" \
-     "http://netbox.example.com/api/plugins/proxbox/nodes/?endpoint_id=1"
+     "http://netbox.example.com/api/plugins/proxbox/proxmox-nodes/?endpoint_id=1"
 ```
 
 **Example — filter for online nodes only:**
 
 ```bash
 curl -H "Authorization: Token <token>" \
-     "http://netbox.example.com/api/plugins/proxbox/nodes/?online=true"
+     "http://netbox.example.com/api/plugins/proxbox/proxmox-nodes/?online=true"
 ```
 
 **Example — link a node to a NetBox Device:**
@@ -132,7 +132,7 @@ curl -X PATCH \
      -H "Authorization: Token <token>" \
      -H "Content-Type: application/json" \
      -d '{"netbox_device": 42}' \
-     http://netbox.example.com/api/plugins/proxbox/nodes/1/
+     http://netbox.example.com/api/plugins/proxbox/proxmox-nodes/1/
 ```
 
 **Filterable fields:** `id`, `endpoint`, `proxmox_cluster`, `netbox_device`, `name`, `ip_address`, `online`, `local`
@@ -144,7 +144,7 @@ curl -X PATCH \
 ```json
 {
   "id": 1,
-  "url": "/api/plugins/proxbox/nodes/1/",
+  "url": "/api/plugins/proxbox/proxmox-nodes/1/",
   "display": "pve-node-01",
   "endpoint": {
     "id": 1,
@@ -154,7 +154,7 @@ curl -X PATCH \
   },
   "proxmox_cluster": {
     "id": 1,
-    "url": "/api/plugins/proxbox/clusters/1/",
+    "url": "/api/plugins/proxbox/proxmox-clusters/1/",
     "display": "pve-cluster",
     "name": "pve-cluster"
   },

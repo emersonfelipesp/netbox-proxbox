@@ -4,6 +4,7 @@
 
 It is a Typer application with top-level operational commands plus grouped command trees for:
 
+- `sync` — operator-friendly trigger for a full Proxmox→NetBox sync job via the `proxbox_sync` Django management command
 - `netbox` — remote NetBox endpoint management
 - `proxmox` — Proxmox session inspection, cluster/node queries, and Proxmox endpoint CRUD
 - `proxbox` — plugin configuration and backend info
@@ -39,6 +40,18 @@ pxb test
 The CLI stores its config under `~/.config/proxbox-cli/config.json` unless `XDG_CONFIG_HOME` overrides that path.
 
 ## Quick Reference
+
+### Sync commands
+
+The `pxb sync` group wraps the `proxbox_sync` Django management command as a subprocess. See [Sync Command](sync.md) for full documentation.
+
+| Command | Description |
+|---------|-------------|
+| `pxb sync run` | Enqueue a full Proxmox→NetBox sync job and exit |
+| `pxb sync run --wait` | Block until the job reaches a terminal state |
+| `pxb sync run --wait --timeout 600` | Wait up to 600 s for completion |
+| `pxb sync run --json` | Emit a single JSON document at exit (CI-friendly) |
+| `pxb sync run --netbox-path PATH` | Override the `manage.py` resolution chain |
 
 ### Root-level commands
 

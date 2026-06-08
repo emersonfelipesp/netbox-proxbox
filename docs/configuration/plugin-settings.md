@@ -80,6 +80,8 @@ These fields control batching, concurrency, and pacing for the Proxmox-to-NetBox
 | **Bulk batch delay (ms)** | `500` | `PROXBOX_BULK_BATCH_DELAY_MS` | Milliseconds to pause between bulk batches to avoid overwhelming NetBox. |
 | **Backup batch size** | `5` | `PROXBOX_BACKUP_BATCH_SIZE` | Records per batch during backup/snapshot reconciliation (kept lower than bulk batches because each item triggers Proxmox calls). |
 | **Backup batch delay (ms)** | `200` | `PROXBOX_BACKUP_BATCH_DELAY_MS` | Milliseconds to pause between backup batches. |
+| **Interface batch size** | `5` | `PROXBOX_INTERFACE_BATCH_SIZE` | Number of VM interfaces (and their IP addresses, subnets, VLANs) synced per batch. Large VMs (50+ interfaces) may time out if synced all at once; batching prevents overwhelming NetBox with concurrent API calls. |
+| **Interface batch delay (ms)** | `100` | `PROXBOX_INTERFACE_BATCH_DELAY_MS` | Milliseconds to wait between interface batches to throttle NetBox load. |
 | **Custom fields request delay (s)** | `0.00` | `PROXBOX_CUSTOM_FIELDS_REQUEST_DELAY` | Optional sleep between custom-field API operations to throttle requests. |
 
 ---

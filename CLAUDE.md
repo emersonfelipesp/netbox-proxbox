@@ -50,8 +50,15 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
 
 ## Architecture Summary
 
-- `ProxmoxEndpoint`, `NetBoxEndpoint`, `FastAPIEndpoint`, `ProxmoxCluster`, `ProxmoxNode`, `ProxmoxStorage`, `BackupRoutine`, `Replication`, `VMBackup`, `VMSnapshot`, `VMTaskHistory`, and `ProxboxPluginSettings` are the plugin's core Proxmox reflection models.
+- `ProxmoxEndpoint`, `NetBoxEndpoint`, `FastAPIEndpoint`, `ProxmoxCluster`, `ProxmoxNode`, `ProxmoxStorage`, `ProxmoxStorageVirtualDisk`, `BackupRoutine`, `Replication`, `VMBackup`, `VMSnapshot`, `VMTaskHistory`, and `ProxboxPluginSettings` are the plugin's core Proxmox reflection models.
+- Companion endpoint models: `PBSEndpoint`, `PDMEndpoint`, `PDMRemote` for Proxmox Backup Server and Datacenter Manager inventory.
+- SSH and hardware discovery: `NodeSSHCredential` stores per-node SSH credentials for the optional hardware-discovery pass.
+- VM lifecycle models: `ProxmoxVMTemplate` (VM template inventory with optional FK to `VirtualMachine`), `ProxmoxVMCloudInit` (cloud-init config), `CloudImageTemplate` (Firecracker/image factory catalog), `ProxmoxApplyJob` (intent apply job), `DeletionRequest` (auditable delete-request workflow).
+- Datacenter config: `ProxmoxDatacenterCpuModel` (custom CPU models synced from PVE).
+- Firewall inventory (6 models, read-only): `ProxmoxFirewallSecurityGroup`, `ProxmoxFirewallRule`, `ProxmoxFirewallIPSet`, `ProxmoxFirewallIPSetEntry`, `ProxmoxFirewallAlias`, `ProxmoxFirewallOptions`.
+- SDN inventory (3 models, PVE 9.2+): `ProxmoxSdnFabric`, `ProxmoxSdnRouteMap`, `ProxmoxSdnPrefixList`.
 - Firecracker Cloud uses separate `FirecrackerHostPool`, `FirecrackerHost`, `FirecrackerImageTemplate`, and `FirecrackerMicroVM` models. A micro-VM is not a NetBox core `VirtualMachine`; API clients identify it with `kind="firecracker"` and `instance_ref="firecracker:<id>"`.
+- `ProxboxPluginSettings` includes sync mode fields `sync_mode_vm_interface` and `sync_mode_mac` (migration 0051) and interface-batch tunables `interface_batch_size` (default 5) and `interface_batch_delay_ms` (default 100).
 - **`NetBoxEndpoint` and `FastAPIEndpoint` are singletons** — the backend proxy and dashboard always use the first row of each, so only one should exist. Their bulk-import views enforce this by prompting for confirmation before replacing an existing record.
 - NetBox UI routes live in [`netbox_proxbox/urls.py`](./netbox_proxbox/urls.py) and are implemented primarily in `netbox_proxbox/views/`.
 - The plugin also exposes a NetBox plugin API under `netbox_proxbox/api/`, using serializers, filtersets, and standard `NetBoxModelViewSet` classes.
@@ -112,7 +119,7 @@ Do **not** invent shadow config layers (parallel JSON/YAML files, ad-hoc dotenv
 sections, module-level constants meant as overrides) to dodge the migration cost.
 A new field touches all five wiring points — model, migration, form, serializer, and
 template — and the existing fields plus migration
-[`0037_pluginsettings_runtime_tunables.py`](./netbox_proxbox/migrations/0037_pluginsettings_runtime_tunables.py)
+[`0037_v0_0_15_release.py`](./netbox_proxbox/migrations/0037_v0_0_15_release.py)
 show the pattern (`SeparateDatabaseAndState` + `IF NOT EXISTS` for production-safe
 additive schema changes).
 
