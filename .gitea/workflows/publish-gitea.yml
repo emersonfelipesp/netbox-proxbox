@@ -225,13 +225,21 @@ jobs:
       TAG: ${{ needs.validate-version.outputs.tag }}
     steps:
       - name: Deploy plugin
+        shell: bash
         run: |
           # Validate tag format defensively
           case "$TAG" in
             v[0-9]*.[0-9]*.[0-9]*) ;;
             *) echo "ERROR: Invalid tag format: $TAG"; exit 1 ;;
           esac
-          ssh -o StrictHostKeyChecking=accept-new \
-              -o ServerAliveInterval=30 \
-              -o ServerAliveCountMax=20 \
-              nmc-prod-207 -- deploy-plugin netbox-proxbox "$TAG"
+          # The deploy script's plugin whitelist uses the short name ("proxbox",
+          # not "netbox-proxbox"). Prefer the local script when the prod-deploy
+          # runner is on the prod host; fall back to ssh for a remote runner.
+          if [[ -x /opt/nmulticloud/deploy/bin/deploy-netbox-plugin ]]; then
+            /opt/nmulticloud/deploy/bin/deploy-netbox-plugin proxbox "$TAG"
+          else
+            ssh -o StrictHostKeyChecking=accept-new \
+                -o ServerAliveInterval=30 \
+                -o ServerAliveCountMax=20 \
+                nmc-prod-207 -- deploy-plugin proxbox "$TAG"
+          fi

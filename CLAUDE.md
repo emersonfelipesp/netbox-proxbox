@@ -396,8 +396,15 @@ What was done for v0.0.19:
 **Deploy job:**
 - Runs after `push-to-github` job completes (requires validated tag and GitHub Release created)
 - Condition: only for non-RC releases (`is_rc == false`)
-- Runs on `prod-deploy` runner with SSH access to production host
-- Executes: `ssh nmc-prod-207 -- deploy-plugin netbox-proxbox "$TAG"`
+- Runs on a `prod-deploy` runner (the repo's Gitea Actions runner must carry the
+  `prod-deploy:host` label in addition to `mirror-host:host`, or the deploy job
+  stays queued forever)
+- Executes the deploy with the **short** plugin name `proxbox` (the deploy
+  script's whitelist maps `proxbox` → module `netbox_proxbox` / package
+  `netbox-proxbox`; passing `netbox-proxbox` fails validation). It prefers the
+  local script when the runner is on the prod host, falling back to ssh for a
+  remote runner: `/opt/nmulticloud/deploy/bin/deploy-netbox-plugin proxbox "$TAG"`
+  else `ssh nmc-prod-207 -- deploy-plugin proxbox "$TAG"`
 
 **Security hardening:**
 - TAG is passed via environment variable, not direct GitHub Actions context interpolation
@@ -422,8 +429,8 @@ What was done for v0.0.19:
 
 **Manual deployment for hotfixes or rollbacks:**
 ```bash
-# Deploy a specific tag or branch
-ssh nmc-prod-207 -- deploy-plugin netbox-proxbox v0.0.19.post1
+# Deploy a specific tag or branch (short name "proxbox", not "netbox-proxbox")
+ssh nmc-prod-207 -- deploy-plugin proxbox v0.0.19.post1
 
 # List recent deploys (check system journal)
 ssh nmc-prod-207 -- journalctl -u netbox-production -n 50 --no-pager
