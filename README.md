@@ -93,6 +93,14 @@ docker compose exec netbox /opt/netbox/netbox/manage.py migrate
 Full companion-plugin details live under
 [docs/companion-plugins/](./docs/companion-plugins/).
 
+## What's New in v0.0.20.post2
+
+Paired with backend [`proxbox-api 0.0.17.post1`](https://github.com/emersonfelipesp/proxbox-api).
+
+- **Latest Sync Jobs on the homepage.** The plugin homepage now includes a read-only table with the five latest Proxbox sync jobs and a **View all sync jobs** button after the additional plugin endpoint cards.
+
+Full notes: [Release Notes - v0.0.20.post2](docs/release-notes/version-0.0.20.post2.md).
+
 ## What's New in v0.0.20.post1
 
 Paired with backend [`proxbox-api 0.0.17.post1`](https://github.com/emersonfelipesp/proxbox-api).
@@ -132,6 +140,7 @@ Full notes: [Release Notes — v0.0.18](https://emersonfelipesp.github.io/netbox
 
 | NetBox | netbox-proxbox | proxbox-api | netbox-sdk | proxmox-sdk |
 |--------|----------------|-------------|------------|-------------|
+| >=4.5.8 | v0.0.20.post2 | v0.0.17.post1 | v0.0.9.post1 | v0.0.11.post1 |
 | >=4.5.8 | v0.0.20.post1 | v0.0.17.post1 | v0.0.9.post1 | v0.0.11.post1 |
 | >=4.5.8 | v0.0.20 | v0.0.17 | v0.0.8.post1 | v0.0.11 |
 | >=4.5.8 | v0.0.19 | v0.0.16 | v0.0.8.post1 | v0.0.9 |
