@@ -20,7 +20,11 @@ from netbox_proxbox.schedule_hints import (
     has_recurring_proxbox_sync_all,
     quick_schedule_home_form_kwargs,
 )
-from netbox_proxbox.tables import FastAPIEndpointTable, NetBoxEndpointTable, ProxmoxEndpointTable
+from netbox_proxbox.tables import (
+    FastAPIEndpointTable,
+    NetBoxEndpointTable,
+    ProxmoxEndpointTable,
+)
 from netbox_proxbox.utils import get_fastapi_url
 from netbox_proxbox.views.proxbox_access import permission_enqueue_proxbox_sync
 

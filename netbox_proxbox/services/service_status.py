@@ -150,7 +150,11 @@ def _maybe_update_proxmox_endpoint_mode(
             return
 
         now = time.monotonic()
-        if now - _last_proxmox_mode_check.get(pk, 0.0) < _PROXMOX_MODE_CHECK_THROTTLE_SECONDS:
+        last_check = _last_proxmox_mode_check.get(pk)
+        if (
+            last_check is not None
+            and now - last_check < _PROXMOX_MODE_CHECK_THROTTLE_SECONDS
+        ):
             return
 
         from netbox_proxbox.schemas import ProxmoxClusterStatusResponse  # noqa: PLC0415
