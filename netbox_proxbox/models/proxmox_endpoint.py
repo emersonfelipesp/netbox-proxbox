@@ -167,6 +167,26 @@ class ProxmoxEndpoint(EndpointBase):
             "Per-endpoint override for Proxmox template VM synchronization. Leave blank to inherit."
         ),
     )
+    sync_mode_vm_interface = models.CharField(
+        max_length=16,
+        choices=SyncModeChoices,
+        null=True,
+        blank=True,
+        verbose_name=_("VM interface sync mode"),
+        help_text=_(
+            "Per-endpoint override for VM interface sync. Leave blank to inherit."
+        ),
+    )
+    sync_mode_mac = models.CharField(
+        max_length=16,
+        choices=SyncModeChoices,
+        null=True,
+        blank=True,
+        verbose_name=_("MAC address sync mode"),
+        help_text=_(
+            "Per-endpoint override for VM interface MAC sync. Leave blank to inherit."
+        ),
+    )
     sync_mode_cluster = models.CharField(
         max_length=16,
         choices=SyncModeChoices,

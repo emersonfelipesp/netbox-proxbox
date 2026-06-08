@@ -1,9 +1,9 @@
 """Tests for the IP-sync-mode gate on the virtual-machines stage.
 
-Regression coverage for GitHub issue #556:
-  When sync_mode_ip_address=disabled, the virtual-machines stage must send
-  sync_vm_network=false to proxbox-api so primary IPs are never assigned there,
-  even when no dedicated IP_ADDRESSES or VM_INTERFACES stage is present.
+When sync_mode_ip_address=disabled but VM interface sync remains active, the
+virtual-machines stage keeps inline interface creation enabled and forwards
+assign_vm_interface_ips=false to proxbox-api. Dedicated interface/IP stages still
+disable inline VM network work with sync_vm_network=false.
 """
 
 from __future__ import annotations
@@ -45,6 +45,7 @@ def sync_stages_module(monkeypatch):
     constants_mod.OVERWRITE_FIELDS = constants.OVERWRITE_FIELDS
     constants_mod.SYNC_MODE_FIELDS = constants.SYNC_MODE_FIELDS
     constants_mod.SYNC_MODE_RESOURCE_TYPES = constants.SYNC_MODE_RESOURCE_TYPES
+    constants_mod.SYNC_MODE_HIERARCHY = constants.SYNC_MODE_HIERARCHY
     monkeypatch.setitem(sys.modules, "netbox_proxbox.constants", constants_mod)
 
     choices_mod = types.ModuleType("netbox_proxbox.choices")
@@ -136,13 +137,22 @@ def sync_stages_module(monkeypatch):
 # ── _build_stage_query_params helper ──────────────────────────────────────────
 
 
-def _build(module, sync_type: str, *, disable_vm_network: bool) -> dict:
+def _build(
+    module,
+    sync_type: str,
+    *,
+    disable_vm_network: bool,
+    ip_disabled: bool = False,
+    mac_disabled: bool = False,
+) -> dict:
     """Call _build_stage_query_params with a minimal base_query."""
     return module._build_stage_query_params(
         base_query={},
         sync_type=sync_type,
         target_vm_ids=[],
         disable_vm_network_on_vm_stage=disable_vm_network,
+        ip_disabled=ip_disabled,
+        mac_disabled=mac_disabled,
     )
 
 
@@ -176,8 +186,9 @@ class TestBuildStageQueryParamsVMNetwork:
 class TestIPSyncModeGate:
     """Verify the fix for GitHub #556.
 
-    When sync_mode_ip_address=disabled, disable_vm_network_on_vm_stage must be
-    True so the VM stage sends sync_vm_network=false to proxbox-api.
+    When sync_mode_ip_address=disabled, VM-only sync forwards a narrower
+    assign_vm_interface_ips=false flag. Full syncs with dedicated interface/IP
+    stages still send sync_vm_network=false on the VM stage.
     """
 
     def _compute_flag(self, module, stages: list[str]) -> bool:
@@ -187,15 +198,15 @@ class TestIPSyncModeGate:
         return STC.VIRTUAL_MACHINES in stages and (
             STC.VM_INTERFACES in stages
             or STC.IP_ADDRESSES in stages
-            or module._sync_mode_for_resource("ip_address") == SMC.DISABLED
+            or module._sync_mode_for_resource("vm_interface") == SMC.DISABLED
         )
 
-    def test_flag_true_when_ip_mode_disabled_vm_only_stages(self, sync_stages_module):
-        """VM-only sync: flag must be True when ip_address mode is disabled."""
+    def test_flag_false_when_ip_mode_disabled_vm_only_stages(self, sync_stages_module):
+        """VM-only sync: IP mode alone no longer disables all VM network sync."""
         m = sync_stages_module
         m.sync_mode_ip_address = "disabled"
         stages = [m.SyncTypeChoices.VIRTUAL_MACHINES]
-        assert self._compute_flag(m, stages) is True
+        assert self._compute_flag(m, stages) is False
 
     def test_flag_false_when_ip_mode_always_vm_only_stages(self, sync_stages_module):
         """VM-only sync: flag is False when ip_address mode is always (original behaviour)."""
@@ -229,17 +240,23 @@ class TestIPSyncModeGate:
         stages = [m.SyncTypeChoices.IP_ADDRESSES]
         assert self._compute_flag(m, stages) is False
 
-    def test_sync_vm_network_false_sent_when_ip_disabled_vm_only(
+    def test_assign_vm_interface_ips_false_sent_when_ip_disabled_vm_only(
         self, sync_stages_module
     ):
-        """End-to-end: verify the query param value when ip_mode=disabled, VM-only."""
+        """End-to-end: verify the narrower query param when ip_mode=disabled, VM-only."""
         m = sync_stages_module
         m.sync_mode_ip_address = "disabled"
         stages = [m.SyncTypeChoices.VIRTUAL_MACHINES]
         flag = self._compute_flag(m, stages)
-        params = _build(m, m.SyncTypeChoices.VIRTUAL_MACHINES, disable_vm_network=flag)
-        assert params.get("sync_vm_network") == "false", (
-            "sync_vm_network must be 'false' when ip_address mode is disabled"
+        params = _build(
+            m,
+            m.SyncTypeChoices.VIRTUAL_MACHINES,
+            disable_vm_network=flag,
+            ip_disabled=m._sync_mode_for_resource("ip_address") == "disabled",
+        )
+        assert "sync_vm_network" not in params
+        assert params.get("assign_vm_interface_ips") == "false", (
+            "assign_vm_interface_ips must be 'false' when only IP sync is disabled"
         )
 
     def test_sync_vm_network_not_sent_when_ip_always_vm_only(self, sync_stages_module):

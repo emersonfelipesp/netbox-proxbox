@@ -222,6 +222,8 @@ class TestSyncModeFieldsOnModels:
     SYNC_MODE_FIELDS = [
         "sync_mode_vm",
         "sync_mode_vm_template",
+        "sync_mode_vm_interface",
+        "sync_mode_mac",
         "sync_mode_cluster",
         "sync_mode_node",
         "sync_mode_storage",

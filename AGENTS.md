@@ -59,7 +59,19 @@ Three modes per type (global and per-endpoint — endpoint takes priority):
 - **`bootstrap_only`** — create once, tag with `bootstrap-only`, never patch/delete again
 - **`disabled`** — skip entirely, leave existing objects untouched
 
-Six resource types: `sync_mode_vm`, `sync_mode_vm_template`, `sync_mode_cluster`, `sync_mode_node`, `sync_mode_storage`, `sync_mode_ip_address`.
+Eight resource types: `sync_mode_vm`, `sync_mode_vm_template`, `sync_mode_vm_interface`, `sync_mode_mac`, `sync_mode_cluster`, `sync_mode_node`, `sync_mode_storage`, `sync_mode_ip_address`.
+
+Effective sync modes resolve through a parent-to-child cascade before stage gating and backend query forwarding. A resource is effectively `disabled` when its own mode is `disabled` or any ancestor is effectively `disabled`; child modes never affect parent modes. The hierarchy is:
+
+```
+cluster
+└── node
+
+vm + vm_template (both disabled only)
+└── vm_interface
+    ├── ip_address
+    └── mac
+```
 
 **VM templates** are stored in `ProxmoxVMTemplate` (not `VirtualMachine`). The model has optional FKs to `VirtualMachine` (`source_vm` and M2M `cloned_vms`), `ProxmoxCluster`, and `ProxmoxNode`.
 

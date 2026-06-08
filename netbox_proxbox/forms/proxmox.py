@@ -250,6 +250,8 @@ class ProxmoxEndpointSettingsForm(NetBoxModelForm):
         sync_mode_labels = {
             "sync_mode_vm": "VM sync mode",
             "sync_mode_vm_template": "VM template sync mode",
+            "sync_mode_vm_interface": "VM interface sync mode",
+            "sync_mode_mac": "MAC address sync mode",
             "sync_mode_cluster": "Cluster sync mode",
             "sync_mode_node": "Node sync mode",
             "sync_mode_storage": "Storage sync mode",

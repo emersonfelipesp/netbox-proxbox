@@ -11,12 +11,19 @@ SYNC_MODE_FIELD_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
         ),
     ),
     (
+        "VM Interface",
+        (
+            "sync_mode_vm_interface",
+            "sync_mode_mac",
+            "sync_mode_ip_address",
+        ),
+    ),
+    (
         "Infrastructure",
         (
             "sync_mode_cluster",
             "sync_mode_node",
             "sync_mode_storage",
-            "sync_mode_ip_address",
         ),
     ),
 )
@@ -28,6 +35,13 @@ SYNC_MODE_FIELDS: tuple[str, ...] = tuple(
 SYNC_MODE_RESOURCE_TYPES: tuple[str, ...] = tuple(
     field.removeprefix("sync_mode_") for field in SYNC_MODE_FIELDS
 )
+
+SYNC_MODE_HIERARCHY: dict[str, str] = {
+    "node": "cluster",
+    "vm_interface": "vm",
+    "ip_address": "vm_interface",
+    "mac": "vm_interface",
+}
 
 OVERWRITE_FIELD_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
     (

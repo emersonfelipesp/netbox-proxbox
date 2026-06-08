@@ -78,6 +78,7 @@ def sync_stages_module(monkeypatch):
     constants_mod.OVERWRITE_FIELDS = constants.OVERWRITE_FIELDS
     constants_mod.SYNC_MODE_FIELDS = constants.SYNC_MODE_FIELDS
     constants_mod.SYNC_MODE_RESOURCE_TYPES = constants.SYNC_MODE_RESOURCE_TYPES
+    constants_mod.SYNC_MODE_HIERARCHY = constants.SYNC_MODE_HIERARCHY
     monkeypatch.setitem(sys.modules, "netbox_proxbox.constants", constants_mod)
 
     # --- choices ---
@@ -200,16 +201,27 @@ class TestSyncModeChoicesAST:
 
 
 class TestSyncModeConstants:
-    def test_all_six_resource_types_present(self):
+    def test_all_sync_mode_resource_types_present(self):
         constants = _load_constants()
-        expected = {"vm", "vm_template", "cluster", "node", "storage", "ip_address"}
+        expected = {
+            "vm",
+            "vm_template",
+            "vm_interface",
+            "mac",
+            "cluster",
+            "node",
+            "storage",
+            "ip_address",
+        }
         assert expected <= set(constants.SYNC_MODE_RESOURCE_TYPES)
 
-    def test_six_sync_mode_fields(self):
+    def test_sync_mode_fields(self):
         constants = _load_constants()
         expected = {
             "sync_mode_vm",
             "sync_mode_vm_template",
+            "sync_mode_vm_interface",
+            "sync_mode_mac",
             "sync_mode_cluster",
             "sync_mode_node",
             "sync_mode_storage",
@@ -227,6 +239,12 @@ class TestSyncStagesDefaults:
 
     def test_sync_mode_vm_template_default_is_always(self, sync_stages_module):
         assert sync_stages_module.sync_mode_vm_template == "always"
+
+    def test_sync_mode_vm_interface_default_is_always(self, sync_stages_module):
+        assert sync_stages_module.sync_mode_vm_interface == "always"
+
+    def test_sync_mode_mac_default_is_always(self, sync_stages_module):
+        assert sync_stages_module.sync_mode_mac == "always"
 
     def test_sync_mode_cluster_default_is_always(self, sync_stages_module):
         assert sync_stages_module.sync_mode_cluster == "always"

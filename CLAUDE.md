@@ -125,9 +125,21 @@ reflected into NetBox. Three modes are available:
 - **`bootstrap_only`** — sync the object once on first discovery, tag it with `bootstrap-only` in NetBox, and leave it completely untouched on all subsequent runs.
 - **`disabled`** — skip this resource type entirely; existing objects are not modified or removed.
 
-Controlled resource types: `sync_mode_vm`, `sync_mode_vm_template`, `sync_mode_cluster`, `sync_mode_node`, `sync_mode_storage`, `sync_mode_ip_address`.
+Controlled resource types: `sync_mode_vm`, `sync_mode_vm_template`, `sync_mode_vm_interface`, `sync_mode_mac`, `sync_mode_cluster`, `sync_mode_node`, `sync_mode_storage`, `sync_mode_ip_address`.
 
 Resolution priority: **endpoint-level setting takes priority over the global default**. An endpoint field set to null inherits the global `ProxboxPluginSettings` value.
+
+Effective sync modes resolve through a parent-to-child cascade before stage gating and backend query forwarding. A resource is effectively `disabled` when its own mode is `disabled` or any ancestor is effectively `disabled`; child modes never affect parent modes. The hierarchy is:
+
+```
+cluster
+└── node
+
+vm + vm_template (both disabled only)
+└── vm_interface
+    ├── ip_address
+    └── mac
+```
 
 ### VM Templates
 

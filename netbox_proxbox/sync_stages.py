@@ -25,11 +25,22 @@ except ImportError:  # pragma: no cover - compatibility for focused import stubs
     SYNC_MODE_FIELDS = (
         "sync_mode_vm",
         "sync_mode_vm_template",
+        "sync_mode_vm_interface",
+        "sync_mode_mac",
         "sync_mode_cluster",
         "sync_mode_node",
         "sync_mode_storage",
         "sync_mode_ip_address",
     )
+try:
+    from netbox_proxbox.constants import SYNC_MODE_HIERARCHY
+except ImportError:  # pragma: no cover - compatibility for focused import stubs
+    SYNC_MODE_HIERARCHY = {
+        "node": "cluster",
+        "vm_interface": "vm",
+        "ip_address": "vm_interface",
+        "mac": "vm_interface",
+    }
 from netbox_proxbox.sync_types import (
     _format_seconds,
     _extract_backend_error_text,
@@ -72,6 +83,8 @@ except ImportError:  # pragma: no cover - compatibility for focused import stubs
 
 sync_mode_vm = SyncModeChoices.ALWAYS
 sync_mode_vm_template = SyncModeChoices.ALWAYS
+sync_mode_vm_interface = SyncModeChoices.ALWAYS
+sync_mode_mac = SyncModeChoices.ALWAYS
 sync_mode_cluster = SyncModeChoices.ALWAYS
 sync_mode_node = SyncModeChoices.ALWAYS
 sync_mode_storage = SyncModeChoices.ALWAYS
@@ -98,10 +111,64 @@ def _set_sync_mode_vars(modes: dict[str, str]) -> None:
 
 
 def _active_sync_modes() -> dict[str, str]:
-    """Return the currently resolved module-level sync modes."""
-    return {
+    """Return the current module-level sync modes after parent-child cascade."""
+    raw_modes = {
         field_name: str(
             globals().get(field_name) or getattr(SyncModeChoices, "ALWAYS", "always")
+        )
+        for field_name in SYNC_MODE_FIELDS
+    }
+    return _effective_sync_modes(raw_modes)
+
+
+def _resource_mode(raw_modes: dict[str, str], resource_type: str) -> str:
+    """Return a normalized raw mode value for a resource type."""
+    field_name = f"sync_mode_{resource_type}"
+    return str(
+        raw_modes.get(field_name) or getattr(SyncModeChoices, "ALWAYS", "always")
+    )
+
+
+def _vm_parent_disabled(raw_modes: dict[str, str]) -> bool:
+    """Return whether VM descendants should be disabled by the VM parent."""
+    disabled = SyncModeChoices.DISABLED
+    return (
+        _resource_mode(raw_modes, "vm") == disabled
+        and _resource_mode(raw_modes, "vm_template") == disabled
+    )
+
+
+def _effective_resource_mode(
+    raw_modes: dict[str, str],
+    resource_type: str,
+    seen: set[str] | None = None,
+) -> str:
+    """Resolve a resource mode, forcing disabled when any ancestor is disabled."""
+    disabled = SyncModeChoices.DISABLED
+    raw_mode = _resource_mode(raw_modes, resource_type)
+    if raw_mode == disabled:
+        return disabled
+
+    seen = set(seen or ())
+    if resource_type in seen:
+        return raw_mode
+    seen.add(resource_type)
+
+    parent = SYNC_MODE_HIERARCHY.get(resource_type)
+    if not parent:
+        return raw_mode
+    if parent == "vm":
+        return disabled if _vm_parent_disabled(raw_modes) else raw_mode
+    if _effective_resource_mode(raw_modes, parent, seen) == disabled:
+        return disabled
+    return raw_mode
+
+
+def _effective_sync_modes(raw_modes: dict[str, str]) -> dict[str, str]:
+    """Return raw sync modes with declarative parent-child disabled cascade applied."""
+    return {
+        field_name: _effective_resource_mode(
+            raw_modes, field_name.removeprefix("sync_mode_")
         )
         for field_name in SYNC_MODE_FIELDS
     }
@@ -169,6 +236,7 @@ def _stage_skip_reason(sync_type: str) -> str | None:
         SyncTypeChoices.DEVICES: "node",
         SyncTypeChoices.NETWORK_INTERFACES: "node",
         SyncTypeChoices.STORAGE: "storage",
+        SyncTypeChoices.VM_INTERFACES: "vm_interface",
         SyncTypeChoices.IP_ADDRESSES: "ip_address",
     }
     resource_type = stage_resource_map.get(sync_type)
@@ -182,7 +250,6 @@ def _stage_skip_reason(sync_type: str) -> str | None:
         SyncTypeChoices.VIRTUAL_MACHINES_DISKS,
         SyncTypeChoices.VIRTUAL_MACHINES_BACKUPS,
         SyncTypeChoices.VIRTUAL_MACHINES_SNAPSHOTS,
-        SyncTypeChoices.VM_INTERFACES,
     } and (vm_disabled and template_disabled):
         return "VM and VM template sync modes are disabled"
     return None
@@ -359,7 +426,7 @@ def _build_base_query_params(
 
     sync_modes = effective_sync_modes_for_endpoint(single_endpoint_id)
     _set_sync_mode_vars(sync_modes)
-    for name, value in sync_modes.items():
+    for name, value in _active_sync_modes().items():
         base_query[name] = value
 
     wire_ids = (
@@ -379,6 +446,9 @@ def _build_stage_query_params(
     sync_type: str,
     target_vm_ids: list[str],
     disable_vm_network_on_vm_stage: bool = False,
+    iface_disabled: bool = False,
+    ip_disabled: bool = False,
+    mac_disabled: bool = False,
     run_id: str | None = None,
 ) -> dict[str, str]:
     """Build query parameters for a specific sync stage."""
@@ -387,9 +457,17 @@ def _build_stage_query_params(
         query_params["delete_nonexistent_backup"] = "true"
     if sync_type == SyncTypeChoices.VIRTUAL_MACHINES_SNAPSHOTS:
         query_params["delete_nonexistent_snapshot"] = "true"
-    if sync_type == SyncTypeChoices.VIRTUAL_MACHINES and disable_vm_network_on_vm_stage:
-        # Full sync runs dedicated VM interface/IP stages; skip network work in VM stage.
-        query_params["sync_vm_network"] = "false"
+    if sync_type == SyncTypeChoices.VIRTUAL_MACHINES:
+        if disable_vm_network_on_vm_stage:
+            # Dedicated stages or disabled interfaces own network sync behavior.
+            query_params["sync_vm_network"] = "false"
+        else:
+            if ip_disabled:
+                query_params["assign_vm_interface_ips"] = "false"
+            if mac_disabled:
+                query_params["sync_vm_interface_macs"] = "false"
+    if sync_type == SyncTypeChoices.VM_INTERFACES and mac_disabled:
+        query_params["sync_vm_interface_macs"] = "false"
     if sync_type == SyncTypeChoices.VIRTUAL_MACHINES and run_id:
         query_params["run_id"] = run_id
     if target_vm_ids:
@@ -595,12 +673,6 @@ def _run_all_stages_sync(
     fastapi_endpoint_id = params.get("fastapi_endpoint_id")
     netbox_branch_schema_id = params.get("netbox_branch_schema_id")
     sync_run_id = str(params.get("run_id") or "").strip() or None
-    disable_vm_network_on_vm_stage = SyncTypeChoices.VIRTUAL_MACHINES in stages and (
-        SyncTypeChoices.VM_INTERFACES in stages
-        or SyncTypeChoices.IP_ADDRESSES in stages
-        or _sync_mode_for_resource("ip_address") == SyncModeChoices.DISABLED
-    )
-
     for endpoint_scope in endpoint_scopes:
         endpoint_id = endpoint_scope[0] if endpoint_scope else None
         wire_scope: list[str] | None = None
@@ -646,6 +718,20 @@ def _run_all_stages_sync(
         if netbox_branch_schema_id:
             base_query["netbox_branch_schema_id"] = str(netbox_branch_schema_id)
 
+        iface_disabled = (
+            _sync_mode_for_resource("vm_interface") == SyncModeChoices.DISABLED
+        )
+        ip_disabled = _sync_mode_for_resource("ip_address") == SyncModeChoices.DISABLED
+        mac_disabled = _sync_mode_for_resource("mac") == SyncModeChoices.DISABLED
+        dedicated_network_stage_present = (
+            SyncTypeChoices.VM_INTERFACES in stages
+            or SyncTypeChoices.IP_ADDRESSES in stages
+        )
+        disable_vm_network_on_vm_stage = (
+            SyncTypeChoices.VIRTUAL_MACHINES in stages
+            and (dedicated_network_stage_present or iface_disabled)
+        )
+
         for st in stages:
             skip_reason = _stage_skip_reason(st)
             if skip_reason:
@@ -674,6 +760,9 @@ def _run_all_stages_sync(
                 st,
                 target_vm_ids,
                 disable_vm_network_on_vm_stage=disable_vm_network_on_vm_stage,
+                iface_disabled=iface_disabled,
+                ip_disabled=ip_disabled,
+                mac_disabled=mac_disabled,
                 run_id=sync_run_id,
             )
             stage_paths = _sync_stream_paths_for_stage(st, target_vm_ids)

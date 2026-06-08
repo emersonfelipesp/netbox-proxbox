@@ -114,6 +114,22 @@ class ProxboxPluginSettings(NetBoxModel):
             "Controls Proxmox template VM synchronization separately from normal VMs."
         ),
     )
+    sync_mode_vm_interface = models.CharField(
+        max_length=16,
+        choices=SyncModeChoices,
+        default=SyncModeChoices.ALWAYS,
+        verbose_name=_("VM interface sync mode"),
+        help_text=_(
+            "Controls synchronization of VM interfaces discovered from Proxmox."
+        ),
+    )
+    sync_mode_mac = models.CharField(
+        max_length=16,
+        choices=SyncModeChoices,
+        default=SyncModeChoices.ALWAYS,
+        verbose_name=_("MAC address sync mode"),
+        help_text=_("Controls MAC address reconciliation for VM interfaces."),
+    )
     sync_mode_cluster = models.CharField(
         max_length=16,
         choices=SyncModeChoices,

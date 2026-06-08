@@ -32,12 +32,14 @@ the object alone.
 
 ## Resource Types
 
-Six independent resource types can be controlled:
+Eight resource types can be controlled:
 
 | Setting field | Resource |
 |---------------|----------|
 | `sync_mode_vm` | Proxmox QEMU/LXC virtual machines (non-template) |
 | `sync_mode_vm_template` | Proxmox VM templates (stored in `ProxmoxVMTemplate`, not `VirtualMachine`) |
+| `sync_mode_vm_interface` | Interfaces discovered on Proxmox VMs |
+| `sync_mode_mac` | MAC address reconciliation for VM interfaces |
 | `sync_mode_cluster` | Proxmox cluster tracking rows |
 | `sync_mode_node` | Proxmox node rows (DCIM devices) |
 | `sync_mode_storage` | Proxmox storage pools |
@@ -62,6 +64,31 @@ snapshot plus optional relationships back to NetBox VMs:
 The `sync_mode_vm_template` setting controls whether templates are synced at
 all, while `sync_mode_vm` independently controls regular (non-template) VMs.
 Setting `sync_mode_vm` to `disabled` does not disable template sync.
+
+---
+
+## Parent-to-child cascade
+
+Sync modes are resolved to an **effective** mode before Proxbox decides which
+stage to run or which backend query flags to forward. A resource becomes
+effectively `disabled` when its own mode is `disabled` or any ancestor is
+effectively `disabled`. Child resources never disable their parents.
+
+```
+cluster
+└── node
+
+vm + vm_template (both disabled only)
+└── vm_interface
+    ├── ip_address
+    └── mac
+```
+
+The VM parent is a special case for network descendants: `vm_interface`,
+`ip_address`, and `mac` inherit disabled only when both `sync_mode_vm` and
+`sync_mode_vm_template` are `disabled`. Disabling only IP sync still allows VM
+interfaces and MAC reconciliation to run; disabling only MAC sync still allows
+interfaces and IP assignment to run.
 
 ---
 
@@ -92,7 +119,7 @@ to every endpoint that does not override the setting.
 ### Per-endpoint settings
 
 Navigate to an existing **ProxmoxEndpoint** and open its **Settings** tab.
-The same six sync-mode dropdowns appear, but these fields are optional. Leave
+The same eight sync-mode dropdowns appear, but these fields are optional. Leave
 them blank to inherit the global setting; choose a value to override it.
 
 ---
@@ -103,6 +130,8 @@ them blank to inherit the global setting; choose a value to override it.
 |----------|--------|------------|------------|-----------------|-----------------|
 | VM | `always` | _(blank)_ | `disabled` | `always` | `disabled` |
 | VM template | `bootstrap_only` | `always` | _(blank)_ | `always` | `bootstrap_only` |
+| VM interface | `always` | _(blank)_ | _(blank)_ | `always` | `always` |
+| MAC | `always` | _(blank)_ | `disabled` | `always` | `disabled` |
 | Cluster | `always` | _(blank)_ | _(blank)_ | `always` | `always` |
 | Node | `disabled` | `always` | _(blank)_ | `always` | `disabled` |
 | Storage | `always` | _(blank)_ | _(blank)_ | `always` | `always` |
@@ -123,8 +152,8 @@ ep.effective_sync_mode("vm_template") # → "bootstrap_only"
 ep.effective_sync_mode("cluster")     # → "disabled"
 ```
 
-Valid `resource_type` values: `vm`, `vm_template`, `cluster`, `node`,
-`storage`, `ip_address`.
+Valid `resource_type` values: `vm`, `vm_template`, `vm_interface`, `mac`,
+`cluster`, `node`, `storage`, `ip_address`.
 
 ---
 

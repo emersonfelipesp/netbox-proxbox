@@ -593,6 +593,8 @@ class ProxboxPluginSettingsForm(forms.Form):
         sync_mode_labels = {
             "sync_mode_vm": "VM sync mode",
             "sync_mode_vm_template": "VM template sync mode",
+            "sync_mode_vm_interface": "VM interface sync mode",
+            "sync_mode_mac": "MAC address sync mode",
             "sync_mode_cluster": "Cluster sync mode",
             "sync_mode_node": "Node sync mode",
             "sync_mode_storage": "Storage sync mode",
@@ -601,6 +603,8 @@ class ProxboxPluginSettingsForm(forms.Form):
         sync_mode_help = {
             "sync_mode_vm": "Controls non-template VM sync.",
             "sync_mode_vm_template": "Controls Proxmox template VM sync.",
+            "sync_mode_vm_interface": "Controls VM interface sync.",
+            "sync_mode_mac": "Controls VM interface MAC address reconciliation.",
             "sync_mode_cluster": "Controls Proxmox cluster tracking sync.",
             "sync_mode_node": "Controls Proxmox node tracking sync.",
             "sync_mode_storage": "Controls Proxmox storage sync.",
