@@ -119,6 +119,23 @@ def test_home_template_renders_companion_plugin_endpoint_groups():
     assert "endpoint_group.plugin_package" in partial
 
 
+def test_home_template_renders_latest_sync_jobs_table_and_view_all_button():
+    contents = _read("netbox_proxbox/templates/netbox_proxbox/home.html")
+
+    # Section heading and the iterated context list.
+    assert "Latest Sync Jobs" in contents
+    assert "latest_sync_jobs" in contents
+    assert "{% for job in latest_sync_jobs %}" in contents
+    # Per-job columns link to the job and show its status badge.
+    assert "job.get_absolute_url" in contents
+    assert "job.get_status_color" in contents
+    # View-all button targets the Proxbox-filtered core job list.
+    assert "sync_jobs_list_url" in contents
+    assert "View all sync jobs" in contents
+    # Empty state for fresh installs with no sync history.
+    assert "No sync jobs have run yet." in contents
+
+
 def test_home_quick_schedule_banner_posts_to_quick_schedule_url():
     contents = _read(
         "netbox_proxbox/templates/netbox_proxbox/home/quick_schedule_banner.html"

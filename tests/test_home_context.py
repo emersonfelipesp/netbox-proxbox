@@ -142,6 +142,67 @@ def test_home_context_exposes_latest_active_proxbox_job(monkeypatch):
     assert context["active_proxbox_job"] is proxbox_job
 
 
+def test_home_context_exposes_latest_five_proxbox_sync_jobs(monkeypatch):
+    module = load_plugin_module(
+        "netbox_proxbox.views.home_context", monkeypatch=monkeypatch
+    )
+
+    proxbox_jobs = [
+        SimpleNamespace(pk=i, created=i, status="completed", name="Proxbox Sync")
+        for i in range(1, 8)
+    ]
+    non_proxbox = [
+        SimpleNamespace(pk=100, created=99, status="completed", name="Other job"),
+        SimpleNamespace(pk=101, created=98, status="completed", name="Housekeeping"),
+    ]
+
+    monkeypatch.setattr(
+        module.Job,
+        "objects",
+        _JobQuerySet(non_proxbox + proxbox_jobs),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        module,
+        "is_proxbox_sync_job",
+        lambda job: str(getattr(job, "name", "")).startswith("Proxbox Sync"),
+    )
+
+    context = module.build_home_dashboard_context(
+        SimpleNamespace(user=SimpleNamespace(has_perm=lambda *a, **k: True))
+    )
+
+    latest = context["latest_sync_jobs"]
+    # Capped at 5, newest-first, only Proxbox sync jobs.
+    assert [job.pk for job in latest] == [7, 6, 5, 4, 3]
+    assert all(job.name.startswith("Proxbox Sync") for job in latest)
+    # View-all link targets the core job list filtered to Proxbox sync jobs.
+    assert "q=Proxbox" in context["sync_jobs_list_url"]
+
+
+def test_latest_proxbox_sync_jobs_helper_handles_fewer_than_limit(monkeypatch):
+    module = load_plugin_module(
+        "netbox_proxbox.views.home_context", monkeypatch=monkeypatch
+    )
+
+    jobs = [
+        SimpleNamespace(pk=1, created=1, status="errored", name="Proxbox Sync"),
+        SimpleNamespace(pk=2, created=2, status="completed", name="Other"),
+    ]
+    monkeypatch.setattr(module.Job, "objects", _JobQuerySet(jobs), raising=False)
+    monkeypatch.setattr(
+        module,
+        "is_proxbox_sync_job",
+        lambda job: str(getattr(job, "name", "")).startswith("Proxbox Sync"),
+    )
+
+    latest = module._get_latest_proxbox_sync_jobs(
+        SimpleNamespace(user=SimpleNamespace()), limit=5
+    )
+
+    assert [job.pk for job in latest] == [1]
+
+
 def test_companion_endpoint_groups_render_required_plugin_endpoint_models(monkeypatch):
     module = load_plugin_module(
         "netbox_proxbox.views.home_context", monkeypatch=monkeypatch

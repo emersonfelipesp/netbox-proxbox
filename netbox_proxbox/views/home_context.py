@@ -83,6 +83,31 @@ def _get_latest_active_proxbox_job(request: HttpRequest) -> Job | None:
     return None
 
 
+# Every Proxbox sync job name contains this literal ("Proxbox Sync" or
+# "Proxbox Sync: Virtual machine <id>"), so the core job list filtered by the
+# ``q`` search (which matches ``name__icontains``) shows all Proxbox sync jobs.
+_PROXBOX_SYNC_JOB_NAME_QUERY = "Proxbox Sync"
+
+
+def _get_latest_proxbox_sync_jobs(request: HttpRequest, limit: int = 5) -> list[Job]:
+    """Return up to ``limit`` newest visible Proxbox sync jobs (newest first)."""
+    jobs = Job.objects.restrict(request.user, "view").order_by("-created")
+    latest: list[Job] = []
+    for job in jobs.iterator():
+        if is_proxbox_sync_job(job):
+            latest.append(job)
+            if len(latest) >= limit:
+                break
+    return latest
+
+
+def _proxbox_sync_jobs_list_url() -> str:
+    """Return the core job list URL filtered to Proxbox sync jobs."""
+    return (
+        f"{reverse('core:job_list')}?{urlencode({'q': _PROXBOX_SYNC_JOB_NAME_QUERY})}"
+    )
+
+
 def _model_field_names(model: type[object]) -> set[str]:
     try:
         return {field.name for field in model._meta.get_fields()}
@@ -411,4 +436,6 @@ def build_home_dashboard_context(
         "quick_schedule_form": quick_schedule_form,
         "active_proxbox_job": active_proxbox_job,
         "companion_endpoint_groups": build_companion_endpoint_groups(request),
+        "latest_sync_jobs": _get_latest_proxbox_sync_jobs(request),
+        "sync_jobs_list_url": _proxbox_sync_jobs_list_url(),
     }
