@@ -16,6 +16,15 @@ def _service_status_module():
     return importlib.import_module("netbox_proxbox.services.service_status")
 
 
+def _reset_proxmox_mode_check(monkeypatch, ss):
+    monkeypatch.setattr(ss, "_last_proxmox_mode_check", {})
+    monkeypatch.setattr(
+        ss,
+        "time",
+        SimpleNamespace(monotonic=lambda: 1.0, sleep=lambda seconds: None),
+    )
+
+
 def _install_pbs_server_stub(monkeypatch, pbs_server):
     netbox_pbs_module = types.ModuleType("netbox_pbs")
     models_module = types.ModuleType("netbox_pbs.models")
@@ -454,13 +463,12 @@ def test_proxmox_status_uses_domain_query_when_available(
         proxmox_endpoint=proxmox_endpoint,
     )
     ss = _service_status_module()
-    monkeypatch.setattr(ss.time, "sleep", lambda seconds: None)
+    _reset_proxmox_mode_check(monkeypatch, ss)
     monkeypatch.setattr(
         ss,
         "sync_proxmox_endpoint_to_backend",
         lambda *args, **kwargs: (True, None, None),
     )
-    monkeypatch.setattr(ss, "_last_proxmox_mode_check", {})
     requested = []
 
     def fake_get(url, verify=True, timeout=None, params=None, headers=None):
@@ -514,12 +522,12 @@ def test_proxmox_status_uses_ip_query_when_domain_missing(
         proxmox_endpoint=proxmox_endpoint,
     )
     ss = _service_status_module()
+    _reset_proxmox_mode_check(monkeypatch, ss)
     monkeypatch.setattr(
         ss,
         "sync_proxmox_endpoint_to_backend",
         lambda *args, **kwargs: (True, None, None),
     )
-    monkeypatch.setattr(ss, "_last_proxmox_mode_check", {})
     requested = []
 
     def fake_get(url, verify=True, timeout=None, params=None, headers=None):
@@ -566,7 +574,7 @@ def test_proxmox_status_normalizes_backend_connection_refused(
         proxmox_endpoint=proxmox_endpoint,
     )
     ss = _service_status_module()
-    monkeypatch.setattr(ss.time, "sleep", lambda seconds: None)
+    _reset_proxmox_mode_check(monkeypatch, ss)
     monkeypatch.setattr(
         ss,
         "sync_proxmox_endpoint_to_backend",
@@ -617,6 +625,7 @@ def test_proxmox_status_returns_sync_error_before_backend_version_call(
         proxmox_endpoint=proxmox_endpoint,
     )
     ss = _service_status_module()
+    _reset_proxmox_mode_check(monkeypatch, ss)
 
     monkeypatch.setattr(
         ss,
@@ -805,13 +814,12 @@ def test_proxmox_mode_detected_on_successful_keepalive(
         proxmox_endpoint=proxmox_endpoint,
     )
     ss = _service_status_module()
-    monkeypatch.setattr(ss.time, "sleep", lambda seconds: None)
+    _reset_proxmox_mode_check(monkeypatch, ss)
     monkeypatch.setattr(
         ss,
         "sync_proxmox_endpoint_to_backend",
         lambda *args, **kwargs: (True, None, None),
     )
-    monkeypatch.setattr(ss, "_last_proxmox_mode_check", {})
 
     def fake_get(url, verify=True, timeout=None, params=None, headers=None):
         if url.endswith("/proxmox/cluster/status"):
