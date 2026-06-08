@@ -190,9 +190,7 @@ class TestSyncModeCascadeResolver:
 
 
 class TestStageSkipReasonCascade:
-    def test_vm_interfaces_skipped_when_vm_interface_disabled(
-        self, sync_stages_module
-    ):
+    def test_vm_interfaces_skipped_when_vm_interface_disabled(self, sync_stages_module):
         m = sync_stages_module
         _set_modes(m, vm_interface="disabled")
         assert m._stage_skip_reason(m.SyncTypeChoices.VM_INTERFACES)
@@ -209,16 +207,12 @@ class TestStageSkipReasonCascade:
         _set_modes(m, ip_address="disabled")
         assert m._stage_skip_reason(m.SyncTypeChoices.IP_ADDRESSES)
 
-    def test_ip_addresses_skipped_when_vm_interface_disabled(
-        self, sync_stages_module
-    ):
+    def test_ip_addresses_skipped_when_vm_interface_disabled(self, sync_stages_module):
         m = sync_stages_module
         _set_modes(m, vm_interface="disabled")
         assert m._stage_skip_reason(m.SyncTypeChoices.IP_ADDRESSES)
 
-    def test_vm_interfaces_not_skipped_when_only_ip_disabled(
-        self, sync_stages_module
-    ):
+    def test_vm_interfaces_not_skipped_when_only_ip_disabled(self, sync_stages_module):
         m = sync_stages_module
         _set_modes(m, ip_address="disabled")
         assert m._stage_skip_reason(m.SyncTypeChoices.VM_INTERFACES) is None
