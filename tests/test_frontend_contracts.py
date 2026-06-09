@@ -211,6 +211,27 @@ def test_vm_detail_sync_now_button_contract():
     assert "Sync Now" in button_contents
 
 
+def test_proxmox_endpoint_detail_sync_now_button_contract():
+    template_contents = _read(
+        "netbox_proxbox/templates/netbox_proxbox/proxmoxendpoint.html"
+    )
+    view_contents = _read("netbox_proxbox/views/endpoints/proxmox_sync_now.py")
+
+    assert "{% block extra_controls %}" in template_contents
+    assert "proxmoxendpoint_sync_now" in template_contents
+    assert 'method="post"' in template_contents
+    assert "{% csrf_token %}" in template_contents
+    assert "perms.core.add_job" in template_contents
+    assert "object.enabled" in template_contents
+    assert "Sync Now" in template_contents
+    assert (
+        '@register_model_view(ProxmoxEndpoint, "sync_now", path="sync-now")'
+        in view_contents
+    )
+    assert 'http_method_names = ["post"]' in view_contents
+    assert 'ProxmoxEndpoint.objects.restrict(request.user, "view")' in view_contents
+
+
 def test_job_runtime_panel_renders_endpoint_runtime_cards():
     contents = _read(
         "netbox_proxbox/templates/netbox_proxbox/inc/job_runtime_panel.html"

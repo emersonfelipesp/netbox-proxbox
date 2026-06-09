@@ -118,6 +118,9 @@ class MessagesStub:
     def success(self, request, message):
         self.calls.append(("success", message))
 
+    def warning(self, request, message):
+        self.calls.append(("warning", message))
+
     def error(self, request, message):
         self.calls.append(("error", message))
 
