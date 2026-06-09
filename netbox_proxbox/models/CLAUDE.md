@@ -25,6 +25,8 @@ This directory defines the plugin's persisted data model.
 - `ProxmoxEndpoint`: stores Proxmox API connection settings, credentials, mode, and version metadata.
 - `NetBoxEndpoint`: stores the remote NetBox API target and either v1 token or v2 key/secret credentials.
 - `FastAPIEndpoint`: stores the ProxBox backend HTTP/WebSocket target and optional backend token.
+- `PBSEndpoint`: stores Proxmox Backup Server connection settings and credentials for companion inventory/status paths.
+- `PDMEndpoint`: stores Proxmox Datacenter Manager connection settings plus declared PVE/PBS federation links.
 - `ProxmoxCluster`: stores synchronized cluster metadata and relationships to the source endpoint and NetBox cluster.
 - `ProxmoxNode`: stores synchronized hypervisor nodes and their relationships to the source endpoint and NetBox device.
 - `ProxmoxStorage`: stores Proxmox storage inventory synchronized from the backend.
@@ -44,6 +46,7 @@ This directory defines the plugin's persisted data model.
 ## Notes
 
 - `CommonProperties` and `EndpointBase` centralize endpoint URL semantics.
+- `EndpointBase.enabled` is operational: `False` means inventory-only. Service, signal, startup, OpenAPI, and sync code must return before any backend or remote-service connection attempt for disabled endpoint-like rows.
 - `FastAPIEndpoint.websocket_url` is distinct from the backend HTTP URL and is used by `websocket_client.py`.
 - `NetBoxEndpoint.has_configured_token` and serializer/form validation together define the remote NetBox credential behavior.
 - `ProxboxPluginSettings` is the singleton home for runtime tunables shared with the

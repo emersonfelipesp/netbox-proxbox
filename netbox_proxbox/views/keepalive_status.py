@@ -9,6 +9,7 @@ from django.shortcuts import get_object_or_404
 from django.views import View
 
 from netbox_proxbox.models import FastAPIEndpoint, NetBoxEndpoint, ProxmoxEndpoint
+from netbox_proxbox.services.endpoint_enabled import disabled_endpoint_detail
 from netbox_proxbox.services.service_status import ServiceStatus
 from utilities.views import TokenConditionalLoginRequiredMixin
 
@@ -49,10 +50,18 @@ def get_service_status_impl(
     pbs_server = None
 
     if service == "fastapi":
-        get_object_or_404(
+        fastapi_endpoint = get_object_or_404(
             FastAPIEndpoint.objects.restrict(request.user, "view"),
             pk=pk,
         )
+        disabled_detail = disabled_endpoint_detail(
+            fastapi_endpoint,
+            kind="FastAPI endpoint",
+            action="skipping status check",
+        )
+        if disabled_detail:
+            return JsonResponse({"status": "error", "detail": disabled_detail})
+
         fastapi_response = service_status.fastapi_status(pk)
         status = (
             "success"
@@ -88,20 +97,30 @@ def get_service_status_impl(
         )
 
     if service == "netbox":
-        get_object_or_404(
+        netbox_endpoint = get_object_or_404(
             NetBoxEndpoint.objects.restrict(request.user, "view"),
             pk=pk,
         )
+        disabled_detail = disabled_endpoint_detail(
+            netbox_endpoint, kind="NetBox endpoint", action="skipping status check"
+        )
+        if disabled_detail:
+            return JsonResponse({"status": "error", "detail": disabled_detail})
     elif service == "proxmox":
         proxmox_endpoint = get_object_or_404(
             ProxmoxEndpoint.objects.restrict(request.user, "view"),
             pk=pk,
         )
-        if not bool(getattr(proxmox_endpoint, "enabled", True)):
+        disabled_detail = disabled_endpoint_detail(
+            proxmox_endpoint,
+            kind="Proxmox endpoint",
+            action="skipping status check",
+        )
+        if disabled_detail:
             return JsonResponse(
                 {
                     "status": "error",
-                    "detail": "Proxmox endpoint is disabled; skipping status check.",
+                    "detail": disabled_detail,
                 }
             )
     elif service == "pbs":
@@ -114,6 +133,11 @@ def get_service_status_impl(
                 },
                 status=404,
             )
+        disabled_detail = disabled_endpoint_detail(
+            pbs_server, kind="PBS endpoint", action="skipping status check"
+        )
+        if disabled_detail:
+            return JsonResponse({"status": "error", "detail": disabled_detail})
 
     fastapi_object = (
         FastAPIEndpoint.objects.restrict(request.user, "view")

@@ -48,7 +48,7 @@ def get_fastapi_endpoint_with_token(
     Returns (endpoint, context) tuple. Either may be None.
     """
     if endpoint_id is not None:
-        endpoint = FastAPIEndpoint.objects.filter(pk=endpoint_id).first()
+        endpoint = FastAPIEndpoint.objects.filter(pk=endpoint_id, enabled=True).first()
         if endpoint is None:
             return None, None
         context = get_fastapi_request_context(endpoint_id=endpoint_id)

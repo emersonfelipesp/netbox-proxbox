@@ -90,7 +90,9 @@ def get_first_fastapi_context(
         return None
 
     if endpoint_id is not None:
-        fastapi_obj = FastAPIEndpoint.objects.filter(pk=endpoint_id).first()
+        fastapi_obj = FastAPIEndpoint.objects.filter(
+            pk=endpoint_id, enabled=True
+        ).first()
         if fastapi_obj is None:
             return None
         return get_fastapi_context(fastapi_obj)
@@ -116,7 +118,7 @@ def get_fastapi_context_by_id(endpoint_id: int) -> dict[str, object] | None:
     """
     from netbox_proxbox.models import FastAPIEndpoint
 
-    fastapi_obj = FastAPIEndpoint.objects.filter(pk=endpoint_id).first()
+    fastapi_obj = FastAPIEndpoint.objects.filter(pk=endpoint_id, enabled=True).first()
     if fastapi_obj is None:
         return None
     return get_fastapi_context(fastapi_obj)

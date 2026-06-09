@@ -22,6 +22,18 @@ def _load_backend_sync_module(monkeypatch):
     views_pkg.__path__ = [str(REPO_ROOT / "netbox_proxbox" / "views")]
     monkeypatch.setitem(sys.modules, "netbox_proxbox.views", views_pkg)
 
+    services_pkg = types.ModuleType("netbox_proxbox.services")
+    services_pkg.__path__ = [str(REPO_ROOT / "netbox_proxbox" / "services")]
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_pkg)
+
+    endpoint_enabled_mod = types.ModuleType("netbox_proxbox.services.endpoint_enabled")
+    endpoint_enabled_mod.disabled_endpoint_detail = lambda endpoint, **kwargs: None
+    monkeypatch.setitem(
+        sys.modules,
+        "netbox_proxbox.services.endpoint_enabled",
+        endpoint_enabled_mod,
+    )
+
     models_mod = types.ModuleType("netbox_proxbox.models")
     models_mod.ProxmoxEndpoint = object
     monkeypatch.setitem(sys.modules, "netbox_proxbox.models", models_mod)

@@ -99,6 +99,16 @@ docker compose exec netbox /opt/netbox/netbox/manage.py migrate
 Full companion-plugin details live under
 [docs/companion-plugins/](./docs/companion-plugins/).
 
+### Endpoint Enablement
+
+Endpoint records are inventory/configuration objects even when disabled. For
+`ProxmoxEndpoint`, `NetBoxEndpoint`, `FastAPIEndpoint`, `PBSEndpoint`,
+`PDMEndpoint`, and companion endpoint objects that expose an `enabled` field,
+`enabled=False` is a hard operational gate: netbox-proxbox keeps the row visible
+in UI/API output, but status checks, backend registration, OpenAPI fetches,
+sync scopes, keepalive probes, and startup/signal pushes must return before any
+proxbox-api or remote-service connection attempt.
+
 ## What's New in v0.0.20.post2
 
 Paired with backend [`proxbox-api 0.0.17.post1`](https://github.com/emersonfelipesp/proxbox-api).

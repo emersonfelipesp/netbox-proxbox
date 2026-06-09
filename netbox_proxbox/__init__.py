@@ -63,6 +63,13 @@ def _deferred_startup_push() -> None:
             sync_netbox_endpoint_to_backend as _push,
         )
 
+        netbox_endpoints = list(NetBoxEndpoint.objects.filter(enabled=True))
+        if not netbox_endpoints:
+            logger.debug(
+                "Startup push: no enabled NetBoxEndpoint records found, skipping"
+            )
+            return
+
         # Ensure the API key is registered with the backend before pushing
         # endpoints.  Without this, authenticated requests would be rejected
         # with 401 if the backend restarted with an empty database.
@@ -84,7 +91,7 @@ def _deferred_startup_push() -> None:
         backend_verify_ssl = bool(context.verify_ssl)
 
         pushed = 0
-        for nb_ep in NetBoxEndpoint.objects.all():
+        for nb_ep in netbox_endpoints:
             ok, err, _ = _push(
                 nb_ep,
                 base_url=base_url,
