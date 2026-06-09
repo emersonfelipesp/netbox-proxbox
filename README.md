@@ -109,6 +109,15 @@ in UI/API output, but status checks, backend registration, OpenAPI fetches,
 sync scopes, keepalive probes, and startup/signal pushes must return before any
 proxbox-api or remote-service connection attempt.
 
+## What's New in v0.0.20.post3
+
+Paired with backend [`proxbox-api 0.0.17.post1`](https://github.com/emersonfelipesp/proxbox-api).
+
+- **Disabled endpoints never connect.** Endpoint-like rows with `enabled=False` remain visible as inventory/configuration records, but Proxbox status, keepalive, backend registration, OpenAPI, sync, startup, signal, PBS, PDM, and companion endpoint paths now return before any proxbox-api or remote-service connection attempt.
+- **Maintenance guardrails.** LLM and developer docs now describe the all-endpoint enabled-field invariant, and the regression suite covers PBSEndpoint/PDMEndpoint shared `EndpointBase.enabled` behavior plus shared guard wiring.
+
+Full notes: [Release Notes - v0.0.20.post3](docs/release-notes/version-0.0.20.post3.md).
+
 ## What's New in v0.0.20.post2
 
 Paired with backend [`proxbox-api 0.0.17.post1`](https://github.com/emersonfelipesp/proxbox-api).
@@ -156,6 +165,7 @@ Full notes: [Release Notes — v0.0.18](https://emersonfelipesp.github.io/netbox
 
 | NetBox | netbox-proxbox | proxbox-api | netbox-sdk | proxmox-sdk |
 |--------|----------------|-------------|------------|-------------|
+| >=4.5.8 | v0.0.20.post3 | v0.0.17.post1 | v0.0.9.post1 | v0.0.11.post1 |
 | >=4.5.8 | v0.0.20.post2 | v0.0.17.post1 | v0.0.9.post1 | v0.0.11.post1 |
 | >=4.5.8 | v0.0.20.post1 | v0.0.17.post1 | v0.0.9.post1 | v0.0.11.post1 |
 | >=4.5.8 | v0.0.20 | v0.0.17 | v0.0.8.post1 | v0.0.11 |

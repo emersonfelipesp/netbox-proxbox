@@ -21,7 +21,8 @@ pip install -e /opt/netbox/netbox/netbox-proxbox
 
 ## Important Notes
 
-- Proxbox `0.0.20.post2` is the current release for NetBox `4.5.8`, `4.5.9`, and `4.6.x` (validated against `v4.5.8`, `v4.5.9`, `v4.6.0`, and official `v4.6.1`; declared compatibility range `4.5.8` through `4.6.99`). It pairs with the separate `proxbox-api` backend release `0.0.17.post1`. The previous `0.0.20` release pairs with backend `0.0.17`.
+- Proxbox `0.0.20.post3` is the current release for NetBox `4.5.8`, `4.5.9`, and `4.6.x` (validated against `v4.5.8`, `v4.5.9`, `v4.6.0`, and official `v4.6.1`; declared compatibility range `4.5.8` through `4.6.99`). It pairs with the separate `proxbox-api` backend release `0.0.17.post1`. The previous `0.0.20` release pairs with backend `0.0.17`.
+- Disabled endpoint-like rows with `enabled=False` are inventory-only in `0.0.20.post3`: they remain visible in UI/API output, but status, keepalive, backend registration, OpenAPI, startup/signal, sync, PBS, PDM, and companion endpoint paths return before any backend or remote-service connection attempt.
 - This release includes the PVE 9.2 schema migration plus `0045_repair_pbs_pdm_endpoint_enabled`, a database-only repair for affected `0.0.18` installs where `PBSEndpoint` and `PDMEndpoint` were missing the shared endpoint `enabled` column. Run `python manage.py migrate netbox_proxbox` after upgrade.
 - If you operate the proxbox-api `*-nginx` image and previously could not connect, edit the FastAPI endpoint after upgrade and tick **Use HTTPS** (and untick **Verify SSL** if you use the bundled mkcert cert).
 - Recent releases moved sync execution to NetBox Jobs and the default RQ queue, so keep a standard NetBox RQ worker running after upgrade.
@@ -50,4 +51,4 @@ a backend build containing that fix, or the next fixed backend release, before
 re-testing VM IP sync.
 
 
-> **Current release:** netbox-proxbox `0.0.20.post2` pairs with proxbox-api `0.0.17.post1` (NetBox `4.5.8`–`4.6.99`).
+> **Current release:** netbox-proxbox `0.0.20.post3` pairs with proxbox-api `0.0.17.post1` (NetBox `4.5.8`–`4.6.99`).
