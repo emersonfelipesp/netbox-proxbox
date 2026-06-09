@@ -18,6 +18,7 @@ from django.db import transaction
 from netbox_proxbox.choices import FirewallSyncStatusChoices
 from netbox_proxbox.models import ProxmoxDatacenterCpuModel, ProxmoxEndpoint
 from netbox_proxbox.services.backend_proxy import get_fastapi_request_context
+from netbox_proxbox.services.endpoint_scope import enabled_backend_endpoint_scope
 
 logger = logging.getLogger(__name__)
 
@@ -44,11 +45,15 @@ def _resolve_endpoint_by_cluster_name(cluster_name: str) -> ProxmoxEndpoint | No
             .select_related("endpoint")
             .first()
         )
-        if cluster and cluster.endpoint_id:
+        if (
+            cluster
+            and cluster.endpoint_id
+            and bool(getattr(cluster.endpoint, "enabled", True))
+        ):
             return cluster.endpoint
     except Exception as exc:
         logger.warning("DB error resolving cluster %r: %s", cluster_name, exc)
-    return ProxmoxEndpoint.objects.filter(name=cluster_name).first()
+    return ProxmoxEndpoint.objects.filter(name=cluster_name, enabled=True).first()
 
 
 def _upsert_cpu_model(
@@ -109,9 +114,27 @@ def sync_datacenter(
     if auth_headers is None:
         auth_headers = {}
 
+    scope_params, _, scope_error = enabled_backend_endpoint_scope(
+        base_url=fastapi_url,
+        auth_headers=auth_headers,
+        backend_verify_ssl=verify_ssl,
+        timeout=SYNC_TIMEOUT,
+    )
+    if scope_error:
+        result.error = scope_error
+        logger.error(result.error)
+        return result
+    if scope_params is None:
+        result.success = True
+        logger.info(
+            "No enabled Proxmox endpoints configured; skipping datacenter CPU sync"
+        )
+        return result
+
     try:
         resp = requests.get(
             f"{fastapi_url}/proxmox/datacenter/cpu-models",
+            params=scope_params,
             headers=auth_headers,
             verify=verify_ssl,
             timeout=SYNC_TIMEOUT,

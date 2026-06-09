@@ -576,7 +576,21 @@ def _proxmox_endpoint_scopes(
             continue
         requested.append(endpoint_id)
     if requested:
-        return [[endpoint_id] for endpoint_id in requested]
+        try:
+            from netbox_proxbox.models import ProxmoxEndpoint
+
+            enabled_ids = {
+                str(pk)
+                for pk in ProxmoxEndpoint.objects.filter(
+                    pk__in=[int(endpoint_id) for endpoint_id in requested],
+                    enabled=True,
+                ).values_list("pk", flat=True)
+            }
+        except (ImportError, RuntimeError, AttributeError, ValueError):
+            enabled_ids = set(requested)
+        return [
+            [endpoint_id] for endpoint_id in requested if endpoint_id in enabled_ids
+        ]
 
     try:
         from netbox_proxbox.models import ProxmoxEndpoint
@@ -624,8 +638,12 @@ def _resolve_wire_endpoint_ids(
         )
 
     endpoints = list(
-        ProxmoxEndpoint.objects.filter(pk__in=[int(pk) for pk in plugin_pks])
+        ProxmoxEndpoint.objects.filter(
+            pk__in=[int(pk) for pk in plugin_pks], enabled=True
+        )
     )
+    if not endpoints:
+        return {}, None
     mapping, error = resolve_backend_endpoint_ids(
         endpoints,
         base_url=ctx.http_url,

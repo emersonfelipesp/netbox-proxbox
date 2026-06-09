@@ -249,6 +249,15 @@ def sync_fw_module(monkeypatch):
     monkeypatch.setitem(
         sys.modules, "netbox_proxbox.services.backend_proxy", backend_proxy
     )
+    endpoint_scope = types.ModuleType("netbox_proxbox.services.endpoint_scope")
+    endpoint_scope.enabled_backend_endpoint_scope = lambda **_kw: (
+        {"source": "database", "proxmox_endpoint_ids": "1"},
+        {1: 1},
+        None,
+    )
+    monkeypatch.setitem(
+        sys.modules, "netbox_proxbox.services.endpoint_scope", endpoint_scope
+    )
 
     # ---- django.db ----
     django_pkg = types.ModuleType("django")

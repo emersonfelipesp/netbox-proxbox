@@ -93,10 +93,17 @@ def get_service_status_impl(
             pk=pk,
         )
     elif service == "proxmox":
-        get_object_or_404(
+        proxmox_endpoint = get_object_or_404(
             ProxmoxEndpoint.objects.restrict(request.user, "view"),
             pk=pk,
         )
+        if not bool(getattr(proxmox_endpoint, "enabled", True)):
+            return JsonResponse(
+                {
+                    "status": "error",
+                    "detail": "Proxmox endpoint is disabled; skipping status check.",
+                }
+            )
     elif service == "pbs":
         pbs_server = _visible_pbs_server(request, pk)
         if pbs_server is None:

@@ -24,6 +24,7 @@ from netbox_proxbox.forms import (
 from netbox_proxbox.models import FastAPIEndpoint, ProxmoxStorage, VMBackup, VMSnapshot
 from netbox_proxbox.schemas import ProxmoxStorageRecord, StorageContentRecord
 from netbox_proxbox.schemas._formatters import iter_scalar_records
+from netbox_proxbox.services.endpoint_scope import enabled_backend_endpoint_scope
 from netbox_proxbox.tables import ProxmoxStorageTable, VMBackupTable, VMSnapshotTable
 from netbox_proxbox.utils import get_backend_auth_headers, get_fastapi_url
 from netbox_proxbox.views.error_utils import (
@@ -132,43 +133,59 @@ class ProxmoxStorageView(generic.ObjectView):
             verify_ssl = bool(fastapi_info.get("verify_ssl", True))
             auth_headers = get_backend_auth_headers(fastapi_endpoint)
             if fastapi_url:
-                try:
-                    storage_payload, storage_err = self._fetch_backend_json(
-                        base_url=fastapi_url,
-                        auth_headers=auth_headers,
-                        verify_ssl=verify_ssl,
-                        route="/proxmox/storage",
-                        query_params={"source": "database"},
-                    )
-                    if storage_err:
-                        usage_detail = storage_err
-                    else:
-                        for record in iter_scalar_records(storage_payload):
-                            typed_record = ProxmoxStorageRecord.model_validate(record)
-                            if typed_record.effective_name != instance.name:
-                                continue
-                            if (
-                                typed_record.cluster
-                                and typed_record.cluster != instance.cluster.name
-                            ):
-                                continue
-                            usage = typed_record.to_usage_dict().model_dump()
-                            break
+                scope_params, _, scope_error = enabled_backend_endpoint_scope(
+                    base_url=fastapi_url,
+                    auth_headers=auth_headers,
+                    backend_verify_ssl=verify_ssl,
+                    timeout=self.request_timeout,
+                )
+                if scope_error:
+                    usage_detail = scope_error
+                elif scope_params is None:
+                    usage_detail = "No enabled Proxmox endpoints configured; skipping storage status."
 
-                    for node in self._parse_nodes(instance.nodes):
-                        content_payload, content_err = self._fetch_backend_json(
+                try:
+                    if scope_params is not None and usage_detail is None:
+                        storage_payload, storage_err = self._fetch_backend_json(
                             base_url=fastapi_url,
                             auth_headers=auth_headers,
                             verify_ssl=verify_ssl,
-                            route=f"/proxmox/nodes/{node}/storage/{instance.name}/content",
-                            query_params={"source": "database"},
+                            route="/proxmox/storage",
+                            query_params=scope_params,
                         )
-                        if content_err:
-                            continue
-                        for record in iter_scalar_records(content_payload):
-                            content_records.append(
-                                StorageContentRecord.model_validate(record).model_dump()
+                        if storage_err:
+                            usage_detail = storage_err
+                        else:
+                            for record in iter_scalar_records(storage_payload):
+                                typed_record = ProxmoxStorageRecord.model_validate(
+                                    record
+                                )
+                                if typed_record.effective_name != instance.name:
+                                    continue
+                                if (
+                                    typed_record.cluster
+                                    and typed_record.cluster != instance.cluster.name
+                                ):
+                                    continue
+                                usage = typed_record.to_usage_dict().model_dump()
+                                break
+
+                        for node in self._parse_nodes(instance.nodes):
+                            content_payload, content_err = self._fetch_backend_json(
+                                base_url=fastapi_url,
+                                auth_headers=auth_headers,
+                                verify_ssl=verify_ssl,
+                                route=f"/proxmox/nodes/{node}/storage/{instance.name}/content",
+                                query_params=scope_params,
                             )
+                            if content_err:
+                                continue
+                            for record in iter_scalar_records(content_payload):
+                                content_records.append(
+                                    StorageContentRecord.model_validate(
+                                        record
+                                    ).model_dump()
+                                )
 
                 except requests.exceptions.RequestException as exc:
                     detail, _ = extract_proxmox_backend_error_detail(

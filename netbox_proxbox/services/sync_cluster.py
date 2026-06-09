@@ -68,6 +68,15 @@ def sync_cluster_and_nodes(
         logger.error("ProxmoxEndpoint %s not found", endpoint_id)
         return ClusterSyncResult(error="Endpoint not found")
 
+    if not bool(getattr(endpoint, "enabled", True)):
+        logger.info("Skipping cluster/node sync for disabled endpoint %s", endpoint_id)
+        return ClusterSyncResult(
+            endpoint_id=endpoint_id,
+            endpoint_name=str(endpoint),
+            success=True,
+            error=None,
+        )
+
     # Resolve FastAPI connection parameters from the configured endpoint when not supplied.
     verify_ssl = True
     if not fastapi_url:

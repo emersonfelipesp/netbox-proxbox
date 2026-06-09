@@ -20,6 +20,17 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _disabled_endpoint_detail(endpoint: ProxmoxEndpoint) -> str | None:
+    """Return a user-facing skip reason when a Proxmox endpoint is disabled."""
+    if bool(getattr(endpoint, "enabled", True)):
+        return None
+    endpoint_id = getattr(endpoint, "pk", getattr(endpoint, "id", None))
+    label = getattr(endpoint, "name", None) or str(endpoint)
+    if endpoint_id is not None:
+        return f"Proxmox endpoint '{label}' (id={endpoint_id}) is disabled; skipping."
+    return f"Proxmox endpoint '{label}' is disabled; skipping."
+
+
 def proxmox_backend_name(endpoint: ProxmoxEndpoint) -> str:
     """Stable display name for proxbox-api including the NetBox primary key suffix."""
     base_name = (
@@ -94,6 +105,9 @@ def sync_proxmox_endpoint_to_backend(
     timeout: int = 15,
 ) -> tuple[bool, str | None, int | None]:
     """Ensure the selected NetBox Proxmox endpoint exists in proxbox-api backend DB."""
+    disabled_detail = _disabled_endpoint_detail(endpoint)
+    if disabled_detail:
+        return False, disabled_detail, None
 
     list_url = f"{base_url}/proxmox/endpoints"
     headers = auth_headers or {}
@@ -227,6 +241,10 @@ def resolve_backend_endpoint_id(
     the endpoint cannot be resolved. Callers must treat ``None`` as fatal for the
     scoped request rather than silently syncing every endpoint.
     """
+    disabled_detail = _disabled_endpoint_detail(endpoint)
+    if disabled_detail:
+        return None, disabled_detail
+
     endpoints, list_error = _list_backend_proxmox_endpoints(
         base_url=base_url,
         auth_headers=auth_headers,
@@ -262,6 +280,12 @@ def resolve_backend_endpoint_ids(
     and skip them; ``error`` is only set when the backend list itself could not be
     fetched.
     """
+    endpoints = [
+        endpoint for endpoint in endpoints if not _disabled_endpoint_detail(endpoint)
+    ]
+    if not endpoints:
+        return {}, None
+
     backend_rows, list_error = _list_backend_proxmox_endpoints(
         base_url=base_url,
         auth_headers=auth_headers,

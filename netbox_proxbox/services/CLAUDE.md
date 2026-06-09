@@ -9,6 +9,7 @@ This directory contains service-layer modules for backend HTTP proxy, keepalive 
 - [`backend_context.py`](./backend_context.py): defines `get_fastapi_request_context()` — resolves the active FastAPIEndpoint and builds the URL/header context used by all backend HTTP helpers.
 - [`backend_proxy.py`](./backend_proxy.py): HTTP client helpers for proxbox-api, including SSE streaming (`run_sync_stream`, `iter_backend_sse_lines`), JSON requests (`sync_full_update_resource`, `sync_resource`). Imports and re-exports `get_fastapi_request_context` from `backend_context.py`.
 - [`backend_version.py`](./backend_version.py): parses proxbox-api versions and emits operator-facing advisories for known backend release windows, including VM IP sync fixes.
+- [`endpoint_scope.py`](./endpoint_scope.py): shared helper that translates all enabled `ProxmoxEndpoint` rows to proxbox-api backend ids and returns `source=database` query params for multi-endpoint live reads.
 - [`http_client.py`](./http_client.py): low-level HTTP client abstraction (session management, retries, timeout helpers) used by other service modules.
 - [`individual_sync.py`](./individual_sync.py): per-object sync handlers called from `views/sync_now/` for cluster, node, storage, and VM objects.
 - [`openapi_schema.py`](./openapi_schema.py): OpenAPI schema caching and retrieval from the backend.
@@ -34,6 +35,12 @@ identity**, not its NetBox primary key:
 - `views/backend_sync.py::resolve_backend_endpoint_id()` /
   `resolve_backend_endpoint_ids()` translate a plugin `ProxmoxEndpoint` to the
   backend database id by matching that name against `GET /proxmox/endpoints`.
+  Disabled endpoints return before this backend request.
+- `endpoint_scope.py::enabled_backend_endpoint_scope()` builds the common
+  `source=database&proxmox_endpoint_ids=<backend ids>` scope for all enabled
+  Proxmox endpoints. If no endpoints are enabled, callers should treat the
+  operation as a successful no-op rather than performing an unscoped backend
+  read.
 - `sync_cluster.py` and `sync_vm_template.py` resolve the backend id first, then
   send `?proxmox_endpoint_ids=<backend_id>` to `/proxmox/cluster/status`,
   `/proxmox/nodes/`, `/proxmox/cluster/resources`, and `/proxmox/.../config`.

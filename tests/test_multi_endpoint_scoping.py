@@ -82,8 +82,8 @@ def _load_backend_sync_module(monkeypatch, *, endpoints_payload):
     return module
 
 
-def _endpoint(pk, name):
-    return SimpleNamespace(pk=pk, name=name)
+def _endpoint(pk, name, *, enabled=True):
+    return SimpleNamespace(pk=pk, name=name, enabled=enabled)
 
 
 def test_proxmox_backend_name_embeds_plugin_pk(monkeypatch):
@@ -105,6 +105,43 @@ def test_resolve_backend_endpoint_id_matches_by_name(monkeypatch):
     )
     assert error is None
     assert backend_id == 7
+
+
+def test_sync_proxmox_endpoint_to_backend_skips_disabled_without_http(monkeypatch):
+    """A disabled endpoint must not be listed, created, or updated on proxbox-api."""
+    backend_sync = _load_backend_sync_module(monkeypatch, endpoints_payload=[])
+    monkeypatch.setattr(
+        backend_sync.requests,
+        "get",
+        lambda *args, **kwargs: pytest.fail("disabled endpoint made backend GET"),
+    )
+
+    ok, detail, status = backend_sync.sync_proxmox_endpoint_to_backend(
+        _endpoint(1, "Disabled PVE", enabled=False),
+        base_url="http://backend:8000",
+    )
+
+    assert ok is False
+    assert status is None
+    assert "disabled" in detail
+
+
+def test_resolve_backend_endpoint_id_skips_disabled_without_http(monkeypatch):
+    """A disabled endpoint must not be resolved through the backend endpoint list."""
+    backend_sync = _load_backend_sync_module(monkeypatch, endpoints_payload=[])
+    monkeypatch.setattr(
+        backend_sync.requests,
+        "get",
+        lambda *args, **kwargs: pytest.fail("disabled endpoint made backend GET"),
+    )
+
+    backend_id, detail = backend_sync.resolve_backend_endpoint_id(
+        _endpoint(1, "Disabled PVE", enabled=False),
+        base_url="http://backend:8000",
+    )
+
+    assert backend_id is None
+    assert "disabled" in detail
 
 
 def test_resolve_backend_endpoint_id_fails_loud_when_unregistered(monkeypatch):

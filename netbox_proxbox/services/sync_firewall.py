@@ -37,6 +37,7 @@ from netbox_proxbox.models import (
     ProxmoxFirewallSecurityGroup,
 )
 from netbox_proxbox.services.backend_proxy import get_fastapi_request_context
+from netbox_proxbox.services.endpoint_scope import enabled_backend_endpoint_scope
 
 logger = logging.getLogger(__name__)
 
@@ -108,12 +109,16 @@ def _resolve_endpoint_by_cluster_name(cluster_name: str) -> ProxmoxEndpoint | No
             .select_related("endpoint")
             .first()
         )
-        if cluster and cluster.endpoint_id:
+        if (
+            cluster
+            and cluster.endpoint_id
+            and bool(getattr(cluster.endpoint, "enabled", True))
+        ):
             return cluster.endpoint
     except Exception as exc:
         logger.warning("DB error resolving cluster %r: %s", cluster_name, exc)
 
-    return ProxmoxEndpoint.objects.filter(name=cluster_name).first()
+    return ProxmoxEndpoint.objects.filter(name=cluster_name, enabled=True).first()
 
 
 # ---------------------------------------------------------------------------
@@ -507,12 +512,28 @@ def sync_firewall(
     if auth_headers is None:
         auth_headers = {}
 
+    scope_params, backend_id_by_pk, scope_error = enabled_backend_endpoint_scope(
+        base_url=fastapi_url,
+        auth_headers=auth_headers,
+        backend_verify_ssl=verify_ssl,
+        timeout=SYNC_TIMEOUT,
+    )
+    if scope_error:
+        result.error = scope_error
+        logger.error(result.error)
+        return result
+    if scope_params is None:
+        result.success = True
+        logger.info("No enabled Proxmox endpoints configured; skipping firewall sync")
+        return result
+
     # -----------------------------------------------------------------------
     # HTTP phase — fetch the summary before touching the DB.
     # -----------------------------------------------------------------------
     try:
         resp = requests.get(
             f"{fastapi_url}/proxmox/firewall/summary",
+            params=scope_params,
             headers=auth_headers,
             verify=verify_ssl,
             timeout=SYNC_TIMEOUT,
@@ -601,6 +622,14 @@ def sync_firewall(
                 "name", flat=True
             )
             for node_name in nodes:
+                backend_endpoint_id = backend_id_by_pk.get(endpoint.pk)
+                if backend_endpoint_id is None:
+                    logger.warning(
+                        "Skipping node firewall sync for endpoint=%s node=%r: backend endpoint id not resolved",
+                        endpoint.pk,
+                        node_name,
+                    )
+                    continue
                 try:
                     sync_node_firewall(
                         endpoint=endpoint,
@@ -608,6 +637,7 @@ def sync_firewall(
                         fastapi_url=fastapi_url,
                         auth_headers=auth_headers,
                         verify_ssl=verify_ssl,
+                        backend_endpoint_id=backend_endpoint_id,
                     )
                 except Exception as exc:
                     logger.warning(
@@ -647,6 +677,7 @@ def sync_node_firewall(
     fastapi_url: str,
     auth_headers: dict[str, str],
     verify_ssl: bool = True,
+    backend_endpoint_id: int | None = None,
 ) -> None:
     """Sync firewall rules for a single Proxmox node.
 
@@ -655,6 +686,10 @@ def sync_node_firewall(
     ProxmoxNode FK set.
     """
     from netbox_proxbox.models import ProxmoxNode  # noqa: PLC0415
+
+    if not bool(getattr(endpoint, "enabled", True)):
+        logger.info("Skipping node firewall sync for disabled endpoint %s", endpoint.pk)
+        return
 
     node_obj = ProxmoxNode.objects.filter(endpoint=endpoint, name=node_name).first()
     if node_obj is None:
@@ -669,6 +704,11 @@ def sync_node_firewall(
     try:
         resp = requests.get(
             f"{fastapi_url}/proxmox/firewall/nodes/{node_name}/rules",
+            params=(
+                {"source": "database", "proxmox_endpoint_ids": str(backend_endpoint_id)}
+                if backend_endpoint_id is not None
+                else None
+            ),
             headers=auth_headers,
             verify=verify_ssl,
             timeout=SYNC_TIMEOUT,
@@ -762,6 +802,7 @@ def sync_vm_firewall(
     fastapi_url: str,
     auth_headers: dict[str, str],
     verify_ssl: bool = True,
+    backend_endpoint_id: int | None = None,
 ) -> None:
     """Sync firewall rules for a single Proxmox VM or container.
 
@@ -771,6 +812,10 @@ def sync_vm_firewall(
 
     vm_type should be 'qemu' or 'lxc'.
     """
+    if not bool(getattr(endpoint, "enabled", True)):
+        logger.info("Skipping VM firewall sync for disabled endpoint %s", endpoint.pk)
+        return
+
     if vm_type not in ("qemu", "lxc"):
         logger.warning(
             "sync_vm_firewall called with unknown vm_type=%r for vmid=%d — skipping",
@@ -800,7 +845,17 @@ def sync_vm_firewall(
             headers=auth_headers,
             verify=verify_ssl,
             timeout=SYNC_TIMEOUT,
-            params={"vm_type": vm_type},
+            params={
+                "vm_type": vm_type,
+                **(
+                    {
+                        "source": "database",
+                        "proxmox_endpoint_ids": str(backend_endpoint_id),
+                    }
+                    if backend_endpoint_id is not None
+                    else {}
+                ),
+            },
         )
         resp.raise_for_status()
         data = resp.json()

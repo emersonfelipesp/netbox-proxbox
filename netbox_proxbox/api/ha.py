@@ -25,6 +25,7 @@ from rest_framework.views import APIView
 
 from netbox_proxbox.services._endpoint_errors import translate_request_exception
 from netbox_proxbox.services.backend_context import get_fastapi_request_context
+from netbox_proxbox.services.endpoint_scope import enabled_backend_endpoint_scope
 
 _BACKEND_NOT_CONFIGURED = "No FastAPI backend endpoint is configured."
 _BACKEND_TOO_OLD = (
@@ -33,10 +34,23 @@ _BACKEND_TOO_OLD = (
 _HA_REQUEST_TIMEOUT = 15
 
 
-def _proxy_get(url: str, *, headers: dict, verify: bool, timeout: int) -> Response:
+def _proxy_get(
+    url: str,
+    *,
+    headers: dict,
+    verify: bool,
+    timeout: int,
+    params: dict[str, str] | None = None,
+) -> Response:
     """Forward a GET to proxbox-api and translate errors into DRF responses."""
     try:
-        response = requests.get(url, headers=headers, timeout=timeout, verify=verify)
+        response = requests.get(
+            url,
+            params=params,
+            headers=headers,
+            timeout=timeout,
+            verify=verify,
+        )
     except requests.exceptions.RequestException as exc:
         return Response(
             {"detail": translate_request_exception(exc)},
@@ -90,11 +104,29 @@ class HAClusterSummaryAPIView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
+        scope_params, _, scope_error = enabled_backend_endpoint_scope(
+            base_url=ctx.http_url,
+            auth_headers=ctx.headers or {},
+            backend_verify_ssl=ctx.verify_ssl,
+            timeout=_HA_REQUEST_TIMEOUT,
+        )
+        if scope_error:
+            return Response(
+                {"detail": scope_error},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+        if scope_params is None:
+            return Response(
+                {"detail": "No enabled Proxmox endpoints configured."},
+                status=status.HTTP_200_OK,
+            )
+
         return _proxy_get(
             f"{ctx.http_url}/proxmox/cluster/ha/summary",
             headers=ctx.headers or {},
             verify=ctx.verify_ssl,
             timeout=_HA_REQUEST_TIMEOUT,
+            params=scope_params,
         )
 
 
@@ -122,11 +154,26 @@ class HAVMResourceAPIView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
+        scope_params, _, scope_error = enabled_backend_endpoint_scope(
+            base_url=ctx.http_url,
+            auth_headers=ctx.headers or {},
+            backend_verify_ssl=ctx.verify_ssl,
+            timeout=10,
+        )
+        if scope_error:
+            return Response(
+                {"detail": scope_error},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+        if scope_params is None:
+            return Response({})
+
         proxied = _proxy_get(
             f"{ctx.http_url}/proxmox/cluster/ha/resources/by-vm/{vmid}",
             headers=ctx.headers or {},
             verify=ctx.verify_ssl,
             timeout=10,
+            params=scope_params,
         )
         if proxied.status_code == status.HTTP_200_OK and proxied.data is None:
             return Response({})

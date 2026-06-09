@@ -69,12 +69,64 @@ def proxbox_sync_job_module(monkeypatch):
                 primary_ip_preference="ipv4",
             )
 
+    class _EndpointQuerySet(list):
+        def first(self):
+            return self[0] if self else None
+
+        def values_list(self, field_name, flat=False):
+            values = [getattr(item, field_name, item) for item in self]
+            return values if flat else [(value,) for value in values]
+
+    class _EndpointManager:
+        rows: list = []
+
+        @classmethod
+        def all(cls):
+            return _EndpointQuerySet(cls.rows)
+
+        @classmethod
+        def filter(cls, **kwargs):
+            rows = list(cls.rows)
+            if not rows and "pk__in" in kwargs:
+                rows = [
+                    SimpleNamespace(
+                        pk=int(value),
+                        enabled=True,
+                        name=f"pve-{value}",
+                        effective_overwrites=lambda: {},
+                    )
+                    for value in kwargs["pk__in"]
+                ]
+            if not rows and "pk" in kwargs:
+                rows = [
+                    SimpleNamespace(
+                        pk=int(kwargs["pk"]),
+                        enabled=True,
+                        name=f"pve-{kwargs['pk']}",
+                        effective_overwrites=lambda: {},
+                    )
+                ]
+            if "enabled" in kwargs:
+                rows = [
+                    row
+                    for row in rows
+                    if bool(getattr(row, "enabled", True)) is bool(kwargs["enabled"])
+                ]
+            if "pk__in" in kwargs:
+                wanted = {int(value) for value in kwargs["pk__in"]}
+                rows = [row for row in rows if int(getattr(row, "pk", row)) in wanted]
+            if "pk" in kwargs:
+                rows = [
+                    row for row in rows if int(getattr(row, "pk", row)) == kwargs["pk"]
+                ]
+            return _EndpointQuerySet(rows)
+
+        @classmethod
+        def values_list(cls, field_name, flat=False):
+            return cls.all().values_list(field_name, flat=flat)
+
     class _ProxmoxEndpoint:
-        objects = SimpleNamespace(
-            values_list=lambda *a, **kw: [],
-            all=lambda: [],
-            filter=lambda **kw: [],
-        )
+        objects = _EndpointManager
 
     class _NetBoxEndpoint:
         objects = SimpleNamespace(all=lambda: [])
@@ -471,6 +523,101 @@ def test_proxbox_sync_job_skips_invalid_proxmox_endpoint_ids(
     assert synced_endpoint_ids == [2]
     assert paths == ["dcim/devices/create/stream"]
     assert "Skipping invalid Proxmox endpoint id 'bad'" in caplog.text
+
+
+def test_proxbox_sync_job_skips_disabled_explicit_proxmox_endpoint_ids(
+    monkeypatch, proxbox_sync_job_module
+):
+    """Stale scheduled jobs must not sync disabled endpoint IDs."""
+    streamed_queries: list[dict] = []
+    synced_endpoint_ids: list[int] = []
+
+    class _EndpointQuerySet(list):
+        def first(self):
+            return self[0] if self else None
+
+        def values_list(self, field_name, flat=False):
+            values = [getattr(item, field_name, item) for item in self]
+            return values if flat else [(value,) for value in values]
+
+    class _EndpointManager:
+        rows = [
+            SimpleNamespace(
+                pk=1,
+                enabled=False,
+                name="disabled",
+                effective_overwrites=lambda: {},
+            ),
+            SimpleNamespace(
+                pk=2,
+                enabled=True,
+                name="enabled",
+                effective_overwrites=lambda: {},
+            ),
+        ]
+
+        @classmethod
+        def filter(cls, **kwargs):
+            rows = list(cls.rows)
+            if "enabled" in kwargs:
+                rows = [
+                    row
+                    for row in rows
+                    if bool(getattr(row, "enabled", True)) is bool(kwargs["enabled"])
+                ]
+            if "pk__in" in kwargs:
+                wanted = {int(value) for value in kwargs["pk__in"]}
+                rows = [row for row in rows if int(row.pk) in wanted]
+            return _EndpointQuerySet(rows)
+
+        @classmethod
+        def values_list(cls, field_name, flat=False):
+            return _EndpointQuerySet(cls.rows).values_list(field_name, flat=flat)
+
+    proxbox_sync_job_module.ProxmoxEndpoint.objects = _EndpointManager
+
+    services_mod = types.ModuleType("netbox_proxbox.services")
+
+    def run_sync_stream(path, query_params=None, **stream_kwargs):
+        streamed_queries.append(dict(query_params or {}))
+        return ({"stream": True, "response": {"ok": True}}, 200)
+
+    services_mod.run_sync_stream = run_sync_stream
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
+
+    sync_cluster_mod = sys.modules["netbox_proxbox.services.sync_cluster"]
+
+    def sync_cluster_and_nodes(endpoint_id=None):
+        synced_endpoint_ids.append(endpoint_id)
+        return SimpleNamespace(
+            success=True,
+            endpoint_id=endpoint_id,
+            endpoint_name=f"pve-{endpoint_id}",
+            clusters_created=0,
+            clusters_updated=0,
+            nodes_created=0,
+            nodes_updated=0,
+            error=None,
+        )
+
+    sync_cluster_mod.sync_cluster_and_nodes = sync_cluster_and_nodes
+    monkeypatch.setattr(
+        proxbox_sync_job_module.sync_stages,
+        "_resolve_wire_endpoint_ids",
+        lambda scopes: ({scope[0]: scope[0] + "00" for scope in scopes if scope}, None),
+    )
+
+    ProxboxSyncJob = proxbox_sync_job_module.ProxboxSyncJob
+    job = ProxboxSyncJob()
+    job.logger = logging.getLogger("test_proxbox_job_disabled_endpoint_ids")
+    job.job = MagicMock()
+    job.job.data = None
+
+    st = proxbox_sync_job_module.SyncTypeChoices
+    ProxboxSyncJob.run(job, sync_type=st.DEVICES, proxmox_endpoint_ids=["1", "2"])
+
+    assert synced_endpoint_ids == [2]
+    assert [query["proxmox_endpoint_ids"] for query in streamed_queries] == ["200"]
 
 
 def test_proxbox_sync_job_logs_stage_lines_with_rendered_values(
@@ -912,6 +1059,10 @@ def test_proxbox_sync_job_persists_endpoint_runtime_breakdown(
     class _EndpointQuerySet(list):
         def first(self):
             return self[0] if self else None
+
+        def values_list(self, field_name, flat=False):
+            values = [getattr(item, field_name, item) for item in self]
+            return values if flat else [(value,) for value in values]
 
     class _EndpointManager:
         def filter(self, **kwargs):

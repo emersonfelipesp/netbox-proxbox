@@ -128,9 +128,11 @@ def default_proxmox_endpoint_id() -> int | None:
         return None
 
     try:
-        endpoint = ProxmoxEndpoint.objects.filter(allow_writes=True).first()
+        endpoint = ProxmoxEndpoint.objects.filter(
+            allow_writes=True, enabled=True
+        ).first()
         if endpoint is None:
-            endpoint = ProxmoxEndpoint.objects.first()
+            endpoint = ProxmoxEndpoint.objects.filter(enabled=True).first()
     except Exception:  # pragma: no cover - test stubs may be partial
         return None
     return _object_id(endpoint)

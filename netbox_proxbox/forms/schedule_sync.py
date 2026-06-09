@@ -39,11 +39,11 @@ class ScheduleSyncForm(forms.Form):
         ),
     )
     proxmox_endpoints = DynamicModelMultipleChoiceField(
-        queryset=ProxmoxEndpoint.objects.all(),
+        queryset=ProxmoxEndpoint.objects.filter(enabled=True),
         required=False,
         label=_("Proxmox Endpoints"),
         help_text=_(
-            "Select specific Proxmox endpoints to sync. Leave empty to sync all."
+            "Select specific enabled Proxmox endpoints to sync. Leave empty to sync all enabled endpoints."
         ),
     )
     netbox_endpoints = DynamicModelMultipleChoiceField(

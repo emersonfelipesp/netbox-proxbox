@@ -10,6 +10,7 @@ from utilities.views import ContentTypePermissionRequiredMixin
 from netbox_proxbox.models import ProxmoxEndpoint
 from netbox_proxbox.services._endpoint_errors import translate_request_exception
 from netbox_proxbox.services.backend_context import get_fastapi_request_context
+from netbox_proxbox.services.endpoint_scope import enabled_backend_endpoint_scope
 
 
 class _HaActionBaseView(ContentTypePermissionRequiredMixin, View):
@@ -28,13 +29,33 @@ class _HaActionBaseView(ContentTypePermissionRequiredMixin, View):
             )
 
         url = f"{ctx.http_url}/proxmox/cluster/ha/{self._proxbox_action}"
+        _, backend_id_by_pk, scope_error = enabled_backend_endpoint_scope(
+            base_url=ctx.http_url,
+            auth_headers=ctx.headers or {},
+            backend_verify_ssl=ctx.verify_ssl,
+            timeout=30,
+        )
+        if scope_error:
+            return JsonResponse({"action": self._proxbox_action, "error": scope_error})
+
         results: list[dict] = []
         for endpoint in ProxmoxEndpoint.objects.filter(enabled=True):
+            backend_endpoint_id = backend_id_by_pk.get(endpoint.pk)
+            if backend_endpoint_id is None:
+                results.append(
+                    {
+                        "endpoint_id": endpoint.pk,
+                        "endpoint_name": str(endpoint),
+                        "error": "Backend endpoint id not resolved.",
+                        "ok": False,
+                    }
+                )
+                continue
             try:
                 resp = requests.post(
                     url,
                     headers=ctx.headers or {},
-                    params={"endpoint_id": endpoint.pk},
+                    params={"proxmox_endpoint_ids": str(backend_endpoint_id)},
                     timeout=30,
                     verify=ctx.verify_ssl,
                 )

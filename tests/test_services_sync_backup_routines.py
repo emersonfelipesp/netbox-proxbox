@@ -119,6 +119,17 @@ def sync_backup_module(monkeypatch):
         sys.modules, "netbox_proxbox.services.backend_proxy", backend_proxy
     )
 
+    views_pkg = types.ModuleType("netbox_proxbox.views")
+    views_pkg.__path__ = [str(REPO_ROOT / "netbox_proxbox" / "views")]
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.views", views_pkg)
+
+    backend_sync = types.ModuleType("netbox_proxbox.views.backend_sync")
+    backend_sync.resolve_backend_endpoint_id = lambda endpoint, **_kwargs: (
+        getattr(endpoint, "pk", None),
+        None,
+    )
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.views.backend_sync", backend_sync)
+
     django_pkg = types.ModuleType("django")
     monkeypatch.setitem(sys.modules, "django", django_pkg)
     db_mod = types.ModuleType("django.db")
@@ -187,6 +198,7 @@ def test_sync_propagates_http_error_for_list_endpoint(sync_backup_module):
     import requests as real_requests
 
     err = real_requests.exceptions.ConnectionError("refused")
+    sync_backup_module.resolve_backend_endpoint_id = lambda *args, **kwargs: (1, None)
     with patch("requests.get", side_effect=err):
         result = sync_backup_module.sync_backup_routines(
             endpoint_id=1,

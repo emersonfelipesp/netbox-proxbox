@@ -292,6 +292,22 @@ def sync_vm_templates(
         return result
 
     result.endpoint_name = str(endpoint)
+    if not bool(getattr(endpoint, "enabled", True)):
+        result.success = True
+        result.endpoints_processed = 1
+        result.per_endpoint.append(
+            {
+                "endpoint_id": endpoint_id,
+                "endpoint_name": result.endpoint_name,
+                "success": True,
+                "runtime_seconds": 0.0,
+                "skipped": True,
+                "reason": "proxmox_endpoint_disabled",
+            }
+        )
+        logger.info("Skipping VM template sync for disabled endpoint %s", endpoint_id)
+        return result
+
     mode = _endpoint_sync_mode(endpoint)
     if mode == SyncModeChoices.DISABLED:
         result.success = True

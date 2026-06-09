@@ -21,7 +21,9 @@ from netbox_proxbox.views.sync_helpers import (
 
 def _all_proxmox_endpoint_ids() -> list[int]:
     """Return explicit endpoint IDs for sync jobs started from broad UI actions."""
-    return list(ProxmoxEndpoint.objects.values_list("pk", flat=True))
+    return list(
+        ProxmoxEndpoint.objects.filter(enabled=True).values_list("pk", flat=True)
+    )
 
 
 def notify_sync_enqueued(request: HttpRequest, job, message: str) -> None:

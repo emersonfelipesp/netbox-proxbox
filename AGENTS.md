@@ -116,6 +116,9 @@ The `publish-pypi` job in `.github/workflows/publish-testpypi.yml` checks the Py
 ### Gitea Package Registry
 
 Use `PKG_TOKEN` (not `GITEA_TOKEN` — GITEA_ prefix is reserved and will fail). The registry URL is `https://git.nmulti.cloud/api/packages/emersonfelipesp/pypi`.
+The publish workflow may receive Gitea `create` events, but branch creation must
+be job-gated out; only tag creation/tag push events should run release version
+validation.
 
 ### Security
 
@@ -142,6 +145,7 @@ Read [`CLAUDE.md`](./CLAUDE.md) first for the plugin architecture and documentat
 Key architectural invariants to keep in mind:
 
 - **`NetBoxEndpoint` and `FastAPIEndpoint` are singletons.** The backend proxy (`services/backend_proxy.py`) and dashboard views always resolve the backend via `.first()`. Import views enforce the singleton constraint — if a record exists, the user is prompted to confirm the override before the existing record is deleted and replaced.
+- **`ProxmoxEndpoint.enabled=False` is a hard no-connection gate.** Disabled Proxmox endpoint rows remain visible inventory records, but operational paths must filter to `enabled=True` before pushing to proxbox-api, resolving backend ids, hydrating dashboard/status cards, scheduling jobs, or calling live HA/storage/firewall/SDN/datacenter routes.
 - **Firecracker inventory is separate from QEMU/LXC.** Use `FirecrackerHostPool`, `FirecrackerHost`, `FirecrackerImageTemplate`, and `FirecrackerMicroVM` for NMS Cloud micro-VMs. A Firecracker row exposes `kind="firecracker"` and `instance_ref="firecracker:<id>"`; do not model it as a NetBox core `VirtualMachine`.
 - **Endpoint export views require token proof for sensitive fields.** `_validate_sensitive_export_token()` supports v1 (dropdown or manual) and v2 (key + secret) modes. Never bypass this check or expose credential fields without it.
 - **Export JS is inlined, not a separate static file.** All three endpoint list templates contain the export-modal IIFE directly in `{% block javascript %}`. Do not move it to a `.js` file — it would then require `collectstatic` to be served.

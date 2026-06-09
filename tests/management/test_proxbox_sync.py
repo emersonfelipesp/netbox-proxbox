@@ -62,19 +62,40 @@ def proxbox_sync_command(monkeypatch):
     # netbox_proxbox.models — only ProxmoxEndpoint is needed
     models_mod = types.ModuleType("netbox_proxbox.models")
 
-    class _ValuesList:
+    class _EndpointQuery:
         def __init__(self, rows):
             self._rows = list(rows)
 
         def __iter__(self):
             return iter(self._rows)
 
+        def values_list(self, field_name, flat=False):
+            values = [getattr(row, field_name, row) for row in self._rows]
+            return values if flat else [(value,) for value in values]
+
     class _ProxmoxEndpointObjects:
-        rows: list[int] = [1, 2]
+        rows: list = [
+            SimpleNamespace(pk=1, enabled=True),
+            SimpleNamespace(pk=2, enabled=True),
+        ]
+
+        @classmethod
+        def filter(cls, **kwargs):
+            rows = list(cls.rows)
+            if "enabled" in kwargs:
+                rows = [
+                    row
+                    for row in rows
+                    if bool(getattr(row, "enabled", True)) is bool(kwargs["enabled"])
+                ]
+            if "pk__in" in kwargs:
+                wanted = {int(value) for value in kwargs["pk__in"]}
+                rows = [row for row in rows if int(getattr(row, "pk", row)) in wanted]
+            return _EndpointQuery(rows)
 
         @classmethod
         def values_list(cls, *args, **kwargs):
-            return _ValuesList(cls.rows)
+            return _EndpointQuery(cls.rows).values_list(*args, **kwargs)
 
     class _ProxmoxEndpoint:
         objects = _ProxmoxEndpointObjects
@@ -229,7 +250,7 @@ def _run(command_module, **options):
 
 
 def test_healthy_enqueue_path(proxbox_sync_command):
-    """Healthy path enqueues a job with ALL sync types and all endpoint IDs."""
+    """Healthy path enqueues a job with ALL sync types and all enabled endpoint IDs."""
     proxbox_sync_command.proxbox_sync_job.raise_on_enqueue = None
     proxbox_sync_command.user_qs.return_first = proxbox_sync_command.fake_user
 
@@ -242,6 +263,20 @@ def test_healthy_enqueue_path(proxbox_sync_command):
     assert call["queue_name"] == "default"
     assert call["user"] is proxbox_sync_command.fake_user
     assert "CLI" in call["name"]
+
+
+def test_disabled_proxmox_endpoints_are_not_enqueued(proxbox_sync_command):
+    """The CLI full-sync command must not pass disabled Proxmox endpoint IDs."""
+    proxbox_sync_command.proxmox_endpoint.objects.rows = [
+        SimpleNamespace(pk=1, enabled=False),
+        SimpleNamespace(pk=2, enabled=True),
+    ]
+
+    _run(proxbox_sync_command.module)
+
+    assert len(proxbox_sync_command.enqueue_calls) == 1
+    call = proxbox_sync_command.enqueue_calls[0]
+    assert call["proxmox_endpoint_ids"] == [2]
 
 
 def test_backend_unreachable_raises_command_error(proxbox_sync_command):

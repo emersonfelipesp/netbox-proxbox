@@ -304,6 +304,14 @@ sudo systemctl enable --now netbox-rq
 
 > **Upgrading from an older Proxbox release?** Jobs used to be enqueued on the `netbox_proxbox.sync` queue. The stock `netbox-rq` service does not listen to that queue, so old-style jobs will not run. New jobs always use `default` and are picked up without any changes.
 
+Disabled `ProxmoxEndpoint` rows are hard-excluded from operational reads and
+sync jobs. The scheduler, CLI sync command, dashboard cards, keepalive checks,
+HA/storage/firewall/SDN/datacenter live reads, backend endpoint preflight, and
+stale scheduled job parameters all filter to `enabled=True` before contacting
+proxbox-api or Proxmox. To pause a production endpoint, set **Enabled** to
+false; the row remains visible in the API and UI but no connection attempt is
+made for that endpoint.
+
 ### Schedule a sync
 
 1. In NetBox, go to **Proxbox > Schedule Sync**.
@@ -324,6 +332,7 @@ Proxbox sync jobs default to a **7200-second (2-hour) RQ wall-clock limit** (`PR
 | Job stays **`pending`** | No RQ worker running, or worker not listening to `default` queue | Start/restart `manage.py rqworker` |
 | Job stays **`running`** for a long time | Proxbox API is still syncing or stream is slow | Check the job **Log** tab; wait or inspect the backend |
 | Job **`errored: JobTimeoutException`** | RQ wall-clock limit exceeded | Increase `PROXBOX_SYNC_JOB_TIMEOUT` in `netbox_proxbox/jobs.py` |
+| Disabled endpoint still appears in `/api/plugins/proxbox/endpoints/proxmox/` | Expected API behavior; disabled rows remain inventory records | Leave it disabled to prevent all connection attempts. Re-enable only when the endpoint should participate in cards, checks, and sync jobs again. |
 | VM IP addresses stay empty after upgrade | The separate `proxbox-api` backend is too old, is on the v0.0.13/v0.0.14 agent-flag warning window, existing VMs still lack `proxmox_vm_id`, or the Proxmox role lacks guest-agent privileges | Check the FastAPI card warning on the Proxbox home page. Run `proxbox-api >= 0.0.13` at minimum; if the warning references PR #156, install a backend build containing that fix or the next fixed backend release. Then run **Full Update** so existing VMs get `proxmox_vm_id` before the IP-address stage runs. For PVE 9, also confirm `VM.GuestAgent.Audit`. |
 | **HTTP 401 Authentication failed!** against Proxmox VE 9.x | A stale stored token is overriding fresh password credentials, or the role is missing PVE 9 permissions | On the Proxmox endpoint edit page, tick **"Clear stored API token on save"** (and/or **"Clear stored password on save"**) to wipe the unused secret. The form rejects rows that end up with neither a password nor a complete `(token name, token value)` pair. Confirm the role on Proxmox grants `Datastore.Audit`, `Sys.Audit`, `VM.Audit`, and on PVE 9 also `VM.GuestAgent.Audit`. The plugin now surfaces the upstream PVE 9 error message in the UI instead of `"Unknown error."`, which makes "no such realm" / "expired token" / "missing privilege" failures self-diagnosing. |
 

@@ -10,6 +10,7 @@ from virtualization.models import VirtualMachine
 
 from netbox_proxbox.services._endpoint_errors import translate_request_exception
 from netbox_proxbox.services.backend_context import get_fastapi_request_context
+from netbox_proxbox.services.endpoint_scope import enabled_backend_endpoint_scope
 
 
 def _extract_vmid(vm: VirtualMachine) -> int | None:
@@ -60,9 +61,25 @@ class ProxmoxVMHATabView(generic.ObjectView):
             return context
 
         url = f"{ctx.http_url}/proxmox/cluster/ha/resources/by-vm/{vmid}"
+        scope_params, _, scope_error = enabled_backend_endpoint_scope(
+            base_url=ctx.http_url,
+            auth_headers=ctx.headers or {},
+            backend_verify_ssl=ctx.verify_ssl,
+            timeout=10,
+        )
+        if scope_error:
+            context["detail"] = scope_error
+            return context
+        if scope_params is None:
+            context["detail"] = (
+                "No enabled Proxmox endpoints configured; skipping VM HA lookup."
+            )
+            return context
+
         try:
             response = requests.get(
                 url,
+                params=scope_params,
                 headers=ctx.headers or {},
                 timeout=10,
                 verify=ctx.verify_ssl,

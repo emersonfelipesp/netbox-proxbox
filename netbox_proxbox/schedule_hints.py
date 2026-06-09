@@ -89,7 +89,9 @@ def quick_schedule_home_form_kwargs() -> dict[str, object]:
         ProxmoxEndpoint,
     )  # local to avoid circular import in tests
 
-    all_proxmox_pks = list(ProxmoxEndpoint.objects.values_list("pk", flat=True))
+    all_proxmox_pks = list(
+        ProxmoxEndpoint.objects.filter(enabled=True).values_list("pk", flat=True)
+    )
     return {
         "initial": {
             "sync_types": [SyncTypeChoices.ALL],
