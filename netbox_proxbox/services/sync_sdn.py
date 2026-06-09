@@ -25,6 +25,7 @@ from netbox_proxbox.models import (
     ProxmoxSdnRouteMap,
 )
 from netbox_proxbox.services.backend_proxy import get_fastapi_request_context
+from netbox_proxbox.services.endpoint_scope import enabled_backend_endpoint_scope
 
 logger = logging.getLogger(__name__)
 
@@ -57,11 +58,15 @@ def _resolve_endpoint_by_cluster_name(cluster_name: str) -> ProxmoxEndpoint | No
             .select_related("endpoint")
             .first()
         )
-        if cluster and cluster.endpoint_id:
+        if (
+            cluster
+            and cluster.endpoint_id
+            and bool(getattr(cluster.endpoint, "enabled", True))
+        ):
             return cluster.endpoint
     except Exception as exc:
         logger.warning("DB error resolving cluster %r: %s", cluster_name, exc)
-    return ProxmoxEndpoint.objects.filter(name=cluster_name).first()
+    return ProxmoxEndpoint.objects.filter(name=cluster_name, enabled=True).first()
 
 
 def _upsert_fabric(endpoint: ProxmoxEndpoint, item: dict, result: SdnSyncResult) -> int:
@@ -172,10 +177,16 @@ def _upsert_prefix_list(
     return obj.pk
 
 
-def _fetch_list(url: str, headers: dict, verify_ssl: bool) -> list[dict] | None:
+def _fetch_list(
+    url: str, headers: dict, verify_ssl: bool, params: dict[str, str]
+) -> list[dict] | None:
     try:
         resp = requests.get(
-            url, headers=headers, verify=verify_ssl, timeout=SYNC_TIMEOUT
+            url,
+            params=params,
+            headers=headers,
+            verify=verify_ssl,
+            timeout=SYNC_TIMEOUT,
         )
         resp.raise_for_status()
         data = resp.json()
@@ -207,14 +218,38 @@ def sync_sdn(
     if auth_headers is None:
         auth_headers = {}
 
+    scope_params, _, scope_error = enabled_backend_endpoint_scope(
+        base_url=fastapi_url,
+        auth_headers=auth_headers,
+        backend_verify_ssl=verify_ssl,
+        timeout=SYNC_TIMEOUT,
+    )
+    if scope_error:
+        result.error = scope_error
+        logger.error(result.error)
+        return result
+    if scope_params is None:
+        result.success = True
+        logger.info("No enabled Proxmox endpoints configured; skipping SDN sync")
+        return result
+
     fabrics = _fetch_list(
-        f"{fastapi_url}/proxmox/sdn/fabrics", auth_headers, verify_ssl
+        f"{fastapi_url}/proxmox/sdn/fabrics",
+        auth_headers,
+        verify_ssl,
+        scope_params,
     )
     route_maps = _fetch_list(
-        f"{fastapi_url}/proxmox/sdn/route-maps", auth_headers, verify_ssl
+        f"{fastapi_url}/proxmox/sdn/route-maps",
+        auth_headers,
+        verify_ssl,
+        scope_params,
     )
     prefix_lists = _fetch_list(
-        f"{fastapi_url}/proxmox/sdn/prefix-lists", auth_headers, verify_ssl
+        f"{fastapi_url}/proxmox/sdn/prefix-lists",
+        auth_headers,
+        verify_ssl,
+        scope_params,
     )
 
     if fabrics is None or route_maps is None or prefix_lists is None:

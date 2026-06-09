@@ -20,6 +20,7 @@ from netbox_proxbox.schemas.backup_routine import (
     GetClusterBackupIdResponse,
 )
 from netbox_proxbox.services.backend_proxy import get_fastapi_request_context
+from netbox_proxbox.views.backend_sync import resolve_backend_endpoint_id
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,21 @@ def sync_backup_routines(
         logger.error("ProxmoxEndpoint %s not found", endpoint_id)
         return {"success": False, "error": "Endpoint not found"}
 
+    if not bool(getattr(endpoint, "enabled", True)):
+        logger.info(
+            "Skipping backup routine sync for disabled endpoint %s", endpoint_id
+        )
+        return {
+            "success": True,
+            "endpoint_id": endpoint_id,
+            "routines_created": 0,
+            "routines_updated": 0,
+            "routines_stale": 0,
+            "error": None,
+            "skipped": True,
+            "reason": "proxmox_endpoint_disabled",
+        }
+
     if not fastapi_url:
         ctx = get_fastapi_request_context()
         if ctx is None or not ctx.http_url:
@@ -84,9 +100,29 @@ def sync_backup_routines(
         "error": None,
     }
 
+    backend_endpoint_id, resolve_error = resolve_backend_endpoint_id(
+        endpoint,
+        base_url=fastapi_url,
+        auth_headers=auth_headers,
+        backend_verify_ssl=verify_ssl,
+        timeout=SYNC_TIMEOUT,
+    )
+    if backend_endpoint_id is None:
+        result["error"] = (
+            resolve_error or "Could not resolve backend Proxmox endpoint id"
+        )
+        logger.error(result["error"])
+        return result
+
+    scope_params = {
+        "source": "database",
+        "proxmox_endpoint_ids": str(backend_endpoint_id),
+    }
+
     try:
         list_resp = requests.get(
             f"{fastapi_url}/proxmox/cluster/backup",
+            params=scope_params,
             headers=auth_headers,
             verify=verify_ssl,
             timeout=SYNC_TIMEOUT,
@@ -119,6 +155,7 @@ def sync_backup_routines(
             try:
                 detail_resp = requests.get(
                     f"{fastapi_url}/proxmox/api2/cluster/backup/{job_id}",
+                    params=scope_params,
                     headers=auth_headers,
                     verify=verify_ssl,
                     timeout=SYNC_TIMEOUT,

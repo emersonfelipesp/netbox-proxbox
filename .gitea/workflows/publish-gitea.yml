@@ -13,6 +13,7 @@ on:
 
 jobs:
   validate-version:
+    if: ${{ github.event_name != 'create' || startsWith(github.ref, 'refs/tags/') }}
     runs-on: mirror-host
     outputs:
       version: ${{ steps.extract.outputs.version }}

@@ -10,6 +10,7 @@ from utilities.views import ConditionalLoginRequiredMixin
 
 from netbox_proxbox.services._endpoint_errors import translate_request_exception
 from netbox_proxbox.services.backend_context import get_fastapi_request_context
+from netbox_proxbox.services.endpoint_scope import enabled_backend_endpoint_scope
 from netbox_proxbox.views.proxbox_access import RequireProxboxDashboardAccessMixin
 
 
@@ -34,9 +35,25 @@ class HAClusterView(
             return render(request, self.template_name, context)
 
         url = f"{ctx.http_url}/proxmox/cluster/ha/summary"
+        scope_params, _, scope_error = enabled_backend_endpoint_scope(
+            base_url=ctx.http_url,
+            auth_headers=ctx.headers or {},
+            backend_verify_ssl=ctx.verify_ssl,
+            timeout=15,
+        )
+        if scope_error:
+            context["detail"] = scope_error
+            return render(request, self.template_name, context)
+        if scope_params is None:
+            context["detail"] = (
+                "No enabled Proxmox endpoints configured; skipping HA summary."
+            )
+            return render(request, self.template_name, context)
+
         try:
             response = requests.get(
                 url,
+                params=scope_params,
                 headers=ctx.headers or {},
                 timeout=15,
                 verify=ctx.verify_ssl,

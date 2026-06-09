@@ -654,6 +654,20 @@ class ServiceStatus:
                 detail=self.last_error_detail,
             )
 
+        if not bool(getattr(proxmox_service_obj, "enabled", True)):
+            logger.info("Skipping Proxmox status check for disabled endpoint %s", pk)
+            self._set_error("Proxmox endpoint is disabled; skipping status check.")
+            return status, ServiceCheckResult(
+                target_address=get_ip_address_host(
+                    getattr(proxmox_service_obj, "ip_address", None)
+                )
+                or (getattr(proxmox_service_obj, "domain", None) or None),
+                target_port=getattr(proxmox_service_obj, "port", None) or 8006,
+                authentication="error",
+                api_access="error",
+                detail=self.last_error_detail,
+            )
+
         proxmox_ip_address = get_ip_address_host(
             getattr(proxmox_service_obj, "ip_address", None)
         )

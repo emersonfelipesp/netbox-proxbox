@@ -98,6 +98,9 @@ def schedule_hints(monkeypatch):
 
     # Stub netbox_proxbox.models so the lazy import in quick_schedule_home_form_kwargs works.
     class _FakePXEndpointManager:
+        def filter(self, **_kwargs):
+            return self
+
         def values_list(self, *a, **k):
             return []
 

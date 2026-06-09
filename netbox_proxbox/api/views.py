@@ -680,7 +680,10 @@ class DashboardAPIView(APIView):
 
         from netbox_proxbox.utils import get_backend_auth_headers, get_fastapi_url
         from netbox_proxbox.views import dashboard_data
-        from netbox_proxbox.views.backend_sync import sync_proxmox_endpoint_to_backend
+        from netbox_proxbox.views.backend_sync import (
+            resolve_backend_endpoint_id,
+            sync_proxmox_endpoint_to_backend,
+        )
         from netbox_proxbox.views.error_utils import (
             extract_proxmox_backend_error_detail,
             parse_requests_response_json,
@@ -688,11 +691,15 @@ class DashboardAPIView(APIView):
         from virtualization.models import Cluster
 
         proxmox_endpoints = list(
-            models.ProxmoxEndpoint.objects.restrict(request.user, "view")
+            models.ProxmoxEndpoint.objects.restrict(request.user, "view").filter(
+                enabled=True
+            )
         )
-        fastapi_endpoint = models.FastAPIEndpoint.objects.restrict(
-            request.user, "view"
-        ).first()
+        fastapi_endpoint = (
+            models.FastAPIEndpoint.objects.restrict(request.user, "view")
+            .filter(enabled=True)
+            .first()
+        )
 
         fastapi_url = None
         backend_verify_ssl = True
@@ -742,15 +749,25 @@ class DashboardAPIView(APIView):
                 dashboards.append(entry)
                 continue
 
-            domain = (endpoint.domain or "").strip()
-            query_params: dict = (
-                {"source": "database", "domain": domain}
-                if domain
-                else {
-                    "source": "database",
-                    "ip_address": str(endpoint.ip_address).split("/")[0],
-                }
+            backend_endpoint_id, resolve_error = resolve_backend_endpoint_id(
+                endpoint,
+                base_url=fastapi_url,
+                auth_headers=backend_headers,
+                backend_verify_ssl=backend_verify_ssl,
+                timeout=self._request_timeout,
             )
+            if backend_endpoint_id is None:
+                entry["detail"] = (
+                    resolve_error
+                    or "Failed to resolve Proxmox endpoint on ProxBox backend."
+                )
+                dashboards.append(entry)
+                continue
+
+            query_params: dict = {
+                "source": "database",
+                "proxmox_endpoint_ids": str(backend_endpoint_id),
+            }
 
             def _fetch(route: str) -> tuple[object, str | None]:
                 resp = http_requests.get(
@@ -1347,6 +1364,14 @@ class ScheduleSyncAPIView(APIView):
         proxmox_endpoint_ids = [
             str(pk) for pk in data.get("proxmox_endpoint_ids") or []
         ]
+        if proxmox_endpoint_ids:
+            proxmox_endpoint_ids = [
+                str(pk)
+                for pk in models.ProxmoxEndpoint.objects.filter(
+                    pk__in=proxmox_endpoint_ids,
+                    enabled=True,
+                ).values_list("pk", flat=True)
+            ]
         netbox_endpoint_ids = [str(pk) for pk in data.get("netbox_endpoint_ids") or []]
         job_name = (data.get("job_name") or "").strip()
 

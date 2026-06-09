@@ -16,6 +16,7 @@ from netbox_proxbox.jobs import (
     is_proxbox_sync_job,
     proxbox_sync_params_from_job,
 )
+from netbox_proxbox.models import ProxmoxEndpoint
 from netbox_proxbox.views.home_context import build_home_dashboard_context
 from netbox_proxbox.views.proxbox_access import permission_enqueue_proxbox_sync
 from netbox_proxbox.views.schedule_helpers import (
@@ -63,7 +64,7 @@ def build_initial_from_job(request: HttpRequest, edit_job_id: str) -> dict:
     netbox_endpoint_ids = params.get("netbox_endpoint_ids", [])
     if proxmox_endpoint_ids:
         initial["proxmox_endpoints"] = list(
-            ProxmoxEndpoint.objects.filter(pk__in=proxmox_endpoint_ids)
+            ProxmoxEndpoint.objects.filter(pk__in=proxmox_endpoint_ids, enabled=True)
         )
     if netbox_endpoint_ids:
         initial["netbox_endpoints"] = list(
@@ -110,6 +111,13 @@ def enqueue_proxbox_sync_from_valid_form(
     schedule_at = form.cleaned_data.get("schedule_at")
     interval = form.cleaned_data.get("interval")
     proxmox_endpoint_ids = form.cleaned_data.get("proxmox_endpoint_ids", [])
+    if proxmox_endpoint_ids:
+        proxmox_endpoint_ids = [
+            str(pk)
+            for pk in ProxmoxEndpoint.objects.filter(
+                pk__in=proxmox_endpoint_ids, enabled=True
+            ).values_list("pk", flat=True)
+        ]
     netbox_endpoint_ids = form.cleaned_data.get("netbox_endpoint_ids", [])
     job_name = form.cleaned_data.get("job_name") or ""
 

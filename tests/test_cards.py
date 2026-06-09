@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import requests
+import pytest
 
 from tests.conftest import ResponseStub, _make_model_class, load_plugin_module
 
@@ -70,6 +71,51 @@ def test_get_proxmox_card_merges_cluster_and_version_payloads(
             True,
         ),
     ]
+
+
+def test_get_proxmox_card_skips_disabled_endpoint_without_backend_calls(
+    monkeypatch,
+    fastapi_endpoint,
+):
+    proxmox_endpoint = type(
+        "Obj",
+        (),
+        {
+            "pk": 1,
+            "id": 1,
+            "name": "Disabled PVE",
+            "domain": "pve.local",
+            "ip_address": "10.0.30.9/24",
+            "port": 8006,
+            "enabled": False,
+        },
+    )()
+    module = load_plugin_module(
+        "netbox_proxbox.views.cards",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+        proxmox_endpoint=proxmox_endpoint,
+    )
+    monkeypatch.setattr(
+        module,
+        "sync_proxmox_endpoint_to_backend",
+        lambda *args, **kwargs: pytest.fail("disabled endpoint was synced"),
+    )
+    monkeypatch.setattr(
+        module,
+        "resolve_backend_endpoint_id",
+        lambda *args, **kwargs: pytest.fail("disabled endpoint was resolved"),
+    )
+    monkeypatch.setattr(
+        module.requests,
+        "get",
+        lambda *args, **kwargs: pytest.fail("disabled endpoint made Proxmox GET"),
+    )
+
+    response = module.get_proxmox_card(None, 1)
+
+    assert response.payload["cluster_data"] == {}
+    assert "disabled" in response.payload["detail"]
 
 
 def test_get_proxmox_card_uses_backend_endpoint_id_when_domain_is_empty(

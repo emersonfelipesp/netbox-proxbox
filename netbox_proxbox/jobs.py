@@ -461,6 +461,23 @@ def _coerce_endpoint_ids(
     return endpoint_ids
 
 
+def _enabled_endpoint_ids(
+    raw_ids: list[str] | None = None,
+    *,
+    logger: object | None = None,
+    context: str = "sync",
+) -> list[int]:
+    """Return enabled Proxmox endpoint ids, optionally constrained to requested ids."""
+    if raw_ids:
+        requested_ids = _coerce_endpoint_ids(raw_ids, logger=logger, context=context)
+        if not requested_ids:
+            return []
+        qs = ProxmoxEndpoint.objects.filter(pk__in=requested_ids, enabled=True)
+    else:
+        qs = ProxmoxEndpoint.objects.filter(enabled=True)
+    return list(qs.values_list("pk", flat=True))
+
+
 class ProxboxSyncJob(JobRunner):
     """Trigger a ProxBox sync operation against the FastAPI backend."""
 
@@ -700,13 +717,16 @@ class ProxboxSyncJob(JobRunner):
             from netbox_proxbox.services.sync_cluster import sync_cluster_and_nodes  # noqa: PLC0415
 
             endpoint_ids_to_sync = (
-                _coerce_endpoint_ids(
+                _enabled_endpoint_ids(
                     proxmox_endpoint_ids,
                     logger=self.logger,
                     context="cluster/node sync",
                 )
                 if proxmox_endpoint_ids
-                else list(ProxmoxEndpoint.objects.values_list("pk", flat=True))
+                else _enabled_endpoint_ids(
+                    logger=self.logger,
+                    context="cluster/node sync",
+                )
             )
             for eid in endpoint_ids_to_sync:
                 self.logger.info(f"Syncing cluster/nodes for endpoint {eid}")

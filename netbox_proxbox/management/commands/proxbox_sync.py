@@ -7,7 +7,7 @@ Usage:
 
 This is the headless equivalent of clicking "Full Update" in the plugin UI:
 it enqueues the same ``ProxboxSyncJob`` (on NetBox's default RQ queue) with
-``sync_types=[SyncTypeChoices.ALL]`` and all configured Proxmox endpoint IDs.
+``sync_types=[SyncTypeChoices.ALL]`` and all enabled Proxmox endpoint IDs.
 
 ``--enqueue-once`` is the integration hook for the ``proxbox-scheduler``
 container (issue #372): it routes through ``JobRunner.enqueue_once()``,
@@ -147,12 +147,12 @@ class Command(BaseCommand):
             )
 
         proxmox_endpoint_ids = list(
-            ProxmoxEndpoint.objects.values_list("pk", flat=True)
+            ProxmoxEndpoint.objects.filter(enabled=True).values_list("pk", flat=True)
         )
         if not proxmox_endpoint_ids:
             self.stdout.write(
                 self.style.WARNING(
-                    "No ProxmoxEndpoint records configured; nothing to sync."
+                    "No enabled ProxmoxEndpoint records configured; nothing to sync."
                 )
             )
             return

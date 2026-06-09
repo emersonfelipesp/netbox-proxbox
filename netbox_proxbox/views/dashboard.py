@@ -79,10 +79,14 @@ class DashboardView(
     def get(self, request: HttpRequest) -> HttpResponse:
         """Handle get."""
         dashboard_data.ProxmoxNode = ProxmoxNode
-        proxmox_endpoints = list(ProxmoxEndpoint.objects.restrict(request.user, "view"))
-        fastapi_endpoint = FastAPIEndpoint.objects.restrict(
-            request.user, "view"
-        ).first()
+        proxmox_endpoints = list(
+            ProxmoxEndpoint.objects.restrict(request.user, "view").filter(enabled=True)
+        )
+        fastapi_endpoint = (
+            FastAPIEndpoint.objects.restrict(request.user, "view")
+            .filter(enabled=True)
+            .first()
+        )
 
         dashboards: list[dict[str, object]] = []
         if fastapi_endpoint:

@@ -104,6 +104,12 @@ def _install_services_stubs(
         "netbox_proxbox.services.backend_context"
     )
     services_backend_context.get_fastapi_request_context = lambda: request_context
+    services_endpoint_scope = types.ModuleType("netbox_proxbox.services.endpoint_scope")
+    services_endpoint_scope.enabled_backend_endpoint_scope = lambda **_kw: (
+        {"source": "database", "proxmox_endpoint_ids": "1"},
+        {1: 1},
+        None,
+    )
 
     netbox_proxbox = types.ModuleType("netbox_proxbox")
     netbox_proxbox.__path__ = []  # mark as package
@@ -119,6 +125,11 @@ def _install_services_stubs(
         sys.modules,
         "netbox_proxbox.services.backend_context",
         services_backend_context,
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "netbox_proxbox.services.endpoint_scope",
+        services_endpoint_scope,
     )
 
 

@@ -159,6 +159,13 @@ def ensure_proxmox_endpoint_has_fastapi_token(
     """
     from netbox_proxbox.models import FastAPIEndpoint
 
+    if not bool(getattr(instance, "enabled", True)):
+        logger.info(
+            "ProxmoxEndpoint %s is disabled, skipping backend token registration and endpoint sync",
+            getattr(instance, "pk", None),
+        )
+        return
+
     count = FastAPIEndpoint.objects.count()
     if count == 0:
         logger.debug("No FastAPIEndpoint configured, skipping token registration")

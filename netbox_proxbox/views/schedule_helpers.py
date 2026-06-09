@@ -33,7 +33,7 @@ def build_initial_from_job(request: HttpRequest, edit_job_id: str) -> dict:
     netbox_endpoint_ids = params.get("netbox_endpoint_ids", [])
     if proxmox_endpoint_ids:
         initial["proxmox_endpoints"] = list(
-            ProxmoxEndpoint.objects.filter(pk__in=proxmox_endpoint_ids)
+            ProxmoxEndpoint.objects.filter(pk__in=proxmox_endpoint_ids, enabled=True)
         )
     if netbox_endpoint_ids:
         initial["netbox_endpoints"] = list(

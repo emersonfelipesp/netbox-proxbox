@@ -79,6 +79,25 @@ class ProxboxProxmoxCardView(
             ProxmoxEndpoint.objects.restrict(request.user, "view"),
             pk=pk,
         )
+        if not bool(getattr(proxmox_object, "enabled", True)):
+            return JsonResponse(
+                {
+                    "cluster_data": {},
+                    "object": {
+                        "pk": getattr(
+                            proxmox_object,
+                            "pk",
+                            getattr(proxmox_object, "id", None),
+                        ),
+                        "name": proxmox_object.name,
+                        "domain": proxmox_object.domain,
+                        "ip_address": str(proxmox_object.ip_address)
+                        if proxmox_object.ip_address
+                        else None,
+                    },
+                    "detail": "Proxmox endpoint is disabled; skipping status check.",
+                }
+            )
 
         fastapi_object = (
             FastAPIEndpoint.objects.restrict(request.user, "view")

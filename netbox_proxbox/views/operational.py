@@ -74,6 +74,9 @@ def resolve_vm_endpoint_context(
     proxmox_cluster = cluster.proxmox_cluster_tracking.first()
     if proxmox_cluster is None or proxmox_cluster.endpoint_id is None:
         return None
+    endpoint = getattr(proxmox_cluster, "endpoint", None)
+    if endpoint is not None and not bool(getattr(endpoint, "enabled", True)):
+        return None
     cf = getattr(vm, "custom_field_data", None) or {}
     raw_vmid = cf.get("proxmox_vm_id") or cf.get("cf_proxmox_vm_id")
     try:

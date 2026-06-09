@@ -8,6 +8,7 @@ import types
 from types import SimpleNamespace
 
 import requests
+import pytest
 
 from tests.conftest import ResponseStub, _make_model_class, load_plugin_module
 
@@ -532,6 +533,55 @@ def test_proxmox_status_uses_backend_endpoint_id_query_when_domain_available(
             True,
         ),
     ]
+
+
+def test_proxmox_status_skips_disabled_endpoint_without_backend_calls(
+    monkeypatch,
+    fastapi_endpoint,
+):
+    proxmox_endpoint = SimpleNamespace(
+        id=1,
+        pk=1,
+        name="Disabled PVE",
+        domain="pve.local",
+        ip_address="10.0.30.9/24",
+        port=8006,
+        verify_ssl=False,
+        enabled=False,
+    )
+    load_plugin_module(
+        "netbox_proxbox.views.keepalive_status",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+        proxmox_endpoint=proxmox_endpoint,
+    )
+    ss = _service_status_module()
+    monkeypatch.setattr(
+        ss,
+        "sync_proxmox_endpoint_to_backend",
+        lambda *args, **kwargs: pytest.fail("disabled endpoint was synced"),
+    )
+    monkeypatch.setattr(
+        ss,
+        "resolve_backend_endpoint_id",
+        lambda *args, **kwargs: pytest.fail("disabled endpoint was resolved"),
+    )
+    monkeypatch.setattr(
+        ss.requests,
+        "get",
+        lambda *args, **kwargs: pytest.fail("disabled endpoint made Proxmox GET"),
+    )
+
+    status, details = ss.ServiceStatus().proxmox_status(
+        1,
+        "https://proxbox.local:8800",
+        auth_headers={"Authorization": "Bearer backend-token"},
+        backend_verify_ssl=True,
+    )
+
+    assert status == "error"
+    assert details["api_access"] == "error"
+    assert "disabled" in details["detail"]
 
 
 def test_proxmox_status_uses_backend_endpoint_id_query_when_domain_missing(

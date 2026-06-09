@@ -75,7 +75,9 @@ def _extract_node(vm: VirtualMachine, vmid: int | None) -> str | None:
 def _pick_proxmox_endpoint(
     request: HttpRequest, vm: VirtualMachine
 ) -> ProxmoxEndpoint | None:
-    proxmox_qs = ProxmoxEndpoint.objects.restrict(request.user, "view")
+    proxmox_qs = ProxmoxEndpoint.objects.restrict(request.user, "view").filter(
+        enabled=True
+    )
     cluster_name = getattr(getattr(vm, "cluster", None), "name", None)
     if cluster_name:
         matched = proxmox_qs.filter(name=cluster_name).first()
@@ -131,7 +133,11 @@ class ProxmoxVMConfigTabView(generic.ObjectView):
             )
             return context
 
-        fastapi_obj = FastAPIEndpoint.objects.restrict(request.user, "view").first()
+        fastapi_obj = (
+            FastAPIEndpoint.objects.restrict(request.user, "view")
+            .filter(enabled=True)
+            .first()
+        )
         proxmox_obj = _pick_proxmox_endpoint(request, instance)
         if fastapi_obj is None:
             context["detail"] = "No FastAPI endpoint is visible."
