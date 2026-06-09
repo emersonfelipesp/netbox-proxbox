@@ -28,8 +28,13 @@ Sync runs on-demand from the NetBox UI or scheduled automatically via NetBox's j
 Proxbox can be extended with standalone companion plugins. Install only the
 plugins you need; `netbox-proxbox` remains the base plugin and must be enabled
 before any companion plugin. The infrastructure inventory plugins declare
-`netbox-proxbox>=0.0.18` as a dependency, and `netbox-packer` follows the same
-operational conventions for the Proxbox plugin family.
+`netbox-proxbox>=0.0.18` as a dependency, while `netbox-packer` and
+`netbox-rpc` follow the same operational conventions for the Proxbox plugin
+family. `netbox-rpc` is an *operational* companion: when it is installed,
+netbox-proxbox can run audited SSH procedures against Proxmox hosts (for
+example installing the proxbox-api cloud-image-build SSH key on a node) through
+the netbox-rpc engine instead of handling SSH itself. The integration is a soft
+dependency — see `netbox_proxbox/integrations/rpc.py`.
 
 | Package | NetBox plugin | What it adds |
 |---------|---------------|--------------|
@@ -37,6 +42,7 @@ operational conventions for the Proxbox plugin family.
 | [`netbox-pbs`](https://github.com/emersonfelipesp/netbox-pbs) | `netbox_pbs` | Inventories Proxmox Backup Server infrastructure, including PBS servers, datastores, backup snapshots, and scheduled job history. |
 | [`netbox-ceph`](https://github.com/emersonfelipesp/netbox-ceph) | `netbox_ceph` | Adds read-only Ceph cluster inventory for Proxmox-managed Ceph: clusters, daemons, OSDs, pools, filesystems, CRUSH rules, flags, and health checks. |
 | [`netbox-packer`](https://github.com/emersonfelipesp/netbox-packer) | `netbox_packer` | Tracks HashiCorp Packer image definitions and build execution records for Proxmox VM templates and image-factory workflows. |
+| [`netbox-rpc`](https://github.com/emersonfelipesp/netbox-rpc) | `netbox_rpc` | Audited SSH/RPC procedure engine. netbox-proxbox optionally uses it to install SSH keys on Proxmox hosts (e.g. for the cloud-image build pipeline) via `netbox_proxbox.integrations.rpc`. |
 
 For a standard NetBox virtualenv install, activate the NetBox environment and
 install the packages you want:
