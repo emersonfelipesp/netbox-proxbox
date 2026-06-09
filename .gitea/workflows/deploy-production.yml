@@ -1,0 +1,73 @@
+name: Deploy NetBox plugin (staging/production)
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref to deploy (tag, branch, or commit SHA)"
+        required: false
+      environment:
+        description: "Target environment (optional for main/develop refs)"
+        required: false
+        type: choice
+        options:
+          - staging
+          - production
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy plugin
+    runs-on: prod-deploy
+    env:
+      REF: ${{ inputs.ref || github.sha }}
+      REQUESTED_ENVIRONMENT: ${{ inputs.environment }}
+    steps:
+      - name: Deploy plugin
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          case "$REF" in
+            v[0-9]*.[0-9]*.[0-9]* | main | develop | [a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9]*) ;;
+            *) echo "ERROR: Invalid ref format: $REF"; exit 1 ;;
+          esac
+
+          target="${REQUESTED_ENVIRONMENT:-}"
+          if [[ -z "$target" ]]; then
+            case "${GITHUB_REF_NAME:-}" in
+              develop) target="staging" ;;
+              main) target="production" ;;
+              *) echo "ERROR: Cannot infer deploy target from ref '${GITHUB_REF_NAME:-}'"; exit 1 ;;
+            esac
+          fi
+
+          case "$target" in
+            staging)
+              if [[ ! -x /opt/nmulticloud/deploy/bin/deploy-netbox-plugin-staging ]]; then
+                echo "ERROR: staging deploy helper is not installed on this runner"
+                exit 1
+              fi
+              /opt/nmulticloud/deploy/bin/deploy-netbox-plugin-staging netbox-proxbox "$REF"
+              ;;
+            production)
+              if [[ -x /opt/nmulticloud/deploy/bin/deploy-netbox-plugin ]]; then
+                /opt/nmulticloud/deploy/bin/deploy-netbox-plugin netbox-proxbox "$REF"
+              else
+                ssh -o StrictHostKeyChecking=accept-new \
+                    -o ServerAliveInterval=30 \
+                    -o ServerAliveCountMax=20 \
+                    nmc-prod-207 -- deploy-plugin netbox-proxbox "$REF"
+              fi
+              ;;
+            *)
+              echo "ERROR: Invalid deploy target: $target"
+              exit 1
+              ;;
+          esac

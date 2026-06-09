@@ -129,14 +129,23 @@ validation.
 
 The Gitea workflow at `.gitea/workflows/mirror-github.yml` mirrors only
 approved source branches to the matching GitHub repository. For this repo the
-allow-list is `develop` and `main`; `main` is included for future branch
-creation, but agents must not create it only for mirroring. The workflow uses
+allow-list is `develop` and `main`; `develop` is the staging branch and `main`
+is the production branch. The workflow uses
 the Gitea Actions secrets `GH_MIRROR_TOKEN` for GitHub and
 `SOURCE_MIRROR_TOKEN` for authenticated Gitea source fetches, runs on the
 dedicated `mirror-host` runner label, authenticates with `gh`, configures
 GitHub git credentials through `gh auth setup-git`, and pushes only
 `HEAD:refs/heads/${{ gitea.ref_name }}`. Do not replace it with `git push
 --all`, `git push --mirror`, or tag synchronization.
+
+## Branch-tier Deployment
+
+The deployment workflow at `.gitea/workflows/deploy-production.yml` treats
+`develop` as staging and `main` as production. Pushes to `develop` deploy
+`netbox-proxbox` to `https://staging.netbox.nmulti.cloud`; pushes to `main`
+deploy it to `https://netbox.nmulti.cloud`. Manual dispatch can omit
+`environment` for `develop` and `main`; specify `environment=staging|production`
+when deploying a ref outside those branch triggers.
 
 ## Navigation
 
