@@ -185,8 +185,8 @@ The `bootstrap-only` tag (slug `bootstrap-only`) is auto-created by `netbox_prox
 
 Gitea is the source of truth for normal branch work. The mirror workflow runs
 from Gitea Actions and mirrors only the approved branches to the equivalent
-GitHub repository: `develop` and `main`. `main` is a future trigger only; do
-not create a missing `main` branch just for mirroring.
+GitHub repository: `develop` and `main`. `develop` is the staging branch and
+`main` is the production branch.
 
 The job requires the Gitea Actions secrets `GH_MIRROR_TOKEN` for GitHub and
 `SOURCE_MIRROR_TOKEN` for authenticated Gitea source fetches, plus the
@@ -204,6 +204,19 @@ trigger issues are resolved. See `proxbox-api/CLAUDE.md` for the exact upload co
 Secret name: `PKG_TOKEN` (GITEA_ prefix is reserved by Gitea, cannot be used).
 Branch creation events must skip this workflow at the job level; only tag
 creation or tag push events should reach the version validation job.
+
+### Branch-tier deployment (`.gitea/workflows/deploy-production.yml`)
+
+Pushes to `develop` deploy this plugin to the staging NetBox endpoint at
+`https://staging.netbox.nmulti.cloud`. Pushes to `main` deploy the same repo to
+the production NetBox endpoint at `https://netbox.nmulti.cloud`.
+
+Manual dispatch accepts an optional `environment=staging|production` and an
+optional `ref`. When no manual environment is supplied, the workflow derives the
+target from `develop` or `main`. The staging path uses
+`/opt/nmulticloud/deploy/bin/deploy-netbox-plugin-staging netbox-proxbox "$REF"`;
+the production path uses
+`/opt/nmulticloud/deploy/bin/deploy-netbox-plugin netbox-proxbox "$REF"`.
 
 ### E2E Docker workflow (`e2e-docker.yml`)
 
