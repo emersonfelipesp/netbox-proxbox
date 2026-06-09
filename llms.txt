@@ -25,7 +25,7 @@ netbox-proxbox is a NetBox plugin that synchronizes Proxmox infrastructure data 
 
 ### Version
 
-- Plugin version: `0.0.20.post1`
+- Plugin version: `0.0.20.post2`
 - NetBox compatibility: `4.5.8` through `4.6.99`
 
 ---
@@ -56,6 +56,25 @@ netbox-proxbox is a NetBox plugin that synchronizes Proxmox infrastructure data 
 5. **Data Collection**: proxbox-api fetches data from Proxmox and NetBox
 6. **Object Creation**: proxbox-api creates/updates NetBox objects via REST API
 7. **Progress Streaming**: SSE events stream back to browser for real-time progress
+
+### Endpoint Enablement
+
+Endpoint rows are both inventory/configuration records and possible connection
+targets. Treat `enabled=False` as a hard no-connection gate for every
+endpoint-like object that exposes the shared field, including
+`ProxmoxEndpoint`, `NetBoxEndpoint`, `FastAPIEndpoint`, `PBSEndpoint`,
+`PDMEndpoint`, and companion endpoint rows such as PBS/PDM plugin endpoints.
+
+Disabled endpoint rows must remain visible through the UI and REST API, but
+operational code must return before the first proxbox-api, NetBox, Proxmox,
+PBS, PDM, or companion-plugin HTTP call. This includes status cards,
+keepalive probes, startup/signal registration, backend key registration,
+OpenAPI fetches, backend-id resolution, sync scopes, and scheduled/manual jobs.
+
+Use `netbox_proxbox/services/endpoint_enabled.py` for this guard. New live-read
+or write paths for PBS/PDM must call `disabled_endpoint_detail()` before
+building request contexts or invoking `requests`, SSE, WebSocket, or SDK
+clients.
 
 ### Key Components
 
@@ -225,6 +244,9 @@ class ProxboxPluginSettings(NetBoxModel):
 ### PBSEndpoint / PDMEndpoint / PDMRemote
 
 Companion endpoint models for Proxmox Backup Server and Proxmox Datacenter Manager inventory.
+`PBSEndpoint` and `PDMEndpoint` inherit `EndpointBase.enabled`; do not add a
+second enabled field or bypass the shared guard when adding PBS/PDM status,
+sync, or write surfaces.
 
 ```python
 # Location: netbox_proxbox/models/pbs_endpoint.py

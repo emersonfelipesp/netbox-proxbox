@@ -224,6 +224,14 @@ erDiagram
 | `PDMEndpoint` | domain, port, token, verify_ssl | Proxmox Datacenter Manager connection record |
 | `PDMRemote` | name, pdm_endpoint, remote_type | PDM-managed remote (links to PBS or PVE remotes managed by PDM) |
 
+All endpoint models that inherit `EndpointBase` share the `enabled` field. When
+that field is `False`, the row is inventory-only: keep it visible in UI/API
+surfaces, but return before backend registration, status/keepalive checks,
+OpenAPI reads, sync scopes, or any proxbox-api, PVE, PBS, PDM, NetBox, or
+companion-plugin network attempt. Use
+`netbox_proxbox.services.endpoint_enabled.disabled_endpoint_detail()` at the
+start of new endpoint operational paths.
+
 !!! warning "Single FastAPIEndpoint constraint"
     The plugin's HTTP and WebSocket helpers resolve the backend via `FastAPIEndpoint.objects.first()`. If multiple `FastAPIEndpoint` rows exist, whichever sorts first in the queryset is used for all backend communication. Keep exactly one row in production.
 

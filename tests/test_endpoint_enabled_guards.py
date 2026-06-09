@@ -13,6 +13,10 @@ from unittest.mock import patch
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
+def _source(relative_path: str) -> str:
+    return (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+
+
 def _load_module(monkeypatch, module_name: str, relative_path: str):
     spec = importlib.util.spec_from_file_location(
         module_name, REPO_ROOT / relative_path
@@ -113,6 +117,49 @@ def _load_openapi_schema_module(monkeypatch):
         "netbox_proxbox.services.openapi_schema",
         "netbox_proxbox/services/openapi_schema.py",
     )
+
+
+def test_pbs_and_pdm_models_reuse_endpoint_base_enabled_field():
+    base_source = _source("netbox_proxbox/models/base.py")
+    pbs_source = _source("netbox_proxbox/models/pbs_endpoint.py")
+    pdm_source = _source("netbox_proxbox/models/pdm_endpoint.py")
+
+    assert "class EndpointBase(CommonProperties, NetBoxModel):" in base_source
+    assert "enabled = models.BooleanField" in base_source
+    assert "class PBSEndpoint(EndpointBase):" in pbs_source
+    assert "class PDMEndpoint(EndpointBase):" in pdm_source
+    assert "enabled = models.BooleanField" not in pbs_source
+    assert "enabled = models.BooleanField" not in pdm_source
+
+
+def test_endpoint_enabled_guard_wired_into_connection_paths():
+    guarded_paths = (
+        "netbox_proxbox/__init__.py",
+        "netbox_proxbox/signals.py",
+        "netbox_proxbox/models/fastapi_endpoint.py",
+        "netbox_proxbox/services/backend_auth.py",
+        "netbox_proxbox/services/backend_context.py",
+        "netbox_proxbox/services/openapi_schema.py",
+        "netbox_proxbox/services/service_status.py",
+        "netbox_proxbox/views/backend_sync.py",
+        "netbox_proxbox/views/keepalive_status.py",
+        "netbox_proxbox/management/commands/proxbox_fix_tokens.py",
+    )
+
+    for relative_path in guarded_paths:
+        module_source = _source(relative_path)
+        assert "enabled" in module_source, relative_path
+
+    shared_guard_paths = (
+        "netbox_proxbox/services/openapi_schema.py",
+        "netbox_proxbox/services/service_status.py",
+        "netbox_proxbox/views/backend_sync.py",
+        "netbox_proxbox/views/keepalive_status.py",
+    )
+
+    for relative_path in shared_guard_paths:
+        module_source = _source(relative_path)
+        assert "disabled_endpoint_detail" in module_source, relative_path
 
 
 def test_disabled_endpoint_detail_supports_pdm_endpoint_objects(monkeypatch):
