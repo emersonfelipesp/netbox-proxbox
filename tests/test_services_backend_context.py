@@ -10,9 +10,9 @@ What the contract pins down:
 
 * ``get_fastapi_request_context`` accepts an optional ``endpoint_id`` (defaults
   to ``None``) and returns ``BackendRequestContext | None``.
-* ``get_fastapi_endpoint_with_token`` falls back from "explicit endpoint_id" →
-  "single endpoint" → "first endpoint" — the three branches that view code
-  relies on.
+* ``get_fastapi_endpoint_with_token`` falls back from "explicit enabled
+  endpoint_id" → "single enabled endpoint" → "first enabled endpoint" — the
+  three branches that view code relies on.
 * Module imports the ``BackendRequestContext`` schema, and the auth-retry path
   imports ``ensure_backend_key_registered`` lazily to avoid NetBox startup
   import cycles.
@@ -96,8 +96,10 @@ def test_get_fastapi_endpoint_with_token_returns_tuple():
 def test_endpoint_lookup_handles_three_branches():
     """Endpoint resolution must cover: explicit id, single row, multi-row first()."""
     source = BACKEND_CONTEXT_PATH.read_text(encoding="utf-8")
-    # explicit id branch:
-    assert "filter(pk=endpoint_id)" in source
+    # explicit id branch (disabled endpoints must not be resolved):
+    assert "filter(" in source
+    assert "pk=endpoint_id" in source
+    assert "enabled=True" in source
     # single-row branch (enabled filter + first):
     assert "filter(enabled=True).first()" in source
     # multi-row branch:

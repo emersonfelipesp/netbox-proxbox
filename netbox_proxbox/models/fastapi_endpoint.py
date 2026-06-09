@@ -152,6 +152,12 @@ class FastAPIEndpoint(EndpointBase):
                 pass
 
         super().save(*args, **kwargs)
+        if not bool(getattr(self, "enabled", True)):
+            logger.info(
+                "FastAPIEndpoint %s is disabled, skipping backend key registration",
+                getattr(self, "pk", None),
+            )
+            return
         if is_new_token:
             self._register_key_with_backend()
         elif token_explicitly_changed:
@@ -184,6 +190,13 @@ class FastAPIEndpoint(EndpointBase):
                 keys (used when the operator explicitly sets a new token value to
                 re-synchronise after a backend key rotation).
         """
+        if not bool(getattr(self, "enabled", True)):
+            logger.info(
+                "FastAPIEndpoint %s is disabled, skipping backend key registration",
+                getattr(self, "pk", None),
+            )
+            return
+
         from netbox_proxbox.utils import get_fastapi_url
 
         try:

@@ -14,6 +14,7 @@ from netbox_proxbox.schemas.service_status import (
     ServiceCheckResult,
 )
 from netbox_proxbox.services.backend_version import backend_version_advisories
+from netbox_proxbox.services.endpoint_enabled import disabled_endpoint_detail
 from netbox_proxbox.utils import (
     get_backend_auth_headers,
     get_fastapi_url,
@@ -64,6 +65,14 @@ def _maybe_push_netbox_endpoints_to_backend(
             sync_netbox_endpoint_to_backend as _push,
         )
 
+        endpoints = list(_NB.objects.filter(enabled=True))
+        if not endpoints:
+            logger.debug(
+                "Keepalive push: no enabled NetBoxEndpoint configured, skipping"
+            )
+            _last_netbox_endpoint_push = now
+            return
+
         # Ensure the API key is registered before making authenticated requests.
         # This is the path that recovers when the backend restarts with a fresh
         # database — the keepalive check fires first, then the push follows.
@@ -72,12 +81,6 @@ def _maybe_push_netbox_endpoints_to_backend(
             logger.info("Keepalive push: API key verified — %s", key_msg)
         else:
             logger.warning("Keepalive push: API key registration failed — %s", key_msg)
-
-        endpoints = list(_NB.objects.all())
-        if not endpoints:
-            logger.debug("Keepalive push: no NetBoxEndpoint configured, skipping")
-            _last_netbox_endpoint_push = now
-            return
 
         for nb_ep in endpoints:
             ok, err, _ = _push(
@@ -396,6 +399,27 @@ class ServiceStatus:
                 detail=self.last_error_detail,
             )
 
+        disabled_detail = disabled_endpoint_detail(
+            fastapi_service_obj,
+            kind="FastAPI endpoint",
+            action="skipping status check",
+        )
+        if disabled_detail:
+            logger.info("Skipping FastAPI status check for disabled endpoint %s", pk)
+            self._set_error(disabled_detail)
+            return FastAPIStatusResult(
+                url=None,
+                connected=False,
+                target_address=get_ip_address_host(
+                    getattr(fastapi_service_obj, "ip_address", None)
+                )
+                or (getattr(fastapi_service_obj, "domain", None) or None),
+                target_port=getattr(fastapi_service_obj, "port", None) or 8080,
+                authentication="error",
+                api_access="error",
+                detail=self.last_error_detail,
+            )
+
         fastapi_detail: dict[str, object] = get_fastapi_url(fastapi_service_obj) or {}
         if not isinstance(fastapi_detail, dict):
             fastapi_detail = {}
@@ -588,6 +612,22 @@ class ServiceStatus:
         domain = (netbox_service_obj.domain or "").strip() or ip_address
         target_address = domain
         target_port = netbox_service_obj.port or 443
+
+        disabled_detail = disabled_endpoint_detail(
+            netbox_service_obj,
+            kind="NetBox endpoint",
+            action="skipping status check",
+        )
+        if disabled_detail:
+            logger.info("Skipping NetBox status check for disabled endpoint %s", pk)
+            self._set_error(disabled_detail)
+            return status, ServiceCheckResult(
+                target_address=target_address,
+                target_port=target_port,
+                authentication="error",
+                api_access="error",
+                detail=self.last_error_detail,
+            )
 
         current_netbox = self._build_netbox_payload(
             netbox_service_obj, ip_address, domain
@@ -817,6 +857,22 @@ class ServiceStatus:
         port = int(getattr(endpoint, "port", 8007) or 8007)
         request_headers = auth_headers or {}
         url = f"{base_url.rstrip('/')}/pbs/status"
+
+        disabled_detail = disabled_endpoint_detail(
+            endpoint, kind="PBS endpoint", action="skipping status check"
+        )
+        if disabled_detail:
+            logger.info(
+                "Skipping PBS status check for disabled endpoint %s", endpoint_id
+            )
+            self._set_error(disabled_detail)
+            return status, ServiceCheckResult(
+                target_address=host,
+                target_port=port,
+                authentication="error",
+                api_access="error",
+                detail=self.last_error_detail,
+            )
 
         try:
             response = requests.get(

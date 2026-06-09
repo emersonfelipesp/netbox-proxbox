@@ -10,6 +10,7 @@ from django.core.cache import cache
 from netbox_proxbox.models import FastAPIEndpoint
 from netbox_proxbox.schemas.openapi_schema import OpenAPISummary
 from netbox_proxbox.services._endpoint_errors import translate_request_exception
+from netbox_proxbox.services.endpoint_enabled import disabled_endpoint_detail
 from netbox_proxbox.utils import get_backend_auth_headers, get_fastapi_url
 
 _CACHE_TIMEOUT_SECONDS = 60 * 60 * 24 * 30
@@ -60,6 +61,12 @@ def get_cached_openapi_schema(
     endpoint: FastAPIEndpoint, *, force_refresh: bool = False
 ) -> dict[str, object]:
     """Return parsed OpenAPI data for a FastAPI endpoint, cached by backend version."""
+    disabled_detail = disabled_endpoint_detail(
+        endpoint, kind="FastAPI endpoint", action="skipping OpenAPI fetch"
+    )
+    if disabled_detail:
+        return {"error": disabled_detail}
+
     endpoint_info = get_fastapi_url(endpoint) or {}
     http_url = endpoint_info.get("http_url")
     if not http_url:

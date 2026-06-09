@@ -92,9 +92,9 @@ def _try_register_key_fallback() -> tuple[bool, str]:
     """
     from netbox_proxbox.utils import get_fastapi_context
 
-    endpoints = FastAPIEndpoint.objects.order_by("pk").all()
+    endpoints = FastAPIEndpoint.objects.filter(enabled=True).order_by("pk")
     if not endpoints:
-        return False, "No FastAPI endpoints configured"
+        return False, "No enabled FastAPI endpoints configured"
 
     last_message = "No keys attempted"
     for endpoint in endpoints:

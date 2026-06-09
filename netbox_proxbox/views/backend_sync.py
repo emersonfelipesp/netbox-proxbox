@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 import requests
 
 from netbox_proxbox.models import ProxmoxEndpoint
+from netbox_proxbox.services.endpoint_enabled import disabled_endpoint_detail
 from netbox_proxbox.utils import get_ip_address_host
 from netbox_proxbox.views.error_utils import (
     extract_backend_error_detail,
@@ -22,13 +23,9 @@ logger = logging.getLogger(__name__)
 
 def _disabled_endpoint_detail(endpoint: ProxmoxEndpoint) -> str | None:
     """Return a user-facing skip reason when a Proxmox endpoint is disabled."""
-    if bool(getattr(endpoint, "enabled", True)):
-        return None
-    endpoint_id = getattr(endpoint, "pk", getattr(endpoint, "id", None))
-    label = getattr(endpoint, "name", None) or str(endpoint)
-    if endpoint_id is not None:
-        return f"Proxmox endpoint '{label}' (id={endpoint_id}) is disabled; skipping."
-    return f"Proxmox endpoint '{label}' is disabled; skipping."
+    return disabled_endpoint_detail(
+        endpoint, kind="Proxmox endpoint", action="skipping"
+    )
 
 
 def proxmox_backend_name(endpoint: ProxmoxEndpoint) -> str:
@@ -370,6 +367,12 @@ def sync_netbox_endpoint_to_backend(
     Performs GET /netbox/endpoint to check for an existing entry, then PUT to
     update it or POST to create it.  Returns (success, error_message, http_status).
     """
+    disabled_detail = disabled_endpoint_detail(
+        endpoint, kind="NetBox endpoint", action="skipping backend sync"
+    )
+    if disabled_detail:
+        return False, disabled_detail, None
+
     list_url = f"{base_url}/netbox/endpoint"
     headers = auth_headers or {}
     payload = _netbox_endpoint_backend_payload(endpoint)

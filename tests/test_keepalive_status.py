@@ -41,7 +41,7 @@ def _keepalive_request():
     )
 
 
-def _pbs_server():
+def _pbs_server(*, enabled=True):
     return SimpleNamespace(
         id=7,
         pk=7,
@@ -49,6 +49,7 @@ def _pbs_server():
         host="10.0.30.134",
         port=8007,
         verify_ssl=True,
+        enabled=enabled,
     )
 
 
@@ -134,6 +135,30 @@ def test_fastapi_status_does_not_retry_insecurely_when_verify_ssl_enabled(
     assert status["api_access"] == "error"
     assert "FastAPI URL check failed" in status["detail"]
     assert calls == [("https://proxbox.local:8800", True, None)]
+
+
+def test_fastapi_status_disabled_endpoint_does_not_connect(
+    monkeypatch,
+    fastapi_endpoint,
+):
+    fastapi_endpoint.enabled = False
+    load_plugin_module(
+        "netbox_proxbox.views.keepalive_status",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+    )
+    ss = _service_status_module()
+
+    def fail_get(*args, **kwargs):
+        raise AssertionError("disabled FastAPI endpoint attempted network access")
+
+    monkeypatch.setattr(ss.requests, "get", fail_get)
+
+    status = ss.ServiceStatus().fastapi_status(1)
+
+    assert status["connected"] is False
+    assert status["api_access"] == "error"
+    assert "disabled" in status["detail"]
 
 
 def test_fastapi_status_warns_for_agent_kv_affected_backend(
@@ -860,6 +885,78 @@ def test_pbs_keepalive_uses_backend_status_host_fallback(
     assert response.payload["target_port"] == 8007
     assert response.payload["authentication"] == "success"
     assert response.payload["api_access"] == "success"
+
+
+def test_netbox_keepalive_disabled_endpoint_returns_before_backend_check(
+    monkeypatch,
+    fastapi_endpoint,
+    netbox_endpoint,
+):
+    netbox_endpoint.enabled = False
+    module = load_plugin_module(
+        "netbox_proxbox.views.keepalive_status",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+        netbox_endpoint=netbox_endpoint,
+    )
+    ss = _service_status_module()
+
+    def fail_get(*args, **kwargs):
+        raise AssertionError("disabled NetBox keepalive attempted network access")
+
+    monkeypatch.setattr(ss.requests, "get", fail_get)
+
+    response = module.get_service_status_impl(_keepalive_request(), "netbox", 1)
+
+    assert response.status_code == 200
+    assert response.payload["status"] == "error"
+    assert "disabled" in response.payload["detail"]
+
+
+def test_pbs_keepalive_disabled_endpoint_returns_before_backend_check(
+    monkeypatch,
+    fastapi_endpoint,
+):
+    module = load_plugin_module(
+        "netbox_proxbox.views.keepalive_status",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+    )
+    pbs_server = _pbs_server(enabled=False)
+    _install_pbs_server_stub(monkeypatch, pbs_server)
+    ss = _service_status_module()
+
+    def fail_get(*args, **kwargs):
+        raise AssertionError("disabled PBS keepalive attempted network access")
+
+    monkeypatch.setattr(ss.requests, "get", fail_get)
+
+    response = module.get_service_status_impl(_keepalive_request(), "pbs", 7)
+
+    assert response.status_code == 200
+    assert response.payload["status"] == "error"
+    assert "disabled" in response.payload["detail"]
+
+
+def test_pbs_status_disabled_endpoint_does_not_request_backend(monkeypatch):
+    ss = _service_status_module()
+    pbs_server = _pbs_server(enabled=False)
+
+    def fail_get(*args, **kwargs):
+        raise AssertionError("disabled PBS status attempted backend access")
+
+    monkeypatch.setattr(ss.requests, "get", fail_get)
+
+    status, details = ss.ServiceStatus().pbs_status(
+        endpoint=pbs_server,
+        base_url="https://proxbox.local:8800",
+        auth_headers={"Authorization": "Bearer backend-token"},
+    )
+
+    assert status == "error"
+    assert details["target_address"] == "10.0.30.134"
+    assert details["target_port"] == 8007
+    assert "disabled" in details["detail"]
 
 
 def test_pbs_keepalive_reports_unreachable_reason(

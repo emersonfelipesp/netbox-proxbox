@@ -67,6 +67,7 @@ class Command(BaseCommand):
 
             self.stdout.write(f"  Port: {endpoint.port}")
             self.stdout.write(f"  Verify SSL: {endpoint.verify_ssl}")
+            self.stdout.write(f"  Enabled: {endpoint.enabled}")
 
             token_status = "HAS TOKEN" if endpoint.token else "NO TOKEN"
             token_style = self.style.SUCCESS if endpoint.token else self.style.ERROR
@@ -76,6 +77,14 @@ class Command(BaseCommand):
                 self.stdout.write(f"  Token Preview: {endpoint.token[:20]}...")
             else:
                 all_registered = False
+                continue
+
+            if not bool(getattr(endpoint, "enabled", True)):
+                self.stdout.write(
+                    self.style.WARNING(
+                        "  Backend Status: Skipped because endpoint is disabled"
+                    )
+                )
                 continue
 
             base_url = _get_backend_url(endpoint)

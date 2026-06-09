@@ -21,7 +21,7 @@ This package contains the NetBox plugin itself. It defines the plugin config, UR
 - [`type_defs.py`](./type_defs.py): shared type aliases and lightweight protocol helpers used across the package.
 - [`utils.py`](./utils.py): URL and host helpers, especially for the FastAPI backend and mkcert-aware local TLS handling.
 - [`websocket_client.py`](./websocket_client.py): long-lived WebSocket client, message queue, and HTTP view used to stream backend messages into NetBox pages.
-- [`signals.py`](./signals.py): Django signal handlers for automatic token generation and backend registration when FastAPIEndpoint objects are created or updated.
+- [`signals.py`](./signals.py): Django signal handlers for automatic token generation and backend registration when enabled FastAPIEndpoint objects are created or updated.
 - [`schemas/`](./schemas): Pydantic models and formatters for backend payloads, normalized sync context, and OpenAPI helpers.
 - [`services/`](./services): backend proxy, schema caching, service status, and sync coordination helpers.
 - [`management/`](./management): Django management commands package.
@@ -54,7 +54,7 @@ All three endpoint types support CSV, JSON, and YAML export via dedicated `Expor
 
 Import uses NetBox's `BulkImportView`. All import forms auto-create missing `IPAddress` objects via `get_or_create` so data can move between NetBox instances without manual IPAM pre-population. Exported `id` columns are stripped before processing to prevent PK collisions.
 
-**NetBoxEndpoint and FastAPIEndpoint are singletons.** If a record already exists when a bulk import is submitted, the import view intercepts the request and renders a confirmation page (`singleton_import_confirm.html`) before deleting the existing record and creating the replacement. ProxmoxEndpoint allows multiple rows and has no such constraint.
+**NetBoxEndpoint and FastAPIEndpoint are singleton-shaped.** If a record already exists when a bulk import is submitted, the import view intercepts the request and renders a confirmation page (`singleton_import_confirm.html`) before deleting the existing record and creating the replacement. Operational helpers use the first enabled FastAPI endpoint; disabled endpoints are inventory-only and must not trigger backend registration or HTTP probes. ProxmoxEndpoint allows multiple rows and has no singleton constraint.
 
 For detailed implementation notes see [`views/endpoints/CLAUDE.md`](./views/endpoints/CLAUDE.md) and [`forms/CLAUDE.md`](./forms/CLAUDE.md).
 

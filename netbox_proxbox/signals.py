@@ -45,6 +45,14 @@ def _register_token_with_backend(endpoint: FastAPIEndpoint) -> bool | None:
     This is a best-effort operation that logs failures but never raises exceptions.
     """
     import requests
+    from netbox_proxbox.services.endpoint_enabled import endpoint_is_enabled
+
+    if not endpoint_is_enabled(endpoint):
+        logger.info(
+            "FastAPIEndpoint %s is disabled, skipping backend token registration",
+            getattr(endpoint, "pk", None),
+        )
+        return False
 
     base_url = _get_backend_url(endpoint)
     if not base_url:
@@ -166,12 +174,14 @@ def ensure_proxmox_endpoint_has_fastapi_token(
         )
         return
 
-    count = FastAPIEndpoint.objects.count()
+    count = FastAPIEndpoint.objects.filter(enabled=True).count()
     if count == 0:
-        logger.debug("No FastAPIEndpoint configured, skipping token registration")
+        logger.debug(
+            "No enabled FastAPIEndpoint configured, skipping token registration"
+        )
         return
 
-    order = FastAPIEndpoint.objects.order_by("pk")
+    order = FastAPIEndpoint.objects.filter(enabled=True).order_by("pk")
     fastapi_ep = order.first()
     if not fastapi_ep:
         logger.debug("No FastAPIEndpoint found, skipping token registration")
@@ -239,9 +249,18 @@ def sync_netbox_endpoint_to_backend(
         sync_netbox_endpoint_to_backend as _push,
     )  # noqa: PLC0415
 
-    fastapi_ep = FastAPIEndpoint.objects.order_by("pk").first()
+    if not bool(getattr(instance, "enabled", True)):
+        logger.info(
+            "NetBoxEndpoint %s is disabled, skipping backend endpoint sync",
+            getattr(instance, "pk", None),
+        )
+        return
+
+    fastapi_ep = FastAPIEndpoint.objects.filter(enabled=True).order_by("pk").first()
     if not fastapi_ep:
-        logger.debug("No FastAPIEndpoint configured, skipping NetBox endpoint sync")
+        logger.debug(
+            "No enabled FastAPIEndpoint configured, skipping NetBox endpoint sync"
+        )
         return
 
     base_url = _get_backend_url(fastapi_ep)

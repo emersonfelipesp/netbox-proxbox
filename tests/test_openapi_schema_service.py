@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+import types
 from types import SimpleNamespace
 from pathlib import Path
 
@@ -22,6 +23,13 @@ def _load_openapi_schema_module(monkeypatch):
     django_cache_mod = SimpleNamespace(cache=_CacheRuntimeStub())
     django_core_cache = SimpleNamespace(cache=django_cache_mod.cache)
     models_stub = SimpleNamespace(FastAPIEndpoint=object)
+    endpoint_enabled_stub = SimpleNamespace(
+        disabled_endpoint_detail=lambda endpoint, **kwargs: (
+            "FastAPI endpoint is disabled; skipping OpenAPI fetch."
+            if getattr(endpoint, "enabled", True) is False
+            else None
+        )
+    )
     utils_stub = SimpleNamespace(
         get_backend_auth_headers=lambda endpoint: {},
         get_fastapi_url=lambda endpoint: {},
@@ -30,8 +38,20 @@ def _load_openapi_schema_module(monkeypatch):
     monkeypatch.setitem(sys.modules, "django", SimpleNamespace())
     monkeypatch.setitem(sys.modules, "django.core", SimpleNamespace())
     monkeypatch.setitem(sys.modules, "django.core.cache", django_core_cache)
-    monkeypatch.setitem(sys.modules, "netbox_proxbox", SimpleNamespace())
+    proxbox_pkg = types.ModuleType("netbox_proxbox")
+    proxbox_pkg.__path__ = [str(Path(__file__).resolve().parents[1] / "netbox_proxbox")]
+    services_pkg = types.ModuleType("netbox_proxbox.services")
+    services_pkg.__path__ = [
+        str(Path(__file__).resolve().parents[1] / "netbox_proxbox" / "services")
+    ]
+    monkeypatch.setitem(sys.modules, "netbox_proxbox", proxbox_pkg)
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_pkg)
     monkeypatch.setitem(sys.modules, "netbox_proxbox.models", models_stub)
+    monkeypatch.setitem(
+        sys.modules,
+        "netbox_proxbox.services.endpoint_enabled",
+        endpoint_enabled_stub,
+    )
     monkeypatch.setitem(sys.modules, "netbox_proxbox.utils", utils_stub)
 
     module_path = (
