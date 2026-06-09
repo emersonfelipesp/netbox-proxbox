@@ -5,6 +5,7 @@ This directory contains NetBox generic model views for the three endpoint models
 ## Files And Ownership
 
 - [`proxmox.py`](./proxmox.py): list/detail/edit/delete, bulk import, export, and quick-add-token views for `ProxmoxEndpoint`.
+- [`proxmox_sync_now.py`](./proxmox_sync_now.py): POST-only `ProxmoxEndpoint` action that queues an immediate full `ProxboxSyncJob` scoped to the endpoint being viewed.
 - [`proxmox_export.py`](./proxmox_export.py): CSV/JSON/YAML export fieldname and serializer helpers for `ProxmoxEndpoint`.
 - [`netbox.py`](./netbox.py): list/detail/edit/delete, bulk import, export, and quick-add-token views for `NetBoxEndpoint`.
 - [`netbox_export.py`](./netbox_export.py): CSV/JSON/YAML export fieldname and serializer helpers for `NetBoxEndpoint`.
@@ -77,6 +78,7 @@ All three import forms use a plain `forms.CharField` for `ip_address` backed by 
 ## Notes
 
 - The export JS (token version toggle, dropdown population, quick-add, copy-to-clipboard) is inlined as an IIFE in each `*endpoint_list.html` template rather than loaded as an external `.js` file. This avoids requiring `collectstatic` for the modal to work.
+- The ProxmoxEndpoint detail page exposes **Sync Now** through `proxmox_sync_now.py`; it requires the shared Proxbox sync enqueue permission, uses a CSRF-protected POST, refuses disabled endpoints, and passes the viewed endpoint PK in `proxmox_endpoint_ids`.
 - Changes to list columns, validation, or field presentation typically happen outside this directory unless the view wiring itself changes.
 
 ## Links

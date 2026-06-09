@@ -29,3 +29,4 @@ from .proxmox import (
     ProxmoxEndpointView,
     ProxmoxExportQuickAddTokenView,
 )
+from .proxmox_sync_now import ProxmoxEndpointSyncNowView

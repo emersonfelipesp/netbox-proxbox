@@ -109,6 +109,7 @@ from .endpoints import (
     ProxmoxEndpointDeleteView,
     ProxmoxEndpointEditView,
     ProxmoxEndpointListView,
+    ProxmoxEndpointSyncNowView,
     ProxmoxEndpointView,
 )
 from .external_pages import discussions_redirect
