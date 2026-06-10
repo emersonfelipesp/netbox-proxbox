@@ -4,7 +4,7 @@ Covers:
 - SyncModeChoices values (always / bootstrap_only / disabled) via AST
 - SYNC_MODE_FIELDS constant coverage
 - Module-level sync mode variables in sync_stages
-- VM resource sync gating (_should_sync_vm_resource)
+- VM stage skip behavior
 - Bootstrap-only tag detection helpers
 """
 
@@ -259,45 +259,36 @@ class TestSyncStagesDefaults:
         assert sync_stages_module.sync_mode_ip_address == "always"
 
 
-# ── VM resource gating ─────────────────────────────────────────────────────────
+# ── VM whole-stage gating ──────────────────────────────────────────────────────
 
 
-class TestShouldSyncVMResource:
-    def test_non_template_allowed_when_vm_mode_always(self, sync_stages_module):
-        m = sync_stages_module
-        m.sync_mode_vm = "always"
-        m.sync_mode_vm_template = "always"
-        resource = SimpleNamespace(template=False)
-        assert m._vm_resource_allowed_by_sync_mode(resource) is True
-
-    def test_template_allowed_when_vm_template_mode_always(self, sync_stages_module):
-        m = sync_stages_module
-        m.sync_mode_vm = "always"
-        m.sync_mode_vm_template = "always"
-        resource = SimpleNamespace(template=True)
-        assert m._vm_resource_allowed_by_sync_mode(resource) is True
-
-    def test_template_blocked_when_vm_template_disabled(self, sync_stages_module):
-        m = sync_stages_module
-        m.sync_mode_vm = "always"
-        m.sync_mode_vm_template = "disabled"
-        resource = SimpleNamespace(template=True)
-        assert m._vm_resource_allowed_by_sync_mode(resource) is False
-
-    def test_non_template_blocked_when_vm_disabled(self, sync_stages_module):
+class TestVMStageSkipReason:
+    def test_vm_stage_not_skipped_when_vm_mode_disabled_only(
+        self, sync_stages_module
+    ):
         m = sync_stages_module
         m.sync_mode_vm = "disabled"
         m.sync_mode_vm_template = "always"
-        resource = SimpleNamespace(template=False)
-        assert m._vm_resource_allowed_by_sync_mode(resource) is False
+        assert m._stage_skip_reason(m.SyncTypeChoices.VIRTUAL_MACHINES) is None
 
-    def test_both_disabled_blocks_all(self, sync_stages_module):
+    def test_vm_stage_not_skipped_when_template_mode_disabled_only(
+        self, sync_stages_module
+    ):
+        m = sync_stages_module
+        m.sync_mode_vm = "always"
+        m.sync_mode_vm_template = "disabled"
+        assert m._stage_skip_reason(m.SyncTypeChoices.VIRTUAL_MACHINES) is None
+
+    def test_vm_stage_skipped_only_when_both_vm_modes_disabled(
+        self, sync_stages_module
+    ):
         m = sync_stages_module
         m.sync_mode_vm = "disabled"
         m.sync_mode_vm_template = "disabled"
-        for is_template in (True, False):
-            resource = SimpleNamespace(template=is_template)
-            assert m._vm_resource_allowed_by_sync_mode(resource) is False
+        assert (
+            m._stage_skip_reason(m.SyncTypeChoices.VIRTUAL_MACHINES)
+            == "sync_mode_vm=disabled and sync_mode_vm_template=disabled"
+        )
 
 
 # ── Bootstrap-only helpers ─────────────────────────────────────────────────────
