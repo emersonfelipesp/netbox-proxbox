@@ -160,6 +160,11 @@ Proxmox VM templates (`template=True` in the Proxmox API) are stored in the dedi
 - Full config snapshot: `vcpus`, `memory`, `disk`, `os_type`, `net_config`, `disk_config`, `raw_config`
 
 `sync_mode_vm` and `sync_mode_vm_template` are independent — disabling VMs does not disable template sync.
+Per-record VM/template filtering is enforced by the proxbox-api backend
+(proxbox-api >= 0.0.18) from the `sync_mode_vm` and `sync_mode_vm_template`
+query parameters the plugin forwards on stage requests. The plugin only applies
+whole-stage skip behavior; the `virtual-machines` stage is skipped entirely only
+when both VM and VM-template modes are `disabled`.
 
 ### Bootstrap-only tag
 
@@ -174,7 +179,7 @@ The `bootstrap-only` tag (slug `bootstrap-only`) is auto-created by `netbox_prox
 - `netbox_proxbox/models/vm_template.py` — `ProxmoxVMTemplate` model
 - `netbox_proxbox/migrations/0046_sync_modes.py` — migration for sync mode fields
 - `netbox_proxbox/migrations/0047_proxmox_vm_template.py` — migration for ProxmoxVMTemplate table
-- `netbox_proxbox/sync_stages.py` — `_vm_resource_allowed_by_sync_mode()`, `_has_bootstrap_only_tag()`, `_bootstrap_only_should_skip_existing()`, `_add_bootstrap_only_tag()`
+- `netbox_proxbox/sync_stages.py` — `_has_bootstrap_only_tag()`, `_bootstrap_only_should_skip_existing()`, `_add_bootstrap_only_tag()`
 - `netbox_proxbox/netbox_bootstrap.py` — `ensure_proxbox_tags()`, `ensure_bootstrap_only_tag()`
 - `netbox_proxbox/services/sync_vm_template.py` — `sync_vm_templates()` service
 - `docs/configuration/sync-modes.md` — user-facing documentation

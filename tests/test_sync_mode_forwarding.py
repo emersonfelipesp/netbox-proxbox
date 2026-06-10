@@ -129,6 +129,30 @@ def sync_stages_module(monkeypatch):
 
 
 class TestSyncModeForwarding:
+    def test_virtual_machines_stage_forwards_vm_and_template_modes(
+        self, sync_stages_module
+    ):
+        m = sync_stages_module
+        m._stubs["global"].update(
+            {
+                "sync_mode_vm": "bootstrap_only",
+                "sync_mode_vm_template": "disabled",
+            }
+        )
+
+        base_query = m._build_base_query_params(
+            proxmox_endpoint_ids=None,
+            netbox_endpoint_ids=None,
+        )
+        params = m._build_stage_query_params(
+            base_query=base_query,
+            sync_type=m.SyncTypeChoices.VIRTUAL_MACHINES,
+            target_vm_ids=[],
+        )
+
+        assert params["sync_mode_vm"] == "bootstrap_only"
+        assert params["sync_mode_vm_template"] == "disabled"
+
     def test_mac_disabled_forwards_to_vm_interfaces_stage(self, sync_stages_module):
         m = sync_stages_module
         params = m._build_stage_query_params(
