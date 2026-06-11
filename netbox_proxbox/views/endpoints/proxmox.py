@@ -43,6 +43,7 @@ __all__ = (
     "ProxmoxEndpointSSHSettingsView",
     "ProxmoxEndpointSSHTerminalView",
     "ProxmoxEndpointSSHTerminalSessionView",
+    "ProxmoxEndpointSyncJobsTabView",
     "ProxmoxEndpointDeleteView",
     "ProxmoxEndpointBulkDeleteView",
     "ProxmoxEndpointBulkImportView",
@@ -515,6 +516,42 @@ class ProxmoxEndpointSSHTerminalSessionView(View):
             )
 
         return JsonResponse({"error": last_error}, status=502)
+
+
+@register_model_view(ProxmoxEndpoint, "sync_jobs", path="sync-jobs")
+class ProxmoxEndpointSyncJobsTabView(generic.ObjectView):
+    """Read-only tab listing Proxbox sync jobs scoped to this Proxmox endpoint."""
+
+    queryset = ProxmoxEndpoint.objects.all()
+    template_name = "netbox_proxbox/proxmoxendpoint_sync_jobs.html"
+    tab = ViewTab(
+        label="Sync Jobs",
+        permission="netbox_proxbox.view_proxmoxendpoint",
+        weight=875,
+    )
+
+    def get_extra_context(
+        self, request: HttpRequest, instance: ProxmoxEndpoint
+    ) -> dict[str, object]:
+        from core.models import Job
+        from netbox_proxbox.jobs import is_proxbox_sync_job
+
+        endpoint_pk_str = str(instance.pk)
+        jobs_qs = Job.objects.restrict(request.user, "view").order_by("-created")
+
+        endpoint_jobs: list[Job] = []
+        for job in jobs_qs.iterator():
+            if not is_proxbox_sync_job(job):
+                continue
+            data = getattr(job, "data", None) or {}
+            params = data.get("proxbox_sync", {}).get("params", {})
+            endpoint_ids = params.get("proxmox_endpoint_ids", [])
+            # Include jobs targeting this endpoint or jobs with no endpoint filter
+            # (which apply to all endpoints).
+            if not endpoint_ids or endpoint_pk_str in [str(e) for e in endpoint_ids]:
+                endpoint_jobs.append(job)
+
+        return {"endpoint_sync_jobs": endpoint_jobs}
 
 
 @register_model_view(ProxmoxEndpoint, "delete")
