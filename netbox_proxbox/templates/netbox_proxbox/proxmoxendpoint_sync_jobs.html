@@ -1,0 +1,49 @@
+{% extends 'generic/object.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <h2 class="card-title mb-0">{% trans "Sync Jobs" %}</h2>
+                <span class="text-muted small">
+                    {% blocktrans with name=object.name %}Jobs for endpoint {{ name }}{% endblocktrans %}
+                </span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th scope="col">{% trans "Job" %}</th>
+                            <th scope="col">{% trans "Status" %}</th>
+                            <th scope="col">{% trans "Created" %}</th>
+                            <th scope="col">{% trans "Started" %}</th>
+                            <th scope="col">{% trans "Completed" %}</th>
+                            <th scope="col">{% trans "User" %}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for job in endpoint_sync_jobs %}
+                            <tr>
+                                <td><a href="{{ job.get_absolute_url }}">{{ job.name }}</a></td>
+                                <td><span class="badge text-bg-{{ job.get_status_color }}">{{ job.get_status_display }}</span></td>
+                                <td>{{ job.created|date:"SHORT_DATETIME_FORMAT"|default:"—" }}</td>
+                                <td>{{ job.started|date:"SHORT_DATETIME_FORMAT"|default:"—" }}</td>
+                                <td>{{ job.completed|date:"SHORT_DATETIME_FORMAT"|default:"—" }}</td>
+                                <td>{{ job.user|default:"—" }}</td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="6" class="text-muted text-center py-3">
+                                    {% trans "No sync jobs found for this endpoint." %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

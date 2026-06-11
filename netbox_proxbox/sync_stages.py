@@ -219,14 +219,6 @@ def _bootstrap_only_should_skip_existing(obj: object, mode: str) -> bool:
     return mode == SyncModeChoices.BOOTSTRAP_ONLY and _has_bootstrap_only_tag(obj)
 
 
-def _vm_resource_allowed_by_sync_mode(resource: object) -> bool:
-    """Return whether a Proxmox VM record should be sent based on template mode."""
-    is_template = bool(getattr(resource, "template", False))
-    if is_template:
-        return _sync_mode_for_resource("vm_template") != SyncModeChoices.DISABLED
-    return _sync_mode_for_resource("vm") != SyncModeChoices.DISABLED
-
-
 def _stage_skip_reason(sync_type: str) -> str | None:
     """Return why a stage should be skipped for the active sync modes."""
     disabled = SyncModeChoices.DISABLED
