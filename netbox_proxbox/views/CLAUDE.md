@@ -18,7 +18,7 @@ This directory implements the plugin's NetBox UI behavior, including dashboard p
 - [`endpoints/`](./endpoints/): model views for the three endpoint models.
 - [`error_utils.py`](./error_utils.py): helpers for rendering and normalizing user-facing error messages.
 - [`external_pages.py`](./external_pages.py): redirect or informational external community pages.
-- [`home_context.py`](./home_context.py): home page context assembly and quick-schedule defaults. Also exposes `latest_sync_jobs` (the newest 5 visible Proxbox sync jobs, resolved via `is_proxbox_sync_job()` over restricted `core.Job` rows) and `sync_jobs_list_url` (the core job list filtered to Proxbox jobs via `?q=Proxbox Sync`), rendered as the "Latest Sync Jobs" table + "View all sync jobs" button at the bottom of `home.html`.
+- [`home_context.py`](./home_context.py): home page context assembly and quick-schedule defaults. Also exposes `latest_sync_jobs` (the newest 5 visible Proxbox sync jobs, resolved via `is_proxbox_sync_job()` over restricted `core.Job` rows) and `sync_jobs_list_url` (the core job list filtered to Proxbox jobs via `?q=Proxbox Sync`), rendered as the "Latest Sync Jobs" table + "View all sync jobs" button at the bottom of `home.html`. See also `ProxmoxEndpointSyncJobsTabView` in `endpoints/proxmox.py` for the per-endpoint job list tab.
 - [`job_run.py`](./job_run.py), [`job_cancel.py`](./job_cancel.py), and [`job_stream.py`](./job_stream.py): integrate rerun/cancel actions and SSE log streaming into NetBox core Job views for Proxbox sync jobs.
 - [`keepalive_status.py`](./keepalive_status.py): health and reachability checks for FastAPI, remote NetBox, and Proxmox services.
 - [`logs.py`](./logs.py): backend log aggregation page and related rendering helpers.
