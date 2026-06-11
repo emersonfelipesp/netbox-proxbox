@@ -263,9 +263,7 @@ class TestSyncStagesDefaults:
 
 
 class TestVMStageSkipReason:
-    def test_vm_stage_not_skipped_when_vm_mode_disabled_only(
-        self, sync_stages_module
-    ):
+    def test_vm_stage_not_skipped_when_vm_mode_disabled_only(self, sync_stages_module):
         m = sync_stages_module
         m.sync_mode_vm = "disabled"
         m.sync_mode_vm_template = "always"
