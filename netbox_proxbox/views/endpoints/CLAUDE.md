@@ -4,7 +4,7 @@ This directory contains NetBox generic model views for the three endpoint models
 
 ## Files And Ownership
 
-- [`proxmox.py`](./proxmox.py): list/detail/edit/delete, bulk import, export, and quick-add-token views for `ProxmoxEndpoint`.
+- [`proxmox.py`](./proxmox.py): list/detail/edit/delete, bulk import, export, quick-add-token, and tab views for `ProxmoxEndpoint`. Includes `ProxmoxEndpointSyncJobsTabView` (weight 875, path `sync-jobs`) which lists Proxbox sync jobs scoped to the viewed endpoint — jobs whose `proxbox_sync.params.proxmox_endpoint_ids` contains the endpoint PK, or jobs with an empty endpoint list (all-endpoint jobs).
 - [`proxmox_sync_now.py`](./proxmox_sync_now.py): POST-only `ProxmoxEndpoint` action that queues an immediate full `ProxboxSyncJob` scoped to the endpoint being viewed.
 - [`proxmox_export.py`](./proxmox_export.py): CSV/JSON/YAML export fieldname and serializer helpers for `ProxmoxEndpoint`.
 - [`netbox.py`](./netbox.py): list/detail/edit/delete, bulk import, export, and quick-add-token views for `NetBoxEndpoint`.
