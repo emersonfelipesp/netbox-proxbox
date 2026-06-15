@@ -42,8 +42,8 @@ DOCS_SCREENSHOTS_WORKFLOW_PATH = (
 )
 
 CURRENT_PLUGIN_VERSION = "0.0.21"
-CURRENT_RELEASE_VERSION = "0.0.21rc1"
-CURRENT_PROXBOX_API_VERSION = "0.0.18rc1"
+CURRENT_RELEASE_VERSION = "0.0.21"
+CURRENT_PROXBOX_API_VERSION = "0.0.18"
 CURRENT_NETBOX_MIN_VERSION = "4.5.8"
 CURRENT_NETBOX_MAX_VERSION = "4.6.99"
 PREVIOUS_PLUGIN_VERSION = "0.0.20"
@@ -221,8 +221,8 @@ def test_current_release_pairing_is_documented_in_primary_docs():
         f">={CURRENT_NETBOX_MIN_VERSION}",
         f"v{CURRENT_RELEASE_VERSION}",
         f"v{CURRENT_PROXBOX_API_VERSION}",
-        "v0.0.10rc1",
-        "v0.0.12rc1",
+        "v0.0.10",
+        "v0.0.12",
     )
     for path in (README_PATH, DOCS_INDEX_PATH, RELEASE_NOTES_021_PATH):
         text = _read(path)
