@@ -86,6 +86,7 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
             "enable_tenant_name_regex",
             "tenant_name_regex_rules",
             "enable_tenant_tag_assignment",
+            "allow_writes",
             *SYNC_MODE_FIELDS,
             *OVERWRITE_FIELDS,
             "site",
