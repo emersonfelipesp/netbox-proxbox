@@ -196,7 +196,9 @@ def test_get_extra_context_mixed_jobs():
     job_other = _make_job(proxbox_sync=True, endpoint_ids=["7"])
     job_all = _make_job(proxbox_sync=True, endpoint_ids=[])
     job_bad = _make_job(proxbox_sync=False, endpoint_ids=None)
-    ctx = _run_get_extra_context(endpoint_pk=5, jobs=[job_match, job_other, job_all, job_bad])
+    ctx = _run_get_extra_context(
+        endpoint_pk=5, jobs=[job_match, job_other, job_all, job_bad]
+    )
     assert job_match in ctx["endpoint_sync_jobs"]
     assert job_other not in ctx["endpoint_sync_jobs"]
     assert job_all in ctx["endpoint_sync_jobs"]
