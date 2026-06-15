@@ -221,8 +221,8 @@ def test_current_release_pairing_is_documented_in_primary_docs():
         f">={CURRENT_NETBOX_MIN_VERSION}",
         f"v{CURRENT_RELEASE_VERSION}",
         f"v{CURRENT_PROXBOX_API_VERSION}",
-        "v0.0.10rc1",
-        "v0.0.12rc1",
+        "v0.0.10",
+        "v0.0.12",
     )
     for path in (README_PATH, DOCS_INDEX_PATH, RELEASE_NOTES_021_PATH):
         text = _read(path)
