@@ -40,6 +40,8 @@ endpoints_router.register(
 endpoints_router.register(
     "fastapi", views.FastAPIEndpointViewSet, basename="fastapiendpoint"
 )
+endpoints_router.register("pbs", views.PBSEndpointViewSet, basename="pbsendpoint")
+endpoints_router.register("pdm", views.PDMEndpointViewSet, basename="pdmendpoint")
 
 router = NetBoxRouter()
 router.APIRootView = views.ProxBoxRootView
@@ -141,6 +143,17 @@ router.register(
     "datacenter-cpu-models",
     views.ProxmoxDatacenterCpuModelViewSet,
     basename="proxmoxdatacentercpumodel",
+)
+router.register("pdm-remotes", views.PDMRemoteViewSet, basename="pdmremote")
+router.register(
+    "deletion-requests",
+    views.DeletionRequestViewSet,
+    basename="deletionrequest",
+)
+router.register(
+    "apply-jobs",
+    views.ProxmoxApplyJobViewSet,
+    basename="proxmoxapplyjob",
 )
 
 urlpatterns = [
