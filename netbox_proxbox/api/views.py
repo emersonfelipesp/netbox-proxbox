@@ -28,6 +28,7 @@ from .. import filtersets, models
 from .serializers import (
     BackupRoutineSerializer,
     CloudImageTemplateSerializer,
+    DeletionRequestSerializer,
     FastAPIEndpointSerializer,
     FirecrackerHostPoolSerializer,
     FirecrackerHostSerializer,
@@ -35,7 +36,11 @@ from .serializers import (
     FirecrackerMicroVMSerializer,
     NetBoxEndpointSerializer,
     NodeSSHCredentialSerializer,
+    PBSEndpointSerializer,
+    PDMEndpointSerializer,
+    PDMRemoteSerializer,
     ProxboxPluginSettingsSerializer,
+    ProxmoxApplyJobSerializer,
     ProxmoxClusterSerializer,
     ProxmoxEndpointSerializer,
     ProxmoxFirewallAliasSerializer,
@@ -1631,3 +1636,69 @@ class ProxmoxDatacenterCpuModelViewSet(NetBoxModelViewSet):
     queryset = models.ProxmoxDatacenterCpuModel.objects.select_related("endpoint")
     serializer_class = ProxmoxDatacenterCpuModelSerializer
     filterset_class = filtersets.ProxmoxDatacenterCpuModelFilterSet
+
+
+# ── PBS / PDM / Intent ViewSets ───────────────────────────────────────────────
+
+
+class PBSEndpointViewSet(NetBoxModelViewSet):
+    """REST API for Proxmox Backup Server endpoint inventory."""
+
+    queryset = models.PBSEndpoint.objects.select_related(
+        "ip_address",
+        "site",
+        "tenant",
+    )
+    serializer_class = PBSEndpointSerializer
+
+
+class PDMEndpointViewSet(NetBoxModelViewSet):
+    """REST API for Proxmox Datacenter Manager endpoint inventory."""
+
+    queryset = models.PDMEndpoint.objects.select_related(
+        "ip_address",
+        "site",
+        "tenant",
+    ).prefetch_related(
+        "proxmox_endpoints",
+        "pbs_endpoints",
+    )
+    serializer_class = PDMEndpointSerializer
+
+
+class PDMRemoteViewSet(NetBoxModelViewSet):
+    """REST API for PDM remote discovery records."""
+
+    queryset = models.PDMRemote.objects.select_related(
+        "pdm_endpoint",
+        "linked_proxmox_endpoint",
+        "linked_pbs_endpoint",
+    )
+    serializer_class = PDMRemoteSerializer
+
+
+class DeletionRequestViewSet(NetBoxModelViewSet):
+    """Read-only REST API for Proxmox deletion requests (four-eyes approval workflow).
+
+    Write access is intentionally disabled — all state transitions must go through
+    the UI-side approval workflow to preserve the four-eyes safety model.
+    """
+
+    queryset = models.DeletionRequest.objects.select_related(
+        "requested_by",
+        "authorizer",
+    )
+    serializer_class = DeletionRequestSerializer
+    http_method_names = ["get", "head", "options"]
+
+
+class ProxmoxApplyJobViewSet(NetBoxModelViewSet):
+    """Read-only REST API for NetBox→Proxmox intent apply runs.
+
+    Write access is intentionally disabled — apply jobs are created exclusively
+    through the intent branch-merge workflow.
+    """
+
+    queryset = models.ProxmoxApplyJob.objects.select_related("user")
+    serializer_class = ProxmoxApplyJobSerializer
+    http_method_names = ["get", "head", "options"]
