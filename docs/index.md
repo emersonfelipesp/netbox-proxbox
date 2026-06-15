@@ -6,7 +6,7 @@ Proxbox is a NetBox plugin that integrates Proxmox with NetBox through a separat
 
 | NetBox   | netbox-proxbox | proxbox-api | netbox-sdk     | proxmox-sdk    |
 |----------|----------------|-------------|----------------|----------------|
-| >=4.5.8  | v0.0.21 | v0.0.18 | v0.0.10 | v0.0.12 |
+| >=4.5.8  | v0.0.21 | v0.0.18.post2 | v0.0.10 | v0.0.12 |
 | >=4.5.8  | v0.0.20.post3 | v0.0.17.post1 | v0.0.9.post1 | v0.0.11.post1 |
 | >=4.5.8  | v0.0.20.post2 | v0.0.17.post1 | v0.0.9.post1 | v0.0.11.post1 |
 | >=4.5.8  | v0.0.20.post1 | v0.0.17.post1 | v0.0.9.post1 | v0.0.11.post1 |
@@ -46,7 +46,7 @@ table, the **View all sync jobs** button for read-only sync-job visibility, and
 the all-endpoint `enabled=False` no-connection guard.
 
 The `0.0.21` release pairs with the separate `proxbox-api` backend
-release `0.0.18`.
+release `0.0.18.post2`.
 
 ## Important Packaging Note
 
