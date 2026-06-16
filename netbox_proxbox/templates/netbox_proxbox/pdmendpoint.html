@@ -1,5 +1,25 @@
 {% extends 'generic/object.html' %}
 {% load static %}
+{% load i18n %}
+
+{% block extra_controls %}
+    {% if perms.core.add_job %}
+        {% if object.enabled %}
+            <form method="post" action="{% url 'plugins:netbox_proxbox:pdmendpoint_sync_now' pk=object.pk %}" class="d-inline">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-primary">
+                    <i class="mdi mdi-sync" aria-hidden="true"></i>
+                    {% trans "Sync Now" %}
+                </button>
+            </form>
+        {% else %}
+            <button type="button" class="btn btn-outline-secondary" disabled title="{% trans 'Disabled endpoints cannot run sync jobs.' %}">
+                <i class="mdi mdi-sync" aria-hidden="true"></i>
+                {% trans "Sync Now" %}
+            </button>
+        {% endif %}
+    {% endif %}
+{% endblock extra_controls %}
 
 {% block content %}
     <div class="row mb-3">

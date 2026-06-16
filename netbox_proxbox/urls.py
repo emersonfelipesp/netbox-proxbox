@@ -378,6 +378,7 @@ urlpatterns = [
 # namespace — otherwise ActionsColumn crashes the list page with NoReverseMatch.
 try:
     import netbox_pdm.views as _netbox_pdm_views  # noqa: F401 — triggers @register_model_view
+    from netbox_proxbox.views.endpoints import pdm as _pdm_endpoint_views  # noqa: F401 — registers PDMEndpointView + PDMEndpointSyncNowView
     urlpatterns += [
         path(
             "pdm/endpoints/",
