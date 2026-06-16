@@ -51,7 +51,7 @@ curl -H "Authorization: Token <token>" \
      "http://netbox.example.com/api/plugins/proxbox/endpoints/proxmox/?mode=cluster"
 ```
 
-**Filterable fields:** `id`, `name`, `domain`, `ip_address`, `mode`
+**Filterable fields:** `id`, `name`, `domain`, `ip_address`, `mode`, `allowed_tenants`, `allowed_tenants_id`, `allowed_tenants__id__in`, `allowed_tenants__isnull`
 
 **Searchable fields (`?q=`):** `name`, `domain`
 
@@ -72,6 +72,7 @@ curl -H "Authorization: Token <token>" \
   "username": "root@pam",
   "token_name": "proxbox",
   "verify_ssl": false,
+  "allowed_tenants": [],
   "tags": [],
   "custom_fields": {},
   "created": "2026-01-01T00:00:00Z",
@@ -98,6 +99,7 @@ curl -H "Authorization: Token <token>" \
 | `token_name` | string | Proxmox API token name |
 | `token_value` | string (write-only) | Proxmox API token secret |
 | `verify_ssl` | boolean | Whether to verify the Proxmox TLS certificate (default `false`) |
+| `allowed_tenants` | nested Tenant list | Tenant allow-list for NMS Cloud endpoint visibility. Empty means default/global visibility. |
 | `allow_writes` | boolean | Gate for the operational verb routes on the paired `proxbox-api` (start/stop/snapshot/migrate). Defaults to `false`. When `false`, `proxbox-api` returns `403 {"reason": "writes_disabled_for_endpoint"}` for verb POSTs against this endpoint even with a valid API key and `X-Proxbox-Actor` header. Flip to `true` per-endpoint to opt that Proxmox cluster into write access. |
 
 !!! warning "Validation"
@@ -105,6 +107,18 @@ curl -H "Authorization: Token <token>" \
 
 !!! tip "Operational verbs"
     `allow_writes` does **not** gate any of the read-side sync paths. It only controls the POST verb routes (`/proxmox/qemu/{vmid}/{start,stop,snapshot,migrate}` and the LXC equivalents) on the paired `proxbox-api`. See [Operational verbs design](../design/operational-verbs.md) and the [Endpoint Operations API](./operations.md).
+
+### Tenant allow-list semantics
+
+- `allowed_tenants=[]` means the endpoint remains in the default/global pool.
+- Supplying one or more tenants makes the endpoint visible only to those
+  tenants in tenant-scoped NMS Cloud flows.
+- `PATCH {"allowed_tenants": []}` clears explicit grants and returns the
+  endpoint to default/global visibility.
+- When `nms-backend` resolves `X-Cloud-Tenant`, it keeps global/default
+  endpoints visible only if the tenant has no explicit endpoint grants. As soon
+  as one explicit match exists, the backend hides the global pool and returns
+  only explicit matches.
 
 ---
 

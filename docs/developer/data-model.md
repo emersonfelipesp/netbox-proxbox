@@ -23,6 +23,7 @@ erDiagram
         string  token_value
         string  version
         fk      ip_address
+        m2m     allowed_tenants
     }
     NetBoxEndpoint {
         int     id
@@ -231,6 +232,13 @@ OpenAPI reads, sync scopes, or any proxbox-api, PVE, PBS, PDM, NetBox, or
 companion-plugin network attempt. Use
 `netbox_proxbox.services.endpoint_enabled.disabled_endpoint_detail()` at the
 start of new endpoint operational paths.
+
+`ProxmoxEndpoint.allowed_tenants` is a tenant allow-list consumed by NMS Cloud.
+An empty relation means the endpoint stays in the default/global pool. A
+non-empty relation pins the endpoint to the listed tenants. The paired backend
+uses explicit grants as an override: if a tenant matches any explicitly granted
+endpoint, global/default endpoints are hidden for that tenant; otherwise the
+tenant continues to see only the default/global rows.
 
 !!! warning "Single FastAPIEndpoint constraint"
     The plugin's HTTP and WebSocket helpers resolve the backend via `FastAPIEndpoint.objects.first()`. If multiple `FastAPIEndpoint` rows exist, whichever sorts first in the queryset is used for all backend communication. Keep exactly one row in production.

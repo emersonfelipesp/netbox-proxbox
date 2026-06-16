@@ -82,6 +82,9 @@ packages = ["netbox_proxbox", "proxbox_cli"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
+markers = [
+    "django_db: requires pytest-django database access",
+]
 
 [tool.coverage.run]
 branch = true
