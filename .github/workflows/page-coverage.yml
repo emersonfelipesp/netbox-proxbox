@@ -10,7 +10,7 @@ on:
 env:
   NETBOX_IMAGE: netboxcommunity/netbox:v4.6.1
   PROXMOX_SDK_IMAGE: emersonfelipesp/proxmox-sdk
-  PROXBOX_API_IMAGE: emersonfelipesp/proxbox-api:0.0.18.post3
+  PROXBOX_API_IMAGE: emersonfelipesp/proxbox-api:0.0.18.post5
   PROXBOX_ENCRYPTION_KEY: proxbox-ci-only-encryption-key-not-a-secret
   SECRET_KEY: proxbox-e2e-secret-key-proxbox-e2e-secret-key-proxbox-e2e-secret-key
 
@@ -105,7 +105,7 @@ jobs:
           echo "PROXMOX_MOCK_PROBE_FLAGS=-sk" >> "$GITHUB_ENV"
           echo "PROXMOX_MOCK_BASE_URL=https://${TEST_HOST}:18006" >> "$GITHUB_ENV"
 
-          # proxbox-api (pinned to PROXBOX_API_IMAGE from DockerHub — matches 0.0.18.post3 release)
+          # proxbox-api (pinned to PROXBOX_API_IMAGE from DockerHub — matches 0.0.18.post5 release)
           docker pull "${PROXBOX_API_IMAGE}"
           docker run -d --name proxbox-e2e-api --network proxbox-e2e -p "18800:8000" \
             -e PROXBOX_SKIP_NETBOX_BOOTSTRAP=true \
