@@ -107,12 +107,11 @@ jobs:
       fail-fast: false
       matrix:
         install_source: ${{ fromJSON(inputs.install_source != 'both' && format('["{0}"]', inputs.install_source) || '["local","pypi","container"]') }}
-        # NetBox 4.6.1 is supported in code (min/max range covers it) but is omitted
-        # from e2e because netboxcommunity/netbox:v4.6.1 is not yet published on
-        # Docker Hub and the upstream netbox-docker source-build fallback fails on
-        # Ubuntu 24.04 (libxmlsec1-openssl1 apt package no longer available).
-        # Re-add once netbox-community/netbox-docker ships the v4.6.1 image.
-        netbox_image: ${{ fromJSON(inputs.netbox_image != '' && format('["{0}"]', inputs.netbox_image) || '["netboxcommunity/netbox:v4.5.8","netboxcommunity/netbox:v4.5.9","netboxcommunity/netbox:v4.6.0"]') }}
+        # NetBox version rotation policy: support the latest 3 releases.
+        # v4.6.1 image is now available on Docker Hub (published 2026-06-04).
+        # v4.6.3 (released 2026-06-16) is not yet on Docker Hub; add when available.
+        # Dropped: v4.5.8 (rotated out per 3-version policy).
+        netbox_image: ${{ fromJSON(inputs.netbox_image != '' && format('["{0}"]', inputs.netbox_image) || '["netboxcommunity/netbox:v4.5.9","netboxcommunity/netbox:v4.6.0","netboxcommunity/netbox:v4.6.1"]') }}
         network_stack: [ipv4]
         proxbox_api_runtime: ${{ fromJSON((inputs.proxbox_api_runtime == 'python' || inputs.proxbox_api_runtime == 'pyo3-rust') && format('["{0}"]', inputs.proxbox_api_runtime) || '["python","pyo3-rust"]') }}
         proxmox_service: ${{ fromJSON((inputs.proxmox_service == 'pve' || inputs.proxmox_service == 'pbs' || inputs.proxmox_service == 'pdm') && format('["{0}"]', inputs.proxmox_service) || '["pve","pbs","pdm"]') }}
