@@ -10,6 +10,7 @@ on:
 env:
   NETBOX_IMAGE: netboxcommunity/netbox:v4.6.1
   PROXMOX_SDK_IMAGE: emersonfelipesp/proxmox-sdk
+  PROXBOX_API_VERSION: 0.0.18.post5
   PROXBOX_ENCRYPTION_KEY: proxbox-ci-only-encryption-key-not-a-secret
   SECRET_KEY: proxbox-e2e-secret-key-proxbox-e2e-secret-key-proxbox-e2e-secret-key
 
@@ -104,14 +105,24 @@ jobs:
           echo "PROXMOX_MOCK_PROBE_FLAGS=-sk" >> "$GITHUB_ENV"
           echo "PROXMOX_MOCK_BASE_URL=https://${TEST_HOST}:18006" >> "$GITHUB_ENV"
 
-          # proxbox-api (built from GitHub HEAD, dev target)
-          git clone --depth 1 https://github.com/emersonfelipesp/proxbox-api.git /tmp/proxbox-api-src
-          docker build --target raw -t proxbox-api-e2e:dev /tmp/proxbox-api-src
+          # proxbox-api — build from PyPI (Docker Hub image not published for post releases)
+          cat > /tmp/proxbox-api-ci.Dockerfile <<'DOCKERFILE'
+          FROM python:3.12-slim
+          RUN python -m pip install --upgrade pip
+          ARG PROXBOX_API_VERSION
+          RUN python -m pip install --no-cache-dir "proxbox-api==${PROXBOX_API_VERSION}"
+          CMD ["python", "-m", "uvicorn", "proxbox_api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+          DOCKERFILE
+          docker build \
+            --build-arg "PROXBOX_API_VERSION=${PROXBOX_API_VERSION}" \
+            -t proxbox-api-ci \
+            -f /tmp/proxbox-api-ci.Dockerfile \
+            /tmp
           docker run -d --name proxbox-e2e-api --network proxbox-e2e -p "18800:8000" \
             -e PROXBOX_SKIP_NETBOX_BOOTSTRAP=true \
             -e PROXBOX_ENCRYPTION_KEY \
             -e PROXBOX_BIND_HOST=0.0.0.0 \
-            proxbox-api-e2e:dev
+            proxbox-api-ci
 
           # Pull NetBox image
           docker pull "${NETBOX_IMAGE}"
