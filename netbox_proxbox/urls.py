@@ -371,3 +371,30 @@ urlpatterns = [
         name="backend_logs_path_update",
     ),
 ]
+
+# PDMEndpoint and PDMRemote have app_label="netbox_proxbox", so NetBox's
+# get_action_url() generates "plugins:netbox_proxbox:pdmendpoint_edit" etc.
+# The CRUD views live in netbox_pdm, but they must also be reachable under this
+# namespace — otherwise ActionsColumn crashes the list page with NoReverseMatch.
+try:
+    import netbox_pdm.views as _netbox_pdm_views  # noqa: F401 — triggers @register_model_view
+    urlpatterns += [
+        path(
+            "pdm/endpoints/",
+            include(get_model_urls("netbox_proxbox", "pdmendpoint", detail=False)),
+        ),
+        path(
+            "pdm/endpoints/<int:pk>/",
+            include(get_model_urls("netbox_proxbox", "pdmendpoint")),
+        ),
+        path(
+            "pdm/remotes/",
+            include(get_model_urls("netbox_proxbox", "pdmremote", detail=False)),
+        ),
+        path(
+            "pdm/remotes/<int:pk>/",
+            include(get_model_urls("netbox_proxbox", "pdmremote")),
+        ),
+    ]
+except ImportError:
+    pass
