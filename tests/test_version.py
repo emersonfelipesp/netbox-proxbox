@@ -116,8 +116,13 @@ def test_certified_netbox_versions_are_documented():
 
 def test_certified_netbox_versions_are_in_e2e_matrix():
     workflow = E2E_WORKFLOW_PATH.read_text(encoding="utf-8")
-    for version in ("v4.5.8", "v4.5.9", "v4.6.0", "v4.6.1"):
-        assert f"netboxcommunity/netbox:{version}" in workflow
+    for version in ("v4.5.9", "v4.6.0", "v4.6.1"):
+        assert f"netboxcommunity/netbox:{version}" in workflow, (
+            f"netboxcommunity/netbox:{version} is missing from the E2E matrix"
+        )
+    assert "netboxcommunity/netbox:v4.5.8" not in workflow, (
+        "v4.5.8 was rotated out of the E2E matrix per the 3-version policy"
+    )
     assert "netboxcommunity/netbox:v4.6.0-beta2" not in workflow
 
 

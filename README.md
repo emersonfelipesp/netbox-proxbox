@@ -109,6 +109,20 @@ in UI/API output, but status checks, backend registration, OpenAPI fetches,
 sync scopes, keepalive probes, and startup/signal pushes must return before any
 proxbox-api or remote-service connection attempt.
 
+### Cloud Portal Endpoint Allowlists
+
+`ProxmoxEndpoint.allowed_tenants` controls which Proxmox endpoint rows are
+eligible for tenant-scoped NMS Cloud callers. An empty allow-list means the
+endpoint stays in the default/global pool. A non-empty allow-list pins that
+endpoint to the listed tenants.
+
+The paired `nms-backend` contract is intentionally asymmetric: if a tenant has
+no explicit endpoint grants, it may still see global/default endpoints; once
+that tenant matches any explicitly granted endpoint, the backend hides the
+global pool and returns only the explicit matches. Use this to pin a tenant
+such as Confitec to a single cluster without changing the default pool for
+other tenants.
+
 ## What's New in v0.0.20.post3
 
 Paired with backend [`proxbox-api 0.0.17.post1`](https://github.com/emersonfelipesp/proxbox-api).

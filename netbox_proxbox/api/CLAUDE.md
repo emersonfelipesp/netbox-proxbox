@@ -8,26 +8,56 @@ This directory contains the NetBox plugin API surface for ProxBox. It exposes th
 - [`urls.py`](./urls.py): API routing for the plugin root, endpoint namespace, non-model views, and model viewsets.
 - [`views.py`](./views.py): `APIRootView` subclasses, `NetBoxModelViewSet` classes, and non-model `APIView` classes (see table below).
 - [`filters.py`](./filters.py): additional filter utilities used by the API router if needed.
-- [`serializers/`](./serializers): package of API serializers for endpoints, clusters, storage, backups, snapshots, task history, backup routines, replications, and the non-model resource/schedule serializers in `resource_views.py`.
+- [`serializers/`](./serializers): package of API serializers for endpoints, clusters, storage, backups, snapshots, task history, backup routines, replications, and the non-model resource/schedule serializers in `resource_views.py`. The `pbs_pdm.py` module provides serializers for `PBSEndpoint`, `PDMEndpoint`, and `PDMRemote`; `intent.py` provides read-only serializers for `DeletionRequest` and `ProxmoxApplyJob`.
 
 ## Model Viewsets
 
 These follow the standard `NetBoxModelViewSet` + `NetBoxRouter` pattern:
 
-| Viewset | Route |
-|---|---|
-| `ProxmoxEndpointViewSet` | `endpoints/proxmox/` |
-| `NetBoxEndpointViewSet` | `endpoints/netbox/` |
-| `FastAPIEndpointViewSet` | `endpoints/fastapi/` |
-| `ProxmoxClusterViewSet` | `clusters/` |
-| `ProxmoxNodeViewSet` | `nodes/` |
-| `ProxmoxStorageViewSet` | `storage/` |
-| `VMBackupViewSet` | `backups/` |
-| `BackupRoutineViewSet` | `backup-routines/` |
-| `ReplicationViewSet` | `replications/` |
-| `VMSnapshotViewSet` | `snapshots/` |
-| `VMTaskHistoryViewSet` | `task-history/` |
-| `ProxboxPluginSettingsViewSet` | `settings/` |
+### Endpoint namespace (`endpoints/`)
+
+| Viewset | Route | Notes |
+|---|---|---|
+| `ProxmoxEndpointViewSet` | `endpoints/proxmox/` | Full CRUD |
+| `NetBoxEndpointViewSet` | `endpoints/netbox/` | Full CRUD |
+| `FastAPIEndpointViewSet` | `endpoints/fastapi/` | Full CRUD |
+| `PBSEndpointViewSet` | `endpoints/pbs/` | Full CRUD; `token_secret` write-only |
+| `PDMEndpointViewSet` | `endpoints/pdm/` | Full CRUD; `token_secret` write-only; M2M proxmox/pbs endpoints |
+
+### Main router
+
+| Viewset | Route | Notes |
+|---|---|---|
+| `ProxmoxClusterViewSet` | `proxmox-clusters/` | Full CRUD |
+| `ProxmoxNodeViewSet` | `proxmox-nodes/` | Full CRUD |
+| `CloudImageTemplateViewSet` | `cloud-image-templates/` | Full CRUD |
+| `FirecrackerHostPoolViewSet` | `firecracker-host-pools/` | Full CRUD |
+| `FirecrackerHostViewSet` | `firecracker-hosts/` | Full CRUD |
+| `FirecrackerImageTemplateViewSet` | `firecracker-image-templates/` | Full CRUD |
+| `FirecrackerMicroVMViewSet` | `firecracker-microvms/` | Full CRUD |
+| `ProxmoxStorageViewSet` | `storage/` | Full CRUD |
+| `VMBackupViewSet` | `backups/` | Full CRUD |
+| `BackupRoutineViewSet` | `backup-routines/` | Full CRUD |
+| `ReplicationViewSet` | `replications/` | Full CRUD |
+| `VMSnapshotViewSet` | `snapshots/` | Full CRUD |
+| `VMTaskHistoryViewSet` | `task-history/` | Full CRUD |
+| `ProxmoxVMCloudInitViewSet` | `vm-cloudinit/` | Full CRUD |
+| `ProxmoxVMTemplateViewSet` | `vm-templates/` | Full CRUD |
+| `ProxboxPluginSettingsViewSet` | `settings/` | GET+PATCH only (singleton) |
+| `NodeSSHCredentialViewSet` | `ssh-credentials/` | Full CRUD |
+| `ProxmoxFirewallSecurityGroupViewSet` | `firewall/security-groups/` | Full CRUD |
+| `ProxmoxFirewallRuleViewSet` | `firewall/rules/` | Full CRUD |
+| `ProxmoxFirewallIPSetViewSet` | `firewall/ipsets/` | Full CRUD |
+| `ProxmoxFirewallIPSetEntryViewSet` | `firewall/ipset-entries/` | Full CRUD |
+| `ProxmoxFirewallAliasViewSet` | `firewall/aliases/` | Full CRUD |
+| `ProxmoxFirewallOptionsViewSet` | `firewall/options/` | Full CRUD |
+| `ProxmoxSdnFabricViewSet` | `sdn-fabrics/` | Full CRUD |
+| `ProxmoxSdnRouteMapViewSet` | `sdn-route-maps/` | Full CRUD |
+| `ProxmoxSdnPrefixListViewSet` | `sdn-prefix-lists/` | Full CRUD |
+| `ProxmoxDatacenterCpuModelViewSet` | `datacenter-cpu-models/` | Full CRUD |
+| `PDMRemoteViewSet` | `pdm-remotes/` | Full CRUD; FK to PDMEndpoint |
+| `DeletionRequestViewSet` | `deletion-requests/` | **GET/HEAD/OPTIONS only** — write paths go through UI approval workflow |
+| `ProxmoxApplyJobViewSet` | `apply-jobs/` | **GET/HEAD/OPTIONS only** — jobs created by intent branch-merge workflow |
 
 ## Non-Model API Views
 

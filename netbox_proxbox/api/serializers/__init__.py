@@ -75,10 +75,22 @@ from netbox_proxbox.api.serializers.vm_template import (
     NestedProxmoxVMTemplateSerializer,
     ProxmoxVMTemplateSerializer,
 )
+from netbox_proxbox.api.serializers.pbs_pdm import (
+    NestedPBSEndpointSerializer,
+    NestedPDMEndpointSerializer,
+    PBSEndpointSerializer,
+    PDMEndpointSerializer,
+    PDMRemoteSerializer,
+)
+from netbox_proxbox.api.serializers.intent import (
+    DeletionRequestSerializer,
+    ProxmoxApplyJobSerializer,
+)
 
 __all__ = (
     "BackupRoutineSerializer",
     "CloudImageTemplateSerializer",
+    "DeletionRequestSerializer",
     "DeviceResourceSerializer",
     "FastAPIEndpointSerializer",
     "FirecrackerHostPoolSerializer",
@@ -92,6 +104,8 @@ __all__ = (
     "NestedFirecrackerHostPoolSerializer",
     "NestedFirecrackerHostSerializer",
     "NestedFirecrackerImageTemplateSerializer",
+    "NestedPBSEndpointSerializer",
+    "NestedPDMEndpointSerializer",
     "NestedProxmoxClusterSerializer",
     "NestedProxmoxEndpointSerializer",
     "NestedProxmoxFirewallIPSetSerializer",
@@ -100,7 +114,11 @@ __all__ = (
     "NetBoxEndpointSerializer",
     "NestedProxmoxStorageSerializer",
     "NodeSSHCredentialSerializer",
+    "PBSEndpointSerializer",
+    "PDMEndpointSerializer",
+    "PDMRemoteSerializer",
     "ProxboxPluginSettingsSerializer",
+    "ProxmoxApplyJobSerializer",
     "ProxmoxClusterSerializer",
     "ProxmoxDatacenterCpuModelSerializer",
     "ProxmoxEndpointSerializer",
