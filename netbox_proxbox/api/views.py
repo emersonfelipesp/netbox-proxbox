@@ -281,7 +281,7 @@ class ProxmoxEndpointViewSet(NetBoxModelViewSet):
 
     queryset = models.ProxmoxEndpoint.objects.select_related(
         "ip_address", "site", "tenant"
-    )
+    ).prefetch_related("allowed_tenants")
     serializer_class = ProxmoxEndpointSerializer
     filterset_class = filtersets.ProxmoxEndpointFilterSet
 

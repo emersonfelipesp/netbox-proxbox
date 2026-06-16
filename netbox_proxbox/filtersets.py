@@ -340,6 +340,24 @@ class FirecrackerMicroVMFilterSet(ProxboxModelFilterSet):
 class ProxmoxEndpointFilterSet(ProxboxModelFilterSet):
     """Filter Proxmox VE endpoint records for list and API views."""
 
+    allowed_tenants_id = django_filters.ModelMultipleChoiceFilter(
+        field_name="allowed_tenants",
+        queryset=Tenant.objects.all(),
+    )
+    allowed_tenants = django_filters.ModelMultipleChoiceFilter(
+        field_name="allowed_tenants__slug",
+        to_field_name="slug",
+        queryset=Tenant.objects.all(),
+    )
+    allowed_tenants__id__in = MultiValueNumberFilter(
+        field_name="allowed_tenants__id",
+        lookup_expr="in",
+    )
+    allowed_tenants__isnull = django_filters.BooleanFilter(
+        field_name="allowed_tenants",
+        lookup_expr="isnull",
+    )
+
     class Meta:
         model = ProxmoxEndpoint
         fields = (
@@ -351,6 +369,10 @@ class ProxmoxEndpointFilterSet(ProxboxModelFilterSet):
             "environment",
             "site",
             "tenant",
+            "allowed_tenants",
+            "allowed_tenants_id",
+            "allowed_tenants__id__in",
+            "allowed_tenants__isnull",
             "enabled",
         )
 

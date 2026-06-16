@@ -103,6 +103,15 @@ class ProxmoxEndpointForm(NetBoxModelForm):
         required=False,
         label=_("Tenant"),
     )
+    allowed_tenants = DynamicModelMultipleChoiceField(
+        queryset=Tenant.objects.all(),
+        required=False,
+        label=_("Allowed tenants"),
+        help_text=_(
+            "Explicitly grant endpoint access to these tenants. Leave empty to keep "
+            "the endpoint in the default visibility pool."
+        ),
+    )
     comments = CommentField()
 
     def __init__(self, *args: object, **kwargs: object) -> None:
@@ -137,6 +146,7 @@ class ProxmoxEndpointForm(NetBoxModelForm):
             "environment",
             "site",
             "tenant",
+            "allowed_tenants",
             "tags",
         )
 
@@ -484,6 +494,11 @@ class ProxmoxEndpointFilterForm(NetBoxModelFilterSetForm):
         queryset=Tenant.objects.all(),
         required=False,
         label=_("Tenant"),
+    )
+    allowed_tenants = DynamicModelMultipleChoiceField(
+        queryset=Tenant.objects.all(),
+        required=False,
+        label=_("Allowed tenants"),
     )
 
 

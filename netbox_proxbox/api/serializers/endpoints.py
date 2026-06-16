@@ -47,6 +47,7 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
     )
     site = SiteSerializer(nested=True, required=False, allow_null=True)
     tenant = TenantSerializer(nested=True, required=False, allow_null=True)
+    allowed_tenants = TenantSerializer(nested=True, many=True, required=False)
     has_ssh_password = serializers.BooleanField(read_only=True)
     has_ssh_private_key = serializers.BooleanField(read_only=True)
     has_ssh_terminal_credentials = serializers.BooleanField(read_only=True)
@@ -91,6 +92,7 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
             *OVERWRITE_FIELDS,
             "site",
             "tenant",
+            "allowed_tenants",
             "tags",
             "custom_fields",
             "created",
@@ -130,6 +132,30 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
             )
 
         return attrs
+
+    def _apply_allowed_tenants(
+        self,
+        instance: ProxmoxEndpoint,
+        allowed_tenants: list[object] | None,
+    ) -> None:
+        if allowed_tenants is not None:
+            instance.allowed_tenants.set(allowed_tenants)
+
+    def create(self, validated_data: dict[str, object]) -> ProxmoxEndpoint:
+        allowed_tenants = validated_data.pop("allowed_tenants", None)
+        instance = super().create(validated_data)
+        self._apply_allowed_tenants(instance, allowed_tenants)
+        return instance
+
+    def update(
+        self,
+        instance: ProxmoxEndpoint,
+        validated_data: dict[str, object],
+    ) -> ProxmoxEndpoint:
+        allowed_tenants = validated_data.pop("allowed_tenants", None)
+        instance = super().update(instance, validated_data)
+        self._apply_allowed_tenants(instance, allowed_tenants)
+        return instance
 
 
 class NetBoxEndpointSerializer(NetBoxModelSerializer):

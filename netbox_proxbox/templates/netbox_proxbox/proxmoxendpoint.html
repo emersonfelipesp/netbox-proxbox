@@ -58,6 +58,20 @@
                             </td>
                         </tr>
                         <tr>
+                            <th scope="row">{% trans "Allowed tenants" %}</th>
+                            <td>
+                                {% if object.allowed_tenants.exists %}
+                                    <ul class="list-unstyled mb-0">
+                                        {% for tenant in object.allowed_tenants.all %}
+                                            <li><a href="{{ tenant.get_absolute_url }}">{{ tenant }}</a></li>
+                                        {% endfor %}
+                                    </ul>
+                                {% else %}
+                                    <span class="text-muted">{% trans "Default visibility" %}</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
                             <th scope="row">IP Address</th>
                             <td>
                                 <a href="{{ object.ip_address.get_absolute_url }}">

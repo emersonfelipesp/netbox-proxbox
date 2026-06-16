@@ -540,6 +540,17 @@ class ProxmoxEndpoint(EndpointBase):
         null=True,
         blank=True,
     )
+    allowed_tenants = models.ManyToManyField(
+        to="tenancy.Tenant",
+        blank=True,
+        related_name="proxbox_proxmox_endpoints",
+        verbose_name=_("Allowed tenants"),
+        help_text=_(
+            "Tenants explicitly granted access to this endpoint. Leave empty for "
+            "default visibility; NMS Cloud callers with any explicit endpoint grant "
+            "see only their granted endpoints."
+        ),
+    )
 
     class Meta(EndpointBase.Meta):
         ordering = ("name", "pk")
