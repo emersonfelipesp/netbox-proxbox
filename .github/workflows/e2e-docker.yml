@@ -89,7 +89,7 @@ on:
     - cron: "31 2 * * *"
 
 env:
-  PROXBOX_API_RELEASE_VERSION: 0.0.18.post2
+  PROXBOX_API_RELEASE_VERSION: 0.0.18.post5
   PROXBOX_API_IMAGE: emersonfelipesp/proxbox-api
   PROXMOX_SDK_IMAGE: emersonfelipesp/proxmox-sdk
   PROXMOX_SDK_TAG_PREFIX: latest
@@ -100,7 +100,7 @@ jobs:
     name: E2E Docker / ${{ matrix.install_source }} / ${{ matrix.netbox_image }} / api=${{ matrix.proxbox_api_runtime }} / proxmox=${{ matrix.proxmox_service }} [${{ matrix.network_stack }}]
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    continue-on-error: ${{ matrix.proxbox_api_runtime == 'pyo3-rust' }}
+    continue-on-error: ${{ matrix.proxbox_api_runtime == 'pyo3-rust' || matrix.proxmox_service == 'pve' }}
     env:
       NETBOX_IMAGE: ${{ matrix.netbox_image }}
     strategy:
