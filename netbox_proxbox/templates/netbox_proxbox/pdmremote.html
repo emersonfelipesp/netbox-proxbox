@@ -1,0 +1,100 @@
+{% extends 'generic/object.html' %}
+{% load static %}
+
+{% block content %}
+    <div class="row mb-3">
+        <div class="col col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">PDM Remote</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-hover attr-table">
+                        <tr>
+                            <th scope="row">PDM Endpoint</th>
+                            <td>
+                                {% if object.pdm_endpoint %}
+                                    <a href="{{ object.pdm_endpoint.get_absolute_url }}">{{ object.pdm_endpoint }}</a>
+                                {% else %}
+                                    &mdash;
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Name</th>
+                            <td>{{ object.name }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Type</th>
+                            <td>
+                                {% if object.type == 'pve' %}
+                                    <span class="badge text-bg-success">PVE</span>
+                                {% elif object.type == 'pbs' %}
+                                    <span class="badge text-bg-info">PBS</span>
+                                {% else %}
+                                    {{ object.get_type_display }}
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Hostname</th>
+                            <td>{{ object.hostname|default:"&mdash;" }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">TLS Fingerprint</th>
+                            <td>
+                                {% if object.fingerprint %}
+                                    <code>{{ object.fingerprint }}</code>
+                                {% else %}
+                                    <span class="text-muted">&mdash;</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Version</th>
+                            <td>{{ object.version|default:"&mdash;" }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Last Seen</th>
+                            <td>
+                                {% if object.last_seen_at %}
+                                    {{ object.last_seen_at }}
+                                {% else %}
+                                    <span class="text-muted">Never</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% if object.type == 'pve' %}
+                        <tr>
+                            <th scope="row">Linked PVE Endpoint</th>
+                            <td>
+                                {% if object.linked_proxmox_endpoint %}
+                                    <a href="{{ object.linked_proxmox_endpoint.get_absolute_url }}">{{ object.linked_proxmox_endpoint }}</a>
+                                {% else %}
+                                    <span class="text-muted">Not resolved</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% elif object.type == 'pbs' %}
+                        <tr>
+                            <th scope="row">Linked PBS Endpoint</th>
+                            <td>
+                                {% if object.linked_pbs_endpoint %}
+                                    <a href="{{ object.linked_pbs_endpoint.get_absolute_url }}">{{ object.linked_pbs_endpoint }}</a>
+                                {% else %}
+                                    <span class="text-muted">Not resolved</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endif %}
+                    </table>
+                </div>
+            </div>
+            {% include 'inc/panels/custom_fields.html' %}
+        </div>
+        <div class="col col-md-6">
+            {% include 'inc/panels/tags.html' %}
+            {% include 'inc/panels/comments.html' %}
+        </div>
+    </div>
+{% endblock %}

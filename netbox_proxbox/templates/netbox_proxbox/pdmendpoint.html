@@ -1,0 +1,170 @@
+{% extends 'generic/object.html' %}
+{% load static %}
+
+{% block content %}
+    <div class="row mb-3">
+        <div class="col col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">PDM Endpoint</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-hover attr-table">
+                        <tr>
+                            <th scope="row">Name</th>
+                            <td>{{ object.name|default:"&mdash;" }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Enabled</th>
+                            <td>
+                                {% if object.enabled %}
+                                    <span class="text-success"><i class="mdi mdi-check-bold"></i> Yes</span>
+                                {% else %}
+                                    <span class="text-muted"><i class="mdi mdi-close-thick"></i> No</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">IP Address</th>
+                            <td>
+                                {% if object.ip_address %}
+                                    <a href="{{ object.ip_address.get_absolute_url }}">{{ object.ip_address }}</a>
+                                {% else %}
+                                    &mdash;
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Domain</th>
+                            <td>{{ object.domain|default:"&mdash;" }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Port</th>
+                            <td>{{ object.port }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Token ID</th>
+                            <td>{{ object.token_id|default:"&mdash;" }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">TLS Fingerprint</th>
+                            <td>
+                                {% if object.fingerprint %}
+                                    <code>{{ object.fingerprint }}</code>
+                                {% else %}
+                                    <span class="text-muted">&mdash;</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Verify SSL</th>
+                            <td>
+                                {% if object.verify_ssl %}
+                                    <span class="text-success"><i class="mdi mdi-check-bold"></i> Yes</span>
+                                {% else %}
+                                    <span class="text-warning"><i class="mdi mdi-close-thick"></i> No</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Allow Writes</th>
+                            <td>
+                                {% if object.allow_writes %}
+                                    <span class="text-warning"><i class="mdi mdi-check-bold"></i> Yes</span>
+                                {% else %}
+                                    <span class="text-muted"><i class="mdi mdi-close-thick"></i> No</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Timeout</th>
+                            <td>
+                                {% if object.timeout %}
+                                    {{ object.timeout }}s
+                                {% else %}
+                                    <span class="text-muted">Default (30s)</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Site</th>
+                            <td>
+                                {% if object.site %}
+                                    <a href="{{ object.site.get_absolute_url }}">{{ object.site }}</a>
+                                {% else %}
+                                    &mdash;
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Tenant</th>
+                            <td>
+                                {% if object.tenant %}
+                                    <a href="{{ object.tenant.get_absolute_url }}">{{ object.tenant }}</a>
+                                {% else %}
+                                    &mdash;
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+            {% include 'inc/panels/custom_fields.html' %}
+        </div>
+        <div class="col col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Federation</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-hover attr-table">
+                        <tr>
+                            <th scope="row">Federated PVE Endpoints</th>
+                            <td>
+                                {% if object.proxmox_endpoints.exists %}
+                                    <ul class="list-unstyled mb-0">
+                                        {% for ep in object.proxmox_endpoints.all %}
+                                            <li><a href="{{ ep.get_absolute_url }}">{{ ep }}</a></li>
+                                        {% endfor %}
+                                    </ul>
+                                {% else %}
+                                    <span class="text-muted">None declared</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Federated PBS Endpoints</th>
+                            <td>
+                                {% if object.pbs_endpoints.exists %}
+                                    <ul class="list-unstyled mb-0">
+                                        {% for ep in object.pbs_endpoints.all %}
+                                            <li><a href="{{ ep.get_absolute_url }}">{{ ep }}</a></li>
+                                        {% endfor %}
+                                    </ul>
+                                {% else %}
+                                    <span class="text-muted">None declared</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+            {% include 'inc/panels/tags.html' %}
+            {% include 'inc/panels/comments.html' %}
+        </div>
+    </div>
+    {% if remotes_table %}
+    <div class="row mb-3">
+        <div class="col">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Discovered Remotes</h5>
+                </div>
+                <div class="card-body">
+                    {% include 'inc/table.html' with table=remotes_table %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+{% endblock %}
