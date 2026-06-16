@@ -7,7 +7,7 @@ import uuid
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
-from django.urls import reverse
+from django.urls import NoReverseMatch, reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from netbox.models import NetBoxModel
@@ -56,7 +56,10 @@ class FirecrackerHostPool(NetBoxModel):
         return self.name
 
     def get_absolute_url(self) -> str:
-        return reverse("plugins:netbox_proxbox:firecrackerhostpool", args=[self.pk])
+        try:
+            return reverse("plugins:netbox_proxbox:firecrackerhostpool", args=[self.pk])
+        except NoReverseMatch:
+            return ""
 
     @property
     def tenant_scope_label(self) -> str:
@@ -164,7 +167,10 @@ class FirecrackerHost(NetBoxModel):
         return f"{self.name} ({self.pool})"
 
     def get_absolute_url(self) -> str:
-        return reverse("plugins:netbox_proxbox:firecrackerhost", args=[self.pk])
+        try:
+            return reverse("plugins:netbox_proxbox:firecrackerhost", args=[self.pk])
+        except NoReverseMatch:
+            return ""
 
     @property
     def token_configured(self) -> bool:
@@ -261,9 +267,12 @@ class FirecrackerImageTemplate(NetBoxModel):
         return f"{self.name} ({self.os_family}{release}, {self.architecture})"
 
     def get_absolute_url(self) -> str:
-        return reverse(
-            "plugins:netbox_proxbox:firecrackerimagetemplate", args=[self.pk]
-        )
+        try:
+            return reverse(
+                "plugins:netbox_proxbox:firecrackerimagetemplate", args=[self.pk]
+            )
+        except NoReverseMatch:
+            return ""
 
     @property
     def tenant_scope_label(self) -> str:
@@ -365,7 +374,10 @@ class FirecrackerMicroVM(NetBoxModel):
         return self.name
 
     def get_absolute_url(self) -> str:
-        return reverse("plugins:netbox_proxbox:firecrackermicrovm", args=[self.pk])
+        try:
+            return reverse("plugins:netbox_proxbox:firecrackermicrovm", args=[self.pk])
+        except NoReverseMatch:
+            return ""
 
     @property
     def instance_ref(self) -> str:
