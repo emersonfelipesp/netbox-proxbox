@@ -107,12 +107,12 @@ jobs:
 
           # proxbox-api — build from PyPI (Docker Hub image not published for post releases)
           cat > /tmp/proxbox-api-ci.Dockerfile <<'DOCKERFILE'
-FROM python:3.12-slim
-RUN python -m pip install --upgrade pip
-ARG PROXBOX_API_VERSION
-RUN python -m pip install --no-cache-dir "proxbox-api==${PROXBOX_API_VERSION}"
-CMD ["python", "-m", "uvicorn", "proxbox_api.main:app", "--host", "0.0.0.0", "--port", "8000"]
-DOCKERFILE
+          FROM python:3.12-slim
+          RUN python -m pip install --upgrade pip
+          ARG PROXBOX_API_VERSION
+          RUN python -m pip install --no-cache-dir "proxbox-api==${PROXBOX_API_VERSION}"
+          CMD ["python", "-m", "uvicorn", "proxbox_api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+          DOCKERFILE
           docker build \
             --build-arg "PROXBOX_API_VERSION=${PROXBOX_API_VERSION}" \
             -t proxbox-api-ci \
