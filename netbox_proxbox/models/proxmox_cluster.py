@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from django.db import models
-from django.urls import reverse
+from django.urls import NoReverseMatch, reverse
 from django.utils.translation import gettext_lazy as _
 
 from netbox.models import NetBoxModel
@@ -84,4 +84,7 @@ class ProxmoxCluster(NetBoxModel):
 
     def get_absolute_url(self) -> str:
         """Plugin UI URL for this Proxmox cluster detail view."""
-        return reverse("plugins:netbox_proxbox:proxmoxcluster", args=[self.pk])
+        try:
+            return reverse("plugins:netbox_proxbox:proxmoxcluster", args=[self.pk])
+        except NoReverseMatch:
+            return ""
