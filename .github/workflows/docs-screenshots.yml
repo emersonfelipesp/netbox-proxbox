@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 env:
-  PROXBOX_API_RELEASE_VERSION: 0.0.18.post2
+  PROXBOX_API_RELEASE_VERSION: 0.0.18.post3
   # NetBox 4.6.1 is supported in code, but netboxcommunity/netbox:v4.6.1 is not
   # yet published on Docker Hub and the upstream source-build fallback fails on
   # Ubuntu 24.04. Pin to v4.6.0 for screenshots until v4.6.1 ships.

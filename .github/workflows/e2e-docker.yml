@@ -89,7 +89,7 @@ on:
     - cron: "31 2 * * *"
 
 env:
-  PROXBOX_API_RELEASE_VERSION: 0.0.18.post2
+  PROXBOX_API_RELEASE_VERSION: 0.0.18.post3
   PROXBOX_API_IMAGE: emersonfelipesp/proxbox-api
   PROXMOX_SDK_IMAGE: emersonfelipesp/proxmox-sdk
   PROXMOX_SDK_TAG_PREFIX: latest
