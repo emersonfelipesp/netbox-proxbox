@@ -267,6 +267,56 @@
                     {% endfor %}
                 {% endfor %}
             {% endif %}
+
+            {% if pdm_endpoint_list %}
+                <div class="col-12 mt-3">
+                    <div class="d-flex justify-content-center flex-nowrap" style="margin-bottom: 15px;">
+                        <h2>PDM Endpoints</h2>
+                    </div>
+                </div>
+                {% for pdm_ep in pdm_endpoint_list %}
+                    <div class="col col-md-6">
+                        <div class="card h-100">
+                            <h2 class="card-header">PDM Endpoint</h2>
+                            <div class="card-body">
+                                <table class="table table-hover attr-table">
+                                    <tr>
+                                        <th scope="row"><strong>Name</strong></th>
+                                        <td><a href="{{ pdm_ep.get_absolute_url }}">{{ pdm_ep.name }}</a></td>
+                                    </tr>
+                                    {% if pdm_ep.domain %}
+                                    <tr>
+                                        <th scope="row"><strong>Domain</strong></th>
+                                        <td>{{ pdm_ep.domain }}</td>
+                                    </tr>
+                                    {% endif %}
+                                    {% if pdm_ep.ip_address %}
+                                    <tr>
+                                        <th scope="row"><strong>IP Address</strong></th>
+                                        <td>{{ pdm_ep.ip_address }}</td>
+                                    </tr>
+                                    {% endif %}
+                                    <tr>
+                                        <th scope="row"><strong>Port</strong></th>
+                                        <td>{{ pdm_ep.port }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th scope="row"><strong>Enabled</strong></th>
+                                        <td>{% if pdm_ep.enabled %}<span class="text-success">Yes</span>{% else %}<span class="text-muted">No</span>{% endif %}</td>
+                                    </tr>
+                                    <tr>
+                                        <th scope="row"><strong>Remotes</strong></th>
+                                        <td>{{ pdm_ep.remotes.count }}</td>
+                                    </tr>
+                                </table>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span class="badge text-bg-secondary">netbox_pdm</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% endif %}
         </div>{# /proxbox-config-cards #}
 
         {# — Table view (default) — #}

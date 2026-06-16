@@ -61,6 +61,32 @@
     </div>
 </div>
 
+{# PDM Endpoints (when netbox-pdm companion plugin is installed) #}
+{% if pdm_endpoint_table %}
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <strong>PDM Endpoints</strong>
+        {% if pdm_list_url %}
+        <a href="{{ pdm_list_url }}" class="btn btn-sm btn-outline-secondary">
+            <i class="mdi mdi-arrow-expand" aria-hidden="true"></i> Full list
+        </a>
+        {% endif %}
+    </div>
+    <div class="card-body p-0">
+        {% if pdm_endpoint_table.data %}
+            {% render_table pdm_endpoint_table %}
+        {% else %}
+            <div class="text-center text-muted py-3">
+                No PDM Endpoints configured.
+                {% if pdm_list_url %}
+                <a href="{{ pdm_list_url }}" class="ms-2">View list</a>
+                {% endif %}
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
 {# Companion Plugin Endpoints (PBS, PDM, Ceph, etc.) #}
 {% if companion_endpoint_groups %}
     {% for endpoint_group in companion_endpoint_groups %}

@@ -354,6 +354,41 @@ def build_companion_endpoint_groups(
     return groups
 
 
+def _build_pdm_endpoint_context(request: HttpRequest) -> dict[str, object]:
+    """
+    Return PDM endpoint table and list URL when netbox-pdm is installed.
+
+    ``PDMEndpoint`` is defined in ``netbox_proxbox`` (so it's always available),
+    but the companion ``netbox-pdm`` plugin owns the table class and the UI
+    routes for it. This helper gates display on whether that plugin is present.
+    Returns an empty dict when ``netbox-pdm`` is not installed.
+    """
+    try:
+        from netbox_pdm.tables import PDMEndpointTable as _PDMEndpointTable  # type: ignore[import]
+    except ImportError:
+        return {}
+
+    try:
+        from netbox_proxbox.models import PDMEndpoint as _PDMEndpoint
+    except ImportError:
+        return {}
+
+    pdm_qs = _PDMEndpoint.objects.restrict(request.user, "view")
+    pdm_table = _PDMEndpointTable(pdm_qs)
+    pdm_table.configure(request)
+
+    try:
+        pdm_list_url = reverse("plugins:netbox_proxbox:pdmendpoint_list")
+    except Exception:
+        pdm_list_url = ""
+
+    return {
+        "pdm_endpoint_table": pdm_table,
+        "pdm_endpoint_list": pdm_qs if pdm_qs.exists() else None,
+        "pdm_list_url": pdm_list_url,
+    }
+
+
 def build_home_dashboard_context(
     request: HttpRequest, quick_schedule_form: ScheduleSyncForm | None = None
 ) -> dict[str, object]:
@@ -411,7 +446,7 @@ def build_home_dashboard_context(
     fastapi_endpoint_table = FastAPIEndpointTable(fastapi_endpoint_obj)
     fastapi_endpoint_table.configure(request)
 
-    return {
+    context: dict[str, object] = {
         "default_config": default_config,
         "proxmox_endpoint_list": proxmox_endpoint_obj
         if proxmox_endpoint_obj.exists()
@@ -439,3 +474,5 @@ def build_home_dashboard_context(
         "latest_sync_jobs": _get_latest_proxbox_sync_jobs(request),
         "sync_jobs_list_url": _proxbox_sync_jobs_list_url(),
     }
+    context.update(_build_pdm_endpoint_context(request))
+    return context
