@@ -108,11 +108,19 @@ jobs:
           gh auth setup-git --hostname github.com --force
 
           git -C "${worktree}" remote add github "https://github.com/${target_repo}.git"
-          if expected_remote_sha="$(git -C "${worktree}" ls-remote github "refs/heads/${mirror_branch}" | awk '{print $1}')" \
-            && [ -n "${expected_remote_sha}" ]; then
-            git -C "${worktree}" push \
-              --force-with-lease="refs/heads/${mirror_branch}:${expected_remote_sha}" \
-              github "HEAD:refs/heads/${mirror_branch}"
+          # Protected GitHub branches reject force pushes, so only fast-forward
+          # the branch when GitHub is behind this Gitea ref.
+          if git -C "${worktree}" ls-remote --exit-code github "refs/heads/${mirror_branch}" >/dev/null 2>&1; then
+            git -C "${worktree}" fetch --no-tags github \
+              "refs/heads/${mirror_branch}:refs/remotes/github/${mirror_branch}"
+            if git -C "${worktree}" merge-base --is-ancestor "refs/remotes/github/${mirror_branch}" HEAD; then
+              git -C "${worktree}" push github "HEAD:refs/heads/${mirror_branch}"
+            elif git -C "${worktree}" merge-base --is-ancestor HEAD "refs/remotes/github/${mirror_branch}"; then
+              echo "GitHub ${mirror_branch} already contains this commit; nothing to push."
+            else
+              echo "::error::GitHub ${mirror_branch} has diverged from Gitea; refusing to overwrite a protected branch."
+              exit 1
+            fi
           else
             git -C "${worktree}" push github "HEAD:refs/heads/${mirror_branch}"
           fi
