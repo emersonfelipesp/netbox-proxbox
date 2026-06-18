@@ -129,6 +129,8 @@ def test_bulk_enabled_view_updates_only_selected_enabled_field() -> None:
     source = VIEW_PATH.read_text(encoding="utf-8")
 
     assert 'get_permission_for_model(ProxmoxEndpoint, "change")' in source
+    assert "def _selected_queryset(" in source
+    assert ") -> QuerySet[ProxmoxEndpoint]:" in source
     assert 'ProxmoxEndpoint.objects.restrict(request.user, "change")' in source
     assert 'request.POST.getlist("pk") or request.POST.getlist("pk[]")' in source
     assert 'request.POST.get("_all")' in source

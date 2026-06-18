@@ -1,9 +1,12 @@
 """Provide NetBox CRUD views for Proxmox endpoint records."""
 
+from __future__ import annotations
+
 import json
 from typing import ClassVar
 
 from django.contrib import messages
+from django.db.models import QuerySet
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
@@ -153,7 +156,7 @@ class _ProxmoxEndpointBulkEnabledView(
         """Require change permission on Proxmox endpoints."""
         return get_permission_for_model(ProxmoxEndpoint, "change")
 
-    def _selected_queryset(self, request: HttpRequest):
+    def _selected_queryset(self, request: HttpRequest) -> QuerySet[ProxmoxEndpoint]:
         """Resolve selected rows using NetBox list-view bulk selection semantics."""
         queryset = ProxmoxEndpoint.objects.restrict(request.user, "change")
 
