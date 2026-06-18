@@ -49,6 +49,22 @@ STATUS_BADGE_TEMPLATE = """
 </span>
 """
 
+PROXMOX_STATUS_BADGE_TEMPLATE = """
+{% if not record.enabled %}
+<span class="badge text-bg-secondary"
+      title="Proxmox endpoint '{{ record }}' is disabled."
+      data-bs-toggle="tooltip"
+      data-bs-title="Proxmox endpoint '{{ record }}' is disabled.">
+    Disabled
+</span>
+{% else %}
+<span class="badge text-bg-grey"
+      data-service-status-url="{% url 'plugins:netbox_proxbox:keepalive_status' 'proxmox' record.pk %}">
+    <span class="spinner-border spinner-border-sm" role="status"></span>
+</span>
+{% endif %}
+"""
+
 
 class ProxmoxEndpointTable(NetBoxTable):
     """django-tables2 layout for Proxmox endpoint inventory."""
@@ -62,7 +78,7 @@ class ProxmoxEndpointTable(NetBoxTable):
     verify_ssl = BooleanColumn()
     enabled = BooleanColumn()
     status = tables.TemplateColumn(
-        template_code=STATUS_BADGE_TEMPLATE.replace("{{ service }}", "proxmox"),
+        template_code=PROXMOX_STATUS_BADGE_TEMPLATE,
         verbose_name=_("Status"),
         orderable=False,
     )

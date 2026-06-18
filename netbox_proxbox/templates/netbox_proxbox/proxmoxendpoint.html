@@ -27,11 +27,21 @@
             <div class="card">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">Proxmox Endpoint (Cluster)</h5>
-                    <span
-                        id="proxmox-status-badge-{{ object.pk }}"
-                        class="badge text-bg-grey"
-                        data-service-status-url="{% url 'plugins:netbox_proxbox:keepalive_status' 'proxmox' object.pk %}"
-                    >Unknown</span>
+                    {% if object.enabled %}
+                        <span
+                            id="proxmox-status-badge-{{ object.pk }}"
+                            class="badge text-bg-grey"
+                            data-service-status-url="{% url 'plugins:netbox_proxbox:keepalive_status' 'proxmox' object.pk %}"
+                        >Unknown</span>
+                    {% else %}
+                        <span
+                            id="proxmox-status-badge-{{ object.pk }}"
+                            class="badge text-bg-secondary"
+                            title="{% trans 'This Proxmox endpoint is disabled.' %}"
+                            data-bs-toggle="tooltip"
+                            data-bs-title="{% trans 'This Proxmox endpoint is disabled.' %}"
+                        >{% trans "Disabled" %}</span>
+                    {% endif %}
                 </div>
                 
                 <div class="card-body">
@@ -127,19 +137,37 @@
                         <tr>
                             <th scope="row">Target</th>
                             <td>
-                                <span id="proxmox-target-{{ object.pk }}">Loading...</span>
+                                {% if object.enabled %}
+                                    <span id="proxmox-target-{{ object.pk }}">Loading...</span>
+                                {% else %}
+                                    {% if object.domain %}
+                                        {{ object.domain }}:{{ object.port }}
+                                    {% elif object.ip_address %}
+                                        {{ object.ip_address }}:{{ object.port }}
+                                    {% else %}
+                                        <span class="badge text-bg-secondary">{% trans "Disabled" %}</span>
+                                    {% endif %}
+                                {% endif %}
                             </td>
                         </tr>
                         <tr>
                             <th scope="row">Authentication</th>
                             <td>
-                                <span id="proxmox-auth-{{ object.pk }}">Loading...</span>
+                                {% if object.enabled %}
+                                    <span id="proxmox-auth-{{ object.pk }}">Loading...</span>
+                                {% else %}
+                                    <span class="badge text-bg-secondary">{% trans "Disabled" %}</span>
+                                {% endif %}
                             </td>
                         </tr>
                         <tr>
                             <th scope="row">API Access</th>
                             <td>
-                                <span id="proxmox-api-{{ object.pk }}">Loading...</span>
+                                {% if object.enabled %}
+                                    <span id="proxmox-api-{{ object.pk }}">Loading...</span>
+                                {% else %}
+                                    <span class="badge text-bg-secondary">{% trans "Disabled" %}</span>
+                                {% endif %}
                             </td>
                         </tr>
                     </table>
@@ -184,6 +212,7 @@
             const badge = document.getElementById("proxmox-status-badge-{{ object.pk }}");
             if (!badge) return;
             const url = badge.dataset.serviceStatusUrl;
+            if (!url) return;
             try {
                 const data = await fetchJson(url);
                 const targetCell = document.getElementById("proxmox-target-{{ object.pk }}");

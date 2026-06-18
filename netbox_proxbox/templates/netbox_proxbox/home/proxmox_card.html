@@ -1,7 +1,11 @@
 {% load static %}
 {% load proxbox_tags %}
 
-<div class="card" data-proxmox-card-url="{% url 'plugins:netbox_proxbox:proxmox_card' object.pk %}" data-proxmox-card-id="{{ object.pk }}">
+<div
+    class="card"
+    {% if object.enabled %}data-proxmox-card-url="{% url 'plugins:netbox_proxbox:proxmox_card' object.pk %}"{% endif %}
+    data-proxmox-card-id="{{ object.pk }}"
+>
     <h2 class="card-header">Proxmox Cluster</h2>
     <div class="p-1" id="proxmox-connection-error-{{ object.pk }}"></div>
 
@@ -12,11 +16,21 @@
             </a>
         </div>
         <div class="d-flex ms-auto" style="margin: 0 40px 0 0">
-            <span
-                id="proxmox-status-badge-{{ object.pk }}"
-                class="badge p-1"
-                data-service-status-url="{% url 'plugins:netbox_proxbox:keepalive_status' 'proxmox' object.pk %}"
-            >Unknown</span>
+            {% if object.enabled %}
+                <span
+                    id="proxmox-status-badge-{{ object.pk }}"
+                    class="badge p-1"
+                    data-service-status-url="{% url 'plugins:netbox_proxbox:keepalive_status' 'proxmox' object.pk %}"
+                >Unknown</span>
+            {% else %}
+                <span
+                    id="proxmox-status-badge-{{ object.pk }}"
+                    class="badge text-bg-secondary p-1"
+                    title="This Proxmox endpoint is disabled."
+                    data-bs-toggle="tooltip"
+                    data-bs-title="This Proxmox endpoint is disabled."
+                >Disabled</span>
+            {% endif %}
         </div>
     </div>
 
@@ -34,20 +48,38 @@
             </tr>
             <tr>
                 <th scope="row"><strong>Proxmox Cluster Mode</strong></th>
-                <td data-proxmox-field="mode">
-                    <span class="badge text-bg-grey">Loading</span>
+                <td {% if object.enabled %}data-proxmox-field="mode"{% endif %}>
+                    {% if object.enabled %}
+                        <span class="badge text-bg-grey">Loading</span>
+                    {% elif object.mode %}
+                        <span class="badge text-bg-secondary">{{ object.get_mode_display }}</span>
+                    {% else %}
+                        <span class="badge text-bg-secondary">Disabled</span>
+                    {% endif %}
                 </td>
             </tr>
             <tr>
                 <th scope="row"><strong>Proxmox Version</strong></th>
-                <td data-proxmox-field="version">
-                    <span class="badge text-bg-grey">Loading</span>
+                <td {% if object.enabled %}data-proxmox-field="version"{% endif %}>
+                    {% if object.enabled %}
+                        <span class="badge text-bg-grey">Loading</span>
+                    {% elif object.version %}
+                        <span class="badge text-bg-secondary">{{ object.version }}</span>
+                    {% else %}
+                        <span class="badge text-bg-secondary">Disabled</span>
+                    {% endif %}
                 </td>
             </tr>
             <tr>
                 <th scope="row"><strong>Proxmox RepoID</strong></th>
-                <td data-proxmox-field="repoid">
-                    <span class="badge text-bg-grey">Loading</span>
+                <td {% if object.enabled %}data-proxmox-field="repoid"{% endif %}>
+                    {% if object.enabled %}
+                        <span class="badge text-bg-grey">Loading</span>
+                    {% elif object.repoid %}
+                        <span class="badge text-bg-secondary">{{ object.repoid }}</span>
+                    {% else %}
+                        <span class="badge text-bg-secondary">Disabled</span>
+                    {% endif %}
                 </td>
             </tr>
             {% if object.domain %}

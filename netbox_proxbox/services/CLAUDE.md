@@ -68,6 +68,7 @@ so `node_records` is populated for the real wire shape, not only flat payloads.
 - `get_fastapi_request_context()` is defined in `backend_context.py` and re-exported by `backend_proxy.py`; import from either, but modify only `backend_context.py`.
 - `get_fastapi_request_context()` and token-registration helpers must resolve only enabled `FastAPIEndpoint` rows. Disabled endpoint rows are visible inventory, not usable connection targets.
 - `endpoint_enabled.py::disabled_endpoint_detail()` is the shared guard for status/openapi/backend-sync code that receives endpoint-like objects (`FastAPIEndpoint`, `NetBoxEndpoint`, `PBSEndpoint`, `PDMEndpoint`, companion `PBSServer`, etc.). Call it before the first HTTP request.
+- Proxmox keepalive/status code should return `status="disabled"` for disabled `ProxmoxEndpoint` rows and must not push/sync the row to proxbox-api, resolve backend ids, or issue backend Proxmox reads. The list/detail/dashboard templates should avoid calling the keepalive route at all for disabled Proxmox rows.
 - `backend_proxy.py` is the primary integration point for SSE streaming and JSON sync requests to proxbox-api.
 - SSE streaming uses `requests.iter_lines()` with chunk delimiters and long read timeouts to handle long sync jobs.
 - `ServiceStatus` aggregates endpoint health checks into a unified status for dashboard cards.

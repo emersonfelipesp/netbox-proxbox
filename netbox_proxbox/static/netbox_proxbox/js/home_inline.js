@@ -22,11 +22,13 @@
         var styles = {
             success: "badge text-bg-green",
             error: "badge text-bg-red",
+            disabled: "badge text-bg-secondary",
             unknown: "badge text-bg-grey",
         };
         var labels = {
             success: "Successful!",
             error: "Error!",
+            disabled: "Disabled",
             unknown: "Unknown",
         };
         element.className = styles[status] || styles.unknown;

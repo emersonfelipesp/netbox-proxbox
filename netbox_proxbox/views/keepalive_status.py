@@ -11,6 +11,7 @@ from django.views import View
 from netbox_proxbox.models import FastAPIEndpoint, NetBoxEndpoint, ProxmoxEndpoint
 from netbox_proxbox.services.endpoint_enabled import disabled_endpoint_detail
 from netbox_proxbox.services.service_status import ServiceStatus
+from netbox_proxbox.utils import get_ip_address_host
 from utilities.views import TokenConditionalLoginRequiredMixin
 
 logger = logging.getLogger(__name__)
@@ -119,8 +120,15 @@ def get_service_status_impl(
         if disabled_detail:
             return JsonResponse(
                 {
-                    "status": "error",
+                    "status": "disabled",
                     "detail": disabled_detail,
+                    "target_address": getattr(proxmox_endpoint, "domain", None)
+                    or get_ip_address_host(
+                        getattr(proxmox_endpoint, "ip_address", None)
+                    ),
+                    "target_port": getattr(proxmox_endpoint, "port", None) or 8006,
+                    "authentication": "disabled",
+                    "api_access": "disabled",
                 }
             )
     elif service == "pbs":
