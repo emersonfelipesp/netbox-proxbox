@@ -25,6 +25,7 @@ This directory contains Pydantic V2 models for backend payloads, normalized sync
 ## Notes
 
 - All schemas use Pydantic V2 (`pydantic.BaseModel` with `model_config`).
+- Service status literals include `disabled` so a deliberately skipped endpoint can be represented separately from an actual `error`.
 - SSE-related schemas in `backend_proxy.py` parse streaming frames from proxbox-api.
 - These models are transport-layer contracts; they do not persist to the database.
 

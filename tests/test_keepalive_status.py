@@ -604,8 +604,8 @@ def test_proxmox_status_skips_disabled_endpoint_without_backend_calls(
         backend_verify_ssl=True,
     )
 
-    assert status == "error"
-    assert details["api_access"] == "error"
+    assert status == "disabled"
+    assert details["api_access"] == "disabled"
     assert "disabled" in details["detail"]
 
 
@@ -910,6 +910,44 @@ def test_netbox_keepalive_disabled_endpoint_returns_before_backend_check(
 
     assert response.status_code == 200
     assert response.payload["status"] == "error"
+    assert "disabled" in response.payload["detail"]
+
+
+def test_proxmox_keepalive_disabled_endpoint_returns_disabled_before_backend_check(
+    monkeypatch,
+    fastapi_endpoint,
+):
+    proxmox_endpoint = SimpleNamespace(
+        id=1,
+        pk=1,
+        name="Disabled PVE",
+        domain="pve.local",
+        ip_address="10.0.30.9/24",
+        port=8006,
+        verify_ssl=False,
+        enabled=False,
+    )
+    module = load_plugin_module(
+        "netbox_proxbox.views.keepalive_status",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+        proxmox_endpoint=proxmox_endpoint,
+    )
+    ss = _service_status_module()
+
+    def fail_get(*args, **kwargs):
+        raise AssertionError("disabled Proxmox keepalive attempted network access")
+
+    monkeypatch.setattr(ss.requests, "get", fail_get)
+
+    response = module.get_service_status_impl(_keepalive_request(), "proxmox", 1)
+
+    assert response.status_code == 200
+    assert response.payload["status"] == "disabled"
+    assert response.payload["target_address"] == "pve.local"
+    assert response.payload["target_port"] == 8006
+    assert response.payload["authentication"] == "disabled"
+    assert response.payload["api_access"] == "disabled"
     assert "disabled" in response.payload["detail"]
 
 
