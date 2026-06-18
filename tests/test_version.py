@@ -46,6 +46,14 @@ CURRENT_RELEASE_VERSION = "0.0.21"
 CURRENT_PROXBOX_API_VERSION = "0.0.18.post5"
 CURRENT_NETBOX_MIN_VERSION = "4.5.8"
 CURRENT_NETBOX_MAX_VERSION = "4.6.99"
+SUPPORTED_NETBOX_IMAGE_TAGS = (
+    "netboxcommunity/netbox:v4.5.8",
+    "netboxcommunity/netbox:v4.5.9",
+    "netboxcommunity/netbox:v4.6.0",
+    "netboxcommunity/netbox:v4.6.1",
+    "netboxcommunity/netbox:v4.6.2",
+    "netboxcommunity/netbox:v4.6.3",
+)
 PREVIOUS_PLUGIN_VERSION = "0.0.20"
 PREVIOUS_PROXBOX_API_VERSION = "0.0.17"
 
@@ -116,15 +124,25 @@ def test_certified_netbox_versions_are_documented():
 
 def test_certified_netbox_versions_are_in_e2e_matrix():
     workflow = E2E_WORKFLOW_PATH.read_text(encoding="utf-8")
-    for version in ("v4.6.1", "v4.6.2", "v4.6.3"):
-        assert f"netboxcommunity/netbox:{version}" in workflow, (
-            f"netboxcommunity/netbox:{version} is missing from the E2E matrix"
-        )
-    for rotated_out in ("v4.5.8", "v4.5.9", "v4.6.0"):
-        assert f"netboxcommunity/netbox:{rotated_out}" not in workflow, (
-            f"{rotated_out} was rotated out of the E2E matrix per the 3-version policy"
-        )
+    for image in SUPPORTED_NETBOX_IMAGE_TAGS:
+        assert image in workflow, f"{image} is missing from the E2E matrix"
     assert "netboxcommunity/netbox:v4.6.0-beta2" not in workflow
+
+
+def test_docs_name_supported_netbox_versions():
+    docs = "\n".join(
+        _read(path)
+        for path in (
+            README_PATH,
+            DOCS_INDEX_PATH,
+            RELEASE_NOTES_021_PATH,
+            REPO_ROOT / "CERTIFICATION.md",
+            REPO_ROOT / "docs" / "certification.md",
+        )
+    )
+
+    for image in SUPPORTED_NETBOX_IMAGE_TAGS:
+        assert image.rsplit(":", 1)[1] in docs
 
 
 def test_proxbox_api_is_not_a_python_dependency():
@@ -140,6 +158,17 @@ def test_proxbox_api_is_not_a_python_dependency():
         "netbox-proxbox talks to proxbox-api over REST/SSE/WebSocket; it must "
         "not install proxbox-api as a Python dependency"
     )
+
+
+def test_pydantic_pin_keeps_proxmox_sdk_peer_plugins_resolvable():
+    pyproject = tomllib.loads(PYPROJECT_PATH.read_text(encoding="utf-8"))
+    dependencies = {
+        str(dep).lower().replace("_", "-")
+        for dep in pyproject["project"].get("dependencies", [])
+    }
+
+    assert "pydantic>=2.13.3,<2.14.0" in dependencies
+    assert "pydantic==2.13.4" not in dependencies
 
 
 def test_pyproject_metadata_is_certification_ready():

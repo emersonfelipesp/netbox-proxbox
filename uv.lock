@@ -1255,7 +1255,7 @@ requires-dist = [
     { name = "invoke", marker = "extra == 'dev'", specifier = ">=2.2.1" },
     { name = "playwright", marker = "extra == 'screenshot'", specifier = ">=1.58.0" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0.0" },
-    { name = "pydantic", specifier = "==2.13.4" },
+    { name = "pydantic", specifier = ">=2.13.3,<2.14.0" },
     { name = "pydocstyle", marker = "extra == 'dev'", specifier = ">=6.3.0" },
     { name = "pylint", marker = "extra == 'dev'", specifier = ">=4.0.5" },
     { name = "pylint-django", marker = "extra == 'dev'", specifier = ">=2.7.0" },
