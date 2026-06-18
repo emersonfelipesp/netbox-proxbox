@@ -73,13 +73,19 @@ class PBSEndpointSerializer(NetBoxModelSerializer):
         )
         brief_fields = ("id", "url", "display", "name", "domain", "port")
         extra_kwargs = {
-            "token_secret": {"write_only": True, "required": False, "allow_blank": True},
+            "token_secret": {
+                "write_only": True,
+                "required": False,
+                "allow_blank": True,
+            },
         }
 
     def validate(self, attrs: dict) -> dict:
         """Require at least one of domain or IP address for reachability."""
         attrs = super().validate(attrs)
-        domain = (attrs.get("domain", getattr(self.instance, "domain", "")) or "").strip()
+        domain = (
+            attrs.get("domain", getattr(self.instance, "domain", "")) or ""
+        ).strip()
         ip_address = attrs.get("ip_address", getattr(self.instance, "ip_address", None))
         if not domain and ip_address is None:
             raise serializers.ValidationError(
@@ -131,11 +137,18 @@ class PDMEndpointSerializer(NetBoxModelSerializer):
         )
         brief_fields = ("id", "url", "display", "name", "domain", "port")
         extra_kwargs = {
-            "token_secret": {"write_only": True, "required": False, "allow_blank": True},
+            "token_secret": {
+                "write_only": True,
+                "required": False,
+                "allow_blank": True,
+            },
         }
 
     def get_proxmox_endpoints(self, obj: PDMEndpoint) -> list:
-        from netbox_proxbox.api.serializers.cluster import NestedProxmoxEndpointSerializer
+        from netbox_proxbox.api.serializers.cluster import (
+            NestedProxmoxEndpointSerializer,
+        )
+
         return NestedProxmoxEndpointSerializer(
             obj.proxmox_endpoints.all(), many=True, context=self.context
         ).data
@@ -148,7 +161,9 @@ class PDMEndpointSerializer(NetBoxModelSerializer):
     def validate(self, attrs: dict) -> dict:
         """Require at least one of domain or IP address for reachability."""
         attrs = super().validate(attrs)
-        domain = (attrs.get("domain", getattr(self.instance, "domain", "")) or "").strip()
+        domain = (
+            attrs.get("domain", getattr(self.instance, "domain", "")) or ""
+        ).strip()
         ip_address = attrs.get("ip_address", getattr(self.instance, "ip_address", None))
         if not domain and ip_address is None:
             raise serializers.ValidationError(

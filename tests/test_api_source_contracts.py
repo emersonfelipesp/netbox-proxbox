@@ -540,11 +540,13 @@ def test_plugin_api_routes_register_all_plugin_objects():
         elif router_name == "router":
             root_registers.append(route)
 
-    assert set(endpoint_registers) == {"proxmox", "netbox", "fastapi"}
+    assert set(endpoint_registers) == {"proxmox", "netbox", "fastapi", "pbs", "pdm"}
     assert set(root_registers) == {
+        "apply-jobs",
         "backup-routines",
         "cloud-image-templates",
         "datacenter-cpu-models",
+        "deletion-requests",
         "firecracker-host-pools",
         "firecracker-hosts",
         "firecracker-image-templates",
@@ -555,6 +557,7 @@ def test_plugin_api_routes_register_all_plugin_objects():
         "firewall/options",
         "firewall/rules",
         "firewall/security-groups",
+        "pdm-remotes",
         "proxmox-clusters",
         "proxmox-nodes",
         "replications",

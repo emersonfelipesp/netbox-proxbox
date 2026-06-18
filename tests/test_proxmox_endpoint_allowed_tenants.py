@@ -42,7 +42,10 @@ def test_proxmox_endpoint_api_supports_allowed_tenants() -> None:
     filtersets = _read("netbox_proxbox/filtersets.py")
     views = _read("netbox_proxbox/api/views.py")
 
-    assert "allowed_tenants = TenantSerializer(nested=True, many=True, required=False)" in serializer
+    assert (
+        "allowed_tenants = TenantSerializer(nested=True, many=True, required=False)"
+        in serializer
+    )
     assert 'validated_data.pop("allowed_tenants", None)' in serializer
     assert "instance.allowed_tenants.set(allowed_tenants)" in serializer
     assert "allowed_tenants__id__in" in filtersets
@@ -51,14 +54,20 @@ def test_proxmox_endpoint_api_supports_allowed_tenants() -> None:
 
 
 def test_proxmox_endpoint_migration_adds_allowed_tenants() -> None:
-    migration = _read("netbox_proxbox/migrations/0052_proxmoxendpoint_allowed_tenants.py")
+    migration = _read(
+        "netbox_proxbox/migrations/0052_proxmoxendpoint_allowed_tenants.py"
+    )
     assert 'name="allowed_tenants"' in migration
     assert 'to="tenancy.tenant"' in migration
 
 
 def _require_harness() -> None:
-    django = pytest.importorskip("django", reason="NetBox + Django harness not installed")
-    pytest.importorskip("tenancy", reason="NetBox app modules not importable in this env")
+    django = pytest.importorskip(
+        "django", reason="NetBox + Django harness not installed"
+    )
+    pytest.importorskip(
+        "tenancy", reason="NetBox app modules not importable in this env"
+    )
 
     os.environ.setdefault("NETBOX_CONFIGURATION", "tests.netbox_test_configuration")
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "netbox.settings")
@@ -166,7 +175,9 @@ def test_allowed_tenants_serializer_writes_and_clears_m2m(
     )
     assert create_serializer.is_valid(), create_serializer.errors
     created = create_serializer.save()
-    assert list(created.allowed_tenants.order_by("slug").values_list("slug", flat=True)) == [
+    assert list(
+        created.allowed_tenants.order_by("slug").values_list("slug", flat=True)
+    ) == [
         "tenant-a",
         "tenant-b",
     ]
