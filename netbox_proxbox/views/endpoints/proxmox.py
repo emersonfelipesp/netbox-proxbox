@@ -1,19 +1,33 @@
 """Provide NetBox CRUD views for Proxmox endpoint records."""
 
 import json
+from typing import ClassVar
 
 from django.contrib import messages
-from django.http import HttpRequest, HttpResponse, JsonResponse
+from django.http import HttpRequest, HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
+from django.urls import reverse
+from django.utils.translation import gettext_lazy as _
 from django.views import View
 from netbox.api.authentication import TokenAuthentication
 from netbox.views import generic
 import requests
 from utilities.permissions import get_permission_for_model
 from utilities.query import reapply_model_ordering
-from utilities.views import ViewTab, register_model_view
+from utilities.views import (
+    ContentTypePermissionRequiredMixin,
+    TokenConditionalLoginRequiredMixin,
+    ViewTab,
+    register_model_view,
+)
 
-from netbox.object_actions import AddObject, BulkDelete, BulkExport, BulkImport
+from netbox.object_actions import (
+    AddObject,
+    BulkDelete,
+    BulkExport,
+    BulkImport,
+    ObjectAction,
+)
 
 from netbox_proxbox.filtersets import ProxmoxEndpointFilterSet
 from netbox_proxbox.forms import (
@@ -44,12 +58,36 @@ __all__ = (
     "ProxmoxEndpointSSHTerminalView",
     "ProxmoxEndpointSSHTerminalSessionView",
     "ProxmoxEndpointSyncJobsTabView",
+    "ProxmoxEndpointBulkEnableAction",
+    "ProxmoxEndpointBulkDisableAction",
+    "ProxmoxEndpointBulkEnableView",
+    "ProxmoxEndpointBulkDisableView",
     "ProxmoxEndpointDeleteView",
     "ProxmoxEndpointBulkDeleteView",
     "ProxmoxEndpointBulkImportView",
     "ProxmoxEndpointExportView",
     "ProxmoxExportQuickAddTokenView",
 )
+
+
+class ProxmoxEndpointBulkEnableAction(ObjectAction):
+    """List-view action for enabling selected Proxmox endpoints."""
+
+    name = "bulk_enable"
+    label = _("Enable Selected")
+    multi = True
+    permissions_required = {"change"}
+    template_name = "netbox_proxbox/buttons/proxmox_endpoint_bulk_enable.html"
+
+
+class ProxmoxEndpointBulkDisableAction(ObjectAction):
+    """List-view action for disabling selected Proxmox endpoints."""
+
+    name = "bulk_disable"
+    label = _("Disable Selected")
+    multi = True
+    permissions_required = {"change"}
+    template_name = "netbox_proxbox/buttons/proxmox_endpoint_bulk_disable.html"
 
 
 @register_model_view(ProxmoxEndpoint)
@@ -90,7 +128,123 @@ class ProxmoxEndpointListView(generic.ObjectListView):
     filterset = ProxmoxEndpointFilterSet
     filterset_form = ProxmoxEndpointFilterForm
     template_name = "netbox_proxbox/proxmoxendpoint_list.html"
-    actions = (AddObject, BulkImport, BulkExport, BulkDelete)
+    actions = (
+        AddObject,
+        BulkImport,
+        BulkExport,
+        ProxmoxEndpointBulkEnableAction,
+        ProxmoxEndpointBulkDisableAction,
+        BulkDelete,
+    )
+
+
+class _ProxmoxEndpointBulkEnabledView(
+    TokenConditionalLoginRequiredMixin,
+    ContentTypePermissionRequiredMixin,
+    View,
+):
+    """Set the enabled state for selected Proxmox endpoints without side effects."""
+
+    enabled: ClassVar[bool]
+    verb: ClassVar[str]
+    http_method_names: ClassVar[list[str]] = ["post"]
+
+    def get_required_permission(self) -> str:
+        """Require change permission on Proxmox endpoints."""
+        return get_permission_for_model(ProxmoxEndpoint, "change")
+
+    def _selected_queryset(self, request: HttpRequest):
+        """Resolve selected rows using NetBox list-view bulk selection semantics."""
+        queryset = ProxmoxEndpoint.objects.restrict(request.user, "change")
+
+        if request.POST.get("_all"):
+            return ProxmoxEndpointFilterSet(
+                request.GET,
+                queryset,
+                request=request,
+            ).qs
+
+        selected_ids = request.POST.getlist("pk") or request.POST.getlist("pk[]")
+        if not selected_ids:
+            return queryset.none()
+        return queryset.filter(pk__in=selected_ids)
+
+    def _return_url(self, request: HttpRequest) -> str:
+        """Redirect back to the originating list page after the bulk action."""
+        return (
+            request.POST.get("return_url")
+            or request.META.get("HTTP_REFERER")
+            or reverse("plugins:netbox_proxbox:proxmoxendpoint_list")
+        )
+
+    def post(self, request: HttpRequest) -> HttpResponseRedirect:
+        """Bulk-update only the local enabled flag for selected endpoints."""
+        selected_ids = request.POST.getlist("pk") or request.POST.getlist("pk[]")
+        if not selected_ids and not request.POST.get("_all"):
+            messages.error(
+                request,
+                _("Select at least one Proxmox endpoint to {verb}.").format(
+                    verb=self.verb
+                ),
+            )
+            return HttpResponseRedirect(self._return_url(request))
+
+        queryset = self._selected_queryset(request)
+        matched_count = queryset.count()
+        updated_count = queryset.exclude(enabled=self.enabled).update(
+            enabled=self.enabled
+        )
+
+        if updated_count:
+            messages.success(
+                request,
+                _("{count} Proxmox endpoint(s) {verb}.").format(
+                    count=updated_count,
+                    verb=_("enabled") if self.enabled else _("disabled"),
+                ),
+            )
+        elif matched_count:
+            messages.info(
+                request,
+                _("Selected Proxmox endpoint(s) were already {state}.").format(
+                    state=_("enabled") if self.enabled else _("disabled")
+                ),
+            )
+        else:
+            messages.warning(
+                request,
+                _("No selected Proxmox endpoints were available to {verb}.").format(
+                    verb=self.verb
+                ),
+            )
+
+        return HttpResponseRedirect(self._return_url(request))
+
+
+@register_model_view(
+    ProxmoxEndpoint,
+    "bulk_enable",
+    path="enable-selected",
+    detail=False,
+)
+class ProxmoxEndpointBulkEnableView(_ProxmoxEndpointBulkEnabledView):
+    """Enable selected Proxmox endpoint records."""
+
+    enabled = True
+    verb = "enable"
+
+
+@register_model_view(
+    ProxmoxEndpoint,
+    "bulk_disable",
+    path="disable-selected",
+    detail=False,
+)
+class ProxmoxEndpointBulkDisableView(_ProxmoxEndpointBulkEnabledView):
+    """Disable selected Proxmox endpoint records."""
+
+    enabled = False
+    verb = "disable"
 
 
 @register_model_view(ProxmoxEndpoint, "bulk_import", path="import", detail=False)

@@ -72,6 +72,7 @@ curl -H "Authorization: Token <token>" \
   "username": "root@pam",
   "token_name": "proxbox",
   "verify_ssl": false,
+  "enabled": true,
   "allowed_tenants": [],
   "tags": [],
   "custom_fields": {},
@@ -82,6 +83,14 @@ curl -H "Authorization: Token <token>" \
 
 !!! note "Write-only credentials"
     `password` and `token_value` are write-only. They are accepted on POST/PUT/PATCH but never returned in GET responses.
+
+!!! tip "Bulk enablement"
+    The Proxmox Endpoints UI at `/plugins/proxbox/endpoints/proxmox/` shows
+    the `Enabled` column by default. Select one or more rows and use
+    **Enable Selected** or **Disable Selected** to toggle the local endpoint
+    inventory state in one action. These buttons only update the NetBox
+    `enabled` flag; they do not register endpoints with proxbox-api, start a
+    sync, or contact Proxmox.
 
 ### Data Model
 
@@ -99,6 +108,7 @@ curl -H "Authorization: Token <token>" \
 | `token_name` | string | Proxmox API token name |
 | `token_value` | string (write-only) | Proxmox API token secret |
 | `verify_ssl` | boolean | Whether to verify the Proxmox TLS certificate (default `false`) |
+| `enabled` | boolean | Local inventory toggle. Disabled endpoints remain visible but are excluded from operational reads, registration, keepalive, status, and sync paths. |
 | `allowed_tenants` | nested Tenant list | Tenant allow-list for NMS Cloud endpoint visibility. Empty means default/global visibility. |
 | `allow_writes` | boolean | Gate for the operational verb routes on the paired `proxbox-api` (start/stop/snapshot/migrate). Defaults to `false`. When `false`, `proxbox-api` returns `403 {"reason": "writes_disabled_for_endpoint"}` for verb POSTs against this endpoint even with a valid API key and `X-Proxbox-Actor` header. Flip to `true` per-endpoint to opt that Proxmox cluster into write access. |
 
