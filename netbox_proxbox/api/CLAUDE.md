@@ -59,6 +59,14 @@ These follow the standard `NetBoxModelViewSet` + `NetBoxRouter` pattern:
 | `DeletionRequestViewSet` | `deletion-requests/` | **GET/HEAD/OPTIONS only** — write paths go through UI approval workflow |
 | `ProxmoxApplyJobViewSet` | `apply-jobs/` | **GET/HEAD/OPTIONS only** — jobs created by intent branch-merge workflow |
 
+Firecracker host-pool and image-template serializers expose `allowed_tenants` as
+the NMS Cloud tenant visibility contract. Omitting `allowed_tenants` on create or
+partial update leaves existing grants untouched; sending an explicit list,
+including `[]`, replaces the many-to-many set. Keep
+`FirecrackerHostPoolSerializer` and `FirecrackerImageTemplateSerializer`
+`create()` / `update()` methods explicitly typed and covered by
+`tests/test_firecracker_cloud_contracts.py` when changing this behavior.
+
 ## Non-Model API Views
 
 These `APIView` subclasses mirror every data-bearing UI page and expose the same aggregated data as JSON. All are GET-only except `ScheduleSyncAPIView` which also accepts POST.

@@ -66,3 +66,38 @@ def test_firecracker_api_surface_is_registered():
     assert "FirecrackerMicroVMSerializer" in serializers_src
     assert "token_configured" in serializers_src
     assert "FirecrackerMicroVMFilterSet" in filtersets_src
+
+
+def test_firecracker_tenant_serializers_have_typed_m2m_write_contracts() -> None:
+    serializers_src = _read("netbox_proxbox/api/serializers/firecracker.py")
+
+    for serializer_name, model_name in (
+        ("FirecrackerHostPoolSerializer", "FirecrackerHostPool"),
+        ("FirecrackerImageTemplateSerializer", "FirecrackerImageTemplate"),
+    ):
+        serializer_src = serializers_src.split(f"class {serializer_name}", 1)[1]
+        serializer_src = serializer_src.split("\n\nclass ", 1)[0]
+
+        assert (
+            "allowed_tenants = TenantSerializer(nested=True, many=True, required=False)"
+            in serializer_src
+        )
+        assert (
+            "def _apply_allowed_tenants(\n"
+            "        self,\n"
+            f"        instance: {model_name},\n"
+            "        allowed_tenants: object | None,\n"
+            "    ) -> None:" in serializer_src
+        )
+        assert "if allowed_tenants is None:\n            return" in serializer_src
+        assert "instance.allowed_tenants.set(allowed_tenants)" in serializer_src
+        assert (
+            f"def create(self, validated_data: dict[str, object]) -> {model_name}:"
+            in serializer_src
+        )
+        assert (
+            f"        instance: {model_name},\n"
+            "        validated_data: dict[str, object],\n"
+            f"    ) -> {model_name}:" in serializer_src
+        )
+        assert 'validated_data.pop("allowed_tenants", None)' in serializer_src
