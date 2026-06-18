@@ -79,6 +79,7 @@ All three import forms use a plain `forms.CharField` for `ip_address` backed by 
 
 - The export JS (token version toggle, dropdown population, quick-add, copy-to-clipboard) is inlined as an IIFE in each `*endpoint_list.html` template rather than loaded as an external `.js` file. This avoids requiring `collectstatic` for the modal to work.
 - The ProxmoxEndpoint detail page exposes **Sync Now** through `proxmox_sync_now.py`; it requires the shared Proxbox sync enqueue permission, uses a CSRF-protected POST, refuses disabled endpoints, and passes the viewed endpoint PK in `proxmox_endpoint_ids`.
+- The ProxmoxEndpoint list/detail/dashboard status badge is a static gray `Disabled` badge when `enabled=False`; do not emit `data-service-status-url` for disabled Proxmox rows, otherwise the browser will poll keepalive and can repaint the inventory state as an error.
 - The ProxmoxEndpoint list page exposes **Enable Selected** and **Disable Selected** through `ProxmoxEndpointBulkEnableView` / `ProxmoxEndpointBulkDisableView`. These are change-permission list actions that update only `enabled` with `queryset.update()`; do not switch them to per-object `save()` because the ProxmoxEndpoint `post_save` signal can register/sync endpoints with proxbox-api.
 - Changes to list columns, validation, or field presentation typically happen outside this directory unless the view wiring itself changes.
 

@@ -502,8 +502,13 @@ def test_vm_sync_now_view_contract():
 
 def test_common_badge_state_supports_hover_tooltip_details():
     contents = _read("netbox_proxbox/static/netbox_proxbox/js/common.js")
+    inline_contents = _read("netbox_proxbox/static/netbox_proxbox/js/home_inline.js")
     assert 'element.dataset.bsToggle = "tooltip"' in contents
     assert "element.dataset.bsTitle = tooltip" in contents
+    assert 'disabled: "badge text-bg-secondary"' in contents
+    assert 'disabled: "Disabled"' in contents
+    assert 'disabled: "badge text-bg-secondary"' in inline_contents
+    assert 'disabled: "Disabled"' in inline_contents
     assert "export function getCsrfToken()" in contents
     assert "querySelector(\"input[name='csrfmiddlewaretoken']\")" in contents
 
@@ -594,6 +599,45 @@ def test_endpoint_tables_use_record_pk_for_keepalive_reverse():
     contents = _read("netbox_proxbox/tables/__init__.py")
     assert "keepalive_status" in contents
     assert "record.pk" in contents
+
+
+def test_proxmox_endpoint_table_disables_status_polling_for_disabled_rows():
+    contents = _read("netbox_proxbox/tables/__init__.py")
+    template_source = contents[
+        contents.index("PROXMOX_STATUS_BADGE_TEMPLATE") : contents.index(
+            "class ProxmoxEndpointTable"
+        )
+    ]
+    disabled_branch = template_source[
+        template_source.index("{% if not record.enabled %}") : template_source.index(
+            "{% else %}"
+        )
+    ]
+
+    assert "text-bg-secondary" in disabled_branch
+    assert "Disabled" in disabled_branch
+    assert "data-service-status-url" not in disabled_branch
+    assert "data-service-status-url" in template_source
+    assert "template_code=PROXMOX_STATUS_BADGE_TEMPLATE" in contents
+
+
+def test_proxmox_endpoint_templates_skip_status_polling_when_disabled():
+    detail_contents = _read(
+        "netbox_proxbox/templates/netbox_proxbox/proxmoxendpoint.html"
+    )
+    home_card_contents = _read(
+        "netbox_proxbox/templates/netbox_proxbox/home/proxmox_card.html"
+    )
+
+    assert "{% if object.enabled %}" in detail_contents
+    assert "{% if object.enabled %}" in home_card_contents
+    assert "data-service-status-url" in detail_contents
+    assert "data-service-status-url" in home_card_contents
+    assert 'class="badge text-bg-secondary"' in detail_contents
+    assert 'class="badge text-bg-secondary p-1"' in home_card_contents
+    assert "if (!url) return;" in detail_contents
+    assert "data-proxmox-card-url" in home_card_contents
+    assert "This Proxmox endpoint is disabled." in home_card_contents
 
 
 def test_community_surface_excludes_discord_and_telegram_links():

@@ -15,11 +15,13 @@ export function setBadgeState(element, status, detail = "") {
     const styles = {
         success: "badge text-bg-green",
         error: "badge text-bg-red",
+        disabled: "badge text-bg-secondary",
         unknown: "badge text-bg-grey",
     };
     const labels = {
         success: "Successful!",
         error: "Error!",
+        disabled: "Disabled",
         unknown: "Unknown",
     };
 

@@ -34,7 +34,28 @@ ProxmoxClusterStatusResponse = schemas.ProxmoxClusterStatusResponse
 ProxmoxStorageRecord = schemas.ProxmoxStorageRecord
 ProxmoxVMConfig = schemas.ProxmoxVMConfig
 ProxmoxNodeRow = schemas.ProxmoxNodeRow
+KeepalivePayload = schemas.KeepalivePayload
+ServiceCheckResult = schemas.ServiceCheckResult
 SyncJobData = schemas.SyncJobData
+
+
+def test_service_status_schemas_accept_disabled_status():
+    check = ServiceCheckResult.model_validate(
+        {"authentication": "disabled", "api_access": "disabled"}
+    )
+    payload = KeepalivePayload.model_validate(
+        {
+            "status": "disabled",
+            "authentication": "disabled",
+            "api_access": "disabled",
+        }
+    )
+
+    assert check.authentication == "disabled"
+    assert check.api_access == "disabled"
+    assert payload.status == "disabled"
+    assert payload.authentication == "disabled"
+    assert payload.api_access == "disabled"
 
 
 def test_proxmox_vm_config_coerces_strings_and_formats_memory():

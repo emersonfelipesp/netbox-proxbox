@@ -8,8 +8,8 @@ from pydantic import Field
 
 from netbox_proxbox.schemas._base import ProxboxBaseModel
 
-StatusLiteral = Literal["success", "error", "unknown"]
-AuthStatusLiteral = Literal["success", "error", "pending"]
+StatusLiteral = Literal["success", "error", "unknown", "disabled"]
+AuthStatusLiteral = Literal["success", "error", "pending", "disabled"]
 
 
 class FastAPIStatusResult(ProxboxBaseModel):
