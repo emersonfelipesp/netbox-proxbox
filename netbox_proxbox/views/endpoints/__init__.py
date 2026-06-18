@@ -21,6 +21,8 @@ from .netbox import (
 )
 from .proxmox import (
     ProxmoxEndpointBulkDeleteView,
+    ProxmoxEndpointBulkDisableView,
+    ProxmoxEndpointBulkEnableView,
     ProxmoxEndpointBulkImportView,
     ProxmoxEndpointDeleteView,
     ProxmoxEndpointEditView,

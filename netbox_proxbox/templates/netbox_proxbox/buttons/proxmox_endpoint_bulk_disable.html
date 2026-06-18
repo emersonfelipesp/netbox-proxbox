@@ -1,0 +1,5 @@
+{% if url %}
+  <button type="submit" name="_bulk_disable" {% formaction %}="{{ url }}{% if url_params %}?{{ url_params.urlencode }}{% endif %}" class="btn btn-yellow">
+    <i class="mdi mdi-close-circle-outline" aria-hidden="true"></i> {{ label }}
+  </button>
+{% endif %}

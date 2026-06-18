@@ -109,6 +109,11 @@ in UI/API output, but status checks, backend registration, OpenAPI fetches,
 sync scopes, keepalive probes, and startup/signal pushes must return before any
 proxbox-api or remote-service connection attempt.
 
+The Proxmox Endpoints list shows the `Enabled` column by default. Operators can
+select multiple rows and use **Enable Selected** or **Disable Selected** to
+toggle the local `ProxmoxEndpoint.enabled` flag in bulk; those list actions do
+not call proxbox-api or Proxmox.
+
 ### Cloud Portal Endpoint Allowlists
 
 `ProxmoxEndpoint.allowed_tenants` controls which Proxmox endpoint rows are

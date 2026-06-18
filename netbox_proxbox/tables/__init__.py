@@ -104,6 +104,7 @@ class ProxmoxEndpointTable(NetBoxTable):
             "version",
             "status",
             "verify_ssl",
+            "enabled",
         )
 
 
