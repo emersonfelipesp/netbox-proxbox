@@ -106,6 +106,8 @@ from .endpoints import (
     NetBoxEndpointListView,
     NetBoxEndpointView,
     ProxmoxEndpointBulkDeleteView,
+    ProxmoxEndpointBulkDisableView,
+    ProxmoxEndpointBulkEnableView,
     ProxmoxEndpointDeleteView,
     ProxmoxEndpointEditView,
     ProxmoxEndpointListView,

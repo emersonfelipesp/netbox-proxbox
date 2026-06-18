@@ -243,7 +243,8 @@ def test_environment_in_filterset_meta_fields() -> None:
 
 def test_environment_column_and_default_columns() -> None:
     """``ProxmoxEndpointTable`` must declare an ``environment`` ChoiceFieldColumn
-    and include it in both ``Meta.fields`` and ``Meta.default_columns``."""
+    and include it in both ``Meta.fields`` and ``Meta.default_columns``. The
+    operational ``enabled`` column must also remain visible by default."""
     src = TABLE_PATH.read_text()
     assert "environment = ChoiceFieldColumn()" in src
     cls = _find_class(_parse(TABLE_PATH), "ProxmoxEndpointTable")
@@ -263,6 +264,7 @@ def test_environment_column_and_default_columns() -> None:
                     fields_seen = True
                 if target.id == "default_columns":
                     assert "'environment'" in rendered or '"environment"' in rendered
+                    assert "'enabled'" in rendered or '"enabled"' in rendered
                     defaults_seen = True
             assert fields_seen and defaults_seen, (
                 "ProxmoxEndpointTable Meta missing environment in fields or default_columns"

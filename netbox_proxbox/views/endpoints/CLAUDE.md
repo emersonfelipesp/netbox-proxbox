@@ -4,7 +4,7 @@ This directory contains NetBox generic model views for the three endpoint models
 
 ## Files And Ownership
 
-- [`proxmox.py`](./proxmox.py): list/detail/edit/delete, bulk import, export, quick-add-token, and tab views for `ProxmoxEndpoint`. Includes `ProxmoxEndpointSyncJobsTabView` (weight 875, path `sync-jobs`) which lists Proxbox sync jobs scoped to the viewed endpoint — jobs whose `proxbox_sync.params.proxmox_endpoint_ids` contains the endpoint PK, or jobs with an empty endpoint list (all-endpoint jobs).
+- [`proxmox.py`](./proxmox.py): list/detail/edit/delete, bulk enable/disable, bulk import, export, quick-add-token, and tab views for `ProxmoxEndpoint`. Includes `ProxmoxEndpointSyncJobsTabView` (weight 875, path `sync-jobs`) which lists Proxbox sync jobs scoped to the viewed endpoint — jobs whose `proxbox_sync.params.proxmox_endpoint_ids` contains the endpoint PK, or jobs with an empty endpoint list (all-endpoint jobs).
 - [`proxmox_sync_now.py`](./proxmox_sync_now.py): POST-only `ProxmoxEndpoint` action that queues an immediate full `ProxboxSyncJob` scoped to the endpoint being viewed.
 - [`proxmox_export.py`](./proxmox_export.py): CSV/JSON/YAML export fieldname and serializer helpers for `ProxmoxEndpoint`.
 - [`netbox.py`](./netbox.py): list/detail/edit/delete, bulk import, export, and quick-add-token views for `NetBoxEndpoint`.
@@ -79,6 +79,7 @@ All three import forms use a plain `forms.CharField` for `ip_address` backed by 
 
 - The export JS (token version toggle, dropdown population, quick-add, copy-to-clipboard) is inlined as an IIFE in each `*endpoint_list.html` template rather than loaded as an external `.js` file. This avoids requiring `collectstatic` for the modal to work.
 - The ProxmoxEndpoint detail page exposes **Sync Now** through `proxmox_sync_now.py`; it requires the shared Proxbox sync enqueue permission, uses a CSRF-protected POST, refuses disabled endpoints, and passes the viewed endpoint PK in `proxmox_endpoint_ids`.
+- The ProxmoxEndpoint list page exposes **Enable Selected** and **Disable Selected** through `ProxmoxEndpointBulkEnableView` / `ProxmoxEndpointBulkDisableView`. These are change-permission list actions that update only `enabled` with `queryset.update()`; do not switch them to per-object `save()` because the ProxmoxEndpoint `post_save` signal can register/sync endpoints with proxbox-api.
 - Changes to list columns, validation, or field presentation typically happen outside this directory unless the view wiring itself changes.
 
 ## Links
