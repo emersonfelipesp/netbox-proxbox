@@ -393,4 +393,8 @@ Before any destruction-adjacent intent operation, an LLM agent MUST:
 4. **Never act as both requester and approver** — the four-eyes invariant is
    enforced at the code level (`self_approve_allowed=False`) and must not be
    circumvented.
-- Companion roadmap items: #357, #358, #367, #370, #376
+
+**Enforcement locations:**
+- `netbox_proxbox/api/views.py::DeletionRequestViewSet.http_method_names` — read-only `["get", "head", "options"]` enforces the four-eyes approval gap at the REST layer
+- `netbox_proxbox/api/views.py::ProxmoxApplyJobViewSet.http_method_names` — read-only enforcement on apply-job state (jobs are created only through intent branch-merge workflow)
+- `tests/test_static_guardrails.py` — static contract tests that pin `http_method_names`, `self_approve_allowed=False`, the five-lock chain, and the confirmation phrase presence in AGENTS.md

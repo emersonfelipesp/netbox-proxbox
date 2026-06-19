@@ -402,6 +402,17 @@ Key pages:
 
 - GitHub Discussions: https://github.com/orgs/emersonfelipesp/discussions
 
+## LLM Agent Safety
+
+> **Before any destruction-adjacent operation, read `AGENTS.md` §"LLM Agent Safety Guardrails".**
+
+Proxbox protects VM destruction behind a five-lock chain. LLM agents **MUST NOT**:
+- Autonomously set `apply_destroy_confirmed=True`
+- Submit the confirmation phrase `"allow-edit-and-add-actions"` on a user's behalf
+- Approve a `DeletionRequest` as the same user who created it (`self_approve_allowed=False`)
+
+The `DeletionRequest` REST endpoint (`/api/plugins/proxbox/deletion-requests/`) is read-only — enforced by `netbox_proxbox/api/views.py::DeletionRequestViewSet.http_method_names = ["get", "head", "options"]`. Pinned by `tests/test_static_guardrails.py`.
+
 ## Contributing
 
 See [DEVELOP.md](./DEVELOP.md) for development setup and contribution guidelines.
