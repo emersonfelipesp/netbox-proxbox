@@ -12,6 +12,9 @@ backend release, the `proxmox-sdk 0.0.11.post1` Proxmox SDK, and
   `enabled=False` remain visible in UI/API output, but operational paths now
   return before any proxbox-api, NetBox, Proxmox, PBS, PDM, OpenAPI, keepalive,
   backend registration, startup/signal, or sync network attempt.
+- **Disabled Proxmox status is not an error.** Proxmox endpoint list, detail,
+  and dashboard status surfaces render disabled rows as a gray **Disabled**
+  badge and omit live status polling metadata.
 - **Shared guard for companion endpoints.** The enabled-state guard applies to
   `ProxmoxEndpoint`, `NetBoxEndpoint`, `FastAPIEndpoint`, `PBSEndpoint`,
   `PDMEndpoint`, and companion endpoint objects that expose an `enabled` field.
