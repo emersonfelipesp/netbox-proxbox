@@ -251,6 +251,7 @@ class ProxmoxEndpointSettingsForm(NetBoxModelForm):
             "enable_tenant_name_regex",
             "tenant_name_regex_rules",
             "enable_tenant_tag_assignment",
+            "enable_tenant_from_cluster",
             *SYNC_MODE_FIELDS,
             *OVERWRITE_FIELDS,
         )
@@ -324,6 +325,15 @@ class ProxmoxEndpointSettingsForm(NetBoxModelForm):
             help_text=_(
                 "Per-endpoint override for the global tenant tag-assignment toggle. "
                 "Leave blank to inherit."
+            ),
+        )
+        self.fields["enable_tenant_from_cluster"] = forms.NullBooleanField(
+            required=False,
+            widget=forms.NullBooleanSelect,
+            label=_("Enable tenant assignment from cluster (override)"),
+            help_text=_(
+                "Per-endpoint override for the global tenant cluster-inheritance "
+                "toggle. Leave blank to inherit."
             ),
         )
 

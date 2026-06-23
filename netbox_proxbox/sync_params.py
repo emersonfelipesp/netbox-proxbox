@@ -308,6 +308,38 @@ def effective_tenant_tag_assignment_for_endpoint(
     return enabled
 
 
+def effective_tenant_from_cluster_for_endpoint(
+    proxmox_endpoint_id: int | str | None,
+) -> bool:
+    """Resolve tenant cluster-inheritance enablement for a given endpoint."""
+    try:
+        from netbox_proxbox.models import ProxboxPluginSettings
+    except (ImportError, RuntimeError):
+        return False
+    try:
+        settings_obj = ProxboxPluginSettings.get_solo()
+    except Exception:
+        return False
+    enabled = bool(getattr(settings_obj, "enable_tenant_from_cluster", False))
+
+    if proxmox_endpoint_id in (None, "", 0, "0"):
+        return enabled
+    try:
+        from netbox_proxbox.models import ProxmoxEndpoint
+
+        endpoint = _queryset_first(
+            ProxmoxEndpoint.objects.filter(pk=int(proxmox_endpoint_id))
+        )
+    except (ImportError, RuntimeError, ValueError, TypeError):
+        return enabled
+    if endpoint is None:
+        return enabled
+    ep_enabled = getattr(endpoint, "enable_tenant_from_cluster", None)
+    if ep_enabled is not None:
+        return bool(ep_enabled)
+    return enabled
+
+
 def _serialize_sync_params(
     *,
     sync_types: list[str],

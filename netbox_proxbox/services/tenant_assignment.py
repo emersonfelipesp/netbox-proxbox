@@ -13,6 +13,7 @@ import logging
 import re
 
 from netbox_proxbox.sync_params import (
+    effective_tenant_from_cluster_for_endpoint,
     effective_tenant_regex_for_endpoint,
     effective_tenant_tag_assignment_for_endpoint,
 )
@@ -197,5 +198,38 @@ def maybe_assign_tenant_from_tags(
         name,
         tenant.slug,
         tenant_tag_slug,
+    )
+    return True
+
+
+def maybe_assign_tenant_from_cluster(
+    vm: object,
+    *,
+    endpoint_id: int | None = None,
+    logger: logging.Logger | None = None,
+) -> bool:
+    """Assign a VM tenant from its cluster tenant as a final fallback."""
+    log = logger or logging.getLogger(__name__)
+    if endpoint_id is None:
+        endpoint_id = _endpoint_id_for_vm(vm)
+    if not effective_tenant_from_cluster_for_endpoint(endpoint_id):
+        return False
+    if getattr(vm, "tenant_id", None) is not None:
+        return False
+
+    cluster = getattr(vm, "cluster", None)
+    if cluster is None or getattr(cluster, "tenant_id", None) is None:
+        return False
+    tenant = getattr(cluster, "tenant", None)
+    if tenant is None:
+        return False
+
+    vm.tenant = tenant
+    vm.save(update_fields=["tenant"])
+    log.info(
+        "[tenant-cluster] vm=%s → tenant=%s (cluster=%s)",
+        getattr(vm, "name", "") or "",
+        getattr(tenant, "slug", getattr(cluster, "tenant_id", "")),
+        getattr(cluster, "name", getattr(cluster, "pk", "")),
     )
     return True

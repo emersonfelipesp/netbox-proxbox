@@ -38,6 +38,7 @@ def sync_params_module(monkeypatch):
         "global_enabled": False,
         "global_rules": [],
         "global_tag_enabled": False,
+        "global_cluster_enabled": False,
         "endpoints_by_pk": {},
     }
 
@@ -48,6 +49,7 @@ def sync_params_module(monkeypatch):
                 enable_tenant_name_regex=state["global_enabled"],
                 tenant_name_regex_rules=state["global_rules"],
                 enable_tenant_tag_assignment=state["global_tag_enabled"],
+                enable_tenant_from_cluster=state["global_cluster_enabled"],
             )
 
     class _Manager:
@@ -99,11 +101,12 @@ def sync_params_module(monkeypatch):
     return module
 
 
-def _endpoint(*, enable=None, rules=None, tag_enable=None):
+def _endpoint(*, enable=None, rules=None, tag_enable=None, cluster_enable=None):
     return SimpleNamespace(
         enable_tenant_name_regex=enable,
         tenant_name_regex_rules=rules,
         enable_tenant_tag_assignment=tag_enable,
+        enable_tenant_from_cluster=cluster_enable,
     )
 
 
@@ -191,6 +194,26 @@ def test_tenant_tag_assignment_endpoint_override(sync_params_module):
     sync_params_module._stubs["endpoints_by_pk"] = {7: _endpoint(tag_enable=False)}
 
     enabled = sync_params_module.effective_tenant_tag_assignment_for_endpoint(7)
+
+    assert enabled is False
+
+
+def test_tenant_from_cluster_inherits_global(sync_params_module):
+    sync_params_module._stubs["global_cluster_enabled"] = True
+    sync_params_module._stubs["endpoints_by_pk"] = {7: _endpoint()}
+
+    enabled = sync_params_module.effective_tenant_from_cluster_for_endpoint(7)
+
+    assert enabled is True
+
+
+def test_tenant_from_cluster_endpoint_override(sync_params_module):
+    sync_params_module._stubs["global_cluster_enabled"] = True
+    sync_params_module._stubs["endpoints_by_pk"] = {
+        7: _endpoint(cluster_enable=False)
+    }
+
+    enabled = sync_params_module.effective_tenant_from_cluster_for_endpoint(7)
 
     assert enabled is False
 
@@ -310,15 +333,19 @@ class _TagList:
 
 
 class _FakeVM:
-    def __init__(self, name, tenant_id=None, tags=None):
+    def __init__(self, name, tenant_id=None, tags=None, cluster=None, vm_type="qemu"):
         self.name = name
         self.tenant = None
         self.tenant_id = tenant_id
         self.tags = _TagList(tags or [])
+        self.cluster = cluster
+        self.custom_field_data = {"proxmox_vm_type": vm_type}
         self.saved_with: list[list[str]] = []
 
     def save(self, update_fields=None):
         self.saved_with.append(list(update_fields or []))
+        if "tenant" in self.saved_with[-1] and self.tenant is not None:
+            self.tenant_id = getattr(self.tenant, "pk", None)
 
 
 def test_assign_no_op_when_disabled(tenant_assignment_module, sync_params_module):
@@ -511,6 +538,170 @@ def test_tag_assignment_disabled_setting_no_op(
     assert vm.tenant is None
     assert vm.saved_with == []
     assert tenant_assignment_module._tenants == {}
+
+
+def _cluster(name="tenant-cluster", tenant=None):
+    return SimpleNamespace(
+        name=name,
+        tenant=tenant,
+        tenant_id=getattr(tenant, "pk", None),
+    )
+
+
+def test_tenant_from_cluster_assigns_when_empty_and_enabled(
+    tenant_assignment_module, sync_params_module
+):
+    sync_params_module._stubs["global_cluster_enabled"] = True
+    tenant = SimpleNamespace(slug="reseller", pk=42)
+    vm = _FakeVM("reseller-vm-001", cluster=_cluster(tenant=tenant))
+
+    assigned = tenant_assignment_module.maybe_assign_tenant_from_cluster(
+        vm, endpoint_id=None
+    )
+
+    assert assigned is True
+    assert vm.tenant is tenant
+    assert vm.tenant_id == 42
+    assert vm.saved_with == [["tenant"]]
+
+
+def test_tenant_from_cluster_never_overwrites_existing_tenant(
+    tenant_assignment_module, sync_params_module
+):
+    sync_params_module._stubs["global_cluster_enabled"] = True
+    cluster_tenant = SimpleNamespace(slug="cluster-tenant", pk=42)
+    vm = _FakeVM(
+        "operator-owned-vm",
+        tenant_id=99,
+        cluster=_cluster(tenant=cluster_tenant),
+    )
+
+    assigned = tenant_assignment_module.maybe_assign_tenant_from_cluster(
+        vm, endpoint_id=None
+    )
+
+    assert assigned is False
+    assert vm.tenant is None
+    assert vm.tenant_id == 99
+    assert vm.saved_with == []
+
+
+@pytest.mark.parametrize(
+    "cluster",
+    [
+        None,
+        SimpleNamespace(name="empty-cluster", tenant=None, tenant_id=None),
+        SimpleNamespace(name="stale-cluster", tenant=None, tenant_id=42),
+    ],
+)
+def test_tenant_from_cluster_no_op_without_cluster_tenant(
+    tenant_assignment_module, sync_params_module, cluster
+):
+    sync_params_module._stubs["global_cluster_enabled"] = True
+    vm = _FakeVM("unassigned-vm", cluster=cluster)
+
+    assigned = tenant_assignment_module.maybe_assign_tenant_from_cluster(
+        vm, endpoint_id=None
+    )
+
+    assert assigned is False
+    assert vm.tenant is None
+    assert vm.tenant_id is None
+    assert vm.saved_with == []
+
+
+def test_tenant_from_cluster_no_op_when_disabled(
+    tenant_assignment_module, sync_params_module
+):
+    sync_params_module._stubs["global_cluster_enabled"] = False
+    cluster_tenant = SimpleNamespace(slug="cluster-tenant", pk=42)
+    vm = _FakeVM("disabled-fallback-vm", cluster=_cluster(tenant=cluster_tenant))
+
+    assigned = tenant_assignment_module.maybe_assign_tenant_from_cluster(
+        vm, endpoint_id=None
+    )
+
+    assert assigned is False
+    assert vm.tenant is None
+    assert vm.tenant_id is None
+    assert vm.saved_with == []
+
+
+@pytest.mark.parametrize("vm_type", ["qemu", "lxc"])
+def test_tenant_from_cluster_assigns_qemu_and_lxc_representations(
+    tenant_assignment_module, sync_params_module, vm_type
+):
+    sync_params_module._stubs["global_cluster_enabled"] = True
+    tenant = SimpleNamespace(slug=f"{vm_type}-tenant", pk=100)
+    vm = _FakeVM(
+        f"{vm_type}-vm",
+        cluster=_cluster(name=f"{vm_type}-cluster", tenant=tenant),
+        vm_type=vm_type,
+    )
+
+    assigned = tenant_assignment_module.maybe_assign_tenant_from_cluster(
+        vm, endpoint_id=None
+    )
+
+    assert assigned is True
+    assert vm.tenant is tenant
+    assert vm.saved_with == [["tenant"]]
+
+
+def test_cluster_fallback_does_not_override_regex_assignment(
+    tenant_assignment_module, sync_params_module
+):
+    sync_params_module._stubs["global_enabled"] = True
+    sync_params_module._stubs["global_rules"] = [
+        {"pattern": "^cust-acme-", "tenant_slug": "regex-tenant"}
+    ]
+    sync_params_module._stubs["global_cluster_enabled"] = True
+    regex_tenant = SimpleNamespace(slug="regex-tenant", pk=1)
+    cluster_tenant = SimpleNamespace(slug="cluster-tenant", pk=2)
+    tenant_assignment_module._tenants["regex-tenant"] = regex_tenant
+    vm = _FakeVM(
+        "cust-acme-prod-01",
+        cluster=_cluster(tenant=cluster_tenant),
+    )
+
+    regex_assigned = tenant_assignment_module.maybe_assign_tenant_from_regex(
+        vm, endpoint_id=None
+    )
+    cluster_assigned = tenant_assignment_module.maybe_assign_tenant_from_cluster(
+        vm, endpoint_id=None
+    )
+
+    assert regex_assigned is True
+    assert cluster_assigned is False
+    assert vm.tenant is regex_tenant
+    assert vm.tenant_id == 1
+    assert vm.saved_with == [["tenant"]]
+
+
+def test_cluster_fallback_does_not_override_tag_assignment(
+    tenant_assignment_module, sync_params_module
+):
+    sync_params_module._stubs["global_tag_enabled"] = True
+    sync_params_module._stubs["global_cluster_enabled"] = True
+    cluster_tenant = SimpleNamespace(slug="cluster-tenant", pk=2)
+    vm = _FakeVM(
+        "cust-confitec-prod-01",
+        tags=["cloud-customer", "tenant-confitec"],
+        cluster=_cluster(tenant=cluster_tenant),
+    )
+
+    tag_assigned = tenant_assignment_module.maybe_assign_tenant_from_tags(
+        vm, endpoint_id=None
+    )
+    cluster_assigned = tenant_assignment_module.maybe_assign_tenant_from_cluster(
+        vm, endpoint_id=None
+    )
+
+    assert tag_assigned is True
+    assert cluster_assigned is False
+    assert vm.tenant.slug == "confitec"
+    assert vm.tenant_id == vm.tenant.pk
+    assert vm.saved_with == [["tenant"]]
 
 
 # ---------------------------------------------------------------------------

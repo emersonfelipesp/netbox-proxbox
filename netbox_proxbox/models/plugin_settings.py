@@ -675,6 +675,15 @@ class ProxboxPluginSettings(NetBoxModel):
             "Existing tenant assignments are never overwritten."
         ),
     )
+    enable_tenant_from_cluster = models.BooleanField(
+        default=False,
+        verbose_name=_("Enable tenant assignment from cluster"),
+        help_text=_(
+            "When enabled, sync assigns a VM Tenant from the VM's cluster Tenant "
+            "when regex and tag assignment did not set one. Existing tenant "
+            "assignments are never overwritten."
+        ),
+    )
     branching_enabled = models.BooleanField(
         default=False,
         verbose_name=_("Branching-enabled sync (Proxmox → NetBox)"),

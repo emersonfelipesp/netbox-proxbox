@@ -79,8 +79,11 @@ post-sync behavior. Regex assignment is controlled by
 controlled by `enable_tenant_tag_assignment`. The tag resolver requires both a
 `cloud-customer` marker tag and exactly one `tenant-<slug>` tag, never overwrites
 an existing VM tenant, and auto-creates missing `Tenant` rows under the
-`cloud-customers` `TenantGroup`. Per-`ProxmoxEndpoint` overrides inherit from the
-global plugin settings when left null.
+`cloud-customers` `TenantGroup`. Cluster inheritance is controlled by
+`enable_tenant_from_cluster`; when enabled it runs after regex and tag assignment
+and fills an empty VM tenant from `vm.cluster.tenant`, so explicit name/tag rules
+win and existing VM tenants are never overwritten. Per-`ProxmoxEndpoint`
+overrides inherit from the global plugin settings when left null.
 
 ## Installation Docs
 

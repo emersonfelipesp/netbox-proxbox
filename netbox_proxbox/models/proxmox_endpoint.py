@@ -524,6 +524,16 @@ class ProxmoxEndpoint(EndpointBase):
             "Leave blank to inherit."
         ),
     )
+    enable_tenant_from_cluster = models.BooleanField(
+        null=True,
+        blank=True,
+        default=None,
+        verbose_name=_("Enable tenant assignment from cluster (override)"),
+        help_text=_(
+            "Per-endpoint override for the global tenant cluster-inheritance toggle. "
+            "Leave blank to inherit."
+        ),
+    )
     site = models.ForeignKey(
         to="dcim.Site",
         on_delete=models.SET_NULL,
