@@ -340,6 +340,7 @@ async def _run_batch_selected_sync(
 
             if batch_object_type == "virtual-machine" and 200 <= int(status) < 300:
                 from netbox_proxbox.services.tenant_assignment import (
+                    maybe_assign_tenant_from_cluster,
                     maybe_assign_tenant_from_regex,
                     maybe_assign_tenant_from_tags,
                 )
@@ -348,6 +349,7 @@ async def _run_batch_selected_sync(
                     obj.refresh_from_db()
                     maybe_assign_tenant_from_regex(obj)
                     maybe_assign_tenant_from_tags(obj)
+                    maybe_assign_tenant_from_cluster(obj)
 
                 await asyncio.to_thread(_post_sync_assign)
 

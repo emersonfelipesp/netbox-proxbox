@@ -1689,6 +1689,7 @@ class DeletionRequestViewSet(NetBoxModelViewSet):
         "authorizer",
     )
     serializer_class = DeletionRequestSerializer
+    # Safety invariant: read-only gate for four-eyes approval; see AGENTS.md §"LLM Agent Safety Guardrails".
     http_method_names = ["get", "head", "options"]
 
 
@@ -1701,4 +1702,5 @@ class ProxmoxApplyJobViewSet(NetBoxModelViewSet):
 
     queryset = models.ProxmoxApplyJob.objects.select_related("user")
     serializer_class = ProxmoxApplyJobSerializer
+    # Safety invariant: apply jobs are created only through the intent branch-merge workflow; never via API write.
     http_method_names = ["get", "head", "options"]

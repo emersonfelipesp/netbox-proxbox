@@ -114,6 +114,11 @@ select multiple rows and use **Enable Selected** or **Disable Selected** to
 toggle the local `ProxmoxEndpoint.enabled` flag in bulk; those list actions do
 not call proxbox-api or Proxmox.
 
+Disabled Proxmox endpoints render as a gray **Disabled** status badge on the
+list, detail page, and dashboard card. These UI surfaces do not attach live
+status polling metadata for disabled rows, so the browser does not repaint an
+administratively disabled endpoint as a red error.
+
 ### Cloud Portal Endpoint Allowlists
 
 `ProxmoxEndpoint.allowed_tenants` controls which Proxmox endpoint rows are
@@ -401,6 +406,17 @@ Key pages:
 ## Community
 
 - GitHub Discussions: https://github.com/orgs/emersonfelipesp/discussions
+
+## LLM Agent Safety
+
+> **Before any destruction-adjacent operation, read `AGENTS.md` §"LLM Agent Safety Guardrails".**
+
+Proxbox protects VM destruction behind a five-lock chain. LLM agents **MUST NOT**:
+- Autonomously set `apply_destroy_confirmed=True`
+- Submit the confirmation phrase `"allow-edit-and-add-actions"` on a user's behalf
+- Approve a `DeletionRequest` as the same user who created it (`self_approve_allowed=False`)
+
+The `DeletionRequest` REST endpoint (`/api/plugins/proxbox/deletion-requests/`) is read-only — enforced by `netbox_proxbox/api/views.py::DeletionRequestViewSet.http_method_names = ["get", "head", "options"]`. Pinned by `tests/test_static_guardrails.py`.
 
 ## Contributing
 

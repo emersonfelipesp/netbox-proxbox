@@ -93,6 +93,11 @@ class SettingsView(
                 "enable_tenant_tag_assignment",
                 False,
             ),
+            "enable_tenant_from_cluster": getattr(
+                settings_obj,
+                "enable_tenant_from_cluster",
+                False,
+            ),
             "branching_enabled": settings_obj.branching_enabled,
             "branch_name_prefix": settings_obj.branch_name_prefix,
             "branch_on_conflict": settings_obj.branch_on_conflict,
@@ -241,6 +246,9 @@ class SettingsView(
             settings_obj.enable_tenant_tag_assignment = form.cleaned_data.get(
                 "enable_tenant_tag_assignment", False
             )
+            settings_obj.enable_tenant_from_cluster = form.cleaned_data.get(
+                "enable_tenant_from_cluster", False
+            )
             settings_obj.branching_enabled = form.cleaned_data.get(
                 "branching_enabled", False
             )
@@ -341,6 +349,7 @@ class SettingsView(
                     "enable_tenant_name_regex",
                     "tenant_name_regex_rules",
                     "enable_tenant_tag_assignment",
+                    "enable_tenant_from_cluster",
                     "branching_enabled",
                     "branch_name_prefix",
                     "branch_on_conflict",

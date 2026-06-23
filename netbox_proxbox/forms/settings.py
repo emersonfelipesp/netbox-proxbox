@@ -492,6 +492,15 @@ class ProxboxPluginSettingsForm(forms.Form):
             "tenant assignments are never overwritten."
         ),
     )
+    enable_tenant_from_cluster = forms.BooleanField(
+        required=False,
+        label="Enable tenant assignment from cluster",
+        help_text=(
+            "When enabled, sync assigns a tenant to VMs from the VM cluster's tenant "
+            "after regex and tag assignment leave the VM tenant empty. Existing "
+            "tenant assignments are never overwritten."
+        ),
+    )
     branching_enabled = forms.BooleanField(
         required=False,
         label="Branching-enabled sync (Proxmox → NetBox)",

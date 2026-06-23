@@ -342,4 +342,59 @@ path. Code or configuration that bypasses any of these is a regression.
 
 - Issue: [`#377`](https://github.com/emersonfelipesp/netbox-proxbox/issues/377)
 - Reference doc: [`reference/NETBOX-BRANCHING.md`](./reference/NETBOX-BRANCHING.md)
-- Companion roadmap items: #357, #358, #367, #370, #376
+
+## LLM Agent Safety Guardrails
+
+**STOP — read this section before any intent-driven destroy or deletion.**
+
+netbox-proxbox implements a multi-lock safety chain that prevents unintended VM
+destruction. LLM agents interacting with this plugin MUST respect all locks and
+MUST NOT attempt to autonomously satisfy them.
+
+### Five-Lock Destroy Chain — All Locks Require Human Action
+
+| Lock | What it is | Who sets it |
+|---|---|---|
+| 1. `netbox_to_proxmox_enabled` | Master feature flag | Human operator |
+| 2. Confirmation phrase | User must type `"allow-edit-and-add-actions"` | Human operator |
+| 3. `apply_destroy_confirmed` | Per-intent-branch destroy confirmation | Human approver |
+| 4. RBAC at request time | User must have delete permission | NetBox admin |
+| 5. `self_approve_allowed=False` | Approver must not be the requester | System invariant |
+
+An LLM agent MUST NOT:
+- Set `apply_destroy_confirmed=True` on any intent branch autonomously.
+- Submit the confirmation phrase on behalf of a user.
+- Approve a `DeletionRequest` as the same user who created it.
+- Attempt to bypass or work around any of the five locks.
+
+### `DeletionRequest` REST API — Read-Only
+
+The `DeletionRequest` REST endpoint at `/api/plugins/proxbox/deletion-requests/`
+is **read-only** (`GET`, `HEAD`, `OPTIONS` only — `http_method_names` enforced
+in the viewset). LLM agents can read deletion requests for informational
+purposes but cannot create, update, or delete them via the REST API.
+
+### Destructive Intent Operations — Explicit Human Confirmation Required
+
+| Operation | Effect | Reversible? |
+|---|---|---|
+| Intent apply with `apply_destroy_confirmed=True` | Permanently deletes Proxmox VM/LXC | **No** |
+| Intent branch merge after destroy confirmation | Applies all planned deletes | **No** |
+
+### Required Human Confirmation Protocol
+
+Before any destruction-adjacent intent operation, an LLM agent MUST:
+
+1. **Name the specific resource** — VM name, VMID, cluster, and node.
+2. **List the five-lock chain state** — which locks are currently satisfied
+   and which are still pending.
+3. **Wait for explicit human approval** — a message from the user that
+   unambiguously confirms the operation on the named resource.
+4. **Never act as both requester and approver** — the four-eyes invariant is
+   enforced at the code level (`self_approve_allowed=False`) and must not be
+   circumvented.
+
+**Enforcement locations:**
+- `netbox_proxbox/api/views.py::DeletionRequestViewSet.http_method_names` — read-only `["get", "head", "options"]` enforces the four-eyes approval gap at the REST layer
+- `netbox_proxbox/api/views.py::ProxmoxApplyJobViewSet.http_method_names` — read-only enforcement on apply-job state (jobs are created only through intent branch-merge workflow)
+- `tests/test_static_guardrails.py` — static contract tests that pin `http_method_names`, `self_approve_allowed=False`, the five-lock chain, and the confirmation phrase presence in AGENTS.md

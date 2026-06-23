@@ -1,5 +1,14 @@
 # netbox-proxbox Codebase Guide
 
+> **LLM Agent Safety — Destructive Operations:** netbox-proxbox protects VM
+> destruction behind a five-lock chain. **Never autonomously set
+> `apply_destroy_confirmed=True`, submit the confirmation phrase
+> `"allow-edit-and-add-actions"` on a user's behalf, or approve a
+> `DeletionRequest` as the same user who created it.**
+> The `DeletionRequest` REST endpoint is read-only (`GET`/`HEAD`/`OPTIONS`
+> only). See `AGENTS.md` §"LLM Agent Safety Guardrails" for the full five-lock
+> chain protocol.
+
 ## Pre-commit Checklist
 
 **Before committing ANY change:**

@@ -31,6 +31,7 @@ class ProxboxPluginSettingsSerializer(NetBoxModelSerializer):
             "enable_tenant_name_regex",
             "tenant_name_regex_rules",
             "enable_tenant_tag_assignment",
+            "enable_tenant_from_cluster",
             "primary_ip_preference",
             "netbox_max_concurrent",
             "netbox_timeout",

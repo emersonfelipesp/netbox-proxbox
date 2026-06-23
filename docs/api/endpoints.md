@@ -92,6 +92,12 @@ curl -H "Authorization: Token <token>" \
     `enabled` flag; they do not register endpoints with proxbox-api, start a
     sync, or contact Proxmox.
 
+!!! note "Disabled status"
+    Disabled Proxmox endpoints are shown as a gray **Disabled** badge on the
+    list, detail page, and dashboard card. The disabled UI state does not emit
+    live status polling metadata, and direct keepalive calls return
+    `status="disabled"` defensively instead of probing proxbox-api or Proxmox.
+
 ### Data Model
 
 | Field | Type | Description |
