@@ -24,7 +24,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           # For tag events, commit screenshots back to develop; for branch events, use the triggered branch.
           ref: ${{ startsWith(github.ref, 'refs/tags/') && 'develop' || github.ref_name }}

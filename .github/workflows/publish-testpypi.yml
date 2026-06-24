@@ -57,7 +57,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.source_ref || (github.event_name == 'release' && github.event.release.tag_name || github.ref) }}
 
@@ -218,7 +218,7 @@ jobs:
         python-version: ['3.12', '3.13']
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.source_ref || (github.event_name == 'release' && github.event.release.tag_name || github.ref) }}
 
@@ -300,7 +300,7 @@ jobs:
         python-version: ['3.12', '3.13']
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.source_ref || (github.event_name == 'release' && github.event.release.tag_name || github.ref) }}
 
