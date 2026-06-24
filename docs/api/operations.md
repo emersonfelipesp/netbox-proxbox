@@ -1,6 +1,10 @@
 # Operations API
 
-These two models store Proxmox operational data synced into NetBox: scheduled backup routines and replication jobs.
+This page covers four models that store Proxmox operational state in NetBox: scheduled backup routines, replication jobs, deletion requests, and apply jobs.
+
+**BackupRoutine** and **Replication** are standard read/write models.
+
+**DeletionRequest** and **ProxmoxApplyJob** are **read-only** endpoints (GET / HEAD / OPTIONS only). Attempting a POST, PUT, PATCH, or DELETE returns HTTP 405. See [API Overview — Deletion Requests and Apply Jobs](index.md#deletion-requests-and-apply-jobs-read-only) for the safety rationale.
 
 For common API conventions (authentication, pagination, nested serializers), see [API Overview](index.md).
 
@@ -238,3 +242,54 @@ curl -H "Authorization: Token <token>" \
 | `remove_job` | choice (nullable) | Whether Proxmox should remove the job. Choices: `local`, `full` |
 | `status` | choice | Sync status. Choices: `active`, `stale` |
 | `raw_config` | object | Full raw replication configuration from Proxmox |
+
+---
+
+## Deletion Request (Read-Only)
+
+`DeletionRequest` records are created through the NetBox UI or the intent API — not through the plugin REST API. The REST endpoint is read-only so automated tools can inspect the deletion queue without being able to modify it.
+
+```
+GET    /api/plugins/proxbox/deletion-requests/
+GET    /api/plugins/proxbox/deletion-requests/{id}/
+```
+
+!!! warning "Write methods are blocked"
+    POST, PUT, PATCH, and DELETE return **HTTP 405 Method Not Allowed** on these paths. The five-lock safety chain that gates VM destruction cannot be bypassed through the API.
+
+For the complete four-eyes deletion workflow and the five-lock chain description, see the [Deletion Requests operations guide](../operations/deletion-requests.md).
+
+**Example — list pending deletion requests:**
+
+```bash
+curl -H "Authorization: Token <token>" \
+     "http://netbox.example.com/api/plugins/proxbox/deletion-requests/?status=pending"
+```
+
+---
+
+## ProxmoxApplyJob (Read-Only)
+
+`ProxmoxApplyJob` is an audit log for intent-branch apply cycles (plan → apply operations driven by proxbox-api). Records are written exclusively by the backend; the plugin REST surface is read-only to preserve audit integrity.
+
+```
+GET    /api/plugins/proxbox/apply-jobs/
+GET    /api/plugins/proxbox/apply-jobs/{id}/
+```
+
+!!! warning "Write methods are blocked"
+    POST, PUT, PATCH, and DELETE return **HTTP 405 Method Not Allowed** on these paths.
+
+**Example — retrieve a specific apply job:**
+
+```bash
+curl -H "Authorization: Token <token>" \
+     "http://netbox.example.com/api/plugins/proxbox/apply-jobs/42/"
+```
+
+**Example — list recent apply jobs for an endpoint:**
+
+```bash
+curl -H "Authorization: Token <token>" \
+     "http://netbox.example.com/api/plugins/proxbox/apply-jobs/?endpoint_id=1&limit=10"
+```
