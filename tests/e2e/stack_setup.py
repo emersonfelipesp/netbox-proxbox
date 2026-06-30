@@ -421,7 +421,7 @@ def assert_plugin_routes(
 ) -> None:
     headers = {"Authorization": f"Token {netbox_token}"}
     route_checks = [
-        f"{netbox_base_url}/plugins/proxbox/",
+        f"{netbox_base_url}/plugins/proxbox/home/",
         f"{netbox_base_url}/plugins/proxbox/endpoints/proxmox/{endpoint_ids['proxmox_pk']}/",
         f"{netbox_base_url}/plugins/proxbox/endpoints/netbox/{endpoint_ids['netbox_pk']}/",
         f"{netbox_base_url}/plugins/proxbox/endpoints/fastapi/{endpoint_ids['fastapi_pk']}/",
