@@ -262,6 +262,59 @@ sdn_fabrics_item = PluginMenuItem(
     ),
 )
 
+sdn_controllers_item = PluginMenuItem(
+    link="plugins:netbox_proxbox:proxmoxsdncontroller_list",
+    link_text="Controllers",
+    buttons=(
+        PluginMenuButton(
+            "plugins:netbox_proxbox:proxmoxsdncontroller_add",
+            "Add Controller",
+            "mdi mdi-plus",
+        ),
+    ),
+)
+
+sdn_zones_item = PluginMenuItem(
+    link="plugins:netbox_proxbox:proxmoxsdnzone_list",
+    link_text="Zones",
+    buttons=(
+        PluginMenuButton(
+            "plugins:netbox_proxbox:proxmoxsdnzone_add",
+            "Add Zone",
+            "mdi mdi-plus",
+        ),
+    ),
+)
+
+sdn_vnets_item = PluginMenuItem(
+    link="plugins:netbox_proxbox:proxmoxsdnvnet_list",
+    link_text="VNets",
+    buttons=(
+        PluginMenuButton(
+            "plugins:netbox_proxbox:proxmoxsdnvnet_add",
+            "Add VNet",
+            "mdi mdi-plus",
+        ),
+    ),
+)
+
+sdn_subnets_item = PluginMenuItem(
+    link="plugins:netbox_proxbox:proxmoxsdnsubnet_list",
+    link_text="Subnets",
+    buttons=(
+        PluginMenuButton(
+            "plugins:netbox_proxbox:proxmoxsdnsubnet_add",
+            "Add Subnet",
+            "mdi mdi-plus",
+        ),
+    ),
+)
+
+sdn_bindings_item = PluginMenuItem(
+    link="plugins:netbox_proxbox:proxmoxsdnbinding_list",
+    link_text="Bindings",
+)
+
 sdn_route_maps_item = PluginMenuItem(
     link="plugins:netbox_proxbox:proxmoxsdnroutemap_list",
     link_text="Route Maps",
@@ -359,6 +412,11 @@ menu = PluginMenu(
             "SDN",
             (
                 sdn_fabrics_item,
+                sdn_controllers_item,
+                sdn_zones_item,
+                sdn_vnets_item,
+                sdn_subnets_item,
+                sdn_bindings_item,
                 sdn_route_maps_item,
                 sdn_prefix_lists_item,
             ),

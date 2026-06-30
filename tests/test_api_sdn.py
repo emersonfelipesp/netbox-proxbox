@@ -21,8 +21,13 @@ def test_sdn_serializer_file_exists():
     assert (REPO_ROOT / "netbox_proxbox/api/serializers/sdn.py").exists()
 
 
-def test_sdn_serializer_exports_all_three_classes():
+def test_sdn_serializer_exports_all_sdn_classes():
     content = _read("netbox_proxbox/api/serializers/sdn.py")
+    assert "class ProxmoxSdnControllerSerializer" in content
+    assert "class ProxmoxSdnZoneSerializer" in content
+    assert "class ProxmoxSdnVNetSerializer" in content
+    assert "class ProxmoxSdnSubnetSerializer" in content
+    assert "class ProxmoxSdnBindingSerializer" in content
     assert "class ProxmoxSdnFabricSerializer" in content
     assert "class ProxmoxSdnRouteMapSerializer" in content
     assert "class ProxmoxSdnPrefixListSerializer" in content
@@ -45,6 +50,11 @@ def test_sdn_serializer_includes_status_choice_field():
 
 def test_serializers_init_exports_sdn_serializers():
     content = _read("netbox_proxbox/api/serializers/__init__.py")
+    assert "ProxmoxSdnControllerSerializer" in content
+    assert "ProxmoxSdnZoneSerializer" in content
+    assert "ProxmoxSdnVNetSerializer" in content
+    assert "ProxmoxSdnSubnetSerializer" in content
+    assert "ProxmoxSdnBindingSerializer" in content
     assert "ProxmoxSdnFabricSerializer" in content
     assert "ProxmoxSdnRouteMapSerializer" in content
     assert "ProxmoxSdnPrefixListSerializer" in content
@@ -57,6 +67,11 @@ def test_serializers_init_exports_sdn_serializers():
 
 def test_sdn_viewsets_defined_in_views():
     content = _read("netbox_proxbox/api/views.py")
+    assert "ProxmoxSdnControllerViewSet" in content
+    assert "ProxmoxSdnZoneViewSet" in content
+    assert "ProxmoxSdnVNetViewSet" in content
+    assert "ProxmoxSdnSubnetViewSet" in content
+    assert "ProxmoxSdnBindingViewSet" in content
     assert "ProxmoxSdnFabricViewSet" in content
     assert "ProxmoxSdnRouteMapViewSet" in content
     assert "ProxmoxSdnPrefixListViewSet" in content
@@ -79,6 +94,11 @@ def test_sdn_viewsets_select_related_endpoint():
 
 def test_sdn_routes_registered_in_api_urls():
     content = _read("netbox_proxbox/api/urls.py")
+    assert "sdn-controllers" in content
+    assert "sdn-zones" in content
+    assert "sdn-vnets" in content
+    assert "sdn-subnets" in content
+    assert "sdn-bindings" in content
     assert "sdn-fabrics" in content
     assert "sdn-route-maps" in content
     assert "sdn-prefix-lists" in content
@@ -86,6 +106,11 @@ def test_sdn_routes_registered_in_api_urls():
 
 def test_sdn_router_basenames_correct():
     content = _read("netbox_proxbox/api/urls.py")
+    assert "proxmoxsdncontroller" in content
+    assert "proxmoxsdnzone" in content
+    assert "proxmoxsdnvnet" in content
+    assert "proxmoxsdnsubnet" in content
+    assert "proxmoxsdnbinding" in content
     assert "proxmoxsdnfabric" in content
     assert "proxmoxsdnroutemap" in content
     assert "proxmoxsdnprefixlist" in content

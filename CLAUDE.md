@@ -65,7 +65,7 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
 - VM lifecycle models: `ProxmoxVMTemplate` (VM template inventory with optional FK to `VirtualMachine`), `ProxmoxVMCloudInit` (cloud-init config), `CloudImageTemplate` (Firecracker/image factory catalog), `ProxmoxApplyJob` (intent apply job), `DeletionRequest` (auditable delete-request workflow).
 - Datacenter config: `ProxmoxDatacenterCpuModel` (custom CPU models synced from PVE).
 - Firewall inventory (6 models, read-only): `ProxmoxFirewallSecurityGroup`, `ProxmoxFirewallRule`, `ProxmoxFirewallIPSet`, `ProxmoxFirewallIPSetEntry`, `ProxmoxFirewallAlias`, `ProxmoxFirewallOptions`.
-- SDN inventory (3 models, PVE 9.2+): `ProxmoxSdnFabric`, `ProxmoxSdnRouteMap`, `ProxmoxSdnPrefixList`.
+- SDN inventory (PVE 9.2+): controllers, zones, VNets, subnets, bindings, fabrics, route maps, and prefix lists.
 - Firecracker Cloud uses separate `FirecrackerHostPool`, `FirecrackerHost`, `FirecrackerImageTemplate`, and `FirecrackerMicroVM` models. A micro-VM is not a NetBox core `VirtualMachine`; API clients identify it with `kind="firecracker"` and `instance_ref="firecracker:<id>"`.
 - `ProxmoxEndpoint.allowed_tenants` is the tenant allow-list for NMS Cloud endpoint visibility. Empty means default/global visibility. Non-empty pins the endpoint to those tenants. The paired backend must hide the default/global pool for a tenant as soon as any explicit endpoint grant matches that tenant.
 - `ProxboxPluginSettings` includes sync mode fields `sync_mode_vm_interface` and `sync_mode_mac` (migration 0051) and interface-batch tunables `interface_batch_size` (default 5) and `interface_batch_delay_ms` (default 100).
@@ -90,7 +90,7 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
 - **When a job looks “stuck”:** **pending** usually means **no RQ worker** is running (or it does not listen to **`default`**). **running** for a long time usually means proxbox-api is still syncing or the stream is slow/buffered; **errored** with **`JobTimeoutException`** means RQ’s wall-clock limit was hit—increase `job_timeout` or `PROXBOX_SYNC_JOB_TIMEOUT`. Inspect the job **log** and **error** fields before changing code.
 - **Cancel on Job detail:** For Proxbox Sync rows in **pending**, **scheduled**, or **running** state, the plugin adds **Cancel job** (POST to `proxbox-cancel`). It requires **delete** permission on the core **Job** model, cancels or stops the linked RQ job when possible, then marks the NetBox job **failed** with a “Cancelled by user.” message. Stopping a **running** job is best-effort (RQ stop + long HTTP reads may not abort instantly).
 - **Run now on Job detail:** Shown only when the job is in a **terminal** state (**completed**, **errored**, or **failed**), including after **Cancel** (failed). It is **not** shown for **pending**, **scheduled**, or **running**—use **Cancel** first if a queued run should be abandoned, then **Run now** on the finished row to queue a new sync with the same parameters.
-- **Full update (UI vs jobs):** The plugin home may still use non-streaming helpers such as [`sync_full_update_resource`](./netbox_proxbox/services/backend_proxy.py) for JSON/redirect flows. Scheduled or immediate **Proxbox Sync** jobs use **`full-update/stream`** on proxbox-api and execute the full stage chain in one stream: devices, storage, virtual machines, virtual disks, backups, snapshots, network interfaces, IP addresses, VM interfaces, backup routines, and replications.
+- **Full update (UI vs jobs):** The plugin home may still use non-streaming helpers such as [`sync_full_update_resource`](./netbox_proxbox/services/backend_proxy.py) for JSON/redirect flows. Scheduled or immediate **Proxbox Sync** jobs expand selected sync types in [`sync_types.py`](./netbox_proxbox/sync_types.py) and call one backend `/stream` path per stage: devices, storage, virtual machines, task history, virtual disks, backups, snapshots, network interfaces, VM interfaces, IP addresses, SDN, replications, and backup routines. The SDN stage is included by **All** but skipped by default while `sync_mode_sdn=disabled`.
 
 ### SSL Certificate Verification
 
@@ -145,7 +145,18 @@ reflected into NetBox. Three modes are available:
 - **`bootstrap_only`** — sync the object once on first discovery, tag it with `bootstrap-only` in NetBox, and leave it completely untouched on all subsequent runs.
 - **`disabled`** — skip this resource type entirely; existing objects are not modified or removed.
 
-Controlled resource types: `sync_mode_vm`, `sync_mode_vm_template`, `sync_mode_vm_interface`, `sync_mode_mac`, `sync_mode_cluster`, `sync_mode_node`, `sync_mode_storage`, `sync_mode_ip_address`.
+Controlled resource types: `sync_mode_vm`, `sync_mode_vm_template`, `sync_mode_vm_interface`, `sync_mode_mac`, `sync_mode_cluster`, `sync_mode_node`, `sync_mode_storage`, `sync_mode_ip_address`, `sync_mode_sdn`.
+
+`sync_mode_sdn` defaults to `disabled` globally and per endpoint. The **All**
+sync option includes the SDN stage after VM interface/IP-address stages, but
+that stage is skipped until the effective SDN mode is enabled. SDN sync is
+read-only against Proxmox: it reflects controllers, zones, VNets, subnets,
+fabrics, route maps, prefix lists, and runtime bindings into NetBox plugin
+metadata, and it maps EVPN/VXLAN VNets into NetBox built-ins (`vpn.L2VPN`,
+`vpn.L2VPNTermination`, `ipam.RouteTarget`, `ipam.Prefix`) when enough source
+data is available.
+Unsupported older Proxmox clusters are counted as skipped warnings, not failed
+syncs.
 
 Resolution priority: **endpoint-level setting takes priority over the global default**. An endpoint field set to null inherits the global `ProxboxPluginSettings` value.
 
@@ -191,6 +202,8 @@ The `bootstrap-only` tag (slug `bootstrap-only`) is auto-created by `netbox_prox
 - `netbox_proxbox/models/vm_template.py` — `ProxmoxVMTemplate` model
 - `netbox_proxbox/migrations/0046_sync_modes.py` — migration for sync mode fields
 - `netbox_proxbox/migrations/0047_proxmox_vm_template.py` — migration for ProxmoxVMTemplate table
+- `netbox_proxbox/migrations/0054_sdn_sync_controls_and_inventory.py` — SDN sync mode and SDN inventory tables
+- `netbox_proxbox/models/sdn_inventory.py` — Proxmox SDN controller/zone/VNet/subnet/binding metadata
 - `netbox_proxbox/sync_stages.py` — `_has_bootstrap_only_tag()`, `_bootstrap_only_should_skip_existing()`, `_add_bootstrap_only_tag()`
 - `netbox_proxbox/netbox_bootstrap.py` — `ensure_proxbox_tags()`, `ensure_bootstrap_only_tag()`
 - `netbox_proxbox/services/sync_vm_template.py` — `sync_vm_templates()` service

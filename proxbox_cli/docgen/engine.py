@@ -7,7 +7,7 @@ from pathlib import Path
 import subprocess
 import sys
 import time
-from typing import TextIO
+from typing import Any, TextIO
 
 import click
 import typer
@@ -93,7 +93,7 @@ def build_command_catalog() -> dict[str, object]:
 CatalogEntry = dict[str, str | list[str]]
 
 
-def _walk_command(command: click.Command, path: list[str]) -> list[CatalogEntry]:
+def _walk_command(command: Any, path: list[str]) -> list[CatalogEntry]:
     full_path = "pxb" if not path else " ".join(["pxb", *path])
     entry = {
         "path": list(path),
@@ -110,11 +110,11 @@ def _walk_command(command: click.Command, path: list[str]) -> list[CatalogEntry]
     return items
 
 
-def _summary_for(command: click.Command) -> str:
+def _summary_for(command: Any) -> str:
     return (command.help or command.short_help or "No help text available.").strip()
 
 
-def _example_for(command: click.Command, path: list[str]) -> str:
+def _example_for(command: Any, path: list[str]) -> str:
     tokens = ["pxb", *path]
     if isinstance(command, click.Group):
         tokens.append("--help")

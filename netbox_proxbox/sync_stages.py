@@ -31,6 +31,7 @@ except ImportError:  # pragma: no cover - compatibility for focused import stubs
         "sync_mode_node",
         "sync_mode_storage",
         "sync_mode_ip_address",
+        "sync_mode_sdn",
     )
 try:
     from netbox_proxbox.constants import SYNC_MODE_HIERARCHY
@@ -76,6 +77,7 @@ if TYPE_CHECKING:
 _HEARTBEAT_SECONDS = 20.0
 _STAGE_RETRY_MAX = 2
 _STAGE_RETRY_DELAY = 8.0
+_SDN_SYNC_TYPE = getattr(SyncTypeChoices, "SDN", "sdn")
 try:
     from netbox_proxbox.netbox_bootstrap import BOOTSTRAP_ONLY_TAG_SLUG
 except ImportError:  # pragma: no cover - compatibility for focused import stubs
@@ -89,6 +91,14 @@ sync_mode_cluster = SyncModeChoices.ALWAYS
 sync_mode_node = SyncModeChoices.ALWAYS
 sync_mode_storage = SyncModeChoices.ALWAYS
 sync_mode_ip_address = SyncModeChoices.ALWAYS
+sync_mode_sdn = SyncModeChoices.DISABLED
+
+
+def _default_sync_mode(field_name: str) -> str:
+    if field_name == "sync_mode_sdn":
+        return getattr(SyncModeChoices, "DISABLED", "disabled")
+    return getattr(SyncModeChoices, "ALWAYS", "always")
+
 
 # Stages that are supplementary/optional: a failure logs a warning and the sync
 # continues.  Required stages (devices, VMs, storage, interfaces, IPs) are NOT
@@ -98,6 +108,7 @@ _SKIPPABLE_STAGES: frozenset[str] = frozenset(
         SyncTypeChoices.VIRTUAL_MACHINES_BACKUPS,  # "vm-backups"
         SyncTypeChoices.VIRTUAL_MACHINES_SNAPSHOTS,  # "vm-snapshots"
         SyncTypeChoices.TASK_HISTORY,  # "task-history"
+        _SDN_SYNC_TYPE,  # read-only SDN inventory; old clusters may not support it
     }
 )
 
@@ -106,16 +117,14 @@ def _set_sync_mode_vars(modes: dict[str, str]) -> None:
     """Update module-level sync-mode vars for the active endpoint scope."""
     for field_name in SYNC_MODE_FIELDS:
         globals()[field_name] = str(
-            modes.get(field_name) or getattr(SyncModeChoices, "ALWAYS", "always")
+            modes.get(field_name) or _default_sync_mode(field_name)
         )
 
 
 def _active_sync_modes() -> dict[str, str]:
     """Return the current module-level sync modes after parent-child cascade."""
     raw_modes = {
-        field_name: str(
-            globals().get(field_name) or getattr(SyncModeChoices, "ALWAYS", "always")
-        )
+        field_name: str(globals().get(field_name) or _default_sync_mode(field_name))
         for field_name in SYNC_MODE_FIELDS
     }
     return _effective_sync_modes(raw_modes)
@@ -124,9 +133,7 @@ def _active_sync_modes() -> dict[str, str]:
 def _resource_mode(raw_modes: dict[str, str], resource_type: str) -> str:
     """Return a normalized raw mode value for a resource type."""
     field_name = f"sync_mode_{resource_type}"
-    return str(
-        raw_modes.get(field_name) or getattr(SyncModeChoices, "ALWAYS", "always")
-    )
+    return str(raw_modes.get(field_name) or _default_sync_mode(field_name))
 
 
 def _vm_parent_disabled(raw_modes: dict[str, str]) -> bool:
@@ -230,6 +237,7 @@ def _stage_skip_reason(sync_type: str) -> str | None:
         SyncTypeChoices.STORAGE: "storage",
         SyncTypeChoices.VM_INTERFACES: "vm_interface",
         SyncTypeChoices.IP_ADDRESSES: "ip_address",
+        _SDN_SYNC_TYPE: "sdn",
     }
     resource_type = stage_resource_map.get(sync_type)
     if resource_type and _sync_mode_for_resource(resource_type) == disabled:

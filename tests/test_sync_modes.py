@@ -212,6 +212,7 @@ class TestSyncModeConstants:
             "node",
             "storage",
             "ip_address",
+            "sdn",
         }
         assert expected <= set(constants.SYNC_MODE_RESOURCE_TYPES)
 
@@ -226,6 +227,7 @@ class TestSyncModeConstants:
             "sync_mode_node",
             "sync_mode_storage",
             "sync_mode_ip_address",
+            "sync_mode_sdn",
         }
         assert expected <= set(constants.SYNC_MODE_FIELDS)
 
@@ -258,6 +260,14 @@ class TestSyncStagesDefaults:
     def test_sync_mode_ip_address_default_is_always(self, sync_stages_module):
         assert sync_stages_module.sync_mode_ip_address == "always"
 
+    def test_sync_mode_sdn_default_is_disabled(self, sync_stages_module):
+        assert sync_stages_module.sync_mode_sdn == "disabled"
+
+    def test_all_stages_include_sdn_after_ip_addresses(self, sync_stages_module):
+        stages = sync_stages_module.expanded_sync_stages(["all"])
+        assert "sdn" in stages
+        assert stages.index("ip-addresses") < stages.index("sdn")
+
 
 # ── VM whole-stage gating ──────────────────────────────────────────────────────
 
@@ -287,6 +297,15 @@ class TestVMStageSkipReason:
             m._stage_skip_reason(m.SyncTypeChoices.VIRTUAL_MACHINES)
             == "sync_mode_vm=disabled and sync_mode_vm_template=disabled"
         )
+
+    def test_sdn_stage_skipped_by_default(self, sync_stages_module):
+        m = sync_stages_module
+        assert m._stage_skip_reason("sdn") == "sync_mode_sdn=disabled"
+
+    def test_sdn_stage_runs_when_enabled(self, sync_stages_module):
+        m = sync_stages_module
+        m.sync_mode_sdn = "always"
+        assert m._stage_skip_reason("sdn") is None
 
 
 # ── Bootstrap-only helpers ─────────────────────────────────────────────────────

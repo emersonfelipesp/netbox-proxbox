@@ -790,30 +790,6 @@ class ProxboxSyncJob(JobRunner):
                 )
             )
 
-            # Sync SDN objects (fabrics, route maps, prefix lists).
-            from netbox_proxbox.services.sync_sdn import sync_sdn  # noqa: PLC0415
-
-            self.logger.info("Syncing SDN objects from proxbox-api")
-            sdn_result = sync_sdn()
-            if sdn_result.success:
-                self.logger.info(
-                    f"SDN sync complete: {sdn_result.endpoints_processed} endpoint(s), "
-                    f"fabrics={sdn_result.fabrics_created}/{sdn_result.fabrics_updated}, "
-                    f"route_maps={sdn_result.route_maps_created}/{sdn_result.route_maps_updated}, "
-                    f"prefix_lists={sdn_result.prefix_lists_created}/{sdn_result.prefix_lists_updated}"
-                )
-            else:
-                self.logger.warning(
-                    f"SDN sync failed or partially failed: {sdn_result.error or 'see per_endpoint log'}"
-                )
-            endpoint_runtime_phases.extend(
-                _phases_from_service_result(
-                    sdn_result,
-                    kind="sdn",
-                    label="SDN sync",
-                )
-            )
-
             # Sync datacenter CPU models.
             from netbox_proxbox.services.sync_datacenter import sync_datacenter  # noqa: PLC0415
 

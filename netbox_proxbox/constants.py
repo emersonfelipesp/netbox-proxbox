@@ -24,6 +24,7 @@ SYNC_MODE_FIELD_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "sync_mode_cluster",
             "sync_mode_node",
             "sync_mode_storage",
+            "sync_mode_sdn",
         ),
     ),
 )

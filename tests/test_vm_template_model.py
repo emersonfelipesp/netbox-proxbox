@@ -228,6 +228,7 @@ class TestSyncModeFieldsOnModels:
         "sync_mode_node",
         "sync_mode_storage",
         "sync_mode_ip_address",
+        "sync_mode_sdn",
     ]
 
     def _load_model_file(self, monkeypatch, filename: str, class_name: str):
