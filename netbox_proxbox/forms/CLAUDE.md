@@ -37,6 +37,16 @@ Each endpoint type has an `ImportForm` (e.g. `ProxmoxEndpointImportForm`, `NetBo
 - Endpoint forms use `DynamicModelChoiceField` for NetBox-managed related objects.
 - These forms define how plugin fields are presented in the NetBox UI; model constraints and the API serializers still remain the source of truth for persistence and credential rules.
 - Password and token_value fields on `ProxmoxEndpointForm` use `PasswordInput(render_value=False)` and are preserved from the stored instance when the user submits a blank value (edit-without-change UX).
+- `ProxmoxEndpointForm` exposes `allow_writes` in a dedicated **Write permission**
+  fieldset so operators can opt a Proxmox endpoint into backend write verbs from
+  the normal add/edit form.
+- Endpoint-level browser-terminal SSH fields are shared between
+  `ProxmoxEndpointForm` and `ProxmoxEndpointSSHSettingsForm` through
+  `ProxmoxEndpointSSHCredentialFormMixin`. The selector
+  `ssh_credential_source` chooses either dedicated encrypted SSH credentials or
+  reuse of the endpoint username/password. Reuse mode requires an endpoint
+  password plus a pinned SSH host-key fingerprint and ignores the dedicated
+  SSH secret fields.
 
 ## Links
 

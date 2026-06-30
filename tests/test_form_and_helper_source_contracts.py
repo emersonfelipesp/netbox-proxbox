@@ -200,6 +200,39 @@ def test_proxmox_endpoint_form_hides_secret_fields_and_preserves_existing_values
     assert 'cleaned_data["token_value"] = self.instance.token_value' in contents
 
 
+def test_proxmox_endpoint_form_exposes_write_and_ssh_credential_controls():
+    contents = _read("netbox_proxbox/forms/proxmox.py")
+    module = ast.parse(contents)
+    class_node = _classdef(module, "ProxmoxEndpointForm")
+    source = ast.get_source_segment(contents, class_node)
+    assert source is not None
+    for field_name in (
+        "allow_writes",
+        "ssh_credential_source",
+        "ssh_username",
+        "ssh_port",
+        "ssh_auth_method",
+        "ssh_known_host_fingerprint",
+    ):
+        assert f'"{field_name}"' in source
+    assert "Write permission" in source
+    assert "SSH credential access" in source
+    assert "ProxmoxEndpointSSHCredentialFormMixin" in source
+
+
+def test_proxmox_endpoint_ssh_forms_share_credential_mixin():
+    contents = _read("netbox_proxbox/forms/proxmox.py")
+    assert "class ProxmoxEndpointSSHCredentialFormMixin" in contents
+    assert (
+        "class ProxmoxEndpointForm(ProxmoxEndpointSSHCredentialFormMixin, "
+        "NetBoxModelForm)"
+    ) in contents
+    assert "class ProxmoxEndpointSSHSettingsForm(" in contents
+    assert "ProxmoxEndpointSSHCredentialFormMixin," in contents
+    assert "def _clean_ssh_credentials" in contents
+    assert "def save(self, commit: bool = True) -> ProxmoxEndpoint" in contents
+
+
 def test_netbox_import_form_auto_creates_ip_address():
     contents = _read("netbox_proxbox/forms/netbox.py")
     assert "class NetBoxEndpointImportForm" in contents

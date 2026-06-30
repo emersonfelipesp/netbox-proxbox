@@ -36,6 +36,10 @@ from netbox_proxbox.models import (
     ProxboxPluginSettings,
     ProxmoxEndpoint,
 )
+from netbox_proxbox.models.ssh_credential import (
+    AUTH_METHOD_PASSWORD,
+    SSH_CRED_SOURCE_REUSE,
+)
 from netbox_proxbox.utils import encryption as enc_helpers
 
 
@@ -60,15 +64,32 @@ def _metadata_payload(cred: NodeSSHCredential) -> dict:
 
 
 def _endpoint_metadata_payload(endpoint: ProxmoxEndpoint) -> dict:
+    reuse_endpoint_credentials = (
+        getattr(endpoint, "ssh_credential_source", "") == SSH_CRED_SOURCE_REUSE
+    )
     return {
         "endpoint_id": endpoint.pk,
         "host": endpoint.ssh_host,
-        "username": endpoint.ssh_username,
+        "username": (
+            endpoint.effective_ssh_username
+            if reuse_endpoint_credentials
+            else endpoint.ssh_username
+        ),
         "port": endpoint.ssh_port,
-        "auth_method": endpoint.ssh_auth_method,
+        "auth_method": (
+            AUTH_METHOD_PASSWORD
+            if reuse_endpoint_credentials
+            else endpoint.ssh_auth_method
+        ),
         "known_host_fingerprint": endpoint.ssh_known_host_fingerprint,
-        "has_password": bool(endpoint.ssh_password_enc),
-        "has_private_key": bool(endpoint.ssh_private_key_enc),
+        "has_password": (
+            bool(endpoint.password)
+            if reuse_endpoint_credentials
+            else bool(endpoint.ssh_password_enc)
+        ),
+        "has_private_key": (
+            False if reuse_endpoint_credentials else bool(endpoint.ssh_private_key_enc)
+        ),
     }
 
 
@@ -209,11 +230,30 @@ class ProxmoxEndpointSSHCredentialSecretsAPIView(APIView):
             ),
             pk=endpoint_id,
         )
+        if (
+            endpoint.ssh_credential_source == SSH_CRED_SOURCE_REUSE
+            and not endpoint.password
+        ):
+            return Response(
+                {
+                    "detail": (
+                        "Endpoint SSH credential source is reuse_endpoint, but "
+                        "the endpoint has no stored password. Token-only "
+                        "endpoints cannot reuse SSH credentials."
+                    )
+                },
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
         if not endpoint.has_ssh_terminal_credentials:
             return Response(
                 {"detail": "No endpoint SSH fallback credential configured."},
                 status=status.HTTP_404_NOT_FOUND,
             )
+        if endpoint.ssh_credential_source == SSH_CRED_SOURCE_REUSE:
+            payload = _endpoint_metadata_payload(endpoint)
+            payload["password"] = endpoint.password or ""
+            payload["private_key"] = ""
+            return Response(payload)
 
         settings_obj = ProxboxPluginSettings.get_solo()
         key = settings_obj.encryption_key or ""
