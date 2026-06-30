@@ -64,7 +64,7 @@ This page documents the internal architecture of each of the four Proxbox reposi
 
         def run(self, *args, **kwargs):
             ...
-            result, status = run_sync_stream("full-update/stream", ...)
+            result, status = run_sync_stream(_sync_stream_path(sync_type), ...)
     ```
 
 === "Template extensions"

@@ -72,10 +72,10 @@ The current codebase includes NetBox models for:
 - Replications (Proxmox storage replication metadata)
 - VM backups, VM snapshots, and VM task history
 - Proxmox VE firewall inventory: `ProxmoxFirewallSecurityGroup`, `ProxmoxFirewallRule`, `ProxmoxFirewallIPSet`, `ProxmoxFirewallIPSetEntry`, `ProxmoxFirewallAlias`, `ProxmoxFirewallOptions` (read-only, synced from proxbox-api)
-- SDN inventory (PVE 9.2+): `ProxmoxSdnFabric`, `ProxmoxSdnRouteMap`, `ProxmoxSdnPrefixList`
+- SDN inventory (PVE 9.2+): controllers, zones, VNets, subnets, bindings, fabrics, route maps, and prefix lists
 - Firecracker Cloud inventory: `FirecrackerHostPool`, `FirecrackerHost`, `FirecrackerImageTemplate`, `FirecrackerMicroVM`
 - Operational models: `ProxmoxApplyJob`, `DeletionRequest`
-- Plugin-wide settings (`ProxboxPluginSettings`), including sync mode controls for interfaces and MACs (migration 0051) and interface-batch tunables
+- Plugin-wide settings (`ProxboxPluginSettings`), including sync mode controls for VM, infrastructure, network, and SDN stages plus interface-batch tunables
 
 The plugin UI exposes sync actions for:
 

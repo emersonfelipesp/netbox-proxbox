@@ -32,7 +32,7 @@ the object alone.
 
 ## Resource Types
 
-Eight resource types can be controlled:
+Nine resource types can be controlled:
 
 | Setting field | Resource |
 |---------------|----------|
@@ -44,6 +44,12 @@ Eight resource types can be controlled:
 | `sync_mode_node` | Proxmox node rows (DCIM devices) |
 | `sync_mode_storage` | Proxmox storage pools |
 | `sync_mode_ip_address` | IP addresses discovered from VM interfaces |
+| `sync_mode_sdn` | Read-only Proxmox SDN inventory and EVPN/VXLAN NetBox mapping |
+
+`sync_mode_sdn` is the exception to the normal default: it defaults to
+`disabled`. Choosing **All** still includes the SDN stage in the dependency
+order, but the stage is skipped until the effective SDN mode is `always` or
+`bootstrap_only`.
 
 ---
 
@@ -82,6 +88,8 @@ vm + vm_template (both disabled only)
 └── vm_interface
     ├── ip_address
     └── mac
+
+sdn
 ```
 
 The VM parent is a special case for network descendants: `vm_interface`,
@@ -119,7 +127,7 @@ to every endpoint that does not override the setting.
 ### Per-endpoint settings
 
 Navigate to an existing **ProxmoxEndpoint** and open its **Settings** tab.
-The same eight sync-mode dropdowns appear, but these fields are optional. Leave
+The same nine sync-mode dropdowns appear, but these fields are optional. Leave
 them blank to inherit the global setting; choose a value to override it.
 
 ---
@@ -136,6 +144,7 @@ them blank to inherit the global setting; choose a value to override it.
 | Node | `disabled` | `always` | _(blank)_ | `always` | `disabled` |
 | Storage | `always` | _(blank)_ | _(blank)_ | `always` | `always` |
 | IP address | `always` | _(blank)_ | `disabled` | `always` | `disabled` |
+| SDN | `disabled` | `always` | _(blank)_ | `always` | `disabled` |
 
 ---
 
@@ -153,7 +162,30 @@ ep.effective_sync_mode("cluster")     # → "disabled"
 ```
 
 Valid `resource_type` values: `vm`, `vm_template`, `vm_interface`, `mac`,
-`cluster`, `node`, `storage`, `ip_address`.
+`cluster`, `node`, `storage`, `ip_address`, `sdn`.
+
+---
+
+## SDN behavior
+
+SDN sync is read-only against Proxmox. When enabled, Proxbox calls the backend
+`GET /proxmox/sdn/create/stream` stage after VM interfaces and VM IP addresses.
+The stage collects controllers, zones, VNets, VNet subnets, fabrics, route
+maps, prefix lists, node zone content, bridges, MAC-VRF, and IP-VRF rows.
+Older Proxmox clusters that do not expose the SDN API are reported as skipped
+warnings rather than failed jobs.
+
+EVPN and VXLAN VNets are mapped to NetBox `vpn.L2VPN` records. EVPN
+`rt-import` values create/update `ipam.RouteTarget` records and are assigned as
+L2VPN import targets. Valid Proxmox subnet CIDRs create/update NetBox
+`ipam.Prefix` records. When runtime rows expose an explicit NetBox target or
+an unambiguous VLAN id, Proxbox creates `vpn.L2VPNTermination` records. If that
+target already belongs to a different L2VPN, Proxbox records the conflict in an
+SDN binding row and does not overwrite the manual assignment.
+
+Proxmox-specific metadata, raw payloads, and bindings are stored in plugin SDN
+inventory tables so operators can inspect unsupported or ambiguous rows without
+Proxmox writes.
 
 ---
 

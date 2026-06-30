@@ -504,7 +504,9 @@ def test_endpoint_secrets_view_reuse_token_only_returns_422(monkeypatch):
     )
 
     assert response.status_code == 422
-    assert "Token-only endpoints cannot reuse SSH credentials" in response.data["detail"]
+    assert (
+        "Token-only endpoints cannot reuse SSH credentials" in response.data["detail"]
+    )
 
 
 def test_endpoint_secrets_view_dedicated_decrypts_existing_payload(monkeypatch):

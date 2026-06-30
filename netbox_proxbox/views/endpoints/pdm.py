@@ -1,4 +1,5 @@
 """PDMEndpoint detail and Sync Now views for netbox-proxbox."""
+
 from __future__ import annotations
 
 import logging
@@ -31,6 +32,7 @@ logger = logging.getLogger(__name__)
 # "Discovered Remotes" table into the page context.
 # ---------------------------------------------------------------------------
 
+
 @register_model_view(PDMEndpoint)
 class PDMEndpointView(generic.ObjectView):
     """Detail view for a PDM endpoint with the Discovered Remotes table."""
@@ -52,6 +54,7 @@ class PDMEndpointView(generic.ObjectView):
 # ---------------------------------------------------------------------------
 # Sync Now — calls the PDM REST API directly and updates PDMRemote rows.
 # ---------------------------------------------------------------------------
+
 
 @register_model_view(PDMEndpoint, "sync_now", path="sync-now")
 class PDMEndpointSyncNowView(_ProxboxSyncViewBase):
@@ -101,7 +104,8 @@ class PDMEndpointSyncNowView(_ProxboxSyncViewBase):
                 request,
                 _(
                     "Synced %(count)d remote(s) from %(name)s with %(nerr)d error(s): %(errors)s"
-                ) % {
+                )
+                % {
                     "count": synced,
                     "name": endpoint.name or host,
                     "nerr": len(errors),
@@ -121,6 +125,7 @@ class PDMEndpointSyncNowView(_ProxboxSyncViewBase):
 # ---------------------------------------------------------------------------
 # Internal helpers — not views, not exported.
 # ---------------------------------------------------------------------------
+
 
 def _sync_pdm_remotes(endpoint: PDMEndpoint) -> tuple[int, list[str]]:
     """Call PDM /remotes, upsert PDMRemote rows, return (synced_count, errors)."""
@@ -158,9 +163,7 @@ def _sync_pdm_remotes(endpoint: PDMEndpoint) -> tuple[int, list[str]]:
             f"SSL error connecting to PDM at {host}:{port}: {exc}"
         ) from exc
     except requests.exceptions.ConnectionError as exc:
-        raise RuntimeError(
-            f"Cannot connect to PDM at {host}:{port}: {exc}"
-        ) from exc
+        raise RuntimeError(f"Cannot connect to PDM at {host}:{port}: {exc}") from exc
     except requests.exceptions.Timeout:
         raise RuntimeError(
             f"Timeout connecting to PDM at {host}:{port} after {timeout}s"
@@ -194,9 +197,7 @@ def _sync_pdm_remotes(endpoint: PDMEndpoint) -> tuple[int, list[str]]:
     return synced, errors
 
 
-def _upsert_pdm_remote(
-    endpoint: PDMEndpoint, data: dict, now: object
-) -> PDMRemote:
+def _upsert_pdm_remote(endpoint: PDMEndpoint, data: dict, now: object) -> PDMRemote:
     """Create or update one PDMRemote from raw PDM API data."""
     remote_name: str = data.get("id") or data.get("name") or ""
     remote_type: str = (data.get("type") or "pve").lower()
@@ -251,8 +252,7 @@ def _find_proxmox_endpoint(hostname: str):
     from netbox_proxbox.models import ProxmoxEndpoint
 
     return ProxmoxEndpoint.objects.filter(
-        Q(domain=hostname)
-        | Q(ip_address__address__startswith=hostname + "/")
+        Q(domain=hostname) | Q(ip_address__address__startswith=hostname + "/")
     ).first()
 
 
@@ -264,6 +264,5 @@ def _find_pbs_endpoint(hostname: str):
         return None
 
     return PBSEndpoint.objects.filter(
-        Q(domain=hostname)
-        | Q(ip_address__address__startswith=hostname + "/")
+        Q(domain=hostname) | Q(ip_address__address__startswith=hostname + "/")
     ).first()

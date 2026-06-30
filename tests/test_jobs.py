@@ -1217,10 +1217,9 @@ def test_proxbox_sync_job_persists_endpoint_runtime_breakdown(
 
     for entry in endpoint_runtimes:
         labels = [phase["label"] for phase in entry["phases"]]
-        assert labels[:4] == [
+        assert labels[:3] == [
             "Cluster/node sync",
             "Firewall sync",
-            "SDN sync",
             "Datacenter sync",
         ]
         assert st.DEVICES in labels
@@ -1527,7 +1526,11 @@ def test_proxbox_sync_job_run_all_invokes_each_stage_stream(
     ProxboxSyncJob.run(job, sync_types=[st.ALL])
     assert calls == 12
     stages = job.job.data["proxbox_sync"]["response"]["stages"]
-    assert len(stages) == 12
+    assert len(stages) == 13
+    assert any(
+        stage["sync_type"] == "sdn" and stage["result_summary"].get("skipped") is True
+        for stage in stages
+    )
     assert {s["sync_type"] for s in stages} == {
         st.DEVICES,
         st.STORAGE,
@@ -1540,6 +1543,7 @@ def test_proxbox_sync_job_run_all_invokes_each_stage_stream(
         st.NETWORK_INTERFACES,
         st.VM_INTERFACES,
         st.IP_ADDRESSES,
+        "sdn",
         st.BACKUP_ROUTINES,
     }
 

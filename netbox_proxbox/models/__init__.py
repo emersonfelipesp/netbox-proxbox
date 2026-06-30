@@ -10,6 +10,13 @@ from netbox_proxbox.models.firewall_options import ProxmoxFirewallOptions
 from netbox_proxbox.models.firewall_rule import ProxmoxFirewallRule
 from netbox_proxbox.models.firewall_security_group import ProxmoxFirewallSecurityGroup
 from netbox_proxbox.models.sdn_fabric import ProxmoxSdnFabric
+from netbox_proxbox.models.sdn_inventory import (
+    ProxmoxSdnBinding,
+    ProxmoxSdnController,
+    ProxmoxSdnSubnet,
+    ProxmoxSdnVNet,
+    ProxmoxSdnZone,
+)
 from netbox_proxbox.models.sdn_route_map import ProxmoxSdnRouteMap
 from netbox_proxbox.models.sdn_prefix_list import ProxmoxSdnPrefixList
 from netbox_proxbox.models.datacenter_cpu_model import ProxmoxDatacenterCpuModel
@@ -50,6 +57,11 @@ __all__ = (
     "ProxmoxFirewallRule",
     "ProxmoxFirewallSecurityGroup",
     "ProxmoxSdnFabric",
+    "ProxmoxSdnBinding",
+    "ProxmoxSdnController",
+    "ProxmoxSdnSubnet",
+    "ProxmoxSdnVNet",
+    "ProxmoxSdnZone",
     "ProxmoxSdnRouteMap",
     "ProxmoxSdnPrefixList",
     "ProxmoxDatacenterCpuModel",
