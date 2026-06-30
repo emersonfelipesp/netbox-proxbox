@@ -344,7 +344,7 @@ class ProxmoxEndpointForm(ProxmoxEndpointSSHCredentialFormMixin, NetBoxModelForm
             "tags",
             name="Identity and credentials",
         ),
-        FieldSet("allow_writes", name="Write permission"),
+        FieldSet("allow_writes", "access_methods", name="Access control"),
         FieldSet(
             *ProxmoxEndpointSSHCredentialFormMixin.ssh_credential_field_names,
             name="SSH credential access",
@@ -381,6 +381,7 @@ class ProxmoxEndpointForm(ProxmoxEndpointSSHCredentialFormMixin, NetBoxModelForm
             "verify_ssl",
             "enabled",
             "allow_writes",
+            "access_methods",
             "environment",
             "site",
             "tenant",

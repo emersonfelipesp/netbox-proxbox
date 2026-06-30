@@ -181,6 +181,16 @@
                             </td>
                         </tr>
                         <tr>
+                            <th scope="row">{% trans "Access method" %}</th>
+                            <td>
+                                {% if object.access_methods == 'api_ssh' %}
+                                    <span class="badge text-bg-info">{% trans "API + SSH" %}</span>
+                                {% else %}
+                                    <span class="badge text-bg-secondary">{% trans "API only" %}</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
                             <th scope="row">{% trans "SSH credential source" %}</th>
                             <td>
                                 {{ object.get_ssh_credential_source_display }}

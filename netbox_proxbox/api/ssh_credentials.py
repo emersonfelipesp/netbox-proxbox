@@ -52,6 +52,13 @@ _ENCRYPTION_KEY_MISSING = (
 )
 
 
+_SSH_ACCESS_DISABLED = (
+    "SSH access is disabled on this endpoint (access_methods='api'). Set the "
+    "endpoint's access method to 'API + SSH' to enable the SSH terminal; SSH "
+    "only complements API and cannot be enabled on its own."
+)
+
+
 def _metadata_payload(cred: NodeSSHCredential) -> dict:
     return {
         "id": cred.pk,
@@ -103,11 +110,26 @@ def _credential_for_node_identifier(node_id: int) -> NodeSSHCredential:
     credentials. The primary lookup stays the intended ``ProxmoxNode`` id, while
     the fallback keeps that backend build compatible.
     """
-    queryset = NodeSSHCredential.objects.select_related("node", "node__netbox_device")
+    queryset = NodeSSHCredential.objects.select_related(
+        "node", "node__netbox_device", "node__endpoint"
+    )
     try:
         return queryset.get(node_id=node_id)
     except NodeSSHCredential.DoesNotExist:
         return get_object_or_404(queryset, node__netbox_device_id=node_id)
+
+
+def _node_ssh_access_disabled(cred: NodeSSHCredential) -> bool:
+    """True when the node's owning endpoint forbids the SSH transport.
+
+    Node-target terminal credentials are keyed by node, but the access-method
+    decision belongs to the owning ProxmoxEndpoint (``access_methods``). When a
+    node has no owning endpoint there is nothing to consult, so SSH is allowed.
+    """
+    endpoint = getattr(getattr(cred, "node", None), "endpoint", None)
+    if endpoint is None:
+        return False
+    return not endpoint.ssh_access_enabled
 
 
 class _NetBoxTokenPermission(BasePermission):
@@ -191,6 +213,12 @@ class NodeSSHCredentialSecretsAPIView(APIView):
             )
 
         cred = _credential_for_node_identifier(node_id)
+        # Gate node-target SSH on the owning endpoint's access method.
+        if _node_ssh_access_disabled(cred):
+            return Response(
+                {"detail": _SSH_ACCESS_DISABLED},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         settings_obj = ProxboxPluginSettings.get_solo()
         key = settings_obj.encryption_key or ""
         if not key:
@@ -233,6 +261,14 @@ class ProxmoxEndpointSSHCredentialSecretsAPIView(APIView):
             ),
             pk=endpoint_id,
         )
+        # Load-bearing SSH access-method gate: refuse to release SSH secrets
+        # (and thus block the browser terminal) unless the endpoint opted into
+        # the SSH transport (access_methods='api_ssh'). Orthogonal to writes.
+        if not endpoint.ssh_access_enabled:
+            return Response(
+                {"detail": _SSH_ACCESS_DISABLED},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         if (
             endpoint.ssh_credential_source == SSH_CRED_SOURCE_REUSE
             and not endpoint.password

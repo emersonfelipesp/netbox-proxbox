@@ -97,3 +97,36 @@ def test_proxmox_backend_payload_includes_site_and_tenant_metadata(monkeypatch) 
     assert payload["tenant_id"] == 9
     assert payload["tenant_slug"] == "customer-a"
     assert payload["tenant_name"] == "Customer A"
+
+
+def _payload_for_access_methods(monkeypatch, value):
+    backend_sync = _load_backend_sync_module(monkeypatch)
+    endpoint = SimpleNamespace(
+        pk=1,
+        name="PVE",
+        ip_address="10.0.0.10/32",
+        domain="pve.example.com",
+        port=8006,
+        username="root@pam",
+        password="secret",
+        verify_ssl=False,
+        timeout=None,
+        max_retries=None,
+        retry_backoff=None,
+        token_name=None,
+        token_value=None,
+        access_methods=value,
+        site=None,
+        tenant=None,
+    )
+    return backend_sync._proxmox_backend_payload(endpoint)
+
+
+def test_proxmox_backend_payload_pushes_access_methods(monkeypatch) -> None:
+    assert _payload_for_access_methods(monkeypatch, "api_ssh")["access_methods"] == "api_ssh"
+    assert _payload_for_access_methods(monkeypatch, "api")["access_methods"] == "api"
+
+
+def test_proxmox_backend_payload_defaults_access_methods_to_api(monkeypatch) -> None:
+    # Missing/blank access_methods falls back to "api" (API-only) in the payload.
+    assert _payload_for_access_methods(monkeypatch, "")["access_methods"] == "api"
