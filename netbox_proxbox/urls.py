@@ -214,6 +214,46 @@ urlpatterns = [
         include(get_model_urls("netbox_proxbox", "proxmoxsdnfabric", detail=False)),
     ),
     path(
+        "sdn/controllers/<int:pk>/",
+        include(get_model_urls("netbox_proxbox", "proxmoxsdncontroller")),
+    ),
+    path(
+        "sdn/controllers/",
+        include(get_model_urls("netbox_proxbox", "proxmoxsdncontroller", detail=False)),
+    ),
+    path(
+        "sdn/zones/<int:pk>/",
+        include(get_model_urls("netbox_proxbox", "proxmoxsdnzone")),
+    ),
+    path(
+        "sdn/zones/",
+        include(get_model_urls("netbox_proxbox", "proxmoxsdnzone", detail=False)),
+    ),
+    path(
+        "sdn/vnets/<int:pk>/",
+        include(get_model_urls("netbox_proxbox", "proxmoxsdnvnet")),
+    ),
+    path(
+        "sdn/vnets/",
+        include(get_model_urls("netbox_proxbox", "proxmoxsdnvnet", detail=False)),
+    ),
+    path(
+        "sdn/subnets/<int:pk>/",
+        include(get_model_urls("netbox_proxbox", "proxmoxsdnsubnet")),
+    ),
+    path(
+        "sdn/subnets/",
+        include(get_model_urls("netbox_proxbox", "proxmoxsdnsubnet", detail=False)),
+    ),
+    path(
+        "sdn/bindings/<int:pk>/",
+        include(get_model_urls("netbox_proxbox", "proxmoxsdnbinding")),
+    ),
+    path(
+        "sdn/bindings/",
+        include(get_model_urls("netbox_proxbox", "proxmoxsdnbinding", detail=False)),
+    ),
+    path(
         "sdn/route-maps/<int:pk>/",
         include(get_model_urls("netbox_proxbox", "proxmoxsdnroutemap")),
     ),
@@ -379,6 +419,7 @@ urlpatterns = [
 try:
     import netbox_pdm.views as _netbox_pdm_views  # noqa: F401 — triggers @register_model_view
     from netbox_proxbox.views.endpoints import pdm as _pdm_endpoint_views  # noqa: F401 — registers PDMEndpointView + PDMEndpointSyncNowView
+
     urlpatterns += [
         path(
             "pdm/endpoints/",

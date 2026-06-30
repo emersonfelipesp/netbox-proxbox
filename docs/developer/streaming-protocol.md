@@ -7,7 +7,7 @@ Proxbox uses **Server-Sent Events (SSE)** as the primary transport for real-time
 ## Two Sync Transport Modes
 
 === "SSE Streaming (primary)"
-    The plugin opens a long-lived HTTP GET to `proxbox-api/full-update/stream`. The response is `text/event-stream` and carries SSE frames for every stage and every object processed. The plugin proxies this stream to the browser via a Django `StreamingHttpResponse`.
+    The plugin opens long-lived HTTP GET calls to backend stage paths such as `proxbox-api/dcim/devices/create/stream` or `proxbox-api/proxmox/sdn/create/stream`. The response is `text/event-stream` and carries SSE frames for each stage and object processed. Scheduled jobs call one backend `/stream` path per selected stage; browser proxy views may still stream a single backend path directly.
 
     - **Used by**: `ProxboxSyncJob.run()` via `run_sync_stream()`, browser-facing `StreamingHttpResponse` proxy views
     - **Advantages**: real-time per-object progress, no polling needed, works through proxies with `X-Accel-Buffering: no`
@@ -36,21 +36,21 @@ data: <json_payload>
 
 ### `discovery`
 
-Emitted once at the start of a full-update stream. Lists all stages that will be processed.
+Emitted once at the start of a scheduled full-update job or legacy full-update stream. Lists all stages that will be processed.
 
 ```json
 {
   "event": "discovery",
   "phase": "full-update",
   "status": "discovered",
-  "message": "Discovered 12 sync stage(s) for full update",
-  "count": 12,
+  "message": "Discovered 13 sync stage(s) for full update",
+  "count": 13,
   "items": [
     {"name": "devices", "type": "stage"},
     {"name": "storage", "type": "stage"},
     ...
   ],
-  "progress": {"current": 0, "total": 12, "percent": 0},
+  "progress": {"current": 0, "total": 13, "percent": 0},
   "metadata": {"operation_id": "550e8400-e29b-41d4-a716-446655440000"}
 }
 ```
@@ -141,12 +141,12 @@ sequenceDiagram
 
     Browser->>NB: GET /proxbox/sync/stream/
     NB->>NB: Create StreamingHttpResponse
-    NB->>API: GET /full-update/stream (via iter_backend_sse_lines)
+    NB->>API: GET /<stage>/stream (via iter_backend_sse_lines)
     API-->>NB: SSE frames (chunked)
     NB-->>Browser: SSE frames (proxied)
 
     note over RQ,API: Background job path (separate)
-    RQ->>API: GET /full-update/stream (via run_sync_stream)
+    RQ->>API: GET /<stage>/stream (via run_sync_stream)
     API-->>RQ: SSE frames consumed by on_frame callback
     RQ->>RQ: Write progress to Job.log
 ```
@@ -203,7 +203,7 @@ sync_vms = await vms_task                # collect result
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Connected: GET /full-update/stream
+    [*] --> Connected: GET /<stage>/stream
 
     Connected --> Discovering: event:discovery
 

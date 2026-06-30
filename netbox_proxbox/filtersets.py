@@ -34,9 +34,14 @@ from .models import (
     ProxmoxFirewallOptions,
     ProxmoxFirewallRule,
     ProxmoxFirewallSecurityGroup,
+    ProxmoxSdnBinding,
+    ProxmoxSdnController,
     ProxmoxSdnFabric,
     ProxmoxSdnRouteMap,
     ProxmoxSdnPrefixList,
+    ProxmoxSdnSubnet,
+    ProxmoxSdnVNet,
+    ProxmoxSdnZone,
     ProxmoxDatacenterCpuModel,
     ProxmoxNode,
     ProxmoxStorage,
@@ -880,6 +885,124 @@ class ProxmoxSdnFabricFilterSet(ProxboxModelFilterSet):
             return queryset
         return queryset.filter(
             Q(fabric_name__icontains=value) | Q(cluster_name__icontains=value)
+        )
+
+
+@register_filterset
+class ProxmoxSdnControllerFilterSet(ProxboxModelFilterSet):
+    """Filter Proxmox SDN controllers."""
+
+    class Meta:
+        model = ProxmoxSdnController
+        fields = (
+            "id",
+            "endpoint",
+            "cluster_name",
+            "controller_name",
+            "controller_type",
+            "status",
+        )
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        if not value.strip():
+            return queryset
+        return queryset.filter(
+            Q(controller_name__icontains=value) | Q(cluster_name__icontains=value)
+        )
+
+
+@register_filterset
+class ProxmoxSdnZoneFilterSet(ProxboxModelFilterSet):
+    """Filter Proxmox SDN zones."""
+
+    class Meta:
+        model = ProxmoxSdnZone
+        fields = ("id", "endpoint", "cluster_name", "zone_name", "zone_type", "status")
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        if not value.strip():
+            return queryset
+        return queryset.filter(
+            Q(zone_name__icontains=value) | Q(cluster_name__icontains=value)
+        )
+
+
+@register_filterset
+class ProxmoxSdnVNetFilterSet(ProxboxModelFilterSet):
+    """Filter Proxmox SDN VNets."""
+
+    class Meta:
+        model = ProxmoxSdnVNet
+        fields = (
+            "id",
+            "endpoint",
+            "cluster_name",
+            "zone_name",
+            "vnet_name",
+            "vnet_type",
+            "tag",
+            "status",
+        )
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        if not value.strip():
+            return queryset
+        return queryset.filter(
+            Q(vnet_name__icontains=value)
+            | Q(zone_name__icontains=value)
+            | Q(cluster_name__icontains=value)
+        )
+
+
+@register_filterset
+class ProxmoxSdnSubnetFilterSet(ProxboxModelFilterSet):
+    """Filter Proxmox SDN subnets."""
+
+    class Meta:
+        model = ProxmoxSdnSubnet
+        fields = (
+            "id",
+            "endpoint",
+            "cluster_name",
+            "zone_name",
+            "vnet_name",
+            "subnet",
+            "status",
+        )
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        if not value.strip():
+            return queryset
+        return queryset.filter(
+            Q(subnet__icontains=value)
+            | Q(vnet_name__icontains=value)
+            | Q(cluster_name__icontains=value)
+        )
+
+
+@register_filterset
+class ProxmoxSdnBindingFilterSet(ProxboxModelFilterSet):
+    """Filter Proxmox SDN binding/status rows."""
+
+    class Meta:
+        model = ProxmoxSdnBinding
+        fields = (
+            "id",
+            "endpoint",
+            "cluster_name",
+            "source_type",
+            "source_name",
+            "target_type",
+            "status",
+        )
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        if not value.strip():
+            return queryset
+        return queryset.filter(
+            Q(source_name__icontains=value)
+            | Q(target_type__icontains=value)
+            | Q(cluster_name__icontains=value)
         )
 
 

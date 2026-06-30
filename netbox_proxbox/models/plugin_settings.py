@@ -151,6 +151,16 @@ class ProxboxPluginSettings(NetBoxModel):
         verbose_name=_("Storage sync mode"),
         help_text=_("Controls synchronization of Proxmox storage inventory."),
     )
+    sync_mode_sdn = models.CharField(
+        max_length=16,
+        choices=SyncModeChoices,
+        default=SyncModeChoices.DISABLED,
+        verbose_name=_("SDN sync mode"),
+        help_text=_(
+            "Controls read-only Proxmox SDN inventory and NetBox L2VPN sync. "
+            "Disabled by default because older clusters may not expose SDN APIs."
+        ),
+    )
     sync_mode_ip_address = models.CharField(
         max_length=16,
         choices=SyncModeChoices,

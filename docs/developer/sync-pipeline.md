@@ -1,6 +1,9 @@
 # Sync Pipeline
 
-The Proxbox full-update sync is a **12-stage sequential pipeline** executed by `proxbox-api`. Each stage fetches data from Proxmox, transforms it, and creates or updates the corresponding NetBox objects. Stages run in a fixed order because later stages depend on objects created by earlier ones.
+The scheduled Proxbox full-update sync is a **13-stage sequential pipeline**.
+Each stage fetches data from Proxmox through `proxbox-api`, transforms it, and
+creates or updates the corresponding NetBox objects. Stages run in a fixed
+order because later stages depend on objects created by earlier ones.
 
 ---
 
@@ -17,8 +20,9 @@ flowchart LR
     S7 --> S8["8\nNode\nInterfaces"]
     S8 --> S9["9\nVM\nInterfaces"]
     S9 --> S10["10\nVM IP\nAddresses"]
-    S10 --> S11["11\nReplications"]
-    S11 --> S12["12\nBackup\nRoutines"]
+    S10 --> S11["11\nSDN"]
+    S11 --> S12["12\nReplications"]
+    S12 --> S13["13\nBackup\nRoutines"]
 
     style S1 fill:#1565c0,color:#fff
     style S2 fill:#1565c0,color:#fff
@@ -30,8 +34,9 @@ flowchart LR
     style S8 fill:#6a1b9a,color:#fff
     style S9 fill:#6a1b9a,color:#fff
     style S10 fill:#6a1b9a,color:#fff
-    style S11 fill:#e65100,color:#fff
+    style S11 fill:#6a1b9a,color:#fff
     style S12 fill:#e65100,color:#fff
+    style S13 fill:#e65100,color:#fff
 ```
 
 **Legend:** blue = infrastructure, green = VM data, purple = networking, orange = operational
@@ -52,8 +57,9 @@ flowchart LR
 | 8 | **Node Interfaces** | `create_all_device_interfaces()` | `Interface` (on Device) | `/nodes/{node}/network` |
 | 9 | **VM Interfaces** | `create_only_vm_interfaces()` | `VMInterface` (on VirtualMachine) | VM config `net*` keys |
 | 10 | **VM IP Addresses** | `create_only_vm_ip_addresses()` | `IPAddress`, assigned to `VMInterface` | QEMU guest agent or config |
-| 11 | **Replications** | `sync_all_replications()` | `Replication` (plugin model) | `/cluster/replication` |
-| 12 | **Backup Routines** | `sync_all_backup_routines()` | `BackupRoutine` (plugin model) | `/cluster/backup` |
+| 11 | **SDN** | `sync_sdn_to_netbox()` | `L2VPN`, `RouteTarget`, `Prefix`, SDN plugin metadata | `/cluster/sdn/*`, `/nodes/{node}/sdn/*` |
+| 12 | **Replications** | `sync_all_replications()` | `Replication` (plugin model) | `/cluster/replication` |
+| 13 | **Backup Routines** | `sync_all_backup_routines()` | `BackupRoutine` (plugin model) | `/cluster/backup` |
 
 ---
 
@@ -67,17 +73,27 @@ The sequential order is not arbitrary — each stage depends on objects created 
 - **Stage 1 → 8**: Devices must exist before their network interfaces can be created
 - **Stage 3 → 9**: VMs must exist before their VM interfaces can be created
 - **Stage 9 → 10**: VM interfaces must exist before IP addresses can be assigned to them
+- **Stages 8–10 → 11**: SDN metadata runs after node/VM networking so generated
+  L2VPN, RouteTarget, Prefix, and binding rows can reference already-discovered
+  NetBox network objects when resolvable
 
 For upgraded installs, Stage 10 also depends on the `proxmox_vm_id` custom
 field that Stage 3 writes to each NetBox VM. VMs created by affected backend
 versions before the VM config fix may need one Full Update on a fixed
 `proxbox-api` build before the IP-address stage can match them reliably.
 
+The SDN stage is optional and defaults to skipped because `sync_mode_sdn`
+defaults to `disabled`. Choosing **All** includes the stage, but
+`sync_stages.py` records a skipped stage until the effective SDN mode allows
+it. Unsupported older Proxmox clusters are also counted as skipped warnings,
+not failed syncs.
+
 ---
 
 ## SSE Stream Mode
 
-The `/full-update/stream` endpoint emits **Server-Sent Events** during the pipeline. Each stage:
+The scheduled stage runner opens each backend stage's `/stream` endpoint and
+emits **Server-Sent Events** during the pipeline. Each stage:
 
 1. Emits a `step` event with `status: "started"`
 2. Creates a `WebSocketSSEBridge` and runs the sync function as an `asyncio.Task`
@@ -126,7 +142,10 @@ flowchart TD
 
 ## Non-Streaming (JSON) Mode
 
-The `/full-update` route runs the same 12 stages but waits for all of them to complete before returning a single JSON response. It is used by the plugin's `sync_full_update_resource()` helper for synchronous workflows.
+The backend `/full-update` route remains the synchronous JSON workflow for
+legacy helper calls. Scheduled NetBox jobs use the explicit per-stage stream
+paths in `netbox_proxbox/sync_types.py`, including
+`proxmox/sdn/create/stream` for the optional SDN stage.
 
 ---
 
@@ -151,7 +170,7 @@ Long syncs can be tuned via environment variables on the `proxbox-api` host:
 
 ## Individual Stage Sync
 
-Besides the full 12-stage pipeline, individual objects can be synced on-demand through targeted endpoints. The plugin exposes "Sync Now" buttons on cluster, node, storage, and VM detail pages that call individual sync routes in `proxbox_api/routes/sync/individual/`. These are handled by `netbox_proxbox/services/individual_sync.py` on the plugin side.
+Besides the full 13-stage scheduled pipeline, individual objects can be synced on-demand through targeted endpoints. The plugin exposes "Sync Now" buttons on cluster, node, storage, and VM detail pages that call individual sync routes in `proxbox_api/routes/sync/individual/`. These are handled by `netbox_proxbox/services/individual_sync.py` on the plugin side.
 
 ---
 

@@ -59,6 +59,7 @@ class SyncTypeChoices(ChoiceSet):
     NETWORK_INTERFACES = "network-interfaces"
     VM_INTERFACES = "vm-interfaces"
     IP_ADDRESSES = "ip-addresses"
+    SDN = "sdn"
     BACKUP_ROUTINES = "backup-routines"
     REPLICATIONS = "replications"
     TASK_HISTORY = "task-history"
@@ -74,6 +75,7 @@ class SyncTypeChoices(ChoiceSet):
         (NETWORK_INTERFACES, _("Network Interfaces"), "indigo"),
         (VM_INTERFACES, _("VM Interfaces"), "indigo"),
         (IP_ADDRESSES, _("IP Addresses"), "violet"),
+        (SDN, _("SDN"), "lime"),
         (BACKUP_ROUTINES, _("Backup Routines"), "yellow"),
         (REPLICATIONS, _("Replications"), "teal"),
         (TASK_HISTORY, _("Task History"), "amber"),

@@ -7,6 +7,8 @@ import re
 
 from netbox_proxbox.choices import SyncTypeChoices
 
+_SDN_SYNC_TYPE = getattr(SyncTypeChoices, "SDN", "sdn")
+
 _SYNC_STAGE_ORDER: tuple[str, ...] = (
     SyncTypeChoices.DEVICES,
     SyncTypeChoices.STORAGE,
@@ -18,6 +20,7 @@ _SYNC_STAGE_ORDER: tuple[str, ...] = (
     SyncTypeChoices.NETWORK_INTERFACES,
     SyncTypeChoices.VM_INTERFACES,
     SyncTypeChoices.IP_ADDRESSES,
+    _SDN_SYNC_TYPE,
     SyncTypeChoices.REPLICATIONS,
     SyncTypeChoices.BACKUP_ROUTINES,
 )
@@ -37,6 +40,7 @@ _SYNC_TYPE_PATH: dict[str, str] = {
     SyncTypeChoices.NETWORK_INTERFACES: "dcim/devices/interfaces/create",
     SyncTypeChoices.VM_INTERFACES: "virtualization/virtual-machines/interfaces/create",
     SyncTypeChoices.IP_ADDRESSES: "virtualization/virtual-machines/interfaces/ip-address/create",
+    _SDN_SYNC_TYPE: "proxmox/sdn/create",
     SyncTypeChoices.BACKUP_ROUTINES: "proxmox/cluster/backup",
 }
 

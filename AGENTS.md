@@ -59,7 +59,13 @@ Three modes per type (global and per-endpoint — endpoint takes priority):
 - **`bootstrap_only`** — create once, tag with `bootstrap-only`, never patch/delete again
 - **`disabled`** — skip entirely, leave existing objects untouched
 
-Eight resource types: `sync_mode_vm`, `sync_mode_vm_template`, `sync_mode_vm_interface`, `sync_mode_mac`, `sync_mode_cluster`, `sync_mode_node`, `sync_mode_storage`, `sync_mode_ip_address`.
+Nine resource types: `sync_mode_vm`, `sync_mode_vm_template`, `sync_mode_vm_interface`, `sync_mode_mac`, `sync_mode_cluster`, `sync_mode_node`, `sync_mode_storage`, `sync_mode_ip_address`, `sync_mode_sdn`.
+
+`sync_mode_sdn` defaults to `disabled`. The **All** sync choice includes the SDN
+stage after VM interface/IP-address stages, but stage gating skips it until the
+effective SDN mode is enabled. SDN sync is read-only against Proxmox and writes
+only NetBox L2VPN/L2VPNTermination/RouteTarget/Prefix objects plus Proxbox
+plugin SDN metadata.
 
 Effective sync modes resolve through a parent-to-child cascade before stage gating and backend query forwarding. A resource is effectively `disabled` when its own mode is `disabled` or any ancestor is effectively `disabled`; child modes never affect parent modes. The hierarchy is:
 
@@ -71,11 +77,13 @@ vm + vm_template (both disabled only)
 └── vm_interface
     ├── ip_address
     └── mac
+
+sdn
 ```
 
 **VM templates** are stored in `ProxmoxVMTemplate` (not `VirtualMachine`). The model has optional FKs to `VirtualMachine` (`source_vm` and M2M `cloned_vms`), `ProxmoxCluster`, and `ProxmoxNode`.
 
-Key files: `choices.py` (SyncModeChoices), `constants.py` (SYNC_MODE_FIELDS), `models/plugin_settings.py` (global fields), `models/proxmox_endpoint.py` (per-endpoint fields + `effective_sync_mode()`), `models/vm_template.py` (ProxmoxVMTemplate), `sync_stages.py` (gating helpers), `netbox_bootstrap.py` (bootstrap-only tag creation), `services/sync_vm_template.py` (template sync service), `docs/configuration/sync-modes.md` (user docs).
+Key files: `choices.py` (SyncModeChoices), `constants.py` (SYNC_MODE_FIELDS), `models/plugin_settings.py` (global fields), `models/proxmox_endpoint.py` (per-endpoint fields + `effective_sync_mode()`), `models/vm_template.py` (ProxmoxVMTemplate), `models/sdn_inventory.py` (SDN metadata), `sync_stages.py` (gating helpers), `netbox_bootstrap.py` (bootstrap-only tag creation), `services/sync_vm_template.py` (template sync service), `docs/configuration/sync-modes.md` (user docs).
 
 ## Release Procedure (summary)
 

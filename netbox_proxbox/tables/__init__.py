@@ -26,9 +26,14 @@ from netbox_proxbox.tables.firewall import (
     ProxmoxFirewallSecurityGroupTable,
 )
 from netbox_proxbox.tables.sdn import (
+    ProxmoxSdnBindingTable,
+    ProxmoxSdnControllerTable,
     ProxmoxSdnFabricTable,
     ProxmoxSdnRouteMapTable,
     ProxmoxSdnPrefixListTable,
+    ProxmoxSdnSubnetTable,
+    ProxmoxSdnVNetTable,
+    ProxmoxSdnZoneTable,
 )
 from netbox_proxbox.tables.datacenter import ProxmoxDatacenterCpuModelTable
 from netbox_proxbox.tables.cloud_image_template import CloudImageTemplateTable
