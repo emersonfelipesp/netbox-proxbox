@@ -54,6 +54,7 @@ SUPPORTED_NETBOX_IMAGE_TAGS = (
     "netboxcommunity/netbox:v4.6.1",
     "netboxcommunity/netbox:v4.6.2",
     "netboxcommunity/netbox:v4.6.3",
+    "netboxcommunity/netbox:v4.6.4",
 )
 PREVIOUS_PLUGIN_VERSION = "0.0.20"
 PREVIOUS_PROXBOX_API_VERSION = "0.0.17"

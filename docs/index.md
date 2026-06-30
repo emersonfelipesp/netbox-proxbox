@@ -41,7 +41,7 @@ That support comes directly from the plugin config in this repository:
 - `max_version = "4.6.99"`
 
 This compatibility line is validated against NetBox `v4.5.8`, `v4.5.9`, and
-`v4.6.0` through `v4.6.3`. It includes the homepage **Latest Sync Jobs** table,
+`v4.6.0` through `v4.6.4`. It includes the homepage **Latest Sync Jobs** table,
 the **View all sync jobs** button for read-only sync-job visibility, and the
 all-endpoint `enabled=False` no-connection guard.
 
