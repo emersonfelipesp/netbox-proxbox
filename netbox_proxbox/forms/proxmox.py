@@ -13,6 +13,7 @@ from utilities.forms.fields import (
     DynamicModelChoiceField,
     DynamicModelMultipleChoiceField,
 )
+from utilities.forms.rendering import FieldSet
 from dcim.models import DeviceRole, Site
 from ipam.models import IPAddress
 from tenancy.models import Tenant
@@ -26,14 +27,218 @@ from .settings import _parse_tenant_regex_rules, _sync_mode_choice_options
 
 from .import_utils import validate_endpoint_import_headers
 from ..models import ProxboxPluginSettings
-from ..models.ssh_credential import AUTH_METHOD_KEY, AUTH_METHOD_PASSWORD
+from ..models.ssh_credential import (
+    AUTH_METHOD_KEY,
+    AUTH_METHOD_PASSWORD,
+    SSH_CRED_SOURCE_CHOICES,
+    SSH_CRED_SOURCE_DEDICATED,
+    SSH_CRED_SOURCE_REUSE,
+)
 
 
-class ProxmoxEndpointForm(NetBoxModelForm):
+class ProxmoxEndpointSSHCredentialFormMixin(forms.Form):
+    """Shared endpoint SSH credential controls for main and SSH tab forms."""
+
+    defer_ssh_credential_clean = False
+    ssh_credential_field_names = (
+        "ssh_credential_source",
+        "ssh_username",
+        "ssh_port",
+        "ssh_auth_method",
+        "ssh_known_host_fingerprint",
+        "ssh_password",
+        "ssh_private_key",
+        "clear_ssh_password",
+        "clear_ssh_private_key",
+    )
+
+    ssh_credential_source = forms.ChoiceField(
+        choices=SSH_CRED_SOURCE_CHOICES,
+        required=True,
+        label=_("SSH credential source"),
+        help_text=_(
+            "Use a dedicated SSH credential, or reuse this endpoint's "
+            "Proxmox username/password for SSH. Reuse strips the realm "
+            "(for example, root@pam becomes root); only @pam/PAM-backed "
+            "users normally map to local SSH accounts."
+        ),
+    )
+    ssh_password = forms.CharField(
+        required=False,
+        widget=forms.PasswordInput(
+            render_value=False,
+            attrs={"autocomplete": "new-password"},
+        ),
+        label=_("SSH password"),
+        help_text=_("Leave blank to keep the currently stored SSH password."),
+    )
+    ssh_private_key = forms.CharField(
+        required=False,
+        widget=forms.Textarea(
+            attrs={
+                "rows": 8,
+                "autocomplete": "off",
+                "spellcheck": "false",
+            }
+        ),
+        label=_("SSH private key"),
+        help_text=_("Leave blank to keep the currently stored SSH private key."),
+    )
+    clear_ssh_password = forms.BooleanField(
+        required=False,
+        label=_("Clear stored SSH password on save"),
+    )
+    clear_ssh_private_key = forms.BooleanField(
+        required=False,
+        label=_("Clear stored SSH private key on save"),
+    )
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        """Hide clear controls when no corresponding encrypted value exists."""
+        super().__init__(*args, **kwargs)
+        instance = getattr(self, "instance", None)
+        if not (instance and getattr(instance, "pk", None)):
+            self.fields.pop("clear_ssh_password", None)
+            self.fields.pop("clear_ssh_private_key", None)
+            return
+        if not getattr(instance, "ssh_password_enc", ""):
+            self.fields.pop("clear_ssh_password", None)
+        if not getattr(instance, "ssh_private_key_enc", ""):
+            self.fields.pop("clear_ssh_private_key", None)
+
+    def clean(self) -> dict[str, object]:
+        """Validate complete endpoint SSH credentials before encryption."""
+        super().clean()
+        cleaned_data = self.cleaned_data
+        if not self.defer_ssh_credential_clean:
+            self._clean_ssh_credentials()
+        return cleaned_data
+
+    def _clean_ssh_credentials(self) -> None:
+        """Validate the selected endpoint SSH credential source."""
+        cleaned_data = self.cleaned_data
+        instance = self.instance
+
+        credential_source = (
+            cleaned_data.get("ssh_credential_source")
+            or getattr(
+                instance,
+                "ssh_credential_source",
+                SSH_CRED_SOURCE_DEDICATED,
+            )
+            or SSH_CRED_SOURCE_DEDICATED
+        )
+        fingerprint = (cleaned_data.get("ssh_known_host_fingerprint") or "").strip()
+
+        if credential_source == SSH_CRED_SOURCE_REUSE:
+            endpoint_password = cleaned_data.get("password")
+            if endpoint_password is None:
+                endpoint_password = getattr(instance, "password", "")
+            if not endpoint_password:
+                self.add_error(
+                    "ssh_credential_source",
+                    _(
+                        "Reusing endpoint credentials for SSH requires this "
+                        "endpoint to store a password; token-only endpoints "
+                        "cannot reuse SSH credentials."
+                    ),
+                )
+            if not fingerprint:
+                self.add_error(
+                    "ssh_known_host_fingerprint",
+                    _(
+                        "Pinned host-key fingerprint is required when reusing "
+                        "endpoint credentials for SSH."
+                    ),
+                )
+            return
+
+        password = cleaned_data.get("ssh_password") or ""
+        private_key = cleaned_data.get("ssh_private_key") or ""
+        clear_password = bool(cleaned_data.get("clear_ssh_password"))
+        clear_private_key = bool(cleaned_data.get("clear_ssh_private_key"))
+
+        has_password = bool(password) or (
+            bool(getattr(instance, "ssh_password_enc", "")) and not clear_password
+        )
+        has_private_key = bool(private_key) or (
+            bool(getattr(instance, "ssh_private_key_enc", "")) and not clear_private_key
+        )
+
+        username = (cleaned_data.get("ssh_username") or "").strip()
+        has_any = any((username, fingerprint, has_password, has_private_key))
+        if not has_any:
+            return
+
+        if not username:
+            self.add_error(
+                "ssh_username",
+                _("SSH username is required when endpoint fallback SSH is configured."),
+            )
+        if not fingerprint:
+            self.add_error(
+                "ssh_known_host_fingerprint",
+                _("Pinned host-key fingerprint is required for endpoint fallback SSH."),
+            )
+
+        auth_method = cleaned_data.get("ssh_auth_method")
+        if auth_method == AUTH_METHOD_KEY and not has_private_key:
+            self.add_error(
+                "ssh_private_key",
+                _("Key authentication requires a stored SSH private key."),
+            )
+        if auth_method == AUTH_METHOD_PASSWORD and not has_password:
+            self.add_error(
+                "ssh_password",
+                _("Password authentication requires a stored SSH password."),
+            )
+        if (
+            password or private_key
+        ) and not ProxboxPluginSettings.get_solo().encryption_key:
+            self.add_error(
+                "ssh_private_key" if private_key else "ssh_password",
+                _(
+                    "Configure ProxboxPluginSettings.encryption_key before storing "
+                    "endpoint SSH secrets."
+                ),
+            )
+
+    def save(self, commit: bool = True) -> ProxmoxEndpoint:
+        """Encrypt submitted dedicated SSH secrets and preserve blank inputs."""
+        instance = super().save(commit=False)
+
+        if self.cleaned_data.get("ssh_credential_source") == SSH_CRED_SOURCE_REUSE:
+            if commit:
+                instance.save()
+                self.save_m2m()
+            return instance
+
+        key = ProxboxPluginSettings.get_solo().encryption_key or ""
+
+        if self.cleaned_data.get("clear_ssh_password"):
+            instance.ssh_password_enc = ""
+        if self.cleaned_data.get("clear_ssh_private_key"):
+            instance.ssh_private_key_enc = ""
+        password = self.cleaned_data.get("ssh_password") or ""
+        private_key = self.cleaned_data.get("ssh_private_key") or ""
+        if password:
+            instance.set_ssh_password(password, key=key)
+        if private_key:
+            instance.set_ssh_private_key(private_key, key=key)
+
+        if commit:
+            instance.save()
+            self.save_m2m()
+        return instance
+
+
+class ProxmoxEndpointForm(ProxmoxEndpointSSHCredentialFormMixin, NetBoxModelForm):
     """
     Form for ProxmoxEndpoint model.
     It is used to CREATE and UPDATE ProxmoxEndpoint objects.
     """
+
+    defer_ssh_credential_clean = True
 
     ip_address = DynamicModelChoiceField(
         queryset=IPAddress.objects.all(),
@@ -114,6 +319,32 @@ class ProxmoxEndpointForm(NetBoxModelForm):
     )
     comments = CommentField()
 
+    fieldsets = (
+        FieldSet(
+            "name",
+            "ip_address",
+            "domain",
+            "port",
+            "username",
+            "password",
+            "token_name",
+            "token_value",
+            "verify_ssl",
+            "enabled",
+            "environment",
+            "site",
+            "tenant",
+            "allowed_tenants",
+            "tags",
+            name="Identity and credentials",
+        ),
+        FieldSet("allow_writes", name="Write permission"),
+        FieldSet(
+            *ProxmoxEndpointSSHCredentialFormMixin.ssh_credential_field_names,
+            name="SSH credential access",
+        ),
+    )
+
     def __init__(self, *args: object, **kwargs: object) -> None:
         """Only expose the clear-credential checkboxes when there is something to clear."""
         super().__init__(*args, **kwargs)
@@ -143,10 +374,16 @@ class ProxmoxEndpointForm(NetBoxModelForm):
             "token_value",
             "verify_ssl",
             "enabled",
+            "allow_writes",
             "environment",
             "site",
             "tenant",
             "allowed_tenants",
+            "ssh_credential_source",
+            "ssh_username",
+            "ssh_port",
+            "ssh_auth_method",
+            "ssh_known_host_fingerprint",
             "tags",
         )
 
@@ -208,6 +445,7 @@ class ProxmoxEndpointForm(NetBoxModelForm):
             self.add_error("password", msg)
             self.add_error("token_name", msg)
 
+        self._clean_ssh_credentials()
         return cleaned_data
 
 
@@ -345,139 +583,28 @@ class ProxmoxEndpointSettingsForm(NetBoxModelForm):
         )
 
 
-class ProxmoxEndpointSSHSettingsForm(NetBoxModelForm):
+class ProxmoxEndpointSSHSettingsForm(
+    ProxmoxEndpointSSHCredentialFormMixin,
+    NetBoxModelForm,
+):
     """Endpoint-level SSH fallback credentials for browser terminal sessions."""
 
-    ssh_password = forms.CharField(
-        required=False,
-        widget=forms.PasswordInput(
-            render_value=False,
-            attrs={"autocomplete": "new-password"},
+    fieldsets = (
+        FieldSet(
+            *ProxmoxEndpointSSHCredentialFormMixin.ssh_credential_field_names,
+            name="SSH credential access",
         ),
-        label=_("SSH password"),
-        help_text=_("Leave blank to keep the currently stored SSH password."),
-    )
-    ssh_private_key = forms.CharField(
-        required=False,
-        widget=forms.Textarea(
-            attrs={
-                "rows": 8,
-                "autocomplete": "off",
-                "spellcheck": "false",
-            }
-        ),
-        label=_("SSH private key"),
-        help_text=_("Leave blank to keep the currently stored SSH private key."),
-    )
-    clear_ssh_password = forms.BooleanField(
-        required=False,
-        label=_("Clear stored SSH password on save"),
-    )
-    clear_ssh_private_key = forms.BooleanField(
-        required=False,
-        label=_("Clear stored SSH private key on save"),
     )
 
     class Meta:
         model = ProxmoxEndpoint
         fields = (
+            "ssh_credential_source",
             "ssh_username",
             "ssh_port",
             "ssh_auth_method",
             "ssh_known_host_fingerprint",
         )
-
-    def __init__(self, *args: object, **kwargs: object) -> None:
-        """Hide clear controls when no corresponding encrypted value exists."""
-        super().__init__(*args, **kwargs)
-        instance = getattr(self, "instance", None)
-        if not (instance and getattr(instance, "pk", None)):
-            self.fields.pop("clear_ssh_password", None)
-            self.fields.pop("clear_ssh_private_key", None)
-            return
-        if not getattr(instance, "ssh_password_enc", ""):
-            self.fields.pop("clear_ssh_password", None)
-        if not getattr(instance, "ssh_private_key_enc", ""):
-            self.fields.pop("clear_ssh_private_key", None)
-
-    def clean(self) -> dict[str, object]:
-        """Validate complete endpoint fallback credentials before encryption."""
-        super().clean()
-        cleaned_data = self.cleaned_data
-        instance = self.instance
-
-        password = cleaned_data.get("ssh_password") or ""
-        private_key = cleaned_data.get("ssh_private_key") or ""
-        clear_password = bool(cleaned_data.get("clear_ssh_password"))
-        clear_private_key = bool(cleaned_data.get("clear_ssh_private_key"))
-
-        has_password = bool(password) or (
-            bool(getattr(instance, "ssh_password_enc", "")) and not clear_password
-        )
-        has_private_key = bool(private_key) or (
-            bool(getattr(instance, "ssh_private_key_enc", "")) and not clear_private_key
-        )
-
-        username = (cleaned_data.get("ssh_username") or "").strip()
-        fingerprint = (cleaned_data.get("ssh_known_host_fingerprint") or "").strip()
-        has_any = any((username, fingerprint, has_password, has_private_key))
-        if not has_any:
-            return cleaned_data
-
-        if not username:
-            self.add_error(
-                "ssh_username",
-                _("SSH username is required when endpoint fallback SSH is configured."),
-            )
-        if not fingerprint:
-            self.add_error(
-                "ssh_known_host_fingerprint",
-                _("Pinned host-key fingerprint is required for endpoint fallback SSH."),
-            )
-
-        auth_method = cleaned_data.get("ssh_auth_method")
-        if auth_method == AUTH_METHOD_KEY and not has_private_key:
-            self.add_error(
-                "ssh_private_key",
-                _("Key authentication requires a stored SSH private key."),
-            )
-        if auth_method == AUTH_METHOD_PASSWORD and not has_password:
-            self.add_error(
-                "ssh_password",
-                _("Password authentication requires a stored SSH password."),
-            )
-        if (
-            password or private_key
-        ) and not ProxboxPluginSettings.get_solo().encryption_key:
-            self.add_error(
-                "ssh_private_key" if private_key else "ssh_password",
-                _(
-                    "Configure ProxboxPluginSettings.encryption_key before storing "
-                    "endpoint SSH secrets."
-                ),
-            )
-        return cleaned_data
-
-    def save(self, commit: bool = True) -> ProxmoxEndpoint:
-        """Encrypt submitted secrets and preserve existing ciphertext on blank input."""
-        instance = super().save(commit=False)
-        key = ProxboxPluginSettings.get_solo().encryption_key or ""
-
-        if self.cleaned_data.get("clear_ssh_password"):
-            instance.ssh_password_enc = ""
-        if self.cleaned_data.get("clear_ssh_private_key"):
-            instance.ssh_private_key_enc = ""
-        password = self.cleaned_data.get("ssh_password") or ""
-        private_key = self.cleaned_data.get("ssh_private_key") or ""
-        if password:
-            instance.set_ssh_password(password, key=key)
-        if private_key:
-            instance.set_ssh_private_key(private_key, key=key)
-
-        if commit:
-            instance.save()
-            self.save_m2m()
-        return instance
 
 
 class ProxmoxEndpointFilterForm(NetBoxModelFilterSetForm):

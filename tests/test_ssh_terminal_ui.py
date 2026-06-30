@@ -15,6 +15,20 @@ TEMPLATE_PATH = (
     / "netbox_proxbox"
     / "proxmoxendpoint_ssh_terminal.html"
 )
+DETAIL_TEMPLATE_PATH = (
+    REPO_ROOT
+    / "netbox_proxbox"
+    / "templates"
+    / "netbox_proxbox"
+    / "proxmoxendpoint.html"
+)
+SSH_SETTINGS_TEMPLATE_PATH = (
+    REPO_ROOT
+    / "netbox_proxbox"
+    / "templates"
+    / "netbox_proxbox"
+    / "proxmoxendpoint_ssh_settings.html"
+)
 JS_PATH = (
     REPO_ROOT
     / "netbox_proxbox"
@@ -82,6 +96,18 @@ def test_terminal_template_uses_xterm_and_exposes_no_backend_api_key() -> None:
     assert "js/ssh_terminal.js" in src
     assert "proxmoxendpoint_ssh_terminal_session" in src
     assert "X-Proxbox-API-Key" not in src
+
+
+def test_endpoint_templates_show_write_and_ssh_source_state() -> None:
+    detail_src = DETAIL_TEMPLATE_PATH.read_text()
+    settings_src = SSH_SETTINGS_TEMPLATE_PATH.read_text()
+
+    for src in (detail_src, settings_src):
+        assert "object.allow_writes" in src
+        assert "get_ssh_credential_source_display" in src
+        assert "effective_ssh_username" in src
+
+    assert "form.ssh_credential_source" in settings_src
 
 
 def test_terminal_javascript_uses_ticket_protocol_without_backend_api_key() -> None:

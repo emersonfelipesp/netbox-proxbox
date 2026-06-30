@@ -157,6 +157,32 @@ Copy the `SHA256:<base64>` segment.
 4. Save. The form encrypts the private key with the configured
    Fernet key before persisting.
 
+## Browser terminal endpoint SSH
+
+The Proxmox endpoint detail page also has a browser **SSH Terminal** tab. Node
+targets use the per-node `NodeSSHCredential` rows described above. The endpoint
+target uses proxbox-native fields on `ProxmoxEndpoint`; it does not use the
+`netbox-nms` `ProxmoxEndpointSSHBinding`.
+
+On the Proxmox endpoint add/edit form, operators can configure **SSH credential
+source**:
+
+- **Dedicated SSH credential** keeps the existing encrypted endpoint `ssh_*`
+  fields. Store an SSH username, port, auth method, pinned host-key fingerprint,
+  and either a password or private key. Saving a secret requires
+  `ProxboxPluginSettings.encryption_key`.
+- **Reuse endpoint username/password** uses the endpoint's own Proxmox
+  username/password for SSH. The plugin strips the Proxmox realm before sending
+  the credential to `proxbox-api` (`root@pam` becomes `root`) and always sends
+  `auth_method=password`. Token-only endpoints cannot use this mode because no
+  endpoint password exists to reuse. A pinned SSH host-key fingerprint is still
+  required.
+
+The endpoint API consumed by `proxbox-api`
+(`/api/plugins/proxbox/ssh-credentials/by-endpoint/<id>/credentials/`) keeps the
+same response keys in both modes: host, username, port, auth method, host-key
+fingerprint, password/private-key presence flags, `password`, and `private_key`.
+
 ## Operations
 
 ### What the discovery pass writes

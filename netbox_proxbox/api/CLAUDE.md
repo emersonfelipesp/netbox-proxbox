@@ -114,7 +114,16 @@ These `APIView` subclasses mirror every data-bearing UI page and expose the same
 ## Notes
 
 - `NetBoxEndpointSerializer` is the main place where v1 versus v2 remote NetBox credential rules are enforced for API writes.
-- `ProxmoxEndpointSerializer` marks password and token value fields write-only.
+- `ProxmoxEndpointSerializer` marks password and token value fields write-only
+  and exposes `ssh_credential_source` for endpoint browser-terminal SSH
+  configuration.
+- `ProxmoxEndpointSSHCredentialSecretsAPIView` preserves the proxbox-api payload
+  shape (`host`, `username`, `port`, `auth_method`, fingerprint, booleans,
+  `password`, `private_key`). In `reuse_endpoint` mode it returns the
+  realm-stripped endpoint username, `auth_method=password`, the endpoint
+  plaintext password, and an empty private key without requiring the plugin
+  encryption key. The dedicated mode still decrypts `ssh_*_enc` fields and
+  returns `503` when the encryption key is missing.
 - Resource views use `get_proxbox_tagged_object_ids()` from `netbox_proxbox/utils.py` to look up objects tagged `proxbox` without repeating the `TaggedItem` query pattern.
 - `DashboardAPIView` makes live HTTP calls to the proxbox-api backend to fetch current cluster/VM statistics; it returns partial data (with error context) when the backend is unreachable rather than failing the entire request.
 - Contract tests for this API layer live in `tests/test_api_source_contracts.py`.
