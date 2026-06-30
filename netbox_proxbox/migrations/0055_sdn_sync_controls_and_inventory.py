@@ -71,9 +71,9 @@ def _status_field():
 class Migration(migrations.Migration):
     dependencies = [
         ("extras", "0134_owner"),
-        ("ipam", "0089_default_ordering_indexes"),
+        ("ipam", "0086_gfk_indexes"),
         ("netbox_proxbox", "0054_proxmoxendpoint_ssh_credential_source"),
-        ("vpn", "0012_default_ordering_indexes"),
+        ("vpn", "0011_add_comments_to_organizationalmodel"),
     ]
 
     operations = [
