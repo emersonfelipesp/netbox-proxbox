@@ -26,7 +26,7 @@ _NETBOX_API_TOKEN = os.environ.get("NETBOX_API_TOKEN", "")
 # (label, path-relative-to-base)
 LIST_PAGES: list[tuple[str, str]] = [
     # Meta
-    ("home", "/plugins/proxbox/"),
+    ("home", "/plugins/proxbox/home/"),
     ("sitemap", "/plugins/proxbox/sitemap.txt"),
     ("dashboard", "/plugins/proxbox/dashboard/"),
     ("ha", "/plugins/proxbox/ha/"),
