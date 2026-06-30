@@ -90,6 +90,7 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
             "enable_tenant_tag_assignment",
             "enable_tenant_from_cluster",
             "allow_writes",
+            "access_methods",
             *SYNC_MODE_FIELDS,
             *OVERWRITE_FIELDS,
             "site",

@@ -88,6 +88,13 @@ def _proxmox_backend_payload(endpoint: ProxmoxEndpoint) -> dict[str, object]:
         "retry_backoff": _float_or_none(getattr(endpoint, "retry_backoff", None)),
         "token_name": (getattr(endpoint, "token_name", "") or "").strip() or None,
         "token_value": (getattr(endpoint, "token_value", "") or "").strip() or None,
+        # Push the transport access method so the proxbox-api backend can gate
+        # its own SSH paths (cloud-image build / Azure VHD import). Unlike
+        # allow_writes (a deliberate manual trust boundary), access_methods only
+        # permits the SSH transport and never grants writes, so it is safe to
+        # propagate automatically.
+        "access_methods": (getattr(endpoint, "access_methods", "") or "api").strip()
+        or "api",
         **_related_object_metadata("site", getattr(endpoint, "site", None)),
         **_related_object_metadata("tenant", getattr(endpoint, "tenant", None)),
     }

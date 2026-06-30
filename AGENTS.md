@@ -375,6 +375,20 @@ An LLM agent MUST NOT:
 - Approve a `DeletionRequest` as the same user who created it.
 - Attempt to bypass or work around any of the five locks.
 
+### Transport Access Method — `ProxmoxEndpoint.access_methods`
+
+Each `ProxmoxEndpoint` declares a transport access method, orthogonal to the
+destroy chain and to write permissions: `api` (Read+Write over the Proxmox API
+only, the default) or `api_ssh` (API + SSH). **SSH only complements API; there
+is no SSH-only option.** This is the load-bearing gate for the browser SSH
+terminal — `netbox_proxbox/api/ssh_credentials.py` refuses to release SSH
+secrets (403) for an API-only endpoint, which blocks the terminal at the
+credential source for both endpoint-target and node-target sessions.
+
+An LLM agent MUST NOT set `access_methods="api_ssh"` autonomously to unlock SSH;
+it is a human operator assertion. The value is pushed to proxbox-api so the
+backend can gate its own SSH paths (cloud-image / Azure VHD import).
+
 ### `DeletionRequest` REST API — Read-Only
 
 The `DeletionRequest` REST endpoint at `/api/plugins/proxbox/deletion-requests/`
