@@ -83,6 +83,30 @@ class SyncTypeChoices(ChoiceSet):
     ]
 
 
+class ProxmoxAccessMethodChoices(ChoiceSet):
+    """Per-endpoint transport access method.
+
+    Orthogonal to ``allow_writes`` (the read/write trust axis): this controls
+    *how* the endpoint may be reached, not *whether* writes are allowed.
+
+    - ``api`` — Read and Write over the Proxmox HTTP API only (default).
+    - ``api_ssh`` — Read and Write over the API plus SSH.
+
+    There is intentionally no "SSH only" choice: SSH only complements API, so an
+    SSH-only endpoint is unrepresentable.
+    """
+
+    key = "ProxmoxEndpoint.access_methods"
+
+    API = "api"
+    API_SSH = "api_ssh"
+
+    CHOICES = [
+        (API, _("API only"), "blue"),
+        (API_SSH, _("API + SSH"), "green"),
+    ]
+
+
 class SyncModeChoices(ChoiceSet):
     """Per-resource sync behavior for reflected Proxmox inventory."""
 
