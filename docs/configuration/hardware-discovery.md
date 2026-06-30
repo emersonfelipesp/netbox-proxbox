@@ -183,6 +183,15 @@ The endpoint API consumed by `proxbox-api`
 same response keys in both modes: host, username, port, auth method, host-key
 fingerprint, password/private-key presence flags, `password`, and `private_key`.
 
+!!! warning "Reuse mode exposes the Proxmox API password"
+    In **Reuse endpoint username/password** mode the secrets endpoint returns the
+    endpoint's own Proxmox API password (reused as the SSH password). That endpoint
+    is gated by a NetBox API token holding `view` **and** `open_ssh_terminal` on the
+    Proxmox endpoint, and requires HTTPS in non-DEBUG — but because such a token can
+    therefore retrieve the Proxmox API password, scope `open_ssh_terminal` to the
+    operators already trusted with that endpoint's credentials. The dedicated
+    `ssh_password` / `ssh_private_key` fields are ignored while reuse is selected.
+
 ## Operations
 
 ### What the discovery pass writes

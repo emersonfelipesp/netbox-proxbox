@@ -70,7 +70,10 @@ class ProxmoxEndpointSSHCredentialFormMixin(forms.Form):
             attrs={"autocomplete": "new-password"},
         ),
         label=_("SSH password"),
-        help_text=_("Leave blank to keep the currently stored SSH password."),
+        help_text=_(
+            "Leave blank to keep the currently stored SSH password. Ignored when "
+            "SSH credential source is 'Reuse endpoint username/password'."
+        ),
     )
     ssh_private_key = forms.CharField(
         required=False,
@@ -82,7 +85,10 @@ class ProxmoxEndpointSSHCredentialFormMixin(forms.Form):
             }
         ),
         label=_("SSH private key"),
-        help_text=_("Leave blank to keep the currently stored SSH private key."),
+        help_text=_(
+            "Leave blank to keep the currently stored SSH private key. Ignored when "
+            "SSH credential source is 'Reuse endpoint username/password'."
+        ),
     )
     clear_ssh_password = forms.BooleanField(
         required=False,
