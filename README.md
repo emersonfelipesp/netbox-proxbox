@@ -133,6 +133,17 @@ global pool and returns only the explicit matches. Use this to pin a tenant
 such as Confitec to a single cluster without changing the default pool for
 other tenants.
 
+## What's New in v0.0.22
+
+Paired with backend [`proxbox-api 0.0.19`](https://github.com/emersonfelipesp/proxbox-api).
+
+- **Full Proxmox SDN sync.** `sync_mode_sdn` is available globally and per endpoint, defaults to disabled, and is included by **All** but skipped until enabled.
+- **SDN inventory and NetBox reconciliation.** Controllers, zones, VNets, subnets, and bindings are preserved with raw payloads, sync status, conflict reasons, and NetBox object links while the backend reconciles L2VPN, RouteTarget, Prefix, and L2VPNTermination objects safely.
+- **Read-only Proxmox behavior.** SDN sync never writes to Proxmox and skips unsupported clusters instead of failing the whole run.
+- **Current SDK pairing.** Current pairing: `netbox-proxbox 0.0.22 ↔ proxbox-api 0.0.19 ↔ proxmox-sdk 0.0.12 ↔ netbox-sdk 0.0.10`. SDN sync requires `proxbox-api >= 0.0.19`.
+
+Full notes: [Release Notes - v0.0.22](docs/release-notes/version-0.0.22.md).
+
 ## What's New in v0.0.21
 
 Paired with backend [`proxbox-api 0.0.18.post5`](https://github.com/emersonfelipesp/proxbox-api).
@@ -199,6 +210,7 @@ Full notes: [Release Notes — v0.0.18](https://emersonfelipesp.github.io/netbox
 
 | NetBox | netbox-proxbox | proxbox-api | netbox-sdk | proxmox-sdk |
 |--------|----------------|-------------|------------|-------------|
+| >=4.5.8 | v0.0.22 | v0.0.19 | v0.0.10 | v0.0.12 |
 | >=4.5.8 | v0.0.21 | v0.0.18.post5 | v0.0.10 | v0.0.12 |
 | >=4.5.8 | v0.0.20.post3 | v0.0.17.post1 | v0.0.9.post1 | v0.0.11.post1 |
 | >=4.5.8 | v0.0.20.post2 | v0.0.17.post1 | v0.0.9.post1 | v0.0.11.post1 |

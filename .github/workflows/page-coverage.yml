@@ -10,7 +10,7 @@ on:
 env:
   NETBOX_IMAGE: netboxcommunity/netbox:v4.6.1
   PROXMOX_SDK_IMAGE: emersonfelipesp/proxmox-sdk
-  PROXBOX_API_VERSION: 0.0.18.post5
+  PROXBOX_API_VERSION: 0.0.19
   PROXBOX_ENCRYPTION_KEY: proxbox-ci-only-encryption-key-not-a-secret
   SECRET_KEY: proxbox-e2e-secret-key-proxbox-e2e-secret-key-proxbox-e2e-secret-key
 

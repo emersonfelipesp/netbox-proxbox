@@ -4,7 +4,7 @@ This section tracks the release line represented by this repository and keeps ol
 
 ## Current Release Line
 
-The plugin source in this repository is currently `0.0.21` on the
+The plugin source in this repository is currently `0.0.22` on the
 development line. The sibling plugins (`netbox-pbs`,
 `netbox-ceph`, and `netbox-pdm`) live in standalone repositories under
 [@emersonfelipesp](https://github.com/emersonfelipesp) and declare
@@ -16,6 +16,7 @@ part of the same plugin family.
 
 | Version | Summary |
 |---------|---------|
+| `0.0.22` | Full Proxmox SDN sync: optional `sync_mode_sdn` (global and per-endpoint, disabled by default, included by **All** but skipped while disabled), plugin inventory for controllers, zones, VNets, subnets, and bindings, and conflict-safe backend reconciliation into NetBox L2VPN, RouteTarget, Prefix, and L2VPNTermination objects. SDN sync is read-only against Proxmox, skips unsupported clusters, and requires `proxbox-api >= 0.0.19`. Pairs with backend [`proxbox-api 0.0.19`](https://github.com/emersonfelipesp/proxbox-api), `proxmox-sdk 0.0.12`, and `netbox-sdk 0.0.10`. |
 | `0.0.21` | Sync-mode filtering at source: per-record VM and VM-template filtering enforced by `proxbox-api 0.0.18.post5` using `sync_mode_vm`/`sync_mode_vm_template` query params — a `disabled` mode no longer creates dependent NetBox objects for skipped VMs. Two-phase VM batch processing and per-VM dispatch failure isolation. Interface-dense guest alias matching by name and partial-failure stream frame. Pairs with backend [`proxbox-api 0.0.18.post5`](https://github.com/emersonfelipesp/proxbox-api), `proxmox-sdk 0.0.12`, and `netbox-sdk 0.0.10`. |
 | `0.0.20.post3` | Endpoint enablement hardening: disabled endpoint-like rows remain visible inventory records but no longer trigger proxbox-api, NetBox, Proxmox, PBS, PDM, OpenAPI, keepalive, registration, startup/signal, or sync network attempts. Adds LLM/developer documentation and regression tests for PBSEndpoint/PDMEndpoint shared enabled-field contracts. Pairs with backend [`proxbox-api 0.0.17.post1`](https://github.com/emersonfelipesp/proxbox-api), `proxmox-sdk 0.0.11.post1`, and `netbox-sdk 0.0.9.post1`. |
 | `0.0.20.post2` | Read-only homepage visibility patch: the Proxbox homepage now renders a **Latest Sync Jobs** table with the five most recent Proxbox sync jobs after the additional plugin endpoint cards, plus a **View all sync jobs** button. Pairs with backend [`proxbox-api 0.0.17.post1`](https://github.com/emersonfelipesp/proxbox-api), `proxmox-sdk 0.0.11.post1`, and `netbox-sdk 0.0.9.post1`. |
@@ -49,4 +50,4 @@ part of the same plugin family.
 - Older pages are intentionally brief because the repository does not preserve fuller release-note prose for those versions.
 
 
-> **Current release:** netbox-proxbox `0.0.21` pairs with proxbox-api `0.0.18.post5` (NetBox `4.5.8`–`4.6.99`).
+> **Current release:** netbox-proxbox `0.0.22` pairs with proxbox-api `0.0.19` (NetBox `4.5.8`–`4.6.99`). Current pairing: `netbox-proxbox 0.0.22 ↔ proxbox-api 0.0.19 ↔ proxmox-sdk 0.0.12 ↔ netbox-sdk 0.0.10`. SDN sync requires `proxbox-api >= 0.0.19`.

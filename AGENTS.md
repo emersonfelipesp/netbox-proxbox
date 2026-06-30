@@ -67,6 +67,9 @@ effective SDN mode is enabled. SDN sync is read-only against Proxmox and writes
 only NetBox L2VPN/L2VPNTermination/RouteTarget/Prefix objects plus Proxbox
 plugin SDN metadata.
 
+Current pairing: `netbox-proxbox 0.0.22 ↔ proxbox-api 0.0.19 ↔ proxmox-sdk 0.0.12 ↔ netbox-sdk 0.0.10`.
+SDN sync requires `proxbox-api >= 0.0.19`.
+
 Effective sync modes resolve through a parent-to-child cascade before stage gating and backend query forwarding. A resource is effectively `disabled` when its own mode is `disabled` or any ancestor is effectively `disabled`; child modes never affect parent modes. The hierarchy is:
 
 ```
