@@ -3,7 +3,7 @@
 netbox-proxbox `0.0.21` pairs with the `proxbox-api 0.0.18.post5`
 backend release, the `proxmox-sdk 0.0.12` Proxmox SDK, and
 `netbox-sdk 0.0.10`. NetBox compatibility is unchanged: `4.5.8` through
-`4.6.99` (validated against `4.5.8`, `4.5.9`, and `4.6.0` through `4.6.3`).
+`4.6.99` (validated against `4.5.8`, `4.5.9`, and `4.6.0` through `4.6.4`).
 
 ## Highlights
 

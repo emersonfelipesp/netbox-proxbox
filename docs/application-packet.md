@@ -18,7 +18,7 @@ the certification process.
 
 ## Compatibility Target
 
-The certification target is NetBox `v4.6.3`, with compatibility preserved for
+The certification target is NetBox `v4.6.4`, with compatibility preserved for
 NetBox `v4.5.8+` where each plugin declares `max_version = "4.6.99"`.
 
 ## Evidence
@@ -28,6 +28,6 @@ NetBox `v4.5.8+` where each plugin declares `max_version = "4.6.99"`.
 - Every PyPI package exposes source, documentation, and issue tracker URLs.
 - GitHub Actions validate package build, tests, docs, release publishing, and
   NetBox install smoke coverage.
-- Screenshot capture workflows use `netboxcommunity/netbox:v4.6.3`.
+- Screenshot capture workflows use `netboxcommunity/netbox:v4.6.4`.
 - Support is handled through GitHub Issues, with family coordination tracked in
   <https://github.com/emersonfelipesp/netbox-proxbox/issues/499>.
