@@ -19,6 +19,9 @@ from netbox_proxbox.models.ssh_credential import (
     AUTH_METHOD_CHOICES,
     AUTH_METHOD_KEY,
     AUTH_METHOD_PASSWORD,
+    SSH_CRED_SOURCE_CHOICES,
+    SSH_CRED_SOURCE_DEDICATED,
+    SSH_CRED_SOURCE_REUSE,
     normalize_fingerprint,
 )
 from netbox_proxbox.utils import encryption as enc_helpers
@@ -235,6 +238,18 @@ class ProxmoxEndpoint(EndpointBase):
         help_text=_(
             "Fallback SSH username for the endpoint itself when no per-node "
             "NodeSSHCredential is selected."
+        ),
+    )
+    ssh_credential_source = models.CharField(
+        max_length=32,
+        choices=SSH_CRED_SOURCE_CHOICES,
+        default=SSH_CRED_SOURCE_DEDICATED,
+        verbose_name=_("SSH credential source"),
+        help_text=_(
+            "Choose a dedicated SSH credential or reuse this endpoint's "
+            "Proxmox username/password for SSH. Reuse strips the realm "
+            "(for example, root@pam becomes root); only PAM-backed Proxmox "
+            "users usually map to local SSH accounts."
         ),
     )
     ssh_port = models.PositiveIntegerField(
@@ -594,8 +609,22 @@ class ProxmoxEndpoint(EndpointBase):
         return bool(self.ssh_private_key_enc)
 
     @property
+    def effective_ssh_username(self) -> str:
+        """Return the SSH login username selected by the endpoint SSH source."""
+        if self.ssh_credential_source == SSH_CRED_SOURCE_REUSE:
+            return (self.username or "").split("@", 1)[0].strip()
+        return (self.ssh_username or "").strip()
+
+    @property
     def has_ssh_terminal_credentials(self) -> bool:
         """Return whether endpoint fallback SSH is complete enough to use."""
+        if self.ssh_credential_source == SSH_CRED_SOURCE_REUSE:
+            return bool(
+                self.ssh_host
+                and self.ssh_known_host_fingerprint
+                and self.effective_ssh_username
+                and self.password
+            )
         has_secret = (
             self.has_ssh_private_key
             if self.ssh_auth_method == AUTH_METHOD_KEY
@@ -631,6 +660,22 @@ class ProxmoxEndpoint(EndpointBase):
             self.ssh_known_host_fingerprint = normalize_fingerprint(
                 self.ssh_known_host_fingerprint
             )
+        if self.ssh_credential_source == SSH_CRED_SOURCE_REUSE:
+            errors: dict[str, str] = {}
+            if not self.password:
+                errors["ssh_credential_source"] = (
+                    "Reusing endpoint credentials for SSH requires a stored "
+                    "endpoint password; token-only endpoints cannot be reused."
+                )
+            if not self.ssh_known_host_fingerprint:
+                errors["ssh_known_host_fingerprint"] = (
+                    "Pinned host-key fingerprint is required when reusing "
+                    "endpoint credentials for SSH."
+                )
+            if errors:
+                raise ValidationError(errors)
+            return
+
         has_any_ssh = any(
             (
                 self.ssh_username,

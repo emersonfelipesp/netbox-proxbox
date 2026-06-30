@@ -75,6 +75,7 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
             "timeout",
             "max_retries",
             "retry_backoff",
+            "ssh_credential_source",
             "ssh_username",
             "ssh_port",
             "ssh_auth_method",

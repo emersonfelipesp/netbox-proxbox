@@ -49,6 +49,13 @@ This directory defines the plugin's persisted data model.
 - `EndpointBase.enabled` is operational: `False` means inventory-only. Service, signal, startup, OpenAPI, and sync code must return before any backend or remote-service connection attempt for disabled endpoint-like rows.
 - `FastAPIEndpoint.websocket_url` is distinct from the backend HTTP URL and is used by `websocket_client.py`.
 - `NetBoxEndpoint.has_configured_token` and serializer/form validation together define the remote NetBox credential behavior.
+- `ProxmoxEndpoint.ssh_credential_source` controls the proxbox-native endpoint
+  SSH credential surface used by the browser terminal. The default
+  `dedicated` mode keeps the encrypted `ssh_*_enc` behavior unchanged.
+  `reuse_endpoint` mode derives `effective_ssh_username` from
+  `username.split("@", 1)[0]` and treats the endpoint plaintext `password` as
+  the SSH password; it still requires `ssh_host` and
+  `ssh_known_host_fingerprint`.
 - `ProxboxPluginSettings` is the singleton home for runtime tunables shared with the
   `proxbox-api` backend (timeouts, concurrency, batch sizes, cache limits, diagnostic
   flags). Add new tunables here rather than as fresh `PROXBOX_*` env vars on the

@@ -160,7 +160,7 @@ Two models perform an **upsert** on POST — if a matching record already exists
 | `/api/plugins/proxbox/ssh-credentials/{id}/` | GET PUT PATCH DELETE | NodeSSHCredential CRUD |
 | `/api/plugins/proxbox/ssh-credentials/by-node/{node_id}/` | GET | Lookup SSH credential by ProxmoxNode |
 | `/api/plugins/proxbox/ssh-credentials/by-node/{node_id}/credentials/` | GET | Retrieve decrypted SSH credential secrets by node |
-| `/api/plugins/proxbox/ssh-credentials/by-endpoint/{endpoint_id}/credentials/` | GET | Retrieve decrypted SSH credential secrets by endpoint |
+| `/api/plugins/proxbox/ssh-credentials/by-endpoint/{endpoint_id}/credentials/` | GET | Retrieve endpoint SSH secrets for browser terminal sessions; supports dedicated encrypted credentials or `ssh_credential_source=reuse_endpoint` with the same response shape |
 | `/api/plugins/proxbox/firewall/security-groups/` | GET POST | ProxmoxFirewallSecurityGroup CRUD |
 | `/api/plugins/proxbox/firewall/security-groups/{id}/` | GET PUT PATCH DELETE | ProxmoxFirewallSecurityGroup CRUD |
 | `/api/plugins/proxbox/firewall/rules/` | GET POST | ProxmoxFirewallRule CRUD |

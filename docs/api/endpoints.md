@@ -117,12 +117,23 @@ curl -H "Authorization: Token <token>" \
 | `enabled` | boolean | Local inventory toggle. Disabled endpoints remain visible but are excluded from operational reads, registration, keepalive, status, and sync paths. |
 | `allowed_tenants` | nested Tenant list | Tenant allow-list for NMS Cloud endpoint visibility. Empty means default/global visibility. |
 | `allow_writes` | boolean | Gate for the operational verb routes on the paired `proxbox-api` (start/stop/snapshot/migrate). Defaults to `false`. When `false`, `proxbox-api` returns `403 {"reason": "writes_disabled_for_endpoint"}` for verb POSTs against this endpoint even with a valid API key and `X-Proxbox-Actor` header. Flip to `true` per-endpoint to opt that Proxmox cluster into write access. |
+| `ssh_credential_source` | choice | Browser terminal endpoint SSH source. `dedicated` (default) uses the encrypted endpoint `ssh_*` fields. `reuse_endpoint` sends the realm-stripped endpoint username plus endpoint plaintext password to `proxbox-api` as password SSH auth. |
+| `ssh_username` / `ssh_port` / `ssh_auth_method` / `ssh_known_host_fingerprint` | mixed | Dedicated endpoint SSH credential metadata for browser terminal sessions. The pinned host-key fingerprint is also required when `ssh_credential_source=reuse_endpoint`. |
+| `has_ssh_password` / `has_ssh_private_key` / `has_ssh_terminal_credentials` | boolean | Read-only browser terminal credential readiness flags. In reuse mode, readiness depends on endpoint host, pinned fingerprint, realm-stripped username, and endpoint password. |
 
 !!! warning "Validation"
     At least one of `domain` or `ip_address` must be provided. Omitting both returns a 400 error on both fields.
 
 !!! tip "Operational verbs"
     `allow_writes` does **not** gate any of the read-side sync paths. It only controls the POST verb routes (`/proxmox/qemu/{vmid}/{start,stop,snapshot,migrate}` and the LXC equivalents) on the paired `proxbox-api`. See [Operational verbs design](../design/operational-verbs.md) and the [Endpoint Operations API](./operations.md).
+
+!!! tip "Endpoint SSH terminal credentials"
+    The endpoint SSH secrets endpoint keeps the same response shape for both
+    credential sources. Dedicated mode decrypts stored `ssh_*_enc` fields and
+    requires the plugin encryption key. Reuse mode returns
+    `auth_method=password`, the realm-stripped endpoint username, the endpoint
+    password, and an empty `private_key`; token-only endpoints return a 4xx
+    error instead of an empty password.
 
 ### Tenant allow-list semantics
 

@@ -31,7 +31,8 @@ state and have the plugin apply that state after merge review.
 6. Confirm the worker listens to the NetBox `default` queue.
 7. Configure one `FastAPIEndpoint`.
 8. Configure one or more `ProxmoxEndpoint` rows.
-9. Enable `allow_writes` only on endpoints that may receive intent writes.
+9. Enable `allow_writes` on the Proxmox endpoint add/edit form only for
+   endpoints that may receive intent writes.
 10. Confirm proxbox-api exposes the `/intent/plan` and `/intent/apply` routes.
 11. Register the merge validator for netbox-branching.
 12. Grant intent request permissions to operators who may request changes.
@@ -65,7 +66,8 @@ The main settings live under **Plugins > Proxbox > Settings**.
 4. Save the settings form.
 5. Confirm the red warning callout is gone after a valid save.
 6. Open each target Proxmox endpoint.
-7. Enable `allow_writes` only where writes are allowed.
+7. Enable `allow_writes` on each endpoint add/edit form only where writes are
+   allowed.
 8. Restart NetBox workers if your deployment requires a restart for new code.
 9. Create a test branch and run a plan before any production merge.
 

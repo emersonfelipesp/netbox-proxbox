@@ -94,6 +94,7 @@ def _stub_for_ssh_credentials(
     rf_status = types.ModuleType("rest_framework.status")
     rf_status.HTTP_404_NOT_FOUND = 404
     rf_status.HTTP_403_FORBIDDEN = 403
+    rf_status.HTTP_422_UNPROCESSABLE_ENTITY = 422
     rf_status.HTTP_503_SERVICE_UNAVAILABLE = 503
 
     class _BasePermission:
@@ -139,6 +140,10 @@ def _stub_for_ssh_credentials(
     np_models.ProxboxPluginSettings = _ProxboxPluginSettings
     np_models.ProxmoxEndpoint = _ProxmoxEndpoint
 
+    np_models_ssh = types.ModuleType("netbox_proxbox.models.ssh_credential")
+    np_models_ssh.AUTH_METHOD_PASSWORD = "password"
+    np_models_ssh.SSH_CRED_SOURCE_REUSE = "reuse_endpoint"
+
     enc_mod = types.ModuleType("netbox_proxbox.utils.encryption")
 
     class EncryptionError(Exception):
@@ -167,6 +172,7 @@ def _stub_for_ssh_credentials(
         ("rest_framework.response", rf_response),
         ("rest_framework.views", rf_views),
         ("netbox_proxbox.models", np_models),
+        ("netbox_proxbox.models.ssh_credential", np_models_ssh),
         ("netbox_proxbox.utils", np_utils),
         ("netbox_proxbox.utils.encryption", enc_mod),
     ]:
@@ -199,10 +205,10 @@ def _load_ssh_credentials_view(
     return module, stubs
 
 
-def _request(*, header: str = ""):
+def _request(*, header: str = "", secure: bool = False):
     return SimpleNamespace(
         headers={"Authorization": header} if header else {},
-        is_secure=lambda: False,
+        is_secure=lambda: secure,
     )
 
 
@@ -397,6 +403,141 @@ def test_endpoint_metadata_payload_omits_secrets(monkeypatch):
     assert "ssh_private_key_enc" not in payload
     assert "password" not in payload
     assert "private_key" not in payload
+
+
+def test_endpoint_metadata_payload_uses_reuse_effective_username(monkeypatch):
+    module, _ = _load_ssh_credentials_view(monkeypatch)
+    endpoint = SimpleNamespace(
+        pk=3,
+        ssh_host="pve.example.com",
+        ssh_credential_source="reuse_endpoint",
+        effective_ssh_username="root",
+        ssh_username="ignored",
+        ssh_port=22,
+        ssh_auth_method="key",
+        ssh_known_host_fingerprint="SHA256:" + "A" * 43,
+        password="endpoint-secret",
+        ssh_password_enc="ciphertext-password",
+        ssh_private_key_enc="ciphertext-key",
+    )
+    payload = module._endpoint_metadata_payload(endpoint)
+    assert payload["username"] == "root"
+    assert payload["auth_method"] == "password"
+    assert payload["has_password"] is True
+    assert payload["has_private_key"] is False
+
+
+class _EndpointQuerySet:
+    def __init__(self, endpoint):
+        self.endpoint = endpoint
+        self.restrict_calls = []
+
+    def restrict(self, user, action):
+        self.restrict_calls.append((user, action))
+        return self
+
+    def get(self, **kwargs):
+        if kwargs == {"pk": self.endpoint.pk}:
+            return self.endpoint
+        raise AssertionError(f"unexpected endpoint lookup: {kwargs}")
+
+
+def _endpoint_secret_request():
+    return SimpleNamespace(
+        headers={"Authorization": "Token expected-token"},
+        is_secure=lambda: True,
+        user=SimpleNamespace(username="proxbox-api"),
+    )
+
+
+def test_endpoint_secrets_view_reuse_returns_endpoint_password(monkeypatch):
+    module, stubs = _load_ssh_credentials_view(monkeypatch)
+    endpoint = SimpleNamespace(
+        pk=11,
+        ssh_host="pve.example.com",
+        ssh_credential_source="reuse_endpoint",
+        effective_ssh_username="root",
+        ssh_username="ignored",
+        ssh_port=22,
+        ssh_auth_method="key",
+        ssh_known_host_fingerprint="SHA256:" + "A" * 43,
+        password="endpoint-secret",
+        ssh_password_enc="",
+        ssh_private_key_enc="",
+        has_ssh_terminal_credentials=True,
+    )
+    stubs.ProxmoxEndpoint.objects = _EndpointQuerySet(endpoint)
+
+    response = module.ProxmoxEndpointSSHCredentialSecretsAPIView().get(
+        _endpoint_secret_request(),
+        endpoint.pk,
+    )
+
+    assert response.status_code == 200
+    assert response.data["username"] == "root"
+    assert response.data["auth_method"] == "password"
+    assert response.data["password"] == "endpoint-secret"
+    assert response.data["private_key"] == ""
+
+
+def test_endpoint_secrets_view_reuse_token_only_returns_422(monkeypatch):
+    module, stubs = _load_ssh_credentials_view(monkeypatch)
+    endpoint = SimpleNamespace(
+        pk=12,
+        ssh_host="pve.example.com",
+        ssh_credential_source="reuse_endpoint",
+        effective_ssh_username="root",
+        ssh_username="ignored",
+        ssh_port=22,
+        ssh_auth_method="key",
+        ssh_known_host_fingerprint="SHA256:" + "A" * 43,
+        password="",
+        ssh_password_enc="",
+        ssh_private_key_enc="",
+        has_ssh_terminal_credentials=False,
+    )
+    stubs.ProxmoxEndpoint.objects = _EndpointQuerySet(endpoint)
+
+    response = module.ProxmoxEndpointSSHCredentialSecretsAPIView().get(
+        _endpoint_secret_request(),
+        endpoint.pk,
+    )
+
+    assert response.status_code == 422
+    assert "Token-only endpoints cannot reuse SSH credentials" in response.data["detail"]
+
+
+def test_endpoint_secrets_view_dedicated_decrypts_existing_payload(monkeypatch):
+    module, stubs = _load_ssh_credentials_view(monkeypatch)
+    stubs.ProxboxPluginSettings.get_solo = staticmethod(
+        lambda: SimpleNamespace(encryption_key="fernet-key")
+    )
+    endpoint = SimpleNamespace(
+        pk=13,
+        ssh_host="pve.example.com",
+        ssh_credential_source="dedicated",
+        ssh_username="proxbox",
+        ssh_port=22,
+        ssh_auth_method="password",
+        ssh_known_host_fingerprint="SHA256:" + "A" * 43,
+        password="endpoint-secret",
+        ssh_password_enc="ciphertext-password",
+        ssh_private_key_enc="",
+        has_ssh_terminal_credentials=True,
+        get_ssh_password=lambda *, key: f"decrypted-with-{key}",
+    )
+    stubs.ProxmoxEndpoint.objects = _EndpointQuerySet(endpoint)
+
+    response = module.ProxmoxEndpointSSHCredentialSecretsAPIView().get(
+        _endpoint_secret_request(),
+        endpoint.pk,
+    )
+
+    assert response.status_code == 200
+    assert response.data["username"] == "proxbox"
+    assert response.data["auth_method"] == "password"
+    assert response.data["password"] == "decrypted-with-fernet-key"
+    assert response.data["private_key"] == ""
 
 
 # ---------------------------------------------------------------------------
