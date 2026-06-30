@@ -25,3 +25,7 @@
 | v0.0.13.post1 | ≥4.6.0-beta2 | ≥3.12 | v0.0.9 | v0.0.7.post6 | v0.0.3.post1 |
 | v0.0.12 | ≥4.6.0-beta1 | ≥3.12 | v0.0.8.post1 | v0.0.7.post6 | v0.0.3.post1 |
 | v0.0.11 | ≥4.5.7 | ≥3.12 | v0.0.7 | v0.0.7.post4 | v0.0.2.post2 |
+
+Current `v0.0.22` source declares NetBox compatibility from `4.5.8` through
+`4.6.99` and is verified against `v4.5.8`, `v4.5.9`, and `v4.6.0` through
+`v4.6.4`.

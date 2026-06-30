@@ -107,8 +107,8 @@ jobs:
       fail-fast: false
       matrix:
         install_source: ${{ fromJSON(inputs.install_source != 'both' && format('["{0}"]', inputs.install_source) || '["local","pypi","container"]') }}
-        # Certified NetBox support set: v4.5.8, v4.5.9, and v4.6.0 through v4.6.3.
-        netbox_image: ${{ fromJSON(inputs.netbox_image != '' && format('["{0}"]', inputs.netbox_image) || '["netboxcommunity/netbox:v4.5.8","netboxcommunity/netbox:v4.5.9","netboxcommunity/netbox:v4.6.0","netboxcommunity/netbox:v4.6.1","netboxcommunity/netbox:v4.6.2","netboxcommunity/netbox:v4.6.3"]') }}
+        # Certified NetBox support set: v4.5.8, v4.5.9, and v4.6.0 through v4.6.4.
+        netbox_image: ${{ fromJSON(inputs.netbox_image != '' && format('["{0}"]', inputs.netbox_image) || '["netboxcommunity/netbox:v4.5.8","netboxcommunity/netbox:v4.5.9","netboxcommunity/netbox:v4.6.0","netboxcommunity/netbox:v4.6.1","netboxcommunity/netbox:v4.6.2","netboxcommunity/netbox:v4.6.3","netboxcommunity/netbox:v4.6.4"]') }}
         network_stack: [ipv4]
         proxbox_api_runtime: ${{ fromJSON((inputs.proxbox_api_runtime == 'python' || inputs.proxbox_api_runtime == 'pyo3-rust') && format('["{0}"]', inputs.proxbox_api_runtime) || '["python","pyo3-rust"]') }}
         proxmox_service: ${{ fromJSON((inputs.proxmox_service == 'pve' || inputs.proxmox_service == 'pbs' || inputs.proxmox_service == 'pdm') && format('["{0}"]', inputs.proxmox_service) || '["pve","pbs","pdm"]') }}

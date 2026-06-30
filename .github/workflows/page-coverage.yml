@@ -8,7 +8,7 @@ on:
     types: [opened, synchronize, reopened, closed]
 
 env:
-  NETBOX_IMAGE: netboxcommunity/netbox:v4.6.1
+  NETBOX_IMAGE: netboxcommunity/netbox:v4.6.4
   PROXMOX_SDK_IMAGE: emersonfelipesp/proxmox-sdk
   PROXBOX_API_VERSION: 0.0.19
   PROXBOX_ENCRYPTION_KEY: proxbox-ci-only-encryption-key-not-a-secret
@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   page-coverage:
-    name: Page Coverage / netboxcommunity/netbox:v4.6.1 / local / pve
+    name: Page Coverage / netboxcommunity/netbox:v4.6.4 / local / pve
     runs-on: ubuntu-latest
     timeout-minutes: 30
 

@@ -53,6 +53,22 @@
       {% render_field form.ssh_port %}
       {% render_field form.ssh_auth_method %}
       {% render_field form.ssh_known_host_fingerprint %}
+      {% if object.pk %}
+        <div class="row mb-3">
+          <div class="col-md-9 offset-md-3">
+            <button type="button"
+                    class="btn btn-sm btn-outline-primary"
+                    id="proxbox-fetch-host-key"
+                    data-endpoint-id="{{ object.pk }}">
+              <i class="mdi mdi-key-chain-variant"></i> {% trans "Fetch host key" %}
+            </button>
+            <span id="proxbox-host-key-status" class="ms-2 small text-muted"></span>
+            <span class="form-text d-block">
+              {% trans "Scans the endpoint host and fills the pinned SHA-256 fingerprint above. Review it, then Save." %}
+            </span>
+          </div>
+        </div>
+      {% endif %}
       {% render_field form.ssh_password %}
       {% render_field form.ssh_private_key %}
       {% if form.clear_ssh_password %}
@@ -70,3 +86,47 @@
     </div>
   {% endif %}
 {% endblock form %}
+
+{% block javascript %}
+  {{ block.super }}
+  <script>
+    (function () {
+      const btn = document.getElementById('proxbox-fetch-host-key');
+      if (!btn) return;
+      const statusEl = document.getElementById('proxbox-host-key-status');
+      const setStatus = function (text, cls) {
+        if (!statusEl) return;
+        statusEl.textContent = text;
+        statusEl.className = 'ms-2 small ' + (cls || 'text-muted');
+      };
+      btn.addEventListener('click', async function () {
+        const endpointId = btn.dataset.endpointId;
+        if (!endpointId) return;
+        const url = '/api/plugins/proxbox/ssh-credentials/by-endpoint/'
+          + encodeURIComponent(endpointId) + '/host-key-fingerprint/';
+        btn.disabled = true;
+        setStatus('{% trans "Fetching host key…" %}', 'text-muted');
+        try {
+          const resp = await fetch(url, {
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+          });
+          let data = {};
+          try { data = await resp.json(); } catch (e) { data = {}; }
+          if (!resp.ok) {
+            throw new Error(data.detail || ('{% trans "Request failed" %} (' + resp.status + ')'));
+          }
+          const input = document.getElementById('id_ssh_known_host_fingerprint');
+          if (input && data.fingerprint) {
+            input.value = data.fingerprint;
+          }
+          const keyType = data.key_type ? (' (' + data.key_type + ')') : '';
+          setStatus('{% trans "Filled — review and Save." %}' + keyType, 'text-success');
+        } catch (err) {
+          setStatus('{% trans "Error:" %} ' + (err.message || err), 'text-danger');
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    })();
+  </script>
+{% endblock javascript %}

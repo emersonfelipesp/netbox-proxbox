@@ -3,7 +3,7 @@
 ## Read This First
 
 The current repository code targets NetBox `4.5.8`, `4.5.9`, and `4.6.x`
-(validated against `v4.5.8`, `v4.5.9`, and `v4.6.0` through `v4.6.3`).
+(validated against `v4.5.8`, `v4.5.9`, and `v4.6.0` through `v4.6.4`).
 
 If you need the code documented in this repository, use [Installing the Plugin Using Git](./2-installing-plugin-git.md) instead.
 

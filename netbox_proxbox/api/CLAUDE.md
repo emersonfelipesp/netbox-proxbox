@@ -128,6 +128,18 @@ These `APIView` subclasses mirror every data-bearing UI page and expose the same
   permission (required alongside `view` here) effectively grants retrieval of that
   password — scope it to operators already trusted with the endpoint credentials.
   Token-only endpoints (no stored password) get `422` from this view.
+- `ProxmoxEndpointHostKeyFingerprintAPIView`
+  (`GET ssh-credentials/by-endpoint/<id>/host-key-fingerprint/`) backs the
+  **"Fetch host key"** button on the SSH-settings tab. It is **session-gated**
+  (`_ProxmoxEndpointChangePermission` → `change_proxmoxendpoint`), resolves the
+  endpoint host (`ssh_host`) + `ssh_port` server-side, and proxies to proxbox-api
+  `GET /ssh/host-key-fingerprint` (via `get_fastapi_request_context`, X-Proxbox-API-Key),
+  returning `{host, port, fingerprint, key_type}` to auto-fill the pinned
+  `ssh_known_host_fingerprint` for operator review. No credential is sent or
+  returned (public host key only). Degrades gracefully: no host → `422`,
+  no backend → `503`, backend without the route (old proxbox-api) → `503`,
+  unreachable/upstream error → `502`. The operator still confirms the pin before
+  Save — no silent auto-trust.
 - Resource views use `get_proxbox_tagged_object_ids()` from `netbox_proxbox/utils.py` to look up objects tagged `proxbox` without repeating the `TaggedItem` query pattern.
 - `DashboardAPIView` makes live HTTP calls to the proxbox-api backend to fetch current cluster/VM statistics; it returns partial data (with error context) when the backend is unreachable rather than failing the entire request.
 - Contract tests for this API layer live in `tests/test_api_source_contracts.py`.
