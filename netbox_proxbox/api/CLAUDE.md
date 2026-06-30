@@ -123,7 +123,11 @@ These `APIView` subclasses mirror every data-bearing UI page and expose the same
   realm-stripped endpoint username, `auth_method=password`, the endpoint
   plaintext password, and an empty private key without requiring the plugin
   encryption key. The dedicated mode still decrypts `ssh_*_enc` fields and
-  returns `503` when the encryption key is missing.
+  returns `503` when the encryption key is missing. **Security:** `reuse_endpoint`
+  means this endpoint returns the Proxmox API password, so the `open_ssh_terminal`
+  permission (required alongside `view` here) effectively grants retrieval of that
+  password — scope it to operators already trusted with the endpoint credentials.
+  Token-only endpoints (no stored password) get `422` from this view.
 - Resource views use `get_proxbox_tagged_object_ids()` from `netbox_proxbox/utils.py` to look up objects tagged `proxbox` without repeating the `TaggedItem` query pattern.
 - `DashboardAPIView` makes live HTTP calls to the proxbox-api backend to fetch current cluster/VM statistics; it returns partial data (with error context) when the backend is unreachable rather than failing the entire request.
 - Contract tests for this API layer live in `tests/test_api_source_contracts.py`.
