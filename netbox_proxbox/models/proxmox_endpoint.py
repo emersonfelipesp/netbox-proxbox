@@ -8,6 +8,7 @@ from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 
 from netbox_proxbox.choices import (
+    ProxmoxAccessMethodChoices,
     ProxmoxEndpointEnvironmentChoices,
     ProxmoxModeChoices,
     SyncModeChoices,
@@ -120,6 +121,20 @@ class ProxmoxEndpoint(EndpointBase):
             "may be dispatched against this endpoint. Default off. Enabling "
             "this widens the trust boundary; restrict the new "
             "core.run_proxmox_action permission to a small operator group."
+        ),
+    )
+    access_methods = models.CharField(
+        max_length=16,
+        choices=ProxmoxAccessMethodChoices,
+        default=ProxmoxAccessMethodChoices.API,
+        verbose_name=_("Access methods"),
+        help_text=_(
+            "Transport access method for this endpoint. 'API only' permits "
+            "Read+Write over the Proxmox HTTP API; 'API + SSH' additionally "
+            "permits SSH (the browser SSH terminal). SSH only complements API; "
+            "there is no SSH-only option. Orthogonal to 'Allow Proxmox-side "
+            "writes'. New endpoints default to API only; this value is pushed "
+            "to the proxbox-api backend."
         ),
     )
     timeout = models.PositiveIntegerField(
@@ -624,6 +639,16 @@ class ProxmoxEndpoint(EndpointBase):
         if self.ssh_credential_source == SSH_CRED_SOURCE_REUSE:
             return (self.username or "").split("@", 1)[0].strip()
         return (self.ssh_username or "").strip()
+
+    @property
+    def ssh_access_enabled(self) -> bool:
+        """True when this endpoint permits the SSH transport (``api_ssh``).
+
+        This is the access-method gate (orthogonal to ``allow_writes``). It
+        governs whether SSH paths — notably the browser SSH terminal — may be
+        used at all, independent of whether SSH credentials are configured.
+        """
+        return self.access_methods == ProxmoxAccessMethodChoices.API_SSH
 
     @property
     def has_ssh_terminal_credentials(self) -> bool:
