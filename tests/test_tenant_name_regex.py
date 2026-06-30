@@ -209,9 +209,7 @@ def test_tenant_from_cluster_inherits_global(sync_params_module):
 
 def test_tenant_from_cluster_endpoint_override(sync_params_module):
     sync_params_module._stubs["global_cluster_enabled"] = True
-    sync_params_module._stubs["endpoints_by_pk"] = {
-        7: _endpoint(cluster_enable=False)
-    }
+    sync_params_module._stubs["endpoints_by_pk"] = {7: _endpoint(cluster_enable=False)}
 
     enabled = sync_params_module.effective_tenant_from_cluster_for_endpoint(7)
 

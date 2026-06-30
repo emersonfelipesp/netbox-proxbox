@@ -1,13 +1,14 @@
 {% load proxbox_tags %}
 {% load i18n %}
-{# Reusable NetBox-style paginator for plugin list pages.
+{% comment %}
+Reusable NetBox-style paginator for plugin list pages.
 
-   Context:
-     page       - a django.core.paginator.Page (EnhancedPage) instance
-     paginator  - the EnhancedPaginator that produced ``page``
-     page_param - the query-string parameter that selects the page number
-                  (defaults to "page"; aggregate pages use "vm_page"/"node_page")
-#}
+Context:
+  page       - a django.core.paginator.Page (EnhancedPage) instance
+  paginator  - the EnhancedPaginator that produced ``page``
+  page_param - the query-string parameter that selects the page number
+               (defaults to "page"; aggregate pages use "vm_page"/"node_page")
+{% endcomment %}
 {% with page_param=page_param|default:"page" %}
 {% if page %}
   <div class="d-flex justify-content-between align-items-center border-top p-2">

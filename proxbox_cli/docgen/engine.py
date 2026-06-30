@@ -7,7 +7,7 @@ from pathlib import Path
 import subprocess
 import sys
 import time
-from typing import TextIO, cast
+from typing import TextIO
 
 import click
 import typer
@@ -81,7 +81,7 @@ def build_command_catalog() -> dict[str, object]:
     from proxbox_cli import app
 
     root = typer.main.get_command(app)
-    commands = _walk_command(cast(click.Command, root), [])
+    commands = _walk_command(root, [])
     return {
         "generated_by": "proxbox_cli.docgen",
         "command_count": len([item for item in commands if item["kind"] == "command"]),

@@ -1,6 +1,9 @@
 # API Reference
 
-Proxbox exposes a REST API under `/api/plugins/proxbox/` for all of its persisted models. The API inherits NetBox's standard DRF infrastructure — authentication, permissions, pagination, and filtering work identically to native NetBox endpoints.
+Proxbox exposes a REST API under `/api/plugins/proxbox/` for all of its persisted models. The plugin registers **29 `NetBoxModelViewSet` classes** — one per model — via a `NetBoxRouter`, so every model is discoverable at the API root. The API inherits NetBox's standard DRF infrastructure — authentication, permissions, pagination, and filtering work identically to native NetBox endpoints.
+
+!!! note "Read-only endpoints"
+    Two endpoints are intentionally **read-only** (GET / HEAD / OPTIONS only) to preserve the four-eyes approval workflow and intent branch safety: `deletion-requests/` and `apply-jobs/`. Attempting a POST, PUT, PATCH, or DELETE to those paths returns HTTP 405. See [Deletion Requests and Apply Jobs](#deletion-requests-and-apply-jobs-read-only) below and the [Deletion Requests operations guide](../operations/deletion-requests.md) for the full safety policy.
 
 ## Base URL
 
@@ -182,3 +185,43 @@ Two models perform an **upsert** on POST — if a matching record already exists
 | `/api/plugins/proxbox/resources/interfaces/` | GET | Aggregated VM interface list (non-model view) |
 | `/api/plugins/proxbox/resources/ip-addresses/` | GET | Aggregated IP address list (non-model view) |
 | `/api/plugins/proxbox/resources/virtual-disks/` | GET | Aggregated virtual disk list (non-model view) |
+| `/api/plugins/proxbox/deletion-requests/` | **GET HEAD OPTIONS** | [DeletionRequest (read-only)](../operations/deletion-requests.md) |
+| `/api/plugins/proxbox/deletion-requests/{id}/` | **GET HEAD OPTIONS** | [DeletionRequest (read-only)](../operations/deletion-requests.md) |
+| `/api/plugins/proxbox/apply-jobs/` | **GET HEAD OPTIONS** | ProxmoxApplyJob (read-only audit) |
+| `/api/plugins/proxbox/apply-jobs/{id}/` | **GET HEAD OPTIONS** | ProxmoxApplyJob (read-only audit) |
+
+## Deletion Requests and Apply Jobs (Read-Only)
+
+`DeletionRequest` and `ProxmoxApplyJob` are the two **read-only** viewsets in the plugin. Their `http_method_names` is restricted to `["get", "head", "options"]` — POST, PUT, PATCH, and DELETE return HTTP 405.
+
+### Why they are read-only
+
+Both models form part of a **five-lock deletion safety chain** that prevents autonomous VM destruction. The chain requires separate actors, explicit confirmation phrases, and operator approval — no single API call (and no automated agent) can bypass it. Making the REST surface read-only enforces this at the framework level:
+
+| Lock | Mechanism |
+|---|---|
+| 1 — Plugin setting | Master `allow_delete` toggle must be enabled in `ProxboxPluginSettings` |
+| 2 — Typed phrase | Caller must supply the exact phrase `allow-edit-and-add-actions` in the request |
+| 3 — Explicit flag | Request body must include `apply_destroy_confirmed: true` |
+| 4 — Requester permission | Initiating user must hold the `delete_deletion_request` permission |
+| 5 — Separate authorizer | A **different** user must approve (`self_approve_allowed: false`) |
+
+The `DeletionRequest` REST endpoint exists only for reading the current deletion queue. The actual deletion workflow is initiated through the NetBox UI or the intent API — not the plugin REST API. See the [Deletion Requests guide](../operations/deletion-requests.md) for the complete four-eyes workflow.
+
+### ProxmoxApplyJob
+
+`ProxmoxApplyJob` records the result of intent-branch apply operations (plan → apply cycles). It is written exclusively by the proxbox-api backend; the plugin REST surface is read-only so audit records cannot be tampered with through the API.
+
+**Example — list pending deletion requests:**
+
+```bash
+curl -H "Authorization: Token <token>" \
+     "http://netbox.example.com/api/plugins/proxbox/deletion-requests/?status=pending"
+```
+
+**Example — retrieve an apply job result:**
+
+```bash
+curl -H "Authorization: Token <token>" \
+     "http://netbox.example.com/api/plugins/proxbox/apply-jobs/42/"
+```

@@ -1,6 +1,7 @@
 """Register plugin UI routes for pages, models, sync actions, and status checks."""
 
 from django.urls import include, path
+from django.views.generic import RedirectView
 from utilities.urls import get_model_urls
 
 from netbox_proxbox import views
@@ -21,7 +22,21 @@ from netbox_proxbox.websocket_client import WebSocketView
 app_name = "netbox_proxbox"
 
 urlpatterns = [
-    path("", views.HomeView.as_view(), name="home"),
+    # Home lives at ``home/`` (not the bare plugin root) so its menu-item URL is
+    # not a prefix of every other Proxbox page URL. NetBox's sidenav active-link
+    # detection (utilities sidenav.ts ``getActiveLinks``) marks a menu item
+    # active when its href is a substring of the current URL, which made the
+    # "Homepage" entry highlight on every Proxbox page when it sat at the root.
+    # The bare root 302-redirects to ``home`` so bookmarks and inbound links to
+    # ``/plugins/proxbox/`` keep working.
+    path(
+        "",
+        RedirectView.as_view(
+            pattern_name="plugins:netbox_proxbox:home", permanent=False
+        ),
+        name="home_redirect",
+    ),
+    path("home/", views.HomeView.as_view(), name="home"),
     path(
         "quick-edit/<str:endpoint_type>/<int:pk>/",
         views.HomeQuickEditView.as_view(),

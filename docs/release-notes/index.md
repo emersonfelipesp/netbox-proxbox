@@ -49,4 +49,4 @@ part of the same plugin family.
 - Older pages are intentionally brief because the repository does not preserve fuller release-note prose for those versions.
 
 
-> **Current release:** netbox-proxbox `0.0.20.post3` pairs with proxbox-api `0.0.17.post1` (NetBox `4.5.8`–`4.6.99`).
+> **Current release:** netbox-proxbox `0.0.21` pairs with proxbox-api `0.0.18.post5` (NetBox `4.5.8`–`4.6.99`).

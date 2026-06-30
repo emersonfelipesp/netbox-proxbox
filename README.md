@@ -133,6 +133,16 @@ global pool and returns only the explicit matches. Use this to pin a tenant
 such as Confitec to a single cluster without changing the default pool for
 other tenants.
 
+## What's New in v0.0.21
+
+Paired with backend [`proxbox-api 0.0.18.post5`](https://github.com/emersonfelipesp/proxbox-api).
+
+- **Sync-mode filtering at source.** Per-record VM and VM-template filtering is enforced by the paired backend through `sync_mode_vm` and `sync_mode_vm_template` query params, so disabled modes no longer create dependent NetBox objects for skipped VMs.
+- **Batch and stream hardening.** VM sync uses two-phase batch processing, isolates per-VM dispatch failures, matches interface-dense guest aliases by name, and emits partial-failure stream frames for operator visibility.
+- **Current SDK pairing.** This release pairs with `proxmox-sdk 0.0.12` and `netbox-sdk 0.0.10` through the separate backend runtime.
+
+Full notes: [Release Notes - v0.0.21](docs/release-notes/version-0.0.21.md).
+
 ## What's New in v0.0.20.post3
 
 Paired with backend [`proxbox-api 0.0.17.post1`](https://github.com/emersonfelipesp/proxbox-api).
