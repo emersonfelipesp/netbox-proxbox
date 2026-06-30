@@ -374,6 +374,7 @@ class ProxmoxEndpointFilterSet(ProxboxModelFilterSet):
             "allowed_tenants__id__in",
             "allowed_tenants__isnull",
             "enabled",
+            "ssh_credential_source",
         )
 
     def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:

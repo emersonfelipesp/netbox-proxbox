@@ -76,6 +76,7 @@ class ProxmoxEndpointTable(NetBoxTable):
     tenant = tables.Column(linkify=True)
     mode = ChoiceFieldColumn()
     environment = ChoiceFieldColumn()
+    ssh_credential_source = ChoiceFieldColumn()
     verify_ssl = BooleanColumn()
     enabled = BooleanColumn()
     status = tables.TemplateColumn(
@@ -99,6 +100,7 @@ class ProxmoxEndpointTable(NetBoxTable):
             "repoid",
             "username",
             "token_name",
+            "ssh_credential_source",
             "verify_ssl",
             "enabled",
             "timeout",

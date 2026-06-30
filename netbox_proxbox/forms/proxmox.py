@@ -622,6 +622,11 @@ class ProxmoxEndpointFilterForm(NetBoxModelFilterSetForm):
     environment = forms.MultipleChoiceField(
         choices=ProxmoxEndpointEnvironmentChoices, required=False
     )
+    ssh_credential_source = forms.MultipleChoiceField(
+        choices=SSH_CRED_SOURCE_CHOICES,
+        required=False,
+        label=_("SSH credential source"),
+    )
     site = DynamicModelMultipleChoiceField(
         queryset=Site.objects.all(),
         required=False,
