@@ -51,9 +51,14 @@ from .serializers import (
     ProxmoxFirewallSecurityGroupSerializer,
     ProxmoxDatacenterCpuModelSerializer,
     ProxmoxNodeSerializer,
+    ProxmoxSdnBindingSerializer,
+    ProxmoxSdnControllerSerializer,
     ProxmoxSdnFabricSerializer,
     ProxmoxSdnPrefixListSerializer,
     ProxmoxSdnRouteMapSerializer,
+    ProxmoxSdnSubnetSerializer,
+    ProxmoxSdnVNetSerializer,
+    ProxmoxSdnZoneSerializer,
     ProxmoxStorageSerializer,
     ProxmoxVMCloudInitSerializer,
     ProxmoxVMTemplateSerializer,
@@ -1609,6 +1614,46 @@ class ProxmoxSdnFabricViewSet(NetBoxModelViewSet):
     queryset = models.ProxmoxSdnFabric.objects.select_related("endpoint")
     serializer_class = ProxmoxSdnFabricSerializer
     filterset_class = filtersets.ProxmoxSdnFabricFilterSet
+
+
+class ProxmoxSdnControllerViewSet(NetBoxModelViewSet):
+    """REST API for Proxmox SDN controllers."""
+
+    queryset = models.ProxmoxSdnController.objects.select_related("endpoint")
+    serializer_class = ProxmoxSdnControllerSerializer
+    filterset_class = filtersets.ProxmoxSdnControllerFilterSet
+
+
+class ProxmoxSdnZoneViewSet(NetBoxModelViewSet):
+    """REST API for Proxmox SDN zones."""
+
+    queryset = models.ProxmoxSdnZone.objects.select_related("endpoint")
+    serializer_class = ProxmoxSdnZoneSerializer
+    filterset_class = filtersets.ProxmoxSdnZoneFilterSet
+
+
+class ProxmoxSdnVNetViewSet(NetBoxModelViewSet):
+    """REST API for Proxmox SDN VNets."""
+
+    queryset = models.ProxmoxSdnVNet.objects.select_related("endpoint", "l2vpn")
+    serializer_class = ProxmoxSdnVNetSerializer
+    filterset_class = filtersets.ProxmoxSdnVNetFilterSet
+
+
+class ProxmoxSdnSubnetViewSet(NetBoxModelViewSet):
+    """REST API for Proxmox SDN subnets."""
+
+    queryset = models.ProxmoxSdnSubnet.objects.select_related("endpoint", "prefix")
+    serializer_class = ProxmoxSdnSubnetSerializer
+    filterset_class = filtersets.ProxmoxSdnSubnetFilterSet
+
+
+class ProxmoxSdnBindingViewSet(NetBoxModelViewSet):
+    """REST API for Proxmox SDN binding/status records."""
+
+    queryset = models.ProxmoxSdnBinding.objects.select_related("endpoint")
+    serializer_class = ProxmoxSdnBindingSerializer
+    filterset_class = filtersets.ProxmoxSdnBindingFilterSet
 
 
 class ProxmoxSdnRouteMapViewSet(NetBoxModelViewSet):

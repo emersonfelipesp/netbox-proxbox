@@ -56,9 +56,14 @@ from netbox_proxbox.api.serializers.datacenter import (
     ProxmoxDatacenterCpuModelSerializer,
 )
 from netbox_proxbox.api.serializers.sdn import (
+    ProxmoxSdnBindingSerializer,
+    ProxmoxSdnControllerSerializer,
     ProxmoxSdnFabricSerializer,
     ProxmoxSdnPrefixListSerializer,
     ProxmoxSdnRouteMapSerializer,
+    ProxmoxSdnSubnetSerializer,
+    ProxmoxSdnVNetSerializer,
+    ProxmoxSdnZoneSerializer,
 )
 from netbox_proxbox.api.serializers.replication import ReplicationSerializer
 from netbox_proxbox.api.serializers.settings import ProxboxPluginSettingsSerializer

@@ -282,9 +282,19 @@ Six read-only models persist Proxmox VE firewall objects synced from proxbox-api
 
 | Model | Purpose |
 |---|---|
+| `ProxmoxSdnController` | SDN controller metadata and raw Proxmox payload |
+| `ProxmoxSdnZone` | SDN zone metadata including controller, RT import, IPAM, and state |
+| `ProxmoxSdnVNet` | SDN VNet metadata linked to NetBox `vpn.L2VPN` when EVPN/VXLAN mapping applies |
+| `ProxmoxSdnSubnet` | SDN subnet metadata linked to NetBox `ipam.Prefix` for valid CIDR payloads |
+| `ProxmoxSdnBinding` | Runtime binding/status rows and links back to generated NetBox objects |
 | `ProxmoxSdnFabric` | SDN fabric definition synced from Proxmox |
 | `ProxmoxSdnRouteMap` | SDN route-map definition |
 | `ProxmoxSdnPrefixList` | SDN prefix-list definition |
+
+The sync uses NetBox built-ins first for portable network semantics:
+`vpn.L2VPN`, `vpn.L2VPNTermination`, `ipam.RouteTarget`, and `ipam.Prefix`.
+Plugin SDN models keep Proxmox-specific fields, unsupported zone types, raw
+payloads, skipped reasons, termination conflicts, and generated-object bindings.
 
 ### Operational Models
 

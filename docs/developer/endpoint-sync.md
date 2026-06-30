@@ -47,7 +47,7 @@ flowchart TB
 
     subgraph SyncJob["ProxboxSyncJob (RQ worker)"]
         Preflight["_ensure_backend_endpoints()\npreflight push"]
-        Stages["SSE sync stages\n(12 stages)"]
+        Stages["SSE sync stages\n(13 stages)"]
     end
 
     NB_EP -- "post_save signal\nsync_netbox_endpoint_to_backend()" --> BE_NB

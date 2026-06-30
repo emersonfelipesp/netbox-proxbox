@@ -620,6 +620,7 @@ def load_plugin_module(
         NETWORK_INTERFACES = "network-interfaces"
         VM_INTERFACES = "vm-interfaces"
         IP_ADDRESSES = "ip-addresses"
+        SDN = "sdn"
         ALL = "all"
 
     nbp_choices.SyncTypeChoices = _SyncTypeChoices

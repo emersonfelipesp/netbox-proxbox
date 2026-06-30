@@ -55,6 +55,14 @@ from .firewall import (
     ProxmoxFirewallSecurityGroupView,
 )
 from .sdn import (
+    ProxmoxSdnBindingDeleteView,
+    ProxmoxSdnBindingEditView,
+    ProxmoxSdnBindingListView,
+    ProxmoxSdnBindingView,
+    ProxmoxSdnControllerDeleteView,
+    ProxmoxSdnControllerEditView,
+    ProxmoxSdnControllerListView,
+    ProxmoxSdnControllerView,
     ProxmoxSdnFabricDeleteView,
     ProxmoxSdnFabricEditView,
     ProxmoxSdnFabricListView,
@@ -67,6 +75,18 @@ from .sdn import (
     ProxmoxSdnRouteMapEditView,
     ProxmoxSdnRouteMapListView,
     ProxmoxSdnRouteMapView,
+    ProxmoxSdnSubnetDeleteView,
+    ProxmoxSdnSubnetEditView,
+    ProxmoxSdnSubnetListView,
+    ProxmoxSdnSubnetView,
+    ProxmoxSdnVNetDeleteView,
+    ProxmoxSdnVNetEditView,
+    ProxmoxSdnVNetListView,
+    ProxmoxSdnVNetView,
+    ProxmoxSdnZoneDeleteView,
+    ProxmoxSdnZoneEditView,
+    ProxmoxSdnZoneListView,
+    ProxmoxSdnZoneView,
 )
 from .datacenter import (
     ProxmoxDatacenterCpuModelDeleteView,

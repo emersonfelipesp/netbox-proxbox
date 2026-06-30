@@ -17,6 +17,7 @@ except ImportError:  # pragma: no cover - compatibility for focused import stubs
         "sync_mode_node",
         "sync_mode_storage",
         "sync_mode_ip_address",
+        "sync_mode_sdn",
     )
 from netbox_proxbox.sync_types import (
     _TARGETED_VM_JOB_NAME_RE,
@@ -168,16 +169,20 @@ def _global_overwrites() -> dict[str, bool]:
 
 def _global_sync_modes() -> dict[str, str]:
     """Return sync modes from the global plugin settings singleton."""
+
+    def default_for(name: str) -> str:
+        return "disabled" if name == "sync_mode_sdn" else "always"
+
     try:
         from netbox_proxbox.models import ProxboxPluginSettings
 
         settings = ProxboxPluginSettings.get_solo()
         return {
-            name: str(getattr(settings, name, "always") or "always")
+            name: str(getattr(settings, name, default_for(name)) or default_for(name))
             for name in SYNC_MODE_FIELDS
         }
     except (ImportError, RuntimeError, AttributeError):
-        return {name: "always" for name in SYNC_MODE_FIELDS}
+        return {name: default_for(name) for name in SYNC_MODE_FIELDS}
 
 
 def effective_overwrites_for_endpoint(

@@ -135,6 +135,9 @@ def test_models_init_exports_sdn_models():
 _SQUASH_MIGRATION = (
     "netbox_proxbox/migrations/0039_squashed_0039_0042_pve_9_2_firewall_sdn.py"
 )
+_SDN_INVENTORY_MIGRATION = (
+    "netbox_proxbox/migrations/0055_sdn_sync_controls_and_inventory.py"
+)
 
 
 def test_migration_0041_exists():
@@ -153,6 +156,14 @@ def test_migration_0041_depends_on_0040():
     # The squash covers 0039–0042; its base dependency is 0038_v0_0_16_release.
     content = _read(_SQUASH_MIGRATION)
     assert "0038_v0_0_16_release" in content
+
+
+def test_sdn_inventory_migration_exists_after_endpoint_ssh_source_migration():
+    content = _read(_SDN_INVENTORY_MIGRATION)
+    assert "0054_proxmoxendpoint_ssh_credential_source" in content
+    assert "sync_mode_sdn" in content
+    assert "proxmoxsdncontroller" in content.lower()
+    assert "proxmoxsdnbinding" in content.lower()
 
 
 # ---------------------------------------------------------------------------

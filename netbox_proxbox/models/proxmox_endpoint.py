@@ -220,6 +220,16 @@ class ProxmoxEndpoint(EndpointBase):
             "Per-endpoint override for Proxmox storage sync. Leave blank to inherit."
         ),
     )
+    sync_mode_sdn = models.CharField(
+        max_length=16,
+        choices=SyncModeChoices,
+        null=True,
+        blank=True,
+        verbose_name=_("SDN sync mode"),
+        help_text=_(
+            "Per-endpoint override for read-only Proxmox SDN sync. Leave blank to inherit."
+        ),
+    )
     sync_mode_ip_address = models.CharField(
         max_length=16,
         choices=SyncModeChoices,

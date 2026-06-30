@@ -130,6 +130,31 @@ router.register(
     basename="proxmoxsdnfabric",
 )
 router.register(
+    "sdn-controllers",
+    views.ProxmoxSdnControllerViewSet,
+    basename="proxmoxsdncontroller",
+)
+router.register(
+    "sdn-zones",
+    views.ProxmoxSdnZoneViewSet,
+    basename="proxmoxsdnzone",
+)
+router.register(
+    "sdn-vnets",
+    views.ProxmoxSdnVNetViewSet,
+    basename="proxmoxsdnvnet",
+)
+router.register(
+    "sdn-subnets",
+    views.ProxmoxSdnSubnetViewSet,
+    basename="proxmoxsdnsubnet",
+)
+router.register(
+    "sdn-bindings",
+    views.ProxmoxSdnBindingViewSet,
+    basename="proxmoxsdnbinding",
+)
+router.register(
     "sdn-route-maps",
     views.ProxmoxSdnRouteMapViewSet,
     basename="proxmoxsdnroutemap",
