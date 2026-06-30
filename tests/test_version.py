@@ -19,6 +19,7 @@ INIT_PATH = REPO_ROOT / "netbox_proxbox" / "__init__.py"
 PYPROJECT_PATH = REPO_ROOT / "pyproject.toml"
 README_PATH = REPO_ROOT / "README.md"
 CLAUDE_PATH = REPO_ROOT / "CLAUDE.md"
+COMPATIBILITY_PATH = REPO_ROOT / "COMPATIBILITY.md"
 DOCS_INDEX_PATH = REPO_ROOT / "docs" / "index.md"
 INSTALL_GIT_PATH = REPO_ROOT / "docs" / "installation" / "2-installing-plugin-git.md"
 UPGRADING_PATH = REPO_ROOT / "docs" / "installation" / "upgrading.md"
@@ -233,8 +234,19 @@ def test_current_release_pairing_is_documented_in_primary_docs():
         text = _read(path)
         _assert_markdown_table_row(text, current_row)
 
+    compatibility_row = (
+        f"v{CURRENT_RELEASE_VERSION}",
+        f">={CURRENT_NETBOX_MIN_VERSION}",
+        ">=3.12",
+        f"v{CURRENT_PROXBOX_API_VERSION}",
+        "v0.0.10",
+        "v0.0.12",
+    )
+    _assert_markdown_table_row(_read(COMPATIBILITY_PATH), compatibility_row)
+
     for path in (
         CLAUDE_PATH,
+        COMPATIBILITY_PATH,
         DOCS_INDEX_PATH,
         UPGRADING_PATH,
         RELEASE_NOTES_INDEX_PATH,

@@ -93,7 +93,7 @@ def test_deletion_request_viewset_is_read_only():
     # The viewset class for DeletionRequest must restrict http_method_names to
     # read-only methods (no POST, PUT, PATCH, DELETE allowed via REST API).
     assert 'http_method_names = ["get", "head", "options"]' in content, (
-        "DeletionRequest viewset must set http_method_names=[\"get\",\"head\",\"options\"] "
+        'DeletionRequest viewset must set http_method_names=["get","head","options"] '
         "to prevent REST-driven creation, update, or deletion"
     )
 
@@ -106,10 +106,14 @@ def test_deletion_request_viewset_is_read_only():
 def test_models_contain_no_exec():
     # Security assertion: scans source text to ensure exec() is absent.
     content = _read("netbox_proxbox/models/__init__.py")
-    assert "exec(" not in content, "netbox_proxbox/models/__init__.py must not use exec()"
+    assert "exec(" not in content, (
+        "netbox_proxbox/models/__init__.py must not use exec()"
+    )
 
 
 def test_views_contain_no_innerHTML():
     # Security assertion: scans source text to ensure XSS sink is absent.
     content = _read("netbox_proxbox/api/views.py")
-    assert "innerHTML" not in content, "netbox_proxbox/api/views.py must not use innerHTML"
+    assert "innerHTML" not in content, (
+        "netbox_proxbox/api/views.py must not use innerHTML"
+    )
