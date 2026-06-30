@@ -8,6 +8,7 @@ from .ha import HAClusterSummaryAPIView, HAVMResourceAPIView
 from .ssh_credentials import (
     NodeSSHCredentialByNodeAPIView,
     NodeSSHCredentialSecretsAPIView,
+    ProxmoxEndpointHostKeyFingerprintAPIView,
     ProxmoxEndpointSSHCredentialSecretsAPIView,
 )
 from .views import (
@@ -245,6 +246,11 @@ urlpatterns = [
         "ssh-credentials/by-endpoint/<int:endpoint_id>/credentials/",
         ProxmoxEndpointSSHCredentialSecretsAPIView.as_view(),
         name="api-ssh-credential-endpoint-secrets",
+    ),
+    path(
+        "ssh-credentials/by-endpoint/<int:endpoint_id>/host-key-fingerprint/",
+        ProxmoxEndpointHostKeyFingerprintAPIView.as_view(),
+        name="api-ssh-credential-endpoint-host-key",
     ),
     # Model CRUD router (ProxmoxCluster/Node at proxmox-clusters/proxmox-nodes/)
     path("", include(router.urls)),
