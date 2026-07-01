@@ -1107,3 +1107,37 @@ def test_proxmox_endpoint_edit_subpages_render_shared_object_header():
         # Breadcrumb + object identifier match the detail header.
         assert "action_url object 'list'" in contents
         assert 'object|meta:"app_label"' in contents
+
+
+def test_overwrite_behavior_tab_has_edit_button_to_sync_overwrite_settings():
+    """The read-only Overwrite Behavior tab offers a change-permission-gated Edit
+    button that deep-links to the endpoint Settings page's Sync Overwrite sub-tab
+    (via the `#proxbox-settings-overwrite` hash), so operators can jump straight
+    to editing the overwrite flags.
+    """
+    tpl = _read(
+        "netbox_proxbox/templates/netbox_proxbox/proxmoxendpoint_overwrite_behavior.html"
+    )
+    # Gated on the change permission.
+    assert "perms.netbox_proxbox.change_proxmoxendpoint" in tpl
+    # Reverses the settings URL for this object and targets the Sync Overwrite pane.
+    assert "action_url object 'settings'" in tpl
+    assert "#proxbox-settings-overwrite" in tpl
+    # Rendered as an Edit button.
+    assert 'role="button"' in tpl
+    assert "{% trans \"Edit\" %}" in tpl
+
+
+def test_settings_tabs_honor_url_hash_for_deep_linking():
+    """The Settings page's inline tab script activates the pane targeted by the
+    URL hash (e.g. `#proxbox-settings-overwrite`) after the validation-error
+    check, so the Overwrite Behavior tab's Edit button lands on the right sub-tab.
+    """
+    tpl = _read(
+        "netbox_proxbox/templates/netbox_proxbox/proxmoxendpoint_settings.html"
+    )
+    assert "window.location.hash" in tpl
+    # Validation-error focus still takes priority and the switch is DOM-safe.
+    assert "has-errors" in tpl
+    assert "DOMContentLoaded" in tpl
+    assert ".click()" in tpl
