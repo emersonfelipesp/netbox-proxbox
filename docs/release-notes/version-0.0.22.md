@@ -1,11 +1,11 @@
 # Version 0.0.22
 
-netbox-proxbox `0.0.22` pairs with the `proxbox-api 0.0.19.post4`
+netbox-proxbox `0.0.22` pairs with the `proxbox-api 0.0.19.post5`
 backend release, the `proxmox-sdk 0.0.12` Proxmox SDK, and
 `netbox-sdk 0.0.10`. NetBox compatibility is unchanged: `4.5.8` through
 `4.6.99` (validated against `4.5.8`, `4.5.9`, and `4.6.0` through `4.6.4`).
 
-Current pairing: netbox-proxbox 0.0.22 <-> proxbox-api 0.0.19.post4 <-> proxmox-sdk 0.0.12 <-> netbox-sdk 0.0.10.
+Current pairing: netbox-proxbox 0.0.22 <-> proxbox-api 0.0.19.post5 <-> proxmox-sdk 0.0.12 <-> netbox-sdk 0.0.10.
 
 ## Highlights
 
@@ -43,7 +43,7 @@ Current pairing: netbox-proxbox 0.0.22 <-> proxbox-api 0.0.19.post4 <-> proxmox-
 
 | NetBox  | netbox-proxbox | proxbox-api | netbox-sdk | proxmox-sdk |
 |---------|----------------|-------------|------------|-------------|
-| >=4.5.8 | v0.0.22 | v0.0.19.post4 | v0.0.10 | v0.0.12 |
+| >=4.5.8 | v0.0.22 | v0.0.19.post5 | v0.0.10 | v0.0.12 |
 | >=4.5.8 | v0.0.21 | v0.0.18.post5 | v0.0.10 | v0.0.12 |
 | >=4.5.8 | v0.0.20.post3 | v0.0.17.post1 | v0.0.9.post1 | v0.0.11.post1 |
 | >=4.5.8 | v0.0.20.post2 | v0.0.17.post1 | v0.0.9.post1 | v0.0.11.post1 |
@@ -51,13 +51,13 @@ Current pairing: netbox-proxbox 0.0.22 <-> proxbox-api 0.0.19.post4 <-> proxmox-
 
 `proxbox-api` is not a Python dependency of this plugin; the services
 communicate over HTTP/SSE/WebSocket. Install the matching
-`proxbox-api 0.0.19.post4` backend separately. This release supports NetBox
+`proxbox-api 0.0.19.post5` backend separately. This release supports NetBox
 `4.5.8` through `4.6.99` and requires Python `>=3.12`.
 
 ## Upgrade Notes
 
 - Upgrade the plugin to `netbox-proxbox 0.0.22` and the backend to
-  `proxbox-api 0.0.19.post4`.
+  `proxbox-api 0.0.19.post5`.
 - Use `proxmox-sdk 0.0.12` and `netbox-sdk 0.0.10` in the paired
   backend environment.
 - Run the normal NetBox plugin upgrade flow: install the package, run

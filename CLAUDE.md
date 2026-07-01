@@ -50,7 +50,7 @@ This repository packages the `netbox_proxbox` NetBox plugin. The plugin adds end
 - Docker-based plugin installation docs are maintained at [`docs/installation/3-installing-plugin-docker.md`](./docs/installation/3-installing-plugin-docker.md), including `plugin_requirements.txt` and `configuration/plugins.py` usage.
 - Backend Docker examples map host `8800` to container `8000` (`-p 8800:8000`) because the published `proxbox-api` image serves through nginx on container port `8000`.
 
-The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxbox/__init__.py). It declares plugin version `0.0.22` and NetBox compatibility `4.5.8` through `4.6.99` (validated against `4.5.8`, `4.5.9`, and `4.6.0` through `4.6.4`). The current pairing is `netbox-proxbox 0.0.22 <-> proxbox-api 0.0.19.post4 <-> proxmox-sdk 0.0.12 <-> netbox-sdk 0.0.10`. The `0.0.22` release adds per-endpoint API-only vs API+SSH access methods, the endpoint **Fetch host key** flow, SSH credential-source selection, Proxmox-side write controls, tenant allowlists, bulk endpoint enablement, PDM/SDN sync surfaces, Firecracker serializer hardening, NetBox `4.6.4` certification, and read-only REST coverage for safety-gated audit resources. The previous stable `0.0.21` release pairs with backend `0.0.18.post5`. `proxbox-api` is not a Python dependency of this plugin; the services communicate over HTTP.
+The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxbox/__init__.py). It declares plugin version `0.0.22` and NetBox compatibility `4.5.8` through `4.6.99` (validated against `4.5.8`, `4.5.9`, and `4.6.0` through `4.6.4`). The current pairing is `netbox-proxbox 0.0.22 <-> proxbox-api 0.0.19.post5 <-> proxmox-sdk 0.0.12 <-> netbox-sdk 0.0.10`. The `0.0.22` release adds per-endpoint API-only vs API+SSH access methods, the endpoint **Fetch host key** flow, SSH credential-source selection, Proxmox-side write controls, tenant allowlists, bulk endpoint enablement, PDM/SDN sync surfaces, Firecracker serializer hardening, NetBox `4.6.4` certification, and read-only REST coverage for safety-gated audit resources. The previous stable `0.0.21` release pairs with backend `0.0.18.post5`. `proxbox-api` is not a Python dependency of this plugin; the services communicate over HTTP.
 
 **Companion repos (cross-link map):**
 
@@ -519,7 +519,7 @@ What was done for v0.0.19:
 **Manual deployment for hotfixes or rollbacks:**
 ```bash
 # Deploy a specific tag or branch (short name "proxbox", not "netbox-proxbox")
-ssh nmc-prod-207 -- deploy-plugin proxbox v0.0.19.post4
+ssh nmc-prod-207 -- deploy-plugin proxbox v0.0.19.post5
 
 # List recent deploys (check system journal)
 ssh nmc-prod-207 -- journalctl -u netbox-production -n 50 --no-pager
