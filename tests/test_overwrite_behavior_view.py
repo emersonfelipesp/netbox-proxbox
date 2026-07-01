@@ -84,7 +84,10 @@ def test_view_tab_metadata_and_template(view_module_ast):
     assert isinstance(tab, ast.Call) and isinstance(tab.func, ast.Name)
     assert tab.func.id == "ViewTab"
     kw = {k.arg: k.value for k in tab.keywords}
-    assert isinstance(kw["label"], ast.Constant) and kw["label"].value == "Overwrite Behavior"
+    assert (
+        isinstance(kw["label"], ast.Constant)
+        and kw["label"].value == "Overwrite Behavior"
+    )
     assert kw["permission"].value == "netbox_proxbox.view_proxmoxendpoint"
     assert isinstance(kw["weight"].value, int)
 
@@ -93,7 +96,9 @@ def test_view_tab_metadata_and_template(view_module_ast):
             n.value
             for n in cls.body
             if isinstance(n, ast.Assign)
-            and any(isinstance(t, ast.Name) and t.id == "template_name" for t in n.targets)
+            and any(
+                isinstance(t, ast.Name) and t.id == "template_name" for t in n.targets
+            )
         ),
         None,
     )
@@ -104,7 +109,11 @@ def test_view_tab_metadata_and_template(view_module_ast):
 def test_view_exposes_overwrite_row_groups(view_module_ast):
     cls = _find_class(view_module_ast, "ProxmoxEndpointOverwriteBehaviorView")
     method = next(
-        (n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == "get_extra_context"),
+        (
+            n
+            for n in cls.body
+            if isinstance(n, ast.FunctionDef) and n.name == "get_extra_context"
+        ),
         None,
     )
     assert method is not None
@@ -132,7 +141,9 @@ def test_row_groups_cover_all_overwrite_fields_in_order():
     spec = importlib.util.spec_from_file_location("_constants_ob", CONSTANTS_PATH)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    flat = tuple(field for _label, fields in mod.OVERWRITE_FIELD_GROUPS for field in fields)
+    flat = tuple(
+        field for _label, fields in mod.OVERWRITE_FIELD_GROUPS for field in fields
+    )
     assert flat == mod.OVERWRITE_FIELDS
     assert len(flat) == 25
 
@@ -145,10 +156,12 @@ def test_overwrite_behavior_template_uses_subtabs():
     assert "extends 'generic/object.html'" in tpl
     assert 'class="nav nav-tabs' in tpl
     assert "overwrite_row_groups" in tpl
-    assert "data-bs-target=\"#overwrite-behavior-pane-" in tpl
+    assert 'data-bs-target="#overwrite-behavior-pane-' in tpl
     # First sub-tab active, badges preserved.
     assert "show active" in tpl
-    assert "text-bg-success" in tpl and "text-bg-warning" in tpl and "text-bg-light" in tpl
+    assert (
+        "text-bg-success" in tpl and "text-bg-warning" in tpl and "text-bg-light" in tpl
+    )
 
 
 def test_detail_template_no_longer_has_overwrite_card():
