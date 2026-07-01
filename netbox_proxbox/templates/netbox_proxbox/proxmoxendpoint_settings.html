@@ -1,11 +1,32 @@
 {% extends 'generic/object_edit.html' %}
 {% load form_helpers %}
+{% load helpers %}
+{% load tabs %}
 {% load i18n %}
 {% load proxbox_tags %}
 
 {% block title %}
   {% blocktrans trimmed with object=object %}Settings for {{ object }}{% endblocktrans %}
 {% endblock title %}
+
+{# Keep the full object tab strip (primary detail tab + every registered #}
+{# ViewTab: Settings, SSH, Terminal, Sync Jobs, …) on this edit sub-page so #}
+{# the operator can navigate back to the other tabs, instead of the lone   #}
+{# "Edit" button object_edit.html renders by default. The current tab is    #}
+{# highlighted via context['tab'] (set to self.tab by ObjectEditView). The  #}
+{# edit form still renders because object_edit.html's content pane is        #}
+{# hardcoded `tab-pane show active`. #}
+{% block tabs %}
+  <ul class="nav nav-tabs" role="presentation">
+    {# Primary detail tab #}
+    <li class="nav-item">
+      <a class="nav-link{% if not tab %} active{% endif %}" href="{{ object.get_absolute_url }}">{{ object|meta:"verbose_name"|bettertitle }}</a>
+    </li>
+
+    {# Registered model-view tabs (Settings/SSH/Terminal/Sync Jobs/…) #}
+    {% model_view_tabs object %}
+  </ul>
+{% endblock tabs %}
 
 {% block form %}
   {% for field in form.hidden_fields %}
