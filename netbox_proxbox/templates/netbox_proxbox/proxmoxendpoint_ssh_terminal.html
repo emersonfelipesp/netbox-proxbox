@@ -48,7 +48,89 @@
           data-endpoint-id="{{ object.pk }}"
           data-csrf-token="{{ csrf_token }}"
           data-endpoint-ready="{% if endpoint_ssh_ready %}true{% else %}false{% endif %}"
+          data-can-store="{% if can_store_credentials %}true{% else %}false{% endif %}"
         ></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# Credential modal — shown when the selected target has no stored SSH credential #}
+{# Hidden trigger/dismiss so the JS can open/close via Bootstrap's data-API even #}
+{# when `window.bootstrap` is not exposed as a JS global (NetBox bundles it). #}
+<button type="button" id="proxbox-cred-open" class="d-none" data-bs-toggle="modal" data-bs-target="#proxbox-ssh-cred-modal"></button>
+<div class="modal fade" id="proxbox-ssh-cred-modal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">{% trans "SSH credentials required" %}</h5>
+        <button type="button" id="proxbox-cred-close" class="btn-close" data-bs-dismiss="modal" aria-label="{% trans 'Close' %}"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-3" id="proxbox-cred-target-label"></p>
+        <div class="mb-2">
+          <label class="form-label" for="proxbox-cred-username">{% trans "SSH username" %}</label>
+          <input type="text" class="form-control form-control-sm" id="proxbox-cred-username" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="mb-2">
+          <label class="form-label" for="proxbox-cred-port">{% trans "SSH port" %}</label>
+          <input type="number" class="form-control form-control-sm" id="proxbox-cred-port" value="22" min="1" max="65535">
+        </div>
+        <div class="mb-2">
+          <label class="form-label" for="proxbox-cred-auth">{% trans "Authentication" %}</label>
+          <select id="proxbox-cred-auth" class="form-select form-select-sm">
+            <option value="password">{% trans "Password" %}</option>
+            <option value="key">{% trans "SSH private key" %}</option>
+          </select>
+        </div>
+        <div class="mb-2" id="proxbox-cred-password-group">
+          <label class="form-label" for="proxbox-cred-password">{% trans "Password" %}</label>
+          <input type="password" class="form-control form-control-sm" id="proxbox-cred-password" autocomplete="off">
+        </div>
+        <div class="mb-2 d-none" id="proxbox-cred-key-group">
+          <label class="form-label" for="proxbox-cred-key">{% trans "Private key (PEM)" %}</label>
+          <textarea class="form-control form-control-sm" id="proxbox-cred-key" rows="4" spellcheck="false"></textarea>
+        </div>
+
+        <div class="mb-2">
+          <label class="form-label d-flex justify-content-between align-items-center">
+            <span>{% trans "Host key" %}</span>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="proxbox-cred-scan">
+              <i class="mdi mdi-fingerprint"></i> {% trans "Fetch host key" %}
+            </button>
+          </label>
+          <input type="text" class="form-control form-control-sm font-monospace" id="proxbox-cred-fingerprint" placeholder="SHA256:…" autocomplete="off" spellcheck="false">
+          <div class="form-text" id="proxbox-cred-fingerprint-hint">
+            {% trans "Fetch and review the host key fingerprint, then connect." %}
+          </div>
+        </div>
+
+        <fieldset class="mt-3">
+          <legend class="form-label mb-1">{% trans "Session type" %}</legend>
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="proxbox-cred-store" id="proxbox-cred-store-once" value="once" checked>
+            <label class="form-check-label" for="proxbox-cred-store-once">
+              {% trans "Use once — do not store" %}
+            </label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="proxbox-cred-store" id="proxbox-cred-store-save" value="save" {% if not can_store_credentials %}disabled{% endif %}>
+            <label class="form-check-label" for="proxbox-cred-store-save">
+              {% trans "Store for future sessions" %}
+              {% if not can_store_credentials %}
+                <span class="text-muted small">({% trans "requires credential add/change permission" %})</span>
+              {% endif %}
+            </label>
+          </div>
+        </fieldset>
+
+        <div class="alert alert-danger mt-3 mb-0 d-none" id="proxbox-cred-error"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">{% trans "Cancel" %}</button>
+        <button type="button" class="btn btn-primary btn-sm" id="proxbox-cred-submit">
+          <i class="mdi mdi-console-line"></i> {% trans "Connect" %}
+        </button>
       </div>
     </div>
   </div>

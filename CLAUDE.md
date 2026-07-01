@@ -63,6 +63,27 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
 - Companion endpoint models: `PBSEndpoint`, `PDMEndpoint`, `PDMRemote` for Proxmox Backup Server and Datacenter Manager inventory.
 - SSH and hardware discovery: `NodeSSHCredential` stores per-node SSH credentials for the optional hardware-discovery pass.
 - `ProxmoxEndpoint.access_methods` (migration 0056, choices `api` / `api_ssh`, default `api`) is the per-endpoint **transport access method**, orthogonal to `allow_writes`. `api` = Read+Write over the Proxmox API only; `api_ssh` = API + SSH. SSH only complements API; **SSH-only is not a selectable choice**. It is the load-bearing gate for the browser SSH terminal: the credential-serving API views in `netbox_proxbox/api/ssh_credentials.py` (`ProxmoxEndpointSSHCredentialSecretsAPIView` for endpoint targets and `NodeSSHCredentialSecretsAPIView` for node targets, the latter via the owning `ProxmoxNode.endpoint`) return 403 and withhold secrets when the endpoint is API-only, which is what blocks the terminal. New endpoints default to `api`; existing rows are backfilled to `api_ssh` on upgrade (non-breaking). The value is pushed to the proxbox-api backend by `_proxmox_backend_payload()` so the backend can gate its own SSH paths.
+- **Terminal-tab credential modal (store vs one-shot).** When a Terminal-tab
+  target (a `ProxmoxNode`, or the endpoint) has **no** stored SSH credential,
+  the browser JS (`static/.../js/ssh_terminal.js`) opens a modal instead of
+  dead-ending on "No SSH credential registered". The operator enters
+  username/password (or key), fetches + accepts the host-key fingerprint
+  (`GET ssh-credentials/by-node/<id>/host-key-fingerprint/`), and chooses
+  **Use once** (one-shot) or **Store for future sessions**. The session view
+  (`ProxmoxEndpointSSHTerminalSessionView.post`) reads a `credential` object +
+  `store` flag: on **store** it persists an encrypted `NodeSSHCredential` (needs
+  `add`/`change_nodesshcredential` + the plugin encryption key, else 403/503)
+  then opens a normal stored session; on **one-shot** it forwards the inline
+  creds to proxbox-api as `one_shot_credential` and stores nothing. Both paths
+  re-enforce `open_ssh_terminal` and `ssh_access_enabled` (the one-shot path
+  bypasses the stored-credential access gate, so the view checks the access
+  method explicitly). Per-node stored-credential readiness (`ssh_ready`) and the
+  store-capability flag (`can_store_credentials`) come from
+  `ProxmoxEndpointSSHTerminalView.get_extra_context`. **Pairing:** the one-shot
+  path requires a proxbox-api release whose `POST /ssh/sessions` accepts the
+  optional `one_shot_credential` field; the plugin degrades gracefully against an
+  older backend (which rejects the extra field), and the store path works against
+  any backend.
 - VM lifecycle models: `ProxmoxVMTemplate` (VM template inventory with optional FK to `VirtualMachine`), `ProxmoxVMCloudInit` (cloud-init config), `CloudImageTemplate` (Firecracker/image factory catalog), `ProxmoxApplyJob` (intent apply job), `DeletionRequest` (auditable delete-request workflow).
 - Datacenter config: `ProxmoxDatacenterCpuModel` (custom CPU models synced from PVE).
 - Firewall inventory (6 models, read-only): `ProxmoxFirewallSecurityGroup`, `ProxmoxFirewallRule`, `ProxmoxFirewallIPSet`, `ProxmoxFirewallIPSetEntry`, `ProxmoxFirewallAlias`, `ProxmoxFirewallOptions`.

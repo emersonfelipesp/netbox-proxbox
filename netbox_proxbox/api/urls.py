@@ -6,6 +6,7 @@ from netbox.api.routers import NetBoxRouter
 from . import views
 from .ha import HAClusterSummaryAPIView, HAVMResourceAPIView
 from .ssh_credentials import (
+    NodeHostKeyFingerprintAPIView,
     NodeSSHCredentialByNodeAPIView,
     NodeSSHCredentialSecretsAPIView,
     ProxmoxEndpointHostKeyFingerprintAPIView,
@@ -241,6 +242,11 @@ urlpatterns = [
         "ssh-credentials/by-node/<int:node_id>/credentials/",
         NodeSSHCredentialSecretsAPIView.as_view(),
         name="api-ssh-credential-secrets",
+    ),
+    path(
+        "ssh-credentials/by-node/<int:node_id>/host-key-fingerprint/",
+        NodeHostKeyFingerprintAPIView.as_view(),
+        name="api-ssh-credential-node-host-key",
     ),
     path(
         "ssh-credentials/by-endpoint/<int:endpoint_id>/credentials/",
