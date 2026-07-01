@@ -972,3 +972,47 @@ def test_cluster_summary_reverses_storages_tab_under_core_namespace():
     # virtualization namespace, never the plugin namespace.
     assert "virtualization:cluster_proxbox-storages" in template
     assert "plugins:netbox_proxbox:cluster_proxbox-storages" not in template
+
+
+def test_proxmox_endpoint_settings_template_uses_tabs_not_stacked_cards():
+    """The ProxmoxEndpoint Settings page groups the per-endpoint override
+    sections into selectable Bootstrap tabs (Connection / Sync Modes / Sync
+    Overwrite / Tenant Assignment) so operators select a section instead of
+    scrolling through stacked cards.
+
+    All four tab panes must stay in the DOM (Bootstrap only toggles display),
+    so every form field still submits on save regardless of the active tab.
+    """
+    template = _read(
+        "netbox_proxbox/templates/netbox_proxbox/proxmoxendpoint_settings.html"
+    )
+
+    # Bootstrap tab strip is present with the four expected panes.
+    assert 'class="nav nav-tabs' in template
+    for pane_id in (
+        "proxbox-settings-connection",
+        "proxbox-settings-sync-modes",
+        "proxbox-settings-overwrite",
+        "proxbox-settings-tenant",
+    ):
+        assert f'data-bs-target="#{pane_id}"' in template
+        assert f'id="{pane_id}"' in template
+    assert template.count("tab-pane") == 4
+
+    # Every configuration section's fields must still be rendered so the whole
+    # form submits regardless of which tab is active.
+    for field in (
+        "form.timeout",
+        "form.max_retries",
+        "form.retry_backoff",
+        "form.enable_tenant_name_regex",
+        "form.tenant_name_regex_rules",
+        "form.enable_tenant_tag_assignment",
+        "form.enable_tenant_from_cluster",
+    ):
+        assert f"render_field {field} " in template
+    # The dynamic groups still drive the Sync Modes and Sync Overwrite panes.
+    assert "sync_mode_field_groups" in template
+    assert "overwrite_field_groups" in template
+    # The changelog message stays outside the tab strip so it always submits.
+    assert "form.changelog_message" in template
