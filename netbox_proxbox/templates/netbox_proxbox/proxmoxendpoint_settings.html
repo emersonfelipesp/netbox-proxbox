@@ -12,92 +12,136 @@
     {{ field }}
   {% endfor %}
 
-  <div class="card mb-3">
-    <h5 class="card-header">
-      <i class="mdi mdi-cog"></i>
-      {% trans "Connection tunables" %}
-    </h5>
-    <div class="card-body">
-      <p class="text-muted">
-        {% blocktrans trimmed %}
-        Per-endpoint overrides for the global Proxmox API connection defaults.
-        Leave any field blank to inherit the value from the global plugin settings.
-        {% endblocktrans %}
-      </p>
-      {% render_field form.timeout %}
-      {% render_field form.max_retries %}
-      {% render_field form.retry_backoff %}
-    </div>
-  </div>
+  {# Each configuration section is a selectable tab instead of a stacked card, #}
+  {# so operators can jump straight to a section instead of scrolling. All tab #}
+  {# panes stay in the DOM (Bootstrap only toggles display), so every field    #}
+  {# still submits on save regardless of which tab is currently active.        #}
+  <ul class="nav nav-tabs mb-3" id="proxbox-settings-tabs" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" id="proxbox-settings-connection-tab" data-bs-toggle="tab"
+              data-bs-target="#proxbox-settings-connection" type="button" role="tab"
+              aria-controls="proxbox-settings-connection" aria-selected="true">
+        <i class="mdi mdi-cog"></i> {% trans "Connection" %}
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="proxbox-settings-sync-modes-tab" data-bs-toggle="tab"
+              data-bs-target="#proxbox-settings-sync-modes" type="button" role="tab"
+              aria-controls="proxbox-settings-sync-modes" aria-selected="false">
+        <i class="mdi mdi-source-branch-sync"></i> {% trans "Sync Modes" %}
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="proxbox-settings-overwrite-tab" data-bs-toggle="tab"
+              data-bs-target="#proxbox-settings-overwrite" type="button" role="tab"
+              aria-controls="proxbox-settings-overwrite" aria-selected="false">
+        <i class="mdi mdi-pencil-circle"></i> {% trans "Sync Overwrite" %}
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="proxbox-settings-tenant-tab" data-bs-toggle="tab"
+              data-bs-target="#proxbox-settings-tenant" type="button" role="tab"
+              aria-controls="proxbox-settings-tenant" aria-selected="false">
+        <i class="mdi mdi-account-switch"></i> {% trans "Tenant Assignment" %}
+      </button>
+    </li>
+  </ul>
 
-  <div class="card mb-3">
-    <h5 class="card-header">
-      <i class="mdi mdi-source-branch-sync"></i>
-      {% trans "Sync mode overrides" %}
-    </h5>
-    <div class="card-body">
-      <p class="text-muted">
-        {% blocktrans trimmed %}
-        Override whether this endpoint syncs each resource on every run, only
-        bootstraps newly-created records, or skips the resource entirely. Leave
-        blank to inherit the global plugin setting.
-        {% endblocktrans %}
-      </p>
-      {% for group_label, group_fields in sync_mode_field_groups %}
-        <h6 class="mt-3">{{ group_label }}</h6>
-        {% for field_name in group_fields %}
-          {% render_field form|form_field:field_name %}
-        {% endfor %}
-      {% endfor %}
+  <div class="tab-content" id="proxbox-settings-tab-content">
+    <div class="tab-pane fade show active" id="proxbox-settings-connection" role="tabpanel"
+         aria-labelledby="proxbox-settings-connection-tab" tabindex="0">
+      <div class="card mb-3">
+        <h5 class="card-header">
+          <i class="mdi mdi-cog"></i>
+          {% trans "Connection tunables" %}
+        </h5>
+        <div class="card-body">
+          <p class="text-muted">
+            {% blocktrans trimmed %}
+            Per-endpoint overrides for the global Proxmox API connection defaults.
+            Leave any field blank to inherit the value from the global plugin settings.
+            {% endblocktrans %}
+          </p>
+          {% render_field form.timeout %}
+          {% render_field form.max_retries %}
+          {% render_field form.retry_backoff %}
+        </div>
+      </div>
     </div>
-  </div>
 
-  <div class="card mb-3">
-    <h5 class="card-header">
-      <i class="mdi mdi-pencil-circle"></i>
-      {% trans "Sync overwrite overrides" %}
-    </h5>
-    <div class="card-body">
-      <p class="text-muted">
-        {% blocktrans trimmed %}
-        Override per-endpoint whether sync overwrites specific fields on existing
-        NetBox objects. Set "Unknown" (the default) to inherit the value from the
-        global Proxbox plugin settings.
-        {% endblocktrans %}
-      </p>
+    <div class="tab-pane fade" id="proxbox-settings-sync-modes" role="tabpanel"
+         aria-labelledby="proxbox-settings-sync-modes-tab" tabindex="0">
+      <div class="card mb-3">
+        <h5 class="card-header">
+          <i class="mdi mdi-source-branch-sync"></i>
+          {% trans "Sync mode overrides" %}
+        </h5>
+        <div class="card-body">
+          <p class="text-muted">
+            {% blocktrans trimmed %}
+            Override whether this endpoint syncs each resource on every run, only
+            bootstraps newly-created records, or skips the resource entirely. Leave
+            blank to inherit the global plugin setting.
+            {% endblocktrans %}
+          </p>
+          {% for group_label, group_fields in sync_mode_field_groups %}
+            <h6 class="mt-3">{{ group_label }}</h6>
+            {% for field_name in group_fields %}
+              {% render_field form|form_field:field_name %}
+            {% endfor %}
+          {% endfor %}
+        </div>
+      </div>
     </div>
-  </div>
 
-  {% for group_label, group_fields in overwrite_field_groups %}
-  <div class="card mb-3">
-    <h5 class="card-header">
-      <i class="mdi mdi-pencil-circle-outline"></i>
-      {{ group_label }}
-    </h5>
-    <div class="card-body">
-      {% for field_name in group_fields %}
-        {% render_field form|form_field:field_name %}
-      {% endfor %}
+    <div class="tab-pane fade" id="proxbox-settings-overwrite" role="tabpanel"
+         aria-labelledby="proxbox-settings-overwrite-tab" tabindex="0">
+      <div class="card mb-3">
+        <h5 class="card-header">
+          <i class="mdi mdi-pencil-circle"></i>
+          {% trans "Sync overwrite overrides" %}
+        </h5>
+        <div class="card-body">
+          <p class="text-muted">
+            {% blocktrans trimmed %}
+            Override per-endpoint whether sync overwrites specific fields on existing
+            NetBox objects. Set "Unknown" (the default) to inherit the value from the
+            global Proxbox plugin settings.
+            {% endblocktrans %}
+          </p>
+          {% for group_label, group_fields in overwrite_field_groups %}
+            <h6 class="mt-3">
+              <i class="mdi mdi-pencil-circle-outline"></i>
+              {{ group_label }}
+            </h6>
+            {% for field_name in group_fields %}
+              {% render_field form|form_field:field_name %}
+            {% endfor %}
+          {% endfor %}
+        </div>
+      </div>
     </div>
-  </div>
-  {% endfor %}
 
-  <div class="card mb-3">
-    <h5 class="card-header">
-      <i class="mdi mdi-account-switch"></i>
-      {% trans "Tenant assignment overrides" %}
-    </h5>
-    <div class="card-body">
-      <p class="text-muted">
-        {% blocktrans trimmed %}
-        Override post-sync Tenant assignment behavior for virtual machines from
-        this endpoint. Leave toggle fields blank to inherit the global setting.
-        {% endblocktrans %}
-      </p>
-      {% render_field form.enable_tenant_name_regex %}
-      {% render_field form.tenant_name_regex_rules %}
-      {% render_field form.enable_tenant_tag_assignment %}
-      {% render_field form.enable_tenant_from_cluster %}
+    <div class="tab-pane fade" id="proxbox-settings-tenant" role="tabpanel"
+         aria-labelledby="proxbox-settings-tenant-tab" tabindex="0">
+      <div class="card mb-3">
+        <h5 class="card-header">
+          <i class="mdi mdi-account-switch"></i>
+          {% trans "Tenant assignment overrides" %}
+        </h5>
+        <div class="card-body">
+          <p class="text-muted">
+            {% blocktrans trimmed %}
+            Override post-sync Tenant assignment behavior for virtual machines from
+            this endpoint. Leave toggle fields blank to inherit the global setting.
+            {% endblocktrans %}
+          </p>
+          {% render_field form.enable_tenant_name_regex %}
+          {% render_field form.tenant_name_regex_rules %}
+          {% render_field form.enable_tenant_tag_assignment %}
+          {% render_field form.enable_tenant_from_cluster %}
+        </div>
+      </div>
     </div>
   </div>
 
