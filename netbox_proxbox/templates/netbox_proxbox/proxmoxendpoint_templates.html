@@ -1,0 +1,181 @@
+{% extends 'generic/object.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="row mb-3">
+  <div class="col col-12">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <h2 class="card-title mb-0">{% trans "Templates" %}</h2>
+        {% if packer_installed and packer_add_url %}
+          <a href="{{ packer_add_url }}" class="btn btn-primary btn-sm">
+            <i class="mdi mdi-plus-thick"></i> {% trans "Create Cloud-Init template image" %}
+          </a>
+        {% else %}
+          {# Bootstrap tooltips do not fire on a disabled button (pointer-events:none), #}
+          {# so the tooltip lives on the wrapping span. #}
+          <span class="d-inline-block" tabindex="0" data-bs-toggle="tooltip" data-bs-placement="left"
+                title="{% trans 'netbox-packer is not installed. Install the netbox-packer plugin to build Cloud-Init template images from here.' %}">
+            <button type="button" class="btn btn-primary btn-sm disabled" tabindex="-1" aria-disabled="true" disabled
+                    style="pointer-events: none;">
+              <i class="mdi mdi-plus-thick"></i> {% trans "Create Cloud-Init template image" %}
+            </button>
+          </span>
+        {% endif %}
+      </div>
+
+      <div class="card-body">
+        {% if backend_error %}
+          <div class="alert alert-warning" role="alert">
+            <i class="mdi mdi-alert"></i> {{ backend_error }}
+          </div>
+        {% endif %}
+
+        {# Category filter #}
+        <div class="btn-group btn-group-sm mb-3" role="group" aria-label="{% trans 'Filter templates by type' %}" id="proxbox-template-filter">
+          <button type="button" class="btn btn-outline-primary active" data-filter="all">
+            {% trans "All" %} <span class="badge text-bg-secondary">{{ total_count }}</span>
+          </button>
+          <button type="button" class="btn btn-outline-primary" data-filter="cloudinit">
+            {% trans "Cloud-Init" %} <span class="badge text-bg-secondary">{{ cloudinit_templates|length }}</span>
+          </button>
+          <button type="button" class="btn btn-outline-primary" data-filter="plain">
+            {% trans "QEMU/KVM (no Cloud-Init)" %} <span class="badge text-bg-secondary">{{ plain_templates|length }}</span>
+          </button>
+          <button type="button" class="btn btn-outline-primary" data-filter="lxc">
+            {% trans "LXC" %} <span class="badge text-bg-secondary">{{ lxc_templates|length }}</span>
+          </button>
+        </div>
+
+        {% if total_count == 0 and not backend_error %}
+          <p class="text-muted mb-0">{% trans "No templates were found on this endpoint." %}</p>
+        {% endif %}
+
+        {# Cloud-Init templates #}
+        <div class="proxbox-template-group" data-category="cloudinit">
+          <h5 class="mt-2">{% trans "Cloud-Init Templates" %}</h5>
+          <div class="table-responsive">
+            <table class="table table-hover">
+              <thead>
+                <tr>
+                  <th scope="col">{% trans "Name" %}</th>
+                  <th scope="col">{% trans "VMID" %}</th>
+                  <th scope="col">{% trans "Node" %}</th>
+                  <th scope="col">{% trans "Cloud-Init source" %}</th>
+                  <th scope="col">{% trans "Memory (MB)" %}</th>
+                  <th scope="col">{% trans "Disk (GiB)" %}</th>
+                  <th scope="col">{% trans "Tags" %}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for t in cloudinit_templates %}
+                  <tr>
+                    <td>{{ t.name }}</td>
+                    <td>{{ t.vmid|default:"—" }}</td>
+                    <td>{{ t.node|default:"—" }}</td>
+                    <td>{% if t.cicustom %}<code>cicustom</code>{% elif t.cloud_init_drives %}<code>{{ t.cloud_init_drives }}</code>{% else %}—{% endif %}</td>
+                    <td>{{ t.memory_mb|default:"—" }}</td>
+                    <td>{{ t.disk_gib|default:"—" }}</td>
+                    <td>{{ t.tags|default:"—" }}</td>
+                  </tr>
+                {% empty %}
+                  <tr><td colspan="7" class="text-muted text-center py-3">{% trans "No Cloud-Init templates found." %}</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {# Plain QEMU/KVM templates #}
+        <div class="proxbox-template-group" data-category="plain">
+          <h5 class="mt-3">{% trans "QEMU/KVM Templates (no Cloud-Init)" %}</h5>
+          <div class="table-responsive">
+            <table class="table table-hover">
+              <thead>
+                <tr>
+                  <th scope="col">{% trans "Name" %}</th>
+                  <th scope="col">{% trans "VMID" %}</th>
+                  <th scope="col">{% trans "Node" %}</th>
+                  <th scope="col">{% trans "Memory (MB)" %}</th>
+                  <th scope="col">{% trans "Disk (GiB)" %}</th>
+                  <th scope="col">{% trans "Tags" %}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for t in plain_templates %}
+                  <tr>
+                    <td>{{ t.name }}</td>
+                    <td>{{ t.vmid|default:"—" }}</td>
+                    <td>{{ t.node|default:"—" }}</td>
+                    <td>{{ t.memory_mb|default:"—" }}</td>
+                    <td>{{ t.disk_gib|default:"—" }}</td>
+                    <td>{{ t.tags|default:"—" }}</td>
+                  </tr>
+                {% empty %}
+                  <tr><td colspan="6" class="text-muted text-center py-3">{% trans "No plain QEMU/KVM templates found." %}</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {# LXC container templates #}
+        <div class="proxbox-template-group" data-category="lxc">
+          <h5 class="mt-3">{% trans "LXC Container Templates" %}</h5>
+          <div class="table-responsive">
+            <table class="table table-hover">
+              <thead>
+                <tr>
+                  <th scope="col">{% trans "Name" %}</th>
+                  <th scope="col">{% trans "Storage" %}</th>
+                  <th scope="col">{% trans "Volume ID" %}</th>
+                  <th scope="col">{% trans "Size (GiB)" %}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for t in lxc_templates %}
+                  <tr>
+                    <td>{{ t.name }}</td>
+                    <td>{{ t.storage|default:"—" }}</td>
+                    <td><code>{{ t.volid }}</code></td>
+                    <td>{{ t.size_gib|default:"—" }}</td>
+                  </tr>
+                {% empty %}
+                  <tr><td colspan="4" class="text-muted text-center py-3">{% trans "No LXC container templates found." %}</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block javascript %}
+{{ block.super }}
+<script type="text/javascript">
+  (function () {
+    const filter = document.getElementById('proxbox-template-filter');
+    if (!filter) { return; }
+    const groups = document.querySelectorAll('.proxbox-template-group');
+    function applyFilter(category) {
+      groups.forEach(function (group) {
+        const match = category === 'all' || group.dataset.category === category;
+        group.style.display = match ? '' : 'none';
+      });
+    }
+    filter.querySelectorAll('button[data-filter]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        filter.querySelectorAll('button[data-filter]').forEach(function (b) {
+          b.classList.remove('active');
+        });
+        btn.classList.add('active');
+        applyFilter(btn.dataset.filter);
+      });
+    });
+  })();
+</script>
+{% endblock %}

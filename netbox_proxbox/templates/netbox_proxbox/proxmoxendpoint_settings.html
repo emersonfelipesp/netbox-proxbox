@@ -260,43 +260,59 @@
 
 {% block javascript %}
   {{ block.super }}
-  {# When the form is redisplayed with validation errors, the errored field may #}
-  {# sit on an inactive tab and be invisible. NetBox's render_field wraps an     #}
-  {# errored field's row in `.has-errors`, so on load we activate the first tab  #}
-  {# pane that contains one. We click the controlling nav button (which keeps    #}
-  {# type="button", so this never resubmits the form) rather than constructing a #}
-  {# Bootstrap Tab instance, because NetBox's bundle registers the tab data-api  #}
-  {# but does not expose window.Tab. Runs inside DOMContentLoaded so that        #}
+  {# On load we activate the right sub-tab: (1) if the form redisplayed with a  #}
+  {# validation error, the errored field may sit on an inactive tab and be       #}
+  {# invisible — NetBox's render_field wraps its row in `.has-errors`, so we open #}
+  {# the first tab pane containing one; (2) otherwise, if the URL hash targets a  #}
+  {# pane (e.g. `#proxbox-settings-overwrite` from the Overwrite Behavior tab's   #}
+  {# Edit button), we open that pane. We click the controlling nav button (which  #}
+  {# keeps type="button", so this never resubmits the form) rather than          #}
+  {# constructing a Bootstrap Tab instance, because NetBox's bundle registers the #}
+  {# tab data-api but does not expose window.Tab. Runs inside DOMContentLoaded so #}
   {# data-api registration is guaranteed complete before the click.             #}
   <script>
     (function () {
-      function focusFirstInvalidTab() {
+      function activatePane(pane) {
+        if (!pane || pane.classList.contains("active")) {
+          return;
+        }
+        var trigger = document.getElementById(
+          pane.getAttribute("aria-labelledby")
+        );
+        if (trigger) {
+          trigger.click();
+        }
+      }
+      function focusInitialTab() {
         var content = document.getElementById("proxbox-settings-tab-content");
         if (!content) {
           return;
         }
+        // 1) First tab pane containing a validation error takes priority.
         var panes = content.querySelectorAll(".tab-pane");
         for (var i = 0; i < panes.length; i++) {
-          var pane = panes[i];
-          if (!pane.querySelector(".has-errors")) {
-            continue;
-          }
-          if (pane.classList.contains("active")) {
+          if (panes[i].querySelector(".has-errors")) {
+            activatePane(panes[i]);
             return;
           }
-          var trigger = document.getElementById(
-            pane.getAttribute("aria-labelledby")
-          );
-          if (trigger) {
-            trigger.click();
+        }
+        // 2) Otherwise honor a pane targeted by the URL hash.
+        var hash = window.location.hash;
+        if (hash && hash.length > 1) {
+          var target = document.getElementById(hash.slice(1));
+          if (
+            target &&
+            content.contains(target) &&
+            target.classList.contains("tab-pane")
+          ) {
+            activatePane(target);
           }
-          return;
         }
       }
       if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", focusFirstInvalidTab);
+        document.addEventListener("DOMContentLoaded", focusInitialTab);
       } else {
-        focusFirstInvalidTab();
+        focusInitialTab();
       }
     })();
   </script>
