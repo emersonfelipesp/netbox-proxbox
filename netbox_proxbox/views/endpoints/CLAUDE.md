@@ -11,6 +11,7 @@ This directory contains NetBox generic model views for the three endpoint models
 - [`netbox_export.py`](./netbox_export.py): CSV/JSON/YAML export fieldname and serializer helpers for `NetBoxEndpoint`.
 - [`fastapi.py`](./fastapi.py): list/detail/edit/delete, bulk import, export, quick-add-token views for `FastAPIEndpoint`, plus the OpenAPI tab that renders cached schema metadata.
 - [`fastapi_export.py`](./fastapi_export.py): CSV/JSON/YAML export fieldname and serializer helpers for `FastAPIEndpoint`.
+- [`ssh_terminal_credential.py`](./ssh_terminal_credential.py): pure, NetBox-free helpers for the Terminal-tab SSH credential modal — `validate_terminal_credential()` (normalizes the operator-entered credential: username/port/auth-method/secret/fingerprint, with a mandatory host-key fingerprint) and `one_shot_payload()` (builds the proxbox-api `one_shot_credential` body). `proxmox.py`'s `ProxmoxEndpointSSHTerminalSessionView` imports these; they are unit-tested in `tests/test_ssh_terminal_credential.py` without bootstrapping NetBox.
 - [`__init__.py`](./__init__.py): re-exports endpoint view classes.
 
 ## Export Views

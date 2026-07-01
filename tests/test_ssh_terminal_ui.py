@@ -143,8 +143,12 @@ def test_terminal_session_view_handles_store_and_one_shot() -> None:
     # One-shot forwards inline creds to proxbox-api; store persists first.
     assert '"one_shot_credential"' in src
     assert "_apply_node_credential" in src
-    assert "def _validate_terminal_credential" in src
-    assert "def _one_shot_payload" in src
+    # Validation/one-shot helpers now live in the standalone, unit-tested module
+    # ssh_terminal_credential.py (behaviorally covered by
+    # tests/test_ssh_terminal_credential.py).
+    assert "validate_terminal_credential" in src
+    assert "one_shot_payload" in src
+    assert "from netbox_proxbox.views.endpoints.ssh_terminal_credential import" in src
     # Store path persists an encrypted NodeSSHCredential via the plugin key.
     assert "ProxboxPluginSettings.get_solo().encryption_key" in src
     assert "cred.set_private_key(" in src
@@ -160,8 +164,16 @@ def test_terminal_session_view_preserves_security_gates() -> None:
     assert "endpoint.ssh_access_enabled" in src
     assert "status=403" in src
     assert "status=503" in src
-    # A fingerprint is mandatory for both paths.
-    assert "Host-key fingerprint is required" in src
+    # A fingerprint is mandatory for both paths — enforced by the extracted,
+    # unit-tested validator module.
+    helper_src = (
+        REPO_ROOT
+        / "netbox_proxbox"
+        / "views"
+        / "endpoints"
+        / "ssh_terminal_credential.py"
+    ).read_text()
+    assert "Host-key fingerprint is required" in helper_src
 
 
 def test_terminal_template_has_credential_modal() -> None:
