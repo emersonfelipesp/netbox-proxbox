@@ -29,8 +29,12 @@ from netbox.object_actions import (
     BulkDelete,
     BulkExport,
     BulkImport,
+    CloneObject,
+    DeleteObject,
+    EditObject,
     ObjectAction,
 )
+from netbox.views.generic.mixins import ActionsMixin
 
 from netbox_proxbox.filtersets import ProxmoxEndpointFilterSet
 from netbox_proxbox.forms import (
@@ -463,7 +467,7 @@ class ProxmoxEndpointEditView(generic.ObjectEditView):
 
 
 @register_model_view(ProxmoxEndpoint, "settings", path="settings")
-class ProxmoxEndpointSettingsView(generic.ObjectEditView):
+class ProxmoxEndpointSettingsView(ActionsMixin, generic.ObjectEditView):
     """
     Edit Proxmox-specific per-endpoint overrides on a dedicated Settings tab.
 
@@ -475,6 +479,9 @@ class ProxmoxEndpointSettingsView(generic.ObjectEditView):
     queryset = ProxmoxEndpoint.objects.all()
     form = ProxmoxEndpointSettingsForm
     template_name = "netbox_proxbox/proxmoxendpoint_settings.html"
+    # Same single-object actions the detail view exposes, so the shared object
+    # header renders the identical Clone/Edit/Delete buttons on this edit tab.
+    actions = (CloneObject, EditObject, DeleteObject)
     tab = ViewTab(
         label="Settings",
         permission="netbox_proxbox.view_proxmoxendpoint",
@@ -498,16 +505,21 @@ class ProxmoxEndpointSettingsView(generic.ObjectEditView):
             # to highlight this Settings tab as active (and to keep the primary
             # detail tab, gated on ``{% if not tab %}``, inactive).
             "tab": self.tab,
+            # ObjectEditView does not compute ``actions`` either; supply the
+            # permitted single-object actions so the shared object header renders
+            # the same Clone/Edit/Delete buttons as the detail page.
+            "actions": self.get_permitted_actions(request.user, model=instance),
         }
 
 
 @register_model_view(ProxmoxEndpoint, "ssh_settings", path="ssh-settings")
-class ProxmoxEndpointSSHSettingsView(generic.ObjectEditView):
+class ProxmoxEndpointSSHSettingsView(ActionsMixin, generic.ObjectEditView):
     """Edit endpoint-level SSH fallback credentials for browser terminals."""
 
     queryset = ProxmoxEndpoint.objects.all()
     form = ProxmoxEndpointSSHSettingsForm
     template_name = "netbox_proxbox/proxmoxendpoint_ssh_settings.html"
+    actions = (CloneObject, EditObject, DeleteObject)
     tab = ViewTab(
         label="SSH",
         permission="netbox_proxbox.change_proxmoxendpoint",
@@ -517,13 +529,17 @@ class ProxmoxEndpointSSHSettingsView(generic.ObjectEditView):
     def get_extra_context(
         self, request: HttpRequest, instance: ProxmoxEndpoint
     ) -> dict[str, object]:
-        """Expose ``tab`` so the object tab strip highlights the active SSH tab.
+        """Expose ``tab`` + ``actions`` so the shared object header renders.
 
-        ``ObjectEditView`` does not inject ``tab`` into the template context;
-        the object tab strip in ``proxmoxendpoint_ssh_settings.html`` needs it to
-        mark this SSH tab active and keep the primary detail tab inactive.
+        ``ObjectEditView`` injects neither ``tab`` (needed to highlight the
+        active SSH tab) nor ``actions`` (needed for the header's Clone/Edit/Delete
+        buttons), so the object header in ``proxmoxendpoint_ssh_settings.html``
+        matches the detail page.
         """
-        return {"tab": self.tab}
+        return {
+            "tab": self.tab,
+            "actions": self.get_permitted_actions(request.user, model=instance),
+        }
 
 
 def _terminal_websocket_url(base_websocket_url: str, websocket_path: str) -> str:

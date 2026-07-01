@@ -1073,3 +1073,37 @@ def test_proxmox_endpoint_edit_subpages_keep_object_tab_strip():
         assert "{% model_view_tabs object %}" in contents
         # ...plus the primary detail tab linking to the object.
         assert "object.get_absolute_url" in contents
+
+
+def test_proxmox_endpoint_edit_subpages_render_shared_object_header():
+    """The Settings and SSH edit sub-pages render the SAME object header as the
+    detail-style tabs (generic/object.html): breadcrumb + object identifier, the
+    object title, created/updated subtitle, and the Bookmark/Subscribe/Edit/
+    Delete controls — so switching between any of the object's tabs keeps
+    identical header chrome. Only the header blocks are overridden; the edit form
+    is left to object_edit.html.
+    """
+    for tpl in (
+        "netbox_proxbox/templates/netbox_proxbox/proxmoxendpoint_settings.html",
+        "netbox_proxbox/templates/netbox_proxbox/proxmoxendpoint_ssh_settings.html",
+    ):
+        contents = _read(tpl)
+        # Header blocks overridden to match the detail page.
+        assert "{% block page-header %}" in contents
+        assert "{% block subtitle %}" in contents
+        assert "{% block controls %}" in contents
+        # Title is the object itself (matching the detail page), not "Settings for …".
+        assert "{% block title %}{{ object }}{% endblock %}" in contents
+        assert "Settings for" not in contents
+        assert "SSH settings for" not in contents
+        # The controls render the same action + bookmark/subscribe buttons.
+        assert "{% action_buttons actions object %}" in contents
+        assert "bookmark_button object" in contents
+        assert "subscribe_button object" in contents
+        assert "plugin_buttons object" in contents
+        # Required NetBox tag libraries are loaded.
+        for lib in ("buttons", "custom_links", "perms", "plugins", "helpers", "tabs"):
+            assert "{% load " + lib + " %}" in contents
+        # Breadcrumb + object identifier match the detail header.
+        assert "action_url object 'list'" in contents
+        assert 'object|meta:"app_label"' in contents
