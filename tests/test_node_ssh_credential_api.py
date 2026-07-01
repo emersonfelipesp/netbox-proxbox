@@ -308,7 +308,11 @@ def test_credential_lookup_prefers_proxmox_node_id(monkeypatch):
 
     assert module._credential_for_node_identifier(42) is credential
     assert queryset.calls == [{"node_id": 42}]
-    assert queryset.select_related_fields == ("node", "node__netbox_device")
+    assert queryset.select_related_fields == (
+        "node",
+        "node__netbox_device",
+        "node__endpoint",
+    )
 
 
 def test_credential_lookup_falls_back_to_netbox_device_id(monkeypatch):
@@ -411,6 +415,7 @@ def test_endpoint_metadata_payload_uses_reuse_effective_username(monkeypatch):
     endpoint = SimpleNamespace(
         pk=3,
         ssh_host="pve.example.com",
+        ssh_access_enabled=True,
         ssh_credential_source="reuse_endpoint",
         effective_ssh_username="root",
         ssh_username="ignored",
@@ -456,6 +461,7 @@ def test_endpoint_secrets_view_reuse_returns_endpoint_password(monkeypatch):
     endpoint = SimpleNamespace(
         pk=11,
         ssh_host="pve.example.com",
+        ssh_access_enabled=True,
         ssh_credential_source="reuse_endpoint",
         effective_ssh_username="root",
         ssh_username="ignored",
@@ -486,6 +492,7 @@ def test_endpoint_secrets_view_reuse_token_only_returns_422(monkeypatch):
     endpoint = SimpleNamespace(
         pk=12,
         ssh_host="pve.example.com",
+        ssh_access_enabled=True,
         ssh_credential_source="reuse_endpoint",
         effective_ssh_username="root",
         ssh_username="ignored",
@@ -518,6 +525,7 @@ def test_endpoint_secrets_view_dedicated_decrypts_existing_payload(monkeypatch):
     endpoint = SimpleNamespace(
         pk=13,
         ssh_host="pve.example.com",
+        ssh_access_enabled=True,
         ssh_credential_source="dedicated",
         ssh_username="proxbox",
         ssh_port=22,
@@ -677,3 +685,117 @@ def test_node_host_key_scan_route_is_registered() -> None:
     assert "ssh-credentials/by-node/<int:node_id>/host-key-fingerprint/" in src
     assert "NodeHostKeyFingerprintAPIView" in src
     assert 'name="api-ssh-credential-node-host-key"' in src
+
+
+# ---------------------------------------------------------------------------
+# Behavior: NodeHostKeyFingerprintAPIView.get (node host-key scan)
+# ---------------------------------------------------------------------------
+
+
+def _load_node_scan(
+    monkeypatch, *, ssh_enabled=True, ip_address="10.0.0.5", ctx="default"
+):
+    """Load ssh_credentials with node + backend-context stubs for the scan view."""
+    module, _stubs = _load_ssh_credentials_view(monkeypatch)
+    # The node scan view uses a 502 status the shared stub does not define.
+    module.status.HTTP_502_BAD_GATEWAY = 502
+
+    endpoint = SimpleNamespace(ssh_access_enabled=ssh_enabled)
+    node = SimpleNamespace(ip_address=ip_address, endpoint=endpoint)
+
+    class _NodeQS:
+        def restrict(self, *a, **k):
+            return self
+
+        def select_related(self, *a, **k):
+            return self
+
+        def get(self, **kw):
+            return node
+
+    module.ProxmoxNode.objects = _NodeQS()
+
+    backend_context = types.ModuleType("netbox_proxbox.services.backend_context")
+    ctx_obj = (
+        SimpleNamespace(http_url="http://backend", headers={}, verify_ssl=True)
+        if ctx == "default"
+        else ctx
+    )
+    backend_context.get_fastapi_request_context = lambda: ctx_obj
+    monkeypatch.setitem(
+        sys.modules, "netbox_proxbox.services.backend_context", backend_context
+    )
+    return module, node
+
+
+def _scan_request(port="2222"):
+    return SimpleNamespace(user=SimpleNamespace(), query_params={"port": port})
+
+
+def test_node_scan_403_when_ssh_disabled(monkeypatch):
+    module, _ = _load_node_scan(monkeypatch, ssh_enabled=False)
+    resp = module.NodeHostKeyFingerprintAPIView().get(_scan_request(), 15)
+    assert resp.status_code == 403
+
+
+def test_node_scan_422_when_node_has_no_ip(monkeypatch):
+    module, _ = _load_node_scan(monkeypatch, ip_address="")
+    resp = module.NodeHostKeyFingerprintAPIView().get(_scan_request(), 15)
+    assert resp.status_code == 422
+
+
+def test_node_scan_503_when_no_backend(monkeypatch):
+    module, _ = _load_node_scan(monkeypatch, ctx=None)
+    resp = module.NodeHostKeyFingerprintAPIView().get(_scan_request(), 15)
+    assert resp.status_code == 503
+
+
+def test_node_scan_success_forwards_host_and_port(monkeypatch):
+    module, _ = _load_node_scan(monkeypatch)
+    captured = {}
+
+    def fake_get(url, params=None, headers=None, verify=None, timeout=None):
+        captured["url"] = url
+        captured["params"] = params
+        return SimpleNamespace(
+            status_code=200,
+            ok=True,
+            json=lambda: {"fingerprint": "SHA256:xyz", "key_type": "ssh-ed25519"},
+        )
+
+    monkeypatch.setattr(module.requests, "get", fake_get)
+    resp = module.NodeHostKeyFingerprintAPIView().get(_scan_request(port="2222"), 15)
+    assert resp.status_code == 200
+    assert resp.data["fingerprint"] == "SHA256:xyz"
+    assert resp.data["port"] == 2222
+    assert captured["url"].endswith("/ssh/host-key-fingerprint")
+    assert captured["params"] == {"host": "10.0.0.5", "port": 2222}
+
+
+def test_node_scan_invalid_port_defaults_to_22(monkeypatch):
+    module, _ = _load_node_scan(monkeypatch)
+    captured = {}
+
+    def fake_get(url, params=None, headers=None, verify=None, timeout=None):
+        captured["params"] = params
+        return SimpleNamespace(
+            status_code=200, ok=True, json=lambda: {"fingerprint": "SHA256:z"}
+        )
+
+    monkeypatch.setattr(module.requests, "get", fake_get)
+    resp = module.NodeHostKeyFingerprintAPIView().get(
+        _scan_request(port="not-a-number"), 15
+    )
+    assert resp.status_code == 200
+    assert captured["params"]["port"] == 22
+
+
+def test_node_scan_503_when_backend_lacks_route(monkeypatch):
+    module, _ = _load_node_scan(monkeypatch)
+
+    def fake_get(url, params=None, headers=None, verify=None, timeout=None):
+        return SimpleNamespace(status_code=404, ok=False, json=lambda: {})
+
+    monkeypatch.setattr(module.requests, "get", fake_get)
+    resp = module.NodeHostKeyFingerprintAPIView().get(_scan_request(), 15)
+    assert resp.status_code == 503
