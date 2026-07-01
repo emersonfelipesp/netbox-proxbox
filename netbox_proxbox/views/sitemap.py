@@ -114,6 +114,10 @@ _PK_PAGES: list[tuple[str, str]] = [
     ("Proxmox Endpoint edit", "endpoints/proxmox/{pk}/edit/"),
     ("Proxmox Endpoint delete", "endpoints/proxmox/{pk}/delete/"),
     ("Proxmox Endpoint settings", "endpoints/proxmox/{pk}/settings/"),
+    (
+        "Proxmox Endpoint overwrite behavior",
+        "endpoints/proxmox/{pk}/overwrite-behavior/",
+    ),
     ("NetBox Endpoint detail", "endpoints/netbox/{pk}/"),
     ("NetBox Endpoint edit", "endpoints/netbox/{pk}/edit/"),
     ("FastAPI Endpoint detail", "endpoints/fastapi/{pk}/"),
