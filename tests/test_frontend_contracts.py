@@ -1050,3 +1050,26 @@ def test_proxmox_endpoint_settings_focuses_first_tab_with_validation_error():
     # window.Tab) and must run after the DOM/tab data-api is ready.
     assert "DOMContentLoaded" in template
     assert ".click()" in template
+
+
+def test_proxmox_endpoint_edit_subpages_keep_object_tab_strip():
+    """The Settings and SSH edit sub-pages are NetBox ObjectEditViews, so
+    `generic/object_edit.html` renders `{% block tabs %}` as a single Edit tab —
+    hiding the object's other registered tabs (detail / SSH / Terminal / Sync
+    Jobs / …). Both templates override that block to render the full object tab
+    strip (primary detail tab + `{% model_view_tabs object %}`) so the operator
+    can navigate back to the other tabs from an edit sub-page.
+    """
+    for tpl in (
+        "netbox_proxbox/templates/netbox_proxbox/proxmoxendpoint_settings.html",
+        "netbox_proxbox/templates/netbox_proxbox/proxmoxendpoint_ssh_settings.html",
+    ):
+        contents = _read(tpl)
+        # Overrides the object-edit tabs block...
+        assert "{% block tabs %}" in contents
+        assert "{% endblock tabs %}" in contents
+        # ...loads the tag library and renders the registered model-view tabs...
+        assert "{% load tabs %}" in contents
+        assert "{% model_view_tabs object %}" in contents
+        # ...plus the primary detail tab linking to the object.
+        assert "object.get_absolute_url" in contents
