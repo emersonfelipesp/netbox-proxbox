@@ -139,6 +139,7 @@ def _stub_for_ssh_credentials(
     np_models.NodeSSHCredential = _NodeSSHCredential
     np_models.ProxboxPluginSettings = _ProxboxPluginSettings
     np_models.ProxmoxEndpoint = _ProxmoxEndpoint
+    np_models.ProxmoxNode = type("ProxmoxNode", (), {})
 
     np_models_ssh = types.ModuleType("netbox_proxbox.models.ssh_credential")
     np_models_ssh.AUTH_METHOD_PASSWORD = "password"
@@ -644,3 +645,35 @@ def test_urls_register_crud_router():
     assert "ssh-credentials" in src
     assert "NodeSSHCredentialViewSet" in src
     assert "nodesshcredential" in src
+
+
+# ---------------------------------------------------------------------------
+# Contract: node host-key scan view + URL wiring (Terminal-tab credential modal)
+# ---------------------------------------------------------------------------
+
+
+def test_node_host_key_scan_view_is_declared() -> None:
+    src = API_PATH.read_text()
+    assert "class NodeHostKeyFingerprintAPIView(APIView):" in src
+    # Gated by an open_ssh_terminal session permission (mirrors the tab), not a
+    # NetBox API token.
+    assert "class _ProxmoxEndpointOpenTerminalPermission(BasePermission):" in src
+    assert 'user.has_perm("netbox_proxbox.open_ssh_terminal")' in src
+    assert "permission_classes = [_ProxmoxEndpointOpenTerminalPermission]" in src
+    # Resolves the node IP server-side, honors the modal ?port=, enforces the
+    # owning endpoint's SSH access method, and proxies to proxbox-api.
+    assert "node.ip_address" in src
+    assert 'request.query_params.get("port")' in src
+    assert "endpoint.ssh_access_enabled" in src
+    assert "/ssh/host-key-fingerprint" in src
+    # Degrades gracefully on an old/absent backend (404 -> 503) and never sends a
+    # credential (only reads the public host key).
+    assert "status.HTTP_503_SERVICE_UNAVAILABLE" in src
+    assert "status.HTTP_403_FORBIDDEN" in src
+
+
+def test_node_host_key_scan_route_is_registered() -> None:
+    src = URLS_PATH.read_text()
+    assert "ssh-credentials/by-node/<int:node_id>/host-key-fingerprint/" in src
+    assert "NodeHostKeyFingerprintAPIView" in src
+    assert 'name="api-ssh-credential-node-host-key"' in src

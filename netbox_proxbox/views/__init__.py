@@ -115,6 +115,7 @@ from .cluster import (
     ClusterSummaryTabView,
 )
 from .cluster_nodes_tab import ProxmoxEndpointClusterNodesTabView
+from .proxmox_create_instance import ProxmoxEndpointCreateInstanceView
 from .proxmox_templates_tab import ProxmoxEndpointTemplatesTabView
 from .dashboard import DashboardView
 from .endpoints import (

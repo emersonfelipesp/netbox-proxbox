@@ -128,9 +128,22 @@ These `APIView` subclasses mirror every data-bearing UI page and expose the same
   permission (required alongside `view` here) effectively grants retrieval of that
   password — scope it to operators already trusted with the endpoint credentials.
   Token-only endpoints (no stored password) get `422` from this view.
+- `NodeHostKeyFingerprintAPIView`
+  (`GET ssh-credentials/by-node/<node_id>/host-key-fingerprint/`) backs the
+  **"Fetch host key"** button in the **Terminal-tab credential modal** for
+  **node** targets. Session-gated by `_ProxmoxEndpointOpenTerminalPermission`
+  (`open_ssh_terminal`, the same permission that renders the tab). It resolves
+  the node IP server-side, honors the modal `?port=` (default 22), enforces the
+  owning endpoint's SSH access method (403 when `access_methods='api'`), and
+  proxies to proxbox-api `GET /ssh/host-key-fingerprint`. No credential is sent
+  or returned (public host key only); degrades gracefully (no host → 422, no
+  backend → 503, old proxbox-api without the route → 503, upstream error → 502).
+  The operator reviews/accepts the fingerprint before it is pinned for a
+  one-shot session or persisted on a stored `NodeSSHCredential`.
 - `ProxmoxEndpointHostKeyFingerprintAPIView`
   (`GET ssh-credentials/by-endpoint/<id>/host-key-fingerprint/`) backs the
-  **"Fetch host key"** button on the SSH-settings tab. It is **session-gated**
+  **"Fetch host key"** button on the SSH-settings tab (and the endpoint-target
+  Terminal-tab modal). It is **session-gated**
   (`_ProxmoxEndpointChangePermission` → `change_proxmoxendpoint`), resolves the
   endpoint host (`ssh_host`) + `ssh_port` server-side, and proxies to proxbox-api
   `GET /ssh/host-key-fingerprint` (via `get_fastapi_request_context`, X-Proxbox-API-Key),

@@ -63,6 +63,27 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
 - Companion endpoint models: `PBSEndpoint`, `PDMEndpoint`, `PDMRemote` for Proxmox Backup Server and Datacenter Manager inventory.
 - SSH and hardware discovery: `NodeSSHCredential` stores per-node SSH credentials for the optional hardware-discovery pass.
 - `ProxmoxEndpoint.access_methods` (migration 0056, choices `api` / `api_ssh`, default `api`) is the per-endpoint **transport access method**, orthogonal to `allow_writes`. `api` = Read+Write over the Proxmox API only; `api_ssh` = API + SSH. SSH only complements API; **SSH-only is not a selectable choice**. It is the load-bearing gate for the browser SSH terminal: the credential-serving API views in `netbox_proxbox/api/ssh_credentials.py` (`ProxmoxEndpointSSHCredentialSecretsAPIView` for endpoint targets and `NodeSSHCredentialSecretsAPIView` for node targets, the latter via the owning `ProxmoxNode.endpoint`) return 403 and withhold secrets when the endpoint is API-only, which is what blocks the terminal. New endpoints default to `api`; existing rows are backfilled to `api_ssh` on upgrade (non-breaking). The value is pushed to the proxbox-api backend by `_proxmox_backend_payload()` so the backend can gate its own SSH paths.
+- **Terminal-tab credential modal (store vs one-shot).** When a Terminal-tab
+  target (a `ProxmoxNode`, or the endpoint) has **no** stored SSH credential,
+  the browser JS (`static/.../js/ssh_terminal.js`) opens a modal instead of
+  dead-ending on "No SSH credential registered". The operator enters
+  username/password (or key), fetches + accepts the host-key fingerprint
+  (`GET ssh-credentials/by-node/<id>/host-key-fingerprint/`), and chooses
+  **Use once** (one-shot) or **Store for future sessions**. The session view
+  (`ProxmoxEndpointSSHTerminalSessionView.post`) reads a `credential` object +
+  `store` flag: on **store** it persists an encrypted `NodeSSHCredential` (needs
+  `add`/`change_nodesshcredential` + the plugin encryption key, else 403/503)
+  then opens a normal stored session; on **one-shot** it forwards the inline
+  creds to proxbox-api as `one_shot_credential` and stores nothing. Both paths
+  re-enforce `open_ssh_terminal` and `ssh_access_enabled` (the one-shot path
+  bypasses the stored-credential access gate, so the view checks the access
+  method explicitly). Per-node stored-credential readiness (`ssh_ready`) and the
+  store-capability flag (`can_store_credentials`) come from
+  `ProxmoxEndpointSSHTerminalView.get_extra_context`. **Pairing:** the one-shot
+  path requires a proxbox-api release whose `POST /ssh/sessions` accepts the
+  optional `one_shot_credential` field; the plugin degrades gracefully against an
+  older backend (which rejects the extra field), and the store path works against
+  any backend.
 - VM lifecycle models: `ProxmoxVMTemplate` (VM template inventory with optional FK to `VirtualMachine`), `ProxmoxVMCloudInit` (cloud-init config), `CloudImageTemplate` (Firecracker/image factory catalog), `ProxmoxApplyJob` (intent apply job), `DeletionRequest` (auditable delete-request workflow).
 - Datacenter config: `ProxmoxDatacenterCpuModel` (custom CPU models synced from PVE).
 - Firewall inventory (6 models, read-only): `ProxmoxFirewallSecurityGroup`, `ProxmoxFirewallRule`, `ProxmoxFirewallIPSet`, `ProxmoxFirewallIPSetEntry`, `ProxmoxFirewallAlias`, `ProxmoxFirewallOptions`.
@@ -80,6 +101,7 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
 - All three endpoint types support **CSV/JSON/YAML export** (safe and sensitive modes) and **bulk import** with IP auto-creation and id-stripping. See [`netbox_proxbox/views/endpoints/CLAUDE.md`](./netbox_proxbox/views/endpoints/CLAUDE.md).
 - The Proxmox endpoint list at `/plugins/proxbox/endpoints/proxmox/` shows `Enabled` by default and exposes **Enable Selected** / **Disable Selected** list actions. These actions bulk-update only `ProxmoxEndpoint.enabled` via `queryset.update()` so they do not fire the ProxmoxEndpoint `post_save` backend-registration/sync signal.
 - The Proxmox endpoint detail page carries a **Templates** tab (`.../endpoints/proxmox/<pk>/templates/`, `views/proxmox_templates_tab.py`) that reads templates **live** from proxbox-api for that endpoint (`GET /cloud/vm/templates?cloud_init_only=false` + `GET /cloud/lxc/templates`, via `get_fastapi_request_context()` + `resolve_backend_endpoint_id()`), grouped into three client-side filters: **Cloud-Init**, **plain QEMU/KVM (no cloud-init)**, and **LXC**. Cloud-init classification derives from `cloud_init_drives`/`cicustom`, not the always-`True` `cloud_init` field. The tab also offers a "Create Cloud-Init template image" action that links to the optional **netbox-packer** plugin when installed (soft-detected by `integrations/packer.py::is_netbox_packer_installed()`, mirroring `integrations/rpc.py`) and is disabled with an explanatory hover tooltip when it is not.
+- The Templates tab also exposes a per-row **Create new instance** wizard for QEMU and LXC templates. The action posts directly to proxbox-api (`/cloud/vm/provision` or `/cloud/lxc/provision`) through `views/proxmox_create_instance.py`, defaults QEMU to linked clone (`full_clone=false`), uses a 90-second request timeout, retries QEMU VMID collisions from the datacenter `next_id` hint, and runs `sync_individual("sync/individual/vm", ...)` afterward so the new VM/container appears in NetBox. Writes are gated in four layers: UI disables the button when `ProxmoxEndpoint.allow_writes=False`, the plugin view pre-checks the same flag before backend calls, proxbox-api 403 `reason`/`detail` is surfaced unchanged, and the view requires `core.run_proxmox_action` via `permission_run_proxmox_action()`.
 
 ## Backend integration notes
 

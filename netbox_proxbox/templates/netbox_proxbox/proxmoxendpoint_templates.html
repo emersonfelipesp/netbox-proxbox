@@ -2,7 +2,7 @@
 {% load i18n %}
 
 {% block content %}
-<div class="row mb-3">
+<div class="row mb-3" id="proxbox-template-create-root" data-create-url="{{ create_instance_url }}">
   <div class="col col-12">
     <div class="card">
       <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -65,6 +65,7 @@
                   <th scope="col">{% trans "Memory (MB)" %}</th>
                   <th scope="col">{% trans "Disk (GiB)" %}</th>
                   <th scope="col">{% trans "Tags" %}</th>
+                  <th scope="col" class="text-end noprint">{% trans "Actions" %}</th>
                 </tr>
               </thead>
               <tbody>
@@ -77,9 +78,29 @@
                     <td>{{ t.memory_mb|default:"—" }}</td>
                     <td>{{ t.disk_gib|default:"—" }}</td>
                     <td>{{ t.tags|default:"—" }}</td>
+                    <td class="text-end noprint">
+                      {% if allow_writes %}
+                        <button type="button" class="btn btn-sm btn-outline-primary text-nowrap proxbox-create-instance-btn"
+                                data-bs-toggle="tooltip" title="{% trans 'Create new instance' %}"
+                                data-create-kind="qemu"
+                                data-create-source="{{ t.vmid }}"
+                                data-create-node="{{ t.node }}"
+                                data-create-name="{{ t.name }}">
+                          <i class="mdi mdi-plus-box"></i> {% trans "Create new instance" %}
+                        </button>
+                      {% else %}
+                        <span class="d-inline-block" tabindex="0" data-bs-toggle="tooltip" data-bs-placement="left"
+                              title="{% trans 'Enable write access on this endpoint to create instances.' %}">
+                          <button type="button" class="btn btn-sm btn-outline-primary text-nowrap disabled" tabindex="-1"
+                                  aria-disabled="true" disabled style="pointer-events: none;">
+                            <i class="mdi mdi-plus-box"></i> {% trans "Create new instance" %}
+                          </button>
+                        </span>
+                      {% endif %}
+                    </td>
                   </tr>
                 {% empty %}
-                  <tr><td colspan="7" class="text-muted text-center py-3">{% trans "No Cloud-Init templates found." %}</td></tr>
+                  <tr><td colspan="8" class="text-muted text-center py-3">{% trans "No Cloud-Init templates found." %}</td></tr>
                 {% endfor %}
               </tbody>
             </table>
@@ -99,6 +120,7 @@
                   <th scope="col">{% trans "Memory (MB)" %}</th>
                   <th scope="col">{% trans "Disk (GiB)" %}</th>
                   <th scope="col">{% trans "Tags" %}</th>
+                  <th scope="col" class="text-end noprint">{% trans "Actions" %}</th>
                 </tr>
               </thead>
               <tbody>
@@ -110,9 +132,29 @@
                     <td>{{ t.memory_mb|default:"—" }}</td>
                     <td>{{ t.disk_gib|default:"—" }}</td>
                     <td>{{ t.tags|default:"—" }}</td>
+                    <td class="text-end noprint">
+                      {% if allow_writes %}
+                        <button type="button" class="btn btn-sm btn-outline-primary text-nowrap proxbox-create-instance-btn"
+                                data-bs-toggle="tooltip" title="{% trans 'Create new instance' %}"
+                                data-create-kind="qemu"
+                                data-create-source="{{ t.vmid }}"
+                                data-create-node="{{ t.node }}"
+                                data-create-name="{{ t.name }}">
+                          <i class="mdi mdi-plus-box"></i> {% trans "Create new instance" %}
+                        </button>
+                      {% else %}
+                        <span class="d-inline-block" tabindex="0" data-bs-toggle="tooltip" data-bs-placement="left"
+                              title="{% trans 'Enable write access on this endpoint to create instances.' %}">
+                          <button type="button" class="btn btn-sm btn-outline-primary text-nowrap disabled" tabindex="-1"
+                                  aria-disabled="true" disabled style="pointer-events: none;">
+                            <i class="mdi mdi-plus-box"></i> {% trans "Create new instance" %}
+                          </button>
+                        </span>
+                      {% endif %}
+                    </td>
                   </tr>
                 {% empty %}
-                  <tr><td colspan="6" class="text-muted text-center py-3">{% trans "No plain QEMU/KVM templates found." %}</td></tr>
+                  <tr><td colspan="7" class="text-muted text-center py-3">{% trans "No plain QEMU/KVM templates found." %}</td></tr>
                 {% endfor %}
               </tbody>
             </table>
@@ -130,6 +172,7 @@
                   <th scope="col">{% trans "Storage" %}</th>
                   <th scope="col">{% trans "Volume ID" %}</th>
                   <th scope="col">{% trans "Size (GiB)" %}</th>
+                  <th scope="col" class="text-end noprint">{% trans "Actions" %}</th>
                 </tr>
               </thead>
               <tbody>
@@ -139,9 +182,29 @@
                     <td>{{ t.storage|default:"—" }}</td>
                     <td><code>{{ t.volid }}</code></td>
                     <td>{{ t.size_gib|default:"—" }}</td>
+                    <td class="text-end noprint">
+                      {% if allow_writes %}
+                        <button type="button" class="btn btn-sm btn-outline-primary text-nowrap proxbox-create-instance-btn"
+                                data-bs-toggle="tooltip" title="{% trans 'Create new instance' %}"
+                                data-create-kind="lxc"
+                                data-create-source="{{ t.volid }}"
+                                data-create-node=""
+                                data-create-name="{{ t.name }}">
+                          <i class="mdi mdi-plus-box"></i> {% trans "Create new instance" %}
+                        </button>
+                      {% else %}
+                        <span class="d-inline-block" tabindex="0" data-bs-toggle="tooltip" data-bs-placement="left"
+                              title="{% trans 'Enable write access on this endpoint to create instances.' %}">
+                          <button type="button" class="btn btn-sm btn-outline-primary text-nowrap disabled" tabindex="-1"
+                                  aria-disabled="true" disabled style="pointer-events: none;">
+                            <i class="mdi mdi-plus-box"></i> {% trans "Create new instance" %}
+                          </button>
+                        </span>
+                      {% endif %}
+                    </td>
                   </tr>
                 {% empty %}
-                  <tr><td colspan="4" class="text-muted text-center py-3">{% trans "No LXC container templates found." %}</td></tr>
+                  <tr><td colspan="5" class="text-muted text-center py-3">{% trans "No LXC container templates found." %}</td></tr>
                 {% endfor %}
               </tbody>
             </table>
@@ -154,26 +217,501 @@
 </div>
 {% endblock %}
 
+{% block modals %}
+{{ block.super }}
+<div class="modal fade" id="proxbox-create-instance-modal" tabindex="-1"
+     aria-labelledby="proxbox-create-instance-modal-label" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="proxbox-create-instance-modal-label">{% trans "Create new instance" %}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{% trans 'Close' %}"></button>
+      </div>
+      <div class="modal-body">
+        <form id="proxbox-create-instance-form">
+          {% csrf_token %}
+          <input type="hidden" id="proxbox-create-kind">
+          <input type="hidden" id="proxbox-create-source">
+
+          <div class="d-flex align-items-center gap-2 mb-3" id="proxbox-create-step-indicator"></div>
+
+          <div class="proxbox-create-step" data-step="1">
+            <h6 class="mb-3">{% trans "Basics" %}</h6>
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label" for="proxbox-create-display-kind">{% trans "Type" %}</label>
+                <input type="text" class="form-control" id="proxbox-create-display-kind" readonly>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label" for="proxbox-create-display-source">{% trans "Template" %}</label>
+                <input type="text" class="form-control" id="proxbox-create-display-source" readonly>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label" for="proxbox-create-name" id="proxbox-create-name-label">{% trans "Name" %}</label>
+                <input type="text" class="form-control" id="proxbox-create-name" maxlength="128" required>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label" for="proxbox-create-target-node">{% trans "Target node" %}</label>
+                <input type="text" class="form-control" id="proxbox-create-target-node" maxlength="128" required>
+              </div>
+              <div class="col-12" data-qemu-only>
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" id="proxbox-create-full-clone">
+                  <label class="form-check-label" for="proxbox-create-full-clone">{% trans "Full clone" %}</label>
+                </div>
+                <div class="form-text text-warning">
+                  {% trans "Full clones copy all disks and may take several minutes; if the request times out the VM is still created and will appear after the next sync." %}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="proxbox-create-step d-none" data-step="2">
+            <h6 class="mb-3">{% trans "Resources" %}</h6>
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label" for="proxbox-create-cores">{% trans "Cores" %}</label>
+                <input type="number" class="form-control" id="proxbox-create-cores" min="1" step="1" placeholder="2">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label" for="proxbox-create-memory">{% trans "Memory (MB)" %}</label>
+                <input type="number" class="form-control" id="proxbox-create-memory" min="64" step="64" placeholder="2048">
+              </div>
+              <div class="col-md-6" data-qemu-only>
+                <label class="form-label" for="proxbox-create-storage">{% trans "Storage" %}</label>
+                <input type="text" class="form-control" id="proxbox-create-storage" maxlength="128" placeholder="local-lvm">
+              </div>
+              <div class="col-md-6" data-qemu-only>
+                <div class="form-check mt-md-4 pt-md-2">
+                  <input class="form-check-input" type="checkbox" id="proxbox-create-start" checked>
+                  <label class="form-check-label" for="proxbox-create-start">{% trans "Start after provision" %}</label>
+                </div>
+              </div>
+              <div class="col-md-6" data-lxc-only>
+                <label class="form-label" for="proxbox-create-rootfs-storage">{% trans "Rootfs storage" %}</label>
+                <input type="text" class="form-control" id="proxbox-create-rootfs-storage" maxlength="128" value="local-lvm">
+              </div>
+              <div class="col-md-6" data-lxc-only>
+                <label class="form-label" for="proxbox-create-rootfs-size">{% trans "Rootfs size (GB)" %}</label>
+                <input type="number" class="form-control" id="proxbox-create-rootfs-size" min="1" max="10000" step="1" value="8">
+              </div>
+              <div class="col-md-6" data-lxc-only>
+                <label class="form-label" for="proxbox-create-password">{% trans "Password" %}</label>
+                <input type="password" class="form-control" id="proxbox-create-password" maxlength="256" autocomplete="new-password">
+              </div>
+              <div class="col-md-6" data-lxc-only>
+                <div class="form-check mt-md-4 pt-md-2">
+                  <input class="form-check-input" type="checkbox" id="proxbox-create-lxc-start" checked>
+                  <label class="form-check-label" for="proxbox-create-lxc-start">{% trans "Start after provision" %}</label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="proxbox-create-step d-none" data-step="3" data-qemu-step>
+            <h6 class="mb-3">{% trans "Cloud-Init" %}</h6>
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label" for="proxbox-create-ci-user">{% trans "User" %}</label>
+                <input type="text" class="form-control" id="proxbox-create-ci-user" maxlength="64" placeholder="ubuntu">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label" for="proxbox-create-ci-search-domain">{% trans "Search domain" %}</label>
+                <input type="text" class="form-control" id="proxbox-create-ci-search-domain" maxlength="255">
+              </div>
+              <div class="col-12">
+                <label class="form-label" for="proxbox-create-ssh-keys">{% trans "SSH public keys" %}</label>
+                <textarea class="form-control" id="proxbox-create-ssh-keys" rows="4"></textarea>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label" for="proxbox-create-static-ip">{% trans "Static IP" %}</label>
+                <input type="text" class="form-control" id="proxbox-create-static-ip" placeholder="192.0.2.10">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label" for="proxbox-create-static-cidr">{% trans "CIDR" %}</label>
+                <input type="number" class="form-control" id="proxbox-create-static-cidr" min="0" max="128" step="1" placeholder="24">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label" for="proxbox-create-static-gw">{% trans "Gateway" %}</label>
+                <input type="text" class="form-control" id="proxbox-create-static-gw" placeholder="192.0.2.1">
+              </div>
+              <div class="col-12">
+                <label class="form-label" for="proxbox-create-dns-servers">{% trans "DNS servers" %}</label>
+                <input type="text" class="form-control" id="proxbox-create-dns-servers" placeholder="1.1.1.1, 8.8.8.8">
+              </div>
+            </div>
+          </div>
+
+          <div class="proxbox-create-step d-none" data-step="4">
+            <h6 class="mb-3">{% trans "Review" %}</h6>
+            <dl class="row mb-3" id="proxbox-create-review"></dl>
+            <div class="alert d-none" id="proxbox-create-result" role="alert"></div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" id="proxbox-create-back">{% trans "Back" %}</button>
+        <button type="button" class="btn btn-primary" id="proxbox-create-next">{% trans "Next" %}</button>
+        <button type="button" class="btn btn-primary d-none" id="proxbox-create-submit">
+          <span class="spinner-border spinner-border-sm me-1 d-none" id="proxbox-create-spinner" role="status" aria-hidden="true"></span>
+          <span id="proxbox-create-submit-label">{% trans "Create" %}</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
 {% block javascript %}
 {{ block.super }}
 <script type="text/javascript">
   (function () {
     const filter = document.getElementById('proxbox-template-filter');
-    if (!filter) { return; }
-    const groups = document.querySelectorAll('.proxbox-template-group');
-    function applyFilter(category) {
-      groups.forEach(function (group) {
-        const match = category === 'all' || group.dataset.category === category;
-        group.style.display = match ? '' : 'none';
+    if (filter) {
+      const groups = document.querySelectorAll('.proxbox-template-group');
+      function applyFilter(category) {
+        groups.forEach(function (group) {
+          const match = category === 'all' || group.dataset.category === category;
+          group.style.display = match ? '' : 'none';
+        });
+      }
+      filter.querySelectorAll('button[data-filter]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          filter.querySelectorAll('button[data-filter]').forEach(function (b) {
+            b.classList.remove('active');
+          });
+          btn.classList.add('active');
+          applyFilter(btn.dataset.filter);
+        });
       });
     }
-    filter.querySelectorAll('button[data-filter]').forEach(function (btn) {
+
+    const root = document.getElementById('proxbox-template-create-root');
+    const modalEl = document.getElementById('proxbox-create-instance-modal');
+    if (!root || !modalEl) { return; }
+
+    const modal = window.bootstrap && window.bootstrap.Modal
+      ? new window.bootstrap.Modal(modalEl)
+      : new Modal(modalEl);
+    const form = document.getElementById('proxbox-create-instance-form');
+    const fields = {
+      kind: document.getElementById('proxbox-create-kind'),
+      source: document.getElementById('proxbox-create-source'),
+      displayKind: document.getElementById('proxbox-create-display-kind'),
+      displaySource: document.getElementById('proxbox-create-display-source'),
+      name: document.getElementById('proxbox-create-name'),
+      nameLabel: document.getElementById('proxbox-create-name-label'),
+      targetNode: document.getElementById('proxbox-create-target-node'),
+      fullClone: document.getElementById('proxbox-create-full-clone'),
+      cores: document.getElementById('proxbox-create-cores'),
+      memory: document.getElementById('proxbox-create-memory'),
+      storage: document.getElementById('proxbox-create-storage'),
+      start: document.getElementById('proxbox-create-start'),
+      lxcStart: document.getElementById('proxbox-create-lxc-start'),
+      rootfsStorage: document.getElementById('proxbox-create-rootfs-storage'),
+      rootfsSize: document.getElementById('proxbox-create-rootfs-size'),
+      password: document.getElementById('proxbox-create-password'),
+      ciUser: document.getElementById('proxbox-create-ci-user'),
+      searchDomain: document.getElementById('proxbox-create-ci-search-domain'),
+      sshKeys: document.getElementById('proxbox-create-ssh-keys'),
+      staticIp: document.getElementById('proxbox-create-static-ip'),
+      staticCidr: document.getElementById('proxbox-create-static-cidr'),
+      staticGw: document.getElementById('proxbox-create-static-gw'),
+      dnsServers: document.getElementById('proxbox-create-dns-servers')
+    };
+    const steps = Array.from(modalEl.querySelectorAll('.proxbox-create-step'));
+    const indicator = document.getElementById('proxbox-create-step-indicator');
+    const review = document.getElementById('proxbox-create-review');
+    const result = document.getElementById('proxbox-create-result');
+    const backBtn = document.getElementById('proxbox-create-back');
+    const nextBtn = document.getElementById('proxbox-create-next');
+    const submitBtn = document.getElementById('proxbox-create-submit');
+    const spinner = document.getElementById('proxbox-create-spinner');
+    const submitLabel = document.getElementById('proxbox-create-submit-label');
+    let stepIndex = 0;
+
+    function clearNode(node) {
+      while (node.firstChild) {
+        node.removeChild(node.firstChild);
+      }
+    }
+
+    function csrfToken() {
+      const input = form.querySelector('input[name="csrfmiddlewaretoken"]');
+      if (input && input.value) { return input.value; }
+      const cookies = document.cookie.split(';');
+      for (const cookie of cookies) {
+        const parts = cookie.trim().split('=');
+        if (parts[0] === 'csrftoken') {
+          return decodeURIComponent(parts.slice(1).join('='));
+        }
+      }
+      return '';
+    }
+
+    function visibleSteps() {
+      const isQemu = fields.kind.value === 'qemu';
+      return steps.filter(function (step) {
+        return isQemu || !step.hasAttribute('data-qemu-step');
+      });
+    }
+
+    function setScopedFields() {
+      const isQemu = fields.kind.value === 'qemu';
+      modalEl.querySelectorAll('[data-qemu-only]').forEach(function (el) {
+        el.classList.toggle('d-none', !isQemu);
+      });
+      modalEl.querySelectorAll('[data-lxc-only]').forEach(function (el) {
+        el.classList.toggle('d-none', isQemu);
+      });
+      fields.nameLabel.textContent = isQemu ? 'Name' : 'Hostname';
+      fields.name.maxLength = isQemu ? 128 : 63;
+      fields.displayKind.value = isQemu ? 'QEMU/KVM VM' : 'LXC container';
+    }
+
+    function defaultInstanceName(rawName, kind) {
+      const source = String(rawName || 'instance');
+      const archiveTrimmed = source.replace(/(\.tar\.(zst|gz|xz)|\.tar)$/i, '');
+      const allowed = kind === 'qemu' ? /[^A-Za-z0-9._-]+/g : /[^A-Za-z0-9.-]+/g;
+      let base = archiveTrimmed.replace(allowed, '-').replace(/^[^A-Za-z0-9]+/, '').replace(/[^A-Za-z0-9]+$/, '');
+      if (!base) {
+        base = kind === 'qemu' ? 'vm' : 'ct';
+      }
+      const suffix = '-new';
+      const maxLength = kind === 'qemu' ? 128 : 63;
+      if (base.length + suffix.length > maxLength) {
+        base = base.slice(0, maxLength - suffix.length).replace(/[^A-Za-z0-9]+$/, '') || base.slice(0, maxLength - suffix.length);
+      }
+      return base + suffix;
+    }
+
+    function setResult(kind, reason, detail, netboxUrl) {
+      result.className = kind === 'success' ? 'alert alert-success' : 'alert alert-danger';
+      clearNode(result);
+      if (reason) {
+        const strong = document.createElement('strong');
+        strong.textContent = reason;
+        result.appendChild(strong);
+      }
+      if (detail) {
+        if (reason) {
+          result.appendChild(document.createTextNode(' '));
+        }
+        const span = document.createElement('span');
+        span.textContent = detail;
+        result.appendChild(span);
+      }
+      if (netboxUrl) {
+        result.appendChild(document.createTextNode(' '));
+        const link = document.createElement('a');
+        link.href = netboxUrl;
+        link.className = 'alert-link';
+        link.textContent = 'Open in NetBox';
+        result.appendChild(link);
+      }
+    }
+
+    function appendReview(label, value) {
+      if (value === null || value === undefined || value === '') { return; }
+      const dt = document.createElement('dt');
+      dt.className = 'col-sm-4';
+      dt.textContent = label;
+      const dd = document.createElement('dd');
+      dd.className = 'col-sm-8';
+      dd.textContent = String(value);
+      review.appendChild(dt);
+      review.appendChild(dd);
+    }
+
+    function optionalNumber(input) {
+      if (!input || input.value === '') { return null; }
+      return Number(input.value);
+    }
+
+    function collectPayload() {
+      const isQemu = fields.kind.value === 'qemu';
+      const payload = {
+        kind: fields.kind.value,
+        source: fields.source.value,
+        target_node: fields.targetNode.value.trim()
+      };
+      const cores = optionalNumber(fields.cores);
+      const memory = optionalNumber(fields.memory);
+      if (cores !== null) { payload.cores = cores; }
+      if (memory !== null) { payload.memory_mb = memory; }
+
+      if (isQemu) {
+        payload.name = fields.name.value.trim();
+        payload.full_clone = fields.fullClone.checked;
+        payload.start_after_provision = fields.start.checked;
+        if (fields.storage.value.trim()) {
+          payload.storage = fields.storage.value.trim();
+        }
+        const cloudInit = {};
+        if (fields.ciUser.value.trim()) {
+          cloudInit.user = fields.ciUser.value.trim();
+        }
+        const sshKeys = fields.sshKeys.value.split(/\r?\n/).map(function (line) {
+          return line.trim();
+        }).filter(Boolean);
+        if (sshKeys.length) {
+          cloudInit.ssh_keys = sshKeys;
+        }
+        if (fields.staticIp.value.trim() || fields.staticCidr.value || fields.staticGw.value.trim()) {
+          cloudInit.network = {
+            ip: fields.staticIp.value.trim(),
+            cidr: Number(fields.staticCidr.value),
+            gw: fields.staticGw.value.trim()
+          };
+        }
+        if (fields.searchDomain.value.trim()) {
+          cloudInit.search_domain = fields.searchDomain.value.trim();
+        }
+        const dnsServers = fields.dnsServers.value.split(',').map(function (entry) {
+          return entry.trim();
+        }).filter(Boolean);
+        if (dnsServers.length) {
+          cloudInit.dns_servers = dnsServers;
+        }
+        payload.cloud_init = cloudInit;
+      } else {
+        payload.hostname = fields.name.value.trim();
+        payload.rootfs_storage = fields.rootfsStorage.value.trim() || 'local-lvm';
+        payload.rootfs_size_gb = Number(fields.rootfsSize.value || 8);
+        payload.start_after_provision = fields.lxcStart.checked;
+        if (fields.password.value) {
+          payload.password = fields.password.value;
+        }
+      }
+      return payload;
+    }
+
+    function buildReview() {
+      const payload = collectPayload();
+      clearNode(review);
+      appendReview('Type', payload.kind === 'qemu' ? 'QEMU/KVM VM' : 'LXC container');
+      appendReview('Template', payload.source);
+      appendReview(payload.kind === 'qemu' ? 'Name' : 'Hostname', payload.name || payload.hostname);
+      appendReview('Target node', payload.target_node);
+      appendReview('Cores', payload.cores);
+      appendReview('Memory (MB)', payload.memory_mb);
+      if (payload.kind === 'qemu') {
+        appendReview('Clone type', payload.full_clone ? 'Full clone' : 'Linked clone');
+        appendReview('Storage', payload.storage);
+      } else {
+        appendReview('Rootfs storage', payload.rootfs_storage);
+        appendReview('Rootfs size (GB)', payload.rootfs_size_gb);
+      }
+      appendReview('Start after provision', payload.start_after_provision ? 'Yes' : 'No');
+    }
+
+    function renderStep() {
+      const activeSteps = visibleSteps();
+      if (stepIndex >= activeSteps.length) {
+        stepIndex = activeSteps.length - 1;
+      }
+      steps.forEach(function (step) {
+        step.classList.add('d-none');
+      });
+      activeSteps[stepIndex].classList.remove('d-none');
+      clearNode(indicator);
+      activeSteps.forEach(function (step, index) {
+        const badge = document.createElement('span');
+        badge.className = index === stepIndex ? 'badge text-bg-primary' : 'badge text-bg-secondary';
+        badge.textContent = 'Step ' + step.dataset.step;
+        indicator.appendChild(badge);
+      });
+      if (activeSteps[stepIndex].dataset.step === '4') {
+        buildReview();
+      }
+      backBtn.classList.toggle('d-none', stepIndex === 0);
+      nextBtn.classList.toggle('d-none', stepIndex === activeSteps.length - 1);
+      submitBtn.classList.toggle('d-none', stepIndex !== activeSteps.length - 1);
+    }
+
+    function resetWizard(btn) {
+      form.reset();
+      fields.kind.value = btn.dataset.createKind || '';
+      fields.source.value = btn.dataset.createSource || '';
+      fields.displaySource.value = btn.dataset.createSource || '';
+      fields.name.value = defaultInstanceName(btn.dataset.createName, fields.kind.value);
+      fields.targetNode.value = btn.dataset.createNode || '';
+      fields.fullClone.checked = false;
+      fields.start.checked = true;
+      fields.lxcStart.checked = true;
+      fields.rootfsStorage.value = 'local-lvm';
+      fields.rootfsSize.value = '8';
+      stepIndex = 0;
+      result.className = 'alert d-none';
+      clearNode(result);
+      setScopedFields();
+      renderStep();
+      submitBtn.disabled = false;
+      spinner.classList.add('d-none');
+      submitLabel.textContent = 'Create';
+    }
+
+    document.querySelectorAll('.proxbox-create-instance-btn').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        filter.querySelectorAll('button[data-filter]').forEach(function (b) {
-          b.classList.remove('active');
+        resetWizard(btn);
+        modal.show();
+      });
+    });
+
+    backBtn.addEventListener('click', function () {
+      if (stepIndex > 0) {
+        stepIndex -= 1;
+        renderStep();
+      }
+    });
+
+    nextBtn.addEventListener('click', function () {
+      if (!form.reportValidity()) { return; }
+      stepIndex += 1;
+      renderStep();
+    });
+
+    submitBtn.addEventListener('click', function () {
+      if (!form.reportValidity()) { return; }
+      const payload = collectPayload();
+      submitBtn.disabled = true;
+      spinner.classList.remove('d-none');
+      submitLabel.textContent = 'Creating';
+      result.className = 'alert d-none';
+      clearNode(result);
+
+      fetch(root.dataset.createUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrfToken(),
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify(payload)
+      }).then(function (response) {
+        return response.json().then(function (data) {
+          return { ok: response.ok, data: data };
+        }).catch(function () {
+          return {
+            ok: false,
+            data: { reason: 'invalid_response', detail: 'Server returned a non-JSON response.' }
+          };
         });
-        btn.classList.add('active');
-        applyFilter(btn.dataset.filter);
+      }).then(function (resultData) {
+        const data = resultData.data || {};
+        if (resultData.ok && data.success) {
+          setResult('success', data.status || 'created', data.detail || '', data.netbox_url || '');
+        } else {
+          setResult('error', data.reason || 'provision_failed', data.detail || 'Create request failed.', '');
+          submitBtn.disabled = false;
+        }
+      }).catch(function (err) {
+        setResult('error', 'request_failed', err.message || 'Create request failed.', '');
+        submitBtn.disabled = false;
+      }).finally(function () {
+        spinner.classList.add('d-none');
+        submitLabel.textContent = 'Create';
       });
     });
   })();

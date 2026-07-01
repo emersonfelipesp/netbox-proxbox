@@ -36,6 +36,7 @@ from netbox_proxbox.models import (
     NodeSSHCredential,
     ProxboxPluginSettings,
     ProxmoxEndpoint,
+    ProxmoxNode,
 )
 from netbox_proxbox.models.ssh_credential import (
     AUTH_METHOD_PASSWORD,
@@ -421,6 +422,124 @@ class ProxmoxEndpointHostKeyFingerprintAPIView(APIView):
             {
                 "host": host,
                 "port": endpoint.ssh_port,
+                "fingerprint": payload.get("fingerprint", ""),
+                "key_type": payload.get("key_type", ""),
+            }
+        )
+
+
+class _ProxmoxEndpointOpenTerminalPermission(BasePermission):
+    """Browser-session gate mirroring the Terminal tab (`open_ssh_terminal`).
+
+    The node host-key scan is triggered from the Terminal-tab credential modal
+    by an authenticated operator, so it allows the session user who already
+    holds ``open_ssh_terminal`` on ``ProxmoxEndpoint`` (the same permission that
+    renders the tab). It reads only the public host key — no credential is sent.
+    """
+
+    def has_permission(self, request: Request, view: object) -> bool:  # type: ignore[override]
+        user = getattr(request, "user", None)
+        if user is None or not getattr(user, "is_authenticated", False):
+            return not getattr(django_settings, "LOGIN_REQUIRED", True)
+        return bool(user.has_perm("netbox_proxbox.open_ssh_terminal"))
+
+
+class NodeHostKeyFingerprintAPIView(APIView):
+    """Scan a Proxmox node's SSH host key and return its pinned fingerprint.
+
+    Backs the **Fetch host key** button in the Terminal-tab credential modal so
+    an operator can accept a node's host key before opening a one-shot session
+    or storing a ``NodeSSHCredential``. Resolves the node IP server-side and
+    proxies to proxbox-api ``GET /ssh/host-key-fingerprint`` with the modal's
+    ``?port=`` (default 22). No credential is sent or returned — only the public
+    host key is read. Degrades gracefully: no host → 422, SSH disabled on the
+    owning endpoint → 403, no/old backend → 503, upstream error → 502.
+    """
+
+    permission_classes = [_ProxmoxEndpointOpenTerminalPermission]
+
+    def get(self, request: Request, node_id: int) -> Response:
+        """Proxy a host-key scan for the node to the ProxBox backend."""
+        from netbox_proxbox.services.backend_context import (
+            get_fastapi_request_context,
+        )
+
+        node = get_object_or_404(
+            ProxmoxNode.objects.restrict(request.user, "view").select_related(
+                "endpoint"
+            ),
+            pk=node_id,
+        )
+        endpoint = node.endpoint
+        if endpoint is not None and not endpoint.ssh_access_enabled:
+            return Response(
+                {"detail": _SSH_ACCESS_DISABLED},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        host = (node.ip_address or "").strip()
+        if not host:
+            return Response(
+                {"detail": "Node has no IP address to scan for a host key."},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+
+        try:
+            port = int(request.query_params.get("port") or 22)
+        except (TypeError, ValueError):
+            port = 22
+        if port < 1 or port > 65535:
+            port = 22
+
+        ctx = get_fastapi_request_context()
+        if ctx is None or not ctx.http_url:
+            return Response(
+                {"detail": "No enabled ProxBox (FastAPI) backend is configured."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        try:
+            backend_response = requests.get(
+                f"{ctx.http_url}/ssh/host-key-fingerprint",
+                params={"host": host, "port": port},
+                headers=ctx.headers or {},
+                verify=ctx.verify_ssl,
+                timeout=_HOST_KEY_SCAN_TIMEOUT,
+            )
+        except requests.exceptions.RequestException:
+            return Response(
+                {"detail": "Could not reach the ProxBox backend."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        if backend_response.status_code == 404:
+            return Response(
+                {
+                    "detail": (
+                        "The ProxBox backend does not support host-key scanning. "
+                        "Upgrade proxbox-api to a release that exposes "
+                        "/ssh/host-key-fingerprint."
+                    )
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        try:
+            payload = backend_response.json()
+        except ValueError:
+            payload = {}
+
+        if not backend_response.ok:
+            detail = payload.get("detail") if isinstance(payload, dict) else None
+            return Response(
+                {"detail": detail or "Host-key scan failed on the ProxBox backend."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        return Response(
+            {
+                "host": host,
+                "port": port,
                 "fingerprint": payload.get("fingerprint", ""),
                 "key_type": payload.get("key_type", ""),
             }
