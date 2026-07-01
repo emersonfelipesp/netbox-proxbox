@@ -99,7 +99,9 @@ at save time and rejects:
 - Duplicate patterns within the same list.
 - Non-list JSON (e.g. `{}`, scalars).
 
-On the per-endpoint form:
+On the per-endpoint form (the endpoint's **Settings** tab → **Tenant
+Assignment** sub-tab; a save rejected for a bad regex re-opens that sub-tab
+automatically):
 
 - Empty / whitespace-only input → stored as `None` (inherit global).
 - Literal `[]` → stored as empty list (explicit override: disable all

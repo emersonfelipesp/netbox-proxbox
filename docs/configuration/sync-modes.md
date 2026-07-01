@@ -126,9 +126,12 @@ to every endpoint that does not override the setting.
 
 ### Per-endpoint settings
 
-Navigate to an existing **ProxmoxEndpoint** and open its **Settings** tab.
-The same nine sync-mode dropdowns appear, but these fields are optional. Leave
-them blank to inherit the global setting; choose a value to override it.
+Navigate to an existing **ProxmoxEndpoint** and open its **Settings** tab. The
+Settings page groups the per-endpoint overrides into selectable sub-tabs
+(**Connection**, **Sync Modes**, **Sync Overwrite**, **Tenant Assignment**);
+select the **Sync Modes** tab. The same nine sync-mode dropdowns appear, but
+these fields are optional. Leave them blank to inherit the global setting;
+choose a value to override it.
 
 ---
 

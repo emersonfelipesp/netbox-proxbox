@@ -51,8 +51,12 @@ caller-side `effective_overwrites_for_endpoint(proxmox_endpoint_id)` helper in
 - **Global defaults:** *Plugins → Proxbox → Plugin Settings*. The page renders
   one checkbox per flag.
 - **Per-endpoint overrides:** open a Proxmox endpoint, click the **Settings**
-  tab. Each flag renders as tri-state Yes / No / — (inherit). Empty leaves the
-  global value in effect; choose Yes or No to override.
+  tab, then select the **Sync Overwrite** sub-tab. Each flag renders as
+  tri-state Yes / No / — (inherit). Empty leaves the global value in effect;
+  choose Yes or No to override. (The Settings page groups per-endpoint overrides
+  into **Connection**, **Sync Modes**, **Sync Overwrite**, and **Tenant
+  Assignment** sub-tabs; if a save is rejected for a validation error, the page
+  automatically opens the sub-tab holding the offending field.)
 
 The detail page of each endpoint shows the **resolved** value plus an
 *Overridden* marker for any flag set explicitly on the endpoint.

@@ -28,6 +28,17 @@ The modal contains the full token-version UI (v1 dropdown or manual entry, v2 ke
 
 `singleton_import_confirm.html` is rendered when a `NetBoxEndpoint` or `FastAPIEndpoint` import is attempted while a record already exists. It shows the existing record's key fields and a re-submit form that adds `confirm_override=true`, plus a Cancel link back to the list. See [`views/endpoints/CLAUDE.md`](../../views/endpoints/CLAUDE.md) for the full singleton import flow.
 
+## ProxmoxEndpoint Settings page (`proxmoxendpoint_settings.html`)
+
+`proxmoxendpoint_settings.html` (rendered by `ProxmoxEndpointSettingsView`, the endpoint's **Settings** tab) presents the per-endpoint overrides as a **Bootstrap nav-tabs** layout instead of a vertical stack of cards, so operators select a section rather than scrolling. Four tab panes:
+
+1. **Connection** — `timeout`, `max_retries`, `retry_backoff`.
+2. **Sync Modes** — the `sync_mode_field_groups` context list.
+3. **Sync Overwrite** — intro text + the dynamic `overwrite_field_groups` as `h6` subsections in the one pane.
+4. **Tenant Assignment** — the four tenant override fields.
+
+Contract: every tab pane stays in the DOM (Bootstrap only toggles `display`), so all fields still submit on save regardless of the active tab; the hidden fields and `changelog_message` block sit **outside** the tab strip so they always submit. The `{% block javascript %}` (calls `{{ block.super }}`) holds an inline IIFE that, on `DOMContentLoaded`, activates the first tab pane containing a `.has-errors` element (NetBox's `render_field` marker for an errored field) so a validation error on an inactive tab is not invisible; it switches by clicking the nav button — the buttons keep `type="button"` so a programmatic click never resubmits — because NetBox's bundle registers Bootstrap's tab data-api but does not expose `window.Tab`. Guarded by `tests/test_frontend_contracts.py::test_proxmox_endpoint_settings_template_uses_tabs_not_stacked_cards` and `...::test_proxmox_endpoint_settings_focuses_first_tab_with_validation_error`.
+
 ## Notes
 
 - There is some historical naming overlap in endpoint templates; keep the Python view/template binding in mind before removing or renaming files.
