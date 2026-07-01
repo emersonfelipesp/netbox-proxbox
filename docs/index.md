@@ -6,6 +6,7 @@ Proxbox is a NetBox plugin that integrates Proxmox with NetBox through a separat
 
 | NetBox   | netbox-proxbox | proxbox-api | netbox-sdk     | proxmox-sdk    |
 |----------|----------------|-------------|----------------|----------------|
+| >=4.5.8  | v0.0.22 | v0.0.19.post3 | v0.0.10 | v0.0.12 |
 | >=4.5.8  | v0.0.21 | v0.0.18.post5 | v0.0.10 | v0.0.12 |
 | >=4.5.8  | v0.0.20.post3 | v0.0.17.post1 | v0.0.9.post1 | v0.0.11.post1 |
 | >=4.5.8  | v0.0.20.post2 | v0.0.17.post1 | v0.0.9.post1 | v0.0.11.post1 |
@@ -33,7 +34,7 @@ and WebSocket.
 The current repository code declares support for:
 
 - NetBox `4.5.8`, `4.5.9`, and `4.6.x`
-- Plugin version `0.0.21` in source
+- Plugin version `0.0.22` in source
 
 That support comes directly from the plugin config in this repository:
 
@@ -41,12 +42,15 @@ That support comes directly from the plugin config in this repository:
 - `max_version = "4.6.99"`
 
 This compatibility line is validated against NetBox `v4.5.8`, `v4.5.9`, and
-`v4.6.0` through `v4.6.4`. It includes the homepage **Latest Sync Jobs** table,
-the **View all sync jobs** button for read-only sync-job visibility, and the
+`v4.6.0` through `v4.6.4`. It includes per-endpoint API-only vs API+SSH access
+methods, tenant-scoped endpoint allowlists, bulk endpoint enablement, PDM
+endpoint sync, SDN inventory, Firecracker serializer hardening, and the
 all-endpoint `enabled=False` no-connection guard.
 
-The `0.0.21` release pairs with the separate `proxbox-api` backend
-release `0.0.18.post5`.
+Current pairing: netbox-proxbox 0.0.22 <-> proxbox-api 0.0.19.post3 <-> proxmox-sdk 0.0.12 <-> netbox-sdk 0.0.10.
+
+The `0.0.22` release pairs with the separate `proxbox-api` backend
+release `0.0.19.post3`.
 
 ## Important Packaging Note
 
