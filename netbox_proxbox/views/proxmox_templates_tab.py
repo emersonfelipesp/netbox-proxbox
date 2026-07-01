@@ -27,6 +27,7 @@ from typing import Any
 
 import requests
 from django.http import HttpRequest
+from django.urls import reverse
 from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
 
@@ -232,5 +233,10 @@ class ProxmoxEndpointTemplatesTabView(generic.ObjectView):
         context["packer_installed"] = packer_installed
         context["packer_add_url"] = (
             packer_template_add_url() if packer_installed else None
+        )
+        context["allow_writes"] = bool(getattr(instance, "allow_writes", False))
+        context["create_instance_url"] = reverse(
+            "plugins:netbox_proxbox:proxmoxendpoint_create_instance",
+            args=[instance.pk],
         )
         return context
