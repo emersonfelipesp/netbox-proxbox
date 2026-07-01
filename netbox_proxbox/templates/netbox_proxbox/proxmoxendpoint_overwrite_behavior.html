@@ -1,4 +1,5 @@
 {% extends 'generic/object.html' %}
+{% load helpers %}
 {% load i18n %}
 
 {# Read-only tab: the resolved sync-overwrite behavior, split into per-category #}
@@ -9,7 +10,20 @@
   <div class="row">
     <div class="col col-12">
       <div class="card">
-        <h5 class="card-header">{% trans "Sync Overwrite Behavior" %}</h5>
+        <h5 class="card-header d-flex justify-content-between align-items-center">
+          <span>{% trans "Sync Overwrite Behavior" %}</span>
+          {# Jump straight to where these flags are edited: the Settings page's #}
+          {# Sync Overwrite sub-tab (activated from the URL hash). Gated on the  #}
+          {# change permission, since editing requires it. #}
+          {% if perms.netbox_proxbox.change_proxmoxendpoint %}
+            {% action_url object 'settings' pk=object.pk as overwrite_settings_url %}
+            <a href="{{ overwrite_settings_url }}#proxbox-settings-overwrite"
+               class="btn btn-sm btn-warning" role="button"
+               title="{% trans 'Edit overwrite settings' %}">
+              <i class="mdi mdi-pencil" aria-hidden="true"></i> {% trans "Edit" %}
+            </a>
+          {% endif %}
+        </h5>
         <div class="card-body">
           <p class="text-muted">
             {% blocktrans trimmed %}
