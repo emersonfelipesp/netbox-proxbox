@@ -1,0 +1,73 @@
+{% extends 'generic/object.html' %}
+{% load i18n %}
+
+{# Read-only tab: the resolved sync-overwrite behavior, split into per-category #}
+{# sub-tabs (Device / Virtual Machine / Cluster / …) that mirror the grouping of #}
+{# the Settings edit tab. Extending generic/object.html reuses the shared object #}
+{# header + tab strip; only the content is the grouped table. #}
+{% block content %}
+  <div class="row">
+    <div class="col col-12">
+      <div class="card">
+        <h5 class="card-header">{% trans "Sync Overwrite Behavior" %}</h5>
+        <div class="card-body">
+          <p class="text-muted">
+            {% blocktrans trimmed %}
+            The effective overwrite behavior applied when this endpoint syncs each
+            resource type. A <strong>global</strong> badge means the value is
+            inherited from the global Proxbox plugin settings; an
+            <strong>override</strong> badge means it is set explicitly on this
+            endpoint (change it on the Settings tab).
+            {% endblocktrans %}
+          </p>
+
+          <ul class="nav nav-tabs mb-3" id="overwrite-behavior-tabs" role="tablist">
+            {% for group_label, group_rows in overwrite_row_groups %}
+              <li class="nav-item" role="presentation">
+                <button class="nav-link{% if forloop.first %} active{% endif %}"
+                        id="overwrite-behavior-tab-{{ forloop.counter0 }}"
+                        data-bs-toggle="tab"
+                        data-bs-target="#overwrite-behavior-pane-{{ forloop.counter0 }}"
+                        type="button" role="tab"
+                        aria-controls="overwrite-behavior-pane-{{ forloop.counter0 }}"
+                        aria-selected="{% if forloop.first %}true{% else %}false{% endif %}">
+                  {{ group_label }}
+                </button>
+              </li>
+            {% endfor %}
+          </ul>
+
+          <div class="tab-content" id="overwrite-behavior-tab-content">
+            {% for group_label, group_rows in overwrite_row_groups %}
+              <div class="tab-pane fade{% if forloop.first %} show active{% endif %}"
+                   id="overwrite-behavior-pane-{{ forloop.counter0 }}" role="tabpanel"
+                   aria-labelledby="overwrite-behavior-tab-{{ forloop.counter0 }}" tabindex="0">
+                <table class="table table-hover attr-table">
+                  <tbody>
+                    {% for row in group_rows %}
+                      <tr>
+                        <th scope="row">{{ row.label }}</th>
+                        <td>
+                          {% if row.value %}
+                            <span class="badge text-bg-success">{% trans "Yes" %}</span>
+                          {% else %}
+                            <span class="badge text-bg-secondary">{% trans "No" %}</span>
+                          {% endif %}
+                          {% if row.is_override %}
+                            <span class="badge text-bg-warning ms-1">{% trans "override" %}</span>
+                          {% else %}
+                            <span class="badge text-bg-light ms-1">{% trans "global" %}</span>
+                          {% endif %}
+                        </td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock content %}

@@ -58,6 +58,7 @@ from netbox_proxbox.views.endpoints.proxmox_export import (
 
 __all__ = (
     "ProxmoxEndpointView",
+    "ProxmoxEndpointOverwriteBehaviorView",
     "ProxmoxEndpointListView",
     "ProxmoxEndpointEditView",
     "ProxmoxEndpointSettingsView",
@@ -97,6 +98,36 @@ class ProxmoxEndpointBulkDisableAction(ObjectAction):
     template_name = "netbox_proxbox/buttons/proxmox_endpoint_bulk_disable.html"
 
 
+def _build_overwrite_row_groups(
+    instance: ProxmoxEndpoint,
+) -> list[tuple[str, list[dict[str, object]]]]:
+    """Group the resolved overwrite map by category for the Overwrite Behavior tab.
+
+    Returns ``[(group_label, [{field, label, value, is_override}, …]), …]`` in the
+    same category order the Settings edit tab uses (``OVERWRITE_FIELD_GROUPS``).
+    ``value`` is the effective flag (per-field override → global fallback) and
+    ``is_override`` marks fields set explicitly on this endpoint.
+    """
+    from netbox_proxbox.constants import OVERWRITE_FIELD_GROUPS
+
+    effective = instance.effective_overwrites()
+    return [
+        (
+            group_label,
+            [
+                {
+                    "field": name,
+                    "label": instance._meta.get_field(name).verbose_name,
+                    "value": effective[name],
+                    "is_override": getattr(instance, name) is not None,
+                }
+                for name in group_fields
+            ],
+        )
+        for group_label, group_fields in OVERWRITE_FIELD_GROUPS
+    ]
+
+
 @register_model_view(ProxmoxEndpoint)
 class ProxmoxEndpointView(generic.ObjectView):
     """
@@ -104,24 +135,6 @@ class ProxmoxEndpointView(generic.ObjectView):
     """
 
     queryset = ProxmoxEndpoint.objects.all()
-
-    def get_extra_context(
-        self, request: HttpRequest, instance: ProxmoxEndpoint
-    ) -> dict[str, object]:
-        """Expose resolved overwrite map plus per-field override origin to the template."""
-        from netbox_proxbox.constants import OVERWRITE_FIELDS
-
-        effective = instance.effective_overwrites()
-        overwrite_rows = [
-            {
-                "field": name,
-                "label": instance._meta.get_field(name).verbose_name,
-                "value": effective[name],
-                "is_override": getattr(instance, name) is not None,
-            }
-            for name in OVERWRITE_FIELDS
-        ]
-        return {"overwrite_rows": overwrite_rows}
 
 
 @register_model_view(ProxmoxEndpoint, "list", path="", detail=False)
@@ -510,6 +523,33 @@ class ProxmoxEndpointSettingsView(ActionsMixin, generic.ObjectEditView):
             # the same Clone/Edit/Delete buttons as the detail page.
             "actions": self.get_permitted_actions(request.user, model=instance),
         }
+
+
+@register_model_view(
+    ProxmoxEndpoint, "overwrite_behavior", path="overwrite-behavior"
+)
+class ProxmoxEndpointOverwriteBehaviorView(generic.ObjectView):
+    """Read-only tab showing the resolved sync-overwrite behavior by category.
+
+    Moves the former detail-page "Sync Overwrite Behavior" card onto its own tab
+    and splits the ``overwrite_*`` flags into per-category sub-tabs (Device /
+    Virtual Machine / Cluster / Node Interface / Storage / VM Interface / IP
+    Address), mirroring the grouping of the Settings edit tab.
+    """
+
+    queryset = ProxmoxEndpoint.objects.all()
+    template_name = "netbox_proxbox/proxmoxendpoint_overwrite_behavior.html"
+    tab = ViewTab(
+        label="Overwrite Behavior",
+        permission="netbox_proxbox.view_proxmoxendpoint",
+        weight=905,
+    )
+
+    def get_extra_context(
+        self, request: HttpRequest, instance: ProxmoxEndpoint
+    ) -> dict[str, object]:
+        """Expose the resolved overwrite map grouped by category for the sub-tabs."""
+        return {"overwrite_row_groups": _build_overwrite_row_groups(instance)}
 
 
 @register_model_view(ProxmoxEndpoint, "ssh_settings", path="ssh-settings")
