@@ -1,19 +1,104 @@
 {% extends 'generic/object_edit.html' %}
+{% load buttons %}
+{% load custom_links %}
 {% load form_helpers %}
 {% load helpers %}
+{% load perms %}
+{% load plugins %}
 {% load tabs %}
 {% load i18n %}
 
-{% block title %}
-  {% blocktrans trimmed with object=object %}SSH settings for {{ object }}{% endblocktrans %}
-{% endblock title %}
+{# Render the SAME object header the detail-style tabs use (generic/object.html), #}
+{# so switching between the object's tabs keeps identical header chrome —          #}
+{# breadcrumb + identifier, object title, created/updated, Bookmark/Subscribe/     #}
+{# Edit/Delete, and the tab strip. Only the header blocks are overridden; the edit #}
+{# form (block form / content) is left to object_edit.html, so the save path is    #}
+{# unchanged. The view supplies `tab` and `actions` (ObjectEditView injects        #}
+{# neither). #}
 
-{# Keep the full object tab strip (primary detail tab + every registered #}
-{# ViewTab) on this edit sub-page so the operator can navigate back to the #}
-{# other tabs, instead of the lone "Edit" button object_edit.html renders  #}
-{# by default. The current tab is highlighted via context['tab'] (set to    #}
-{# self.tab by ObjectEditView); the edit form still renders because          #}
-{# object_edit.html's content pane is hardcoded `tab-pane show active`. #}
+{% block page-header %}
+  <div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mt-2">
+
+      {# Breadcrumbs #}
+      <ol class="breadcrumb" aria-label="breadcrumbs">
+        {% block breadcrumbs %}
+          <li class="breadcrumb-item">
+            <a href="{% action_url object 'list' %}">{{ object|meta:'verbose_name_plural'|bettertitle }}</a>
+          </li>
+        {% endblock breadcrumbs %}
+      </ol>
+
+      {# Object identifier #}
+      <code class="d-block text-muted bg-transparent px-0">
+        {% block object_identifier %}
+          {{ object|meta:"app_label" }}.{{ object|meta:"model_name" }}:{{ object.pk }}
+          {% if object.slug %}({{ object.slug }}){% endif %}
+        {% endblock object_identifier %}
+      </code>
+
+    </div>
+  </div>
+  {{ block.super }}
+{% endblock page-header %}
+
+{% block title %}{{ object }}{% endblock %}
+
+{% block subtitle %}
+  <div class="text-secondary fs-5">
+    <ul class="list-inline">
+      {% if object.owner %}
+        <li class="list-inline-item">
+          <i class="mdi mdi-account-outline" title="{% trans "Owner" %}"></i> {{ object.owner|linkify }}
+        </li>
+      {% endif %}
+      <li class="list-inline-item">
+        <i class="mdi mdi-calendar-plus" title="{% trans "Created" %}"></i>
+        {{ object.created|isodatetime:"minutes" }}
+      </li>
+      {% if object.last_updated %}
+        <li class="list-inline-item">
+          <i class="mdi mdi-calendar-edit" title="{% trans "Last updated" %}"></i>
+          {{ object.last_updated|isodatetime:"minutes" }}
+        </li>
+      {% endif %}
+    </ul>
+  </div>
+{% endblock subtitle %}
+
+{% block controls %}
+  <div class="btn-list justify-content-end mb-2">
+    {% plugin_buttons object %}
+
+    {# Add/edit/delete/etc. buttons #}
+    {% block control-buttons %}
+
+      {# Extra buttons #}
+      {% block extra_controls %}{% endblock %}
+
+      {# Default buttons #}
+      {% if perms.extras.add_bookmark and object.bookmarks %}
+        {% bookmark_button object %}
+      {% endif %}
+      {% if perms.extras.add_subscription and object.subscriptions %}
+        {% subscribe_button object %}
+      {% endif %}
+      {% action_buttons actions object %}
+    {% endblock control-buttons %}
+  </div>
+
+  {# Custom links #}
+  <div class="d-flex justify-content-end">
+    <div class="btn-list">
+      {% block custom-links %}
+        {% custom_links object %}
+      {% endblock custom-links %}
+    </div>
+  </div>
+{% endblock controls %}
+
+{# Full object tab strip (primary detail tab + every registered ViewTab), matching #}
+{# generic/object.html; the current tab highlights via context['tab']. #}
 {% block tabs %}
   <ul class="nav nav-tabs" role="presentation">
     {# Primary detail tab #}
