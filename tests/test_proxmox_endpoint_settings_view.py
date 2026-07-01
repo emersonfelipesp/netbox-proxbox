@@ -234,3 +234,64 @@ def test_ssh_settings_view_exposes_tab_for_active_highlight(view_module_ast):
         "ProxmoxEndpointSSHSettingsView.get_extra_context must return "
         "{'tab': self.tab} so the object tab strip highlights the active SSH tab"
     )
+
+
+# ── Shared object header: both edit views mix ActionsMixin + expose `actions` ──
+
+
+def test_settings_view_mixes_actions_mixin(view_module_ast):
+    cls = _find_class(view_module_ast, "ProxmoxEndpointSettingsView")
+    base_names = {
+        b.attr if isinstance(b, ast.Attribute) else getattr(b, "id", "")
+        for b in cls.bases
+    }
+    assert "ActionsMixin" in base_names
+    assert "ObjectEditView" in base_names
+
+
+def test_ssh_settings_view_mixes_actions_mixin(view_module_ast):
+    cls = _find_class(view_module_ast, "ProxmoxEndpointSSHSettingsView")
+    base_names = {
+        b.attr if isinstance(b, ast.Attribute) else getattr(b, "id", "")
+        for b in cls.bases
+    }
+    assert "ActionsMixin" in base_names
+    assert "ObjectEditView" in base_names
+
+
+def _get_extra_context_returns_actions(cls: ast.ClassDef) -> bool:
+    """True if get_extra_context returns a dict with an ``actions`` key set to a
+    call of ``self.get_permitted_actions(...)`` (so the shared header renders the
+    Clone/Edit/Delete buttons)."""
+    method = next(
+        (
+            n
+            for n in cls.body
+            if isinstance(n, ast.FunctionDef) and n.name == "get_extra_context"
+        ),
+        None,
+    )
+    if method is None:
+        return False
+    for node in ast.walk(method):
+        if isinstance(node, ast.Dict):
+            for key, value in zip(node.keys, node.values):
+                if (
+                    isinstance(key, ast.Constant)
+                    and key.value == "actions"
+                    and isinstance(value, ast.Call)
+                    and isinstance(value.func, ast.Attribute)
+                    and value.func.attr == "get_permitted_actions"
+                ):
+                    return True
+    return False
+
+
+def test_settings_view_exposes_actions_for_header_buttons(view_module_ast):
+    cls = _find_class(view_module_ast, "ProxmoxEndpointSettingsView")
+    assert _get_extra_context_returns_actions(cls)
+
+
+def test_ssh_settings_view_exposes_actions_for_header_buttons(view_module_ast):
+    cls = _find_class(view_module_ast, "ProxmoxEndpointSSHSettingsView")
+    assert _get_extra_context_returns_actions(cls)
