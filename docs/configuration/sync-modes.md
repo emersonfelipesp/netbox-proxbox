@@ -32,7 +32,7 @@ the object alone.
 
 ## Resource Types
 
-Nine resource types can be controlled:
+Ten resource types can be controlled:
 
 | Setting field | Resource |
 |---------------|----------|
@@ -45,11 +45,14 @@ Nine resource types can be controlled:
 | `sync_mode_storage` | Proxmox storage pools |
 | `sync_mode_ip_address` | IP addresses discovered from VM interfaces |
 | `sync_mode_sdn` | Read-only Proxmox SDN inventory and EVPN/VXLAN NetBox mapping |
+| `sync_mode_sdn_bgp` | Optional Proxmox SDN BGP projection into `netbox_bgp` objects |
 
-`sync_mode_sdn` is the exception to the normal default: it defaults to
-`disabled`. Choosing **All** still includes the SDN stage in the dependency
-order, but the stage is skipped until the effective SDN mode is `always` or
-`bootstrap_only`.
+`sync_mode_sdn` and `sync_mode_sdn_bgp` are exceptions to the normal default:
+both default to `disabled`. Choosing **All** still includes the SDN stage in
+the dependency order, but the stage is skipped until the effective SDN mode is
+`always` or `bootstrap_only`. BGP projection is evaluated inside the SDN stage,
+requires the optional `netbox_bgp` plugin to be installed, and is skipped when
+`sync_mode_sdn_bgp` is disabled or when its SDN parent is disabled.
 
 ---
 
@@ -90,6 +93,7 @@ vm + vm_template (both disabled only)
     └── mac
 
 sdn
+└── sdn_bgp
 ```
 
 The VM parent is a special case for network descendants: `vm_interface`,

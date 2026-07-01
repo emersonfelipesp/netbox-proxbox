@@ -190,6 +190,12 @@
             blank to inherit the global plugin setting.
             {% endblocktrans %}
           </p>
+          {% if netbox_bgp_status %}
+          <div class="alert {% if netbox_bgp_status.installed %}alert-success{% else %}alert-warning{% endif %}" role="status">
+            <i class="mdi mdi-source-branch"></i>
+            {{ netbox_bgp_status.message }}
+          </div>
+          {% endif %}
           {% for group_label, group_fields in sync_mode_field_groups %}
             <h6 class="mt-3">{{ group_label }}</h6>
             {% for field_name in group_fields %}

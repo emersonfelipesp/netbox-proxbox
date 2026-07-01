@@ -25,6 +25,7 @@ SYNC_MODE_FIELD_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "sync_mode_node",
             "sync_mode_storage",
             "sync_mode_sdn",
+            "sync_mode_sdn_bgp",
         ),
     ),
 )
@@ -42,6 +43,7 @@ SYNC_MODE_HIERARCHY: dict[str, str] = {
     "vm_interface": "vm",
     "ip_address": "vm_interface",
     "mac": "vm_interface",
+    "sdn_bgp": "sdn",
 }
 
 OVERWRITE_FIELD_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (

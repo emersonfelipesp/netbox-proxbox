@@ -608,6 +608,7 @@ class ProxboxPluginSettingsForm(forms.Form):
             "sync_mode_node": "Node sync mode",
             "sync_mode_storage": "Storage sync mode",
             "sync_mode_sdn": "SDN sync mode",
+            "sync_mode_sdn_bgp": "SDN BGP projection sync mode",
             "sync_mode_ip_address": "IP address sync mode",
         }
         sync_mode_help = {
@@ -619,6 +620,11 @@ class ProxboxPluginSettingsForm(forms.Form):
             "sync_mode_node": "Controls Proxmox node tracking sync.",
             "sync_mode_storage": "Controls Proxmox storage sync.",
             "sync_mode_sdn": "Controls read-only Proxmox SDN inventory and NetBox L2VPN sync.",
+            "sync_mode_sdn_bgp": (
+                "Controls optional netbox-bgp projection for SDN peer groups, "
+                "sessions, routing policies, and prefix lists. Requires the "
+                "netbox_bgp plugin to be installed."
+            ),
             "sync_mode_ip_address": "Controls IP address sync from VM interfaces.",
         }
         for name in SYNC_MODE_FIELDS:
@@ -627,7 +633,7 @@ class ProxboxPluginSettingsForm(forms.Form):
                 choices=_sync_mode_choice_options(),
                 initial=(
                     SyncModeChoices.DISABLED
-                    if name == "sync_mode_sdn"
+                    if name in {"sync_mode_sdn", "sync_mode_sdn_bgp"}
                     else SyncModeChoices.ALWAYS
                 ),
                 label=sync_mode_labels[name],

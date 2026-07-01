@@ -161,6 +161,16 @@ class ProxboxPluginSettings(NetBoxModel):
             "Disabled by default because older clusters may not expose SDN APIs."
         ),
     )
+    sync_mode_sdn_bgp = models.CharField(
+        max_length=16,
+        choices=SyncModeChoices,
+        default=SyncModeChoices.DISABLED,
+        verbose_name=_("SDN BGP projection sync mode"),
+        help_text=_(
+            "Controls optional netbox-bgp projection for Proxmox SDN BGP "
+            "peer groups, sessions, routing policies, and prefix lists."
+        ),
+    )
     sync_mode_ip_address = models.CharField(
         max_length=16,
         choices=SyncModeChoices,

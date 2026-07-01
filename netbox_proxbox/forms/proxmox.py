@@ -512,6 +512,7 @@ class ProxmoxEndpointSettingsForm(NetBoxModelForm):
             "sync_mode_node": "Node sync mode",
             "sync_mode_storage": "Storage sync mode",
             "sync_mode_sdn": "SDN sync mode",
+            "sync_mode_sdn_bgp": "SDN BGP projection sync mode",
             "sync_mode_ip_address": "IP address sync mode",
         }
         for name in SYNC_MODE_FIELDS:
