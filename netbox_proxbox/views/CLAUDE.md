@@ -14,6 +14,7 @@ This directory implements the plugin's NetBox UI behavior, including dashboard p
 - [`cards.py`](./cards.py): dashboard card hydration for Proxmox cluster/version data.
 - [`cluster.py`](./cluster.py): cluster storage summary tab and Proxmox cluster summary tab.
 - [`cluster_nodes_tab.py`](./cluster_nodes_tab.py): cluster/node tab for Proxmox endpoint detail pages.
+- [`proxmox_templates_tab.py`](./proxmox_templates_tab.py): **Templates** tab for the Proxmox endpoint detail page (`.../endpoints/proxmox/<pk>/templates/`). Fetches templates live from proxbox-api for that endpoint via `get_fastapi_request_context()` + `resolve_backend_endpoint_id()` (the established backend boundary), classifies QEMU templates into **Cloud-Init** vs **plain QEMU/KVM** (derived from `cloud_init_drives`/`cicustom`, not the unreliable `cloud_init` flag) and lists **LXC** (`vztmpl`) images. Degrades gracefully (renders a message, no 500) when no FastAPI backend is configured, the endpoint is unresolved, or a request fails. Surfaces a "Create Cloud-Init template image" action wired to the optional `netbox-packer` plugin (via `integrations/packer.py`), disabled with a tooltip when netbox-packer is not installed.
 - [`dashboard.py`](./dashboard.py): operational cluster and node summary dashboard.
 - [`endpoints/`](./endpoints/): model views for the three endpoint models.
 - [`error_utils.py`](./error_utils.py): helpers for rendering and normalizing user-facing error messages.
