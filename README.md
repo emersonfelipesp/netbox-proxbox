@@ -133,6 +133,19 @@ global pool and returns only the explicit matches. Use this to pin a tenant
 such as Confitec to a single cluster without changing the default pool for
 other tenants.
 
+## What's New in v0.0.22
+
+Current pairing: netbox-proxbox 0.0.22 <-> proxbox-api 0.0.19.post3 <-> proxmox-sdk 0.0.12 <-> netbox-sdk 0.0.10.
+
+Paired with backend [`proxbox-api 0.0.19.post3`](https://github.com/emersonfelipesp/proxbox-api).
+
+- **Per-endpoint access methods.** Proxmox endpoints now expose API-only vs API+SSH transport selection, with the selected `access_methods` value sent to the backend registration payload so backend SSH paths can enforce the same gate.
+- **Endpoint operator controls.** The form includes the Proxmox-side write-permission toggle, SSH credential-source selection, and a **Fetch host key** flow for pinned SSH fingerprints.
+- **Inventory and API coverage.** This release includes tenant allowlists, bulk endpoint enablement, PDM endpoint sync, SDN inventory, Firecracker serializer hardening, and REST coverage for PBS/PDM endpoints plus read-only DeletionRequest and ProxmoxApplyJob audit endpoints.
+- **Certification refresh.** NetBox compatibility remains `4.5.8` through `4.6.99`, now validated through NetBox `v4.6.4`.
+
+Full notes: [Release Notes - v0.0.22](docs/release-notes/version-0.0.22.md).
+
 ## What's New in v0.0.21
 
 Paired with backend [`proxbox-api 0.0.18.post5`](https://github.com/emersonfelipesp/proxbox-api).
@@ -199,6 +212,7 @@ Full notes: [Release Notes — v0.0.18](https://emersonfelipesp.github.io/netbox
 
 | NetBox | netbox-proxbox | proxbox-api | netbox-sdk | proxmox-sdk |
 |--------|----------------|-------------|------------|-------------|
+| >=4.5.8 | v0.0.22 | v0.0.19.post3 | v0.0.10 | v0.0.12 |
 | >=4.5.8 | v0.0.21 | v0.0.18.post5 | v0.0.10 | v0.0.12 |
 | >=4.5.8 | v0.0.20.post3 | v0.0.17.post1 | v0.0.9.post1 | v0.0.11.post1 |
 | >=4.5.8 | v0.0.20.post2 | v0.0.17.post1 | v0.0.9.post1 | v0.0.11.post1 |
