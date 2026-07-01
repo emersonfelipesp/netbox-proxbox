@@ -6,6 +6,7 @@ import json
 from typing import ClassVar
 
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from django.db.models import QuerySet
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
@@ -44,7 +45,16 @@ from netbox_proxbox.forms import (
     ProxmoxEndpointSSHSettingsForm,
     ProxmoxEndpointSettingsForm,
 )
-from netbox_proxbox.models import ProxmoxEndpoint, ProxmoxNode
+from netbox_proxbox.models import (
+    NodeSSHCredential,
+    ProxboxPluginSettings,
+    ProxmoxEndpoint,
+    ProxmoxNode,
+)
+from netbox_proxbox.models.ssh_credential import (
+    AUTH_METHOD_KEY,
+    AUTH_METHOD_PASSWORD,
+)
 from netbox_proxbox.services.backend_context import (
     _build_request_candidates,
     get_fastapi_endpoint_with_token,
@@ -525,9 +535,7 @@ class ProxmoxEndpointSettingsView(ActionsMixin, generic.ObjectEditView):
         }
 
 
-@register_model_view(
-    ProxmoxEndpoint, "overwrite_behavior", path="overwrite-behavior"
-)
+@register_model_view(ProxmoxEndpoint, "overwrite_behavior", path="overwrite-behavior")
 class ProxmoxEndpointOverwriteBehaviorView(generic.ObjectView):
     """Read-only tab showing the resolved sync-overwrite behavior by category.
 
@@ -606,21 +614,93 @@ class ProxmoxEndpointSSHTerminalView(generic.ObjectView):
         self, request: HttpRequest, instance: ProxmoxEndpoint
     ) -> dict[str, object]:
         nodes = ProxmoxNode.objects.filter(endpoint=instance).order_by("name")
+        cred_node_ids = set(
+            NodeSSHCredential.objects.filter(node__endpoint=instance).values_list(
+                "node_id", flat=True
+            )
+        )
         node_options = [
             {
                 "id": node.pk,
                 "name": node.name,
                 "host": node.ip_address,
                 "online": node.online,
+                # True when a NodeSSHCredential is already stored for this node.
+                # The Terminal-tab JS uses this to decide whether to prompt for
+                # credentials before connecting.
+                "ssh_ready": node.pk in cred_node_ids,
             }
             for node in nodes
         ]
+        can_store_credentials = request.user.has_perm(
+            "netbox_proxbox.add_nodesshcredential"
+        ) and request.user.has_perm("netbox_proxbox.change_nodesshcredential")
         return {
             "node_options": node_options,
             "endpoint_host": instance.ssh_host,
             "endpoint_ssh_ready": instance.has_ssh_terminal_credentials,
+            "endpoint_ssh_access_enabled": instance.ssh_access_enabled,
+            "can_store_credentials": can_store_credentials,
             "terminal_permission": permission_open_ssh_terminal(),
         }
+
+
+def _validate_terminal_credential(credential: object) -> tuple[dict | None, str | None]:
+    """Validate a credential object typed into the Terminal-tab modal.
+
+    Returns ``(normalized_dict, None)`` on success or ``(None, error)`` on
+    failure. The normalized dict carries ``username``, ``port``, ``auth_method``,
+    ``password``, ``private_key``, and ``known_host_fingerprint``. A pinned
+    host-key fingerprint is mandatory for both the store and one-shot paths
+    because proxbox-api refuses to connect without it.
+    """
+    if not isinstance(credential, dict):
+        return None, "Credential payload must be an object."
+    username = str(credential.get("username") or "").strip()
+    if not username:
+        return None, "SSH username is required."
+    fingerprint = str(credential.get("known_host_fingerprint") or "").strip()
+    if not fingerprint:
+        return None, (
+            'Host-key fingerprint is required. Use "Fetch host key" to obtain it.'
+        )
+    password = str(credential.get("password") or "")
+    private_key = str(credential.get("private_key") or "")
+    auth_method = str(credential.get("auth_method") or "").strip().lower()
+    if auth_method not in (AUTH_METHOD_PASSWORD, AUTH_METHOD_KEY):
+        auth_method = AUTH_METHOD_KEY if private_key.strip() else AUTH_METHOD_PASSWORD
+    if auth_method == AUTH_METHOD_PASSWORD and not password:
+        return None, "Password is required for password authentication."
+    if auth_method == AUTH_METHOD_KEY and not private_key.strip():
+        return None, "Private key is required for key authentication."
+    try:
+        port = int(credential.get("port") or 22)
+    except (TypeError, ValueError):
+        return None, "SSH port must be a number."
+    if port < 1 or port > 65535:
+        return None, "SSH port must be between 1 and 65535."
+    return {
+        "username": username,
+        "port": port,
+        "auth_method": auth_method,
+        "password": password,
+        "private_key": private_key,
+        "known_host_fingerprint": fingerprint,
+    }, None
+
+
+def _one_shot_payload(data: dict) -> dict:
+    """Build the proxbox-api ``one_shot_credential`` body from validated data."""
+    payload = {
+        "username": data["username"],
+        "port": data["port"],
+        "known_host_fingerprint": data["known_host_fingerprint"],
+    }
+    if data["auth_method"] == AUTH_METHOD_KEY:
+        payload["private_key"] = data["private_key"]
+    else:
+        payload["password"] = data["password"]
+    return payload
 
 
 @register_model_view(
@@ -655,6 +735,8 @@ class ProxmoxEndpointSSHTerminalSessionView(View):
             return JsonResponse({"error": "Invalid terminal size."}, status=400)
 
         target_type = body.get("target_type")
+        credential = body.get("credential")
+        store = bool(body.get("store"))
         backend_payload = {
             "target_type": target_type,
             "endpoint_id": endpoint.pk,
@@ -662,6 +744,21 @@ class ProxmoxEndpointSSHTerminalSessionView(View):
             "cols": cols,
             "rows": rows,
         }
+
+        # A credential typed into the modal (store OR one-shot) opens SSH from the
+        # inline material, bypassing the plugin's stored-credential access gate, so
+        # enforce the endpoint's SSH access method here explicitly.
+        if credential is not None and not endpoint.ssh_access_enabled:
+            return JsonResponse(
+                {
+                    "error": (
+                        "SSH access is disabled on this endpoint. Set the access "
+                        "method to 'API + SSH' to use the terminal."
+                    )
+                },
+                status=403,
+            )
+
         if target_type == "node":
             node_id = body.get("node_id")
             node = ProxmoxNode.objects.filter(endpoint=endpoint, pk=node_id).first()
@@ -671,13 +768,46 @@ class ProxmoxEndpointSSHTerminalSessionView(View):
                 )
             backend_payload["node_id"] = node.pk
             backend_payload["host"] = node.ip_address
-        elif target_type == "endpoint":
-            if not endpoint.has_ssh_terminal_credentials:
-                return JsonResponse(
-                    {"error": "Endpoint SSH fallback credentials are not configured."},
-                    status=409,
+            if credential is not None:
+                error = self._apply_node_credential(
+                    request, node, credential, store, backend_payload
                 )
-            backend_payload["host"] = endpoint.ssh_host
+                if error is not None:
+                    return error
+        elif target_type == "endpoint":
+            if credential is not None:
+                if store:
+                    return JsonResponse(
+                        {
+                            "error": (
+                                "Store endpoint SSH credentials from the endpoint's "
+                                "SSH settings tab, not the terminal modal."
+                            )
+                        },
+                        status=400,
+                    )
+                host = (endpoint.ssh_host or "").strip()
+                if not host:
+                    return JsonResponse(
+                        {"error": "Endpoint has no resolvable SSH host."},
+                        status=422,
+                    )
+                data, error = _validate_terminal_credential(credential)
+                if error is not None:
+                    return JsonResponse({"error": error}, status=400)
+                backend_payload["host"] = host
+                backend_payload["one_shot_credential"] = _one_shot_payload(data)
+            else:
+                if not endpoint.has_ssh_terminal_credentials:
+                    return JsonResponse(
+                        {
+                            "error": (
+                                "Endpoint SSH fallback credentials are not configured."
+                            )
+                        },
+                        status=409,
+                    )
+                backend_payload["host"] = endpoint.ssh_host
         else:
             return JsonResponse({"error": "Unsupported terminal target."}, status=400)
 
@@ -745,6 +875,81 @@ class ProxmoxEndpointSSHTerminalSessionView(View):
             )
 
         return JsonResponse({"error": last_error}, status=502)
+
+    def _apply_node_credential(
+        self,
+        request: HttpRequest,
+        node: ProxmoxNode,
+        credential: object,
+        store: bool,
+        backend_payload: dict,
+    ) -> JsonResponse | None:
+        """Handle a modal-supplied node credential (store or one-shot).
+
+        On the **store** path it persists an encrypted ``NodeSSHCredential`` and
+        leaves ``backend_payload`` untouched so proxbox-api fetches the freshly
+        stored secret. On the **one-shot** path it adds ``one_shot_credential`` to
+        ``backend_payload`` and stores nothing. Returns a ``JsonResponse`` on
+        failure, or ``None`` on success.
+        """
+        data, error = _validate_terminal_credential(credential)
+        if error is not None:
+            return JsonResponse({"error": error}, status=400)
+
+        if not store:
+            backend_payload["one_shot_credential"] = _one_shot_payload(data)
+            return None
+
+        # Store path: persist an encrypted NodeSSHCredential, then open a normal
+        # session that fetches the stored secret.
+        if not (
+            request.user.has_perm("netbox_proxbox.add_nodesshcredential")
+            and request.user.has_perm("netbox_proxbox.change_nodesshcredential")
+        ):
+            return JsonResponse(
+                {
+                    "error": (
+                        "You do not have permission to store SSH credentials. "
+                        'Use "Use once" instead.'
+                    )
+                },
+                status=403,
+            )
+
+        key = ProxboxPluginSettings.get_solo().encryption_key or ""
+        if not key:
+            return JsonResponse(
+                {
+                    "error": (
+                        "Cannot store credentials: the plugin encryption key is "
+                        'not configured. Use "Use once" instead.'
+                    )
+                },
+                status=503,
+            )
+
+        cred = NodeSSHCredential.objects.filter(node=node).first()
+        if cred is None:
+            cred = NodeSSHCredential(node=node)
+        cred.username = data["username"]
+        cred.port = data["port"]
+        cred.auth_method = data["auth_method"]
+        cred.known_host_fingerprint = data["known_host_fingerprint"]
+        if data["auth_method"] == AUTH_METHOD_KEY:
+            cred.set_private_key(data["private_key"], key=key)
+            cred.password_enc = ""
+        else:
+            cred.set_password(data["password"], key=key)
+            cred.private_key_enc = ""
+        try:
+            cred.full_clean()
+            cred.save()
+        except ValidationError as exc:
+            return JsonResponse(
+                {"error": "; ".join(exc.messages) or "Invalid SSH credential."},
+                status=400,
+            )
+        return None
 
 
 @register_model_view(ProxmoxEndpoint, "sync_jobs", path="sync-jobs")
