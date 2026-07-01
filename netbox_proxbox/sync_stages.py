@@ -32,6 +32,7 @@ except ImportError:  # pragma: no cover - compatibility for focused import stubs
         "sync_mode_storage",
         "sync_mode_ip_address",
         "sync_mode_sdn",
+        "sync_mode_sdn_bgp",
     )
 try:
     from netbox_proxbox.constants import SYNC_MODE_HIERARCHY
@@ -41,6 +42,7 @@ except ImportError:  # pragma: no cover - compatibility for focused import stubs
         "vm_interface": "vm",
         "ip_address": "vm_interface",
         "mac": "vm_interface",
+        "sdn_bgp": "sdn",
     }
 from netbox_proxbox.sync_types import (
     _format_seconds,
@@ -92,10 +94,11 @@ sync_mode_node = SyncModeChoices.ALWAYS
 sync_mode_storage = SyncModeChoices.ALWAYS
 sync_mode_ip_address = SyncModeChoices.ALWAYS
 sync_mode_sdn = SyncModeChoices.DISABLED
+sync_mode_sdn_bgp = SyncModeChoices.DISABLED
 
 
 def _default_sync_mode(field_name: str) -> str:
-    if field_name == "sync_mode_sdn":
+    if field_name in {"sync_mode_sdn", "sync_mode_sdn_bgp"}:
         return getattr(SyncModeChoices, "DISABLED", "disabled")
     return getattr(SyncModeChoices, "ALWAYS", "always")
 

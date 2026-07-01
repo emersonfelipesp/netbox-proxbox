@@ -245,6 +245,17 @@ class ProxmoxEndpoint(EndpointBase):
             "Per-endpoint override for read-only Proxmox SDN sync. Leave blank to inherit."
         ),
     )
+    sync_mode_sdn_bgp = models.CharField(
+        max_length=16,
+        choices=SyncModeChoices,
+        null=True,
+        blank=True,
+        verbose_name=_("SDN BGP projection sync mode"),
+        help_text=_(
+            "Per-endpoint override for optional netbox-bgp SDN projection. "
+            "Leave blank to inherit."
+        ),
+    )
     sync_mode_ip_address = models.CharField(
         max_length=16,
         choices=SyncModeChoices,
@@ -762,4 +773,9 @@ class ProxmoxEndpoint(EndpointBase):
         if endpoint_value:
             return str(endpoint_value)
         settings = ProxboxPluginSettings.get_solo()
-        return str(getattr(settings, field_name, SyncModeChoices.ALWAYS))
+        default = (
+            SyncModeChoices.DISABLED
+            if field_name in {"sync_mode_sdn", "sync_mode_sdn_bgp"}
+            else SyncModeChoices.ALWAYS
+        )
+        return str(getattr(settings, field_name, default) or default)

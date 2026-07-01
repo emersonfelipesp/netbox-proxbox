@@ -14,6 +14,7 @@ from netbox_proxbox.constants import (
     SYNC_MODE_FIELDS,
 )
 from netbox_proxbox.forms.settings import ProxboxPluginSettingsForm
+from netbox_proxbox.integrations.bgp import netbox_bgp_status
 from netbox_proxbox.models import ProxboxPluginSettings
 from netbox_proxbox.views.proxbox_access import (
     permission_change_proxbox_plugin_settings,
@@ -133,6 +134,7 @@ class SettingsView(
             self.template_name,
             {
                 "form": form,
+                "netbox_bgp_status": netbox_bgp_status(),
                 "overwrite_field_groups": OVERWRITE_FIELD_GROUPS,
                 "sync_mode_field_groups": SYNC_MODE_FIELD_GROUPS,
             },
@@ -371,6 +373,7 @@ class SettingsView(
             self.template_name,
             {
                 "form": form,
+                "netbox_bgp_status": netbox_bgp_status(),
                 "overwrite_field_groups": OVERWRITE_FIELD_GROUPS,
                 "sync_mode_field_groups": SYNC_MODE_FIELD_GROUPS,
             },

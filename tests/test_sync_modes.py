@@ -213,6 +213,7 @@ class TestSyncModeConstants:
             "storage",
             "ip_address",
             "sdn",
+            "sdn_bgp",
         }
         assert expected <= set(constants.SYNC_MODE_RESOURCE_TYPES)
 
@@ -228,6 +229,7 @@ class TestSyncModeConstants:
             "sync_mode_storage",
             "sync_mode_ip_address",
             "sync_mode_sdn",
+            "sync_mode_sdn_bgp",
         }
         assert expected <= set(constants.SYNC_MODE_FIELDS)
 
@@ -262,6 +264,9 @@ class TestSyncStagesDefaults:
 
     def test_sync_mode_sdn_default_is_disabled(self, sync_stages_module):
         assert sync_stages_module.sync_mode_sdn == "disabled"
+
+    def test_sync_mode_sdn_bgp_default_is_disabled(self, sync_stages_module):
+        assert sync_stages_module.sync_mode_sdn_bgp == "disabled"
 
     def test_all_stages_include_sdn_after_ip_addresses(self, sync_stages_module):
         stages = sync_stages_module.expanded_sync_stages(["all"])

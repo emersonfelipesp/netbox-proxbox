@@ -33,7 +33,8 @@ The modal contains the full token-version UI (v1 dropdown or manual entry, v2 ke
 `proxmoxendpoint_settings.html` (rendered by `ProxmoxEndpointSettingsView`, the endpoint's **Settings** tab) presents the per-endpoint overrides as a **Bootstrap nav-tabs** layout instead of a vertical stack of cards, so operators select a section rather than scrolling. Four tab panes:
 
 1. **Connection** — `timeout`, `max_retries`, `retry_backoff`.
-2. **Sync Modes** — the `sync_mode_field_groups` context list.
+2. **Sync Modes** — the `sync_mode_field_groups` context list plus the
+   `netbox_bgp_status` alert for optional SDN BGP projection availability.
 3. **Sync Overwrite** — intro text + the dynamic `overwrite_field_groups` as `h6` subsections in the one pane.
 4. **Tenant Assignment** — the four tenant override fields.
 

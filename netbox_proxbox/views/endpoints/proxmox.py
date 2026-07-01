@@ -523,8 +523,10 @@ class ProxmoxEndpointSettingsView(ActionsMixin, generic.ObjectEditView):
             OVERWRITE_FIELD_GROUPS,
             SYNC_MODE_FIELD_GROUPS,
         )
+        from netbox_proxbox.integrations.bgp import netbox_bgp_status
 
         return {
+            "netbox_bgp_status": netbox_bgp_status(),
             "overwrite_field_groups": OVERWRITE_FIELD_GROUPS,
             "sync_mode_field_groups": SYNC_MODE_FIELD_GROUPS,
             # ObjectEditView (unlike ObjectView) does not inject ``tab`` into the

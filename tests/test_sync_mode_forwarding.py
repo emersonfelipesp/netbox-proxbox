@@ -153,6 +153,40 @@ class TestSyncModeForwarding:
         assert params["sync_mode_vm"] == "bootstrap_only"
         assert params["sync_mode_vm_template"] == "disabled"
 
+    def test_sdn_stage_forwards_effective_sdn_bgp_mode(self, sync_stages_module):
+        m = sync_stages_module
+        m._stubs["global"].update(
+            {
+                "sync_mode_sdn": "always",
+                "sync_mode_sdn_bgp": "bootstrap_only",
+            }
+        )
+
+        params = m._build_base_query_params(
+            proxmox_endpoint_ids=None,
+            netbox_endpoint_ids=None,
+        )
+
+        assert params["sync_mode_sdn"] == "always"
+        assert params["sync_mode_sdn_bgp"] == "bootstrap_only"
+
+    def test_sdn_disabled_forwards_sdn_bgp_disabled(self, sync_stages_module):
+        m = sync_stages_module
+        m._stubs["global"].update(
+            {
+                "sync_mode_sdn": "disabled",
+                "sync_mode_sdn_bgp": "always",
+            }
+        )
+
+        params = m._build_base_query_params(
+            proxmox_endpoint_ids=None,
+            netbox_endpoint_ids=None,
+        )
+
+        assert params["sync_mode_sdn"] == "disabled"
+        assert params["sync_mode_sdn_bgp"] == "disabled"
+
     def test_mac_disabled_forwards_to_vm_interfaces_stage(self, sync_stages_module):
         m = sync_stages_module
         params = m._build_stage_query_params(
