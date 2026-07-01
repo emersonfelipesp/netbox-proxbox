@@ -107,6 +107,11 @@ DETAIL_SPECS: list[DetailSpec] = [
         "/api/plugins/proxbox/endpoints/proxmox/",
     ),
     DetailSpec(
+        "proxmox-endpoint-overwrite-behavior",
+        "/plugins/proxbox/endpoints/proxmox/{id}/overwrite-behavior/",
+        "/api/plugins/proxbox/endpoints/proxmox/",
+    ),
+    DetailSpec(
         "proxmox-vm-template-detail",
         "/plugins/proxbox/vm-templates/{id}/",
         "/api/plugins/proxbox/vm-templates/",
