@@ -186,3 +186,51 @@ def test_overwrite_vm_tags_uses_merge_label():
         "Settings form must override the overwrite_vm_tags label to 'Merge VM tags' "
         "so the merge-not-replace semantics are visible in the UI"
     )
+
+
+# ── Object tab strip active-highlight (both edit sub-views expose `tab`) ──────
+
+
+def _get_extra_context_returns_tab(cls: ast.ClassDef) -> bool:
+    """True if the class's get_extra_context returns a dict with a ``tab`` key
+    whose value is ``self.tab`` (so the object tab strip highlights this tab)."""
+    method = next(
+        (
+            n
+            for n in cls.body
+            if isinstance(n, ast.FunctionDef) and n.name == "get_extra_context"
+        ),
+        None,
+    )
+    if method is None:
+        return False
+    for node in ast.walk(method):
+        if isinstance(node, ast.Dict):
+            for key, value in zip(node.keys, node.values):
+                if (
+                    isinstance(key, ast.Constant)
+                    and key.value == "tab"
+                    and isinstance(value, ast.Attribute)
+                    and value.attr == "tab"
+                    and isinstance(value.value, ast.Name)
+                    and value.value.id == "self"
+                ):
+                    return True
+    return False
+
+
+def test_settings_view_exposes_tab_for_active_highlight(view_module_ast):
+    cls = _find_class(view_module_ast, "ProxmoxEndpointSettingsView")
+    assert _get_extra_context_returns_tab(cls), (
+        "ProxmoxEndpointSettingsView.get_extra_context must return {'tab': self.tab} "
+        "so the object tab strip highlights the active Settings tab (ObjectEditView "
+        "does not inject `tab` on its own)"
+    )
+
+
+def test_ssh_settings_view_exposes_tab_for_active_highlight(view_module_ast):
+    cls = _find_class(view_module_ast, "ProxmoxEndpointSSHSettingsView")
+    assert _get_extra_context_returns_tab(cls), (
+        "ProxmoxEndpointSSHSettingsView.get_extra_context must return "
+        "{'tab': self.tab} so the object tab strip highlights the active SSH tab"
+    )
