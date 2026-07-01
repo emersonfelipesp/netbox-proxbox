@@ -123,7 +123,10 @@ def _payload_for_access_methods(monkeypatch, value):
 
 
 def test_proxmox_backend_payload_pushes_access_methods(monkeypatch) -> None:
-    assert _payload_for_access_methods(monkeypatch, "api_ssh")["access_methods"] == "api_ssh"
+    assert (
+        _payload_for_access_methods(monkeypatch, "api_ssh")["access_methods"]
+        == "api_ssh"
+    )
     assert _payload_for_access_methods(monkeypatch, "api")["access_methods"] == "api"
 
 
