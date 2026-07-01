@@ -1125,7 +1125,7 @@ def test_overwrite_behavior_tab_has_edit_button_to_sync_overwrite_settings():
     assert "#proxbox-settings-overwrite" in tpl
     # Rendered as an Edit button.
     assert 'role="button"' in tpl
-    assert "{% trans \"Edit\" %}" in tpl
+    assert '{% trans "Edit" %}' in tpl
 
 
 def test_settings_tabs_honor_url_hash_for_deep_linking():
@@ -1133,9 +1133,7 @@ def test_settings_tabs_honor_url_hash_for_deep_linking():
     URL hash (e.g. `#proxbox-settings-overwrite`) after the validation-error
     check, so the Overwrite Behavior tab's Edit button lands on the right sub-tab.
     """
-    tpl = _read(
-        "netbox_proxbox/templates/netbox_proxbox/proxmoxendpoint_settings.html"
-    )
+    tpl = _read("netbox_proxbox/templates/netbox_proxbox/proxmoxendpoint_settings.html")
     assert "window.location.hash" in tpl
     # Validation-error focus still takes priority and the switch is DOM-safe.
     assert "has-errors" in tpl
