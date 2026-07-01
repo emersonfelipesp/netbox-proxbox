@@ -493,6 +493,11 @@ class ProxmoxEndpointSettingsView(generic.ObjectEditView):
         return {
             "overwrite_field_groups": OVERWRITE_FIELD_GROUPS,
             "sync_mode_field_groups": SYNC_MODE_FIELD_GROUPS,
+            # ObjectEditView (unlike ObjectView) does not inject ``tab`` into the
+            # context, so expose it here for the object tab strip in the template
+            # to highlight this Settings tab as active (and to keep the primary
+            # detail tab, gated on ``{% if not tab %}``, inactive).
+            "tab": self.tab,
         }
 
 
@@ -508,6 +513,17 @@ class ProxmoxEndpointSSHSettingsView(generic.ObjectEditView):
         permission="netbox_proxbox.change_proxmoxendpoint",
         weight=925,
     )
+
+    def get_extra_context(
+        self, request: HttpRequest, instance: ProxmoxEndpoint
+    ) -> dict[str, object]:
+        """Expose ``tab`` so the object tab strip highlights the active SSH tab.
+
+        ``ObjectEditView`` does not inject ``tab`` into the template context;
+        the object tab strip in ``proxmoxendpoint_ssh_settings.html`` needs it to
+        mark this SSH tab active and keep the primary detail tab inactive.
+        """
+        return {"tab": self.tab}
 
 
 def _terminal_websocket_url(base_websocket_url: str, websocket_path: str) -> str:
