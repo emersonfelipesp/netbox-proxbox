@@ -215,7 +215,9 @@ def test_proxmox_endpoint_form_exposes_write_and_ssh_credential_controls():
         "ssh_known_host_fingerprint",
     ):
         assert f'"{field_name}"' in source
-    assert "Write permission" in source
+    # The write-permission control (allow_writes) lives in the "Access control"
+    # fieldset alongside access_methods.
+    assert "Access control" in source
     assert "SSH credential access" in source
     assert "ProxmoxEndpointSSHCredentialFormMixin" in source
 
