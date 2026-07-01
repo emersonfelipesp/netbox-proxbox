@@ -151,3 +151,47 @@
     </div>
   {% endif %}
 {% endblock form %}
+
+{% block javascript %}
+  {{ block.super }}
+  {# When the form is redisplayed with validation errors, the errored field may #}
+  {# sit on an inactive tab and be invisible. NetBox's render_field wraps an     #}
+  {# errored field's row in `.has-errors`, so on load we activate the first tab  #}
+  {# pane that contains one. We click the controlling nav button (which keeps    #}
+  {# type="button", so this never resubmits the form) rather than constructing a #}
+  {# Bootstrap Tab instance, because NetBox's bundle registers the tab data-api  #}
+  {# but does not expose window.Tab. Runs inside DOMContentLoaded so that        #}
+  {# data-api registration is guaranteed complete before the click.             #}
+  <script>
+    (function () {
+      function focusFirstInvalidTab() {
+        var content = document.getElementById("proxbox-settings-tab-content");
+        if (!content) {
+          return;
+        }
+        var panes = content.querySelectorAll(".tab-pane");
+        for (var i = 0; i < panes.length; i++) {
+          var pane = panes[i];
+          if (!pane.querySelector(".has-errors")) {
+            continue;
+          }
+          if (pane.classList.contains("active")) {
+            return;
+          }
+          var trigger = document.getElementById(
+            pane.getAttribute("aria-labelledby")
+          );
+          if (trigger) {
+            trigger.click();
+          }
+          return;
+        }
+      }
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", focusFirstInvalidTab);
+      } else {
+        focusFirstInvalidTab();
+      }
+    })();
+  </script>
+{% endblock javascript %}

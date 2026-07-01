@@ -997,7 +997,9 @@ def test_proxmox_endpoint_settings_template_uses_tabs_not_stacked_cards():
     ):
         assert f'data-bs-target="#{pane_id}"' in template
         assert f'id="{pane_id}"' in template
-    assert template.count("tab-pane") == 4
+    # Count the actual pane containers, not stray "tab-pane" occurrences in the
+    # error-focus script's selector string.
+    assert template.count('class="tab-pane') == 4
 
     # Every configuration section's fields must still be rendered so the whole
     # form submits regardless of which tab is active.
@@ -1016,3 +1018,35 @@ def test_proxmox_endpoint_settings_template_uses_tabs_not_stacked_cards():
     assert "overwrite_field_groups" in template
     # The changelog message stays outside the tab strip so it always submits.
     assert "form.changelog_message" in template
+
+
+def test_proxmox_endpoint_settings_focuses_first_tab_with_validation_error():
+    """When the Settings form redisplays with validation errors, an errored field
+    may sit on an inactive tab and be invisible. The template ships an inline
+    script that, on load, activates the first tab pane containing a ``.has-errors``
+    element (the class NetBox's ``render_field`` adds to an errored field row).
+
+    This is a template/contract assertion: it proves the script is present and
+    keys off ``has-errors``; it does not exercise the runtime tab switch (that is
+    confirmed once in a browser on staging, matching how this plugin already
+    contract-tests its other inlined JS).
+    """
+    template = _read(
+        "netbox_proxbox/templates/netbox_proxbox/proxmoxendpoint_settings.html"
+    )
+
+    # The behavior lives in an inline script inside the javascript block so it
+    # works without collectstatic (the plugin's established inline-JS convention),
+    # and calls the parent block so NetBox's own page scripts still load.
+    assert "{% block javascript %}" in template
+    assert "{{ block.super }}" in template
+
+    # It keys off NetBox's errored-field marker class and scopes to the tab
+    # content container.
+    assert "has-errors" in template
+    assert "proxbox-settings-tab-content" in template
+
+    # It must switch tabs by clicking the nav button (NetBox does not expose
+    # window.Tab) and must run after the DOM/tab data-api is ready.
+    assert "DOMContentLoaded" in template
+    assert ".click()" in template
