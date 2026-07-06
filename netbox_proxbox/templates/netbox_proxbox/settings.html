@@ -198,6 +198,23 @@
                     {% render_field form.expose_internal_errors %}
                 </div>
             </div>
+            {# Schema Resolution Card #}
+            <div class="card mb-3">
+                <h5 class="card-header">
+                    <i class="mdi mdi-file-document-outline"></i>
+                    {% trans "Schema resolution" %}
+                </h5>
+                <div class="card-body">
+                    <p class="text-muted">
+                        {% blocktrans trimmed %}
+                        Control whether proxbox-api caches the resolved NetBox OpenAPI schema on
+                        disk. Disable to run schema resolution fully in-memory for read-only
+                        filesystems or no-disk-write deployments.
+                        {% endblocktrans %}
+                    </p>
+                    {% render_field form.netbox_openapi_persist %}
+                </div>
+            </div>
             {# NetBox Branching Integration Card #}
             <div class="card mb-3">
                 <h5 class="card-header">

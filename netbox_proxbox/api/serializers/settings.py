@@ -55,6 +55,7 @@ class ProxboxPluginSettingsSerializer(NetBoxModelSerializer):
             "backend_log_file_path",
             "debug_cache",
             "expose_internal_errors",
+            "netbox_openapi_persist",
             "ssrf_protection_enabled",
             "allow_private_ips",
             "additional_allowed_ip_ranges",

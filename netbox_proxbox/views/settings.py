@@ -72,6 +72,9 @@ class SettingsView(
             "backend_log_file_path": settings_obj.backend_log_file_path,
             "debug_cache": settings_obj.debug_cache,
             "expose_internal_errors": settings_obj.expose_internal_errors,
+            "netbox_openapi_persist": getattr(
+                settings_obj, "netbox_openapi_persist", True
+            ),
             "parse_description_metadata": settings_obj.parse_description_metadata,
             "embed_description_metadata": settings_obj.embed_description_metadata,
             "ssrf_protection_enabled": settings_obj.ssrf_protection_enabled,
@@ -226,6 +229,9 @@ class SettingsView(
             settings_obj.expose_internal_errors = form.cleaned_data.get(
                 "expose_internal_errors", False
             )
+            settings_obj.netbox_openapi_persist = form.cleaned_data.get(
+                "netbox_openapi_persist", True
+            )
             settings_obj.parse_description_metadata = form.cleaned_data.get(
                 "parse_description_metadata", False
             )
@@ -336,6 +342,7 @@ class SettingsView(
                     "backend_log_file_path",
                     "debug_cache",
                     "expose_internal_errors",
+                    "netbox_openapi_persist",
                     "parse_description_metadata",
                     "embed_description_metadata",
                     "ssrf_protection_enabled",

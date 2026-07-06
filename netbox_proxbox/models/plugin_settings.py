@@ -360,6 +360,16 @@ class ProxboxPluginSettings(NetBoxModel):
             "responses. Leave disabled in production to avoid leaking implementation details."
         ),
     )
+    netbox_openapi_persist = models.BooleanField(
+        default=True,
+        verbose_name=_("Persist NetBox OpenAPI schema to disk"),
+        help_text=_(
+            "When enabled (default), proxbox-api caches the resolved NetBox OpenAPI schema "
+            "on disk. Disable to run schema resolution fully in-memory and never write to "
+            "the filesystem (read-only filesystems or no-disk-write deployments). The "
+            "PROXBOX_NETBOX_OPENAPI_PERSIST environment variable overrides this setting."
+        ),
+    )
     parse_description_metadata = models.BooleanField(
         default=False,
         verbose_name=_("Parse description metadata"),

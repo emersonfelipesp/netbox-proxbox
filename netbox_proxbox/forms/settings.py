@@ -346,6 +346,16 @@ class ProxboxPluginSettingsForm(forms.Form):
             "responses. Leave disabled in production."
         ),
     )
+    netbox_openapi_persist = forms.BooleanField(
+        required=False,
+        label="Persist NetBox OpenAPI schema to disk",
+        help_text=(
+            "When enabled (default), proxbox-api caches the resolved NetBox OpenAPI schema "
+            "on disk. Disable to run schema resolution fully in-memory and never write to "
+            "the filesystem. The PROXBOX_NETBOX_OPENAPI_PERSIST environment variable "
+            "overrides this setting."
+        ),
+    )
     parse_description_metadata = forms.BooleanField(
         required=False,
         label="Parse description metadata",
