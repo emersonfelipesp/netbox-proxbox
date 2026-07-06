@@ -64,6 +64,7 @@ curl -X PATCH \
   "netbox_max_retries": 5,
   "netbox_retry_delay": "2.00",
   "netbox_get_cache_ttl": "60.00",
+  "netbox_openapi_persist": true,
   "bulk_batch_size": 50,
   "bulk_batch_delay_ms": 500,
   "backup_batch_size": 5,
@@ -126,6 +127,7 @@ These fields are set by the system and cannot be modified via PATCH:
 | `netbox_max_retries` | integer | Number of retry attempts on failed NetBox API requests |
 | `netbox_retry_delay` | decimal | Delay in seconds between retry attempts |
 | `netbox_get_cache_ttl` | decimal | TTL in seconds for cached NetBox GET responses |
+| `netbox_openapi_persist` | boolean | When `true` (default), proxbox-api caches the resolved NetBox OpenAPI schema on disk. When `false`, schema resolution runs fully in-memory and never reads/writes the filesystem (read-only filesystems, no-disk-write deployments). Overridable by the `PROXBOX_NETBOX_OPENAPI_PERSIST` backend environment variable. |
 
 ### Network Behavior
 
