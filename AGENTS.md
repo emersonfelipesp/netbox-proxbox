@@ -59,13 +59,15 @@ Three modes per type (global and per-endpoint — endpoint takes priority):
 - **`bootstrap_only`** — create once, tag with `bootstrap-only`, never patch/delete again
 - **`disabled`** — skip entirely, leave existing objects untouched
 
-Nine resource types: `sync_mode_vm`, `sync_mode_vm_template`, `sync_mode_vm_interface`, `sync_mode_mac`, `sync_mode_cluster`, `sync_mode_node`, `sync_mode_storage`, `sync_mode_ip_address`, `sync_mode_sdn`.
+Ten resource types: `sync_mode_vm`, `sync_mode_vm_template`, `sync_mode_vm_interface`, `sync_mode_mac`, `sync_mode_cluster`, `sync_mode_node`, `sync_mode_storage`, `sync_mode_ip_address`, `sync_mode_sdn`, `sync_mode_sdn_bgp`.
 
-`sync_mode_sdn` defaults to `disabled`. The **All** sync choice includes the SDN
-stage after VM interface/IP-address stages, but stage gating skips it until the
-effective SDN mode is enabled. SDN sync is read-only against Proxmox and writes
-only NetBox L2VPN/L2VPNTermination/RouteTarget/Prefix objects plus Proxbox
-plugin SDN metadata.
+`sync_mode_sdn` and `sync_mode_sdn_bgp` default to `disabled`. The **All** sync
+choice includes the SDN stage after VM interface/IP-address stages, but stage
+gating skips it until the effective SDN mode is enabled. SDN sync is read-only
+against Proxmox and writes only NetBox L2VPN/L2VPNTermination/RouteTarget/Prefix
+objects plus Proxbox plugin SDN metadata. `sync_mode_sdn_bgp` is a child mode
+for optional `netbox_bgp` projection inside the SDN stage; it is forced disabled
+whenever `sync_mode_sdn` is disabled.
 
 Effective sync modes resolve through a parent-to-child cascade before stage gating and backend query forwarding. A resource is effectively `disabled` when its own mode is `disabled` or any ancestor is effectively `disabled`; child modes never affect parent modes. The hierarchy is:
 
@@ -79,6 +81,7 @@ vm + vm_template (both disabled only)
     └── mac
 
 sdn
+└── sdn_bgp
 ```
 
 **VM templates** are stored in `ProxmoxVMTemplate` (not `VirtualMachine`). The model has optional FKs to `VirtualMachine` (`source_vm` and M2M `cloned_vms`), `ProxmoxCluster`, and `ProxmoxNode`.

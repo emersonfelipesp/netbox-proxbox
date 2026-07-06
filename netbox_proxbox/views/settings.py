@@ -14,6 +14,7 @@ from netbox_proxbox.constants import (
     SYNC_MODE_FIELDS,
 )
 from netbox_proxbox.forms.settings import ProxboxPluginSettingsForm
+from netbox_proxbox.integrations.bgp import netbox_bgp_status
 from netbox_proxbox.models import ProxboxPluginSettings
 from netbox_proxbox.views.proxbox_access import (
     permission_change_proxbox_plugin_settings,
@@ -71,6 +72,9 @@ class SettingsView(
             "backend_log_file_path": settings_obj.backend_log_file_path,
             "debug_cache": settings_obj.debug_cache,
             "expose_internal_errors": settings_obj.expose_internal_errors,
+            "netbox_openapi_persist": getattr(
+                settings_obj, "netbox_openapi_persist", True
+            ),
             "parse_description_metadata": settings_obj.parse_description_metadata,
             "embed_description_metadata": settings_obj.embed_description_metadata,
             "ssrf_protection_enabled": settings_obj.ssrf_protection_enabled,
@@ -133,6 +137,7 @@ class SettingsView(
             self.template_name,
             {
                 "form": form,
+                "netbox_bgp_status": netbox_bgp_status(),
                 "overwrite_field_groups": OVERWRITE_FIELD_GROUPS,
                 "sync_mode_field_groups": SYNC_MODE_FIELD_GROUPS,
             },
@@ -223,6 +228,9 @@ class SettingsView(
             settings_obj.debug_cache = form.cleaned_data.get("debug_cache", False)
             settings_obj.expose_internal_errors = form.cleaned_data.get(
                 "expose_internal_errors", False
+            )
+            settings_obj.netbox_openapi_persist = form.cleaned_data.get(
+                "netbox_openapi_persist", True
             )
             settings_obj.parse_description_metadata = form.cleaned_data.get(
                 "parse_description_metadata", False
@@ -334,6 +342,7 @@ class SettingsView(
                     "backend_log_file_path",
                     "debug_cache",
                     "expose_internal_errors",
+                    "netbox_openapi_persist",
                     "parse_description_metadata",
                     "embed_description_metadata",
                     "ssrf_protection_enabled",
@@ -371,6 +380,7 @@ class SettingsView(
             self.template_name,
             {
                 "form": form,
+                "netbox_bgp_status": netbox_bgp_status(),
                 "overwrite_field_groups": OVERWRITE_FIELD_GROUPS,
                 "sync_mode_field_groups": SYNC_MODE_FIELD_GROUPS,
             },

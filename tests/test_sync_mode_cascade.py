@@ -188,6 +188,20 @@ class TestSyncModeCascadeResolver:
         assert effective["sync_mode_node"] == "disabled"
         assert effective["sync_mode_cluster"] == "always"
 
+    def test_sdn_disabled_disables_sdn_bgp(self, sync_stages_module):
+        m = sync_stages_module
+        _set_modes(m, sdn="disabled", sdn_bgp="always")
+        effective = m._active_sync_modes()
+        assert effective["sync_mode_sdn"] == "disabled"
+        assert effective["sync_mode_sdn_bgp"] == "disabled"
+
+    def test_sdn_bgp_disabled_does_not_disable_sdn(self, sync_stages_module):
+        m = sync_stages_module
+        _set_modes(m, sdn="always", sdn_bgp="disabled")
+        effective = m._active_sync_modes()
+        assert effective["sync_mode_sdn"] == "always"
+        assert effective["sync_mode_sdn_bgp"] == "disabled"
+
 
 class TestStageSkipReasonCascade:
     def test_vm_interfaces_skipped_when_vm_interface_disabled(self, sync_stages_module):

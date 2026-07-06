@@ -114,7 +114,7 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
 - **When a job looks “stuck”:** **pending** usually means **no RQ worker** is running (or it does not listen to **`default`**). **running** for a long time usually means proxbox-api is still syncing or the stream is slow/buffered; **errored** with **`JobTimeoutException`** means RQ’s wall-clock limit was hit—increase `job_timeout` or `PROXBOX_SYNC_JOB_TIMEOUT`. Inspect the job **log** and **error** fields before changing code.
 - **Cancel on Job detail:** For Proxbox Sync rows in **pending**, **scheduled**, or **running** state, the plugin adds **Cancel job** (POST to `proxbox-cancel`). It requires **delete** permission on the core **Job** model, cancels or stops the linked RQ job when possible, then marks the NetBox job **failed** with a “Cancelled by user.” message. Stopping a **running** job is best-effort (RQ stop + long HTTP reads may not abort instantly).
 - **Run now on Job detail:** Shown only when the job is in a **terminal** state (**completed**, **errored**, or **failed**), including after **Cancel** (failed). It is **not** shown for **pending**, **scheduled**, or **running**—use **Cancel** first if a queued run should be abandoned, then **Run now** on the finished row to queue a new sync with the same parameters.
-- **Full update (UI vs jobs):** The plugin home may still use non-streaming helpers such as [`sync_full_update_resource`](./netbox_proxbox/services/backend_proxy.py) for JSON/redirect flows. Scheduled or immediate **Proxbox Sync** jobs expand selected sync types in [`sync_types.py`](./netbox_proxbox/sync_types.py) and call one backend `/stream` path per stage: devices, storage, virtual machines, task history, virtual disks, backups, snapshots, network interfaces, VM interfaces, IP addresses, SDN, replications, and backup routines. The SDN stage is included by **All** but skipped by default while `sync_mode_sdn=disabled`.
+- **Full update (UI vs jobs):** The plugin home may still use non-streaming helpers such as [`sync_full_update_resource`](./netbox_proxbox/services/backend_proxy.py) for JSON/redirect flows. Scheduled or immediate **Proxbox Sync** jobs expand selected sync types in [`sync_types.py`](./netbox_proxbox/sync_types.py) and call one backend `/stream` path per stage: devices, storage, virtual machines, task history, virtual disks, backups, snapshots, network interfaces, VM interfaces, IP addresses, SDN, replications, and backup routines. The SDN stage is included by **All** but skipped by default while `sync_mode_sdn=disabled`; optional BGP projection inside that stage is separately gated by `sync_mode_sdn_bgp`.
 
 ### SSL Certificate Verification
 
@@ -169,16 +169,18 @@ reflected into NetBox. Three modes are available:
 - **`bootstrap_only`** — sync the object once on first discovery, tag it with `bootstrap-only` in NetBox, and leave it completely untouched on all subsequent runs.
 - **`disabled`** — skip this resource type entirely; existing objects are not modified or removed.
 
-Controlled resource types: `sync_mode_vm`, `sync_mode_vm_template`, `sync_mode_vm_interface`, `sync_mode_mac`, `sync_mode_cluster`, `sync_mode_node`, `sync_mode_storage`, `sync_mode_ip_address`, `sync_mode_sdn`.
+Controlled resource types: `sync_mode_vm`, `sync_mode_vm_template`, `sync_mode_vm_interface`, `sync_mode_mac`, `sync_mode_cluster`, `sync_mode_node`, `sync_mode_storage`, `sync_mode_ip_address`, `sync_mode_sdn`, `sync_mode_sdn_bgp`.
 
-`sync_mode_sdn` defaults to `disabled` globally and per endpoint. The **All**
-sync option includes the SDN stage after VM interface/IP-address stages, but
-that stage is skipped until the effective SDN mode is enabled. SDN sync is
-read-only against Proxmox: it reflects controllers, zones, VNets, subnets,
-fabrics, route maps, prefix lists, and runtime bindings into NetBox plugin
-metadata, and it maps EVPN/VXLAN VNets into NetBox built-ins (`vpn.L2VPN`,
-`vpn.L2VPNTermination`, `ipam.RouteTarget`, `ipam.Prefix`) when enough source
-data is available.
+`sync_mode_sdn` and `sync_mode_sdn_bgp` default to `disabled` globally and per
+endpoint. The **All** sync option includes the SDN stage after VM
+interface/IP-address stages, but that stage is skipped until the effective SDN
+mode is enabled. SDN sync is read-only against Proxmox: it reflects
+controllers, zones, VNets, subnets, fabrics, route maps, prefix lists, and
+runtime bindings into NetBox plugin metadata, and it maps EVPN/VXLAN VNets into
+NetBox built-ins (`vpn.L2VPN`, `vpn.L2VPNTermination`, `ipam.RouteTarget`,
+`ipam.Prefix`) when enough source data is available. `sync_mode_sdn_bgp`
+controls optional projection of SDN BGP data into the `netbox_bgp` plugin inside
+the SDN stage and is forced disabled whenever `sync_mode_sdn` is disabled.
 Unsupported older Proxmox clusters are counted as skipped warnings, not failed
 syncs.
 
@@ -194,6 +196,9 @@ vm + vm_template (both disabled only)
 └── vm_interface
     ├── ip_address
     └── mac
+
+sdn
+└── sdn_bgp
 ```
 
 ### VM Templates

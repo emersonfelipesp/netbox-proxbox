@@ -166,6 +166,12 @@ def test_sdn_inventory_migration_exists_after_endpoint_ssh_source_migration():
     assert "proxmoxsdnbinding" in content.lower()
 
 
+def test_sdn_bgp_sync_mode_migration_exists_after_sdn_inventory_migration():
+    content = _read("netbox_proxbox/migrations/0057_sdn_bgp_sync_mode.py")
+    assert "0056_proxmoxendpoint_access_methods" in content
+    assert "sync_mode_sdn_bgp" in content
+
+
 # ---------------------------------------------------------------------------
 # Choices
 # ---------------------------------------------------------------------------

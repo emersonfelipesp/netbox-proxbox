@@ -85,7 +85,10 @@ versions before the VM config fix may need one Full Update on a fixed
 The SDN stage is optional and defaults to skipped because `sync_mode_sdn`
 defaults to `disabled`. Choosing **All** includes the stage, but
 `sync_stages.py` records a skipped stage until the effective SDN mode allows
-it. Unsupported older Proxmox clusters are also counted as skipped warnings,
+it. `sync_mode_sdn_bgp` is a child mode that controls optional projection of
+SDN BGP data into `netbox_bgp` models inside the same backend stage; it also
+defaults to `disabled` and is forced disabled whenever `sync_mode_sdn` is
+disabled. Unsupported older Proxmox clusters are counted as skipped warnings,
 not failed syncs.
 
 ---

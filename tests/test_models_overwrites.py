@@ -96,6 +96,15 @@ def test_effective_overwrites_endpoint_true_overrides_global_false(overwrite_fie
         assert resolved[name] is False
 
 
+def test_effective_sync_mode_uses_disabled_default_for_sdn_family():
+    source = (
+        REPO_ROOT / "netbox_proxbox" / "models" / "proxmox_endpoint.py"
+    ).read_text()
+
+    assert '{"sync_mode_sdn", "sync_mode_sdn_bgp"}' in source
+    assert "SyncModeChoices.DISABLED" in source
+
+
 # ---------------------------------------------------------------------------
 # effective_overwrites_for_endpoint(): global-fallback wrapper
 # ---------------------------------------------------------------------------
