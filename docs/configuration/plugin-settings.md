@@ -64,6 +64,30 @@ These fields tune how aggressively Proxbox calls the NetBox REST API during sync
 | **NetBox GET cache max bytes** | `52428800` | `PROXBOX_NETBOX_GET_CACHE_MAX_BYTES` | Maximum total cache size in bytes (default ≈ 50 MB). |
 | **Debug cache logging** | `false` | `PROXBOX_DEBUG_CACHE` | Emit verbose hit/miss/eviction logs for the NetBox GET cache. Use sparingly — produces high log volume. |
 | **Expose internal errors** | `false` | `PROXBOX_EXPOSE_INTERNAL_ERRORS` | When enabled, full Python tracebacks surface in HTTP responses. Keep `false` outside of dev environments. |
+| **Persist NetBox OpenAPI schema to disk** | `true` | `PROXBOX_NETBOX_OPENAPI_PERSIST` | When enabled (default), proxbox-api caches the resolved NetBox OpenAPI schema on disk. **Uncheck to run schema resolution fully in-memory** and never write to (or read from) the filesystem. |
+
+### NetBox OpenAPI schema cache (in-memory mode)
+
+proxbox-api resolves a NetBox OpenAPI contract at sync time to validate the
+payloads it builds. By default the resolved document is cached on disk at
+`proxbox_api/generated/netbox/openapi.json` so the backend does not have to
+re-fetch it from NetBox on every run.
+
+**Persist NetBox OpenAPI schema to disk** (`netbox_openapi_persist`, env
+`PROXBOX_NETBOX_OPENAPI_PERSIST`, default `true`) turns that on-disk cache off.
+When it is unchecked:
+
+- The fetched schema is kept only in a process-local, in-memory store — the
+  backend **never reads from or writes to the filesystem** for this cache.
+- Resolution still avoids repeated live fetches within the same process; only
+  cross-restart persistence is lost (the schema is re-fetched after a restart).
+- Use this for **read-only filesystems** or deployments that must not write any
+  generated artifacts to disk.
+
+The toggle resolves in the standard order: the
+`PROXBOX_NETBOX_OPENAPI_PERSIST` environment variable on the backend host wins,
+then this plugin setting, then the built-in default (`true`). Behavior is
+unchanged when the setting is left enabled.
 
 ---
 
