@@ -1,7 +1,5 @@
 """Pydantic V2 schemas for Proxmox backup routines synced via the FastAPI backend."""
 
-from __future__ import annotations
-
 from datetime import datetime
 from typing import Annotated
 

@@ -1,7 +1,5 @@
 """Shared Pydantic V2 base model configuration for all ProxBox schemas."""
 
-from __future__ import annotations
-
 from pydantic import BaseModel, ConfigDict
 
 

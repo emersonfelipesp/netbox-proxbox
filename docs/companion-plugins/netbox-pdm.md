@@ -1,6 +1,6 @@
 # netbox-pdm — Proxmox Datacenter Manager
 
-`netbox-pdm` is a standalone NetBox plugin that inventories **Proxmox Datacenter Manager (PDM)** infrastructure. PDM is the centralized management plane that sits above individual Proxmox VE clusters and PBS servers. `netbox-pdm` reflects PDM endpoint metadata and the remotes they manage (PVE nodes and PBS servers) into NetBox, and links them to the `ProxmoxEndpoint` and `PBSServer` objects tracked by the sibling plugins.
+`netbox-pdm` is a standalone NetBox plugin that inventories **Proxmox Datacenter Manager (PDM)** infrastructure. PDM is the centralized management plane that sits above individual Proxmox VE clusters and PBS servers. `netbox-pdm` reflects PDM endpoint metadata and the remotes they manage (PVE nodes and PBS servers) into NetBox, and links them to the `ProxmoxEndpoint` and `PBSEndpoint` objects tracked by the sibling plugins.
 
 ## Architecture
 
@@ -16,7 +16,7 @@ graph TB
     NB --> EP["PDMEndpoint\n(one PDM server)"]
     NB --> REM["PDMRemote\n(PVE or PBS managed by PDM)"]
     EP -- "M2M" --> PROXMOX["netbox-proxbox\nProxmoxEndpoint"]
-    EP -- "M2M" --> PBS["netbox-pbs\nPBSServer"]
+    EP -- "M2M" --> PBS["netbox-proxbox\nPBSEndpoint"]
     REM -- "FK (optional)" --> PROXMOX
     REM -- "FK (optional)" --> PBS
 ```
@@ -30,19 +30,19 @@ Mirrors one Proxmox Datacenter Manager server registered in NetBox.
 | Field | Type | Description |
 |---|---|---|
 | `name` | string | Human-readable label (unique) |
-| `host` | string | Hostname or IP address |
+| `domain` / `ip_address` | string / FK → `ipam.IPAddress` | Endpoint host source; the model exposes computed `host` for proxbox-api compatibility |
 | `port` | int | API port (default `8443`) |
 | `token_id` | string | PDM API token identifier |
-| `token_secret_encrypted` | string | Bearer token secret, stored encrypted at rest |
+| `token_secret_enc` | string | Fernet-encrypted PDM API token secret ciphertext |
 | `fingerprint` | string | TLS fingerprint for certificate pinning |
 | `verify_ssl` | bool | Whether to verify TLS certificates |
 | `allow_writes` | bool | Reserved — enables write-back operations (default `false`) |
-| `timeout_seconds` | int | Per-request timeout (default `30`) |
-| `last_seen_at` | datetime | Most recent successful API contact |
+| `timeout` | int | Optional per-request timeout; computed `timeout_seconds` defaults to `30` |
+| `enabled` | bool | Disabled rows remain inventory-only and cannot run sync jobs |
 | `site` | FK → `dcim.Site` | Physical site |
 | `tenant` | FK → `tenancy.Tenant` | Tenant scoping |
 | `proxmox_endpoints` | M2M → `ProxmoxEndpoint` | Proxmox VE clusters managed through this PDM |
-| `pbs_servers` | M2M → `PBSServer` | PBS servers managed through this PDM |
+| `pbs_endpoints` | M2M → `PBSEndpoint` | PBS endpoints managed through this PDM |
 
 ### `PDMRemote`
 
@@ -52,11 +52,13 @@ One row of PDM's `/pdm/remotes` response — a single PVE cluster or PBS server 
 |---|---|---|
 | `pdm_endpoint` | FK → `PDMEndpoint` | Parent PDM server |
 | `name` | string | Remote name as reported by PDM |
-| `remote_type` | choice | `pve` (Proxmox VE) or `pbs` (Proxmox Backup Server) |
+| `type` | choice | `pve` (Proxmox VE) or `pbs` (Proxmox Backup Server) |
+| `hostname` | string | Primary hostname reported by PDM |
+| `fingerprint` | string | TLS fingerprint reported by PDM |
 | `version` | string | Proxmox version string reported by the remote |
 | `last_seen_at` | datetime | Most recent successful contact |
 | `linked_proxmox_endpoint` | FK → `ProxmoxEndpoint` (nullable) | Links to the matching `netbox-proxbox` endpoint |
-| `linked_pbs_server` | FK → `PBSServer` (nullable) | Links to the matching `netbox-pbs` server |
+| `linked_pbs_endpoint` | FK → `PBSEndpoint` (nullable) | Links to the matching `netbox-proxbox` PBS endpoint |
 
 Uniqueness constraint: `(pdm_endpoint, name)`.
 
@@ -86,7 +88,7 @@ flowchart TD
     E --> D
     D --> F["POST /pdm/sync/endpoints"]
     D --> G["POST /pdm/sync/remotes"]
-    F & G --> H[Link remotes → ProxmoxEndpoint / PBSServer]
+    F & G --> H[Link remotes → ProxmoxEndpoint / PBSEndpoint]
     H --> I{Branching enabled?}
     I -- No --> J([Done])
     I -- Yes --> K{Conflicts?}
@@ -103,30 +105,32 @@ flowchart TD
 erDiagram
     PDMEndpoint {
         string name
-        string host
+        string domain
+        string ip_address
         int port
     }
     PDMRemote {
         string name
-        string remote_type
+        string type
+        string hostname
         string version
     }
     ProxmoxEndpoint {
         string name
     }
-    PBSServer {
+    PBSEndpoint {
         string name
     }
 
     PDMEndpoint ||--o{ PDMRemote : "remotes"
     PDMEndpoint }o--o{ ProxmoxEndpoint : "proxmox_endpoints (M2M)"
-    PDMEndpoint }o--o{ PBSServer : "pbs_servers (M2M)"
+    PDMEndpoint }o--o{ PBSEndpoint : "pbs_endpoints (M2M)"
     PDMRemote }o--o| ProxmoxEndpoint : "linked_proxmox_endpoint (nullable FK)"
-    PDMRemote }o--o| PBSServer : "linked_pbs_server (nullable FK)"
+    PDMRemote }o--o| PBSEndpoint : "linked_pbs_endpoint (nullable FK)"
 ```
 
 !!! warning "Install order"
-    Because `PDMEndpoint` references `PBSServer`, you must run `python3 manage.py migrate netbox_pbs` **before** `python3 manage.py migrate netbox_pdm`.
+    When using the standalone companion plugins, run PBS migrations before PDM migrations so PDM can resolve PBS-side references.
 
 ## Navigation
 

@@ -46,6 +46,9 @@ def test_build_pve_template_backend_helper_targets_correct_path() -> None:
     assert "/cloud/templates/images" in helper
     assert "get_fastapi_request_context" in helper
     assert "requests.post" in helper
+    assert "extract_backend_error_detail" in helper
+    assert "parse_requests_response_json" in helper
+    assert "response.text[:500]" not in helper
     assert "build_pve_template_via_backend" in helper
 
 

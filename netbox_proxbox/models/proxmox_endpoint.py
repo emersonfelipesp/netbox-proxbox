@@ -25,6 +25,10 @@ from netbox_proxbox.models.ssh_credential import (
     SSH_CRED_SOURCE_REUSE,
     normalize_fingerprint,
 )
+from netbox_proxbox.models.primary_secrets import (
+    decrypt_primary_secret,
+    encrypt_primary_secret,
+)
 from netbox_proxbox.utils import encryption as enc_helpers
 
 
@@ -89,24 +93,22 @@ class ProxmoxEndpoint(EndpointBase):
         verbose_name=_("Username"),
         help_text=_("Username must use the format 'user@realm'."),
     )
-    password = models.CharField(
-        max_length=255,
-        verbose_name=_("Password"),
-        help_text=_(
-            "Password for the Proxmox endpoint. Leave blank when using token authentication."
-        ),
+    password_enc = models.TextField(
         blank=True,
-        null=True,
+        default="",
+        verbose_name=_("Encrypted password"),
+        help_text=_("Fernet-encrypted Proxmox endpoint password ciphertext. Internal."),
     )
     token_name = models.CharField(
         max_length=255,
         verbose_name=_("Token name"),
         blank=True,
     )
-    token_value = models.CharField(
-        max_length=255,
-        verbose_name=_("Token value"),
+    token_value_enc = models.TextField(
         blank=True,
+        default="",
+        verbose_name=_("Encrypted token value"),
+        help_text=_("Fernet-encrypted Proxmox API token value ciphertext. Internal."),
     )
     verify_ssl = models.BooleanField(
         default=False,
@@ -628,6 +630,24 @@ class ProxmoxEndpoint(EndpointBase):
     def get_absolute_url(self) -> str:
         """Plugin UI URL for this Proxmox endpoint detail view."""
         return reverse("plugins:netbox_proxbox:proxmoxendpoint", args=[self.pk])
+
+    @property
+    def password(self) -> str:
+        """Decrypt and return the Proxmox password secret."""
+        return decrypt_primary_secret(self.password_enc)
+
+    @password.setter
+    def password(self, value: object | None) -> None:
+        self.password_enc = encrypt_primary_secret(value)
+
+    @property
+    def token_value(self) -> str:
+        """Decrypt and return the Proxmox API token value secret."""
+        return decrypt_primary_secret(self.token_value_enc)
+
+    @token_value.setter
+    def token_value(self, value: object | None) -> None:
+        self.token_value_enc = encrypt_primary_secret(value)
 
     @property
     def ssh_host(self) -> str:

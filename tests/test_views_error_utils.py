@@ -69,7 +69,8 @@ def test_parse_json_returns_user_facing_detail_for_html(error_utils_module):
     assert payload is None
     assert detail is not None
     assert "not valid JSON" in detail
-    assert "<html>nginx</html>" in detail or "Body starts with" in detail
+    assert "<html>nginx</html>" not in detail
+    assert "Body starts with" not in detail
 
 
 # ── extract_backend_error_detail (no .response set) ──────────────────────────

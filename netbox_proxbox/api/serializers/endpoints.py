@@ -36,6 +36,19 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
     url = serializers.HyperlinkedIdentityField(
         view_name="plugins-api:netbox_proxbox-api:endpoints:proxmoxendpoint-detail",
     )
+    password = serializers.CharField(
+        write_only=True,
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        style={"input_type": "password"},
+    )
+    token_value = serializers.CharField(
+        write_only=True,
+        required=False,
+        allow_blank=True,
+        style={"input_type": "password"},
+    )
     ip_address = NestedIPAddressSerializer(required=False, allow_null=True)
     domain = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     mode = ChoiceField(choices=ProxmoxModeChoices)
@@ -284,6 +297,13 @@ class FastAPIEndpointSerializer(NetBoxModelSerializer):
 
     url = serializers.HyperlinkedIdentityField(
         view_name="plugins-api:netbox_proxbox-api:endpoints:fastapiendpoint-detail",
+    )
+    token = serializers.CharField(
+        write_only=True,
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        style={"input_type": "password"},
     )
     ip_address = NestedIPAddressSerializer(required=False, allow_null=True)
 

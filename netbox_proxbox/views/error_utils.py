@@ -41,7 +41,6 @@ def parse_requests_response_json(
         return response.json(), None
     except (_JSON_DECODE_ERROR, ValueError) as exc:
         url = getattr(response, "url", "") or ""
-        snippet = (getattr(response, "text", "") or "")[:200].replace("\n", " ")
         logger.warning(
             "Non-JSON HTTP %s body from %s (%s): %s",
             getattr(response, "status_code", "?"),
@@ -53,8 +52,6 @@ def parse_requests_response_json(
             "ProxBox backend returned a response that is not valid JSON. "
             "Check that the FastAPI URL points to proxbox-api, not another service."
         )
-        if snippet:
-            detail += f" Body starts with: {snippet!r}"
         return None, detail
 
 
@@ -148,7 +145,11 @@ def extract_backend_error_detail(
             )
             return detail, status_code
 
-        detail = body[:500] if body else str(exc)
+        detail = (
+            f"Backend returned HTTP {status_code} without a JSON error detail."
+            if status_code
+            else str(exc)
+        )
 
     return detail, status_code
 

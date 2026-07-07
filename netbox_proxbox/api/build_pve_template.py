@@ -3,12 +3,12 @@
 The single ``FastAPIEndpoint`` row is the source of truth for the backend
 URL and API key. The plugin posts the request body verbatim to
 ``POST /cloud/templates/images`` on proxbox-api and returns the upstream
-JSON / status pair to the caller.
+JSON / status pair to the caller on success.
 
 Error handling mirrors ``services/backend_proxy.request_backend_resource``:
-network errors and non-JSON responses surface as ``503`` with a ``detail``
-field; upstream HTTP errors are propagated 1:1 so the NMS UI can render
-the proxbox-api ``detail`` text directly.
+network errors and non-JSON responses surface with a sanitized ``detail`` field;
+upstream HTTP errors are normalized so raw proxbox-api response bodies are never
+forwarded to the browser.
 """
 
 from __future__ import annotations
@@ -19,6 +19,10 @@ from typing import Any
 import requests
 
 from netbox_proxbox.services.backend_proxy import get_fastapi_request_context
+from netbox_proxbox.views.error_utils import (
+    extract_backend_error_detail,
+    parse_requests_response_json,
+)
 
 logger = logging.getLogger("netbox_proxbox.api.build_pve_template")
 
@@ -65,10 +69,23 @@ def build_cloud_image_pipeline_via_backend(
             503,
         )
 
-    try:
-        body = response.json() if response.content else {}
-    except ValueError:
-        body = {"detail": response.text[:500]}
+    if response.status_code >= 400:
+        try:
+            response.raise_for_status()
+        except requests.exceptions.RequestException as exc:
+            detail, status = extract_backend_error_detail(exc)
+        else:
+            detail, status = (
+                f"Backend returned HTTP {response.status_code} without a JSON error detail.",
+                response.status_code,
+            )
+        return {"queued": False, "detail": detail}, status or response.status_code
+
+    body, json_err = parse_requests_response_json(
+        response, log_label="cloud-image-build"
+    )
+    if json_err:
+        return {"queued": False, "detail": json_err}, 502
 
     if not isinstance(body, dict):
         body = {"result": body}

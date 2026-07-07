@@ -213,6 +213,11 @@ class ProxmoxEndpointSSHCredentialFormMixin(forms.Form):
         """Encrypt submitted dedicated SSH secrets and preserve blank inputs."""
         instance = super().save(commit=False)
 
+        if "password" in self.cleaned_data:
+            instance.password = self.cleaned_data.get("password")
+        if "token_value" in self.cleaned_data:
+            instance.token_value = self.cleaned_data.get("token_value")
+
         if self.cleaned_data.get("ssh_credential_source") == SSH_CRED_SOURCE_REUSE:
             if commit:
                 instance.save()
@@ -656,6 +661,8 @@ class ProxmoxEndpointFilterForm(NetBoxModelFilterSetForm):
 class ProxmoxEndpointImportForm(NetBoxModelImportForm):
     """CSV import mapping for bulk Proxmox endpoint creation."""
 
+    password = forms.CharField(required=False)
+    token_value = forms.CharField(required=False)
     ip_address = forms.CharField(
         required=False,
         help_text=_(

@@ -20,6 +20,10 @@ from django.urls import NoReverseMatch, reverse
 from django.utils.translation import gettext_lazy as _
 
 from netbox_proxbox.models.base import PORT_VALIDATORS, EndpointBase
+from netbox_proxbox.models.primary_secrets import (
+    decrypt_primary_secret,
+    encrypt_primary_secret,
+)
 
 
 class PDMEndpoint(EndpointBase):
@@ -42,10 +46,11 @@ class PDMEndpoint(EndpointBase):
         verbose_name=_("Token ID"),
         help_text=_("PDM API token id of the form 'user@realm!tokenname'."),
     )
-    token_secret = models.CharField(
-        max_length=255,
-        verbose_name=_("Token secret"),
-        help_text=_("PDM API token secret value."),
+    token_secret_enc = models.TextField(
+        blank=True,
+        default="",
+        verbose_name=_("Encrypted token secret"),
+        help_text=_("Fernet-encrypted PDM API token secret ciphertext. Internal."),
     )
     fingerprint = models.CharField(
         max_length=255,
@@ -123,6 +128,15 @@ class PDMEndpoint(EndpointBase):
                 name="netbox_proxbox_pdmendpoint_identity",
             ),
         )
+
+    @property
+    def token_secret(self) -> str:
+        """Decrypt and return the PDM API token secret."""
+        return decrypt_primary_secret(self.token_secret_enc)
+
+    @token_secret.setter
+    def token_secret(self, value: object | None) -> None:
+        self.token_secret_enc = encrypt_primary_secret(value)
 
     @property
     def host(self) -> str:
