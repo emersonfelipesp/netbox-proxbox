@@ -12,6 +12,10 @@ from django.utils.translation import gettext_lazy as _
 
 from netbox_proxbox.fields import DomainField
 from netbox_proxbox.models.base import PORT_VALIDATORS, EndpointBase
+from netbox_proxbox.models.primary_secrets import (
+    decrypt_primary_secret,
+    encrypt_primary_secret,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -66,12 +70,13 @@ class FastAPIEndpoint(EndpointBase):
             "cert in the proxbox-api '*-nginx' image)."
         ),
     )
-    token = models.CharField(
+    token_enc = models.TextField(
         blank=True,
-        null=True,
-        max_length=255,
-        verbose_name=_("Token"),
-        help_text=_("Optional backend token used by the ProxBox service."),
+        default="",
+        verbose_name=_("Encrypted token"),
+        help_text=_(
+            "Fernet-encrypted backend token used by the ProxBox service. Internal."
+        ),
     )
     use_websocket = models.BooleanField(
         default=False,
@@ -115,6 +120,15 @@ class FastAPIEndpoint(EndpointBase):
         )
 
     @property
+    def token(self) -> str:
+        """Decrypt and return the proxbox-api backend token."""
+        return decrypt_primary_secret(self.token_enc)
+
+    @token.setter
+    def token(self, value: object | None) -> None:
+        self.token_enc = encrypt_primary_secret(value)
+
+    @property
     def url(self) -> str:
         """Synthetic ``http(s)://`` base URL using domain or IP and the model port.
 
@@ -144,7 +158,7 @@ class FastAPIEndpoint(EndpointBase):
         token_explicitly_changed = False
         if self.pk and not is_new_token:
             try:
-                prior = type(self).objects.only("token").get(pk=self.pk)
+                prior = type(self).objects.only("token_enc").get(pk=self.pk)
                 token_explicitly_changed = (
                     bool(prior.token) and prior.token != self.token
                 )

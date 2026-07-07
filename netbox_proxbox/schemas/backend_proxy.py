@@ -1,7 +1,5 @@
 """Pydantic V2 schemas for ProxBox FastAPI backend proxy payloads."""
 
-from __future__ import annotations
-
 from collections.abc import Iterator
 from enum import Enum
 from pydantic import Field

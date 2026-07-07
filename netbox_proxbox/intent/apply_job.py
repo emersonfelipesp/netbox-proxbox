@@ -38,6 +38,7 @@ from netbox_proxbox.models import (
     ProxmoxApplyJob as ProxmoxApplyJobModel,
 )
 from netbox_proxbox.services.backend_context import get_fastapi_request_context
+from netbox_proxbox.views.error_utils import extract_backend_error_detail
 
 PROXBOX_APPLY_JOB_TIMEOUT = 3600
 
@@ -149,9 +150,15 @@ def _call_apply_endpoint(
         raise RuntimeError(f"Apply request failed: {exc}") from exc
 
     if response.status_code >= 400:
+        try:
+            response.raise_for_status()
+        except requests.exceptions.RequestException as exc:
+            detail, _status = extract_backend_error_detail(exc)
+        else:
+            detail = f"Backend returned HTTP {response.status_code} without a JSON error detail."
         raise RuntimeError(
             f"proxbox-api returned HTTP {response.status_code} for /intent/apply: "
-            f"{response.text[:500]}"
+            f"{detail}"
         )
 
     try:

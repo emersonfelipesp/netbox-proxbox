@@ -1,7 +1,5 @@
 """Pydantic V2 schemas for Proxmox storage API responses."""
 
-from __future__ import annotations
-
 from pydantic import Field, field_validator
 
 from netbox_proxbox.schemas._base import ProxboxBaseModel, ProxboxLenientModel

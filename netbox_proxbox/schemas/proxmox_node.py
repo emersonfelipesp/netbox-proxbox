@@ -1,7 +1,5 @@
 """Pydantic V2 schemas for Proxmox cluster and node API responses."""
 
-from __future__ import annotations
-
 from typing import Literal
 
 from pydantic import Field, field_validator, model_validator
@@ -184,7 +182,7 @@ class ProxmoxClusterSummary(ProxboxBaseModel):
     @classmethod
     def from_status_response(
         cls, response: ProxmoxClusterStatusResponse
-    ) -> ProxmoxClusterSummary:
+    ) -> "ProxmoxClusterSummary":
         """Handle from status response."""
         cr = response.cluster_record
         nr = response.node_records
@@ -230,7 +228,7 @@ class ProxmoxNodeRow(ProxboxBaseModel):
         memory_label: str,
         disk_pct: float,
         disk_label: str,
-    ) -> ProxmoxNodeRow:
+    ) -> "ProxmoxNodeRow":
         """Build a dashboard row from already-normalised values."""
         return cls(
             name=name,
@@ -246,7 +244,7 @@ class ProxmoxNodeRow(ProxboxBaseModel):
         )
 
     @classmethod
-    def from_node_detail(cls, detail: ProxmoxNodeDetail) -> ProxmoxNodeRow:
+    def from_node_detail(cls, detail: ProxmoxNodeDetail) -> "ProxmoxNodeRow":
         """Handle from node detail."""
         mem_used = detail.mem or 0
         mem_total = detail.maxmem or 0
@@ -269,7 +267,7 @@ class ProxmoxNodeRow(ProxboxBaseModel):
         )
 
     @classmethod
-    def from_node_model(cls, node: object) -> ProxmoxNodeRow:
+    def from_node_model(cls, node: object) -> "ProxmoxNodeRow":
         """Render a persisted ``ProxmoxNode`` row for the dashboard card."""
         name = str(getattr(node, "name", "") or "—")
         online = bool(getattr(node, "online", False))

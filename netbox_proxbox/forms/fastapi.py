@@ -38,7 +38,10 @@ class FastAPIEndpointForm(NetBoxModelForm):
     )
     token = forms.CharField(
         required=False,
-        help_text="This will only be working from v0.0.7 and above. Token for the Proxbox Endpoint. If not provided, the Proxbox Endpoint will not be able to send messages to the client (user) browser.",
+        widget=forms.PasswordInput(
+            render_value=False, attrs={"autocomplete": "new-password"}
+        ),
+        help_text="Backend token for proxbox-api. Leave blank to keep the current value.",
         label="[BETA] Proxbox Backend Token",
     )
     use_websocket = forms.BooleanField(
@@ -113,10 +116,22 @@ class FastAPIEndpointForm(NetBoxModelForm):
 
         return cleaned_data
 
+    def save(self, commit: bool = True) -> FastAPIEndpoint:
+        """Persist submitted backend token rotations through encrypted storage."""
+        instance = super().save(commit=False)
+        submitted_token = (self.cleaned_data.get("token") or "").strip()
+        if submitted_token:
+            instance.token = submitted_token
+        if commit:
+            instance.save()
+            self.save_m2m()
+        return instance
+
 
 class FastAPIEndpointImportForm(NetBoxModelImportForm):
     """CSV import mapping for bulk FastAPI endpoint creation."""
 
+    token = forms.CharField(required=False)
     ip_address = forms.CharField(
         required=False,
         help_text=_(

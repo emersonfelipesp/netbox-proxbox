@@ -105,14 +105,10 @@ def sync_individual(
             if getattr(exc, "response", None) is not None:
                 break
         except ValueError as exc:
-            response_obj = locals().get("response")
-            snippet = (getattr(response_obj, "text", "") or "")[:200].replace("\n", " ")
             last_error = (
                 "ProxBox backend returned a response that is not valid JSON. "
                 "Check that the FastAPI URL points to proxbox-api, not another service."
             )
-            if snippet:
-                last_error += f" Body starts with: {snippet!r}"
             last_status = 502
             logger.error("Invalid individual sync response for %s: %s", path, exc)
         except Exception as exc:  # pragma: no cover

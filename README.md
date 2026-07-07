@@ -133,6 +133,16 @@ global pool and returns only the explicit matches. Use this to pin a tenant
 such as Confitec to a single cluster without changing the default pool for
 other tenants.
 
+## Maintenance hardening notes
+
+- **Primary endpoint secrets are encrypted at rest.** `ProxmoxEndpoint.password`,
+  `ProxmoxEndpoint.token_value`, `FastAPIEndpoint.token`,
+  `PBSEndpoint.token_secret`, and `PDMEndpoint.token_secret` now write through
+  Fernet-encrypted `*_enc` database columns. The upgrade migration encrypts
+  existing values and creates `ProxboxPluginSettings.encryption_key` if it was
+  blank, so new endpoint saves do not persist those primary secrets in
+  plaintext columns.
+
 ## What's New in v0.0.22
 
 Current pairing: netbox-proxbox 0.0.22 <-> proxbox-api 0.0.19.post5 <-> proxmox-sdk 0.0.12 <-> netbox-sdk 0.0.10.

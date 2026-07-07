@@ -43,6 +43,12 @@ class PBSEndpointSerializer(NetBoxModelSerializer):
     url = serializers.HyperlinkedIdentityField(
         view_name="plugins-api:netbox_proxbox-api:endpoints:pbsendpoint-detail",
     )
+    token_secret = serializers.CharField(
+        write_only=True,
+        required=False,
+        allow_blank=True,
+        style={"input_type": "password"},
+    )
     ip_address = NestedIPAddressSerializer(required=False, allow_null=True)
     site = SiteSerializer(nested=True, required=False, allow_null=True)
     tenant = TenantSerializer(nested=True, required=False, allow_null=True)
@@ -102,6 +108,12 @@ class PDMEndpointSerializer(NetBoxModelSerializer):
 
     url = serializers.HyperlinkedIdentityField(
         view_name="plugins-api:netbox_proxbox-api:endpoints:pdmendpoint-detail",
+    )
+    token_secret = serializers.CharField(
+        write_only=True,
+        required=False,
+        allow_blank=True,
+        style={"input_type": "password"},
     )
     ip_address = NestedIPAddressSerializer(required=False, allow_null=True)
     site = SiteSerializer(nested=True, required=False, allow_null=True)

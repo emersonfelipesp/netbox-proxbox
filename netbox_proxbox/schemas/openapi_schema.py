@@ -1,7 +1,5 @@
 """Pydantic V2 schemas and factory for OpenAPI schema normalization."""
 
-from __future__ import annotations
-
 from pydantic import ConfigDict, Field, field_validator
 
 from netbox_proxbox.schemas._base import ProxboxBaseModel
@@ -82,7 +80,7 @@ class OpenAPISummary(ProxboxBaseModel):
     stats: OpenAPIStats = Field(default_factory=OpenAPIStats)
 
     @classmethod
-    def from_raw_payload(cls, payload: object) -> OpenAPISummary:
+    def from_raw_payload(cls, payload: object) -> "OpenAPISummary":
         """Parse a raw OpenAPI JSON object into a typed ``OpenAPISummary``.
 
         Raises ``ValueError`` when *payload* is not a dict.

@@ -1,7 +1,5 @@
 """Pydantic V2 schemas for sync job parameters and results."""
 
-from __future__ import annotations
-
 from pydantic import Field
 
 from netbox_proxbox.schemas._base import ProxboxBaseModel
@@ -27,7 +25,7 @@ class SyncJobData(ProxboxBaseModel):
     response: dict[str, object] | None = None
 
     @classmethod
-    def from_job(cls, job: object) -> SyncJobData:
+    def from_job(cls, job: object) -> "SyncJobData":
         """Parse ``job.data['proxbox_sync']`` into a typed model with safe fallbacks."""
         data = getattr(job, "data", None)
         if not isinstance(data, dict):
