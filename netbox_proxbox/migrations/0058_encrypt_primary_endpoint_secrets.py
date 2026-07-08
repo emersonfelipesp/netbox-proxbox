@@ -4,7 +4,10 @@ import base64
 import binascii
 
 from cryptography.fernet import Fernet
+from django.core.exceptions import FieldDoesNotExist
 from django.db import migrations, models
+
+from netbox_proxbox.migrations._idempotent_ops import add_field_idempotent
 
 
 def _coerce_fernet_key(raw: str) -> bytes:
@@ -38,6 +41,59 @@ def _encrypt(value: object, *, fernet: Fernet) -> str:
     return fernet.encrypt(plaintext.encode("utf-8")).decode("ascii")
 
 
+def _table_columns(schema_editor, table: str) -> set[str]:
+    connection = schema_editor.connection
+    with connection.cursor() as cursor:
+        return {
+            description.name
+            for description in connection.introspection.get_table_description(
+                cursor, table
+            )
+        }
+
+
+def _field_column(model, field_name: str) -> str | None:
+    try:
+        return model._meta.get_field(field_name).column
+    except FieldDoesNotExist:
+        return None
+
+
+def _remove_field_if_present(model_name: str, field_name: str):
+    def forwards(apps, schema_editor) -> None:
+        model = apps.get_model("netbox_proxbox", model_name)
+        try:
+            field = model._meta.get_field(field_name)
+        except FieldDoesNotExist:
+            return
+        columns = _table_columns(schema_editor, model._meta.db_table)
+        if field.column not in columns:
+            return
+        schema_editor.remove_field(model, field)
+
+    return forwards
+
+
+def remove_field_idempotent(
+    model_name: str,
+    field_name: str,
+) -> migrations.SeparateDatabaseAndState:
+    return migrations.SeparateDatabaseAndState(
+        database_operations=[
+            migrations.RunPython(
+                _remove_field_if_present(model_name, field_name),
+                reverse_code=migrations.RunPython.noop,
+            ),
+        ],
+        state_operations=[
+            migrations.RemoveField(
+                model_name=model_name,
+                name=field_name,
+            ),
+        ],
+    )
+
+
 def encrypt_existing_primary_endpoint_secrets(apps, schema_editor) -> None:
     """Move existing plaintext endpoint secrets into Fernet ciphertext columns."""
     fernet = Fernet(_get_or_create_key(apps))
@@ -53,10 +109,21 @@ def encrypt_existing_primary_endpoint_secrets(apps, schema_editor) -> None:
 
     for model_name, field_pairs in model_specs:
         model = apps.get_model("netbox_proxbox", model_name)
-        update_fields = [target for _source, target in field_pairs]
-        for obj in model.objects.all().iterator():
+        columns = _table_columns(schema_editor, model._meta.db_table)
+        present_pairs = []
+        for source, target in field_pairs:
+            source_column = _field_column(model, source)
+            target_column = _field_column(model, target)
+            if source_column in columns and target_column in columns:
+                present_pairs.append((source, target))
+        if not present_pairs:
+            continue
+
+        update_fields = [target for _source, target in present_pairs]
+        query_fields = sorted({field for pair in present_pairs for field in pair})
+        for obj in model.objects.only(*query_fields).iterator():
             changed = False
-            for source, target in field_pairs:
+            for source, target in present_pairs:
                 ciphertext = _encrypt(getattr(obj, source, None), fernet=fernet)
                 if getattr(obj, target, "") != ciphertext:
                     setattr(obj, target, ciphertext)
@@ -72,9 +139,9 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AddField(
+        add_field_idempotent(
             model_name="proxmoxendpoint",
-            name="password_enc",
+            field_name="password_enc",
             field=models.TextField(
                 blank=True,
                 default="",
@@ -82,9 +149,9 @@ class Migration(migrations.Migration):
                 verbose_name="Encrypted password",
             ),
         ),
-        migrations.AddField(
+        add_field_idempotent(
             model_name="proxmoxendpoint",
-            name="token_value_enc",
+            field_name="token_value_enc",
             field=models.TextField(
                 blank=True,
                 default="",
@@ -92,9 +159,9 @@ class Migration(migrations.Migration):
                 verbose_name="Encrypted token value",
             ),
         ),
-        migrations.AddField(
+        add_field_idempotent(
             model_name="fastapiendpoint",
-            name="token_enc",
+            field_name="token_enc",
             field=models.TextField(
                 blank=True,
                 default="",
@@ -102,9 +169,9 @@ class Migration(migrations.Migration):
                 verbose_name="Encrypted token",
             ),
         ),
-        migrations.AddField(
+        add_field_idempotent(
             model_name="pbsendpoint",
-            name="token_secret_enc",
+            field_name="token_secret_enc",
             field=models.TextField(
                 blank=True,
                 default="",
@@ -112,9 +179,9 @@ class Migration(migrations.Migration):
                 verbose_name="Encrypted token secret",
             ),
         ),
-        migrations.AddField(
+        add_field_idempotent(
             model_name="pdmendpoint",
-            name="token_secret_enc",
+            field_name="token_secret_enc",
             field=models.TextField(
                 blank=True,
                 default="",
@@ -126,24 +193,24 @@ class Migration(migrations.Migration):
             encrypt_existing_primary_endpoint_secrets,
             reverse_code=migrations.RunPython.noop,
         ),
-        migrations.RemoveField(
+        remove_field_idempotent(
             model_name="proxmoxendpoint",
-            name="password",
+            field_name="password",
         ),
-        migrations.RemoveField(
+        remove_field_idempotent(
             model_name="proxmoxendpoint",
-            name="token_value",
+            field_name="token_value",
         ),
-        migrations.RemoveField(
+        remove_field_idempotent(
             model_name="fastapiendpoint",
-            name="token",
+            field_name="token",
         ),
-        migrations.RemoveField(
+        remove_field_idempotent(
             model_name="pbsendpoint",
-            name="token_secret",
+            field_name="token_secret",
         ),
-        migrations.RemoveField(
+        remove_field_idempotent(
             model_name="pdmendpoint",
-            name="token_secret",
+            field_name="token_secret",
         ),
     ]
