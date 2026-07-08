@@ -1,0 +1,112 @@
+{% load i18n %}
+<button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#proxbox-bug-report-{{ job.pk }}">
+  <i class="mdi mdi-bug" aria-hidden="true"></i>
+  {% trans "Bug report" %}
+</button>
+
+<div class="modal fade" id="proxbox-bug-report-{{ job.pk }}" tabindex="-1" aria-labelledby="proxbox-bug-report-{{ job.pk }}-label" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content" id="proxbox-bug-report-{{ job.pk }}-root">
+      <div class="modal-header">
+        <h5 class="modal-title" id="proxbox-bug-report-{{ job.pk }}-label">
+          <i class="mdi mdi-bug" aria-hidden="true"></i>
+          {% trans "Report a Proxbox sync bug" %}
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{% trans 'Close' %}"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted">
+          {% trans "This sync job did not complete successfully. Copy the metadata and logs below, then open a new issue on GitHub and paste them in so we can investigate." %}
+        </p>
+
+        <div class="d-flex flex-wrap gap-2 mb-3">
+          <a href="{{ github_issue_url }}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-primary">
+            <i class="mdi mdi-github" aria-hidden="true"></i>
+            {% trans "Open a new issue on GitHub" %}
+          </a>
+          <a href="{{ github_issues_url }}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-secondary">
+            <i class="mdi mdi-format-list-bulleted" aria-hidden="true"></i>
+            {% trans "Browse existing issues" %}
+          </a>
+        </div>
+
+        <h6 class="mb-2">{% trans "Metadata" %}</h6>
+        <table class="table table-sm table-borderless mb-3">
+          <tbody>
+            {% for label, value in metadata %}
+              <tr>
+                <th class="ps-0 text-nowrap" style="width: 12rem;">{{ label }}</th>
+                <td class="font-monospace text-break">{{ value }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+
+        {% if error %}
+          <h6 class="mb-2">{% trans "Error" %}</h6>
+          <pre class="border rounded bg-body-tertiary p-2 mb-3" style="max-height: 12rem; overflow: auto;">{{ error }}</pre>
+        {% endif %}
+
+        <h6 class="mb-2">{% trans "Job logs" %}</h6>
+        {% if log_lines %}
+          <pre class="border rounded bg-body-tertiary p-2 mb-3" style="max-height: 16rem; overflow: auto;">{% for line in log_lines %}{{ line }}
+{% endfor %}</pre>
+        {% else %}
+          <p class="text-muted mb-3">{% trans "No log entries were recorded for this job." %}</p>
+        {% endif %}
+
+        <h6 class="mb-2">{% trans "Report (metadata + logs)" %}</h6>
+        <textarea class="form-control font-monospace" data-proxbox-report readonly rows="10"
+                  aria-label="{% trans 'Bug report contents' %}">{{ report_text }}</textarea>
+        <div class="form-text text-success" data-proxbox-copy-feedback hidden>
+          {% trans "Copied to clipboard." %}
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-primary" data-proxbox-copy>
+          <i class="mdi mdi-content-copy" aria-hidden="true"></i>
+          {% trans "Copy metadata and logs" %}
+        </button>
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">{% trans "Close" %}</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var root = document.getElementById("proxbox-bug-report-{{ job.pk }}-root");
+  if (!root) { return; }
+  var copyBtn = root.querySelector("[data-proxbox-copy]");
+  var source = root.querySelector("[data-proxbox-report]");
+  var feedback = root.querySelector("[data-proxbox-copy-feedback]");
+  if (!copyBtn || !source) { return; }
+
+  function showFeedback() {
+    if (!feedback) { return; }
+    feedback.hidden = false;
+    window.setTimeout(function () { feedback.hidden = true; }, 2500);
+  }
+
+  function fallbackCopy() {
+    source.focus();
+    source.select();
+    try {
+      document.execCommand("copy");
+      showFeedback();
+    } catch (err) {
+      /* Clipboard unavailable; the operator can still select the text manually. */
+    }
+  }
+
+  copyBtn.addEventListener("click", function () {
+    var text = source.value;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(showFeedback, fallbackCopy);
+    } else {
+      fallbackCopy();
+    }
+  });
+})();
+</script>
