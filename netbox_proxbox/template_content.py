@@ -12,6 +12,7 @@ from netbox.plugins import PluginTemplateExtension
 from utilities.permissions import get_permission_for_model
 from virtualization.models import VirtualMachine
 
+from netbox_proxbox.bug_report import build_bug_report_context, is_reportable_status
 from netbox_proxbox.jobs import is_proxbox_sync_job
 from netbox_proxbox.utils import resolve_vm_type
 from netbox_proxbox.intent.firewall_common import resolve_firewall_endpoint
@@ -144,6 +145,17 @@ class ProxboxJobTemplateExtension(PluginTemplateExtension):
                         {"job": obj},
                     )
                 )
+
+        # Bug report: only for jobs that ended in an error/unknown state. The
+        # modal shows data the user can already see on this page, so no extra
+        # permission beyond viewing the Job is required.
+        if is_reportable_status(obj.status):
+            parts.append(
+                self.render(
+                    "netbox_proxbox/inc/bug_report_button.html",
+                    build_bug_report_context(obj),
+                )
+            )
 
         # Joined HTML comes from this plugin's own templates rendered above.
         return mark_safe("".join(parts)) if parts else ""  # nosec

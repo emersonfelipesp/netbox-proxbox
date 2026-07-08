@@ -17,7 +17,8 @@ This package contains the NetBox plugin itself. It defines the plugin config, UR
 - [`sync_ownership.py`](./sync_ownership.py): helpers that claim and release RQ job ownership to prevent concurrent duplicate runs.
 - [`schedule_hints.py`](./schedule_hints.py): quick-schedule heuristics and UI defaults for the home dashboard.
 - [`github.py`](./github.py): fetches markdown content from GitHub for the contributing page.
-- [`template_content.py`](./template_content.py): plugin template extensions for Job and VirtualMachine buttons/panels.
+- [`template_content.py`](./template_content.py): plugin template extensions for Job and VirtualMachine buttons/panels. `ProxboxJobTemplateExtension.buttons()` also renders a **Bug report** button on core Job detail pages for Proxbox sync jobs that ended in an error/unknown state (see `bug_report.py`).
+- [`bug_report.py`](./bug_report.py): pure, read-only helper that assembles the failed-job **Bug report** modal context — plugin/NetBox versions, job metadata, formatted `log_entries`, a copy-to-clipboard `report_text`, and a prefilled netbox-proxbox GitHub *new issue* URL. Gated by `is_reportable_status(status)` (errored/failed or any unknown status).
 - [`type_defs.py`](./type_defs.py): shared type aliases and lightweight protocol helpers used across the package.
 - [`utils.py`](./utils.py): URL and host helpers, especially for the FastAPI backend and mkcert-aware local TLS handling.
 - [`websocket_client.py`](./websocket_client.py): long-lived WebSocket client, message queue, and HTTP view used to stream backend messages into NetBox pages.
