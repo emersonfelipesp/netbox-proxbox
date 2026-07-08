@@ -38,22 +38,31 @@ def test_primary_secret_migration_encrypts_and_removes_plaintext_fields() -> Non
     migration = _read(
         "netbox_proxbox/migrations/0058_encrypt_primary_endpoint_secrets.py"
     )
+    assert (
+        "from netbox_proxbox.migrations._idempotent_ops import add_field_idempotent"
+        in migration
+    )
     assert "Fernet.generate_key()" in migration
     assert "encrypt_existing_primary_endpoint_secrets" in migration
+    assert "def _table_columns(schema_editor, table: str) -> set[str]:" in migration
+    assert "if source_column in columns and target_column in columns:" in migration
+    assert "model.objects.only(*query_fields).iterator()" in migration
     for field in (
-        'name="password"',
-        'name="token_value"',
-        'name="token"',
-        'name="token_secret"',
+        'field_name="password"',
+        'field_name="token_value"',
+        'field_name="token"',
+        'field_name="token_secret"',
     ):
         assert field in migration
     for field in (
-        'name="password_enc"',
-        'name="token_value_enc"',
-        'name="token_enc"',
-        'name="token_secret_enc"',
+        'field_name="password_enc"',
+        'field_name="token_value_enc"',
+        'field_name="token_enc"',
+        'field_name="token_secret_enc"',
     ):
         assert field in migration
+    assert migration.count("        add_field_idempotent(") == 5
+    assert migration.count("        remove_field_idempotent(") == 5
 
 
 def test_fastapi_endpoint_form_preserves_blank_token_submissions() -> None:
