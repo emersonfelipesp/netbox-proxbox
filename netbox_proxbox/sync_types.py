@@ -152,6 +152,19 @@ def expanded_sync_stages(types: list[str]) -> list[str]:
         and SyncTypeChoices.VM_INTERFACES not in expanded
     ):
         expanded.append(SyncTypeChoices.VM_INTERFACES)
+    # IP addresses can only be attached to VM interfaces that already exist in
+    # NetBox: the backend's IP stage looks up each Proxmox NIC's interface and
+    # silently skips the IP when the interface is missing.  Selecting only the
+    # "IP addresses" stage (manually or on a schedule) therefore reconciles
+    # nothing when the interfaces are stale/missing.  Auto-append the VM
+    # interface stage so interfaces are always reconciled first; stage ordering
+    # (``_STAGE_ORDER_INDEX``) guarantees it runs before IP addresses, and the
+    # sync-mode cascade still skips both when ``vm_interface`` is disabled.
+    if (
+        SyncTypeChoices.IP_ADDRESSES in expanded
+        and SyncTypeChoices.VM_INTERFACES not in expanded
+    ):
+        expanded.append(SyncTypeChoices.VM_INTERFACES)
 
     seen: set[str] = set()
     ordered: list[str] = []
