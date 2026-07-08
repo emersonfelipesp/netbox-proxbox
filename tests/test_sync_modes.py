@@ -273,6 +273,28 @@ class TestSyncStagesDefaults:
         assert "sdn" in stages
         assert stages.index("ip-addresses") < stages.index("sdn")
 
+    def test_ip_addresses_selection_auto_includes_vm_interfaces(
+        self, sync_stages_module
+    ):
+        # The backend IP stage can only attach an IP to a VM interface that
+        # already exists in NetBox, so selecting "IP addresses" alone must
+        # reconcile VM interfaces first (regression for silently-dropped IPs
+        # when the IP stage runs standalone).
+        stages = sync_stages_module.expanded_sync_stages(["ip-addresses"])
+        assert stages == ["vm-interfaces", "ip-addresses"]
+
+    def test_ip_addresses_with_explicit_vm_interfaces_is_not_duplicated(
+        self, sync_stages_module
+    ):
+        stages = sync_stages_module.expanded_sync_stages(
+            ["vm-interfaces", "ip-addresses"]
+        )
+        assert stages == ["vm-interfaces", "ip-addresses"]
+
+    def test_vm_interfaces_selection_alone_is_unchanged(self, sync_stages_module):
+        stages = sync_stages_module.expanded_sync_stages(["vm-interfaces"])
+        assert stages == ["vm-interfaces"]
+
 
 # ── VM whole-stage gating ──────────────────────────────────────────────────────
 

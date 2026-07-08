@@ -54,6 +54,16 @@ the dependency order, but the stage is skipped until the effective SDN mode is
 requires the optional `netbox_bgp` plugin to be installed, and is skipped when
 `sync_mode_sdn_bgp` is disabled or when its SDN parent is disabled.
 
+!!! note "IP addresses always sync VM interfaces first"
+    An IP address can only be attached to a VM interface that already exists in
+    NetBox. Selecting the **IP addresses** stage on its own (manually or on a
+    schedule) therefore automatically runs the **VM interfaces** stage first, so
+    interfaces are reconciled before IPs are attached. Without this, an
+    IP-only run whose interfaces are stale or missing would silently reconcile
+    no IP addresses. The **All** sync already runs VM interfaces before IP
+    addresses, so its behavior is unchanged. If `sync_mode_vm_interface` is
+    `disabled`, both stages are skipped by the cascade below.
+
 ---
 
 ## VM Templates

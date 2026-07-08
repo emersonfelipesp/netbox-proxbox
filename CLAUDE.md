@@ -117,6 +117,7 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
 - **Cancel on Job detail:** For Proxbox Sync rows in **pending**, **scheduled**, or **running** state, the plugin adds **Cancel job** (POST to `proxbox-cancel`). It requires **delete** permission on the core **Job** model, cancels or stops the linked RQ job when possible, then marks the NetBox job **failed** with a “Cancelled by user.” message. Stopping a **running** job is best-effort (RQ stop + long HTTP reads may not abort instantly).
 - **Run now on Job detail:** Shown only when the job is in a **terminal** state (**completed**, **errored**, or **failed**), including after **Cancel** (failed). It is **not** shown for **pending**, **scheduled**, or **running**—use **Cancel** first if a queued run should be abandoned, then **Run now** on the finished row to queue a new sync with the same parameters.
 - **Full update (UI vs jobs):** The plugin home may still use non-streaming helpers such as [`sync_full_update_resource`](./netbox_proxbox/services/backend_proxy.py) for JSON/redirect flows. Scheduled or immediate **Proxbox Sync** jobs expand selected sync types in [`sync_types.py`](./netbox_proxbox/sync_types.py) and call one backend `/stream` path per stage: devices, storage, virtual machines, task history, virtual disks, backups, snapshots, network interfaces, VM interfaces, IP addresses, SDN, replications, and backup routines. The SDN stage is included by **All** but skipped by default while `sync_mode_sdn=disabled`; optional BGP projection inside that stage is separately gated by `sync_mode_sdn_bgp`.
+- **`ip-addresses` implies `vm-interfaces` (stage dependency).** `expanded_sync_stages()` auto-appends the **VM interfaces** stage whenever **IP addresses** is selected without it (mirroring the `network-interfaces` → `vm-interfaces` bundle). The backend IP stage (`proxbox-api` `_sync_vm_ips`) can only attach an IP to a VM interface that already exists in NetBox and silently skips the IP otherwise, so an IP-only run whose interfaces are stale/missing would reconcile nothing. Stage ordering (`_STAGE_ORDER_INDEX`) keeps interfaces before IPs, and the `vm_interface` → `ip_address` sync-mode cascade still skips both when `sync_mode_vm_interface=disabled`. **All** already ran interfaces before IPs, so it is unaffected.
 
 ### SSL Certificate Verification
 
@@ -513,9 +514,16 @@ What was done for v0.0.19:
 2. pip install -e to refresh editable install
 3. manage.py migrate to apply any pending migrations
 4. manage.py collectstatic to collect new/updated static files
-5. systemctl reload netbox-production (graceful gunicorn reload)
-6. systemctl restart netbox-rq (RQ worker restart for code changes)
-7. Health check: curl -sf http://127.0.0.1:18001/api/ to verify
+5. systemctl **restart** netbox.service (gunicorn re-exec so refreshed plugin
+   code is re-imported). **Never `reload`** here: a graceful gunicorn reload
+   (SIGHUP) can keep stale model code resident and silently serve a schema that
+   no longer matches the migrated DB (e.g. a dropped column), producing
+   `ProgrammingError` 500s on every affected query. The prod WSGI unit is
+   `netbox.service` (older hosts used `netbox-production.service`).
+6. systemctl restart netbox-rq.service (RQ worker restart for code changes)
+7. Health check: curl -sf http://127.0.0.1:18001/api/ to verify (note: this
+   probe does not exercise plugin models, so it will not catch a stale-code
+   schema mismatch on its own)
 
 **Monitoring deployment:**
 - Watch the `publish-gitea.yml` workflow run in Gitea Actions
@@ -529,7 +537,7 @@ What was done for v0.0.19:
 ssh nmc-prod-207 -- deploy-plugin proxbox v0.0.19.post5
 
 # List recent deploys (check system journal)
-ssh nmc-prod-207 -- journalctl -u netbox-production -n 50 --no-pager
+ssh nmc-prod-207 -- journalctl -u netbox.service -n 50 --no-pager
 ```
 
 For detailed production deployment infrastructure and cross-plugin coordination, see `/root/personal-context/nmulticloud-context/CLAUDE.md` "Automatic Plugin Deployment to Production" section.
