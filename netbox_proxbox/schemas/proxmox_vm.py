@@ -1,7 +1,5 @@
 """Pydantic V2 schemas for Proxmox VM configuration and resource responses."""
 
-from __future__ import annotations
-
 import hashlib
 import re
 from typing import Literal
@@ -198,12 +196,12 @@ class ProxmoxGuestSummary(ProxboxBaseModel):
     @classmethod
     def from_resources(
         cls, records: list[ProxmoxResourceRecord]
-    ) -> ProxmoxGuestSummary:
+    ) -> "ProxmoxGuestSummary":
         """Handle from resources."""
 
         def _count(
             items: list[ProxmoxResourceRecord],
-        ) -> ProxmoxGuestSummary.GuestTypeCounts:
+        ) -> "ProxmoxGuestSummary.GuestTypeCounts":
             running = sum(1 for r in items if r.status == "running")
             templates = sum(1 for r in items if r.template)
             return cls.GuestTypeCounts(

@@ -22,6 +22,7 @@ import requests
 import requests.exceptions
 
 from netbox_proxbox.services.backend_context import get_fastapi_request_context
+from netbox_proxbox.views.error_utils import extract_backend_error_detail
 
 logger = logging.getLogger(__name__)
 
@@ -105,9 +106,15 @@ def call_plan_endpoint(
         raise PlanClientError(f"Plan request failed: {exc}") from exc
 
     if response.status_code >= 400:
+        try:
+            response.raise_for_status()
+        except requests.exceptions.RequestException as exc:
+            detail, _status = extract_backend_error_detail(exc)
+        else:
+            detail = f"Backend returned HTTP {response.status_code} without a JSON error detail."
         raise PlanClientError(
             f"proxbox-api returned HTTP {response.status_code} for /intent/plan: "
-            f"{response.text[:500]}"
+            f"{detail}"
         )
 
     try:

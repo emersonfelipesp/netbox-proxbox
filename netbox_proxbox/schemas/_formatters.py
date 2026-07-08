@@ -1,7 +1,5 @@
 """Pure-function formatting helpers consolidated from dashboard, storage, and vm_config views."""
 
-from __future__ import annotations
-
 from collections.abc import Iterable
 
 

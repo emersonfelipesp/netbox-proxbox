@@ -1,7 +1,5 @@
 """Pydantic V2 schemas for service reachability check results."""
 
-from __future__ import annotations
-
 from typing import Literal
 
 from pydantic import Field

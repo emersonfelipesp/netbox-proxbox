@@ -449,9 +449,15 @@ def sync_netbox_endpoint_to_backend(
             )
             return True, None, None
 
+        try:
+            response.raise_for_status()
+        except requests.exceptions.RequestException as exc:
+            detail, _http_status = extract_backend_error_detail(exc)
+        else:
+            detail = f"Backend returned HTTP {response.status_code} without a JSON error detail."
         return (
             False,
-            f"Failed to sync NetBox endpoint to proxbox-api: HTTP {response.status_code} — {response.text[:200]}",
+            f"Failed to sync NetBox endpoint to proxbox-api: HTTP {response.status_code} - {detail}",
             response.status_code,
         )
 

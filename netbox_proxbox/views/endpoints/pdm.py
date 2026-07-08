@@ -170,8 +170,9 @@ def _sync_pdm_remotes(endpoint: PDMEndpoint) -> tuple[int, list[str]]:
         ) from None
     except requests.exceptions.HTTPError as exc:
         status = exc.response.status_code if exc.response is not None else "?"
-        body = exc.response.text[:200] if exc.response is not None else ""
-        raise RuntimeError(f"PDM API error HTTP {status}: {body}") from exc
+        raise RuntimeError(
+            f"PDM API error HTTP {status}; upstream body suppressed."
+        ) from exc
 
     payload = response.json()
     remotes_data: list[dict] = payload.get("data") or []

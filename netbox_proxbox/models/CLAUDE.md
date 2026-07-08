@@ -49,6 +49,13 @@ This directory defines the plugin's persisted data model.
 - `EndpointBase.enabled` is operational: `False` means inventory-only. Service, signal, startup, OpenAPI, and sync code must return before any backend or remote-service connection attempt for disabled endpoint-like rows.
 - `FastAPIEndpoint.websocket_url` is distinct from the backend HTTP URL and is used by `websocket_client.py`.
 - `NetBoxEndpoint.has_configured_token` and serializer/form validation together define the remote NetBox credential behavior.
+- Primary endpoint secrets are exposed as compatibility properties and stored in
+  encrypted backing fields: `ProxmoxEndpoint.password_enc`,
+  `ProxmoxEndpoint.token_value_enc`, `FastAPIEndpoint.token_enc`,
+  `PBSEndpoint.token_secret_enc`, and `PDMEndpoint.token_secret_enc`. Use the
+  public properties (`password`, `token_value`, `token`, `token_secret`) in
+  service code and serializers; never add plaintext model fields for these
+  secrets.
 - `ProxmoxEndpoint.ssh_credential_source` controls the proxbox-native endpoint
   SSH credential surface used by the browser terminal. The default
   `dedicated` mode keeps the encrypted `ssh_*_enc` behavior unchanged.

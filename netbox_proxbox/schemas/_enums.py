@@ -5,8 +5,6 @@ The two repos communicate over HTTP rather than as Python imports, so the defini
 are maintained in both places. Keep the values in sync when updating either side.
 """
 
-from __future__ import annotations
-
 from enum import Enum
 
 

@@ -93,6 +93,7 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
 - `ProxboxPluginSettings` includes sync mode fields `sync_mode_vm_interface` and `sync_mode_mac` (migration 0051) and interface-batch tunables `interface_batch_size` (default 5) and `interface_batch_delay_ms` (default 100).
 - `ProxboxPluginSettings.netbox_openapi_persist` (migration 0057, default `True`) controls whether proxbox-api caches the resolved NetBox OpenAPI schema on disk. Disabling it runs the backend's schema resolution fully in-memory (no filesystem read/write) for read-only or no-disk-write deployments; the backend resolves it as env `PROXBOX_NETBOX_OPENAPI_PERSIST` > this setting > default. Documented in `docs/configuration/plugin-settings.md` and `docs/api/settings.md`; source-contract-tested in `tests/test_settings_netbox_openapi_persist.py`.
 - **`NetBoxEndpoint` and `FastAPIEndpoint` are singletons** — the backend proxy and dashboard always use the first row of each, so only one should exist. Their bulk-import views enforce this by prompting for confirmation before replacing an existing record.
+- **Primary endpoint secrets are encrypted at rest.** `ProxmoxEndpoint.password`, `ProxmoxEndpoint.token_value`, `FastAPIEndpoint.token`, `PBSEndpoint.token_secret`, and `PDMEndpoint.token_secret` are public Python properties backed by Fernet-encrypted `*_enc` model fields. Runtime setters use `ProxboxPluginSettings.encryption_key` and create one when storing a primary secret if it is blank; do not reintroduce plaintext model fields for those secrets.
 - NetBox UI routes live in [`netbox_proxbox/urls.py`](./netbox_proxbox/urls.py) and are implemented primarily in `netbox_proxbox/views/`.
 - The plugin also exposes a NetBox plugin API under `netbox_proxbox/api/`, using serializers, filtersets, and standard `NetBoxModelViewSet` classes.
 - Sync actions enqueue NetBox background jobs (`ProxboxSyncJob`) on NetBox's default RQ queue and call the external ProxBox FastAPI SSE endpoints to record progress/result on the Job row.
@@ -512,9 +513,16 @@ What was done for v0.0.19:
 2. pip install -e to refresh editable install
 3. manage.py migrate to apply any pending migrations
 4. manage.py collectstatic to collect new/updated static files
-5. systemctl reload netbox-production (graceful gunicorn reload)
-6. systemctl restart netbox-rq (RQ worker restart for code changes)
-7. Health check: curl -sf http://127.0.0.1:18001/api/ to verify
+5. systemctl **restart** netbox.service (gunicorn re-exec so refreshed plugin
+   code is re-imported). **Never `reload`** here: a graceful gunicorn reload
+   (SIGHUP) can keep stale model code resident and silently serve a schema that
+   no longer matches the migrated DB (e.g. a dropped column), producing
+   `ProgrammingError` 500s on every affected query. The prod WSGI unit is
+   `netbox.service` (older hosts used `netbox-production.service`).
+6. systemctl restart netbox-rq.service (RQ worker restart for code changes)
+7. Health check: curl -sf http://127.0.0.1:18001/api/ to verify (note: this
+   probe does not exercise plugin models, so it will not catch a stale-code
+   schema mismatch on its own)
 
 **Monitoring deployment:**
 - Watch the `publish-gitea.yml` workflow run in Gitea Actions
@@ -528,7 +536,7 @@ What was done for v0.0.19:
 ssh nmc-prod-207 -- deploy-plugin proxbox v0.0.19.post5
 
 # List recent deploys (check system journal)
-ssh nmc-prod-207 -- journalctl -u netbox-production -n 50 --no-pager
+ssh nmc-prod-207 -- journalctl -u netbox.service -n 50 --no-pager
 ```
 
 For detailed production deployment infrastructure and cross-plugin coordination, see `/root/personal-context/nmulticloud-context/CLAUDE.md` "Automatic Plugin Deployment to Production" section.

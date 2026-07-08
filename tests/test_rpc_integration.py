@@ -8,7 +8,10 @@ stdlib at module level, so it loads standalone without NetBox/Django.
 from __future__ import annotations
 
 import importlib.util
+import sys
+import types
 from pathlib import Path
+from types import SimpleNamespace
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -60,3 +63,80 @@ def test_install_ssh_key_via_rpc_returns_none_without_netbox_rpc() -> None:
     )
     assert result is None
     assert mod.INSTALL_SSH_KEY_PROCEDURE == "os.linux.ubuntu.24.install_ssh_key"
+
+
+def test_install_ssh_key_via_rpc_enqueues_with_execution_pk(monkeypatch) -> None:
+    """The netbox-rpc job contract is keyword execution_pk, never instance."""
+    mod = _load_rpc_module()
+    calls = []
+    procedure = object()
+    execution = SimpleNamespace(pk=123)
+    backend = SimpleNamespace(pk=456)
+    requested_by = SimpleNamespace(username="operator")
+    target = SimpleNamespace(name="pve-01")
+
+    class _ProcedureQuery:
+        def first(self):
+            return procedure
+
+    class _ProcedureManager:
+        def filter(self, **kwargs):
+            assert kwargs == {
+                "name": mod.INSTALL_SSH_KEY_PROCEDURE,
+                "enabled": True,
+            }
+            return _ProcedureQuery()
+
+    class _ExecutionManager:
+        def create(self, **kwargs):
+            assert kwargs["procedure"] is procedure
+            assert kwargs["assigned_object"] is target
+            assert kwargs["backend"] is backend
+            assert kwargs["requested_by"] is requested_by
+            assert kwargs["params"] == {
+                "public_key": "ssh-ed25519 AAAA",
+                "username": "root",
+            }
+            assert kwargs["status"] == "queued"
+            return execution
+
+    class _RPCProcedure:
+        objects = _ProcedureManager()
+
+    class _RPCExecution:
+        objects = _ExecutionManager()
+
+    class _RPCExecutionJob:
+        @classmethod
+        def enqueue(cls, **kwargs):
+            calls.append(kwargs)
+
+    package = types.ModuleType("netbox_rpc")
+    package.__path__ = []
+    jobs = types.ModuleType("netbox_rpc.jobs")
+    jobs.RPCExecutionJob = _RPCExecutionJob
+    models = types.ModuleType("netbox_rpc.models")
+    models.RPCExecution = _RPCExecution
+    models.RPCProcedure = _RPCProcedure
+
+    monkeypatch.setitem(sys.modules, "netbox_rpc", package)
+    monkeypatch.setitem(sys.modules, "netbox_rpc.jobs", jobs)
+    monkeypatch.setitem(sys.modules, "netbox_rpc.models", models)
+
+    result = mod.install_ssh_key_via_rpc(
+        target=target,
+        public_key="ssh-ed25519 AAAA",
+        backend=backend,
+        requested_by=requested_by,
+        username="root",
+    )
+
+    assert result is execution
+    assert calls == [
+        {
+            "execution_pk": 123,
+            "instance": None,
+            "user": requested_by,
+            "backend_pk": 456,
+        }
+    ]

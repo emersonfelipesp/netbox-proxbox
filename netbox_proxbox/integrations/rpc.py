@@ -96,7 +96,8 @@ def install_ssh_key_via_rpc(
 
     try:
         RPCExecutionJob.enqueue(
-            instance=execution,
+            execution_pk=execution.pk,
+            instance=None,
             user=requested_by,
             backend_pk=getattr(backend, "pk", None),
         )
