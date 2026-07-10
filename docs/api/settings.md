@@ -61,6 +61,11 @@ curl -X PATCH \
   "proxbox_fetch_max_concurrency": 8,
   "ignore_ipv6_link_local_addresses": true,
   "delete_orphans": false,
+  "cloud_network_lock_enabled": true,
+  "cloud_customer_prefix_id": 123,
+  "cloud_customer_bridge": "vmbr1",
+  "cloud_customer_vlan_tag": 2050,
+  "cloud_customer_gateway": "168.0.98.1",
   "netbox_max_concurrent": 1,
   "netbox_max_retries": 5,
   "netbox_retry_delay": "2.00",
@@ -137,6 +142,20 @@ These fields are set by the system and cannot be modified via PATCH:
 | `vm_interface_sync_strategy` | string | `guest_os_model` keeps Proxmox `netX` NICs as core `VMInterface` rows and stores guest-agent OS names in `GuestVMInterface`; `legacy_rename` preserves the older single-interface rename behavior |
 | `use_guest_agent_interface_name` | boolean | Deprecated. Used only when `vm_interface_sync_strategy=legacy_rename`; then it controls whether guest-agent names replace Proxmox-reported names when syncing network interfaces |
 | `ignore_ipv6_link_local_addresses` | boolean | When `true`, skip IPv6 link-local addresses (`fe80::/64`) during interface sync |
+
+### Cloud Customer Network
+
+| Field | Type | Description |
+|---|---|---|
+| `cloud_network_lock_enabled` | boolean | When `true`, cloud provisioning integrations should treat the configured customer network fields as authoritative |
+| `cloud_customer_prefix_id` | integer or null | Primary key of the NetBox IPAM Prefix designated as the cloud customer network |
+| `cloud_customer_bridge` | string | Proxmox bridge name used for customer-facing cloud interfaces |
+| `cloud_customer_vlan_tag` | integer or null | VLAN tag associated with the designated cloud customer network |
+| `cloud_customer_gateway` | string | Gateway IP address for the designated cloud customer network |
+
+Populate these fields with `python manage.py ensure_cloud_customer_network ...`
+so proxbox-api and nms-backend can resolve the cloud customer network without
+hardcoded estate values.
 
 ### SSRF Protection
 

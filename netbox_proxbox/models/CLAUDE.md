@@ -89,6 +89,13 @@ This directory defines the plugin's persisted data model.
   rows named `net0`/`net1` and stores guest-agent names in `GuestVMInterface`.
   The `legacy_rename` strategy is retained only for the old single-interface
   rename behavior controlled by deprecated `use_guest_agent_interface_name`.
+- Cloud-customer network discovery fields also live on `ProxboxPluginSettings`:
+  `cloud_network_lock_enabled`, `cloud_customer_prefix_id`,
+  `cloud_customer_bridge`, `cloud_customer_vlan_tag`, and
+  `cloud_customer_gateway`. They are populated by the
+  `ensure_cloud_customer_network` management command so proxbox-api and
+  nms-backend discover the designated customer network from NetBox instead of
+  hardcoded estate constants.
 
 ## Links
 

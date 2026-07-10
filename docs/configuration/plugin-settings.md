@@ -164,6 +164,41 @@ See [Tenant Mapping operations](../operations/tenant-mapping.md) for runbook-lev
 
 ---
 
+## Cloud-customer network
+
+These fields designate the NetBox IPAM objects that proxbox-api and nms-backend
+use to discover the customer-facing cloud network. Prefix, VLAN, and gateway
+values are operator-provided; they are not hardcoded as plugin defaults or seeded
+by data migration.
+
+| Field | Default | Env override | Description |
+|---|---|---|---|
+| **Enable cloud customer network lock** (`cloud_network_lock_enabled`) | `false` | _(plugin only)_ | Marks the configured cloud customer network as authoritative for cloud provisioning integrations. |
+| **Cloud customer Prefix ID** (`cloud_customer_prefix_id`) | `null` | _(plugin only)_ | Primary key of the NetBox IPAM Prefix designated as the cloud customer network. |
+| **Cloud customer bridge** (`cloud_customer_bridge`) | `vmbr1` | _(plugin only)_ | Proxmox bridge name used for customer-facing cloud interfaces. |
+| **Cloud customer VLAN tag** (`cloud_customer_vlan_tag`) | `null` | _(plugin only)_ | VLAN tag associated with the designated cloud customer network. |
+| **Cloud customer gateway** (`cloud_customer_gateway`) | _(empty)_ | _(plugin only)_ | Gateway IP address for the designated cloud customer network. |
+
+Run the idempotent management command from the NetBox environment to create or
+reuse the IPAM Role, VLAN, Prefix, and reserved gateway IP, then write the
+singleton settings row:
+
+```bash
+python manage.py ensure_cloud_customer_network \
+  --prefix 168.0.98.0/25 \
+  --vlan 2050 \
+  --vlan-name cloud-vmbr1 \
+  --bridge vmbr1 \
+  --gateway 168.0.98.1 \
+  --enable-lock
+```
+
+The command only creates missing target objects and updates
+`ProxboxPluginSettings`. It does not delete objects or mutate unrelated IPAM
+records, so it can be run repeatedly during rollout automation.
+
+---
+
 ## Branching
 
 These fields configure the optional **branching-enabled sync** mode where every Proxbox job runs against a fresh `netbox-branching` branch and merges on success. Requires the `netbox_branching` plugin installed and listed **last** in `PLUGINS`.
