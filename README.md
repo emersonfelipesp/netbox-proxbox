@@ -151,6 +151,18 @@ other tenants.
   flag is deprecated and only applies when `vm_interface_sync_strategy` is set
   to `legacy_rename`.
 
+## What's New in v0.0.23
+
+Current pairing: netbox-proxbox 0.0.23 <-> proxbox-api (guest-VM-interface writer build / next release) <-> proxmox-sdk 0.0.12 <-> netbox-sdk 0.0.10.
+
+Paired with backend: guest-VM-interface writer build / next release.
+
+- **Dual VM interface sync.** Proxmox NICs stay as core `VMInterface` rows named `net0`/`net1`, while guest-agent OS interfaces such as `ens18` are stored in `GuestVMInterface` rows.
+- **Shared IP ownership.** `GuestVMInterfaceAddress` links guest interfaces to the same core `ipam.IPAddress` objects already assigned to the mapped core VM interface.
+- **Strategy control.** `vm_interface_sync_strategy=guest_os_model` is the new default for fresh installs; existing configured installs are backfilled to `legacy_rename` during migration `0059` so upgrades do not silently rename interfaces differently.
+
+Full notes: [Release Notes - v0.0.23](docs/release-notes/version-0.0.23.md).
+
 ## What's New in v0.0.22
 
 Current pairing: netbox-proxbox 0.0.22 <-> proxbox-api 0.0.19.post5 <-> proxmox-sdk 0.0.12 <-> netbox-sdk 0.0.10.
@@ -230,6 +242,7 @@ Full notes: [Release Notes — v0.0.18](https://emersonfelipesp.github.io/netbox
 
 | NetBox | netbox-proxbox | proxbox-api | netbox-sdk | proxmox-sdk |
 |--------|----------------|-------------|------------|-------------|
+| >=4.5.8 | v0.0.23 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
 | >=4.5.8 | v0.0.22 | v0.0.19.post5 | v0.0.10 | v0.0.12 |
 | >=4.5.8 | v0.0.21 | v0.0.18.post5 | v0.0.10 | v0.0.12 |
 | >=4.5.8 | v0.0.20.post3 | v0.0.17.post1 | v0.0.9.post1 | v0.0.11.post1 |

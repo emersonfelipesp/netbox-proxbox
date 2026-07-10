@@ -36,6 +36,7 @@ RELEASE_NOTES_020_POST3_PATH = (
 )
 RELEASE_NOTES_021_PATH = REPO_ROOT / "docs" / "release-notes" / "version-0.0.21.md"
 RELEASE_NOTES_022_PATH = REPO_ROOT / "docs" / "release-notes" / "version-0.0.22.md"
+RELEASE_NOTES_023_PATH = REPO_ROOT / "docs" / "release-notes" / "version-0.0.23.md"
 E2E_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "e2e-docker.yml"
 PUBLISH_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "publish-testpypi.yml"
 NIGHTLY_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "nightly-contracts.yml"
@@ -43,9 +44,15 @@ DOCS_SCREENSHOTS_WORKFLOW_PATH = (
     REPO_ROOT / ".github" / "workflows" / "docs-screenshots.yml"
 )
 
-CURRENT_PLUGIN_VERSION = "0.0.22"
-CURRENT_RELEASE_VERSION = "0.0.22"
-CURRENT_PROXBOX_API_VERSION = "0.0.19.post5"
+CURRENT_PLUGIN_VERSION = "0.0.23"
+CURRENT_RELEASE_VERSION = "0.0.23"
+CURRENT_PROXBOX_API_PAIRING_LABEL = "guest-VM-interface writer build / next release"
+CURRENT_PAIRING_LINE = (
+    "Current pairing: netbox-proxbox 0.0.23 <-> proxbox-api "
+    "(guest-VM-interface writer build / next release) <-> proxmox-sdk 0.0.12 "
+    "<-> netbox-sdk 0.0.10."
+)
+PROXBOX_API_WORKFLOW_DEFAULT_VERSION = "0.0.19.post5"
 CURRENT_NETBOX_MIN_VERSION = "4.5.8"
 CURRENT_NETBOX_MAX_VERSION = "4.6.99"
 SUPPORTED_NETBOX_IMAGE_TAGS = (
@@ -57,8 +64,8 @@ SUPPORTED_NETBOX_IMAGE_TAGS = (
     "netboxcommunity/netbox:v4.6.3",
     "netboxcommunity/netbox:v4.6.4",
 )
-PREVIOUS_PLUGIN_VERSION = "0.0.21"
-PREVIOUS_PROXBOX_API_VERSION = "0.0.18.post5"
+PREVIOUS_PLUGIN_VERSION = "0.0.22"
+PREVIOUS_PROXBOX_API_VERSION = "0.0.19.post5"
 
 
 def _class_constants(class_name: str) -> dict[str, str]:
@@ -117,7 +124,7 @@ def test_certified_netbox_versions_are_documented():
         DOCS_INDEX_PATH,
         INSTALL_GIT_PATH,
         UPGRADING_PATH,
-        RELEASE_NOTES_022_PATH,
+        RELEASE_NOTES_023_PATH,
     )
     for path in docs_with_explicit_range:
         text = _read(path)
@@ -138,7 +145,7 @@ def test_docs_name_supported_netbox_versions():
         for path in (
             README_PATH,
             DOCS_INDEX_PATH,
-            RELEASE_NOTES_022_PATH,
+            RELEASE_NOTES_023_PATH,
             REPO_ROOT / "CERTIFICATION.md",
             REPO_ROOT / "docs" / "certification.md",
         )
@@ -196,12 +203,31 @@ def test_pyproject_metadata_is_certification_ready():
     assert (REPO_ROOT / "LICENSE").is_file()
 
 
+def test_release_notes_files_are_present():
+    for path in (
+        RELEASE_NOTES_014_PATH,
+        RELEASE_NOTES_015_PATH,
+        RELEASE_NOTES_016_PATH,
+        RELEASE_NOTES_017_PATH,
+        RELEASE_NOTES_018_PATH,
+        RELEASE_NOTES_019_PATH,
+        RELEASE_NOTES_020_PATH,
+        RELEASE_NOTES_020_POST3_PATH,
+        RELEASE_NOTES_021_PATH,
+        RELEASE_NOTES_022_PATH,
+        RELEASE_NOTES_023_PATH,
+    ):
+        assert path.is_file(), f"{path} is missing"
+
+
 def test_workflows_pin_proxbox_api_runtime_release_without_installing_package():
     e2e_workflow = E2E_WORKFLOW_PATH.read_text(encoding="utf-8")
     nightly_workflow = NIGHTLY_WORKFLOW_PATH.read_text(encoding="utf-8")
     docs_workflow = DOCS_SCREENSHOTS_WORKFLOW_PATH.read_text(encoding="utf-8")
 
-    expected_pin = f"PROXBOX_API_RELEASE_VERSION: {CURRENT_PROXBOX_API_VERSION}"
+    expected_pin = (
+        f"PROXBOX_API_RELEASE_VERSION: {PROXBOX_API_WORKFLOW_DEFAULT_VERSION}"
+    )
     assert expected_pin in e2e_workflow
     assert expected_pin in docs_workflow
     assert "pip install proxbox-api" not in nightly_workflow
@@ -258,11 +284,11 @@ def test_current_release_pairing_is_documented_in_primary_docs():
     current_row = (
         f">={CURRENT_NETBOX_MIN_VERSION}",
         f"v{CURRENT_RELEASE_VERSION}",
-        f"v{CURRENT_PROXBOX_API_VERSION}",
+        CURRENT_PROXBOX_API_PAIRING_LABEL,
         "v0.0.10",
         "v0.0.12",
     )
-    for path in (README_PATH, DOCS_INDEX_PATH, RELEASE_NOTES_022_PATH):
+    for path in (README_PATH, DOCS_INDEX_PATH, RELEASE_NOTES_023_PATH):
         text = _read(path)
         _assert_markdown_table_row(text, current_row)
 
@@ -270,7 +296,7 @@ def test_current_release_pairing_is_documented_in_primary_docs():
         f"v{CURRENT_RELEASE_VERSION}",
         f">={CURRENT_NETBOX_MIN_VERSION}",
         ">=3.12",
-        f"v{CURRENT_PROXBOX_API_VERSION}",
+        CURRENT_PROXBOX_API_PAIRING_LABEL,
         "v0.0.10",
         "v0.0.12",
     )
@@ -282,12 +308,15 @@ def test_current_release_pairing_is_documented_in_primary_docs():
         DOCS_INDEX_PATH,
         UPGRADING_PATH,
         RELEASE_NOTES_INDEX_PATH,
-        RELEASE_NOTES_022_PATH,
+        RELEASE_NOTES_023_PATH,
     ):
         text = _read(path)
         assert CURRENT_RELEASE_VERSION in text, f"{path} missing release version"
         assert CURRENT_PLUGIN_VERSION in text, f"{path} missing plugin version"
-        assert CURRENT_PROXBOX_API_VERSION in text, f"{path} missing backend pin"
+        assert CURRENT_PROXBOX_API_PAIRING_LABEL in text, (
+            f"{path} missing backend pairing label"
+        )
+        assert CURRENT_PAIRING_LINE in text, f"{path} missing pairing line"
 
 
 def test_previous_release_compatibility_row_matches_release_notes():
@@ -301,6 +330,6 @@ def test_previous_release_compatibility_row_matches_release_notes():
     for path in (
         README_PATH,
         DOCS_INDEX_PATH,
-        RELEASE_NOTES_021_PATH,
+        RELEASE_NOTES_022_PATH,
     ):
         _assert_markdown_table_row(_read(path), previous_row)
