@@ -977,29 +977,30 @@ def test_cluster_summary_reverses_storages_tab_under_core_namespace():
 def test_proxmox_endpoint_settings_template_uses_tabs_not_stacked_cards():
     """The ProxmoxEndpoint Settings page groups the per-endpoint override
     sections into selectable Bootstrap tabs (Connection / Sync Modes / Sync
-    Overwrite / Tenant Assignment) so operators select a section instead of
-    scrolling through stacked cards.
+    Overwrite / Tenant Assignment / RPC) so operators select a section instead
+    of scrolling through stacked cards.
 
-    All four tab panes must stay in the DOM (Bootstrap only toggles display),
-    so every form field still submits on save regardless of the active tab.
+    All tab panes must stay in the DOM (Bootstrap only toggles display), so every
+    form field still submits on save regardless of the active tab.
     """
     template = _read(
         "netbox_proxbox/templates/netbox_proxbox/proxmoxendpoint_settings.html"
     )
 
-    # Bootstrap tab strip is present with the four expected panes.
+    # Bootstrap tab strip is present with the expected panes.
     assert 'class="nav nav-tabs' in template
     for pane_id in (
         "proxbox-settings-connection",
         "proxbox-settings-sync-modes",
         "proxbox-settings-overwrite",
         "proxbox-settings-tenant",
+        "proxbox-settings-rpc",
     ):
         assert f'data-bs-target="#{pane_id}"' in template
         assert f'id="{pane_id}"' in template
     # Count the actual pane containers, not stray "tab-pane" occurrences in the
     # error-focus script's selector string.
-    assert template.count('class="tab-pane') == 4
+    assert template.count('class="tab-pane') == 5
 
     # Every configuration section's fields must still be rendered so the whole
     # form submits regardless of which tab is active.

@@ -81,6 +81,31 @@ and `templates/netbox_proxbox/home.html` renders the card (config state +
 to the netbox-rpc landing page's own *Test connection* action, so the Proxbox
 dashboard render stays fast. Guarded by `tests/test_rpc_integration.py`.
 
+## Per-endpoint netbox-rpc enablement (optional companion)
+
+`ProxmoxEndpoint.rpc_enabled` is a **tri-state** (`BooleanField(null=True)`)
+per-endpoint override for netbox-rpc operations against that endpoint, mirroring
+the `overwrite_*` pattern. `ProxmoxEndpoint.effective_rpc_enabled()` resolves it:
+the per-endpoint value wins when set (`is not None`, so an explicit `False` is
+respected); otherwise it **inherits the global** netbox-rpc opt-in flag
+(`netbox_rpc.RpcPluginSettings.enabled`) via a **function-local, guarded**
+`try/except ImportError` (returns `False` when netbox-rpc is absent). This is the
+allowed **optional** proxbox→rpc integration; the model never imports netbox-rpc
+at load time and **must never depend on the NMS stack**.
+
+The field is editable on the endpoint **Settings tab** (new **RPC** pane,
+`NullBooleanSelect`, `RPC_FIELD_GROUPS` in `constants.py`) and exposed over REST
+(`ProxmoxEndpointSerializer.rpc_enabled` writable + read-only
+`effective_rpc_enabled` `SerializerMethodField`) so external callers can read the
+resolved value. Added by migration `0059_proxmoxendpoint_rpc_enabled`
+(`add_field_idempotent`). Contract-tested in `tests/test_rpc_endpoint_override.py`
+and `tests/test_frontend_contracts.py` (5-pane Settings tab).
+
+**Non-enforcing here:** resolution + UI only. The fail-closed *gate* (block RPC
+against a disabled endpoint) lives in the layer allowed to read the endpoint —
+netbox-proxbox for RPC it initiates, and the NMS layer (nms-backend) for
+dispatch — and ships separately once operators have enabled RPC.
+
 ## Configuration
 
 `ProxboxPluginSettings` (see [`models/plugin_settings.py`](./models/plugin_settings.py))
