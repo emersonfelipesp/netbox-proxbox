@@ -566,6 +566,16 @@ class ProxmoxEndpoint(EndpointBase):
             "Per-endpoint override for the global Proxbox setting. Leave blank to inherit."
         ),
     )
+    rpc_enabled = models.BooleanField(
+        null=True,
+        blank=True,
+        verbose_name=_("RPC enabled"),
+        help_text=_(
+            "Per-endpoint override for netbox-rpc operations against this Proxmox "
+            "endpoint. Leave blank to inherit the global netbox-rpc setting; set "
+            "explicitly to override it (per-endpoint wins)."
+        ),
+    )
     default_role_qemu = models.ForeignKey(
         to="dcim.DeviceRole",
         on_delete=models.SET_NULL,
@@ -837,6 +847,31 @@ class ProxmoxEndpoint(EndpointBase):
             else getattr(settings, name)
             for name in OVERWRITE_FIELDS
         }
+
+    def effective_rpc_enabled(self) -> bool:
+        """Resolve whether netbox-rpc is enabled for this endpoint.
+
+        The per-endpoint ``rpc_enabled`` override wins when set (an explicit
+        ``False`` is respected via ``is not None``); otherwise this inherits the
+        **global** netbox-rpc opt-in flag (``RpcPluginSettings.enabled``).
+
+        netbox-rpc is an *optional* companion of netbox-proxbox: it is imported
+        function-locally and guarded, so this returns ``False`` when netbox-rpc
+        is not installed. This module never imports netbox-rpc at load time and
+        must never depend on the NMS stack.
+        """
+        if self.rpc_enabled is not None:
+            return bool(self.rpc_enabled)
+
+        try:
+            from netbox_rpc.models import RpcPluginSettings
+        except ImportError:
+            return False
+
+        try:
+            return bool(RpcPluginSettings.get_solo().enabled)
+        except Exception:  # noqa: BLE001 - resolution must never break callers
+            return False
 
     def effective_sync_mode(self, resource_type: str) -> str:
         """Resolve a per-resource sync mode, falling back to the global singleton."""

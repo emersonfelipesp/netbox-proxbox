@@ -317,6 +317,58 @@
                     </div>
                 {% endfor %}
             {% endif %}
+
+            {% if rpc_integration %}
+                <div class="col-12 mt-3">
+                    <div class="d-flex justify-content-center flex-nowrap" style="margin-bottom: 15px;">
+                        <h2>RPC Engine</h2>
+                    </div>
+                </div>
+                <div class="col col-md-6">
+                    <div class="card h-100">
+                        <h2 class="card-header">netbox-rpc</h2>
+                        <div class="card-body">
+                            <table class="table table-hover attr-table">
+                                <tr>
+                                    <th scope="row"><strong>Integration</strong></th>
+                                    <td>
+                                        {% if rpc_integration.enabled %}
+                                            <span class="badge text-bg-success">Enabled</span>
+                                        {% else %}
+                                            <span class="badge text-bg-secondary">Optional &middot; not enabled</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% if rpc_integration.settings_supported %}
+                                <tr>
+                                    <th scope="row"><strong>Backend</strong></th>
+                                    <td>
+                                        {% if rpc_integration.backend_name %}
+                                            {{ rpc_integration.backend_name }}
+                                        {% else %}
+                                            <span class="text-muted">Not configured</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% if rpc_integration.backend_url %}
+                                <tr>
+                                    <th scope="row"><strong>Backend URL</strong></th>
+                                    <td class="text-truncate" style="max-width: 320px;">{{ rpc_integration.backend_url }}</td>
+                                </tr>
+                                {% endif %}
+                                {% endif %}
+                            </table>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="badge text-bg-secondary">netbox_rpc</span>
+                                <a href="{{ rpc_integration.home_url }}" class="btn btn-sm btn-outline-primary">
+                                    <i class="mdi mdi-cog-outline"></i>
+                                    {% if rpc_integration.enabled %}Open netbox-rpc{% else %}Configure &amp; opt in{% endif %}
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
         </div>{# /proxbox-config-cards #}
 
         {# — Table view (default) — #}

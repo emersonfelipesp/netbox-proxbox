@@ -151,6 +151,13 @@
         <i class="mdi mdi-account-switch"></i> {% trans "Tenant Assignment" %}
       </button>
     </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="proxbox-settings-rpc-tab" data-bs-toggle="tab"
+              data-bs-target="#proxbox-settings-rpc" type="button" role="tab"
+              aria-controls="proxbox-settings-rpc" aria-selected="false">
+        <i class="mdi mdi-console-network"></i> {% trans "RPC" %}
+      </button>
+    </li>
   </ul>
 
   <div class="tab-content" id="proxbox-settings-tab-content">
@@ -252,6 +259,30 @@
           {% render_field form.tenant_name_regex_rules %}
           {% render_field form.enable_tenant_tag_assignment %}
           {% render_field form.enable_tenant_from_cluster %}
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-pane fade" id="proxbox-settings-rpc" role="tabpanel"
+         aria-labelledby="proxbox-settings-rpc-tab" tabindex="0">
+      <div class="card mb-3">
+        <h5 class="card-header">
+          <i class="mdi mdi-console-network"></i>
+          {% trans "RPC override" %}
+        </h5>
+        <div class="card-body">
+          <p class="text-muted">
+            {% blocktrans trimmed %}
+            Turn netbox-rpc operations on or off for this Proxmox endpoint. Leave
+            blank to inherit the global netbox-rpc setting; setting it explicitly
+            overrides the global value (the per-endpoint value wins).
+            {% endblocktrans %}
+          </p>
+          {% for group_label, group_fields in rpc_field_groups %}
+            {% for field_name in group_fields %}
+              {% render_field form|form_field:field_name %}
+            {% endfor %}
+          {% endfor %}
         </div>
       </div>
     </div>

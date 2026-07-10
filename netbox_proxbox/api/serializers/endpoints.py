@@ -68,6 +68,11 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
     service_monitoring_last_success_at = serializers.DateTimeField(read_only=True)
     service_monitoring_last_status = serializers.CharField(read_only=True)
     service_monitoring_last_error = serializers.CharField(read_only=True)
+    effective_rpc_enabled = serializers.SerializerMethodField(read_only=True)
+
+    def get_effective_rpc_enabled(self, obj: ProxmoxEndpoint) -> bool:
+        """Resolved netbox-rpc enablement: per-endpoint override else global."""
+        return obj.effective_rpc_enabled()
 
     class Meta:
         model = ProxmoxEndpoint
@@ -117,6 +122,8 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
             "access_methods",
             *SYNC_MODE_FIELDS,
             *OVERWRITE_FIELDS,
+            "rpc_enabled",
+            "effective_rpc_enabled",
             "site",
             "tenant",
             "allowed_tenants",

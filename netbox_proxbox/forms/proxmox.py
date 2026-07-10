@@ -20,7 +20,7 @@ from tenancy.models import Tenant
 from django.utils.translation import gettext as _
 
 # Proxbox Imports
-from ..constants import OVERWRITE_FIELDS, SYNC_MODE_FIELDS
+from ..constants import OVERWRITE_FIELDS, RPC_FIELDS, SYNC_MODE_FIELDS
 from ..models import ProxmoxEndpoint
 from ..choices import (
     ProxmoxAccessMethodChoices,
@@ -581,6 +581,7 @@ class ProxmoxEndpointSettingsForm(NetBoxModelForm):
             "enable_tenant_from_cluster",
             *SYNC_MODE_FIELDS,
             *OVERWRITE_FIELDS,
+            *RPC_FIELDS,
         )
 
     def __init__(self, *args: object, **kwargs: object) -> None:
@@ -620,6 +621,16 @@ class ProxmoxEndpointSettingsForm(NetBoxModelForm):
                     "Leave blank to inherit the global Proxbox plugin setting."
                 ),
             )
+        self.fields["rpc_enabled"] = forms.NullBooleanField(
+            required=False,
+            widget=forms.NullBooleanSelect,
+            label=_("RPC enabled (override)"),
+            help_text=_(
+                "Per-endpoint override for netbox-rpc operations against this "
+                "endpoint. Leave blank to inherit the global netbox-rpc setting "
+                "(per-endpoint wins when set)."
+            ),
+        )
         self.fields["enable_tenant_name_regex"] = forms.NullBooleanField(
             required=False,
             widget=forms.NullBooleanSelect,
