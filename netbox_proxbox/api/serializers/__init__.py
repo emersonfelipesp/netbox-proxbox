@@ -71,6 +71,11 @@ from netbox_proxbox.api.serializers.sdn import (
     ProxmoxSdnZoneSerializer,
 )
 from netbox_proxbox.api.serializers.replication import ReplicationSerializer
+from netbox_proxbox.api.serializers.service_monitoring import (
+    ProxmoxServiceCollectionSerializer,
+    ProxmoxServiceSampleSerializer,
+    ProxmoxServiceStatusSerializer,
+)
 from netbox_proxbox.api.serializers.settings import ProxboxPluginSettingsSerializer
 from netbox_proxbox.api.serializers.ssh_credential import NodeSSHCredentialSerializer
 from netbox_proxbox.api.serializers.storage import (
@@ -136,6 +141,9 @@ __all__ = (
     "ProxmoxDatacenterCpuModelSerializer",
     "ProxmoxEndpointSerializer",
     "ProxmoxNodeSerializer",
+    "ProxmoxServiceCollectionSerializer",
+    "ProxmoxServiceSampleSerializer",
+    "ProxmoxServiceStatusSerializer",
     "NestedProxmoxVMTemplateSerializer",
     "ProxmoxSdnFabricSerializer",
     "ProxmoxSdnPrefixListSerializer",

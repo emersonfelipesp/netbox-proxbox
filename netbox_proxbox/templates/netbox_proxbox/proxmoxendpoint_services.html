@@ -1,0 +1,207 @@
+{% extends 'generic/object.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="row mb-3">
+  <div class="col col-12">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <h2 class="card-title mb-0">{% trans "Services" %}</h2>
+        {% if object.service_monitoring_enabled %}
+          {% if can_refresh_services %}
+            <form method="post" class="d-inline">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-primary btn-sm">
+                <i class="mdi mdi-refresh" aria-hidden="true"></i>
+                {% trans "Refresh now" %}
+              </button>
+            </form>
+          {% else %}
+            <span class="d-inline-block" tabindex="0" data-bs-toggle="tooltip" data-bs-placement="left"
+                  title="{% trans 'Requires change permission, write permission, API + SSH access, and endpoint SSH credentials.' %}">
+              <button type="button" class="btn btn-primary btn-sm disabled" tabindex="-1" aria-disabled="true" disabled
+                      style="pointer-events: none;">
+                <i class="mdi mdi-refresh" aria-hidden="true"></i>
+                {% trans "Refresh now" %}
+              </button>
+            </span>
+          {% endif %}
+        {% endif %}
+      </div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-3">
+            <div class="text-muted small">{% trans "Configured" %}</div>
+            {% if object.service_monitoring_enabled %}
+              <span class="badge text-bg-success">{% trans "Enabled" %}</span>
+            {% else %}
+              <span class="badge text-bg-secondary">{% trans "Disabled" %}</span>
+            {% endif %}
+          </div>
+          <div class="col-md-3">
+            <div class="text-muted small">{% trans "Eligible" %}</div>
+            {% if object.service_monitoring_eligible %}
+              <span class="badge text-bg-success">{% trans "Yes" %}</span>
+            {% else %}
+              <span class="badge text-bg-warning">{% trans "No" %}</span>
+            {% endif %}
+          </div>
+          <div class="col-md-3">
+            <div class="text-muted small">{% trans "Reachable" %}</div>
+            {% if service_heartbeat.reachable %}
+              <span class="badge text-bg-success">{% trans "Yes" %}</span>
+            {% else %}
+              <span class="badge text-bg-secondary">{% trans "No" %}</span>
+            {% endif %}
+          </div>
+          <div class="col-md-3">
+            <div class="text-muted small">{% trans "Heartbeat" %}</div>
+            {% if service_heartbeat.is_stale %}
+              <span class="badge text-bg-warning">{% trans "Stale" %}</span>
+            {% else %}
+              <span class="badge text-bg-success">{% trans "Fresh" %}</span>
+            {% endif %}
+          </div>
+          <div class="col-md-4">
+            <div class="text-muted small">{% trans "Last success" %}</div>
+            {{ service_heartbeat.last_success_at|date:"SHORT_DATETIME_FORMAT"|default:"&mdash;" }}
+          </div>
+          <div class="col-md-4">
+            <div class="text-muted small">{% trans "Stale after" %}</div>
+            {{ service_heartbeat.stale_after|date:"SHORT_DATETIME_FORMAT"|default:"&mdash;" }}
+          </div>
+          <div class="col-md-4">
+            <div class="text-muted small">{% trans "Last status" %}</div>
+            {{ service_heartbeat.last_status|default:"&mdash;" }}
+          </div>
+          {% if service_heartbeat.last_error %}
+            <div class="col-12">
+              <div class="alert alert-warning mb-0" role="alert">
+                {{ service_heartbeat.last_error }}
+              </div>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row mb-3">
+  <div class="col col-12">
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title mb-0">{% trans "Latest Service Status" %}</h3>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead>
+            <tr>
+              <th scope="col">{% trans "Unit" %}</th>
+              <th scope="col">{% trans "Health" %}</th>
+              <th scope="col">{% trans "Active" %}</th>
+              <th scope="col">{% trans "Sub" %}</th>
+              <th scope="col">{% trans "Result" %}</th>
+              <th scope="col">{% trans "Restarts" %}</th>
+              <th scope="col">{% trans "PID" %}</th>
+              <th scope="col">{% trans "Unit file" %}</th>
+              <th scope="col">{% trans "Last seen" %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for service in service_statuses %}
+              <tr>
+                <td><code>{{ service.unit }}</code></td>
+                <td>
+                  {% if service.is_healthy %}
+                    <span class="badge text-bg-success">{% trans "Healthy" %}</span>
+                  {% else %}
+                    <span class="badge text-bg-danger">{% trans "Unhealthy" %}</span>
+                  {% endif %}
+                </td>
+                <td>{{ service.active_state|default:"&mdash;" }}</td>
+                <td>{{ service.sub_state|default:"&mdash;" }}</td>
+                <td>{{ service.result|default:"&mdash;" }}</td>
+                <td>{{ service.n_restarts|default:"0" }}</td>
+                <td>{{ service.main_pid|default:"&mdash;" }}</td>
+                <td>{{ service.unit_file_state|default:"&mdash;" }}</td>
+                <td>{{ service.last_seen_at|date:"SHORT_DATETIME_FORMAT"|default:"&mdash;" }}</td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="9" class="text-muted text-center py-3">
+                  {% trans "No service status has been projected for this endpoint." %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row mb-3">
+  <div class="col col-12">
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title mb-0">{% trans "Recent Collections" %}</h3>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead>
+            <tr>
+              <th scope="col">{% trans "Collected" %}</th>
+              <th scope="col">{% trans "Status" %}</th>
+              <th scope="col">{% trans "Trigger" %}</th>
+              <th scope="col">{% trans "Reachable" %}</th>
+              <th scope="col">{% trans "Duration" %}</th>
+              <th scope="col">{% trans "RPC execution" %}</th>
+              <th scope="col">{% trans "Error" %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for collection in service_collections %}
+              <tr>
+                <td>{{ collection.collected_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+                <td>
+                  {% if collection.status == 'succeeded' %}
+                    <span class="badge text-bg-success">{% trans "Succeeded" %}</span>
+                  {% elif collection.status == 'failed' %}
+                    <span class="badge text-bg-danger">{% trans "Failed" %}</span>
+                  {% else %}
+                    <span class="badge text-bg-secondary">{% trans "Pending" %}</span>
+                  {% endif %}
+                </td>
+                <td>{{ collection.get_trigger_display }}</td>
+                <td>
+                  {% if collection.reachable %}
+                    <span class="badge text-bg-success">{% trans "Yes" %}</span>
+                  {% else %}
+                    <span class="badge text-bg-secondary">{% trans "No" %}</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if collection.duration_ms is not None %}
+                    {{ collection.duration_ms }} ms
+                  {% else %}
+                    &mdash;
+                  {% endif %}
+                </td>
+                <td>{{ collection.rpc_execution_id|default:"&mdash;" }}</td>
+                <td>{{ collection.error_message|default:"&mdash;" }}</td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="7" class="text-muted text-center py-3">
+                  {% trans "No service collections have been queued for this endpoint." %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -3,10 +3,20 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timedelta
 import time
 import uuid
 from netbox.constants import RQ_QUEUE_DEFAULT
 from netbox.jobs import JobRunner
+
+try:
+    from netbox.jobs import system_job
+except ImportError:  # pragma: no cover - older/test NetBox stubs
+    def system_job(*_args: object, **_kwargs: object):
+        def decorator(cls):
+            return cls
+
+        return decorator
 
 try:
     from netbox.jobs import Job
@@ -59,9 +69,11 @@ __all__ = (
     "PROXBOX_SYNC_QUEUE_NAME",
     "PROXBOX_SYNC_JOB_TIMEOUT",
     "ProxboxSyncJob",
+    "ProxmoxServiceMonitoringJob",
     "is_proxbox_sync_job",
     "normalize_sync_types",
     "proxbox_sync_params_from_job",
+    "service_monitoring_collection_due",
 )
 
 
@@ -480,6 +492,158 @@ def _enabled_endpoint_ids(
     else:
         qs = ProxmoxEndpoint.objects.filter(enabled=True)
     return list(qs.values_list("pk", flat=True))
+
+
+def _now_for_service_monitoring() -> datetime:
+    """Return a timezone-aware timestamp when Django is available."""
+    try:
+        from django.utils import timezone
+    except Exception:  # noqa: BLE001 - isolated tests may not stub Django
+        return datetime.now()
+    return timezone.now()
+
+
+def service_monitoring_collection_due(
+    endpoint: object,
+    *,
+    latest_collected_at: datetime | None = None,
+    now: datetime | None = None,
+) -> bool:
+    """Return whether an endpoint is due for a service-monitoring collection."""
+    if not getattr(endpoint, "service_monitoring_enabled", False):
+        return False
+    if not getattr(endpoint, "service_monitoring_eligible", False):
+        return False
+    # Disabled endpoints are never contacted (inlined endpoint_is_enabled).
+    if not bool(getattr(endpoint, "enabled", True)):
+        return False
+    try:
+        interval_minutes = int(
+            getattr(endpoint, "service_monitoring_interval_minutes", 5) or 5
+        )
+    except (TypeError, ValueError):
+        interval_minutes = 5
+    interval_minutes = max(interval_minutes, 1)
+
+    if latest_collected_at is None:
+        return True
+    current_time = now or _now_for_service_monitoring()
+    return latest_collected_at <= current_time - timedelta(minutes=interval_minutes)
+
+
+def _record_service_monitoring_tick_error(endpoint: object, error: str) -> None:
+    """Persist scheduler collection failures on the endpoint heartbeat fields."""
+    setattr(endpoint, "service_monitoring_last_status", "failed")
+    setattr(endpoint, "service_monitoring_last_error", error)
+    save = getattr(endpoint, "save", None)
+    if callable(save):
+        try:
+            save(
+                update_fields=[
+                    "service_monitoring_last_status",
+                    "service_monitoring_last_error",
+                ]
+            )
+        except TypeError:
+            save()
+
+
+# NetBox system-job intervals are in MINUTES (INTERVAL_MINUTELY=1). This is a
+# 1-minute base tick; each endpoint is then collected only once its own
+# service_monitoring_interval_minutes has elapsed (default 5).
+@system_job(interval=1)
+class ProxmoxServiceMonitoringJob(JobRunner):
+    """Periodic (1-minute) tick for async Proxmox endpoint service monitoring."""
+
+    class Meta:
+        name = "Proxmox Service Monitoring"
+
+    def run(self, **kwargs: object) -> None:
+        """Project finished collections and enqueue due service-monitoring RPCs."""
+        del kwargs
+        from django.db.models import Max
+
+        from netbox_proxbox.integrations.rpc import (
+            collect_systemctl_services,
+            project_completed_collections,
+        )
+        from netbox_proxbox.models import ProxmoxServiceCollection
+        from netbox_proxbox.models.service_monitoring import (
+            SERVICE_COLLECTION_STATUS_PENDING,
+        )
+
+        projected_count = project_completed_collections()
+        logger = getattr(self, "logger", None)
+        if logger is not None and projected_count:
+            logger.info(
+                "Projected %s completed Proxmox service collection(s).",
+                projected_count,
+            )
+
+        endpoints = list(
+            ProxmoxEndpoint.objects.filter(
+                service_monitoring_enabled=True, enabled=True
+            )
+        )
+        if not endpoints:
+            return
+
+        endpoint_ids = [endpoint.pk for endpoint in endpoints]
+        latest_by_endpoint = {
+            row["endpoint_id"]: row["last_collected_at"]
+            for row in ProxmoxServiceCollection.objects.filter(
+                endpoint_id__in=endpoint_ids
+            )
+            .values("endpoint_id")
+            .annotate(last_collected_at=Max("collected_at"))
+        }
+        pending_endpoint_ids = set(
+            ProxmoxServiceCollection.objects.filter(
+                endpoint_id__in=endpoint_ids,
+                status=SERVICE_COLLECTION_STATUS_PENDING,
+            ).values_list("endpoint_id", flat=True)
+        )
+        now = _now_for_service_monitoring()
+        requested_by = getattr(getattr(self, "job", None), "user", None)
+
+        for endpoint in endpoints:
+            if not getattr(endpoint, "service_monitoring_eligible", False):
+                _record_service_monitoring_tick_error(
+                    endpoint,
+                    (
+                        "Service monitoring is enabled but the endpoint is no "
+                        "longer eligible; check allow_writes, API + SSH access, "
+                        "and endpoint SSH credentials."
+                    ),
+                )
+                continue
+            if not service_monitoring_collection_due(
+                endpoint,
+                latest_collected_at=latest_by_endpoint.get(endpoint.pk),
+                now=now,
+            ):
+                continue
+            if endpoint.pk in pending_endpoint_ids:
+                if logger is not None:
+                    logger.info(
+                        "Skipping Proxmox service monitoring for endpoint %s; "
+                        "a prior collection is still pending.",
+                        getattr(endpoint, "pk", endpoint),
+                    )
+                continue
+            try:
+                collect_systemctl_services(
+                    endpoint,
+                    requested_by=requested_by,
+                    trigger="scheduled",
+                )
+            except Exception as exc:  # noqa: BLE001 - keep ticking other endpoints
+                if logger is not None:
+                    logger.exception(
+                        "Failed to collect service status for endpoint %s.",
+                        getattr(endpoint, "pk", endpoint),
+                    )
+                _record_service_monitoring_tick_error(endpoint, str(exc))
 
 
 class ProxboxSyncJob(JobRunner):

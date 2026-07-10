@@ -5,6 +5,12 @@ This directory contains NetBox generic model views for the three endpoint models
 ## Files And Ownership
 
 - [`proxmox.py`](./proxmox.py): list/detail/edit/delete, bulk enable/disable, bulk import, export, quick-add-token, and tab views for `ProxmoxEndpoint`. Includes `ProxmoxEndpointSyncJobsTabView` (weight 875, path `sync-jobs`) which lists Proxbox sync jobs scoped to the viewed endpoint — jobs whose `proxbox_sync.params.proxmox_endpoint_ids` contains the endpoint PK, or jobs with an empty endpoint list (all-endpoint jobs). Also includes `ProxmoxEndpointOverwriteBehaviorView` (weight 905, path `overwrite-behavior`), a read-only **Overwrite Behavior** tab that moved the former detail-page "Sync Overwrite Behavior" card onto its own tab and splits the `overwrite_*` flags into per-category Bootstrap sub-tabs (`_build_overwrite_row_groups()` over `OVERWRITE_FIELD_GROUPS`).
+- `ProxmoxEndpointServicesView` (weight 930, path `services`) renders latest
+  projected systemd service status and recent collection history. GET calls
+  `project_completed_collections()` to reconcile already-finished netbox-rpc
+  executions. POST is the **Refresh now** action and only queues
+  `collect_systemctl_services()` when the requester can change the endpoint and
+  `service_monitoring_eligible` is true.
 - [`proxmox_sync_now.py`](./proxmox_sync_now.py): POST-only `ProxmoxEndpoint` action that queues an immediate full `ProxboxSyncJob` scoped to the endpoint being viewed.
 - [`proxmox_export.py`](./proxmox_export.py): CSV/JSON/YAML export fieldname and serializer helpers for `ProxmoxEndpoint`.
 - [`netbox.py`](./netbox.py): list/detail/edit/delete, bulk import, export, and quick-add-token views for `NetBoxEndpoint`.

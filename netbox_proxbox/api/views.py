@@ -53,6 +53,9 @@ from .serializers import (
     ProxmoxFirewallSecurityGroupSerializer,
     ProxmoxDatacenterCpuModelSerializer,
     ProxmoxNodeSerializer,
+    ProxmoxServiceCollectionSerializer,
+    ProxmoxServiceSampleSerializer,
+    ProxmoxServiceStatusSerializer,
     ProxmoxSdnBindingSerializer,
     ProxmoxSdnControllerSerializer,
     ProxmoxSdnFabricSerializer,
@@ -382,6 +385,113 @@ class ProxmoxEndpointViewSet(NetBoxModelViewSet):
         payload["endpoint_id"] = endpoint.pk
         body, status_code = build_cloud_image_pipeline_via_backend(payload)
         return Response(body, status=status_code)
+
+
+class ProxmoxServiceMonitoringRefreshAPIView(APIView):
+    """Queue an on-demand systemctl service collection for one endpoint."""
+
+    permission_classes = [IsAuthenticated]
+    http_method_names = ["post", "head", "options"]
+
+    def post(self, request: Request, endpoint_id: int) -> Response:
+        """Mirror the Services tab refresh button for API clients."""
+        if not request.user.has_perm(
+            get_permission_for_model(models.ProxmoxEndpoint, "change")
+        ):
+            return Response(
+                {
+                    "detail": "Missing permission to change Proxmox endpoints.",
+                },
+                status=drf_status.HTTP_403_FORBIDDEN,
+            )
+
+        try:
+            endpoint = models.ProxmoxEndpoint.objects.restrict(
+                request.user,
+                "change",
+            ).get(pk=endpoint_id)
+        except models.ProxmoxEndpoint.DoesNotExist:
+            return Response(
+                {"detail": "Proxmox endpoint not found."},
+                status=drf_status.HTTP_404_NOT_FOUND,
+            )
+
+        if not endpoint.service_monitoring_enabled:
+            return Response(
+                {"detail": "Service monitoring is disabled for this endpoint."},
+                status=drf_status.HTTP_400_BAD_REQUEST,
+            )
+
+        from netbox_proxbox.services.endpoint_enabled import endpoint_is_enabled
+
+        if not endpoint_is_enabled(endpoint):
+            return Response(
+                {"detail": "Endpoint is disabled; disabled endpoints are never contacted."},
+                status=drf_status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not endpoint.service_monitoring_eligible:
+            return Response(
+                {
+                    "detail": (
+                        "Service monitoring requires allow_writes, API + SSH "
+                        "access, and complete endpoint SSH credentials."
+                    )
+                },
+                status=drf_status.HTTP_400_BAD_REQUEST,
+            )
+
+        from netbox_proxbox.integrations.rpc import collect_systemctl_services
+
+        execution = collect_systemctl_services(
+            endpoint,
+            requested_by=request.user,
+            trigger="on_demand",
+        )
+        if execution is None:
+            return Response(
+                {
+                    "detail": (
+                        "Service monitoring collection could not be queued. "
+                        "Confirm netbox-rpc is installed and the procedure is enabled."
+                    )
+                },
+                status=drf_status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return Response(
+            {
+                "status": "queued",
+                "rpc_execution_id": getattr(execution, "pk", None),
+            },
+            status=drf_status.HTTP_202_ACCEPTED,
+        )
+
+
+class ProxmoxServiceCollectionViewSet(NetBoxModelViewSet):
+    """Read-only REST API for service-monitoring collection history."""
+
+    queryset = models.ProxmoxServiceCollection.objects.select_related("endpoint")
+    serializer_class = ProxmoxServiceCollectionSerializer
+    http_method_names = ["get", "head", "options"]
+
+
+class ProxmoxServiceSampleViewSet(NetBoxModelViewSet):
+    """Read-only REST API for raw service-monitoring samples."""
+
+    queryset = models.ProxmoxServiceSample.objects.select_related(
+        "collection",
+        "collection__endpoint",
+    )
+    serializer_class = ProxmoxServiceSampleSerializer
+    http_method_names = ["get", "head", "options"]
+
+
+class ProxmoxServiceStatusViewSet(NetBoxModelViewSet):
+    """Read-only REST API for latest projected service state."""
+
+    queryset = models.ProxmoxServiceStatus.objects.select_related("endpoint")
+    serializer_class = ProxmoxServiceStatusSerializer
+    http_method_names = ["get", "head", "options"]
 
 
 class NetBoxEndpointViewSet(NetBoxModelViewSet):

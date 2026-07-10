@@ -28,6 +28,7 @@ from .proxmox import (
     ProxmoxEndpointEditView,
     ProxmoxEndpointExportView,
     ProxmoxEndpointListView,
+    ProxmoxEndpointServicesView,
     ProxmoxEndpointView,
     ProxmoxExportQuickAddTokenView,
 )

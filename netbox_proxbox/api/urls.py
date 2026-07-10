@@ -22,6 +22,7 @@ from .views import (
     IPAddressesAPIView,
     LXCContainersAPIView,
     NodesAPIView,
+    ProxmoxServiceMonitoringRefreshAPIView,
     ScheduleSyncAPIView,
     VirtualDisksAPIView,
     VirtualMachinesAPIView,
@@ -51,6 +52,21 @@ router.register(
     "proxmox-clusters", views.ProxmoxClusterViewSet, basename="proxmoxcluster"
 )
 router.register("proxmox-nodes", views.ProxmoxNodeViewSet, basename="proxmoxnode")
+router.register(
+    "service-collections",
+    views.ProxmoxServiceCollectionViewSet,
+    basename="proxmoxservicecollection",
+)
+router.register(
+    "service-samples",
+    views.ProxmoxServiceSampleViewSet,
+    basename="proxmoxservicesample",
+)
+router.register(
+    "service-statuses",
+    views.ProxmoxServiceStatusViewSet,
+    basename="proxmoxservicestatus",
+)
 router.register(
     "cloud-image-templates",
     views.CloudImageTemplateViewSet,
@@ -194,6 +210,11 @@ router.register(
 )
 
 urlpatterns = [
+    path(
+        "endpoints/proxmox/<int:endpoint_id>/services/refresh/",
+        ProxmoxServiceMonitoringRefreshAPIView.as_view(),
+        name="api-proxmoxendpoint-services-refresh",
+    ),
     path(
         "endpoints/",
         include((endpoints_router.urls, "endpoints"), namespace="endpoints"),

@@ -84,6 +84,18 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
   optional `one_shot_credential` field; the plugin degrades gracefully against an
   older backend (which rejects the extra field), and the store path works against
   any backend.
+- **Proxmox endpoint service monitoring:** opt-in, agentless, pull-based systemd
+  service status collection for `ProxmoxEndpoint`. Eligibility is deliberately
+  tied to `allow_writes=True`, `access_methods="api_ssh"`, and complete endpoint
+  SSH credentials. netbox-proxbox does not open SSH or run shell commands; it
+  creates a soft-optional `netbox-rpc` `RPCExecution` for
+  `os.linux.proxmox.show_systemctl_services` with params
+  `{proxmox_endpoint_id, units}` and `assigned_object` set to the endpoint. The
+  RPC backend uses the endpoint's own SSH credential. Projection is asynchronous:
+  `collect_systemctl_services()` creates the execution plus a pending
+  `ProxmoxServiceCollection`, and `project_completed_collections()` later reads
+  `execution.result` into `ProxmoxServiceSample`, latest `ProxmoxServiceStatus`,
+  and endpoint heartbeat fields. Never add a synchronous netbox-rpc run path.
 - VM lifecycle models: `ProxmoxVMTemplate` (VM template inventory with optional FK to `VirtualMachine`), `ProxmoxVMCloudInit` (cloud-init config), `CloudImageTemplate` (Firecracker/image factory catalog), `ProxmoxApplyJob` (intent apply job), `DeletionRequest` (auditable delete-request workflow).
 - VM interface modeling uses a dual representation under `ProxboxPluginSettings.vm_interface_sync_strategy="guest_os_model"` (the default): Proxmox config NICs stay as core `virtualization.VMInterface` rows with canonical names such as `net0`; guest-agent OS names such as `ens18` are stored in plugin `GuestVMInterface` rows. `GuestVMInterface.vm_interface` is nullable for agent-only interfaces, and `GuestVMInterfaceAddress` links guest interfaces to the same core `ipam.IPAddress` objects used by the core VM interface assignment. The old `use_guest_agent_interface_name` toggle is deprecated and applies only when the strategy is `legacy_rename`.
 - Datacenter config: `ProxmoxDatacenterCpuModel` (custom CPU models synced from PVE).

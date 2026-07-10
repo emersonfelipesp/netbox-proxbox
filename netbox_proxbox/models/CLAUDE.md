@@ -39,6 +39,11 @@ This directory defines the plugin's persisted data model.
 - `VMBackup`: stores backup inventory for NetBox virtual machines.
 - `VMSnapshot`: stores snapshot inventory for NetBox virtual machines.
 - `VMTaskHistory`: stores VM task history records linked to NetBox virtual machines.
+- `ProxmoxServiceCollection`, `ProxmoxServiceSample`, and
+  `ProxmoxServiceStatus`: store asynchronous netbox-rpc systemctl service
+  collection history, raw per-run samples, and latest projected service state
+  for opt-in Proxmox endpoint service monitoring. The systemd `id` property is
+  stored as `service_id` to avoid colliding with the NetBox row primary key.
 - `ProxboxPluginSettings`: singleton settings for plugin runtime behavior.
 
 ## Dependencies
@@ -66,6 +71,11 @@ This directory defines the plugin's persisted data model.
   `username.split("@", 1)[0]` and treats the endpoint plaintext `password` as
   the SSH password; it still requires `ssh_host` and
   `ssh_known_host_fingerprint`.
+- `ProxmoxEndpoint.service_monitoring_enabled` is gated by
+  `service_monitoring_eligible`, which is true only when `allow_writes`,
+  `ssh_access_enabled`, and `has_ssh_terminal_credentials` are all true. The
+  collector creates asynchronous netbox-rpc executions; this plugin does not
+  perform SSH itself.
 - `ProxboxPluginSettings` is the singleton home for runtime tunables shared with the
   `proxbox-api` backend (timeouts, concurrency, batch sizes, cache limits, diagnostic
   flags). Add new tunables here rather than as fresh `PROXBOX_*` env vars on the

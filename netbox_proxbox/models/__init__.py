@@ -44,6 +44,11 @@ from netbox_proxbox.models.proxmox_cluster import ProxmoxCluster
 from netbox_proxbox.models.proxmox_endpoint import ProxmoxEndpoint
 from netbox_proxbox.models.proxmox_node import ProxmoxNode
 from netbox_proxbox.models.replication import Replication
+from netbox_proxbox.models.service_monitoring import (
+    ProxmoxServiceCollection,
+    ProxmoxServiceSample,
+    ProxmoxServiceStatus,
+)
 from netbox_proxbox.models.ssh_credential import NodeSSHCredential
 from netbox_proxbox.models.storage import ProxmoxStorage, ProxmoxStorageVirtualDisk
 from netbox_proxbox.models.vm_backup import VMBackup
@@ -89,6 +94,9 @@ __all__ = (
     "ProxmoxCluster",
     "ProxmoxEndpoint",
     "ProxmoxNode",
+    "ProxmoxServiceCollection",
+    "ProxmoxServiceSample",
+    "ProxmoxServiceStatus",
     "ProxmoxVMCloudInit",
     "Replication",
     "ProxmoxStorage",
