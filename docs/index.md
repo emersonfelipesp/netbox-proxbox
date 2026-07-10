@@ -72,6 +72,7 @@ The current codebase includes NetBox models for:
 - Node SSH credentials (`NodeSSHCredential`) for SSH-based hardware discovery
 - Custom datacenter CPU models (`ProxmoxDatacenterCpuModel`)
 - VM templates (`ProxmoxVMTemplate`), cloud-init config (`ProxmoxVMCloudInit`), and cloud image templates (`CloudImageTemplate`)
+- Guest OS VM interfaces (`GuestVMInterface`) plus guest-interface address links (`GuestVMInterfaceAddress`) for dual Proxmox NIC and QEMU guest-agent interface modeling
 - Backup routines (Proxmox vzdump schedules with retention policies)
 - Replications (Proxmox storage replication metadata)
 - VM backups, VM snapshots, and VM task history
@@ -79,7 +80,7 @@ The current codebase includes NetBox models for:
 - SDN inventory (PVE 9.2+): controllers, zones, VNets, subnets, bindings, fabrics, route maps, and prefix lists
 - Firecracker Cloud inventory: `FirecrackerHostPool`, `FirecrackerHost`, `FirecrackerImageTemplate`, `FirecrackerMicroVM`
 - Operational models: `ProxmoxApplyJob`, `DeletionRequest`
-- Plugin-wide settings (`ProxboxPluginSettings`), including sync mode controls for VM, infrastructure, network, and SDN stages plus interface-batch tunables
+- Plugin-wide settings (`ProxboxPluginSettings`), including sync mode controls for VM, infrastructure, network, and SDN stages, the `vm_interface_sync_strategy` selector, plus interface-batch tunables
 
 The plugin UI exposes sync actions for:
 

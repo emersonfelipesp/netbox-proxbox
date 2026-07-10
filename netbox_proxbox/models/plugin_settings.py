@@ -11,7 +11,7 @@ from django.utils.translation import gettext_lazy as _
 
 from netbox.models import NetBoxModel
 
-from netbox_proxbox.choices import SyncModeChoices
+from netbox_proxbox.choices import SyncModeChoices, VMInterfaceSyncStrategyChoices
 
 DEFAULT_BACKEND_LOG_FILE_PATH = "/var/log/proxbox.log"
 
@@ -54,8 +54,21 @@ class ProxboxPluginSettings(NetBoxModel):
         default=True,
         verbose_name=_("Use guest agent interface name"),
         help_text=_(
+            "DEPRECATED (used only under the legacy_rename strategy): "
             "When enabled, VM interface names use QEMU guest-agent names when available "
             "(for example ens18) instead of generic Proxmox labels (for example net0/nic0)."
+        ),
+    )
+    vm_interface_sync_strategy = models.CharField(
+        max_length=32,
+        choices=VMInterfaceSyncStrategyChoices,
+        default=VMInterfaceSyncStrategyChoices.GUEST_OS_MODEL,
+        verbose_name=_("VM interface sync strategy"),
+        help_text=_(
+            "Controls how proxbox-api represents VM interfaces. The default keeps "
+            "Proxmox netX NICs as core VMInterface rows and writes guest OS names to "
+            "GuestVMInterface rows. Legacy rename keeps the older single-interface "
+            "rename behavior."
         ),
     )
     proxbox_fetch_max_concurrency = models.PositiveSmallIntegerField(

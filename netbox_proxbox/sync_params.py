@@ -61,6 +61,25 @@ def _use_guest_agent_interface_name_setting() -> bool:
         return True
 
 
+def _vm_interface_sync_strategy_setting() -> str:
+    """Return current plugin setting for dual VM interface sync behavior."""
+    valid_values = {"guest_os_model", "legacy_rename"}
+    try:
+        from netbox_proxbox.models import ProxboxPluginSettings
+
+        value = str(
+            getattr(
+                ProxboxPluginSettings.get_solo(),
+                "vm_interface_sync_strategy",
+                "guest_os_model",
+            )
+            or "guest_os_model"
+        )
+    except (ImportError, RuntimeError):
+        return "guest_os_model"
+    return value if value in valid_values else "guest_os_model"
+
+
 def _proxbox_fetch_max_concurrency_setting() -> int:
     """Return fetch concurrency setting for proxbox-api data collection."""
     try:

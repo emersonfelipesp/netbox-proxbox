@@ -4,11 +4,12 @@ import django_filters
 from django.db.models import Q, QuerySet
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
+from ipam.models import IPAddress
 from netbox.filtersets import NetBoxModelFilterSet
 from tenancy.models import Tenant
 from utilities.filtersets import register_filterset
 from utilities.filters import MultiValueNumberFilter
-from virtualization.models import Cluster
+from virtualization.models import Cluster, VirtualMachine, VMInterface
 
 from .choices import (
     CloudImageOSFamilyChoices,
@@ -24,6 +25,8 @@ from .models import (
     FirecrackerHostPool,
     FirecrackerImageTemplate,
     FirecrackerMicroVM,
+    GuestVMInterface,
+    GuestVMInterfaceAddress,
     NetBoxEndpoint,
     NodeSSHCredential,
     ProxmoxCluster,
@@ -604,6 +607,112 @@ class ProxmoxStorageFilterSet(ProxboxModelFilterSet):
             Q(name__icontains=value)
             | Q(cluster__name__icontains=value)
             | Q(path__icontains=value)
+        )
+
+
+@register_filterset
+class GuestVMInterfaceFilterSet(ProxboxModelFilterSet):
+    """Filter guest OS VM interface rows."""
+
+    virtual_machine = django_filters.ModelMultipleChoiceFilter(
+        queryset=VirtualMachine.objects.all(),
+    )
+    virtual_machine_id = django_filters.ModelMultipleChoiceFilter(
+        field_name="virtual_machine",
+        queryset=VirtualMachine.objects.all(),
+        label="Virtual machine (ID)",
+    )
+    vm_interface = django_filters.ModelMultipleChoiceFilter(
+        queryset=VMInterface.objects.all(),
+    )
+    vm_interface_id = django_filters.ModelMultipleChoiceFilter(
+        field_name="vm_interface",
+        queryset=VMInterface.objects.all(),
+        label="Core VM interface (ID)",
+    )
+    # Exact match: the backend reconcile scopes by ``virtual_machine_id`` +
+    # exact ``name`` and trusts the server-side filter, so ``name`` must not be
+    # ``icontains`` here. Free-text UI search goes through ``search()`` (the
+    # ``q`` param), and NetBox still auto-generates ``name__ic`` for list views.
+    name = django_filters.CharFilter()
+    mac_address = django_filters.CharFilter(lookup_expr="icontains")
+
+    class Meta:
+        model = GuestVMInterface
+        fields = (
+            "id",
+            "virtual_machine",
+            "virtual_machine_id",
+            "vm_interface",
+            "vm_interface_id",
+            "name",
+            "mac_address",
+            "enabled",
+            "mtu",
+        )
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        """Match guest interface name, MAC address, VM name, or core interface."""
+        if not value.strip():
+            return queryset
+        return queryset.filter(
+            Q(name__icontains=value)
+            | Q(mac_address__icontains=value)
+            | Q(virtual_machine__name__icontains=value)
+            | Q(vm_interface__name__icontains=value)
+        )
+
+
+@register_filterset
+class GuestVMInterfaceAddressFilterSet(ProxboxModelFilterSet):
+    """Filter guest interface to shared IPAddress links."""
+
+    guest_interface = django_filters.ModelMultipleChoiceFilter(
+        queryset=GuestVMInterface.objects.all(),
+    )
+    guest_interface_id = django_filters.ModelMultipleChoiceFilter(
+        field_name="guest_interface",
+        queryset=GuestVMInterface.objects.all(),
+        label="Guest VM interface (ID)",
+    )
+    ip_address = django_filters.ModelMultipleChoiceFilter(
+        queryset=IPAddress.objects.all(),
+    )
+    ip_address_id = django_filters.ModelMultipleChoiceFilter(
+        field_name="ip_address",
+        queryset=IPAddress.objects.all(),
+        label="IP address (ID)",
+    )
+    virtual_machine = django_filters.ModelMultipleChoiceFilter(
+        field_name="guest_interface__virtual_machine",
+        queryset=VirtualMachine.objects.all(),
+    )
+    vm_interface = django_filters.ModelMultipleChoiceFilter(
+        field_name="guest_interface__vm_interface",
+        queryset=VMInterface.objects.all(),
+    )
+
+    class Meta:
+        model = GuestVMInterfaceAddress
+        fields = (
+            "id",
+            "guest_interface",
+            "guest_interface_id",
+            "ip_address",
+            "ip_address_id",
+            "virtual_machine",
+            "vm_interface",
+        )
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        """Match IP address, guest interface, VM, or core interface name."""
+        if not value.strip():
+            return queryset
+        return queryset.filter(
+            Q(ip_address__address__icontains=value)
+            | Q(guest_interface__name__icontains=value)
+            | Q(guest_interface__virtual_machine__name__icontains=value)
+            | Q(guest_interface__vm_interface__name__icontains=value)
         )
 
 

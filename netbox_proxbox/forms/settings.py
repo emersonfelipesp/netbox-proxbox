@@ -9,7 +9,7 @@ from django import forms
 from dcim.models import DeviceRole
 from utilities.forms.fields import DynamicModelChoiceField
 
-from netbox_proxbox.choices import SyncModeChoices
+from netbox_proxbox.choices import SyncModeChoices, VMInterfaceSyncStrategyChoices
 from netbox_proxbox.constants import OVERWRITE_FIELDS, SYNC_MODE_FIELDS
 from netbox_proxbox.models.plugin_settings import (
     BRANCH_ON_CONFLICT_CHOICES,
@@ -111,8 +111,23 @@ class ProxboxPluginSettingsForm(forms.Form):
         required=False,
         label="Use QEMU guest-agent interface names",
         help_text=(
+            "DEPRECATED (used only under the legacy_rename strategy): "
             "When enabled, synced VM interface names prefer guest-agent names "
             "when they are available."
+        ),
+    )
+    vm_interface_sync_strategy = forms.ChoiceField(
+        required=False,
+        choices=tuple(
+            (value, str(label))
+            for value, label, _color in VMInterfaceSyncStrategyChoices.CHOICES
+        ),
+        initial=VMInterfaceSyncStrategyChoices.GUEST_OS_MODEL,
+        label="VM interface sync strategy",
+        help_text=(
+            "Default guest_os_model keeps Proxmox netX NICs as core VMInterface rows "
+            "and writes guest OS names to GuestVMInterface rows. legacy_rename keeps "
+            "the older single-interface rename behavior."
         ),
     )
     proxbox_fetch_max_concurrency = forms.IntegerField(
@@ -430,6 +445,14 @@ class ProxboxPluginSettingsForm(forms.Form):
             "Leave blank to use environment variable only."
         ),
     )
+
+    def clean_vm_interface_sync_strategy(self) -> str:
+        """Default omitted legacy settings posts to the additive strategy."""
+        return (
+            self.cleaned_data.get("vm_interface_sync_strategy")
+            or VMInterfaceSyncStrategyChoices.GUEST_OS_MODEL
+        )
+
     proxmox_timeout = forms.IntegerField(
         required=True,
         min_value=1,

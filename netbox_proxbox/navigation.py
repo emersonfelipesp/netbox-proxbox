@@ -42,6 +42,11 @@ interfaces_item = PluginMenuItem(
     link_text="Interfaces",
 )
 
+guest_vm_interfaces_item = PluginMenuItem(
+    link="plugins:netbox_proxbox:guestvminterface_list",
+    link_text="Guest VM Interfaces",
+)
+
 ip_addresses_item = PluginMenuItem(
     link="plugins:netbox_proxbox:ip_addresses",
     link_text="IP Addresses",
@@ -392,6 +397,7 @@ menu = PluginMenu(
                 lxc_containers_item,
                 virtual_disks_item,
                 interfaces_item,
+                guest_vm_interfaces_item,
                 ip_addresses_item,
                 vm_cloudinit_item,
                 cloud_images_item,

@@ -1,0 +1,36 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load i18n %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <h5 class="card-header">{% trans "Guest VM Interface Address" %}</h5>
+            <table class="table table-hover attr-table">
+                <tr>
+                    <th scope="row">{% trans "Guest Interface" %}</th>
+                    <td>{{ object.guest_interface|linkify }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">{% trans "Virtual Machine" %}</th>
+                    <td>{{ object.guest_interface.virtual_machine|linkify }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">{% trans "Core VM Interface" %}</th>
+                    <td>{{ object.guest_interface.vm_interface|linkify|placeholder }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">{% trans "IP Address" %}</th>
+                    <td>{{ object.ip_address|linkify }}</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+    <div class="col-md-6">
+        {% include 'inc/panels/tags.html' %}
+        {% include 'inc/panels/custom_fields.html' %}
+        {% include 'inc/panels/comments.html' %}
+    </div>
+</div>
+{% endblock %}

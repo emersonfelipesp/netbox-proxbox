@@ -39,6 +39,10 @@ from netbox_proxbox.tables.datacenter import ProxmoxDatacenterCpuModelTable
 from netbox_proxbox.tables.cloud_image_template import CloudImageTemplateTable
 from netbox_proxbox.tables.cluster import ProxmoxClusterTable, ProxmoxNodeTable
 from netbox_proxbox.tables.deletion_requests import DeletionRequestTable
+from netbox_proxbox.tables.guest_vm_interface import (
+    GuestVMInterfaceAddressTable,
+    GuestVMInterfaceTable,
+)
 from netbox_proxbox.tables.replication import ReplicationTable
 from netbox_proxbox.tables.storage import ProxmoxStorageTable
 from netbox_proxbox.tables.vm_backup import VMBackupTable

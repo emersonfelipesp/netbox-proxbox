@@ -52,6 +52,11 @@ from netbox_proxbox.api.serializers.firecracker import (
     NestedFirecrackerHostSerializer,
     NestedFirecrackerImageTemplateSerializer,
 )
+from netbox_proxbox.api.serializers.guest_vm_interface import (
+    GuestVMInterfaceAddressSerializer,
+    GuestVMInterfaceSerializer,
+    NestedGuestVMInterfaceSerializer,
+)
 from netbox_proxbox.api.serializers.datacenter import (
     ProxmoxDatacenterCpuModelSerializer,
 )
@@ -102,6 +107,8 @@ __all__ = (
     "FirecrackerHostSerializer",
     "FirecrackerImageTemplateSerializer",
     "FirecrackerMicroVMSerializer",
+    "GuestVMInterfaceAddressSerializer",
+    "GuestVMInterfaceSerializer",
     "InterfaceResourceSerializer",
     "IPAddressResourceSerializer",
     "NestedBackupRoutineSerializer",
@@ -109,6 +116,7 @@ __all__ = (
     "NestedFirecrackerHostPoolSerializer",
     "NestedFirecrackerHostSerializer",
     "NestedFirecrackerImageTemplateSerializer",
+    "NestedGuestVMInterfaceSerializer",
     "NestedPBSEndpointSerializer",
     "NestedPDMEndpointSerializer",
     "NestedProxmoxClusterSerializer",

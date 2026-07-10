@@ -173,7 +173,9 @@ def _build_report_text(
     )
 
 
-def _build_issue_url(job: Any, report_text: str, metadata: list[tuple[str, str]], error: str) -> str:
+def _build_issue_url(
+    job: Any, report_text: str, metadata: list[tuple[str, str]], error: str
+) -> str:
     status = _format_value(getattr(job, "status", None))
     pk = getattr(job, "pk", None)
     title = f"[Sync bug] Proxbox sync job {pk if pk is not None else ''} ({status})"
@@ -183,9 +185,7 @@ def _build_issue_url(job: Any, report_text: str, metadata: list[tuple[str, str]]
         body = report_text
     else:
         meta_block = "\n".join(f"- {label}: {value}" for label, value in metadata)
-        error_block = (
-            error.strip() if error and error.strip() else "(no error message)"
-        )
+        error_block = error.strip() if error and error.strip() else "(no error message)"
         body = (
             "### Proxbox sync job bug report\n\n"
             "**Environment / metadata**\n"

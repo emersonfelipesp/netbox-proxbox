@@ -57,6 +57,7 @@ curl -X PATCH \
   "display": "Proxbox Plugin Settings",
   "singleton_key": "default",
   "use_guest_agent_interface_name": true,
+  "vm_interface_sync_strategy": "guest_os_model",
   "proxbox_fetch_max_concurrency": 8,
   "ignore_ipv6_link_local_addresses": true,
   "delete_orphans": false,
@@ -133,7 +134,8 @@ These fields are set by the system and cannot be modified via PATCH:
 
 | Field | Type | Description |
 |---|---|---|
-| `use_guest_agent_interface_name` | boolean | When `true`, use the QEMU guest agent interface name instead of the Proxmox-reported name when syncing network interfaces |
+| `vm_interface_sync_strategy` | string | `guest_os_model` keeps Proxmox `netX` NICs as core `VMInterface` rows and stores guest-agent OS names in `GuestVMInterface`; `legacy_rename` preserves the older single-interface rename behavior |
+| `use_guest_agent_interface_name` | boolean | Deprecated. Used only when `vm_interface_sync_strategy=legacy_rename`; then it controls whether guest-agent names replace Proxmox-reported names when syncing network interfaces |
 | `ignore_ipv6_link_local_addresses` | boolean | When `true`, skip IPv6 link-local addresses (`fe80::/64`) during interface sync |
 
 ### SSRF Protection

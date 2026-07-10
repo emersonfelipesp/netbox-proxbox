@@ -15,7 +15,7 @@ Proxbox discovers and syncs the following from Proxmox into NetBox:
 - **VM Snapshots** — Point-in-time snapshots for recovery
 - **VM Backups** — Backup jobs and restore points
 - **Storage** — Datastores and storage content
-- **Network Interfaces and IPs** — Network interfaces and IP addresses assigned to VMs and containers
+- **Network Interfaces and IPs** — Proxmox NICs (`net0`, `net1`) as core NetBox VM interfaces, optional guest-OS interfaces (`ens18`, `eth0`) as plugin `GuestVMInterface` rows, and IP addresses assigned to VMs and containers
 - **Backup Routines** — Backup job definitions from Proxmox
 - **Replications** — Replication job status and configuration
 
@@ -142,6 +142,14 @@ other tenants.
   existing values and creates `ProxboxPluginSettings.encryption_key` if it was
   blank, so new endpoint saves do not persist those primary secrets in
   plaintext columns.
+- **Dual VM interface sync.** The plugin model surface supports the new
+  `guest_os_model` strategy: keep Proxmox-side NICs as core
+  `virtualization.VMInterface` rows named `net0`/`net1`, and store guest-agent
+  OS names such as `ens18` in `GuestVMInterface`. `GuestVMInterfaceAddress`
+  links those guest interfaces to the same core `ipam.IPAddress` rows already
+  assigned to the core VM interface. The older `use_guest_agent_interface_name`
+  flag is deprecated and only applies when `vm_interface_sync_strategy` is set
+  to `legacy_rename`.
 
 ## What's New in v0.0.22
 

@@ -69,6 +69,15 @@ objects plus Proxbox plugin SDN metadata. `sync_mode_sdn_bgp` is a child mode
 for optional `netbox_bgp` projection inside the SDN stage; it is forced disabled
 whenever `sync_mode_sdn` is disabled.
 
+VM interface sync now has a separate strategy setting:
+`ProxboxPluginSettings.vm_interface_sync_strategy` defaults to
+`guest_os_model`. In that mode Proxmox NICs remain core
+`virtualization.VMInterface` rows named `net0`/`net1`, guest-agent OS names are
+stored in plugin `GuestVMInterface` rows, and `GuestVMInterfaceAddress` links
+to the same core `ipam.IPAddress` rows rather than duplicating IPs. The old
+`use_guest_agent_interface_name` flag is deprecated and used only under
+`legacy_rename`.
+
 Effective sync modes resolve through a parent-to-child cascade before stage gating and backend query forwarding. A resource is effectively `disabled` when its own mode is `disabled` or any ancestor is effectively `disabled`; child modes never affect parent modes. The hierarchy is:
 
 ```
@@ -86,7 +95,7 @@ sdn
 
 **VM templates** are stored in `ProxmoxVMTemplate` (not `VirtualMachine`). The model has optional FKs to `VirtualMachine` (`source_vm` and M2M `cloned_vms`), `ProxmoxCluster`, and `ProxmoxNode`.
 
-Key files: `choices.py` (SyncModeChoices), `constants.py` (SYNC_MODE_FIELDS), `models/plugin_settings.py` (global fields), `models/proxmox_endpoint.py` (per-endpoint fields + `effective_sync_mode()`), `models/vm_template.py` (ProxmoxVMTemplate), `models/sdn_inventory.py` (SDN metadata), `sync_stages.py` (gating helpers), `netbox_bootstrap.py` (bootstrap-only tag creation), `services/sync_vm_template.py` (template sync service), `docs/configuration/sync-modes.md` (user docs).
+Key files: `choices.py` (SyncModeChoices and VMInterfaceSyncStrategyChoices), `constants.py` (SYNC_MODE_FIELDS), `models/plugin_settings.py` (global fields), `models/guest_vm_interface.py` (guest OS interface inventory), `models/proxmox_endpoint.py` (per-endpoint fields + `effective_sync_mode()`), `models/vm_template.py` (ProxmoxVMTemplate), `models/sdn_inventory.py` (SDN metadata), `sync_stages.py` (gating helpers and backend query forwarding), `netbox_bootstrap.py` (bootstrap-only tag creation), `services/sync_vm_template.py` (template sync service), `docs/configuration/sync-modes.md` (user docs).
 
 ## Release Procedure (summary)
 
@@ -170,6 +179,7 @@ Key architectural invariants to keep in mind:
 - **Disabled Proxmox status badges stay static.** List, detail, and dashboard Proxmox status elements must show a gray `Disabled` badge without `data-service-status-url` when `enabled=False`; the direct keepalive endpoint may return `status="disabled"` only as a defensive fallback.
 - **Proxmox endpoint bulk enablement is local-only.** The `/plugins/proxbox/endpoints/proxmox/` list shows `Enabled` by default and exposes **Enable Selected** / **Disable Selected** actions. Keep those actions as direct `ProxmoxEndpoint.enabled` queryset updates; do not save each object or trigger the ProxmoxEndpoint `post_save` backend-registration/sync signal from bulk toggles.
 - **Firecracker inventory is separate from QEMU/LXC.** Use `FirecrackerHostPool`, `FirecrackerHost`, `FirecrackerImageTemplate`, and `FirecrackerMicroVM` for NMS Cloud micro-VMs. A Firecracker row exposes `kind="firecracker"` and `instance_ref="firecracker:<id>"`; do not model it as a NetBox core `VirtualMachine`.
+- **Guest OS interfaces are separate from core VM interfaces.** Do not rename a core `VMInterface` from `net0` to `ens18` under the default `guest_os_model` strategy. Store guest-agent interface names in `GuestVMInterface`, link by MAC to the core `VMInterface` when possible, and reuse existing `ipam.IPAddress` rows via `GuestVMInterfaceAddress`.
 - **Firecracker tenant grants are API-visible Cloud policy.** `FirecrackerHostPoolSerializer` and `FirecrackerImageTemplateSerializer` treat an omitted `allowed_tenants` field as no-op, while an explicit list (including `[]`) replaces the M2M grants through `allowed_tenants.set(...)`. Keep those serializer helpers typed and covered by source-contract tests when changing NMS Cloud visibility behavior.
 - **`ProxmoxEndpoint.allowed_tenants` is a real Cloud contract, not UI-only metadata.** Empty means default/global visibility. Explicit tenant grants pin an endpoint to those tenants, and the paired backend must hide the default/global endpoint pool for a tenant as soon as any explicit endpoint grant matches.
 - **Endpoint export views require token proof for sensitive fields.** `_validate_sensitive_export_token()` supports v1 (dropdown or manual) and v2 (key + secret) modes. Never bypass this check or expose credential fields without it.

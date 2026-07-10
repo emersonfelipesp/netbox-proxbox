@@ -1,0 +1,61 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load i18n %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <h5 class="card-header">{% trans "Guest VM Interface" %}</h5>
+            <table class="table table-hover attr-table">
+                <tr>
+                    <th scope="row">{% trans "Virtual Machine" %}</th>
+                    <td>{{ object.virtual_machine|linkify }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">{% trans "Core VM Interface" %}</th>
+                    <td>{{ object.vm_interface|linkify|placeholder }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">{% trans "Name" %}</th>
+                    <td>{{ object.name }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">{% trans "MAC Address" %}</th>
+                    <td>{{ object.mac_address|placeholder }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">{% trans "Enabled" %}</th>
+                    <td>{{ object.enabled|yesno:"Yes,No" }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">{% trans "MTU" %}</th>
+                    <td>{{ object.mtu|placeholder }}</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <h5 class="card-header">{% trans "Guest IP Addresses" %}</h5>
+            <table class="table table-hover attr-table">
+                {% for address_link in object.addresses.all %}
+                <tr>
+                    <th scope="row">{{ address_link.ip_address|linkify }}</th>
+                    <td>
+                        <a href="{{ address_link.get_absolute_url }}">{% trans "Address link" %}</a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="2" class="text-muted">{% trans "No guest IP addresses recorded." %}</td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+        {% include 'inc/panels/tags.html' %}
+        {% include 'inc/panels/custom_fields.html' %}
+        {% include 'inc/panels/comments.html' %}
+    </div>
+</div>
+{% endblock %}

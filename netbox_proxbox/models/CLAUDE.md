@@ -13,6 +13,7 @@ This directory defines the plugin's persisted data model.
 - [`proxmox_node.py`](./proxmox_node.py): discovered Proxmox node model linked to endpoint and NetBox device data.
 - [`plugin_settings.py`](./plugin_settings.py): singleton plugin settings model.
 - [`storage.py`](./storage.py): `ProxmoxStorage` model and `ProxmoxStorageVirtualDisk` relation model.
+- [`guest_vm_interface.py`](./guest_vm_interface.py): guest-agent OS interfaces and address links for dual VM interface sync.
 - [`backup_routine.py`](./backup_routine.py): backup routine inventory model.
 - [`replication.py`](./replication.py): replication inventory model.
 - [`vm_backup.py`](./vm_backup.py): `VMBackup` model.
@@ -31,6 +32,8 @@ This directory defines the plugin's persisted data model.
 - `ProxmoxNode`: stores synchronized hypervisor nodes and their relationships to the source endpoint and NetBox device.
 - `ProxmoxStorage`: stores Proxmox storage inventory synchronized from the backend.
 - `ProxmoxStorageVirtualDisk`: links storage rows to virtual disks.
+- `GuestVMInterface`: stores guest-agent OS interface names (for example `ens18`) for a NetBox `VirtualMachine`, mapped **one-to-one** (`OneToOneField`, `SET_NULL`) to the canonical core `VMInterface` (for example `net0`) by MAC. `SET_NULL` (not `CASCADE`) so deleting/recreating the core interface during churn preserves the guest OS inventory row and only clears the link; `vm_interface` is nullable for agent-only interfaces with no matching Proxmox NIC.
+- `GuestVMInterfaceAddress`: links a guest OS interface to an existing core `ipam.IPAddress`; it never duplicates IP rows and protects referenced IPs from deletion. `clean()` enforces that the linked IP is the **same object** assigned to the mapped core `VMInterface` (or, for agent-only guests, at least on the same VM) so a bad ID/privileged user can never cross-link a foreign VM's IP.
 - `BackupRoutine`: stores backup routine inventory for NetBox-backed ProxBox sync.
 - `Replication`: stores replication job inventory for NetBox-backed ProxBox sync.
 - `VMBackup`: stores backup inventory for NetBox virtual machines.
@@ -71,6 +74,11 @@ This directory defines the plugin's persisted data model.
   [top-level `CLAUDE.md` → Plugin settings and configuration](../../CLAUDE.md) and
   migration [`0037_pluginsettings_runtime_tunables.py`](../migrations/0037_pluginsettings_runtime_tunables.py)
   for the migration shape (`SeparateDatabaseAndState` + `IF NOT EXISTS`).
+- `ProxboxPluginSettings.vm_interface_sync_strategy` defaults to `guest_os_model`.
+  This strategy keeps Proxmox config NICs as core `virtualization.VMInterface`
+  rows named `net0`/`net1` and stores guest-agent names in `GuestVMInterface`.
+  The `legacy_rename` strategy is retained only for the old single-interface
+  rename behavior controlled by deprecated `use_guest_agent_interface_name`.
 
 ## Links
 

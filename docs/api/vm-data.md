@@ -1,8 +1,49 @@
 # VM Data API
 
-These three models store per-virtual-machine data synced from Proxmox: backup records, snapshot records, and task history entries.
+These models store per-virtual-machine data synced from Proxmox: guest OS interface metadata, guest-interface address links, backup records, snapshot records, and task history entries.
 
 For common API conventions (authentication, pagination, nested serializers), see [API Overview](index.md).
+
+---
+
+## Guest VM Interfaces
+
+`GuestVMInterface` records QEMU guest-agent OS interface names without renaming
+the core NetBox VM interface. Proxmox-side NICs remain
+`virtualization.VMInterface` rows named `net0`, `net1`, etc. Guest-agent rows
+use names such as `ens18` or `eth0` and link to the core VM interface when the
+MAC address matches. The `vm_interface` relation is nullable for agent-only
+interfaces such as Linux bridges.
+
+```
+GET    /api/plugins/proxbox/guest-vm-interfaces/
+GET    /api/plugins/proxbox/guest-vm-interfaces/{id}/
+POST   /api/plugins/proxbox/guest-vm-interfaces/
+PUT    /api/plugins/proxbox/guest-vm-interfaces/{id}/
+PATCH  /api/plugins/proxbox/guest-vm-interfaces/{id}/
+DELETE /api/plugins/proxbox/guest-vm-interfaces/{id}/
+```
+
+**Filterable fields:** `id`, `virtual_machine`, `vm_interface`, `name`,
+`mac_address`, `enabled`, `mtu`
+
+## Guest VM Interface Addresses
+
+`GuestVMInterfaceAddress` links a guest OS interface to an existing core
+`ipam.IPAddress`. It deliberately reuses the same IP object already assigned to
+the core VM interface and protects that IP from deletion while the link exists.
+
+```
+GET    /api/plugins/proxbox/guest-vm-interface-addresses/
+GET    /api/plugins/proxbox/guest-vm-interface-addresses/{id}/
+POST   /api/plugins/proxbox/guest-vm-interface-addresses/
+PUT    /api/plugins/proxbox/guest-vm-interface-addresses/{id}/
+PATCH  /api/plugins/proxbox/guest-vm-interface-addresses/{id}/
+DELETE /api/plugins/proxbox/guest-vm-interface-addresses/{id}/
+```
+
+**Filterable fields:** `id`, `guest_interface`, `ip_address`,
+`virtual_machine`, `vm_interface`
 
 ---
 

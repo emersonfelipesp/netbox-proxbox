@@ -21,6 +21,7 @@ class ProxboxPluginSettingsSerializer(NetBoxModelSerializer):
             "display",
             "singleton_key",
             "use_guest_agent_interface_name",
+            "vm_interface_sync_strategy",
             "proxbox_fetch_max_concurrency",
             "ignore_ipv6_link_local_addresses",
             "ensure_netbox_objects",

@@ -20,7 +20,9 @@ def test_netbox_openapi_persist_model_and_migration_default_on():
 
     assert "netbox_openapi_persist = models.BooleanField(" in model
     # The model field defaults to on (persist to disk).
-    field_block = model.split("netbox_openapi_persist = models.BooleanField(", 1)[1][:120]
+    field_block = model.split("netbox_openapi_persist = models.BooleanField(", 1)[1][
+        :120
+    ]
     assert "default=True" in field_block
 
     assert '("netbox_proxbox", "0056_proxmoxendpoint_access_methods")' in migration
