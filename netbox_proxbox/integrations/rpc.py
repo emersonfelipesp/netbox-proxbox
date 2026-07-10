@@ -25,8 +25,14 @@ INSTALL_SSH_KEY_PROCEDURE = "os.linux.ubuntu.24.install_ssh_key"
 __all__ = (
     "is_netbox_rpc_installed",
     "install_ssh_key_via_rpc",
+    "rpc_dashboard_context",
     "INSTALL_SSH_KEY_PROCEDURE",
 )
+
+# netbox-rpc mounts its UI under base_url "rpc"; the landing page is the plugin
+# root. Kept as a stable literal so this soft integration does not depend on the
+# companion plugin's internal URL names.
+NETBOX_RPC_HOME_URL = "/plugins/rpc/"
 
 
 def is_netbox_rpc_installed() -> bool:
@@ -107,3 +113,47 @@ def install_ssh_key_via_rpc(
         )
 
     return execution
+
+
+def rpc_dashboard_context() -> dict[str, Any]:
+    """Best-effort dashboard context for the optional netbox-rpc companion card.
+
+    Returns ``{}`` when netbox-rpc is not installed, so the Proxbox home page
+    simply omits the card. When netbox-rpc is present, returns
+    ``{"rpc_integration": {...}}`` describing whether the operator has opted in
+    (``enabled``) and which backend is configured. Never raises and never issues
+    a network call — live backend reachability is offered by the netbox-rpc
+    landing page's own *Test connection* action, so the Proxbox dashboard render
+    stays fast and fully decoupled.
+    """
+    if not is_netbox_rpc_installed():
+        return {}
+
+    info: dict[str, Any] = {
+        "installed": True,
+        "enabled": False,
+        "backend_name": "",
+        "backend_url": "",
+        "home_url": NETBOX_RPC_HOME_URL,
+        "settings_supported": False,
+    }
+
+    try:
+        from netbox_rpc.models import RpcPluginSettings  # type: ignore[import]
+    except ImportError:
+        # netbox-rpc is installed but predates the opt-in settings model; still
+        # show the card (config state unknown) with a link to the plugin.
+        return {"rpc_integration": info}
+
+    info["settings_supported"] = True
+    try:
+        settings = RpcPluginSettings.get_solo()
+        info["enabled"] = bool(getattr(settings, "enabled", False))
+        backend = getattr(settings, "backend", None)
+        if backend is not None:
+            info["backend_name"] = str(backend)
+            info["backend_url"] = getattr(backend, "backend_url", "") or ""
+    except Exception:  # noqa: BLE001 - a bad/missing settings row must not break home
+        logger.debug("Unable to read netbox-rpc RpcPluginSettings for dashboard card.")
+
+    return {"rpc_integration": info}

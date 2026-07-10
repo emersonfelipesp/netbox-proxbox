@@ -64,6 +64,23 @@ For detailed implementation notes see [`views/endpoints/CLAUDE.md`](./views/endp
 - Inbound: NetBox plugin loader imports `config`, NetBox route registration imports `urls.py`, and the menu system imports `navigation.py`.
 - Outbound: Django/NetBox APIs, `requests`, `websockets`, the external ProxBox FastAPI service, GitHub raw content for the contributing page, and standard NetBox core models like `users.Token`, `ipam.IPAddress`, `virtualization.VirtualMachine`, and `virtualization.Cluster`.
 
+## Optional netbox-rpc companion card (home dashboard)
+
+The home dashboard renders an optional **netbox-rpc** companion card when that
+plugin is installed. `integrations/rpc.py::rpc_dashboard_context()` is a soft,
+best-effort helper (never imports `netbox_rpc` at module load; `try/except
+ImportError`; never issues a network call) that returns
+`{"rpc_integration": {installed, enabled, backend_name, backend_url, home_url,
+settings_supported}}` — or `{}` when netbox-rpc is absent, so the card is simply
+omitted. It reads `netbox_rpc.RpcPluginSettings.get_solo()` for the opt-in
+`enabled` flag and configured backend when present, and degrades cleanly against
+an older netbox-rpc that predates that model. `views/home_context.py`
+(`_build_rpc_integration_context`) wires it into `build_home_dashboard_context`,
+and `templates/netbox_proxbox/home.html` renders the card (config state +
+"Configure & opt in" link to `/plugins/rpc/`). Live backend reachability is left
+to the netbox-rpc landing page's own *Test connection* action, so the Proxbox
+dashboard render stays fast. Guarded by `tests/test_rpc_integration.py`.
+
 ## Configuration
 
 `ProxboxPluginSettings` (see [`models/plugin_settings.py`](./models/plugin_settings.py))

@@ -140,3 +140,126 @@ def test_install_ssh_key_via_rpc_enqueues_with_execution_pk(monkeypatch) -> None
             "backend_pk": 456,
         }
     ]
+
+
+def test_rpc_dashboard_context_empty_when_not_installed() -> None:
+    mod = _load_rpc_module()
+    # is_netbox_rpc_installed() is False in the test env (django settings absent)
+    # → the companion card is omitted entirely.
+    assert mod.rpc_dashboard_context() == {}
+
+
+def test_rpc_dashboard_context_installed_without_settings_model(monkeypatch) -> None:
+    """Old netbox-rpc (no RpcPluginSettings): card shows, settings unsupported."""
+    mod = _load_rpc_module()
+    monkeypatch.setattr(mod, "is_netbox_rpc_installed", lambda: True)
+    # netbox_rpc present but netbox_rpc.models import fails → ImportError branch.
+    package = types.ModuleType("netbox_rpc")  # no __path__ → submodule import fails
+    monkeypatch.setitem(sys.modules, "netbox_rpc", package)
+    monkeypatch.delitem(sys.modules, "netbox_rpc.models", raising=False)
+
+    ctx = mod.rpc_dashboard_context()
+    assert ctx == {
+        "rpc_integration": {
+            "installed": True,
+            "enabled": False,
+            "backend_name": "",
+            "backend_url": "",
+            "home_url": "/plugins/rpc/",
+            "settings_supported": False,
+        }
+    }
+
+
+def _install_fake_settings(monkeypatch, *, enabled, backend):
+    package = types.ModuleType("netbox_rpc")
+    package.__path__ = []
+    models = types.ModuleType("netbox_rpc.models")
+
+    class _Settings:
+        @classmethod
+        def get_solo(cls):
+            obj = cls()
+            obj.enabled = enabled
+            obj.backend = backend
+            return obj
+
+    models.RpcPluginSettings = _Settings
+    monkeypatch.setitem(sys.modules, "netbox_rpc", package)
+    monkeypatch.setitem(sys.modules, "netbox_rpc.models", models)
+
+
+def test_rpc_dashboard_context_reads_enabled_settings(monkeypatch) -> None:
+    mod = _load_rpc_module()
+    monkeypatch.setattr(mod, "is_netbox_rpc_installed", lambda: True)
+
+    class _Backend:
+        backend_url = "https://backend.rpc.nmulti.cloud"
+
+        def __str__(self) -> str:
+            return "rpc-prod"
+
+    _install_fake_settings(monkeypatch, enabled=True, backend=_Backend())
+
+    ctx = mod.rpc_dashboard_context()["rpc_integration"]
+    assert ctx["installed"] is True
+    assert ctx["enabled"] is True
+    assert ctx["settings_supported"] is True
+    assert ctx["backend_name"] == "rpc-prod"
+    assert ctx["backend_url"] == "https://backend.rpc.nmulti.cloud"
+    assert ctx["home_url"] == "/plugins/rpc/"
+
+
+def test_rpc_dashboard_context_disabled_without_backend(monkeypatch) -> None:
+    mod = _load_rpc_module()
+    monkeypatch.setattr(mod, "is_netbox_rpc_installed", lambda: True)
+    _install_fake_settings(monkeypatch, enabled=False, backend=None)
+
+    ctx = mod.rpc_dashboard_context()["rpc_integration"]
+    assert ctx["installed"] is True
+    assert ctx["enabled"] is False
+    assert ctx["settings_supported"] is True
+    assert ctx["backend_name"] == ""
+    assert ctx["backend_url"] == ""
+
+
+def test_rpc_dashboard_context_survives_bad_settings_row(monkeypatch) -> None:
+    """A raising get_solo() must not break the dashboard."""
+    mod = _load_rpc_module()
+    monkeypatch.setattr(mod, "is_netbox_rpc_installed", lambda: True)
+
+    package = types.ModuleType("netbox_rpc")
+    package.__path__ = []
+    models = types.ModuleType("netbox_rpc.models")
+
+    class _Settings:
+        @classmethod
+        def get_solo(cls):
+            raise RuntimeError("db down")
+
+    models.RpcPluginSettings = _Settings
+    monkeypatch.setitem(sys.modules, "netbox_rpc", package)
+    monkeypatch.setitem(sys.modules, "netbox_rpc.models", models)
+
+    ctx = mod.rpc_dashboard_context()["rpc_integration"]
+    assert ctx["installed"] is True
+    assert ctx["settings_supported"] is True
+    assert ctx["enabled"] is False  # safe default when the row can't be read
+
+
+def test_rpc_dashboard_context_in_all_exports() -> None:
+    src = _read("netbox_proxbox/integrations/rpc.py")
+    assert '"rpc_dashboard_context"' in src
+
+
+def test_home_context_wires_optional_rpc_card() -> None:
+    src = _read("netbox_proxbox/views/home_context.py")
+    assert "_build_rpc_integration_context" in src
+    assert "rpc_dashboard_context" in src
+
+
+def test_home_template_renders_rpc_card() -> None:
+    html = _read("netbox_proxbox/templates/netbox_proxbox/home.html")
+    assert "{% if rpc_integration %}" in html
+    assert "netbox-rpc" in html
+    assert "rpc_integration.home_url" in html
