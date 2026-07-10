@@ -110,3 +110,15 @@ OVERWRITE_FIELD_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
 OVERWRITE_FIELDS: tuple[str, ...] = tuple(
     field for _, fields in OVERWRITE_FIELD_GROUPS for field in fields
 )
+
+# Per-endpoint netbox-rpc override fields, grouped for the Settings-tab UI.
+RPC_FIELD_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    (
+        "RPC",
+        ("rpc_enabled",),
+    ),
+)
+
+RPC_FIELDS: tuple[str, ...] = tuple(
+    field for _, fields in RPC_FIELD_GROUPS for field in fields
+)
