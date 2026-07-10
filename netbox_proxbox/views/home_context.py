@@ -475,4 +475,17 @@ def build_home_dashboard_context(
         "sync_jobs_list_url": _proxbox_sync_jobs_list_url(),
     }
     context.update(_build_pdm_endpoint_context(request))
+    context.update(_build_rpc_integration_context())
     return context
+
+
+def _build_rpc_integration_context() -> dict[str, object]:
+    """Optional netbox-rpc companion card context (empty when not installed)."""
+    try:
+        from netbox_proxbox.integrations.rpc import rpc_dashboard_context
+    except Exception:  # noqa: BLE001 - integration module must never break home
+        return {}
+    try:
+        return rpc_dashboard_context()
+    except Exception:  # noqa: BLE001 - best-effort card; never break the dashboard
+        return {}
