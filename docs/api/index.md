@@ -138,6 +138,13 @@ Two models perform an **upsert** on POST — if a matching record already exists
 | `/api/plugins/proxbox/backup-routines/{id}/` | GET PUT PATCH DELETE | [BackupRoutine](operations.md#backup-routine) |
 | `/api/plugins/proxbox/replications/` | GET POST | [Replication](operations.md#replication) |
 | `/api/plugins/proxbox/replications/{id}/` | GET PUT PATCH DELETE | [Replication](operations.md#replication) |
+| `/api/plugins/proxbox/endpoints/proxmox/{id}/services/refresh/` | POST | Queue on-demand endpoint service monitoring via netbox-rpc |
+| `/api/plugins/proxbox/service-collections/` | GET | Read-only Proxmox endpoint service collection history |
+| `/api/plugins/proxbox/service-collections/{id}/` | GET | Read-only Proxmox endpoint service collection detail |
+| `/api/plugins/proxbox/service-samples/` | GET | Read-only raw systemd service samples |
+| `/api/plugins/proxbox/service-samples/{id}/` | GET | Read-only raw systemd service sample detail |
+| `/api/plugins/proxbox/service-statuses/` | GET | Read-only latest projected systemd service status |
+| `/api/plugins/proxbox/service-statuses/{id}/` | GET | Read-only latest projected systemd service status detail |
 | `/api/plugins/proxbox/settings/` | GET | [Plugin Settings](settings.md) |
 | `/api/plugins/proxbox/settings/{id}/` | GET PATCH | [Plugin Settings](settings.md) |
 | `/api/plugins/proxbox/ha/summary/` | GET | [Cluster HA](ha.md) |

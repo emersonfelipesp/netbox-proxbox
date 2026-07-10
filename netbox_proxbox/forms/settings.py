@@ -534,6 +534,46 @@ class ProxboxPluginSettingsForm(forms.Form):
             "tenant assignments are never overwritten."
         ),
     )
+    cloud_network_lock_enabled = forms.BooleanField(
+        required=False,
+        label="Enable cloud customer network lock",
+        help_text=(
+            "When enabled, cloud provisioning integrations use the configured customer "
+            "network as the authoritative NetBox source for instance networking."
+        ),
+    )
+    cloud_customer_prefix_id = forms.IntegerField(
+        required=False,
+        min_value=1,
+        label="Cloud customer Prefix ID",
+        help_text=(
+            "NetBox IPAM Prefix primary key designated as the cloud customer network. "
+            "Populate this with the ensure_cloud_customer_network management command."
+        ),
+    )
+    cloud_customer_bridge = forms.CharField(
+        required=True,
+        max_length=64,
+        initial="vmbr1",
+        label="Cloud customer bridge",
+        help_text="Proxmox bridge name used for cloud customer interfaces.",
+    )
+    cloud_customer_vlan_tag = forms.IntegerField(
+        required=False,
+        min_value=1,
+        max_value=4094,
+        label="Cloud customer VLAN tag",
+        help_text=(
+            "VLAN tag associated with the cloud customer network. Leave blank until "
+            "an operator designates the network."
+        ),
+    )
+    cloud_customer_gateway = forms.CharField(
+        required=False,
+        max_length=64,
+        label="Cloud customer gateway",
+        help_text="Gateway address for the configured cloud customer network.",
+    )
     branching_enabled = forms.BooleanField(
         required=False,
         label="Branching-enabled sync (Proxmox → NetBox)",

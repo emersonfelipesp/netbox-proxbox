@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 import json
 from typing import ClassVar
 
@@ -11,6 +12,7 @@ from django.db.models import QuerySet
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 from netbox.api.authentication import TokenAuthentication
@@ -50,6 +52,8 @@ from netbox_proxbox.models import (
     ProxboxPluginSettings,
     ProxmoxEndpoint,
     ProxmoxNode,
+    ProxmoxServiceCollection,
+    ProxmoxServiceStatus,
 )
 from netbox_proxbox.models.ssh_credential import (
     AUTH_METHOD_KEY,
@@ -79,6 +83,7 @@ __all__ = (
     "ProxmoxEndpointSSHSettingsView",
     "ProxmoxEndpointSSHTerminalView",
     "ProxmoxEndpointSSHTerminalSessionView",
+    "ProxmoxEndpointServicesView",
     "ProxmoxEndpointSyncJobsTabView",
     "ProxmoxEndpointBulkEnableAction",
     "ProxmoxEndpointBulkDisableAction",
@@ -900,6 +905,151 @@ class ProxmoxEndpointSSHTerminalSessionView(View):
                 status=400,
             )
         return None
+
+
+@register_model_view(ProxmoxEndpoint, "services", path="services")
+class ProxmoxEndpointServicesView(generic.ObjectView):
+    """Services tab showing projected systemctl state for a Proxmox endpoint."""
+
+    queryset = ProxmoxEndpoint.objects.all()
+    template_name = "netbox_proxbox/proxmoxendpoint_services.html"
+    tab = ViewTab(
+        label="Services",
+        permission="netbox_proxbox.view_proxmoxendpoint",
+        weight=930,
+    )
+
+    def _services_url(self, instance: ProxmoxEndpoint) -> str:
+        return reverse(
+            "plugins:netbox_proxbox:proxmoxendpoint_services",
+            args=[instance.pk],
+        )
+
+    def post(self, request: HttpRequest, pk: int) -> HttpResponseRedirect:
+        """Queue an on-demand service collection from the Refresh now control."""
+        change_permission = get_permission_for_model(ProxmoxEndpoint, "change")
+        if not request.user.has_perm(change_permission):
+            messages.error(
+                request,
+                _("You do not have permission to refresh service monitoring."),
+            )
+            return HttpResponseRedirect(
+                reverse(
+                    "plugins:netbox_proxbox:proxmoxendpoint_services",
+                    args=[pk],
+                )
+            )
+        endpoint = get_object_or_404(
+            ProxmoxEndpoint.objects.restrict(request.user, "change"),
+            pk=pk,
+        )
+        if not endpoint.service_monitoring_enabled:
+            messages.error(
+                request,
+                _("Service monitoring is disabled for this endpoint."),
+            )
+            return HttpResponseRedirect(self._services_url(endpoint))
+        from netbox_proxbox.services.endpoint_enabled import endpoint_is_enabled
+
+        if not endpoint_is_enabled(endpoint):
+            messages.error(
+                request,
+                _("Endpoint is disabled; disabled endpoints are never contacted."),
+            )
+            return HttpResponseRedirect(self._services_url(endpoint))
+        if not endpoint.service_monitoring_eligible:
+            messages.error(
+                request,
+                _(
+                    "Service monitoring requires write permission, API + SSH "
+                    "access, and complete endpoint SSH credentials."
+                ),
+            )
+            return HttpResponseRedirect(self._services_url(endpoint))
+
+        from netbox_proxbox.integrations.rpc import collect_systemctl_services
+
+        execution = collect_systemctl_services(
+            endpoint,
+            requested_by=request.user,
+            trigger="on_demand",
+        )
+        if execution is None:
+            messages.error(
+                request,
+                _(
+                    "Could not queue service monitoring. Confirm netbox-rpc is "
+                    "installed and the systemctl procedure is enabled."
+                ),
+            )
+        else:
+            messages.success(
+                request,
+                _("Queued service monitoring refresh via netbox-rpc."),
+            )
+        return HttpResponseRedirect(self._services_url(endpoint))
+
+    def get_extra_context(
+        self, request: HttpRequest, instance: ProxmoxEndpoint
+    ) -> dict[str, object]:
+        """Project finished executions and expose service heartbeat data."""
+        from netbox_proxbox.integrations.rpc import project_completed_collections
+
+        project_completed_collections()
+        instance.refresh_from_db(
+            fields=[
+                "service_monitoring_last_success_at",
+                "service_monitoring_last_status",
+                "service_monitoring_last_error",
+            ]
+        )
+        statuses = ProxmoxServiceStatus.objects.filter(endpoint=instance).order_by(
+            "unit"
+        )
+        collections = list(
+            ProxmoxServiceCollection.objects.filter(endpoint=instance).order_by(
+                "-collected_at",
+                "-pk",
+            )[:10]
+        )
+        interval_minutes = max(
+            1,
+            int(getattr(instance, "service_monitoring_interval_minutes", 5) or 5),
+        )
+        last_success_at = instance.service_monitoring_last_success_at
+        stale_after = (
+            last_success_at + timedelta(minutes=interval_minutes * 3)
+            if last_success_at
+            else None
+        )
+        now = timezone.now()
+        latest_collection = collections[0] if collections else None
+        reachable = bool(
+            latest_collection
+            and latest_collection.status == "succeeded"
+            and latest_collection.reachable
+        )
+        heartbeat = {
+            "last_success_at": last_success_at,
+            "last_status": instance.service_monitoring_last_status,
+            "last_error": instance.service_monitoring_last_error,
+            "interval_minutes": interval_minutes,
+            "stale_after": stale_after,
+            "is_stale": bool(stale_after is None or now > stale_after),
+            "reachable": reachable,
+        }
+        return {
+            "service_statuses": statuses,
+            "service_collections": collections,
+            "service_heartbeat": heartbeat,
+            "can_refresh_services": bool(
+                instance.service_monitoring_enabled
+                and instance.service_monitoring_eligible
+                and request.user.has_perm(
+                    get_permission_for_model(ProxmoxEndpoint, "change")
+                )
+            ),
+        }
 
 
 @register_model_view(ProxmoxEndpoint, "sync_jobs", path="sync-jobs")

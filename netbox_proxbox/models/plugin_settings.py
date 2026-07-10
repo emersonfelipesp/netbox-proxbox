@@ -727,6 +727,55 @@ class ProxboxPluginSettings(NetBoxModel):
             "assignments are never overwritten."
         ),
     )
+    cloud_network_lock_enabled = models.BooleanField(
+        default=False,
+        verbose_name=_("Enable cloud customer network lock"),
+        help_text=_(
+            "When enabled, cloud provisioning integrations should use the configured "
+            "customer network fields below as the authoritative NetBox source for "
+            "customer-facing instance networking."
+        ),
+    )
+    cloud_customer_prefix_id = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name=_("Cloud customer prefix ID"),
+        help_text=_(
+            "Primary key of the NetBox IPAM Prefix designated as the cloud customer "
+            "network. Populate it with the ensure_cloud_customer_network management "
+            "command rather than hardcoding estate-specific values."
+        ),
+    )
+    cloud_customer_bridge = models.CharField(
+        max_length=64,
+        default="vmbr1",
+        verbose_name=_("Cloud customer bridge"),
+        help_text=_(
+            "Proxmox bridge name used for cloud customer interfaces. The default is "
+            "only a conventional bridge label; the active estate-specific network is "
+            "selected by the management command."
+        ),
+    )
+    cloud_customer_vlan_tag = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name=_("Cloud customer VLAN tag"),
+        help_text=_(
+            "VLAN tag associated with the configured cloud customer network. Leave "
+            "blank until an operator runs ensure_cloud_customer_network."
+        ),
+    )
+    cloud_customer_gateway = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        verbose_name=_("Cloud customer gateway"),
+        help_text=_(
+            "Gateway address for the cloud customer network. Stored as operator "
+            "configuration so proxbox-api and nms-backend can discover it without "
+            "hardcoded estate values."
+        ),
+    )
     branching_enabled = models.BooleanField(
         default=False,
         verbose_name=_("Branching-enabled sync (Proxmox → NetBox)"),

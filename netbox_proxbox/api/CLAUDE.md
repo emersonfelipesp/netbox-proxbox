@@ -41,6 +41,9 @@ These follow the standard `NetBoxModelViewSet` + `NetBoxRouter` pattern:
 | `ReplicationViewSet` | `replications/` | Full CRUD |
 | `VMSnapshotViewSet` | `snapshots/` | Full CRUD |
 | `VMTaskHistoryViewSet` | `task-history/` | Full CRUD |
+| `ProxmoxServiceCollectionViewSet` | `service-collections/` | GET/HEAD/OPTIONS only — async netbox-rpc collection history |
+| `ProxmoxServiceSampleViewSet` | `service-samples/` | GET/HEAD/OPTIONS only — raw projected systemd rows |
+| `ProxmoxServiceStatusViewSet` | `service-statuses/` | GET/HEAD/OPTIONS only — latest projected service state |
 | `ProxmoxVMCloudInitViewSet` | `vm-cloudinit/` | Full CRUD |
 | `ProxmoxVMTemplateViewSet` | `vm-templates/` | Full CRUD |
 | `ProxboxPluginSettingsViewSet` | `settings/` | GET+PATCH only (singleton) |
@@ -83,6 +86,7 @@ These `APIView` subclasses mirror every data-bearing UI page and expose the same
 | `VirtualDisksAPIView` | `resources/virtual-disks/` | `/plugins/proxbox/virtual-disks/` | `IsAuthenticatedOrLoginNotRequired` |
 | `ScheduleSyncAPIView` | `sync/schedule/` | `/plugins/proxbox/sync/schedule/` | `IsAuthenticatedOrLoginNotRequired` + `core.add_job` check |
 | `BackendLogsAPIView` | `logs/` | `/plugins/proxbox/logs/` | `IsAuthenticatedOrLoginNotRequired` |
+| `ProxmoxServiceMonitoringRefreshAPIView` | `endpoints/proxmox/{id}/services/refresh/` | Proxmox endpoint Services tab refresh | `IsAuthenticated` + `change_proxmoxendpoint` + endpoint service-monitoring eligibility |
 
 ### Permission notes
 
@@ -128,6 +132,14 @@ These `APIView` subclasses mirror every data-bearing UI page and expose the same
   permission (required alongside `view` here) effectively grants retrieval of that
   password — scope it to operators already trusted with the endpoint credentials.
   Token-only endpoints (no stored password) get `422` from this view.
+- Proxmox endpoint service-monitoring fields are exposed on
+  `ProxmoxEndpointSerializer`, but decrypted SSH material is not. The refresh
+  API only queues an async `netbox-rpc` execution for the read-only
+  `os.linux.proxmox.show_systemctl_services` procedure. It requires
+  `change_proxmoxendpoint` and the same eligibility gate as the UI:
+  `allow_writes=True`, `access_methods="api_ssh"`, and complete endpoint SSH
+  credentials. `netbox-rpc` remains a soft optional dependency and must be
+  imported only inside call-time `try/except ImportError` blocks.
 - `NodeHostKeyFingerprintAPIView`
   (`GET ssh-credentials/by-node/<node_id>/host-key-fingerprint/`) backs the
   **"Fetch host key"** button in the **Terminal-tab credential modal** for

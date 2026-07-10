@@ -120,6 +120,11 @@ curl -H "Authorization: Token <token>" \
 | `ssh_credential_source` | choice | Browser terminal endpoint SSH source. `dedicated` (default) uses the encrypted endpoint `ssh_*` fields. `reuse_endpoint` sends the realm-stripped endpoint username plus endpoint plaintext password to `proxbox-api` as password SSH auth. |
 | `ssh_username` / `ssh_port` / `ssh_auth_method` / `ssh_known_host_fingerprint` | mixed | Dedicated endpoint SSH credential metadata for browser terminal sessions. The pinned host-key fingerprint is also required when `ssh_credential_source=reuse_endpoint`. |
 | `has_ssh_password` / `has_ssh_private_key` / `has_ssh_terminal_credentials` | boolean | Read-only browser terminal credential readiness flags. In reuse mode, readiness depends on endpoint host, pinned fingerprint, realm-stripped username, and endpoint password. |
+| `service_monitoring_enabled` | boolean | Opt-in flag for async systemd service monitoring via the optional `netbox-rpc` plugin. |
+| `service_monitoring_interval_minutes` | integer | Scheduled collection interval, 1 through 1440 minutes. |
+| `service_monitoring_units` | JSON list | Systemd units passed to `os.linux.proxmox.show_systemctl_services`; an empty list lets the RPC procedure use its default Proxmox unit set. |
+| `service_monitoring_last_success_at` / `service_monitoring_last_status` / `service_monitoring_last_error` | mixed | Read-only heartbeat fields updated by completed service-monitoring projections. |
+| `service_monitoring_eligible` | boolean | Read-only gate result. True only when `allow_writes=True`, `access_methods="api_ssh"`, and endpoint SSH credentials are complete. |
 
 !!! warning "Validation"
     At least one of `domain` or `ip_address` must be provided. Omitting both returns a 400 error on both fields.
@@ -134,6 +139,14 @@ curl -H "Authorization: Token <token>" \
     `auth_method=password`, the realm-stripped endpoint username, the endpoint
     password, and an empty `private_key`; token-only endpoints return a 4xx
     error instead of an empty password.
+
+!!! tip "Endpoint service monitoring"
+    The API route
+    `POST /api/plugins/proxbox/endpoints/proxmox/{id}/services/refresh/`
+    queues an on-demand `netbox-rpc` execution for service monitoring. It
+    requires `change_proxmoxendpoint` and the same eligibility gate as the UI.
+    Read-only projections are exposed at `/service-collections/`,
+    `/service-samples/`, and `/service-statuses/`.
 
 ### Tenant allow-list semantics
 

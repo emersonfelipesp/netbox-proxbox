@@ -107,6 +107,31 @@ class SettingsView(
                 "enable_tenant_from_cluster",
                 False,
             ),
+            "cloud_network_lock_enabled": getattr(
+                settings_obj,
+                "cloud_network_lock_enabled",
+                False,
+            ),
+            "cloud_customer_prefix_id": getattr(
+                settings_obj,
+                "cloud_customer_prefix_id",
+                None,
+            ),
+            "cloud_customer_bridge": getattr(
+                settings_obj,
+                "cloud_customer_bridge",
+                "vmbr1",
+            ),
+            "cloud_customer_vlan_tag": getattr(
+                settings_obj,
+                "cloud_customer_vlan_tag",
+                None,
+            ),
+            "cloud_customer_gateway": getattr(
+                settings_obj,
+                "cloud_customer_gateway",
+                "",
+            ),
             "branching_enabled": settings_obj.branching_enabled,
             "branch_name_prefix": settings_obj.branch_name_prefix,
             "branch_on_conflict": settings_obj.branch_on_conflict,
@@ -266,6 +291,21 @@ class SettingsView(
             settings_obj.enable_tenant_from_cluster = form.cleaned_data.get(
                 "enable_tenant_from_cluster", False
             )
+            settings_obj.cloud_network_lock_enabled = form.cleaned_data.get(
+                "cloud_network_lock_enabled", False
+            )
+            settings_obj.cloud_customer_prefix_id = form.cleaned_data.get(
+                "cloud_customer_prefix_id"
+            )
+            settings_obj.cloud_customer_bridge = form.cleaned_data.get(
+                "cloud_customer_bridge", "vmbr1"
+            )
+            settings_obj.cloud_customer_vlan_tag = form.cleaned_data.get(
+                "cloud_customer_vlan_tag"
+            )
+            settings_obj.cloud_customer_gateway = form.cleaned_data.get(
+                "cloud_customer_gateway", ""
+            )
             settings_obj.branching_enabled = form.cleaned_data.get(
                 "branching_enabled", False
             )
@@ -369,6 +409,11 @@ class SettingsView(
                     "tenant_name_regex_rules",
                     "enable_tenant_tag_assignment",
                     "enable_tenant_from_cluster",
+                    "cloud_network_lock_enabled",
+                    "cloud_customer_prefix_id",
+                    "cloud_customer_bridge",
+                    "cloud_customer_vlan_tag",
+                    "cloud_customer_gateway",
                     "branching_enabled",
                     "branch_name_prefix",
                     "branch_on_conflict",

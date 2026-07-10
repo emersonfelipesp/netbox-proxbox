@@ -201,9 +201,8 @@ class GuestVMInterfaceModelTest(TestCase):
             guest.full_clean()
 
     def test_fresh_install_defaults_strategy_to_guest_os_model(self) -> None:
-        # Migration 0059 only backfills to legacy_rename when a ProxmoxEndpoint
-        # exists; the fresh test DB has none, so the singleton keeps the new
-        # default rather than being silently flipped.
+        # Migration 0060 makes guest_os_model the universal default even though
+        # 0059 briefly preserved legacy_rename for existing installs.
         settings = ProxboxPluginSettings.objects.first()
         self.assertIsNotNone(settings)
         self.assertEqual(settings.vm_interface_sync_strategy, "guest_os_model")

@@ -64,6 +64,10 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
     has_ssh_password = serializers.BooleanField(read_only=True)
     has_ssh_private_key = serializers.BooleanField(read_only=True)
     has_ssh_terminal_credentials = serializers.BooleanField(read_only=True)
+    service_monitoring_eligible = serializers.BooleanField(read_only=True)
+    service_monitoring_last_success_at = serializers.DateTimeField(read_only=True)
+    service_monitoring_last_status = serializers.CharField(read_only=True)
+    service_monitoring_last_error = serializers.CharField(read_only=True)
     effective_rpc_enabled = serializers.SerializerMethodField(read_only=True)
 
     def get_effective_rpc_enabled(self, obj: ProxmoxEndpoint) -> bool:
@@ -101,6 +105,13 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
             "has_ssh_password",
             "has_ssh_private_key",
             "has_ssh_terminal_credentials",
+            "service_monitoring_enabled",
+            "service_monitoring_interval_minutes",
+            "service_monitoring_units",
+            "service_monitoring_last_success_at",
+            "service_monitoring_last_status",
+            "service_monitoring_last_error",
+            "service_monitoring_eligible",
             "default_role_qemu",
             "default_role_lxc",
             "enable_tenant_name_regex",

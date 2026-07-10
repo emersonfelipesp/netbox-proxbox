@@ -128,6 +128,13 @@ and fills an empty VM tenant from `vm.cluster.tenant`, so explicit name/tag rule
 win and existing VM tenants are never overwritten. Per-`ProxmoxEndpoint`
 overrides inherit from the global plugin settings when left null.
 
+Cloud-customer network discovery is also settings-backed. The plugin stores the
+operator-designated IPAM Prefix ID, bridge, VLAN tag, gateway, and lock flag on
+`ProxboxPluginSettings`; proxbox-api and nms-backend must resolve those fields
+instead of hardcoding estate network values. Populate them with the idempotent
+`python manage.py ensure_cloud_customer_network --prefix ... --vlan ... --gateway ... [--enable-lock]`
+command.
+
 ## Installation Docs
 
 - Docker-based NetBox installation guidance is documented at [`../docs/installation/3-installing-plugin-docker.md`](../docs/installation/3-installing-plugin-docker.md).

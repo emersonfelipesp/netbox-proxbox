@@ -146,6 +146,26 @@
                     {% render_field form.enable_tenant_from_cluster %}
                 </div>
             </div>
+            {# Cloud Customer Network Card #}
+            <div class="card mb-3">
+                <h5 class="card-header">
+                    <i class="mdi mdi-lan"></i>
+                    {% trans "Cloud customer network" %}
+                </h5>
+                <div class="card-body">
+                    <p class="text-muted">
+                        {% blocktrans trimmed %}
+                        Designate the NetBox IPAM network that proxbox-api and nms-backend
+                        use for customer-facing cloud instance interfaces.
+                        {% endblocktrans %}
+                    </p>
+                    {% render_field form.cloud_network_lock_enabled %}
+                    {% render_field form.cloud_customer_prefix_id %}
+                    {% render_field form.cloud_customer_bridge %}
+                    {% render_field form.cloud_customer_vlan_tag %}
+                    {% render_field form.cloud_customer_gateway %}
+                </div>
+            </div>
             {# Proxmox API Card #}
             <div class="card mb-3">
                 <h5 class="card-header">

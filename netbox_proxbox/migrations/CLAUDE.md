@@ -96,6 +96,7 @@ contract and issue #454 for the bug history.
 - **v0.0.18** (current): same chain as v0.0.16 plus `0039_squashed_0039_0042_pve_9_2_firewall_sdn` (replaces individual 0039–0042; no `replaces = [...]` attribute per post-squash policy)
   - 0039_squashed_0039_0042_pve_9_2_firewall_sdn: manually-constructed squash of migrations 0039 (PVE firewall models), 0040 (endpoint `enabled` field + PBS/PDM gap fix), 0041 (SDN/datacenter models + `ProxmoxNode.location`), and 0042 (SDN prefix list constraint rename). Uses idempotent `create_model_idempotent` / `add_field_idempotent` helpers throughout. Constraint rename is handled by a `_fix_sdn_prefix_list_constraint` RunPython that inspects `information_schema.table_constraints` and is safe for all three DB states: fresh install, partial upgrade, and fully-upgraded.
   - 0045_repair_pbs_pdm_endpoint_enabled: database-only repair for v0.0.18 installs where the released individual `0040_endpoint_enabled` migration added `enabled` to Proxmox/NetBox/FastAPI endpoints but omitted `PBSEndpoint` and `PDMEndpoint`. This migration adds the missing columns idempotently when those tables already exist.
+- **0059_cloud_customer_network_settings**: additive `ProxboxPluginSettings` fields for the operator-designated cloud-customer Prefix ID, bridge, VLAN tag, gateway, and lock flag. Uses `add_field_idempotent`; estate-specific values are populated by the `ensure_cloud_customer_network` management command, not by migration defaults or data migration.
 
 ## Notes
 

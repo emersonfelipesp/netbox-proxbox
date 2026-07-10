@@ -22,7 +22,11 @@ from django.utils.translation import gettext as _
 # Proxbox Imports
 from ..constants import OVERWRITE_FIELDS, RPC_FIELDS, SYNC_MODE_FIELDS
 from ..models import ProxmoxEndpoint
-from ..choices import ProxmoxEndpointEnvironmentChoices, ProxmoxModeChoices
+from ..choices import (
+    ProxmoxAccessMethodChoices,
+    ProxmoxEndpointEnvironmentChoices,
+    ProxmoxModeChoices,
+)
 from .settings import _parse_tenant_regex_rules, _sync_mode_choice_options
 
 from .import_utils import validate_endpoint_import_headers
@@ -354,6 +358,12 @@ class ProxmoxEndpointForm(ProxmoxEndpointSSHCredentialFormMixin, NetBoxModelForm
             *ProxmoxEndpointSSHCredentialFormMixin.ssh_credential_field_names,
             name="SSH credential access",
         ),
+        FieldSet(
+            "service_monitoring_enabled",
+            "service_monitoring_interval_minutes",
+            "service_monitoring_units",
+            name="Service monitoring",
+        ),
     )
 
     def __init__(self, *args: object, **kwargs: object) -> None:
@@ -387,6 +397,9 @@ class ProxmoxEndpointForm(ProxmoxEndpointSSHCredentialFormMixin, NetBoxModelForm
             "enabled",
             "allow_writes",
             "access_methods",
+            "service_monitoring_enabled",
+            "service_monitoring_interval_minutes",
+            "service_monitoring_units",
             "environment",
             "site",
             "tenant",
@@ -458,7 +471,71 @@ class ProxmoxEndpointForm(ProxmoxEndpointSSHCredentialFormMixin, NetBoxModelForm
             self.add_error("token_name", msg)
 
         self._clean_ssh_credentials()
+        self._clean_service_monitoring()
         return cleaned_data
+
+    def _clean_service_monitoring(self) -> None:
+        """Mirror the model eligibility gate using submitted credential values."""
+        cleaned_data = self.cleaned_data
+        if not cleaned_data.get("service_monitoring_enabled"):
+            return
+
+        eligible = (
+            bool(cleaned_data.get("allow_writes"))
+            and cleaned_data.get("access_methods") == ProxmoxAccessMethodChoices.API_SSH
+            and self._submitted_service_monitoring_credentials_ready()
+        )
+        if not eligible:
+            self.add_error(
+                "service_monitoring_enabled",
+                _(
+                    "Requires write permission (allow_writes), SSH access "
+                    "(api_ssh), and a registered SSH credential."
+                ),
+            )
+
+    def _submitted_service_monitoring_credentials_ready(self) -> bool:
+        """Return whether submitted endpoint SSH credentials are complete."""
+        cleaned_data = self.cleaned_data
+        instance = self.instance
+        credential_source = (
+            cleaned_data.get("ssh_credential_source")
+            or getattr(instance, "ssh_credential_source", SSH_CRED_SOURCE_DEDICATED)
+            or SSH_CRED_SOURCE_DEDICATED
+        )
+        domain = (cleaned_data.get("domain") or getattr(instance, "domain", "") or "")
+        ip_address = cleaned_data.get("ip_address") or getattr(
+            instance,
+            "ip_address",
+            None,
+        )
+        host = str(domain or ip_address or "").strip()
+        fingerprint = (cleaned_data.get("ssh_known_host_fingerprint") or "").strip()
+
+        if credential_source == SSH_CRED_SOURCE_REUSE:
+            username = (
+                cleaned_data.get("username")
+                or getattr(instance, "username", "")
+                or ""
+            )
+            effective_username = str(username).split("@", 1)[0].strip()
+            password = cleaned_data.get("password")
+            if password is None:
+                password = getattr(instance, "password", "")
+            return bool(host and fingerprint and effective_username and password)
+
+        username = (cleaned_data.get("ssh_username") or "").strip()
+        clear_password = bool(cleaned_data.get("clear_ssh_password"))
+        clear_private_key = bool(cleaned_data.get("clear_ssh_private_key"))
+        has_password = bool(cleaned_data.get("ssh_password")) or (
+            bool(getattr(instance, "ssh_password_enc", "")) and not clear_password
+        )
+        has_private_key = bool(cleaned_data.get("ssh_private_key")) or (
+            bool(getattr(instance, "ssh_private_key_enc", "")) and not clear_private_key
+        )
+        auth_method = cleaned_data.get("ssh_auth_method")
+        has_secret = has_private_key if auth_method == AUTH_METHOD_KEY else has_password
+        return bool(host and username and fingerprint and has_secret)
 
 
 class ProxmoxEndpointSettingsForm(NetBoxModelForm):

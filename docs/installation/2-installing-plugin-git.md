@@ -4,7 +4,7 @@ This is the recommended installation path for the current repository state.
 
 ## Why This Is Recommended
 
-The code in this repository is `0.0.21` and targets NetBox `4.5.8`,
+The code in this repository is `0.0.23.post1` and targets NetBox `4.5.8`,
 `4.5.9`, and `4.6.x` (validated against `v4.5.8`, `v4.5.9`, `v4.6.0`, and
 `v4.6.0` through `v4.6.4`). That is the version line reflected by the docs in this
 repository.

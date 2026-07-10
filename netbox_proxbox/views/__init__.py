@@ -145,6 +145,7 @@ from .endpoints import (
     ProxmoxEndpointDeleteView,
     ProxmoxEndpointEditView,
     ProxmoxEndpointListView,
+    ProxmoxEndpointServicesView,
     ProxmoxEndpointSyncNowView,
     ProxmoxEndpointView,
 )

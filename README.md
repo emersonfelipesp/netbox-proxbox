@@ -18,6 +18,7 @@ Proxbox discovers and syncs the following from Proxmox into NetBox:
 - **Network Interfaces and IPs** — Proxmox NICs (`net0`, `net1`) as core NetBox VM interfaces, optional guest-OS interfaces (`ens18`, `eth0`) as plugin `GuestVMInterface` rows, and IP addresses assigned to VMs and containers
 - **Backup Routines** — Backup job definitions from Proxmox
 - **Replications** — Replication job status and configuration
+- **Opt-in service monitoring** — Proxmox endpoint systemd service state collected through the optional `netbox-rpc` procedure `os.linux.proxmox.show_systemctl_services`
 
 > **Note:** All metrics (CPU, memory, uptime, etc.) are captured as point-in-time snapshots at sync time, not continuous monitoring.
 
@@ -32,9 +33,10 @@ before any companion plugin. The infrastructure inventory plugins declare
 `netbox-rpc` follow the same operational conventions for the Proxbox plugin
 family. `netbox-rpc` is an *operational* companion: when it is installed,
 netbox-proxbox can run audited SSH procedures against Proxmox hosts (for
-example installing the proxbox-api cloud-image-build SSH key on a node) through
-the netbox-rpc engine instead of handling SSH itself. The integration is a soft
-dependency — see `netbox_proxbox/integrations/rpc.py`.
+example installing the proxbox-api cloud-image-build SSH key on a node, or
+collecting systemd service status for an endpoint) through the netbox-rpc engine
+instead of handling SSH itself. The integration is a soft dependency — see
+`netbox_proxbox/integrations/rpc.py`.
 
 | Package | NetBox plugin | What it adds |
 |---------|---------------|--------------|
@@ -42,7 +44,7 @@ dependency — see `netbox_proxbox/integrations/rpc.py`.
 | [`netbox-pbs`](https://github.com/emersonfelipesp/netbox-pbs) | `netbox_pbs` | Inventories Proxmox Backup Server infrastructure, including PBS servers, datastores, backup snapshots, and scheduled job history. |
 | [`netbox-ceph`](https://github.com/emersonfelipesp/netbox-ceph) | `netbox_ceph` | Adds read-only Ceph cluster inventory for Proxmox-managed Ceph: clusters, daemons, OSDs, pools, filesystems, CRUSH rules, flags, and health checks. |
 | [`netbox-packer`](https://github.com/emersonfelipesp/netbox-packer) | `netbox_packer` | Tracks HashiCorp Packer image definitions and build execution records for Proxmox VM templates and image-factory workflows. |
-| [`netbox-rpc`](https://github.com/emersonfelipesp/netbox-rpc) | `netbox_rpc` | Audited SSH/RPC procedure engine. netbox-proxbox optionally uses it to install SSH keys on Proxmox hosts (e.g. for the cloud-image build pipeline) via `netbox_proxbox.integrations.rpc`. |
+| [`netbox-rpc`](https://github.com/emersonfelipesp/netbox-rpc) | `netbox_rpc` | Audited SSH/RPC procedure engine. netbox-proxbox optionally uses it to install SSH keys on Proxmox hosts and to collect Proxmox endpoint systemd service status via `netbox_proxbox.integrations.rpc`. |
 
 For a standard NetBox virtualenv install, activate the NetBox environment and
 install the packages you want:
@@ -119,6 +121,24 @@ list, detail page, and dashboard card. These UI surfaces do not attach live
 status polling metadata for disabled rows, so the browser does not repaint an
 administratively disabled endpoint as a red error.
 
+### Proxmox Endpoint Service Monitoring
+
+Service monitoring is opt-in per `ProxmoxEndpoint`. An endpoint is eligible only
+when `allow_writes=True`, `access_methods="api_ssh"`, and the endpoint has a
+complete registered SSH credential. Collection is agentless from the Proxbox
+plugin perspective: netbox-proxbox creates a `netbox-rpc` `RPCExecution` for the
+read-only procedure `os.linux.proxmox.show_systemctl_services` with params
+`{proxmox_endpoint_id, units}` and assigned object set to the endpoint. The RPC
+backend uses the endpoint's own SSH credential; netbox-proxbox does not open SSH
+sockets or run shell commands itself.
+
+Execution is asynchronous. Phase 1 queues the RPC job and records a pending
+`ProxmoxServiceCollection`. Phase 2 runs from the periodic service-monitoring
+tick and from the endpoint **Services** tab render path: completed executions are
+projected into raw `ProxmoxServiceSample` rows, latest `ProxmoxServiceStatus`
+rows, and endpoint heartbeat fields. A `reachable=false` RPC result is recorded
+as an unreachable node outcome, not as a projection error.
+
 ### Cloud Portal Endpoint Allowlists
 
 `ProxmoxEndpoint.allowed_tenants` controls which Proxmox endpoint rows are
@@ -150,6 +170,29 @@ other tenants.
   assigned to the core VM interface. The older `use_guest_agent_interface_name`
   flag is deprecated and only applies when `vm_interface_sync_strategy` is set
   to `legacy_rename`.
+
+## What's New in v0.0.23.post1
+
+Current pairing: netbox-proxbox 0.0.23.post1 <-> proxbox-api (guest-VM-interface writer build / next release) <-> proxmox-sdk 0.0.12 <-> netbox-sdk 0.0.10.
+
+Paired with backend: guest-VM-interface writer build / next release.
+
+- **Universal guest OS interface model default.** `vm_interface_sync_strategy=guest_os_model` is now the default for existing installs as well as new installs; migration `0060` supersedes the `0.0.23` upgrade backfill that kept configured installs on `legacy_rename`.
+- **Upgrade behavior change.** Proxmox NICs stay as `net0`/`net1` core `VMInterface` rows, guest-agent names such as `ens18` are stored in `GuestVMInterface`, and operators who want the old renaming behavior can re-select `legacy_rename` in plugin settings.
+
+Full notes: [Release Notes - v0.0.23.post1](docs/release-notes/version-0.0.23.post1.md).
+
+## What's New in v0.0.23
+
+Current pairing: netbox-proxbox 0.0.23 <-> proxbox-api (guest-VM-interface writer build / next release) <-> proxmox-sdk 0.0.12 <-> netbox-sdk 0.0.10.
+
+Paired with backend: guest-VM-interface writer build / next release.
+
+- **Dual VM interface sync.** Proxmox NICs stay as core `VMInterface` rows named `net0`/`net1`, while guest-agent OS interfaces such as `ens18` are stored in `GuestVMInterface` rows.
+- **Shared IP ownership.** `GuestVMInterfaceAddress` links guest interfaces to the same core `ipam.IPAddress` objects already assigned to the mapped core VM interface.
+- **Strategy control.** `vm_interface_sync_strategy=guest_os_model` is the new default for fresh installs; existing configured installs are backfilled to `legacy_rename` during migration `0059` so upgrades do not silently rename interfaces differently. This 0.0.23 upgrade backfill is superseded by v0.0.23.post1.
+
+Full notes: [Release Notes - v0.0.23](docs/release-notes/version-0.0.23.md).
 
 ## What's New in v0.0.22
 
@@ -230,6 +273,8 @@ Full notes: [Release Notes — v0.0.18](https://emersonfelipesp.github.io/netbox
 
 | NetBox | netbox-proxbox | proxbox-api | netbox-sdk | proxmox-sdk |
 |--------|----------------|-------------|------------|-------------|
+| >=4.5.8 | v0.0.23.post1 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
+| >=4.5.8 | v0.0.23 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
 | >=4.5.8 | v0.0.22 | v0.0.19.post5 | v0.0.10 | v0.0.12 |
 | >=4.5.8 | v0.0.21 | v0.0.18.post5 | v0.0.10 | v0.0.12 |
 | >=4.5.8 | v0.0.20.post3 | v0.0.17.post1 | v0.0.9.post1 | v0.0.11.post1 |

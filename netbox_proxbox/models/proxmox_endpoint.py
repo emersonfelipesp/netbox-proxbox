@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
@@ -324,6 +325,46 @@ class ProxmoxEndpoint(EndpointBase):
         default="",
         verbose_name=_("Encrypted SSH private key"),
         help_text=_("Fernet-encrypted fallback SSH private key ciphertext. Internal."),
+    )
+    service_monitoring_enabled = models.BooleanField(
+        default=False,
+        verbose_name=_("Enable service monitoring"),
+        help_text=_(
+            "Opt in to agentless systemd service monitoring through netbox-rpc. "
+            "Requires Proxmox-side writes enabled, API + SSH access, and complete "
+            "endpoint SSH credentials."
+        ),
+    )
+    service_monitoring_interval_minutes = models.PositiveIntegerField(
+        default=5,
+        validators=[MinValueValidator(1), MaxValueValidator(1440)],
+        verbose_name=_("Service monitoring interval (minutes)"),
+        help_text=_("Polling interval for systemd service monitoring."),
+    )
+    service_monitoring_units = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name=_("Service monitoring units"),
+        help_text=_(
+            "List of systemd units to collect. Leave empty to let netbox-rpc use "
+            "its default Proxmox unit set."
+        ),
+    )
+    service_monitoring_last_success_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Service monitoring last success"),
+    )
+    service_monitoring_last_status = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        verbose_name=_("Service monitoring last status"),
+    )
+    service_monitoring_last_error = models.TextField(
+        blank=True,
+        default="",
+        verbose_name=_("Service monitoring last error"),
     )
     overwrite_device_role = models.BooleanField(
         null=True,
@@ -713,6 +754,15 @@ class ProxmoxEndpoint(EndpointBase):
             and has_secret
         )
 
+    @property
+    def service_monitoring_eligible(self) -> bool:
+        """Return whether this endpoint can run systemctl service monitoring."""
+        return bool(
+            self.allow_writes
+            and self.ssh_access_enabled
+            and self.has_ssh_terminal_credentials
+        )
+
     def set_ssh_password(self, plaintext: str, *, key: str) -> None:
         """Encrypt and store the endpoint fallback SSH password."""
         self.ssh_password_enc = enc_helpers.encrypt(plaintext, key=key)
@@ -735,6 +785,15 @@ class ProxmoxEndpoint(EndpointBase):
         if self.ssh_known_host_fingerprint:
             self.ssh_known_host_fingerprint = normalize_fingerprint(
                 self.ssh_known_host_fingerprint
+            )
+        if self.service_monitoring_enabled and not self.service_monitoring_eligible:
+            raise ValidationError(
+                {
+                    "service_monitoring_enabled": (
+                        "Requires write permission (allow_writes), SSH access "
+                        "(api_ssh), and a registered SSH credential."
+                    )
+                }
             )
         if self.ssh_credential_source == SSH_CRED_SOURCE_REUSE:
             errors: dict[str, str] = {}
