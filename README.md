@@ -151,6 +151,17 @@ other tenants.
   flag is deprecated and only applies when `vm_interface_sync_strategy` is set
   to `legacy_rename`.
 
+## What's New in v0.0.23.post1
+
+Current pairing: netbox-proxbox 0.0.23.post1 <-> proxbox-api (guest-VM-interface writer build / next release) <-> proxmox-sdk 0.0.12 <-> netbox-sdk 0.0.10.
+
+Paired with backend: guest-VM-interface writer build / next release.
+
+- **Universal guest OS interface model default.** `vm_interface_sync_strategy=guest_os_model` is now the default for existing installs as well as new installs; migration `0060` supersedes the `0.0.23` upgrade backfill that kept configured installs on `legacy_rename`.
+- **Upgrade behavior change.** Proxmox NICs stay as `net0`/`net1` core `VMInterface` rows, guest-agent names such as `ens18` are stored in `GuestVMInterface`, and operators who want the old renaming behavior can re-select `legacy_rename` in plugin settings.
+
+Full notes: [Release Notes - v0.0.23.post1](docs/release-notes/version-0.0.23.post1.md).
+
 ## What's New in v0.0.23
 
 Current pairing: netbox-proxbox 0.0.23 <-> proxbox-api (guest-VM-interface writer build / next release) <-> proxmox-sdk 0.0.12 <-> netbox-sdk 0.0.10.
@@ -159,7 +170,7 @@ Paired with backend: guest-VM-interface writer build / next release.
 
 - **Dual VM interface sync.** Proxmox NICs stay as core `VMInterface` rows named `net0`/`net1`, while guest-agent OS interfaces such as `ens18` are stored in `GuestVMInterface` rows.
 - **Shared IP ownership.** `GuestVMInterfaceAddress` links guest interfaces to the same core `ipam.IPAddress` objects already assigned to the mapped core VM interface.
-- **Strategy control.** `vm_interface_sync_strategy=guest_os_model` is the new default for fresh installs; existing configured installs are backfilled to `legacy_rename` during migration `0059` so upgrades do not silently rename interfaces differently.
+- **Strategy control.** `vm_interface_sync_strategy=guest_os_model` is the new default for fresh installs; existing configured installs are backfilled to `legacy_rename` during migration `0059` so upgrades do not silently rename interfaces differently. This 0.0.23 upgrade backfill is superseded by v0.0.23.post1.
 
 Full notes: [Release Notes - v0.0.23](docs/release-notes/version-0.0.23.md).
 
@@ -242,6 +253,7 @@ Full notes: [Release Notes — v0.0.18](https://emersonfelipesp.github.io/netbox
 
 | NetBox | netbox-proxbox | proxbox-api | netbox-sdk | proxmox-sdk |
 |--------|----------------|-------------|------------|-------------|
+| >=4.5.8 | v0.0.23.post1 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
 | >=4.5.8 | v0.0.23 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
 | >=4.5.8 | v0.0.22 | v0.0.19.post5 | v0.0.10 | v0.0.12 |
 | >=4.5.8 | v0.0.21 | v0.0.18.post5 | v0.0.10 | v0.0.12 |

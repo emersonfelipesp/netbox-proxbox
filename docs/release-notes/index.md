@@ -4,7 +4,7 @@ This section tracks the release line represented by this repository and keeps ol
 
 ## Current Release Line
 
-The plugin source in this repository is currently `0.0.23` on the
+The plugin source in this repository is currently `0.0.23.post1` on the
 development line. The sibling plugins (`netbox-pbs`,
 `netbox-ceph`, and `netbox-pdm`) live in standalone repositories under
 [@emersonfelipesp](https://github.com/emersonfelipesp) and declare
@@ -16,6 +16,7 @@ part of the same plugin family.
 
 | Version | Summary |
 |---------|---------|
+| `0.0.23.post1` | Makes `guest_os_model` the universal VM interface sync default, including existing installs. Migration `0060` supersedes the `0.0.23` backward-compat backfill that kept upgrades on `legacy_rename`; `legacy_rename` remains a deprecated selectable opt-out. Pairs with a `proxbox-api` guest-VM-interface writer build / next release, `proxmox-sdk 0.0.12`, and `netbox-sdk 0.0.10`. |
 | `0.0.23` | Dual VM interface sync release: keeps Proxmox NICs as core `VMInterface` rows while writing guest-agent OS interfaces and their shared IP links to `GuestVMInterface` / `GuestVMInterfaceAddress`. Pairs with a `proxbox-api` guest-VM-interface writer build / next release, `proxmox-sdk 0.0.12`, and `netbox-sdk 0.0.10`. |
 | `0.0.22` | Endpoint access and certification release: adds per-endpoint API-only vs API+SSH access methods, the Proxmox endpoint **Fetch host key** flow, SSH credential-source selection, Proxmox-side write toggle, bulk endpoint enablement, tenant allowlists, PDM endpoint sync, SDN inventory and migration fixes, Firecracker serializer hardening, NetBox `v4.6.4` certification, and read-only REST coverage for safety-gated audit resources. Pairs with backend [`proxbox-api 0.0.19.post5`](https://github.com/emersonfelipesp/proxbox-api), `proxmox-sdk 0.0.12`, and `netbox-sdk 0.0.10`. |
 | `0.0.21` | Sync-mode filtering at source: per-record VM and VM-template filtering enforced by `proxbox-api 0.0.18.post5` using `sync_mode_vm`/`sync_mode_vm_template` query params — a `disabled` mode no longer creates dependent NetBox objects for skipped VMs. Two-phase VM batch processing and per-VM dispatch failure isolation. Interface-dense guest alias matching by name and partial-failure stream frame. Pairs with backend [`proxbox-api 0.0.18.post5`](https://github.com/emersonfelipesp/proxbox-api), `proxmox-sdk 0.0.12`, and `netbox-sdk 0.0.10`. |
@@ -51,4 +52,4 @@ part of the same plugin family.
 - Older pages are intentionally brief because the repository does not preserve fuller release-note prose for those versions.
 
 
-> **Current release:** netbox-proxbox `0.0.23` pairs with proxbox-api guest-VM-interface writer build / next release (NetBox `4.5.8`-`4.6.99`). Current pairing: netbox-proxbox 0.0.23 <-> proxbox-api (guest-VM-interface writer build / next release) <-> proxmox-sdk 0.0.12 <-> netbox-sdk 0.0.10.
+> **Current release:** netbox-proxbox `0.0.23.post1` pairs with proxbox-api guest-VM-interface writer build / next release (NetBox `4.5.8`-`4.6.99`). Current pairing: netbox-proxbox 0.0.23.post1 <-> proxbox-api (guest-VM-interface writer build / next release) <-> proxmox-sdk 0.0.12 <-> netbox-sdk 0.0.10.

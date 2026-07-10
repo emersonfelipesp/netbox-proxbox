@@ -50,6 +50,9 @@ Current pairing: netbox-proxbox 0.0.23 <-> proxbox-api (guest-VM-interface write
   (detected by the presence of a configured Proxmox endpoint) are backfilled to
   `legacy_rename` so an upgrade never silently changes interface naming;
   operators opt into `guest_os_model` explicitly. **Fresh installs** default to
-  `guest_os_model`.
+  `guest_os_model`. This compatibility backfill is superseded by
+  `0.0.23.post1`, whose migration `0060` switches existing `legacy_rename`
+  settings to `guest_os_model` by default while leaving `legacy_rename`
+  selectable as an opt-out.
 - Addresses the long-standing "IP addresses not syncing / `net0` vs `ens18`"
   reports.

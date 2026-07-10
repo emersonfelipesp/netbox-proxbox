@@ -66,7 +66,7 @@ def test_guest_vm_interface_models_are_exported() -> None:
     assert '"GuestVMInterfaceAddress"' in content
 
 
-def test_guest_vm_interface_migration_is_additive_leaf() -> None:
+def test_guest_vm_interface_migration_is_additive() -> None:
     content = _read("netbox_proxbox/migrations/0059_guest_vm_interface.py")
 
     assert '"0058_encrypt_primary_endpoint_secrets"' in content
@@ -90,6 +90,19 @@ def test_guest_vm_interface_migration_is_additive_leaf() -> None:
     assert "migrations.RunPython(" in content
     assert "ProxmoxEndpoint" in content
     assert "if not ProxmoxEndpoint.objects.exists():" in content
+
+
+def test_guest_vm_interface_strategy_default_adoption_migration_contract() -> None:
+    content = _read("netbox_proxbox/migrations/0060_default_guest_os_model.py")
+
+    assert '"0059_guest_vm_interface"' in content
+    assert "legacy_rename" in content
+    assert "guest_os_model" in content
+    assert "RunPython" in content
+    assert "apps.get_model" in content
+    assert ".filter(" in content
+    assert ".update(" in content
+    assert "migrations.RunPython.noop" in content
 
 
 def test_guest_vm_interface_api_contract() -> None:

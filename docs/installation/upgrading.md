@@ -21,7 +21,8 @@ pip install -e /opt/netbox/netbox/netbox-proxbox
 
 ## Important Notes
 
-- Proxbox `0.0.23` is the current release candidate for NetBox `4.5.8`, `4.5.9`, and `4.6.x` (validated against `v4.5.8`, `v4.5.9`, and `v4.6.0` through `v4.6.4`; declared compatibility range `4.5.8` through `4.6.99`). It pairs with a `proxbox-api` guest-VM-interface writer build / next release. Plugin version `0.0.23` on the `0.0.23` release line. The previous stable `0.0.22` release pairs with backend `0.0.19.post5`.
+- Proxbox `0.0.23.post1` is the current release candidate for NetBox `4.5.8`, `4.5.9`, and `4.6.x` (validated against `v4.5.8`, `v4.5.9`, and `v4.6.0` through `v4.6.4`; declared compatibility range `4.5.8` through `4.6.99`). It pairs with a `proxbox-api` guest-VM-interface writer build / next release. Plugin version `0.0.23.post1` on the `0.0.23` release line. The previous stable `0.0.22` release pairs with backend `0.0.19.post5`.
+- Upgrading to `0.0.23.post1` switches existing installs from `vm_interface_sync_strategy=legacy_rename` to `vm_interface_sync_strategy=guest_os_model`. Proxmox `netX` interfaces stay named `netX` as core `VMInterface` rows, and guest OS names such as `ens18` are stored in `GuestVMInterface` rows. Operators who want the old core-interface renaming behavior can re-select `vm_interface_sync_strategy=legacy_rename` in plugin settings after the upgrade.
 - Disabled endpoint-like rows with `enabled=False` are inventory-only in `0.0.20.post3`: they remain visible in UI/API output, but status, keepalive, backend registration, OpenAPI, startup/signal, sync, PBS, PDM, and companion endpoint paths return before any backend or remote-service connection attempt.
 - This release includes the PVE 9.2 schema migration plus `0045_repair_pbs_pdm_endpoint_enabled`, a database-only repair for affected `0.0.18` installs where `PBSEndpoint` and `PDMEndpoint` were missing the shared endpoint `enabled` column. Run `python manage.py migrate netbox_proxbox` after upgrade.
 - If you operate the proxbox-api `*-nginx` image and previously could not connect, edit the FastAPI endpoint after upgrade and tick **Use HTTPS** (and untick **Verify SSL** if you use the bundled mkcert cert).
@@ -51,4 +52,4 @@ a backend build containing that fix, or the next fixed backend release, before
 re-testing VM IP sync.
 
 
-> **Current release:** netbox-proxbox `0.0.23` pairs with proxbox-api guest-VM-interface writer build / next release (NetBox `4.5.8`-`4.6.99`). Current pairing: netbox-proxbox 0.0.23 <-> proxbox-api (guest-VM-interface writer build / next release) <-> proxmox-sdk 0.0.12 <-> netbox-sdk 0.0.10.
+> **Current release:** netbox-proxbox `0.0.23.post1` pairs with proxbox-api guest-VM-interface writer build / next release (NetBox `4.5.8`-`4.6.99`). Current pairing: netbox-proxbox 0.0.23.post1 <-> proxbox-api (guest-VM-interface writer build / next release) <-> proxmox-sdk 0.0.12 <-> netbox-sdk 0.0.10.
