@@ -101,6 +101,20 @@ erDiagram
         string  type
         fk      virtual_machine
     }
+    GuestVMInterface {
+        int     id
+        string  name
+        string  mac_address
+        bool    enabled
+        int     mtu
+        fk      virtual_machine
+        fk      vm_interface
+    }
+    GuestVMInterfaceAddress {
+        int     id
+        fk      guest_interface
+        fk      ip_address
+    }
     FirecrackerHostPool {
         int     id
         string  name
@@ -161,6 +175,8 @@ erDiagram
     FirecrackerHost ||--o{ FirecrackerMicroVM : "runs"
     FirecrackerImageTemplate ||--o{ FirecrackerMicroVM : "boots"
     ProxmoxNode ||--o{ FirecrackerHost : "hosts agent VM"
+    VirtualMachine ||--o{ GuestVMInterface : "has guest OS interfaces"
+    GuestVMInterface ||--o{ GuestVMInterfaceAddress : "observes"
 ```
 
 > **NetBox core relationships** — Plugin models link to standard NetBox objects via foreign keys:
@@ -170,6 +186,9 @@ erDiagram
 > - `VMBackup.virtual_machine` → `virtualization.VirtualMachine`
 > - `VMSnapshot.virtual_machine` → `virtualization.VirtualMachine`
 > - `VMTaskHistory.virtual_machine` → `virtualization.VirtualMachine`
+> - `GuestVMInterface.virtual_machine` → `virtualization.VirtualMachine`
+> - `GuestVMInterface.vm_interface` → `virtualization.VMInterface` (nullable)
+> - `GuestVMInterfaceAddress.ip_address` → `ipam.IPAddress` (shared core IP object)
 > - `ProxmoxEndpoint.ip_address` → `ipam.IPAddress`
 > - `FirecrackerHost.host_vm` → `virtualization.VirtualMachine` for the Proxmox VM running the host agent
 > - `FirecrackerHost.proxmox_node` → `netbox_proxbox.ProxmoxNode`

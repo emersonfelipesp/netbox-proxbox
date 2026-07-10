@@ -77,6 +77,16 @@ router.register(
     basename="firecrackermicrovm",
 )
 router.register("storage", views.ProxmoxStorageViewSet, basename="storage")
+router.register(
+    "guest-vm-interfaces",
+    views.GuestVMInterfaceViewSet,
+    basename="guestvminterface",
+)
+router.register(
+    "guest-vm-interface-addresses",
+    views.GuestVMInterfaceAddressViewSet,
+    basename="guestvminterfaceaddress",
+)
 router.register("backups", views.VMBackupViewSet)
 router.register("backup-routines", views.BackupRoutineViewSet, basename="backuproutine")
 router.register("replications", views.ReplicationViewSet, basename="replication")

@@ -27,7 +27,8 @@ shadows the field.
 
 | Field | Default | Env override | Description |
 |---|---|---|---|
-| **Use guest agent interface name** | `true` | _(plugin only)_ | Use QEMU guest-agent interface names (e.g. `ens18`) instead of generic Proxmox labels (e.g. `net0`). |
+| **VM interface sync strategy** | `guest_os_model` | _(plugin only)_ | `guest_os_model` keeps Proxmox NICs as core `VMInterface` rows named `net0`/`net1` and writes guest-agent OS interfaces to plugin `GuestVMInterface` rows. `legacy_rename` preserves the older lossy behavior that renames the core VM interface to the guest-agent name. |
+| **Use guest agent interface name** | `true` | _(plugin only)_ | **Deprecated.** Used only when **VM interface sync strategy** is `legacy_rename`; then it controls whether guest-agent names (e.g. `ens18`) replace generic Proxmox labels (e.g. `net0`). |
 | **Proxmox fetch max concurrency** | `8` | `PROXBOX_FETCH_MAX_CONCURRENCY` | Maximum parallel Proxmox fetch operations per sync stage. Raise for multi-cluster speed; lower if Proxmox load is a concern. |
 | **Ignore IPv6 link-local addresses** | `true` | _(plugin only)_ | Skip `fe80::/64` addresses during VM interface IP selection. |
 | **Ensure NetBox supporting objects on startup** | `true` | _(plugin only)_ | When enabled, proxbox-api runs an idempotent NetBox-side bootstrap pass on each process start that ensures the supporting objects the plugin relies on (cluster type, device roles, manufacturer, device type, VM type, custom fields, discovery tags) exist. Disable to leave hand-curated NetBox installs untouched. |

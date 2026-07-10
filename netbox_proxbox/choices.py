@@ -123,6 +123,20 @@ class SyncModeChoices(ChoiceSet):
     ]
 
 
+class VMInterfaceSyncStrategyChoices(ChoiceSet):
+    """How VM interface sync represents Proxmox NICs and guest OS interfaces."""
+
+    key = "ProxboxPluginSettings.vm_interface_sync_strategy"
+
+    GUEST_OS_MODEL = "guest_os_model"
+    LEGACY_RENAME = "legacy_rename"
+
+    CHOICES = [
+        (GUEST_OS_MODEL, _("Guest OS model"), "green"),
+        (LEGACY_RENAME, _("Legacy rename"), "yellow"),
+    ]
+
+
 class NetBoxTokenVersionChoices(ChoiceSet):
     """NetBox REST API token style for remote endpoint authentication."""
 

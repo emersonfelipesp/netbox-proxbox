@@ -34,6 +34,8 @@ from .serializers import (
     FirecrackerHostSerializer,
     FirecrackerImageTemplateSerializer,
     FirecrackerMicroVMSerializer,
+    GuestVMInterfaceAddressSerializer,
+    GuestVMInterfaceSerializer,
     NetBoxEndpointSerializer,
     NodeSSHCredentialSerializer,
     PBSEndpointSerializer,
@@ -99,6 +101,8 @@ class ProxBoxRootView(APIRootView):
             "vm_templates": f"{base}/vm-templates/",
             "firecracker_microvms": f"{base}/resources/firecracker-microvms/",
             "interfaces": f"{base}/resources/interfaces/",
+            "guest_vm_interfaces": f"{base}/guest-vm-interfaces/",
+            "guest_vm_interface_addresses": (f"{base}/guest-vm-interface-addresses/"),
             "ip_addresses": f"{base}/resources/ip-addresses/",
             "virtual_disks": f"{base}/resources/virtual-disks/",
         }
@@ -279,6 +283,30 @@ class ProxmoxStorageViewSet(NetBoxModelViewSet):
     queryset = models.ProxmoxStorage.objects.select_related("cluster")
     serializer_class = ProxmoxStorageSerializer
     filterset_class = filtersets.ProxmoxStorageFilterSet
+
+
+class GuestVMInterfaceViewSet(NetBoxModelViewSet):
+    """REST API for guest OS VM interfaces reported by the QEMU guest agent."""
+
+    queryset = models.GuestVMInterface.objects.select_related(
+        "virtual_machine",
+        "vm_interface",
+    ).prefetch_related("addresses", "tags")
+    serializer_class = GuestVMInterfaceSerializer
+    filterset_class = filtersets.GuestVMInterfaceFilterSet
+
+
+class GuestVMInterfaceAddressViewSet(NetBoxModelViewSet):
+    """REST API for guest OS interface to shared IPAddress links."""
+
+    queryset = models.GuestVMInterfaceAddress.objects.select_related(
+        "guest_interface",
+        "guest_interface__virtual_machine",
+        "guest_interface__vm_interface",
+        "ip_address",
+    ).prefetch_related("tags")
+    serializer_class = GuestVMInterfaceAddressSerializer
+    filterset_class = filtersets.GuestVMInterfaceAddressFilterSet
 
 
 class ProxmoxEndpointViewSet(NetBoxModelViewSet):

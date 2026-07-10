@@ -23,6 +23,7 @@
                         Configure runtime behavior for Proxbox synchronization.
                         {% endblocktrans %}
                     </p>
+                    {% render_field form.vm_interface_sync_strategy %}
                     {% render_field form.use_guest_agent_interface_name %}
                     {% render_field form.proxbox_fetch_max_concurrency %}
                     {% render_field form.ignore_ipv6_link_local_addresses %}

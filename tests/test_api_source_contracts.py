@@ -557,6 +557,8 @@ def test_plugin_api_routes_register_all_plugin_objects():
         "firewall/options",
         "firewall/rules",
         "firewall/security-groups",
+        "guest-vm-interface-addresses",
+        "guest-vm-interfaces",
         "pdm-remotes",
         "proxmox-clusters",
         "proxmox-nodes",

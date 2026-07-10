@@ -782,6 +782,13 @@ def parser_module(monkeypatch):
             ("disabled", "Disabled", "red"),
         )
     )
+    choices_mod.VMInterfaceSyncStrategyChoices = SimpleNamespace(
+        CHOICES=(
+            ("guest_os_model", "Guest OS model", "green"),
+            ("legacy_rename", "Legacy rename", "yellow"),
+        ),
+        GUEST_OS_MODEL="guest_os_model",
+    )
     monkeypatch.setitem(sys.modules, "netbox_proxbox.choices", choices_mod)
 
     # Stub the relative imports that forms/settings.py performs.

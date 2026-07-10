@@ -62,6 +62,7 @@ from netbox_proxbox.sync_params import (
     _parse_description_metadata_setting,
     _proxbox_fetch_max_concurrency_setting,
     _use_guest_agent_interface_name_setting,
+    _vm_interface_sync_strategy_setting,
     _ignore_ipv6_link_local_addresses_setting,
     _primary_ip_preference_setting,
     _serialize_sync_params,
@@ -411,6 +412,7 @@ def _build_base_query_params(
     base_query["use_guest_agent_interface_name"] = (
         "true" if _use_guest_agent_interface_name_setting() else "false"
     )
+    base_query["vm_interface_sync_strategy"] = _vm_interface_sync_strategy_setting()
     base_query["fetch_max_concurrency"] = str(_proxbox_fetch_max_concurrency_setting())
     base_query["ignore_ipv6_link_local_addresses"] = (
         "true" if _ignore_ipv6_link_local_addresses_setting() else "false"

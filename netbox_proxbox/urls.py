@@ -58,6 +58,28 @@ urlpatterns = [
         name="lxc_containers",
     ),
     path("interfaces/", views.InterfacesView.as_view(), name="interfaces"),
+    path(
+        "guest-vm-interfaces/<int:pk>/",
+        include(get_model_urls("netbox_proxbox", "guestvminterface")),
+    ),
+    path(
+        "guest-vm-interfaces/",
+        include(get_model_urls("netbox_proxbox", "guestvminterface", detail=False)),
+    ),
+    path(
+        "guest-vm-interface-addresses/<int:pk>/",
+        include(get_model_urls("netbox_proxbox", "guestvminterfaceaddress")),
+    ),
+    path(
+        "guest-vm-interface-addresses/",
+        include(
+            get_model_urls(
+                "netbox_proxbox",
+                "guestvminterfaceaddress",
+                detail=False,
+            )
+        ),
+    ),
     path("ip-addresses/", views.IPAddressesView.as_view(), name="ip_addresses"),
     path("virtual-disks/", views.VirtualDisksView.as_view(), name="virtual_disks"),
     path("contributing/", views.ContributingView.as_view(), name="contributing"),

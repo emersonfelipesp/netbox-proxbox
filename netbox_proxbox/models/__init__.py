@@ -31,6 +31,10 @@ from netbox_proxbox.models.firecracker import (
     FirecrackerImageTemplate,
     FirecrackerMicroVM,
 )
+from netbox_proxbox.models.guest_vm_interface import (
+    GuestVMInterface,
+    GuestVMInterfaceAddress,
+)
 from netbox_proxbox.models.netbox_endpoint import NetBoxEndpoint
 from netbox_proxbox.models.pbs_endpoint import PBSEndpoint
 from netbox_proxbox.models.pdm_endpoint import PDMEndpoint
@@ -72,6 +76,8 @@ __all__ = (
     "FirecrackerHostPool",
     "FirecrackerImageTemplate",
     "FirecrackerMicroVM",
+    "GuestVMInterface",
+    "GuestVMInterfaceAddress",
     "NetBoxEndpoint",
     "NodeSSHCredential",
     "PBSEndpoint",

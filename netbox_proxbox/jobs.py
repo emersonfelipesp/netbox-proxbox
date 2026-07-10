@@ -33,6 +33,7 @@ from netbox_proxbox.sync_params import (
     _proxbox_fetch_max_concurrency_setting,
     _serialize_sync_params,
     _use_guest_agent_interface_name_setting,
+    _vm_interface_sync_strategy_setting,
     effective_sync_modes_for_endpoint,
 )
 import netbox_proxbox.sync_stages as sync_stages
@@ -100,6 +101,9 @@ def _sync_stage_settings() -> None:
     """Keep extracted stage helpers patchable through the legacy jobs module."""
     sync_stages._use_guest_agent_interface_name_setting = (
         _use_guest_agent_interface_name_setting
+    )
+    sync_stages._vm_interface_sync_strategy_setting = (
+        _vm_interface_sync_strategy_setting
     )
     sync_stages._proxbox_fetch_max_concurrency_setting = (
         _proxbox_fetch_max_concurrency_setting

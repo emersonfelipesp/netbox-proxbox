@@ -95,6 +95,18 @@ from .datacenter import (
     ProxmoxDatacenterCpuModelView,
 )
 from .ha_actions import HaArmView, HaDisarmView
+from .guest_vm_interface import (
+    GuestVMInterfaceAddressBulkDeleteView,
+    GuestVMInterfaceAddressDeleteView,
+    GuestVMInterfaceAddressEditView,
+    GuestVMInterfaceAddressListView,
+    GuestVMInterfaceAddressView,
+    GuestVMInterfaceBulkDeleteView,
+    GuestVMInterfaceDeleteView,
+    GuestVMInterfaceEditView,
+    GuestVMInterfaceListView,
+    GuestVMInterfaceView,
+)
 from .backup_routine import (
     BackupRoutineBulkDeleteView,
     BackupRoutineDeleteView,
