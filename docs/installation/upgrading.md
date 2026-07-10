@@ -21,7 +21,7 @@ pip install -e /opt/netbox/netbox/netbox-proxbox
 
 ## Important Notes
 
-- Proxbox `0.0.22` is the current release candidate for NetBox `4.5.8`, `4.5.9`, and `4.6.x` (validated against `v4.5.8`, `v4.5.9`, and `v4.6.0` through `v4.6.4`; declared compatibility range `4.5.8` through `4.6.99`). It pairs with the separate `proxbox-api` backend release `0.0.19.post5`. Plugin version `0.0.22` on the `0.0.22` release line. The previous stable `0.0.21` release pairs with backend `0.0.18.post5`.
+- Proxbox `0.0.23` is the current release candidate for NetBox `4.5.8`, `4.5.9`, and `4.6.x` (validated against `v4.5.8`, `v4.5.9`, and `v4.6.0` through `v4.6.4`; declared compatibility range `4.5.8` through `4.6.99`). It pairs with a `proxbox-api` guest-VM-interface writer build / next release. Plugin version `0.0.23` on the `0.0.23` release line. The previous stable `0.0.22` release pairs with backend `0.0.19.post5`.
 - Disabled endpoint-like rows with `enabled=False` are inventory-only in `0.0.20.post3`: they remain visible in UI/API output, but status, keepalive, backend registration, OpenAPI, startup/signal, sync, PBS, PDM, and companion endpoint paths return before any backend or remote-service connection attempt.
 - This release includes the PVE 9.2 schema migration plus `0045_repair_pbs_pdm_endpoint_enabled`, a database-only repair for affected `0.0.18` installs where `PBSEndpoint` and `PDMEndpoint` were missing the shared endpoint `enabled` column. Run `python manage.py migrate netbox_proxbox` after upgrade.
 - If you operate the proxbox-api `*-nginx` image and previously could not connect, edit the FastAPI endpoint after upgrade and tick **Use HTTPS** (and untick **Verify SSL** if you use the bundled mkcert cert).
@@ -51,4 +51,4 @@ a backend build containing that fix, or the next fixed backend release, before
 re-testing VM IP sync.
 
 
-> **Current release:** netbox-proxbox `0.0.22` pairs with proxbox-api `0.0.19.post5` (NetBox `4.5.8`-`4.6.99`). Current pairing: netbox-proxbox 0.0.22 <-> proxbox-api 0.0.19.post5 <-> proxmox-sdk 0.0.12 <-> netbox-sdk 0.0.10.
+> **Current release:** netbox-proxbox `0.0.23` pairs with proxbox-api guest-VM-interface writer build / next release (NetBox `4.5.8`-`4.6.99`). Current pairing: netbox-proxbox 0.0.23 <-> proxbox-api (guest-VM-interface writer build / next release) <-> proxmox-sdk 0.0.12 <-> netbox-sdk 0.0.10.

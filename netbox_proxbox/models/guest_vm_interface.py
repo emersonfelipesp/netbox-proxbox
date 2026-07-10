@@ -127,7 +127,10 @@ class GuestVMInterfaceAddress(NetBoxModel):
 
         guest = self.guest_interface
         if guest.vm_interface_id:
-            if not isinstance(assigned, VMInterface) or assigned.pk != guest.vm_interface_id:
+            if (
+                not isinstance(assigned, VMInterface)
+                or assigned.pk != guest.vm_interface_id
+            ):
                 raise ValidationError(
                     {
                         "ip_address": (
