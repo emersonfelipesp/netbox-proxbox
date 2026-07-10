@@ -526,6 +526,7 @@ class ProxmoxEndpointSettingsView(ActionsMixin, generic.ObjectEditView):
         """Expose grouped overwrite metadata so the template can render category cards."""
         from netbox_proxbox.constants import (
             OVERWRITE_FIELD_GROUPS,
+            RPC_FIELD_GROUPS,
             SYNC_MODE_FIELD_GROUPS,
         )
         from netbox_proxbox.integrations.bgp import netbox_bgp_status
@@ -533,6 +534,7 @@ class ProxmoxEndpointSettingsView(ActionsMixin, generic.ObjectEditView):
         return {
             "netbox_bgp_status": netbox_bgp_status(),
             "overwrite_field_groups": OVERWRITE_FIELD_GROUPS,
+            "rpc_field_groups": RPC_FIELD_GROUPS,
             "sync_mode_field_groups": SYNC_MODE_FIELD_GROUPS,
             # ObjectEditView (unlike ObjectView) does not inject ``tab`` into the
             # context, so expose it here for the object tab strip in the template
