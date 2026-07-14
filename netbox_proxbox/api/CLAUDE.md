@@ -44,7 +44,7 @@ These follow the standard `NetBoxModelViewSet` + `NetBoxRouter` pattern:
 | `ProxmoxServiceCollectionViewSet` | `service-collections/` | GET/HEAD/OPTIONS only — async netbox-rpc collection history |
 | `ProxmoxServiceSampleViewSet` | `service-samples/` | GET/HEAD/OPTIONS only — raw projected systemd rows |
 | `ProxmoxServiceStatusViewSet` | `service-statuses/` | GET/HEAD/OPTIONS only — latest projected service state |
-| `ProxmoxVMCloudInitViewSet` | `vm-cloudinit/` | Full CRUD |
+| `ProxmoxVMCloudInitViewSet` | `vm-cloudinit/` | Full CRUD; reflection fields + create-time intent; `sshkeys_intent` write-only (encrypted → `sshkeys_enc`), `has_sshkeys` read-only |
 | `ProxmoxVMTemplateViewSet` | `vm-templates/` | Full CRUD |
 | `ProxboxPluginSettingsViewSet` | `settings/` | GET+PATCH only (singleton) |
 | `NodeSSHCredentialViewSet` | `ssh-credentials/` | Full CRUD |

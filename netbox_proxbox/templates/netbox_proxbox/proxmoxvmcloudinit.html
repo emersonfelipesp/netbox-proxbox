@@ -46,6 +46,69 @@
 				{% endif %}
 			</div>
 		</div>
+		{% if object.is_intent %}
+		<div class="card mt-3">
+			<h5 class="card-header">{% trans "Cloud-init Intent (create-time)" %}</h5>
+			<table class="table table-hover attr-table">
+				<tr>
+					<th scope="row">{% trans "Hostname" %}</th>
+					<td>{{ object.hostname|placeholder }}</td>
+				</tr>
+				<tr>
+					<th scope="row">{% trans "IP (CIDR)" %}</th>
+					<td><code>{{ object.ip_cidr|placeholder }}</code></td>
+				</tr>
+				<tr>
+					<th scope="row">{% trans "Gateway" %}</th>
+					<td><code>{{ object.gateway|placeholder }}</code></td>
+				</tr>
+				<tr>
+					<th scope="row">{% trans "Bridge" %}</th>
+					<td>{{ object.bridge|placeholder }}</td>
+				</tr>
+				<tr>
+					<th scope="row">{% trans "VLAN tag" %}</th>
+					<td>{{ object.vlan_tag|placeholder }}</td>
+				</tr>
+				<tr>
+					<th scope="row">{% trans "Search domain" %}</th>
+					<td>{{ object.search_domain|placeholder }}</td>
+				</tr>
+				<tr>
+					<th scope="row">{% trans "DNS servers" %}</th>
+					<td>{{ object.dns_servers|placeholder }}</td>
+				</tr>
+				<tr>
+					<th scope="row">{% trans "SSH password auth" %}</th>
+					<td>{{ object.ssh_pwauth|placeholder }}</td>
+				</tr>
+				<tr>
+					<th scope="row">{% trans "Guest agent" %}</th>
+					<td>{{ object.enable_agent|placeholder }}</td>
+				</tr>
+				<tr>
+					<th scope="row">{% trans "Encrypted intent SSH keys" %}</th>
+					<td>
+						{% if object.has_sshkeys %}
+							<span class="badge text-bg-green">{% trans "Stored (encrypted)" %}</span>
+						{% else %}
+							<span class="badge text-bg-grey">{% trans "None" %}</span>
+						{% endif %}
+					</td>
+				</tr>
+				<tr>
+					<th scope="row">{% trans "NMS credential (secret store)" %}</th>
+					<td>
+						{% if object.nms_credential_id %}
+							<code>netbox-nms CloudVMCredential #{{ object.nms_credential_id }}</code>
+						{% else %}
+							{{ ''|placeholder }}
+						{% endif %}
+					</td>
+				</tr>
+			</table>
+		</div>
+		{% endif %}
 	</div>
 	<div class="col-md-6">
 		{% include 'inc/panels/tags.html' %}

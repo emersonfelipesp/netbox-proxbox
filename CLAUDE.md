@@ -97,6 +97,22 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
   `execution.result` into `ProxmoxServiceSample`, latest `ProxmoxServiceStatus`,
   and endpoint heartbeat fields. Never add a synchronous netbox-rpc run path.
 - VM lifecycle models: `ProxmoxVMTemplate` (VM template inventory with optional FK to `VirtualMachine`), `ProxmoxVMCloudInit` (cloud-init config), `CloudImageTemplate` (Firecracker/image factory catalog), `ProxmoxApplyJob` (intent apply job), `DeletionRequest` (auditable delete-request workflow).
+- **`ProxmoxVMCloudInit` create-time intent (migration 0064).** In addition to
+  the read-only reflection columns (`ciuser`/`sshkeys`/`ipconfig0`/
+  `sshkeys_truncated`, patched from `qm config` by proxbox-api), the model now
+  stores the **create-time cloud-init intent** the NMS stack sent at VM/LXC
+  create time: `is_intent`, `hostname`, `search_domain`, `dns_servers`
+  (comma-separated), `bridge`, `vlan_tag`, `gateway`, `ip_cidr`, `ssh_pwauth`,
+  `enable_agent`, and a soft `nms_credential_id` (integer PK of the netbox-nms
+  `CloudVMCredential` holding the encrypted password / SSH private key — **not a
+  FK; netbox-proxbox never imports netbox-nms**). SSH public keys captured at
+  create time are Fernet-encrypted at rest in `sshkeys_enc` (accessors
+  `set_sshkeys`/`get_sshkeys`, `has_sshkeys`, reusing
+  `models/primary_secrets.py`); the API writes them through the **write-only**
+  `sshkeys_intent` serializer field and never returns the raw bundle (only
+  `has_sshkeys`). The intent fields are deliberately kept **out** of proxbox-api's
+  `CLOUDINIT_PATCHABLE_FIELDS`, so a later reflection sync never clobbers them,
+  and the plaintext `sshkeys` reflection mirror is left untouched.
 - VM interface modeling uses a dual representation under `ProxboxPluginSettings.vm_interface_sync_strategy="guest_os_model"` (the default): Proxmox config NICs stay as core `virtualization.VMInterface` rows with canonical names such as `net0`; guest-agent OS names such as `ens18` are stored in plugin `GuestVMInterface` rows. `GuestVMInterface.vm_interface` is nullable for agent-only interfaces, and `GuestVMInterfaceAddress` links guest interfaces to the same core `ipam.IPAddress` objects used by the core VM interface assignment. The old `use_guest_agent_interface_name` toggle is deprecated and applies only when the strategy is `legacy_rename`.
 - Datacenter config: `ProxmoxDatacenterCpuModel` (custom CPU models synced from PVE).
 - Firewall inventory (6 models, read-only): `ProxmoxFirewallSecurityGroup`, `ProxmoxFirewallRule`, `ProxmoxFirewallIPSet`, `ProxmoxFirewallIPSetEntry`, `ProxmoxFirewallAlias`, `ProxmoxFirewallOptions`.
