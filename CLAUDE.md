@@ -60,6 +60,25 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
 ## Architecture Summary
 
 - `ProxmoxEndpoint`, `NetBoxEndpoint`, `FastAPIEndpoint`, `ProxmoxCluster`, `ProxmoxNode`, `ProxmoxStorage`, `ProxmoxStorageVirtualDisk`, `BackupRoutine`, `Replication`, `VMBackup`, `VMSnapshot`, `VMTaskHistory`, `GuestVMInterface`, `GuestVMInterfaceAddress`, and `ProxboxPluginSettings` are the plugin's core Proxmox reflection models.
+- **Typed custom-field sidecars (migration 0065/0066).** The legacy Proxbox
+  custom-field payload is now mirrored into plugin-owned
+  `Proxbox*SyncState` sidecar models in `models/sync_state.py`, one row per
+  affected NetBox core object. The shared abstract `ProxboxSyncStateBase`
+  stores `proxmox_last_updated` (from the legacy custom field) and
+  `last_run_id` (from `proxbox_last_run_id`) so those recurrent fields are not
+  duplicated across 14 concrete models. `last_updated` remains the
+  NetBox-managed row timestamp used for API ETags. VM/device sidecars replace raw
+  `proxmox_endpoint_id`, `proxmox_node`, and `proxmox_cluster` custom fields
+  with nullable FKs to existing `ProxmoxEndpoint`, `ProxmoxNode`, and
+  `ProxmoxCluster`, while preserving unresolved values in fallback name fields
+  and `proxmox_endpoint_raw_id`. Cluster sidecars preserve the legacy cluster
+  numeric value in `proxmox_cluster_raw_id`. The NetBox
+  `virtualization.Cluster` payload lives in
+  `ProxboxClusterSyncState`, not on `ProxmoxCluster`, because `ProxmoxCluster`
+  is endpoint-scoped (`endpoint`, `name`) and only optionally links to a
+  NetBox cluster. This phase is additive: proxbox-api still writes custom
+  fields, readers still consume them, and the backend writer/reader switch plus
+  custom-field removal are separate follow-up issues.
 - Companion endpoint models: `PBSEndpoint`, `PDMEndpoint`, `PDMRemote` for Proxmox Backup Server and Datacenter Manager inventory.
 - SSH and hardware discovery: `NodeSSHCredential` stores per-node SSH credentials for the optional hardware-discovery pass.
 - `ProxmoxEndpoint.access_methods` (migration 0056, choices `api` / `api_ssh`, default `api`) is the per-endpoint **transport access method**, orthogonal to `allow_writes`. `api` = Read+Write over the Proxmox API only; `api_ssh` = API + SSH. SSH only complements API; **SSH-only is not a selectable choice**. It is the load-bearing gate for the browser SSH terminal: the credential-serving API views in `netbox_proxbox/api/ssh_credentials.py` (`ProxmoxEndpointSSHCredentialSecretsAPIView` for endpoint targets and `NodeSSHCredentialSecretsAPIView` for node targets, the latter via the owning `ProxmoxNode.endpoint`) return 403 and withhold secrets when the endpoint is API-only, which is what blocks the terminal. New endpoints default to `api`; existing rows are backfilled to `api_ssh` on upgrade (non-breaking). The value is pushed to the proxbox-api backend by `_proxmox_backend_payload()` so the backend can gate its own SSH paths.

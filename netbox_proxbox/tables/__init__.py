@@ -45,6 +45,22 @@ from netbox_proxbox.tables.guest_vm_interface import (
 )
 from netbox_proxbox.tables.replication import ReplicationTable
 from netbox_proxbox.tables.storage import ProxmoxStorageTable
+from netbox_proxbox.tables.sync_state import (
+    ProxboxClusterGroupSyncStateTable,
+    ProxboxClusterSyncStateTable,
+    ProxboxClusterTypeSyncStateTable,
+    ProxboxDeviceRoleSyncStateTable,
+    ProxboxDeviceSyncStateTable,
+    ProxboxDeviceTypeSyncStateTable,
+    ProxboxIPAddressSyncStateTable,
+    ProxboxInterfaceSyncStateTable,
+    ProxboxManufacturerSyncStateTable,
+    ProxboxSiteSyncStateTable,
+    ProxboxVirtualDiskSyncStateTable,
+    ProxboxVirtualMachineSyncStateTable,
+    ProxboxVLANSyncStateTable,
+    ProxboxVMInterfaceSyncStateTable,
+)
 from netbox_proxbox.tables.vm_backup import VMBackupTable
 from netbox_proxbox.tables.vm_cloudinit import ProxmoxVMCloudInitTable
 from netbox_proxbox.tables.vm_snapshot import VMSnapshotTable

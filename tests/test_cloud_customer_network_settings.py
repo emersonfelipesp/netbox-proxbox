@@ -28,30 +28,45 @@ def test_cloud_customer_network_fields_exist_with_estate_agnostic_defaults():
         assert f'field_name="{field_name}"' in migration
 
     assert "cloud_network_lock_enabled = models.BooleanField(" in model
-    assert "default=False" in model.split(
-        "cloud_network_lock_enabled = models.BooleanField(",
-        1,
-    )[1][:180]
+    assert (
+        "default=False"
+        in model.split(
+            "cloud_network_lock_enabled = models.BooleanField(",
+            1,
+        )[1][:180]
+    )
     assert "cloud_customer_prefix_id = models.PositiveIntegerField(" in model
-    assert "null=True" in model.split(
-        "cloud_customer_prefix_id = models.PositiveIntegerField(",
-        1,
-    )[1][:180]
+    assert (
+        "null=True"
+        in model.split(
+            "cloud_customer_prefix_id = models.PositiveIntegerField(",
+            1,
+        )[1][:180]
+    )
     assert "cloud_customer_bridge = models.CharField(" in model
-    assert 'default="vmbr1"' in model.split(
-        "cloud_customer_bridge = models.CharField(",
-        1,
-    )[1][:180]
+    assert (
+        'default="vmbr1"'
+        in model.split(
+            "cloud_customer_bridge = models.CharField(",
+            1,
+        )[1][:180]
+    )
     assert "cloud_customer_vlan_tag = models.PositiveIntegerField(" in model
-    assert "null=True" in model.split(
-        "cloud_customer_vlan_tag = models.PositiveIntegerField(",
-        1,
-    )[1][:180]
+    assert (
+        "null=True"
+        in model.split(
+            "cloud_customer_vlan_tag = models.PositiveIntegerField(",
+            1,
+        )[1][:180]
+    )
     assert "cloud_customer_gateway = models.CharField(" in model
-    assert 'default=""' in model.split(
-        "cloud_customer_gateway = models.CharField(",
-        1,
-    )[1][:180]
+    assert (
+        'default=""'
+        in model.split(
+            "cloud_customer_gateway = models.CharField(",
+            1,
+        )[1][:180]
+    )
 
     assert "168.0.98" not in migration
     assert "2050" not in migration

@@ -88,8 +88,7 @@ class ProxmoxVMCloudInit(NetBoxModel):
         max_length=255,
         blank=True,
         help_text=_(
-            "cloud-init DNS nameservers requested at create time "
-            "(comma-separated)."
+            "cloud-init DNS nameservers requested at create time (comma-separated)."
         ),
     )
 

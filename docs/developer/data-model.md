@@ -193,6 +193,52 @@ erDiagram
 > - `FirecrackerHost.host_vm` → `virtualization.VirtualMachine` for the Proxmox VM running the host agent
 > - `FirecrackerHost.proxmox_node` → `netbox_proxbox.ProxmoxNode`
 > - `FirecrackerMicroVM.tenant` → `tenancy.Tenant`
+> - `Proxbox*SyncState` sidecars → the matching NetBox core object via
+>   `OneToOneField`; VM/device sidecars also reuse `ProxmoxEndpoint`,
+>   `ProxmoxNode`, and `ProxmoxCluster` as nullable resolved references.
+
+### Custom-field Sidecars
+
+The legacy proxbox-api custom-field surface is mirrored into typed plugin
+models by migrations `0065_proxbox_sync_state_models.py` and
+`0066_backfill_proxbox_sync_state.py`. These models are additive compatibility
+sidecars; custom fields remain registered and existing readers continue using
+them until the linked backend switch is released.
+
+`ProxboxSyncStateBase` is the shared abstract base for all sidecars. It stores
+`proxmox_last_updated` (from the legacy source timestamp custom field) and
+`last_run_id` (from `proxbox_last_run_id`) once instead of duplicating those
+fields across every core object surface. The inherited NetBox `last_updated`
+field remains the row modification timestamp and backs REST API ETags.
+
+| Sidecar | Core object |
+|---|---|
+| `ProxboxVirtualMachineSyncState` | `virtualization.VirtualMachine` |
+| `ProxboxDeviceSyncState` | `dcim.Device` |
+| `ProxboxClusterSyncState` | `virtualization.Cluster` |
+| `ProxboxIPAddressSyncState` | `ipam.IPAddress` |
+| `ProxboxInterfaceSyncState` | `dcim.Interface` |
+| `ProxboxVLANSyncState` | `ipam.VLAN` |
+| `ProxboxClusterGroupSyncState` | `virtualization.ClusterGroup` |
+| `ProxboxVirtualDiskSyncState` | `virtualization.VirtualDisk` |
+| `ProxboxVMInterfaceSyncState` | `virtualization.VMInterface` |
+| `ProxboxDeviceRoleSyncState` | `dcim.DeviceRole` |
+| `ProxboxDeviceTypeSyncState` | `dcim.DeviceType` |
+| `ProxboxManufacturerSyncState` | `dcim.Manufacturer` |
+| `ProxboxSiteSyncState` | `dcim.Site` |
+| `ProxboxClusterTypeSyncState` | `virtualization.ClusterType` |
+
+`ProxboxClusterSyncState` remains separate from `ProxmoxCluster` because the
+existing `ProxmoxCluster` model is endpoint-scoped by `(endpoint, name)` and
+only optionally links to a NetBox core cluster. It is not a one-to-one extension
+of `virtualization.Cluster`.
+
+Legacy backend IDs are preserved as raw data rather than guessed as plugin
+primary keys. The VM sidecar stores legacy `proxmox_endpoint_id` in
+`proxmox_endpoint_raw_id`; the cluster sidecar stores legacy
+`proxmox_cluster_id` in `proxmox_cluster_raw_id`. FK resolution uses strong
+NetBox relationships first and otherwise requires an endpoint-scoped unique
+name match.
 
 ### VM-Centric Models
 

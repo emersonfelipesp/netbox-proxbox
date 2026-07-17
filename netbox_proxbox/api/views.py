@@ -41,7 +41,21 @@ from .serializers import (
     PBSEndpointSerializer,
     PDMEndpointSerializer,
     PDMRemoteSerializer,
+    ProxboxClusterGroupSyncStateSerializer,
+    ProxboxClusterSyncStateSerializer,
+    ProxboxClusterTypeSyncStateSerializer,
+    ProxboxDeviceRoleSyncStateSerializer,
+    ProxboxDeviceSyncStateSerializer,
+    ProxboxDeviceTypeSyncStateSerializer,
+    ProxboxIPAddressSyncStateSerializer,
+    ProxboxInterfaceSyncStateSerializer,
+    ProxboxManufacturerSyncStateSerializer,
     ProxboxPluginSettingsSerializer,
+    ProxboxSiteSyncStateSerializer,
+    ProxboxVirtualDiskSyncStateSerializer,
+    ProxboxVirtualMachineSyncStateSerializer,
+    ProxboxVLANSyncStateSerializer,
+    ProxboxVMInterfaceSyncStateSerializer,
     ProxmoxApplyJobSerializer,
     ProxmoxClusterSerializer,
     ProxmoxEndpointSerializer,
@@ -117,6 +131,22 @@ class ProxBoxRootView(APIRootView):
             "hosts": f"{base}/firecracker-hosts/",
             "image_templates": f"{base}/firecracker-image-templates/",
             "microvms": f"{base}/firecracker-microvms/",
+        }
+        response.data["sync_state"] = {
+            "virtual_machines": f"{base}/sync-state/virtual-machines/",
+            "devices": f"{base}/sync-state/devices/",
+            "clusters": f"{base}/sync-state/clusters/",
+            "ip_addresses": f"{base}/sync-state/ip-addresses/",
+            "interfaces": f"{base}/sync-state/interfaces/",
+            "vlans": f"{base}/sync-state/vlans/",
+            "cluster_groups": f"{base}/sync-state/cluster-groups/",
+            "virtual_disks": f"{base}/sync-state/virtual-disks/",
+            "vm_interfaces": f"{base}/sync-state/vm-interfaces/",
+            "device_roles": f"{base}/sync-state/device-roles/",
+            "device_types": f"{base}/sync-state/device-types/",
+            "manufacturers": f"{base}/sync-state/manufacturers/",
+            "sites": f"{base}/sync-state/sites/",
+            "cluster_types": f"{base}/sync-state/cluster-types/",
         }
         response.data["ha"] = {
             "summary": f"{base}/ha/summary/",
@@ -312,6 +342,216 @@ class GuestVMInterfaceAddressViewSet(NetBoxModelViewSet):
     filterset_class = filtersets.GuestVMInterfaceAddressFilterSet
 
 
+class _ParentRestrictedSyncStateViewSetMixin:
+    """Restrict sidecar rows by the caller's visibility to the parent object."""
+
+    parent_field_name: str
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        request = getattr(self, "request", None)
+        user = getattr(request, "user", None)
+        parent_field = queryset.model._meta.get_field(self.parent_field_name)
+        parent_model = parent_field.remote_field.model
+        parent_queryset = parent_model.objects.all()
+        if user is not None and hasattr(parent_queryset, "restrict"):
+            parent_queryset = parent_queryset.restrict(user, "view")
+        return queryset.filter(
+            **{f"{self.parent_field_name}__in": parent_queryset.values("pk")}
+        )
+
+
+class ProxboxVirtualMachineSyncStateViewSet(
+    _ParentRestrictedSyncStateViewSetMixin,
+    NetBoxModelViewSet,
+):
+    """REST API for typed Proxbox VM custom-field sync state."""
+
+    parent_field_name = "virtual_machine"
+    queryset = models.ProxboxVirtualMachineSyncState.objects.select_related(
+        "virtual_machine",
+        "endpoint",
+        "proxmox_node",
+        "proxmox_cluster",
+    )
+    serializer_class = ProxboxVirtualMachineSyncStateSerializer
+    filterset_class = filtersets.ProxboxVirtualMachineSyncStateFilterSet
+
+
+class ProxboxDeviceSyncStateViewSet(
+    _ParentRestrictedSyncStateViewSetMixin,
+    NetBoxModelViewSet,
+):
+    """REST API for typed Proxbox device custom-field sync state."""
+
+    parent_field_name = "device"
+    queryset = models.ProxboxDeviceSyncState.objects.select_related(
+        "device",
+        "endpoint",
+        "proxmox_node",
+        "proxmox_cluster",
+    )
+    serializer_class = ProxboxDeviceSyncStateSerializer
+    filterset_class = filtersets.ProxboxDeviceSyncStateFilterSet
+
+
+class ProxboxClusterSyncStateViewSet(
+    _ParentRestrictedSyncStateViewSetMixin,
+    NetBoxModelViewSet,
+):
+    """REST API for typed Proxbox cluster custom-field sync state."""
+
+    parent_field_name = "cluster"
+    queryset = models.ProxboxClusterSyncState.objects.select_related(
+        "cluster",
+        "proxmox_cluster",
+    )
+    serializer_class = ProxboxClusterSyncStateSerializer
+    filterset_class = filtersets.ProxboxClusterSyncStateFilterSet
+
+
+class ProxboxIPAddressSyncStateViewSet(
+    _ParentRestrictedSyncStateViewSetMixin,
+    NetBoxModelViewSet,
+):
+    """REST API for typed Proxbox IP address custom-field sync state."""
+
+    parent_field_name = "ip_address"
+    queryset = models.ProxboxIPAddressSyncState.objects.select_related("ip_address")
+    serializer_class = ProxboxIPAddressSyncStateSerializer
+    filterset_class = filtersets.ProxboxIPAddressSyncStateFilterSet
+
+
+class ProxboxInterfaceSyncStateViewSet(
+    _ParentRestrictedSyncStateViewSetMixin,
+    NetBoxModelViewSet,
+):
+    """REST API for typed Proxbox interface custom-field sync state."""
+
+    parent_field_name = "interface"
+    queryset = models.ProxboxInterfaceSyncState.objects.select_related("interface")
+    serializer_class = ProxboxInterfaceSyncStateSerializer
+    filterset_class = filtersets.ProxboxInterfaceSyncStateFilterSet
+
+
+class ProxboxVLANSyncStateViewSet(
+    _ParentRestrictedSyncStateViewSetMixin,
+    NetBoxModelViewSet,
+):
+    """REST API for typed Proxbox VLAN custom-field sync state."""
+
+    parent_field_name = "vlan"
+    queryset = models.ProxboxVLANSyncState.objects.select_related("vlan")
+    serializer_class = ProxboxVLANSyncStateSerializer
+    filterset_class = filtersets.ProxboxVLANSyncStateFilterSet
+
+
+class ProxboxClusterGroupSyncStateViewSet(
+    _ParentRestrictedSyncStateViewSetMixin,
+    NetBoxModelViewSet,
+):
+    """REST API for typed Proxbox cluster-group custom-field sync state."""
+
+    parent_field_name = "cluster_group"
+    queryset = models.ProxboxClusterGroupSyncState.objects.select_related(
+        "cluster_group",
+    )
+    serializer_class = ProxboxClusterGroupSyncStateSerializer
+    filterset_class = filtersets.ProxboxClusterGroupSyncStateFilterSet
+
+
+class ProxboxVirtualDiskSyncStateViewSet(
+    _ParentRestrictedSyncStateViewSetMixin,
+    NetBoxModelViewSet,
+):
+    """REST API for typed Proxbox virtual-disk custom-field sync state."""
+
+    parent_field_name = "virtual_disk"
+    queryset = models.ProxboxVirtualDiskSyncState.objects.select_related(
+        "virtual_disk",
+    )
+    serializer_class = ProxboxVirtualDiskSyncStateSerializer
+    filterset_class = filtersets.ProxboxVirtualDiskSyncStateFilterSet
+
+
+class ProxboxVMInterfaceSyncStateViewSet(
+    _ParentRestrictedSyncStateViewSetMixin,
+    NetBoxModelViewSet,
+):
+    """REST API for typed Proxbox VM-interface custom-field sync state."""
+
+    parent_field_name = "vm_interface"
+    queryset = models.ProxboxVMInterfaceSyncState.objects.select_related(
+        "vm_interface",
+    )
+    serializer_class = ProxboxVMInterfaceSyncStateSerializer
+    filterset_class = filtersets.ProxboxVMInterfaceSyncStateFilterSet
+
+
+class ProxboxDeviceRoleSyncStateViewSet(
+    _ParentRestrictedSyncStateViewSetMixin,
+    NetBoxModelViewSet,
+):
+    """REST API for typed Proxbox device-role custom-field sync state."""
+
+    parent_field_name = "device_role"
+    queryset = models.ProxboxDeviceRoleSyncState.objects.select_related("device_role")
+    serializer_class = ProxboxDeviceRoleSyncStateSerializer
+    filterset_class = filtersets.ProxboxDeviceRoleSyncStateFilterSet
+
+
+class ProxboxDeviceTypeSyncStateViewSet(
+    _ParentRestrictedSyncStateViewSetMixin,
+    NetBoxModelViewSet,
+):
+    """REST API for typed Proxbox device-type custom-field sync state."""
+
+    parent_field_name = "device_type"
+    queryset = models.ProxboxDeviceTypeSyncState.objects.select_related("device_type")
+    serializer_class = ProxboxDeviceTypeSyncStateSerializer
+    filterset_class = filtersets.ProxboxDeviceTypeSyncStateFilterSet
+
+
+class ProxboxManufacturerSyncStateViewSet(
+    _ParentRestrictedSyncStateViewSetMixin,
+    NetBoxModelViewSet,
+):
+    """REST API for typed Proxbox manufacturer custom-field sync state."""
+
+    parent_field_name = "manufacturer"
+    queryset = models.ProxboxManufacturerSyncState.objects.select_related(
+        "manufacturer",
+    )
+    serializer_class = ProxboxManufacturerSyncStateSerializer
+    filterset_class = filtersets.ProxboxManufacturerSyncStateFilterSet
+
+
+class ProxboxSiteSyncStateViewSet(
+    _ParentRestrictedSyncStateViewSetMixin,
+    NetBoxModelViewSet,
+):
+    """REST API for typed Proxbox site custom-field sync state."""
+
+    parent_field_name = "site"
+    queryset = models.ProxboxSiteSyncState.objects.select_related("site")
+    serializer_class = ProxboxSiteSyncStateSerializer
+    filterset_class = filtersets.ProxboxSiteSyncStateFilterSet
+
+
+class ProxboxClusterTypeSyncStateViewSet(
+    _ParentRestrictedSyncStateViewSetMixin,
+    NetBoxModelViewSet,
+):
+    """REST API for typed Proxbox cluster-type custom-field sync state."""
+
+    parent_field_name = "cluster_type"
+    queryset = models.ProxboxClusterTypeSyncState.objects.select_related(
+        "cluster_type",
+    )
+    serializer_class = ProxboxClusterTypeSyncStateSerializer
+    filterset_class = filtersets.ProxboxClusterTypeSyncStateFilterSet
+
+
 class ProxmoxEndpointViewSet(NetBoxModelViewSet):
     """REST API for Proxmox VE API endpoint credentials and targets."""
 
@@ -426,7 +666,9 @@ class ProxmoxServiceMonitoringRefreshAPIView(APIView):
 
         if not endpoint_is_enabled(endpoint):
             return Response(
-                {"detail": "Endpoint is disabled; disabled endpoints are never contacted."},
+                {
+                    "detail": "Endpoint is disabled; disabled endpoints are never contacted."
+                },
                 status=drf_status.HTTP_400_BAD_REQUEST,
             )
 

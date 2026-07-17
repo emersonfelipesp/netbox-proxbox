@@ -102,6 +102,11 @@ contract and issue #454 for the bug history.
 
 - Review this directory before changing model fields or uniqueness rules.
 - The squashed 0022 migration handles PostgreSQL constraint removal safely using `DROP CONSTRAINT IF EXISTS` and explicit constraint naming.
+- Sync-state migrations 0065/0066 must keep NetBox's inherited
+  `last_updated` as the auto-managed row timestamp and store source timestamps
+  in `proxmox_last_updated`. Raw legacy backend IDs must use non-FK-attname
+  fields such as `proxmox_endpoint_raw_id` and `proxmox_cluster_raw_id`; do not
+  resolve proxbox-api database IDs as plugin model primary keys during backfill.
 
 ## Links
 
