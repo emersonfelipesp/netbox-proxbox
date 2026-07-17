@@ -51,6 +51,23 @@ from netbox_proxbox.models.service_monitoring import (
 )
 from netbox_proxbox.models.ssh_credential import NodeSSHCredential
 from netbox_proxbox.models.storage import ProxmoxStorage, ProxmoxStorageVirtualDisk
+from netbox_proxbox.models.sync_state import (
+    ProxboxClusterGroupSyncState,
+    ProxboxClusterSyncState,
+    ProxboxClusterTypeSyncState,
+    ProxboxDeviceRoleSyncState,
+    ProxboxDeviceSyncState,
+    ProxboxDeviceTypeSyncState,
+    ProxboxIPAddressSyncState,
+    ProxboxInterfaceSyncState,
+    ProxboxManufacturerSyncState,
+    ProxboxSiteSyncState,
+    ProxboxSyncStateBase,
+    ProxboxVirtualDiskSyncState,
+    ProxboxVirtualMachineSyncState,
+    ProxboxVLANSyncState,
+    ProxboxVMInterfaceSyncState,
+)
 from netbox_proxbox.models.vm_backup import VMBackup
 from netbox_proxbox.models.vm_cloudinit import ProxmoxVMCloudInit
 from netbox_proxbox.models.vm_snapshot import VMSnapshot
@@ -101,6 +118,21 @@ __all__ = (
     "Replication",
     "ProxmoxStorage",
     "ProxmoxStorageVirtualDisk",
+    "ProxboxClusterGroupSyncState",
+    "ProxboxClusterSyncState",
+    "ProxboxClusterTypeSyncState",
+    "ProxboxDeviceRoleSyncState",
+    "ProxboxDeviceSyncState",
+    "ProxboxDeviceTypeSyncState",
+    "ProxboxIPAddressSyncState",
+    "ProxboxInterfaceSyncState",
+    "ProxboxManufacturerSyncState",
+    "ProxboxSiteSyncState",
+    "ProxboxSyncStateBase",
+    "ProxboxVirtualDiskSyncState",
+    "ProxboxVirtualMachineSyncState",
+    "ProxboxVLANSyncState",
+    "ProxboxVMInterfaceSyncState",
     "VMBackup",
     "VMSnapshot",
     "VMTaskHistory",

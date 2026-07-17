@@ -76,6 +76,22 @@ from netbox_proxbox.api.serializers.service_monitoring import (
     ProxmoxServiceSampleSerializer,
     ProxmoxServiceStatusSerializer,
 )
+from netbox_proxbox.api.serializers.sync_state import (
+    ProxboxClusterGroupSyncStateSerializer,
+    ProxboxClusterSyncStateSerializer,
+    ProxboxClusterTypeSyncStateSerializer,
+    ProxboxDeviceRoleSyncStateSerializer,
+    ProxboxDeviceSyncStateSerializer,
+    ProxboxDeviceTypeSyncStateSerializer,
+    ProxboxIPAddressSyncStateSerializer,
+    ProxboxInterfaceSyncStateSerializer,
+    ProxboxManufacturerSyncStateSerializer,
+    ProxboxSiteSyncStateSerializer,
+    ProxboxVirtualDiskSyncStateSerializer,
+    ProxboxVirtualMachineSyncStateSerializer,
+    ProxboxVLANSyncStateSerializer,
+    ProxboxVMInterfaceSyncStateSerializer,
+)
 from netbox_proxbox.api.serializers.settings import ProxboxPluginSettingsSerializer
 from netbox_proxbox.api.serializers.ssh_credential import NodeSSHCredentialSerializer
 from netbox_proxbox.api.serializers.storage import (
@@ -136,6 +152,20 @@ __all__ = (
     "PDMEndpointSerializer",
     "PDMRemoteSerializer",
     "ProxboxPluginSettingsSerializer",
+    "ProxboxClusterGroupSyncStateSerializer",
+    "ProxboxClusterSyncStateSerializer",
+    "ProxboxClusterTypeSyncStateSerializer",
+    "ProxboxDeviceRoleSyncStateSerializer",
+    "ProxboxDeviceSyncStateSerializer",
+    "ProxboxDeviceTypeSyncStateSerializer",
+    "ProxboxIPAddressSyncStateSerializer",
+    "ProxboxInterfaceSyncStateSerializer",
+    "ProxboxManufacturerSyncStateSerializer",
+    "ProxboxSiteSyncStateSerializer",
+    "ProxboxVirtualDiskSyncStateSerializer",
+    "ProxboxVirtualMachineSyncStateSerializer",
+    "ProxboxVLANSyncStateSerializer",
+    "ProxboxVMInterfaceSyncStateSerializer",
     "ProxmoxApplyJobSerializer",
     "ProxmoxClusterSerializer",
     "ProxmoxDatacenterCpuModelSerializer",

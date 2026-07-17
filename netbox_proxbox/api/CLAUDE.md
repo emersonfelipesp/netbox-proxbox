@@ -46,6 +46,7 @@ These follow the standard `NetBoxModelViewSet` + `NetBoxRouter` pattern:
 | `ProxmoxServiceStatusViewSet` | `service-statuses/` | GET/HEAD/OPTIONS only — latest projected service state |
 | `ProxmoxVMCloudInitViewSet` | `vm-cloudinit/` | Full CRUD; reflection fields + create-time intent; `sshkeys_intent` write-only (encrypted → `sshkeys_enc`), `has_sshkeys` read-only |
 | `ProxmoxVMTemplateViewSet` | `vm-templates/` | Full CRUD |
+| `Proxbox*SyncStateViewSet` | `sync-state/.../` | Full CRUD typed sidecars for the legacy custom-field payload; additive until proxbox-api switches writers/readers |
 | `ProxboxPluginSettingsViewSet` | `settings/` | GET+PATCH only (singleton) |
 | `NodeSSHCredentialViewSet` | `ssh-credentials/` | Full CRUD |
 | `ProxmoxFirewallSecurityGroupViewSet` | `firewall/security-groups/` | Full CRUD |
@@ -69,6 +70,22 @@ including `[]`, replaces the many-to-many set. Keep
 `FirecrackerHostPoolSerializer` and `FirecrackerImageTemplateSerializer`
 `create()` / `update()` methods explicitly typed and covered by
 `tests/test_firecracker_cloud_contracts.py` when changing this behavior.
+
+The `sync-state/` routes expose typed mirrors of the old custom-field surface:
+`virtual-machines`, `devices`, `clusters`, `ip-addresses`, `interfaces`,
+`vlans`, `cluster-groups`, `virtual-disks`, `vm-interfaces`, `device-roles`,
+`device-types`, `manufacturers`, `sites`, and `cluster-types`. They are
+sidecar rows keyed one-to-one to NetBox core objects. Keep them additive until
+the paired proxbox-api writer/readers switch away from custom fields.
+Every sync-state viewset must also restrict rows through the caller's
+visibility to the one-to-one parent object, and writable nested parent
+relations must resolve through the caller-restricted parent queryset. Sidecar
+permissions alone must not reveal or attach hidden core objects.
+On NetBox 4.5.x, these sidecar APIs do not emit ETags and do not enforce
+`If-Match`; that is a platform limitation affecting all endpoints on that
+release. Optimistic concurrency is available on NetBox 4.6+. Automated writers
+should treat sidecar rows as proxbox-api-owned during the additive migration
+phase.
 
 ## Non-Model API Views
 

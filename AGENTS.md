@@ -97,6 +97,25 @@ sdn
 
 Key files: `choices.py` (SyncModeChoices and VMInterfaceSyncStrategyChoices), `constants.py` (SYNC_MODE_FIELDS), `models/plugin_settings.py` (global fields), `models/guest_vm_interface.py` (guest OS interface inventory), `models/proxmox_endpoint.py` (per-endpoint fields + `effective_sync_mode()`), `models/vm_template.py` (ProxmoxVMTemplate), `models/sdn_inventory.py` (SDN metadata), `sync_stages.py` (gating helpers and backend query forwarding), `netbox_bootstrap.py` (bootstrap-only tag creation), `services/sync_vm_template.py` (template sync service), `docs/configuration/sync-modes.md` (user docs).
 
+## Custom-field to model migration
+
+The legacy Proxbox custom-field surface is being moved into plugin-owned
+sidecar models under `netbox_proxbox/models/sync_state.py`. Every sidecar
+inherits `ProxboxSyncStateBase`, which owns the shared `last_updated`
+(`proxmox_last_updated`) and `last_run_id` (`proxbox_last_run_id`) columns.
+VM and device sidecars reuse existing `ProxmoxEndpoint`, `ProxmoxNode`, and
+`ProxmoxCluster` rows as nullable FKs, with text/raw fallback columns retained
+for unresolved custom-field values. `virtualization.Cluster` uses a sidecar
+(`ProxboxClusterSyncState`) instead of extending `ProxmoxCluster`, because
+`ProxmoxCluster` is endpoint-scoped and links to NetBox clusters through a
+nullable FK rather than a one-to-one relationship.
+
+This migration is additive. Do not remove or stop registering legacy custom
+fields in this plugin change set, and do not change proxbox-api writers here.
+Readers continue to use custom fields until the linked reader-switch work lands;
+custom-field deletion is a later cleanup after both repositories read/write the
+new models.
+
 ## Release Procedure (summary)
 
 Official releases are cut **from `develop`** and triggered **only** by
