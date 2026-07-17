@@ -107,9 +107,7 @@ def _install_model_stubs(
         def create(self, **kwargs):
             collection = SimpleNamespace(**kwargs)
             collection.saved = []
-            collection.save = lambda **save_kwargs: collection.saved.append(
-                save_kwargs
-            )
+            collection.save = lambda **save_kwargs: collection.saved.append(save_kwargs)
             created_collections.append(collection)
             return collection
 
@@ -128,8 +126,10 @@ def _install_model_stubs(
 
         def filter(self, *args, **kwargs):
             pk = kwargs.get("pk", self.pk)
-            conditional = self.conditional or bool(args) or any(
-                key.startswith("last_seen_at__") for key in kwargs
+            conditional = (
+                self.conditional
+                or bool(args)
+                or any(key.startswith("last_seen_at__") for key in kwargs)
             )
             return _StatusUpdateQuerySet(pk=pk, conditional=conditional)
 

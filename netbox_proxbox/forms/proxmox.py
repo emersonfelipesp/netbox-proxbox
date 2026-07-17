@@ -503,7 +503,7 @@ class ProxmoxEndpointForm(ProxmoxEndpointSSHCredentialFormMixin, NetBoxModelForm
             or getattr(instance, "ssh_credential_source", SSH_CRED_SOURCE_DEDICATED)
             or SSH_CRED_SOURCE_DEDICATED
         )
-        domain = (cleaned_data.get("domain") or getattr(instance, "domain", "") or "")
+        domain = cleaned_data.get("domain") or getattr(instance, "domain", "") or ""
         ip_address = cleaned_data.get("ip_address") or getattr(
             instance,
             "ip_address",
@@ -514,9 +514,7 @@ class ProxmoxEndpointForm(ProxmoxEndpointSSHCredentialFormMixin, NetBoxModelForm
 
         if credential_source == SSH_CRED_SOURCE_REUSE:
             username = (
-                cleaned_data.get("username")
-                or getattr(instance, "username", "")
-                or ""
+                cleaned_data.get("username") or getattr(instance, "username", "") or ""
             )
             effective_username = str(username).split("@", 1)[0].strip()
             password = cleaned_data.get("password")

@@ -157,7 +157,9 @@ def _stub_proxmox_endpoint_dependencies(monkeypatch):
 
 def _load_proxmox_endpoint(monkeypatch):
     _stub_proxmox_endpoint_dependencies(monkeypatch)
-    spec = importlib.util.spec_from_file_location("_prox_endpoint_under_test", MODEL_PATH)
+    spec = importlib.util.spec_from_file_location(
+        "_prox_endpoint_under_test", MODEL_PATH
+    )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
