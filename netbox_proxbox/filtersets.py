@@ -104,6 +104,29 @@ class ProxboxModelFilterSet(NetBoxModelFilterSet):
         return filters
 
 
+class ProxboxSyncStateFilterSet(ProxboxModelFilterSet):
+    """FilterSet base for sync-state sidecars with relation visibility guards."""
+
+    def _filter_visible_relation_id(
+        self,
+        queryset: QuerySet,
+        field_name: str,
+        value: list[int],
+    ) -> QuerySet:
+        if not value:
+            return queryset
+
+        relation_field = queryset.model._meta.get_field(field_name)
+        relation_model = relation_field.remote_field.model
+        relation_queryset = relation_model.objects.all()
+        user = getattr(self.request, "user", None)
+        if user is not None and hasattr(relation_queryset, "restrict"):
+            relation_queryset = relation_queryset.restrict(user, "view")
+
+        visible_relation_ids = relation_queryset.filter(pk__in=value).values("pk")
+        return queryset.filter(**{f"{field_name}__in": visible_relation_ids})
+
+
 @register_filterset
 class CloudImageTemplateFilterSet(ProxboxModelFilterSet):
     """Filter cloud image templates exposed through the Cloud Portal."""
@@ -740,11 +763,44 @@ class GuestVMInterfaceAddressFilterSet(ProxboxModelFilterSet):
 
 
 @register_filterset
-class ProxboxVirtualMachineSyncStateFilterSet(ProxboxModelFilterSet):
+class ProxboxVirtualMachineSyncStateFilterSet(ProxboxSyncStateFilterSet):
     """Filter typed VM sync-state sidecars."""
 
-    virtual_machine = django_filters.ModelMultipleChoiceFilter(
-        queryset=VirtualMachine.objects.all(),
+    virtual_machine = MultiValueNumberFilter(
+        field_name="virtual_machine",
+        method="_filter_visible_relation_id",
+    )
+    virtual_machine_id = MultiValueNumberFilter(
+        field_name="virtual_machine",
+        method="_filter_visible_relation_id",
+        label="Virtual machine (ID)",
+    )
+    endpoint = MultiValueNumberFilter(
+        field_name="endpoint",
+        method="_filter_visible_relation_id",
+    )
+    endpoint_id = MultiValueNumberFilter(
+        field_name="endpoint",
+        method="_filter_visible_relation_id",
+        label="Endpoint (ID)",
+    )
+    proxmox_node = MultiValueNumberFilter(
+        field_name="proxmox_node",
+        method="_filter_visible_relation_id",
+    )
+    proxmox_node_id = MultiValueNumberFilter(
+        field_name="proxmox_node",
+        method="_filter_visible_relation_id",
+        label="Proxmox node (ID)",
+    )
+    proxmox_cluster = MultiValueNumberFilter(
+        field_name="proxmox_cluster",
+        method="_filter_visible_relation_id",
+    )
+    proxmox_cluster_id = MultiValueNumberFilter(
+        field_name="proxmox_cluster",
+        method="_filter_visible_relation_id",
+        label="Proxmox cluster (ID)",
     )
 
     class Meta:
@@ -752,9 +808,13 @@ class ProxboxVirtualMachineSyncStateFilterSet(ProxboxModelFilterSet):
         fields = (
             "id",
             "virtual_machine",
+            "virtual_machine_id",
             "endpoint",
+            "endpoint_id",
             "proxmox_node",
+            "proxmox_node_id",
             "proxmox_cluster",
+            "proxmox_cluster_id",
             "proxmox_vm_id",
             "proxmox_vm_type",
             "proxmox_status",
@@ -778,19 +838,58 @@ class ProxboxVirtualMachineSyncStateFilterSet(ProxboxModelFilterSet):
 
 
 @register_filterset
-class ProxboxDeviceSyncStateFilterSet(ProxboxModelFilterSet):
+class ProxboxDeviceSyncStateFilterSet(ProxboxSyncStateFilterSet):
     """Filter typed device sync-state sidecars."""
 
-    device = django_filters.ModelMultipleChoiceFilter(queryset=Device.objects.all())
+    device = MultiValueNumberFilter(
+        field_name="device",
+        method="_filter_visible_relation_id",
+    )
+    device_id = MultiValueNumberFilter(
+        field_name="device",
+        method="_filter_visible_relation_id",
+        label="Device (ID)",
+    )
+    endpoint = MultiValueNumberFilter(
+        field_name="endpoint",
+        method="_filter_visible_relation_id",
+    )
+    endpoint_id = MultiValueNumberFilter(
+        field_name="endpoint",
+        method="_filter_visible_relation_id",
+        label="Endpoint (ID)",
+    )
+    proxmox_node = MultiValueNumberFilter(
+        field_name="proxmox_node",
+        method="_filter_visible_relation_id",
+    )
+    proxmox_node_id = MultiValueNumberFilter(
+        field_name="proxmox_node",
+        method="_filter_visible_relation_id",
+        label="Proxmox node (ID)",
+    )
+    proxmox_cluster = MultiValueNumberFilter(
+        field_name="proxmox_cluster",
+        method="_filter_visible_relation_id",
+    )
+    proxmox_cluster_id = MultiValueNumberFilter(
+        field_name="proxmox_cluster",
+        method="_filter_visible_relation_id",
+        label="Proxmox cluster (ID)",
+    )
 
     class Meta:
         model = ProxboxDeviceSyncState
         fields = (
             "id",
             "device",
+            "device_id",
             "endpoint",
+            "endpoint_id",
             "proxmox_node",
+            "proxmox_node_id",
             "proxmox_cluster",
+            "proxmox_cluster_id",
             "proxmox_vmid",
             "hardware_chassis_serial",
             "proxmox_last_updated",
@@ -809,17 +908,36 @@ class ProxboxDeviceSyncStateFilterSet(ProxboxModelFilterSet):
 
 
 @register_filterset
-class ProxboxClusterSyncStateFilterSet(ProxboxModelFilterSet):
+class ProxboxClusterSyncStateFilterSet(ProxboxSyncStateFilterSet):
     """Filter typed cluster sync-state sidecars."""
 
-    cluster = django_filters.ModelMultipleChoiceFilter(queryset=Cluster.objects.all())
+    cluster = MultiValueNumberFilter(
+        field_name="cluster",
+        method="_filter_visible_relation_id",
+    )
+    cluster_id = MultiValueNumberFilter(
+        field_name="cluster",
+        method="_filter_visible_relation_id",
+        label="Cluster (ID)",
+    )
+    proxmox_cluster = MultiValueNumberFilter(
+        field_name="proxmox_cluster",
+        method="_filter_visible_relation_id",
+    )
+    proxmox_cluster_id = MultiValueNumberFilter(
+        field_name="proxmox_cluster",
+        method="_filter_visible_relation_id",
+        label="Proxmox cluster (ID)",
+    )
 
     class Meta:
         model = ProxboxClusterSyncState
         fields = (
             "id",
             "cluster",
+            "cluster_id",
             "proxmox_cluster",
+            "proxmox_cluster_id",
             "proxmox_cluster_name",
             "proxmox_cluster_status",
             "proxmox_cluster_raw_id",
@@ -840,11 +958,17 @@ class ProxboxClusterSyncStateFilterSet(ProxboxModelFilterSet):
 
 
 @register_filterset
-class ProxboxIPAddressSyncStateFilterSet(ProxboxModelFilterSet):
+class ProxboxIPAddressSyncStateFilterSet(ProxboxSyncStateFilterSet):
     """Filter typed IP address sync-state sidecars."""
 
-    ip_address = django_filters.ModelMultipleChoiceFilter(
-        queryset=IPAddress.objects.all(),
+    ip_address = MultiValueNumberFilter(
+        field_name="ip_address",
+        method="_filter_visible_relation_id",
+    )
+    ip_address_id = MultiValueNumberFilter(
+        field_name="ip_address",
+        method="_filter_visible_relation_id",
+        label="IP address (ID)",
     )
 
     class Meta:
@@ -852,6 +976,7 @@ class ProxboxIPAddressSyncStateFilterSet(ProxboxModelFilterSet):
         fields = (
             "id",
             "ip_address",
+            "ip_address_id",
             "proxmox_interface",
             "proxmox_mac",
             "proxmox_last_updated",
@@ -869,11 +994,17 @@ class ProxboxIPAddressSyncStateFilterSet(ProxboxModelFilterSet):
 
 
 @register_filterset
-class ProxboxInterfaceSyncStateFilterSet(ProxboxModelFilterSet):
+class ProxboxInterfaceSyncStateFilterSet(ProxboxSyncStateFilterSet):
     """Filter typed device-interface sync-state sidecars."""
 
-    interface = django_filters.ModelMultipleChoiceFilter(
-        queryset=Interface.objects.all()
+    interface = MultiValueNumberFilter(
+        field_name="interface",
+        method="_filter_visible_relation_id",
+    )
+    interface_id = MultiValueNumberFilter(
+        field_name="interface",
+        method="_filter_visible_relation_id",
+        label="Interface (ID)",
     )
 
     class Meta:
@@ -881,6 +1012,7 @@ class ProxboxInterfaceSyncStateFilterSet(ProxboxModelFilterSet):
         fields = (
             "id",
             "interface",
+            "interface_id",
             "nic_speed_gbps",
             "nic_duplex",
             "nic_link",
@@ -898,14 +1030,22 @@ class ProxboxInterfaceSyncStateFilterSet(ProxboxModelFilterSet):
 
 
 @register_filterset
-class ProxboxVLANSyncStateFilterSet(ProxboxModelFilterSet):
+class ProxboxVLANSyncStateFilterSet(ProxboxSyncStateFilterSet):
     """Filter typed VLAN sync-state sidecars."""
 
-    vlan = django_filters.ModelMultipleChoiceFilter(queryset=VLAN.objects.all())
+    vlan = MultiValueNumberFilter(
+        field_name="vlan",
+        method="_filter_visible_relation_id",
+    )
+    vlan_id = MultiValueNumberFilter(
+        field_name="vlan",
+        method="_filter_visible_relation_id",
+        label="VLAN (ID)",
+    )
 
     class Meta:
         model = ProxboxVLANSyncState
-        fields = ("id", "vlan", "proxmox_vlan_id", "proxmox_last_updated")
+        fields = ("id", "vlan", "vlan_id", "proxmox_vlan_id", "proxmox_last_updated")
 
     def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
         if not value.strip():
@@ -917,11 +1057,17 @@ class ProxboxVLANSyncStateFilterSet(ProxboxModelFilterSet):
 
 
 @register_filterset
-class ProxboxClusterGroupSyncStateFilterSet(ProxboxModelFilterSet):
+class ProxboxClusterGroupSyncStateFilterSet(ProxboxSyncStateFilterSet):
     """Filter typed cluster-group sync-state sidecars."""
 
-    cluster_group = django_filters.ModelMultipleChoiceFilter(
-        queryset=ClusterGroup.objects.all(),
+    cluster_group = MultiValueNumberFilter(
+        field_name="cluster_group",
+        method="_filter_visible_relation_id",
+    )
+    cluster_group_id = MultiValueNumberFilter(
+        field_name="cluster_group",
+        method="_filter_visible_relation_id",
+        label="Cluster group (ID)",
     )
 
     class Meta:
@@ -929,6 +1075,7 @@ class ProxboxClusterGroupSyncStateFilterSet(ProxboxModelFilterSet):
         fields = (
             "id",
             "cluster_group",
+            "cluster_group_id",
             "proxmox_cluster_name",
             "proxmox_cluster_status",
             "proxmox_last_updated",
@@ -945,14 +1092,26 @@ class ProxboxClusterGroupSyncStateFilterSet(ProxboxModelFilterSet):
 
 
 @register_filterset
-class ProxboxVirtualDiskSyncStateFilterSet(ProxboxModelFilterSet):
+class ProxboxVirtualDiskSyncStateFilterSet(ProxboxSyncStateFilterSet):
     """Filter typed virtual-disk sync-state sidecars."""
 
-    virtual_disk = django_filters.ModelMultipleChoiceFilter(
-        queryset=VirtualDisk.objects.all(),
+    virtual_disk = MultiValueNumberFilter(
+        field_name="virtual_disk",
+        method="_filter_visible_relation_id",
     )
-    proxbox_storage = django_filters.ModelMultipleChoiceFilter(
-        queryset=ProxmoxStorage.objects.all(),
+    virtual_disk_id = MultiValueNumberFilter(
+        field_name="virtual_disk",
+        method="_filter_visible_relation_id",
+        label="Virtual disk (ID)",
+    )
+    proxbox_storage = MultiValueNumberFilter(
+        field_name="proxbox_storage",
+        method="_filter_visible_relation_id",
+    )
+    proxbox_storage_id = MultiValueNumberFilter(
+        field_name="proxbox_storage",
+        method="_filter_visible_relation_id",
+        label="Proxbox storage (ID)",
     )
 
     class Meta:
@@ -960,7 +1119,9 @@ class ProxboxVirtualDiskSyncStateFilterSet(ProxboxModelFilterSet):
         fields = (
             "id",
             "virtual_disk",
+            "virtual_disk_id",
             "proxbox_storage",
+            "proxbox_storage_id",
             "proxbox_storage_raw_id",
             "proxmox_last_updated",
         )
@@ -977,14 +1138,26 @@ class ProxboxVirtualDiskSyncStateFilterSet(ProxboxModelFilterSet):
 
 
 @register_filterset
-class ProxboxVMInterfaceSyncStateFilterSet(ProxboxModelFilterSet):
+class ProxboxVMInterfaceSyncStateFilterSet(ProxboxSyncStateFilterSet):
     """Filter typed VM-interface sync-state sidecars."""
 
-    vm_interface = django_filters.ModelMultipleChoiceFilter(
-        queryset=VMInterface.objects.all(),
+    vm_interface = MultiValueNumberFilter(
+        field_name="vm_interface",
+        method="_filter_visible_relation_id",
     )
-    proxbox_bridge = django_filters.ModelMultipleChoiceFilter(
-        queryset=Interface.objects.all(),
+    vm_interface_id = MultiValueNumberFilter(
+        field_name="vm_interface",
+        method="_filter_visible_relation_id",
+        label="VM interface (ID)",
+    )
+    proxbox_bridge = MultiValueNumberFilter(
+        field_name="proxbox_bridge",
+        method="_filter_visible_relation_id",
+    )
+    proxbox_bridge_id = MultiValueNumberFilter(
+        field_name="proxbox_bridge",
+        method="_filter_visible_relation_id",
+        label="Proxbox bridge (ID)",
     )
 
     class Meta:
@@ -992,7 +1165,9 @@ class ProxboxVMInterfaceSyncStateFilterSet(ProxboxModelFilterSet):
         fields = (
             "id",
             "vm_interface",
+            "vm_interface_id",
             "proxbox_bridge",
+            "proxbox_bridge_id",
             "proxbox_bridge_raw_id",
             "proxmox_last_updated",
         )
@@ -1012,16 +1187,22 @@ class ProxboxVMInterfaceSyncStateFilterSet(ProxboxModelFilterSet):
 
 
 @register_filterset
-class ProxboxDeviceRoleSyncStateFilterSet(ProxboxModelFilterSet):
+class ProxboxDeviceRoleSyncStateFilterSet(ProxboxSyncStateFilterSet):
     """Filter typed device-role sync-state sidecars."""
 
-    device_role = django_filters.ModelMultipleChoiceFilter(
-        queryset=DeviceRole.objects.all(),
+    device_role = MultiValueNumberFilter(
+        field_name="device_role",
+        method="_filter_visible_relation_id",
+    )
+    device_role_id = MultiValueNumberFilter(
+        field_name="device_role",
+        method="_filter_visible_relation_id",
+        label="Device role (ID)",
     )
 
     class Meta:
         model = ProxboxDeviceRoleSyncState
-        fields = ("id", "device_role", "proxmox_last_updated")
+        fields = ("id", "device_role", "device_role_id", "proxmox_last_updated")
 
     def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
         if not value.strip():
@@ -1030,16 +1211,22 @@ class ProxboxDeviceRoleSyncStateFilterSet(ProxboxModelFilterSet):
 
 
 @register_filterset
-class ProxboxDeviceTypeSyncStateFilterSet(ProxboxModelFilterSet):
+class ProxboxDeviceTypeSyncStateFilterSet(ProxboxSyncStateFilterSet):
     """Filter typed device-type sync-state sidecars."""
 
-    device_type = django_filters.ModelMultipleChoiceFilter(
-        queryset=DeviceType.objects.all(),
+    device_type = MultiValueNumberFilter(
+        field_name="device_type",
+        method="_filter_visible_relation_id",
+    )
+    device_type_id = MultiValueNumberFilter(
+        field_name="device_type",
+        method="_filter_visible_relation_id",
+        label="Device type (ID)",
     )
 
     class Meta:
         model = ProxboxDeviceTypeSyncState
-        fields = ("id", "device_type", "proxmox_last_updated")
+        fields = ("id", "device_type", "device_type_id", "proxmox_last_updated")
 
     def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
         if not value.strip():
@@ -1051,16 +1238,22 @@ class ProxboxDeviceTypeSyncStateFilterSet(ProxboxModelFilterSet):
 
 
 @register_filterset
-class ProxboxManufacturerSyncStateFilterSet(ProxboxModelFilterSet):
+class ProxboxManufacturerSyncStateFilterSet(ProxboxSyncStateFilterSet):
     """Filter typed manufacturer sync-state sidecars."""
 
-    manufacturer = django_filters.ModelMultipleChoiceFilter(
-        queryset=Manufacturer.objects.all(),
+    manufacturer = MultiValueNumberFilter(
+        field_name="manufacturer",
+        method="_filter_visible_relation_id",
+    )
+    manufacturer_id = MultiValueNumberFilter(
+        field_name="manufacturer",
+        method="_filter_visible_relation_id",
+        label="Manufacturer (ID)",
     )
 
     class Meta:
         model = ProxboxManufacturerSyncState
-        fields = ("id", "manufacturer", "proxmox_last_updated")
+        fields = ("id", "manufacturer", "manufacturer_id", "proxmox_last_updated")
 
     def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
         if not value.strip():
@@ -1069,14 +1262,22 @@ class ProxboxManufacturerSyncStateFilterSet(ProxboxModelFilterSet):
 
 
 @register_filterset
-class ProxboxSiteSyncStateFilterSet(ProxboxModelFilterSet):
+class ProxboxSiteSyncStateFilterSet(ProxboxSyncStateFilterSet):
     """Filter typed site sync-state sidecars."""
 
-    site = django_filters.ModelMultipleChoiceFilter(queryset=Site.objects.all())
+    site = MultiValueNumberFilter(
+        field_name="site",
+        method="_filter_visible_relation_id",
+    )
+    site_id = MultiValueNumberFilter(
+        field_name="site",
+        method="_filter_visible_relation_id",
+        label="Site (ID)",
+    )
 
     class Meta:
         model = ProxboxSiteSyncState
-        fields = ("id", "site", "proxmox_last_updated")
+        fields = ("id", "site", "site_id", "proxmox_last_updated")
 
     def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
         if not value.strip():
@@ -1085,16 +1286,22 @@ class ProxboxSiteSyncStateFilterSet(ProxboxModelFilterSet):
 
 
 @register_filterset
-class ProxboxClusterTypeSyncStateFilterSet(ProxboxModelFilterSet):
+class ProxboxClusterTypeSyncStateFilterSet(ProxboxSyncStateFilterSet):
     """Filter typed cluster-type sync-state sidecars."""
 
-    cluster_type = django_filters.ModelMultipleChoiceFilter(
-        queryset=ClusterType.objects.all(),
+    cluster_type = MultiValueNumberFilter(
+        field_name="cluster_type",
+        method="_filter_visible_relation_id",
+    )
+    cluster_type_id = MultiValueNumberFilter(
+        field_name="cluster_type",
+        method="_filter_visible_relation_id",
+        label="Cluster type (ID)",
     )
 
     class Meta:
         model = ProxboxClusterTypeSyncState
-        fields = ("id", "cluster_type", "proxmox_last_updated")
+        fields = ("id", "cluster_type", "cluster_type_id", "proxmox_last_updated")
 
     def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
         if not value.strip():
