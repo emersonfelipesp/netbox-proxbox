@@ -5,12 +5,16 @@ from __future__ import annotations
 import importlib
 import sys
 import types
+from pathlib import Path
 from types import SimpleNamespace
 
 import requests
 import pytest
 
 from tests.conftest import ResponseStub, _make_model_class, load_plugin_module
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _service_status_module():
@@ -39,6 +43,24 @@ def _keepalive_request():
         ),
         method="GET",
     )
+
+
+class _RecordingProxmoxEndpointManager:
+    def __init__(self, endpoint):
+        self.endpoint = endpoint
+        self.filters = []
+        self.updates = []
+
+    def get(self, *args, **kwargs):
+        return self.endpoint
+
+    def filter(self, *args, **kwargs):
+        self.filters.append(kwargs)
+        return self
+
+    def update(self, **kwargs):
+        self.updates.append(kwargs)
+        return 1
 
 
 def _pbs_server(*, enabled=True):
@@ -1092,12 +1114,45 @@ def test_get_service_status_unknown_service_returns_400(monkeypatch, fastapi_end
     assert "pbs" in resp.payload["detail"]
 
 
+def test_proxmox_mode_derivation_is_shared_by_keepalive_and_full_sync(
+    monkeypatch,
+    fastapi_endpoint,
+):
+    load_plugin_module(
+        "netbox_proxbox.views.keepalive_status",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+    )
+    from netbox_proxbox.services.proxmox_mode import derive_proxmox_endpoint_mode
+
+    mode = derive_proxmox_endpoint_mode(
+        SimpleNamespace(name="pve-cluster", quorate=True),
+        [SimpleNamespace(name="pve01")],
+    )
+
+    assert mode == "standalone"
+    assert (
+        "derive_proxmox_endpoint_mode("
+        in (REPO_ROOT / "netbox_proxbox/services/service_status.py").read_text()
+    )
+    assert (
+        "derive_proxmox_endpoint_mode("
+        in (REPO_ROOT / "netbox_proxbox/services/sync_cluster.py").read_text()
+    )
+
+
+def test_proxmox_keepalive_mode_write_uses_queryset_update_not_save():
+    source = (REPO_ROOT / "netbox_proxbox/services/service_status.py").read_text()
+
+    assert "ProxmoxEndpoint.objects.filter(pk=pk).update(mode=mode)" in source
+    assert 'endpoint.save(update_fields=["mode"])' not in source
+
+
 def test_proxmox_mode_detected_on_successful_keepalive(
     monkeypatch,
     fastapi_endpoint,
 ):
     """Keepalive sets endpoint.mode to 'cluster' when cluster/status returns topology."""
-    saved_calls = []
     proxmox_endpoint = SimpleNamespace(
         id=1,
         pk=1,
@@ -1107,7 +1162,7 @@ def test_proxmox_mode_detected_on_successful_keepalive(
         port=8006,
         verify_ssl=False,
         mode="undefined",
-        save=lambda update_fields=None: saved_calls.append(update_fields),
+        save=lambda update_fields=None: pytest.fail("keepalive must not call save()"),
     )
     load_plugin_module(
         "netbox_proxbox.views.keepalive_status",
@@ -1116,6 +1171,8 @@ def test_proxmox_mode_detected_on_successful_keepalive(
         proxmox_endpoint=proxmox_endpoint,
     )
     ss = _service_status_module()
+    endpoint_manager = _RecordingProxmoxEndpointManager(proxmox_endpoint)
+    monkeypatch.setattr(ss.ProxmoxEndpoint, "objects", endpoint_manager)
     monkeypatch.setattr(ss.time, "sleep", lambda seconds: None)
     monkeypatch.setattr(
         ss,
@@ -1151,4 +1208,281 @@ def test_proxmox_mode_detected_on_successful_keepalive(
 
     assert status == "success"
     assert proxmox_endpoint.mode == "cluster"
-    assert saved_calls == [["mode"]]
+    assert endpoint_manager.filters == [{"pk": 1}]
+    assert endpoint_manager.updates == [{"mode": "cluster"}]
+
+
+def test_proxmox_mode_detects_named_single_node_cluster_as_standalone(
+    monkeypatch,
+    fastapi_endpoint,
+):
+    proxmox_endpoint = SimpleNamespace(
+        id=1,
+        pk=1,
+        name="pve01",
+        domain="pve.local",
+        ip_address="10.0.0.30/24",
+        port=8006,
+        verify_ssl=False,
+        mode="undefined",
+        save=lambda update_fields=None: pytest.fail("keepalive must not call save()"),
+    )
+    load_plugin_module(
+        "netbox_proxbox.views.keepalive_status",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+        proxmox_endpoint=proxmox_endpoint,
+    )
+    ss = _service_status_module()
+    endpoint_manager = _RecordingProxmoxEndpointManager(proxmox_endpoint)
+    monkeypatch.setattr(ss.ProxmoxEndpoint, "objects", endpoint_manager)
+    monkeypatch.setattr(ss.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(
+        ss,
+        "sync_proxmox_endpoint_to_backend",
+        lambda *args, **kwargs: (True, None, None),
+    )
+    monkeypatch.setattr(
+        ss,
+        "resolve_backend_endpoint_id",
+        lambda *args, **kwargs: (1, None),
+    )
+    monkeypatch.setattr(ss, "_last_proxmox_mode_check", {})
+
+    def fake_get(url, verify=True, timeout=None, params=None, headers=None):
+        assert url.endswith("/proxmox/version")
+        return ResponseStub([{"pve01": {"version": "8.3.0"}}])
+
+    def fake_request_backend_json(
+        context,
+        path,
+        *,
+        query_params=None,
+        timeout=5,
+        endpoint_id=None,
+        method="GET",
+    ):
+        assert context.http_url == "https://proxbox.local:8800"
+        assert context.verify_ssl is False
+        assert context.headers == {"Authorization": "Bearer backend-token"}
+        assert path == "proxmox/cluster/status"
+        assert query_params == {
+            "source": "database",
+            "proxmox_endpoint_ids": "1",
+        }
+        assert timeout == 10
+        assert endpoint_id is None
+        assert method == "GET"
+        return {
+            "ok": True,
+            "response": [
+                {
+                    "type": "cluster",
+                    "name": "pve-cluster",
+                    "quorate": 1,
+                    "node_list": [{"type": "node", "name": "pve01"}],
+                }
+            ],
+        }, 200
+
+    monkeypatch.setattr(ss.requests, "get", fake_get)
+    monkeypatch.setattr(ss, "request_backend_json", fake_request_backend_json)
+
+    status, details = ss.ServiceStatus().proxmox_status(
+        1,
+        "https://proxbox.local:8800",
+        auth_headers={"Authorization": "Bearer backend-token"},
+        backend_verify_ssl=False,
+    )
+
+    assert status == "success"
+    assert details["api_access"] == "success"
+    assert proxmox_endpoint.mode == "standalone"
+    assert endpoint_manager.filters == [{"pk": 1}]
+    assert endpoint_manager.updates == [{"mode": "standalone"}]
+
+
+def test_proxmox_mode_detects_standalone_via_backend_json(
+    monkeypatch,
+    fastapi_endpoint,
+):
+    proxmox_endpoint = SimpleNamespace(
+        id=1,
+        pk=1,
+        name="pve01",
+        domain="pve.local",
+        ip_address="10.0.0.30/24",
+        port=8006,
+        verify_ssl=False,
+        mode="undefined",
+        save=lambda update_fields=None: pytest.fail("keepalive must not call save()"),
+    )
+    load_plugin_module(
+        "netbox_proxbox.views.keepalive_status",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+        proxmox_endpoint=proxmox_endpoint,
+    )
+    ss = _service_status_module()
+    endpoint_manager = _RecordingProxmoxEndpointManager(proxmox_endpoint)
+    monkeypatch.setattr(ss.ProxmoxEndpoint, "objects", endpoint_manager)
+    monkeypatch.setattr(ss.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(
+        ss,
+        "sync_proxmox_endpoint_to_backend",
+        lambda *args, **kwargs: (True, None, None),
+    )
+    monkeypatch.setattr(
+        ss,
+        "resolve_backend_endpoint_id",
+        lambda *args, **kwargs: (1, None),
+    )
+    monkeypatch.setattr(ss, "_last_proxmox_mode_check", {})
+    monkeypatch.setattr(
+        ss.requests,
+        "get",
+        lambda *args, **kwargs: ResponseStub([{"pve01": {"version": "8.3.0"}}]),
+    )
+    monkeypatch.setattr(
+        ss,
+        "request_backend_json",
+        lambda *args, **kwargs: (
+            {"ok": True, "response": [{"type": "node", "name": "pve01"}]},
+            200,
+        ),
+    )
+
+    status, details = ss.ServiceStatus().proxmox_status(
+        1,
+        "https://proxbox.local:8800",
+        auth_headers={"Authorization": "Bearer backend-token"},
+        backend_verify_ssl=False,
+    )
+
+    assert status == "success"
+    assert details["api_access"] == "success"
+    assert proxmox_endpoint.mode == "standalone"
+    assert endpoint_manager.filters == [{"pk": 1}]
+    assert endpoint_manager.updates == [{"mode": "standalone"}]
+
+
+def test_proxmox_mode_detection_failure_leaves_status_and_mode_unchanged(
+    monkeypatch,
+    fastapi_endpoint,
+):
+    saved_calls = []
+    proxmox_endpoint = SimpleNamespace(
+        id=1,
+        pk=1,
+        name="pve01",
+        domain="pve.local",
+        ip_address="10.0.0.30/24",
+        port=8006,
+        verify_ssl=False,
+        mode="undefined",
+        save=lambda update_fields=None: saved_calls.append(update_fields),
+    )
+    load_plugin_module(
+        "netbox_proxbox.views.keepalive_status",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+        proxmox_endpoint=proxmox_endpoint,
+    )
+    ss = _service_status_module()
+    monkeypatch.setattr(ss.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(
+        ss,
+        "sync_proxmox_endpoint_to_backend",
+        lambda *args, **kwargs: (True, None, None),
+    )
+    monkeypatch.setattr(
+        ss,
+        "resolve_backend_endpoint_id",
+        lambda *args, **kwargs: (1, None),
+    )
+    monkeypatch.setattr(ss, "_last_proxmox_mode_check", {})
+    monkeypatch.setattr(
+        ss.requests,
+        "get",
+        lambda *args, **kwargs: ResponseStub([{"pve01": {"version": "8.3.0"}}]),
+    )
+    monkeypatch.setattr(
+        ss,
+        "request_backend_json",
+        lambda *args, **kwargs: (
+            {"ok": False, "detail": "backend unavailable"},
+            503,
+        ),
+    )
+
+    status, details = ss.ServiceStatus().proxmox_status(
+        1,
+        "https://proxbox.local:8800",
+        auth_headers={"Authorization": "Bearer backend-token"},
+        backend_verify_ssl=False,
+    )
+
+    assert status == "success"
+    assert details["api_access"] == "success"
+    assert proxmox_endpoint.mode == "undefined"
+    assert saved_calls == []
+
+
+def test_proxmox_mode_detection_throttle_skips_fresh_detected_mode(
+    monkeypatch,
+    fastapi_endpoint,
+):
+    saved_calls = []
+    proxmox_endpoint = SimpleNamespace(
+        id=1,
+        pk=1,
+        name="pve01",
+        domain="pve.local",
+        ip_address="10.0.0.30/24",
+        port=8006,
+        verify_ssl=False,
+        mode="cluster",
+        save=lambda update_fields=None: saved_calls.append(update_fields),
+    )
+    load_plugin_module(
+        "netbox_proxbox.views.keepalive_status",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+        proxmox_endpoint=proxmox_endpoint,
+    )
+    ss = _service_status_module()
+    monkeypatch.setattr(ss.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(ss.time, "monotonic", lambda: 1000.0)
+    monkeypatch.setattr(ss, "_last_proxmox_mode_check", {1: 1000.0})
+    monkeypatch.setattr(
+        ss,
+        "sync_proxmox_endpoint_to_backend",
+        lambda *args, **kwargs: (True, None, None),
+    )
+    monkeypatch.setattr(
+        ss,
+        "resolve_backend_endpoint_id",
+        lambda *args, **kwargs: (1, None),
+    )
+    monkeypatch.setattr(
+        ss.requests,
+        "get",
+        lambda *args, **kwargs: ResponseStub([{"pve01": {"version": "8.3.0"}}]),
+    )
+    monkeypatch.setattr(
+        ss,
+        "request_backend_json",
+        lambda *args, **kwargs: pytest.fail("fresh mode throttle was ignored"),
+    )
+
+    status, details = ss.ServiceStatus().proxmox_status(
+        1,
+        "https://proxbox.local:8800",
+        auth_headers={"Authorization": "Bearer backend-token"},
+        backend_verify_ssl=False,
+    )
+
+    assert status == "success"
+    assert details["api_access"] == "success"
+    assert proxmox_endpoint.mode == "cluster"
+    assert saved_calls == []

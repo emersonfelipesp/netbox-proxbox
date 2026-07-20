@@ -9,12 +9,16 @@ from typing import Any
 import requests
 
 from netbox_proxbox.models import FastAPIEndpoint, NetBoxEndpoint, ProxmoxEndpoint
+from netbox_proxbox.schemas import ProxmoxClusterStatusResponse
+from netbox_proxbox.schemas.backend_proxy import BackendRequestContext
 from netbox_proxbox.schemas.service_status import (
     FastAPIStatusResult,
     ServiceCheckResult,
 )
+from netbox_proxbox.services.backend_proxy import request_backend_json
 from netbox_proxbox.services.backend_version import backend_version_advisories
 from netbox_proxbox.services.endpoint_enabled import disabled_endpoint_detail
+from netbox_proxbox.services.proxmox_mode import derive_proxmox_endpoint_mode
 from netbox_proxbox.utils import (
     get_backend_auth_headers,
     get_fastapi_url,
@@ -28,6 +32,11 @@ from netbox_proxbox.views.error_utils import (
 
 logger = logging.getLogger(__name__)
 
+try:
+    from django.core.cache import cache as _django_cache
+except Exception:  # pragma: no cover - import-safe for lightweight test stubs
+    _django_cache = None
+
 # Module-level throttle for the keepalive NetBox endpoint push.
 # Prevents spamming the backend on every dashboard keepalive poll.
 _last_netbox_endpoint_push: float = 0.0
@@ -36,6 +45,41 @@ _NETBOX_PUSH_THROTTLE_SECONDS: float = 300.0  # 5 minutes
 # Per-endpoint throttle for the keepalive Proxmox mode detection.
 _last_proxmox_mode_check: dict[int, float] = {}
 _PROXMOX_MODE_CHECK_THROTTLE_SECONDS: float = 300.0  # 5 minutes
+_PROXMOX_MODE_CHECK_CACHE_PREFIX = "netbox_proxbox:keepalive:proxmox_mode_check"
+
+
+def _proxmox_mode_check_cache_key(pk: int) -> str:
+    return f"{_PROXMOX_MODE_CHECK_CACHE_PREFIX}:{pk}"
+
+
+def _should_run_proxmox_mode_check(pk: int) -> bool:
+    """Throttle Proxmox mode detection across workers when cache is available."""
+    if _django_cache is not None:
+        try:
+            cache_key = _proxmox_mode_check_cache_key(pk)
+            if _django_cache.get(cache_key):
+                return False
+            _django_cache.set(
+                cache_key,
+                True,
+                timeout=int(_PROXMOX_MODE_CHECK_THROTTLE_SECONDS),
+            )
+            return True
+        except Exception:  # noqa: BLE001
+            logger.debug(
+                "Keepalive mode update: cache throttle unavailable; "
+                "falling back to process-local throttle",
+                exc_info=True,
+            )
+
+    now = time.monotonic()
+    if (
+        now - _last_proxmox_mode_check.get(pk, float("-inf"))
+        < _PROXMOX_MODE_CHECK_THROTTLE_SECONDS
+    ):
+        return False
+    _last_proxmox_mode_check[pk] = now
+    return True
 
 
 def _maybe_push_netbox_endpoints_to_backend(
@@ -167,56 +211,54 @@ def _maybe_update_proxmox_endpoint_mode(
     Throttled per endpoint pk (once per 5 minutes) so it adds no measurable
     overhead to the keepalive dashboard poll.
     """
-    global _last_proxmox_mode_check
-
     try:
         pk = getattr(endpoint, "pk", getattr(endpoint, "id", None))
         if pk is None:
             return
 
-        now = time.monotonic()
-        if (
-            now - _last_proxmox_mode_check.get(pk, float("-inf"))
-            < _PROXMOX_MODE_CHECK_THROTTLE_SECONDS
-        ):
+        if not _should_run_proxmox_mode_check(pk):
             return
 
-        from netbox_proxbox.schemas import ProxmoxClusterStatusResponse  # noqa: PLC0415
-
-        resp = requests.get(
-            f"{base_url}/proxmox/cluster/status",
-            params=query_params,
+        context = BackendRequestContext(
+            http_url=base_url.rstrip("/"),
+            verify_ssl=backend_verify_ssl,
             headers=auth_headers,
-            verify=backend_verify_ssl,
+        )
+        payload, http_status = request_backend_json(
+            context,
+            "proxmox/cluster/status",
+            query_params=query_params,
             timeout=10,
         )
-        resp.raise_for_status()
-        cluster_data = ProxmoxClusterStatusResponse.model_validate(resp.json())
+        if not payload.get("ok"):
+            logger.debug(
+                "Keepalive mode update: cluster/status failed for endpoint pk=%s "
+                "(HTTP %s): %s",
+                pk,
+                http_status,
+                payload.get("detail"),
+            )
+            return
 
-        cluster_record = cluster_data.cluster_record
-        node_records = cluster_data.node_records
+        cluster_data = ProxmoxClusterStatusResponse.model_validate(
+            payload.get("response")
+        )
 
-        if cluster_record and len(node_records) > 1:
-            mode = "cluster"
-        elif len(node_records) == 1:
-            mode = "standalone"
-        else:
-            mode = "undefined"
+        mode = derive_proxmox_endpoint_mode(
+            cluster_data.cluster_record,
+            cluster_data.node_records,
+        )
 
         current_mode = getattr(endpoint, "mode", None)
         if current_mode != mode:
             endpoint.mode = mode
-            if callable(getattr(endpoint, "save", None)):
-                endpoint.save(update_fields=["mode"])
+            ProxmoxEndpoint.objects.filter(pk=pk).update(mode=mode)
             logger.info(
                 "Keepalive mode update: endpoint '%s' (pk=%s) mode set to %s",
                 getattr(endpoint, "name", pk),
                 pk,
                 mode,
             )
-
-        _last_proxmox_mode_check[pk] = now
-
     except Exception:  # noqa: BLE001
         logger.debug(
             "Keepalive mode update: failed to detect mode for endpoint pk=%s",
