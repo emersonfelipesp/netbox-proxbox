@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import copy
+import logging
+
 from django.utils.translation import gettext as _
 
 from netbox.api.fields import ChoiceField
@@ -19,6 +22,28 @@ from netbox_proxbox.choices import (
 )
 from netbox_proxbox.constants import OVERWRITE_FIELDS, SYNC_MODE_FIELDS
 from netbox_proxbox.models import FastAPIEndpoint, NetBoxEndpoint, ProxmoxEndpoint
+from netbox_proxbox.models.proxmox_endpoint import (
+    SERVICE_MONITORING_INELIGIBLE_MESSAGE,
+)
+
+
+logger = logging.getLogger(__name__)
+
+
+SERVICE_MONITORING_ELIGIBILITY_FIELDS = (
+    "allow_writes",
+    "access_methods",
+    "ssh_credential_source",
+    "domain",
+    "ip_address",
+    "username",
+    "password",
+    "ssh_username",
+    "ssh_auth_method",
+    "ssh_known_host_fingerprint",
+    "rpc_enabled",
+    "service_monitoring_enabled",
+)
 
 
 class NestedTokenSerializer(WritableNestedSerializer):
@@ -71,7 +96,7 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
     effective_rpc_enabled = serializers.SerializerMethodField(read_only=True)
 
     def get_effective_rpc_enabled(self, obj: ProxmoxEndpoint) -> bool:
-        """Resolved netbox-rpc enablement: per-endpoint override else global."""
+        """Resolved netbox-rpc enablement: installed, then endpoint override/global."""
         return obj.effective_rpc_enabled()
 
     class Meta:
@@ -165,7 +190,37 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
                 }
             )
 
+        self._validate_service_monitoring(attrs)
         return attrs
+
+    def _validate_service_monitoring(self, attrs: dict[str, object]) -> None:
+        """Apply the model's service-monitoring eligibility policy to API writes."""
+        candidate = (
+            copy.copy(self.instance) if self.instance is not None else ProxmoxEndpoint()
+        )
+        for field_name in SERVICE_MONITORING_ELIGIBILITY_FIELDS:
+            if field_name in attrs:
+                setattr(candidate, field_name, attrs[field_name])
+
+        if not getattr(candidate, "service_monitoring_enabled", False):
+            return
+        if candidate.service_monitoring_eligible:
+            return
+        if (
+            "service_monitoring_enabled" not in attrs
+            and candidate._should_auto_disable_service_monitoring_for_rpc()
+        ):
+            attrs["service_monitoring_enabled"] = False
+            logger.warning(
+                "Auto-disabled service monitoring for Proxmox endpoint %s "
+                "because netbox-rpc is not installed or is disabled for the "
+                "endpoint.",
+                getattr(candidate, "pk", None) or candidate,
+            )
+            return
+        raise serializers.ValidationError(
+            {"non_field_errors": [str(SERVICE_MONITORING_INELIGIBLE_MESSAGE)]}
+        )
 
     def _apply_allowed_tenants(
         self,

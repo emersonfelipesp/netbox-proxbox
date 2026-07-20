@@ -37,6 +37,14 @@ This directory contains the plugin's pytest test suite.
 - `test_hardware_discovery_custom_fields_migration.py`: migration `0049_register_hardware_discovery_cfs` registers all six custom fields with correct types, content-type bindings (`dcim.device` / `dcim.interface`), `ui_editable="hidden"`, `filter_logic="disabled"`, idempotency, unregister path, and dependency chain.
 - `test_backup_replication_views.py`: view coverage for backup routine and replication list/detail pages.
 - `test_home_context.py`: tests for home page context assembly.
+- `test_operator_migration_ux.py`: source-contract and pure outcome tests for
+  issue #217's operator migration UX. Pins the `sync-state/repair/` route,
+  lazy `sync-state/bootstrap-status/` route, `RepairSyncStateView` permission
+  stack, proxbox-api `/extras/bootstrap-status` and
+  `/extras/custom-fields/reconcile` helper strings, Home/Settings template
+  inclusion of the shared bootstrap-status card, nested backend response
+  handling, duplicate active-job guarding, and success / permission-denied /
+  backend-error outcome mapping without bootstrapping NetBox.
 - `test_stack_setup.py`, `test_stack_sync_polling.py`: integration-level stack setup and sync polling behavior tests.
 - `test_templatetags.py`: tests for custom Proxbox template tag helpers.
 - `e2e/`: stack-oriented tests that exercise the proxbox-api and NetBox integration flow end to end.

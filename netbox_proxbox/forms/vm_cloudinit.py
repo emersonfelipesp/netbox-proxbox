@@ -23,6 +23,18 @@ class ProxmoxVMCloudInitForm(NetBoxModelForm):
             "sshkeys",
             "ipconfig0",
             "sshkeys_truncated",
+            # create-time intent (displayed read-only; written by the NMS stack)
+            "is_intent",
+            "hostname",
+            "search_domain",
+            "dns_servers",
+            "bridge",
+            "vlan_tag",
+            "gateway",
+            "ip_cidr",
+            "ssh_pwauth",
+            "enable_agent",
+            "nms_credential_id",
             "tags",
         )
 

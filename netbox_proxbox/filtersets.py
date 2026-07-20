@@ -1,15 +1,23 @@
 """Define NetBox filtersets for the plugin's list views and API queries."""
 
 import django_filters
+from dcim.models import Device, DeviceRole, DeviceType, Interface, Manufacturer, Site
 from django.db.models import Q, QuerySet
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
-from ipam.models import IPAddress
+from ipam.models import IPAddress, VLAN
 from netbox.filtersets import NetBoxModelFilterSet
 from tenancy.models import Tenant
 from utilities.filtersets import register_filterset
 from utilities.filters import MultiValueNumberFilter
-from virtualization.models import Cluster, VirtualMachine, VMInterface
+from virtualization.models import (
+    Cluster,
+    ClusterGroup,
+    ClusterType,
+    VirtualDisk,
+    VirtualMachine,
+    VMInterface,
+)
 
 from .choices import (
     CloudImageOSFamilyChoices,
@@ -37,6 +45,21 @@ from .models import (
     ProxmoxFirewallOptions,
     ProxmoxFirewallRule,
     ProxmoxFirewallSecurityGroup,
+    ProxmoxMetricsInfluxDB,
+    ProxboxClusterGroupSyncState,
+    ProxboxClusterSyncState,
+    ProxboxClusterTypeSyncState,
+    ProxboxDeviceRoleSyncState,
+    ProxboxDeviceSyncState,
+    ProxboxDeviceTypeSyncState,
+    ProxboxIPAddressSyncState,
+    ProxboxInterfaceSyncState,
+    ProxboxManufacturerSyncState,
+    ProxboxSiteSyncState,
+    ProxboxVirtualDiskSyncState,
+    ProxboxVirtualMachineSyncState,
+    ProxboxVLANSyncState,
+    ProxboxVMInterfaceSyncState,
     ProxmoxSdnBinding,
     ProxmoxSdnController,
     ProxmoxSdnFabric,
@@ -717,6 +740,369 @@ class GuestVMInterfaceAddressFilterSet(ProxboxModelFilterSet):
 
 
 @register_filterset
+class ProxboxVirtualMachineSyncStateFilterSet(ProxboxModelFilterSet):
+    """Filter typed VM sync-state sidecars."""
+
+    virtual_machine = django_filters.ModelMultipleChoiceFilter(
+        queryset=VirtualMachine.objects.all(),
+    )
+
+    class Meta:
+        model = ProxboxVirtualMachineSyncState
+        fields = (
+            "id",
+            "virtual_machine",
+            "endpoint",
+            "proxmox_node",
+            "proxmox_cluster",
+            "proxmox_vm_id",
+            "proxmox_vm_type",
+            "proxmox_status",
+            "proxmox_endpoint_raw_id",
+            "proxmox_last_updated",
+        )
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        if not value.strip():
+            return queryset
+        query = (
+            Q(virtual_machine__name__icontains=value)
+            | Q(proxmox_node_name__icontains=value)
+            | Q(proxmox_cluster_name__icontains=value)
+            | Q(proxmox_status__icontains=value)
+            | Q(proxmox_vmid__icontains=value)
+        )
+        if value.isdigit():
+            query |= Q(proxmox_vm_id=int(value))
+        return queryset.filter(query)
+
+
+@register_filterset
+class ProxboxDeviceSyncStateFilterSet(ProxboxModelFilterSet):
+    """Filter typed device sync-state sidecars."""
+
+    device = django_filters.ModelMultipleChoiceFilter(queryset=Device.objects.all())
+
+    class Meta:
+        model = ProxboxDeviceSyncState
+        fields = (
+            "id",
+            "device",
+            "endpoint",
+            "proxmox_node",
+            "proxmox_cluster",
+            "proxmox_vmid",
+            "hardware_chassis_serial",
+            "proxmox_last_updated",
+        )
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        if not value.strip():
+            return queryset
+        return queryset.filter(
+            Q(device__name__icontains=value)
+            | Q(proxmox_node_name__icontains=value)
+            | Q(proxmox_cluster_name__icontains=value)
+            | Q(proxmox_vmid__icontains=value)
+            | Q(hardware_chassis_serial__icontains=value)
+        )
+
+
+@register_filterset
+class ProxboxClusterSyncStateFilterSet(ProxboxModelFilterSet):
+    """Filter typed cluster sync-state sidecars."""
+
+    cluster = django_filters.ModelMultipleChoiceFilter(queryset=Cluster.objects.all())
+
+    class Meta:
+        model = ProxboxClusterSyncState
+        fields = (
+            "id",
+            "cluster",
+            "proxmox_cluster",
+            "proxmox_cluster_name",
+            "proxmox_cluster_status",
+            "proxmox_cluster_raw_id",
+            "proxmox_last_updated",
+        )
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        if not value.strip():
+            return queryset
+        query = (
+            Q(cluster__name__icontains=value)
+            | Q(proxmox_cluster_name__icontains=value)
+            | Q(proxmox_cluster_status__icontains=value)
+        )
+        if value.isdigit():
+            query |= Q(proxmox_cluster_raw_id=int(value))
+        return queryset.filter(query)
+
+
+@register_filterset
+class ProxboxIPAddressSyncStateFilterSet(ProxboxModelFilterSet):
+    """Filter typed IP address sync-state sidecars."""
+
+    ip_address = django_filters.ModelMultipleChoiceFilter(
+        queryset=IPAddress.objects.all(),
+    )
+
+    class Meta:
+        model = ProxboxIPAddressSyncState
+        fields = (
+            "id",
+            "ip_address",
+            "proxmox_interface",
+            "proxmox_mac",
+            "proxmox_last_updated",
+        )
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        if not value.strip():
+            return queryset
+        return queryset.filter(
+            Q(ip_address__address__icontains=value)
+            | Q(proxmox_interface__icontains=value)
+            | Q(proxmox_mac__icontains=value)
+            | Q(proxmox_ip_addresses__icontains=value)
+        )
+
+
+@register_filterset
+class ProxboxInterfaceSyncStateFilterSet(ProxboxModelFilterSet):
+    """Filter typed device-interface sync-state sidecars."""
+
+    interface = django_filters.ModelMultipleChoiceFilter(
+        queryset=Interface.objects.all()
+    )
+
+    class Meta:
+        model = ProxboxInterfaceSyncState
+        fields = (
+            "id",
+            "interface",
+            "nic_speed_gbps",
+            "nic_duplex",
+            "nic_link",
+            "proxmox_last_updated",
+        )
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        if not value.strip():
+            return queryset
+        return queryset.filter(
+            Q(interface__name__icontains=value)
+            | Q(interface__device__name__icontains=value)
+            | Q(nic_duplex__icontains=value)
+        )
+
+
+@register_filterset
+class ProxboxVLANSyncStateFilterSet(ProxboxModelFilterSet):
+    """Filter typed VLAN sync-state sidecars."""
+
+    vlan = django_filters.ModelMultipleChoiceFilter(queryset=VLAN.objects.all())
+
+    class Meta:
+        model = ProxboxVLANSyncState
+        fields = ("id", "vlan", "proxmox_vlan_id", "proxmox_last_updated")
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        if not value.strip():
+            return queryset
+        query = Q(vlan__name__icontains=value)
+        if value.isdigit():
+            query |= Q(proxmox_vlan_id=int(value)) | Q(vlan__vid=int(value))
+        return queryset.filter(query)
+
+
+@register_filterset
+class ProxboxClusterGroupSyncStateFilterSet(ProxboxModelFilterSet):
+    """Filter typed cluster-group sync-state sidecars."""
+
+    cluster_group = django_filters.ModelMultipleChoiceFilter(
+        queryset=ClusterGroup.objects.all(),
+    )
+
+    class Meta:
+        model = ProxboxClusterGroupSyncState
+        fields = (
+            "id",
+            "cluster_group",
+            "proxmox_cluster_name",
+            "proxmox_cluster_status",
+            "proxmox_last_updated",
+        )
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        if not value.strip():
+            return queryset
+        return queryset.filter(
+            Q(cluster_group__name__icontains=value)
+            | Q(proxmox_cluster_name__icontains=value)
+            | Q(proxmox_cluster_status__icontains=value)
+        )
+
+
+@register_filterset
+class ProxboxVirtualDiskSyncStateFilterSet(ProxboxModelFilterSet):
+    """Filter typed virtual-disk sync-state sidecars."""
+
+    virtual_disk = django_filters.ModelMultipleChoiceFilter(
+        queryset=VirtualDisk.objects.all(),
+    )
+    proxbox_storage = django_filters.ModelMultipleChoiceFilter(
+        queryset=ProxmoxStorage.objects.all(),
+    )
+
+    class Meta:
+        model = ProxboxVirtualDiskSyncState
+        fields = (
+            "id",
+            "virtual_disk",
+            "proxbox_storage",
+            "proxbox_storage_raw_id",
+            "proxmox_last_updated",
+        )
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        if not value.strip():
+            return queryset
+        query = Q(virtual_disk__name__icontains=value) | Q(
+            proxbox_storage__name__icontains=value
+        )
+        if value.isdigit():
+            query |= Q(proxbox_storage_raw_id=int(value))
+        return queryset.filter(query)
+
+
+@register_filterset
+class ProxboxVMInterfaceSyncStateFilterSet(ProxboxModelFilterSet):
+    """Filter typed VM-interface sync-state sidecars."""
+
+    vm_interface = django_filters.ModelMultipleChoiceFilter(
+        queryset=VMInterface.objects.all(),
+    )
+    proxbox_bridge = django_filters.ModelMultipleChoiceFilter(
+        queryset=Interface.objects.all(),
+    )
+
+    class Meta:
+        model = ProxboxVMInterfaceSyncState
+        fields = (
+            "id",
+            "vm_interface",
+            "proxbox_bridge",
+            "proxbox_bridge_raw_id",
+            "proxmox_last_updated",
+        )
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        if not value.strip():
+            return queryset
+        query = (
+            Q(vm_interface__name__icontains=value)
+            | Q(vm_interface__virtual_machine__name__icontains=value)
+            | Q(proxbox_bridge__name__icontains=value)
+            | Q(proxbox_bridge__device__name__icontains=value)
+        )
+        if value.isdigit():
+            query |= Q(proxbox_bridge_raw_id=int(value))
+        return queryset.filter(query)
+
+
+@register_filterset
+class ProxboxDeviceRoleSyncStateFilterSet(ProxboxModelFilterSet):
+    """Filter typed device-role sync-state sidecars."""
+
+    device_role = django_filters.ModelMultipleChoiceFilter(
+        queryset=DeviceRole.objects.all(),
+    )
+
+    class Meta:
+        model = ProxboxDeviceRoleSyncState
+        fields = ("id", "device_role", "proxmox_last_updated")
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        if not value.strip():
+            return queryset
+        return queryset.filter(Q(device_role__name__icontains=value))
+
+
+@register_filterset
+class ProxboxDeviceTypeSyncStateFilterSet(ProxboxModelFilterSet):
+    """Filter typed device-type sync-state sidecars."""
+
+    device_type = django_filters.ModelMultipleChoiceFilter(
+        queryset=DeviceType.objects.all(),
+    )
+
+    class Meta:
+        model = ProxboxDeviceTypeSyncState
+        fields = ("id", "device_type", "proxmox_last_updated")
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        if not value.strip():
+            return queryset
+        return queryset.filter(
+            Q(device_type__model__icontains=value)
+            | Q(device_type__manufacturer__name__icontains=value)
+        )
+
+
+@register_filterset
+class ProxboxManufacturerSyncStateFilterSet(ProxboxModelFilterSet):
+    """Filter typed manufacturer sync-state sidecars."""
+
+    manufacturer = django_filters.ModelMultipleChoiceFilter(
+        queryset=Manufacturer.objects.all(),
+    )
+
+    class Meta:
+        model = ProxboxManufacturerSyncState
+        fields = ("id", "manufacturer", "proxmox_last_updated")
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        if not value.strip():
+            return queryset
+        return queryset.filter(Q(manufacturer__name__icontains=value))
+
+
+@register_filterset
+class ProxboxSiteSyncStateFilterSet(ProxboxModelFilterSet):
+    """Filter typed site sync-state sidecars."""
+
+    site = django_filters.ModelMultipleChoiceFilter(queryset=Site.objects.all())
+
+    class Meta:
+        model = ProxboxSiteSyncState
+        fields = ("id", "site", "proxmox_last_updated")
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        if not value.strip():
+            return queryset
+        return queryset.filter(Q(site__name__icontains=value))
+
+
+@register_filterset
+class ProxboxClusterTypeSyncStateFilterSet(ProxboxModelFilterSet):
+    """Filter typed cluster-type sync-state sidecars."""
+
+    cluster_type = django_filters.ModelMultipleChoiceFilter(
+        queryset=ClusterType.objects.all(),
+    )
+
+    class Meta:
+        model = ProxboxClusterTypeSyncState
+        fields = ("id", "cluster_type", "proxmox_last_updated")
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        if not value.strip():
+            return queryset
+        return queryset.filter(Q(cluster_type__name__icontains=value))
+
+
+@register_filterset
 class ProxmoxClusterFilterSet(ProxboxModelFilterSet):
     """Filter Proxmox cluster records tracked by the plugin."""
 
@@ -795,6 +1181,26 @@ class ProxmoxVMTemplateFilterSet(ProxboxModelFilterSet):
         if value.isdigit():
             query |= Q(vmid=int(value))
         return queryset.filter(query)
+
+
+@register_filterset
+class ProxmoxMetricsInfluxDBFilterSet(ProxboxModelFilterSet):
+    """Filter Proxmox cluster InfluxDB metrics endpoint metadata."""
+
+    class Meta:
+        model = ProxmoxMetricsInfluxDB
+        fields = ("id", "endpoint", "proxmox_cluster", "enabled", "name")
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        """Match metrics endpoint name, InfluxDB URL, organization, or bucket."""
+        if not value.strip():
+            return queryset
+        return queryset.filter(
+            Q(name__icontains=value)
+            | Q(influx_url__icontains=value)
+            | Q(org__icontains=value)
+            | Q(bucket__icontains=value)
+        )
 
 
 @register_filterset

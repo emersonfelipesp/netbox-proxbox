@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import Callable, Generator, Iterable
+from typing import Literal
 
 import requests
 from pydantic import ValidationError
@@ -32,6 +33,7 @@ from netbox_proxbox.views.error_utils import (
 logger = logging.getLogger(__name__)
 
 _SYNC_STREAM_READ_TIMEOUT = (5, 3600)
+_BACKEND_JSON_METHODS = Literal["GET", "POST"]
 
 
 def sse_error_frames(
@@ -259,6 +261,227 @@ def request_backend_resource(
         "requested_urls": requested_urls,
         "detail": last_detail or "Unable to reach the ProxBox backend.",
     }, 503
+
+
+def _send_backend_json_request(
+    method: _BACKEND_JSON_METHODS,
+    url: str,
+    *,
+    query_params: dict[str, str] | None,
+    headers: dict[str, str],
+    verify: bool,
+    timeout: float | tuple[int, int],
+) -> requests.Response:
+    """Send a bounded JSON request without dynamic method dispatch."""
+    if method == "GET":
+        return requests.get(
+            url,
+            params=query_params,
+            headers=headers,
+            verify=verify,
+            timeout=timeout,
+        )
+    if method == "POST":
+        return requests.post(
+            url,
+            params=query_params,
+            headers=headers,
+            verify=verify,
+            timeout=timeout,
+        )
+    raise ValueError(f"Unsupported backend JSON method: {method}")
+
+
+def _parse_json_or_empty(
+    response: requests.Response, *, log_label: str
+) -> tuple[object | None, str | None]:
+    """Return JSON response data, treating empty success bodies as ``{}``."""
+    if response.status_code == 204:
+        return {}, None
+    body = getattr(response, "text", None)
+    if body == "":
+        return {}, None
+    return parse_requests_response_json(response, log_label=log_label)
+
+
+def request_backend_json(
+    context: BackendRequestContext,
+    path: str,
+    *,
+    method: _BACKEND_JSON_METHODS = "GET",
+    query_params: dict[str, str] | None = None,
+    timeout: float | tuple[int, int] = 5,
+    endpoint_id: int | None = None,
+) -> tuple[dict[str, object], int]:
+    """Call a proxbox-api JSON endpoint with URL fallback and auth retry."""
+    http_url = context.http_url
+    if not http_url:
+        return {
+            "ok": False,
+            "path": path,
+            "requested_urls": [],
+            "detail": "No FastAPI URL found.",
+        }, 503
+
+    verify_ssl = bool(context.verify_ssl)
+    backend_headers = context.headers or {}
+    requested_urls: list[str] = []
+    request_candidates = _build_request_candidates(
+        http_url, context.ip_address_url, path, verify_ssl
+    )
+
+    last_detail: str | None = None
+    last_status: int | None = None
+    auth_register_attempted = False
+
+    for url, verify in request_candidates:
+        requested_urls.append(url)
+        retry_current_url = True
+
+        while retry_current_url:
+            retry_current_url = False
+            try:
+                response = _send_backend_json_request(
+                    method,
+                    url,
+                    query_params=query_params,
+                    headers=backend_headers,
+                    verify=verify,
+                    timeout=timeout,
+                )
+            except requests.exceptions.RequestException as exc:
+                last_detail, last_status = extract_backend_error_detail(exc)
+                logger.error(
+                    "Backend %s request failed for %s via %s", method, path, url
+                )
+                if getattr(exc, "response", None) is not None:
+                    return {
+                        "ok": False,
+                        "path": path,
+                        "requested_urls": requested_urls,
+                        "detail": last_detail,
+                    }, last_status or 503
+                break
+            except (KeyboardInterrupt, SystemExit, GeneratorExit):
+                raise
+            except OSError as exc:
+                last_detail = str(exc)
+                logger.error(
+                    "Unexpected backend %s error for %s via %s: %s",
+                    method,
+                    path,
+                    url,
+                    exc,
+                )
+                break
+
+            last_status = response.status_code
+            if response.status_code >= 400:
+                last_detail = f"HTTP {response.status_code}"
+                payload, json_err = parse_requests_response_json(
+                    response, log_label=f"backend-json:{path}"
+                )
+                if json_err:
+                    last_detail = json_err
+                elif isinstance(payload, dict):
+                    detail = payload.get("detail") or payload.get("message")
+                    if detail:
+                        last_detail = str(detail)
+                    if (
+                        not auth_register_attempted
+                        and response.status_code == 401
+                        and "API key" in str(detail)
+                    ):
+                        auth_register_attempted = True
+                        new_headers, should_retry = _handle_auth_registration_and_retry(
+                            backend_headers,
+                            endpoint_id=endpoint_id,
+                        )
+                        if should_retry:
+                            backend_headers = {
+                                str(key): str(value)
+                                for key, value in new_headers.items()
+                            }
+                            retry_current_url = True
+                            continue
+
+                logger.error(
+                    "Backend %s request failed for %s via %s: %s",
+                    method,
+                    path,
+                    url,
+                    last_detail,
+                )
+                if response.status_code < 500:
+                    return {
+                        "ok": False,
+                        "path": path,
+                        "requested_urls": requested_urls,
+                        "status_code": response.status_code,
+                        "detail": last_detail,
+                    }, response.status_code
+                break
+
+            payload, json_err = _parse_json_or_empty(
+                response, log_label=f"backend-json:{path}"
+            )
+            if json_err:
+                last_detail = json_err
+                logger.error(
+                    "Backend %s request returned non-JSON for %s via %s: %s",
+                    method,
+                    path,
+                    url,
+                    json_err,
+                )
+                continue
+
+            return {
+                "ok": True,
+                "path": path,
+                "requested_urls": requested_urls,
+                "status_code": response.status_code,
+                "response": payload if payload is not None else {},
+            }, response.status_code
+
+    return {
+        "ok": False,
+        "path": path,
+        "requested_urls": requested_urls,
+        "status_code": last_status,
+        "detail": last_detail or "Unable to reach the ProxBox backend.",
+    }, last_status or 503
+
+
+def get_backend_bootstrap_status(
+    endpoint_id: int | None = None,
+) -> tuple[dict[str, object], int]:
+    """Fetch proxbox-api setup/bootstrap status from ``/extras/bootstrap-status``."""
+    context = get_fastapi_request_context(endpoint_id=endpoint_id)
+    if context is None or not context.http_url:
+        return {"ok": False, "detail": "No FastAPI URL found."}, 404
+    return request_backend_json(
+        context,
+        "extras/bootstrap-status",
+        method="GET",
+        endpoint_id=endpoint_id,
+    )
+
+
+def reconcile_backend_custom_fields(
+    endpoint_id: int | None = None,
+) -> tuple[dict[str, object], int]:
+    """Force-reconcile legacy Proxbox custom-field definitions on proxbox-api."""
+    context = get_fastapi_request_context(endpoint_id=endpoint_id)
+    if context is None or not context.http_url:
+        return {"ok": False, "detail": "No FastAPI URL found."}, 404
+    return request_backend_json(
+        context,
+        "extras/custom-fields/reconcile",
+        method="POST",
+        timeout=30,
+        endpoint_id=endpoint_id,
+    )
 
 
 def run_sync_stream(

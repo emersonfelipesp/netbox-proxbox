@@ -193,6 +193,104 @@ erDiagram
 > - `FirecrackerHost.host_vm` → `virtualization.VirtualMachine` for the Proxmox VM running the host agent
 > - `FirecrackerHost.proxmox_node` → `netbox_proxbox.ProxmoxNode`
 > - `FirecrackerMicroVM.tenant` → `tenancy.Tenant`
+> - `Proxbox*SyncState` sidecars → the matching NetBox core object via
+>   `OneToOneField`; VM/device sidecars also reuse `ProxmoxEndpoint`,
+>   `ProxmoxNode`, and `ProxmoxCluster` as nullable resolved references.
+
+### Custom-field Sidecars
+
+The legacy proxbox-api custom-field surface is mirrored into typed plugin
+models by migrations `0065_proxbox_sync_state_models.py` and
+`0066_backfill_proxbox_sync_state.py`. These models are additive compatibility
+sidecars; custom fields remain registered and existing readers continue using
+them until the linked backend switch is released.
+
+`ProxboxSyncStateBase` is the shared abstract base for all sidecars. It stores
+`proxmox_last_updated` (from the legacy source timestamp custom field) and
+`last_run_id` (from `proxbox_last_run_id`) once instead of duplicating those
+fields across every core object surface. The inherited NetBox `last_updated`
+field remains the row modification timestamp and backs REST API ETags.
+
+| Sidecar | Core object |
+|---|---|
+| `ProxboxVirtualMachineSyncState` | `virtualization.VirtualMachine` |
+| `ProxboxDeviceSyncState` | `dcim.Device` |
+| `ProxboxClusterSyncState` | `virtualization.Cluster` |
+| `ProxboxIPAddressSyncState` | `ipam.IPAddress` |
+| `ProxboxInterfaceSyncState` | `dcim.Interface` |
+| `ProxboxVLANSyncState` | `ipam.VLAN` |
+| `ProxboxClusterGroupSyncState` | `virtualization.ClusterGroup` |
+| `ProxboxVirtualDiskSyncState` | `virtualization.VirtualDisk` |
+| `ProxboxVMInterfaceSyncState` | `virtualization.VMInterface` |
+| `ProxboxDeviceRoleSyncState` | `dcim.DeviceRole` |
+| `ProxboxDeviceTypeSyncState` | `dcim.DeviceType` |
+| `ProxboxManufacturerSyncState` | `dcim.Manufacturer` |
+| `ProxboxSiteSyncState` | `dcim.Site` |
+| `ProxboxClusterTypeSyncState` | `virtualization.ClusterType` |
+
+`ProxboxClusterSyncState` remains separate from `ProxmoxCluster` because the
+existing `ProxmoxCluster` model is endpoint-scoped by `(endpoint, name)` and
+only optionally links to a NetBox core cluster. It is not a one-to-one extension
+of `virtualization.Cluster`.
+
+Legacy backend IDs are preserved as raw data rather than guessed as plugin
+primary keys. The VM sidecar stores legacy `proxmox_endpoint_id` in
+`proxmox_endpoint_raw_id`; the cluster sidecar stores legacy
+`proxmox_cluster_id` in `proxmox_cluster_raw_id`. FK resolution uses strong
+NetBox relationships first and otherwise requires an endpoint-scoped unique
+name match.
+
+The two object-valued legacy custom fields are stored as real relations rather
+than opaque JSON through a retry-safe split migration sequence. Migration `0067`
+is additive schema only: it adds staging FK columns plus raw fallback columns
+without renaming or dropping the legacy JSON columns. Migration `0068` is the
+non-atomic data conversion; it resolves legacy storage and bridge integer IDs
+into the staged FKs, writes `proxbox_storage_raw_id` /
+`proxbox_bridge_raw_id` even when the referenced object is missing, and can be
+rerun after a mid-migration failure. Its reverse is data-preserving: it copies
+the raw ID, falling back to the FK ID, back into the legacy JSON column before
+the new columns are removed. Migration `0069` atomically removes the legacy JSON
+columns and promotes the staging FKs to the final model fields:
+`proxbox_storage` (nullable FK to `ProxmoxStorage`, `SET_NULL`) and
+`proxbox_bridge` (nullable FK to `dcim.Interface`, `SET_NULL`).
+
+**Backfill safety.** The backfill migration (`0066`) remains the original
+per-object migration body. It performs row-scoped `update_or_create()` work,
+falls back to field-by-field saves after row save errors, and aggregates
+structural row-creation failures so the migration fails loudly after checking
+the remaining objects. A malformed value, out-of-range integer, or unparseable
+date/URL degrades that one field to null rather than aborting the migration.
+The reverse of `0066` is a no-op — reversing the data migration never deletes
+rows it may not have created; a full teardown is done by reversing the schema
+migration.
+
+**Sidecar API.** The sidecar viewsets restrict their parent core object with
+`restrict(user, "view")` on both read and write. The one-to-one parent is
+immutable after creation, a duplicate/occupied parent returns a `409` conflict
+(never a `500`), and the `endpoint` / `proxmox_node` / `proxmox_cluster`
+relations are validated for coherence (a node's or cluster's endpoint must match
+the row's endpoint, and the endpoint is derived from them when omitted). List
+viewsets `select_related` the node and cluster endpoints so paginated lists do
+not issue a per-row endpoint query. Writable storage and bridge relations also
+resolve through request-restricted querysets, and virtual-disk / VM-interface
+sidecar rows with hidden `proxbox_storage` or `proxbox_bridge` relations are
+filtered from API responses so object permissions cannot attach or disclose
+hidden related objects.
+
+On NetBox 4.5.x these APIs do not emit ETags or enforce `If-Match` — a platform
+limitation present for every endpoint on that release, since ETag support was
+added in NetBox 4.6. Optimistic concurrency on the sidecar APIs is available on
+NetBox 4.6+; the rows are proxbox-api-owned and read-mostly.
+
+**Testing.** The Django-backed behavior of these models, migrations, backfill,
+and APIs is exercised by the `Django Tests` GitHub Actions workflow
+(`.github/workflows/django-tests.yml`), which provisions a real NetBox source
+tree (matrixed over the supported 4.5.x and 4.6.x lines) plus PostgreSQL and
+Redis. The job installs the plugin's `test` extra, including `pytest-django`,
+and lets pytest-django create and migrate the real NetBox test database. It
+sets `NETBOX_PROXBOX_REQUIRE_DJANGO=1` so a missing or broken NetBox harness is
+a hard failure rather than a silent skip. The lighter mocked `CI` workflow
+still runs the source-contract tests but skips the NetBox-dependent cases.
 
 ### VM-Centric Models
 

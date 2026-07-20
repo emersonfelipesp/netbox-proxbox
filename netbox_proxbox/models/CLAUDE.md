@@ -11,9 +11,12 @@ This directory defines the plugin's persisted data model.
 - [`fastapi_endpoint.py`](./fastapi_endpoint.py): ProxBox backend endpoint model.
 - [`proxmox_cluster.py`](./proxmox_cluster.py): discovered Proxmox cluster model linked to endpoint and NetBox cluster data.
 - [`proxmox_node.py`](./proxmox_node.py): discovered Proxmox node model linked to endpoint and NetBox device data.
+- [`proxmox_metrics.py`](./proxmox_metrics.py): Proxmox cluster InfluxDB metrics endpoint metadata with `nms-secret:<uuid>` token references.
 - [`plugin_settings.py`](./plugin_settings.py): singleton plugin settings model.
 - [`storage.py`](./storage.py): `ProxmoxStorage` model and `ProxmoxStorageVirtualDisk` relation model.
 - [`guest_vm_interface.py`](./guest_vm_interface.py): guest-agent OS interfaces and address links for dual VM interface sync.
+- [`sync_state.py`](./sync_state.py): typed sidecar models for the legacy
+  Proxbox custom-field payload, keyed one-to-one to NetBox core objects.
 - [`backup_routine.py`](./backup_routine.py): backup routine inventory model.
 - [`replication.py`](./replication.py): replication inventory model.
 - [`vm_backup.py`](./vm_backup.py): `VMBackup` model.
@@ -30,10 +33,39 @@ This directory defines the plugin's persisted data model.
 - `PDMEndpoint`: stores Proxmox Datacenter Manager connection settings plus declared PVE/PBS federation links.
 - `ProxmoxCluster`: stores synchronized cluster metadata and relationships to the source endpoint and NetBox cluster.
 - `ProxmoxNode`: stores synchronized hypervisor nodes and their relationships to the source endpoint and NetBox device.
+- `ProxmoxMetricsInfluxDB`: stores the InfluxDB URL, organization, bucket, TLS
+  flag, enabled state, and query/writer token secret references for a Proxmox
+  cluster. Token fields are `nms-secret:<uuid>` references to netbox-nms
+  `ObservabilitySecret` objects, never plaintext credentials or encrypted token
+  blobs in this plugin.
 - `ProxmoxStorage`: stores Proxmox storage inventory synchronized from the backend.
 - `ProxmoxStorageVirtualDisk`: links storage rows to virtual disks.
 - `GuestVMInterface`: stores guest-agent OS interface names (for example `ens18`) for a NetBox `VirtualMachine`, mapped **one-to-one** (`OneToOneField`, `SET_NULL`) to the canonical core `VMInterface` (for example `net0`) by MAC. `SET_NULL` (not `CASCADE`) so deleting/recreating the core interface during churn preserves the guest OS inventory row and only clears the link; `vm_interface` is nullable for agent-only interfaces with no matching Proxmox NIC.
 - `GuestVMInterfaceAddress`: links a guest OS interface to an existing core `ipam.IPAddress`; it never duplicates IP rows and protects referenced IPs from deletion. `clean()` enforces that the linked IP is the **same object** assigned to the mapped core `VMInterface` (or, for agent-only guests, at least on the same VM) so a bad ID/privileged user can never cross-link a foreign VM's IP.
+- `ProxboxSyncStateBase`: abstract base for the custom-field migration
+  sidecars. It stores the mirrored source timestamp in
+  `proxmox_last_updated` and the backend run identifier in `last_run_id`;
+  `last_updated` remains the inherited NetBox row timestamp for change
+  tracking and API ETags where the NetBox platform supports them.
+- `ProxboxVirtualMachineSyncState`, `ProxboxDeviceSyncState`,
+  `ProxboxClusterSyncState`, `ProxboxIPAddressSyncState`,
+  `ProxboxInterfaceSyncState`, `ProxboxVLANSyncState`,
+  `ProxboxClusterGroupSyncState`, `ProxboxVirtualDiskSyncState`,
+  `ProxboxVMInterfaceSyncState`, `ProxboxDeviceRoleSyncState`,
+  `ProxboxDeviceTypeSyncState`, `ProxboxManufacturerSyncState`,
+  `ProxboxSiteSyncState`, and `ProxboxClusterTypeSyncState`: additive typed
+  mirrors for the 43 legacy custom fields proxbox-api currently writes across
+  14 NetBox core object types. VM/device sidecars reuse existing
+  `ProxmoxEndpoint`, `ProxmoxNode`, and `ProxmoxCluster` rows as nullable FKs,
+  with text/raw fallback columns for unresolved legacy values. Legacy
+  `proxmox_endpoint_id` is stored as `proxmox_endpoint_raw_id` and never
+  treated as a plugin `ProxmoxEndpoint` primary key; legacy
+  `proxmox_cluster_id` is stored as `proxmox_cluster_raw_id` to avoid
+  colliding with the `proxmox_cluster` FK attname. Legacy virtual-disk storage
+  and VM-interface bridge JSON values preserve unresolved numeric IDs in
+  `proxbox_storage_raw_id` / `proxbox_bridge_raw_id` and malformed or
+  non-numeric payloads in `proxbox_storage_raw_value` /
+  `proxbox_bridge_raw_value`.
 - `BackupRoutine`: stores backup routine inventory for NetBox-backed ProxBox sync.
 - `Replication`: stores replication job inventory for NetBox-backed ProxBox sync.
 - `VMBackup`: stores backup inventory for NetBox virtual machines.
@@ -73,7 +105,9 @@ This directory defines the plugin's persisted data model.
   `ssh_known_host_fingerprint`.
 - `ProxmoxEndpoint.service_monitoring_enabled` is gated by
   `service_monitoring_eligible`, which is true only when `allow_writes`,
-  `ssh_access_enabled`, and `has_ssh_terminal_credentials` are all true. The
+  `ssh_access_enabled`, `has_ssh_terminal_credentials`, and
+  `effective_rpc_enabled()` are all true (an RPC-disabled endpoint is excluded
+  because each collection tick would 403 at the backend RPC gate). The
   collector creates asynchronous netbox-rpc executions; this plugin does not
   perform SSH itself.
 - `ProxboxPluginSettings` is the singleton home for runtime tunables shared with the
@@ -89,6 +123,21 @@ This directory defines the plugin's persisted data model.
   rows named `net0`/`net1` and stores guest-agent names in `GuestVMInterface`.
   The `legacy_rename` strategy is retained only for the old single-interface
   rename behavior controlled by deprecated `use_guest_agent_interface_name`.
+- `ProxboxClusterSyncState` is intentionally separate from `ProxmoxCluster`.
+  `ProxmoxCluster` is endpoint-scoped and unique by `(endpoint, name)` with a
+  nullable FK to `virtualization.Cluster`; it is not a one-to-one extension of
+  NetBox's core cluster model. Keep custom-field backfill on the sidecar unless
+  that cardinality changes.
+- The custom-field migration path is additive. Migrations 0065/0066 create and
+  backfill typed sidecars, but proxbox-api still writes custom fields and
+  existing readers still consume them until the linked backend writer/reader
+  switch lands. Removing custom fields is a later cleanup after both repos use
+  the sidecars.
+- Concurrency known limitation: on NetBox 4.5.x, sync-state sidecar REST APIs
+  do not emit ETags and do not enforce `If-Match`, matching the platform
+  behavior for all endpoints on that release. Optimistic concurrency is
+  available on NetBox 4.6+. Automated writers should treat sidecar rows as
+  proxbox-api-owned during the additive phase.
 - Cloud-customer network discovery fields also live on `ProxboxPluginSettings`:
   `cloud_network_lock_enabled`, `cloud_customer_prefix_id`,
   `cloud_customer_bridge`, `cloud_customer_vlan_tag`, and

@@ -3,7 +3,6 @@
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.views import View
-from netbox import configuration
 from utilities.views import (
     ConditionalLoginRequiredMixin,
     ContentTypePermissionRequiredMixin,
@@ -128,6 +127,13 @@ from .cluster import (
 )
 from .cluster_nodes_tab import ProxmoxEndpointClusterNodesTabView
 from .proxmox_create_instance import ProxmoxEndpointCreateInstanceView
+from .proxmox_metrics import (
+    ProxmoxMetricsInfluxDBBulkDeleteView,
+    ProxmoxMetricsInfluxDBDeleteView,
+    ProxmoxMetricsInfluxDBEditView,
+    ProxmoxMetricsInfluxDBListView,
+    ProxmoxMetricsInfluxDBView,
+)
 from .proxmox_templates_tab import ProxmoxEndpointTemplatesTabView
 from .dashboard import DashboardView
 from .endpoints import (
@@ -174,6 +180,7 @@ from .resource_list_views import (
 )
 from .schedule_sync import QuickScheduleSyncFromHomeView, ScheduleSyncView
 from .settings import SettingsView
+from .sync_state_repair import BootstrapStatusView, RepairSyncStateView
 from .ssh_credential import (
     NodeSSHCredentialBulkDeleteView,
     NodeSSHCredentialDeleteView,

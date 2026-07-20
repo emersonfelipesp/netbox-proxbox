@@ -275,7 +275,7 @@
             {% blocktrans trimmed %}
             Turn netbox-rpc operations on or off for this Proxmox endpoint. Leave
             blank to inherit the global netbox-rpc setting; setting it explicitly
-            overrides the global value (the per-endpoint value wins).
+            overrides the global value when netbox-rpc is installed.
             {% endblocktrans %}
           </p>
           {% for group_label, group_fields in rpc_field_groups %}

@@ -356,6 +356,18 @@ datacenter_cpu_models_item = PluginMenuItem(
     ),
 )
 
+metrics_influxdb_item = PluginMenuItem(
+    link="plugins:netbox_proxbox:proxmoxmetricsinfluxdb_list",
+    link_text="InfluxDB Metrics",
+    buttons=(
+        PluginMenuButton(
+            "plugins:netbox_proxbox:proxmoxmetricsinfluxdb_add",
+            "Add Metrics Endpoint",
+            "mdi mdi-plus",
+        ),
+    ),
+)
+
 community_item = PluginMenuItem(
     link="plugins:netbox_proxbox:community",
     link_text="Community",
@@ -387,6 +399,7 @@ menu = PluginMenu(
                 storage_item,
                 ha_item,
                 datacenter_cpu_models_item,
+                metrics_influxdb_item,
             ),
         ),
         (

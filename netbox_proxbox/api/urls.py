@@ -103,6 +103,76 @@ router.register(
     views.GuestVMInterfaceAddressViewSet,
     basename="guestvminterfaceaddress",
 )
+router.register(
+    "sync-state/virtual-machines",
+    views.ProxboxVirtualMachineSyncStateViewSet,
+    basename="proxboxvirtualmachinesyncstate",
+)
+router.register(
+    "sync-state/devices",
+    views.ProxboxDeviceSyncStateViewSet,
+    basename="proxboxdevicesyncstate",
+)
+router.register(
+    "sync-state/clusters",
+    views.ProxboxClusterSyncStateViewSet,
+    basename="proxboxclustersyncstate",
+)
+router.register(
+    "sync-state/ip-addresses",
+    views.ProxboxIPAddressSyncStateViewSet,
+    basename="proxboxipaddresssyncstate",
+)
+router.register(
+    "sync-state/interfaces",
+    views.ProxboxInterfaceSyncStateViewSet,
+    basename="proxboxinterfacesyncstate",
+)
+router.register(
+    "sync-state/vlans",
+    views.ProxboxVLANSyncStateViewSet,
+    basename="proxboxvlansyncstate",
+)
+router.register(
+    "sync-state/cluster-groups",
+    views.ProxboxClusterGroupSyncStateViewSet,
+    basename="proxboxclustergroupsyncstate",
+)
+router.register(
+    "sync-state/virtual-disks",
+    views.ProxboxVirtualDiskSyncStateViewSet,
+    basename="proxboxvirtualdisksyncstate",
+)
+router.register(
+    "sync-state/vm-interfaces",
+    views.ProxboxVMInterfaceSyncStateViewSet,
+    basename="proxboxvminterfacesyncstate",
+)
+router.register(
+    "sync-state/device-roles",
+    views.ProxboxDeviceRoleSyncStateViewSet,
+    basename="proxboxdevicerolesyncstate",
+)
+router.register(
+    "sync-state/device-types",
+    views.ProxboxDeviceTypeSyncStateViewSet,
+    basename="proxboxdevicetypesyncstate",
+)
+router.register(
+    "sync-state/manufacturers",
+    views.ProxboxManufacturerSyncStateViewSet,
+    basename="proxboxmanufacturersyncstate",
+)
+router.register(
+    "sync-state/sites",
+    views.ProxboxSiteSyncStateViewSet,
+    basename="proxboxsitesyncstate",
+)
+router.register(
+    "sync-state/cluster-types",
+    views.ProxboxClusterTypeSyncStateViewSet,
+    basename="proxboxclustertypesyncstate",
+)
 router.register("backups", views.VMBackupViewSet)
 router.register("backup-routines", views.BackupRoutineViewSet, basename="backuproutine")
 router.register("replications", views.ReplicationViewSet, basename="replication")
@@ -113,6 +183,11 @@ router.register(
 )
 router.register(
     "vm-templates", views.ProxmoxVMTemplateViewSet, basename="proxmoxvmtemplate"
+)
+router.register(
+    "metrics-influxdb",
+    views.ProxmoxMetricsInfluxDBViewSet,
+    basename="proxmoxmetricsinfluxdb",
 )
 router.register(
     "settings", views.ProxboxPluginSettingsViewSet, basename="proxboxpluginsettings"

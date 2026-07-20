@@ -8,6 +8,28 @@ For the operational guide — how to trigger cluster/node syncs, link to NetBox 
 
 ---
 
+## Proxmox InfluxDB Metrics Endpoint
+
+Proxmox cluster InfluxDB metrics mappings are exposed as standard NetBox plugin
+model API objects.
+
+```
+GET    /api/plugins/proxbox/metrics-influxdb/
+GET    /api/plugins/proxbox/metrics-influxdb/{id}/
+POST   /api/plugins/proxbox/metrics-influxdb/
+PUT    /api/plugins/proxbox/metrics-influxdb/{id}/
+PATCH  /api/plugins/proxbox/metrics-influxdb/{id}/
+DELETE /api/plugins/proxbox/metrics-influxdb/{id}/
+```
+
+The token fields are secret references, not token material:
+`query_token_secret_ref` and `writer_token_secret_ref` accept
+`nms-secret:<uuid>` values that point to netbox-nms `ObservabilitySecret`
+records. Use filters `endpoint`, `proxmox_cluster`, `enabled`, and `name` to
+select mappings for a cluster or endpoint.
+
+---
+
 ## Proxmox Cluster
 
 A Proxmox VE cluster record, optionally linked to a NetBox `virtualization.Cluster`.

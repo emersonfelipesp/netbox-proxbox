@@ -184,6 +184,10 @@
             </div>
         </div>
 
+        <div class="col-12">
+            {% include "netbox_proxbox/partials/bootstrap_status_card.html" %}
+        </div>
+
         {# — Card view — #}
         <div id="proxbox-config-cards" style="display: none;">
             {% if netbox_endpoint_list and netbox_endpoint_list|length > 0 %}

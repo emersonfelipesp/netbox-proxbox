@@ -60,6 +60,38 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
 ## Architecture Summary
 
 - `ProxmoxEndpoint`, `NetBoxEndpoint`, `FastAPIEndpoint`, `ProxmoxCluster`, `ProxmoxNode`, `ProxmoxStorage`, `ProxmoxStorageVirtualDisk`, `BackupRoutine`, `Replication`, `VMBackup`, `VMSnapshot`, `VMTaskHistory`, `GuestVMInterface`, `GuestVMInterfaceAddress`, and `ProxboxPluginSettings` are the plugin's core Proxmox reflection models.
+- **Typed custom-field sidecars (migration 0065/0066).** The legacy Proxbox
+  custom-field payload is now mirrored into plugin-owned
+  `Proxbox*SyncState` sidecar models in `models/sync_state.py`, one row per
+  affected NetBox core object. The shared abstract `ProxboxSyncStateBase`
+  stores `proxmox_last_updated` (from the legacy custom field) and
+  `last_run_id` (from `proxbox_last_run_id`) so those recurrent fields are not
+  duplicated across 14 concrete models. `last_updated` remains the
+  NetBox-managed row timestamp used for API ETags. VM/device sidecars replace raw
+  `proxmox_endpoint_id`, `proxmox_node`, and `proxmox_cluster` custom fields
+  with nullable FKs to existing `ProxmoxEndpoint`, `ProxmoxNode`, and
+  `ProxmoxCluster`, while preserving unresolved values in fallback name fields
+  and `proxmox_endpoint_raw_id`. Cluster sidecars preserve the legacy cluster
+  numeric value in `proxmox_cluster_raw_id`. Virtual-disk and VM-interface
+  sidecars promote the legacy `proxbox_storage_id` / `proxbox_bridge` JSON
+  values to nullable `proxbox_storage` / `proxbox_bridge` FKs while retaining
+  numeric unresolved IDs in `*_raw_id` and non-numeric/malformed raw payloads
+  in `*_raw_value` text fallbacks. This runs through the retry-safe
+  `0067`/`0068`/`0069` split: additive staging schema, non-atomic idempotent
+  data conversion with a data-preserving reverse, then guarded atomic
+  cleanup/promotion to final field names. The NetBox
+  `virtualization.Cluster` payload lives in
+  `ProxboxClusterSyncState`, not on `ProxmoxCluster`, because `ProxmoxCluster`
+  is endpoint-scoped (`endpoint`, `name`) and only optionally links to a
+  NetBox cluster. Sync-state API duplicate/occupied-parent preflight returns an
+  exact `409`; attempts to change a sidecar's parent to an unoccupied object
+  remain `400`. Device/node and cluster/proxmox-cluster relations must point
+  back to the same NetBox parent. Writable storage and bridge relations resolve
+  through request-restricted querysets, and hidden nested endpoint/node/cluster,
+  storage, and bridge relations are masked or filtered from API responses. This
+  phase is additive: proxbox-api still writes custom fields,
+  readers still consume them, and the backend writer/reader switch plus
+  custom-field removal are separate follow-up issues.
 - Companion endpoint models: `PBSEndpoint`, `PDMEndpoint`, `PDMRemote` for Proxmox Backup Server and Datacenter Manager inventory.
 - SSH and hardware discovery: `NodeSSHCredential` stores per-node SSH credentials for the optional hardware-discovery pass.
 - `ProxmoxEndpoint.access_methods` (migration 0056, choices `api` / `api_ssh`, default `api`) is the per-endpoint **transport access method**, orthogonal to `allow_writes`. `api` = Read+Write over the Proxmox API only; `api_ssh` = API + SSH. SSH only complements API; **SSH-only is not a selectable choice**. It is the load-bearing gate for the browser SSH terminal: the credential-serving API views in `netbox_proxbox/api/ssh_credentials.py` (`ProxmoxEndpointSSHCredentialSecretsAPIView` for endpoint targets and `NodeSSHCredentialSecretsAPIView` for node targets, the latter via the owning `ProxmoxNode.endpoint`) return 403 and withhold secrets when the endpoint is API-only, which is what blocks the terminal. New endpoints default to `api`; existing rows are backfilled to `api_ssh` on upgrade (non-breaking). The value is pushed to the proxbox-api backend by `_proxmox_backend_payload()` so the backend can gate its own SSH paths.
@@ -97,8 +129,28 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
   `execution.result` into `ProxmoxServiceSample`, latest `ProxmoxServiceStatus`,
   and endpoint heartbeat fields. Never add a synchronous netbox-rpc run path.
 - VM lifecycle models: `ProxmoxVMTemplate` (VM template inventory with optional FK to `VirtualMachine`), `ProxmoxVMCloudInit` (cloud-init config), `CloudImageTemplate` (Firecracker/image factory catalog), `ProxmoxApplyJob` (intent apply job), `DeletionRequest` (auditable delete-request workflow).
+- **`ProxmoxVMCloudInit` create-time intent (migration 0064).** In addition to
+  the read-only reflection columns (`ciuser`/`sshkeys`/`ipconfig0`/
+  `sshkeys_truncated`, patched from `qm config` by proxbox-api), the model now
+  stores the **create-time cloud-init intent** the NMS stack sent at VM/LXC
+  create time: `is_intent`, `hostname`, `search_domain`, `dns_servers`
+  (comma-separated), `bridge`, `vlan_tag`, `gateway`, `ip_cidr`, `ssh_pwauth`,
+  `enable_agent`, and a soft `nms_credential_id` (integer PK of the netbox-nms
+  `CloudVMCredential` holding the encrypted password / SSH private key — **not a
+  FK; netbox-proxbox never imports netbox-nms**). SSH public keys captured at
+  create time are Fernet-encrypted at rest in `sshkeys_enc` (accessors
+  `set_sshkeys`/`get_sshkeys`, `has_sshkeys`, reusing
+  `models/primary_secrets.py`); the API writes them through the **write-only**
+  `sshkeys_intent` serializer field and never returns the raw bundle (only
+  `has_sshkeys`). The intent fields are deliberately kept **out** of proxbox-api's
+  `CLOUDINIT_PATCHABLE_FIELDS`, so a later reflection sync never clobbers them,
+  and the plaintext `sshkeys` reflection mirror is left untouched.
 - VM interface modeling uses a dual representation under `ProxboxPluginSettings.vm_interface_sync_strategy="guest_os_model"` (the default): Proxmox config NICs stay as core `virtualization.VMInterface` rows with canonical names such as `net0`; guest-agent OS names such as `ens18` are stored in plugin `GuestVMInterface` rows. `GuestVMInterface.vm_interface` is nullable for agent-only interfaces, and `GuestVMInterfaceAddress` links guest interfaces to the same core `ipam.IPAddress` objects used by the core VM interface assignment. The old `use_guest_agent_interface_name` toggle is deprecated and applies only when the strategy is `legacy_rename`.
 - Datacenter config: `ProxmoxDatacenterCpuModel` (custom CPU models synced from PVE).
+- Metrics metadata: `ProxmoxMetricsInfluxDB` maps a Proxmox endpoint and cluster
+  to an InfluxDB URL, organization, and bucket for observability consumers. It
+  stores only `nms-secret:<uuid>` references for query/writer tokens and never
+  persists plaintext InfluxDB credentials.
 - Firewall inventory (6 models, read-only): `ProxmoxFirewallSecurityGroup`, `ProxmoxFirewallRule`, `ProxmoxFirewallIPSet`, `ProxmoxFirewallIPSetEntry`, `ProxmoxFirewallAlias`, `ProxmoxFirewallOptions`.
 - SDN inventory (PVE 9.2+): controllers, zones, VNets, subnets, bindings, fabrics, route maps, and prefix lists.
 - Firecracker Cloud uses separate `FirecrackerHostPool`, `FirecrackerHost`, `FirecrackerImageTemplate`, and `FirecrackerMicroVM` models. A micro-VM is not a NetBox core `VirtualMachine`; API clients identify it with `kind="firecracker"` and `instance_ref="firecracker:<id>"`.
@@ -111,6 +163,18 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
 - NetBox UI routes live in [`netbox_proxbox/urls.py`](./netbox_proxbox/urls.py) and are implemented primarily in `netbox_proxbox/views/`.
 - The plugin also exposes a NetBox plugin API under `netbox_proxbox/api/`, using serializers, filtersets, and standard `NetBoxModelViewSet` classes.
 - Sync actions enqueue NetBox background jobs (`ProxboxSyncJob`) on NetBox's default RQ queue and call the external ProxBox FastAPI SSE endpoints to record progress/result on the Job row.
+- **Operator sync-state repair UX (issue #217).** The Proxbox Home
+  Configuration section and plugin Settings page render a shared
+  **Repair / Rebuild Proxbox sync-state** card. Bootstrap visibility calls
+  proxbox-api `GET /extras/bootstrap-status` through
+  `services/backend_proxy.py::get_backend_bootstrap_status()` and is gated by
+  `view` on `FastAPIEndpoint`. The POST action at
+  `/plugins/proxbox/sync-state/repair/` uses a session-gated
+  `RepairSyncStateView`, requires `core.add_job` via
+  `permission_enqueue_proxbox_sync()`, calls
+  `POST /extras/custom-fields/reconcile`, then enqueues a normal
+  `ProxboxSyncJob` full sync for enabled Proxmox endpoints. Backend errors and
+  enqueue failures are shown as flash messages and must never return a 500.
 - The dashboard and Job detail pages are extended by template extensions so Proxbox jobs get run-now/cancel controls and live stream/log helpers. Sync jobs that end in an error/unknown state also get a **Bug report** button whose modal packages job metadata + logs (copy-to-clipboard) and links to a prefilled netbox-proxbox GitHub *new issue* — logic in [`netbox_proxbox/bug_report.py`](./netbox_proxbox/bug_report.py), rendered by [`inc/bug_report_button.html`](./netbox_proxbox/templates/netbox_proxbox/inc/bug_report_button.html).
 - Browser updates can flow over SSE streams or the existing WebSocket channel.
 - Templates and static assets are conventional Django plugin assets under `netbox_proxbox/templates/` and `netbox_proxbox/static/`.
@@ -536,9 +600,19 @@ What was done for v0.0.19:
    `ProgrammingError` 500s on every affected query. The prod WSGI unit is
    `netbox.service` (older hosts used `netbox-production.service`).
 6. systemctl restart netbox-rq.service (RQ worker restart for code changes)
-7. Health check: curl -sf http://127.0.0.1:18001/api/ to verify (note: this
-   probe does not exercise plugin models, so it will not catch a stale-code
-   schema mismatch on its own)
+7. Verify the deploy across three independent gates — any failure rolls the
+   plugin back to the previous ref and restarts NetBox:
+   a. **HTTP health** — `curl -sf http://127.0.0.1:18001/api/` returns 200/403.
+   b. **Freshness (boot token)** — the WSGI unit's
+      `ExecMainStartTimestampMonotonic`, captured before/after the restart, must
+      advance. This proves the web process actually restarted and re-imported the
+      new code — not merely that *some* backend answers — catching a wrong-unit
+      or compose no-op restart that would otherwise ship green on stale code.
+   c. **Model DB smoke** — a fresh, read-only `manage.py shell` queries one row of
+      every managed, non-proxy model of the deployed plugin; any DB/schema error
+      (a missing or unapplied migration) fails the deploy. The bare `/api/` probe
+      does not exercise plugin models, so this is the gate that catches a
+      stale-code / schema mismatch.
 
 **Monitoring deployment:**
 - Watch the `publish-gitea.yml` workflow run in Gitea Actions

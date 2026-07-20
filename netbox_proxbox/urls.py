@@ -138,6 +138,20 @@ urlpatterns = [
         include(get_model_urls("netbox_proxbox", "proxmoxvmtemplate", detail=False)),
     ),
     path(
+        "metrics/influxdb/<int:pk>/",
+        include(get_model_urls("netbox_proxbox", "proxmoxmetricsinfluxdb")),
+    ),
+    path(
+        "metrics/influxdb/",
+        include(
+            get_model_urls(
+                "netbox_proxbox",
+                "proxmoxmetricsinfluxdb",
+                detail=False,
+            )
+        ),
+    ),
+    path(
         "backup-routines/<int:pk>/",
         include(get_model_urls("netbox_proxbox", "backuproutine")),
     ),
@@ -428,6 +442,16 @@ urlpatterns = [
     ),
     path("sync/schedule/", views.ScheduleSyncView.as_view(), name="schedule_sync"),
     path("settings/", views.SettingsView.as_view(), name="settings"),
+    path(
+        "sync-state/bootstrap-status/",
+        views.BootstrapStatusView.as_view(),
+        name="bootstrap_status",
+    ),
+    path(
+        "sync-state/repair/",
+        views.RepairSyncStateView.as_view(),
+        name="repair_sync_state",
+    ),
     path(
         "sync/schedule/quick/",
         views.QuickScheduleSyncFromHomeView.as_view(),

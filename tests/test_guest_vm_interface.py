@@ -6,6 +6,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -40,6 +41,7 @@ from django.contrib.auth import get_user_model  # noqa: E402
 from django.contrib.contenttypes.models import ContentType  # noqa: E402
 from django.core.exceptions import ValidationError  # noqa: E402
 from django.db import IntegrityError, transaction  # noqa: E402
+from django.db.models.query import QuerySet  # noqa: E402
 from django.db.models import ProtectedError  # noqa: E402
 from django.test import TestCase  # noqa: E402
 from django.urls import reverse  # noqa: E402
@@ -256,6 +258,17 @@ class GuestVMInterfaceAPITest(TestCase):
     def _auth_headers(self) -> dict[str, str]:
         return {"HTTP_AUTHORIZATION": f"Token {self.token.key}"}
 
+    @staticmethod
+    def _patch_exists_false_for_model(model):
+        original_exists = QuerySet.exists
+
+        def exists(queryset):
+            if queryset.model is model:
+                return False
+            return original_exists(queryset)
+
+        return patch.object(QuerySet, "exists", exists)
+
     def test_guest_interface_api_crud_round_trip(self) -> None:
         list_url = reverse("plugins-api:netbox_proxbox-api:guestvminterface-list")
         create_response = self.client.post(
@@ -299,6 +312,75 @@ class GuestVMInterfaceAPITest(TestCase):
         self.assertEqual(delete_response.status_code, 204, delete_response.content)
         self.assertFalse(GuestVMInterface.objects.filter(pk=guest.pk).exists())
 
+    def test_duplicate_core_interface_mapping_returns_400_not_500(self) -> None:
+        # vm_interface is one-to-one: the backend can map two guest interfaces
+        # sharing a MAC (e.g. a VLAN sub-interface eth0.100 and its parent eth0)
+        # to the same core interface. The second write must return a clean 400,
+        # not an unhandled IntegrityError (HTTP 500) that could turn a
+        # partial-failure stream into a stage abort.
+        list_url = reverse("plugins-api:netbox_proxbox-api:guestvminterface-list")
+        first = self.client.post(
+            list_url,
+            data=json.dumps(
+                {
+                    "virtual_machine": {"id": self.vm.pk},
+                    "vm_interface": {"id": self.core_interface.pk},
+                    "name": "eth0",
+                }
+            ),
+            content_type="application/json",
+            **self._auth_headers(),
+        )
+        self.assertEqual(first.status_code, 201, first.content)
+
+        second = self.client.post(
+            list_url,
+            data=json.dumps(
+                {
+                    "virtual_machine": {"id": self.vm.pk},
+                    "vm_interface": {"id": self.core_interface.pk},
+                    "name": "eth0.100",
+                }
+            ),
+            content_type="application/json",
+            **self._auth_headers(),
+        )
+        self.assertEqual(second.status_code, 400, second.content)
+        self.assertIn("vm_interface", second.json())
+
+    def test_duplicate_core_interface_save_race_returns_400_not_500(self) -> None:
+        list_url = reverse("plugins-api:netbox_proxbox-api:guestvminterface-list")
+        first = self.client.post(
+            list_url,
+            data=json.dumps(
+                {
+                    "virtual_machine": {"id": self.vm.pk},
+                    "vm_interface": {"id": self.core_interface.pk},
+                    "name": "eth1",
+                }
+            ),
+            content_type="application/json",
+            **self._auth_headers(),
+        )
+        self.assertEqual(first.status_code, 201, first.content)
+
+        with self._patch_exists_false_for_model(GuestVMInterface):
+            second = self.client.post(
+                list_url,
+                data=json.dumps(
+                    {
+                        "virtual_machine": {"id": self.vm.pk},
+                        "vm_interface": {"id": self.core_interface.pk},
+                        "name": "eth1.100",
+                    }
+                ),
+                content_type="application/json",
+                **self._auth_headers(),
+            )
+
+        self.assertEqual(second.status_code, 400, second.content)
+        self.assertIn("vm_interface", second.json())
+
     def test_guest_interface_address_api_crud_round_trip(self) -> None:
         guest = GuestVMInterface.objects.create(
             virtual_machine=self.vm,
@@ -334,6 +416,80 @@ class GuestVMInterfaceAPITest(TestCase):
         self.assertEqual(delete_response.status_code, 204, delete_response.content)
         self.assertFalse(GuestVMInterfaceAddress.objects.filter(pk=link.pk).exists())
         self.assertTrue(IPAddress.objects.filter(pk=self.ip_address.pk).exists())
+
+    def test_guest_interface_address_partial_patch_duplicate_returns_400(
+        self,
+    ) -> None:
+        guest_a = GuestVMInterface.objects.create(
+            virtual_machine=self.vm,
+            vm_interface=self.core_interface,
+            name="ens20",
+        )
+        guest_b = GuestVMInterface.objects.create(
+            virtual_machine=self.vm,
+            name="ens21",
+        )
+        GuestVMInterfaceAddress.objects.create(
+            guest_interface=guest_a,
+            ip_address=self.ip_address,
+        )
+        link_b = GuestVMInterfaceAddress.objects.create(
+            guest_interface=guest_b,
+            ip_address=self.ip_address,
+        )
+
+        detail_url = reverse(
+            "plugins-api:netbox_proxbox-api:guestvminterfaceaddress-detail",
+            args=[link_b.pk],
+        )
+        with patch.object(
+            GuestVMInterfaceAddress,
+            "save",
+            side_effect=AssertionError("duplicate partial PATCH reached save"),
+        ):
+            response = self.client.patch(
+                detail_url,
+                data=json.dumps({"guest_interface": {"id": guest_a.pk}}),
+                content_type="application/json",
+                **self._auth_headers(),
+            )
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertIn("ip_address", response.json())
+
+    def test_guest_interface_address_save_race_returns_400_not_500(self) -> None:
+        guest_a = GuestVMInterface.objects.create(
+            virtual_machine=self.vm,
+            vm_interface=self.core_interface,
+            name="ens22",
+        )
+        guest_b = GuestVMInterface.objects.create(
+            virtual_machine=self.vm,
+            name="ens23",
+        )
+        GuestVMInterfaceAddress.objects.create(
+            guest_interface=guest_a,
+            ip_address=self.ip_address,
+        )
+        link_b = GuestVMInterfaceAddress.objects.create(
+            guest_interface=guest_b,
+            ip_address=self.ip_address,
+        )
+
+        detail_url = reverse(
+            "plugins-api:netbox_proxbox-api:guestvminterfaceaddress-detail",
+            args=[link_b.pk],
+        )
+        with self._patch_exists_false_for_model(GuestVMInterfaceAddress):
+            response = self.client.patch(
+                detail_url,
+                data=json.dumps({"guest_interface": {"id": guest_a.pk}}),
+                content_type="application/json",
+                **self._auth_headers(),
+            )
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertIn("ip_address", response.json())
 
 
 class VMInterfaceSyncStrategySettingsTest(TestCase):

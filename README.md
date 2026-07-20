@@ -170,6 +170,12 @@ other tenants.
   assigned to the core VM interface. The older `use_guest_agent_interface_name`
   flag is deprecated and only applies when `vm_interface_sync_strategy` is set
   to `legacy_rename`.
+- **Operator repair path.** If Proxbox custom fields or bootstrap setup vanish
+  after an upgrade, use **Repair / Rebuild Proxbox sync-state** on the Proxbox
+  Home or Settings page. It reconciles proxbox-api custom-field definitions,
+  queues a normal full sync job, and shows `GET /extras/bootstrap-status` output
+  for troubleshooting. See
+  [Recovering / Regenerating Proxbox Data](docs/operations/recovering-proxbox-data.md).
 
 ## What's New in v0.0.23.post1
 

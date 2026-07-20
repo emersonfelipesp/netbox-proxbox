@@ -8,12 +8,28 @@ the staged TestPyPI/PyPI release pipeline.
 
 | Workflow | Trigger | Purpose |
 |---|---|---|
-| `.github/workflows/ci.yml` | Push and pull request | Runs lint, type checks, compile checks, and the mocked pytest suite. |
+| `.github/workflows/ci.yml` | Push and pull request | Runs lint, type checks, compile checks, and the mocked pytest suite. NetBox-dependent Django tests skip here. |
+| `.github/workflows/django-tests.yml` | Push and pull request | Provisions a real NetBox source tree (matrixed over the supported 4.5.x and 4.6.x lines) plus PostgreSQL and Redis, installs the plugin `test` extra (`pytest-django` included), and runs the NetBox-backed Django TestCase suite for the sync-state sidecar models, migrations, backfill, and APIs. Sets `NETBOX_PROXBOX_REQUIRE_DJANGO=1` so a missing or broken harness fails the job instead of skipping. |
 | `.github/workflows/e2e-docker.yml` | Manual, scheduled, reusable workflow call | Builds a real NetBox stack with the plugin, rqworker, `proxbox-api`, PostgreSQL, Redis, and a mocked Proxmox API. |
 | `.github/workflows/publish-testpypi.yml` | `v*rc*` tag push (TestPyPI), GitHub release published (PyPI), manual dispatch | Publishes immutable package versions through TestPyPI, PyPI release candidates, final PyPI releases, and post-release fixes. Official PyPI releases are cut from `develop` via `gh release create`; plain non-rc tag pushes do not trigger publishing. |
 | `.github/workflows/docs.yml` | Docs changes on main / PR | Builds and publishes the MkDocs site. |
 | `.github/workflows/docs-screenshots.yml` | Manual dispatch | Refreshes committed UI screenshots used by the docs site. |
 | `.github/workflows/nightly-contracts.yml` | Schedule / manual dispatch | Checks cross-repo contracts that must stay aligned with `proxbox-api`. |
+
+## Django Test Database
+
+`django-tests.yml` relies on the hardcoded `matrix.netbox` allowlist for the
+NetBox checkout ref. Do not replace that with event input or any other untrusted
+value.
+
+The job sets `DJANGO_SETTINGS_MODULE=netbox.settings` and
+`NETBOX_CONFIGURATION=tests.netbox_test_configuration`, then runs pytest with
+`--ds=netbox.settings --reuse-db --create-db`. `pytest-django` creates the test
+database and applies the real NetBox/plugin migrations; the job deliberately
+does not use `--no-migrations` because the sync-state TestCases exercise real
+tables and migration reversals. `NETBOX_PROXBOX_REQUIRE_DJANGO=1` converts a
+missing dependency, failed `django.setup()`, or broken DB harness into a hard
+failure instead of a module-level skip.
 
 ## Docker E2E Stack
 

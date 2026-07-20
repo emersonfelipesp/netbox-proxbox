@@ -143,22 +143,59 @@ def _make_job(proxbox_sync: bool, endpoint_ids: list | None, pk: int = 99) -> ob
 
 
 def _run_get_extra_context(endpoint_pk: int, jobs: list) -> dict:
-    """Replicate the view's filtering logic — this is the behavior contract.
+    """Replicate ``endpoint_sync_jobs_for`` filtering — the behavior contract.
 
     The view can't be fully loaded without Django, so we test the algorithm
-    directly, mirroring get_extra_context verbatim.
+    directly, mirroring the hardened extraction (type-guarded at every level;
+    missing/empty ids = all-endpoints job; wrong-type ids are excluded rather
+    than silently shown on every endpoint).
     """
     endpoint_pk_str = str(endpoint_pk)
     result = []
     for job in jobs:
-        data = getattr(job, "data", None) or {}
-        if "proxbox_sync" not in data:
+        data = getattr(job, "data", None)
+        if not isinstance(data, dict) or "proxbox_sync" not in data:
             continue
-        params = data.get("proxbox_sync", {}).get("params", {})
-        endpoint_ids = params.get("proxmox_endpoint_ids", [])
-        if not endpoint_ids or endpoint_pk_str in [str(e) for e in endpoint_ids]:
+        block = data.get("proxbox_sync")
+        params = block.get("params") if isinstance(block, dict) else None
+        raw_ids = (
+            params.get("proxmox_endpoint_ids") if isinstance(params, dict) else None
+        )
+        if raw_ids is None or raw_ids == []:
+            result.append(job)
+        elif not isinstance(raw_ids, list):
+            continue
+        elif endpoint_pk_str in [str(e) for e in raw_ids]:
             result.append(job)
     return {"endpoint_sync_jobs": result}
+
+
+def test_get_extra_context_includes_job_with_missing_params():
+    """A proxbox job whose params lack the endpoint list applies to all endpoints."""
+    job = SimpleNamespace(pk=1, name="J", data={"proxbox_sync": {}})
+    ctx = _run_get_extra_context(endpoint_pk=5, jobs=[job])
+    assert job in ctx["endpoint_sync_jobs"]
+
+
+def test_get_extra_context_excludes_wrong_type_endpoint_ids():
+    """Corrupt (non-list) endpoint ids are excluded, not treated as all-endpoints."""
+    job = SimpleNamespace(
+        pk=2,
+        name="J",
+        data={"proxbox_sync": {"params": {"proxmox_endpoint_ids": "5"}}},
+    )
+    ctx = _run_get_extra_context(endpoint_pk=5, jobs=[job])
+    assert job not in ctx["endpoint_sync_jobs"]
+
+
+def test_get_extra_context_survives_malformed_data():
+    """Malformed data never raises: non-dict data is skipped; an unparseable
+    ``proxbox_sync`` block has no endpoint filter, so it counts as all-endpoints."""
+    bad_data = SimpleNamespace(pk=3, name="J", data="not-a-dict")
+    bad_block = SimpleNamespace(pk=4, name="J", data={"proxbox_sync": "nope"})
+    ctx = _run_get_extra_context(endpoint_pk=5, jobs=[bad_data, bad_block])
+    assert bad_data not in ctx["endpoint_sync_jobs"]
+    assert bad_block in ctx["endpoint_sync_jobs"]
 
 
 def test_get_extra_context_includes_matching_endpoint_job():

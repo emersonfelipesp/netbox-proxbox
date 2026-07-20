@@ -44,8 +44,9 @@ These follow the standard `NetBoxModelViewSet` + `NetBoxRouter` pattern:
 | `ProxmoxServiceCollectionViewSet` | `service-collections/` | GET/HEAD/OPTIONS only — async netbox-rpc collection history |
 | `ProxmoxServiceSampleViewSet` | `service-samples/` | GET/HEAD/OPTIONS only — raw projected systemd rows |
 | `ProxmoxServiceStatusViewSet` | `service-statuses/` | GET/HEAD/OPTIONS only — latest projected service state |
-| `ProxmoxVMCloudInitViewSet` | `vm-cloudinit/` | Full CRUD |
+| `ProxmoxVMCloudInitViewSet` | `vm-cloudinit/` | Full CRUD; reflection fields + create-time intent; `sshkeys_intent` write-only (encrypted → `sshkeys_enc`), `has_sshkeys` read-only |
 | `ProxmoxVMTemplateViewSet` | `vm-templates/` | Full CRUD |
+| `Proxbox*SyncStateViewSet` | `sync-state/.../` | Full CRUD typed sidecars for the legacy custom-field payload; additive until proxbox-api switches writers/readers |
 | `ProxboxPluginSettingsViewSet` | `settings/` | GET+PATCH only (singleton) |
 | `NodeSSHCredentialViewSet` | `ssh-credentials/` | Full CRUD |
 | `ProxmoxFirewallSecurityGroupViewSet` | `firewall/security-groups/` | Full CRUD |
@@ -58,6 +59,7 @@ These follow the standard `NetBoxModelViewSet` + `NetBoxRouter` pattern:
 | `ProxmoxSdnRouteMapViewSet` | `sdn-route-maps/` | Full CRUD |
 | `ProxmoxSdnPrefixListViewSet` | `sdn-prefix-lists/` | Full CRUD |
 | `ProxmoxDatacenterCpuModelViewSet` | `datacenter-cpu-models/` | Full CRUD |
+| `ProxmoxMetricsInfluxDBViewSet` | `metrics-influxdb/` | Full CRUD; stores InfluxDB token references only (`nms-secret:<uuid>`) |
 | `PDMRemoteViewSet` | `pdm-remotes/` | Full CRUD; FK to PDMEndpoint |
 | `DeletionRequestViewSet` | `deletion-requests/` | **GET/HEAD/OPTIONS only** — write paths go through UI approval workflow |
 | `ProxmoxApplyJobViewSet` | `apply-jobs/` | **GET/HEAD/OPTIONS only** — jobs created by intent branch-merge workflow |
@@ -69,6 +71,30 @@ including `[]`, replaces the many-to-many set. Keep
 `FirecrackerHostPoolSerializer` and `FirecrackerImageTemplateSerializer`
 `create()` / `update()` methods explicitly typed and covered by
 `tests/test_firecracker_cloud_contracts.py` when changing this behavior.
+
+The `sync-state/` routes expose typed mirrors of the old custom-field surface:
+`virtual-machines`, `devices`, `clusters`, `ip-addresses`, `interfaces`,
+`vlans`, `cluster-groups`, `virtual-disks`, `vm-interfaces`, `device-roles`,
+`device-types`, `manufacturers`, `sites`, and `cluster-types`. They are
+sidecar rows keyed one-to-one to NetBox core objects. Keep them additive until
+the paired proxbox-api writer/readers switch away from custom fields.
+Every sync-state viewset must also restrict rows through the caller's
+visibility to the one-to-one parent object, and writable nested parent
+relations must resolve through the caller-restricted parent queryset. Sidecar
+permissions alone must not reveal or attach hidden core objects. The
+`proxbox_storage` and `proxbox_bridge` writable relations follow the same
+request-restricted resolution rule, and sidecar rows that would disclose hidden
+storage or bridge objects are filtered out of API responses. Nested
+endpoint/node/cluster representations are also masked when the caller lacks
+view permission on those related objects. Duplicate or occupied parent preflight
+returns `409`; changing an existing sidecar to a free different parent remains a
+`400` validation error, and device/node plus cluster/proxmox-cluster writes must
+point back to the same NetBox parent.
+On NetBox 4.5.x, these sidecar APIs do not emit ETags and do not enforce
+`If-Match`; that is a platform limitation affecting all endpoints on that
+release. Optimistic concurrency is available on NetBox 4.6+. Automated writers
+should treat sidecar rows as proxbox-api-owned during the additive migration
+phase.
 
 ## Non-Model API Views
 
@@ -137,9 +163,10 @@ These `APIView` subclasses mirror every data-bearing UI page and expose the same
   API only queues an async `netbox-rpc` execution for the read-only
   `os.linux.proxmox.show_systemctl_services` procedure. It requires
   `change_proxmoxendpoint` and the same eligibility gate as the UI:
-  `allow_writes=True`, `access_methods="api_ssh"`, and complete endpoint SSH
-  credentials. `netbox-rpc` remains a soft optional dependency and must be
-  imported only inside call-time `try/except ImportError` blocks.
+  `allow_writes=True`, `access_methods="api_ssh"`, complete endpoint SSH
+  credentials, and netbox-rpc installed and effectively enabled for the
+  endpoint. `netbox-rpc` remains a soft optional dependency and must be imported
+  only inside call-time `try/except ImportError` blocks.
 - `NodeHostKeyFingerprintAPIView`
   (`GET ssh-credentials/by-node/<node_id>/host-key-fingerprint/`) backs the
   **"Fetch host key"** button in the **Terminal-tab credential modal** for

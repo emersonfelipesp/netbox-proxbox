@@ -147,6 +147,53 @@ class ProxmoxVMCloudInitAPITest(TestCase):
         self.assertEqual(row.ipconfig0, "ip=dhcp")
         self.assertIn("ssh-rsa", row.sshkeys)
 
+    def test_post_intent_encrypts_sshkeys_and_hides_ciphertext(self) -> None:
+        """Create-time intent: sshkeys_intent encrypts to sshkeys_enc, never leaks."""
+        url = reverse("plugins-api:netbox_proxbox-api:proxmoxvmcloudinit-list")
+        response = self.client.post(
+            url,
+            data=json.dumps(
+                {
+                    "virtual_machine": self.vm.pk,
+                    "ciuser": "ubuntu",
+                    "is_intent": True,
+                    "hostname": "tenant-vm",
+                    "search_domain": "tenant.example",
+                    "dns_servers": "168.0.96.26,168.0.96.27",
+                    "bridge": "vmbr1",
+                    "vlan_tag": 111,
+                    "gateway": "168.0.98.1",
+                    "ip_cidr": "168.0.98.10/25",
+                    "ssh_pwauth": True,
+                    "enable_agent": True,
+                    "nms_credential_id": 901,
+                    "sshkeys_intent": "ssh-ed25519 AAAAC3Intent user@host\n",
+                }
+            ),
+            content_type="application/json",
+            **self._auth_headers(),
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        body = response.json()
+        # Ciphertext + the write-only key material must never be serialized out.
+        self.assertNotIn("sshkeys_enc", body)
+        self.assertNotIn("sshkeys_intent", body)
+        self.assertTrue(body["has_sshkeys"])
+        self.assertTrue(body["is_intent"])
+        self.assertEqual(body["nms_credential_id"], 901)
+
+        row = ProxmoxVMCloudInit.objects.get(virtual_machine=self.vm)
+        # Encrypted at rest and decryptable back to the original bundle.
+        self.assertTrue(row.sshkeys_enc)
+        self.assertNotIn("ssh-ed25519", row.sshkeys_enc)  # stored as ciphertext
+        self.assertIn("ssh-ed25519 AAAAC3Intent", row.get_sshkeys())
+        self.assertTrue(row.has_sshkeys)
+        self.assertEqual(row.hostname, "tenant-vm")
+        self.assertEqual(row.vlan_tag, 111)
+        self.assertEqual(row.nms_credential_id, 901)
+        # The plaintext reflection column stays owned by proxbox-api sync.
+        self.assertEqual(row.sshkeys, "")
+
     def test_list_returns_brief_fields(self) -> None:
         ProxmoxVMCloudInit.objects.create(
             virtual_machine=self.vm, ciuser="root", ipconfig0="ip=dhcp"

@@ -45,6 +45,18 @@ This package contains the NetBox plugin itself. It defines the plugin config, UR
   - GET SSE streaming: the plugin proxies `text/event-stream` from the FastAPI backend to the browser via `StreamingHttpResponse`. The browser JS parses SSE frames and renders granular per-object progress in real time.
 - The API layer exposes the same main models through NetBox plugin API endpoints.
 - Browser-side pages use templates plus JS from `static/netbox_proxbox/js/` for dashboard hydration, keepalive polling, SSE streaming, log rendering, and WebSocket updates.
+- Operator recovery for missing Proxbox bootstrap/custom-field setup is exposed
+  through `views/sync_state_repair.py` and the shared
+  `partials/bootstrap_status_card.html`. The card appears on Home and Settings,
+  loads proxbox-api `GET /extras/bootstrap-status` on demand through the
+  session-gated `sync-state/bootstrap-status/` JSON endpoint for users with
+  `view_fastapiendpoint`, and posts to `sync-state/repair/` for users with
+  `core.add_job`. Both backend calls resolve the FastAPI endpoint through a
+  request-user-restricted queryset before passing the endpoint ID to the backend
+  proxy. The POST path calls
+  `POST /extras/custom-fields/reconcile` through `services/backend_proxy.py`
+  before queuing a normal full `ProxboxSyncJob`; it must remain a UI/session
+  action with flash-message error handling, not a new sync transport.
 
 ## Import / Export
 
@@ -86,12 +98,13 @@ dashboard render stays fast. Guarded by `tests/test_rpc_integration.py`.
 `ProxmoxEndpoint.rpc_enabled` is a **tri-state** (`BooleanField(null=True)`)
 per-endpoint override for netbox-rpc operations against that endpoint, mirroring
 the `overwrite_*` pattern. `ProxmoxEndpoint.effective_rpc_enabled()` resolves it:
-the per-endpoint value wins when set (`is not None`, so an explicit `False` is
+netbox-rpc installation is a precondition for all paths; after the
+**function-local, guarded** `try/except ImportError` import succeeds, the
+per-endpoint value wins when set (`is not None`, so an explicit `False` is
 respected); otherwise it **inherits the global** netbox-rpc opt-in flag
-(`netbox_rpc.RpcPluginSettings.enabled`) via a **function-local, guarded**
-`try/except ImportError` (returns `False` when netbox-rpc is absent). This is the
-allowed **optional** proxbox→rpc integration; the model never imports netbox-rpc
-at load time and **must never depend on the NMS stack**.
+(`netbox_rpc.RpcPluginSettings.enabled`). This is the allowed **optional**
+proxbox→rpc integration; the model never imports netbox-rpc at load time and
+**must never depend on the NMS stack**.
 
 The field is editable on the endpoint **Settings tab** (new **RPC** pane,
 `NullBooleanSelect`, `RPC_FIELD_GROUPS` in `constants.py`) and exposed over REST

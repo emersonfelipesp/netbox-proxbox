@@ -12,11 +12,13 @@ from netbox.jobs import JobRunner
 try:
     from netbox.jobs import system_job
 except ImportError:  # pragma: no cover - older/test NetBox stubs
+
     def system_job(*_args: object, **_kwargs: object):
         def decorator(cls):
             return cls
 
         return decorator
+
 
 try:
     from netbox.jobs import Job
@@ -613,7 +615,7 @@ class ProxmoxServiceMonitoringJob(JobRunner):
                     (
                         "Service monitoring is enabled but the endpoint is no "
                         "longer eligible; check allow_writes, API + SSH access, "
-                        "and endpoint SSH credentials."
+                        "endpoint SSH credentials, and netbox-rpc enablement."
                     ),
                 )
                 continue

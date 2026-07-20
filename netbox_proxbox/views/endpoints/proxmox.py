@@ -10,7 +10,7 @@ from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db.models import QuerySet
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect, JsonResponse
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -85,6 +85,7 @@ __all__ = (
     "ProxmoxEndpointSSHTerminalSessionView",
     "ProxmoxEndpointServicesView",
     "ProxmoxEndpointSyncJobsTabView",
+    "endpoint_sync_jobs_for",
     "ProxmoxEndpointBulkEnableAction",
     "ProxmoxEndpointBulkDisableAction",
     "ProxmoxEndpointBulkEnableView",
@@ -962,7 +963,8 @@ class ProxmoxEndpointServicesView(generic.ObjectView):
                 request,
                 _(
                     "Service monitoring requires write permission, API + SSH "
-                    "access, and complete endpoint SSH credentials."
+                    "access, complete endpoint SSH credentials, and netbox-rpc "
+                    "enabled for this endpoint."
                 ),
             )
             return HttpResponseRedirect(self._services_url(endpoint))
@@ -1052,9 +1054,57 @@ class ProxmoxEndpointServicesView(generic.ObjectView):
         }
 
 
+def endpoint_sync_jobs_for(request: HttpRequest, instance: ProxmoxEndpoint) -> list:
+    """Return the Proxbox sync ``core.Job`` rows scoped to ``instance``.
+
+    Includes jobs whose stored ``proxbox_sync.params.proxmox_endpoint_ids`` contains
+    this endpoint's PK, plus jobs with an empty endpoint filter (which apply to all
+    endpoints). Shared by the Sync Jobs tab GET render and the create-routine POST
+    error re-render so both show the same list.
+    """
+    from core.models import Job
+    from netbox_proxbox.jobs import is_proxbox_sync_job
+
+    endpoint_pk_str = str(instance.pk)
+    jobs_qs = Job.objects.restrict(request.user, "view").order_by("-created")
+
+    endpoint_jobs: list = []
+    for job in jobs_qs.iterator():
+        if not is_proxbox_sync_job(job):
+            continue
+        # Guard every level: historical/foreign Job.data may not be a dict at any
+        # depth, so never assume ``.get`` is available (avoids a 500 on bad rows).
+        data = getattr(job, "data", None)
+        block = data.get("proxbox_sync") if isinstance(data, dict) else None
+        params = block.get("params") if isinstance(block, dict) else None
+        raw_ids = (
+            params.get("proxmox_endpoint_ids") if isinstance(params, dict) else None
+        )
+        if raw_ids is None or raw_ids == []:
+            # No endpoint filter (missing/empty) → an all-endpoints job.
+            endpoint_jobs.append(job)
+        elif not isinstance(raw_ids, list):
+            # Corrupt value (wrong type) → do NOT silently show it on every
+            # endpoint; skip rather than treat it as an all-endpoints job.
+            continue
+        elif endpoint_pk_str in [str(e) for e in raw_ids]:
+            endpoint_jobs.append(job)
+
+    return endpoint_jobs
+
+
 @register_model_view(ProxmoxEndpoint, "sync_jobs", path="sync-jobs")
 class ProxmoxEndpointSyncJobsTabView(generic.ObjectView):
-    """Read-only tab listing Proxbox sync jobs scoped to this Proxmox endpoint."""
+    """Sync Jobs tab: lists Proxbox sync jobs for this endpoint and hosts the
+    "Create Sync Job" modal that schedules an immediate or recurring routine
+    scoped to the viewed endpoint.
+
+    GET renders the history table plus the (unbound) modal form. POST creates the
+    routine (validated + hard-scoped to this endpoint) and, on validation error,
+    re-renders this same tab with the modal reopened so field errors are visible.
+    Scheduling is entirely NetBox-native (``core.Job`` + ``ProxboxSyncJob`` +
+    django_rq); there is no dependency on the NMS stack.
+    """
 
     queryset = ProxmoxEndpoint.objects.all()
     template_name = "netbox_proxbox/proxmoxendpoint_sync_jobs.html"
@@ -1067,25 +1117,67 @@ class ProxmoxEndpointSyncJobsTabView(generic.ObjectView):
     def get_extra_context(
         self, request: HttpRequest, instance: ProxmoxEndpoint
     ) -> dict[str, object]:
-        from core.models import Job
-        from netbox_proxbox.jobs import is_proxbox_sync_job
+        from netbox_proxbox.forms.schedule_sync import ScheduleSyncForm
 
-        endpoint_pk_str = str(instance.pk)
-        jobs_qs = Job.objects.restrict(request.user, "view").order_by("-created")
+        form = ScheduleSyncForm(use_bootstrap_sync_checkboxes=True)
+        # The tab modal advertises "leave Schedule at blank to run immediately",
+        # so default the recurrence to one-time (blank interval) instead of the
+        # standalone scheduler page's hourly default — otherwise an untouched
+        # submit would silently create a recurring hourly job.
+        form.fields["interval_value"].initial = None
+        return {
+            "endpoint_sync_jobs": endpoint_sync_jobs_for(request, instance),
+            "schedule_form": form,
+            "show_create_modal": False,
+        }
 
-        endpoint_jobs: list[Job] = []
-        for job in jobs_qs.iterator():
-            if not is_proxbox_sync_job(job):
-                continue
-            data = getattr(job, "data", None) or {}
-            params = data.get("proxbox_sync", {}).get("params", {})
-            endpoint_ids = params.get("proxmox_endpoint_ids", [])
-            # Include jobs targeting this endpoint or jobs with no endpoint filter
-            # (which apply to all endpoints).
-            if not endpoint_ids or endpoint_pk_str in [str(e) for e in endpoint_ids]:
-                endpoint_jobs.append(job)
+    def post(self, request: HttpRequest, **kwargs: object) -> HttpResponse:
+        """Create an immediate or recurring sync routine scoped to this endpoint.
 
-        return {"endpoint_sync_jobs": endpoint_jobs}
+        Delegates gating + enqueue to
+        ``schedule_sync.handle_endpoint_sync_routine_post`` (which is unit-loadable
+        without NetBox) and only owns the HTTP response mapping here: 403 on missing
+        permission, redirect back to this tab on success/refusal, or re-render this
+        tab with the bound form so the modal reopens showing field errors.
+        """
+        from netbox_proxbox.views.schedule_sync import (
+            handle_endpoint_sync_routine_post,
+        )
+
+        instance = self.get_object(**kwargs)
+        outcome, form = handle_endpoint_sync_routine_post(
+            request, instance, request.POST
+        )
+
+        if outcome == "forbidden":
+            # The tab view's own gate only requires ``view`` on the endpoint;
+            # queueing a job additionally requires ``add`` on core Job.
+            return HttpResponse(status=403)
+
+        redirect_url = reverse(
+            "plugins:netbox_proxbox:proxmoxendpoint_sync_jobs",
+            kwargs={"pk": instance.pk},
+        )
+        if outcome in ("disabled", "created", "error"):
+            # Warning / success / error message already posted by the handler.
+            return HttpResponseRedirect(redirect_url)
+
+        # outcome == "invalid": re-render this tab (same context ObjectView.get()
+        # builds) with the bound form so the modal reopens showing field errors.
+        actions = self.get_permitted_actions(request.user, model=instance)
+        return render(
+            request,
+            self.get_template_name(),
+            {
+                "object": instance,
+                "actions": actions,
+                "tab": self.tab,
+                "layout": self.layout,
+                "endpoint_sync_jobs": endpoint_sync_jobs_for(request, instance),
+                "schedule_form": form,
+                "show_create_modal": True,
+            },
+        )
 
 
 @register_model_view(ProxmoxEndpoint, "delete")

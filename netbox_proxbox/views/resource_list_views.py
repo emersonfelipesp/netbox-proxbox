@@ -4,7 +4,7 @@ from django.core.paginator import Page, Paginator
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.views import View
-from netbox import configuration
+from django.conf import settings
 from utilities.paginator import EnhancedPaginator, get_paginate_count
 from utilities.views import ConditionalLoginRequiredMixin
 from virtualization.models import Cluster, VirtualDisk, VirtualMachine, VMInterface
@@ -52,7 +52,7 @@ class NodesView(ConditionalLoginRequiredMixin, View):
         from django.contrib.contenttypes.models import ContentType
         from extras.models import Tag, TaggedItem
 
-        plugin_configuration = getattr(configuration, "PLUGINS_CONFIG", {})
+        plugin_configuration = getattr(settings, "PLUGINS_CONFIG", {})
         fastapi_info = get_fastapi_context_for_request(request)
 
         proxbox_tag = Tag.objects.filter(slug="proxbox").first()
@@ -112,7 +112,7 @@ class VirtualMachinesView(ConditionalLoginRequiredMixin, View):
         from django.contrib.contenttypes.models import ContentType
         from extras.models import Tag, TaggedItem
 
-        plugin_configuration = getattr(configuration, "PLUGINS_CONFIG", {})
+        plugin_configuration = getattr(settings, "PLUGINS_CONFIG", {})
         fastapi_info = get_fastapi_context_for_request(request)
 
         proxbox_tag = Tag.objects.filter(slug="proxbox").first()
@@ -176,7 +176,7 @@ class LXCContainersView(ConditionalLoginRequiredMixin, View):
         from django.contrib.contenttypes.models import ContentType
         from extras.models import Tag, TaggedItem
 
-        plugin_configuration = getattr(configuration, "PLUGINS_CONFIG", {})
+        plugin_configuration = getattr(settings, "PLUGINS_CONFIG", {})
         fastapi_info = get_fastapi_context_for_request(request)
 
         proxbox_tag = Tag.objects.filter(slug="proxbox").first()
@@ -240,7 +240,7 @@ class VirtualDisksView(ConditionalLoginRequiredMixin, View):
         from django.contrib.contenttypes.models import ContentType
         from extras.models import Tag, TaggedItem
 
-        plugin_configuration = getattr(configuration, "PLUGINS_CONFIG", {})
+        plugin_configuration = getattr(settings, "PLUGINS_CONFIG", {})
         fastapi_info = get_fastapi_context_for_request(request)
 
         proxbox_tag = Tag.objects.filter(slug="proxbox").first()
@@ -304,7 +304,7 @@ class InterfacesView(ConditionalLoginRequiredMixin, View):
         from django.contrib.contenttypes.models import ContentType
         from extras.models import Tag, TaggedItem
 
-        plugin_configuration = getattr(configuration, "PLUGINS_CONFIG", {})
+        plugin_configuration = getattr(settings, "PLUGINS_CONFIG", {})
         fastapi_info = get_fastapi_context_for_request(request)
 
         proxbox_tag = Tag.objects.filter(slug="proxbox").first()
@@ -401,7 +401,7 @@ class ClustersView(ConditionalLoginRequiredMixin, View):
 
     def get(self, request: HttpRequest) -> HttpResponse:
         """Load tagged clusters and FastAPI URL hints for the clusters template."""
-        plugin_configuration = getattr(configuration, "PLUGINS_CONFIG", {})
+        plugin_configuration = getattr(settings, "PLUGINS_CONFIG", {})
         fastapi_info = get_fastapi_context_for_request(request)
 
         from django.db.models import Count
@@ -452,7 +452,7 @@ class IPAddressesView(ConditionalLoginRequiredMixin, View):
         from extras.models import Tag, TaggedItem
         from ipam.models import IPAddress
 
-        plugin_configuration = getattr(configuration, "PLUGINS_CONFIG", {})
+        plugin_configuration = getattr(settings, "PLUGINS_CONFIG", {})
         fastapi_info = get_fastapi_context_for_request(request)
 
         proxbox_tag = Tag.objects.filter(slug="proxbox").first()

@@ -16,6 +16,10 @@ class ProxmoxVMCloudInitTable(NetBoxTable):
     ciuser = tables.Column(verbose_name=_("Cloud-init User"))
     ipconfig0 = tables.Column(verbose_name=_("ipconfig0"))
     sshkeys_truncated = BooleanColumn(verbose_name=_("SSH Keys Truncated"))
+    is_intent = BooleanColumn(verbose_name=_("Intent"))
+    hostname = tables.Column(verbose_name=_("Hostname"))
+    nms_credential_id = tables.Column(verbose_name=_("NMS Credential"))
+    has_sshkeys = BooleanColumn(verbose_name=_("Intent SSH Keys"))
     last_synced = tables.DateTimeColumn(verbose_name=_("Last Synced"))
 
     class Meta(NetBoxTable.Meta):
@@ -27,6 +31,10 @@ class ProxmoxVMCloudInitTable(NetBoxTable):
             "ciuser",
             "ipconfig0",
             "sshkeys_truncated",
+            "is_intent",
+            "hostname",
+            "nms_credential_id",
+            "has_sshkeys",
             "last_synced",
         )
 
@@ -35,6 +43,7 @@ class ProxmoxVMCloudInitTable(NetBoxTable):
             "virtual_machine",
             "ciuser",
             "ipconfig0",
+            "is_intent",
             "sshkeys_truncated",
             "last_synced",
         )

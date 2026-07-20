@@ -1,0 +1,192 @@
+{% load i18n %}
+
+<div class="card mb-3" data-proxbox-bootstrap-status-card data-status-url="{% url 'plugins:netbox_proxbox:bootstrap_status' %}">
+    <h5 class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span>
+            <i class="mdi mdi-wrench" aria-hidden="true"></i>
+            {% trans "Repair / Rebuild Proxbox sync-state" %}
+        </span>
+        {% if can_repair_sync_state %}
+            <form class="m-0" method="post" action="{% url 'plugins:netbox_proxbox:repair_sync_state' %}" data-proxbox-repair-form>
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ proxbox_repair_next|default:'settings' }}">
+                <button type="submit" class="btn btn-sm btn-warning">
+                    <i class="mdi mdi-reload" aria-hidden="true"></i>
+                    <span data-proxbox-repair-label>{% trans "Repair / Rebuild" %}</span>
+                </button>
+            </form>
+        {% else %}
+            <button type="button" class="btn btn-sm btn-outline-secondary" disabled title="{% trans 'Requires permission to enqueue NetBox jobs.' %}">
+                <i class="mdi mdi-lock-outline" aria-hidden="true"></i>
+                {% trans "Repair / Rebuild" %}
+            </button>
+        {% endif %}
+    </h5>
+    <div class="card-body">
+        <p class="text-muted">
+            {% blocktrans trimmed %}
+            Reconcile Proxbox custom-field definitions through proxbox-api, then queue
+            a normal full sync job to rebuild reflected sync-state data.
+            {% endblocktrans %}
+        </p>
+
+        <div class="d-flex align-items-center flex-wrap gap-2 mb-2">
+            <strong>{% trans "Backend bootstrap status" %}</strong>
+            {% if bootstrap_status.can_view %}
+                <span class="badge text-bg-secondary" data-proxbox-bootstrap-badge>{% trans "Not checked" %}</span>
+                <span class="badge text-bg-secondary d-none" data-proxbox-bootstrap-http></span>
+                <button type="button" class="btn btn-sm btn-outline-primary" data-proxbox-bootstrap-refresh>
+                    <i class="mdi mdi-refresh" aria-hidden="true"></i>
+                    {% trans "Check status" %}
+                </button>
+            {% else %}
+                <span class="badge text-bg-secondary">{% trans "Permission required" %}</span>
+            {% endif %}
+        </div>
+
+        {% if bootstrap_status.can_view %}
+            <div class="alert alert-warning mb-2 d-none" role="alert" data-proxbox-bootstrap-detail></div>
+            <pre class="border rounded bg-light p-2 small overflow-auto mb-0 d-none" style="max-height: 18rem;" data-proxbox-bootstrap-payload></pre>
+            <p class="text-muted mb-0" data-proxbox-bootstrap-empty>
+                {% trans "Status is loaded on demand to avoid delaying this page." %}
+            </p>
+        {% else %}
+            <p class="text-muted mb-0">
+                {% trans "Viewing bootstrap status requires FastAPI endpoint view permission." %}
+            </p>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+(function () {
+    "use strict";
+
+    function setHidden(node, hidden) {
+        if (node) {
+            node.classList.toggle("d-none", hidden);
+        }
+    }
+
+    function setText(node, value) {
+        if (node) {
+            node.textContent = value || "";
+        }
+    }
+
+    function setBadge(card, label, className) {
+        const badge = card.querySelector("[data-proxbox-bootstrap-badge]");
+        if (!badge) return;
+        badge.className = "badge " + className;
+        badge.textContent = label;
+    }
+
+    function hasPayload(value) {
+        if (value === null || value === undefined) return false;
+        if (Array.isArray(value)) return value.length > 0;
+        if (typeof value === "object") return Object.keys(value).length > 0;
+        return true;
+    }
+
+    function formatPayload(value) {
+        try {
+            return JSON.stringify(value || {}, null, 2);
+        } catch (err) {
+            return String(value);
+        }
+    }
+
+    function updateCard(card, data) {
+        const httpBadge = card.querySelector("[data-proxbox-bootstrap-http]");
+        const detail = card.querySelector("[data-proxbox-bootstrap-detail]");
+        const payload = card.querySelector("[data-proxbox-bootstrap-payload]");
+        const empty = card.querySelector("[data-proxbox-bootstrap-empty]");
+        const ok = data && data.ok === true;
+
+        setBadge(card, ok ? "Reachable" : "Needs attention", ok ? "text-bg-success" : "text-bg-warning");
+
+        if (data && data.http_status) {
+            setText(httpBadge, "HTTP " + data.http_status);
+            setHidden(httpBadge, false);
+        } else {
+            setText(httpBadge, "");
+            setHidden(httpBadge, true);
+        }
+
+        if (data && data.detail) {
+            setText(detail, data.detail);
+            setHidden(detail, false);
+        } else {
+            setText(detail, "");
+            setHidden(detail, true);
+        }
+
+        if (data && hasPayload(data.payload)) {
+            setText(payload, formatPayload(data.payload));
+            setHidden(payload, false);
+            setHidden(empty, true);
+        } else {
+            setText(payload, "");
+            setHidden(payload, true);
+            setText(empty, "No bootstrap-status payload is available.");
+            setHidden(empty, false);
+        }
+    }
+
+    function loadStatus(card) {
+        const url = card.getAttribute("data-status-url");
+        const button = card.querySelector("[data-proxbox-bootstrap-refresh]");
+        if (!url) {
+            updateCard(card, { ok: false, detail: "Bootstrap status URL is not configured.", payload: {} });
+            return;
+        }
+
+        if (button) button.disabled = true;
+        setBadge(card, "Checking", "text-bg-secondary");
+
+        fetch(url, { headers: { "X-Requested-With": "XMLHttpRequest" } })
+            .then(function (response) {
+                return response.json()
+                    .catch(function () { return {}; })
+                    .then(function (data) {
+                        if (!response.ok) {
+                            data.ok = false;
+                            if (!data.detail) {
+                                data.detail = "Bootstrap status request failed with HTTP " + response.status + ".";
+                            }
+                        }
+                        return data;
+                    });
+            })
+            .then(function (data) {
+                updateCard(card, data);
+            })
+            .catch(function (err) {
+                updateCard(card, { ok: false, detail: err.message || "Bootstrap status request failed.", payload: {} });
+            })
+            .finally(function () {
+                if (button) button.disabled = false;
+            });
+    }
+
+    document.addEventListener("DOMContentLoaded", function () {
+        document.querySelectorAll("[data-proxbox-bootstrap-status-card]").forEach(function (card) {
+            const refresh = card.querySelector("[data-proxbox-bootstrap-refresh]");
+            if (refresh) {
+                refresh.addEventListener("click", function () {
+                    loadStatus(card);
+                });
+            }
+        });
+
+        document.querySelectorAll("[data-proxbox-repair-form]").forEach(function (form) {
+            form.addEventListener("submit", function () {
+                const button = form.querySelector("button[type='submit']");
+                const label = form.querySelector("[data-proxbox-repair-label]");
+                if (button) button.disabled = true;
+                setText(label, "Queueing...");
+            });
+        });
+    });
+}());
+</script>

@@ -9,6 +9,13 @@ This is the main Django template namespace for the plugin.
 - Sync and action pages: `schedule_sync.html`, `sync_devices.html`, `sync_virtual_machines.html`, `sync_vm_backups.html`, and `sync_full_update.html`.
 - Inventory detail/list pages: `storage_list.html`, `vmbackup.html`, `vmbackup_list.html`, `vmbackup_bulk_delete.html`, `vmsnapshot.html`, `vmsnapshot_list.html`, `vmtaskhistory.html`, `proxmoxstorage.html`, `backup_routine.html`, `backup_routine_list.html`, `replication.html`, `replication_list.html`, and `vm_proxmox_config.html` (live Proxmox config tab).
 - Shared fragments and includes: `footer.html`, the `inc/` snippets for job buttons, runtime panels, live poll alerts, schedule form fields, and VM sync actions, plus `widgets/` helpers for custom checkbox controls.
+- Operator bootstrap/status fragment:
+  `partials/bootstrap_status_card.html` is included by `home.html` and
+  `settings.html`. It displays the escaped proxbox-api
+  `/extras/bootstrap-status` payload and the permission-aware
+  **Repair / Rebuild Proxbox sync-state** POST form. Keep any future JS inline
+  in the template that needs it; the current fragment needs none and must not
+  use `innerHTML`.
 - Child subdirectories: `base`, `cluster`, `fastapi`, `home`, `inc`, `partials`, `proxmox`, `table`, `test`, and `widgets`.
 
 ## Dependencies
@@ -53,6 +60,10 @@ This needs `{% load buttons custom_links helpers perms plugins tabs %}` and two 
 ## ProxmoxEndpoint Overwrite Behavior tab (`proxmoxendpoint_overwrite_behavior.html`)
 
 `proxmoxendpoint_overwrite_behavior.html` (rendered by `ProxmoxEndpointOverwriteBehaviorView`, an `ObjectView` at path `overwrite-behavior`, tab **Overwrite Behavior**, weight 905) is the read-only view of the resolved sync-overwrite behavior that used to be the **Sync Overwrite Behavior** card on the endpoint detail page. It extends `generic/object.html` (so it reuses the shared object header + tab strip) and its `{% block content %}` splits the `overwrite_*` flags into **Bootstrap nav-tabs sub-tabs by category** — Device / Virtual Machine / Cluster / Node Interface / Storage / VM Interface / IP Address — matching `OVERWRITE_FIELD_GROUPS` and the Settings edit tab's grouping. Each sub-tab pane is an `attr-table` of that group's fields with the effective value (`Yes`/`No`) + origin badge (`override` when set on the endpoint, else `global`). The context var `overwrite_row_groups` = `[(group_label, [{field, label, value, is_override}, …]), …]` is built by `_build_overwrite_row_groups()` in `views/endpoints/proxmox.py` from `instance.effective_overwrites()`. The old flat `overwrite_rows` card was removed from `proxmoxendpoint.html`. Guarded by `tests/test_overwrite_behavior_view.py`. The card header carries a change-permission-gated **Edit** button (`{% action_url object 'settings' %}#proxbox-settings-overwrite`) that deep-links to the Settings page's **Sync Overwrite** sub-tab; the Settings template's inline tab script activates the pane targeted by `location.hash` (after the validation-error focus) so the link lands on the right sub-tab.
+
+## ProxmoxEndpoint Sync Jobs tab (`proxmoxendpoint_sync_jobs.html`)
+
+`proxmoxendpoint_sync_jobs.html` (rendered by `ProxmoxEndpointSyncJobsTabView`, path `sync-jobs`, weight 875) lists this endpoint's Proxbox sync jobs **and** hosts a **Create Sync Job** modal for scheduling an immediate or recurring routine scoped to the viewed endpoint. The card header carries a `perms.core.add_job`-gated **Create Sync Job** button (disabled with a tooltip when `object.enabled` is false, mirroring the detail page's Sync Now). The Bootstrap modal (`#proxbox-create-sync-job-modal`) posts back to the tab's own URL (`plugins:netbox_proxbox:proxmoxendpoint_sync_jobs`), which the `ObjectView` handles via a `post()` method. It renders a **subset** of `ScheduleSyncForm` — `job_name`, `sync_types` (Bootstrap checkboxes), `schedule_at` (DateTimePicker), `interval_value`, `interval_unit` — and deliberately **omits the `proxmox_endpoints`/`netbox_endpoints` pickers** (the target endpoint is fixed to the current one and shown as a read-only "Target endpoint" note; the server hard-scopes to it regardless of POST body). On a validation error the view re-renders this template with `show_create_modal=True`, and the `{% block javascript %}` auto-opens the modal (`bootstrap.Modal.getOrCreateInstance(...).show()`) so field errors are visible. All JS is inline (no `collectstatic` dependency). Scheduling rides `core.Job` + `ProxboxSyncJob` + django_rq — **no NMS dependency**. Guarded by `tests/test_sync_jobs_create_contracts.py` (template/AST) and `tests/test_endpoint_sync_job_create.py` (handler behavior).
 
 ## Notes
 

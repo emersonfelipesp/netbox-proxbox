@@ -244,7 +244,8 @@ def collect_systemctl_services(
             status="ineligible",
             error=(
                 "Service monitoring requires allow_writes, API + SSH access, "
-                "and complete endpoint SSH credentials."
+                "complete endpoint SSH credentials, and netbox-rpc enabled for "
+                "this endpoint."
             ),
         )
         return None
@@ -298,7 +299,9 @@ def collect_systemctl_services(
     params = {
         "proxmox_endpoint_id": getattr(endpoint, "pk", None),
         "units": _coerce_units(
-            units if units is not None else getattr(endpoint, "service_monitoring_units", [])
+            units
+            if units is not None
+            else getattr(endpoint, "service_monitoring_units", [])
         ),
     }
     execution = RPCExecution.objects.create(
@@ -520,7 +523,9 @@ def _project_service_rows(collection: Any, services: object, seen_at: Any) -> in
 
 
 def _mark_collection_failed(collection: Any, execution: Any, error: str) -> None:
-    from netbox_proxbox.models.service_monitoring import SERVICE_COLLECTION_STATUS_FAILED
+    from netbox_proxbox.models.service_monitoring import (
+        SERVICE_COLLECTION_STATUS_FAILED,
+    )
 
     collection.status = SERVICE_COLLECTION_STATUS_FAILED
     collection.reachable = False
@@ -597,7 +602,9 @@ def project_completed_collections(*, limit: int = 100) -> int:
         return 0
 
     from netbox_proxbox.models import ProxmoxServiceCollection
-    from netbox_proxbox.models.service_monitoring import SERVICE_COLLECTION_STATUS_PENDING
+    from netbox_proxbox.models.service_monitoring import (
+        SERVICE_COLLECTION_STATUS_PENDING,
+    )
 
     pending = list(
         ProxmoxServiceCollection.objects.filter(
@@ -625,9 +632,8 @@ def project_completed_collections(*, limit: int = 100) -> int:
     for collection in pending:
         execution = executions.get(collection.rpc_execution_id)
         if execution is None:
-            if (
-                stale_failures < limit
-                and _collection_pending_timed_out(collection, now)
+            if stale_failures < limit and _collection_pending_timed_out(
+                collection, now
             ):
                 _mark_collection_failed(
                     collection,
@@ -642,9 +648,8 @@ def project_completed_collections(*, limit: int = 100) -> int:
             continue
         execution_status = str(getattr(execution, "status", "") or "").lower()
         if execution_status not in _RPC_SUCCESS_STATUSES | _RPC_FAILURE_STATUSES:
-            if (
-                stale_failures < limit
-                and _collection_pending_timed_out(collection, now)
+            if stale_failures < limit and _collection_pending_timed_out(
+                collection, now
             ):
                 _mark_collection_failed(
                     collection,
@@ -709,6 +714,8 @@ def project_completed_collections(*, limit: int = 100) -> int:
         projected += 1
 
     return projected
+
+
 def rpc_dashboard_context() -> dict[str, Any]:
     """Best-effort dashboard context for the optional netbox-rpc companion card.
 
