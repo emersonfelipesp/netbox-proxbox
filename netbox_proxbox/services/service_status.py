@@ -15,7 +15,6 @@ from netbox_proxbox.schemas.service_status import (
     FastAPIStatusResult,
     ServiceCheckResult,
 )
-from netbox_proxbox.services.backend_proxy import request_backend_json
 from netbox_proxbox.services.backend_version import backend_version_advisories
 from netbox_proxbox.services.endpoint_enabled import disabled_endpoint_detail
 from netbox_proxbox.services.proxmox_mode import derive_proxmox_endpoint_mode
@@ -218,6 +217,11 @@ def _maybe_update_proxmox_endpoint_mode(
 
         if not _should_run_proxmox_mode_check(pk):
             return
+
+        # Imported lazily: backend_proxy imports from this module's dependency
+        # graph, so a module-level import here forms a circular import that
+        # fails at startup ("partially initialized module").
+        from netbox_proxbox.services.backend_proxy import request_backend_json
 
         context = BackendRequestContext(
             http_url=base_url.rstrip("/"),
