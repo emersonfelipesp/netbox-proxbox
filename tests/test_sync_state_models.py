@@ -1170,7 +1170,16 @@ class ProxboxSyncStateAPITest(_SyncStateFixturesMixin, TestCase):
         self.assertEqual(detail_response.status_code, 404, detail_response.content)
         list_response = self.client.get(list_url, **headers)
         self.assertEqual(list_response.status_code, 200, list_response.content)
-        self.assertNotIn(str(hidden_storage.pk), list_response.content.decode())
+        # The sidecar row that references the hidden storage must be filtered
+        # out entirely, and the hidden storage must never be disclosed. Assert
+        # on the row identity and the storage's unique name rather than a bare
+        # substring of the whole payload: a small integer PK collides with
+        # unrelated digits (e.g. timestamps) and yields false positives.
+        returned_ids = {
+            row["id"] for row in list_response.json().get("results", [])
+        }
+        self.assertNotIn(hidden_row.pk, returned_ids)
+        self.assertNotIn(hidden_storage.name, list_response.content.decode())
 
     def test_filterset_basic_filter(self) -> None:
         filtered = ProxboxVirtualMachineSyncStateFilterSet(
