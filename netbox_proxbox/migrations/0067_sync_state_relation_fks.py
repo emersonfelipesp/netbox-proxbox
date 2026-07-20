@@ -34,10 +34,20 @@ def _bind_field(apps, model, field_name: str, field):
     bound_field.set_attributes_from_name(field_name)
     bound_field.model = model
     remote_field = getattr(bound_field, "remote_field", None)
-    remote_model = getattr(remote_field, "model", None)
-    if isinstance(remote_model, str):
-        app_label, model_name = remote_model.split(".", 1)
-        remote_field.model = apps.get_model(app_label, model_name)
+    if remote_field is not None:
+        remote_model = getattr(remote_field, "model", None)
+        if isinstance(remote_model, str):
+            app_label, model_name = remote_model.split(".", 1)
+            remote_model = apps.get_model(app_label, model_name)
+            remote_field.model = remote_model
+        # A ForeignKey built inline for a staging column is never run through
+        # contribute_to_class / resolve_related_fields, so remote_field.field_name
+        # stays None. schema_editor.add_field then calls
+        # remote_model._meta.get_field(None) and raises KeyError: None. Resolve the
+        # target to the related model's primary key (the default FK target) so the
+        # column type/reference can be built.
+        if remote_model is not None and getattr(remote_field, "field_name", None) is None:
+            remote_field.field_name = remote_model._meta.pk.name
     return bound_field
 
 
