@@ -185,6 +185,11 @@ router.register(
     "vm-templates", views.ProxmoxVMTemplateViewSet, basename="proxmoxvmtemplate"
 )
 router.register(
+    "metrics-influxdb",
+    views.ProxmoxMetricsInfluxDBViewSet,
+    basename="proxmoxmetricsinfluxdb",
+)
+router.register(
     "settings", views.ProxboxPluginSettingsViewSet, basename="proxboxpluginsettings"
 )
 router.register(

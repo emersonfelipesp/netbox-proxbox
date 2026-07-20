@@ -37,6 +37,9 @@ from netbox_proxbox.api.serializers.pve_template import (
     PVETemplateBuildRequestSerializer,
     PVETemplateBuildResponseSerializer,
 )
+from netbox_proxbox.api.serializers.proxmox_metrics import (
+    ProxmoxMetricsInfluxDBSerializer,
+)
 from netbox_proxbox.api.serializers.endpoints import (
     FastAPIEndpointSerializer,
     NestedTokenSerializer,
@@ -170,6 +173,7 @@ __all__ = (
     "ProxmoxClusterSerializer",
     "ProxmoxDatacenterCpuModelSerializer",
     "ProxmoxEndpointSerializer",
+    "ProxmoxMetricsInfluxDBSerializer",
     "ProxmoxNodeSerializer",
     "ProxmoxServiceCollectionSerializer",
     "ProxmoxServiceSampleSerializer",

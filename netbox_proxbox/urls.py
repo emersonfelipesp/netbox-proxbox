@@ -138,6 +138,20 @@ urlpatterns = [
         include(get_model_urls("netbox_proxbox", "proxmoxvmtemplate", detail=False)),
     ),
     path(
+        "metrics/influxdb/<int:pk>/",
+        include(get_model_urls("netbox_proxbox", "proxmoxmetricsinfluxdb")),
+    ),
+    path(
+        "metrics/influxdb/",
+        include(
+            get_model_urls(
+                "netbox_proxbox",
+                "proxmoxmetricsinfluxdb",
+                detail=False,
+            )
+        ),
+    ),
+    path(
         "backup-routines/<int:pk>/",
         include(get_model_urls("netbox_proxbox", "backuproutine")),
     ),

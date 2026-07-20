@@ -67,6 +67,7 @@ from .serializers import (
     ProxmoxFirewallRuleSerializer,
     ProxmoxFirewallSecurityGroupSerializer,
     ProxmoxDatacenterCpuModelSerializer,
+    ProxmoxMetricsInfluxDBSerializer,
     ProxmoxNodeSerializer,
     ProxmoxServiceCollectionSerializer,
     ProxmoxServiceSampleSerializer,
@@ -127,6 +128,7 @@ class ProxBoxRootView(APIRootView):
         response.data["schedule_sync"] = f"{base}/sync/schedule/"
         response.data["logs"] = f"{base}/logs/"
         response.data["cloud_image_templates"] = f"{base}/cloud-image-templates/"
+        response.data["metrics_influxdb"] = f"{base}/metrics-influxdb/"
         response.data["firecracker"] = {
             "host_pools": f"{base}/firecracker-host-pools/",
             "hosts": f"{base}/firecracker-hosts/",
@@ -309,6 +311,17 @@ class ProxmoxVMTemplateViewSet(NetBoxModelViewSet):
     ).prefetch_related("cloned_vms", "tags")
     serializer_class = ProxmoxVMTemplateSerializer
     filterset_class = filtersets.ProxmoxVMTemplateFilterSet
+
+
+class ProxmoxMetricsInfluxDBViewSet(NetBoxModelViewSet):
+    """REST API for Proxmox cluster InfluxDB metrics endpoint metadata."""
+
+    queryset = models.ProxmoxMetricsInfluxDB.objects.select_related(
+        "endpoint",
+        "proxmox_cluster",
+    ).prefetch_related("tags")
+    serializer_class = ProxmoxMetricsInfluxDBSerializer
+    filterset_class = filtersets.ProxmoxMetricsInfluxDBFilterSet
 
 
 class ProxmoxStorageViewSet(NetBoxModelViewSet):

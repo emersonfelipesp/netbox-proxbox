@@ -45,6 +45,7 @@ from .models import (
     ProxmoxFirewallOptions,
     ProxmoxFirewallRule,
     ProxmoxFirewallSecurityGroup,
+    ProxmoxMetricsInfluxDB,
     ProxboxClusterGroupSyncState,
     ProxboxClusterSyncState,
     ProxboxClusterTypeSyncState,
@@ -1180,6 +1181,26 @@ class ProxmoxVMTemplateFilterSet(ProxboxModelFilterSet):
         if value.isdigit():
             query |= Q(vmid=int(value))
         return queryset.filter(query)
+
+
+@register_filterset
+class ProxmoxMetricsInfluxDBFilterSet(ProxboxModelFilterSet):
+    """Filter Proxmox cluster InfluxDB metrics endpoint metadata."""
+
+    class Meta:
+        model = ProxmoxMetricsInfluxDB
+        fields = ("id", "endpoint", "proxmox_cluster", "enabled", "name")
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        """Match metrics endpoint name, InfluxDB URL, organization, or bucket."""
+        if not value.strip():
+            return queryset
+        return queryset.filter(
+            Q(name__icontains=value)
+            | Q(influx_url__icontains=value)
+            | Q(org__icontains=value)
+            | Q(bucket__icontains=value)
+        )
 
 
 @register_filterset

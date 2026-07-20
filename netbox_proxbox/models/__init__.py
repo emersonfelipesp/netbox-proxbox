@@ -42,6 +42,7 @@ from netbox_proxbox.models.pdm_remote import PDMRemote, PDMRemoteTypeChoices
 from netbox_proxbox.models.plugin_settings import ProxboxPluginSettings
 from netbox_proxbox.models.proxmox_cluster import ProxmoxCluster
 from netbox_proxbox.models.proxmox_endpoint import ProxmoxEndpoint
+from netbox_proxbox.models.proxmox_metrics import ProxmoxMetricsInfluxDB
 from netbox_proxbox.models.proxmox_node import ProxmoxNode
 from netbox_proxbox.models.replication import Replication
 from netbox_proxbox.models.service_monitoring import (
@@ -110,6 +111,7 @@ __all__ = (
     "ProxmoxApplyJob",
     "ProxmoxCluster",
     "ProxmoxEndpoint",
+    "ProxmoxMetricsInfluxDB",
     "ProxmoxNode",
     "ProxmoxServiceCollection",
     "ProxmoxServiceSample",

@@ -11,6 +11,7 @@ This directory defines the plugin's persisted data model.
 - [`fastapi_endpoint.py`](./fastapi_endpoint.py): ProxBox backend endpoint model.
 - [`proxmox_cluster.py`](./proxmox_cluster.py): discovered Proxmox cluster model linked to endpoint and NetBox cluster data.
 - [`proxmox_node.py`](./proxmox_node.py): discovered Proxmox node model linked to endpoint and NetBox device data.
+- [`proxmox_metrics.py`](./proxmox_metrics.py): Proxmox cluster InfluxDB metrics endpoint metadata with `nms-secret:<uuid>` token references.
 - [`plugin_settings.py`](./plugin_settings.py): singleton plugin settings model.
 - [`storage.py`](./storage.py): `ProxmoxStorage` model and `ProxmoxStorageVirtualDisk` relation model.
 - [`guest_vm_interface.py`](./guest_vm_interface.py): guest-agent OS interfaces and address links for dual VM interface sync.
@@ -32,6 +33,11 @@ This directory defines the plugin's persisted data model.
 - `PDMEndpoint`: stores Proxmox Datacenter Manager connection settings plus declared PVE/PBS federation links.
 - `ProxmoxCluster`: stores synchronized cluster metadata and relationships to the source endpoint and NetBox cluster.
 - `ProxmoxNode`: stores synchronized hypervisor nodes and their relationships to the source endpoint and NetBox device.
+- `ProxmoxMetricsInfluxDB`: stores the InfluxDB URL, organization, bucket, TLS
+  flag, enabled state, and query/writer token secret references for a Proxmox
+  cluster. Token fields are `nms-secret:<uuid>` references to netbox-nms
+  `ObservabilitySecret` objects, never plaintext credentials or encrypted token
+  blobs in this plugin.
 - `ProxmoxStorage`: stores Proxmox storage inventory synchronized from the backend.
 - `ProxmoxStorageVirtualDisk`: links storage rows to virtual disks.
 - `GuestVMInterface`: stores guest-agent OS interface names (for example `ens18`) for a NetBox `VirtualMachine`, mapped **one-to-one** (`OneToOneField`, `SET_NULL`) to the canonical core `VMInterface` (for example `net0`) by MAC. `SET_NULL` (not `CASCADE`) so deleting/recreating the core interface during churn preserves the guest OS inventory row and only clears the link; `vm_interface` is nullable for agent-only interfaces with no matching Proxmox NIC.
