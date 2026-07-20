@@ -2,20 +2,20 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 import json
 import logging
 
 from django.core.exceptions import ValidationError
-from django.core.validators import URLValidator
 from django.db import migrations, transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
+from urllib.parse import urlsplit
 
 
 LOGGER = logging.getLogger(__name__)
 INT32_MIN = -(2**31)
 INT32_MAX = 2**31 - 1
-_validate_url = URLValidator()
 
 
 VM_FIELD_MAP = {
@@ -187,13 +187,21 @@ TARGET_MODELS = (
 )
 
 
-def _cf(data: dict, name: str):
+def _cf(data, name: str):
+    if not isinstance(data, Mapping):
+        return None
     if name in data:
         return data[name]
     return data.get(f"cf_{name}")
 
 
-def _has_any(data: dict, names: set[str]) -> bool:
+def _has_cf(data, name: str) -> bool:
+    return isinstance(data, Mapping) and (name in data or f"cf_{name}" in data)
+
+
+def _has_any(data, names: set[str]) -> bool:
+    if not isinstance(data, Mapping):
+        return False
     return any(name in data or f"cf_{name}" in data for name in names)
 
 
@@ -213,6 +221,12 @@ def _to_text(value) -> str:
 def _to_int(value) -> int | None:
     if value in (None, ""):
         return None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, float):
+        if not value.is_integer():
+            return None
+        return int(value)
     try:
         return int(value)
     except (OverflowError, TypeError, ValueError):
@@ -258,6 +272,17 @@ def _null_value_for_field(field):
     return "" if getattr(field, "empty_strings_allowed", False) else None
 
 
+def _field_is_url(field) -> bool:
+    return (
+        field.get_internal_type() == "URLField"
+        or field.__class__.__name__ == "URLField"
+        or any(
+            validator.__class__.__name__ == "URLValidator"
+            for validator in getattr(field, "validators", ())
+        )
+    )
+
+
 def _convert_json(value, target_label: str, field_name: str):
     if _is_blank(value):
         return None
@@ -274,19 +299,31 @@ def _convert_json(value, target_label: str, field_name: str):
         return text
 
 
+def _looks_like_url(text: str) -> bool:
+    """Return whether ``text`` is a usable http(s) URL.
+
+    Django's ``URLValidator`` rejects single-label hosts, so it would blank
+    legitimate intra-LAN Proxmox links such as ``https://pve:8006``. Accept any
+    value that parses to an ``http``/``https`` scheme with a non-empty host, which
+    still rejects clearly malformed values (``not-a-url`` has no scheme/host).
+    """
+    try:
+        parsed = urlsplit(text)
+    except ValueError:
+        return False
+    return parsed.scheme in ("http", "https") and bool(parsed.netloc)
+
+
 def _convert_text(value, field, target_label: str, field_name: str) -> str:
     text = _to_text(value)
-    if field.get_internal_type() == "URLField" and text:
-        try:
-            _validate_url(text)
-        except ValidationError:
-            LOGGER.warning(
-                "Backfill skipped malformed URL for %s.%s: %r",
-                target_label,
-                field_name,
-                text,
-            )
-            return ""
+    if _field_is_url(field) and text and not _looks_like_url(text):
+        LOGGER.warning(
+            "Backfill skipped malformed URL for %s.%s: %r",
+            target_label,
+            field_name,
+            text,
+        )
+        return ""
 
     max_length = getattr(field, "max_length", None)
     if max_length and len(text) > max_length:
@@ -343,11 +380,11 @@ def _convert_for_field(Target, field_name: str, value, kind: str):
         return _null_value_for_field(field)
 
 
-def _defaults_from_map(
-    Target, data: dict, field_map: dict[str, tuple[str, str]]
-) -> dict:
+def _defaults_from_map(Target, data, field_map: dict[str, tuple[str, str]]) -> dict:
     defaults = {}
     for field_name, (cf_name, kind) in field_map.items():
+        if not _has_cf(data, cf_name):
+            continue
         try:
             defaults[field_name] = _convert_for_field(
                 Target,
@@ -525,17 +562,28 @@ def _backfill_virtual_machines(apps, row_failures: list[str]) -> None:
         data = getattr(vm, "custom_field_data", None) or {}
         if not _has_any(data, cf_names):
             continue
+        has_node = _has_cf(data, "proxmox_node")
+        has_cluster = _has_cf(data, "proxmox_cluster")
+        has_endpoint_id = _has_cf(data, "proxmox_endpoint_id")
         netbox_cluster = getattr(vm, "cluster", None)
-        cluster = _resolve_cluster(
-            apps,
-            _cf(data, "proxmox_cluster"),
-            netbox_cluster=netbox_cluster,
-        )
-        endpoint = getattr(cluster, "endpoint", None)
-        if endpoint is None:
-            endpoint = _resolve_endpoint_from_netbox_cluster(apps, netbox_cluster)
-        node = _resolve_node(apps, _cf(data, "proxmox_node"), endpoint=endpoint)
-        if cluster is None:
+        cluster = None
+        endpoint = None
+        node = None
+        if has_node or has_cluster:
+            cluster = _resolve_cluster(
+                apps,
+                _cf(data, "proxmox_cluster"),
+                netbox_cluster=netbox_cluster,
+            )
+            endpoint = getattr(cluster, "endpoint", None)
+            if endpoint is None:
+                endpoint = _resolve_endpoint_from_netbox_cluster(
+                    apps,
+                    netbox_cluster,
+                )
+        if has_node:
+            node = _resolve_node(apps, _cf(data, "proxmox_node"), endpoint=endpoint)
+        if has_cluster and cluster is None:
             cluster = _resolve_cluster(
                 apps,
                 _cf(data, "proxmox_cluster"),
@@ -543,31 +591,39 @@ def _backfill_virtual_machines(apps, row_failures: list[str]) -> None:
                 netbox_cluster=netbox_cluster,
             )
         defaults = _defaults_from_map(Target, data, VM_FIELD_MAP)
-        defaults.update(
-            {
-                "endpoint": endpoint,
-                "proxmox_node": node,
-                "proxmox_node_name": _convert_for_field(
-                    Target,
-                    "proxmox_node_name",
-                    _cf(data, "proxmox_node"),
-                    "text",
-                ),
-                "proxmox_cluster": cluster,
-                "proxmox_cluster_name": _convert_for_field(
-                    Target,
-                    "proxmox_cluster_name",
-                    _cf(data, "proxmox_cluster"),
-                    "text",
-                ),
-                "proxmox_endpoint_raw_id": _convert_for_field(
-                    Target,
-                    "proxmox_endpoint_raw_id",
-                    _cf(data, "proxmox_endpoint_id"),
-                    "int",
-                ),
-            }
-        )
+        if has_node or has_cluster:
+            defaults["endpoint"] = endpoint
+        if has_node:
+            defaults.update(
+                {
+                    "proxmox_node": node,
+                    "proxmox_node_name": _convert_for_field(
+                        Target,
+                        "proxmox_node_name",
+                        _cf(data, "proxmox_node"),
+                        "text",
+                    ),
+                }
+            )
+        if has_cluster:
+            defaults.update(
+                {
+                    "proxmox_cluster": cluster,
+                    "proxmox_cluster_name": _convert_for_field(
+                        Target,
+                        "proxmox_cluster_name",
+                        _cf(data, "proxmox_cluster"),
+                        "text",
+                    ),
+                }
+            )
+        if has_endpoint_id:
+            defaults["proxmox_endpoint_raw_id"] = _convert_for_field(
+                Target,
+                "proxmox_endpoint_raw_id",
+                _cf(data, "proxmox_endpoint_id"),
+                "int",
+            )
         _save_sidecar(Target, "virtual_machine", vm, defaults, row_failures)
 
 
@@ -582,24 +638,30 @@ def _backfill_devices(apps, row_failures: list[str]) -> None:
         data = getattr(device, "custom_field_data", None) or {}
         if not _has_any(data, cf_names):
             continue
-        node = _resolve_node(
-            apps,
-            _cf(data, "proxmox_node"),
-            netbox_device=device,
-        )
+        has_node = _has_cf(data, "proxmox_node")
+        has_cluster = _has_cf(data, "proxmox_cluster")
+        node = None
+        if has_node or has_cluster:
+            node = _resolve_node(
+                apps,
+                _cf(data, "proxmox_node"),
+                netbox_device=device,
+            )
         endpoint = getattr(node, "endpoint", None) if node is not None else None
         netbox_cluster = getattr(device, "cluster", None)
-        cluster = _resolve_cluster(
-            apps,
-            _cf(data, "proxmox_cluster"),
-            endpoint=endpoint,
-            netbox_cluster=netbox_cluster,
-        )
+        cluster = None
+        if has_cluster:
+            cluster = _resolve_cluster(
+                apps,
+                _cf(data, "proxmox_cluster"),
+                endpoint=endpoint,
+                netbox_cluster=netbox_cluster,
+            )
         if endpoint is None and cluster is not None:
             endpoint = getattr(cluster, "endpoint", None)
-        if node is None:
+        if has_node and node is None:
             node = _resolve_node(apps, _cf(data, "proxmox_node"), endpoint=endpoint)
-        if cluster is None:
+        if has_cluster and cluster is None:
             cluster = _resolve_cluster(
                 apps,
                 _cf(data, "proxmox_cluster"),
@@ -607,25 +669,32 @@ def _backfill_devices(apps, row_failures: list[str]) -> None:
                 netbox_cluster=netbox_cluster,
             )
         defaults = _defaults_from_map(Target, data, DEVICE_FIELD_MAP)
-        defaults.update(
-            {
-                "endpoint": endpoint,
-                "proxmox_node": node,
-                "proxmox_node_name": _convert_for_field(
-                    Target,
-                    "proxmox_node_name",
-                    _cf(data, "proxmox_node"),
-                    "text",
-                ),
-                "proxmox_cluster": cluster,
-                "proxmox_cluster_name": _convert_for_field(
-                    Target,
-                    "proxmox_cluster_name",
-                    _cf(data, "proxmox_cluster"),
-                    "text",
-                ),
-            }
-        )
+        if has_node or has_cluster:
+            defaults["endpoint"] = endpoint
+        if has_node:
+            defaults.update(
+                {
+                    "proxmox_node": node,
+                    "proxmox_node_name": _convert_for_field(
+                        Target,
+                        "proxmox_node_name",
+                        _cf(data, "proxmox_node"),
+                        "text",
+                    ),
+                }
+            )
+        if has_cluster:
+            defaults.update(
+                {
+                    "proxmox_cluster": cluster,
+                    "proxmox_cluster_name": _convert_for_field(
+                        Target,
+                        "proxmox_cluster_name",
+                        _cf(data, "proxmox_cluster"),
+                        "text",
+                    ),
+                }
+            )
         _save_sidecar(Target, "device", device, defaults, row_failures)
 
 
@@ -644,13 +713,13 @@ def _backfill_clusters(apps, row_failures: list[str]) -> None:
         data = getattr(cluster, "custom_field_data", None) or {}
         if not _has_any(data, cf_names):
             continue
-        proxmox_cluster = _resolve_cluster(
-            apps,
-            _cf(data, "proxmox_cluster_name"),
-            netbox_cluster=cluster,
-        )
         defaults = _defaults_from_map(Target, data, field_map)
-        defaults["proxmox_cluster"] = proxmox_cluster
+        if _has_cf(data, "proxmox_cluster_name"):
+            defaults["proxmox_cluster"] = _resolve_cluster(
+                apps,
+                _cf(data, "proxmox_cluster_name"),
+                netbox_cluster=cluster,
+            )
         _save_sidecar(Target, "cluster", cluster, defaults, row_failures)
 
 

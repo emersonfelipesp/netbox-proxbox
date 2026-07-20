@@ -171,12 +171,20 @@ def _auth_headers(token: Token) -> dict[str, str]:
     return {"HTTP_AUTHORIZATION": f"Token {token.key}"}
 
 
+def _create_test_user(username: str):
+    user = get_user_model().objects.create_user(username=username)
+    if any(field.name == "is_staff" for field in user._meta.fields):
+        user.is_staff = True
+        user.save(update_fields=["is_staff"])
+    return user
+
+
 def _create_api_token(
     username: str,
     sidecar_models: tuple[type, ...],
     parent_models: set[type],
 ) -> Token:
-    user = get_user_model().objects.create_user(username=username, is_staff=True)
+    user = _create_test_user(username)
     token = Token.objects.create(user=user)
     permission = ObjectPermission.objects.create(
         name=f"{username}-sync-state-rw",
@@ -431,10 +439,7 @@ class ProxboxSyncStateAPITest(_SyncStateFixturesMixin, TestCase):
     @classmethod
     def setUpTestData(cls) -> None:
         super().setUpTestData()
-        cls.user = get_user_model().objects.create_user(
-            username="sync-state-api",
-            is_staff=True,
-        )
+        cls.user = _create_test_user("sync-state-api")
         cls.token = Token.objects.create(user=cls.user)
         permission = ObjectPermission.objects.create(
             name="sync-state-rw",
@@ -456,10 +461,7 @@ class ProxboxSyncStateAPITest(_SyncStateFixturesMixin, TestCase):
         for model in parent_models:
             parent_permission.object_types.add(ContentType.objects.get_for_model(model))
         parent_permission.users.add(cls.user)
-        cls.sidecar_only_user = get_user_model().objects.create_user(
-            username="sync-state-sidecar-only",
-            is_staff=True,
-        )
+        cls.sidecar_only_user = _create_test_user("sync-state-sidecar-only")
         cls.sidecar_only_token = Token.objects.create(user=cls.sidecar_only_user)
         sidecar_only_permission = ObjectPermission.objects.create(
             name="sync-state-sidecar-only",
@@ -1046,10 +1048,7 @@ class ProxboxSyncStateAPITest(_SyncStateFixturesMixin, TestCase):
         )
 
     def test_api_rejects_patch_to_hidden_parent(self) -> None:
-        limited_user = get_user_model().objects.create_user(
-            username="sync-state-limited-parent",
-            is_staff=True,
-        )
+        limited_user = _create_test_user("sync-state-limited-parent")
         limited_token = Token.objects.create(user=limited_user)
         sidecar_permission = ObjectPermission.objects.create(
             name="sync-state-limited-sidecar",
@@ -2019,21 +2018,24 @@ class ProxboxSyncStateHistoricalMigrationTest(TransactionTestCase):
         try:
             self._migrate_to(MIGRATION_0064)
             apps_0069 = self._migrate_to(MIGRATION_0069)
+            cluster = Cluster.objects.get(pk=ids["cluster"])
+            device = Device.objects.get(pk=ids["device"])
+            vm = VirtualMachine.objects.get(pk=ids["vm"])
             alternate_storage = ProxmoxStorage.objects.create(
-                cluster=self.cluster,
+                cluster=cluster,
                 name="sync-state-api-patched-storage",
             )
             alternate_bridge = Interface.objects.create(
-                device=self.device,
+                device=device,
                 name="migration-patched-bridge",
             )
             cleared_disk = VirtualDisk.objects.create(
-                virtual_machine=self.vm,
+                virtual_machine=vm,
                 name="migration-cleared-scsi0",
                 size=1024,
             )
             cleared_vm_interface = VMInterface.objects.create(
-                virtual_machine=self.vm,
+                virtual_machine=vm,
                 name="migration-cleared-net0",
                 enabled=True,
             )
@@ -2147,8 +2149,15 @@ class ProxboxSyncStateHistoricalMigrationTest(TransactionTestCase):
             self._assert_0068_relation_payloads(apps_0068, ids)
             self._assert_0068_relation_edge_cases(apps_0068, edge_ids)
             log_output = "\n".join(captured.output)
+            DiskState0068 = apps_0068.get_model(
+                "netbox_proxbox",
+                "ProxboxVirtualDiskSyncState",
+            )
+            overflow_state = DiskState0068.objects.get(
+                virtual_disk_id=edge_ids["overflow_disk"],
+            )
             self.assertIn("out-of-range", log_output)
-            self.assertIn(str(edge_ids["overflow_disk"]), log_output)
+            self.assertIn(f"pk={overflow_state.pk!r}", log_output)
             self.assertIn(edge_ids["overflow_storage_raw"]["id"], log_output)
             self.assertIn("non-integral", log_output)
             self.assertIn("vmbr0", log_output)
