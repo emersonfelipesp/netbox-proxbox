@@ -962,7 +962,8 @@ class ProxmoxEndpointServicesView(generic.ObjectView):
                 request,
                 _(
                     "Service monitoring requires write permission, API + SSH "
-                    "access, and complete endpoint SSH credentials."
+                    "access, complete endpoint SSH credentials, and netbox-rpc "
+                    "enabled for this endpoint."
                 ),
             )
             return HttpResponseRedirect(self._services_url(endpoint))

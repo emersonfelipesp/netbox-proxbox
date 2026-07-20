@@ -86,12 +86,13 @@ dashboard render stays fast. Guarded by `tests/test_rpc_integration.py`.
 `ProxmoxEndpoint.rpc_enabled` is a **tri-state** (`BooleanField(null=True)`)
 per-endpoint override for netbox-rpc operations against that endpoint, mirroring
 the `overwrite_*` pattern. `ProxmoxEndpoint.effective_rpc_enabled()` resolves it:
-the per-endpoint value wins when set (`is not None`, so an explicit `False` is
+netbox-rpc installation is a precondition for all paths; after the
+**function-local, guarded** `try/except ImportError` import succeeds, the
+per-endpoint value wins when set (`is not None`, so an explicit `False` is
 respected); otherwise it **inherits the global** netbox-rpc opt-in flag
-(`netbox_rpc.RpcPluginSettings.enabled`) via a **function-local, guarded**
-`try/except ImportError` (returns `False` when netbox-rpc is absent). This is the
-allowed **optional** proxbox→rpc integration; the model never imports netbox-rpc
-at load time and **must never depend on the NMS stack**.
+(`netbox_rpc.RpcPluginSettings.enabled`). This is the allowed **optional**
+proxbox→rpc integration; the model never imports netbox-rpc at load time and
+**must never depend on the NMS stack**.
 
 The field is editable on the endpoint **Settings tab** (new **RPC** pane,
 `NullBooleanSelect`, `RPC_FIELD_GROUPS` in `constants.py`) and exposed over REST

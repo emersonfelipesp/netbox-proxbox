@@ -615,7 +615,7 @@ class ProxmoxServiceMonitoringJob(JobRunner):
                     (
                         "Service monitoring is enabled but the endpoint is no "
                         "longer eligible; check allow_writes, API + SSH access, "
-                        "and endpoint SSH credentials."
+                        "endpoint SSH credentials, and netbox-rpc enablement."
                     ),
                 )
                 continue

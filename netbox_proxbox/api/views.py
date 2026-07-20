@@ -729,7 +729,8 @@ class ProxmoxServiceMonitoringRefreshAPIView(APIView):
                 {
                     "detail": (
                         "Service monitoring requires allow_writes, API + SSH "
-                        "access, and complete endpoint SSH credentials."
+                        "access, complete endpoint SSH credentials, and "
+                        "netbox-rpc enabled for this endpoint."
                     )
                 },
                 status=drf_status.HTTP_400_BAD_REQUEST,

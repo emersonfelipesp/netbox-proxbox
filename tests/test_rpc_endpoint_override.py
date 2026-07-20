@@ -1,8 +1,9 @@
 """Per-endpoint netbox-rpc enablement override (non-enforcing).
 
 Covers the resolution semantics of ``ProxmoxEndpoint.effective_rpc_enabled()``
-(per-endpoint override wins via ``is not None``; otherwise inherit the global
-netbox-rpc ``RpcPluginSettings.enabled``; ``False`` when netbox-rpc is absent)
+(netbox-rpc installation is required first; when installed, the per-endpoint
+override wins via ``is not None``; otherwise inherit the global netbox-rpc
+``RpcPluginSettings.enabled``)
 plus source contracts pinning the model field, constants, form, serializer,
 migration, view context, and Settings-tab UI wiring.
 
@@ -28,10 +29,10 @@ def _resolve_rpc_like_model(
     rpc_installed: bool = True,
 ) -> bool:
     """Mirror of ``ProxmoxEndpoint.effective_rpc_enabled()`` body."""
-    if endpoint_rpc_enabled is not None:
-        return bool(endpoint_rpc_enabled)
     if not rpc_installed:
         return False
+    if endpoint_rpc_enabled is not None:
+        return bool(endpoint_rpc_enabled)
     return bool(global_enabled)
 
 
@@ -59,9 +60,10 @@ def test_netbox_rpc_absent_resolves_false_when_unset() -> None:
     )
 
 
-def test_netbox_rpc_absent_still_respects_explicit_override() -> None:
+def test_netbox_rpc_absent_disables_even_explicit_true_override() -> None:
     assert (
-        _resolve_rpc_like_model(True, global_enabled=False, rpc_installed=False) is True
+        _resolve_rpc_like_model(True, global_enabled=False, rpc_installed=False)
+        is False
     )
 
 
@@ -78,6 +80,9 @@ def test_model_defines_rpc_enabled_and_effective_resolution() -> None:
     # Optional, guarded, function-local netbox-rpc import (never top-level).
     assert "from netbox_rpc.models import RpcPluginSettings" in method
     assert "except ImportError" in method
+    assert method.index("from netbox_rpc.models") < method.index(
+        "if self.rpc_enabled is not None"
+    )
     assert "RpcPluginSettings.get_solo().enabled" in method
     top = src.split("class ", 1)[0]
     assert "import netbox_rpc" not in top and "from netbox_rpc" not in top

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
@@ -31,6 +33,17 @@ from netbox_proxbox.models.primary_secrets import (
     encrypt_primary_secret,
 )
 from netbox_proxbox.utils import encryption as enc_helpers
+
+
+logger = logging.getLogger(__name__)
+
+SERVICE_MONITORING_INELIGIBLE_MESSAGE = _(
+    "Service monitoring requires write permission (allow_writes), SSH access "
+    "(api_ssh), a registered SSH credential, and netbox-rpc installed and "
+    "enabled for this endpoint (effective rpc_enabled). Monitoring dispatches "
+    "an RPC execution each tick, which the backend rejects while RPC is "
+    "disabled or unavailable."
+)
 
 
 class ProxmoxEndpoint(EndpointBase):
@@ -332,7 +345,8 @@ class ProxmoxEndpoint(EndpointBase):
         help_text=_(
             "Opt in to agentless systemd service monitoring through netbox-rpc. "
             "Requires Proxmox-side writes enabled, API + SSH access, and complete "
-            "endpoint SSH credentials."
+            "endpoint SSH credentials, with netbox-rpc installed and effectively "
+            "enabled for this endpoint."
         ),
     )
     service_monitoring_interval_minutes = models.PositiveIntegerField(
@@ -573,7 +587,8 @@ class ProxmoxEndpoint(EndpointBase):
         help_text=_(
             "Per-endpoint override for netbox-rpc operations against this Proxmox "
             "endpoint. Leave blank to inherit the global netbox-rpc setting; set "
-            "explicitly to override it (per-endpoint wins)."
+            "explicitly to override it when netbox-rpc is installed. If netbox-rpc "
+            "is absent, the effective value is always disabled."
         ),
     )
     default_role_qemu = models.ForeignKey(
@@ -756,7 +771,22 @@ class ProxmoxEndpoint(EndpointBase):
 
     @property
     def service_monitoring_eligible(self) -> bool:
-        """Return whether this endpoint can run systemctl service monitoring."""
+        """Return whether this endpoint can run systemctl service monitoring.
+
+        Service monitoring dispatches an ``RPCExecution`` on every scheduler
+        tick, and the nms-backend RPC dispatch gate fails closed on RPC-disabled
+        endpoints (403 ``RPC_ENDPOINT_DISABLED``). An endpoint whose effective
+        netbox-rpc state is disabled can therefore never succeed, so it is not
+        eligible — this keeps ``clean()`` from accepting an enable that would
+        403 forever and keeps the scheduler tick / on-demand collect from
+        dispatching doomed executions.
+        """
+        return bool(
+            self._service_monitoring_base_eligible() and self.effective_rpc_enabled()
+        )
+
+    def _service_monitoring_base_eligible(self) -> bool:
+        """Return whether all non-RPC service-monitoring gates are satisfied."""
         return bool(
             self.allow_writes
             and self.ssh_access_enabled
@@ -787,14 +817,18 @@ class ProxmoxEndpoint(EndpointBase):
                 self.ssh_known_host_fingerprint
             )
         if self.service_monitoring_enabled and not self.service_monitoring_eligible:
-            raise ValidationError(
-                {
-                    "service_monitoring_enabled": (
-                        "Requires write permission (allow_writes), SSH access "
-                        "(api_ssh), and a registered SSH credential."
-                    )
-                }
-            )
+            if self._should_auto_disable_service_monitoring_for_rpc():
+                self.service_monitoring_enabled = False
+                logger.warning(
+                    "Auto-disabled service monitoring for Proxmox endpoint %s "
+                    "because netbox-rpc is not installed or is disabled for the "
+                    "endpoint.",
+                    getattr(self, "pk", None) or self,
+                )
+            else:
+                raise ValidationError(
+                    {"__all__": SERVICE_MONITORING_INELIGIBLE_MESSAGE}
+                )
         if self.ssh_credential_source == SSH_CRED_SOURCE_REUSE:
             errors: dict[str, str] = {}
             if not self.password:
@@ -851,27 +885,59 @@ class ProxmoxEndpoint(EndpointBase):
     def effective_rpc_enabled(self) -> bool:
         """Resolve whether netbox-rpc is enabled for this endpoint.
 
-        The per-endpoint ``rpc_enabled`` override wins when set (an explicit
-        ``False`` is respected via ``is not None``); otherwise this inherits the
-        **global** netbox-rpc opt-in flag (``RpcPluginSettings.enabled``).
+        netbox-rpc installation is a precondition for every path. Once the
+        guarded import succeeds, the per-endpoint ``rpc_enabled`` override wins
+        when set (an explicit ``False`` is respected via ``is not None``);
+        otherwise this inherits the **global** netbox-rpc opt-in flag
+        (``RpcPluginSettings.enabled``).
 
         netbox-rpc is an *optional* companion of netbox-proxbox: it is imported
         function-locally and guarded, so this returns ``False`` when netbox-rpc
         is not installed. This module never imports netbox-rpc at load time and
         must never depend on the NMS stack.
         """
-        if self.rpc_enabled is not None:
-            return bool(self.rpc_enabled)
-
         try:
             from netbox_rpc.models import RpcPluginSettings
         except ImportError:
             return False
 
+        if self.rpc_enabled is not None:
+            return bool(self.rpc_enabled)
+
         try:
             return bool(RpcPluginSettings.get_solo().enabled)
         except Exception:  # noqa: BLE001 - resolution must never break callers
             return False
+
+    def _should_auto_disable_service_monitoring_for_rpc(self) -> bool:
+        """Return whether an RPC-only eligibility loss should disable monitoring."""
+        return bool(
+            self._saved_service_monitoring_enabled()
+            and self._service_monitoring_base_eligible()
+            and not self.effective_rpc_enabled()
+        )
+
+    def _saved_service_monitoring_enabled(self) -> bool:
+        """Return the persisted monitoring flag for existing rows, if available."""
+        pk = getattr(self, "pk", None)
+        if not pk:
+            return False
+        manager = getattr(type(self), "_default_manager", None) or getattr(
+            type(self),
+            "objects",
+            None,
+        )
+        if manager is None:
+            return False
+        try:
+            saved = (
+                manager.filter(pk=pk)
+                .values_list("service_monitoring_enabled", flat=True)
+                .first()
+            )
+        except (AttributeError, TypeError):
+            return False
+        return bool(saved)
 
     def effective_sync_mode(self, resource_type: str) -> str:
         """Resolve a per-resource sync mode, falling back to the global singleton."""

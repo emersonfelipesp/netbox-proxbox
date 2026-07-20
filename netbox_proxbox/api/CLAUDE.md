@@ -163,9 +163,10 @@ These `APIView` subclasses mirror every data-bearing UI page and expose the same
   API only queues an async `netbox-rpc` execution for the read-only
   `os.linux.proxmox.show_systemctl_services` procedure. It requires
   `change_proxmoxendpoint` and the same eligibility gate as the UI:
-  `allow_writes=True`, `access_methods="api_ssh"`, and complete endpoint SSH
-  credentials. `netbox-rpc` remains a soft optional dependency and must be
-  imported only inside call-time `try/except ImportError` blocks.
+  `allow_writes=True`, `access_methods="api_ssh"`, complete endpoint SSH
+  credentials, and netbox-rpc installed and effectively enabled for the
+  endpoint. `netbox-rpc` remains a soft optional dependency and must be imported
+  only inside call-time `try/except ImportError` blocks.
 - `NodeHostKeyFingerprintAPIView`
   (`GET ssh-credentials/by-node/<node_id>/host-key-fingerprint/`) backs the
   **"Fetch host key"** button in the **Terminal-tab credential modal** for

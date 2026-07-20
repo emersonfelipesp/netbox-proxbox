@@ -105,7 +105,9 @@ This directory defines the plugin's persisted data model.
   `ssh_known_host_fingerprint`.
 - `ProxmoxEndpoint.service_monitoring_enabled` is gated by
   `service_monitoring_eligible`, which is true only when `allow_writes`,
-  `ssh_access_enabled`, and `has_ssh_terminal_credentials` are all true. The
+  `ssh_access_enabled`, `has_ssh_terminal_credentials`, and
+  `effective_rpc_enabled()` are all true (an RPC-disabled endpoint is excluded
+  because each collection tick would 403 at the backend RPC gate). The
   collector creates asynchronous netbox-rpc executions; this plugin does not
   perform SSH itself.
 - `ProxboxPluginSettings` is the singleton home for runtime tunables shared with the

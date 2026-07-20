@@ -31,6 +31,15 @@ endpoint, and the endpoint is eligible only when all of these are true:
 - `allow_writes=True`
 - `access_methods="api_ssh"`
 - the endpoint has complete SSH credentials registered
+- netbox-rpc is effectively enabled for the endpoint — the per-endpoint
+  `rpc_enabled` override when set, otherwise the global netbox-rpc opt-in
+
+The last condition matters because each collection tick dispatches a netbox-rpc
+`RPCExecution`, and the nms-backend RPC dispatch gate fails closed on an
+RPC-disabled endpoint (403 `RPC_ENDPOINT_DISABLED`). Without this gate an
+operator could enable monitoring on an RPC-disabled endpoint and accumulate
+`failed`/`last_error` state every tick with no upfront signal; the strict
+eligibility check now refuses the enable and skips the doomed dispatch.
 
 The RPC backend uses the endpoint's own SSH credential. Scheduled collection
 runs from a one-minute NetBox system tick and respects

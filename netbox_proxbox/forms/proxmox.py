@@ -480,12 +480,16 @@ class ProxmoxEndpointForm(ProxmoxEndpointSSHCredentialFormMixin, NetBoxModelForm
         if not cleaned_data.get("service_monitoring_enabled"):
             return
 
-        eligible = (
+        base_eligible = (
             bool(cleaned_data.get("allow_writes"))
             and cleaned_data.get("access_methods") == ProxmoxAccessMethodChoices.API_SSH
             and self._submitted_service_monitoring_credentials_ready()
         )
-        if not eligible:
+        actively_enabling = not bool(
+            getattr(self.instance, "pk", None)
+            and getattr(self.instance, "service_monitoring_enabled", False)
+        )
+        if actively_enabling and not base_eligible:
             self.add_error(
                 "service_monitoring_enabled",
                 _(
@@ -626,7 +630,7 @@ class ProxmoxEndpointSettingsForm(NetBoxModelForm):
             help_text=_(
                 "Per-endpoint override for netbox-rpc operations against this "
                 "endpoint. Leave blank to inherit the global netbox-rpc setting "
-                "(per-endpoint wins when set)."
+                "(per-endpoint wins when set, but netbox-rpc must be installed)."
             ),
         )
         self.fields["enable_tenant_name_regex"] = forms.NullBooleanField(

@@ -244,7 +244,8 @@ def collect_systemctl_services(
             status="ineligible",
             error=(
                 "Service monitoring requires allow_writes, API + SSH access, "
-                "and complete endpoint SSH credentials."
+                "complete endpoint SSH credentials, and netbox-rpc enabled for "
+                "this endpoint."
             ),
         )
         return None
