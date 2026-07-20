@@ -63,6 +63,11 @@ from django.test.utils import CaptureQueriesContext  # noqa: E402
 from django.urls import reverse  # noqa: E402
 from dcim.models import Device, DeviceRole, DeviceType, Interface, Manufacturer, Site  # noqa: E402
 from ipam.models import IPAddress, VLAN  # noqa: E402
+
+try:
+    from users.constants import TOKEN_PREFIX  # noqa: E402
+except ImportError:  # pragma: no cover - NetBox 4.5 v1 token compatibility
+    TOKEN_PREFIX = ""
 from users.models import ObjectPermission, Token  # noqa: E402
 from utilities.testing import create_test_device, create_test_virtualmachine  # noqa: E402
 from virtualization.models import (  # noqa: E402
@@ -167,8 +172,42 @@ def _netbox_version_tuple() -> tuple[int, int]:
     return (4, 6)
 
 
+_AUTH_HEADER_ATTR = "_proxbox_test_auth_header"
+
+
+def _is_v2_api_token(token: Token) -> bool:
+    version = getattr(token, "version", None)
+    if version is not None:
+        try:
+            return int(version) == 2
+        except (TypeError, ValueError):
+            pass
+    return bool(getattr(token, "token", None))
+
+
+def _build_auth_header_value(token: Token) -> str:
+    cached_header = getattr(token, _AUTH_HEADER_ATTR, "")
+    if cached_header:
+        return cached_header
+
+    if _is_v2_api_token(token):
+        plaintext = getattr(token, "token", None)
+        if not plaintext:
+            raise AssertionError("NetBox v2 API token plaintext was not captured.")
+        return f"Bearer {TOKEN_PREFIX}{token.key}.{plaintext}"
+
+    token_value = getattr(token, "key", None) or getattr(token, "plaintext", None)
+    return f"Token {token_value}"
+
+
 def _auth_headers(token: Token) -> dict[str, str]:
-    return {"HTTP_AUTHORIZATION": f"Token {token.key}"}
+    return {"HTTP_AUTHORIZATION": _build_auth_header_value(token)}
+
+
+def _create_api_auth_token(user) -> Token:
+    token = Token.objects.create(user=user)
+    setattr(token, _AUTH_HEADER_ATTR, _build_auth_header_value(token))
+    return token
 
 
 def _create_test_user(username: str):
@@ -185,7 +224,7 @@ def _create_api_token(
     parent_models: set[type],
 ) -> Token:
     user = _create_test_user(username)
-    token = Token.objects.create(user=user)
+    token = _create_api_auth_token(user)
     permission = ObjectPermission.objects.create(
         name=f"{username}-sync-state-rw",
         actions=["view", "add", "change", "delete"],
@@ -440,7 +479,8 @@ class ProxboxSyncStateAPITest(_SyncStateFixturesMixin, TestCase):
     def setUpTestData(cls) -> None:
         super().setUpTestData()
         cls.user = _create_test_user("sync-state-api")
-        cls.token = Token.objects.create(user=cls.user)
+        cls.token = _create_api_auth_token(cls.user)
+        cls.auth_headers = _auth_headers(cls.token)
         permission = ObjectPermission.objects.create(
             name="sync-state-rw",
             actions=["view", "add", "change", "delete"],
@@ -462,7 +502,8 @@ class ProxboxSyncStateAPITest(_SyncStateFixturesMixin, TestCase):
             parent_permission.object_types.add(ContentType.objects.get_for_model(model))
         parent_permission.users.add(cls.user)
         cls.sidecar_only_user = _create_test_user("sync-state-sidecar-only")
-        cls.sidecar_only_token = Token.objects.create(user=cls.sidecar_only_user)
+        cls.sidecar_only_token = _create_api_auth_token(cls.sidecar_only_user)
+        cls.sidecar_only_auth_headers = _auth_headers(cls.sidecar_only_token)
         sidecar_only_permission = ObjectPermission.objects.create(
             name="sync-state-sidecar-only",
             actions=["view", "add", "change"],
@@ -475,11 +516,12 @@ class ProxboxSyncStateAPITest(_SyncStateFixturesMixin, TestCase):
         for model, parent_field, parent, defaults in cls.model_cases():
             model.objects.create(**{parent_field: parent}, **defaults)
 
-    def _auth_headers(self) -> dict[str, str]:
-        return {"HTTP_AUTHORIZATION": f"Token {self.token.key}"}
-
-    def _token_headers(self, token: Token) -> dict[str, str]:
-        return {"HTTP_AUTHORIZATION": f"Token {token.key}"}
+    def _auth_headers(self, token: Token | None = None) -> dict[str, str]:
+        if token is None:
+            return dict(self.auth_headers)
+        if token.pk == self.sidecar_only_token.pk:
+            return dict(self.sidecar_only_auth_headers)
+        return _auth_headers(token)
 
     def _create_relation_triplet(
         self,
@@ -949,7 +991,7 @@ class ProxboxSyncStateAPITest(_SyncStateFixturesMixin, TestCase):
         )
 
     def test_api_hides_sidecar_when_parent_is_not_visible(self) -> None:
-        headers = self._token_headers(self.sidecar_only_token)
+        headers = self._auth_headers(self.sidecar_only_token)
         list_url = reverse(
             "plugins-api:netbox_proxbox-api:proxboxvirtualmachinesyncstate-list"
         )
@@ -1038,7 +1080,7 @@ class ProxboxSyncStateAPITest(_SyncStateFixturesMixin, TestCase):
                 }
             ),
             content_type="application/json",
-            **self._token_headers(self.sidecar_only_token),
+            **self._auth_headers(self.sidecar_only_token),
         )
         self.assertEqual(response.status_code, 400, response.content)
         self.assertFalse(
@@ -1049,7 +1091,7 @@ class ProxboxSyncStateAPITest(_SyncStateFixturesMixin, TestCase):
 
     def test_api_rejects_patch_to_hidden_parent(self) -> None:
         limited_user = _create_test_user("sync-state-limited-parent")
-        limited_token = Token.objects.create(user=limited_user)
+        limited_token = _create_api_auth_token(limited_user)
         sidecar_permission = ObjectPermission.objects.create(
             name="sync-state-limited-sidecar",
             actions=["view", "add", "change"],
@@ -1080,7 +1122,7 @@ class ProxboxSyncStateAPITest(_SyncStateFixturesMixin, TestCase):
             detail_url,
             data=json.dumps({"virtual_machine": {"id": self.vm.pk}}),
             content_type="application/json",
-            **self._token_headers(limited_token),
+            **self._auth_headers(limited_token),
         )
         self.assertEqual(response.status_code, 400, response.content)
         row.refresh_from_db()
