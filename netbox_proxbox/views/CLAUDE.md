@@ -27,6 +27,17 @@ This directory implements the plugin's NetBox UI behavior, including dashboard p
 - [`replication.py`](./replication.py): list/detail/edit/delete views and VM-related tab views for `Replication`.
 - [`schedule_sync.py`](./schedule_sync.py): recurring/one-shot scheduler UI and quick-schedule flow from the home dashboard.
 - [`settings.py`](./settings.py): plugin settings page for runtime feature toggles.
+- [`sync_state_repair.py`](./sync_state_repair.py): operator recovery surface
+  for missing Proxbox bootstrap/custom-field setup. It builds the shared
+  Home/Settings repair-card context without blocking page render, gates the
+  on-demand `GET /extras/bootstrap-status` JSON endpoint with
+  `view_fastapiendpoint`, and exposes the session-only `RepairSyncStateView`
+  POST action requiring `core.add_job`. Bootstrap and repair backend calls use a
+  request-user-restricted `FastAPIEndpoint` lookup, classify the proxy envelope
+  plus inner proxbox-api body, and treat inner `ok=false` / `success=false` /
+  error responses as failures. The repair action calls proxbox-api
+  `POST /extras/custom-fields/reconcile` and then enqueues a normal full
+  `ProxboxSyncJob`; backend and enqueue failures are flash messages.
 - [`storage.py`](./storage.py): CRUD list/detail/delete views for `ProxmoxStorage`.
 - [`sync.py`](./sync.py): POST endpoints that enqueue `ProxboxSyncJob` runs for devices, storage, virtual machines, virtual disks, backups, snapshots, network interfaces, IP addresses, backup routines, replications, and full update.
 - [`sync_now/`](./sync_now/): targeted per-object sync handlers for cluster, node, storage, and VM actions.

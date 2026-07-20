@@ -19,10 +19,25 @@ from netbox_proxbox.models import ProxboxPluginSettings
 from netbox_proxbox.views.proxbox_access import (
     permission_change_proxbox_plugin_settings,
 )
+from netbox_proxbox.views.sync_state_repair import build_bootstrap_status_context
 from utilities.views import (
     ContentTypePermissionRequiredMixin,
     TokenConditionalLoginRequiredMixin,
 )
+
+
+def _settings_template_context(
+    request: HttpRequest,
+    form: ProxboxPluginSettingsForm,
+) -> dict[str, object]:
+    """Build shared template context for settings GET and invalid POST renders."""
+    return {
+        "form": form,
+        "netbox_bgp_status": netbox_bgp_status(),
+        "overwrite_field_groups": OVERWRITE_FIELD_GROUPS,
+        "sync_mode_field_groups": SYNC_MODE_FIELD_GROUPS,
+        **build_bootstrap_status_context(request, surface="settings"),
+    }
 
 
 class SettingsView(
@@ -165,12 +180,7 @@ class SettingsView(
         return render(
             request,
             self.template_name,
-            {
-                "form": form,
-                "netbox_bgp_status": netbox_bgp_status(),
-                "overwrite_field_groups": OVERWRITE_FIELD_GROUPS,
-                "sync_mode_field_groups": SYNC_MODE_FIELD_GROUPS,
-            },
+            _settings_template_context(request, form),
         )
 
     def post(self, request: HttpRequest) -> HttpResponse:
@@ -433,10 +443,5 @@ class SettingsView(
         return render(
             request,
             self.template_name,
-            {
-                "form": form,
-                "netbox_bgp_status": netbox_bgp_status(),
-                "overwrite_field_groups": OVERWRITE_FIELD_GROUPS,
-                "sync_mode_field_groups": SYNC_MODE_FIELD_GROUPS,
-            },
+            _settings_template_context(request, form),
         )

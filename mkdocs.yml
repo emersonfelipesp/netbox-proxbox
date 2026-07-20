@@ -127,6 +127,7 @@ nav:
     - Tenant Mapping: 'operations/tenant-mapping.md'
     - NetBox to Proxmox: 'operations/netbox-to-proxmox.md'
     - Deletion Requests: 'operations/deletion-requests.md'
+    - Recovering Proxbox Data: 'operations/recovering-proxbox-data.md'
     - Troubleshooting: 'operations/troubleshooting.md'
   - API Reference:
     - Overview: 'api/index.md'

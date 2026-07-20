@@ -27,6 +27,7 @@ from netbox_proxbox.tables import (
 )
 from netbox_proxbox.utils import get_fastapi_url
 from netbox_proxbox.views.proxbox_access import permission_enqueue_proxbox_sync
+from netbox_proxbox.views.sync_state_repair import build_bootstrap_status_context
 
 __all__ = ("build_companion_endpoint_groups", "build_home_dashboard_context")
 
@@ -474,6 +475,7 @@ def build_home_dashboard_context(
         "latest_sync_jobs": _get_latest_proxbox_sync_jobs(request),
         "sync_jobs_list_url": _proxbox_sync_jobs_list_url(),
     }
+    context.update(build_bootstrap_status_context(request, surface="home"))
     context.update(_build_pdm_endpoint_context(request))
     context.update(_build_rpc_integration_context())
     return context

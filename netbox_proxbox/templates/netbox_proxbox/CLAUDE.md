@@ -9,6 +9,13 @@ This is the main Django template namespace for the plugin.
 - Sync and action pages: `schedule_sync.html`, `sync_devices.html`, `sync_virtual_machines.html`, `sync_vm_backups.html`, and `sync_full_update.html`.
 - Inventory detail/list pages: `storage_list.html`, `vmbackup.html`, `vmbackup_list.html`, `vmbackup_bulk_delete.html`, `vmsnapshot.html`, `vmsnapshot_list.html`, `vmtaskhistory.html`, `proxmoxstorage.html`, `backup_routine.html`, `backup_routine_list.html`, `replication.html`, `replication_list.html`, and `vm_proxmox_config.html` (live Proxmox config tab).
 - Shared fragments and includes: `footer.html`, the `inc/` snippets for job buttons, runtime panels, live poll alerts, schedule form fields, and VM sync actions, plus `widgets/` helpers for custom checkbox controls.
+- Operator bootstrap/status fragment:
+  `partials/bootstrap_status_card.html` is included by `home.html` and
+  `settings.html`. It displays the escaped proxbox-api
+  `/extras/bootstrap-status` payload and the permission-aware
+  **Repair / Rebuild Proxbox sync-state** POST form. Keep any future JS inline
+  in the template that needs it; the current fragment needs none and must not
+  use `innerHTML`.
 - Child subdirectories: `base`, `cluster`, `fastapi`, `home`, `inc`, `partials`, `proxmox`, `table`, `test`, and `widgets`.
 
 ## Dependencies

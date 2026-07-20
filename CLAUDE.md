@@ -163,6 +163,18 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
 - NetBox UI routes live in [`netbox_proxbox/urls.py`](./netbox_proxbox/urls.py) and are implemented primarily in `netbox_proxbox/views/`.
 - The plugin also exposes a NetBox plugin API under `netbox_proxbox/api/`, using serializers, filtersets, and standard `NetBoxModelViewSet` classes.
 - Sync actions enqueue NetBox background jobs (`ProxboxSyncJob`) on NetBox's default RQ queue and call the external ProxBox FastAPI SSE endpoints to record progress/result on the Job row.
+- **Operator sync-state repair UX (issue #217).** The Proxbox Home
+  Configuration section and plugin Settings page render a shared
+  **Repair / Rebuild Proxbox sync-state** card. Bootstrap visibility calls
+  proxbox-api `GET /extras/bootstrap-status` through
+  `services/backend_proxy.py::get_backend_bootstrap_status()` and is gated by
+  `view` on `FastAPIEndpoint`. The POST action at
+  `/plugins/proxbox/sync-state/repair/` uses a session-gated
+  `RepairSyncStateView`, requires `core.add_job` via
+  `permission_enqueue_proxbox_sync()`, calls
+  `POST /extras/custom-fields/reconcile`, then enqueues a normal
+  `ProxboxSyncJob` full sync for enabled Proxmox endpoints. Backend errors and
+  enqueue failures are shown as flash messages and must never return a 500.
 - The dashboard and Job detail pages are extended by template extensions so Proxbox jobs get run-now/cancel controls and live stream/log helpers. Sync jobs that end in an error/unknown state also get a **Bug report** button whose modal packages job metadata + logs (copy-to-clipboard) and links to a prefilled netbox-proxbox GitHub *new issue* — logic in [`netbox_proxbox/bug_report.py`](./netbox_proxbox/bug_report.py), rendered by [`inc/bug_report_button.html`](./netbox_proxbox/templates/netbox_proxbox/inc/bug_report_button.html).
 - Browser updates can flow over SSE streams or the existing WebSocket channel.
 - Templates and static assets are conventional Django plugin assets under `netbox_proxbox/templates/` and `netbox_proxbox/static/`.

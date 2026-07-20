@@ -45,6 +45,18 @@ This package contains the NetBox plugin itself. It defines the plugin config, UR
   - GET SSE streaming: the plugin proxies `text/event-stream` from the FastAPI backend to the browser via `StreamingHttpResponse`. The browser JS parses SSE frames and renders granular per-object progress in real time.
 - The API layer exposes the same main models through NetBox plugin API endpoints.
 - Browser-side pages use templates plus JS from `static/netbox_proxbox/js/` for dashboard hydration, keepalive polling, SSE streaming, log rendering, and WebSocket updates.
+- Operator recovery for missing Proxbox bootstrap/custom-field setup is exposed
+  through `views/sync_state_repair.py` and the shared
+  `partials/bootstrap_status_card.html`. The card appears on Home and Settings,
+  loads proxbox-api `GET /extras/bootstrap-status` on demand through the
+  session-gated `sync-state/bootstrap-status/` JSON endpoint for users with
+  `view_fastapiendpoint`, and posts to `sync-state/repair/` for users with
+  `core.add_job`. Both backend calls resolve the FastAPI endpoint through a
+  request-user-restricted queryset before passing the endpoint ID to the backend
+  proxy. The POST path calls
+  `POST /extras/custom-fields/reconcile` through `services/backend_proxy.py`
+  before queuing a normal full `ProxboxSyncJob`; it must remain a UI/session
+  action with flash-message error handling, not a new sync transport.
 
 ## Import / Export
 

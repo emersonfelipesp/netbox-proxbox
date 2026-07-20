@@ -7,7 +7,12 @@ This directory contains service-layer modules for backend HTTP proxy, keepalive 
 - [`__init__.py`](./__init__.py): re-exports key service functions (`get_fastapi_request_context`, `iter_backend_sse_lines`, `run_sync_stream`, `sse_error_frames`, `sync_full_update_resource`, `sync_resource`, `ServiceStatus`).
 - [`backend_auth.py`](./backend_auth.py): token registration and bootstrap-status checks against the proxbox-api `/auth/` endpoints.
 - [`backend_context.py`](./backend_context.py): defines `get_fastapi_request_context()` — resolves the active FastAPIEndpoint and builds the URL/header context used by all backend HTTP helpers.
-- [`backend_proxy.py`](./backend_proxy.py): HTTP client helpers for proxbox-api, including SSE streaming (`run_sync_stream`, `iter_backend_sse_lines`), JSON requests (`sync_full_update_resource`, `sync_resource`). Imports and re-exports `get_fastapi_request_context` from `backend_context.py`.
+- [`backend_proxy.py`](./backend_proxy.py): HTTP client helpers for proxbox-api,
+  including SSE streaming (`run_sync_stream`, `iter_backend_sse_lines`), JSON
+  requests (`sync_full_update_resource`, `sync_resource`), and operator
+  bootstrap repair helpers for `GET /extras/bootstrap-status` and
+  `POST /extras/custom-fields/reconcile`. Imports and re-exports
+  `get_fastapi_request_context` from `backend_context.py`.
 - [`backend_version.py`](./backend_version.py): parses proxbox-api versions and emits operator-facing advisories for known backend release windows, including VM IP sync fixes.
 - [`endpoint_enabled.py`](./endpoint_enabled.py): shared `enabled=False` guard helpers for endpoint-like rows.
 - [`endpoint_scope.py`](./endpoint_scope.py): shared helper that translates all enabled `ProxmoxEndpoint` rows to proxbox-api backend ids and returns `source=database` query params for multi-endpoint live reads.

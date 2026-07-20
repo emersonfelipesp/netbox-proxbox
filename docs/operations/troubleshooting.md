@@ -8,6 +8,7 @@ it after reviewing [NetBox to Proxmox Intent](netbox-to-proxmox.md) and
 
 | Symptom | First check |
 | --- | --- |
+| Proxbox custom fields vanished after upgrade | [Recovering / Regenerating Proxbox Data](recovering-proxbox-data.md) |
 | Plan page says branching is missing | `netbox-branching` plugin installation |
 | Plan page has no diffs | Branch contains no VirtualMachine `ChangeDiff` rows |
 | Merge is NetBox-only | Branch `apply_to_proxmox` is false |

@@ -9,6 +9,7 @@
 <div class="row">
     <div class="col col-md-12">
         <h4 class="mb-3">{% trans "Plugin Settings" %}</h4>
+        {% include "netbox_proxbox/partials/bootstrap_status_card.html" %}
         <form method="post">
             {% csrf_token %}
             {# Sync Settings Card #}

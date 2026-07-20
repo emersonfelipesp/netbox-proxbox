@@ -443,6 +443,16 @@ urlpatterns = [
     path("sync/schedule/", views.ScheduleSyncView.as_view(), name="schedule_sync"),
     path("settings/", views.SettingsView.as_view(), name="settings"),
     path(
+        "sync-state/bootstrap-status/",
+        views.BootstrapStatusView.as_view(),
+        name="bootstrap_status",
+    ),
+    path(
+        "sync-state/repair/",
+        views.RepairSyncStateView.as_view(),
+        name="repair_sync_state",
+    ),
+    path(
         "sync/schedule/quick/",
         views.QuickScheduleSyncFromHomeView.as_view(),
         name="schedule_sync_quick",
