@@ -312,11 +312,15 @@ class ProxboxSyncStateSerializerMixin:
 
     parent_field_name: str
 
-    def _validate_parent_uniqueness(self, attrs: dict) -> None:
+    def _validate_parent_uniqueness(
+        self,
+        attrs: dict,
+        current_parent=None,
+    ) -> None:
         parent_field = self.parent_field_name
         parent = attrs.get(parent_field)
         if self.instance is not None:
-            current_parent = getattr(self.instance, parent_field)
+            current_parent = current_parent or getattr(self.instance, parent_field)
             if parent is not None and parent.pk != current_parent.pk:
                 if self.Meta.model.objects.filter(**{parent_field: parent}).exists():
                     raise SyncStateConflict(
@@ -425,8 +429,13 @@ class ProxboxSyncStateSerializerMixin:
             raise serializers.ValidationError(errors)
 
     def validate(self, attrs: dict) -> dict:
+        current_parent = (
+            getattr(self.instance, self.parent_field_name)
+            if self.instance is not None
+            else None
+        )
         attrs = super().validate(attrs)
-        self._validate_parent_uniqueness(attrs)
+        self._validate_parent_uniqueness(attrs, current_parent=current_parent)
         self._validate_relation_coherence(attrs)
         return attrs
 
