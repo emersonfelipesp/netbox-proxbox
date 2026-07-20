@@ -6,10 +6,27 @@
     <div class="col col-12">
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
-                <h2 class="card-title mb-0">{% trans "Sync Jobs" %}</h2>
-                <span class="text-muted small">
-                    {% blocktrans with name=object.name %}Jobs for endpoint {{ name }}{% endblocktrans %}
-                </span>
+                <div>
+                    <h2 class="card-title mb-0">{% trans "Sync Jobs" %}</h2>
+                    <span class="text-muted small">
+                        {% blocktrans with name=object.name %}Jobs for endpoint {{ name }}{% endblocktrans %}
+                    </span>
+                </div>
+                {% if perms.core.add_job %}
+                    {% if object.enabled %}
+                        <button type="button" class="btn btn-primary"
+                                data-bs-toggle="modal" data-bs-target="#proxbox-create-sync-job-modal">
+                            <i class="mdi mdi-clock-plus-outline" aria-hidden="true"></i>
+                            {% trans "Create Sync Job" %}
+                        </button>
+                    {% else %}
+                        <button type="button" class="btn btn-outline-secondary" disabled
+                                title="{% trans 'Disabled endpoints cannot run sync jobs.' %}">
+                            <i class="mdi mdi-clock-plus-outline" aria-hidden="true"></i>
+                            {% trans "Create Sync Job" %}
+                        </button>
+                    {% endif %}
+                {% endif %}
             </div>
             <div class="table-responsive">
                 <table class="table table-hover mb-0">
@@ -46,4 +63,132 @@
         </div>
     </div>
 </div>
+
+{% if perms.core.add_job and object.enabled %}
+<div class="modal fade" id="proxbox-create-sync-job-modal" tabindex="-1"
+     aria-labelledby="proxbox-create-sync-job-modal-label" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <form method="post"
+                  action="{% url 'plugins:netbox_proxbox:proxmoxendpoint_sync_jobs' pk=object.pk %}">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title" id="proxbox-create-sync-job-modal-label">
+                        <i class="mdi mdi-clock-plus-outline"></i>
+                        {% trans "Create Sync Job" %}
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"
+                            aria-label="{% trans 'Close' %}"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted">
+                        {% blocktrans trimmed %}
+                        Schedule a ProxBox sync for this endpoint. Set a recurrence interval to
+                        repeat it automatically (e.g. every 4 hours, daily, weekly).
+                        Leave <strong>Schedule at</strong> blank to run immediately.
+                        {% endblocktrans %}
+                    </p>
+
+                    <div class="mb-3">
+                        <label class="form-label">{% trans "Target endpoint" %}</label>
+                        <div class="form-control-plaintext fw-semibold">{{ object.name }}</div>
+                        <div class="form-text text-muted">
+                            {% trans "This sync job routine runs only against the endpoint you are viewing." %}
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ schedule_form.job_name.id_for_label }}">
+                            {{ schedule_form.job_name.label }}
+                        </label>
+                        {{ schedule_form.job_name }}
+                        {% if schedule_form.job_name.help_text %}
+                            <div class="form-text text-muted">{{ schedule_form.job_name.help_text }}</div>
+                        {% endif %}
+                        {% for error in schedule_form.job_name.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">{{ schedule_form.sync_types.label }}</label>
+                        {{ schedule_form.sync_types }}
+                        {% if schedule_form.sync_types.help_text %}
+                            <div class="form-text text-muted">{{ schedule_form.sync_types.help_text }}</div>
+                        {% endif %}
+                        {% for error in schedule_form.sync_types.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ schedule_form.schedule_at.id_for_label }}">
+                            {{ schedule_form.schedule_at.label }}
+                        </label>
+                        {{ schedule_form.schedule_at }}
+                        {% if schedule_form.schedule_at.help_text %}
+                            <div class="form-text text-muted">{{ schedule_form.schedule_at.help_text|safe }}</div>
+                        {% endif %}
+                        {% for error in schedule_form.schedule_at.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">{{ schedule_form.interval_value.label }}</label>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                {{ schedule_form.interval_value }}
+                                {% for error in schedule_form.interval_value.errors %}
+                                    <div class="invalid-feedback d-block">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                            <div class="col-6">
+                                {{ schedule_form.interval_unit }}
+                                {% for error in schedule_form.interval_unit.errors %}
+                                    <div class="invalid-feedback d-block">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% if schedule_form.interval_value.help_text %}
+                            <div class="form-text text-muted">{{ schedule_form.interval_value.help_text }}</div>
+                        {% endif %}
+                    </div>
+
+                    {% if schedule_form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {% for error in schedule_form.non_field_errors %}
+                                <div>{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                        {% trans "Cancel" %}
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="mdi mdi-clock-plus-outline"></i>
+                        {% trans "Create Sync Job" %}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block javascript %}
+{{ block.super }}
+{% if show_create_modal %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        var modalEl = document.getElementById('proxbox-create-sync-job-modal');
+        if (modalEl && window.bootstrap && window.bootstrap.Modal) {
+            window.bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        }
+    });
+</script>
+{% endif %}
 {% endblock %}

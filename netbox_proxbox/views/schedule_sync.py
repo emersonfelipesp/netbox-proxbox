@@ -4,6 +4,7 @@ from django.contrib import messages
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 from django.views import View
 
 from core.choices import JobStatusChoices
@@ -34,6 +35,7 @@ __all__ = (
     "build_initial_from_job",
     "enqueue_proxbox_sync_from_valid_form",
     "get_scheduled_jobs_list",
+    "handle_endpoint_sync_routine_post",
     "proxbox_sync_params_from_job",
     "schedule_sync_success_message",
 )
@@ -160,6 +162,83 @@ def schedule_sync_success_message(form: ScheduleSyncForm) -> str:
             f"{interval_desc}{endpoint_desc}"
         )
     return f"Sync job queued for immediate execution.{endpoint_desc}"
+
+
+def handle_endpoint_sync_routine_post(
+    request: HttpRequest, endpoint: ProxmoxEndpoint, post_data: object
+) -> tuple[str, ScheduleSyncForm | None]:
+    """Validate + enqueue a sync routine created from an endpoint's Sync Jobs tab.
+
+    This is the NetBox-independent core of the per-endpoint "Create Sync Job"
+    modal so it can be unit-tested without loading the heavy endpoint view module.
+    It owns permission gating, the disabled-endpoint refusal, form validation,
+    **hard server-side scoping to ``endpoint``** (the routine always targets the
+    viewed endpoint regardless of any endpoint ids in ``post_data``), enqueue, and
+    the flash message. It never renders — the caller maps the outcome to a
+    response.
+
+    Scheduling is entirely NetBox-native (``core.Job`` + ``ProxboxSyncJob`` +
+    django_rq); there is no dependency on the NMS stack.
+
+    Returns ``(outcome, form)`` where ``outcome`` is one of:
+
+    - ``"forbidden"`` — user lacks ``add`` on core ``Job``; caller returns 403.
+    - ``"disabled"`` — endpoint is disabled; warning posted, caller redirects.
+    - ``"invalid"`` — bound ``form`` has errors; caller re-renders the tab.
+    - ``"error"`` — enqueue raised; error posted, caller redirects.
+    - ``"created"`` — routine enqueued; success posted, caller redirects.
+    """
+    if not request.user.has_perm(permission_enqueue_proxbox_sync()):
+        return "forbidden", None
+
+    if not getattr(endpoint, "enabled", False):
+        messages.warning(
+            request,
+            _("Disabled Proxmox endpoints cannot run sync jobs."),
+        )
+        return "disabled", None
+
+    form = ScheduleSyncForm(post_data, use_bootstrap_sync_checkboxes=True)
+    if not form.is_valid():
+        return "invalid", form
+
+    # Hard server-side scoping. A routine created from this tab always targets the
+    # viewed endpoint and never the NetBox-endpoint picker (which the tab modal
+    # does not expose), regardless of any ids a crafted POST supplies. Overwrite
+    # both cleaned lists so the flash message reflects reality, and pass the
+    # Proxmox id list to ``enqueue`` *directly* rather than via
+    # ``enqueue_proxbox_sync_from_valid_form`` — that helper re-filters by
+    # ``enabled=True`` and would fall through to an all-endpoints sync if the list
+    # ever filtered to empty. Passing the id explicitly fails closed.
+    scoped_proxmox_ids = [str(endpoint.pk)]
+    form.cleaned_data["proxmox_endpoint_ids"] = scoped_proxmox_ids
+    form.cleaned_data["netbox_endpoint_ids"] = []
+
+    enqueue_kwargs: dict[str, object] = {
+        "instance": None,
+        "user": request.user,
+        "queue_name": PROXBOX_SYNC_QUEUE_NAME,
+        "sync_types": form.cleaned_data["sync_types"],
+        "schedule_at": form.cleaned_data.get("schedule_at"),
+        "interval": form.cleaned_data.get("interval"),
+        "proxmox_endpoint_ids": scoped_proxmox_ids,
+        "netbox_endpoint_ids": [],
+    }
+    job_name = form.cleaned_data.get("job_name") or ""
+    if job_name:
+        enqueue_kwargs["name"] = job_name
+
+    try:
+        ProxboxSyncJob.enqueue(**enqueue_kwargs)
+    except Exception as exc:  # noqa: BLE001 - surface enqueue failures to operators
+        messages.error(
+            request,
+            _("Failed to queue sync job: {error}").format(error=exc),
+        )
+        return "error", None
+
+    messages.success(request, schedule_sync_success_message(form))
+    return "created", form
 
 
 class ScheduleSyncView(
