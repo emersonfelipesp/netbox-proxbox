@@ -62,6 +62,7 @@ dev = [
 test = [
     "pytest>=9.0.2",
     "pytest-cov>=7.1.0",
+    "pytest-django>=4.11.1",
 ]
 e2e = [
     "fastapi>=0.136.1",

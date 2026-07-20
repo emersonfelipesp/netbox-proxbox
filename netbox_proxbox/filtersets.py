@@ -950,15 +950,29 @@ class ProxboxVirtualDiskSyncStateFilterSet(ProxboxModelFilterSet):
     virtual_disk = django_filters.ModelMultipleChoiceFilter(
         queryset=VirtualDisk.objects.all(),
     )
+    proxbox_storage = django_filters.ModelMultipleChoiceFilter(
+        queryset=ProxmoxStorage.objects.all(),
+    )
 
     class Meta:
         model = ProxboxVirtualDiskSyncState
-        fields = ("id", "virtual_disk", "proxmox_last_updated")
+        fields = (
+            "id",
+            "virtual_disk",
+            "proxbox_storage",
+            "proxbox_storage_raw_id",
+            "proxmox_last_updated",
+        )
 
     def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
         if not value.strip():
             return queryset
-        return queryset.filter(Q(virtual_disk__name__icontains=value))
+        query = Q(virtual_disk__name__icontains=value) | Q(
+            proxbox_storage__name__icontains=value
+        )
+        if value.isdigit():
+            query |= Q(proxbox_storage_raw_id=int(value))
+        return queryset.filter(query)
 
 
 @register_filterset
@@ -968,18 +982,32 @@ class ProxboxVMInterfaceSyncStateFilterSet(ProxboxModelFilterSet):
     vm_interface = django_filters.ModelMultipleChoiceFilter(
         queryset=VMInterface.objects.all(),
     )
+    proxbox_bridge = django_filters.ModelMultipleChoiceFilter(
+        queryset=Interface.objects.all(),
+    )
 
     class Meta:
         model = ProxboxVMInterfaceSyncState
-        fields = ("id", "vm_interface", "proxmox_last_updated")
+        fields = (
+            "id",
+            "vm_interface",
+            "proxbox_bridge",
+            "proxbox_bridge_raw_id",
+            "proxmox_last_updated",
+        )
 
     def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
         if not value.strip():
             return queryset
-        return queryset.filter(
+        query = (
             Q(vm_interface__name__icontains=value)
             | Q(vm_interface__virtual_machine__name__icontains=value)
+            | Q(proxbox_bridge__name__icontains=value)
+            | Q(proxbox_bridge__device__name__icontains=value)
         )
+        if value.isdigit():
+            query |= Q(proxbox_bridge_raw_id=int(value))
+        return queryset.filter(query)
 
 
 @register_filterset

@@ -107,6 +107,17 @@ contract and issue #454 for the bug history.
   in `proxmox_last_updated`. Raw legacy backend IDs must use non-FK-attname
   fields such as `proxmox_endpoint_raw_id` and `proxmox_cluster_raw_id`; do not
   resolve proxbox-api database IDs as plugin model primary keys during backfill.
+- Migration 0066 is the original per-object backfill body. Do not replace it
+  with a batched helper or mark it `atomic = False`; already-applied migration
+  bodies must remain immutable after staging/prod rollout.
+- Storage/bridge sync-state relation conversion is split across 0067-0069.
+  0067 is additive schema only and retry-safe, 0068 is non-atomic data
+  conversion that can rerun after a mid-migration failure, and 0068's reverse
+  must copy preserved raw values or raw/FK IDs back into the legacy JSON columns
+  before 0067 removes the new columns. 0068 must not materialize full target PK
+  sets; it should resolve only referenced raw IDs in bounded batches. 0069 is
+  the guarded atomic cleanup/promotion to final field names and must refuse to
+  drop legacy JSON columns if unresolved values were not preserved first.
 
 ## Links
 

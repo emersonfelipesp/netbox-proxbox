@@ -105,7 +105,10 @@ inherits `ProxboxSyncStateBase`, which owns the shared `last_updated`
 (`proxmox_last_updated`) and `last_run_id` (`proxbox_last_run_id`) columns.
 VM and device sidecars reuse existing `ProxmoxEndpoint`, `ProxmoxNode`, and
 `ProxmoxCluster` rows as nullable FKs, with text/raw fallback columns retained
-for unresolved custom-field values. `virtualization.Cluster` uses a sidecar
+for unresolved custom-field values. Virtual-disk and VM-interface sidecars keep
+numeric unresolved storage/bridge IDs in `*_raw_id` and preserve non-numeric or
+malformed legacy JSON payloads in `*_raw_value` text fallbacks before the legacy
+JSON columns are removed. `virtualization.Cluster` uses a sidecar
 (`ProxboxClusterSyncState`) instead of extending `ProxmoxCluster`, because
 `ProxmoxCluster` is endpoint-scoped and links to NetBox clusters through a
 nullable FK rather than a one-to-one relationship.

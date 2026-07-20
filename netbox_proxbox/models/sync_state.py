@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
@@ -171,6 +172,19 @@ class ProxboxDeviceSyncState(ProxboxSyncStateBase):
     def get_absolute_url(self) -> str:
         return _core_url(self.device)
 
+    def clean(self) -> None:
+        super().clean()
+        if self.proxmox_node_id is None:
+            return
+        if getattr(self.proxmox_node, "netbox_device_id", None) != self.device_id:
+            raise ValidationError(
+                {
+                    "proxmox_node": _(
+                        "Proxmox node must be linked to the sync-state device."
+                    )
+                }
+            )
+
 
 class ProxboxClusterSyncState(ProxboxSyncStateBase):
     """Typed Proxmox custom-field payload for a NetBox cluster."""
@@ -201,6 +215,19 @@ class ProxboxClusterSyncState(ProxboxSyncStateBase):
 
     def get_absolute_url(self) -> str:
         return _core_url(self.cluster)
+
+    def clean(self) -> None:
+        super().clean()
+        if self.proxmox_cluster_id is None:
+            return
+        if getattr(self.proxmox_cluster, "netbox_cluster_id", None) != self.cluster_id:
+            raise ValidationError(
+                {
+                    "proxmox_cluster": _(
+                        "Proxmox cluster must be linked to the sync-state cluster."
+                    )
+                }
+            )
 
 
 class ProxboxIPAddressSyncState(ProxboxSyncStateBase):
@@ -304,7 +331,15 @@ class ProxboxVirtualDiskSyncState(ProxboxSyncStateBase):
         on_delete=models.CASCADE,
         related_name="proxbox_sync_state",
     )
-    proxbox_storage_id = models.JSONField(null=True, blank=True)
+    proxbox_storage = models.ForeignKey(
+        to="netbox_proxbox.ProxmoxStorage",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="virtual_disk_sync_states",
+    )
+    proxbox_storage_raw_id = models.BigIntegerField(null=True, blank=True)
+    proxbox_storage_raw_value = models.TextField(blank=True, default="")
 
     class Meta:
         ordering = ("virtual_disk",)
@@ -326,7 +361,15 @@ class ProxboxVMInterfaceSyncState(ProxboxSyncStateBase):
         on_delete=models.CASCADE,
         related_name="proxbox_sync_state",
     )
-    proxbox_bridge = models.JSONField(null=True, blank=True)
+    proxbox_bridge = models.ForeignKey(
+        to="dcim.Interface",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="proxbox_vm_interface_sync_states",
+    )
+    proxbox_bridge_raw_id = models.BigIntegerField(null=True, blank=True)
+    proxbox_bridge_raw_value = models.TextField(blank=True, default="")
 
     class Meta:
         ordering = ("vm_interface",)

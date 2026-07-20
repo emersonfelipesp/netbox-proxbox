@@ -55,7 +55,11 @@ This directory defines the plugin's persisted data model.
   `proxmox_endpoint_id` is stored as `proxmox_endpoint_raw_id` and never
   treated as a plugin `ProxmoxEndpoint` primary key; legacy
   `proxmox_cluster_id` is stored as `proxmox_cluster_raw_id` to avoid
-  colliding with the `proxmox_cluster` FK attname.
+  colliding with the `proxmox_cluster` FK attname. Legacy virtual-disk storage
+  and VM-interface bridge JSON values preserve unresolved numeric IDs in
+  `proxbox_storage_raw_id` / `proxbox_bridge_raw_id` and malformed or
+  non-numeric payloads in `proxbox_storage_raw_value` /
+  `proxbox_bridge_raw_value`.
 - `BackupRoutine`: stores backup routine inventory for NetBox-backed ProxBox sync.
 - `Replication`: stores replication job inventory for NetBox-backed ProxBox sync.
 - `VMBackup`: stores backup inventory for NetBox virtual machines.

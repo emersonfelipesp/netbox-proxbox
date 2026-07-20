@@ -72,12 +72,25 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
   with nullable FKs to existing `ProxmoxEndpoint`, `ProxmoxNode`, and
   `ProxmoxCluster`, while preserving unresolved values in fallback name fields
   and `proxmox_endpoint_raw_id`. Cluster sidecars preserve the legacy cluster
-  numeric value in `proxmox_cluster_raw_id`. The NetBox
+  numeric value in `proxmox_cluster_raw_id`. Virtual-disk and VM-interface
+  sidecars promote the legacy `proxbox_storage_id` / `proxbox_bridge` JSON
+  values to nullable `proxbox_storage` / `proxbox_bridge` FKs while retaining
+  numeric unresolved IDs in `*_raw_id` and non-numeric/malformed raw payloads
+  in `*_raw_value` text fallbacks. This runs through the retry-safe
+  `0067`/`0068`/`0069` split: additive staging schema, non-atomic idempotent
+  data conversion with a data-preserving reverse, then guarded atomic
+  cleanup/promotion to final field names. The NetBox
   `virtualization.Cluster` payload lives in
   `ProxboxClusterSyncState`, not on `ProxmoxCluster`, because `ProxmoxCluster`
   is endpoint-scoped (`endpoint`, `name`) and only optionally links to a
-  NetBox cluster. This phase is additive: proxbox-api still writes custom
-  fields, readers still consume them, and the backend writer/reader switch plus
+  NetBox cluster. Sync-state API duplicate/occupied-parent preflight returns an
+  exact `409`; attempts to change a sidecar's parent to an unoccupied object
+  remain `400`. Device/node and cluster/proxmox-cluster relations must point
+  back to the same NetBox parent. Writable storage and bridge relations resolve
+  through request-restricted querysets, and hidden nested endpoint/node/cluster,
+  storage, and bridge relations are masked or filtered from API responses. This
+  phase is additive: proxbox-api still writes custom fields,
+  readers still consume them, and the backend writer/reader switch plus
   custom-field removal are separate follow-up issues.
 - Companion endpoint models: `PBSEndpoint`, `PDMEndpoint`, `PDMRemote` for Proxmox Backup Server and Datacenter Manager inventory.
 - SSH and hardware discovery: `NodeSSHCredential` stores per-node SSH credentials for the optional hardware-discovery pass.

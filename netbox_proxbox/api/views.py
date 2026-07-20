@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from django.db.models import Q
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
 from netbox.api.authentication import IsAuthenticatedOrLoginNotRequired
@@ -361,6 +362,28 @@ class _ParentRestrictedSyncStateViewSetMixin:
         )
 
 
+class _RelationRestrictedSyncStateViewSetMixin(_ParentRestrictedSyncStateViewSetMixin):
+    """Restrict sidecar rows that would expose hidden writable relations."""
+
+    restricted_relation_fields: tuple[str, ...] = ()
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        request = getattr(self, "request", None)
+        user = getattr(request, "user", None)
+        for field_name in self.restricted_relation_fields:
+            relation_field = queryset.model._meta.get_field(field_name)
+            relation_model = relation_field.remote_field.model
+            relation_queryset = relation_model.objects.all()
+            if user is not None and hasattr(relation_queryset, "restrict"):
+                relation_queryset = relation_queryset.restrict(user, "view")
+            queryset = queryset.filter(
+                Q(**{f"{field_name}__isnull": True})
+                | Q(**{f"{field_name}__in": relation_queryset.values("pk")})
+            )
+        return queryset
+
+
 class ProxboxVirtualMachineSyncStateViewSet(
     _ParentRestrictedSyncStateViewSetMixin,
     NetBoxModelViewSet,
@@ -372,7 +395,9 @@ class ProxboxVirtualMachineSyncStateViewSet(
         "virtual_machine",
         "endpoint",
         "proxmox_node",
+        "proxmox_node__endpoint",
         "proxmox_cluster",
+        "proxmox_cluster__endpoint",
     )
     serializer_class = ProxboxVirtualMachineSyncStateSerializer
     filterset_class = filtersets.ProxboxVirtualMachineSyncStateFilterSet
@@ -389,7 +414,9 @@ class ProxboxDeviceSyncStateViewSet(
         "device",
         "endpoint",
         "proxmox_node",
+        "proxmox_node__endpoint",
         "proxmox_cluster",
+        "proxmox_cluster__endpoint",
     )
     serializer_class = ProxboxDeviceSyncStateSerializer
     filterset_class = filtersets.ProxboxDeviceSyncStateFilterSet
@@ -405,6 +432,7 @@ class ProxboxClusterSyncStateViewSet(
     queryset = models.ProxboxClusterSyncState.objects.select_related(
         "cluster",
         "proxmox_cluster",
+        "proxmox_cluster__endpoint",
     )
     serializer_class = ProxboxClusterSyncStateSerializer
     filterset_class = filtersets.ProxboxClusterSyncStateFilterSet
@@ -429,7 +457,10 @@ class ProxboxInterfaceSyncStateViewSet(
     """REST API for typed Proxbox interface custom-field sync state."""
 
     parent_field_name = "interface"
-    queryset = models.ProxboxInterfaceSyncState.objects.select_related("interface")
+    queryset = models.ProxboxInterfaceSyncState.objects.select_related(
+        "interface",
+        "interface__device",
+    )
     serializer_class = ProxboxInterfaceSyncStateSerializer
     filterset_class = filtersets.ProxboxInterfaceSyncStateFilterSet
 
@@ -461,28 +492,36 @@ class ProxboxClusterGroupSyncStateViewSet(
 
 
 class ProxboxVirtualDiskSyncStateViewSet(
-    _ParentRestrictedSyncStateViewSetMixin,
+    _RelationRestrictedSyncStateViewSetMixin,
     NetBoxModelViewSet,
 ):
     """REST API for typed Proxbox virtual-disk custom-field sync state."""
 
     parent_field_name = "virtual_disk"
+    restricted_relation_fields = ("proxbox_storage",)
     queryset = models.ProxboxVirtualDiskSyncState.objects.select_related(
         "virtual_disk",
+        "virtual_disk__virtual_machine",
+        "proxbox_storage",
+        "proxbox_storage__cluster",
     )
     serializer_class = ProxboxVirtualDiskSyncStateSerializer
     filterset_class = filtersets.ProxboxVirtualDiskSyncStateFilterSet
 
 
 class ProxboxVMInterfaceSyncStateViewSet(
-    _ParentRestrictedSyncStateViewSetMixin,
+    _RelationRestrictedSyncStateViewSetMixin,
     NetBoxModelViewSet,
 ):
     """REST API for typed Proxbox VM-interface custom-field sync state."""
 
     parent_field_name = "vm_interface"
+    restricted_relation_fields = ("proxbox_bridge",)
     queryset = models.ProxboxVMInterfaceSyncState.objects.select_related(
         "vm_interface",
+        "vm_interface__virtual_machine",
+        "proxbox_bridge",
+        "proxbox_bridge__device",
     )
     serializer_class = ProxboxVMInterfaceSyncStateSerializer
     filterset_class = filtersets.ProxboxVMInterfaceSyncStateFilterSet

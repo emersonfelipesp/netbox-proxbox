@@ -44,6 +44,8 @@ def test_sync_state_model_surface_exists() -> None:
     assert "proxmox_cluster_name" in content
     assert "proxmox_endpoint_raw_id" in content
     assert "proxmox_cluster_raw_id" in content
+    assert "proxbox_storage_raw_value" in content
+    assert "proxbox_bridge_raw_value" in content
     assert "proxmox_endpoint_id = models.IntegerField" not in content
     assert "proxmox_cluster_id = models.IntegerField" not in content
     for model_name in SYNC_STATE_MODELS:
@@ -63,9 +65,18 @@ def test_sync_state_api_wiring() -> None:
     views = _read("netbox_proxbox/api/views.py")
     urls = _read("netbox_proxbox/api/urls.py")
     assert "class RestrictedNestedObjectMixin" in serializers
+    assert "class RestrictedNestedProxmoxStorageSerializer" in serializers
     assert 'queryset.restrict(user, "view")' in serializers
+    assert "def to_representation(self, instance)" in serializers
+    assert "_proxbox_nested_visibility_cache" in serializers
+    assert "node.netbox_device_id != parent.pk" in serializers
+    assert "cluster.netbox_cluster_id != parent.pk" in serializers
+    assert "proxbox_storage = RestrictedNestedProxmoxStorageSerializer" in serializers
     assert "class _ParentRestrictedSyncStateViewSetMixin" in views
+    assert "class _RelationRestrictedSyncStateViewSetMixin" in views
     assert 'parent_queryset.restrict(user, "view")' in views
+    assert 'restricted_relation_fields = ("proxbox_storage",)' in views
+    assert 'restricted_relation_fields = ("proxbox_bridge",)' in views
     for model_name in SYNC_STATE_MODELS:
         assert f"{model_name}Serializer" in serializers
         assert f"{model_name}Serializer" in serializers_init
@@ -104,6 +115,13 @@ def test_sync_state_filtersets_and_tables_exist() -> None:
 def test_sync_state_migrations_pin_schema_and_backfill() -> None:
     schema = _read("netbox_proxbox/migrations/0065_proxbox_sync_state_models.py")
     backfill = _read("netbox_proxbox/migrations/0066_backfill_proxbox_sync_state.py")
+    relation_schema = _read("netbox_proxbox/migrations/0067_sync_state_relation_fks.py")
+    relation_data = _read(
+        "netbox_proxbox/migrations/0068_sync_state_relation_fk_data.py"
+    )
+    relation_cleanup = _read(
+        "netbox_proxbox/migrations/0069_sync_state_relation_fk_cleanup.py"
+    )
     for model_name in SYNC_STATE_MODELS:
         assert f'name="{model_name}"' in schema
         assert f'"{model_name}"' in backfill
@@ -124,3 +142,35 @@ def test_sync_state_migrations_pin_schema_and_backfill() -> None:
     assert ".objects.all().delete()" not in backfill
     assert "delete rows it may not have created" in backfill
     assert '"proxmox_cluster_raw_id": ("proxmox_cluster_id", "int")' in backfill
+
+    assert "add_field_idempotent" in relation_schema
+    assert "atomic = False" not in relation_schema
+    assert "migrations.RenameField" not in relation_schema
+    assert "migrations.RemoveField" not in relation_schema
+    assert 'field_name="proxbox_storage_fk"' in relation_schema
+    assert 'field_name="proxbox_storage_raw_id"' in relation_schema
+    assert 'field_name="proxbox_storage_raw_value"' in relation_schema
+    assert 'field_name="proxbox_bridge_fk"' in relation_schema
+    assert 'field_name="proxbox_bridge_raw_id"' in relation_schema
+    assert 'field_name="proxbox_bridge_raw_value"' in relation_schema
+    assert 'to="netbox_proxbox.proxmoxstorage"' in relation_schema
+    assert 'to="dcim.interface"' in relation_schema
+
+    assert "atomic = False" in relation_data
+    assert "convert_sync_state_relation_fks" in relation_data
+    assert "restore_legacy_relation_values" in relation_data
+    assert "_save_relation_conversion" in relation_data
+    assert "BIGINT_MIN = -(2**63)" in relation_data
+    assert "BIGINT_MAX = 2**63 - 1" in relation_data
+    assert "RelationTarget.objects.filter(pk__in=candidate_ids)" in relation_data
+    assert "set(Storage.objects.values_list" not in relation_data
+    assert "set(Interface.objects.values_list" not in relation_data
+    assert "bulk_update" not in relation_data
+
+    assert "assert_relation_values_preserved" in relation_cleanup
+    assert 'name="proxbox_storage_id"' in relation_cleanup
+    assert 'old_name="proxbox_storage_fk"' in relation_cleanup
+    assert 'new_name="proxbox_storage"' in relation_cleanup
+    assert 'name="proxbox_bridge"' in relation_cleanup
+    assert 'old_name="proxbox_bridge_fk"' in relation_cleanup
+    assert 'new_name="proxbox_bridge"' in relation_cleanup

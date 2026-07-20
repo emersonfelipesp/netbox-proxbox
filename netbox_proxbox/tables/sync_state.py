@@ -218,6 +218,7 @@ class ProxboxClusterGroupSyncStateTable(NetBoxTable):
 
 class ProxboxVirtualDiskSyncStateTable(NetBoxTable):
     virtual_disk = tables.Column(linkify=True)
+    proxbox_storage = tables.Column(linkify=True)
 
     class Meta(NetBoxTable.Meta):
         model = ProxboxVirtualDiskSyncState
@@ -225,13 +226,16 @@ class ProxboxVirtualDiskSyncStateTable(NetBoxTable):
             "pk",
             "id",
             "virtual_disk",
+            "proxbox_storage",
             "proxbox_storage_id",
+            "proxbox_storage_raw_id",
             "proxmox_last_updated",
             "actions",
         )
         default_columns = (
             "pk",
             "virtual_disk",
+            "proxbox_storage",
             "proxbox_storage_id",
             "proxmox_last_updated",
         )
@@ -239,6 +243,7 @@ class ProxboxVirtualDiskSyncStateTable(NetBoxTable):
 
 class ProxboxVMInterfaceSyncStateTable(NetBoxTable):
     vm_interface = tables.Column(linkify=True)
+    proxbox_bridge = tables.Column(linkify=True)
 
     class Meta(NetBoxTable.Meta):
         model = ProxboxVMInterfaceSyncState
@@ -247,6 +252,7 @@ class ProxboxVMInterfaceSyncStateTable(NetBoxTable):
             "id",
             "vm_interface",
             "proxbox_bridge",
+            "proxbox_bridge_raw_id",
             "proxmox_last_updated",
             "actions",
         )

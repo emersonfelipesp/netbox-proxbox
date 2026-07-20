@@ -80,7 +80,15 @@ the paired proxbox-api writer/readers switch away from custom fields.
 Every sync-state viewset must also restrict rows through the caller's
 visibility to the one-to-one parent object, and writable nested parent
 relations must resolve through the caller-restricted parent queryset. Sidecar
-permissions alone must not reveal or attach hidden core objects.
+permissions alone must not reveal or attach hidden core objects. The
+`proxbox_storage` and `proxbox_bridge` writable relations follow the same
+request-restricted resolution rule, and sidecar rows that would disclose hidden
+storage or bridge objects are filtered out of API responses. Nested
+endpoint/node/cluster representations are also masked when the caller lacks
+view permission on those related objects. Duplicate or occupied parent preflight
+returns `409`; changing an existing sidecar to a free different parent remains a
+`400` validation error, and device/node plus cluster/proxmox-cluster writes must
+point back to the same NetBox parent.
 On NetBox 4.5.x, these sidecar APIs do not emit ETags and do not enforce
 `If-Match`; that is a platform limitation affecting all endpoints on that
 release. Optimistic concurrency is available on NetBox 4.6+. Automated writers
