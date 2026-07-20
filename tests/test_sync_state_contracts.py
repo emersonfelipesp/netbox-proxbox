@@ -69,6 +69,8 @@ def test_sync_state_api_wiring() -> None:
     assert 'queryset.restrict(user, "view")' in serializers
     assert "def to_representation(self, instance)" in serializers
     assert "_proxbox_nested_visibility_cache" in serializers
+    assert "_proxbox_nested_visibility_pk_cache" in serializers
+    assert "pk__in=candidate_ids" in serializers
     assert "node.netbox_device_id != parent.pk" in serializers
     assert "cluster.netbox_cluster_id != parent.pk" in serializers
     assert "proxbox_storage = RestrictedNestedProxmoxStorageSerializer" in serializers
@@ -113,6 +115,7 @@ def test_sync_state_filtersets_and_tables_exist() -> None:
 
 
 def test_sync_state_migrations_pin_schema_and_backfill() -> None:
+    idempotent_ops = _read("netbox_proxbox/migrations/_idempotent_ops.py")
     schema = _read("netbox_proxbox/migrations/0065_proxbox_sync_state_models.py")
     backfill = _read("netbox_proxbox/migrations/0066_backfill_proxbox_sync_state.py")
     relation_schema = _read("netbox_proxbox/migrations/0067_sync_state_relation_fks.py")
@@ -126,6 +129,10 @@ def test_sync_state_migrations_pin_schema_and_backfill() -> None:
         assert f'name="{model_name}"' in schema
         assert f'"{model_name}"' in backfill
     assert "create_model_idempotent" in schema
+    assert "ProjectState.from_apps(apps)" in idempotent_ops
+    assert "migrations.CreateModel(**state_kwargs).state_forwards" in idempotent_ops
+    assert "_model_from_create_state" in idempotent_ops
+    assert "_live_model" not in idempotent_ops
     assert "backfill_proxbox_sync_state" in backfill
     assert "reverse_backfill_proxbox_sync_state" in backfill
     assert "apps.get_model" in backfill
@@ -144,7 +151,7 @@ def test_sync_state_migrations_pin_schema_and_backfill() -> None:
     assert '"proxmox_cluster_raw_id": ("proxmox_cluster_id", "int")' in backfill
 
     assert "add_field_idempotent" in relation_schema
-    assert "atomic = False" not in relation_schema
+    assert "atomic = False" in relation_schema
     assert "migrations.RenameField" not in relation_schema
     assert "migrations.RemoveField" not in relation_schema
     assert 'field_name="proxbox_storage_fk"' in relation_schema
@@ -159,6 +166,8 @@ def test_sync_state_migrations_pin_schema_and_backfill() -> None:
     assert "atomic = False" in relation_data
     assert "convert_sync_state_relation_fks" in relation_data
     assert "restore_legacy_relation_values" in relation_data
+    assert "value = getattr(obj, fk_attname)" in relation_data
+    assert "raw_id not in existing_raw_ids" in relation_data
     assert "_save_relation_conversion" in relation_data
     assert "BIGINT_MIN = -(2**63)" in relation_data
     assert "BIGINT_MAX = 2**63 - 1" in relation_data

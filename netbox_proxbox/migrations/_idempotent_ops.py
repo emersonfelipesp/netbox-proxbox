@@ -36,6 +36,7 @@ from typing import Any, Callable, Iterable
 from django.apps import apps as live_apps
 from django.core.exceptions import FieldDoesNotExist
 from django.db import migrations
+from django.db.migrations.state import ProjectState
 
 APP_LABEL = "netbox_proxbox"
 
@@ -107,27 +108,52 @@ def _remove_field_if_present(model_name: str, field_name: str) -> Callable:
     return reverse
 
 
-def _live_model(model_name: str):
-    """Return the model from the live registry, or None.
-
-    Mirrors ``_live_field``: the historical apps state passed to ``RunPython``
-    inside ``SeparateDatabaseAndState`` does not include the same operation's
-    ``state_operations``, so ``apps.get_model(APP_LABEL, name)`` raises
-    ``LookupError`` for the model being created. The live model registry always
-    has the fully-bound model with its fields, M2M ``through`` tables, and
-    ForeignKey ``target_field`` lookups resolved.
-    """
+def _model_from_create_state(
+    apps,
+    model_name: str,
+    fields: Iterable[tuple[str, Any]],
+    *,
+    options: dict | None = None,
+    bases: tuple | None = None,
+    managers: Iterable | None = None,
+):
+    """Render the model exactly as this migration's CreateModel defines it."""
     try:
-        return live_apps.get_model(APP_LABEL, model_name)
+        return apps.get_model(APP_LABEL, model_name)
     except LookupError:
-        return None
+        pass
+
+    state = ProjectState.from_apps(apps)
+    state_kwargs: dict[str, Any] = {
+        "name": model_name,
+        "fields": [(field_name, field.clone()) for field_name, field in fields],
+        "options": dict(options or {}),
+    }
+    if bases is not None:
+        state_kwargs["bases"] = bases
+    if managers is not None:
+        state_kwargs["managers"] = list(managers)
+    migrations.CreateModel(**state_kwargs).state_forwards(APP_LABEL, state)
+    return state.apps.get_model(APP_LABEL, model_name)
 
 
-def _create_model_if_missing(model_name: str) -> Callable:
+def _create_model_if_missing(
+    model_name: str,
+    fields: Iterable[tuple[str, Any]],
+    *,
+    options: dict | None = None,
+    bases: tuple | None = None,
+    managers: Iterable | None = None,
+) -> Callable:
     def forwards(apps, schema_editor):
-        model = _live_model(model_name)
-        if model is None:
-            return
+        model = _model_from_create_state(
+            apps,
+            model_name,
+            fields,
+            options=options,
+            bases=bases,
+            managers=managers,
+        )
         if not _table_exists(schema_editor, model._meta.db_table):
             schema_editor.create_model(model)
         for field in model._meta.local_many_to_many:
@@ -142,11 +168,23 @@ def _create_model_if_missing(model_name: str) -> Callable:
     return forwards
 
 
-def _delete_model_if_present(model_name: str) -> Callable:
+def _delete_model_if_present(
+    model_name: str,
+    fields: Iterable[tuple[str, Any]],
+    *,
+    options: dict | None = None,
+    bases: tuple | None = None,
+    managers: Iterable | None = None,
+) -> Callable:
     def reverse(apps, schema_editor):
-        model = _live_model(model_name)
-        if model is None:
-            return
+        model = _model_from_create_state(
+            apps,
+            model_name,
+            fields,
+            options=options,
+            bases=bases,
+            managers=managers,
+        )
         for field in model._meta.local_many_to_many:
             through = field.remote_field.through
             if (
@@ -196,20 +234,34 @@ def create_model_idempotent(
     managers: Iterable | None = None,
 ) -> migrations.SeparateDatabaseAndState:
     """``CreateModel`` wrapped to skip the schema change when the table exists."""
+    field_list = list(fields)
+    manager_list = list(managers) if managers is not None else None
     state_kwargs: dict[str, Any] = {
         "name": name,
-        "fields": list(fields),
+        "fields": field_list,
         "options": options or {},
     }
     if bases is not None:
         state_kwargs["bases"] = bases
-    if managers is not None:
-        state_kwargs["managers"] = list(managers)
+    if manager_list is not None:
+        state_kwargs["managers"] = manager_list
     return migrations.SeparateDatabaseAndState(
         database_operations=[
             migrations.RunPython(
-                _create_model_if_missing(name),
-                reverse_code=_delete_model_if_present(name),
+                _create_model_if_missing(
+                    name,
+                    field_list,
+                    options=options,
+                    bases=bases,
+                    managers=manager_list,
+                ),
+                reverse_code=_delete_model_if_present(
+                    name,
+                    field_list,
+                    options=options,
+                    bases=bases,
+                    managers=manager_list,
+                ),
             ),
         ],
         state_operations=[

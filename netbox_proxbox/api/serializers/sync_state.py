@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from django.core.exceptions import FieldDoesNotExist
 from django.db import IntegrityError, transaction
+from django.db.models.query import QuerySet
 from dcim.models import Device, DeviceRole, DeviceType, Interface, Manufacturer, Site
 from ipam.models import IPAddress, VLAN
 from netbox.api.serializers import NetBoxModelSerializer, WritableNestedSerializer
@@ -63,6 +66,79 @@ class RestrictedNestedObjectMixin:
     def to_internal_value(self, data):
         return get_related_object_by_attrs(self._restricted_queryset(), data)
 
+    def _root_instances(self):
+        root_instance = getattr(self.root, "instance", None)
+        if root_instance is None:
+            return ()
+        if _is_instance_of_model(root_instance, self.Meta.model):
+            return ()
+        if isinstance(root_instance, QuerySet):
+            return getattr(root_instance, "_result_cache", None) or ()
+        if isinstance(root_instance, Iterable) and not isinstance(
+            root_instance,
+            (dict, str, bytes),
+        ):
+            return root_instance
+        return ()
+
+    def _candidate_visibility_ids(self) -> set[int] | None:
+        source_attrs = getattr(self, "source_attrs", None)
+        if not source_attrs or source_attrs == ["*"]:
+            return None
+        root_instances = self._root_instances()
+        if not root_instances:
+            return None
+
+        candidate_ids = set()
+        for root_instance in root_instances:
+            value = root_instance
+            for source_attr in source_attrs:
+                value = getattr(value, source_attr, None)
+                if value is None:
+                    break
+            if _is_instance_of_model(value, self.Meta.model) and value.pk is not None:
+                candidate_ids.add(value.pk)
+        return candidate_ids
+
+    def _nested_object_is_visible(self, user, instance) -> bool:
+        batched_cache = self.context.setdefault(
+            "_proxbox_nested_visibility_pk_cache",
+            {},
+        )
+        batch_cache_key = (
+            self.Meta.model._meta.label_lower,
+            getattr(user, "pk", None),
+            tuple(getattr(self, "source_attrs", ()) or ()),
+        )
+        if batch_cache_key not in batched_cache:
+            candidate_ids = self._candidate_visibility_ids()
+            if candidate_ids is None:
+                batched_cache[batch_cache_key] = None
+            elif not candidate_ids:
+                batched_cache[batch_cache_key] = set()
+            else:
+                batched_cache[batch_cache_key] = set(
+                    self._restricted_queryset()
+                    .filter(pk__in=candidate_ids)
+                    .values_list("pk", flat=True)
+                )
+
+        visible_ids = batched_cache[batch_cache_key]
+        if visible_ids is not None:
+            return instance.pk in visible_ids
+
+        cache = self.context.setdefault("_proxbox_nested_visibility_cache", {})
+        cache_key = (
+            self.Meta.model._meta.label_lower,
+            getattr(user, "pk", None),
+            instance.pk,
+        )
+        if cache_key not in cache:
+            cache[cache_key] = (
+                self._restricted_queryset().filter(pk=instance.pk).exists()
+            )
+        return cache[cache_key]
+
     def to_representation(self, instance):
         request = self.context.get("request")
         user = getattr(request, "user", None)
@@ -71,18 +147,14 @@ class RestrictedNestedObjectMixin:
             and user is not None
             and not getattr(user, "is_superuser", False)
         ):
-            cache = self.context.setdefault("_proxbox_nested_visibility_cache", {})
-            cache_key = (
-                self.Meta.model._meta.label_lower,
-                getattr(user, "pk", None),
-                instance.pk,
-            )
-            queryset = self._restricted_queryset()
-            if cache_key not in cache:
-                cache[cache_key] = queryset.filter(pk=instance.pk).exists()
-            if not cache[cache_key]:
+            if not self._nested_object_is_visible(user, instance):
                 return None
         return super().to_representation(instance)
+
+
+def _is_instance_of_model(value, model) -> bool:
+    value_model = getattr(getattr(value, "_meta", None), "concrete_model", None)
+    return value_model is model._meta.concrete_model
 
 
 class RestrictedNestedProxmoxEndpointSerializer(

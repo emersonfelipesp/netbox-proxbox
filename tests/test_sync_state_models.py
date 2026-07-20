@@ -479,6 +479,32 @@ class ProxboxSyncStateAPITest(_SyncStateFixturesMixin, TestCase):
     def _token_headers(self, token: Token) -> dict[str, str]:
         return {"HTTP_AUTHORIZATION": f"Token {token.key}"}
 
+    def _create_relation_triplet(
+        self,
+        prefix: str,
+        index: int,
+        *,
+        netbox_cluster: Cluster | None = None,
+        netbox_device: Device | None = None,
+    ) -> tuple[ProxmoxEndpoint, ProxmoxCluster, ProxmoxNode]:
+        endpoint = ProxmoxEndpoint.objects.create(
+            name=f"sync-state-api-nplus-{prefix}-endpoint-{index}",
+        )
+        proxmox_cluster = ProxmoxCluster.objects.create(
+            endpoint=endpoint,
+            netbox_cluster=netbox_cluster,
+            name=f"sync-state-api-nplus-{prefix}-cluster-{index}",
+            cluster_id=f"{prefix}-{index}",
+        )
+        proxmox_node = ProxmoxNode.objects.create(
+            endpoint=endpoint,
+            proxmox_cluster=proxmox_cluster,
+            netbox_device=netbox_device,
+            name=f"sync-state-api-nplus-{prefix}-node-{index}",
+            ip_address=f"192.0.2.{100 + index}",
+        )
+        return endpoint, proxmox_cluster, proxmox_node
+
     def test_api_list_and_detail_for_each_sync_state_model(self) -> None:
         for model in SYNC_STATE_MODELS:
             with self.subTest(model=model.__name__):
@@ -595,19 +621,32 @@ class ProxboxSyncStateAPITest(_SyncStateFixturesMixin, TestCase):
             vm = create_test_virtualmachine(f"sync-state-api-nplus-vm-{index}")
             vm.cluster = self.cluster
             vm.save()
+            vm_endpoint, vm_cluster, vm_node = self._create_relation_triplet(
+                "vm",
+                index,
+                netbox_cluster=self.cluster,
+            )
             ProxboxVirtualMachineSyncState.objects.create(
                 virtual_machine=vm,
-                endpoint=self.endpoint,
-                proxmox_node=self.proxmox_node,
-                proxmox_cluster=self.proxmox_cluster,
+                endpoint=vm_endpoint,
+                proxmox_node=vm_node,
+                proxmox_cluster=vm_cluster,
                 proxmox_vm_id=9200 + index,
             )
             device = create_test_device(f"sync-state-api-nplus-device-{index}")
+            device_endpoint, device_cluster, device_node = (
+                self._create_relation_triplet(
+                    "device",
+                    index,
+                    netbox_cluster=self.cluster,
+                    netbox_device=device,
+                )
+            )
             ProxboxDeviceSyncState.objects.create(
                 device=device,
-                endpoint=self.endpoint,
-                proxmox_node=self.proxmox_node,
-                proxmox_cluster=self.proxmox_cluster,
+                endpoint=device_endpoint,
+                proxmox_node=device_node,
+                proxmox_cluster=device_cluster,
                 proxmox_vmid=str(9300 + index),
             )
             cluster = Cluster.objects.create(
@@ -615,17 +654,34 @@ class ProxboxSyncStateAPITest(_SyncStateFixturesMixin, TestCase):
                 type=self.cluster_type,
                 group=self.cluster_group,
             )
+            cluster_endpoint, cluster_relation, _cluster_node = (
+                self._create_relation_triplet(
+                    "cluster",
+                    index,
+                    netbox_cluster=cluster,
+                )
+            )
             ProxboxClusterSyncState.objects.create(
                 cluster=cluster,
-                proxmox_cluster=self.proxmox_cluster,
-                proxmox_cluster_name="pve-sync",
+                proxmox_cluster=cluster_relation,
+                proxmox_cluster_name=f"pve-sync-{cluster_endpoint.pk}",
             )
 
-        for model in (
-            ProxboxVirtualMachineSyncState,
-            ProxboxDeviceSyncState,
-            ProxboxClusterSyncState,
-        ):
+        relation_table_limits = {
+            ProxboxVirtualMachineSyncState: (
+                "netbox_proxbox_proxmoxendpoint",
+                "netbox_proxbox_proxmoxnode",
+                "netbox_proxbox_proxmoxcluster",
+            ),
+            ProxboxDeviceSyncState: (
+                "netbox_proxbox_proxmoxendpoint",
+                "netbox_proxbox_proxmoxnode",
+                "netbox_proxbox_proxmoxcluster",
+            ),
+            ProxboxClusterSyncState: ("netbox_proxbox_proxmoxcluster",),
+        }
+
+        for model, relation_tables in relation_table_limits.items():
             with self.subTest(model=model.__name__):
                 url = reverse(
                     f"plugins-api:netbox_proxbox-api:{_model_route(model)}-list"
@@ -636,19 +692,27 @@ class ProxboxSyncStateAPITest(_SyncStateFixturesMixin, TestCase):
                 self.assertGreaterEqual(response.json()["count"], 6)
                 self.assertLessEqual(
                     len(captured),
-                    60,
+                    50,
                     "\n".join(query["sql"] for query in captured.captured_queries),
                 )
-                endpoint_queries = [
-                    query["sql"]
-                    for query in captured.captured_queries
-                    if "netbox_proxbox_proxmoxendpoint" in query["sql"].lower()
-                ]
-                self.assertLessEqual(
-                    len(endpoint_queries),
-                    3,
-                    "\n".join(endpoint_queries),
-                )
+                for table_name in relation_tables:
+                    relation_queries = [
+                        query["sql"]
+                        for query in captured.captured_queries
+                        if table_name in query["sql"].lower()
+                    ]
+                    self.assertLessEqual(
+                        len(relation_queries),
+                        4,
+                        "\n".join(relation_queries),
+                    )
+                    self.assertFalse(
+                        any(
+                            "LIMIT 1" in sql.upper() and " IN " not in sql.upper()
+                            for sql in relation_queries
+                        ),
+                        "\n".join(relation_queries),
+                    )
 
     def test_api_rejects_duplicate_parent_writes_without_500(self) -> None:
         occupied_vm = create_test_virtualmachine("sync-state-duplicate-api-vm")
@@ -691,6 +755,38 @@ class ProxboxSyncStateAPITest(_SyncStateFixturesMixin, TestCase):
         self.assertEqual(reparent_response.status_code, 409)
         reparent_row.refresh_from_db()
         self.assertEqual(reparent_row.virtual_machine, reparent_source)
+
+    def test_api_maps_duplicate_parent_integrity_error_to_conflict(self) -> None:
+        from netbox_proxbox.api.serializers.sync_state import (
+            ProxboxSyncStateSerializerMixin,
+        )
+
+        occupied_vm = create_test_virtualmachine("sync-state-duplicate-db-api-vm")
+        ProxboxVirtualMachineSyncState.objects.create(
+            virtual_machine=occupied_vm,
+            proxmox_vm_id=9450,
+        )
+        list_url = reverse(
+            "plugins-api:netbox_proxbox-api:proxboxvirtualmachinesyncstate-list"
+        )
+
+        with patch.object(
+            ProxboxSyncStateSerializerMixin,
+            "_validate_parent_uniqueness",
+            return_value=None,
+        ):
+            response = self.client.post(
+                list_url,
+                data=json.dumps(
+                    {
+                        "virtual_machine": {"id": occupied_vm.pk},
+                        "proxmox_vm_id": 9451,
+                    }
+                ),
+                content_type="application/json",
+                **self._auth_headers(),
+            )
+        self.assertEqual(response.status_code, 409, response.content)
 
     def test_api_enforces_relation_coherence_and_parent_immutability(self) -> None:
         other_endpoint = ProxmoxEndpoint.objects.create(name="sync-state-other")
@@ -1756,7 +1852,7 @@ class ProxboxSyncStateHistoricalMigrationTest(TransactionTestCase):
         disk_state = DiskState.objects.get(virtual_disk_id=ids["virtual_disk"])
         self.assertEqual(disk_state.proxbox_storage_id, {"id": ids["storage"]})
         self.assertEqual(disk_state.proxbox_storage_fk_id, ids["storage"])
-        self.assertEqual(disk_state.proxbox_storage_raw_id, ids["storage"])
+        self.assertIsNone(disk_state.proxbox_storage_raw_id)
         self.assertEqual(disk_state.proxbox_storage_raw_value, "")
 
         VMInterfaceState = apps.get_model(
@@ -1768,7 +1864,7 @@ class ProxboxSyncStateHistoricalMigrationTest(TransactionTestCase):
         )
         self.assertEqual(interface_state.proxbox_bridge, {"id": ids["bridge"]})
         self.assertEqual(interface_state.proxbox_bridge_fk_id, ids["bridge"])
-        self.assertEqual(interface_state.proxbox_bridge_raw_id, ids["bridge"])
+        self.assertIsNone(interface_state.proxbox_bridge_raw_id)
         self.assertEqual(interface_state.proxbox_bridge_raw_value, "")
 
     def _assert_0069_relation_payloads(self, apps, ids: dict[str, int]) -> None:
@@ -1779,7 +1875,7 @@ class ProxboxSyncStateHistoricalMigrationTest(TransactionTestCase):
         self.assertIn("proxbox_storage", disk_fields)
         disk_state = DiskState.objects.get(virtual_disk_id=ids["virtual_disk"])
         self.assertEqual(disk_state.proxbox_storage_id, ids["storage"])
-        self.assertEqual(disk_state.proxbox_storage_raw_id, ids["storage"])
+        self.assertIsNone(disk_state.proxbox_storage_raw_id)
         self.assertEqual(disk_state.proxbox_storage_raw_value, "")
 
         VMInterfaceState = apps.get_model(
@@ -1795,7 +1891,7 @@ class ProxboxSyncStateHistoricalMigrationTest(TransactionTestCase):
             vm_interface_id=ids["vm_interface"],
         )
         self.assertEqual(interface_state.proxbox_bridge_id, ids["bridge"])
-        self.assertEqual(interface_state.proxbox_bridge_raw_id, ids["bridge"])
+        self.assertIsNone(interface_state.proxbox_bridge_raw_id)
         self.assertEqual(interface_state.proxbox_bridge_raw_value, "")
 
     def _assert_0068_relation_edge_cases(self, apps, edge_ids: dict) -> None:
@@ -1874,7 +1970,8 @@ class ProxboxSyncStateHistoricalMigrationTest(TransactionTestCase):
         ids = self._seed_sync_state_sources()
         try:
             self._migrate_to(MIGRATION_0064)
-            self._migrate_to(MIGRATION_0065)
+            apps_0065 = self._migrate_to(MIGRATION_0065)
+            self._assert_0066_relation_schema(apps_0065)
 
             apps_0066 = self._migrate_to(MIGRATION_0066)
             self._assert_all_sidecars_exist(apps_0066, ids)
@@ -1922,14 +2019,37 @@ class ProxboxSyncStateHistoricalMigrationTest(TransactionTestCase):
         try:
             self._migrate_to(MIGRATION_0064)
             apps_0069 = self._migrate_to(MIGRATION_0069)
+            alternate_storage = ProxmoxStorage.objects.create(
+                cluster=self.cluster,
+                name="sync-state-api-patched-storage",
+            )
+            alternate_bridge = Interface.objects.create(
+                device=self.device,
+                name="migration-patched-bridge",
+            )
+            cleared_disk = VirtualDisk.objects.create(
+                virtual_machine=self.vm,
+                name="migration-cleared-scsi0",
+                size=1024,
+            )
+            cleared_vm_interface = VMInterface.objects.create(
+                virtual_machine=self.vm,
+                name="migration-cleared-net0",
+                enabled=True,
+            )
             DiskState = apps_0069.get_model(
                 "netbox_proxbox",
                 "ProxboxVirtualDiskSyncState",
             )
             disk_state = DiskState.objects.get(virtual_disk_id=ids["virtual_disk"])
-            disk_state.proxbox_storage_id = ids["storage"]
+            disk_state.proxbox_storage_id = alternate_storage.pk
             disk_state.proxbox_storage_raw_id = 987654
             disk_state.save(update_fields=("proxbox_storage", "proxbox_storage_raw_id"))
+            cleared_disk_state = DiskState.objects.create(
+                virtual_disk_id=cleared_disk.pk,
+                proxbox_storage_id=None,
+                proxbox_storage_raw_id=ids["storage"],
+            )
 
             VMInterfaceState = apps_0069.get_model(
                 "netbox_proxbox",
@@ -1938,10 +2058,15 @@ class ProxboxSyncStateHistoricalMigrationTest(TransactionTestCase):
             interface_state = VMInterfaceState.objects.get(
                 vm_interface_id=ids["vm_interface"],
             )
-            interface_state.proxbox_bridge_id = ids["bridge"]
-            interface_state.proxbox_bridge_raw_id = None
+            interface_state.proxbox_bridge_id = alternate_bridge.pk
+            interface_state.proxbox_bridge_raw_id = ids["bridge"]
             interface_state.save(
                 update_fields=("proxbox_bridge", "proxbox_bridge_raw_id")
+            )
+            cleared_interface_state = VMInterfaceState.objects.create(
+                vm_interface_id=cleared_vm_interface.pk,
+                proxbox_bridge_id=None,
+                proxbox_bridge_raw_id=ids["bridge"],
             )
 
             apps_0066 = self._migrate_to(MIGRATION_0066)
@@ -1952,7 +2077,11 @@ class ProxboxSyncStateHistoricalMigrationTest(TransactionTestCase):
             restored_disk = DiskState0066.objects.get(
                 virtual_disk_id=ids["virtual_disk"],
             )
-            self.assertEqual(restored_disk.proxbox_storage_id, 987654)
+            self.assertEqual(restored_disk.proxbox_storage_id, alternate_storage.pk)
+            restored_cleared_disk = DiskState0066.objects.get(
+                virtual_disk_id=cleared_disk_state.virtual_disk_id,
+            )
+            self.assertIsNone(restored_cleared_disk.proxbox_storage_id)
 
             VMInterfaceState0066 = apps_0066.get_model(
                 "netbox_proxbox",
@@ -1961,7 +2090,11 @@ class ProxboxSyncStateHistoricalMigrationTest(TransactionTestCase):
             restored_interface = VMInterfaceState0066.objects.get(
                 vm_interface_id=ids["vm_interface"],
             )
-            self.assertEqual(restored_interface.proxbox_bridge, ids["bridge"])
+            self.assertEqual(restored_interface.proxbox_bridge, alternate_bridge.pk)
+            restored_cleared_interface = VMInterfaceState0066.objects.get(
+                vm_interface_id=cleared_interface_state.vm_interface_id,
+            )
+            self.assertIsNone(restored_cleared_interface.proxbox_bridge)
         finally:
             self._migrate_to(MIGRATION_0069)
 

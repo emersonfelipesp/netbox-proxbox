@@ -91,6 +91,8 @@ def add_staging_field_idempotent(model_name: str, field_name: str, field):
 
 
 class Migration(migrations.Migration):
+    atomic = False
+
     dependencies = [
         ("netbox_proxbox", "0066_backfill_proxbox_sync_state"),
     ]

@@ -147,15 +147,20 @@ def _convert_legacy_relation_values(
             fk_id = raw_id if raw_id in target_ids else None
             if fk_id is not None:
                 resolved += 1
-            if raw_id is None:
-                raw_fallbacks += 1
-                preserved_value = _to_preserved_text(raw_value)
-            else:
+                preserved_raw_id = None
                 preserved_value = ""
+            elif raw_id is not None:
+                raw_fallbacks += 1
+                preserved_raw_id = raw_id
+                preserved_value = ""
+            else:
+                raw_fallbacks += 1
+                preserved_raw_id = None
+                preserved_value = _to_preserved_text(raw_value)
             _save_relation_conversion(
                 obj,
                 {
-                    raw_field: raw_id,
+                    raw_field: preserved_raw_id,
                     raw_value_field: preserved_value,
                     fk_attname: fk_id,
                 },
@@ -171,6 +176,41 @@ def _convert_legacy_relation_values(
     )
 
 
+def _restore_legacy_relation_batch(
+    batch,
+    *,
+    legacy_field: str,
+    fk_attname: str,
+    raw_field: str,
+    raw_value_field: str,
+    RelationTarget,
+) -> None:
+    raw_candidate_ids = {
+        getattr(obj, raw_field)
+        for obj in batch
+        if getattr(obj, fk_attname) is None and getattr(obj, raw_field) is not None
+    }
+    existing_raw_ids = set()
+    if raw_candidate_ids:
+        existing_raw_ids = set(
+            RelationTarget.objects.filter(pk__in=raw_candidate_ids).values_list(
+                "pk",
+                flat=True,
+            )
+        )
+    for obj in batch:
+        value = getattr(obj, fk_attname)
+        if value is None:
+            value = _from_preserved_text(getattr(obj, raw_value_field))
+        if value is None:
+            raw_id = getattr(obj, raw_field)
+            if raw_id is not None and raw_id not in existing_raw_ids:
+                value = raw_id
+        if value is None:
+            continue
+        _save_relation_conversion(obj, {legacy_field: value})
+
+
 def _restore_legacy_relation_values(
     Target,
     *,
@@ -178,17 +218,30 @@ def _restore_legacy_relation_values(
     fk_attname: str,
     raw_field: str,
     raw_value_field: str,
+    RelationTarget,
 ) -> None:
+    batch = []
     for obj in Target.objects.all().iterator(chunk_size=BATCH_SIZE):
-        preserved_value = getattr(obj, raw_value_field)
-        value = _from_preserved_text(preserved_value)
-        if value is None:
-            value = getattr(obj, raw_field)
-        if value is None:
-            value = getattr(obj, fk_attname)
-        if value is None:
-            continue
-        _save_relation_conversion(obj, {legacy_field: value})
+        batch.append(obj)
+        if len(batch) >= BATCH_SIZE:
+            _restore_legacy_relation_batch(
+                batch,
+                legacy_field=legacy_field,
+                fk_attname=fk_attname,
+                raw_field=raw_field,
+                raw_value_field=raw_value_field,
+                RelationTarget=RelationTarget,
+            )
+            batch = []
+    if batch:
+        _restore_legacy_relation_batch(
+            batch,
+            legacy_field=legacy_field,
+            fk_attname=fk_attname,
+            raw_field=raw_field,
+            raw_value_field=raw_value_field,
+            RelationTarget=RelationTarget,
+        )
 
 
 def convert_sync_state_relation_fks(apps, schema_editor) -> None:
@@ -219,6 +272,8 @@ def convert_sync_state_relation_fks(apps, schema_editor) -> None:
 
 
 def restore_legacy_relation_values(apps, schema_editor) -> None:
+    Storage = apps.get_model("netbox_proxbox", "ProxmoxStorage")
+    Interface = apps.get_model("dcim", "Interface")
     DiskState = apps.get_model("netbox_proxbox", "ProxboxVirtualDiskSyncState")
     VMInterfaceState = apps.get_model(
         "netbox_proxbox",
@@ -231,6 +286,7 @@ def restore_legacy_relation_values(apps, schema_editor) -> None:
         fk_attname="proxbox_storage_fk_id",
         raw_field="proxbox_storage_raw_id",
         raw_value_field="proxbox_storage_raw_value",
+        RelationTarget=Storage,
     )
     _restore_legacy_relation_values(
         VMInterfaceState,
@@ -238,6 +294,7 @@ def restore_legacy_relation_values(apps, schema_editor) -> None:
         fk_attname="proxbox_bridge_fk_id",
         raw_field="proxbox_bridge_raw_id",
         raw_value_field="proxbox_bridge_raw_value",
+        RelationTarget=Interface,
     )
 
 
