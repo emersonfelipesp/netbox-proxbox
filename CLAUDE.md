@@ -584,9 +584,19 @@ What was done for v0.0.19:
    `ProgrammingError` 500s on every affected query. The prod WSGI unit is
    `netbox.service` (older hosts used `netbox-production.service`).
 6. systemctl restart netbox-rq.service (RQ worker restart for code changes)
-7. Health check: curl -sf http://127.0.0.1:18001/api/ to verify (note: this
-   probe does not exercise plugin models, so it will not catch a stale-code
-   schema mismatch on its own)
+7. Verify the deploy across three independent gates — any failure rolls the
+   plugin back to the previous ref and restarts NetBox:
+   a. **HTTP health** — `curl -sf http://127.0.0.1:18001/api/` returns 200/403.
+   b. **Freshness (boot token)** — the WSGI unit's
+      `ExecMainStartTimestampMonotonic`, captured before/after the restart, must
+      advance. This proves the web process actually restarted and re-imported the
+      new code — not merely that *some* backend answers — catching a wrong-unit
+      or compose no-op restart that would otherwise ship green on stale code.
+   c. **Model DB smoke** — a fresh, read-only `manage.py shell` queries one row of
+      every managed, non-proxy model of the deployed plugin; any DB/schema error
+      (a missing or unapplied migration) fails the deploy. The bare `/api/` probe
+      does not exercise plugin models, so this is the gate that catches a
+      stale-code / schema mismatch.
 
 **Monitoring deployment:**
 - Watch the `publish-gitea.yml` workflow run in Gitea Actions
