@@ -16,7 +16,6 @@ from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 from utilities.views import (
-    ConditionalLoginRequiredMixin,
     ContentTypePermissionRequiredMixin,
 )
 
@@ -554,10 +553,14 @@ class RepairSyncStateView(
         return redirect(_redirect_name_from_request(request))
 
 
-class BootstrapStatusView(ConditionalLoginRequiredMixin, View):
+class BootstrapStatusView(ContentTypePermissionRequiredMixin, View):
     """AJAX bootstrap-status endpoint for the repair card."""
 
     http_method_names = ["get", "head", "options"]
+
+    def get_required_permission(self) -> str:
+        """Require view access to the FastAPI backend endpoint to read status."""
+        return permission_view_fastapi_endpoint()
 
     def get(
         self, request: HttpRequest, *args: object, **kwargs: object
