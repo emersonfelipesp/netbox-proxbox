@@ -499,7 +499,6 @@ def _redirect_name_from_request(request: HttpRequest) -> str:
 
 
 class RepairSyncStateView(
-    ConditionalLoginRequiredMixin,
     ContentTypePermissionRequiredMixin,
     View,
 ):
