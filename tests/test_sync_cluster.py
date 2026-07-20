@@ -56,6 +56,17 @@ def test_sync_cluster_updates_endpoint_mode():
     assert "mode_updated" in content
 
 
+def test_sync_cluster_uses_shared_mode_derivation():
+    content = _read("netbox_proxbox/services/sync_cluster.py")
+    assert (
+        "from netbox_proxbox.services.proxmox_mode import derive_proxmox_endpoint_mode"
+    ) in content
+    assert (
+        "mode = derive_proxmox_endpoint_mode(cluster_record, node_records)" in content
+    )
+    assert "cluster_record and len(node_records)" not in content
+
+
 def test_sync_cluster_uses_update_or_create_for_clusters():
     content = _read("netbox_proxbox/services/sync_cluster.py")
     assert "update_or_create" in content

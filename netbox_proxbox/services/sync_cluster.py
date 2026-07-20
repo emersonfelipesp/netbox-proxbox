@@ -29,12 +29,13 @@ from netbox_proxbox.schemas import (
 )
 from netbox_proxbox.schemas._formatters import iter_node_records, iter_scalar_records
 from netbox_proxbox.services.backend_proxy import get_fastapi_request_context
-from netbox_proxbox.views.backend_sync import resolve_backend_endpoint_id
+from netbox_proxbox.services.proxmox_mode import derive_proxmox_endpoint_mode
 from netbox_proxbox.sync_stages import (
     _add_bootstrap_only_tag,
     _bootstrap_only_should_skip_existing,
     _has_bootstrap_only_tag,
 )
+from netbox_proxbox.views.backend_sync import resolve_backend_endpoint_id
 
 logger = logging.getLogger(__name__)
 
@@ -192,13 +193,7 @@ def sync_cluster_and_nodes(
             cluster_record = cluster_data.cluster_record
             node_records = cluster_data.node_records
 
-            # Determine mode from topology.
-            if cluster_record and len(node_records) > 1:
-                mode = "cluster"
-            elif len(node_records) == 1:
-                mode = "standalone"
-            else:
-                mode = "undefined"
+            mode = derive_proxmox_endpoint_mode(cluster_record, node_records)
 
             if cluster_mode != SyncModeChoices.DISABLED and endpoint.mode != mode:
                 endpoint.mode = mode

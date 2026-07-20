@@ -7,6 +7,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -78,7 +79,22 @@ from virtualization.models import (  # noqa: E402
     VMInterface,
 )
 
-from netbox_proxbox.filtersets import ProxboxVirtualMachineSyncStateFilterSet  # noqa: E402
+from netbox_proxbox.filtersets import (  # noqa: E402
+    ProxboxClusterGroupSyncStateFilterSet,
+    ProxboxClusterSyncStateFilterSet,
+    ProxboxClusterTypeSyncStateFilterSet,
+    ProxboxDeviceRoleSyncStateFilterSet,
+    ProxboxDeviceSyncStateFilterSet,
+    ProxboxDeviceTypeSyncStateFilterSet,
+    ProxboxIPAddressSyncStateFilterSet,
+    ProxboxInterfaceSyncStateFilterSet,
+    ProxboxManufacturerSyncStateFilterSet,
+    ProxboxSiteSyncStateFilterSet,
+    ProxboxVLANSyncStateFilterSet,
+    ProxboxVirtualDiskSyncStateFilterSet,
+    ProxboxVirtualMachineSyncStateFilterSet,
+    ProxboxVMInterfaceSyncStateFilterSet,
+)
 from netbox_proxbox.models import (  # noqa: E402
     ProxboxClusterGroupSyncState,
     ProxboxClusterSyncState,
@@ -1031,6 +1047,374 @@ class ProxboxSyncStateAPITest(_SyncStateFixturesMixin, TestCase):
         self.assertEqual(cluster_data["cluster"]["id"], self.cluster.pk)
         self.assertIsNone(cluster_data["proxmox_cluster"])
 
+    def test_filtersets_do_not_oracle_hidden_relation_ids(self) -> None:
+        token = _create_api_token(
+            "sync-state-hidden-relation-filters",
+            (
+                ProxboxVirtualMachineSyncState,
+                ProxboxDeviceSyncState,
+                ProxboxClusterSyncState,
+                ProxboxVirtualDiskSyncState,
+                ProxboxVMInterfaceSyncState,
+            ),
+            {VirtualMachine, Device, Cluster, VirtualDisk, VMInterface},
+        )
+        nested_relation_request = SimpleNamespace(user=token.user)
+        parent_relation_request = SimpleNamespace(user=self.sidecar_only_user)
+        missing_pk = 999_999_999
+        parent_relation_cases = (
+            (
+                ProxboxVirtualMachineSyncStateFilterSet,
+                ProxboxVirtualMachineSyncState,
+                "virtual_machine",
+                self.vm.pk,
+            ),
+            (
+                ProxboxVirtualMachineSyncStateFilterSet,
+                ProxboxVirtualMachineSyncState,
+                "virtual_machine_id",
+                self.vm.pk,
+            ),
+            (
+                ProxboxDeviceSyncStateFilterSet,
+                ProxboxDeviceSyncState,
+                "device",
+                self.device.pk,
+            ),
+            (
+                ProxboxDeviceSyncStateFilterSet,
+                ProxboxDeviceSyncState,
+                "device_id",
+                self.device.pk,
+            ),
+            (
+                ProxboxClusterSyncStateFilterSet,
+                ProxboxClusterSyncState,
+                "cluster",
+                self.cluster.pk,
+            ),
+            (
+                ProxboxClusterSyncStateFilterSet,
+                ProxboxClusterSyncState,
+                "cluster_id",
+                self.cluster.pk,
+            ),
+            (
+                ProxboxIPAddressSyncStateFilterSet,
+                ProxboxIPAddressSyncState,
+                "ip_address",
+                self.ip_address.pk,
+            ),
+            (
+                ProxboxIPAddressSyncStateFilterSet,
+                ProxboxIPAddressSyncState,
+                "ip_address_id",
+                self.ip_address.pk,
+            ),
+            (
+                ProxboxInterfaceSyncStateFilterSet,
+                ProxboxInterfaceSyncState,
+                "interface",
+                self.interface.pk,
+            ),
+            (
+                ProxboxInterfaceSyncStateFilterSet,
+                ProxboxInterfaceSyncState,
+                "interface_id",
+                self.interface.pk,
+            ),
+            (
+                ProxboxVLANSyncStateFilterSet,
+                ProxboxVLANSyncState,
+                "vlan",
+                self.vlan.pk,
+            ),
+            (
+                ProxboxVLANSyncStateFilterSet,
+                ProxboxVLANSyncState,
+                "vlan_id",
+                self.vlan.pk,
+            ),
+            (
+                ProxboxClusterGroupSyncStateFilterSet,
+                ProxboxClusterGroupSyncState,
+                "cluster_group",
+                self.cluster_group.pk,
+            ),
+            (
+                ProxboxClusterGroupSyncStateFilterSet,
+                ProxboxClusterGroupSyncState,
+                "cluster_group_id",
+                self.cluster_group.pk,
+            ),
+            (
+                ProxboxVirtualDiskSyncStateFilterSet,
+                ProxboxVirtualDiskSyncState,
+                "virtual_disk",
+                self.virtual_disk.pk,
+            ),
+            (
+                ProxboxVirtualDiskSyncStateFilterSet,
+                ProxboxVirtualDiskSyncState,
+                "virtual_disk_id",
+                self.virtual_disk.pk,
+            ),
+            (
+                ProxboxVMInterfaceSyncStateFilterSet,
+                ProxboxVMInterfaceSyncState,
+                "vm_interface",
+                self.vm_interface.pk,
+            ),
+            (
+                ProxboxVMInterfaceSyncStateFilterSet,
+                ProxboxVMInterfaceSyncState,
+                "vm_interface_id",
+                self.vm_interface.pk,
+            ),
+            (
+                ProxboxDeviceRoleSyncStateFilterSet,
+                ProxboxDeviceRoleSyncState,
+                "device_role",
+                self.device_role.pk,
+            ),
+            (
+                ProxboxDeviceRoleSyncStateFilterSet,
+                ProxboxDeviceRoleSyncState,
+                "device_role_id",
+                self.device_role.pk,
+            ),
+            (
+                ProxboxDeviceTypeSyncStateFilterSet,
+                ProxboxDeviceTypeSyncState,
+                "device_type",
+                self.device_type.pk,
+            ),
+            (
+                ProxboxDeviceTypeSyncStateFilterSet,
+                ProxboxDeviceTypeSyncState,
+                "device_type_id",
+                self.device_type.pk,
+            ),
+            (
+                ProxboxManufacturerSyncStateFilterSet,
+                ProxboxManufacturerSyncState,
+                "manufacturer",
+                self.manufacturer.pk,
+            ),
+            (
+                ProxboxManufacturerSyncStateFilterSet,
+                ProxboxManufacturerSyncState,
+                "manufacturer_id",
+                self.manufacturer.pk,
+            ),
+            (
+                ProxboxSiteSyncStateFilterSet,
+                ProxboxSiteSyncState,
+                "site",
+                self.site.pk,
+            ),
+            (
+                ProxboxSiteSyncStateFilterSet,
+                ProxboxSiteSyncState,
+                "site_id",
+                self.site.pk,
+            ),
+            (
+                ProxboxClusterTypeSyncStateFilterSet,
+                ProxboxClusterTypeSyncState,
+                "cluster_type",
+                self.cluster_type.pk,
+            ),
+            (
+                ProxboxClusterTypeSyncStateFilterSet,
+                ProxboxClusterTypeSyncState,
+                "cluster_type_id",
+                self.cluster_type.pk,
+            ),
+        )
+        nested_relation_cases = (
+            (
+                ProxboxVirtualMachineSyncStateFilterSet,
+                ProxboxVirtualMachineSyncState,
+                "endpoint_id",
+                self.endpoint.pk,
+            ),
+            (
+                ProxboxVirtualMachineSyncStateFilterSet,
+                ProxboxVirtualMachineSyncState,
+                "endpoint",
+                self.endpoint.pk,
+            ),
+            (
+                ProxboxVirtualMachineSyncStateFilterSet,
+                ProxboxVirtualMachineSyncState,
+                "proxmox_node_id",
+                self.proxmox_node.pk,
+            ),
+            (
+                ProxboxVirtualMachineSyncStateFilterSet,
+                ProxboxVirtualMachineSyncState,
+                "proxmox_node",
+                self.proxmox_node.pk,
+            ),
+            (
+                ProxboxVirtualMachineSyncStateFilterSet,
+                ProxboxVirtualMachineSyncState,
+                "proxmox_cluster_id",
+                self.proxmox_cluster.pk,
+            ),
+            (
+                ProxboxVirtualMachineSyncStateFilterSet,
+                ProxboxVirtualMachineSyncState,
+                "proxmox_cluster",
+                self.proxmox_cluster.pk,
+            ),
+            (
+                ProxboxDeviceSyncStateFilterSet,
+                ProxboxDeviceSyncState,
+                "endpoint_id",
+                self.endpoint.pk,
+            ),
+            (
+                ProxboxDeviceSyncStateFilterSet,
+                ProxboxDeviceSyncState,
+                "endpoint",
+                self.endpoint.pk,
+            ),
+            (
+                ProxboxDeviceSyncStateFilterSet,
+                ProxboxDeviceSyncState,
+                "proxmox_node_id",
+                self.proxmox_node.pk,
+            ),
+            (
+                ProxboxDeviceSyncStateFilterSet,
+                ProxboxDeviceSyncState,
+                "proxmox_node",
+                self.proxmox_node.pk,
+            ),
+            (
+                ProxboxDeviceSyncStateFilterSet,
+                ProxboxDeviceSyncState,
+                "proxmox_cluster_id",
+                self.proxmox_cluster.pk,
+            ),
+            (
+                ProxboxDeviceSyncStateFilterSet,
+                ProxboxDeviceSyncState,
+                "proxmox_cluster",
+                self.proxmox_cluster.pk,
+            ),
+            (
+                ProxboxClusterSyncStateFilterSet,
+                ProxboxClusterSyncState,
+                "proxmox_cluster_id",
+                self.proxmox_cluster.pk,
+            ),
+            (
+                ProxboxClusterSyncStateFilterSet,
+                ProxboxClusterSyncState,
+                "proxmox_cluster",
+                self.proxmox_cluster.pk,
+            ),
+            (
+                ProxboxVirtualDiskSyncStateFilterSet,
+                ProxboxVirtualDiskSyncState,
+                "proxbox_storage_id",
+                self.storage.pk,
+            ),
+            (
+                ProxboxVirtualDiskSyncStateFilterSet,
+                ProxboxVirtualDiskSyncState,
+                "proxbox_storage",
+                self.storage.pk,
+            ),
+            (
+                ProxboxVMInterfaceSyncStateFilterSet,
+                ProxboxVMInterfaceSyncState,
+                "proxbox_bridge_id",
+                self.interface.pk,
+            ),
+            (
+                ProxboxVMInterfaceSyncStateFilterSet,
+                ProxboxVMInterfaceSyncState,
+                "proxbox_bridge",
+                self.interface.pk,
+            ),
+        )
+
+        for filterset_class, model, filter_name, hidden_pk in (
+            *parent_relation_cases,
+            *nested_relation_cases,
+        ):
+            with self.subTest(model=model.__name__, filter_name=filter_name):
+                request = (
+                    parent_relation_request
+                    if (
+                        filterset_class,
+                        model,
+                        filter_name,
+                        hidden_pk,
+                    )
+                    in parent_relation_cases
+                    else nested_relation_request
+                )
+                hidden_filterset = filterset_class(
+                    data={filter_name: [str(hidden_pk)]},
+                    queryset=model.objects.all(),
+                    request=request,
+                )
+                missing_filterset = filterset_class(
+                    data={filter_name: [str(missing_pk)]},
+                    queryset=model.objects.all(),
+                    request=request,
+                )
+                hidden_ids = list(hidden_filterset.qs.values_list("pk", flat=True))
+                missing_ids = list(missing_filterset.qs.values_list("pk", flat=True))
+                self.assertEqual(hidden_ids, missing_ids)
+                self.assertEqual(hidden_ids, [])
+
+    def test_api_filters_do_not_oracle_hidden_parent_and_nested_relation_ids(
+        self,
+    ) -> None:
+        vm_list_url = reverse(
+            "plugins-api:netbox_proxbox-api:proxboxvirtualmachinesyncstate-list"
+        )
+        missing_pk = 999_999_999
+        nested_token = _create_api_token(
+            "sync-state-hidden-nested-api-filter",
+            (ProxboxVirtualMachineSyncState,),
+            {VirtualMachine},
+        )
+        cases = (
+            (self.sidecar_only_token, "virtual_machine", self.vm.pk),
+            (self.sidecar_only_token, "virtual_machine_id", self.vm.pk),
+            (nested_token, "endpoint", self.endpoint.pk),
+            (nested_token, "endpoint_id", self.endpoint.pk),
+        )
+
+        for token, filter_name, hidden_pk in cases:
+            with self.subTest(filter_name=filter_name):
+                headers = self._auth_headers(token)
+                hidden_response = self.client.get(
+                    vm_list_url,
+                    {filter_name: hidden_pk},
+                    **headers,
+                )
+                missing_response = self.client.get(
+                    vm_list_url,
+                    {filter_name: missing_pk},
+                    **headers,
+                )
+                self.assertEqual(hidden_response.status_code, 200)
+                self.assertEqual(missing_response.status_code, 200)
+                hidden_payload = hidden_response.json()
+                missing_payload = missing_response.json()
+                self.assertEqual(hidden_payload.get("count"), 0)
+                self.assertEqual(missing_payload.get("count"), 0)
+                self.assertEqual(hidden_payload.get("results"), [])
+                self.assertEqual(missing_payload.get("results"), [])
+
     def test_api_rejects_create_with_hidden_parent(self) -> None:
         url = reverse(
             "plugins-api:netbox_proxbox-api:proxboxvirtualmachinesyncstate-list"
@@ -1175,9 +1559,7 @@ class ProxboxSyncStateAPITest(_SyncStateFixturesMixin, TestCase):
         # on the row identity and the storage's unique name rather than a bare
         # substring of the whole payload: a small integer PK collides with
         # unrelated digits (e.g. timestamps) and yields false positives.
-        returned_ids = {
-            row["id"] for row in list_response.json().get("results", [])
-        }
+        returned_ids = {row["id"] for row in list_response.json().get("results", [])}
         self.assertNotIn(hidden_row.pk, returned_ids)
         self.assertNotIn(hidden_storage.name, list_response.content.decode())
 

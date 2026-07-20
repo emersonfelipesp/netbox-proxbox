@@ -623,6 +623,12 @@ def load_plugin_module(
         SDN = "sdn"
         ALL = "all"
 
+    class _ProxmoxModeChoices(_StubChoiceSet):
+        PROXMOX_MODE_UNDEFINED = "undefined"
+        PROXMOX_MODE_STANDALONE = "standalone"
+        PROXMOX_MODE_CLUSTER = "cluster"
+
+    nbp_choices.ProxmoxModeChoices = _ProxmoxModeChoices
     nbp_choices.SyncTypeChoices = _SyncTypeChoices
     nbp_choices.NetBoxTokenVersionChoices = SimpleNamespace(V1="v1", V2="v2")
     nbp_choices.ReplicationStatusChoices = SimpleNamespace(
