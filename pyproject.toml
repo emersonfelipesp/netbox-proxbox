@@ -83,19 +83,22 @@ packages = ["netbox_proxbox", "proxbox_cli"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-# This suite deliberately runs against the lightweight Django/NetBox stubs in
-# tests/conftest.py rather than a real NetBox install, and it installs `django`
-# into sys.modules as a plain MODULE, not a package. pytest-django's
-# pytest_collection_modifyitems hook unconditionally does
-# `from django.test import TestCase, TransactionTestCase`, which against that
-# stub raises "No module named 'django.test'; 'django' is not a package" and
-# aborts collection with an INTERNALERROR before a single test runs.
+# NOTE: the *mocked* suite must run with `-p no:django`.
 #
-# The suite uses no pytest-django fixture or marker, so the plugin is pure
-# overhead here; disabling it is what lets the stubbed suite collect at all.
-# The failure only appeared in CI because pytest-django ships in the `test`
-# extra and is usually absent from local environments.
-addopts = "-p no:django"
+# It deliberately runs against the lightweight Django/NetBox stubs in
+# tests/conftest.py, which install `django` into sys.modules as a plain MODULE,
+# not a package. pytest-django's pytest_collection_modifyitems hook
+# unconditionally does `from django.test import TestCase, TransactionTestCase`,
+# which against that stub raises "No module named 'django.test'; 'django' is not
+# a package" and aborts collection with an INTERNALERROR before a single test
+# runs. The mocked suite uses no pytest-django fixture or marker, so the plugin
+# is pure overhead there.
+#
+# The flag is applied per-invocation in .github/workflows/ci.yml rather than in
+# `addopts`, because .github/workflows/django-tests.yml runs the NetBox-backed
+# subset against a REAL Django and genuinely needs pytest-django (it passes
+# --ds/--reuse-db/--create-db). A global `addopts = "-p no:django"` disables the
+# plugin for that job too and makes those flags unrecognised arguments.
 markers = [
     "django_db: requires pytest-django database access",
 ]
