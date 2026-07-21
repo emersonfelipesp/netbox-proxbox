@@ -11,6 +11,18 @@ This package contains the NetBox plugin itself. It defines the plugin config, UR
 - [`fields.py`](./fields.py): custom model/form field helpers used by the endpoint models.
 - [`filtersets.py`](./filtersets.py): NetBox filtersets backing list views and API query filtering.
 - [`jobs.py`](./jobs.py): `ProxboxSyncJob` background job class, enqueue helpers, and concurrent-run ownership guards.
+
+> **Job log messages must be pre-formatted.** NetBox persists job log entries via
+> `core.dataclasses.JobLogEntry.from_logrecord`, which stores `record.msg` — the
+> **raw** format string. Python only merges `record.args` inside
+> `record.getMessage()`, which NetBox never calls. So
+> `job.logger.info("... %s", value)` writes a literal `%s` to the job log and
+> drops the value; users reporting sync problems pasted logs full of
+> `Preflight: API key verified — %s` and `Running SSE sync for Proxmox endpoint
+> %s (backend id %s)`, which made those reports much harder to diagnose. Always
+> use an f-string for `job.logger` / `self.logger` calls. Module-level
+> `logger.info("%s", x)` is unaffected and stays fine. Guarded by
+> `tests/test_job_log_formatting.py`, which scans every plugin module.
 - [`sync_types.py`](./sync_types.py): regex-based targeted VM job name parsing and sync-type expansion helpers used by `jobs.py`.
 - [`sync_params.py`](./sync_params.py): normalises and serialises sync parameters passed into `ProxboxSyncJob.enqueue`.
 - [`sync_stages.py`](./sync_stages.py): runs a single named sync stage against the backend SSE stream.

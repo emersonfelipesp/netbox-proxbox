@@ -369,9 +369,9 @@ def _ensure_backend_endpoints(
     # Ensure the API key is registered before making authenticated requests.
     key_ok, key_msg = ensure_backend_key_registered()
     if key_ok:
-        job.logger.info("Preflight: API key verified — %s", key_msg)
+        job.logger.info(f"Preflight: API key verified — {key_msg}")
     else:
-        job.logger.warning("Preflight: API key registration failed — %s", key_msg)
+        job.logger.warning(f"Preflight: API key registration failed — {key_msg}")
 
     context = get_fastapi_request_context()
     if context is None or not context.http_url:
@@ -393,15 +393,15 @@ def _ensure_backend_endpoints(
             backend_verify_ssl=backend_verify_ssl,
         )
         if ok:
+            nb_label = getattr(nb_ep, "name", nb_ep.pk)
             job.logger.info(
-                "Preflight: synced NetBox endpoint '%s' to proxbox-api backend",
-                getattr(nb_ep, "name", nb_ep.pk),
+                f"Preflight: synced NetBox endpoint '{nb_label}' to proxbox-api backend"
             )
         else:
+            nb_label = getattr(nb_ep, "name", nb_ep.pk)
             job.logger.warning(
-                "Preflight: could not sync NetBox endpoint '%s' to proxbox-api: %s",
-                getattr(nb_ep, "name", nb_ep.pk),
-                err,
+                f"Preflight: could not sync NetBox endpoint "
+                f"'{nb_label}' to proxbox-api: {err}"
             )
 
     # Push Proxmox endpoints — filter by IDs if the job was scoped to specific ones.
@@ -427,15 +427,15 @@ def _ensure_backend_endpoints(
             backend_verify_ssl=backend_verify_ssl,
         )
         if ok:
+            px_label = getattr(px_ep, "name", px_ep.pk)
             job.logger.info(
-                "Preflight: synced Proxmox endpoint '%s' to proxbox-api backend",
-                getattr(px_ep, "name", px_ep.pk),
+                f"Preflight: synced Proxmox endpoint '{px_label}' to proxbox-api backend"
             )
         else:
+            px_label = getattr(px_ep, "name", px_ep.pk)
             job.logger.warning(
-                "Preflight: could not sync Proxmox endpoint '%s' to proxbox-api: %s",
-                getattr(px_ep, "name", px_ep.pk),
-                err,
+                f"Preflight: could not sync Proxmox endpoint "
+                f"'{px_label}' to proxbox-api: {err}"
             )
         phases.append(
             _endpoint_runtime_phase(
