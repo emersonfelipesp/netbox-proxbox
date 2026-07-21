@@ -21,6 +21,16 @@ def _service_status_module():
     return importlib.import_module("netbox_proxbox.services.service_status")
 
 
+def _backend_proxy_module():
+    """Return the module that actually owns ``request_backend_json``.
+
+    ``service_status`` imports it *lazily inside the function body* to break a
+    circular import, so it is not an attribute of ``service_status`` and cannot
+    be monkeypatched there -- patches must target the defining module.
+    """
+    return importlib.import_module("netbox_proxbox.services.backend_proxy")
+
+
 def _install_pbs_server_stub(monkeypatch, pbs_server):
     netbox_pbs_module = types.ModuleType("netbox_pbs")
     models_module = types.ModuleType("netbox_pbs.models")
@@ -1286,7 +1296,9 @@ def test_proxmox_mode_detects_named_single_node_cluster_as_standalone(
         }, 200
 
     monkeypatch.setattr(ss.requests, "get", fake_get)
-    monkeypatch.setattr(ss, "request_backend_json", fake_request_backend_json)
+    monkeypatch.setattr(
+        _backend_proxy_module(), "request_backend_json", fake_request_backend_json
+    )
 
     status, details = ss.ServiceStatus().proxmox_status(
         1,
@@ -1344,7 +1356,7 @@ def test_proxmox_mode_detects_standalone_via_backend_json(
         lambda *args, **kwargs: ResponseStub([{"pve01": {"version": "8.3.0"}}]),
     )
     monkeypatch.setattr(
-        ss,
+        _backend_proxy_module(),
         "request_backend_json",
         lambda *args, **kwargs: (
             {"ok": True, "response": [{"type": "node", "name": "pve01"}]},
@@ -1407,7 +1419,7 @@ def test_proxmox_mode_detection_failure_leaves_status_and_mode_unchanged(
         lambda *args, **kwargs: ResponseStub([{"pve01": {"version": "8.3.0"}}]),
     )
     monkeypatch.setattr(
-        ss,
+        _backend_proxy_module(),
         "request_backend_json",
         lambda *args, **kwargs: (
             {"ok": False, "detail": "backend unavailable"},
@@ -1470,7 +1482,7 @@ def test_proxmox_mode_detection_throttle_skips_fresh_detected_mode(
         lambda *args, **kwargs: ResponseStub([{"pve01": {"version": "8.3.0"}}]),
     )
     monkeypatch.setattr(
-        ss,
+        _backend_proxy_module(),
         "request_backend_json",
         lambda *args, **kwargs: pytest.fail("fresh mode throttle was ignored"),
     )

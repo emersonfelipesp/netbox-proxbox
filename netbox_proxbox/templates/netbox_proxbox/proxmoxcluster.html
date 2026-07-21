@@ -1,0 +1,96 @@
+{% extends 'generic/object.html' %}
+
+{# generic/object.html's default breadcrumb does `{% action_url object 'list' %}`
+   with no `as` clause, and ActionURLNode.render() re-raises NoReverseMatch in
+   that form. ProxmoxCluster has no `proxmoxcluster_list` route -- its list page
+   is the bespoke `clusters` view -- so the inherited breadcrumb would 500 this
+   page with exactly the NoReverseMatch class of failure issue #618 reported.
+   Point the breadcrumb at the real list page instead. #}
+{% block breadcrumbs %}
+    <li class="breadcrumb-item">
+        <a href="{% url 'plugins:netbox_proxbox:clusters' %}">Proxmox Clusters</a>
+    </li>
+{% endblock breadcrumbs %}
+
+{% block content %}
+    <div class="row mb-3">
+        <div class="col col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Proxmox Cluster</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-hover attr-table">
+                        <tr>
+                            <th scope="row">Name</th>
+                            <td>{{ object.name }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Proxmox Endpoint</th>
+                            <td>
+                                {% if object.endpoint %}
+                                    <a href="{{ object.endpoint.get_absolute_url }}">{{ object.endpoint }}</a>
+                                {% else %}
+                                    &mdash;
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">NetBox Cluster</th>
+                            <td>
+                                {% if object.netbox_cluster %}
+                                    <a href="{{ object.netbox_cluster.get_absolute_url }}">{{ object.netbox_cluster }}</a>
+                                {% else %}
+                                    <span class="text-muted">Not linked</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Cluster ID</th>
+                            <td>{{ object.cluster_id|placeholder }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Mode</th>
+                            <td>{{ object.get_mode_display|placeholder }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="col col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">State</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-hover attr-table">
+                        <tr>
+                            <th scope="row">Nodes</th>
+                            <td>{{ object.nodes_count|placeholder }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Quorate</th>
+                            <td>
+                                {% if object.quorate is None %}
+                                    &mdash;
+                                {% elif object.quorate %}
+                                    <span class="badge text-bg-success">Yes</span>
+                                {% else %}
+                                    <span class="badge text-bg-danger">No</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Version</th>
+                            <td>{{ object.version|placeholder }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Last Updated</th>
+                            <td>{{ object.last_updated|placeholder }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock content %}
