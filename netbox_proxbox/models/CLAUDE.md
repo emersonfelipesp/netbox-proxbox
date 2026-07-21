@@ -128,11 +128,15 @@ This directory defines the plugin's persisted data model.
   nullable FK to `virtualization.Cluster`; it is not a one-to-one extension of
   NetBox's core cluster model. Keep custom-field backfill on the sidecar unless
   that cardinality changes.
-- The custom-field migration path is additive. Migrations 0065/0066 create and
-  backfill typed sidecars, but proxbox-api still writes custom fields and
-  existing readers still consume them until the linked backend writer/reader
-  switch lands. Removing custom fields is a later cleanup after both repos use
-  the sidecars.
+- The typed sidecars are now the **standard** source of truth. Migrations
+  0065/0066 created and backfilled them; the proxbox-api writer/reader switch has
+  landed, so a normal sync writes and reads the sidecars and rebuilds them from
+  live Proxmox data. The legacy reflection custom fields are **deprecated** and
+  gated behind `ProxboxPluginSettings.custom_fields_enabled` (default `False`):
+  by default proxbox-api does not write, read, or reconcile custom fields.
+  Setting the flag `True` restores legacy custom-field behavior for a transition
+  and emits deprecation warnings. Removing the custom fields entirely is a later
+  cleanup; no custom-field data is deleted while the flag exists.
 - Concurrency known limitation: on NetBox 4.5.x, sync-state sidecar REST APIs
   do not emit ETags and do not enforce `If-Match`, matching the platform
   behavior for all endpoints on that release. Optimistic concurrency is

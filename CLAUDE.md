@@ -89,9 +89,14 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
   back to the same NetBox parent. Writable storage and bridge relations resolve
   through request-restricted querysets, and hidden nested endpoint/node/cluster,
   storage, and bridge relations are masked or filtered from API responses. This
-  phase is additive: proxbox-api still writes custom fields,
-  readers still consume them, and the backend writer/reader switch plus
-  custom-field removal are separate follow-up issues.
+  sidecars are now the standard source of truth: the proxbox-api writer/reader
+  switch has landed, so a normal sync writes and reads the sidecars (rebuilt from
+  live Proxmox data). The legacy reflection custom fields are deprecated and
+  gated behind `ProxboxPluginSettings.custom_fields_enabled` (default `False`);
+  by default proxbox-api does not write, read, or reconcile custom fields.
+  Setting the flag `True` restores legacy custom-field behavior for a transition
+  and emits deprecation warnings. Full custom-field removal is a later cleanup;
+  no data is deleted while the flag exists.
 - Companion endpoint models: `PBSEndpoint`, `PDMEndpoint`, `PDMRemote` for Proxmox Backup Server and Datacenter Manager inventory.
 - SSH and hardware discovery: `NodeSSHCredential` stores per-node SSH credentials for the optional hardware-discovery pass.
 - `ProxmoxEndpoint.access_methods` (migration 0056, choices `api` / `api_ssh`, default `api`) is the per-endpoint **transport access method**, orthogonal to `allow_writes`. `api` = Read+Write over the Proxmox API only; `api_ssh` = API + SSH. SSH only complements API; **SSH-only is not a selectable choice**. It is the load-bearing gate for the browser SSH terminal: the credential-serving API views in `netbox_proxbox/api/ssh_credentials.py` (`ProxmoxEndpointSSHCredentialSecretsAPIView` for endpoint targets and `NodeSSHCredentialSecretsAPIView` for node targets, the latter via the owning `ProxmoxNode.endpoint`) return 403 and withhold secrets when the endpoint is API-only, which is what blocks the terminal. New endpoints default to `api`; existing rows are backfilled to `api_ssh` on upgrade (non-breaking). The value is pushed to the proxbox-api backend by `_proxmox_backend_payload()` so the backend can gate its own SSH paths.
