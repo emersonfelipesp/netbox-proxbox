@@ -111,7 +111,15 @@ jobs:
           python -m pip install -e ".[test]"
 
       - name: Run mocked test suite
-        run: pytest --cov=netbox_proxbox --cov-report=term-missing --cov-report=xml tests
+        # -p no:django: this suite runs against the Django/NetBox stubs in
+        # tests/conftest.py, which register `django` as a plain module rather
+        # than a package. pytest-django (pulled in by the `test` extra) then
+        # aborts collection with an INTERNALERROR from its
+        # pytest_collection_modifyitems hook:
+        #   ModuleNotFoundError: No module named 'django.test'; 'django' is not a package
+        # The mocked suite uses no pytest-django fixture or marker. The
+        # NetBox-backed job in django-tests.yml keeps the plugin enabled.
+        run: pytest -p no:django --cov=netbox_proxbox --cov-report=term-missing --cov-report=xml tests
 
       - name: Upload coverage report
         if: matrix.python-version == '3.12'

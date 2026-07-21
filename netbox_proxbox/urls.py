@@ -17,6 +17,18 @@ from netbox_proxbox.views.deletion_requests import (
     DeletionRequestView,
 )
 from netbox_proxbox.views.plan_summary import IntentPlanSummaryView
+
+# The ``sync_now`` package only exposes its views through a lazy ``__getattr__``
+# (to dodge circular imports at app-init time), so nothing ever executed their
+# ``@register_model_view`` decorators and the cluster/node/storage "Sync Now"
+# actions registered no URL at all. Importing them here -- before the
+# ``get_model_urls()`` calls below are evaluated -- is what actually registers
+# them. Imported for the decorator side effect only.
+from netbox_proxbox.views.sync_now import (  # noqa: F401
+    cluster as _sync_now_cluster,
+    node as _sync_now_node,
+    storage as _sync_now_storage,
+)
 from netbox_proxbox.websocket_client import WebSocketView
 
 app_name = "netbox_proxbox"
@@ -47,6 +59,20 @@ urlpatterns = [
     path("sitemap.txt", views.SitemapView.as_view(), name="sitemap"),
     path("clusters/", views.ClustersView.as_view(), name="clusters"),
     path("nodes/", views.NodesView.as_view(), name="nodes"),
+    # ``ProxmoxCluster``/``ProxmoxNode`` detail routes. Both models have always
+    # pointed ``get_absolute_url()`` at ``proxmoxcluster``/``proxmoxnode``, and
+    # their ``proxbox_sync_now`` action views were registered, but neither name
+    # was ever mounted -- so the reverse failed and the Sync Now action was
+    # unreachable (issue #618). Mounting ``get_model_urls`` here registers both
+    # the detail view and the already-declared sync-now action.
+    path(
+        "proxmox-clusters/<int:pk>/",
+        include(get_model_urls("netbox_proxbox", "proxmoxcluster")),
+    ),
+    path(
+        "proxmox-nodes/<int:pk>/",
+        include(get_model_urls("netbox_proxbox", "proxmoxnode")),
+    ),
     path(
         "virtual_machines/",
         views.VirtualMachinesView.as_view(),

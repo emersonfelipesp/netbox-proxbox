@@ -713,9 +713,7 @@ def _run_all_stages_sync(
                     "ProxBox backend; skipping to avoid syncing the wrong endpoint"
                 )
                 job.logger.error(
-                    "Skipping SSE sync for Proxmox endpoint %s: %s",
-                    endpoint_id,
-                    reason,
+                    f"Skipping SSE sync for Proxmox endpoint {endpoint_id}: {reason}"
                 )
                 stages_out.append(
                     {
@@ -729,9 +727,8 @@ def _run_all_stages_sync(
                 continue
             wire_scope = [backend_id]
             job.logger.info(
-                "Running SSE sync for Proxmox endpoint %s (backend id %s)",
-                endpoint_id,
-                backend_id,
+                f"Running SSE sync for Proxmox endpoint {endpoint_id} "
+                f"(backend id {backend_id})"
             )
         else:
             job.logger.info("Running SSE sync with no Proxmox endpoint filter")
@@ -761,10 +758,8 @@ def _run_all_stages_sync(
             skip_reason = _stage_skip_reason(st)
             if skip_reason:
                 job.logger.info(
-                    "Skipping stage %s for endpoint %s: %s",
-                    st,
-                    endpoint_id or "unscoped",
-                    skip_reason,
+                    f"Skipping stage {st} for endpoint "
+                    f"{endpoint_id or 'unscoped'}: {skip_reason}"
                 )
                 stages_out.append(
                     {
@@ -805,7 +800,7 @@ def _run_all_stages_sync(
                 except RuntimeError as exc:
                     if st in _SKIPPABLE_STAGES:
                         job.logger.warning(
-                            "Optional stage '%s' failed and was skipped: %s", st, exc
+                            f"Optional stage '{st}' failed and was skipped: {exc}"
                         )
                         job.job.save(update_fields=["log_entries"])
                         continue

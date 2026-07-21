@@ -126,6 +126,7 @@ from .cluster import (
     ClusterSummaryTabView,
 )
 from .cluster_nodes_tab import ProxmoxEndpointClusterNodesTabView
+from .proxmox_cluster_node import ProxmoxClusterView, ProxmoxNodeView
 from .proxmox_create_instance import ProxmoxEndpointCreateInstanceView
 from .proxmox_metrics import (
     ProxmoxMetricsInfluxDBBulkDeleteView,

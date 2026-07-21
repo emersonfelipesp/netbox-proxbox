@@ -11,7 +11,33 @@ This package contains the NetBox plugin itself. It defines the plugin config, UR
 - [`fields.py`](./fields.py): custom model/form field helpers used by the endpoint models.
 - [`filtersets.py`](./filtersets.py): NetBox filtersets backing list views and API query filtering.
 - [`jobs.py`](./jobs.py): `ProxboxSyncJob` background job class, enqueue helpers, and concurrent-run ownership guards.
+
+> **Job log messages must be pre-formatted.** NetBox persists job log entries via
+> `core.dataclasses.JobLogEntry.from_logrecord`, which stores `record.msg` — the
+> **raw** format string. Python only merges `record.args` inside
+> `record.getMessage()`, which NetBox never calls. So
+> `job.logger.info("... %s", value)` writes a literal `%s` to the job log and
+> drops the value; users reporting sync problems pasted logs full of
+> `Preflight: API key verified — %s` and `Running SSE sync for Proxmox endpoint
+> %s (backend id %s)`, which made those reports much harder to diagnose. Always
+> use an f-string for `job.logger` / `self.logger` calls. Module-level
+> `logger.info("%s", x)` is unaffected and stays fine. Guarded by
+> `tests/test_job_log_formatting.py`, which scans every plugin module.
 - [`sync_types.py`](./sync_types.py): regex-based targeted VM job name parsing and sync-type expansion helpers used by `jobs.py`.
+
+> **Targeted per-VM runs are scoped, not estate-wide.** When `netbox_vm_ids` is
+> non-empty (the per-VM "Sync now" button), `ProxboxSyncJob.run()` sets
+> `targeted_vm_run` and **skips** the datacenter-wide preflight passes —
+> firewall sync, datacenter CPU-model sync, and VM template inventory. Those
+> three take no scoping argument (firewall/datacenter take none at all; templates
+> loop every endpoint) and are irrelevant to reconciling one VM, yet they
+> dominated the wall-clock of a targeted run. Each skip is logged so it is
+> visible, and a full/scheduled sync still runs all of them. Cluster/node sync
+> stays, but is scoped: `views/vm_sync_now.py::_endpoint_ids_for_vm()` resolves
+> the VM's own endpoint through `ProxmoxCluster.netbox_cluster` and passes only
+> that id, falling back to all enabled endpoints when the VM has no reflected
+> Proxmox cluster yet. Guarded by `tests/test_targeted_sync_scope.py` and
+> `tests/test_vm_sync_now_view.py`.
 - [`sync_params.py`](./sync_params.py): normalises and serialises sync parameters passed into `ProxboxSyncJob.enqueue`.
 - [`sync_stages.py`](./sync_stages.py): runs a single named sync stage against the backend SSE stream.
 - [`sync_ownership.py`](./sync_ownership.py): helpers that claim and release RQ job ownership to prevent concurrent duplicate runs.
