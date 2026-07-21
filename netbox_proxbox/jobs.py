@@ -872,6 +872,16 @@ class ProxboxSyncJob(JobRunner):
 
             endpoint_runtime_phases: list[dict[str, object]] = []
 
+            # A targeted run syncs specific VirtualMachine rows (the per-VM
+            # "Sync now" button). The estate-wide datacenter passes below —
+            # firewall objects, datacenter CPU models, VM template inventory —
+            # are irrelevant to reconciling one VM, take no scoping argument at
+            # all, and were the bulk of the wall-clock in targeted runs:
+            # operators syncing a single VM saw all endpoints' clusters,
+            # firewalls, SDN, CPU models, and templates sync first. Skip them
+            # here; a full/scheduled sync still runs them.
+            targeted_vm_run = bool(netbox_vm_ids)
+
             # Push NetBox and Proxmox endpoint configuration to the proxbox-api
             # backend before any SSE stage runs.  The backend needs its own copy
             # of these records to open NetBox and Proxmox sessions; the post_save
@@ -936,52 +946,64 @@ class ProxboxSyncJob(JobRunner):
             # IP sets, aliases, options) after cluster/node records exist so
             # the endpoint lookup via ProxmoxCluster.name can resolve.
             # A failure here is logged as a warning and does not abort the run.
-            from netbox_proxbox.services.sync_firewall import sync_firewall  # noqa: PLC0415
-
-            self.logger.info("Syncing firewall objects from proxbox-api")
-            fw_result = sync_firewall()
-            if fw_result.success:
+            if targeted_vm_run:
                 self.logger.info(
-                    f"Firewall sync complete: {fw_result.endpoints_processed} endpoint(s), "
-                    f"{fw_result.security_groups_created} sg created, "
-                    f"{fw_result.rules_created} rules created, "
-                    f"{fw_result.ipsets_created} ipsets created, "
-                    f"{fw_result.aliases_created} aliases created"
+                    "Skipping firewall sync: targeted virtual-machine run "
+                    f"({', '.join(netbox_vm_ids)})"
                 )
             else:
-                self.logger.warning(
-                    f"Firewall sync failed or partially failed: {fw_result.error or 'see per_endpoint log'}"
+                from netbox_proxbox.services.sync_firewall import sync_firewall  # noqa: PLC0415
+
+                self.logger.info("Syncing firewall objects from proxbox-api")
+                fw_result = sync_firewall()
+                if fw_result.success:
+                    self.logger.info(
+                        f"Firewall sync complete: {fw_result.endpoints_processed} endpoint(s), "
+                        f"{fw_result.security_groups_created} sg created, "
+                        f"{fw_result.rules_created} rules created, "
+                        f"{fw_result.ipsets_created} ipsets created, "
+                        f"{fw_result.aliases_created} aliases created"
+                    )
+                else:
+                    self.logger.warning(
+                        f"Firewall sync failed or partially failed: {fw_result.error or 'see per_endpoint log'}"
+                    )
+                endpoint_runtime_phases.extend(
+                    _phases_from_service_result(
+                        fw_result,
+                        kind="firewall",
+                        label="Firewall sync",
+                    )
                 )
-            endpoint_runtime_phases.extend(
-                _phases_from_service_result(
-                    fw_result,
-                    kind="firewall",
-                    label="Firewall sync",
-                )
-            )
 
             # Sync datacenter CPU models.
-            from netbox_proxbox.services.sync_datacenter import sync_datacenter  # noqa: PLC0415
-
-            self.logger.info("Syncing datacenter CPU models from proxbox-api")
-            dc_result = sync_datacenter()
-            if dc_result.success:
+            if targeted_vm_run:
                 self.logger.info(
-                    f"Datacenter CPU model sync complete: {dc_result.endpoints_processed} endpoint(s), "
-                    f"created={dc_result.cpu_models_created}, updated={dc_result.cpu_models_updated}, "
-                    f"stale={dc_result.cpu_models_stale}"
+                    "Skipping datacenter CPU model sync: targeted virtual-machine run "
+                    f"({', '.join(netbox_vm_ids)})"
                 )
             else:
-                self.logger.warning(
-                    f"Datacenter CPU model sync failed: {dc_result.error or 'unknown error'}"
+                from netbox_proxbox.services.sync_datacenter import sync_datacenter  # noqa: PLC0415
+
+                self.logger.info("Syncing datacenter CPU models from proxbox-api")
+                dc_result = sync_datacenter()
+                if dc_result.success:
+                    self.logger.info(
+                        f"Datacenter CPU model sync complete: {dc_result.endpoints_processed} endpoint(s), "
+                        f"created={dc_result.cpu_models_created}, updated={dc_result.cpu_models_updated}, "
+                        f"stale={dc_result.cpu_models_stale}"
+                    )
+                else:
+                    self.logger.warning(
+                        f"Datacenter CPU model sync failed: {dc_result.error or 'unknown error'}"
+                    )
+                endpoint_runtime_phases.extend(
+                    _phases_from_service_result(
+                        dc_result,
+                        kind="datacenter",
+                        label="Datacenter sync",
+                    )
                 )
-            endpoint_runtime_phases.extend(
-                _phases_from_service_result(
-                    dc_result,
-                    kind="datacenter",
-                    label="Datacenter sync",
-                )
-            )
 
             # Sync dedicated Proxmox VM template inventory after datacenter-level
             # service syncs and before VM SSE stages consume backend VM data.
@@ -990,7 +1012,12 @@ class ProxboxSyncJob(JobRunner):
             global_vm_template_mode = sync_stages.effective_sync_modes_for_endpoint(
                 None
             ).get("sync_mode_vm_template", SyncModeChoices.ALWAYS)
-            if global_vm_template_mode == SyncModeChoices.DISABLED:
+            if targeted_vm_run:
+                self.logger.info(
+                    "Skipping VM template sync: targeted virtual-machine run "
+                    f"({', '.join(netbox_vm_ids)})"
+                )
+            elif global_vm_template_mode == SyncModeChoices.DISABLED:
                 self.logger.info(
                     "Skipping VM template sync: sync_mode_vm_template=disabled"
                 )
