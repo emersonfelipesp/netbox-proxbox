@@ -61,6 +61,7 @@ curl -X PATCH \
   "proxbox_fetch_max_concurrency": 8,
   "ignore_ipv6_link_local_addresses": true,
   "delete_orphans": false,
+  "custom_fields_enabled": false,
   "cloud_network_lock_enabled": true,
   "cloud_customer_prefix_id": 123,
   "cloud_customer_bridge": "vmbr1",
@@ -124,6 +125,7 @@ These fields are set by the system and cannot be modified via PATCH:
 | `reconciliation_compare_strict` | boolean | In `compare` mode, fail the sync on Rust/Python mismatch instead of only logging it. |
 | `custom_fields_request_delay` | decimal | Delay in seconds between custom field update requests |
 | `delete_orphans` | boolean | When `true`, full-update may delete Proxbox-discovered VMs with stale or missing `proxbox_last_run_id` stamps |
+| `custom_fields_enabled` | boolean | Deprecated. When `false` (the default), the typed `Proxbox*SyncState` models are the sole source of truth and the legacy reflection custom fields are not written, read, or reconciled. When `true`, proxbox-api restores legacy custom-field writes/reads/reconcile and emits deprecation warnings. |
 
 ### NetBox Client
 

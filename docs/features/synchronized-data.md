@@ -55,11 +55,20 @@ data: `proxmox_endpoint_id` becomes `proxmox_endpoint_raw_id`, and
 nullable FK to the core NetBox cluster. A single NetBox cluster is not guaranteed
 to be the same row as a Proxmox cluster tracking record.
 
-During this phase, do not remove the legacy custom fields and do not expect
-custom-field values to stop changing. Existing readers continue using custom
-fields until the linked backend reader/writer switch is released. Custom-field
-removal is a later cleanup after both netbox-proxbox and proxbox-api use the
-sidecar models.
+The typed `Proxbox*SyncState` models are now the **standard** source of truth
+for the Proxmox-to-NetBox linkage. The legacy reflection custom fields are
+**deprecated** and, by default, no longer used: the `custom_fields_enabled`
+plugin setting defaults to `false`, so a normal sync writes and reads the
+sidecar models only and does not write, read, or reconcile the custom fields.
+The sidecars are (re)built from live Proxmox data on each sync, so a plain
+re-sync recovers them even when a NetBox upgrade has already dropped the custom
+fields.
+
+Operators who need the old behavior during a transition can set
+`custom_fields_enabled = true`; while enabled, proxbox-api restores the legacy
+custom-field writes/reads/reconcile and emits deprecation warnings. The custom
+fields (and this flag) will be removed entirely in a future release; the flag is
+non-destructive and no custom-field data is deleted while it exists.
 
 ### Concurrency / Known Limitation
 

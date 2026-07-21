@@ -26,6 +26,7 @@ class ProxboxPluginSettingsSerializer(NetBoxModelSerializer):
             "ignore_ipv6_link_local_addresses",
             "ensure_netbox_objects",
             "delete_orphans",
+            "custom_fields_enabled",
             *SYNC_MODE_FIELDS,
             "parse_description_metadata",
             "embed_description_metadata",

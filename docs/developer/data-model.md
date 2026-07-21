@@ -201,9 +201,15 @@ erDiagram
 
 The legacy proxbox-api custom-field surface is mirrored into typed plugin
 models by migrations `0065_proxbox_sync_state_models.py` and
-`0066_backfill_proxbox_sync_state.py`. These models are additive compatibility
-sidecars; custom fields remain registered and existing readers continue using
-them until the linked backend switch is released.
+`0066_backfill_proxbox_sync_state.py`. These typed sidecars are now the
+**standard** source of truth for the Proxmox-to-NetBox linkage: proxbox-api
+writes and reads them during sync and rebuilds them from live Proxmox data.
+The legacy reflection custom fields are **deprecated** and gated behind the
+`custom_fields_enabled` plugin setting, which defaults to `false` — so by
+default the custom fields are not written, read, or reconciled. Setting it to
+`true` restores the legacy custom-field behavior for a transition period and
+emits deprecation warnings; no custom-field data is deleted while the flag
+exists.
 
 `ProxboxSyncStateBase` is the shared abstract base for all sidecars. It stores
 `proxmox_last_updated` (from the legacy source timestamp custom field) and

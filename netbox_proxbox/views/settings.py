@@ -67,6 +67,7 @@ class SettingsView(
             "ignore_ipv6_link_local_addresses": settings_obj.ignore_ipv6_link_local_addresses,
             "ensure_netbox_objects": settings_obj.ensure_netbox_objects,
             "delete_orphans": settings_obj.delete_orphans,
+            "custom_fields_enabled": settings_obj.custom_fields_enabled,
             "primary_ip_preference": settings_obj.primary_ip_preference,
             "netbox_max_concurrent": settings_obj.netbox_max_concurrent,
             "netbox_timeout": settings_obj.netbox_timeout,
@@ -205,6 +206,9 @@ class SettingsView(
                 "ensure_netbox_objects", True
             )
             settings_obj.delete_orphans = form.cleaned_data.get("delete_orphans", False)
+            settings_obj.custom_fields_enabled = form.cleaned_data.get(
+                "custom_fields_enabled", False
+            )
             settings_obj.primary_ip_preference = form.cleaned_data[
                 "primary_ip_preference"
             ]
