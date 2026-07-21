@@ -183,3 +183,57 @@ def test_sync_state_migrations_pin_schema_and_backfill() -> None:
     assert 'name="proxbox_bridge"' in relation_cleanup
     assert 'old_name="proxbox_bridge_fk"' in relation_cleanup
     assert 'new_name="proxbox_bridge"' in relation_cleanup
+
+
+def test_vm_sync_state_records_last_synced_proxmox_name() -> None:
+    """`proxmox_vm_name` must exist end to end (netbox-proxbox issue #617).
+
+    A VM renamed in Proxmox never had that rename written back to NetBox.
+    proxbox-api's name-collision resolver treats any mismatch between the stored
+    NetBox name and the incoming Proxmox name as "an operator renamed this inside
+    NetBox" and pushes the stale name back onto the payload — a heuristic that
+    cannot be right, because both situations look identical from its inputs.
+
+    Persisting the name Proxmox last reported supplies the missing third data
+    point:
+
+        stored name != proxmox_vm_name         -> edited in NetBox -> preserve
+        stored name == proxmox_vm_name != new  -> renamed in Proxmox -> update
+
+    The field is only useful if the backend can both read and write it, so pin
+    the model field, the migration, and the serializer surface together.
+    """
+    model_source = _read("netbox_proxbox/models/sync_state.py")
+    assert "proxmox_vm_name = models.CharField" in model_source, (
+        "ProxboxVirtualMachineSyncState must persist the last-synced Proxmox name"
+    )
+
+    migration = _read("netbox_proxbox/migrations/0071_sync_state_proxmox_vm_name.py")
+    assert "proxboxvirtualmachinesyncstate" in migration
+    assert 'field_name="proxmox_vm_name"' in migration
+    assert "add_field_idempotent" in migration, (
+        "follow the repo's idempotent additive-migration pattern"
+    )
+
+    serializer_source = _read("netbox_proxbox/api/serializers/sync_state.py")
+    assert '"proxmox_vm_name"' in serializer_source, (
+        "the field must be exposed over the API — proxbox-api writes it after a "
+        "sync and reads it back on the next one"
+    )
+
+
+def test_vm_sync_state_proxmox_name_is_optional() -> None:
+    """It must be blank-able, or upgrading would break every existing row.
+
+    Every row starts blank on upgrade, and proxbox-api has to fall back to the
+    previous behaviour while it is blank so nothing regresses mid-rollout.
+    """
+    model_source = _read("netbox_proxbox/models/sync_state.py")
+    field_line = next(
+        line
+        for line in model_source.splitlines()
+        if "proxmox_vm_name = models.CharField" in line
+    )
+    assert "blank=True" in field_line, (
+        "proxmox_vm_name must be optional; existing rows have no recorded name"
+    )

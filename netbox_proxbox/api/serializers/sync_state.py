@@ -466,6 +466,10 @@ SYNC_TRAILER_FIELDS = (
 VM_PROXMOX_FIELDS = (
     "proxmox_vm_id",
     "proxmox_vm_type",
+    # proxbox-api writes this after each successful sync and reads it back to
+    # tell a Proxmox-side rename apart from an operator renaming the VM in
+    # NetBox (issue #617), so it must be round-trippable over the API.
+    "proxmox_vm_name",
     "proxmox_start_at_boot",
     "proxmox_unprivileged_container",
     "proxmox_qemu_agent",
