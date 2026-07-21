@@ -26,8 +26,14 @@ from netbox_proxbox.migrations._idempotent_ops import add_field_idempotent
 
 
 class Migration(migrations.Migration):
+    # Depends on 0071_settings_custom_fields_enabled, not 0070 directly: that
+    # sibling 0071 also branched off 0070, so pointing this migration at 0070
+    # too left the graph with two leaf nodes at 0071 ("multiple leaf nodes in
+    # the migration graph"), which breaks `manage.py migrate` on every NetBox
+    # start. Chaining after it makes the history linear (0070 -> 0071_settings
+    # -> 0072_sync_state).
     dependencies = [
-        ("netbox_proxbox", "0070_proxmox_metrics_influxdb"),
+        ("netbox_proxbox", "0071_settings_custom_fields_enabled"),
     ]
 
     operations = [
