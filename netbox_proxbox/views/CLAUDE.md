@@ -38,6 +38,7 @@ This directory implements the plugin's NetBox UI behavior, including dashboard p
   error responses as failures. The repair action calls proxbox-api
   `POST /extras/custom-fields/reconcile` and then enqueues a normal full
   `ProxboxSyncJob`; backend and enqueue failures are flash messages.
+- [`proxmox_cluster_node.py`](./proxmox_cluster_node.py): detail (`ObjectView`) views for `ProxmoxCluster` and `ProxmoxNode`, registered under the bare model names so `get_absolute_url()` resolves.
 - [`storage.py`](./storage.py): CRUD list/detail/delete views for `ProxmoxStorage`.
 - [`sync.py`](./sync.py): POST endpoints that enqueue `ProxboxSyncJob` runs for devices, storage, virtual machines, virtual disks, backups, snapshots, network interfaces, IP addresses, backup routines, replications, and full update.
 - [`sync_now/`](./sync_now/): targeted per-object sync handlers for cluster, node, storage, and VM actions.
@@ -70,6 +71,29 @@ This directory implements the plugin's NetBox UI behavior, including dashboard p
   `NoReverseMatch` at template-render time and returns HTTP 500 (this caused the
   cluster summary crash). `tests/test_frontend_contracts.py` guards the cluster
   summary template against this regression.
+- **A model's `get_absolute_url()` target must actually be mounted (issue #618).**
+  `ProxmoxCluster` and `ProxmoxNode` reversed
+  `plugins:netbox_proxbox:proxmoxcluster` / `:proxmoxnode`, but `urls.py` never
+  mounted `get_model_urls()` for either, so the name did not exist. The Sync-Now
+  template extension calls `get_absolute_url()` on **every core
+  `virtualization.Cluster` and `dcim.Device` detail page**, which raised
+  `NoReverseMatch` and rendered "An error occurred when loading content from
+  plugin netbox_proxbox". The models later gained a `try/except NoReverseMatch →
+  return ""` guard, which stopped the crash but silently produced dead links and
+  a Sync-Now button posting to a relative `proxbox-sync-now/` that 404s. Both
+  models now have a real `ObjectView` registered under the bare model name plus
+  a `get_model_urls()` mount. Keep the guard **and** the mount:
+  `tests/test_url_reverse_contracts.py` asserts every name reversed from
+  `models/` is mounted, with an explicit `UNMOUNTED_BY_DESIGN` allowlist
+  (`PBSEndpoint` pending #449; the four Firecracker models are API-managed and
+  have no UI surface).
+- **`views/sync_now/` only registers if something imports it.** That package
+  exposes its views through a lazy `__getattr__`, so nothing ever executed the
+  `@register_model_view` decorators in `sync_now/cluster.py`, `node.py`, and
+  `storage.py` — those three Sync Now actions registered **no URL at all**.
+  `urls.py` now imports the three modules for their decorator side effect,
+  before the `get_model_urls()` calls are evaluated. If you add a module there,
+  import it in `urls.py` too, and keep the contract test green.
 
 ## Links
 

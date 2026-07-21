@@ -1,0 +1,130 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+
+{% block content %}
+    <div class="row mb-3">
+        <div class="col col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Proxmox Node</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-hover attr-table">
+                        <tr>
+                            <th scope="row">Name</th>
+                            <td>{{ object.name }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Proxmox Endpoint</th>
+                            <td>
+                                {% if object.endpoint %}
+                                    <a href="{{ object.endpoint.get_absolute_url }}">{{ object.endpoint }}</a>
+                                {% else %}
+                                    &mdash;
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Proxmox Cluster</th>
+                            <td>
+                                {% if object.proxmox_cluster %}
+                                    <a href="{{ object.proxmox_cluster.get_absolute_url }}">{{ object.proxmox_cluster }}</a>
+                                {% else %}
+                                    &mdash;
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">NetBox Device</th>
+                            <td>
+                                {% if object.netbox_device %}
+                                    <a href="{{ object.netbox_device.get_absolute_url }}">{{ object.netbox_device }}</a>
+                                {% else %}
+                                    <span class="text-muted">Not linked</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Node ID</th>
+                            <td>{{ object.node_id|placeholder }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">IP Address</th>
+                            <td>{{ object.ip_address|placeholder }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Location</th>
+                            <td>{{ object.location|placeholder }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="col col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">State &amp; Capacity</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-hover attr-table">
+                        <tr>
+                            <th scope="row">Online</th>
+                            <td>
+                                {% if object.online is None %}
+                                    &mdash;
+                                {% elif object.online %}
+                                    <span class="badge text-bg-success">Online</span>
+                                {% else %}
+                                    <span class="badge text-bg-danger">Offline</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Local Node</th>
+                            <td>{% if object.local %}<span class="badge text-bg-info">Yes</span>{% else %}&mdash;{% endif %}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">CPU</th>
+                            <td>
+                                {% if object.cpu_usage_percent is not None %}
+                                    {{ object.cpu_usage_percent|floatformat:1 }}%
+                                {% else %}
+                                    &mdash;
+                                {% endif %}
+                                {% if object.max_cpu %}<span class="text-muted">of {{ object.max_cpu }} core{{ object.max_cpu|pluralize }}</span>{% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Memory</th>
+                            <td>
+                                {% if object.memory_usage_percent is not None %}
+                                    {{ object.memory_usage_percent|floatformat:1 }}%
+                                {% else %}
+                                    &mdash;
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Support Level</th>
+                            <td>{{ object.support_level|placeholder }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">SSL Fingerprint</th>
+                            <td>
+                                {% if object.ssl_fingerprint %}
+                                    <code>{{ object.ssl_fingerprint }}</code>
+                                {% else %}
+                                    <span class="text-muted">&mdash;</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Last Updated</th>
+                            <td>{{ object.last_updated|placeholder }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock content %}
