@@ -169,6 +169,19 @@ class ProxboxPluginSettingsForm(forms.Form):
             "dry-run preview before enabling in production."
         ),
     )
+    custom_fields_enabled = forms.BooleanField(
+        required=False,
+        label="Enable legacy custom fields (deprecated)",
+        help_text=(
+            "Deprecated. When disabled (the default), Proxbox uses the typed "
+            "Proxbox sync-state models as the sole source of truth for the "
+            "Proxmox-to-NetBox linkage and does not write, read, or reconcile the "
+            "legacy reflection custom fields. Enable only for a temporary "
+            "transition; while enabled, proxbox-api still writes and reads the "
+            "custom fields and emits deprecation warnings. The custom fields will "
+            "be removed in a future release."
+        ),
+    )
     primary_ip_preference = forms.ChoiceField(
         required=True,
         choices=(("ipv4", "Prefer IPv4"), ("ipv6", "Prefer IPv6")),

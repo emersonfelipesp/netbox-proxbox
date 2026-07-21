@@ -108,6 +108,20 @@ class ProxboxPluginSettings(NetBoxModel):
             "preview before enabling in production."
         ),
     )
+    custom_fields_enabled = models.BooleanField(
+        default=False,
+        verbose_name=_("Enable legacy custom fields (deprecated)"),
+        help_text=_(
+            "Deprecated. When disabled (the default), Proxbox uses the typed "
+            "Proxbox sync-state models as the sole source of truth for the "
+            "Proxmox-to-NetBox linkage: sync writes and reads the sidecar models "
+            "and does not write, read, or reconcile the legacy reflection custom "
+            "fields. Enable only for a temporary transition; while enabled, "
+            "proxbox-api still writes and reads the custom fields and emits "
+            "deprecation warnings. The custom fields will be removed in a future "
+            "release."
+        ),
+    )
     sync_mode_vm = models.CharField(
         max_length=16,
         choices=SyncModeChoices,
