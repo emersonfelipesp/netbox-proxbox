@@ -121,6 +121,43 @@ def test_cluster_and_node_detail_routes_are_mounted(model_name):
     )
 
 
+@pytest.mark.parametrize(
+    ("template_name", "list_route"),
+    [("proxmoxcluster.html", "clusters"), ("proxmoxnode.html", "nodes")],
+)
+def test_detail_templates_override_the_list_breadcrumb(template_name, list_route):
+    """A template extending ``generic/object.html`` needs a ``<model>_list`` route.
+
+    NetBox's ``generic/object.html`` breadcrumb block renders
+    ``{% action_url object 'list' %}`` with **no** ``as`` clause, and
+    ``ActionURLNode.render()`` only swallows ``NoReverseMatch`` when an ``as``
+    variable is supplied — otherwise it re-raises. ProxmoxCluster and ProxmoxNode
+    have no ``<model>_list`` route (their list pages are the bespoke ``clusters``
+    and ``nodes`` views), so inheriting that breadcrumb would 500 the detail page
+    with the very ``NoReverseMatch`` failure issue #618 reported — just moved
+    from the linking page to the linked one.
+
+    Both templates must therefore override ``breadcrumbs`` and point at the real
+    list page.
+    """
+    template = (
+        PLUGIN_ROOT / "templates" / "netbox_proxbox" / template_name
+    ).read_text()
+
+    assert "{% extends 'generic/object.html' %}" in template, (
+        f"{template_name} is expected to extend generic/object.html"
+    )
+    assert "{% block breadcrumbs %}" in template, (
+        f"{template_name} must override the breadcrumbs block; the inherited one "
+        "reverses a <model>_list route this model does not have and will raise "
+        "NoReverseMatch when the page is rendered"
+    )
+    assert f"plugins:netbox_proxbox:{list_route}" in template, (
+        f"{template_name}'s breadcrumb must link to the existing "
+        f"'{list_route}' list page"
+    )
+
+
 def test_sync_now_action_views_are_imported_so_they_register():
     """``sync_now`` views only register if something imports them eagerly.
 

@@ -1,5 +1,14 @@
 {% extends 'generic/object.html' %}
 
+{# See proxmoxcluster.html: the inherited breadcrumb reverses `<model>_list`,
+   which does not exist for ProxmoxNode (its list page is the bespoke `nodes`
+   view), and a bare `{% action_url %}` re-raises NoReverseMatch. #}
+{% block breadcrumbs %}
+    <li class="breadcrumb-item">
+        <a href="{% url 'plugins:netbox_proxbox:nodes' %}">Proxmox Nodes</a>
+    </li>
+{% endblock breadcrumbs %}
+
 {% block content %}
     <div class="row mb-3">
         <div class="col col-md-6">

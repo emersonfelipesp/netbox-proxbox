@@ -392,13 +392,12 @@ def _ensure_backend_endpoints(
             auth_headers=auth_headers,
             backend_verify_ssl=backend_verify_ssl,
         )
+        nb_label = getattr(nb_ep, "name", nb_ep.pk)
         if ok:
-            nb_label = getattr(nb_ep, "name", nb_ep.pk)
             job.logger.info(
                 f"Preflight: synced NetBox endpoint '{nb_label}' to proxbox-api backend"
             )
         else:
-            nb_label = getattr(nb_ep, "name", nb_ep.pk)
             job.logger.warning(
                 f"Preflight: could not sync NetBox endpoint "
                 f"'{nb_label}' to proxbox-api: {err}"
@@ -426,13 +425,12 @@ def _ensure_backend_endpoints(
             auth_headers=auth_headers,
             backend_verify_ssl=backend_verify_ssl,
         )
+        px_label = getattr(px_ep, "name", px_ep.pk)
         if ok:
-            px_label = getattr(px_ep, "name", px_ep.pk)
             job.logger.info(
                 f"Preflight: synced Proxmox endpoint '{px_label}' to proxbox-api backend"
             )
         else:
-            px_label = getattr(px_ep, "name", px_ep.pk)
             job.logger.warning(
                 f"Preflight: could not sync Proxmox endpoint "
                 f"'{px_label}' to proxbox-api: {err}"
@@ -1007,21 +1005,25 @@ class ProxboxSyncJob(JobRunner):
 
             # Sync dedicated Proxmox VM template inventory after datacenter-level
             # service syncs and before VM SSE stages consume backend VM data.
-            from netbox_proxbox.services.sync_vm_template import sync_vm_templates  # noqa: PLC0415
-
-            global_vm_template_mode = sync_stages.effective_sync_modes_for_endpoint(
-                None
-            ).get("sync_mode_vm_template", SyncModeChoices.ALWAYS)
             if targeted_vm_run:
                 self.logger.info(
                     "Skipping VM template sync: targeted virtual-machine run "
                     f"({', '.join(netbox_vm_ids)})"
                 )
-            elif global_vm_template_mode == SyncModeChoices.DISABLED:
+            elif (
+                sync_stages.effective_sync_modes_for_endpoint(None).get(
+                    "sync_mode_vm_template", SyncModeChoices.ALWAYS
+                )
+                == SyncModeChoices.DISABLED
+            ):
                 self.logger.info(
                     "Skipping VM template sync: sync_mode_vm_template=disabled"
                 )
             else:
+                from netbox_proxbox.services.sync_vm_template import (  # noqa: PLC0415
+                    sync_vm_templates,
+                )
+
                 for eid in endpoint_ids_to_sync:
                     self.logger.info(f"Syncing VM templates for endpoint {eid}")
                     template_started = time.monotonic()

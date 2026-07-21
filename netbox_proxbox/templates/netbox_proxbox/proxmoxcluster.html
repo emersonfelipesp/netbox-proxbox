@@ -1,5 +1,17 @@
 {% extends 'generic/object.html' %}
 
+{# generic/object.html's default breadcrumb does `{% action_url object 'list' %}`
+   with no `as` clause, and ActionURLNode.render() re-raises NoReverseMatch in
+   that form. ProxmoxCluster has no `proxmoxcluster_list` route -- its list page
+   is the bespoke `clusters` view -- so the inherited breadcrumb would 500 this
+   page with exactly the NoReverseMatch class of failure issue #618 reported.
+   Point the breadcrumb at the real list page instead. #}
+{% block breadcrumbs %}
+    <li class="breadcrumb-item">
+        <a href="{% url 'plugins:netbox_proxbox:clusters' %}">Proxmox Clusters</a>
+    </li>
+{% endblock breadcrumbs %}
+
 {% block content %}
     <div class="row mb-3">
         <div class="col col-md-6">
