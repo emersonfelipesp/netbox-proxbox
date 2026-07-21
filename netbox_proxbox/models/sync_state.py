@@ -78,6 +78,22 @@ class ProxboxVirtualMachineSyncState(ProxboxSyncStateBase):
 
     proxmox_vm_id = models.IntegerField(null=True, blank=True)
     proxmox_vm_type = models.CharField(max_length=64, blank=True)
+    # Name this VM had in Proxmox as of the last successful sync.
+    #
+    # Without it, a rename cannot be attributed: "NetBox name != incoming
+    # Proxmox name" looks identical whether an operator renamed the VM inside
+    # NetBox or somebody renamed it in Proxmox. proxbox-api's collision resolver
+    # assumed the former and pushed the stale NetBox name back onto the payload,
+    # so a Proxmox-side rename was silently discarded
+    # (netbox-proxbox issue #617).
+    #
+    # With it, the two cases separate cleanly:
+    #   NetBox name != this value          -> a human edited it in NetBox -> keep
+    #   NetBox name == this value != new   -> renamed in Proxmox          -> update
+    #
+    # Blank means "not yet recorded" (every row on first upgrade), and callers
+    # must fall back to the previous behaviour so nothing regresses mid-rollout.
+    proxmox_vm_name = models.CharField(max_length=255, blank=True)
     proxmox_start_at_boot = models.BooleanField(null=True, blank=True)
     proxmox_unprivileged_container = models.BooleanField(null=True, blank=True)
     proxmox_qemu_agent = models.BooleanField(null=True, blank=True)
