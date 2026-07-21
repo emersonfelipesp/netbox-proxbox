@@ -83,6 +83,19 @@ packages = ["netbox_proxbox", "proxbox_cli"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
+# This suite deliberately runs against the lightweight Django/NetBox stubs in
+# tests/conftest.py rather than a real NetBox install, and it installs `django`
+# into sys.modules as a plain MODULE, not a package. pytest-django's
+# pytest_collection_modifyitems hook unconditionally does
+# `from django.test import TestCase, TransactionTestCase`, which against that
+# stub raises "No module named 'django.test'; 'django' is not a package" and
+# aborts collection with an INTERNALERROR before a single test runs.
+#
+# The suite uses no pytest-django fixture or marker, so the plugin is pure
+# overhead here; disabling it is what lets the stubbed suite collect at all.
+# The failure only appeared in CI because pytest-django ships in the `test`
+# extra and is usually absent from local environments.
+addopts = "-p no:django"
 markers = [
     "django_db: requires pytest-django database access",
 ]

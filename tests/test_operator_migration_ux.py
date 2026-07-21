@@ -72,8 +72,14 @@ def test_repair_view_is_exported_from_views_package():
 def test_repair_view_uses_session_gate_and_sync_enqueue_permission():
     view_source = _read(VIEW_PATH)
 
-    assert "ConditionalLoginRequiredMixin" in view_source
+    # The session gate is ContentTypePermissionRequiredMixin alone. An earlier
+    # revision also listed ConditionalLoginRequiredMixin, but commit 39f8f9d9
+    # ("Fix invalid MRO on the sync-state repair view base classes") removed it
+    # deliberately -- combining the two produced an invalid MRO. This assertion
+    # was left behind and has been failing on develop ever since; it now pins
+    # the gate the view actually uses, and that the removed mixin stays out.
     assert "ContentTypePermissionRequiredMixin" in view_source
+    assert "ConditionalLoginRequiredMixin" not in view_source
     assert "permission_enqueue_proxbox_sync" in view_source
     assert "def get_required_permission" in view_source
     assert "ProxboxSyncJob.enqueue" in view_source
