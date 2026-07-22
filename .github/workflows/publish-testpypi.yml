@@ -62,7 +62,7 @@ jobs:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.source_ref || (github.event_name == 'release' && github.event.release.tag_name || github.ref) }}
 
       - name: Set up Python 3.13
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: "3.13"
 
@@ -182,7 +182,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Python 3.13
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: '3.13'
 
@@ -223,7 +223,7 @@ jobs:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.source_ref || (github.event_name == 'release' && github.event.release.tag_name || github.ref) }}
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -305,7 +305,7 @@ jobs:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.source_ref || (github.event_name == 'release' && github.event.release.tag_name || github.ref) }}
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -342,7 +342,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Python 3.13
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: '3.13'
 
@@ -394,7 +394,7 @@ jobs:
         python-version: ['3.12', '3.13']
     steps:
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
 
