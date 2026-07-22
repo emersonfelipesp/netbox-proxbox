@@ -304,11 +304,31 @@ def sync_fw_module(monkeypatch):
 
 def test_no_fastapi_url_and_no_context_returns_error(sync_fw_module):
     """When no FastAPI context and no url arg, return error without HTTP call."""
-    sync_fw_module.get_fastapi_request_context = lambda: None
+    sync_fw_module.get_fastapi_request_context = lambda endpoint_id=None: None
     with patch("requests.get") as mock_get:
         result = sync_fw_module.sync_firewall()
     assert result.success is False
     assert "FastAPI" in (result.error or "")
+    mock_get.assert_not_called()
+
+
+def test_fastapi_endpoint_id_is_forwarded_to_the_context_resolver(sync_fw_module):
+    """The caller's chosen backend must be the one this pass resolves.
+
+    With two enabled ``FastAPIEndpoint`` rows the job preflight certifies the one
+    it selected, so a service pass that re-resolves without the id can certify
+    backend A and then sync against backend B.
+    """
+    seen: list[int | None] = []
+
+    def _ctx(endpoint_id=None):
+        seen.append(endpoint_id)
+        return None
+
+    sync_fw_module.get_fastapi_request_context = _ctx
+    with patch("requests.get") as mock_get:
+        sync_fw_module.sync_firewall(fastapi_endpoint_id=7)
+    assert seen == [7]
     mock_get.assert_not_called()
 
 

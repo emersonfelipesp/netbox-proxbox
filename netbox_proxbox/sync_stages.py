@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from typing import TYPE_CHECKING
 
 try:
@@ -81,6 +81,83 @@ _HEARTBEAT_SECONDS = 20.0
 _STAGE_RETRY_MAX = 2
 _STAGE_RETRY_DELAY = 8.0
 _SDN_SYNC_TYPE = getattr(SyncTypeChoices, "SDN", "sdn")
+
+# Phrases that mark a backend error as a transport/availability failure rather
+# than a genuine client-side rejection.  proxbox-api raises ``ProxboxException``
+# with a class-default HTTP 400 for *every* uncaught error, timeouts and refused
+# connections included, so a cold or restarting backend can report a retryable
+# condition under a status code that means "your request was wrong".  Matching on
+# the reported cause lets those be retried without retrying real 4xx rejections.
+# Every marker is specific enough that it cannot plausibly appear in a
+# validation message: a bare ``"timeout"`` also matched the genuine rejection
+# ``"timeout must be between 1 and 300"``, so the word alone is not usable.
+# The list is checked against the strings the transport layer actually emits
+# (requests/urllib3, httpx, the ssl module, glibc/BSD resolvers, and nginx) —
+# see ``test_real_transport_failure_texts_are_matched``.  A phrase is only added
+# when it cannot also complete a sentence about a *field* of that name, which is
+# why ``"request timeout"`` is deliberately absent.
+_TRANSPORT_FAILURE_MARKERS: tuple[str, ...] = (
+    "timed out",
+    "timeout error",
+    "timeouterror",
+    "read timeout",
+    "readtimeout",
+    "connecttimeout",
+    "connectiontimeout",
+    "pooltimeout",
+    "writetimeout",
+    "gateway timeout",
+    # nginx spells its own 504 body "Gateway Time-out", with the hyphen. A real
+    # 504 is already retryable by status; this matters when proxbox-api catches
+    # an upstream 504 and re-reports the body under its default 400.
+    "gateway time-out",
+    "connection refused",
+    "connection reset",
+    "connection aborted",
+    "connection error",
+    "cannot connect",
+    "bad gateway",
+    "server disconnected",
+    "temporarily unavailable",
+    "service unavailable",
+    "network is unreachable",
+    # DNS. The first is glibc's EAI_AGAIN and is the common one when a container
+    # starts before its resolver is ready — precisely the cold-start case here.
+    "name or service not known",
+    "temporary failure in name resolution",
+    "nodename nor servname provided",
+    # urllib3 wraps the resolver error in its own NameResolutionError text, which
+    # survives even when the inner errno string is truncated away.
+    "failed to resolve",
+    # urllib3's outermost wrapper for a retry-exhausted connection attempt. It
+    # prefixes most transport failures, so it catches the ones whose inner cause
+    # was trimmed before proxbox-api re-reported it.
+    "max retries exceeded",
+    # TLS handshake aborted mid-way, e.g. the backend restarting behind HTTPS.
+    "eof occurred in violation of protocol",
+    "remote end closed connection",
+)
+# Payload keys that describe *why* a request failed.  Only these are searched for
+# the markers above: scanning the whole payload would let unrelated content — a
+# ``"timeout": 30`` config value, a VM named "connection-reset" — turn a genuine
+# client rejection into a retry.  ``python_exception`` is included because
+# proxbox-api reports the underlying exception there and
+# ``_extract_backend_error_text()`` does not read it.
+_ERROR_CAUSE_KEYS: tuple[str, ...] = (
+    "python_exception",
+    "exception",
+    "detail",
+    "message",
+    "error",
+)
+# The same keys, plus FastAPI's per-error ``msg``, used when descending into a
+# *nested* error body.  A FastAPI validation/dependency failure reports
+# ``detail`` as a list of ``{"loc": [...], "msg": ..., "input": {...}}`` objects,
+# so the cause can be one level down.  ``input`` is deliberately absent: it
+# echoes the submitted request body, which for endpoint pushes contains
+# credentials.
+_NESTED_CAUSE_KEYS: tuple[str, ...] = _ERROR_CAUSE_KEYS + ("msg",)
+_CAUSE_RECURSION_LIMIT = 4
 try:
     from netbox_proxbox.netbox_bootstrap import BOOTSTRAP_ONLY_TAG_SLUG
 except ImportError:  # pragma: no cover - compatibility for focused import stubs
@@ -265,8 +342,46 @@ async def _run_batch_selected_sync(
     batch_object_type: str,
     batch_object_ids: list[str],
     netbox_branch_schema_id: str | None = None,
+    fastapi_endpoint_id: int | None = None,
+    proxmox_wire_endpoint_ids: str | None = None,
+    proxmox_wire_endpoint_by_pk: dict[str, str] | None = None,
 ) -> dict[str, object]:
-    """Run selected object syncs concurrently with asyncio.gather."""
+    """Run selected object syncs concurrently with asyncio.gather.
+
+    ``fastapi_endpoint_id`` pins every per-object call to the backend the job
+    selected and preflighted. Without it each call resolves the *first* enabled
+    backend independently, so on a multi-backend install a batch run could
+    validate one backend and then sync against another.
+
+    ``proxmox_wire_endpoint_ids`` pins the *Proxmox* side the same way: a
+    comma-separated list of backend endpoint ids, already resolved by the
+    caller. The individual-sync routes resolve their Proxmox sessions through
+    the same dependency the streaming stages use, and that dependency treats an
+    absent filter as "every endpoint I hold" — so omitting the scope widens the
+    run to endpoints the operator disabled in NetBox rather than narrowing it.
+
+    ``proxmox_wire_endpoint_by_pk`` narrows it the rest of the way, per object.
+    The job-wide scope stops the backend reaching endpoints this NetBox
+    disabled, but it still asks *all* the enabled ones — and a selected-object
+    request names only a cluster/node/VMID, which are unique per endpoint and
+    not across the estate. Two Proxmox installations each holding a
+    ``cluster01/pve1/100`` would both answer, and whichever the backend picked
+    would be written into this object's NetBox row. So each object is pinned to
+    the single backend id its own ``ProxmoxCluster → ProxmoxEndpoint`` chain
+    names. An object whose owner is known but is *not* in the map — its endpoint
+    drifted and was skipped from the scope — is failed explicitly rather than
+    being asked of the remaining endpoints, which is precisely the case that
+    would otherwise sync from the wrong estate. So is an object whose cluster is
+    claimed by *two* endpoints: that is proof the duplicated namespace exists
+    here, so widening would ask both and keep whichever answered. An owner that
+    cannot be determined **at all** — nothing has reflected this cluster yet —
+    falls back to the job-wide scope only while that scope names a *single*
+    endpoint, where falling back and pinning are the same request; a run
+    spanning two or more refuses the object instead. That keeps first-ever
+    syncs working on the installs the fallback was written for — one endpoint,
+    nothing reflected yet — without letting "unknown" widen in the very estate
+    where a duplicated identifier is possible.
+    """
     from virtualization.models import VirtualMachine
 
     from netbox_proxbox.models import (
@@ -301,6 +416,39 @@ async def _run_batch_selected_sync(
     objects = list(queryset.filter(pk__in=object_ids))
     object_by_id = {str(getattr(obj, "pk", "")): obj for obj in objects}
 
+    # Resolve every object's owning endpoint in one query, here rather than
+    # inside `run_one()`: the batch can carry hundreds of objects and this is
+    # the same place the object fetch already happens.
+    #
+    # The map is object id → *set* of claiming endpoint pks, deliberately kept
+    # tri-state (see `_owner_endpoint_pks_by_cluster_id()`): one claimant pins,
+    # two or more refuses the object, and none widens to the job-wide scope —
+    # but only while that scope names a single endpoint.
+    owner_pks_by_object_id: dict[str, set[str]] = {}
+    if proxmox_wire_endpoint_by_pk:
+        cluster_id_by_object_id = {
+            object_id: _batch_object_core_cluster_id(obj, batch_object_type)
+            for object_id, obj in object_by_id.items()
+        }
+        owner_by_cluster = _owner_endpoint_pks_by_cluster_id(
+            [cid for cid in cluster_id_by_object_id.values() if cid]
+        )
+        owner_pks_by_object_id = {
+            object_id: owner_by_cluster[cluster_id]
+            for object_id, cluster_id in cluster_id_by_object_id.items()
+            if cluster_id and cluster_id in owner_by_cluster
+        }
+
+    # The unknown-owner fallback in `run_one()` widens an object back to the
+    # whole run's scope. That is only safe while the run names **one** endpoint,
+    # where "the job-wide scope" and "one specific endpoint" are the same
+    # request. Count the ids once here rather than re-splitting per object.
+    job_scope_wire_ids = [
+        wire_id.strip()
+        for wire_id in (proxmox_wire_endpoint_ids or "").split(",")
+        if wire_id.strip()
+    ]
+
     semaphore = asyncio.Semaphore(_proxbox_fetch_max_concurrency_setting())
 
     async def run_one(object_id: str) -> dict[str, object]:
@@ -312,6 +460,82 @@ async def _run_batch_selected_sync(
                     "object_id": str(object_id),
                     "status": 404,
                     "error": "Selected object was not found.",
+                }
+
+            # Pin to this object's own endpoint when we can name it. Two of the
+            # three outcomes refuse rather than widen, because a cluster/node/
+            # VMID is unique only *per endpoint*: asking a set of endpoints for
+            # an identifier another estate also uses is how the wrong estate's
+            # data ends up written into this row.
+            owner_pks = owner_pks_by_object_id.get(str(object_id)) or set()
+            object_wire_scope = proxmox_wire_endpoint_ids
+            if len(owner_pks) > 1:
+                # Ambiguous: two endpoints have both reflected this cluster, so
+                # the estate provably *has* the duplicated namespace. Falling
+                # back to the job-wide scope here would ask both of them and
+                # write whichever answered first — the exact defect per-object
+                # pinning exists to close. Unknown ownership may widen;
+                # ambiguous ownership may not.
+                claimants = ", ".join(sorted(owner_pks))
+                return {
+                    "batch_object_type": batch_object_type,
+                    "object_id": str(object_id),
+                    "status": 424,
+                    "error": (
+                        "This object's Proxmox cluster is claimed by more than "
+                        f"one Proxmox endpoint (ids {claimants}), so the "
+                        "endpoint that owns it cannot be determined and it was "
+                        "not synced. Syncing it against every claimant could "
+                        "match another cluster/node/VMID with the same name. "
+                        "Remove the duplicate reflected cluster, then retry."
+                    ),
+                }
+            if len(owner_pks) == 1:
+                owner_pk = next(iter(owner_pks))
+                pinned = (proxmox_wire_endpoint_by_pk or {}).get(owner_pk)
+                if not pinned:
+                    # Resolved, but its endpoint drifted and was dropped from
+                    # the scope. Same refusal, same reason.
+                    return {
+                        "batch_object_type": batch_object_type,
+                        "object_id": str(object_id),
+                        "status": 424,
+                        "error": (
+                            "The Proxmox endpoint this object belongs to "
+                            f"(id {owner_pk}) is not in this run's endpoint "
+                            "scope, so it was not synced. Syncing it against "
+                            "the remaining endpoints could match another "
+                            "cluster/node/VMID with the same name."
+                        ),
+                    }
+                object_wire_scope = pinned
+            elif not owner_pks and len(job_scope_wire_ids) > 1:
+                # Unknown owner: nothing has reflected this object's cluster
+                # yet. Widening to the job-wide scope is what makes a
+                # first-ever sync possible at all, and it costs nothing while
+                # the run names a single endpoint — that request is already
+                # pinned. With two or more in scope it is a guess, and the
+                # identifiers being guessed with (cluster/node/VMID) are unique
+                # only per endpoint, so the wrong estate can answer and its
+                # data lands in this row with no error raised.
+                #
+                # Refusing the object is recoverable: a staged sync reflects
+                # the clusters, ownership becomes resolvable, and the retry
+                # pins. Widening is not — the wrong data is already written.
+                return {
+                    "batch_object_type": batch_object_type,
+                    "object_id": str(object_id),
+                    "status": 424,
+                    "error": (
+                        "The Proxmox endpoint this object belongs to could not "
+                        "be determined — no reflected cluster names an owner — "
+                        f"and this run spans {len(job_scope_wire_ids)} Proxmox "
+                        "endpoints, so it was not synced. Syncing it against "
+                        "all of them could match another cluster/node/VMID "
+                        "with the same name. Run a staged sync first so the "
+                        "cluster is reflected, or retry with a single endpoint "
+                        "selected."
+                    ),
                 }
 
             if batch_object_type == "virtual-machine":
@@ -342,11 +566,33 @@ async def _run_batch_selected_sync(
 
             path = str(params["path"])
             query_params = dict(params.get("query_params") or {})
-            if netbox_branch_schema_id:
-                query_params["netbox_branch_schema_id"] = str(netbox_branch_schema_id)
+            # WHY: the branch schema id has to travel as an argument, not only as
+            # a query param on this first call. `_sync_dependency()` builds its
+            # params dict from scratch out of `_CONTEXT_KEYS`, which does not
+            # include `netbox_branch_schema_id` — so a dependency resolved off
+            # this object would be written to the *main* schema while the object
+            # itself went to the branch.
+            branch_schema_id = (
+                str(netbox_branch_schema_id) if netbox_branch_schema_id else None
+            )
+            if branch_schema_id:
+                query_params["netbox_branch_schema_id"] = branch_schema_id
+            # Same argument-not-just-query-param rule as the branch schema, and
+            # for the same reason: an unscoped individual sync is a *wider*
+            # request than a scoped one, so a scope that got dropped somewhere
+            # in the dependency recursion silently re-widens to every endpoint
+            # the backend holds instead of failing.
+            if object_wire_scope:
+                query_params["proxmox_endpoint_ids"] = object_wire_scope
 
             def _call_sync() -> tuple[dict, int, list[dict]]:
-                return sync_individual_with_dependencies(path, query_params)
+                return sync_individual_with_dependencies(
+                    path,
+                    query_params,
+                    netbox_branch_schema_id=branch_schema_id,
+                    fastapi_endpoint_id=fastapi_endpoint_id,
+                    proxmox_endpoint_ids=object_wire_scope,
+                )
 
             response, status, dependencies = await asyncio.to_thread(_call_sync)
 
@@ -482,6 +728,63 @@ def _build_stage_query_params(
     return query_params
 
 
+def _iter_cause_strings(value: object, depth: int = 0) -> Iterator[str]:
+    """Yield the error-describing strings reachable from ``value``.
+
+    FastAPI reports validation and dependency errors as a *list* under
+    ``detail`` (``[{"loc": [...], "msg": "...", "input": {...}}]``), so a
+    transport failure surfaced through that shape is invisible to a flat
+    ``payload["detail"]`` read. Recursion is therefore necessary — but it stays
+    keyed on ``_NESTED_CAUSE_KEYS`` so submitted ``input`` (which echoes the
+    request body, credentials included) is never scanned.
+    """
+    if depth > _CAUSE_RECURSION_LIMIT:
+        return
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, list | tuple):
+        for item in value:
+            yield from _iter_cause_strings(item, depth + 1)
+    elif isinstance(value, dict):
+        for key in _NESTED_CAUSE_KEYS:
+            if key in value:
+                yield from _iter_cause_strings(value[key], depth + 1)
+
+
+def _names_transport_failure(payload: object) -> bool:
+    """Return ``True`` when the payload's *cause* names a transport failure.
+
+    Only the error-describing fields are searched (``_NESTED_CAUSE_KEYS``),
+    never the payload as a whole, so ordinary data that happens to contain a
+    marker word cannot make a real rejection look retryable. A non-dict body is
+    matched whole because then the body *is* the error text.
+    """
+    if isinstance(payload, dict):
+        parts = [_extract_backend_error_text(payload) or ""]
+        for key in _ERROR_CAUSE_KEYS:
+            if key in payload:
+                parts.extend(_iter_cause_strings(payload[key]))
+        haystack = " ".join(parts)
+    else:
+        haystack = str(payload)
+    lowered = haystack.lower()
+    return any(marker in lowered for marker in _TRANSPORT_FAILURE_MARKERS)
+
+
+def _is_retryable_stage_failure(status: int, payload: object) -> bool:
+    """Return ``True`` when a failed stage is worth retrying.
+
+    5xx and 429 are retryable by definition. A 400 is retryable only when the
+    reported cause names a transport failure — see ``_TRANSPORT_FAILURE_MARKERS``
+    for why proxbox-api can report one under a 400.
+    """
+    if status >= 500 or status == 429:
+        return True
+    if status != 400:
+        return False
+    return _names_transport_failure(payload)
+
+
 def _execute_stage_sync(
     job: "ProxboxSyncJob",
     sync_type: str,
@@ -489,8 +792,14 @@ def _execute_stage_sync(
     query_params: dict[str, str] | None,
     on_frame: Callable[[str, dict[str, object]], None],
     endpoint_id: int | None = None,
+    preflight_hint: str | None = None,
 ) -> tuple[dict[str, object], float]:
-    """Execute a single stage sync and return payload."""
+    """Execute a single stage sync and return payload.
+
+    ``preflight_hint`` carries non-fatal warnings from the pre-sync preflight so
+    a stage failure can name the earlier problem that likely caused it, instead
+    of leaving the operator with only whatever error the backend surfaced.
+    """
     from netbox_proxbox.services import run_sync_stream
 
     job.logger.info(f"Starting stage: {sync_type} ({stream_path})")
@@ -536,7 +845,10 @@ def _execute_stage_sync(
             )
             return last_payload, stage_runtime
 
-        if (last_status >= 500 or last_status == 429) and _attempt < _STAGE_RETRY_MAX:
+        if (
+            _is_retryable_stage_failure(last_status, last_payload)
+            and _attempt < _STAGE_RETRY_MAX
+        ):
             retry_detail = _extract_backend_error_text(last_payload) or str(
                 last_payload
             )
@@ -565,6 +877,15 @@ def _execute_stage_sync(
         )
     else:
         job.logger.error(f"Stage {sync_type} failed (HTTP {last_status}): {detail}")
+    if preflight_hint:
+        # The backend often reports a generic downstream symptom (a failed tag,
+        # a missing object) when the real cause was an earlier preflight problem.
+        # Say so, so the operator fixes the cause instead of the symptom.
+        job.logger.error(
+            f"Stage '{sync_type}' likely failed because of an earlier "
+            f"problem. {preflight_hint}"
+        )
+        user_detail = f"{user_detail} {preflight_hint}"
     raise RuntimeError(user_detail)
 
 
@@ -610,13 +931,18 @@ def _proxmox_endpoint_scopes(
         ]
     except (ImportError, RuntimeError, AttributeError):
         endpoint_ids = []
-    if not endpoint_ids:
-        return [[]]
+    # No enabled endpoint means *no scope*, never the empty scope. An empty scope
+    # reaches the backend as a request with no ``proxmox_endpoint_ids`` at all,
+    # which the backend reads as "sync every endpoint you hold" — so disabling the
+    # last ProxmoxEndpoint would have widened the sync to whatever proxbox-api
+    # still had registered, instead of stopping it. The caller turns an empty
+    # scope list into a fail-loud endpoint-scope record.
     return [[endpoint_id] for endpoint_id in endpoint_ids]
 
 
 def _resolve_wire_endpoint_ids(
     endpoint_scopes: list[list[str]],
+    fastapi_endpoint_id: int | None = None,
 ) -> tuple[dict[str, str], str | None]:
     """Map plugin ``ProxmoxEndpoint`` pks (used in scopes) to backend database ids.
 
@@ -626,6 +952,10 @@ def _resolve_wire_endpoint_ids(
     backend endpoint list could not be fetched. Plugin pks with no backend match
     are omitted so the caller can fail loud per endpoint rather than syncing an
     unscoped (all-endpoint) request.
+
+    ``fastapi_endpoint_id`` must be the *same* backend the stages will run
+    against: the ids returned here are that backend's own primary keys and are
+    meaningless — or worse, wrong but valid — against a different one.
     """
     plugin_pks = {
         scope[0] for scope in endpoint_scopes if scope and str(scope[0]).strip()
@@ -637,7 +967,7 @@ def _resolve_wire_endpoint_ids(
     from netbox_proxbox.services.backend_proxy import get_fastapi_request_context
     from netbox_proxbox.views.backend_sync import resolve_backend_endpoint_ids
 
-    ctx = get_fastapi_request_context()
+    ctx = get_fastapi_request_context(endpoint_id=fastapi_endpoint_id)
     if ctx is None or not ctx.http_url:
         return (
             {},
@@ -662,15 +992,236 @@ def _resolve_wire_endpoint_ids(
     return {str(pk): str(backend_id) for pk, backend_id in mapping.items()}, None
 
 
+def _no_endpoint_scope_reason(requested_endpoint_ids: object) -> str:
+    """Explain why a run resolved *no* Proxmox endpoint scope at all.
+
+    Shared by the staged and the selected-object paths so both refuse in the
+    same words. The two cases read very differently to an operator — a stale
+    selection on this one run, versus an estate with nothing enabled — and the
+    second has to say out loud that dropping the filter is not the safe
+    degradation, because "just sync everything then" is exactly the fix the
+    message would otherwise invite.
+    """
+    if requested_endpoint_ids:
+        return (
+            "every Proxmox endpoint selected for this run is disabled or no "
+            "longer exists, so there was nothing to sync"
+        )
+    return (
+        "no enabled Proxmox endpoint exists in NetBox, so there was "
+        "nothing to sync. Syncing without an endpoint filter is not a "
+        "fallback: the backend would sync every endpoint it still holds, "
+        "including ones disabled here"
+    )
+
+
+def _batch_wire_endpoint_scope(
+    requested_endpoint_ids: object,
+    fastapi_endpoint_id: int | None = None,
+) -> tuple[str, list[str], str | None, dict[str, str]]:
+    """Resolve the backend Proxmox endpoint scope for a selected-object run.
+
+    Returns ``(comma_separated_backend_ids, skipped_plugin_pks, error,
+    wire_id_by_plugin_pk)``.
+
+    The trailing map is what lets the caller narrow *per object* instead of
+    sending the whole job-wide scope with every request. The job-wide scope is
+    still the right answer when an object's own endpoint cannot be determined,
+    so both are returned rather than one replacing the other.
+
+    The selected-object path reaches proxbox-api through ``sync_individual()``
+    rather than the SSE stage loop, but both land on the same
+    ``ProxmoxSessionsDep`` — and that dependency reads a *missing*
+    ``proxmox_endpoint_ids`` as "use every endpoint I hold". So the batch path
+    needs exactly the resolution and the fail-loud behaviour the staged path
+    already has; without it, a selected-object sync against a NetBox whose
+    endpoints are all disabled still reaches whatever the backend kept.
+
+    A *partially* resolvable scope is not an error: the resolved endpoints are
+    returned and the rest are reported as ``skipped_plugin_pks`` for the caller
+    to log. Failing the whole run because one unrelated endpoint drifted would
+    be a regression, while the narrowed scope is still strictly safer than the
+    unscoped request this replaces.
+
+    What the narrowed scope does **not** do on its own is guarantee that an
+    object living on a skipped endpoint fails loudly. It only does so when no
+    other in-scope endpoint can answer for it — and Proxmox identifiers are not
+    globally unique, so a cluster name, node name or VMID duplicated across two
+    estates would be answered by the wrong one. Per-object pinning through
+    ``_owner_endpoint_pks_by_cluster_id()`` is what closes that gap; this map is
+    the input it needs.
+    """
+    endpoint_scopes = _proxmox_endpoint_scopes(requested_endpoint_ids)
+    if not endpoint_scopes:
+        return "", [], _no_endpoint_scope_reason(requested_endpoint_ids), {}
+
+    wire_ids, error = _resolve_wire_endpoint_ids(
+        endpoint_scopes, fastapi_endpoint_id=fastapi_endpoint_id
+    )
+    if error:
+        return (
+            "",
+            [],
+            (
+                "the enabled Proxmox endpoints could not be resolved to ProxBox "
+                f"backend ids, so this sync would not have been scoped to them: {error}"
+            ),
+            {},
+        )
+
+    plugin_pks = [scope[0] for scope in endpoint_scopes if scope]
+    resolved = {str(pk): str(wire_ids[pk]) for pk in plugin_pks if pk in wire_ids}
+    scope_ids = [wire_ids[pk] for pk in plugin_pks if pk in wire_ids]
+    skipped = [pk for pk in plugin_pks if pk not in wire_ids]
+    if not scope_ids:
+        return (
+            "",
+            skipped,
+            (
+                "none of the enabled Proxmox endpoints is registered with this "
+                "ProxBox backend under a matching connection target, so this "
+                "sync would not have been scoped to them"
+            ),
+            {},
+        )
+    return ",".join(scope_ids), skipped, None, resolved
+
+
+def _batch_object_core_cluster_id(obj: object, batch_object_type: str) -> int | None:
+    """Return the core ``virtualization.Cluster`` id a selected object belongs to.
+
+    All five batch object types converge on a core cluster, though by different
+    routes: a VM and a ``ProxmoxStorage`` carry it directly (``ProxmoxStorage``
+    FKs to ``virtualization.Cluster``, not to ``ProxmoxCluster``), while backups,
+    snapshots and task-history rows reach it through the object they describe.
+    The backup case prefers its storage because that is the cluster its own sync
+    parameters are built from — using the VM's would resolve an owner the
+    request itself does not name.
+    """
+
+    def _cluster_id_of(candidate: object) -> int | None:
+        value = getattr(candidate, "cluster_id", None)
+        try:
+            return int(value) if value else None
+        except (TypeError, ValueError):
+            return None
+
+    if batch_object_type in {"virtual-machine", "proxmox-storage"}:
+        return _cluster_id_of(obj)
+    if batch_object_type == "vm-backup":
+        return _cluster_id_of(getattr(obj, "proxmox_storage", None)) or _cluster_id_of(
+            getattr(obj, "virtual_machine", None)
+        )
+    if batch_object_type in {"vm-snapshot", "vm-task-history"}:
+        return _cluster_id_of(getattr(obj, "virtual_machine", None)) or _cluster_id_of(
+            getattr(obj, "proxmox_storage", None)
+        )
+    return None
+
+
+def _batch_object_owner_endpoint_pks(obj: object, batch_object_type: str) -> set[str]:
+    """Return every plugin ``ProxmoxEndpoint`` pk that claims ``obj``'s cluster.
+
+    Proxmox identifiers are scoped to an endpoint, not to the estate: two
+    unrelated Proxmox installations can each have a ``cluster01`` with a node
+    ``pve1`` running VMID ``100``. A selected-object request carries only those
+    names, so sending it with the job-wide endpoint scope asks *every* in-scope
+    endpoint and takes whichever answers — which on a duplicate is silently the
+    wrong estate's data, written into this object's NetBox row.
+
+    ``ProxmoxCluster`` is the join that settles it: it FKs to both the core
+    cluster the object hangs off and the ``ProxmoxEndpoint`` it was reflected
+    from. This mirrors ``views/vm_sync_now.py::_endpoint_ids_for_vm()``.
+
+    The result is a **set**, not a single pk, because the caller has to keep
+    three outcomes apart: exactly one claimant is the owner and the object pins
+    there; an empty set is *unknown* (no cluster, or nothing reflected yet) and
+    may widen to the job-wide scope so a first-ever sync can still discover its
+    endpoint; two or more claimants is *ambiguous* and must fail the object,
+    because a duplicated namespace is precisely where widening would let the
+    wrong estate answer. Do not collapse ambiguous into unknown here — that
+    reintroduces the cross-estate write this resolution exists to prevent.
+
+    ``_run_batch_selected_sync()`` does not call this per object; it runs
+    ``_owner_endpoint_pks_by_cluster_id()`` once for the whole batch and
+    classifies the same three ways. This is the single-object equivalent.
+    """
+    cluster_id = _batch_object_core_cluster_id(obj, batch_object_type)
+    if not cluster_id:
+        return set()
+    return _owner_endpoint_pks_by_cluster_id([cluster_id]).get(cluster_id, set())
+
+
+def _owner_endpoint_pks_by_cluster_id(cluster_ids: list[int]) -> dict[int, set[str]]:
+    """Map core cluster id → the set of ``ProxmoxEndpoint`` pks claiming it.
+
+    One query for the whole batch: a selected-object run can carry hundreds of
+    objects, and resolving each one's owner separately would put a query per
+    object in front of a sync that is already doing one HTTP call per object.
+
+    The **whole claim set** is returned, not just the unambiguous singletons,
+    because the caller needs to tell three states apart and collapsing them here
+    would destroy the distinction. A cluster absent from the map is *unknown* —
+    nothing has reflected it yet — and may safely widen to the job-wide scope. A
+    cluster mapping to two or more pks is *ambiguous*: we know the estate has a
+    duplicated namespace, which is the one case where widening is actively
+    dangerous. See ``_batch_object_owner_endpoint_pks()``.
+    """
+    if not cluster_ids:
+        return {}
+
+    from netbox_proxbox.models import ProxmoxCluster
+
+    seen: dict[int, set[str]] = {}
+    rows = (
+        ProxmoxCluster.objects.filter(netbox_cluster_id__in=set(cluster_ids))
+        .exclude(endpoint__isnull=True)
+        .values_list("netbox_cluster_id", "endpoint_id")
+        .distinct()
+    )
+    for cluster_id, endpoint_pk in rows:
+        seen.setdefault(int(cluster_id), set()).add(str(endpoint_pk))
+    return seen
+
+
 def _run_all_stages_sync(
     job: "ProxboxSyncJob",
     stages: list[str],
     params: dict[str, object],
     run_started: float,
+    preflight_hint: str | None = None,
 ) -> list[dict[str, object]]:
-    """Run all sync stages in order and return stage results."""
+    """Run all sync stages in order and return stage results.
+
+    ``preflight_hint`` is forwarded to every stage so a failure can point back at
+    a non-fatal preflight problem that plausibly caused it.
+    """
     endpoint_scopes = _proxmox_endpoint_scopes(params.get("proxmox_endpoint_ids"))
-    backend_id_by_pk, wire_resolve_error = _resolve_wire_endpoint_ids(endpoint_scopes)
+    if not endpoint_scopes:
+        # Nothing enabled to sync. Returning here — rather than falling through to
+        # a stage loop that never iterates — is what makes the run *fail loud*:
+        # an empty ``stages_out`` finishes green, having synced nothing, which is
+        # the silent no-op this preflight work exists to eliminate. The caller
+        # turns this record into a "No sync stage ran" error.
+        reason = _no_endpoint_scope_reason(params.get("proxmox_endpoint_ids"))
+        job.logger.error(f"Skipping SSE sync entirely: {reason}")
+        return [
+            {
+                "sync_type": "endpoint-scope",
+                "endpoint_id": None,
+                "stream_path": None,
+                "runtime_seconds": 0.0,
+                "result_summary": {"ok": False, "error": reason},
+            }
+        ]
+
+    # Read before resolving: the backend-local ids below are only valid against
+    # the backend the stages will actually run on.
+    fastapi_endpoint_id = params.get("fastapi_endpoint_id")
+    backend_id_by_pk, wire_resolve_error = _resolve_wire_endpoint_ids(
+        endpoint_scopes,
+        fastapi_endpoint_id=fastapi_endpoint_id,  # type: ignore[arg-type]
+    )
 
     flush_interval = 2.0
     log_throttle = 1.5
@@ -695,7 +1246,6 @@ def _run_all_stages_sync(
     stages_out: list[dict[str, object]] = []
 
     target_vm_ids = [str(x) for x in list(params.get("netbox_vm_ids") or []) if str(x)]
-    fastapi_endpoint_id = params.get("fastapi_endpoint_id")
     netbox_branch_schema_id = params.get("netbox_branch_schema_id")
     sync_run_id = str(params.get("run_id") or "").strip() or None
     for endpoint_scope in endpoint_scopes:
@@ -707,10 +1257,52 @@ def _run_all_stages_sync(
             # this endpoint, never fall back to an unscoped (all-endpoint) request.
             backend_id = backend_id_by_pk.get(str(endpoint_id))
             if backend_id is None:
+                # An unresolved endpoint is only a *failure* if it had work to do.
+                # Sync modes are normally applied further down, inside the stage
+                # loop — which this branch never reaches — so resolve them here
+                # first. Otherwise a run whose every selected stage is disabled
+                # (``sync_type=sdn`` with the default ``sync_mode_sdn=disabled``,
+                # say) would hard-fail as "No sync stage ran" on an endpoint that
+                # was never going to sync anything. Nothing was lost, so nothing
+                # is wrong. ``_build_base_query_params()`` re-sets these globals
+                # for every endpoint that does run, so scribbling on them here is
+                # the established pattern, not a leak.
+                _set_sync_mode_vars(effective_sync_modes_for_endpoint(endpoint_id))
+                mode_skips = {st: _stage_skip_reason(st) for st in stages}
+                if all(reason is not None for reason in mode_skips.values()):
+                    job.logger.info(
+                        f"Proxmox endpoint {endpoint_id} is not registered on the "
+                        "ProxBox backend, but every selected stage is disabled by "
+                        "its sync modes — recording skips instead of failing"
+                    )
+                    for st, skip_reason in mode_skips.items():
+                        stages_out.append(
+                            {
+                                "sync_type": st,
+                                "endpoint_id": endpoint_id,
+                                "stream_path": None,
+                                "runtime_seconds": 0.0,
+                                "result_summary": {
+                                    "ok": True,
+                                    "skipped": True,
+                                    "reason": skip_reason,
+                                },
+                            }
+                        )
+                    continue
                 reason = (
                     wire_resolve_error
-                    or f"Proxmox endpoint {endpoint_id} is not registered on the "
-                    "ProxBox backend; skipping to avoid syncing the wrong endpoint"
+                    # Two distinct causes land here and the message covers both:
+                    # the backend has never seen this endpoint, or it holds a row
+                    # under this endpoint's name that points at a *different*
+                    # host — a retarget whose preflight push failed. The second
+                    # is why "skipping to avoid syncing the wrong endpoint" is
+                    # literal rather than defensive phrasing. The specific cause
+                    # is logged by resolve_backend_endpoint_ids().
+                    or f"Proxmox endpoint {endpoint_id} could not be resolved to "
+                    "a current ProxBox backend endpoint (not registered, or the "
+                    "backend's stored copy points at a different host or port); "
+                    "skipping to avoid syncing the wrong endpoint"
                 )
                 job.logger.error(
                     f"Skipping SSE sync for Proxmox endpoint {endpoint_id}: {reason}"
@@ -796,6 +1388,7 @@ def _run_all_stages_sync(
                         query_params,
                         on_frame,
                         fastapi_endpoint_id,
+                        preflight_hint=preflight_hint,
                     )
                 except RuntimeError as exc:
                     if st in _SKIPPABLE_STAGES:

@@ -35,6 +35,8 @@ def sync_individual(
     path: str,
     query_params: dict | None = None,
     netbox_branch_schema_id: str | None = None,
+    fastapi_endpoint_id: int | None = None,
+    proxmox_endpoint_ids: str | None = None,
 ) -> tuple[dict, int]:
     """Call an individual sync endpoint on proxbox-api.
 
@@ -46,17 +48,41 @@ def sync_individual(
             single-record sync in ``activate_branch(schema_id)`` and emits
             the ``X-NetBox-Branch`` header on every NetBox write. Bridges
             issue #370 through SyncContext (#375) per issue #406.
+        fastapi_endpoint_id: Optional ``FastAPIEndpoint`` pk to run against.
+            Without it this resolves the *first* enabled backend, which on a
+            multi-backend install is not necessarily the one the calling job
+            selected and preflighted. Pass the **id**, never a URL: the id is
+            resolved through the same context builder, so the URL and the
+            ``verify_ssl`` setting always come from the same row.
+        proxmox_endpoint_ids: Optional comma-separated list of **backend**
+            Proxmox endpoint ids to scope the sync to. Every individual-sync
+            route resolves its Proxmox sessions through the same
+            ``ProxmoxSessionsDep`` the streaming stages use, and that
+            dependency treats an *absent* filter as "use every endpoint I
+            hold" — including endpoints an operator has disabled in NetBox.
+            Callers that know their scope must therefore send it explicitly;
+            omitting it widens the run rather than narrowing it.
 
     Returns:
         Tuple of (response_dict, status_code)
     """
-    if netbox_branch_schema_id:
+    if netbox_branch_schema_id or proxmox_endpoint_ids:
         merged_params = dict(query_params or {})
-        merged_params["netbox_branch_schema_id"] = netbox_branch_schema_id
+        if netbox_branch_schema_id:
+            merged_params["netbox_branch_schema_id"] = netbox_branch_schema_id
+        if proxmox_endpoint_ids:
+            merged_params["proxmox_endpoint_ids"] = proxmox_endpoint_ids
         query_params = merged_params
 
-    context = get_first_fastapi_context()
+    context = get_first_fastapi_context(endpoint_id=fastapi_endpoint_id)
     if context is None or not context.get("http_url"):
+        if fastapi_endpoint_id is not None:
+            return {
+                "error": (
+                    "The FastAPI endpoint selected for this run "
+                    f"(id {fastapi_endpoint_id}) is not configured or not enabled."
+                )
+            }, 503
         return {"error": "No FastAPI endpoint configured."}, 503
 
     http_url = context["http_url"]
@@ -144,6 +170,8 @@ def sync_individual_with_dependencies(
     _visited: set | None = None,
     _context: dict | None = None,
     netbox_branch_schema_id: str | None = None,
+    fastapi_endpoint_id: int | None = None,
+    proxmox_endpoint_ids: str | None = None,
 ) -> tuple[dict, int, list[dict]]:
     """Call an individual sync endpoint and recursively sync dependencies.
 
@@ -154,6 +182,17 @@ def sync_individual_with_dependencies(
         netbox_branch_schema_id: Optional netbox-branching schema_id;
             forwarded to every recursive call so all dependent records land
             on the same branch (see :func:`sync_individual`).
+        fastapi_endpoint_id: Optional ``FastAPIEndpoint`` pk, forwarded to
+            every recursive call so a dependency cannot silently sync through
+            a different backend than the object that pulled it in.
+        proxmox_endpoint_ids: Optional comma-separated **backend** Proxmox
+            endpoint scope, forwarded to every recursive call. Like the branch
+            schema id, this must be an argument and not merely a query param:
+            :func:`_sync_dependency` rebuilds each dependent call's params from
+            ``_CONTEXT_KEYS``, so a scope that travelled only inside
+            ``query_params`` would apply to the first object and then silently
+            widen back to "every endpoint the backend holds" for everything
+            resolved off it.
 
     Returns:
         Tuple of (response_dict, status_code, list of synced dependencies)
@@ -173,7 +212,11 @@ def sync_individual_with_dependencies(
     _visited.add(cache_key)
 
     response, status = sync_individual(
-        path, params, netbox_branch_schema_id=netbox_branch_schema_id
+        path,
+        params,
+        netbox_branch_schema_id=netbox_branch_schema_id,
+        fastapi_endpoint_id=fastapi_endpoint_id,
+        proxmox_endpoint_ids=proxmox_endpoint_ids,
     )
     all_synced = []
 
@@ -188,6 +231,8 @@ def sync_individual_with_dependencies(
                     _visited,
                     context,
                     netbox_branch_schema_id=netbox_branch_schema_id,
+                    fastapi_endpoint_id=fastapi_endpoint_id,
+                    proxmox_endpoint_ids=proxmox_endpoint_ids,
                 )
                 all_synced.extend(dep_synced)
                 if dep_response:
@@ -245,6 +290,8 @@ def _sync_dependency(
     _visited: set,
     parent_context: dict | None,
     netbox_branch_schema_id: str | None = None,
+    fastapi_endpoint_id: int | None = None,
+    proxmox_endpoint_ids: str | None = None,
 ) -> tuple[dict, int, list[dict]]:
     """Sync a single dependency from a dependencies_synced entry."""
     dep_type = dep.get("object_type")
@@ -319,6 +366,8 @@ def _sync_dependency(
         _visited,
         _context=context,
         netbox_branch_schema_id=netbox_branch_schema_id,
+        fastapi_endpoint_id=fastapi_endpoint_id,
+        proxmox_endpoint_ids=proxmox_endpoint_ids,
     )
 
 

@@ -9,11 +9,17 @@ from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
 
+from tests.django_stubs import install_django_stubs
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _load_backend_sync_module(monkeypatch):
+    # `DatabaseError` / `salted_hmac` are imported at module level — see
+    # `tests/django_stubs.py` for why every loader of this file needs them.
+    install_django_stubs(monkeypatch)
+
     pkg = types.ModuleType("netbox_proxbox")
     pkg.__path__ = [str(REPO_ROOT / "netbox_proxbox")]
     monkeypatch.setitem(sys.modules, "netbox_proxbox", pkg)

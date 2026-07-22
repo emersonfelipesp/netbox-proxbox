@@ -281,8 +281,14 @@ def sync_vm_templates(
     endpoint_id: int,
     fastapi_url: str | None = None,
     auth_headers: dict[str, str] | None = None,
+    fastapi_endpoint_id: int | None = None,
 ) -> VMTemplateSyncResult:
-    """Sync Proxmox template VMs for one Proxmox endpoint."""
+    """Sync Proxmox template VMs for one Proxmox endpoint.
+
+    ``fastapi_endpoint_id`` pins backend resolution to one `FastAPIEndpoint` row
+    (only consulted when ``fastapi_url`` is omitted) so a multi-backend install
+    cannot certify one backend in the job preflight and sync against another.
+    """
     result = VMTemplateSyncResult(endpoint_id=endpoint_id)
     try:
         endpoint = ProxmoxEndpoint.objects.get(pk=endpoint_id)
@@ -327,7 +333,7 @@ def sync_vm_templates(
 
     verify_ssl = True
     if not fastapi_url:
-        ctx = get_fastapi_request_context()
+        ctx = get_fastapi_request_context(endpoint_id=fastapi_endpoint_id)
         if ctx is None or not ctx.http_url:
             result.error = "FastAPI URL not configured"
             logger.error(result.error)

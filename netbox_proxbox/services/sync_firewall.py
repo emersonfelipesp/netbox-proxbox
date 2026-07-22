@@ -481,6 +481,7 @@ def _sync_one_endpoint(
 def sync_firewall(
     fastapi_url: str | None = None,
     auth_headers: dict[str, str] | None = None,
+    fastapi_endpoint_id: int | None = None,
 ) -> FirewallSyncResult:
     """Sync datacenter-level firewall objects for all Proxmox endpoints.
 
@@ -491,6 +492,10 @@ def sync_firewall(
     Args:
         fastapi_url: Optional base URL override (resolved from FastAPIEndpoint when omitted).
         auth_headers: Optional auth headers override.
+        fastapi_endpoint_id: Optional `FastAPIEndpoint` pk pinning which backend
+            row is resolved.  Only consulted when ``fastapi_url`` is omitted; it
+            stops a multi-backend install from certifying one backend in the job
+            preflight and then syncing against another.
 
     Returns:
         FirewallSyncResult with per-model counters and success flag.
@@ -499,7 +504,7 @@ def sync_firewall(
 
     verify_ssl = True
     if not fastapi_url:
-        ctx = get_fastapi_request_context()
+        ctx = get_fastapi_request_context(endpoint_id=fastapi_endpoint_id)
         if ctx is None or not ctx.http_url:
             result.error = "FastAPI endpoint not configured or has no URL"
             logger.error(result.error)

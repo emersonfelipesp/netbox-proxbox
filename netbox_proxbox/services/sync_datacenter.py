@@ -95,13 +95,20 @@ def _upsert_cpu_model(
 def sync_datacenter(
     fastapi_url: str | None = None,
     auth_headers: dict | None = None,
+    fastapi_endpoint_id: int | None = None,
 ) -> DatacenterSyncResult:
-    """Sync datacenter CPU models for all Proxmox endpoints."""
+    """Sync datacenter CPU models for all Proxmox endpoints.
+
+    ``fastapi_endpoint_id`` pins the resolution to one `FastAPIEndpoint` row so a
+    multi-backend install cannot certify one backend in the job preflight and
+    then talk to a different one here.  It is only consulted when ``fastapi_url``
+    is not supplied — an explicit URL already names the backend.
+    """
     result = DatacenterSyncResult()
 
     verify_ssl = True
     if not fastapi_url:
-        ctx = get_fastapi_request_context()
+        ctx = get_fastapi_request_context(endpoint_id=fastapi_endpoint_id)
         if ctx is None or not ctx.http_url:
             result.error = "FastAPI endpoint not configured or has no URL"
             logger.error(result.error)

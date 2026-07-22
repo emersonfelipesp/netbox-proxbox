@@ -289,10 +289,23 @@ def test_get_proxmox_card_scopes_duplicate_domain_by_backend_id(
 
     def fake_get(url, timeout=None, params=None, headers=None, verify=None):
         if url.endswith("/proxmox/endpoints"):
+            # Same domain on both rows is the point of this test; `port` is
+            # present because the resolver confirms the located row still dials
+            # `(host, port)` and refuses a row it cannot resolve one from.
             return ResponseStub(
                 [
-                    {"id": 1, "name": "PVE (nb:1)", "domain": "pve.local"},
-                    {"id": 2, "name": "PVE (nb:2)", "domain": "pve.local"},
+                    {
+                        "id": 1,
+                        "name": "PVE (nb:1)",
+                        "domain": "pve.local",
+                        "port": 8006,
+                    },
+                    {
+                        "id": 2,
+                        "name": "PVE (nb:2)",
+                        "domain": "pve.local",
+                        "port": 8006,
+                    },
                 ]
             )
         if "/proxmox/version" in url:

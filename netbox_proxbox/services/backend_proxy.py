@@ -28,6 +28,8 @@ from netbox_proxbox.services.backend_context import (
 from netbox_proxbox.views.error_utils import (
     extract_backend_error_detail,
     parse_requests_response_json,
+    redact_backend_detail,
+    redact_sensitive,
 )
 
 logger = logging.getLogger(__name__)
@@ -97,6 +99,22 @@ def _iter_sse_frames(
     yield from flush()
 
 
+def _redacted_mapping(payload: dict[str, object]) -> dict[str, object]:
+    """Redact a backend payload, guaranteeing a mapping comes back.
+
+    ``redact_sensitive()`` is shape-preserving, so a dict in yields a dict out —
+    but its declared return type is ``object`` because it walks arbitrary JSON.
+    This narrows it back for the two call sites that must hand a mapping onward
+    (the SSE frame callback and the failed-stream payload). If redaction ever
+    collapses the mapping (it would take a depth limit of 0), the *redacted*
+    value is wrapped rather than the original being handed back — the fallback
+    has to stay fail-closed, or the one path that loses its shape is the one
+    path that leaks.
+    """
+    redacted = redact_sensitive(payload)
+    return redacted if isinstance(redacted, dict) else {"detail": redacted}
+
+
 def _consume_sse_until_complete(
     response: requests.Response,
     *,
@@ -109,7 +127,12 @@ def _consume_sse_until_complete(
             _event = frame.event
             data = frame.data
             if on_frame is not None:
-                on_frame(_event, data)
+                # ``on_frame`` writes into the NetBox job log (see
+                # ``sync_stages.py``), which is long-lived and readable by anyone
+                # who can view jobs. A backend error frame can quote the request
+                # that failed, and the preflight pushes credential payloads, so
+                # the frame is redacted before it leaves this reader.
+                on_frame(_event, _redacted_mapping(data))
             if _event == "complete":
                 try:
                     last_complete = SseCompletePayload.model_validate(data)
@@ -135,11 +158,11 @@ def _consume_sse_until_complete(
         }, 502
 
     if last_complete.ok is False:
-        msg = last_complete.message or "Sync failed."
+        msg = redact_backend_detail(last_complete.message or "Sync failed.")
         if last_complete.errors:
             first_error = last_complete.errors[0]
             if first_error.get("detail"):
-                msg = str(first_error["detail"])
+                msg = redact_backend_detail(first_error["detail"])
         return {
             "stream": True,
             "detail": msg,
@@ -212,7 +235,7 @@ def request_backend_resource(
             if not json_err and isinstance(payload, dict):
                 d = payload.get("detail") or payload.get("message")
                 if d:
-                    last_detail = str(d)
+                    last_detail = redact_backend_detail(d)
                 if (
                     not auth_register_attempted
                     and response.status_code == 401
@@ -386,7 +409,7 @@ def request_backend_json(
                 elif isinstance(payload, dict):
                     detail = payload.get("detail") or payload.get("message")
                     if detail:
-                        last_detail = str(detail)
+                        last_detail = redact_backend_detail(detail)
                     if (
                         not auth_register_attempted
                         and response.status_code == 401
@@ -542,6 +565,16 @@ def run_sync_stream(
                 "path": path,
                 "requested_urls": requested_urls,
             }
+            if status >= 400:
+                # A failed stream payload is consumed by ``sync_stages.py``,
+                # which logs it and folds it into the ``RuntimeError`` that
+                # becomes ``Job.error``. Redact the whole mapping here, at the
+                # producer, so every downstream reader — including the
+                # ``str(payload)`` fallbacks and ``_format_stage_sync_error()``
+                # — is working from already-redacted data. The success payload
+                # is deliberately left alone: it carries the sync counters
+                # callers depend on, not error text.
+                payload = _redacted_mapping(payload)
             return payload, status
 
         # Error path: result is (last_detail, should_retry, new_headers, http_status)
@@ -596,7 +629,7 @@ def _try_sync_stream_url(
                 if not json_err and isinstance(payload, dict):
                     d = payload.get("detail") or payload.get("message")
                     if d:
-                        last_detail = str(d)
+                        last_detail = redact_backend_detail(d)
                     if actual_status == 401 and "API key" in str(d):
                         new_headers, should_retry = _handle_auth_registration_and_retry(
                             headers,
