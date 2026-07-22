@@ -67,6 +67,7 @@ def test_get_returns_wrapped_response(http_client_module):
     assert mock_get.call_args.kwargs["timeout"] == 7
     assert mock_get.call_args.kwargs["verify"] is False
     assert mock_get.call_args.kwargs["stream"] is False
+    assert mock_get.call_args.kwargs["allow_redirects"] is True
 
 
 def test_post_passes_json_payload(http_client_module):
@@ -76,6 +77,20 @@ def test_post_passes_json_payload(http_client_module):
         resp = client.post("http://x/", json={"a": 1})
     assert resp.status_code == 201
     assert mock_post.call_args.kwargs["json"] == {"a": 1}
+
+
+def test_get_and_post_can_disable_redirect_following(http_client_module):
+    client = http_client_module.RequestsHttpClient()
+    raw = _make_response(307, "")
+    with (
+        patch("requests.get", return_value=raw) as mock_get,
+        patch("requests.post", return_value=raw) as mock_post,
+    ):
+        client.get("http://x/", allow_redirects=False)
+        client.post("http://x/", allow_redirects=False)
+
+    assert mock_get.call_args.kwargs["allow_redirects"] is False
+    assert mock_post.call_args.kwargs["allow_redirects"] is False
 
 
 # ── Exception translation ────────────────────────────────────────────────────

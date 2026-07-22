@@ -904,6 +904,47 @@ def _ensure_backend_endpoints(
     return PreflightResult(phases=phases, hint=_preflight_hint(notes))
 
 
+class BackendKeyPreflightError(RuntimeError):
+    """Raised when a sync job cannot prove its stored backend key."""
+
+
+def _require_backend_key(
+    job: "ProxboxSyncJob",
+    endpoint_id: int | None = None,
+) -> None:
+    """Abort the entire job unless one stored key authenticates read-only."""
+    from netbox_proxbox.services.backend_auth import ensure_backend_key_registered  # noqa: PLC0415
+
+    key_ok, key_msg = ensure_backend_key_registered(endpoint_id=endpoint_id)
+    if not key_ok:
+        job.logger.error(f"Preflight: API key verification failed — {key_msg}")
+        raise BackendKeyPreflightError(
+            "Backend API-key preflight failed; no sync stage was started."
+        )
+
+    # Several legacy pre-SSE services still resolve the first enabled endpoint.
+    # Until those APIs accept an explicit selector end-to-end, allow a selector
+    # only when it names that same default. This prevents proving endpoint B and
+    # then sending endpoint A's unproved key in a later phase.
+    if endpoint_id is not None:
+        from netbox_proxbox.services.backend_context import (  # noqa: PLC0415
+            get_fastapi_endpoint_with_token,
+        )
+
+        selected, _ = get_fastapi_endpoint_with_token(endpoint_id=endpoint_id)
+        default, _ = get_fastapi_endpoint_with_token()
+        if (
+            selected is None
+            or default is None
+            or getattr(selected, "pk", None) != getattr(default, "pk", None)
+        ):
+            raise BackendKeyPreflightError(
+                "The selected FastAPI endpoint is not the active default; no sync "
+                "stage was started."
+            )
+    job.logger.info(f"Preflight: API key verified — {key_msg}")
+
+
 def _coerce_endpoint_ids(
     raw_ids: list[str] | None,
     *,
@@ -1214,6 +1255,11 @@ class ProxboxSyncJob(JobRunner):
             run_started = time.monotonic()
             sync_run_id = str(uuid.uuid4())
             _sync_stage_settings()
+
+            # Authenticate before branch creation, batch execution, endpoint
+            # pushes, cluster sync, and every SSE stage. Rejection aborts the
+            # whole job instead of creating repeated authentication failures.
+            _require_backend_key(self, fastapi_endpoint_id)
 
             try:
                 from netbox_proxbox.services.branch_lifecycle import (  # noqa: PLC0415

@@ -24,6 +24,13 @@ Proxbox discovers and syncs the following from Proxmox into NetBox:
 
 Sync runs on-demand from the NetBox UI or scheduled automatically via NetBox's job system.
 
+Backend API keys are adopted fail-closed. Creating or enabling a
+`FastAPIEndpoint`, changing its URL/TLS target, or rotating its key requires an
+explicit candidate that the operator retains. The plugin never generates a
+hidden key, never follows redirects during key checks, and never persists a
+candidate until an initialized backend authenticates it or an empty backend
+accepts the one-time bootstrap. Disabled endpoint rows make no network calls.
+
 ## Additional Optional Plugins
 
 Proxbox can be extended with standalone companion plugins. Install only the
@@ -261,7 +268,8 @@ Full notes: [Release Notes - v0.0.20](docs/release-notes/version-0.0.20.md).
 
 Paired with backend [`proxbox-api 0.0.16`](https://github.com/emersonfelipesp/proxbox-api).
 
-- **FastAPI endpoint token drift fix.** `FastAPIEndpoint.save()` now detects explicit token changes on existing rows and calls `_register_key_with_backend(skip_bootstrap_check=True)` so operators can recover from a proxbox-api key rotation without direct database surgery.
+- **Historical FastAPI endpoint token drift fix (superseded).** v0.0.19 added an explicit-token recovery path for proxbox-api key rotation. Current code replaces its former bootstrap bypass with the fail-closed adoption boundary described above.
+- **Canonical FastAPI trust boundary.** Direct-model and REST paths validate the backend authority before any request, reject URL injection syntax, bracket IPv6 literals, preserve omitted secret ciphertext, and treat disabled WebSocket/storage consumers as absolute no-network paths.
 - **PBS/PDM `host` compatibility property.** `PBSEndpoint` and `PDMEndpoint` now expose a `host` property bridging the field-name difference with proxbox-api's SQLite column.
 - **PBS/PDM `timeout_seconds` compatibility property.** Both models now expose a `timeout_seconds` property to match the proxbox-api SQLite column name.
 

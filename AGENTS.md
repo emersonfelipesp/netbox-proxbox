@@ -201,6 +201,22 @@ Key architectural invariants to keep in mind:
 
 - **`NetBoxEndpoint` and `FastAPIEndpoint` are singleton-shaped.** The backend proxy (`services/backend_proxy.py`) and dashboard views resolve the first enabled backend row. Import views enforce the singleton constraint — if a record exists, the user is prompted to confirm the override before the existing record is deleted and replaced.
 - **Primary endpoint secrets are encrypted at rest.** `ProxmoxEndpoint.password`, `ProxmoxEndpoint.token_value`, `FastAPIEndpoint.token`, `PBSEndpoint.token_secret`, and `PDMEndpoint.token_secret` are public Python properties backed by Fernet-encrypted `*_enc` model fields. Runtime setters use `ProxboxPluginSettings.encryption_key` and create one when storing a primary secret if it is blank; do not reintroduce plaintext model fields for those secrets.
+- **Backend API-key adoption is fail-closed.** `FastAPIEndpoint.save()` and
+  every UI/import/API persistence path share
+  `services.backend_key_adoption.adopt_rotated_backend_key()`. Keys are never
+  generated implicitly. A new disabled row stays keyless; creating/enabling an
+  endpoint or changing its URL/TLS trust boundary requires the operator to
+  resubmit a retained candidate explicitly. The bootstrap POST is allowed only
+  for that explicit candidate and only when proxbox-api reports no keys; an
+  initialized backend must authenticate it with one read-only keys request
+  before `token_enc` changes. A credential-free
+  `backend_key_target_fingerprint` durably binds the ciphertext to the
+  canonical primary HTTP target, fallback IP, TLS flags, and WebSocket target
+  flags; runtime lookups recompute it using a fresh IP FK and fail closed on
+  drift. HTTP and WebSocket adoption rejects redirects, the WebSocket client
+  disables ambient proxies and rechecks trust throughout its lifetime, and
+  endpoint saves cancel stale clients. Never treat HTTP 409 as success, expose
+  token previews, or include response or transport text in key errors.
 - **`enabled=False` is a hard no-connection gate for endpoint-like rows.** Disabled `ProxmoxEndpoint`, `NetBoxEndpoint`, `FastAPIEndpoint`, `PBSEndpoint`, `PDMEndpoint`, and companion endpoint rows remain visible inventory records, but operational paths must return before pushing to proxbox-api, registering keys, fetching OpenAPI/status, resolving backend ids, hydrating dashboard/status cards, scheduling jobs, or calling live HA/storage/firewall/SDN/datacenter routes.
 - **Disabled Proxmox status badges stay static.** List, detail, and dashboard Proxmox status elements must show a gray `Disabled` badge without `data-service-status-url` when `enabled=False`; the direct keepalive endpoint may return `status="disabled"` only as a defensive fallback.
 - **Proxmox connection tuning is model-resolved.** Nullable endpoint timeout/retry/back-off values inherit `ProxboxPluginSettings` through `ProxmoxEndpoint.effective_connection_tuning()`; explicit values win when they are not `None`, including zero retries/back-off. Push only the resulting concrete values to proxbox-api — never JSON `null` inheritance markers. Treat a backend row whose public timeout/retry/back-off differs or is missing as stale and push-required even after the soft preflight budget expires.

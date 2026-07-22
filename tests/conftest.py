@@ -510,6 +510,21 @@ def load_plugin_module(
 
     utils_module.resolve_vm_type = _resolve_vm_type_stub
 
+    backend_auth_module = types.ModuleType("netbox_proxbox.services.backend_auth")
+    backend_auth_module.ensure_backend_key_registered = lambda *args, **kwargs: (
+        True,
+        "stubbed",
+    )
+    backend_auth_module.http_timeout_for_sync_path = lambda path: (
+        (5, 3600)
+        if "virtualization/virtual-machines" in path or "full-update" in path
+        else 5
+    )
+    backend_auth_module.wait_for_backend_ready = lambda *args, **kwargs: (
+        True,
+        "stubbed",
+    )
+
     stub_modules = {
         "django": django_module,
         "django.http": django_http,
@@ -545,6 +560,7 @@ def load_plugin_module(
         "virtualization": virtualization_module,
         "virtualization.models": virtualization_models_module,
         "netbox_proxbox.utils": utils_module,
+        "netbox_proxbox.services.backend_auth": backend_auth_module,
         "utilities.permissions": utilities_permissions,
         "utilities.views": utilities_views,
     }

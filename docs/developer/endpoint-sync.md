@@ -52,7 +52,7 @@ flowchart TB
 
     NB_EP -- "post_save signal\nsync_netbox_endpoint_to_backend()" --> BE_NB
     PX_EP -- "post_save signal\nsync_proxmox_endpoint_to_backend()" --> BE_PX
-    FA_EP -- "post_save signal\nPOST /auth/register-key" --> BE_KEY
+    FA_EP -- "save() preflight\nGET status/keys; explicit bootstrap only" --> BE_KEY
 
     Preflight -- "PUT/POST /netbox/endpoint" --> BE_NB
     Preflight -- "PUT/POST /proxmox/endpoints" --> BE_PX
@@ -64,39 +64,71 @@ flowchart TB
 
 ---
 
-## Delivery Mechanism 1 — `post_save` Signals
+## Delivery Mechanism 1 — model gate and `post_save` signals
 
-All three `post_save` signals fire whenever an operator saves an endpoint record through
-the plugin's UI or REST API. Each signal is **best-effort**: it logs on failure but never
-raises an exception, so a transient backend outage does not break the Django request.
+`FastAPIEndpoint.save()` is the persistence boundary for backend keys. UI,
+import, REST, and direct-model writes all converge there; form validation and
+`save(commit=False)` remain network-free. REST serializers translate its Django
+error to a DRF validation response. The three `post_save` signals still
+coordinate endpoint delivery, but they never invent, bootstrap, rotate, or
+persist a credential.
 
-### `FastAPIEndpoint` → API key registration
+### `FastAPIEndpoint` → fail-closed API key adoption
 
-**File:** `netbox_proxbox/signals.py` — `ensure_fastapi_endpoint_token`
+**Files:** `netbox_proxbox/models/fastapi_endpoint.py` and
+`netbox_proxbox/services/backend_key_adoption.py`
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor Op as Operator
     participant NB as NetBox UI
-    participant Sig as Django Signal
     participant FA as FastAPIEndpoint (PostgreSQL)
     participant API as proxbox-api
 
-    Op->>NB: Save FastAPIEndpoint
-    NB->>FA: ORM save()
-    FA-->>Sig: post_save fired
-    Sig->>FA: Generate 48-byte token if missing
-    Sig->>API: GET /auth/bootstrap-status
-    API-->>Sig: { "needs_bootstrap": true }
-    Sig->>API: POST /auth/register-key { "api_key": token }
-    API-->>Sig: 201 Created
-    Note over Sig,API: Token stored as bcrypt hash in apikey table
+    Op->>NB: Save with an explicit retained candidate
+    NB->>FA: save() / prepare_backend_key_transition()
+    FA->>FA: Lock row and compare loaded trust-boundary snapshot
+    FA->>API: GET /auth/bootstrap-status (redirects disabled)
+    alt backend has no keys
+        API-->>FA: { "needs_bootstrap": true }
+        FA->>API: POST /auth/register-key { "api_key": candidate } (once; redirects disabled)
+        API-->>FA: 201 Created
+    else backend is initialized
+        API-->>FA: { "needs_bootstrap": false }
+        FA->>API: GET /auth/keys + candidate header (redirects disabled)
+        API-->>FA: 200 Accepted
+    end
+    FA->>FA: Encrypt and persist candidate
+    Note over FA,API: Any rejection or transport failure preserves the prior DB value
 ```
 
-The auto-generated token is stored on `FastAPIEndpoint.token` in PostgreSQL and used as the
-`X-Proxbox-API-Key` header on every subsequent backend request. If the backend already has a
-key (`needs_bootstrap: false`), the registration step is skipped.
+The backend stores only the bcrypt hash. The plugin stores the candidate in the
+encrypted `token_enc` model field and exposes it through the compatibility
+`token` property. An initialized backend is never sent the bootstrap POST;
+`409` is failure, not adoption. The in-memory validation proof is bound to the
+candidate, URL, scheme, port, and TLS-verification setting so changing the
+target before persistence forces a fresh check. A new disabled row is stored
+without a key and performs no HTTP request. Enabling it, changing the target, or
+rotating the key requires the candidate to be explicitly resubmitted. A
+same-key target change reuses the exact ciphertext after authenticating against
+the new target. Security-sensitive saves use a row lock plus an optimistic
+snapshot so a stale model instance cannot overwrite a newer key or target.
+Blank or null `token` values on an existing REST partial update are treated as
+omitted, preserving the exact ciphertext; they do not satisfy the explicit-key
+requirement for enable or target transitions.
+
+The adoption service canonicalizes the target before its first request. It
+rejects authority injection and URL userinfo/path/query/fragment syntax,
+validates DNS/IP values, and brackets IPv6 literals. Invalid direct-model input
+therefore cannot redirect the candidate header to a different authority.
+
+The one-time bootstrap POST necessarily precedes the local database commit. If
+the database transaction later rolls back, retrying with the same retained
+candidate is recoverable: the now-initialized backend authenticates that
+candidate through `GET /auth/keys`, and the retry commits it locally. Hidden or
+server-generated bootstrap candidates are forbidden because they could be lost
+in that failure window.
 
 ---
 
@@ -156,8 +188,8 @@ sequenceDiagram
     NB->>PX_EP: ORM save()
     PX_EP-->>Sig: post_save fired
     Sig->>Sig: Resolve FastAPIEndpoint (singleton)
-    Sig->>Sig: Ensure FastAPIEndpoint has a token
-    Sig->>API: POST /auth/register-key (if needed)
+    Sig->>Sig: Resolve an enabled FastAPIEndpoint with a stored token
+    Sig->>API: GET bootstrap status, then authenticated GET /auth/keys
 
     Sig->>Sig: Build base_url + auth headers
     Sig->>API: GET /proxmox/endpoints
@@ -180,11 +212,14 @@ registered under different NetBox PKs is treated as a distinct backend entry.
 
 ## Delivery Mechanism 2 — Sync Job Preflight
 
-`post_save` signals are best-effort: if the backend was offline when an endpoint was first
-saved, the push is silently lost. The **preflight step** in `ProxboxSyncJob.run()` closes
-this gap by pushing all endpoint data immediately before any SSE stage starts — regardless
-of whether the signals previously succeeded — and then verifies that the backend actually
-holds a NetBox endpoint before letting the run continue.
+The NetBox/Proxmox endpoint-delivery `post_save` signals are best-effort: if the
+backend was offline when either downstream endpoint was saved, that push is
+lost. The **preflight step** in `ProxboxSyncJob.run()` closes this delivery gap
+by pushing all endpoint data immediately before any SSE stage starts —
+regardless of whether the signals previously succeeded — and then verifies
+that the backend actually holds a NetBox endpoint before letting the run
+continue. Backend key adoption is different: its model-level preflight fails
+the `FastAPIEndpoint` save instead of accepting an unverified key.
 
 **File:** `netbox_proxbox/jobs.py` — `_ensure_backend_endpoints()`
 
@@ -752,11 +787,12 @@ sequenceDiagram
     participant API as proxbox-api SQLite
 
     Note over Op,API: Step 1 — FastAPIEndpoint (connection to backend)
-    Op->>NB: Create FastAPIEndpoint (IP/port of proxbox-api)
-    NB->>NBPG: Save FastAPIEndpoint
-    NBPG-->>NB: post_save signal
-    NB->>API: POST /auth/register-key { api_key: <48-byte token> }
+    Op->>NB: Create enabled FastAPIEndpoint with a retained API key
+    NB->>API: GET /auth/bootstrap-status
+    API-->>NB: needs_bootstrap=true, has_db_keys=false
+    NB->>API: POST /auth/register-key { api_key: <explicit candidate> }
     API-->>NB: 201 — key stored as bcrypt hash
+    NB->>NBPG: Encrypt and commit the same candidate
 
     Note over Op,API: Step 2 — NetBoxEndpoint (NetBox credentials for backend)
     Op->>NB: Create NetBoxEndpoint (this NetBox URL + token)
@@ -780,11 +816,12 @@ sequenceDiagram
 ```
 
 !!! tip "Order matters"
-    Create the `FastAPIEndpoint` **first** so that the `post_save` signals for
-    `NetBoxEndpoint` and `ProxmoxEndpoint` have an active backend connection to push to.
-    If you create endpoints in a different order, the preflight at sync time will still
-    push everything correctly — but you will see warnings in the NetBox log for the missed
-    signal pushes.
+    Create the enabled `FastAPIEndpoint` **first**, explicitly supplying a key
+    you retain until the save succeeds. This gives the `post_save` signals for
+    `NetBoxEndpoint` and `ProxmoxEndpoint` an authenticated backend connection.
+    A disabled FastAPI row is inventory-only: it remains keyless and makes no
+    connection. To activate it later, enable it and resubmit the candidate in
+    the same save.
 
 ---
 
@@ -808,7 +845,7 @@ return { "detail": last_detail }, last_http_status or 503
 | Backend response | Old plugin status | New plugin status | Retry triggered? |
 |---|---|---|---|
 | `400` missing endpoint | `503` | `400` | Yes (wrong) → **No (correct)** |
-| `401` invalid API key | `503` | `401` → auto-retry with new key | Handled separately |
+| `401` invalid API key | `503` | `401`; stored key is re-checked read-only | No credential substitution or bootstrap |
 | `502` bad gateway | `503` | `502` | Yes (unchanged) |
 | `503` backend overloaded | `503` | `503` | Yes (unchanged) |
 
@@ -821,12 +858,17 @@ return { "detail": last_detail }, last_http_status or 503
 All plugin → backend requests include:
 
 ```
-X-Proxbox-API-Key: <48-byte URL-safe random token>
+X-Proxbox-API-Key: <operator-retained backend key>
 ```
 
-The token is auto-generated on `FastAPIEndpoint.save()` (via `secrets.token_urlsafe(48)`)
-and registered with the backend as a **bcrypt hash** stored in the `apikey` SQLite table.
-The plaintext token is never stored on the backend.
+The plugin never generates a hidden key. The operator explicitly supplies and
+retains the first candidate; bootstrap registers only its **bcrypt hash** in the
+backend `apikey` table. Later rotations are created through the authenticated
+key-management route and are accepted by the plugin only after a read-only
+protected request succeeds. Every bootstrap-status, authenticated-key-list, and
+registration request rejects redirects. The plaintext token is never stored on
+the backend, included in diagnostic output, copied into validation errors, or
+shown by `proxbox_fix_tokens`.
 
 The backend's `APIKeyAuthMiddleware` validates the header on every non-exempt request.
 Brute-force attempts are blocked by the `AuthLockout` table (5 attempts per IP in 300 s).
@@ -870,12 +912,15 @@ are stored in plaintext with a dev-mode warning logged.
 
 | File | Role |
 |---|---|
-| `netbox_proxbox/signals.py` | `post_save` handlers for all three endpoint types |
+| `netbox_proxbox/models/fastapi_endpoint.py` | Transactional persistence gate, row lock, optimistic snapshot, and partial-update rules for backend-key adoption |
+| `netbox_proxbox/services/backend_key_adoption.py` | Strict bootstrap/auth response validation, target binding, and secret-safe errors |
+| `netbox_proxbox/services/http_client.py` | Redirect-disabled request adapter and transport-error normalization |
+| `netbox_proxbox/signals.py` | Read-only FastAPI stored-key checks plus best-effort NetBox/Proxmox endpoint-delivery handlers |
 | `netbox_proxbox/views/backend_sync.py` | Shared `sync_netbox_endpoint_to_backend()` and `sync_proxmox_endpoint_to_backend()`; `list_backend_netbox_endpoints()` (verification read); `backend_holds_netbox_endpoint()` + `_netbox_row_is_current()` (identity **and** currency) / `backend_holds_proxmox_endpoint()` (held **and** current); `netbox_credential_fingerprint()` / `netbox_push_credentials_unchanged()` / `_record_pushed_credential_fingerprint()` (local secret-rotation check, migration `0073`); `resolve_backend_endpoint_id()` / `resolve_backend_endpoint_ids()` (wire-id resolution, target-confirmed) |
 | `netbox_proxbox/jobs.py` | `_ensure_backend_endpoints()` preflight; `PreflightResult`; `ProxboxPreflightError`; `ProxboxSyncJob.run()` (staged **and** selected-object batch branches) |
 | `netbox_proxbox/sync_stages.py` | `_is_retryable_stage_failure()`; `preflight_hint` attribution on stage errors; `_no_endpoint_scope_reason()` / `_batch_wire_endpoint_scope()` (shared fail-loud endpoint-scope resolution, plus the plugin-pk → wire-id map); `_batch_object_core_cluster_id()` / `_batch_object_owner_endpoint_pks()` / `_owner_endpoint_pks_by_cluster_id()` (per-object owner resolution, tri-state: unknown / pinned / ambiguous); `_run_batch_selected_sync()` backend **and** per-object Proxmox-endpoint pinning |
 | `netbox_proxbox/services/individual_sync.py` | `sync_individual()` / `sync_individual_with_dependencies()` — `fastapi_endpoint_id` and `proxmox_endpoint_ids` pinned through recursive dependency syncs |
-| `netbox_proxbox/services/backend_auth.py` | `wait_for_backend_ready()`; cold-start timeout budgets |
+| `netbox_proxbox/services/backend_auth.py` | Read-only stored-key verification, `wait_for_backend_ready()`, and cold-start timeout budgets |
 | `netbox_proxbox/services/backend_proxy.py` | `run_sync_stream()`, `_try_sync_stream_url()` (HTTP status propagation) |
 | `netbox_proxbox/services/backend_context.py` | `get_fastapi_request_context()` — URL + auth header resolution |
 | `proxbox_api/routes/netbox/__init__.py` | `POST/PUT /netbox/endpoint` (backend CRUD) |

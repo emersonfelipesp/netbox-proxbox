@@ -4,8 +4,29 @@ This directory contains service-layer modules for backend HTTP proxy, keepalive 
 
 ## Files And Ownership
 
-- [`__init__.py`](./__init__.py): re-exports key service functions (`get_fastapi_request_context`, `iter_backend_sse_lines`, `run_sync_stream`, `sse_error_frames`, `sync_full_update_resource`, `sync_resource`, `ServiceStatus`).
-- [`backend_auth.py`](./backend_auth.py): token registration and bootstrap-status checks against the proxbox-api `/auth/` endpoints. Its HTTP budgets are **named module constants** (`BOOTSTRAP_STATUS_TIMEOUT`, `REGISTER_KEY_TIMEOUT`, `PREFLIGHT_READY_*`), not inline literals, because a cold backend spends its first seconds opening SQLite and resolving the NetBox OpenAPI schema — a 5-second budget failed at *exactly* 5.03 s while a later call to the same host answered in 3.78 s (netbox-proxbox issue #624). Timeouts are ceilings, not delays: a warm backend still answers well under a second. The `/health` probe inside `wait_for_backend_ready()` deliberately keeps its own short literal — it is a *retried* readiness poll, so a long budget there would stall the whole wait. Pinned by `tests/test_preflight_diagnosis.py`.
+- [`__init__.py`](./__init__.py): lazily re-exports key service functions
+  (`get_fastapi_request_context`, `iter_backend_sse_lines`, `run_sync_stream`,
+  `sse_error_frames`, `sync_full_update_resource`, `sync_resource`,
+  `ServiceStatus`). Keep this initializer import-light: pure URL/auth helpers
+  must import `services.backend_key_adoption` without initializing Django or
+  NetBox models.
+- [`backend_auth.py`](./backend_auth.py): read-only stored-key verification and
+  backend readiness checks against proxbox-api. The `PREFLIGHT_READY_*`
+  constants provide a bounded cold-start allowance; the short `/health` probe
+  is retried rather than given one long blocking timeout.
+- [`backend_key_adoption.py`](./backend_key_adoption.py): fail-closed key state
+  machine shared by model, form, API, signal, job, and management-command paths.
+  It uses the bootstrap POST only for an explicitly retained candidate and only
+  when the backend reports no keys; ordinary signal/job/status checks are
+  read-only. Initialized backends must authenticate a candidate with one
+  read-only `GET /auth/keys` request before encrypted persistence. All three
+  adoption requests set `allow_redirects=False` so the API-key header or body
+  cannot cross an origin through redirects. The service validates and
+  canonicalizes the authority before the first request: URL userinfo/path/query/
+  fragment syntax and malformed hosts are rejected, while IPv6 literals are
+  emitted only as bracketed authorities. Its bootstrap/auth/register HTTP
+  ceilings are named constants sized for a cold backend opening SQLite and
+  resolving the NetBox OpenAPI schema; warm calls still return immediately.
 - [`backend_context.py`](./backend_context.py): defines `get_fastapi_request_context()` — resolves the active FastAPIEndpoint and builds the URL/header context used by all backend HTTP helpers.
 - [`backend_proxy.py`](./backend_proxy.py): HTTP client helpers for proxbox-api,
   including SSE streaming (`run_sync_stream`, `iter_backend_sse_lines`), JSON
@@ -154,7 +175,10 @@ is never logged.
 ## Notes
 
 - `get_fastapi_request_context()` is defined in `backend_context.py` and re-exported by `backend_proxy.py`; import from either, but modify only `backend_context.py`.
-- `get_fastapi_request_context()` and token-registration helpers must resolve only enabled `FastAPIEndpoint` rows. Disabled endpoint rows are visible inventory, not usable connection targets.
+- Never treat `POST /auth/register-key` HTTP 409 as key adoption. Rotation uses
+  `adopt_rotated_backend_key()`, whose secret-safe failures preserve the prior
+  encrypted value and whose proof binds the key to the exact URL and TLS target.
+- `get_fastapi_request_context()` and stored-key verification helpers must resolve only enabled, target-adopted `FastAPIEndpoint` rows. Disabled, blank-fingerprint, and drifted-target rows are visible inventory, not usable connection targets.
 - `endpoint_enabled.py::disabled_endpoint_detail()` is the shared guard for status/openapi/backend-sync code that receives endpoint-like objects (`FastAPIEndpoint`, `NetBoxEndpoint`, `PBSEndpoint`, `PDMEndpoint`, companion `PBSServer`, etc.). Call it before the first HTTP request.
 - Proxmox keepalive/status code should return `status="disabled"` for disabled `ProxmoxEndpoint` rows and must not push/sync the row to proxbox-api, resolve backend ids, or issue backend Proxmox reads. The list/detail/dashboard templates should avoid calling the keepalive route at all for disabled Proxmox rows.
 - `backend_proxy.py` is the primary integration point for SSE streaming and JSON sync requests to proxbox-api.

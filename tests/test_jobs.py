@@ -2927,6 +2927,95 @@ def test_run_batch_selected_sync_passes_the_proxmox_scope_to_dependency_syncs(
     ]
 
 
+@pytest.mark.parametrize("batch", [False, True])
+def test_proxbox_sync_job_rejected_key_aborts_before_batch_and_all_stages(
+    monkeypatch,
+    proxbox_sync_job_module,
+    batch,
+):
+    backend_auth = sys.modules["netbox_proxbox.services.backend_auth"]
+    checks: list[int | None] = []
+
+    def reject_key(*args, endpoint_id=None, **kwargs):
+        checks.append(endpoint_id)
+        return False, "candidate rejected"
+
+    monkeypatch.setattr(
+        backend_auth,
+        "ensure_backend_key_registered",
+        reject_key,
+    )
+
+    async def fail_batch(*args, **kwargs):
+        raise AssertionError("batch sync ran after key rejection")
+
+    monkeypatch.setattr(
+        proxbox_sync_job_module,
+        "_run_batch_selected_sync",
+        fail_batch,
+    )
+    services_mod = types.ModuleType("netbox_proxbox.services")
+    services_mod.run_sync_stream = lambda *args, **kwargs: (_ for _ in ()).throw(
+        AssertionError("SSE sync ran after key rejection")
+    )
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
+
+    ProxboxSyncJob = proxbox_sync_job_module.ProxboxSyncJob
+    job = ProxboxSyncJob()
+    job.logger = logging.getLogger("test_rejected_key_aborts")
+    job.job = MagicMock()
+    job.job.data = None
+    run_kwargs = {}
+    if batch:
+        run_kwargs = {
+            "batch_object_type": "virtual-machine",
+            "batch_object_ids": ["1"],
+        }
+
+    with pytest.raises(proxbox_sync_job_module.BackendKeyPreflightError):
+        ProxboxSyncJob.run(
+            job,
+            sync_types=[proxbox_sync_job_module.SyncTypeChoices.ALL],
+            fastapi_endpoint_id=42,
+            **run_kwargs,
+        )
+
+    assert checks == [42]
+
+
+def test_backend_key_preflight_rejects_nondefault_selected_endpoint(
+    monkeypatch,
+    proxbox_sync_job_module,
+):
+    """A proved selector cannot authorize legacy stages that use another row."""
+    backend_auth = sys.modules["netbox_proxbox.services.backend_auth"]
+    monkeypatch.setattr(
+        backend_auth,
+        "ensure_backend_key_registered",
+        lambda *args, **kwargs: (True, "verified"),
+    )
+    backend_context = sys.modules["netbox_proxbox.services.backend_context"]
+
+    def resolve_endpoint(*args, endpoint_id=None, **kwargs):
+        return (
+            SimpleNamespace(pk=endpoint_id if endpoint_id is not None else 1),
+            "stored-key",
+        )
+
+    monkeypatch.setattr(
+        backend_context,
+        "get_fastapi_endpoint_with_token",
+        resolve_endpoint,
+    )
+    job = SimpleNamespace(logger=MagicMock())
+
+    with pytest.raises(
+        proxbox_sync_job_module.BackendKeyPreflightError,
+        match="not the active default",
+    ):
+        proxbox_sync_job_module._require_backend_key(job, endpoint_id=42)
+
+
 def test_stage_retries_on_502_then_succeeds(monkeypatch, proxbox_sync_job_module):
     """A 502 stream error on first attempt should trigger a retry that succeeds."""
     call_count = 0

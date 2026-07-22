@@ -2,6 +2,7 @@
 
 # Django Imports
 from django import forms
+from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 
 # NetBox Imports
@@ -23,7 +24,27 @@ from ..utils import resolve_ip_address_initial
 from .import_utils import NullableCSVIntegerField, validate_endpoint_import_headers
 
 
-class FastAPIEndpointForm(NetBoxModelForm):
+class BackendKeyAdoptionFormMixin:
+    """Persist virtual token fields through the model's shared key gate."""
+
+    def save(self, commit: bool = True) -> FastAPIEndpoint:
+        instance = super().save(commit=False)  # type: ignore[misc]
+        submitted_token = (self.cleaned_data.get("token") or "").strip()  # type: ignore[attr-defined]
+        if submitted_token:
+            instance.token = submitted_token
+        if commit:
+            try:
+                instance.save()
+            except ValidationError as exc:
+                from utilities.exceptions import AbortRequest
+
+                messages = exc.message_dict.get("token", exc.messages)
+                raise AbortRequest(" ".join(str(item) for item in messages)) from None
+            self.save_m2m()  # type: ignore[attr-defined]
+        return instance
+
+
+class FastAPIEndpointForm(BackendKeyAdoptionFormMixin, NetBoxModelForm):
     """
     Form for FastAPIEndpoint model.
     It is used to CREATE and UPDATE FastAPIEndpoint objects.
@@ -116,19 +137,8 @@ class FastAPIEndpointForm(NetBoxModelForm):
 
         return cleaned_data
 
-    def save(self, commit: bool = True) -> FastAPIEndpoint:
-        """Persist submitted backend token rotations through encrypted storage."""
-        instance = super().save(commit=False)
-        submitted_token = (self.cleaned_data.get("token") or "").strip()
-        if submitted_token:
-            instance.token = submitted_token
-        if commit:
-            instance.save()
-            self.save_m2m()
-        return instance
 
-
-class FastAPIEndpointImportForm(NetBoxModelImportForm):
+class FastAPIEndpointImportForm(BackendKeyAdoptionFormMixin, NetBoxModelImportForm):
     """CSV import mapping for bulk FastAPI endpoint creation."""
 
     token = forms.CharField(required=False)

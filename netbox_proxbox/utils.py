@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import subprocess
 from typing import TYPE_CHECKING
+from urllib.parse import urlsplit
 
 from netbox_proxbox.type_defs import FastAPIAuthSource, FastAPIUrlSource
 
@@ -42,7 +43,11 @@ def get_ip_address_host(value: object | None) -> str:
 
 def get_backend_auth_headers(endpoint: FastAPIAuthSource | None) -> dict[str, str]:
     """Build auth header dict for ProxBox backend requests."""
-    if endpoint is None:
+    from netbox_proxbox.services.backend_key_adoption import (
+        backend_key_runtime_is_trusted,
+    )
+
+    if endpoint is None or not backend_key_runtime_is_trusted(endpoint):
         return {}
     token = (getattr(endpoint, "token", "") or "").strip()
     if not token:
@@ -221,22 +226,62 @@ def get_fastapi_url(endpoint: FastAPIUrlSource) -> dict[str, object]:
     governs only certificate verification on whatever connection the scheme
     selects — see issue #352 for the rationale.
     """
-    ip = get_ip_address_host(getattr(endpoint, "ip_address", None))
-    domain = getattr(endpoint, "domain", None) or ip
-    websocket_domain = getattr(endpoint, "websocket_domain", None) or ip
-    use_https = bool(getattr(endpoint, "use_https", False))
-    verify_ssl = bool(getattr(endpoint, "verify_ssl", False))
-
-    scheme = "https" if use_https else "http"
-    websocket_scheme = "wss" if use_https else "ws"
-    http_url = f"{scheme}://{domain}:{endpoint.port}"
-    ws_port = (
-        endpoint.websocket_port
-        if endpoint.websocket_port is not None
-        else endpoint.port
+    from netbox_proxbox.services.backend_key_adoption import (
+        BackendKeyAdoptionError,
+        backend_key_runtime_is_trusted,
+        backend_key_target,
+        canonical_backend_authority,
     )
-    websocket_url = f"{websocket_scheme}://{websocket_domain}:{ws_port}/ws"
-    ip_address_url = f"{scheme}://{ip}:{endpoint.port}"
+
+    if not backend_key_runtime_is_trusted(endpoint):
+        return {}
+
+    try:
+        http_url, verify_ssl = backend_key_target(endpoint)
+        parsed_http = urlsplit(http_url)
+        use_https = parsed_http.scheme == "https"
+        scheme = parsed_http.scheme
+        websocket_scheme = "wss" if use_https else "ws"
+
+        ip_resolver = getattr(endpoint, "backend_key_ip_address_for_trust", None)
+        ip_source = (
+            ip_resolver()
+            if callable(ip_resolver)
+            else getattr(endpoint, "ip_address", None)
+        )
+        ip_authority = canonical_backend_authority(ip_source)
+        ip = ip_authority.strip("[]")
+        ip_address_url = (
+            f"{scheme}://{ip_authority}:{int(endpoint.port)}" if ip_authority else ""
+        )
+
+        use_websocket = bool(getattr(endpoint, "use_websocket", False))
+        websocket_url = ""
+        server_websocket_url = ""
+        websocket_source = (
+            getattr(endpoint, "websocket_domain", None)
+            or ip_source
+            or getattr(endpoint, "domain", None)
+        )
+        if websocket_source:
+            websocket_domain = canonical_backend_authority(websocket_source)
+            ws_port_value = getattr(endpoint, "websocket_port", None)
+            ws_port = int(ws_port_value if ws_port_value is not None else endpoint.port)
+            if not websocket_domain or not 1 <= ws_port <= 65535:
+                raise BackendKeyAdoptionError(
+                    "endpoint_websocket_invalid",
+                    "Configure a valid WebSocket host and port.",
+                )
+            websocket_url = f"{websocket_scheme}://{websocket_domain}:{ws_port}/ws"
+        elif use_websocket:
+            raise BackendKeyAdoptionError(
+                "endpoint_websocket_address_missing",
+                "Configure a valid WebSocket host before connecting.",
+            )
+        if use_websocket and bool(getattr(endpoint, "server_side_websocket", False)):
+            server_websocket_url = f"{websocket_scheme}://{parsed_http.netloc}/ws"
+    except (BackendKeyAdoptionError, TypeError, ValueError):
+        return {}
 
     if (
         use_https
@@ -269,6 +314,7 @@ def get_fastapi_url(endpoint: FastAPIUrlSource) -> dict[str, object]:
         "ip_address_url": ip_address_url,
         "http_url": http_url,
         "websocket_url": websocket_url,
+        "server_websocket_url": server_websocket_url,
         "use_https": use_https,
         "verify_ssl": verify_ssl,
     }

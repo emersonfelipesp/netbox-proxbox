@@ -165,6 +165,23 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
 - `ProxboxPluginSettings` cloud-customer network fields (migration 0059) store the operator-designated IPAM Prefix ID, bridge, VLAN tag, gateway, and lock flag used by proxbox-api and nms-backend to resolve customer-facing cloud networking without hardcoded estate values. Populate them with `python manage.py ensure_cloud_customer_network --prefix ... --vlan ... --gateway ... [--enable-lock]`; the command is idempotent and documented in `docs/configuration/plugin-settings.md`.
 - **`NetBoxEndpoint` and `FastAPIEndpoint` are singletons** — the backend proxy and dashboard always use the first row of each, so only one should exist. Their bulk-import views enforce this by prompting for confirmation before replacing an existing record.
 - **Primary endpoint secrets are encrypted at rest.** `ProxmoxEndpoint.password`, `ProxmoxEndpoint.token_value`, `FastAPIEndpoint.token`, `PBSEndpoint.token_secret`, and `PDMEndpoint.token_secret` are public Python properties backed by Fernet-encrypted `*_enc` model fields. Runtime setters use `ProxboxPluginSettings.encryption_key` and create one when storing a primary secret if it is blank; do not reintroduce plaintext model fields for those secrets.
+- **Backend API-key adoption is fail-closed.** `FastAPIEndpoint.save()` and
+  every UI/import/API persistence path share
+  `services.backend_key_adoption.adopt_rotated_backend_key()`. Keys are never
+  generated implicitly. A new disabled row stays keyless; creating/enabling an
+  endpoint or changing its URL/TLS trust boundary requires the operator to
+  resubmit a retained candidate explicitly. The bootstrap POST is allowed only
+  for that explicit candidate and only when proxbox-api reports no keys; an
+  initialized backend must authenticate it with one read-only keys request
+  before `token_enc` changes. A credential-free
+  `backend_key_target_fingerprint` durably binds the ciphertext to the
+  canonical primary HTTP target, fallback IP, TLS flags, and WebSocket target
+  flags; every runtime credential lookup recomputes it using a fresh IP FK and
+  fails closed on drift. HTTP and WebSocket adoption rejects redirects, the
+  WebSocket client disables ambient proxies and rechecks trust throughout its
+  lifetime, and endpoint saves cancel stale clients. Never treat HTTP 409 as
+  success, expose token previews, or include response or transport text in key
+  errors.
 - NetBox UI routes live in [`netbox_proxbox/urls.py`](./netbox_proxbox/urls.py) and are implemented primarily in `netbox_proxbox/views/`.
 - The plugin also exposes a NetBox plugin API under `netbox_proxbox/api/`, using serializers, filtersets, and standard `NetBoxModelViewSet` classes.
 - Sync actions enqueue NetBox background jobs (`ProxboxSyncJob`) on NetBox's default RQ queue and call the external ProxBox FastAPI SSE endpoints to record progress/result on the Job row.
@@ -206,6 +223,11 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
 ## Backend integration notes
 
 - **Single enabled FastAPI row:** HTTP and WebSocket helpers such as `get_fastapi_request_context()` in [`netbox_proxbox/services/backend_proxy.py`](./netbox_proxbox/services/backend_proxy.py), `websocket_client`, and several dashboard views resolve the backend via the first `FastAPIEndpoint` with `enabled=True` (or the first enabled row from a restricted queryset). If multiple enabled FastAPI endpoints exist, whichever row sorts first is used; plan automation and operator docs accordingly.
+- **Backend-key preflight is a job-wide gate:** a manual or scheduled sync must
+  authenticate the selected FastAPI endpoint before batch creation or SSE. A
+  supplied endpoint selector is accepted only when it resolves to the same
+  singleton-shaped first enabled row still used by legacy stage services;
+  otherwise the entire job aborts before any partial sync can start.
 - **Background Proxbox sync jobs (RQ):** `ProxboxSyncJob` enqueues on NetBox’s **`default`** RQ queue (`RQ_QUEUE_DEFAULT`) so a stock **`manage.py rqworker`** (no queue arguments) picks them up. NetBox’s default worker only listens to **`high`**, **`default`**, and **`low`**; the extra django-rq queue **`netbox_proxbox.sync`** is legacy only. Older Job rows may still show **`netbox_proxbox.sync`** in **Queue**; cancel/RQ lookup uses the stored name. Jobs call proxbox-api **SSE** via [`run_sync_stream`](./netbox_proxbox/services/backend_proxy.py) until a terminal `complete` event.
 - **Disabled endpoint rows are a hard no-connection gate:** any endpoint-like row with `enabled=False` (`ProxmoxEndpoint`, `NetBoxEndpoint`, `FastAPIEndpoint`, `PBSEndpoint`, `PDMEndpoint`, or companion plugin endpoint objects such as `PBSServer`) remains visible through the API/UI for inventory, but operational paths must return before proxbox-api or remote-service network calls. This includes backend key registration, startup/signal pushes, OpenAPI fetches, keepalive/status probes, backend-id resolution, dashboard/API live reads, and scheduled/manual sync scopes.
   **The gate is decided from NetBox's own rows, never from what proxbox-api still

@@ -26,7 +26,7 @@ This page documents the internal architecture of each of the four Proxbox reposi
 | `netbox_proxbox/navigation.py` | Plugin menu groups and buttons |
 | `netbox_proxbox/urls.py` | URL map for all plugin views |
 | `netbox_proxbox/template_content.py` | Template extensions that inject buttons/panels into NetBox's Job and VirtualMachine detail pages |
-| `netbox_proxbox/signals.py` | Django signals for auto token generation when `FastAPIEndpoint` is created |
+| `netbox_proxbox/signals.py` | Read-only post-save checks for stored FastAPI keys plus downstream endpoint delivery; never generates or persists credentials |
 | `netbox_proxbox/sync_stages.py` | Runs a single named sync stage against the backend SSE stream |
 | `netbox_proxbox/websocket_client.py` | Long-lived WebSocket client and message queue for backend broadcast messages |
 
@@ -36,7 +36,7 @@ This page documents the internal architecture of each of the four Proxbox reposi
 :   A `JobRunner` subclass that enqueues on NetBox's `default` RQ queue. Its `run()` method calls `run_sync_stream()` to consume the FastAPI SSE endpoint and writes progress to the Job record. Ownership guards prevent concurrent duplicate runs. Default RQ wall-clock timeout: **7200 s**.
 
 `get_fastapi_request_context()` (`services/backend_context.py`)
-:   Resolves the active `FastAPIEndpoint` (always the first row from the queryset), builds the HTTP URL and auth headers, and returns a `BackendRequestContext` dataclass used by all backend HTTP helpers.
+:   Resolves the first enabled `FastAPIEndpoint`, builds the HTTP URL and auth headers, and returns a `BackendRequestContext` dataclass used by backend HTTP helpers. Disabled rows return before URL/header construction.
 
 `ServiceStatus` (`services/service_status.py`)
 :   Aggregates health checks for all three endpoint types (Proxmox, NetBox, FastAPI) into a unified status used by dashboard cards and keepalive polling.

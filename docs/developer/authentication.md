@@ -55,9 +55,28 @@ class SyncNowView(ContentTypePermissionRequiredMixin, View):
 
 The plugin authenticates to proxbox-api using a **bcrypt-hashed API key** sent in the `X-Proxbox-API-Key` HTTP header.
 
-### API Key Registration (Bootstrap Flow)
+### API Key Adoption and Bootstrap
 
-When a `FastAPIEndpoint` is saved in NetBox, a Django signal auto-registers the plugin with proxbox-api:
+`FastAPIEndpoint.save()` is the credential persistence boundary. UI, import,
+REST, and direct-model writes converge there; Django signals only authenticate
+an already-persisted key before downstream endpoint delivery. The plugin never
+generates a hidden key.
+
+Successful adoption persists a credential-free SHA-256
+`backend_key_target_fingerprint` alongside the ciphertext. The fingerprint
+binds the candidate to the canonical primary HTTP authority, fallback IP,
+port, HTTP/TLS flags, and WebSocket authority flags. Every runtime HTTP and
+WebSocket credential lookup recomputes it, using a fresh IP foreign-key value,
+and refuses to return the key if any bound value drifted. Legacy rows created
+before migration `0075_fastapi_backend_key_target_fingerprint` remain blank
+until an operator reviews the target and runs `proxbox_fix_tokens --fix`.
+
+Before any bootstrap-status request, the adoption service validates and
+canonicalizes the target authority. DNS names follow the model hostname
+contract, IP literals are parsed, IPv6 is bracketed, and URL userinfo, paths,
+queries, fragments, malformed ports, and authority-injection strings are
+rejected without network traffic. Redirect rejection is therefore defense in
+depth rather than the first authority boundary.
 
 ```mermaid
 sequenceDiagram
@@ -65,16 +84,44 @@ sequenceDiagram
     participant NB as NetBox Plugin
     participant API as proxbox-api /auth/
 
-    Operator->>NB: Save FastAPIEndpoint (forms.py)
-    NB->>NB: signals.py: post_save fires
-    NB->>API: POST /auth/register-key (first time, no auth required)
-    API->>API: bcrypt.hash(key) → store in ApiKey table
-    API-->>NB: {status: "registered"}
-    NB->>NB: Store returned token in FastAPIEndpoint.backend_token
+    Operator->>NB: Save enabled endpoint with explicit retained candidate
+    NB->>NB: Lock row; compare trust-boundary snapshot
+    NB->>API: GET /auth/bootstrap-status (redirects disabled)
+    alt no backend keys
+        API-->>NB: needs_bootstrap=true, has_db_keys=false
+        NB->>API: POST /auth/register-key once (redirects disabled)
+        API->>API: bcrypt.hash(candidate) → store in ApiKey table
+        API-->>NB: 201 Created
+    else initialized backend
+        API-->>NB: needs_bootstrap=false, has_db_keys=true
+        NB->>API: GET /auth/keys with candidate header (redirects disabled)
+        API-->>NB: 200 + valid key-list schema
+    end
+    NB->>NB: Encrypt and persist the same candidate
 ```
 
 !!! info "First key only"
-    `POST /auth/register-key` is **exempt from authentication** but only accepts the **first** API key. Subsequent key management (list, rotate, delete) requires authentication via `POST /auth/keys` and `DELETE /auth/keys/{id}`.
+    `POST /auth/register-key` is **exempt from authentication** but accepts only
+    the **first** API key. It is used only after a consistent empty-state
+    response and only for the candidate the operator explicitly supplied.
+    HTTP `409` is failure, never proof of adoption. Subsequent key management
+    requires authentication via `POST /auth/keys` and
+    `DELETE /auth/keys/{id}`.
+
+!!! warning "Disabled means no connection"
+    A new disabled FastAPI endpoint stays keyless. Disabled rows are skipped by
+    signals, jobs, status checks, WebSocket/storage views, and
+    `proxbox_fix_tokens`, including `--fix`.
+    Enabling a row, moving it to a different URL/TLS target, or rotating its key
+    requires explicitly resubmitting the candidate. Rejections and transport
+    failures preserve the prior ciphertext.
+
+The WebSocket bridge applies the same durable trust check before opening a
+connection, again after the handshake, periodically while a busy stream is
+running, and before queued messages are sent. It disables ambient proxy use and
+refuses a server-selected redirect before adding the API-key header. Saving the
+endpoint cancels the old client so a stale task cannot continue with the prior
+target or key.
 
 ### APIKeyAuthMiddleware
 
@@ -167,23 +214,22 @@ SSL verification is controlled per endpoint via `verify_ssl`. When `verify_ssl=F
 
 ---
 
-## Django Signal Auto-Registration
+## Django Signal Responsibilities
 
-When an operator creates or updates a `FastAPIEndpoint` record in NetBox, the plugin automatically:
+`signals.py` never adopts or persists a FastAPI credential. Its
+`FastAPIEndpoint` receiver only confirms that the model gate completed. The
+`NetBoxEndpoint` and `ProxmoxEndpoint` receivers resolve an enabled
+`FastAPIEndpoint`, authenticate its stored key through the read-only adoption
+check, and then push those downstream endpoint records to proxbox-api.
+The `FastAPIEndpoint` receiver itself performs no request and repeated receiver
+invocation cannot generate, bootstrap, or rewrite a key.
 
-1. Calls `POST /auth/register-key` with a freshly generated token (if none stored yet)
-2. Stores the returned token in `FastAPIEndpoint.backend_token`
-3. Calls `POST /netbox/endpoints/` to register the `NetBoxEndpoint` details with proxbox-api
-
-This is implemented in `netbox_proxbox/signals.py` using Django's `post_save` signal.
-
-```python title="netbox_proxbox/signals.py (simplified)"
-@receiver(post_save, sender=FastAPIEndpoint)
-def register_fastapi_endpoint(sender, instance, created, **kwargs):
-    if created:
-        _bootstrap_backend_auth(instance)
-    _sync_netbox_endpoint_to_backend(instance)
-```
-
-!!! tip "Manual registration"
-    If auto-registration fails (e.g., proxbox-api is not running when the endpoint is saved), you can trigger it manually via the **Sync Endpoints** button on the FastAPIEndpoint detail page.
+This separation matters because signal exceptions can roll back the database
+transaction after a remote bootstrap has succeeded. The operator-retained
+candidate makes that state recoverable: retry the save with the same key, which
+the initialized backend can authenticate. The `proxbox_fix_tokens` command is
+an explicit legacy-repair path; without `--fix` it is read-only, and `--fix`
+records a reviewed legacy target after authenticating its durably stored key;
+it bootstraps that same key only when the backend reports no keys. A blank
+legacy fingerprint is never probed without `--fix`, and a nonblank fingerprint
+that no longer matches is refused without network traffic.

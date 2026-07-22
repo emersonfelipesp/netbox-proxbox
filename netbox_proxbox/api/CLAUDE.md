@@ -144,6 +144,11 @@ These `APIView` subclasses mirror every data-bearing UI page and expose the same
 ## Notes
 
 - `NetBoxEndpointSerializer` is the main place where v1 versus v2 remote NetBox credential rules are enforced for API writes.
+- `FastAPIEndpointSerializer` uses
+  `BackendKeyAdoptionValidationMixin` to translate the model's fail-closed
+  backend-key gate into a DRF `400` validation response. API create, update, and
+  partial-update paths therefore preserve the prior encrypted token when a
+  candidate is rejected or the backend cannot be reached.
 - `ProxmoxEndpointSerializer` marks password and token value fields write-only
   and exposes `ssh_credential_source` for endpoint browser-terminal SSH
   configuration.

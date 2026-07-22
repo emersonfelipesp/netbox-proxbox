@@ -1865,7 +1865,11 @@ class BackendLogsAPIView(APIView):
         from netbox_proxbox.utils import get_fastapi_url
         from netbox_proxbox.views.logs import DEFAULT_BACKEND_LOG_FILE_PATH
 
-        endpoint = FastAPIEndpoint.objects.restrict(request.user, "view").first()
+        endpoint = (
+            FastAPIEndpoint.objects.restrict(request.user, "view")
+            .filter(enabled=True)
+            .first()
+        )
         fastapi_info = get_fastapi_url(endpoint) if endpoint is not None else {}
         settings_obj = ProxboxPluginSettings.get_solo()
 

@@ -90,20 +90,23 @@ def _handle_auth_registration_and_retry(
     *,
     endpoint_id: int | None = None,
 ) -> tuple[dict, bool]:
-    """Attempt API key registration with the backend.
+    """Re-check the stored API key after an authentication response.
 
-    Returns (new_headers, retry_flag). If registration succeeds, returns new headers
+    Returns (new_headers, retry_flag). If authentication succeeds, returns new headers
     and True to indicate the caller should retry the request.
+
+    The historical helper name remains part of the backend-proxy contract. It
+    never bootstraps or substitutes a credential.
     """
     from netbox_proxbox.services.backend_auth import ensure_backend_key_registered
 
-    logger.info("Backend returned 'no API key' error; attempting key registration")
+    logger.info("Backend returned an API-key error; re-checking the stored key")
     reg_ok, reg_msg = ensure_backend_key_registered(endpoint_id=endpoint_id)
     if reg_ok:
-        logger.info("Key registration succeeded: %s", reg_msg)
+        logger.info("Stored key authentication succeeded: %s", reg_msg)
         new_context = get_fastapi_request_context(endpoint_id=endpoint_id)
         if new_context and new_context.headers:
             return new_context.headers, True
     else:
-        logger.warning("Key registration failed: %s", reg_msg)
+        logger.warning("Stored key authentication failed: %s", reg_msg)
     return backend_headers, False

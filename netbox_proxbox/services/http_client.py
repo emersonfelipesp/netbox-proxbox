@@ -44,7 +44,7 @@ class HttpResponse:
 
     @property
     def status_code(self) -> int:
-        return self._raw.status_code
+        return int(self._raw.status_code or 0)
 
     @property
     def ok(self) -> bool:
@@ -56,7 +56,7 @@ class HttpResponse:
 
     @property
     def url(self) -> str:
-        return self._raw.url
+        return str(self._raw.url or "")
 
     @property
     def headers(self) -> dict[str, str]:
@@ -88,6 +88,7 @@ class HttpClient(Protocol):
         verify: bool = True,
         timeout: float | tuple[int, int] = 5,
         stream: bool = False,
+        allow_redirects: bool = True,
     ) -> HttpResponse: ...
 
     def post(
@@ -98,6 +99,7 @@ class HttpClient(Protocol):
         headers: dict[str, str] | None = None,
         verify: bool = True,
         timeout: float | tuple[int, int] = 5,
+        allow_redirects: bool = True,
     ) -> HttpResponse: ...
 
     def put(
@@ -160,6 +162,7 @@ class RequestsHttpClient:
         verify: bool = True,
         timeout: float | tuple[int, int] = 5,
         stream: bool = False,
+        allow_redirects: bool = True,
     ) -> HttpResponse:
         try:
             resp = requests.get(
@@ -169,6 +172,7 @@ class RequestsHttpClient:
                 verify=verify,
                 timeout=timeout,
                 stream=stream,
+                allow_redirects=allow_redirects,
             )
         except requests.exceptions.RequestException as exc:
             raise _convert_exception(exc) from exc
@@ -182,6 +186,7 @@ class RequestsHttpClient:
         headers: dict[str, str] | None = None,
         verify: bool = True,
         timeout: float | tuple[int, int] = 5,
+        allow_redirects: bool = True,
     ) -> HttpResponse:
         try:
             resp = requests.post(
@@ -190,6 +195,7 @@ class RequestsHttpClient:
                 headers=headers,
                 verify=verify,
                 timeout=timeout,
+                allow_redirects=allow_redirects,
             )
         except requests.exceptions.RequestException as exc:
             raise _convert_exception(exc) from exc

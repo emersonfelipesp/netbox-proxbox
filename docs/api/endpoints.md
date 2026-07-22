@@ -275,6 +275,8 @@ curl -X POST \
        "port": 8800,
        "use_https": true,
        "verify_ssl": false,
+       "enabled": true,
+       "token": "<explicit retained backend key>",
        "use_websocket": true,
        "websocket_port": 8800
      }' \
@@ -305,7 +307,7 @@ curl -H "Authorization: Token <token>" \
   "port": 8800,
   "use_https": true,
   "verify_ssl": false,
-  "token": "a1b2c3d4e5f6...",
+  "enabled": true,
   "use_websocket": true,
   "websocket_domain": "",
   "websocket_port": 8800,
@@ -317,8 +319,19 @@ curl -H "Authorization: Token <token>" \
 }
 ```
 
-!!! note "Auto-generated token"
-    The `token` field is automatically generated via `secrets.token_urlsafe(48)` when a FastAPIEndpoint is saved without one. The token is registered with the Proxbox backend automatically. You do not need to set it manually.
+!!! warning "Explicit, write-only key"
+    `token` is write-only and is never returned by list or detail responses.
+    Creating an enabled endpoint requires an explicit, retained candidate. The
+    plugin does not generate one. A new disabled endpoint may omit it and stays
+    keyless; enabling that row later requires resubmitting the key in the same
+    request. Candidate adoption fails closed if proxbox-api cannot prove the
+    key or complete the first-key bootstrap.
+
+    The target authority is validated before the first request. Embedded
+    credentials, paths, queries, fragments, malformed hosts, and authority
+    injection are rejected; valid IPv6 literals use bracketed URL syntax.
+    Disabled rows are also excluded from the legacy WebSocket and storage-detail
+    consumers before URL or authentication-header construction.
 
 ### Data Model
 
@@ -330,7 +343,8 @@ curl -H "Authorization: Token <token>" \
 | `port` | integer | HTTP API port (default `8800`) |
 | `use_https` | boolean | URL scheme selector. `true` → `https://`, `false` → `http://`. Independent of `verify_ssl` since v0.0.15 (migration `0038`, [#352](https://github.com/emersonfelipesp/netbox-proxbox/issues/352)). See [Backend Setup → TLS combinations](../installation/backend-setup.md) and [v0.0.15 release notes](../release-notes/version-0.0.15.md). |
 | `verify_ssl` | boolean | Whether to verify the backend TLS certificate. Only meaningful when `use_https=true`. |
-| `token` | string (read-only) | Bearer token used to authenticate requests to the backend |
+| `enabled` | boolean | Operational gate. Disabled rows perform no backend connection and cannot stage or rotate a key. |
+| `token` | string (write-only) | Explicit backend API-key candidate. Blank preserves an existing key only when no activation or target change requires resubmission. |
 | `use_websocket` | boolean | Whether to use a WebSocket connection for streaming |
 | `websocket_domain` | string | Override domain for WebSocket connections (defaults to `domain`) |
 | `websocket_port` | integer | WebSocket port (default `8800`) |

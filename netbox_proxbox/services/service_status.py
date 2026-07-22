@@ -85,25 +85,45 @@ def _maybe_push_netbox_endpoints_to_backend(
     base_url: str,
     auth_headers: dict[str, str],
     backend_verify_ssl: bool,
-) -> None:
-    """Push NetBox endpoint data to the backend if the throttle window has elapsed.
+    endpoint_id: int,
+) -> bool:
+    """Verify the selected key and best-effort push current NetBox endpoints.
 
-    Best-effort: logs warnings on failure but never raises.
-    Called after ``fastapi_status()`` confirms the backend is reachable so the
-    backend always has a current ``NetBoxEndpoint`` record — even after a fresh
-    start or database wipe — without requiring user interaction.
+    ``False`` means key verification failed and no authenticated downstream
+    request is allowed. Push failures after successful verification remain
+    best-effort and return ``True`` so they aren't misreported as auth failures.
     """
     global _last_netbox_endpoint_push
 
-    now = time.monotonic()
-    if now - _last_netbox_endpoint_push < _NETBOX_PUSH_THROTTLE_SECONDS:
-        return
-
     try:
-        from netbox_proxbox.models import NetBoxEndpoint as _NB  # noqa: PLC0415
         from netbox_proxbox.services.backend_auth import (  # noqa: PLC0415
             ensure_backend_key_registered,
         )
+
+        key_ok, key_msg = ensure_backend_key_registered(endpoint_id=endpoint_id)
+    except Exception:  # noqa: BLE001
+        logger.warning(
+            "Keepalive key verification could not run for FastAPIEndpoint %s",
+            endpoint_id,
+            exc_info=True,
+        )
+        return False
+
+    if not key_ok:
+        logger.warning(
+            "Keepalive API-key verification failed for FastAPIEndpoint %s — %s",
+            endpoint_id,
+            key_msg,
+        )
+        return False
+    logger.info("Keepalive push: API key verified — %s", key_msg)
+
+    now = time.monotonic()
+    if now - _last_netbox_endpoint_push < _NETBOX_PUSH_THROTTLE_SECONDS:
+        return True
+
+    try:
+        from netbox_proxbox.models import NetBoxEndpoint as _NB  # noqa: PLC0415
         from netbox_proxbox.views.backend_sync import (  # noqa: PLC0415
             sync_netbox_endpoint_to_backend as _push,
         )
@@ -114,16 +134,7 @@ def _maybe_push_netbox_endpoints_to_backend(
                 "Keepalive push: no enabled NetBoxEndpoint configured, skipping"
             )
             _last_netbox_endpoint_push = now
-            return
-
-        # Ensure the API key is registered before making authenticated requests.
-        # This is the path that recovers when the backend restarts with a fresh
-        # database — the keepalive check fires first, then the push follows.
-        key_ok, key_msg = ensure_backend_key_registered()
-        if key_ok:
-            logger.info("Keepalive push: API key verified — %s", key_msg)
-        else:
-            logger.warning("Keepalive push: API key registration failed — %s", key_msg)
+            return True
 
         for nb_ep in endpoints:
             ok, err, _ = _push(
@@ -145,12 +156,12 @@ def _maybe_push_netbox_endpoints_to_backend(
                 )
 
         _last_netbox_endpoint_push = now
-
     except Exception:  # noqa: BLE001
         logger.warning(
             "Keepalive push: failed to push NetBox endpoints to proxbox-api backend",
             exc_info=True,
         )
+    return True
 
 
 def sync_proxmox_endpoint_to_backend(
@@ -544,19 +555,26 @@ class ServiceStatus:
         # after a fresh start or DB wipe, covering the gap between plugin restarts
         # and the post_save signal.  The push is throttled to at most once per 5
         # minutes so it does not spam the backend on every keepalive poll.
+        authenticated = False
         if connected and self.connected_url:
-            _maybe_push_netbox_endpoints_to_backend(
+            authenticated = _maybe_push_netbox_endpoints_to_backend(
                 base_url=self.connected_url.rstrip("/"),
                 auth_headers=self.backend_auth_headers(fastapi_service_obj),
                 backend_verify_ssl=connected_verify_ssl,
+                endpoint_id=int(pk),
             )
-            backend_version, warnings, blocking_error = self._probe_backend_version(
-                base_url=self.connected_url,
-                fastapi_obj=fastapi_service_obj,
-                verify_ssl=connected_verify_ssl,
-            )
-            if blocking_error:
-                self._set_error(blocking_error)
+            if authenticated:
+                backend_version, warnings, blocking_error = self._probe_backend_version(
+                    base_url=self.connected_url,
+                    fastapi_obj=fastapi_service_obj,
+                    verify_ssl=connected_verify_ssl,
+                )
+                if blocking_error:
+                    self._set_error(blocking_error)
+            else:
+                self._set_error(
+                    "Backend API-key preflight failed; authenticated requests were skipped."
+                )
 
         return FastAPIStatusResult(
             url=fastapi_url,
@@ -565,7 +583,7 @@ class ServiceStatus:
             connected_verify_ssl=connected_verify_ssl,
             target_address=target_address if connected else None,
             target_port=target_port if connected else None,
-            authentication="success" if connected else "error",
+            authentication="success" if authenticated else "error",
             api_access=(
                 "success" if connected and self.last_error_detail is None else "error"
             ),

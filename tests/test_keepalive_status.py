@@ -169,6 +169,45 @@ def test_fastapi_status_does_not_retry_insecurely_when_verify_ssl_enabled(
     assert calls == [("https://proxbox.local:8800", True, None)]
 
 
+def test_fastapi_status_rejected_selected_key_stops_all_authenticated_requests(
+    monkeypatch,
+    fastapi_endpoint,
+):
+    load_plugin_module(
+        "netbox_proxbox.views.keepalive_status",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+    )
+    ss = _service_status_module()
+    auth = sys.modules["netbox_proxbox.services.backend_auth"]
+    key_checks: list[int | None] = []
+
+    def reject_key(*, endpoint_id=None):
+        key_checks.append(endpoint_id)
+        return False, "candidate rejected"
+
+    monkeypatch.setattr(auth, "ensure_backend_key_registered", reject_key)
+    calls = []
+
+    def fake_get(url, verify=True, timeout=None, headers=None):
+        calls.append((url, headers))
+        if url.endswith("/version"):
+            raise AssertionError("version probe ran after key rejection")
+        return ResponseStub({"ok": True})
+
+    monkeypatch.setattr(ss.requests, "get", fake_get)
+
+    status = ss.ServiceStatus().fastapi_status(1)
+
+    assert key_checks == [1]
+    assert calls == [("https://proxbox.local:8800", None)]
+    assert status["connected"] is True
+    assert status["authentication"] == "error"
+    assert status["api_access"] == "error"
+    assert status["backend_version"] is None
+    assert "preflight failed" in status["detail"]
+
+
 def test_fastapi_status_disabled_endpoint_does_not_connect(
     monkeypatch,
     fastapi_endpoint,

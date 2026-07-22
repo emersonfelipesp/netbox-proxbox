@@ -232,37 +232,154 @@ def assert_plugin_internal_contracts(
 
 
 def register_proxbox_api_key(proxbox_base_url: str) -> str:
-    """Register the E2E API key with proxbox-api if not already registered.
+    """Bootstrap or authenticate the retained E2E key without false success.
 
     proxbox-api requires an API key registered via POST /auth/register-key before
     any authenticated management endpoints (e.g. /netbox/endpoint) can be called.
     Returns the API key string so callers can include it as X-Proxbox-API-Key.
     """
     api_key = _E2E_PROXBOX_API_KEY
-    try:
-        status_resp = requests.get(
-            f"{proxbox_base_url}/auth/bootstrap-status", timeout=10
+    status_resp = requests.get(
+        f"{proxbox_base_url}/auth/bootstrap-status",
+        timeout=10,
+        allow_redirects=False,
+    )
+    status_data = assert_ok(status_resp, context="read proxbox-api bootstrap status")
+    needs_bootstrap = status_data.get("needs_bootstrap")
+    has_db_keys = status_data.get("has_db_keys")
+    if (
+        not isinstance(needs_bootstrap, bool)
+        or not isinstance(has_db_keys, bool)
+        or needs_bootstrap is has_db_keys
+    ):
+        raise AssertionError("proxbox-api returned an inconsistent bootstrap status")
+
+    if not needs_bootstrap:
+        auth_response = requests.get(
+            f"{proxbox_base_url}/auth/keys",
+            headers={"X-Proxbox-API-Key": api_key},
+            timeout=10,
+            allow_redirects=False,
         )
-        if status_resp.status_code == 200:
-            status_data = status_resp.json()
-            if not status_data.get("needs_bootstrap", True):
-                print("proxbox-api bootstrap-status: key already registered")
-                return api_key
-    except Exception as exc:  # noqa: BLE001
-        print(f"bootstrap-status check failed (continuing): {exc}")
+        assert_ok(
+            auth_response,
+            context="authenticate retained proxbox-api E2E key",
+            include_response_body=False,
+        )
+        print("proxbox-api E2E key is already authenticated")
+        return api_key
 
     print("Registering proxbox-api API key...")
     resp = requests.post(
         f"{proxbox_base_url}/auth/register-key",
         json={"api_key": api_key, "label": "netbox-proxbox-e2e"},
         timeout=10,
+        allow_redirects=False,
     )
-    print(f"register-key response: HTTP {resp.status_code} - {resp.text[:200]}")
-    if resp.status_code not in (201, 409):
+    if resp.status_code != 201:
         raise AssertionError(
-            f"Failed to register proxbox-api key: {resp.status_code} {resp.text}"
+            f"Failed to register proxbox-api key: HTTP {resp.status_code}"
         )
+    print("proxbox-api E2E key bootstrap succeeded")
     return api_key
+
+
+def assert_backend_key_rotation_contract(
+    proxbox_base_url: str,
+    netbox_base_url: str,
+    netbox_token: str,
+    fastapi_endpoint_id: int,
+    current_key: str,
+) -> str:
+    """Exercise proxbox-api's real key routes and the plugin adoption boundary."""
+    create_response = requests.post(
+        f"{proxbox_base_url}/auth/keys",
+        headers={"X-Proxbox-API-Key": current_key},
+        timeout=10,
+        allow_redirects=False,
+    )
+    create_payload = assert_ok(
+        create_response,
+        context="create proxbox-api replacement key",
+        include_response_body=False,
+    )
+    replacement = str(create_payload.get("raw_key") or "").strip()
+    if len(replacement) < 32:
+        raise AssertionError("proxbox-api did not return a usable one-time key")
+
+    netbox_headers = {
+        "Authorization": f"Token {netbox_token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    endpoint_url = (
+        f"{netbox_base_url}/api/plugins/proxbox/endpoints/fastapi/"
+        f"{fastapi_endpoint_id}/"
+    )
+    adopt_response = requests.patch(
+        endpoint_url,
+        json={"token": replacement},
+        headers=netbox_headers,
+        timeout=30,
+        allow_redirects=False,
+    )
+    assert_ok(
+        adopt_response,
+        context="adopt proxbox-api replacement key",
+        include_response_body=False,
+    )
+
+    protected_response = requests.get(
+        f"{proxbox_base_url}/auth/keys",
+        headers={"X-Proxbox-API-Key": replacement},
+        timeout=10,
+        allow_redirects=False,
+    )
+    assert_ok(
+        protected_response,
+        context="verify adopted proxbox-api key",
+        include_response_body=False,
+    )
+
+    rejected_candidate = "invalid-e2e-candidate-key-do-not-persist-000000"
+    reject_response = requests.patch(
+        endpoint_url,
+        json={"token": rejected_candidate},
+        headers=netbox_headers,
+        timeout=30,
+        allow_redirects=False,
+    )
+    if reject_response.status_code != 400:
+        raise AssertionError(
+            "Invalid backend key adoption did not return HTTP 400 "
+            f"(got {reject_response.status_code})"
+        )
+    if (
+        rejected_candidate in reject_response.text
+        or replacement in reject_response.text
+    ):
+        raise AssertionError("Backend key validation response disclosed a credential")
+
+    command = [
+        "docker",
+        "exec",
+        "netbox-e2e",
+        "/opt/netbox/venv/bin/python",
+        "/opt/netbox/netbox/manage.py",
+        "proxbox_fix_tokens",
+    ]
+    result = subprocess.run(
+        command,
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    if "All FastAPIEndpoint tokens are registered" not in result.stdout:
+        raise AssertionError("Stored replacement key failed post-rejection validation")
+    if replacement in result.stdout or rejected_candidate in result.stdout:
+        raise AssertionError("Key diagnostics disclosed a credential")
+    return replacement
 
 
 def ensure_proxbox_backend_endpoints(
