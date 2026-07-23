@@ -840,19 +840,33 @@ def _ensure_backend_endpoints(
             rotated_note = ""
             try:
                 if proxmox_endpoint_credentials_rotated_since_last_push(px_ep):
+                    # "May" is deliberate: a failed push does not prove the
+                    # backend kept the old secret — proxbox-api can commit the
+                    # update and the client still time out reading the
+                    # response. What the fingerprint does prove is that no
+                    # *confirmed* push has delivered the current secret.
                     rotated_note = (
                         " This endpoint's credentials changed since the last "
-                        "successful push, so proxbox-api is still holding the "
-                        "previous secret — Proxmox reads for this endpoint will "
-                        "fail to authenticate until a push succeeds."
+                        "confirmed push, so proxbox-api may still be holding "
+                        "the previous secret — if so, Proxmox reads for this "
+                        "endpoint will fail to authenticate until a push "
+                        "succeeds."
                     )
                     notes.append(
                         f"Proxmox endpoint '{px_label}' push failed after an "
-                        "in-place credential change; proxbox-api still holds "
-                        "the previous secret."
+                        "in-place credential change; proxbox-api may still "
+                        "hold the previous secret."
                     )
-            except Exception:  # noqa: BLE001 - attribution must never fail the push loop
+            except Exception as attribution_exc:  # noqa: BLE001
+                # Attribution must never fail the push loop, but a swallowed
+                # decryption or DB error would silently delete the hint on the
+                # runs that most need it — so the suppression is logged,
+                # type-only (the exception could render decrypted material).
                 rotated_note = ""
+                job.logger.warning(
+                    f"Could not evaluate credential rotation for Proxmox endpoint "
+                    f"{getattr(px_ep, 'pk', None)}: {type(attribution_exc).__name__}"
+                )
             job.logger.warning(
                 f"Preflight: could not sync Proxmox endpoint "
                 f"'{px_label}' to proxbox-api: {err}{rotated_note}"

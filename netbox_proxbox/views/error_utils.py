@@ -229,6 +229,34 @@ def extract_backend_error_detail(
         error_text = str(exc)
         lowered = error_text.lower()
 
+        # Order matters: requests' SSLError, ProxyError and ConnectTimeout all
+        # subclass ConnectionError, so the generic branch below would classify a
+        # TLS handshake failure as "Connection was refused" — sending the
+        # operator to check whether the service is running instead of at the
+        # certificate. Most-specific first.
+        if isinstance(exc, requests.exceptions.SSLError):
+            host, port = _extract_host_port_from_request_error(error_text)
+            target = (
+                f"{host}:{port}"
+                if host and port
+                else (host or "configured FastAPI endpoint")
+            )
+            return (
+                "TLS error connecting to ProxBox backend at "
+                f"{target}. Verify the certificate (or the endpoint's "
+                "Verify SSL setting) matches how proxbox-api is served."
+            ), None
+
+        if isinstance(exc, requests.exceptions.Timeout) or "timed out" in lowered:
+            host, port = _extract_host_port_from_request_error(error_text)
+            target = (
+                f"{host}:{port}" if host and port else "configured FastAPI endpoint"
+            )
+            return (
+                "Timed out while connecting to ProxBox backend at "
+                f"{target}. Verify network reachability and that proxbox-api is healthy."
+            ), None
+
         if isinstance(exc, requests.exceptions.ConnectionError) or (
             "connection refused" in lowered
             or "failed to establish a new connection" in lowered
@@ -247,19 +275,11 @@ def extract_backend_error_detail(
                 "then confirm the plugin FastAPI endpoint settings."
             ), None
 
-        if isinstance(exc, requests.exceptions.Timeout) or "timed out" in lowered:
-            host, port = _extract_host_port_from_request_error(error_text)
-            target = (
-                f"{host}:{port}" if host and port else "configured FastAPI endpoint"
-            )
-            return (
-                "Timed out while connecting to ProxBox backend at "
-                f"{target}. Verify network reachability and that proxbox-api is healthy."
-            ), None
-
         # A transport exception carries no parsed body to key-match against, but
-        # its rendered text can still quote the request that failed.
-        return redact_sensitive_text(error_text), None
+        # its rendered text can still quote the request that failed. The class
+        # name is kept in front of the swept text: it is the one discriminator
+        # (SSLError vs ProxyError vs ReadTimeout) that survives redaction.
+        return (f"{type(exc).__name__}: {redact_sensitive_text(error_text)}"), None
 
     status_code = getattr(response, "status_code", None)
     detail = None
@@ -339,11 +359,15 @@ def extract_proxmox_backend_error_detail(
     if proxmox_port:
         target = f"{target}:{proxmox_port}"
 
-    # Sweep the rendered exception text: a transport error can echo request
-    # content, and this string flows into job logs and flash messages.
+    # Only the exception class, never the rendered text: a transport error can
+    # echo request content, and the text sweep is pattern-based — an unquoted
+    # value containing spaces or escaped quotes can leave credential fragments
+    # behind. The class name (ConnectTimeout vs SSLError vs ConnectionError) is
+    # the diagnostic that matters here, and it cannot carry a secret. This
+    # string flows into job logs and flash messages.
     detail = (
         "ProxBox backend could not connect to the configured Proxmox endpoint"
         f" ({target}). Backend route: {backend_url}."
-        f" Upstream error: {redact_sensitive_text(str(exc))}"
+        f" Upstream error: {type(exc).__name__}"
     )
     return detail, None

@@ -150,3 +150,34 @@ def test_out_of_scope_cpu_models_are_refused(sync_dc_module, monkeypatch):
     assert sync_dc_module._cpu_mgr.stale_calls == [{"endpoint_id__in": {1}}], (
         "stale marking must stay inside the run's scope"
     )
+
+
+def test_a_cluster_name_claimed_by_two_endpoints_is_refused(
+    sync_dc_module, monkeypatch
+):
+    """Ambiguous cluster names must resolve to nobody — same rule as firewall.
+
+    A refused resolution feeds the existing skip branch, so the ambiguous row
+    is neither upserted under the wrong endpoint nor allowed to impersonate an
+    in-scope one through the shared name.
+    """
+    rows = [
+        SimpleNamespace(endpoint=SimpleNamespace(pk=1), endpoint_id=1),
+        SimpleNamespace(endpoint=SimpleNamespace(pk=2), endpoint_id=2),
+    ]
+
+    class _AmbiguousCluster:
+        class objects:
+            @staticmethod
+            def filter(**_kw):
+                class _qs:
+                    @staticmethod
+                    def select_related(*_a):
+                        return rows
+
+                return _qs()
+
+    models = sys.modules["netbox_proxbox.models"]
+    monkeypatch.setattr(models, "ProxmoxCluster", _AmbiguousCluster, raising=False)
+
+    assert sync_dc_module._resolve_endpoint_by_cluster_name("pve") is None

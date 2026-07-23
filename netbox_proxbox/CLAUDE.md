@@ -158,6 +158,24 @@ This package contains the NetBox plugin itself. It defines the plugin config, UR
 >    [`views/CLAUDE.md`](./views/CLAUDE.md) for why the fingerprint is taken from
 >    the *payload* and written with `queryset.update()`.
 >
+> Two review-raised escalations are **deliberately not taken**, and the
+> rationale is part of the contract. *(1) Credential receipts are install-global,
+> not per-backend.* With two enabled `FastAPIEndpoint` rows, a successful push
+> to backend B records the fingerprint that would then vouch for backend A's
+> stored row. That is a real bound — accepted because `FastAPIEndpoint` is
+> singleton-shaped by product contract (multiple enabled rows are already an
+> unsupported configuration the docs warn about), and keying receipts per
+> backend means a receipt *table*, not a column. Revisit only if multi-backend
+> ever becomes supported. *(2) A failed Proxmox push over rotated credentials
+> warns; it does not gate.* The reviewer's overlap-rotation scenario (old token
+> still valid with broader permissions) is real but self-limiting: the backend
+> keeps reading the same, target-verified Proxmox with a credential the operator
+> has not yet revoked, and the moment it is revoked the failure is loud. Gating
+> would convert every transient push failure after a rotation into a blocked
+> sync — the NetBox side gates because *its* staleness writes into the wrong
+> instance silently; the Proxmox side's staleness is an authorization-intent
+> drift that the preflight now **names** in the warning and hint instead.
+>
 > Every other preflight problem — a failed key registration, a failed *Proxmox*
 > push, or a listing call that errored *after* a successful NetBox push — stays
 > non-fatal and is returned on `PreflightResult.hint`, which

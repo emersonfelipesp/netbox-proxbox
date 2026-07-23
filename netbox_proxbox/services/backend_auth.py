@@ -9,7 +9,10 @@ import requests
 
 from netbox_proxbox.models import FastAPIEndpoint
 from netbox_proxbox.schemas.backend_proxy import BackendRequestContext
-from netbox_proxbox.views.error_utils import extract_backend_error_detail
+from netbox_proxbox.views.error_utils import (
+    extract_backend_error_detail,
+    redact_sensitive_text,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +86,14 @@ def _try_register_key(context: BackendRequestContext, token: str) -> tuple[bool,
             return True, "Key already registered"
 
     except requests.exceptions.RequestException as exc:
-        return False, f"Could not check bootstrap status: {exc}"
+        # Class name + swept text only: this message is returned to the caller,
+        # persisted into job logs and preflight notes, and the register call
+        # below sends the API key in its request body — a raw exception render
+        # must never carry that request into the log.
+        return False, (
+            "Could not check bootstrap status: "
+            f"{type(exc).__name__}: {redact_sensitive_text(str(exc))}"
+        )
 
     try:
         register_response = requests.post(
@@ -99,7 +109,12 @@ def _try_register_key(context: BackendRequestContext, token: str) -> tuple[bool,
         return False, f"Registration failed: HTTP {register_response.status_code}"
 
     except requests.exceptions.RequestException as exc:
-        return False, f"Could not register key: {exc}"
+        # Same rule as the bootstrap-status branch: the failed POST carried the
+        # API key in its body, so only the class name and swept text may leave.
+        return False, (
+            "Could not register key: "
+            f"{type(exc).__name__}: {redact_sensitive_text(str(exc))}"
+        )
 
 
 def _try_register_key_fallback() -> tuple[bool, str]:
@@ -212,7 +227,7 @@ def wait_for_backend_ready(
                     "Backend health check request failed (attempt %s/%s): %s, retrying in %ss",
                     attempt + 1,
                     max_retries,
-                    str(exc)[:100],
+                    f"{type(exc).__name__}: {redact_sensitive_text(str(exc))}"[:160],
                     delay,
                 )
                 time_module.sleep(delay)

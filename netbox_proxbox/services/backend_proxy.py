@@ -30,7 +30,20 @@ from netbox_proxbox.views.error_utils import (
     parse_requests_response_json,
     redact_backend_detail,
     redact_sensitive,
+    redact_sensitive_text,
 )
+
+
+def _safe_exception_text(exc: BaseException) -> str:
+    """Render an exception for logs/responses without leaking request content.
+
+    Every place that stores or emits an exception's text goes through this one
+    formatter, so a path cannot quietly regress to ``str(exc)``: the rendered
+    message is swept for credential-shaped content, and the class name — the
+    discriminator that survives redaction — is kept in front.
+    """
+    return f"{type(exc).__name__}: {redact_sensitive_text(str(exc))}"
+
 
 logger = logging.getLogger(__name__)
 
@@ -216,15 +229,19 @@ def request_backend_resource(
             )
         except requests.exceptions.RequestException as exc:
             last_detail, _ = extract_backend_error_detail(exc)
-            logger.error("Sync request failed for %s via %s: %s", path, url, exc)
+            logger.error(
+                "Sync request failed for %s via %s: %s", path, url, last_detail
+            )
             if getattr(exc, "response", None) is not None:
                 break
             continue
         except (KeyboardInterrupt, SystemExit, GeneratorExit):
             raise
         except OSError as exc:
-            last_detail = str(exc)
-            logger.error("Unexpected sync error for %s via %s: %s", path, url, exc)
+            last_detail = _safe_exception_text(exc)
+            logger.error(
+                "Unexpected sync error for %s via %s: %s", path, url, last_detail
+            )
             continue
 
         if response.status_code >= 400:
@@ -388,13 +405,13 @@ def request_backend_json(
             except (KeyboardInterrupt, SystemExit, GeneratorExit):
                 raise
             except OSError as exc:
-                last_detail = str(exc)
+                last_detail = _safe_exception_text(exc)
                 logger.error(
                     "Unexpected backend %s error for %s via %s: %s",
                     method,
                     path,
                     url,
-                    exc,
+                    last_detail,
                 )
                 break
 
@@ -674,9 +691,9 @@ def _try_sync_stream_url(
     except (KeyboardInterrupt, SystemExit, GeneratorExit):
         raise
     except OSError as exc:
-        last_detail = str(exc)
-        logger.exception(
-            "Unexpected sync stream error for %s via %s: %s", path, url, exc
+        last_detail = _safe_exception_text(exc)
+        logger.error(
+            "Unexpected sync stream error for %s via %s: %s", path, url, last_detail
         )
         return last_detail, False, None, None
 
@@ -735,9 +752,12 @@ def iter_backend_sse_lines(
             except (KeyboardInterrupt, SystemExit, GeneratorExit):
                 raise
             except OSError as exc:  # pragma: no cover
-                last_error = str(exc)
-                logger.exception(
-                    "Unexpected sync stream error for %s via %s", path, url
+                last_error = _safe_exception_text(exc)
+                logger.error(
+                    "Unexpected sync stream error for %s via %s: %s",
+                    path,
+                    url,
+                    last_error,
                 )
 
         payload = last_error or "Unable to reach the ProxBox backend stream."
@@ -745,8 +765,9 @@ def iter_backend_sse_lines(
     except (KeyboardInterrupt, SystemExit, GeneratorExit):
         raise
     except OSError as exc:  # pragma: no cover
-        logger.exception("Stream proxy crashed while handling %s", path)
-        yield from sse_error_frames(str(exc), final_message="Stream proxy failed.")
+        safe_text = _safe_exception_text(exc)
+        logger.error("Stream proxy crashed while handling %s: %s", path, safe_text)
+        yield from sse_error_frames(safe_text, final_message="Stream proxy failed.")
 
 
 def sync_resource(

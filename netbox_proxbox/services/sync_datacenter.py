@@ -37,19 +37,38 @@ class DatacenterSyncResult:
 
 
 def _resolve_endpoint_by_cluster_name(cluster_name: str) -> ProxmoxEndpoint | None:
+    """Return the single ProxmoxEndpoint whose cluster name matches, or ``None``.
+
+    Cluster names are only unique **per endpoint**, not across the estate: two
+    unrelated Proxmox installations can each hold a cluster named ``pve``. A
+    backend response row names only the cluster, so when more than one endpoint
+    claims that name there is no way to tell whose row this is — and guessing
+    (the old ``.first()``) attributed one estate's firewall/CPU data to the
+    other, or discarded a valid row as out-of-scope. Ambiguous therefore
+    resolves to ``None`` (refused, logged with every claimant), mirroring the
+    batch path's "ambiguous never widens" rule.
+    """
     try:
         from netbox_proxbox.models import ProxmoxCluster  # noqa: PLC0415
 
-        cluster = (
-            ProxmoxCluster.objects.filter(name=cluster_name)
-            .select_related("endpoint")
-            .first()
+        cluster_rows = list(
+            ProxmoxCluster.objects.filter(name=cluster_name).select_related("endpoint")
         )
-        if (
-            cluster
-            and cluster.endpoint_id
-            and bool(getattr(cluster.endpoint, "enabled", True))
-        ):
+        claimant_ids = sorted(
+            {row.endpoint_id for row in cluster_rows if row.endpoint_id}
+        )
+        if len(claimant_ids) > 1:
+            logger.warning(
+                "Refusing to resolve cluster %r: claimed by %d Proxmox endpoints "
+                "(%s). Cluster names are only unique per endpoint, so this "
+                "response row cannot be attributed safely.",
+                cluster_name,
+                len(claimant_ids),
+                ", ".join(str(pk) for pk in claimant_ids),
+            )
+            return None
+        cluster = next((row for row in cluster_rows if row.endpoint_id), None)
+        if cluster is not None and bool(getattr(cluster.endpoint, "enabled", True)):
             return cluster.endpoint
     except Exception as exc:
         logger.warning("DB error resolving cluster %r: %s", cluster_name, exc)

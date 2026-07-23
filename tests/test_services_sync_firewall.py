@@ -180,17 +180,21 @@ def sync_fw_module(monkeypatch):
     class _ProxmoxCluster:
         DoesNotExist = _DoesNotExist
 
+        # One cluster row owned by the harness endpoint. The resolver iterates
+        # the queryset (list(...)), so ``select_related`` returns a real list.
         class objects:
             @staticmethod
             def filter(**_kw):
+                rows = [SimpleNamespace(endpoint=_endpoint_obj, endpoint_id=1)]
+
                 class _qs:
                     @staticmethod
                     def select_related(*_a):
-                        return _qs
+                        return rows
 
                     @staticmethod
                     def first():
-                        return SimpleNamespace(endpoint=_endpoint_obj, endpoint_id=1)
+                        return rows[0]
 
                 return _qs()
 
@@ -459,6 +463,46 @@ def test_out_of_scope_summary_entries_are_refused(sync_fw_module, monkeypatch):
     assert [row["endpoint_id"] for row in result.per_endpoint] == [1], (
         "the out-of-scope endpoint's entry must be refused, not synced"
     )
+
+
+def test_a_cluster_name_claimed_by_two_endpoints_is_refused(
+    sync_fw_module, monkeypatch
+):
+    """Ambiguous cluster names must resolve to nobody, never to ``.first()``.
+
+    Cluster names are unique per endpoint, not across the estate. When two
+    endpoints both reflect a cluster named ``pve``, a response row naming only
+    the cluster cannot be attributed — the old ``.first()`` guess wrote one
+    estate's data under the other, or let an out-of-scope row impersonate an
+    in-scope endpoint through the shared name. The name-fallback must not
+    resurrect the guess either.
+    """
+    rows = [
+        SimpleNamespace(endpoint=SimpleNamespace(pk=1), endpoint_id=1),
+        SimpleNamespace(endpoint=SimpleNamespace(pk=2), endpoint_id=2),
+    ]
+
+    class _AmbiguousCluster:
+        class objects:
+            @staticmethod
+            def filter(**_kw):
+                class _qs:
+                    @staticmethod
+                    def select_related(*_a):
+                        return rows
+
+                return _qs()
+
+    models = sys.modules["netbox_proxbox.models"]
+    monkeypatch.setattr(models, "ProxmoxCluster", _AmbiguousCluster, raising=False)
+
+    assert sync_fw_module._resolve_endpoint_by_cluster_name("pve") is None
+
+
+def test_a_single_claimant_cluster_name_still_resolves(sync_fw_module):
+    """The ordinary unique-name case keeps resolving through the cluster row."""
+    endpoint = sync_fw_module._resolve_endpoint_by_cluster_name(CLUSTER_NAME)
+    assert endpoint is sync_fw_module._endpoint_obj
 
 
 # ---------------------------------------------------------------------------

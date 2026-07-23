@@ -377,26 +377,59 @@ def test_proxmox_error_falls_back_to_target_message_when_no_response(
     assert "http://backend/proxmox/sync" in detail
 
 
-def test_proxmox_error_sweeps_the_rendered_upstream_exception(error_utils_module):
-    """The ``Upstream error:`` tail must be swept, not rendered raw.
+def test_proxmox_error_upstream_tail_is_class_only(error_utils_module):
+    """The ``Upstream error:`` tail carries the exception class, never its text.
 
-    A transport exception can echo request content — here a credential-bearing
-    assignment — and this string flows into job logs and flash messages, so it
-    gets the same text sweep as every other exception-rendered detail.
+    A transport exception can echo request content, and the pattern-based text
+    sweep is defeatable — an unquoted value with spaces or an escaped quote
+    leaves credential *fragments* behind. Class-only is the fail-closed shape:
+    it cannot carry a secret, and the class name is the discriminator that
+    matters (SSLError vs ConnectTimeout vs ConnectionError). The awkward inputs
+    below are exactly the ones the sweep alone mishandled.
     """
     secret = "0123456789abcdef0123456789abcdef01234567"
-    exc = requests.exceptions.ConnectionError(
-        f"connection failed while sending token_value='{secret}'"
+    for rendered in (
+        f"connection failed while sending token_value='{secret}'",
+        f'{{"password":"{secret[:4]}\\"{secret[4:]}"}}',
+        f"password={secret[:4]} {secret[4:8]} {secret[8:]}",
+        f"password={secret[:4]},{secret[4:]}",
+    ):
+        exc = requests.exceptions.ConnectionError(rendered)
+        detail, status = error_utils_module.extract_proxmox_backend_error_detail(
+            exc,
+            proxmox_host="pve.local",
+            proxmox_port=8006,
+            backend_url="http://backend/proxmox/sync",
+        )
+        assert status is None
+        assert secret[4:] not in detail, f"credential fragment leaked from {rendered!r}"
+        assert "ConnectionError" in detail, "the class name is the kept diagnostic"
+        assert "pve.local:8006" in detail, "the target must survive"
+
+
+def test_tls_and_timeout_errors_are_not_reported_as_connection_refused(
+    error_utils_module,
+):
+    """SSLError and ConnectTimeout subclass ConnectionError — order matters.
+
+    Classified generically, a TLS handshake failure told the operator to check
+    whether proxbox-api was *running*, when the actual problem was the
+    certificate (or the Verify SSL setting) — the most common fresh-install
+    misconfiguration this branch exists to make diagnosable.
+    """
+    tls_detail, tls_status = error_utils_module.extract_backend_error_detail(
+        requests.exceptions.SSLError("certificate verify failed")
     )
-    detail, status = error_utils_module.extract_proxmox_backend_error_detail(
-        exc,
-        proxmox_host="pve.local",
-        proxmox_port=8006,
-        backend_url="http://backend/proxmox/sync",
+    assert tls_status is None
+    assert "TLS" in tls_detail
+    assert "refused" not in tls_detail.lower()
+
+    timeout_detail, timeout_status = error_utils_module.extract_backend_error_detail(
+        requests.exceptions.ConnectTimeout("connection to host timed out")
     )
-    assert status is None
-    assert secret not in detail
-    assert "pve.local:8006" in detail, "the diagnostic target must survive the sweep"
+    assert timeout_status is None
+    assert "Timed out" in timeout_detail
+    assert "refused" not in timeout_detail.lower()
 
 
 def test_proxmox_error_delegates_when_response_is_present(error_utils_module):

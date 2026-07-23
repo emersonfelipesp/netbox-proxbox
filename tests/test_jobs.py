@@ -4363,6 +4363,36 @@ def test_proxmox_and_netbox_credential_fingerprints_never_compare_equal():
     ) != backend_sync.proxmox_credential_fingerprint(material)
 
 
+def test_fingerprint_material_is_injective_where_a_separator_was_not():
+    """Distinct credential tuples must never encode to the same material.
+
+    The original encoding joined fields with ``\\x1f`` on the claim that the
+    byte "cannot occur in a token" — but nothing structurally stops a pasted
+    secret from carrying any byte, and two different tuples containing the
+    separator concatenated into the same input, so a rotation to a colliding
+    tuple compared as "unchanged". Each case below collides under
+    separator-joining (for its separator) and must not collide length-prefixed.
+    """
+    backend_sync = load_real_backend_sync()
+    material = backend_sync._fingerprint_material
+
+    colliding_pairs = [
+        # The literal \x1f collision the old encoding allowed.
+        (("a\x1fb", "c"), ("a", "b\x1fc")),
+        # Empty fields shifting content across the boundary.
+        (("", "ab"), ("ab", "")),
+        # A digit/colon-leading field that tries to impersonate the length
+        # prefix itself.
+        (("1", ":a"), ("1:", "a")),
+        (("12", "3:x"), ("1", "23:x")),
+    ]
+    for left, right in colliding_pairs:
+        assert material(left) != material(right), (left, right)
+
+    # And the equality direction: identical tuples still encode identically.
+    assert material(("a", "b", "c")) == material(("a", "b", "c"))
+
+
 def _netbox_row(domain="", ip=None, port=443, verify_ssl=True, token_version="v1"):
     """A local ``NetBoxEndpoint``-shaped row for the identity predicate."""
     return SimpleNamespace(
@@ -5191,7 +5221,7 @@ def test_preflight_names_a_credential_rotation_behind_a_failed_proxmox_push(
 
     assert result.blocking_error is None, "a failed Proxmox push stays non-fatal"
     assert any(
-        "credentials changed since the last successful push" in entry
+        "credentials changed since the last confirmed push" in entry
         for entry in records["warning"]
     ), "the warning must attribute the rotation, not just report a timeout"
     assert result.hint and "in-place credential change" in result.hint
@@ -5225,7 +5255,7 @@ def test_preflight_does_not_claim_rotation_for_a_never_vouched_endpoint(
 
     assert result.blocking_error is None
     assert not any(
-        "credentials changed since the last successful push" in entry
+        "credentials changed since the last confirmed push" in entry
         for entry in records["warning"]
     )
     assert not (result.hint and "in-place credential change" in result.hint)
