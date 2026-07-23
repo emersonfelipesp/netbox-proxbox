@@ -188,7 +188,15 @@ def test_sync_individual_appends_schema_id_to_outgoing_query_params(monkeypatch)
 
     captured: dict = {}
 
-    def fake_get(url, *, params=None, headers=None, verify=None, timeout=None):
+    def fake_get(
+        url,
+        *,
+        params=None,
+        headers=None,
+        verify=None,
+        timeout=None,
+        allow_redirects=True,
+    ):
         captured["params"] = dict(params or {})
         return _FakeResponse({"object_type": "cluster", "action": "unchanged"})
 
@@ -216,7 +224,15 @@ def test_sync_individual_omits_schema_id_when_unset(monkeypatch):
 
     captured: dict = {}
 
-    def fake_get(url, *, params=None, headers=None, verify=None, timeout=None):
+    def fake_get(
+        url,
+        *,
+        params=None,
+        headers=None,
+        verify=None,
+        timeout=None,
+        allow_redirects=True,
+    ):
         captured["params"] = dict(params or {})
         return _FakeResponse({"object_type": "cluster", "action": "unchanged"})
 

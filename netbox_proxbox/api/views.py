@@ -1219,6 +1219,7 @@ class DashboardAPIView(APIView):
                     headers=backend_headers,
                     verify=backend_verify_ssl,
                     timeout=self._request_timeout,
+                    allow_redirects=False,
                 )
                 resp.raise_for_status()
                 return parse_requests_response_json(resp, log_label=route)

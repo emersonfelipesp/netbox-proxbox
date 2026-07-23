@@ -83,6 +83,7 @@ class ProxmoxVMHATabView(generic.ObjectView):
                 headers=ctx.headers or {},
                 timeout=10,
                 verify=ctx.verify_ssl,
+                allow_redirects=False,
             )
             if response.status_code == 404:
                 context["detail"] = (

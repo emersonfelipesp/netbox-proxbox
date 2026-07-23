@@ -71,6 +71,7 @@ class DashboardView(
             headers=auth_headers,
             verify=verify_ssl,
             timeout=self.request_timeout,
+            allow_redirects=False,
         )
         response.raise_for_status()
         payload, json_err = parse_requests_response_json(response, log_label=route)

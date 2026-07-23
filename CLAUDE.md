@@ -180,10 +180,12 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
   fails closed on drift. HTTP and WebSocket adoption rejects redirects, the
   WebSocket client disables ambient proxies and rechecks trust throughout its
   lifetime, and endpoint saves cancel stale clients. The same redirect rule
-  covers every credentialed **runtime** request: all JSON and SSE proxy calls in
-  `services/backend_proxy.py` (and every `services/http_client.py` verb) send
-  `allow_redirects=False` and treat any 3xx as a terminal transport failure, so
-  the API key is never replayed to a redirect target; a 401 retry proceeds only
+  covers every **runtime** request plugin-wide: every direct `requests` call in
+  `netbox_proxbox/` sends `allow_redirects=False` (sole exception: the
+  unauthenticated public-content fetches in `github.py`), enforced structurally
+  by `tests/test_outbound_redirect_policy.py`, and the proxy/readiness paths
+  additionally treat any 3xx as a terminal transport failure — so the API key
+  is never replayed to a redirect target; a 401 retry proceeds only
   from one freshly re-authenticated, identity-bound request context or fails
   closed (see `services/CLAUDE.md`). Never treat HTTP 409 as
   success, expose token previews, or include response or transport text in key

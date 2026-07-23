@@ -93,7 +93,9 @@ def test_dashboard_live_reads_use_resolved_backend_endpoint_id(
 
     scoped_calls = []
 
-    def fake_get(url, timeout=None, params=None, headers=None, verify=None):
+    def fake_get(
+        url, timeout=None, params=None, headers=None, verify=None, allow_redirects=True
+    ):
         scoped_calls.append((url, params))
         if "/proxmox/cluster/status" in url:
             return ResponseStub(
@@ -199,7 +201,9 @@ def test_dashboard_nodes_summary_uses_all_persisted_nodes(
         raising=False,
     )
 
-    def fake_get(url, timeout=None, params=None, headers=None, verify=None):
+    def fake_get(
+        url, timeout=None, params=None, headers=None, verify=None, allow_redirects=True
+    ):
         if "/proxmox/cluster/status" in url:
             return ResponseStub(
                 [
@@ -273,7 +277,9 @@ def test_dashboard_nodes_summary_falls_back_to_live_payload_when_needed(
     _scope_dashboard_to_backend_id(monkeypatch, module)
     monkeypatch.setattr(module.ProxmoxNode, "objects", _NodeQuerySet(), raising=False)
 
-    def fake_get(url, timeout=None, params=None, headers=None, verify=None):
+    def fake_get(
+        url, timeout=None, params=None, headers=None, verify=None, allow_redirects=True
+    ):
         if "/proxmox/cluster/status" in url:
             return ResponseStub(
                 [
@@ -377,7 +383,9 @@ def test_dashboard_nodes_summary_includes_live_nodes_missing_from_database(
         raising=False,
     )
 
-    def fake_get(url, timeout=None, params=None, headers=None, verify=None):
+    def fake_get(
+        url, timeout=None, params=None, headers=None, verify=None, allow_redirects=True
+    ):
         if "/proxmox/cluster/status" in url:
             return ResponseStub(
                 [
@@ -498,7 +506,9 @@ def test_dashboard_nodes_summary_includes_cluster_sibling_nodes_from_database(
         raising=False,
     )
 
-    def fake_get(url, timeout=None, params=None, headers=None, verify=None):
+    def fake_get(
+        url, timeout=None, params=None, headers=None, verify=None, allow_redirects=True
+    ):
         if "/proxmox/cluster/status" in url:
             return ResponseStub(
                 [
@@ -612,7 +622,9 @@ def test_dashboard_includes_cluster_siblings_via_proxmox_cluster_endpoint(
         raising=False,
     )
 
-    def fake_get(url, timeout=None, params=None, headers=None, verify=None):
+    def fake_get(
+        url, timeout=None, params=None, headers=None, verify=None, allow_redirects=True
+    ):
         if "/proxmox/cluster/status" in url:
             return ResponseStub(
                 [
@@ -682,7 +694,9 @@ def test_dashboard_object_summaries_present_in_context(
     _scope_dashboard_to_backend_id(monkeypatch, module)
     monkeypatch.setattr(module.ProxmoxNode, "objects", _NodeQuerySet(), raising=False)
 
-    def fake_get(url, timeout=None, params=None, headers=None, verify=None):
+    def fake_get(
+        url, timeout=None, params=None, headers=None, verify=None, allow_redirects=True
+    ):
         if "/proxmox/cluster/status" in url:
             return ResponseStub(
                 [
@@ -757,7 +771,9 @@ def test_dashboard_cluster_summary_preserves_api_totals_when_live_rows_truncated
     _scope_dashboard_to_backend_id(monkeypatch, module)
     monkeypatch.setattr(module.ProxmoxNode, "objects", _NodeQuerySet(), raising=False)
 
-    def fake_get(url, timeout=None, params=None, headers=None, verify=None):
+    def fake_get(
+        url, timeout=None, params=None, headers=None, verify=None, allow_redirects=True
+    ):
         if "/proxmox/cluster/status" in url:
             return ResponseStub(
                 [
@@ -837,7 +853,9 @@ def test_dashboard_nodes_include_placeholders_for_unsynced_cluster_members(
     _scope_dashboard_to_backend_id(monkeypatch, module)
     monkeypatch.setattr(module.ProxmoxNode, "objects", _NodeQuerySet(), raising=False)
 
-    def fake_get(url, timeout=None, params=None, headers=None, verify=None):
+    def fake_get(
+        url, timeout=None, params=None, headers=None, verify=None, allow_redirects=True
+    ):
         if "/proxmox/cluster/status" in url:
             return ResponseStub(
                 [

@@ -387,6 +387,7 @@ class ProxmoxEndpointHostKeyFingerprintAPIView(APIView):
                 headers=ctx.headers or {},
                 verify=ctx.verify_ssl,
                 timeout=_HOST_KEY_SCAN_TIMEOUT,
+                allow_redirects=False,
             )
         except requests.exceptions.RequestException:
             return Response(
@@ -505,6 +506,7 @@ class NodeHostKeyFingerprintAPIView(APIView):
                 headers=ctx.headers or {},
                 verify=ctx.verify_ssl,
                 timeout=_HOST_KEY_SCAN_TIMEOUT,
+                allow_redirects=False,
             )
         except requests.exceptions.RequestException:
             return Response(

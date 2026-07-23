@@ -187,6 +187,7 @@ def _fetch_list(
             headers=headers,
             verify=verify_ssl,
             timeout=SYNC_TIMEOUT,
+            allow_redirects=False,
         )
         resp.raise_for_status()
         data = resp.json()

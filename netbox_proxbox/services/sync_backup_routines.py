@@ -126,6 +126,7 @@ def sync_backup_routines(
             headers=auth_headers,
             verify=verify_ssl,
             timeout=SYNC_TIMEOUT,
+            allow_redirects=False,
         )
         list_resp.raise_for_status()
         job_list = list_resp.json()
@@ -159,6 +160,7 @@ def sync_backup_routines(
                     headers=auth_headers,
                     verify=verify_ssl,
                     timeout=SYNC_TIMEOUT,
+                    allow_redirects=False,
                 )
                 detail_resp.raise_for_status()
                 detail_data = detail_resp.json()

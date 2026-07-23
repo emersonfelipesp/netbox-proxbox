@@ -159,6 +159,7 @@ def _fetch_endpoint_templates(instance: ProxmoxEndpoint) -> dict[str, Any]:
             headers=headers,
             verify=verify_ssl,
             timeout=_TEMPLATES_FETCH_TIMEOUT,
+            allow_redirects=False,
         )
         qemu_response.raise_for_status()
         qemu_payload = qemu_response.json()
@@ -186,6 +187,7 @@ def _fetch_endpoint_templates(instance: ProxmoxEndpoint) -> dict[str, Any]:
             headers=headers,
             verify=verify_ssl,
             timeout=_TEMPLATES_FETCH_TIMEOUT,
+            allow_redirects=False,
         )
         lxc_response.raise_for_status()
         lxc_payload = lxc_response.json()

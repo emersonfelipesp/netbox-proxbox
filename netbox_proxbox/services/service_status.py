@@ -369,6 +369,7 @@ class ServiceStatus:
                 headers=self.backend_auth_headers(fastapi_obj),
                 verify=verify_ssl,
                 timeout=self.request_timeout,
+                allow_redirects=False,
             )
             response.raise_for_status()
             payload = response.json()
@@ -492,7 +493,10 @@ class ServiceStatus:
         if fastapi_url:
             try:
                 response = requests.get(
-                    fastapi_url, verify=fastapi_verify_ssl, timeout=self.request_timeout
+                    fastapi_url,
+                    verify=fastapi_verify_ssl,
+                    timeout=self.request_timeout,
+                    allow_redirects=False,
                 )
                 response.raise_for_status()
                 connected = True
@@ -522,6 +526,7 @@ class ServiceStatus:
                                 ip_url,
                                 verify=False,  # nosec B501
                                 timeout=self.request_timeout,
+                                allow_redirects=False,
                             )
                             response.raise_for_status()
                             connected = True
@@ -831,6 +836,7 @@ class ServiceStatus:
                     headers=request_headers,
                     verify=backend_verify_ssl,
                     timeout=self.request_timeout,
+                    allow_redirects=False,
                 )
                 response.raise_for_status()
                 self._clear_error()
@@ -944,6 +950,7 @@ class ServiceStatus:
                 headers=request_headers,
                 verify=backend_verify_ssl,
                 timeout=self.request_timeout,
+                allow_redirects=False,
             )
             response.raise_for_status()
             payload, json_err = parse_requests_response_json(

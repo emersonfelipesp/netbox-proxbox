@@ -178,6 +178,7 @@ class ProxmoxVMConfigTabView(generic.ObjectView):
                 headers=headers,
                 verify=verify_ssl,
                 timeout=8,
+                allow_redirects=False,
             )
             config_response.raise_for_status()
             parsed, parse_error = parse_requests_response_json(
@@ -220,6 +221,7 @@ class ProxmoxVMConfigTabView(generic.ObjectView):
                         headers=headers,
                         verify=verify_ssl,
                         timeout=8,
+                        allow_redirects=False,
                     )
                     if fw_response.status_code < 400:
                         fw_parsed, fw_err = parse_requests_response_json(

@@ -123,20 +123,31 @@ so both the URL and the TLS setting come from the same place.
 
 ## Credentialed requests never follow redirects, and a 401 retry is identity-bound
 
-Every credentialed HTTP surface in this package — the JSON helpers
-(`request_backend_json`, `request_backend_resource`), the SSE/stream paths
-(`run_sync_stream` / `_try_sync_stream_url`, `iter_backend_sse_lines`), the
-readiness probe in `backend_auth.py`, and every verb on
-`http_client.py::RequestsHttpClient` — sends `allow_redirects=False` and treats
-**any 3xx as a terminal transport failure**: the response is closed unread, the
-fixed detail `"ProxBox backend redirects are not permitted."` is returned with
-HTTP 502, and the redirect `Location` is never dialled — not by the same
-candidate, and not by the IP fallback. Following a redirect would replay
-`X-Proxbox-API-Key` to whatever origin a compromised or misconfigured backend
-names, including a plaintext-HTTP downgrade of the original host, so a redirect
-is evidence of an untrustworthy target, not a routing hint. `RequestsHttpClient`
-enforces the same rule structurally via `_checked_response()` /
-`HttpRedirectError`.
+Every direct `requests.<verb>()` call in the **whole plugin** (not only this
+package) sends `allow_redirects=False`; the one deliberate exception is
+`github.py`, whose fetches are unauthenticated public content. This is enforced
+structurally by `tests/test_outbound_redirect_policy.py`, which AST-scans every
+module under `netbox_proxbox/` and fails on any call missing the literal
+keyword — so a new call site written with the library default cannot silently
+reopen the exfiltration class. Following a redirect would replay
+`X-Proxbox-API-Key` (and, on the endpoint-push paths in
+`views/backend_sync.py`, request bodies carrying the downstream NetBox and
+Proxmox credentials) to whatever origin a compromised or misconfigured backend
+names, including a plaintext-HTTP downgrade of the original host — a redirect
+is evidence of an untrustworthy target, not a routing hint.
+
+On top of the blanket no-follow rule, the proxy paths in this package — the
+JSON helpers (`request_backend_json`, `request_backend_resource`), the
+SSE/stream paths (`run_sync_stream` / `_try_sync_stream_url`,
+`iter_backend_sse_lines`), and the readiness probe in `backend_auth.py` — also
+treat **any 3xx as a terminal transport failure**: the response is closed
+unread, the fixed detail `"ProxBox backend redirects are not permitted."` is
+returned (HTTP 502 on the JSON/stream paths), and the redirect `Location` is
+never dialled — not by the same candidate, and not by the IP fallback.
+`RequestsHttpClient` enforces the same rule structurally via
+`_checked_response()` / `HttpRedirectError`. Elsewhere a 3xx simply surfaces
+through the call site's existing non-2xx error handling; with redirects
+disabled the credential is never replayed either way.
 
 The 401 auth-retry is bound to one endpoint identity end to end.
 `backend_context.py::_handle_auth_registration_and_retry(context, *,

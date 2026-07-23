@@ -50,6 +50,7 @@ def _proxy_get(
             headers=headers,
             timeout=timeout,
             verify=verify,
+            allow_redirects=False,
         )
     except requests.exceptions.RequestException as exc:
         return Response(

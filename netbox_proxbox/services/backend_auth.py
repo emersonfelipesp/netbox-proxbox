@@ -151,6 +151,12 @@ def wait_for_backend_ready(
                 timeout=5,
                 allow_redirects=False,
             )
+            if 300 <= response.status_code < 400:
+                # A redirecting backend is an untrustworthy target, not a
+                # slow one — retrying would spin against an origin that will
+                # never stop redirecting, so fail terminally like every other
+                # credentialed path.
+                return False, "Backend redirects are not permitted."
             if response.status_code == 200:
                 # Backend is reachable — that is enough.  Whether its
                 # bootstrap completed (``init_ok``) is not our concern;

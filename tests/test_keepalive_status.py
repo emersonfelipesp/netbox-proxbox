@@ -119,7 +119,7 @@ def test_fastapi_status_falls_back_to_ip_after_ssl_error(
     ss = _service_status_module()
     calls = []
 
-    def fake_get(url, verify=True, timeout=None, headers=None):
+    def fake_get(url, verify=True, timeout=None, headers=None, allow_redirects=True):
         calls.append((url, verify, headers))
         if "proxbox.local" in url:
             raise requests.exceptions.SSLError("bad cert")
@@ -156,7 +156,7 @@ def test_fastapi_status_does_not_retry_insecurely_when_verify_ssl_enabled(
     ss = _service_status_module()
     calls = []
 
-    def fake_get(url, verify=True, timeout=None, headers=None):
+    def fake_get(url, verify=True, timeout=None, headers=None, allow_redirects=True):
         calls.append((url, verify, headers))
         if "proxbox.local" in url:
             raise requests.exceptions.SSLError("bad cert")
@@ -191,7 +191,7 @@ def test_fastapi_status_rejected_selected_key_stops_all_authenticated_requests(
     monkeypatch.setattr(auth, "ensure_backend_key_registered", reject_key)
     calls = []
 
-    def fake_get(url, verify=True, timeout=None, headers=None):
+    def fake_get(url, verify=True, timeout=None, headers=None, allow_redirects=True):
         calls.append((url, headers))
         if url.endswith("/version"):
             raise AssertionError("version probe ran after key rejection")
@@ -245,7 +245,7 @@ def test_fastapi_status_warns_for_agent_kv_affected_backend(
     )
     ss = _service_status_module()
 
-    def fake_get(url, verify=True, timeout=None, headers=None):
+    def fake_get(url, verify=True, timeout=None, headers=None, allow_redirects=True):
         if url.endswith("/version"):
             return ResponseStub({"version": "0.0.14"})
         return ResponseStub({"ok": True})
@@ -272,7 +272,7 @@ def test_fastapi_status_errors_for_backend_before_vm_ip_config_fix(
     )
     ss = _service_status_module()
 
-    def fake_get(url, verify=True, timeout=None, headers=None):
+    def fake_get(url, verify=True, timeout=None, headers=None, allow_redirects=True):
         if url.endswith("/version"):
             return ResponseStub({"version": "0.0.12"})
         return ResponseStub({"ok": True})
@@ -298,7 +298,7 @@ def test_fastapi_keepalive_payload_exposes_backend_version_warning(
     )
     ss = _service_status_module()
 
-    def fake_get(url, verify=True, timeout=None, headers=None):
+    def fake_get(url, verify=True, timeout=None, headers=None, allow_redirects=True):
         if url.endswith("/version"):
             return ResponseStub({"version": "0.0.14"})
         return ResponseStub({"ok": True})

@@ -100,7 +100,15 @@ def _bind_vm(monkeypatch, operational, vm):
 def _patch_backend(monkeypatch, operational, *, response):
     captured: dict[str, object] = {}
 
-    def fake_post(url, params=None, json=None, headers=None, timeout=None, verify=None):
+    def fake_post(
+        url,
+        params=None,
+        json=None,
+        headers=None,
+        timeout=None,
+        verify=None,
+        allow_redirects=True,
+    ):
         captured["url"] = url
         captured["params"] = params or {}
         captured["json"] = json or {}

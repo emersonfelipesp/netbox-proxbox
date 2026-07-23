@@ -461,6 +461,7 @@ def _provision_lxc(
             headers=headers,
             verify=verify_ssl,
             timeout=_PROVISION_TIMEOUT_S,
+            allow_redirects=False,
         )
     except requests.exceptions.Timeout:
         return _timeout_response()
@@ -529,6 +530,7 @@ def _post_qemu_with_vmid_retry(
             headers=attempt_headers,
             verify=verify_ssl,
             timeout=timeout,
+            allow_redirects=False,
         )
         if is_vmid_collision_response(response):
             continue
@@ -1043,6 +1045,7 @@ def _fetch_next_vmid_base(
             headers=headers,
             verify=verify_ssl,
             timeout=_DATACENTER_OPTIONS_TIMEOUT_S,
+            allow_redirects=False,
         )
         response.raise_for_status()
         return _extract_next_vmid(response.json(), cluster_name=cluster_name)

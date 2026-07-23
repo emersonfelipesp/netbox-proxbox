@@ -363,7 +363,9 @@ def test_vmid_retry_increments_on_collision(monkeypatch):
         _response(200, {"new_vmid": 201, "status": "started"}),
     ]
 
-    def fake_post(url, json=None, headers=None, verify=None, timeout=None):
+    def fake_post(
+        url, json=None, headers=None, verify=None, timeout=None, allow_redirects=True
+    ):
         calls.append(json["new_vmid"])
         return responses.pop(0)
 
