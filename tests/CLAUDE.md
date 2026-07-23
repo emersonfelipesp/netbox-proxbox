@@ -44,13 +44,23 @@ This directory contains the plugin's pytest test suite.
 - `test_backup_replication_views.py`: view coverage for backup routine and replication list/detail pages.
 - `test_home_context.py`: tests for home page context assembly.
 - `test_operator_migration_ux.py`: source-contract and pure outcome tests for
-  issue #217's operator migration UX. Pins the `sync-state/repair/` route,
-  lazy `sync-state/bootstrap-status/` route, `RepairSyncStateView` permission
-  stack, proxbox-api `/extras/bootstrap-status` and
-  `/extras/custom-fields/reconcile` helper strings, Home/Settings template
+  issue #217's operator migration UX, hardened by issue #255. Pins the
+  `sync-state/repair/` route, lazy `sync-state/bootstrap-status/` route,
+  `RepairSyncStateView` permission stack, proxbox-api `/extras/bootstrap-status`
+  and `/extras/custom-fields/reconcile` helper strings, Home/Settings template
   inclusion of the shared bootstrap-status card, nested backend response
-  handling, duplicate active-job guarding, and success / permission-denied /
-  backend-error outcome mapping without bootstrapping NetBox.
+  handling, duplicate active-job guarding, and outcome mapping without
+  bootstrapping NetBox. **The reconcile is non-fatal (issue #255):**
+  `test_repair_outcome_reconcile_failure_still_queues_rebuild_sync` /
+  `…_reconcile_exception_still_queues_rebuild_sync` pin that an inner `ok:false`
+  reconcile response or a raised reconcile still enqueues the full sync, sets
+  `reconcile_warning`, and returns `status="success"` — because the sync's
+  preflight is the recovery path — while
+  `test_repair_outcome_enqueue_failure_after_reconcile_warning_is_fatal` keeps a
+  failed *enqueue* fatal. `test_bootstrap_status_card_is_hidden_until_it_needs_attention`
+  pins the template: `d-none` by default, `data-can-view`, the
+  `needsAttention`/`revealCard` reveal-only-on-HTTP-200-`ok:false` logic, the
+  auto-check on load, and no `innerHTML`.
 - `test_stack_setup.py`, `test_stack_sync_polling.py`: integration-level stack setup and sync polling behavior tests.
 - `test_templatetags.py`: tests for custom Proxbox template tag helpers.
 - `e2e/`: stack-oriented tests that exercise the proxbox-api and NetBox integration flow end to end.

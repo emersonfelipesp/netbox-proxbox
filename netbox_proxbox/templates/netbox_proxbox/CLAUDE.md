@@ -13,9 +13,17 @@ This is the main Django template namespace for the plugin.
   `partials/bootstrap_status_card.html` is included by `home.html` and
   `settings.html`. It displays the escaped proxbox-api
   `/extras/bootstrap-status` payload and the permission-aware
-  **Repair / Rebuild Proxbox sync-state** POST form. Keep any future JS inline
-  in the template that needs it; the current fragment needs none and must not
-  use `innerHTML`.
+  **Repair / Rebuild Proxbox sync-state** POST form. **The card only surfaces
+  when it is useful (issue #255).** For a user who can view status it renders
+  hidden (`d-none`); its inline JS auto-checks `bootstrap-status` on load (only
+  when `data-can-view="true"`) and calls `revealCard()` only for a genuine
+  backend-reported problem — `needsAttention(data)` is `ok === false` with
+  `Number(http_status) === 200` — and never auto-hides a revealed card within a
+  page view. **A repair-only user** (can `core.add_job` but not view status) gets
+  the card rendered server-visible instead, so they keep the repair affordance
+  with no payload exposed; the `{% if bootstrap_status.can_view or not
+  can_repair_sync_state %} d-none{% endif %}` guard encodes this. Its JS is inline
+  (Bootstrap's `d-none` toggle only) and must not use `innerHTML`.
 - Child subdirectories: `base`, `cluster`, `fastapi`, `home`, `inc`, `partials`, `proxmox`, `table`, `test`, and `widgets`.
 
 ## Dependencies
