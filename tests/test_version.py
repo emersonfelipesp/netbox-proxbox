@@ -240,6 +240,18 @@ def test_page_coverage_pins_latest_certified_netbox():
     )
 
 
+def _contains_exact_version(text, version):
+    """True when *version* appears as an exact token, not as a prefix.
+
+    Substring membership would let "4.6.50" satisfy a "4.6.5" assertion and
+    "0.0.23.post10" satisfy "0.0.23.post1"; require a non-version character
+    (or end of string) after the match.
+    """
+    import re
+
+    return re.search(rf"(?<![0-9.]){re.escape(version)}(?![0-9])", text) is not None
+
+
 def test_certified_netbox_range_is_documented_independently():
     for path in (
         README_PATH,
@@ -250,8 +262,10 @@ def test_certified_netbox_range_is_documented_independently():
         APPLICATION_PACKET_PATH,
     ):
         text = _read(path)
-        assert CURRENT_NETBOX_MIN_VERSION in text, f"{path} missing certified floor"
-        assert LATEST_CERTIFIED_NETBOX_VERSION in text, (
+        assert _contains_exact_version(text, CURRENT_NETBOX_MIN_VERSION), (
+            f"{path} missing certified floor"
+        )
+        assert _contains_exact_version(text, LATEST_CERTIFIED_NETBOX_VERSION), (
             f"{path} missing latest certified version"
         )
 
@@ -259,10 +273,20 @@ def test_certified_netbox_range_is_documented_independently():
 def test_certification_evidence_names_the_tested_plugin_artifact():
     for path in (CERTIFICATION_PATH, APPLICATION_PACKET_PATH):
         text = _read(path)
-        assert CURRENT_RELEASE_VERSION in text, f"{path} missing tested plugin artifact"
+        assert _contains_exact_version(text, CURRENT_RELEASE_VERSION), (
+            f"{path} missing tested plugin artifact"
+        )
         assert "0.0.18.post1" not in text, (
             f"{path} still names the historical certification target"
         )
+
+
+def test_exact_version_matcher_rejects_prefix_collisions():
+    assert _contains_exact_version("certified against 4.6.5.", "4.6.5")
+    assert not _contains_exact_version("certified against 4.6.50", "4.6.5")
+    assert not _contains_exact_version("certified against 14.6.5", "4.6.5")
+    assert _contains_exact_version("artifact 0.0.23.post1 tested", "0.0.23.post1")
+    assert not _contains_exact_version("artifact 0.0.23.post10 tested", "0.0.23.post1")
 
 
 def test_proxbox_api_is_not_a_python_dependency():
