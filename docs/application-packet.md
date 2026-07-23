@@ -4,7 +4,7 @@ This packet covers the Proxbox plugin family.
 
 | Plugin | Repository | PyPI | Certification release |
 | --- | --- | --- | --- |
-| netbox-proxbox | <https://github.com/emersonfelipesp/netbox-proxbox> | <https://pypi.org/project/netbox-proxbox/> | 0.0.18.post1 |
+| netbox-proxbox | <https://github.com/emersonfelipesp/netbox-proxbox> | <https://pypi.org/project/netbox-proxbox/> | 0.0.23.post1 (local source) |
 | netbox-pbs | <https://github.com/emersonfelipesp/netbox-pbs> | <https://pypi.org/project/netbox-pbs/> | 0.0.1.post1 |
 | netbox-pdm | <https://github.com/emersonfelipesp/netbox-pdm> | <https://pypi.org/project/netbox-pdm/> | 0.0.1.post1 |
 | netbox-ceph | <https://github.com/emersonfelipesp/netbox-ceph> | <https://pypi.org/project/netbox-ceph/> | 0.0.1.post1 |

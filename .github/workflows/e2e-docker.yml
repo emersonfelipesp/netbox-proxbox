@@ -100,13 +100,15 @@ jobs:
     name: E2E Docker / ${{ matrix.install_source }} / ${{ matrix.netbox_image }} / api=${{ matrix.proxbox_api_runtime }} / proxmox=${{ matrix.proxmox_service }} [${{ matrix.network_stack }}]
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    continue-on-error: ${{ matrix.proxbox_api_runtime == 'pyo3-rust' || matrix.proxmox_service == 'pve' }}
+    continue-on-error: ${{ matrix.proxbox_api_runtime == 'pyo3-rust' }}
     env:
       NETBOX_IMAGE: ${{ matrix.netbox_image }}
     strategy:
       fail-fast: false
       matrix:
-        install_source: ${{ fromJSON(inputs.install_source != 'both' && format('["{0}"]', inputs.install_source) || '["local","pypi","container"]') }}
+        # Scheduled events have no inputs. Treat empty, "both", and unknown values
+        # as the full certification matrix instead of an empty install source.
+        install_source: ${{ fromJSON((inputs.install_source == 'local' || inputs.install_source == 'pypi' || inputs.install_source == 'container' || inputs.install_source == 'testpypi') && format('["{0}"]', inputs.install_source) || '["local","pypi","container"]') }}
         # Certified NetBox support set: v4.5.8, v4.5.9, and v4.6.0 through v4.6.5.
         netbox_image: ${{ fromJSON(inputs.netbox_image != '' && format('["{0}"]', inputs.netbox_image) || '["netboxcommunity/netbox:v4.5.8","netboxcommunity/netbox:v4.5.9","netboxcommunity/netbox:v4.6.0","netboxcommunity/netbox:v4.6.1","netboxcommunity/netbox:v4.6.2","netboxcommunity/netbox:v4.6.3","netboxcommunity/netbox:v4.6.4","netboxcommunity/netbox:v4.6.5"]') }}
         network_stack: [ipv4]
