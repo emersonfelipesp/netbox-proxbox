@@ -122,9 +122,21 @@ This directory implements the plugin's NetBox UI behavior, including dashboard p
   POST action requiring `core.add_job`. Bootstrap and repair backend calls use a
   request-user-restricted `FastAPIEndpoint` lookup, classify the proxy envelope
   plus inner proxbox-api body, and treat inner `ok=false` / `success=false` /
-  error responses as failures. The repair action calls proxbox-api
-  `POST /extras/custom-fields/reconcile` and then enqueues a normal full
-  `ProxboxSyncJob`; backend and enqueue failures are flash messages.
+  error responses as failures. **The repair reconcile is non-fatal (issue
+  #255):** `build_sync_state_repair_outcome()` calls
+  `POST /extras/custom-fields/reconcile` but a failure — which is expected when
+  proxbox-api holds a stale/invalid NetBox credential, since the reconcile
+  authenticates with that same credential — is recorded on
+  `SyncStateRepairOutcome.reconcile_warning` and the normal full `ProxboxSyncJob`
+  is **still enqueued**, because the sync's preflight re-pushes the
+  NetBox/Proxmox endpoint credentials to proxbox-api and rebuilds the sidecars
+  from live Proxmox data (the actual recovery). The view surfaces a reconcile
+  warning as `messages.warning` (still linking the job). Only `permission_denied`,
+  `already_running`, and `enqueue_error` are hard failures; all outcomes are
+  flash messages that never 500. The card is hidden for a view-capable user and
+  only reveals on a genuine backend-reported bootstrap problem, but is rendered
+  server-visible for a repair-only user (can `core.add_job`, cannot view status)
+  so they keep the repair affordance — see `partials/bootstrap_status_card.html`.
 - [`proxmox_cluster_node.py`](./proxmox_cluster_node.py): detail (`ObjectView`) views for `ProxmoxCluster` and `ProxmoxNode`, registered under the bare model names so `get_absolute_url()` resolves.
 - [`storage.py`](./storage.py): CRUD list/detail/delete views for `ProxmoxStorage`.
 - [`sync.py`](./sync.py): POST endpoints that enqueue `ProxboxSyncJob` runs for devices, storage, virtual machines, virtual disks, backups, snapshots, network interfaces, IP addresses, backup routines, replications, and full update.

@@ -546,16 +546,39 @@ This package contains the NetBox plugin itself. It defines the plugin config, UR
 - Browser-side pages use templates plus JS from `static/netbox_proxbox/js/` for dashboard hydration, keepalive polling, SSE streaming, log rendering, and WebSocket updates.
 - Operator recovery for missing Proxbox bootstrap/custom-field setup is exposed
   through `views/sync_state_repair.py` and the shared
-  `partials/bootstrap_status_card.html`. The card appears on Home and Settings,
-  loads proxbox-api `GET /extras/bootstrap-status` on demand through the
-  session-gated `sync-state/bootstrap-status/` JSON endpoint for users with
-  `view_fastapiendpoint`, and posts to `sync-state/repair/` for users with
-  `core.add_job`. Both backend calls resolve the FastAPI endpoint through a
-  request-user-restricted queryset before passing the endpoint ID to the backend
-  proxy. The POST path calls
-  `POST /extras/custom-fields/reconcile` through `services/backend_proxy.py`
-  before queuing a normal full `ProxboxSyncJob`; it must remain a UI/session
-  action with flash-message error handling, not a new sync transport.
+  `partials/bootstrap_status_card.html`. The card is included on Home and
+  Settings but **renders hidden (`d-none`) and only reveals itself when the
+  backend bootstrap actually needs attention** — its inline JS auto-checks
+  `sync-state/bootstrap-status/` on page load (only when the user has
+  `view_fastapiendpoint`) and reveals the card **only** on a genuine
+  backend-reported problem (`ok:false` with `http_status == 200`, e.g. the
+  "Invalid v1 token" warnings). A healthy backend, an unreachable/unconfigured
+  backend (no FastAPI endpoint → 404), or a transport failure keeps the card
+  hidden, so it never shows on the UI permanently. The JS never auto-hides a
+  revealed card within a page view; the next load re-evaluates from hidden.
+  **Repair-only exception:** a user who can repair (`core.add_job`) but cannot
+  view status (no `view_fastapiendpoint`) gets the card rendered server-visible
+  so they keep the repair affordance — no bootstrap payload is exposed — via the
+  template's `{% if bootstrap_status.can_view or not can_repair_sync_state %}
+  d-none{% endif %}` guard. A user with neither permission never sees it.
+- The `sync-state/repair/` POST (`core.add_job`) calls
+  `POST /extras/custom-fields/reconcile` through `services/backend_proxy.py` and
+  then enqueues a normal full `ProxboxSyncJob`. **The custom-field reconcile is a
+  best-effort first step, not a gate:** when proxbox-api holds a stale/invalid
+  NetBox credential (the "Invalid v1 token" state), the reconcile POST
+  authenticates with that same broken credential and fails — but aborting there
+  would skip the only recovery path, because the queued sync's preflight
+  (`jobs.py::_ensure_backend_endpoints`) re-pushes the `NetBoxEndpoint` (and
+  `ProxmoxEndpoint`) credentials to proxbox-api and the sync rebuilds the typed
+  `Proxbox*SyncState` sidecars from live Proxmox data. So a reconcile failure is
+  recorded on `SyncStateRepairOutcome.reconcile_warning` and the rebuild sync is
+  **still queued**; the view surfaces it as a `messages.warning` (still linking
+  the job) instead of `messages.success`. Only `permission_denied`,
+  `already_running` (active-job debounce), and `enqueue_error` (the sync could
+  not be queued) are hard failures. Both backend calls resolve the FastAPI
+  endpoint through a request-user-restricted queryset before passing the endpoint
+  ID to the backend proxy. It must remain a UI/session action with flash-message
+  error handling that never returns a 500, not a new sync transport.
 
 ## Import / Export
 
