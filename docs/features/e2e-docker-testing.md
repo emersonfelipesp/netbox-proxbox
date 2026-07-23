@@ -23,12 +23,12 @@ do not abort the others.
 | Axis | Default values | Purpose |
 |---|---|---|
 | `install_source` | `local`, `pypi`, `container` | How `netbox-proxbox` is installed inside NetBox. |
-| `netbox_image` | `v4.5.8`, `v4.5.9`, `v4.6.0`-`v4.6.4` | The NetBox releases the plugin is currently certified against. |
+| `netbox_image` | `v4.5.8`-`v4.5.10`, `v4.6.0`-`v4.6.5` | The NetBox releases the plugin is currently certified against. |
 | `network_stack` | `ipv4` | Reserved for future dual-stack runs. |
 | `proxbox_api_runtime` | `python`, `pyo3-rust` | Runs each cell against the default Python backend and the experimental PyO3/Rust reconciliation backend. |
 | `proxmox_service` | `pve`, `pbs`, `pdm` | Selects which `proxmox-sdk` mock service image is used as the Proxmox side. |
 
-The default cross-product is **3 × 3 × 1 × 2 × 3 = 54 cells**. Manual
+The default cross-product is **3 × 9 × 1 × 2 × 3 = 162 cells**. Manual
 dispatch (`workflow_dispatch`) and reusable callers can pin any axis to a
 single value (for example `proxmox_service: pve`) to run a narrower slice.
 

@@ -69,7 +69,7 @@ The reusable inputs select what is under test:
 | `dependency_mode` | `dev`, `published`, `testpypi-package`, `pypi-package` | Selects how the separate `proxbox-api` container is built or installed. |
 | `proxbox_api_version` | Version string | Pins the backend package version for TestPyPI/PyPI package-index E2E modes. |
 | `proxbox_api_runtime` | `python`, `pyo3-rust`, `both` | Selects the backend reconciliation runtime. `both` is the default and doubles the matrix. |
-| `netbox_image` | Full image ref | Overrides the NetBox image; default matrix covers `v4.5.8`, `v4.5.9`, and `v4.6.0` through `v4.6.4`. |
+| `netbox_image` | Full image ref | Overrides the NetBox image; default matrix covers `v4.5.8` through `v4.5.10` and `v4.6.0` through `v4.6.5`. |
 | `proxmox_service` | `pve`, `pbs`, `pdm`, `all` | Selects the proxmox-sdk mock image suffix. `all` runs the full per-service matrix. |
 
 The `pyo3-rust` runtime uses the `proxbox-api` `raw-pyo3-rust` Docker target in
