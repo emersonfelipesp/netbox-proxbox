@@ -86,6 +86,7 @@ class SyncStateRepairOutcome:
     message: str
     job: object | None = None
     backend_status: int | None = None
+    reconcile_warning: str | None = None
 
     @property
     def ok(self) -> bool:
@@ -350,27 +351,41 @@ def build_sync_state_repair_outcome(
             job=active_job,
         )
 
+    # Custom-field reconcile is a best-effort *first* step, not a gate. When
+    # proxbox-api holds a stale/invalid NetBox credential (e.g. the
+    # "Invalid v1 token" bootstrap failure), the reconcile POST authenticates
+    # with that same broken credential and fails. Aborting here would skip the
+    # one recovery path that heals it: the full ProxboxSyncJob preflight
+    # (`_ensure_backend_endpoints`) re-pushes the NetBox (and Proxmox) endpoint
+    # credentials to proxbox-api, and the sync rebuilds the typed
+    # Proxbox*SyncState sidecars from live Proxmox data (custom fields are
+    # deprecated / off by default). So a reconcile failure is recorded as a
+    # warning and the rebuild sync is still queued.
     reconcile = reconcile_backend or _reconcile_backend_custom_fields
+    reconcile_warning: str | None = None
+    backend_status: int | None = None
     try:
         payload, backend_status = reconcile()
     except Exception as exc:  # noqa: BLE001 - dependency injection tests/backend stubs
-        return SyncStateRepairOutcome(
-            status="backend_error",
-            message=(
-                f"Proxbox custom-field reconcile failed: {exc} No sync was queued."
-            ),
-            backend_status=503,
+        backend_status = 503
+        # str(exc) can be empty (e.g. a bare exception); keep reconcile_warning
+        # truthy so the warning path is taken instead of a false success flash.
+        reconcile_warning = str(exc).strip() or type(exc).__name__
+        logger.warning(
+            "Proxbox custom-field reconcile raised during repair; "
+            "queuing rebuild sync anyway: %s",
+            exc,
         )
-    backend_result = backend_payload_result(payload, backend_status)
-    if not backend_result.ok:
-        return SyncStateRepairOutcome(
-            status="backend_error",
-            message=(
-                "Proxbox custom-field reconcile failed: "
-                f"{backend_result.detail} No sync was queued."
-            ),
-            backend_status=backend_status,
-        )
+    else:
+        backend_result = backend_payload_result(payload, backend_status)
+        if not backend_result.ok:
+            reconcile_warning = backend_result.detail
+            logger.warning(
+                "Proxbox custom-field reconcile failed during repair "
+                "(HTTP %s); queuing rebuild sync anyway: %s",
+                backend_status,
+                backend_result.detail,
+            )
 
     enqueue = enqueue_sync or ProxboxSyncJob.enqueue
     try:
@@ -383,23 +398,40 @@ def build_sync_state_repair_outcome(
             proxmox_endpoint_ids=target_endpoint_ids,
         )
     except Exception as exc:  # noqa: BLE001 - surface enqueue failures, never 500
+        prefix = (
+            "Custom fields could not be reconciled "
+            f"({reconcile_warning}), and the Proxbox rebuild sync job "
+            if reconcile_warning
+            else "Custom fields were reconciled, but the Proxbox rebuild sync job "
+        )
         return SyncStateRepairOutcome(
             status="enqueue_error",
-            message=(
-                "Custom fields were reconciled, but the Proxbox rebuild sync job "
-                f"could not be queued: {exc}"
-            ),
+            message=f"{prefix}could not be queued: {exc}",
             backend_status=backend_status,
+            reconcile_warning=reconcile_warning,
+        )
+
+    if reconcile_warning:
+        message = (
+            "Proxbox custom fields could not be reconciled "
+            f"({reconcile_warning}), but a rebuild sync job has been queued. "
+            "The sync re-pushes NetBox credentials to proxbox-api and rebuilds "
+            "sync-state from live Proxmox data. If the reconcile error persists "
+            "after the sync, verify the NetBox API token configured on the "
+            "NetBox endpoint is valid."
+        )
+    else:
+        message = (
+            "Proxbox custom fields were reconciled and a rebuild sync job has "
+            "been queued."
         )
 
     return SyncStateRepairOutcome(
         status="success",
-        message=(
-            "Proxbox custom fields were reconciled and a rebuild sync job has "
-            "been queued."
-        ),
+        message=message,
         job=job,
         backend_status=backend_status,
+        reconcile_warning=reconcile_warning,
     )
 
 
@@ -522,7 +554,10 @@ class RepairSyncStateView(
         )
 
         if outcome.ok and outcome.job is not None:
-            messages.success(
+            # A queued rebuild whose custom-field reconcile warned is surfaced as
+            # a warning (still linking the job) rather than an unqualified success.
+            level = messages.warning if outcome.reconcile_warning else messages.success
+            level(
                 request,
                 format_html(
                     '{} <a href="{}">{}</a>',

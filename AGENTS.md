@@ -97,9 +97,9 @@ sdn
 
 Key files: `choices.py` (SyncModeChoices and VMInterfaceSyncStrategyChoices), `constants.py` (SYNC_MODE_FIELDS), `models/plugin_settings.py` (global fields), `models/guest_vm_interface.py` (guest OS interface inventory), `models/proxmox_endpoint.py` (per-endpoint fields + `effective_sync_mode()`), `models/vm_template.py` (ProxmoxVMTemplate), `models/sdn_inventory.py` (SDN metadata), `sync_stages.py` (gating helpers and backend query forwarding), `netbox_bootstrap.py` (bootstrap-only tag creation), `services/sync_vm_template.py` (template sync service), `docs/configuration/sync-modes.md` (user docs).
 
-## Custom-field to model migration
+## Custom-field to model migration (complete)
 
-The legacy Proxbox custom-field surface is being moved into plugin-owned
+The legacy Proxbox custom-field surface has been moved into plugin-owned
 sidecar models under `netbox_proxbox/models/sync_state.py`. Every sidecar
 inherits `ProxboxSyncStateBase`, which owns the shared `last_updated`
 (`proxmox_last_updated`) and `last_run_id` (`proxbox_last_run_id`) columns.
@@ -113,11 +113,15 @@ JSON columns are removed. `virtualization.Cluster` uses a sidecar
 `ProxmoxCluster` is endpoint-scoped and links to NetBox clusters through a
 nullable FK rather than a one-to-one relationship.
 
-This migration is additive. Do not remove or stop registering legacy custom
-fields in this plugin change set, and do not change proxbox-api writers here.
-Readers continue to use custom fields until the linked reader-switch work lands;
-custom-field deletion is a later cleanup after both repositories read/write the
-new models.
+These sidecars are now the standard source of truth: the proxbox-api
+writer/reader switch has landed (commit `51866764`), so a normal sync writes
+and reads the sidecars, rebuilt from live Proxmox data. The legacy reflection
+custom fields are deprecated and gated behind
+`ProxboxPluginSettings.custom_fields_enabled` (default `False`); by default
+proxbox-api does not write, read, or reconcile custom fields. Setting the flag
+`True` restores legacy custom-field behavior for a transition window and emits
+deprecation warnings. Full custom-field removal is a later cleanup; no data is
+deleted while the flag exists.
 
 ## Release Procedure (summary)
 

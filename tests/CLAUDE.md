@@ -18,7 +18,7 @@ This directory contains the plugin's pytest test suite.
 - `test_proxmox_endpoint_tuning.py`: isolated model behavior for endpoint/global timeout, retry, and back-off resolution, including an AST contract on the actual `5` / `0` / `0.50` model defaults plus all-inherited, mixed, and explicit zero retry/back-off cases. `test_backend_sync_placement.py` pins that backend registration consumes the resolved values; `test_multi_endpoint_scoping.py` requires public backend tuning values to match before a row is current; `test_jobs.py` proves stale inherited tuning remains push-required after the soft preflight budget; and `test_sync_mode_forwarding.py` pins that only the dedicated task-history stage owns task-history discovery.
 - `test_sdn_models.py`: source and migration contracts for `ProxmoxSdnFabric`, `ProxmoxSdnRouteMap`, and `ProxmoxSdnPrefixList` — model file existence, required/optional fields, `UniqueConstraint` presence, `NetBoxModel` base, `models/__init__` exports, `choices.py` `SdnFabricTypeChoices`, navigation items and URLs, views (list views, `register_model_view`), filtersets, tables, forms, and the `sync_sdn` service (`SdnSyncResult` dataclass, backend endpoint paths). References the consolidated squash migration `0039_squashed_0039_0042_pve_9_2_firewall_sdn.py`.
 - `test_datacenter_models.py`: source and migration contracts for `ProxmoxDatacenterCpuModel` — model file existence, required fields, `UniqueConstraint` presence, `NetBoxModel` base, `models/__init__` exports, navigation items and URLs, views, filtersets, tables, forms, and the `sync_datacenter` service. References the consolidated squash migration `0039_squashed_0039_0042_pve_9_2_firewall_sdn.py`.
-- `test_version.py`: AST-based pin on `ProxboxConfig.version`, `min_version`, `max_version`, plus docs-contract checks for current release metadata, backend pairing, and compatibility-table rows. Fails loudly when one drifts so docs and release notes stay aligned.
+- `test_version.py`: AST-based exact identity pin across `CURRENT_RELEASE_VERSION`, `pyproject.toml`, and `ProxboxConfig.version`, plus pins on `min_version` / `max_version` and docs-contract checks for current release metadata, backend pairing, and compatibility-table rows. Fails loudly when one drifts so docs and release notes stay aligned.
 - `test_signals.py`: AST contract for the three `@receiver(post_save)` handlers in `netbox_proxbox/signals.py` that bootstrap the proxbox-api backend.
 - `test_services_http_client.py`: behavior tests for `RequestsHttpClient` exception translation (`HttpConnectionError`, `HttpTimeoutError`, `HttpSslError`) and the singleton accessor; uses `unittest.mock` against `requests.get/post/put/delete`.
 - `test_views_error_utils.py`: behavior tests for `parse_requests_response_json`, `extract_backend_error_detail`, and `extract_proxmox_backend_error_detail` covering connection-refused, timeout, HTML-on-error, generic-detail-with-message, and Python-exception-append branches. Its **credential redaction** section pins that a FastAPI 422 echoing a pushed endpoint payload never prints the NetBox API `token` or the Proxmox `password`/`token_value`/`api_key` while keeping the rejected field name and message readable, that `redact_sensitive()` matches keys rather than values (so an error text mentioning a password survives), and that a self-referential payload terminates on the depth limit. Six further tests close the holes key-only matching leaves: a **scalar** `input` echoed next to a `loc` naming a credential field is redacted, header-style keys (`X-Proxbox-API-Key`, `Private-Key`, `SSH Keys`) normalize to the same markers as `api_key`, a payload nested one level past `_REDACTION_DEPTH_LIMIT` is replaced with `_REDACTED_DEEP` rather than returned raw, credentials already rendered into `msg`/`python_exception` prose are swept (including `Authorization: Bearer <jwt>`, which must lose the **token** and not merely the scheme keyword), a bare `Bearer …` with no credential-named key in front of it is swept by `_BEARER_RE`, and a transport exception carrying no response body still has its rendered text swept before it is returned.
@@ -45,13 +45,23 @@ This directory contains the plugin's pytest test suite.
 - `test_backup_replication_views.py`: view coverage for backup routine and replication list/detail pages.
 - `test_home_context.py`: tests for home page context assembly.
 - `test_operator_migration_ux.py`: source-contract and pure outcome tests for
-  issue #217's operator migration UX. Pins the `sync-state/repair/` route,
-  lazy `sync-state/bootstrap-status/` route, `RepairSyncStateView` permission
-  stack, proxbox-api `/extras/bootstrap-status` and
-  `/extras/custom-fields/reconcile` helper strings, Home/Settings template
+  issue #217's operator migration UX, hardened by issue #255. Pins the
+  `sync-state/repair/` route, lazy `sync-state/bootstrap-status/` route,
+  `RepairSyncStateView` permission stack, proxbox-api `/extras/bootstrap-status`
+  and `/extras/custom-fields/reconcile` helper strings, Home/Settings template
   inclusion of the shared bootstrap-status card, nested backend response
-  handling, duplicate active-job guarding, and success / permission-denied /
-  backend-error outcome mapping without bootstrapping NetBox.
+  handling, duplicate active-job guarding, and outcome mapping without
+  bootstrapping NetBox. **The reconcile is non-fatal (issue #255):**
+  `test_repair_outcome_reconcile_failure_still_queues_rebuild_sync` /
+  `…_reconcile_exception_still_queues_rebuild_sync` pin that an inner `ok:false`
+  reconcile response or a raised reconcile still enqueues the full sync, sets
+  `reconcile_warning`, and returns `status="success"` — because the sync's
+  preflight is the recovery path — while
+  `test_repair_outcome_enqueue_failure_after_reconcile_warning_is_fatal` keeps a
+  failed *enqueue* fatal. `test_bootstrap_status_card_is_hidden_until_it_needs_attention`
+  pins the template: `d-none` by default, `data-can-view`, the
+  `needsAttention`/`revealCard` reveal-only-on-HTTP-200-`ok:false` logic, the
+  auto-check on load, and no `innerHTML`.
 - `test_stack_setup.py`, `test_stack_sync_polling.py`: integration-level stack setup and sync polling behavior tests.
 - `test_templatetags.py`: tests for custom Proxbox template tag helpers.
 - `e2e/`: stack-oriented tests that exercise the proxbox-api and NetBox integration flow end to end.

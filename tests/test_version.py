@@ -10,6 +10,7 @@ reminder to update the docs and release-notes files at the same time.
 from __future__ import annotations
 
 import ast
+import json
 import re
 from pathlib import Path
 import tomllib
@@ -46,6 +47,11 @@ NIGHTLY_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "nightly-contracts
 DOCS_SCREENSHOTS_WORKFLOW_PATH = (
     REPO_ROOT / ".github" / "workflows" / "docs-screenshots.yml"
 )
+DJANGO_TESTS_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "django-tests.yml"
+PAGE_COVERAGE_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "page-coverage.yml"
+CERTIFICATION_PATH = REPO_ROOT / "CERTIFICATION.md"
+DOCS_CERTIFICATION_PATH = REPO_ROOT / "docs" / "certification.md"
+APPLICATION_PACKET_PATH = REPO_ROOT / "docs" / "application-packet.md"
 
 CURRENT_PLUGIN_VERSION = "0.0.23"
 CURRENT_RELEASE_VERSION = "0.0.23.post1"
@@ -58,15 +64,24 @@ CURRENT_PAIRING_LINE = (
 PROXBOX_API_WORKFLOW_DEFAULT_VERSION = "0.0.19.post5"
 CURRENT_NETBOX_MIN_VERSION = "4.5.8"
 CURRENT_NETBOX_MAX_VERSION = "4.6.99"
+LATEST_CERTIFIED_NETBOX_VERSION = "4.6.5"
+LATEST_CERTIFIED_NETBOX_IMAGE = (
+    f"netboxcommunity/netbox:v{LATEST_CERTIFIED_NETBOX_VERSION}"
+)
 SUPPORTED_NETBOX_IMAGE_TAGS = (
     "netboxcommunity/netbox:v4.5.8",
     "netboxcommunity/netbox:v4.5.9",
+    "netboxcommunity/netbox:v4.5.10",
     "netboxcommunity/netbox:v4.6.0",
     "netboxcommunity/netbox:v4.6.1",
     "netboxcommunity/netbox:v4.6.2",
     "netboxcommunity/netbox:v4.6.3",
     "netboxcommunity/netbox:v4.6.4",
+    "netboxcommunity/netbox:v4.6.5",
 )
+E2E_DEFAULT_INSTALL_SOURCES = ("local", "pypi", "container")
+E2E_EXPLICIT_INSTALL_SOURCES = (*E2E_DEFAULT_INSTALL_SOURCES, "testpypi")
+DJANGO_TESTED_NETBOX_TAGS = ("v4.5.8", "v4.5.10", "v4.6.0", "v4.6.5")
 PREVIOUS_PLUGIN_VERSION = "0.0.22"
 PREVIOUS_PROXBOX_API_VERSION = "0.0.19.post5"
 CURRENT_RELEASE_NOTES_PATH = RELEASE_NOTES_023_POST1_PATH
@@ -102,13 +117,40 @@ def _assert_markdown_table_row(text: str, expected_cells: tuple[str, ...]) -> No
     assert expected in normalized_rows
 
 
-def test_plugin_version_is_pinned():
+def _workflow_matrix_expression(workflow: str, matrix_key: str) -> str:
+    prefix = f"        {matrix_key}: "
+    matches = [
+        line.removeprefix(prefix)
+        for line in workflow.splitlines()
+        if line.startswith(prefix)
+    ]
+    assert len(matches) == 1, (
+        f"expected exactly one {matrix_key!r} matrix expression, got {len(matches)}"
+    )
+    return matches[0]
+
+
+def _workflow_matrix_json_fallback(workflow: str, matrix_key: str) -> tuple[str, ...]:
+    expression = _workflow_matrix_expression(workflow, matrix_key)
+    match = re.search(r"\|\| '(?P<values>\[[^']*\])'\)\s*}}$", expression)
+    assert match is not None, f"{matrix_key!r} matrix has no JSON fallback"
+    values = json.loads(match.group("values"))
+    assert isinstance(values, list)
+    assert all(isinstance(value, str) for value in values)
+    return tuple(values)
+
+
+def test_current_release_version_identity_is_exact():
     constants = _class_constants("ProxboxConfig")
-    actual = constants.get("version") or ""
-    pattern = rf"^{re.escape(CURRENT_PLUGIN_VERSION)}(rc\d+|\.post\d+)?$"
-    assert re.match(pattern, actual), (
-        f"version drifted (got {actual!r}); update docs/, release-notes, "
-        "and pyproject.toml together"
+    pyproject = tomllib.loads(PYPROJECT_PATH.read_text(encoding="utf-8"))
+    config_version = constants.get("version")
+    pyproject_version = pyproject["project"]["version"]
+
+    assert config_version == pyproject_version == CURRENT_RELEASE_VERSION, (
+        "release version identity drifted: "
+        f"ProxboxConfig.version={config_version!r}, "
+        f"pyproject.toml={pyproject_version!r}, "
+        f"certification constant={CURRENT_RELEASE_VERSION!r}"
     )
 
 
@@ -138,25 +180,113 @@ def test_certified_netbox_versions_are_documented():
 
 def test_certified_netbox_versions_are_in_e2e_matrix():
     workflow = E2E_WORKFLOW_PATH.read_text(encoding="utf-8")
-    for image in SUPPORTED_NETBOX_IMAGE_TAGS:
-        assert image in workflow, f"{image} is missing from the E2E matrix"
-    assert "netboxcommunity/netbox:v4.6.0-beta2" not in workflow
-
-
-def test_docs_name_supported_netbox_versions():
-    docs = "\n".join(
-        _read(path)
-        for path in (
-            README_PATH,
-            DOCS_INDEX_PATH,
-            CURRENT_RELEASE_NOTES_PATH,
-            REPO_ROOT / "CERTIFICATION.md",
-            REPO_ROOT / "docs" / "certification.md",
-        )
+    assert (
+        _workflow_matrix_json_fallback(workflow, "netbox_image")
+        == SUPPORTED_NETBOX_IMAGE_TAGS
     )
 
-    for image in SUPPORTED_NETBOX_IMAGE_TAGS:
-        assert image.rsplit(":", 1)[1] in docs
+
+def test_e2e_scheduled_runs_expand_the_full_install_source_matrix():
+    workflow = E2E_WORKFLOW_PATH.read_text(encoding="utf-8")
+    expression = _workflow_matrix_expression(workflow, "install_source")
+    recognized_sources = tuple(
+        re.findall(r"inputs\.install_source == '([^']+)'", expression)
+    )
+    fallback_sources = _workflow_matrix_json_fallback(workflow, "install_source")
+
+    assert recognized_sources == E2E_EXPLICIT_INSTALL_SOURCES
+    assert fallback_sources == E2E_DEFAULT_INSTALL_SOURCES
+
+    def expanded_sources(input_value: str) -> tuple[str, ...]:
+        if input_value in recognized_sources:
+            return (input_value,)
+        return fallback_sources
+
+    assert expanded_sources("") == E2E_DEFAULT_INSTALL_SOURCES
+    assert expanded_sources("both") == E2E_DEFAULT_INSTALL_SOURCES
+    assert expanded_sources("unrecognized") == E2E_DEFAULT_INSTALL_SOURCES
+
+
+def test_e2e_stable_python_cells_are_gating_for_pve():
+    workflow = E2E_WORKFLOW_PATH.read_text(encoding="utf-8")
+    job_header = workflow.split("    steps:", maxsplit=1)[0]
+    continue_on_error_lines = [
+        line.strip()
+        for line in job_header.splitlines()
+        if line.strip().startswith("continue-on-error:")
+    ]
+    assert continue_on_error_lines == [
+        "continue-on-error: ${{ matrix.proxbox_api_runtime == 'pyo3-rust' }}"
+    ]
+
+
+def test_docs_screenshots_pins_latest_certified_netbox():
+    workflow = _read(DOCS_SCREENSHOTS_WORKFLOW_PATH)
+    assert workflow.count(f"NETBOX_IMAGE: {LATEST_CERTIFIED_NETBOX_IMAGE}") == 1
+
+
+def test_django_tests_pin_expected_netbox_matrix():
+    workflow = _read(DJANGO_TESTS_WORKFLOW_PATH)
+    expected_matrix = json.dumps(list(DJANGO_TESTED_NETBOX_TAGS))
+    assert f"        netbox: {expected_matrix}" in workflow
+
+
+def test_page_coverage_pins_latest_certified_netbox():
+    workflow = _read(PAGE_COVERAGE_WORKFLOW_PATH)
+    assert workflow.count(f"NETBOX_IMAGE: {LATEST_CERTIFIED_NETBOX_IMAGE}") == 1
+    assert (
+        f"name: Page Coverage / {LATEST_CERTIFIED_NETBOX_IMAGE} / local / pve"
+        in workflow
+    )
+
+
+def _contains_exact_version(text, version):
+    """True when *version* appears as an exact token, not as a prefix.
+
+    Substring membership would let "4.6.50" satisfy a "4.6.5" assertion and
+    "0.0.23.post10" satisfy "0.0.23.post1"; require a non-version character
+    (or end of string) after the match.
+    """
+    import re
+
+    return re.search(rf"(?<![0-9.]){re.escape(version)}(?![0-9])", text) is not None
+
+
+def test_certified_netbox_range_is_documented_independently():
+    for path in (
+        README_PATH,
+        DOCS_INDEX_PATH,
+        CURRENT_RELEASE_NOTES_PATH,
+        CERTIFICATION_PATH,
+        DOCS_CERTIFICATION_PATH,
+        APPLICATION_PACKET_PATH,
+    ):
+        text = _read(path)
+        assert _contains_exact_version(text, CURRENT_NETBOX_MIN_VERSION), (
+            f"{path} missing certified floor"
+        )
+        assert _contains_exact_version(text, LATEST_CERTIFIED_NETBOX_VERSION), (
+            f"{path} missing latest certified version"
+        )
+
+
+def test_certification_evidence_names_the_tested_plugin_artifact():
+    for path in (CERTIFICATION_PATH, APPLICATION_PACKET_PATH):
+        text = _read(path)
+        assert _contains_exact_version(text, CURRENT_RELEASE_VERSION), (
+            f"{path} missing tested plugin artifact"
+        )
+        assert "0.0.18.post1" not in text, (
+            f"{path} still names the historical certification target"
+        )
+
+
+def test_exact_version_matcher_rejects_prefix_collisions():
+    assert _contains_exact_version("certified against 4.6.5.", "4.6.5")
+    assert not _contains_exact_version("certified against 4.6.50", "4.6.5")
+    assert not _contains_exact_version("certified against 14.6.5", "4.6.5")
+    assert _contains_exact_version("artifact 0.0.23.post1 tested", "0.0.23.post1")
+    assert not _contains_exact_version("artifact 0.0.23.post10 tested", "0.0.23.post1")
 
 
 def test_proxbox_api_is_not_a_python_dependency():
@@ -189,12 +319,7 @@ def test_pyproject_metadata_is_certification_ready():
     pyproject = tomllib.loads(PYPROJECT_PATH.read_text(encoding="utf-8"))
     project = pyproject["project"]
 
-    assert re.fullmatch(
-        rf"^{re.escape(CURRENT_PLUGIN_VERSION)}(rc\d+|\.post\d+)?$",
-        project["version"],
-    ), (
-        f"pyproject.toml version {project['version']!r} does not match {CURRENT_PLUGIN_VERSION}"
-    )
+    assert project["version"] == CURRENT_RELEASE_VERSION
     assert project["license"] == "Apache-2.0"
     assert project["license-files"] == ["LICENSE"]
     assert (

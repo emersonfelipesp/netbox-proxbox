@@ -1,6 +1,18 @@
 {% load i18n %}
 
-<div class="card mb-3" data-proxbox-bootstrap-status-card data-status-url="{% url 'plugins:netbox_proxbox:bootstrap_status' %}">
+{% comment %}
+Visibility rules so the card never shows on the UI permanently:
+  - can_view: hidden by default; the JS silently checks `bootstrap-status` on
+    load and reveals it only for a genuine needs-attention state (the backend
+    answered HTTP 200 with `ok:false`). Healthy / unreachable / unconfigured
+    backends stay hidden.
+  - repair-only (can repair but NOT view status): the card is rendered visible
+    so the operator keeps the repair affordance they are authorized to use; no
+    bootstrap payload is exposed (the body shows the permission notice).
+  - neither view nor repair: hidden.
+So the card is server-visible only when `not can_view and can_repair_sync_state`.
+{% endcomment %}
+<div class="card mb-3{% if bootstrap_status.can_view or not can_repair_sync_state %} d-none{% endif %}" data-proxbox-bootstrap-status-card data-can-view="{{ bootstrap_status.can_view|yesno:'true,false' }}" data-status-url="{% url 'plugins:netbox_proxbox:bootstrap_status' %}">
     <h5 class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
         <span>
             <i class="mdi mdi-wrench" aria-hidden="true"></i>
@@ -88,6 +100,19 @@
         return true;
     }
 
+    // The card is only worth showing when the backend actually reported a
+    // bootstrap problem: it answered (HTTP 200) but flagged ok:false (e.g. the
+    // "Invalid v1 token" warnings). A healthy backend, an unreachable/
+    // unconfigured backend (no FastAPI endpoint -> 404), a transport failure, or
+    // a permission error are NOT "sync-state needs repair" and stay hidden.
+    function needsAttention(data) {
+        return !!(data && data.ok === false && Number(data.http_status) === 200);
+    }
+
+    function revealCard(card) {
+        setHidden(card, false);
+    }
+
     function formatPayload(value) {
         try {
             return JSON.stringify(value || {}, null, 2);
@@ -130,6 +155,13 @@
             setHidden(payload, true);
             setText(empty, "No bootstrap-status payload is available.");
             setHidden(empty, false);
+        }
+
+        // Surface the card only when the backend reported a real problem. Never
+        // auto-hide here: once revealed in this page view the operator keeps the
+        // repair controls; the next page load re-evaluates from hidden.
+        if (needsAttention(data)) {
+            revealCard(card);
         }
     }
 
@@ -176,6 +208,12 @@
                 refresh.addEventListener("click", function () {
                     loadStatus(card);
                 });
+            }
+            // Auto-check on load so a healthy backend keeps the card hidden and a
+            // real bootstrap problem reveals it. Only when the user can view
+            // status; otherwise there is nothing to check and it stays hidden.
+            if (card.getAttribute("data-can-view") === "true") {
+                loadStatus(card);
             }
         });
 
