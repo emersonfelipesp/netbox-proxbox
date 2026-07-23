@@ -73,6 +73,11 @@ def _load_backend_sync_module(monkeypatch):
 
 def test_proxmox_backend_payload_includes_site_and_tenant_metadata(monkeypatch) -> None:
     backend_sync = _load_backend_sync_module(monkeypatch)
+    effective_tuning = {
+        "timeout": 30,
+        "max_retries": 3,
+        "retry_backoff": Decimal("1.25"),
+    }
     endpoint = SimpleNamespace(
         pk=123,
         name="PVE",
@@ -89,6 +94,7 @@ def test_proxmox_backend_payload_includes_site_and_tenant_metadata(monkeypatch) 
         token_value=None,
         site=SimpleNamespace(pk=42, slug="dc1", name="DC 1"),
         tenant=SimpleNamespace(pk=9, slug="customer-a", name="Customer A"),
+        effective_connection_tuning=lambda: effective_tuning,
     )
 
     payload = backend_sync._proxmox_backend_payload(endpoint)
@@ -103,6 +109,41 @@ def test_proxmox_backend_payload_includes_site_and_tenant_metadata(monkeypatch) 
     assert payload["tenant_id"] == 9
     assert payload["tenant_slug"] == "customer-a"
     assert payload["tenant_name"] == "Customer A"
+
+
+def test_proxmox_backend_payload_uses_resolved_tuning_and_preserves_zero(
+    monkeypatch,
+) -> None:
+    backend_sync = _load_backend_sync_module(monkeypatch)
+    endpoint = SimpleNamespace(
+        pk=123,
+        name="PVE",
+        ip_address="10.0.0.10/32",
+        domain="pve.example.com",
+        port=8006,
+        username="root@pam",
+        password="secret",
+        verify_ssl=False,
+        timeout=None,
+        max_retries=None,
+        retry_backoff=None,
+        token_name=None,
+        token_value=None,
+        access_methods="api",
+        site=None,
+        tenant=None,
+        effective_connection_tuning=lambda: {
+            "timeout": 45,
+            "max_retries": 0,
+            "retry_backoff": Decimal("0.00"),
+        },
+    )
+
+    payload = backend_sync._proxmox_backend_payload(endpoint)
+
+    assert payload["timeout"] == 45
+    assert payload["max_retries"] == 0
+    assert payload["retry_backoff"] == 0.0
 
 
 def _payload_for_access_methods(monkeypatch, value):
@@ -124,6 +165,11 @@ def _payload_for_access_methods(monkeypatch, value):
         access_methods=value,
         site=None,
         tenant=None,
+        effective_connection_tuning=lambda: {
+            "timeout": 5,
+            "max_retries": 0,
+            "retry_backoff": Decimal("0.50"),
+        },
     )
     return backend_sync._proxmox_backend_payload(endpoint)
 

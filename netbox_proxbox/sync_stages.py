@@ -711,6 +711,10 @@ def _build_stage_query_params(
     if sync_type == SyncTypeChoices.VIRTUAL_MACHINES_SNAPSHOTS:
         query_params["delete_nonexistent_snapshot"] = "true"
     if sync_type == SyncTypeChoices.VIRTUAL_MACHINES:
+        # Task history has its own stage. Leaving the backend's VM-stage default
+        # enabled performs the same expensive discovery twice during a full
+        # sync and also hides task-history failures inside the required VM pass.
+        query_params["sync_task_history"] = "false"
         if disable_vm_network_on_vm_stage:
             # Dedicated stages or disabled interfaces own network sync behavior.
             query_params["sync_vm_network"] = "false"

@@ -362,7 +362,9 @@ def test_repair_outcome_enqueue_failure_after_reconcile_warning_is_fatal(monkeyp
     assert "queue down" in outcome.message
 
 
-def test_repair_outcome_transport_error_reconcile_still_queues_rebuild_sync(monkeypatch):
+def test_repair_outcome_transport_error_reconcile_still_queues_rebuild_sync(
+    monkeypatch,
+):
     # A transport-level reconcile failure (outer proxy envelope non-ok, non-2xx
     # status) is classified as not-ok by backend_payload_result and must be
     # treated exactly like an inner ok:false: warn and still queue the rebuild.
