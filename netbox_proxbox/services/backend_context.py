@@ -29,6 +29,8 @@ def get_fastapi_request_context(
 
     return BackendRequestContext(
         detail=context,
+        endpoint_id=context.get("endpoint_id"),
+        target_fingerprint=str(context.get("target_fingerprint", "")),
         http_url=context.get("http_url"),
         ip_address_url=context.get("ip_address_url"),
         verify_ssl=context.get("verify_ssl", True),
@@ -86,27 +88,61 @@ def _build_request_candidates(
 
 
 def _handle_auth_registration_and_retry(
-    backend_headers: dict,
+    context: BackendRequestContext,
     *,
     endpoint_id: int | None = None,
-) -> tuple[dict, bool]:
-    """Re-check the stored API key after an authentication response.
+) -> BackendRequestContext | None:
+    """Rebind and authenticate one stable endpoint context after a 401.
 
-    Returns (new_headers, retry_flag). If authentication succeeds, returns new headers
-    and True to indicate the caller should retry the request.
+    The caller must restart candidate selection from the returned context. Returning
+    ``None`` fails closed if the endpoint changes again while its key is checked.
 
     The historical helper name remains part of the backend-proxy contract. It
     never bootstraps or substitutes a credential.
     """
-    from netbox_proxbox.services.backend_auth import ensure_backend_key_registered
+    from netbox_proxbox.services.backend_auth import (
+        authenticate_backend_request_context,
+    )
+
+    bound_endpoint_id = context.endpoint_id
+    if endpoint_id is not None:
+        if bound_endpoint_id is not None and bound_endpoint_id != endpoint_id:
+            logger.warning("Backend auth retry endpoint identity changed")
+            return None
+        bound_endpoint_id = endpoint_id
+    if bound_endpoint_id is None:
+        logger.warning("Backend auth retry has no bound endpoint identity")
+        return None
+
+    fresh_context = get_fastapi_request_context(endpoint_id=bound_endpoint_id)
+    if fresh_context is None or not fresh_context.http_url or not fresh_context.headers:
+        logger.warning(
+            "Backend auth retry could not resolve a trusted endpoint context"
+        )
+        return None
 
     logger.info("Backend returned an API-key error; re-checking the stored key")
-    reg_ok, reg_msg = ensure_backend_key_registered(endpoint_id=endpoint_id)
+    reg_ok, reg_msg = authenticate_backend_request_context(fresh_context)
     if reg_ok:
         logger.info("Stored key authentication succeeded: %s", reg_msg)
-        new_context = get_fastapi_request_context(endpoint_id=endpoint_id)
-        if new_context and new_context.headers:
-            return new_context.headers, True
+        confirmed_context = get_fastapi_request_context(endpoint_id=bound_endpoint_id)
+        if confirmed_context and _request_context_binding(
+            confirmed_context
+        ) == _request_context_binding(fresh_context):
+            return confirmed_context
+        logger.warning("Backend endpoint changed during the authentication retry")
     else:
         logger.warning("Stored key authentication failed: %s", reg_msg)
-    return backend_headers, False
+    return None
+
+
+def _request_context_binding(context: BackendRequestContext) -> tuple[object, ...]:
+    """Return every authority and credential field that a retry must preserve."""
+    return (
+        context.endpoint_id,
+        context.target_fingerprint,
+        (context.http_url or "").rstrip("/"),
+        (context.ip_address_url or "").rstrip("/"),
+        bool(context.verify_ssl),
+        tuple(sorted((str(key), str(value)) for key, value in context.headers.items())),
+    )

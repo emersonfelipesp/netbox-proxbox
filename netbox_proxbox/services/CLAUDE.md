@@ -121,6 +121,49 @@ verification on for operators who deliberately disabled it — a working sync
 turns into an SSL error. The id parameter selects the row *through* the resolver,
 so both the URL and the TLS setting come from the same place.
 
+## Credentialed requests never follow redirects, and a 401 retry is identity-bound
+
+Every credentialed HTTP surface in this package — the JSON helpers
+(`request_backend_json`, `request_backend_resource`), the SSE/stream paths
+(`run_sync_stream` / `_try_sync_stream_url`, `iter_backend_sse_lines`), the
+readiness probe in `backend_auth.py`, and every verb on
+`http_client.py::RequestsHttpClient` — sends `allow_redirects=False` and treats
+**any 3xx as a terminal transport failure**: the response is closed unread, the
+fixed detail `"ProxBox backend redirects are not permitted."` is returned with
+HTTP 502, and the redirect `Location` is never dialled — not by the same
+candidate, and not by the IP fallback. Following a redirect would replay
+`X-Proxbox-API-Key` to whatever origin a compromised or misconfigured backend
+names, including a plaintext-HTTP downgrade of the original host, so a redirect
+is evidence of an untrustworthy target, not a routing hint. `RequestsHttpClient`
+enforces the same rule structurally via `_checked_response()` /
+`HttpRedirectError`.
+
+The 401 auth-retry is bound to one endpoint identity end to end.
+`backend_context.py::_handle_auth_registration_and_retry(context, *,
+endpoint_id=None)` returns either **one complete, freshly resolved and
+authenticated `BackendRequestContext`** or `None` to fail closed — never a bare
+header mapping. On success the caller must **restart candidate selection from
+the returned context** (fresh `http_url`, `ip_address_url`, `headers`,
+`verify_ssl`), so fresh credentials can never be combined with a stale URL and a
+stale key is never replayed against a rotated endpoint. The helper refuses a
+caller/context endpoint-id mismatch before resolving anything, re-authenticates
+the exact URL/key pair via
+`backend_auth.py::authenticate_backend_request_context()`, and confirms with
+`_request_context_binding()` that the endpoint's full authority tuple
+(endpoint id, target fingerprint, URLs, TLS flag, headers) did not change while
+the key was being checked. The retry stays bounded to one attempt per request
+(`auth_register_attempted`).
+
+Context construction is fingerprint-verified at the source:
+`utils.get_fastapi_context()` recomputes the credential-free
+`backend_key_target_fingerprint` — through a fresh IP FK read, before **and**
+after the credential headers are built — and returns `None` on any drift or
+recomputation error, so a stale `select_related` IP row cannot authenticate the
+previous address or persist its fingerprint against a newly selected one. The
+emitted context carries `endpoint_id` and `target_fingerprint` so downstream
+retries can enforce the binding. Guarded end to end by
+`tests/test_backend_proxy_credential_binding.py`.
+
 ## Backend error text is redacted at the producer, not at each reader
 
 Everything `run_sync_stream()` hands back on a failure ends up somewhere

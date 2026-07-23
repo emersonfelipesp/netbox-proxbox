@@ -64,15 +64,40 @@ def get_fastapi_context(endpoint: FastAPIUrlSource) -> dict[str, object] | None:
     if endpoint is None:
         return None
 
+    from netbox_proxbox.services.backend_key_adoption import (
+        BackendKeyAdoptionError,
+        backend_key_target_fingerprint,
+    )
+
+    stored_fingerprint = getattr(endpoint, "backend_key_target_fingerprint", None)
+    target_fingerprint = ""
+    if stored_fingerprint is not None:
+        try:
+            target_fingerprint = backend_key_target_fingerprint(endpoint)
+        except BackendKeyAdoptionError:
+            return None
+        if target_fingerprint != str(stored_fingerprint or "").strip().lower():
+            return None
+
     url_dict = get_fastapi_url(endpoint)
+    headers = get_backend_auth_headers(endpoint)
+    if stored_fingerprint is not None:
+        try:
+            confirmed_fingerprint = backend_key_target_fingerprint(endpoint)
+        except BackendKeyAdoptionError:
+            return None
+        if confirmed_fingerprint != target_fingerprint:
+            return None
 
     return {
+        "endpoint_id": getattr(endpoint, "pk", None),
+        "target_fingerprint": target_fingerprint,
         "domain": url_dict.get("domain"),
         "http_url": url_dict.get("http_url"),
         "ip_address_url": url_dict.get("ip_address_url"),
         "websocket_url": url_dict.get("websocket_url"),
         "verify_ssl": bool(url_dict.get("verify_ssl", True)),
-        "headers": get_backend_auth_headers(endpoint),
+        "headers": headers,
     }
 
 

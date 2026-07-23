@@ -103,6 +103,8 @@ def _try_register_key_fallback() -> tuple[bool, str]:
         success, message = _try_register_key(
             BackendRequestContext(
                 detail=context,
+                endpoint_id=context.get("endpoint_id"),
+                target_fingerprint=str(context.get("target_fingerprint", "")),
                 http_url=context.get("http_url"),
                 ip_address_url=context.get("ip_address_url"),
                 verify_ssl=context.get("verify_ssl", True),
@@ -147,6 +149,7 @@ def wait_for_backend_ready(
                 headers=headers,
                 verify=verify_ssl,
                 timeout=5,
+                allow_redirects=False,
             )
             if response.status_code == 200:
                 # Backend is reachable — that is enough.  Whether its
@@ -211,8 +214,14 @@ def ensure_backend_key_registered(endpoint_id: int | None = None) -> tuple[bool,
     if context is None or not context.http_url:
         return False, "No FastAPI URL configured"
 
-    token = (getattr(endpoint, "token", "") or "").strip()
+    return authenticate_backend_request_context(context)
+
+
+def authenticate_backend_request_context(
+    context: BackendRequestContext,
+) -> tuple[bool, str]:
+    """Authenticate the exact URL/key pair captured in one request context."""
+    token = (context.headers or {}).get("X-Proxbox-API-Key", "").strip()
     if not token:
         return False, "No API token configured on FastAPI endpoint"
-
     return _try_register_key(context, token)

@@ -14,8 +14,8 @@ What the contract pins down:
   endpoint_id" → "single enabled endpoint" → "first enabled endpoint" — the
   three branches that view code relies on.
 * Module imports the ``BackendRequestContext`` schema, and the auth-retry path
-  imports ``ensure_backend_key_registered`` lazily to avoid NetBox startup
-  import cycles.
+  imports ``authenticate_backend_request_context`` lazily to avoid NetBox
+  startup import cycles.
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ def test_module_imports_required_collaborators():
     source = BACKEND_CONTEXT_PATH.read_text(encoding="utf-8")
     assert "from netbox_proxbox.models import FastAPIEndpoint" in source
     assert "BackendRequestContext" in source
-    assert "ensure_backend_key_registered" in source
+    assert "authenticate_backend_request_context" in source
 
 
 def test_backend_auth_import_stays_lazy():
@@ -108,15 +108,19 @@ def test_endpoint_lookup_handles_three_branches():
     assert "filter(enabled=True).count()" in source
 
 
-def test_auth_retry_helper_returns_two_tuple_with_retry_flag():
+def test_auth_retry_helper_returns_a_fresh_bound_context_or_none():
     funcs = _functions_by_name(_module())
     helper = funcs.get("_handle_auth_registration_and_retry")
     assert helper is not None, (
         "_handle_auth_registration_and_retry is the auth-retry hook used by "
         "backend_proxy; do not delete or rename"
     )
+    assert [arg.arg for arg in helper.args.args] == ["context"]
+    assert [arg.arg for arg in helper.args.kwonlyargs] == ["endpoint_id"]
     for ret in ast.walk(helper):
         if isinstance(ret, ast.Return):
-            assert isinstance(ret.value, ast.Tuple) and len(ret.value.elts) == 2, (
-                "_handle_auth_registration_and_retry must return (headers, retry_flag)"
+            assert not isinstance(ret.value, ast.Tuple), (
+                "_handle_auth_registration_and_retry must return one complete "
+                "BackendRequestContext so callers cannot combine fresh headers "
+                "with stale URLs"
             )

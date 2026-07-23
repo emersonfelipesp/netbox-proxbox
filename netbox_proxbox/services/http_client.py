@@ -34,6 +34,10 @@ class HttpSslError(HttpError):
     """Raised when SSL verification fails."""
 
 
+class HttpRedirectError(HttpError):
+    """Raised when a backend attempts to redirect a credentialed request."""
+
+
 class HttpResponse:
     """Wrapper around a raw HTTP response, decoupled from requests.Response."""
 
@@ -88,7 +92,7 @@ class HttpClient(Protocol):
         verify: bool = True,
         timeout: float | tuple[int, int] = 5,
         stream: bool = False,
-        allow_redirects: bool = True,
+        allow_redirects: bool = False,
     ) -> HttpResponse: ...
 
     def post(
@@ -99,7 +103,7 @@ class HttpClient(Protocol):
         headers: dict[str, str] | None = None,
         verify: bool = True,
         timeout: float | tuple[int, int] = 5,
-        allow_redirects: bool = True,
+        allow_redirects: bool = False,
     ) -> HttpResponse: ...
 
     def put(
@@ -110,6 +114,7 @@ class HttpClient(Protocol):
         headers: dict[str, str] | None = None,
         verify: bool = True,
         timeout: float | tuple[int, int] = 5,
+        allow_redirects: bool = False,
     ) -> HttpResponse: ...
 
     def delete(
@@ -119,6 +124,7 @@ class HttpClient(Protocol):
         headers: dict[str, str] | None = None,
         verify: bool = True,
         timeout: float | tuple[int, int] = 5,
+        allow_redirects: bool = False,
     ) -> HttpResponse: ...
 
     def stream_get(
@@ -129,6 +135,7 @@ class HttpClient(Protocol):
         headers: dict[str, str] | None = None,
         verify: bool = True,
         timeout: float | tuple[int, int] = (5, 3600),
+        allow_redirects: bool = False,
     ) -> AbstractContextManager[HttpResponse]: ...
 
 
@@ -162,7 +169,7 @@ class RequestsHttpClient:
         verify: bool = True,
         timeout: float | tuple[int, int] = 5,
         stream: bool = False,
-        allow_redirects: bool = True,
+        allow_redirects: bool = False,
     ) -> HttpResponse:
         try:
             resp = requests.get(
@@ -176,7 +183,7 @@ class RequestsHttpClient:
             )
         except requests.exceptions.RequestException as exc:
             raise _convert_exception(exc) from exc
-        return HttpResponse(resp)
+        return _checked_response(resp)
 
     def post(
         self,
@@ -186,7 +193,7 @@ class RequestsHttpClient:
         headers: dict[str, str] | None = None,
         verify: bool = True,
         timeout: float | tuple[int, int] = 5,
-        allow_redirects: bool = True,
+        allow_redirects: bool = False,
     ) -> HttpResponse:
         try:
             resp = requests.post(
@@ -199,7 +206,7 @@ class RequestsHttpClient:
             )
         except requests.exceptions.RequestException as exc:
             raise _convert_exception(exc) from exc
-        return HttpResponse(resp)
+        return _checked_response(resp)
 
     def put(
         self,
@@ -209,6 +216,7 @@ class RequestsHttpClient:
         headers: dict[str, str] | None = None,
         verify: bool = True,
         timeout: float | tuple[int, int] = 5,
+        allow_redirects: bool = False,
     ) -> HttpResponse:
         try:
             resp = requests.put(
@@ -217,10 +225,11 @@ class RequestsHttpClient:
                 headers=headers,
                 verify=verify,
                 timeout=timeout,
+                allow_redirects=allow_redirects,
             )
         except requests.exceptions.RequestException as exc:
             raise _convert_exception(exc) from exc
-        return HttpResponse(resp)
+        return _checked_response(resp)
 
     def delete(
         self,
@@ -229,6 +238,7 @@ class RequestsHttpClient:
         headers: dict[str, str] | None = None,
         verify: bool = True,
         timeout: float | tuple[int, int] = 5,
+        allow_redirects: bool = False,
     ) -> HttpResponse:
         try:
             resp = requests.delete(
@@ -236,10 +246,11 @@ class RequestsHttpClient:
                 headers=headers,
                 verify=verify,
                 timeout=timeout,
+                allow_redirects=allow_redirects,
             )
         except requests.exceptions.RequestException as exc:
             raise _convert_exception(exc) from exc
-        return HttpResponse(resp)
+        return _checked_response(resp)
 
     @contextmanager
     def stream_get(
@@ -250,6 +261,7 @@ class RequestsHttpClient:
         headers: dict[str, str] | None = None,
         verify: bool = True,
         timeout: float | tuple[int, int] = (5, 3600),
+        allow_redirects: bool = False,
     ) -> Generator[HttpResponse, None, None]:
         """Context-managed streaming GET yielding an HttpResponse.
 
@@ -268,13 +280,26 @@ class RequestsHttpClient:
                 verify=verify,
                 timeout=timeout,
                 stream=True,
+                allow_redirects=allow_redirects,
             )
         except requests.exceptions.RequestException as exc:
             raise _convert_exception(exc) from exc
         try:
-            yield HttpResponse(raw_resp)
+            yield _checked_response(raw_resp)
         finally:
             raw_resp.close()
+
+
+def _checked_response(raw_response: requests.Response) -> HttpResponse:
+    """Wrap a response while treating every redirect as a transport failure."""
+    response = HttpResponse(raw_response)
+    if 300 <= response.status_code < 400:
+        raw_response.close()
+        raise HttpRedirectError(
+            "Backend redirects are not permitted.",
+            response=response,
+        )
+    return response
 
 
 def _to_requests_response(

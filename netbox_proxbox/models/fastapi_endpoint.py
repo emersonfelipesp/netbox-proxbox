@@ -37,6 +37,17 @@ _BACKEND_KEY_PERSISTED_FIELDS = frozenset(
 
 
 @dataclass(frozen=True, slots=True)
+class _LockedBackendKeyIPAddress:
+    """Immutable IPAddress snapshot held under the endpoint write transaction."""
+
+    pk: object
+    address: object
+
+    def __str__(self) -> str:
+        return str(self.address)
+
+
+@dataclass(frozen=True, slots=True)
 class _EffectiveBackendKeyEndpoint:
     """Immutable next-state target used for one bounded authentication check."""
 
@@ -366,11 +377,39 @@ class FastAPIEndpoint(EndpointBase):
         if self.ip_address_id is None:
             return None
         related_model = self._meta.get_field("ip_address").remote_field.model
+        database = self._state.db or router.db_for_read(related_model, instance=self)
         try:
-            current = related_model.objects.only("address").get(pk=self.ip_address_id)
+            current = (
+                related_model.objects.using(database)
+                .only("address")
+                .get(pk=self.ip_address_id)
+            )
         except ObjectDoesNotExist:
             return None
         return current.address
+
+    def _locked_backend_key_ip_address(
+        self,
+        ip_address_id: object | None,
+        *,
+        using: str,
+    ) -> _LockedBackendKeyIPAddress | None:
+        """Lock and snapshot the selected IPAddress on the endpoint database."""
+        if ip_address_id is None:
+            return None
+        related_model = self._meta.get_field("ip_address").remote_field.model
+        try:
+            current = (
+                related_model.objects.using(using)
+                .select_for_update()
+                .only("pk", "address")
+                .get(pk=ip_address_id)
+            )
+        except ObjectDoesNotExist:
+            raise ValidationError(
+                {"ip_address": "The selected backend IP address no longer exists."}
+            ) from None
+        return _LockedBackendKeyIPAddress(pk=current.pk, address=current.address)
 
     def _persisted_backend_key_state(
         self,
@@ -497,7 +536,11 @@ class FastAPIEndpoint(EndpointBase):
         token_changed = current_candidate != previous_token
         self._backend_key_token_changed = token_changed
 
-        effective = self._effective_backend_key_endpoint(previous, update_fields)
+        effective = self._effective_backend_key_endpoint(
+            previous,
+            update_fields,
+            using=database,
+        )
         if effective.server_side_websocket and not effective.use_websocket:
             raise ValidationError(
                 {
@@ -522,7 +565,7 @@ class FastAPIEndpoint(EndpointBase):
         persisted_target_drift = False
         if previous is not None:
             try:
-                current_persisted_target = backend_key_target_fingerprint(previous)
+                current_persisted_target = backend_key_target_fingerprint(effective)
             except BackendKeyAdoptionError:
                 current_persisted_target = ""
             persisted_target_drift = (
@@ -624,8 +667,10 @@ class FastAPIEndpoint(EndpointBase):
         self,
         previous: FastAPIEndpoint | None,
         update_fields: frozenset[str] | None,
+        *,
+        using: str,
     ) -> _EffectiveBackendKeyEndpoint:
-        """Build next state from the locked row plus only selected partial fields."""
+        """Build next state from locked endpoint and IPAddress rows."""
 
         def selected(field: str) -> bool:
             if previous is None or update_fields is None:
@@ -639,11 +684,16 @@ class FastAPIEndpoint(EndpointBase):
             return getattr(source, field)
 
         domain_value = value("domain")
+        ip_source = self if selected("ip_address") or previous is None else previous
+        ip_address = self._locked_backend_key_ip_address(
+            getattr(ip_source, "ip_address_id", None),
+            using=using,
+        )
         return _EffectiveBackendKeyEndpoint(
             pk=self.pk,
             enabled=bool(value("enabled")),
             domain=str(domain_value) if domain_value else None,
-            ip_address=value("ip_address"),
+            ip_address=ip_address,
             port=int(str(value("port"))),
             use_https=bool(value("use_https")),
             verify_ssl=bool(value("verify_ssl")),

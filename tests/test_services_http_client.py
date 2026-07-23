@@ -67,7 +67,7 @@ def test_get_returns_wrapped_response(http_client_module):
     assert mock_get.call_args.kwargs["timeout"] == 7
     assert mock_get.call_args.kwargs["verify"] is False
     assert mock_get.call_args.kwargs["stream"] is False
-    assert mock_get.call_args.kwargs["allow_redirects"] is True
+    assert mock_get.call_args.kwargs["allow_redirects"] is False
 
 
 def test_post_passes_json_payload(http_client_module):
@@ -79,18 +79,25 @@ def test_post_passes_json_payload(http_client_module):
     assert mock_post.call_args.kwargs["json"] == {"a": 1}
 
 
-def test_get_and_post_can_disable_redirect_following(http_client_module):
+def test_get_and_post_refuse_redirect_responses(http_client_module):
     client = http_client_module.RequestsHttpClient()
-    raw = _make_response(307, "")
+    get_raw = _make_response(307, "")
+    post_raw = _make_response(302, "")
+    closed = {"get": False, "post": False}
+    get_raw.close = lambda: closed.update(get=True)
+    post_raw.close = lambda: closed.update(post=True)
     with (
-        patch("requests.get", return_value=raw) as mock_get,
-        patch("requests.post", return_value=raw) as mock_post,
+        patch("requests.get", return_value=get_raw) as mock_get,
+        patch("requests.post", return_value=post_raw) as mock_post,
     ):
-        client.get("http://x/", allow_redirects=False)
-        client.post("http://x/", allow_redirects=False)
+        with pytest.raises(http_client_module.HttpRedirectError):
+            client.get("http://x/")
+        with pytest.raises(http_client_module.HttpRedirectError):
+            client.post("http://x/")
 
     assert mock_get.call_args.kwargs["allow_redirects"] is False
     assert mock_post.call_args.kwargs["allow_redirects"] is False
+    assert closed == {"get": True, "post": True}
 
 
 # ── Exception translation ────────────────────────────────────────────────────
