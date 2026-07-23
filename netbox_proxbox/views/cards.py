@@ -248,7 +248,12 @@ class ProxboxProxmoxCardView(
                 proxmox_port=proxmox_object.port,
                 backend_url=failed_endpoint,
             )
-            logger.error("Unable to hydrate Proxmox card for endpoint %s: %s", pk, exc)
+            # The redacted detail, not the raw exception — a transport error can
+            # echo request content, and this handler runs on every dashboard
+            # card refresh.
+            logger.error(
+                "Unable to hydrate Proxmox card for endpoint %s: %s", pk, detail
+            )
 
         payload: dict[str, object] = {
             "cluster_data": _merge_cluster_payloads(version_data, cluster_data),

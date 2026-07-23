@@ -97,6 +97,27 @@ contract and issue #454 for the bug history.
   - 0039_squashed_0039_0042_pve_9_2_firewall_sdn: manually-constructed squash of migrations 0039 (PVE firewall models), 0040 (endpoint `enabled` field + PBS/PDM gap fix), 0041 (SDN/datacenter models + `ProxmoxNode.location`), and 0042 (SDN prefix list constraint rename). Uses idempotent `create_model_idempotent` / `add_field_idempotent` helpers throughout. Constraint rename is handled by a `_fix_sdn_prefix_list_constraint` RunPython that inspects `information_schema.table_constraints` and is safe for all three DB states: fresh install, partial upgrade, and fully-upgraded.
   - 0045_repair_pbs_pdm_endpoint_enabled: database-only repair for v0.0.18 installs where the released individual `0040_endpoint_enabled` migration added `enabled` to Proxmox/NetBox/FastAPI endpoints but omitted `PBSEndpoint` and `PDMEndpoint`. This migration adds the missing columns idempotently when those tables already exist.
 - **0059_cloud_customer_network_settings**: additive `ProxboxPluginSettings` fields for the operator-designated cloud-customer Prefix ID, bridge, VLAN tag, gateway, and lock flag. Uses `add_field_idempotent`; estate-specific values are populated by the `ensure_cloud_customer_network` management command, not by migration defaults or data migration.
+- **0073_netboxendpoint_pushed_credential_fingerprint**: additive
+  `NetBoxEndpoint.pushed_credential_fingerprint` (blank `CharField`) holding a
+  keyed HMAC-SHA256 digest of the credentials the last **successful** push handed
+  proxbox-api. Never a secret: `salted_hmac` keys off NetBox's `SECRET_KEY`, so
+  the value is non-reversible and not comparable across installs. No data
+  migration and no default beyond `""` — an empty fingerprint deliberately reads
+  as "credentials changed" (see `views/CLAUDE.md`), so the upgrade window is
+  fail-closed rather than back-filled with a guess. The writer catches
+  `DatabaseError`, so a deployment that has not applied this migration yet logs a
+  warning instead of failing the push.
+- **0074_proxmoxendpoint_pushed_credential_fingerprint**: the Proxmox twin of
+  0073 — additive `ProxmoxEndpoint.pushed_credential_fingerprint` (blank
+  `CharField`, `add_field_idempotent`) recording the keyed HMAC-SHA256 digest of
+  the credentials (`password`/`token_name`/`token_value`) the last successful
+  push handed proxbox-api, under a **distinct salt** from the NetBox
+  fingerprint. Consumed by the preflight's soft push budget: a rotated-in-place
+  secret is invisible on the wire (`ProxmoxEndpointPublic` withholds the
+  credential fields), so only this local receipt can tell a no-op refresh from a
+  push that delivers a new secret. Empty reads as "push again" (one bounded
+  extra request), never as a blocked run; the writer catches `DatabaseError`, so
+  an unapplied migration degrades to the previous always-push behavior.
 
 ## Notes
 

@@ -269,3 +269,239 @@ def test_run_sync_stream_no_fastapi_url(backend_proxy_module, monkeypatch):
     payload, status = bp.run_sync_stream("full-update/stream")
     assert status == 404
     assert "No FastAPI URL" in payload["detail"]
+
+
+# --------------------------------------------------------------------------- #
+# Credential redaction on the stream error path.
+#
+# ``sync_stages.py`` logs the payload ``run_sync_stream`` returns and folds it
+# into the ``RuntimeError`` that becomes ``Job.error``; ``on_frame`` json-dumps
+# every SSE frame straight into the job log.  Both are long-lived and readable
+# by anyone with permission to view jobs, and the sync preflight pushes the
+# ``NetBoxEndpoint`` token and every ``ProxmoxEndpoint`` password into
+# proxbox-api -- so a backend that echoes the rejected request back (FastAPI 422
+# does exactly that) writes live credentials into NetBox.  Redaction happens at
+# the producer, here, so every downstream reader is working from redacted data.
+# --------------------------------------------------------------------------- #
+
+_SECRET = "nbt_0123456789abcdef0123456789abcdef01234567"
+
+
+def _assert_absent(secret: str, value: object) -> None:
+    """Fail if ``secret`` survives anywhere in ``value`` (nested included)."""
+    rendered = json.dumps(value, default=str)
+    assert secret not in rendered, f"secret leaked: {rendered}"
+
+
+def test_failed_stream_payload_redacts_echoed_credentials(
+    backend_proxy_module, monkeypatch
+):
+    """A backend error that echoes the pushed endpoint body must not leak it."""
+    bp = backend_proxy_module
+    complete = {
+        "ok": False,
+        "message": "Sync failed.",
+        "errors": [
+            {
+                "detail": [
+                    {
+                        "loc": ["body", "token"],
+                        "msg": "Input should be a valid string",
+                        "input": _SECRET,
+                    }
+                ],
+                "python_exception": f"ValidationError(input_value={{'token': '{_SECRET}'}})",
+                "headers": {"Authorization": f"Bearer {_SECRET}"},
+            }
+        ],
+    }
+    lines = [
+        "event: complete",
+        f"data: {json.dumps(complete)}",
+        "",
+    ]
+    monkeypatch.setattr(bp.requests, "get", _mock_backend_get(_StreamResponse(lines)))
+    monkeypatch.setattr(bp, "get_fastapi_request_context", lambda: _stream_context(bp))
+
+    payload, status = bp.run_sync_stream("dcim/devices/create/stream")
+
+    assert status == 503
+    # ``response`` carries the raw ``complete`` frame verbatim -- it is the only
+    # reason producer-side redaction of the whole mapping is needed rather than
+    # redaction of ``detail`` alone.
+    assert "response" in payload
+    _assert_absent(_SECRET, payload)
+
+
+def test_failed_stream_payload_keeps_diagnostic_shape(
+    backend_proxy_module, monkeypatch
+):
+    """Redaction must keep the error diagnosable: field names and status survive."""
+    bp = backend_proxy_module
+    complete = {
+        "ok": False,
+        "errors": [
+            {
+                "detail": [
+                    {
+                        "loc": ["body", "token"],
+                        "msg": "Field required",
+                        "input": _SECRET,
+                    }
+                ]
+            }
+        ],
+    }
+    lines = ["event: complete", f"data: {json.dumps(complete)}", ""]
+    monkeypatch.setattr(bp.requests, "get", _mock_backend_get(_StreamResponse(lines)))
+    monkeypatch.setattr(bp, "get_fastapi_request_context", lambda: _stream_context(bp))
+
+    payload, _status = bp.run_sync_stream("dcim/devices/create/stream")
+
+    rendered = json.dumps(payload, default=str)
+    assert "Field required" in rendered
+    assert "token" in rendered  # the *name* of the rejected field, not its value
+    assert payload["path"] == "dcim/devices/create/stream"
+    _assert_absent(_SECRET, payload)
+
+
+def test_successful_stream_payload_is_not_redacted(backend_proxy_module, monkeypatch):
+    """The success payload carries sync counters, not error text -- leave it alone."""
+    bp = backend_proxy_module
+    monkeypatch.setattr(
+        bp.requests, "get", _mock_backend_get(_StreamResponse(_sse_complete_ok()))
+    )
+    monkeypatch.setattr(bp, "get_fastapi_request_context", lambda: _stream_context(bp))
+
+    payload, status = bp.run_sync_stream("dcim/devices/create/stream")
+
+    assert status == 200
+    assert payload["response"]["result"]["n"] == 3
+    assert payload["response"]["message"] == "done"
+
+
+def test_on_frame_receives_redacted_frames(backend_proxy_module, monkeypatch):
+    """``sync_stages.py`` json-dumps every frame into the job log -- redact first."""
+    bp = backend_proxy_module
+    error_frame = {
+        "step": "devices",
+        "status": "error",
+        "detail": f"push rejected: token={_SECRET}",
+        "request": {"password": "hunter2", "api_key": _SECRET},
+    }
+    lines = [
+        "event: error",
+        f"data: {json.dumps(error_frame)}",
+        "",
+        "event: complete",
+        f"data: {json.dumps({'ok': True, 'message': 'done'})}",
+        "",
+    ]
+    monkeypatch.setattr(bp.requests, "get", _mock_backend_get(_StreamResponse(lines)))
+    monkeypatch.setattr(bp, "get_fastapi_request_context", lambda: _stream_context(bp))
+
+    frames: list[tuple[str, dict]] = []
+    bp.run_sync_stream(
+        "dcim/devices/create/stream", on_frame=lambda ev, d: frames.append((ev, d))
+    )
+
+    assert [f[0] for f in frames] == ["error", "complete"]
+    _assert_absent(_SECRET, frames)
+    _assert_absent("hunter2", frames)
+    # Still diagnosable: the step and the fact that it errored survive.
+    assert frames[0][1]["step"] == "devices"
+    assert frames[0][1]["status"] == "error"
+
+
+def test_redaction_preserves_backend_readiness_marker(
+    backend_proxy_module, monkeypatch
+):
+    """``sync_stages.py`` branches on ``"init_ok" in detail`` -- redaction must not eat it."""
+    bp = backend_proxy_module
+    detail = "Backend not ready: init_ok=false, netbox_schema=pending"
+    lines = [
+        "event: complete",
+        f"data: {json.dumps({'ok': False, 'errors': [{'detail': detail}]})}",
+        "",
+    ]
+    monkeypatch.setattr(bp.requests, "get", _mock_backend_get(_StreamResponse(lines)))
+    monkeypatch.setattr(bp, "get_fastapi_request_context", lambda: _stream_context(bp))
+
+    payload, status = bp.run_sync_stream("dcim/devices/create/stream")
+
+    assert status == 503
+    assert "init_ok" in payload["detail"]
+
+
+def test_redaction_preserves_postgres_slot_marker(backend_proxy_module, monkeypatch):
+    """``_format_stage_sync_error()`` matches this phrase to explain a DB overload."""
+    bp = backend_proxy_module
+    marker = (
+        "remaining connection slots are reserved for roles with the superuser attribute"
+    )
+    lines = [
+        "event: complete",
+        f"data: {json.dumps({'ok': False, 'errors': [{'detail': f'FATAL: {marker}'}]})}",
+        "",
+    ]
+    monkeypatch.setattr(bp.requests, "get", _mock_backend_get(_StreamResponse(lines)))
+    monkeypatch.setattr(bp, "get_fastapi_request_context", lambda: _stream_context(bp))
+
+    payload, _status = bp.run_sync_stream("dcim/devices/create/stream")
+
+    assert marker in payload["detail"].lower()
+
+
+def test_redacted_mapping_is_fail_closed(backend_proxy_module, monkeypatch):
+    """If redaction ever stops returning a mapping, wrap the *redacted* value."""
+    bp = backend_proxy_module
+    monkeypatch.setattr(bp, "redact_sensitive", lambda value: "[redacted: collapsed]")
+
+    result = bp._redacted_mapping({"token": _SECRET})
+
+    assert result == {"detail": "[redacted: collapsed]"}
+    _assert_absent(_SECRET, result)
+
+
+def test_stream_transport_failure_never_logs_the_raw_exception(
+    backend_proxy_module, monkeypatch, caplog
+):
+    """The application log must get the redacted detail, not ``str(exc)``.
+
+    ``extract_backend_error_detail()`` sweeps the exception's rendered text
+    before it reaches the user — but a ``logger.exception`` beside it would
+    still write the raw message (and traceback) to the application log,
+    leaking the same credential the user-facing path just redacted. Both the
+    return value *and* every log record must be free of the secret.
+    """
+    import logging
+
+    import requests as _req
+
+    bp = backend_proxy_module
+
+    def _raise(*_a, **_kw):
+        raise _req.exceptions.ConnectionError(
+            f"connection failed while sending token='{_SECRET}'"
+        )
+
+    monkeypatch.setattr(bp.requests, "get", _raise)
+
+    with caplog.at_level(logging.DEBUG, logger=bp.logger.name):
+        result = bp._try_sync_stream_url(
+            url="http://backend:8000/dcim/devices/create/stream",
+            verify=True,
+            path="dcim/devices/create/stream",
+            query_params=None,
+            headers={},
+            on_frame=None,
+        )
+
+    assert isinstance(result, tuple), "a transport failure returns the error tuple"
+    _assert_absent(_SECRET, result[0])
+    for record in caplog.records:
+        rendered = record.getMessage()
+        assert _SECRET not in rendered, f"secret leaked to the log: {rendered}"
+        assert record.exc_info is None, (
+            "a transport failure must not be logged with its raw traceback"
+        )

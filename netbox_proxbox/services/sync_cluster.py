@@ -51,6 +51,7 @@ def sync_cluster_and_nodes(
     endpoint_id: int,
     fastapi_url: str | None = None,
     auth_headers: dict | None = None,
+    fastapi_endpoint_id: int | None = None,
 ) -> ClusterSyncResult:
     """
     Sync cluster and node data for a Proxmox endpoint from proxbox-api.
@@ -59,6 +60,10 @@ def sync_cluster_and_nodes(
         endpoint_id: ProxmoxEndpoint ID to sync.
         fastapi_url: Optional FastAPI base URL override (resolved from FastAPIEndpoint if omitted).
         auth_headers: Optional auth headers override for proxbox-api.
+        fastapi_endpoint_id: Optional `FastAPIEndpoint` pk pinning which backend
+            row is resolved.  Only consulted when ``fastapi_url`` is omitted; it
+            stops a multi-backend install from certifying one backend in the job
+            preflight and then syncing against another.
 
     Returns:
         dict with sync status and counts.
@@ -81,7 +86,7 @@ def sync_cluster_and_nodes(
     # Resolve FastAPI connection parameters from the configured endpoint when not supplied.
     verify_ssl = True
     if not fastapi_url:
-        ctx = get_fastapi_request_context()
+        ctx = get_fastapi_request_context(endpoint_id=fastapi_endpoint_id)
         if ctx is None or not ctx.http_url:
             logger.error("FastAPI endpoint not configured or has no URL")
             return ClusterSyncResult(error="FastAPI URL not configured")

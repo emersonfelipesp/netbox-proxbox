@@ -239,6 +239,43 @@ def test_sync_datacenter_service_has_result_dataclass():
     assert "runtime_seconds" in content
 
 
+def test_sync_datacenter_forwards_the_runs_endpoint_selection():
+    """`sync_datacenter(endpoint_ids=…)` must reach the endpoint-scope helper.
+
+    The scope helper reads an *omitted* ``endpoint_ids`` as "all enabled", so a
+    job launched against one endpoint would silently sync every enabled
+    endpoint's CPU models if this pass dropped the kwarg. Asserted by AST so a
+    refactor cannot keep the parameter while quietly no longer forwarding it.
+    """
+    import ast
+
+    tree = ast.parse(_read("netbox_proxbox/services/sync_datacenter.py"))
+    func = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "sync_datacenter"
+    )
+    assert "endpoint_ids" in {arg.arg for arg in func.args.args + func.args.kwonlyargs}
+
+    scope_calls = [
+        node
+        for node in ast.walk(func)
+        if isinstance(node, ast.Call)
+        and getattr(node.func, "id", getattr(node.func, "attr", None))
+        == "enabled_backend_endpoint_scope"
+    ]
+    assert scope_calls, "the pass must build its scope through the shared helper"
+    for call in scope_calls:
+        forwarded = {
+            kw.arg: getattr(kw.value, "id", None)
+            for kw in call.keywords
+            if kw.arg == "endpoint_ids"
+        }
+        assert forwarded == {"endpoint_ids": "endpoint_ids"}, (
+            "the selection must be forwarded, not rebuilt or dropped"
+        )
+
+
 # ---------------------------------------------------------------------------
 # ProxmoxNode location field
 # ---------------------------------------------------------------------------

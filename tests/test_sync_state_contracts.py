@@ -30,6 +30,21 @@ def _read(path: str) -> str:
     return (REPO_ROOT / path).read_text()
 
 
+def _read_migration(suffix: str) -> str:
+    """Read a migration by name suffix, ignoring its sequence number.
+
+    Migrations get renumbered to keep the graph linear when two branches land
+    the same sequence number, and a hard-coded ``00NN_`` path in a test breaks
+    on the rename even though nothing about the contract changed.
+    """
+    matches = sorted(
+        (REPO_ROOT / "netbox_proxbox" / "migrations").glob(f"*_{suffix}.py")
+    )
+    assert matches, f"no migration matching *_{suffix}.py"
+    assert len(matches) == 1, f"ambiguous migration for *_{suffix}.py: {matches}"
+    return matches[0].read_text()
+
+
 def test_sync_state_model_surface_exists() -> None:
     content = _read("netbox_proxbox/models/sync_state.py")
     assert "class ProxboxSyncStateBase(NetBoxModel)" in content
@@ -208,7 +223,7 @@ def test_vm_sync_state_records_last_synced_proxmox_name() -> None:
         "ProxboxVirtualMachineSyncState must persist the last-synced Proxmox name"
     )
 
-    migration = _read("netbox_proxbox/migrations/0071_sync_state_proxmox_vm_name.py")
+    migration = _read_migration("sync_state_proxmox_vm_name")
     assert "proxboxvirtualmachinesyncstate" in migration
     assert 'field_name="proxmox_vm_name"' in migration
     assert "add_field_idempotent" in migration, (

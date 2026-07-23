@@ -96,28 +96,41 @@ class FirewallSyncResult:
 
 
 def _resolve_endpoint_by_cluster_name(cluster_name: str) -> ProxmoxEndpoint | None:
-    """Return the ProxmoxEndpoint whose cluster name matches *cluster_name*.
+    """Return the single ProxmoxEndpoint whose cluster name matches, or ``None``.
 
-    Primary lookup: ProxmoxCluster.name → endpoint (populated by the cluster
-    sync that runs earlier in the same job).  Fallback: ProxmoxEndpoint.name.
+    Cluster names are only unique **per endpoint**, not across the estate: two
+    unrelated Proxmox installations can each hold a cluster named ``pve``. A
+    backend response row names only the cluster, so when more than one endpoint
+    claims that name there is no way to tell whose row this is — and guessing
+    (the old ``.first()``) attributed one estate's firewall/CPU data to the
+    other, or discarded a valid row as out-of-scope. Ambiguous therefore
+    resolves to ``None`` (refused, logged with every claimant), mirroring the
+    batch path's "ambiguous never widens" rule.
     """
     try:
         from netbox_proxbox.models import ProxmoxCluster  # noqa: PLC0415
 
-        cluster = (
-            ProxmoxCluster.objects.filter(name=cluster_name)
-            .select_related("endpoint")
-            .first()
+        cluster_rows = list(
+            ProxmoxCluster.objects.filter(name=cluster_name).select_related("endpoint")
         )
-        if (
-            cluster
-            and cluster.endpoint_id
-            and bool(getattr(cluster.endpoint, "enabled", True))
-        ):
+        claimant_ids = sorted(
+            {row.endpoint_id for row in cluster_rows if row.endpoint_id}
+        )
+        if len(claimant_ids) > 1:
+            logger.warning(
+                "Refusing to resolve cluster %r: claimed by %d Proxmox endpoints "
+                "(%s). Cluster names are only unique per endpoint, so this "
+                "response row cannot be attributed safely.",
+                cluster_name,
+                len(claimant_ids),
+                ", ".join(str(pk) for pk in claimant_ids),
+            )
+            return None
+        cluster = next((row for row in cluster_rows if row.endpoint_id), None)
+        if cluster is not None and bool(getattr(cluster.endpoint, "enabled", True)):
             return cluster.endpoint
     except Exception as exc:
         logger.warning("DB error resolving cluster %r: %s", cluster_name, exc)
-
     return ProxmoxEndpoint.objects.filter(name=cluster_name, enabled=True).first()
 
 
@@ -481,8 +494,10 @@ def _sync_one_endpoint(
 def sync_firewall(
     fastapi_url: str | None = None,
     auth_headers: dict[str, str] | None = None,
+    fastapi_endpoint_id: int | None = None,
+    endpoint_ids: list[int] | None = None,
 ) -> FirewallSyncResult:
-    """Sync datacenter-level firewall objects for all Proxmox endpoints.
+    """Sync datacenter-level firewall objects for the Proxmox endpoints in scope.
 
     Calls ``GET /proxmox/firewall/summary`` which returns one entry per
     configured Proxmox endpoint.  Each entry is matched to a
@@ -491,6 +506,16 @@ def sync_firewall(
     Args:
         fastapi_url: Optional base URL override (resolved from FastAPIEndpoint when omitted).
         auth_headers: Optional auth headers override.
+        fastapi_endpoint_id: Optional `FastAPIEndpoint` pk pinning which backend
+            row is resolved.  Only consulted when ``fastapi_url`` is omitted; it
+            stops a multi-backend install from certifying one backend in the job
+            preflight and then syncing against another.
+        endpoint_ids: Optional plugin ``ProxmoxEndpoint`` pks narrowing the run.
+            A job launched against one endpoint used to sync every enabled
+            endpoint's firewall objects anyway, because this pass built its own
+            all-enabled scope and never saw the job's selection.  Stale marking
+            runs per resolved endpoint, so a narrowed run leaves out-of-scope
+            rows untouched.  ``None`` keeps the all-enabled scope.
 
     Returns:
         FirewallSyncResult with per-model counters and success flag.
@@ -499,7 +524,7 @@ def sync_firewall(
 
     verify_ssl = True
     if not fastapi_url:
-        ctx = get_fastapi_request_context()
+        ctx = get_fastapi_request_context(endpoint_id=fastapi_endpoint_id)
         if ctx is None or not ctx.http_url:
             result.error = "FastAPI endpoint not configured or has no URL"
             logger.error(result.error)
@@ -517,6 +542,7 @@ def sync_firewall(
         auth_headers=auth_headers,
         backend_verify_ssl=verify_ssl,
         timeout=SYNC_TIMEOUT,
+        endpoint_ids=endpoint_ids,
     )
     if scope_error:
         result.error = scope_error
@@ -526,6 +552,14 @@ def sync_firewall(
         result.success = True
         logger.info("No enabled Proxmox endpoints configured; skipping firewall sync")
         return result
+
+    # The scope travels twice: once to the backend as `proxmox_endpoint_ids`,
+    # and once here as the set of plugin pks whose response entries may be
+    # written. The second leg is not redundant — a backend that ignores the
+    # query filter (older release, or a bug) would otherwise hand back every
+    # endpoint's clusters, and the by-cluster-name resolution below would
+    # happily write firewall rows for endpoints outside this run's selection.
+    allowed_endpoint_pks = set(backend_id_by_pk)
 
     # -----------------------------------------------------------------------
     # HTTP phase — fetch the summary before touching the DB.
@@ -567,6 +601,15 @@ def sync_firewall(
             logger.warning(
                 "Cannot resolve ProxmoxEndpoint for cluster_name=%r — skipping firewall sync for this entry",
                 cluster_name,
+            )
+            continue
+
+        if endpoint.pk not in allowed_endpoint_pks:
+            logger.warning(
+                "Skipping firewall summary entry for cluster_name=%r: "
+                "endpoint %s is outside this run's endpoint scope",
+                cluster_name,
+                endpoint.pk,
             )
             continue
 

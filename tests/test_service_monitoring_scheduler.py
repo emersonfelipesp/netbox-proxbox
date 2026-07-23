@@ -55,6 +55,7 @@ def _load_jobs_module(monkeypatch):
 
     sync_params = types.ModuleType("netbox_proxbox.sync_params")
     for name in (
+        "_coerce_fastapi_endpoint_id",
         "_ignore_ipv6_link_local_addresses_setting",
         "_primary_ip_preference_setting",
         "_infer_targeted_vm_job_params",

@@ -13,7 +13,7 @@ This directory contains Pydantic V2 models for backend payloads, normalized sync
 - [`proxmox_storage.py`](./proxmox_storage.py): Proxmox storage models (`ProxmoxStorageRecord`, `StorageContentRecord`, `StorageUsage`).
 - [`proxmox_vm.py`](./proxmox_vm.py): Proxmox VM/guest models (`ProxmoxGuestSummary`, `ProxmoxResourceRecord`, `ProxmoxVMConfig`).
 - [`service_status.py`](./service_status.py): service health check models (`ServiceCheckResult`, `FastAPIStatusResult`, `KeepalivePayload`, `AuthStatusLiteral`, `StatusLiteral`).
-- [`sync_result.py`](./sync_result.py): sync job payload models (`SyncJobData`, `SyncJobParams`, `ClusterSyncResult`).
+- [`sync_result.py`](./sync_result.py): sync job payload models (`SyncJobData`, `SyncJobParams`, `ClusterSyncResult`). `SyncJobParams.fastapi_endpoint_id` is the `FastAPIEndpoint` pk the run was pinned to; it is what makes the backend pin survive a **replay** (Run now / a recurring schedule re-enqueueing itself) instead of falling back to "first enabled backend". See [`../CLAUDE.md`](../CLAUDE.md) → `jobs.py`.
 - [`backup_routine.py`](./backup_routine.py): backup routine schema models (`BackupRoutineSchema`, `GetClusterBackupIdResponse`, `GetClusterBackupResponseItem`).
 - [`schedule_parser.py`](./schedule_parser.py): helpers for parsing and normalising Proxmox schedule strings (cron and PVE-specific formats).
 

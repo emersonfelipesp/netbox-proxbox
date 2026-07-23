@@ -422,6 +422,23 @@ def _normalize_batch_object_ids(object_ids: list[str] | None) -> list[str]:
     return [str(object_id) for object_id in list(object_ids or []) if str(object_id)]
 
 
+def _coerce_fastapi_endpoint_id(value: object) -> int | None:
+    """Normalise a caller-supplied FastAPI endpoint pk for storage in ``job.data``.
+
+    ``job.data`` is a JSONField, so the pinned backend id must land there as an
+    ``int`` (or be absent) rather than as whatever a form or querystring handed
+    in. An unusable value degrades to ``None`` — "not pinned" — because a
+    half-parsed pk would silently select a *different* backend than the caller
+    meant, which is worse than falling back to the documented default.
+    """
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        return int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+
+
 def _resolve_vm_cluster_name(vm: VirtualMachine) -> str:
     """Derive a Proxmox cluster name from a NetBox VM record."""
     from netbox_proxbox.models import ProxmoxCluster

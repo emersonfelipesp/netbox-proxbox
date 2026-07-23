@@ -124,6 +124,18 @@ class ProxmoxEndpoint(EndpointBase):
         verbose_name=_("Encrypted token value"),
         help_text=_("Fernet-encrypted Proxmox API token value ciphertext. Internal."),
     )
+    pushed_credential_fingerprint = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        editable=False,
+        verbose_name=_("Pushed credential fingerprint"),
+        help_text=_(
+            "Non-reversible fingerprint of the credentials last successfully "
+            "pushed to the ProxBox backend. Maintained automatically by the "
+            "push itself; used to detect credentials rotated since that push."
+        ),
+    )
     verify_ssl = models.BooleanField(
         default=False,
         verbose_name=_("Verify SSL"),

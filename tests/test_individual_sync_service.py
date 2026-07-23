@@ -67,7 +67,7 @@ def _load_individual_sync_module(monkeypatch):
     utils_stub = types.ModuleType("netbox_proxbox.utils")
     utils_stub.get_fastapi_url = lambda obj: {}
     utils_stub.get_backend_auth_headers = lambda obj: {}
-    utils_stub.get_first_fastapi_context = lambda: None
+    utils_stub.get_first_fastapi_context = lambda **kwargs: None
     monkeypatch.setitem(sys.modules, "netbox_proxbox.utils", utils_stub)
 
     sys.modules.pop("netbox_proxbox.services.individual_sync", None)
@@ -80,7 +80,13 @@ def test_sync_individual_with_dependencies_propagates_cluster_context(monkeypatc
 
     calls: list[tuple[str, dict]] = []
 
-    def fake_sync(path, query_params=None, netbox_branch_schema_id=None):
+    def fake_sync(
+        path,
+        query_params=None,
+        netbox_branch_schema_id=None,
+        fastapi_endpoint_id=None,
+        proxmox_endpoint_ids=None,
+    ):
         params = dict(query_params or {})
         calls.append((path, params))
         if path == "sync/individual/vm":
@@ -127,7 +133,7 @@ def test_build_cache_key_is_deterministic(monkeypatch):
 
 def test_sync_individual_reports_non_json_backend_response(monkeypatch):
     module = _load_individual_sync_module(monkeypatch)
-    module.get_first_fastapi_context = lambda: {
+    module.get_first_fastapi_context = lambda **kwargs: {
         "http_url": "http://backend",
         "headers": {},
         "verify_ssl": True,
@@ -147,7 +153,7 @@ def test_sync_individual_reports_non_json_backend_response(monkeypatch):
 
 def test_sync_individual_preserves_backend_http_status_and_detail(monkeypatch):
     module = _load_individual_sync_module(monkeypatch)
-    module.get_first_fastapi_context = lambda: {
+    module.get_first_fastapi_context = lambda **kwargs: {
         "http_url": "http://backend",
         "headers": {},
         "verify_ssl": True,

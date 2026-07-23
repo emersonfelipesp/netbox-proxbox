@@ -9,13 +9,34 @@ import requests
 
 from netbox_proxbox.models import FastAPIEndpoint
 from netbox_proxbox.schemas.backend_proxy import BackendRequestContext
-from netbox_proxbox.views.error_utils import extract_backend_error_detail
+from netbox_proxbox.views.error_utils import (
+    extract_backend_error_detail,
+    redact_sensitive_text,
+)
 
 logger = logging.getLogger(__name__)
 
 _LONG_RUNNING_VM_SYNC_MARKER = "virtualization/virtual-machines"
 _LONG_RUNNING_FULL_UPDATE_MARKER = "full-update"
 _LONG_HTTP_READ_TIMEOUT = (5, 3600)
+
+# Preflight HTTP budgets.  A freshly started proxbox-api answers its first few
+# requests slowly (container start, SQLite open, NetBox OpenAPI resolution), and
+# the old 5s/10s bounds failed the preflight on that start-up latency alone —
+# the first sync of a new install saw bootstrap-status give up at 5.03s and the
+# endpoint push at 10.02s, while a later call to the very same host answered in
+# 3.78s.  These bounds leave a cold backend room to answer.  They are ceilings,
+# not delays: a healthy backend still returns in well under a second.
+BOOTSTRAP_STATUS_TIMEOUT = 15
+REGISTER_KEY_TIMEOUT = 20
+
+# Bounded readiness wait used by the sync preflight.  Deliberately much shorter
+# than the ``wait_for_backend_ready`` defaults (30 retries, up to 30s apart):
+# the preflight only needs to absorb a cold start, and a backend that is truly
+# down should surface that quickly rather than stalling the job for minutes.
+PREFLIGHT_READY_MAX_RETRIES = 5
+PREFLIGHT_READY_INITIAL_DELAY = 1.0
+PREFLIGHT_READY_MAX_DELAY = 8.0
 
 
 def http_timeout_for_sync_path(path: str) -> float | tuple[int, int]:
@@ -52,7 +73,7 @@ def _try_register_key(context: BackendRequestContext, token: str) -> tuple[bool,
         status_response = requests.get(
             f"{base_url}/auth/bootstrap-status",
             verify=verify_ssl,
-            timeout=5,
+            timeout=BOOTSTRAP_STATUS_TIMEOUT,
         )
         if status_response.status_code != 200:
             return (
@@ -65,14 +86,21 @@ def _try_register_key(context: BackendRequestContext, token: str) -> tuple[bool,
             return True, "Key already registered"
 
     except requests.exceptions.RequestException as exc:
-        return False, f"Could not check bootstrap status: {exc}"
+        # Class name + swept text only: this message is returned to the caller,
+        # persisted into job logs and preflight notes, and the register call
+        # below sends the API key in its request body — a raw exception render
+        # must never carry that request into the log.
+        return False, (
+            "Could not check bootstrap status: "
+            f"{type(exc).__name__}: {redact_sensitive_text(str(exc))}"
+        )
 
     try:
         register_response = requests.post(
             f"{base_url}/auth/register-key",
             json={"api_key": token, "label": "netbox-proxbox-plugin"},
             verify=verify_ssl,
-            timeout=10,
+            timeout=REGISTER_KEY_TIMEOUT,
         )
         if register_response.status_code == 201:
             return True, "Key registered successfully"
@@ -81,7 +109,12 @@ def _try_register_key(context: BackendRequestContext, token: str) -> tuple[bool,
         return False, f"Registration failed: HTTP {register_response.status_code}"
 
     except requests.exceptions.RequestException as exc:
-        return False, f"Could not register key: {exc}"
+        # Same rule as the bootstrap-status branch: the failed POST carried the
+        # API key in its body, so only the class name and swept text may leave.
+        return False, (
+            "Could not register key: "
+            f"{type(exc).__name__}: {redact_sensitive_text(str(exc))}"
+        )
 
 
 def _try_register_key_fallback() -> tuple[bool, str]:
@@ -194,7 +227,7 @@ def wait_for_backend_ready(
                     "Backend health check request failed (attempt %s/%s): %s, retrying in %ss",
                     attempt + 1,
                     max_retries,
-                    str(exc)[:100],
+                    f"{type(exc).__name__}: {redact_sensitive_text(str(exc))}"[:160],
                     delay,
                 )
                 time_module.sleep(delay)

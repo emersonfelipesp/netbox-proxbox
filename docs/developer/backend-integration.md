@@ -140,6 +140,24 @@ Before any SSE stage runs, the job executes a **preflight push** that ensures bo
 This closes the gap where a `post_save` signal was silently missed because the backend was
 offline when the endpoint was first configured.
 
+The push is best-effort with **six blocking exceptions**. The job raises
+`ProxboxPreflightError` before the first stage when: no usable proxbox-api backend is
+configured; this NetBox has no enabled `NetBoxEndpoint` row at all (a hard authorization
+gate, decided without consulting the backend); the backend is confirmed to hold no NetBox
+endpoint and this run could not push one; the backend holds rows but none of them
+provably points at *this* NetBox; the push failed **and** the read-back failed too, so
+the backend's credentials cannot be shown to belong here; or a stored row *is* ours and
+current, but was written with an API token this NetBox has since rotated in place — the
+one case the stored row cannot reveal, since `NetBoxEndpointResponse` withholds
+`token`/`token_key`, so it is caught against a fingerprint recorded locally by the last
+successful push. The first three are states in which every stage would fail anyway, so
+failing at the preflight names the real cause instead of whichever stage happened to run
+first. The last three are worse than a failure — they are the states in which stages would
+*succeed*, writing this estate's Proxmox inventory into a different NetBox, or writing it
+with a credential the operator has already revoked. The Proxmox push loop is also
+time-boxed by `PREFLIGHT_ENDPOINT_PUSH_BUDGET`, so a slow backend cannot consume the whole
+job timeout before a stage runs.
+
 See [Endpoint Data Exchange](endpoint-sync.md) for the full mechanism.
 
 ```mermaid

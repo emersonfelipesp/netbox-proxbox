@@ -12,6 +12,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from tests.django_stubs import django_stub_modules
+
 
 class HttpResponse:
     def __init__(self, status: int = 200, content: str | None = None):
@@ -311,6 +313,16 @@ def load_plugin_module(
 
     django_db_models.Count = Count
 
+    # `django.db` itself, not just `django.db.models`.  Registering only the
+    # submodule is enough for `from django.db.models import Q` (the full dotted
+    # name is already in sys.modules, so the parent is never imported), but
+    # `from django.db import DatabaseError` resolves the *parent* package and
+    # dies with ModuleNotFoundError because the `django` stub has no __path__.
+    # Shared with the other five stub loaders — see `tests/django_stubs.py`.
+    _django_stubs = django_stub_modules(models_module=django_db_models)
+    django_db = _django_stubs["django.db"]
+    django_utils_crypto = _django_stubs["django.utils.crypto"]
+
     utilities_datetime = types.ModuleType("utilities.datetime")
     utilities_datetime.local_now = lambda: __import__("datetime").datetime(
         2026, 1, 1, 1, 0, 0, tzinfo=__import__("datetime").timezone.utc
@@ -512,6 +524,8 @@ def load_plugin_module(
         "django.utils.timezone": django_utils_timezone,
         "django.utils.translation": django_utils_translation,
         "django.utils.safestring": django_utils_safestring,
+        "django.utils.crypto": django_utils_crypto,
+        "django.db": django_db,
         "django.db.models": django_db_models,
         "utilities.datetime": utilities_datetime,
         "netbox.constants": netbox_constants,
