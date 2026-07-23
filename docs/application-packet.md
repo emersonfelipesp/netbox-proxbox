@@ -18,8 +18,9 @@ the certification process.
 
 ## Compatibility Target
 
-The certification target is NetBox `v4.6.5`, with compatibility preserved for
-NetBox `v4.5.8+` where each plugin declares `max_version = "4.6.99"`.
+The certification matrix covers NetBox `v4.5.8` through `v4.5.10` and `v4.6.0`
+through `v4.6.5`, with compatibility preserved for NetBox `v4.5.8+` where each
+plugin declares `max_version = "4.6.99"`.
 
 ## Evidence
 

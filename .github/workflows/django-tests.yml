@@ -21,9 +21,9 @@ jobs:
       fail-fast: false
       matrix:
         # Declared support is NetBox 4.5.8 - 4.6.99. Gate the minimum,
-        # the last validated 4.5 patch, and both the 4.6 line floor/latest
+        # the latest certified 4.5 patch, and both the 4.6 line floor/latest
         # validated patch in step with netbox_proxbox/__init__.py.
-        netbox: ["v4.5.8", "v4.5.9", "v4.6.0", "v4.6.5"]
+        netbox: ["v4.5.8", "v4.5.10", "v4.6.0", "v4.6.5"]
 
     services:
       postgres:

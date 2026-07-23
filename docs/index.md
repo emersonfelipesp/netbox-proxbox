@@ -35,7 +35,7 @@ and WebSocket.
 
 The current repository code declares support for:
 
-- NetBox `4.5.8`, `4.5.9`, and `4.6.x`
+- NetBox `4.5.8` through `4.5.10`, and `4.6.x`
 - Plugin version `0.0.23.post1` in source
 
 That support comes directly from the plugin config in this repository:
@@ -43,8 +43,8 @@ That support comes directly from the plugin config in this repository:
 - `min_version = "4.5.8"`
 - `max_version = "4.6.99"`
 
-This compatibility line is validated against NetBox `v4.5.8`, `v4.5.9`, and
-`v4.6.0` through `v4.6.5`. It includes per-endpoint API-only vs API+SSH access
+This compatibility line is validated against NetBox `v4.5.8` through `v4.5.10`
+and `v4.6.0` through `v4.6.5`. It includes per-endpoint API-only vs API+SSH access
 methods, tenant-scoped endpoint allowlists, bulk endpoint enablement, PDM
 endpoint sync, SDN inventory, Firecracker serializer hardening, dual VM
 interface sync, and the all-endpoint `enabled=False` no-connection guard.

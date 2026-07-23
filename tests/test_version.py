@@ -71,6 +71,7 @@ LATEST_CERTIFIED_NETBOX_IMAGE = (
 SUPPORTED_NETBOX_IMAGE_TAGS = (
     "netboxcommunity/netbox:v4.5.8",
     "netboxcommunity/netbox:v4.5.9",
+    "netboxcommunity/netbox:v4.5.10",
     "netboxcommunity/netbox:v4.6.0",
     "netboxcommunity/netbox:v4.6.1",
     "netboxcommunity/netbox:v4.6.2",
@@ -80,7 +81,7 @@ SUPPORTED_NETBOX_IMAGE_TAGS = (
 )
 E2E_DEFAULT_INSTALL_SOURCES = ("local", "pypi", "container")
 E2E_EXPLICIT_INSTALL_SOURCES = (*E2E_DEFAULT_INSTALL_SOURCES, "testpypi")
-DJANGO_TESTED_NETBOX_TAGS = ("v4.5.8", "v4.5.9", "v4.6.0", "v4.6.5")
+DJANGO_TESTED_NETBOX_TAGS = ("v4.5.8", "v4.5.10", "v4.6.0", "v4.6.5")
 PREVIOUS_PLUGIN_VERSION = "0.0.22"
 PREVIOUS_PROXBOX_API_VERSION = "0.0.19.post5"
 CURRENT_RELEASE_NOTES_PATH = RELEASE_NOTES_023_POST1_PATH
@@ -139,13 +140,17 @@ def _workflow_matrix_json_fallback(workflow: str, matrix_key: str) -> tuple[str,
     return tuple(values)
 
 
-def test_plugin_version_is_pinned():
+def test_current_release_version_identity_is_exact():
     constants = _class_constants("ProxboxConfig")
-    actual = constants.get("version") or ""
-    pattern = rf"^{re.escape(CURRENT_PLUGIN_VERSION)}(rc\d+|\.post\d+)?$"
-    assert re.match(pattern, actual), (
-        f"version drifted (got {actual!r}); update docs/, release-notes, "
-        "and pyproject.toml together"
+    pyproject = tomllib.loads(PYPROJECT_PATH.read_text(encoding="utf-8"))
+    config_version = constants.get("version")
+    pyproject_version = pyproject["project"]["version"]
+
+    assert config_version == pyproject_version == CURRENT_RELEASE_VERSION, (
+        "release version identity drifted: "
+        f"ProxboxConfig.version={config_version!r}, "
+        f"pyproject.toml={pyproject_version!r}, "
+        f"certification constant={CURRENT_RELEASE_VERSION!r}"
     )
 
 
@@ -290,12 +295,7 @@ def test_pyproject_metadata_is_certification_ready():
     pyproject = tomllib.loads(PYPROJECT_PATH.read_text(encoding="utf-8"))
     project = pyproject["project"]
 
-    assert re.fullmatch(
-        rf"^{re.escape(CURRENT_PLUGIN_VERSION)}(rc\d+|\.post\d+)?$",
-        project["version"],
-    ), (
-        f"pyproject.toml version {project['version']!r} does not match {CURRENT_PLUGIN_VERSION}"
-    )
+    assert project["version"] == CURRENT_RELEASE_VERSION
     assert project["license"] == "Apache-2.0"
     assert project["license-files"] == ["LICENSE"]
     assert (
