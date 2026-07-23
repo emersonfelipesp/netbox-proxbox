@@ -355,15 +355,17 @@ This package contains the NetBox plugin itself. It defines the plugin config, UR
 > push itself matches on, so the check cannot drift from
 > `sync_proxmox_endpoint_to_backend()`) and then requires
 > `_proxmox_row_is_current()` — same resolved connection target, same `username` /
-> `access_methods` / `verify_ssl`. Skipping a **drifted** row would preserve
+> `access_methods` / `verify_ssl` / `timeout` / `max_retries` /
+> `retry_backoff`. Skipping a **drifted** row would preserve
 > exactly the stale row `resolve_backend_endpoint_ids()` then refuses to sync
 > against, turning a merely slow backend into a blocked endpoint, so a drifted row
-> is pushed regardless of the budget. `timeout` / `max_retries` /
-> `retry_backoff` and the site/tenant metadata are deliberately **excluded**:
-> drift there is the "slightly stale row" the budget already accepts, and
-> comparing values that normalise unpredictably risks a budget that never skips
-> anything — reintroducing the (endpoints × timeout) stall it exists to prevent.
-> A false "not current" costs one extra push, bounded by the hard ceiling. An
+> is pushed regardless of the budget. The public proxbox-api list schema returns
+> `timeout` / `max_retries` / `retry_backoff` as canonical `int` / `int` /
+> `float`, so tuning drift is compared exactly and remains push-required: it
+> changes live request behavior, and skipping a global timeout change could
+> leave the backend session on the old value indefinitely. Only site/tenant
+> display metadata is excluded. A false "not current" costs one extra push,
+> bounded by the hard ceiling. An
 > endpoint the backend has never seen — or one whose listing call failed, since
 > "unknown" must never be the reason an endpoint is skipped into a fatal error —
 > is **always** pushed, and the extra push is logged: skipping it strands the
@@ -375,6 +377,13 @@ This package contains the NetBox plugin itself. It defines the plugin config, UR
 > incomplete rather than silently partial. The loop also lists the backend's
 > Proxmox rows **once** and reuses them via `existing_endpoints=`, instead of
 > paying a fresh listing per endpoint.
+>
+> **Task-history timeout remediation is a backend-first paired rollout.** The
+> proxbox-api bounded task-history implementation retains the existing stage
+> routes and query parameters, so deploy it first and this plugin second. The
+> plugin's `sync_task_history=false` VM-stage flag is non-breaking against an
+> older backend, but the dedicated task-history stage remains unbounded there;
+> the incident is not fully remediated until the paired backend is live.
 >
 > **A stored Proxmox row is only usable once it is confirmed to still dial the
 > same host.** The push loop *warns* on failure and continues, so a retargeted

@@ -37,7 +37,8 @@ BACKEND_ENDPOINT_PUSH_TIMEOUT = 30
 #
 # The budget is **soft**, and that distinction is load-bearing.  Past it, only
 # endpoints the backend already holds are skipped — for those the push is a
-# refresh, so skipping costs nothing but a slightly stale row.  An endpoint the
+# refresh, so its operational connection behavior is unchanged; only
+# non-operational display metadata may lag. An endpoint the
 # backend has *never* seen is always pushed, because skipping it strands the
 # endpoint with no backend id at all and the run then fails outright.  Budgeting
 # an endpoint into a guaranteed failure is strictly worse than spending the time.
@@ -120,17 +121,9 @@ def _int_or_none(value: object) -> int | None:
         return None
 
 
-def _float_or_none(value: object) -> float | None:
-    if value is None:
-        return None
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
-
-
 def _proxmox_backend_payload(endpoint: ProxmoxEndpoint) -> dict[str, object]:
     """JSON body for POST/PUT ``/proxmox/endpoints`` from a ``ProxmoxEndpoint`` row."""
+    tuning = endpoint.effective_connection_tuning()
     return {
         "name": proxmox_backend_name(endpoint),
         "ip_address": get_ip_address_host(getattr(endpoint, "ip_address", None)),
@@ -140,9 +133,9 @@ def _proxmox_backend_payload(endpoint: ProxmoxEndpoint) -> dict[str, object]:
         or "root@pam",
         "password": (getattr(endpoint, "password", "") or "").strip() or None,
         "verify_ssl": bool(getattr(endpoint, "verify_ssl", False)),
-        "timeout": _int_or_none(getattr(endpoint, "timeout", None)),
-        "max_retries": _int_or_none(getattr(endpoint, "max_retries", None)),
-        "retry_backoff": _float_or_none(getattr(endpoint, "retry_backoff", None)),
+        "timeout": tuning["timeout"],
+        "max_retries": tuning["max_retries"],
+        "retry_backoff": float(tuning["retry_backoff"]),
         "token_name": (getattr(endpoint, "token_name", "") or "").strip() or None,
         "token_value": (getattr(endpoint, "token_value", "") or "").strip() or None,
         # Push the transport access method so the proxbox-api backend can gate
@@ -394,15 +387,15 @@ def _proxmox_targets_match(endpoint: ProxmoxEndpoint, row: dict[str, object]) ->
 def _proxmox_row_is_current(endpoint: ProxmoxEndpoint, row: dict[str, object]) -> bool:
     """Return ``True`` when a backend row already reflects what a push would send.
 
-    Compares the resolved connection target first, then the three pushed fields
+    Compares the resolved connection target first, then the six pushed fields
     the backend both stores and returns, and finally the **credentials**, which
-    it does not. ``timeout``/``max_retries``/``retry_backoff`` and the site/tenant
-    metadata are deliberately **excluded**: they normalise less predictably, and
-    drift in them is exactly the "slightly stale row" the soft push budget
-    already accepts. Comparing them risks a budget that never skips anything,
-    which would reintroduce the (endpoints × timeout) preflight stall it exists
-    to prevent. A false "not current" costs one extra push, bounded by the hard
-    ceiling.
+    it does not. The public proxbox-api response schema normalises request tuning
+    as ``int`` / ``int`` / ``float``, matching this module's payload, so timeout,
+    retry-count, and retry-back-off comparisons are stable. Their drift is
+    operational: skipping a globally inherited timeout change can leave the
+    backend session on the old value indefinitely. Site/tenant display metadata
+    remains excluded from this soft-budget predicate. A false "not current"
+    costs one extra push, bounded by the hard ceiling.
 
     The credentials are the one exclusion that was **not** safe.
     ``ProxmoxEndpointPublic`` withholds ``password``/``token_name``/
@@ -424,6 +417,9 @@ def _proxmox_row_is_current(endpoint: ProxmoxEndpoint, row: dict[str, object]) -
             return False
     if bool(row.get("verify_ssl")) != bool(payload.get("verify_ssl")):
         return False
+    for key in ("timeout", "max_retries", "retry_backoff"):
+        if row.get(key) != payload.get(key):
+            return False
     return proxmox_push_credentials_unchanged(endpoint, payload)
 
 

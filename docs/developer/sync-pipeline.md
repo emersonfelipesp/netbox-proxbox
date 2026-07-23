@@ -61,6 +61,20 @@ flowchart LR
 | 12 | **Replications** | `sync_all_replications()` | `Replication` (plugin model) | `/cluster/replication` |
 | 13 | **Backup Routines** | `sync_all_backup_routines()` | `BackupRoutine` (plugin model) | `/cluster/backup` |
 
+The plugin sends `sync_task_history=false` on Stage 3's virtual-machine
+request. Task history is owned exclusively by Stage 5, which keeps its
+supplementary failure handling and prevents the backend from repeating the
+same expensive discovery inside the required VM stage.
+
+!!! warning "Paired backend rollout"
+    This change pairs with the proxbox-api release that bounds task-history
+    discovery and reconciliation. Deploy **proxbox-api first**, then this
+    plugin. The backend change retains the existing routes and query parameters,
+    so it is wire-compatible with the previous plugin; deploying the plugin
+    first is also non-breaking, but the dedicated task-history stage still uses
+    the old unbounded backend implementation and the timeout remediation is
+    therefore incomplete until the paired backend is live.
+
 ---
 
 ## Stage Dependencies

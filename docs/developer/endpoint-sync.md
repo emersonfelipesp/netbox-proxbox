@@ -528,11 +528,13 @@ flowchart TD
     three pushed fields the backend both stores and returns (`username`, `access_methods`,
     `verify_ssl`). Skipping a **drifted** row would preserve exactly the stale row the
     resolvers below then refuse to sync against, turning a merely slow backend into a
-    blocked endpoint. `timeout` / `max_retries` / `retry_backoff` and the site/tenant
-    metadata are deliberately excluded: drift there is the "slightly stale row" the budget
-    already accepts, and comparing values that normalise unpredictably risks a budget that
-    never skips anything. A false "not current" costs one extra push, bounded by the hard
-    ceiling.
+    blocked endpoint. The same check covers `timeout`, `max_retries`, and
+    `retry_backoff`: proxbox-api's public list schema returns those as
+    `int` / `int` / `float`, matching the plugin payload, and drift changes live
+    Proxmox request behavior. A globally inherited timeout change therefore
+    remains push-required even after the soft budget is exhausted. Site/tenant
+    display metadata remains excluded. A false "not current" costs one extra
+    push, bounded by the hard ceiling.
 
     Skipped endpoints are never silent — each gets a `warning` runtime phase, and they are
     named in a job-log warning and in the preflight hint, with wording that distinguishes a

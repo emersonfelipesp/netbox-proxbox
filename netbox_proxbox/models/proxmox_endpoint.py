@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+from decimal import Decimal
+from typing import TypedDict
 
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
@@ -36,6 +38,15 @@ from netbox_proxbox.utils import encryption as enc_helpers
 
 
 logger = logging.getLogger(__name__)
+
+
+class ProxmoxConnectionTuning(TypedDict):
+    """Concrete Proxmox request settings sent to the backend."""
+
+    timeout: int
+    max_retries: int
+    retry_backoff: Decimal
+
 
 SERVICE_MONITORING_INELIGIBLE_MESSAGE = _(
     "Service monitoring requires write permission (allow_writes), SSH access "
@@ -892,6 +903,36 @@ class ProxmoxEndpoint(EndpointBase):
             if getattr(self, name) is not None
             else getattr(settings, name)
             for name in OVERWRITE_FIELDS
+        }
+
+    def effective_connection_tuning(self) -> ProxmoxConnectionTuning:
+        """Resolve endpoint request tuning against the plugin-wide defaults.
+
+        Endpoint fields are nullable by design. ``None`` means inherit, while
+        any concrete value is an explicit override (including zero for the
+        retry count and retry back-off fields).
+        Returning concrete values here keeps that tri-state policy on the
+        owning model and prevents backend payload builders from sending JSON
+        ``null`` for inherited settings.
+        """
+        from netbox_proxbox.models.plugin_settings import ProxboxPluginSettings
+
+        settings = ProxboxPluginSettings.get_solo()
+        timeout = self.timeout if self.timeout is not None else settings.proxmox_timeout
+        max_retries = (
+            self.max_retries
+            if self.max_retries is not None
+            else settings.proxmox_max_retries
+        )
+        retry_backoff = (
+            self.retry_backoff
+            if self.retry_backoff is not None
+            else settings.proxmox_retry_backoff
+        )
+        return {
+            "timeout": int(timeout),
+            "max_retries": int(max_retries),
+            "retry_backoff": Decimal(str(retry_backoff)),
         }
 
     def effective_rpc_enabled(self) -> bool:

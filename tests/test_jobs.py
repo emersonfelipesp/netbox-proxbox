@@ -9,6 +9,7 @@ import logging
 import sys
 import types
 import uuid
+from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -4289,6 +4290,11 @@ def _recording_proxmox_endpoint(*, update_error=None):
         access_methods="api",
         verify_ssl=False,
         pushed_credential_fingerprint="",
+        effective_connection_tuning=lambda: {
+            "timeout": 5,
+            "max_retries": 0,
+            "retry_backoff": Decimal("0.50"),
+        },
     )
     return endpoint, calls
 
@@ -4970,10 +4976,22 @@ def _preflight_proxmox_endpoint(pk):
         username="root@pam",
         access_methods="api",
         verify_ssl=False,
+        effective_connection_tuning=lambda: {
+            "timeout": 5,
+            "max_retries": 0,
+            "retry_backoff": Decimal("0.50"),
+        },
     )
 
 
-def _arrange_slow_push(monkeypatch, module, *, seconds=6.0, held=()):
+def _arrange_slow_push(
+    monkeypatch,
+    module,
+    *,
+    seconds=6.0,
+    held=(),
+    stored_tuning_by_pk=None,
+):
     """Give the preflight a fake clock advanced by each push, and a held-rows list.
 
     ``held`` are the endpoint stubs proxbox-api already holds, and the rows built
@@ -4999,8 +5017,10 @@ def _arrange_slow_push(monkeypatch, module, *, seconds=6.0, held=()):
         clock["now"] += seconds
         return (True, None, None)
 
-    held_rows = [
-        {
+    held_rows = []
+    for endpoint in held:
+        tuning = endpoint.effective_connection_tuning()
+        row = {
             "id": endpoint.pk,
             "name": f"{endpoint.name} (nb:{endpoint.pk})",
             "domain": endpoint.domain,
@@ -5009,9 +5029,12 @@ def _arrange_slow_push(monkeypatch, module, *, seconds=6.0, held=()):
             "username": endpoint.username,
             "access_methods": endpoint.access_methods,
             "verify_ssl": endpoint.verify_ssl,
+            "timeout": tuning["timeout"],
+            "max_retries": tuning["max_retries"],
+            "retry_backoff": float(tuning["retry_backoff"]),
         }
-        for endpoint in held
-    ]
+        row.update((stored_tuning_by_pk or {}).get(endpoint.pk, {}))
+        held_rows.append(row)
 
     monkeypatch.setattr(backend_sync, "sync_proxmox_endpoint_to_backend", _slow_push)
     monkeypatch.setattr(
@@ -5104,6 +5127,46 @@ def test_preflight_budget_never_skips_an_endpoint_the_backend_does_not_hold(
     assert result.blocking_error is None
     assert all(phase["status"] == "success" for phase in result.phases)
     assert not result.hint, "nothing was skipped, so there is nothing to warn about"
+
+
+def test_preflight_budget_never_skips_an_endpoint_with_stale_tuning(
+    monkeypatch, proxbox_sync_job_module
+):
+    """Operational request tuning drift is not a no-op refresh.
+
+    A global timeout change affects every endpoint whose nullable override
+    inherits it. Once the soft budget is exhausted, a backend row that still
+    carries the old timeout must be pushed; otherwise its Proxmox session keeps
+    using the stale value on every task-history request.
+    """
+    module = proxbox_sync_job_module
+    backend_sync = sys.modules["netbox_proxbox.views.backend_sync"]
+    rows = [_preflight_proxmox_endpoint(pk) for pk in (1, 2, 3)]
+    rows[2].effective_connection_tuning = lambda: {
+        "timeout": 60,
+        "max_retries": 0,
+        "retry_backoff": Decimal("0.50"),
+    }
+
+    _arrange_preflight(monkeypatch)
+    monkeypatch.setattr(
+        sys.modules["netbox_proxbox.models"].ProxmoxEndpoint.objects, "rows", rows
+    )
+    monkeypatch.setattr(backend_sync, "PREFLIGHT_ENDPOINT_PUSH_BUDGET", 10.0)
+
+    pushed = _arrange_slow_push(
+        monkeypatch,
+        module,
+        held=rows,
+        stored_tuning_by_pk={3: {"timeout": 5}},
+    )
+    job, _records = _preflight_job()
+
+    result = module._ensure_backend_endpoints(job)
+
+    assert pushed == ["pve-1", "pve-2", "pve-3"]
+    assert result.blocking_error is None
+    assert all(phase["status"] == "success" for phase in result.phases)
 
 
 def test_preflight_hard_ceiling_skips_even_unregistered_endpoints(

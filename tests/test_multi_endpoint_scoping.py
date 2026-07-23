@@ -21,6 +21,7 @@ from __future__ import annotations
 import importlib.util
 import sys
 import types
+from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -126,6 +127,9 @@ def _endpoint(
     username="root@pam",
     access_methods="api",
     verify_ssl=False,
+    timeout=5,
+    max_retries=0,
+    retry_backoff=Decimal("0.50"),
 ):
     """Return a Proxmox endpoint stub that resolves a connection target.
 
@@ -145,16 +149,22 @@ def _endpoint(
         username=username,
         access_methods=access_methods,
         verify_ssl=verify_ssl,
+        effective_connection_tuning=lambda: {
+            "timeout": timeout,
+            "max_retries": max_retries,
+            "retry_backoff": retry_backoff,
+        },
     )
 
 
 def _backend_row(backend_id, endpoint, **overrides):
     """Return the row proxbox-api would store for ``endpoint``, fully current.
 
-    Carries the three pushed fields ``_proxmox_row_is_current()`` compares
+    Carries the six pushed fields ``_proxmox_row_is_current()`` compares
     beyond the connection target, so a row built here reads as *held and
     current* unless a test overrides one of them.
     """
+    tuning = endpoint.effective_connection_tuning()
     row = {
         "id": backend_id,
         "name": f"{endpoint.name} (nb:{endpoint.pk})",
@@ -164,6 +174,9 @@ def _backend_row(backend_id, endpoint, **overrides):
         "username": endpoint.username,
         "access_methods": endpoint.access_methods,
         "verify_ssl": endpoint.verify_ssl,
+        "timeout": tuning["timeout"],
+        "max_retries": tuning["max_retries"],
+        "retry_backoff": float(tuning["retry_backoff"]),
     }
     row.update(overrides)
     return row
@@ -457,6 +470,14 @@ def test_backend_holds_proxmox_endpoint_requires_the_row_to_be_current(monkeypat
         "different user": _backend_row(7, endpoint, username="svc@pve"),
         "different transport": _backend_row(7, endpoint, access_methods="api_ssh"),
         "different tls": _backend_row(7, endpoint, verify_ssl=True),
+        "different timeout": _backend_row(7, endpoint, timeout=30),
+        "different retries": _backend_row(7, endpoint, max_retries=3),
+        "different back-off": _backend_row(7, endpoint, retry_backoff=1.5),
+        "missing tuning": {
+            key: value
+            for key, value in _backend_row(7, endpoint).items()
+            if key not in {"timeout", "max_retries", "retry_backoff"}
+        },
         "another endpoint": _backend_row(7, _endpoint(4, "Other")),
     }
     for label, row in drifted.items():
