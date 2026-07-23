@@ -4,7 +4,7 @@ netbox-proxbox `0.0.23.post1` pairs with a `proxbox-api`
 guest-VM-interface writer build / next release, alongside
 `proxmox-sdk 0.0.12` and `netbox-sdk 0.0.10`. NetBox compatibility is unchanged:
 `4.5.8` through `4.6.99` (validated against `4.5.8`, `4.5.9`, and `4.6.0`
-through `4.6.4`).
+through `4.6.5`).
 
 Current pairing: netbox-proxbox 0.0.23.post1 <-> proxbox-api (guest-VM-interface writer build / next release) <-> proxmox-sdk 0.0.12 <-> netbox-sdk 0.0.10.
 
