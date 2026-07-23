@@ -166,6 +166,10 @@ nav:
     - Other Models: 'models/others.md'
   - Release Notes:
     - Summary: 'release-notes/index.md'
+    - Version 0.0.23.post1: 'release-notes/version-0.0.23.post1.md'
+    - Version 0.0.23: 'release-notes/version-0.0.23.md'
+    - Version 0.0.22: 'release-notes/version-0.0.22.md'
+    - Version 0.0.21: 'release-notes/version-0.0.21.md'
     - Version 0.0.20.post3: 'release-notes/version-0.0.20.post3.md'
     - Version 0.0.20.post2: 'release-notes/version-0.0.20.post2.md'
     - Version 0.0.20.post1: 'release-notes/version-0.0.20.post1.md'
