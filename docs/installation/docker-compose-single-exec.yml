@@ -18,7 +18,7 @@ name: netbox-proxbox-single-exec
 
 services:
   netbox:
-    image: ${NETBOX_IMAGE:-netboxcommunity/netbox:v4.6.4}
+    image: ${NETBOX_IMAGE:-netboxcommunity/netbox:v4.6.5}
     restart: "no"
     pull_policy: missing
     env_file:

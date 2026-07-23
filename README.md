@@ -296,8 +296,8 @@ See [COMPATIBILITY.md](COMPATIBILITY.md) for the full version compatibility tabl
 
 ## Requirements
 
-- NetBox 4.5.8, 4.5.9, or 4.6.x
-- Verified with NetBox v4.5.8, v4.5.9, and v4.6.0 through v4.6.4
+- NetBox 4.5.8 through 4.5.10, or 4.6.x
+- Verified with NetBox v4.5.8 through v4.5.10 and v4.6.0 through v4.6.5
 - Python 3.12+
 - Proxmox VE 7.x, 8.x, or 9.x (PVE 9 requires `VM.GuestAgent.Audit` on the API role; see "Troubleshooting" below for the PVE 9 auth checklist)
 - Proxbox API backend as a separately deployed service (see below)
