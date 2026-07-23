@@ -224,10 +224,11 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
 
 - **Single enabled FastAPI row:** HTTP and WebSocket helpers such as `get_fastapi_request_context()` in [`netbox_proxbox/services/backend_proxy.py`](./netbox_proxbox/services/backend_proxy.py), `websocket_client`, and several dashboard views resolve the backend via the first `FastAPIEndpoint` with `enabled=True` (or the first enabled row from a restricted queryset). If multiple enabled FastAPI endpoints exist, whichever row sorts first is used; plan automation and operator docs accordingly.
 - **Backend-key preflight is a job-wide gate:** a manual or scheduled sync must
-  authenticate the selected FastAPI endpoint before batch creation or SSE. A
-  supplied endpoint selector is accepted only when it resolves to the same
-  singleton-shaped first enabled row still used by legacy stage services;
-  otherwise the entire job aborts before any partial sync can start.
+  authenticate the selected FastAPI endpoint before batch creation or SSE. The
+  selected endpoint ID is then threaded through endpoint preflight, batch sync,
+  and every pre-SSE service pass so no phase silently re-resolves a different
+  enabled backend. Authentication failure aborts the entire job before any
+  partial sync can start.
 - **Background Proxbox sync jobs (RQ):** `ProxboxSyncJob` enqueues on NetBox’s **`default`** RQ queue (`RQ_QUEUE_DEFAULT`) so a stock **`manage.py rqworker`** (no queue arguments) picks them up. NetBox’s default worker only listens to **`high`**, **`default`**, and **`low`**; the extra django-rq queue **`netbox_proxbox.sync`** is legacy only. Older Job rows may still show **`netbox_proxbox.sync`** in **Queue**; cancel/RQ lookup uses the stored name. Jobs call proxbox-api **SSE** via [`run_sync_stream`](./netbox_proxbox/services/backend_proxy.py) until a terminal `complete` event.
 - **Disabled endpoint rows are a hard no-connection gate:** any endpoint-like row with `enabled=False` (`ProxmoxEndpoint`, `NetBoxEndpoint`, `FastAPIEndpoint`, `PBSEndpoint`, `PDMEndpoint`, or companion plugin endpoint objects such as `PBSServer`) remains visible through the API/UI for inventory, but operational paths must return before proxbox-api or remote-service network calls. This includes backend key registration, startup/signal pushes, OpenAPI fetches, keepalive/status probes, backend-id resolution, dashboard/API live reads, and scheduled/manual sync scopes.
   **The gate is decided from NetBox's own rows, never from what proxbox-api still

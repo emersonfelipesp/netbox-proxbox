@@ -20,16 +20,6 @@ _LONG_RUNNING_VM_SYNC_MARKER = "virtualization/virtual-machines"
 _LONG_RUNNING_FULL_UPDATE_MARKER = "full-update"
 _LONG_HTTP_READ_TIMEOUT = (5, 3600)
 
-# Preflight HTTP budgets.  A freshly started proxbox-api answers its first few
-# requests slowly (container start, SQLite open, NetBox OpenAPI resolution), and
-# the old 5s/10s bounds failed the preflight on that start-up latency alone —
-# the first sync of a new install saw bootstrap-status give up at 5.03s and the
-# endpoint push at 10.02s, while a later call to the very same host answered in
-# 3.78s.  These bounds leave a cold backend room to answer.  They are ceilings,
-# not delays: a healthy backend still returns in well under a second.
-BOOTSTRAP_STATUS_TIMEOUT = 15
-REGISTER_KEY_TIMEOUT = 20
-
 # Bounded readiness wait used by the sync preflight.  Deliberately much shorter
 # than the ``wait_for_backend_ready`` defaults (30 retries, up to 30s apart):
 # the preflight only needs to absorb a cold start, and a backend that is truly

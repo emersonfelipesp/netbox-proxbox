@@ -224,7 +224,7 @@ def test_valid_rotation_authenticates_once_and_never_calls_register(
     assert client.get_calls[1][1] == {
         "headers": {"X-Proxbox-API-Key": CANDIDATE},
         "verify": False,
-        "timeout": 5,
+        "timeout": adoption.AUTHENTICATED_KEY_LIST_TIMEOUT,
         "allow_redirects": False,
     }
     assert client.post_calls == []
@@ -258,7 +258,7 @@ def test_initial_bootstrap_requires_exactly_one_successful_registration(
                     "label": "netbox-fastapi-7",
                 },
                 "verify": False,
-                "timeout": 10,
+                "timeout": adoption.REGISTER_KEY_TIMEOUT,
                 "allow_redirects": False,
             },
         )

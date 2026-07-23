@@ -921,27 +921,6 @@ def _require_backend_key(
         raise BackendKeyPreflightError(
             "Backend API-key preflight failed; no sync stage was started."
         )
-
-    # Several legacy pre-SSE services still resolve the first enabled endpoint.
-    # Until those APIs accept an explicit selector end-to-end, allow a selector
-    # only when it names that same default. This prevents proving endpoint B and
-    # then sending endpoint A's unproved key in a later phase.
-    if endpoint_id is not None:
-        from netbox_proxbox.services.backend_context import (  # noqa: PLC0415
-            get_fastapi_endpoint_with_token,
-        )
-
-        selected, _ = get_fastapi_endpoint_with_token(endpoint_id=endpoint_id)
-        default, _ = get_fastapi_endpoint_with_token()
-        if (
-            selected is None
-            or default is None
-            or getattr(selected, "pk", None) != getattr(default, "pk", None)
-        ):
-            raise BackendKeyPreflightError(
-                "The selected FastAPI endpoint is not the active default; no sync "
-                "stage was started."
-            )
     job.logger.info(f"Preflight: API key verified — {key_msg}")
 
 

@@ -2983,37 +2983,34 @@ def test_proxbox_sync_job_rejected_key_aborts_before_batch_and_all_stages(
     assert checks == [42]
 
 
-def test_backend_key_preflight_rejects_nondefault_selected_endpoint(
+def test_backend_key_preflight_accepts_the_selected_endpoint_without_default_lookup(
     monkeypatch,
     proxbox_sync_job_module,
 ):
-    """A proved selector cannot authorize legacy stages that use another row."""
+    """Every stage is pinned, so verification must not re-resolve another row."""
     backend_auth = sys.modules["netbox_proxbox.services.backend_auth"]
+    checked: list[int | None] = []
+
+    def verify(*args, endpoint_id=None, **kwargs):
+        checked.append(endpoint_id)
+        return True, "verified"
+
     monkeypatch.setattr(
         backend_auth,
         "ensure_backend_key_registered",
-        lambda *args, **kwargs: (True, "verified"),
+        verify,
     )
     backend_context = sys.modules["netbox_proxbox.services.backend_context"]
-
-    def resolve_endpoint(*args, endpoint_id=None, **kwargs):
-        return (
-            SimpleNamespace(pk=endpoint_id if endpoint_id is not None else 1),
-            "stored-key",
-        )
-
     monkeypatch.setattr(
         backend_context,
         "get_fastapi_endpoint_with_token",
-        resolve_endpoint,
+        MagicMock(side_effect=AssertionError("unexpected default endpoint lookup")),
     )
     job = SimpleNamespace(logger=MagicMock())
 
-    with pytest.raises(
-        proxbox_sync_job_module.BackendKeyPreflightError,
-        match="not the active default",
-    ):
-        proxbox_sync_job_module._require_backend_key(job, endpoint_id=42)
+    proxbox_sync_job_module._require_backend_key(job, endpoint_id=42)
+
+    assert checked == [42]
 
 
 def test_stage_retries_on_502_then_succeeds(monkeypatch, proxbox_sync_job_module):

@@ -30,9 +30,12 @@ from netbox_proxbox.services.http_client import (
     get_default_http_client,
 )
 
-_STATUS_TIMEOUT = 5
-_AUTH_TIMEOUT = 5
-_REGISTER_TIMEOUT = 10
+# One-shot authentication budgets. A freshly started proxbox-api can spend its
+# first seconds opening SQLite and resolving the NetBox OpenAPI schema. These
+# are ceilings, not delays: a warm backend still returns immediately.
+BOOTSTRAP_STATUS_TIMEOUT = 15
+AUTHENTICATED_KEY_LIST_TIMEOUT = 15
+REGISTER_KEY_TIMEOUT = 20
 
 _FQDN_RE = re.compile(
     r"^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+"
@@ -516,7 +519,7 @@ def _register_backend_key_at_url(
                 "label": label,
             },
             verify=verify_ssl,
-            timeout=_REGISTER_TIMEOUT,
+            timeout=REGISTER_KEY_TIMEOUT,
             allow_redirects=False,
         )
     except HttpError as exc:
@@ -595,7 +598,7 @@ def inspect_backend_key_at_url(
         status_response = client.get(
             f"{normalized_base_url}/auth/bootstrap-status",
             verify=verify_ssl,
-            timeout=_STATUS_TIMEOUT,
+            timeout=BOOTSTRAP_STATUS_TIMEOUT,
             allow_redirects=False,
         )
     except HttpError as exc:
@@ -639,7 +642,7 @@ def inspect_backend_key_at_url(
             f"{normalized_base_url}/auth/keys",
             headers={"X-Proxbox-API-Key": normalized_candidate},
             verify=verify_ssl,
-            timeout=_AUTH_TIMEOUT,
+            timeout=AUTHENTICATED_KEY_LIST_TIMEOUT,
             allow_redirects=False,
         )
     except HttpError as exc:
