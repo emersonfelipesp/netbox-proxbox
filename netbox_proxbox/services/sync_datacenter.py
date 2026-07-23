@@ -96,13 +96,21 @@ def sync_datacenter(
     fastapi_url: str | None = None,
     auth_headers: dict | None = None,
     fastapi_endpoint_id: int | None = None,
+    endpoint_ids: list[int] | None = None,
 ) -> DatacenterSyncResult:
-    """Sync datacenter CPU models for all Proxmox endpoints.
+    """Sync datacenter CPU models for the Proxmox endpoints in scope.
 
     ``fastapi_endpoint_id`` pins the resolution to one `FastAPIEndpoint` row so a
     multi-backend install cannot certify one backend in the job preflight and
     then talk to a different one here.  It is only consulted when ``fastapi_url``
     is not supplied — an explicit URL already names the backend.
+
+    ``endpoint_ids`` narrows the run to specific plugin ``ProxmoxEndpoint`` pks.
+    A job launched against one endpoint used to sync every enabled endpoint's CPU
+    models anyway, because this pass built its own all-enabled scope and never
+    saw the job's selection.  Stale marking is per-endpoint, so a narrowed run
+    simply leaves out-of-scope rows untouched.  ``None`` keeps the all-enabled
+    scope for callers with no selection.
     """
     result = DatacenterSyncResult()
 
@@ -126,6 +134,7 @@ def sync_datacenter(
         auth_headers=auth_headers,
         backend_verify_ssl=verify_ssl,
         timeout=SYNC_TIMEOUT,
+        endpoint_ids=endpoint_ids,
     )
     if scope_error:
         result.error = scope_error

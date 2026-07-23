@@ -1487,7 +1487,13 @@ class ProxboxSyncJob(JobRunner):
                 from netbox_proxbox.services.sync_firewall import sync_firewall  # noqa: PLC0415
 
                 self.logger.info("Syncing firewall objects from proxbox-api")
-                fw_result = sync_firewall(fastapi_endpoint_id=fastapi_endpoint_id)
+                # Scoped to this run's endpoints for the same reason the stage
+                # loop is: an *absent* endpoint filter is the widest request
+                # proxbox-api accepts, not a narrower one.
+                fw_result = sync_firewall(
+                    fastapi_endpoint_id=fastapi_endpoint_id,
+                    endpoint_ids=endpoint_ids_to_sync,
+                )
                 if fw_result.success:
                     self.logger.info(
                         f"Firewall sync complete: {fw_result.endpoints_processed} endpoint(s), "
@@ -1518,7 +1524,10 @@ class ProxboxSyncJob(JobRunner):
                 from netbox_proxbox.services.sync_datacenter import sync_datacenter  # noqa: PLC0415
 
                 self.logger.info("Syncing datacenter CPU models from proxbox-api")
-                dc_result = sync_datacenter(fastapi_endpoint_id=fastapi_endpoint_id)
+                dc_result = sync_datacenter(
+                    fastapi_endpoint_id=fastapi_endpoint_id,
+                    endpoint_ids=endpoint_ids_to_sync,
+                )
                 if dc_result.success:
                     self.logger.info(
                         f"Datacenter CPU model sync complete: {dc_result.endpoints_processed} endpoint(s), "

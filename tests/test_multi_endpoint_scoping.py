@@ -429,9 +429,23 @@ def test_backend_holds_proxmox_endpoint_requires_the_row_to_be_current(monkeypat
     A row whose target or pushed configuration has drifted still needs its push:
     skipping it would preserve exactly the stale row the resolvers then refuse
     to sync against, turning a merely slow backend into a blocked endpoint.
+
+    "Current" also covers the one thing the row cannot report: the credentials.
+    ``ProxmoxEndpointPublic`` withholds ``password``/``token_name``/
+    ``token_value``, so a secret rotated in place produces a row byte-identical
+    to a current one, and only the locally recorded fingerprint of the last
+    successful push (`pushed_credential_fingerprint`, migration 0074) can tell.
+    A held row therefore requires a *matching* fingerprint; a stale or absent
+    one reads as "push again". The fingerprints below are produced by the
+    **real** helper, never re-derived here — a hand-rolled HMAC would stop
+    tracking the code the moment the material or the salt changed.
     """
     backend_sync = _load_backend_sync_module(monkeypatch, endpoints_payload=[])
     endpoint = _endpoint(3, "PVE")
+    endpoint.password = "the-secret-this-endpoint-carries-now"
+    endpoint.pushed_credential_fingerprint = (
+        backend_sync.proxmox_endpoint_credential_fingerprint(endpoint)
+    )
 
     assert backend_sync.backend_holds_proxmox_endpoint(
         endpoint, [_backend_row(7, endpoint)]
@@ -449,6 +463,24 @@ def test_backend_holds_proxmox_endpoint_requires_the_row_to_be_current(monkeypat
         assert not backend_sync.backend_holds_proxmox_endpoint(endpoint, [row]), (
             f"a row with a {label} must still be pushed"
         )
+
+    # The current row again — but the *secret* rotated in place after the
+    # fingerprint was recorded. The row itself is indistinguishable from the
+    # held case above; only the fingerprint comparison can refuse the skip.
+    rotated = _endpoint(3, "PVE")
+    rotated.password = "the-secret-that-replaced-it"
+    rotated.pushed_credential_fingerprint = endpoint.pushed_credential_fingerprint
+    assert not backend_sync.backend_holds_proxmox_endpoint(
+        rotated, [_backend_row(7, rotated)]
+    ), "a rotated-in-place credential must still be pushed"
+
+    # ...and the pre-upgrade state: no fingerprint has ever been recorded.
+    # Unknown here means "push again" (one bounded extra request), never "skip".
+    never_vouched = _endpoint(3, "PVE")
+    never_vouched.password = "the-secret-this-endpoint-carries-now"
+    assert not backend_sync.backend_holds_proxmox_endpoint(
+        never_vouched, [_backend_row(7, never_vouched)]
+    ), "a never-recorded fingerprint must not license a skip"
 
     assert not backend_sync.backend_holds_proxmox_endpoint(endpoint, [])
     assert not backend_sync.backend_holds_proxmox_endpoint(endpoint, None), (

@@ -310,6 +310,20 @@ This package contains the NetBox plugin itself. It defines the plugin config, UR
 > so passing a `fastapi_url` instead would silently pin `verify_ssl=True` and
 > break self-signed installs. Pass the id, never the URL.
 >
+> **The firewall and datacenter passes are also scoped to the run's endpoints.**
+> Both used to build their own all-enabled scope, so a job launched against one
+> endpoint still synced every enabled endpoint's firewall objects and CPU models
+> — an *absent* endpoint filter is the widest request proxbox-api accepts, not a
+> narrower one, the same reason the stage loop refuses an empty scope. `run()`
+> forwards `endpoint_ids_to_sync` as `endpoint_ids=` to `sync_firewall()` and
+> `sync_datacenter()`, which hand it to
+> `endpoint_scope.py::enabled_backend_endpoint_scope()`; an empty selection
+> resolves to *no scope at all*, never to "all" (see
+> [`services/CLAUDE.md`](./services/CLAUDE.md)). Cluster/node sync is already
+> per-endpoint and the VM-template pass iterates the same list itself, so those
+> two need no forwarding. Guarded by
+> `test_run_scopes_firewall_and_datacenter_to_the_runs_endpoints`.
+>
 > **The preflight push loop is time-boxed — with a *soft* budget and a hard
 > ceiling, and the difference is load-bearing.** Each push carries its own request
 > timeout, so an estate with many Proxmox endpoints and a hung backend would

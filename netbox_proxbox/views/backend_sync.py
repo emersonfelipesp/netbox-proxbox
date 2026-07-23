@@ -236,6 +236,7 @@ def sync_proxmox_endpoint_to_backend(
             )
 
         response.raise_for_status()
+        _record_pushed_proxmox_credential_fingerprint(endpoint, payload)
         return True, None, None
 
     except requests.exceptions.RequestException as exc:
@@ -394,13 +395,26 @@ def _proxmox_row_is_current(endpoint: ProxmoxEndpoint, row: dict[str, object]) -
     """Return ``True`` when a backend row already reflects what a push would send.
 
     Compares the resolved connection target first, then the three pushed fields
-    the backend both stores and returns. ``timeout``/``max_retries``/
-    ``retry_backoff`` and the site/tenant metadata are deliberately **excluded**:
-    they normalise less predictably, and drift in them is exactly the "slightly
-    stale row" the soft push budget already accepts. Comparing them risks a
-    budget that never skips anything, which would reintroduce the
-    (endpoints × timeout) preflight stall it exists to prevent. A false "not
-    current" costs one extra push, bounded by the hard ceiling.
+    the backend both stores and returns, and finally the **credentials**, which
+    it does not. ``timeout``/``max_retries``/``retry_backoff`` and the site/tenant
+    metadata are deliberately **excluded**: they normalise less predictably, and
+    drift in them is exactly the "slightly stale row" the soft push budget
+    already accepts. Comparing them risks a budget that never skips anything,
+    which would reintroduce the (endpoints × timeout) preflight stall it exists
+    to prevent. A false "not current" costs one extra push, bounded by the hard
+    ceiling.
+
+    The credentials are the one exclusion that was **not** safe.
+    ``ProxmoxEndpointPublic`` withholds ``password``/``token_name``/
+    ``token_value``, so a secret rotated *in place* — same host, same username,
+    same access methods — looked identical to the row already stored, and the
+    soft budget would skip precisely the push that was meant to deliver the new
+    secret. The endpoint then keeps authenticating with the credential the
+    operator has just revoked, and the whole point of rotating is that the old
+    value stops working. The comparison is therefore **local**:
+    :func:`proxmox_push_credentials_unchanged` against the fingerprint the last
+    successful push recorded (migration 0074). ``payload`` is materialised here
+    anyway for the field comparisons above, so this costs no extra decryption.
     """
     if not _proxmox_targets_match(endpoint, row):
         return False
@@ -408,7 +422,9 @@ def _proxmox_row_is_current(endpoint: ProxmoxEndpoint, row: dict[str, object]) -
     for key in ("username", "access_methods"):
         if str(row.get(key) or "").strip() != str(payload.get(key) or "").strip():
             return False
-    return bool(row.get("verify_ssl")) == bool(payload.get("verify_ssl"))
+    if bool(row.get("verify_ssl")) != bool(payload.get("verify_ssl")):
+        return False
+    return proxmox_push_credentials_unchanged(endpoint, payload)
 
 
 def _backend_row_for_endpoint(
@@ -926,6 +942,94 @@ def _record_pushed_credential_fingerprint(
         # Includes ProgrammingError when migration 0073 has not been applied yet.
         logger.warning(
             "Could not record pushed-credential fingerprint for NetBox endpoint %s: %s",
+            pk,
+            exc,
+        )
+        return
+    endpoint.pushed_credential_fingerprint = fingerprint
+
+
+# Separate namespace from the NetBox salt above so a Proxmox fingerprint can
+# never be compared against a NetBox one, even if both ever landed in the same
+# column by mistake.
+_PROXMOX_CREDENTIAL_FINGERPRINT_SALT = (
+    "netbox_proxbox.proxmox_endpoint.pushed_credential"
+)
+
+
+def proxmox_credential_fingerprint(payload: dict[str, object]) -> str:
+    """Return a non-reversible fingerprint of the credentials in a push payload.
+
+    Same construction as :func:`netbox_credential_fingerprint`, over the three
+    credential keys ``_proxmox_backend_payload()`` sends: ``password``,
+    ``token_name`` and ``token_value``. Computed from the payload for the same
+    reason — it is literally what proxbox-api was handed, so the recorded
+    fingerprint cannot drift from what the backend stored.
+    """
+    material = _FINGERPRINT_FIELD_SEPARATOR.join(
+        str(payload.get(key) or "") for key in ("password", "token_name", "token_value")
+    )
+    return salted_hmac(
+        _PROXMOX_CREDENTIAL_FINGERPRINT_SALT, material, algorithm="sha256"
+    ).hexdigest()
+
+
+def proxmox_endpoint_credential_fingerprint(endpoint: ProxmoxEndpoint) -> str:
+    """Return the fingerprint of the credentials this endpoint *would* push now."""
+    return proxmox_credential_fingerprint(_proxmox_backend_payload(endpoint))
+
+
+def proxmox_push_credentials_unchanged(
+    endpoint: ProxmoxEndpoint, payload: dict[str, object]
+) -> bool:
+    """Return ``True`` when this endpoint's credentials still match its last push.
+
+    Takes the already-materialised ``payload`` rather than deriving one, because
+    the sole caller (:func:`_proxmox_row_is_current`) has just built it — there
+    is no reason to decrypt the same secrets twice to answer one question.
+
+    **This fails closed in the opposite direction from the NetBox twin, and the
+    asymmetry is deliberate.** ``netbox_push_credentials_unchanged()`` gates a
+    *fatal* preflight case, so an unknown there must block the run. This one
+    gates only whether the soft push budget may **skip** a push, so unknown here
+    means "push again": one extra request, bounded by
+    ``PREFLIGHT_ENDPOINT_PUSH_HARD_CEILING``, which is exactly the cost the
+    surrounding docstring already accepts for a false "not current" — and it
+    self-clears, because that push records the fingerprint.
+    """
+    stored = str(getattr(endpoint, "pushed_credential_fingerprint", "") or "").strip()
+    if not stored:
+        return False
+    return hmac.compare_digest(stored, proxmox_credential_fingerprint(payload))
+
+
+def _record_pushed_proxmox_credential_fingerprint(
+    endpoint: ProxmoxEndpoint, payload: dict[str, object]
+) -> None:
+    """Persist the fingerprint of the credentials proxbox-api just accepted.
+
+    Written with ``queryset.update()`` rather than ``save()`` for the same
+    reason as the NetBox twin: ``ProxmoxEndpoint`` has a ``post_save`` handler
+    that pushes the row to the backend, and saving from inside the push would
+    re-enter it.
+
+    A failure here is logged, never raised. The push itself succeeded, and the
+    only consequence of a missing fingerprint is that ``_proxmox_row_is_current()``
+    reports "not current" and the next preflight spends one extra push — the
+    fail-closed direction on this side.
+    """
+    pk = getattr(endpoint, "pk", None)
+    if pk is None:
+        return
+    fingerprint = proxmox_credential_fingerprint(payload)
+    try:
+        type(endpoint).objects.filter(pk=pk).update(
+            pushed_credential_fingerprint=fingerprint
+        )
+    except DatabaseError as exc:
+        # Includes ProgrammingError when migration 0074 has not been applied yet.
+        logger.warning(
+            "Could not record pushed-credential fingerprint for Proxmox endpoint %s: %s",
             pk,
             exc,
         )

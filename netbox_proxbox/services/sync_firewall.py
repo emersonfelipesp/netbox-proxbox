@@ -482,8 +482,9 @@ def sync_firewall(
     fastapi_url: str | None = None,
     auth_headers: dict[str, str] | None = None,
     fastapi_endpoint_id: int | None = None,
+    endpoint_ids: list[int] | None = None,
 ) -> FirewallSyncResult:
-    """Sync datacenter-level firewall objects for all Proxmox endpoints.
+    """Sync datacenter-level firewall objects for the Proxmox endpoints in scope.
 
     Calls ``GET /proxmox/firewall/summary`` which returns one entry per
     configured Proxmox endpoint.  Each entry is matched to a
@@ -496,6 +497,12 @@ def sync_firewall(
             row is resolved.  Only consulted when ``fastapi_url`` is omitted; it
             stops a multi-backend install from certifying one backend in the job
             preflight and then syncing against another.
+        endpoint_ids: Optional plugin ``ProxmoxEndpoint`` pks narrowing the run.
+            A job launched against one endpoint used to sync every enabled
+            endpoint's firewall objects anyway, because this pass built its own
+            all-enabled scope and never saw the job's selection.  Stale marking
+            runs per resolved endpoint, so a narrowed run leaves out-of-scope
+            rows untouched.  ``None`` keeps the all-enabled scope.
 
     Returns:
         FirewallSyncResult with per-model counters and success flag.
@@ -522,6 +529,7 @@ def sync_firewall(
         auth_headers=auth_headers,
         backend_verify_ssl=verify_ssl,
         timeout=SYNC_TIMEOUT,
+        endpoint_ids=endpoint_ids,
     )
     if scope_error:
         result.error = scope_error

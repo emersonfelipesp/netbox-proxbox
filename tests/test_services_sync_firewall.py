@@ -332,6 +332,34 @@ def test_fastapi_endpoint_id_is_forwarded_to_the_context_resolver(sync_fw_module
     mock_get.assert_not_called()
 
 
+def test_endpoint_ids_are_forwarded_to_the_endpoint_scope(sync_fw_module):
+    """The job's endpoint selection must narrow this pass, not evaporate.
+
+    A job launched against one endpoint used to sync every enabled endpoint's
+    firewall objects anyway, because this pass built its own all-enabled scope
+    and never saw the selection. The scope helper reads an *omitted*
+    ``endpoint_ids`` as "all enabled", so dropping the kwarg here silently
+    widens the run — the assertion is on the exact forwarded value, ``None``
+    included.
+    """
+    seen: list[object] = []
+
+    def _scope(**kwargs):
+        seen.append(kwargs.get("endpoint_ids", "<missing>"))
+        # No scope resolves: sync_firewall returns successfully without HTTP.
+        return None, {}, None
+
+    sync_fw_module.enabled_backend_endpoint_scope = _scope
+    with patch("requests.get") as mock_get:
+        narrowed = sync_fw_module.sync_firewall(
+            fastapi_url="http://backend:8000", endpoint_ids=[5]
+        )
+        unselected = sync_fw_module.sync_firewall(fastapi_url="http://backend:8000")
+    assert seen == [[5], None]
+    assert narrowed.success is True and unselected.success is True
+    mock_get.assert_not_called()
+
+
 def test_http_error_fetching_summary_returns_error(sync_fw_module):
     """A network-level error on the summary call is captured, not raised."""
     import requests as _req

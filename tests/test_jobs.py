@@ -324,6 +324,12 @@ def proxbox_sync_job_module(monkeypatch):
     views_backend_sync_mod.netbox_endpoint_credential_fingerprint = (
         _real_backend_sync.netbox_endpoint_credential_fingerprint
     )
+    views_backend_sync_mod.proxmox_endpoint_credential_fingerprint = (
+        _real_backend_sync.proxmox_endpoint_credential_fingerprint
+    )
+    views_backend_sync_mod.proxmox_push_credentials_unchanged = (
+        _real_backend_sync.proxmox_push_credentials_unchanged
+    )
     monkeypatch.setitem(
         sys.modules, "netbox_proxbox.views.backend_sync", views_backend_sync_mod
     )
@@ -4240,6 +4246,120 @@ def test_recording_a_pushed_fingerprint_survives_an_unapplied_migration():
     assert backend_sync.netbox_push_credentials_unchanged(endpoint) is False
 
 
+def _recording_proxmox_endpoint(*, update_error=None):
+    """A ``ProxmoxEndpoint``-shaped row that records how its own row gets written.
+
+    The Proxmox twin of ``_recording_netbox_endpoint()``:
+    ``_record_pushed_proxmox_credential_fingerprint()`` must also write through
+    ``type(endpoint).objects.filter(pk=…).update(…)``, because ``ProxmoxEndpoint``
+    has its own ``post_save`` receiver that pushes the row to proxbox-api.
+    """
+    calls = {"filter": [], "update": [], "save": []}
+
+    class _Manager:
+        def filter(self, **kwargs):
+            calls["filter"].append(kwargs)
+            return self
+
+        def update(self, **kwargs):
+            calls["update"].append(kwargs)
+            if update_error is not None:
+                raise update_error
+            return 1
+
+    class _ProxmoxEndpointRow(SimpleNamespace):
+        objects = _Manager()
+
+        def save(self, *args, **kwargs):
+            calls["save"].append((args, kwargs))
+
+    endpoint = _ProxmoxEndpointRow(
+        pk=7,
+        name="pve-7",
+        domain="pve-7.example.test",
+        ip_address=None,
+        port=8006,
+        username="root@pam",
+        password="the-secret-this-endpoint-carries-now",
+        token_name=None,
+        token_value=None,
+        access_methods="api",
+        verify_ssl=False,
+        pushed_credential_fingerprint="",
+    )
+    return endpoint, calls
+
+
+def test_recording_a_pushed_proxmox_fingerprint_updates_the_row_without_saving_it():
+    """The Proxmox bookkeeping write must not re-enter the push either."""
+    backend_sync = load_real_backend_sync()
+    endpoint, calls = _recording_proxmox_endpoint()
+    payload = backend_sync._proxmox_backend_payload(endpoint)
+
+    backend_sync._record_pushed_proxmox_credential_fingerprint(endpoint, payload)
+
+    assert calls["save"] == [], (
+        "post_save would push to the backend from inside the push"
+    )
+    assert calls["filter"] == [{"pk": 7}]
+    assert calls["update"] == [
+        {
+            "pushed_credential_fingerprint": (
+                backend_sync.proxmox_credential_fingerprint(payload)
+            )
+        }
+    ]
+    # Mirrored onto the instance too, so the soft push budget reads the endpoint
+    # as current for the rest of this request without a refetch.
+    assert backend_sync.proxmox_push_credentials_unchanged(endpoint, payload) is True
+
+
+def test_recording_a_pushed_proxmox_fingerprint_survives_an_unapplied_migration():
+    """A missing 0074 column must not turn a successful push into a failure.
+
+    Unlike the NetBox twin, the consequence of the fingerprint staying empty is
+    *not* a blocked run: ``proxmox_push_credentials_unchanged()`` gates only
+    whether the soft push budget may skip a push, so empty reads as "push
+    again" — one extra request that records the fingerprint and self-clears.
+    """
+    backend_sync = load_real_backend_sync()
+    endpoint, calls = _recording_proxmox_endpoint(
+        update_error=DatabaseError(
+            'column "pushed_credential_fingerprint" does not exist'
+        )
+    )
+    payload = backend_sync._proxmox_backend_payload(endpoint)
+
+    backend_sync._record_pushed_proxmox_credential_fingerprint(endpoint, payload)
+
+    assert calls["update"], "the write is attempted, not skipped"
+    assert endpoint.pushed_credential_fingerprint == ""
+    assert backend_sync.proxmox_push_credentials_unchanged(endpoint, payload) is False
+
+
+def test_proxmox_and_netbox_credential_fingerprints_never_compare_equal():
+    """The two fingerprint namespaces must stay disjoint.
+
+    Both are HMACs over three credential fields, so identical material would
+    produce identical digests if the salts ever collapsed into one — and a
+    Proxmox fingerprint accidentally landing in the NetBox column (or vice
+    versa) would then read as *current*. Distinct salts make the mistake
+    self-detecting instead.
+    """
+    backend_sync = load_real_backend_sync()
+    material = {
+        "token_version": "s",
+        "token_key": "a",
+        "token": "b",
+        "password": "s",
+        "token_name": "a",
+        "token_value": "b",
+    }
+    assert backend_sync.netbox_credential_fingerprint(
+        material
+    ) != backend_sync.proxmox_credential_fingerprint(material)
+
+
 def _netbox_row(domain="", ip=None, port=443, verify_ssl=True, token_version="v1"):
     """A local ``NetBoxEndpoint``-shaped row for the identity predicate."""
     return SimpleNamespace(
@@ -4825,9 +4945,19 @@ def _arrange_slow_push(monkeypatch, module, *, seconds=6.0, held=()):
 
     ``held`` are the endpoint stubs proxbox-api already holds, and the rows built
     for them are *current* — same target, same pushed configuration — because a
-    drifted row still needs its push and would not be skipped.
+    drifted row still needs its push and would not be skipped. "Current" now
+    also covers the credentials, which the backend row cannot report: each held
+    endpoint gets the fingerprint a previous successful push of its present
+    credentials would have recorded, computed through the **real**
+    ``proxmox_endpoint_credential_fingerprint()`` — a literal here would stop
+    tracking the code the moment the material or the salt changed.
     """
     backend_sync = sys.modules["netbox_proxbox.views.backend_sync"]
+    _real_backend_sync = load_real_backend_sync()
+    for endpoint in held:
+        endpoint.pushed_credential_fingerprint = (
+            _real_backend_sync.proxmox_endpoint_credential_fingerprint(endpoint)
+        )
     clock = {"now": 0.0}
     pushed: list[str] = []
 
@@ -4975,6 +5105,49 @@ def test_preflight_hard_ceiling_skips_even_unregistered_endpoints(
     assert all("hard ceiling of 12s was reached" in p["summary"] for p in skipped)
 
 
+def test_preflight_budget_never_skips_an_endpoint_whose_credentials_rotated(
+    monkeypatch, proxbox_sync_job_module
+):
+    """A rotated secret is invisible to the backend row — only the push fixes it.
+
+    ``ProxmoxEndpointPublic`` withholds ``password``/``token_name``/
+    ``token_value``, so a secret rotated *in place* — same host, same username,
+    same access methods — produces a backend row that reads byte-identical to a
+    current one. Skipping that push under the soft budget would leave proxbox-api
+    authenticating with the credential the operator has just revoked. The
+    locally recorded fingerprint of the last successful push is the only thing
+    that can tell, and both a stale fingerprint *and* a never-recorded one must
+    read as "push again" — the fail-closed direction on this side is one extra
+    request, not a blocked run.
+    """
+    module = proxbox_sync_job_module
+    backend_sync = sys.modules["netbox_proxbox.views.backend_sync"]
+    rows = [_preflight_proxmox_endpoint(pk) for pk in (1, 2, 3, 4)]
+
+    _arrange_preflight(monkeypatch)
+    monkeypatch.setattr(
+        sys.modules["netbox_proxbox.models"].ProxmoxEndpoint.objects, "rows", rows
+    )
+    monkeypatch.setattr(backend_sync, "PREFLIGHT_ENDPOINT_PUSH_BUDGET", 10.0)
+
+    # All four rows are held and *current* as far as the backend can report.
+    pushed = _arrange_slow_push(monkeypatch, module, held=rows)
+    # Endpoint 3's secret rotates *after* the fingerprint of its last push was
+    # recorded; endpoint 4 has never had a fingerprint recorded at all (the
+    # pre-upgrade state). Both must be pushed despite the exhausted budget.
+    rows[2].password = "rotated-in-place"
+    rows[3].pushed_credential_fingerprint = ""
+    job, _records = _preflight_job()
+
+    result = module._ensure_backend_endpoints(job)
+
+    assert pushed == ["pve-1", "pve-2", "pve-3", "pve-4"], (
+        "a rotated or never-vouched credential is never 'already held'"
+    )
+    assert result.blocking_error is None
+    assert all(phase["status"] == "success" for phase in result.phases)
+
+
 def test_run_passes_the_selected_backend_to_the_preflight(
     monkeypatch, proxbox_sync_job_module
 ):
@@ -5107,6 +5280,90 @@ def test_run_passes_the_selected_backend_to_every_pre_sse_service(
         "datacenter": 3,
         "vm_template": 3,
     }
+
+
+def test_run_scopes_firewall_and_datacenter_to_the_runs_endpoints(
+    monkeypatch, proxbox_sync_job_module
+):
+    """The firewall and datacenter passes must honour the job's endpoint scope.
+
+    Both passes used to build their own all-enabled scope, so a job launched
+    against one endpoint still synced every enabled endpoint's firewall objects
+    and CPU models — an *absent* endpoint filter is the widest request
+    proxbox-api accepts, not a narrower one. `run()` therefore forwards the same
+    `endpoint_ids_to_sync` the cluster/node loop and the stage scope are built
+    from. Cluster/node sync is already per-endpoint (`endpoint_id=`) and the
+    VM-template pass iterates that list itself, so those two need no forwarding.
+    """
+    module = proxbox_sync_job_module
+    seen: dict[str, object] = {}
+
+    services_mod = types.ModuleType("netbox_proxbox.services")
+    services_mod.run_sync_stream = lambda path, **kwargs: (
+        {"stream": True, "response": {"ok": True}},
+        200,
+    )
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
+
+    def _record(name, result):
+        def _call(*args, **kwargs):
+            seen[name] = kwargs.get("endpoint_ids", "<missing>")
+            return result
+
+        return _call
+
+    ok = SimpleNamespace(
+        success=True,
+        error=None,
+        endpoint_id=1,
+        endpoint_name="pve-1",
+        endpoints_processed=1,
+        security_groups_created=0,
+        security_groups_updated=0,
+        rules_created=0,
+        ipsets_created=0,
+        aliases_created=0,
+        cpu_models_created=0,
+        cpu_models_updated=0,
+        cpu_models_stale=0,
+        per_endpoint=[],
+    )
+    for module_name, attr, key in (
+        ("sync_firewall", "sync_firewall", "firewall"),
+        ("sync_datacenter", "sync_datacenter", "datacenter"),
+    ):
+        monkeypatch.setattr(
+            sys.modules[f"netbox_proxbox.services.{module_name}"],
+            attr,
+            _record(key, ok),
+        )
+
+    monkeypatch.setattr(
+        module, "_ensure_backend_endpoints", lambda *a, **kw: module.PreflightResult()
+    )
+    monkeypatch.setattr(
+        module.sync_stages,
+        "_resolve_wire_endpoint_ids",
+        lambda scopes, **kwargs: (
+            {scope[0]: scope[0] + "00" for scope in scopes},
+            None,
+        ),
+    )
+
+    job = module.ProxboxSyncJob()
+    job.logger = logging.getLogger("test_proxbox_job_pre_sse_endpoint_scope")
+    job.job = MagicMock()
+    job.job.data = None
+
+    module.ProxboxSyncJob.run(
+        job,
+        sync_types=[module.SyncTypeChoices.DEVICES],
+        proxmox_endpoint_ids=["1"],
+    )
+
+    assert seen == {"firewall": [1], "datacenter": [1]}, (
+        "both passes must receive the run's own endpoint selection"
+    )
 
 
 def test_run_raises_on_a_blocking_preflight(monkeypatch, proxbox_sync_job_module):

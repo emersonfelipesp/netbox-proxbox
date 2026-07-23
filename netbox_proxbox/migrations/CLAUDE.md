@@ -107,6 +107,17 @@ contract and issue #454 for the bug history.
   fail-closed rather than back-filled with a guess. The writer catches
   `DatabaseError`, so a deployment that has not applied this migration yet logs a
   warning instead of failing the push.
+- **0074_proxmoxendpoint_pushed_credential_fingerprint**: the Proxmox twin of
+  0073 — additive `ProxmoxEndpoint.pushed_credential_fingerprint` (blank
+  `CharField`, `add_field_idempotent`) recording the keyed HMAC-SHA256 digest of
+  the credentials (`password`/`token_name`/`token_value`) the last successful
+  push handed proxbox-api, under a **distinct salt** from the NetBox
+  fingerprint. Consumed by the preflight's soft push budget: a rotated-in-place
+  secret is invisible on the wire (`ProxmoxEndpointPublic` withholds the
+  credential fields), so only this local receipt can tell a no-op refresh from a
+  push that delivers a new secret. Empty reads as "push again" (one bounded
+  extra request), never as a blocked run; the writer catches `DatabaseError`, so
+  an unapplied migration degrades to the previous always-push behavior.
 
 ## Notes
 
