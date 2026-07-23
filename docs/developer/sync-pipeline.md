@@ -13,8 +13,8 @@ order because later stages depend on objects created by earlier ones.
 flowchart LR
     S1["1\nDevices\n(nodes)"] --> S2["2\nStorage"]
     S2 --> S3["3\nVirtual\nMachines"]
-    S3 --> S4["4\nVirtual\nDisks"]
-    S4 --> S5["5\nTask\nHistory"]
+    S3 --> S4["4\nTask\nHistory"]
+    S4 --> S5["5\nVirtual\nDisks"]
     S5 --> S6["6\nBackups"]
     S6 --> S7["7\nSnapshots"]
     S7 --> S8["8\nNode\nInterfaces"]
@@ -50,8 +50,8 @@ flowchart LR
 | 1 | **Devices** | `create_proxmox_devices()` | `Device`, `DeviceType`, `Platform`, `Cluster` | `/cluster/status`, `/nodes` |
 | 2 | **Storage** | `create_storages()` | `ProxmoxStorage` (plugin model) | `/nodes/{node}/storage` |
 | 3 | **Virtual Machines** | `create_virtual_machines()` | `VirtualMachine`, custom fields, tags | `/cluster/resources?type=vm` |
-| 4 | **Virtual Disks** | `create_virtual_disks()` | `VirtualDisk`, `ProxmoxStorageVirtualDisk` | VM config API per VMID |
-| 5 | **Task History** | `sync_all_virtual_machine_task_histories()` | `VMTaskHistory` (plugin model) | `/nodes/{node}/tasks` |
+| 4 | **Task History** | `sync_all_virtual_machine_task_histories()` | `VMTaskHistory` (plugin model) | `/nodes/{node}/tasks` |
+| 5 | **Virtual Disks** | `create_virtual_disks()` | `VirtualDisk`, `ProxmoxStorageVirtualDisk` | VM config API per VMID |
 | 6 | **Backups** | `create_all_virtual_machine_backups()` | `VMBackup` (plugin model) | `/nodes/{node}/storage/{storage}/content` |
 | 7 | **Snapshots** | `create_all_virtual_machine_snapshots()` | `VMSnapshot` (plugin model) | `/nodes/{node}/qemu/{vmid}/snapshot` |
 | 8 | **Node Interfaces** | `create_all_device_interfaces()` | `Interface` (on Device) | `/nodes/{node}/network` |
@@ -62,7 +62,7 @@ flowchart LR
 | 13 | **Backup Routines** | `sync_all_backup_routines()` | `BackupRoutine` (plugin model) | `/cluster/backup` |
 
 The plugin sends `sync_task_history=false` on Stage 3's virtual-machine
-request. Task history is owned exclusively by Stage 5, which keeps its
+request. Task history is owned exclusively by Stage 4, which keeps its
 supplementary failure handling and prevents the backend from repeating the
 same expensive discovery inside the required VM stage.
 
@@ -82,8 +82,8 @@ same expensive discovery inside the required VM stage.
 The sequential order is not arbitrary — each stage depends on objects created by the previous ones:
 
 - **Stage 1 → 2–3**: Devices (nodes) must exist before storage and VMs can reference them
-- **Stage 3 → 4**: VMs must exist in NetBox before their virtual disks can be linked
-- **Stage 3 → 5–7**: VMs must exist before task history, backups, and snapshots can be attached
+- **Stage 3 → 4**: VMs must exist before task history can be attached
+- **Stage 3 → 5–7**: VMs must exist before virtual disks, backups, and snapshots can be attached
 - **Stage 1 → 8**: Devices must exist before their network interfaces can be created
 - **Stage 3 → 9**: VMs must exist before their VM interfaces can be created
 - **Stage 9 → 10**: VM interfaces must exist before IP addresses can be assigned to them
@@ -174,8 +174,8 @@ Long syncs can be tuned via environment variables on the `proxbox-api` host:
 |---|---|---|
 | `PROXBOX_VM_SYNC_MAX_CONCURRENCY` | 8 | Max concurrent VM sync workers in Stage 3 |
 | `PROXBOX_FETCH_MAX_CONCURRENCY` | 8 | Max concurrent Proxmox read ops in Stages 2, 6, 7 |
-| `PROXBOX_NETBOX_WRITE_CONCURRENCY` | 8 | Max concurrent NetBox write ops in Stage 3; 4 in Stages 5, 7 |
-| `PROXBOX_PROXMOX_FETCH_CONCURRENCY` | 8 | Max concurrent Proxmox reads; 4 in Stage 5 |
+| `PROXBOX_NETBOX_WRITE_CONCURRENCY` | 8 | Max concurrent NetBox write ops in Stage 3; 4 in Stages 4, 7 |
+| `PROXBOX_PROXMOX_FETCH_CONCURRENCY` | 8 | Max concurrent Proxmox reads; 4 in Stage 4 |
 | `PROXBOX_BACKUP_BATCH_SIZE` | 5 | Batch size for Stage 6 backup sync |
 | `PROXBOX_BACKUP_BATCH_DELAY_MS` | 200 | Delay between backup batches (ms) |
 | `PROXBOX_NETBOX_MAX_CONCURRENT` | 1 | Max concurrent NetBox API requests (keep low to avoid PG pool exhaustion) |
