@@ -208,3 +208,20 @@ class TestSyncModeForwarding:
         )
         assert "sync_vm_network" not in params
         assert params.get("assign_vm_interface_ips") == "false"
+
+    def test_task_history_is_owned_only_by_dedicated_stage(self, sync_stages_module):
+        m = sync_stages_module
+
+        vm_params = m._build_stage_query_params(
+            base_query={},
+            sync_type=m.SyncTypeChoices.VIRTUAL_MACHINES,
+            target_vm_ids=[],
+        )
+        task_history_params = m._build_stage_query_params(
+            base_query={},
+            sync_type=m.SyncTypeChoices.TASK_HISTORY,
+            target_vm_ids=[],
+        )
+
+        assert vm_params["sync_task_history"] == "false"
+        assert "sync_task_history" not in task_history_params

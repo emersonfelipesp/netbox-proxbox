@@ -118,10 +118,16 @@ Tunables that govern how proxbox-api talks to upstream Proxmox clusters.
 
 | Field | Default | Env override | Description |
 |---|---|---|---|
-| **Proxmox API timeout (s)** | `60` | _(plugin only)_ | Per-request timeout for Proxmox API calls. |
-| **Proxmox max retries** | `3` | _(plugin only)_ | Retry attempts for transient Proxmox API failures. |
-| **Proxmox retry back-off (s)** | `1.00` | _(plugin only)_ | Base delay in seconds for exponential back-off between Proxmox retries. |
+| **Proxmox API timeout (s)** | `5` | _(plugin only)_ | Per-request timeout for Proxmox API calls. |
+| **Proxmox max retries** | `0` | _(plugin only)_ | Retry attempts for transient Proxmox API failures. |
+| **Proxmox retry back-off (s)** | `0.50` | _(plugin only)_ | Base delay in seconds for exponential back-off between Proxmox retries. |
 | **Proxmox fetch concurrency** | `8` | `PROXBOX_PROXMOX_FETCH_CONCURRENCY` | Cap on parallel Proxmox reads during sync stages that loop over many VMs (e.g. task-history). Distinct from the workspace-wide **Proxmox fetch max concurrency** in Core Behavior. |
+
+Each Proxmox endpoint can override timeout, retries, and retry back-off. A blank
+endpoint field inherits the corresponding value above; a concrete endpoint
+value, including zero retries or zero back-off, wins. The plugin resolves this
+inheritance before registering the endpoint with proxbox-api, so the backend
+always receives concrete values rather than JSON `null`.
 
 ---
 
