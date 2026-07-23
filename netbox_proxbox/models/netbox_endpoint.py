@@ -78,6 +78,18 @@ class NetBoxEndpoint(EndpointBase):
         verbose_name=_("Verify SSL"),
         help_text=_("Verify the TLS certificate presented by the NetBox API."),
     )
+    pushed_credential_fingerprint = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        editable=False,
+        verbose_name=_("Pushed credential fingerprint"),
+        help_text=_(
+            "Non-reversible fingerprint of the credentials last successfully "
+            "pushed to the ProxBox backend. Maintained automatically by the "
+            "push itself; used to detect a token rotated since that push."
+        ),
+    )
 
     class Meta(EndpointBase.Meta):
         verbose_name = _("NetBox endpoint")

@@ -37,19 +37,38 @@ class DatacenterSyncResult:
 
 
 def _resolve_endpoint_by_cluster_name(cluster_name: str) -> ProxmoxEndpoint | None:
+    """Return the single ProxmoxEndpoint whose cluster name matches, or ``None``.
+
+    Cluster names are only unique **per endpoint**, not across the estate: two
+    unrelated Proxmox installations can each hold a cluster named ``pve``. A
+    backend response row names only the cluster, so when more than one endpoint
+    claims that name there is no way to tell whose row this is — and guessing
+    (the old ``.first()``) attributed one estate's firewall/CPU data to the
+    other, or discarded a valid row as out-of-scope. Ambiguous therefore
+    resolves to ``None`` (refused, logged with every claimant), mirroring the
+    batch path's "ambiguous never widens" rule.
+    """
     try:
         from netbox_proxbox.models import ProxmoxCluster  # noqa: PLC0415
 
-        cluster = (
-            ProxmoxCluster.objects.filter(name=cluster_name)
-            .select_related("endpoint")
-            .first()
+        cluster_rows = list(
+            ProxmoxCluster.objects.filter(name=cluster_name).select_related("endpoint")
         )
-        if (
-            cluster
-            and cluster.endpoint_id
-            and bool(getattr(cluster.endpoint, "enabled", True))
-        ):
+        claimant_ids = sorted(
+            {row.endpoint_id for row in cluster_rows if row.endpoint_id}
+        )
+        if len(claimant_ids) > 1:
+            logger.warning(
+                "Refusing to resolve cluster %r: claimed by %d Proxmox endpoints "
+                "(%s). Cluster names are only unique per endpoint, so this "
+                "response row cannot be attributed safely.",
+                cluster_name,
+                len(claimant_ids),
+                ", ".join(str(pk) for pk in claimant_ids),
+            )
+            return None
+        cluster = next((row for row in cluster_rows if row.endpoint_id), None)
+        if cluster is not None and bool(getattr(cluster.endpoint, "enabled", True)):
             return cluster.endpoint
     except Exception as exc:
         logger.warning("DB error resolving cluster %r: %s", cluster_name, exc)
@@ -95,13 +114,28 @@ def _upsert_cpu_model(
 def sync_datacenter(
     fastapi_url: str | None = None,
     auth_headers: dict | None = None,
+    fastapi_endpoint_id: int | None = None,
+    endpoint_ids: list[int] | None = None,
 ) -> DatacenterSyncResult:
-    """Sync datacenter CPU models for all Proxmox endpoints."""
+    """Sync datacenter CPU models for the Proxmox endpoints in scope.
+
+    ``fastapi_endpoint_id`` pins the resolution to one `FastAPIEndpoint` row so a
+    multi-backend install cannot certify one backend in the job preflight and
+    then talk to a different one here.  It is only consulted when ``fastapi_url``
+    is not supplied — an explicit URL already names the backend.
+
+    ``endpoint_ids`` narrows the run to specific plugin ``ProxmoxEndpoint`` pks.
+    A job launched against one endpoint used to sync every enabled endpoint's CPU
+    models anyway, because this pass built its own all-enabled scope and never
+    saw the job's selection.  Stale marking is per-endpoint, so a narrowed run
+    simply leaves out-of-scope rows untouched.  ``None`` keeps the all-enabled
+    scope for callers with no selection.
+    """
     result = DatacenterSyncResult()
 
     verify_ssl = True
     if not fastapi_url:
-        ctx = get_fastapi_request_context()
+        ctx = get_fastapi_request_context(endpoint_id=fastapi_endpoint_id)
         if ctx is None or not ctx.http_url:
             result.error = "FastAPI endpoint not configured or has no URL"
             logger.error(result.error)
@@ -114,11 +148,12 @@ def sync_datacenter(
     if auth_headers is None:
         auth_headers = {}
 
-    scope_params, _, scope_error = enabled_backend_endpoint_scope(
+    scope_params, backend_id_by_pk, scope_error = enabled_backend_endpoint_scope(
         base_url=fastapi_url,
         auth_headers=auth_headers,
         backend_verify_ssl=verify_ssl,
         timeout=SYNC_TIMEOUT,
+        endpoint_ids=endpoint_ids,
     )
     if scope_error:
         result.error = scope_error
@@ -130,6 +165,13 @@ def sync_datacenter(
             "No enabled Proxmox endpoints configured; skipping datacenter CPU sync"
         )
         return result
+
+    # Same double-leg scope as sync_firewall: the query param asks the backend
+    # to filter, and this set refuses response entries the backend returned
+    # anyway (older release ignoring `proxmox_endpoint_ids`, or a bug). Without
+    # it the by-cluster-name resolution below writes CPU models — and marks
+    # rows stale — for endpoints outside this run's selection.
+    allowed_endpoint_pks = set(backend_id_by_pk)
 
     try:
         resp = requests.get(
@@ -176,6 +218,14 @@ def sync_datacenter(
                 logger.warning(
                     "Cannot resolve endpoint for cluster_name=%r, skipping CPU model",
                     cluster_name,
+                )
+                continue
+            if endpoint.pk not in allowed_endpoint_pks:
+                logger.warning(
+                    "Skipping CPU model for cluster_name=%r: endpoint %s is "
+                    "outside this run's endpoint scope",
+                    cluster_name,
+                    endpoint.pk,
                 )
                 continue
             upsert_started = time.monotonic()

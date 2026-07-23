@@ -154,7 +154,7 @@ def _load_individual_sync_module(monkeypatch: pytest.MonkeyPatch):
     utils_stub = types.ModuleType("netbox_proxbox.utils")
     utils_stub.get_fastapi_url = lambda obj: {}
     utils_stub.get_backend_auth_headers = lambda obj: {}
-    utils_stub.get_first_fastapi_context = lambda: None
+    utils_stub.get_first_fastapi_context = lambda **kwargs: None
     monkeypatch.setitem(sys.modules, "netbox_proxbox.utils", utils_stub)
 
     sys.modules.pop("netbox_proxbox.services.individual_sync", None)
@@ -180,7 +180,7 @@ class _FakeResponse:
 def test_sync_individual_appends_schema_id_to_outgoing_query_params(monkeypatch):
     """``sync_individual(..., netbox_branch_schema_id=X)`` ⇒ HTTP query has X."""
     module = _load_individual_sync_module(monkeypatch)
-    module.get_first_fastapi_context = lambda: {
+    module.get_first_fastapi_context = lambda **kwargs: {
         "http_url": "http://backend",
         "headers": {},
         "verify_ssl": True,
@@ -208,7 +208,7 @@ def test_sync_individual_appends_schema_id_to_outgoing_query_params(monkeypatch)
 def test_sync_individual_omits_schema_id_when_unset(monkeypatch):
     """No schema id ⇒ no ``netbox_branch_schema_id`` key on the wire."""
     module = _load_individual_sync_module(monkeypatch)
-    module.get_first_fastapi_context = lambda: {
+    module.get_first_fastapi_context = lambda **kwargs: {
         "http_url": "http://backend",
         "headers": {},
         "verify_ssl": True,
@@ -235,7 +235,13 @@ def test_sync_individual_with_dependencies_threads_schema_id_through_recursion(
 
     calls: list[tuple[str, dict]] = []
 
-    def fake_sync(path, query_params=None, netbox_branch_schema_id=None):
+    def fake_sync(
+        path,
+        query_params=None,
+        netbox_branch_schema_id=None,
+        fastapi_endpoint_id=None,
+        proxmox_endpoint_ids=None,
+    ):
         params = dict(query_params or {})
         if netbox_branch_schema_id is not None:
             params["__schema_id_kwarg__"] = netbox_branch_schema_id

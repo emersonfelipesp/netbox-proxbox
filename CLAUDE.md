@@ -193,6 +193,67 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
 - **Single enabled FastAPI row:** HTTP and WebSocket helpers such as `get_fastapi_request_context()` in [`netbox_proxbox/services/backend_proxy.py`](./netbox_proxbox/services/backend_proxy.py), `websocket_client`, and several dashboard views resolve the backend via the first `FastAPIEndpoint` with `enabled=True` (or the first enabled row from a restricted queryset). If multiple enabled FastAPI endpoints exist, whichever row sorts first is used; plan automation and operator docs accordingly.
 - **Background Proxbox sync jobs (RQ):** `ProxboxSyncJob` enqueues on NetBox’s **`default`** RQ queue (`RQ_QUEUE_DEFAULT`) so a stock **`manage.py rqworker`** (no queue arguments) picks them up. NetBox’s default worker only listens to **`high`**, **`default`**, and **`low`**; the extra django-rq queue **`netbox_proxbox.sync`** is legacy only. Older Job rows may still show **`netbox_proxbox.sync`** in **Queue**; cancel/RQ lookup uses the stored name. Jobs call proxbox-api **SSE** via [`run_sync_stream`](./netbox_proxbox/services/backend_proxy.py) until a terminal `complete` event.
 - **Disabled endpoint rows are a hard no-connection gate:** any endpoint-like row with `enabled=False` (`ProxmoxEndpoint`, `NetBoxEndpoint`, `FastAPIEndpoint`, `PBSEndpoint`, `PDMEndpoint`, or companion plugin endpoint objects such as `PBSServer`) remains visible through the API/UI for inventory, but operational paths must return before proxbox-api or remote-service network calls. This includes backend key registration, startup/signal pushes, OpenAPI fetches, keepalive/status probes, backend-id resolution, dashboard/API live reads, and scheduled/manual sync scopes.
+  **The gate is decided from NetBox's own rows, never from what proxbox-api still
+  holds.** The backend's stored endpoint state is not evidence that a disabled row
+  is safe to use — it may carry credentials issued before the row was disabled, or
+  credentials for a different NetBox instance entirely. Six sync-job behaviors
+  enforce this explicitly and must not be relaxed: zero enabled `NetBoxEndpoint`
+  rows block the preflight **unconditionally**, without consulting the backend's
+  list at all; zero enabled `ProxmoxEndpoint` rows fail the run loudly rather than
+  issuing an **unscoped** stage request, which proxbox-api would read as "sync every
+  endpoint you hold"; a failed NetBox push with stored backend rows continues only
+  when `backend_holds_netbox_endpoint()` proves a row points at *this* NetBox by
+  **resolved connection target** — `(domain or ip_address)` plus `port`, exactly
+  what proxbox-api's own `NetBoxEndpoint.url` property dials, so once a domain is
+  set the address is a field nobody reads — and **never** by name, since the
+  backend NetBox endpoint is a singleton updated by position and its name is free
+  text, and **never** off the push payload, whose synthetic `127.0.0.1` fallback
+  every domain-only NetBox sends identically — and identity alone is not enough,
+  since a row can name this NetBox while describing a **superseded** posture, so
+  `_netbox_row_is_current()` also requires the pushed `verify_ssl` and
+  `token_version` to match and reads a *missing* one as drifted (the secret itself
+  is not comparable: `NetBoxEndpointResponse` withholds `token`/`token_key`) —
+  and because that singleton is **positional**, a listing returning more than
+  one row is refused outright whatever those rows say: the push overwrites entry
+  `[0]` and entry `[0]` is what the backend dials, so accepting a match found
+  further down would vouch for a row proxbox-api is not using while a stale one
+  ahead of it drives the sync;
+  a failed NetBox push whose backend
+  listing *also* failed blocks rather than warning, because "unknown" must not read
+  as "ours" — unless some other enabled row pushed successfully, which already wrote
+  this NetBox's credentials into the singleton; the selected-object **batch**
+  sync path runs the same preflight before its first write, because it reaches
+  proxbox-api through `sync_individual()` but writes NetBox objects identically;
+  and that same batch path resolves the same enabled-`ProxmoxEndpoint` scope and
+  refuses the run when none resolves, because the individual-sync routes take
+  proxbox-api's `ProxmoxSessionsDep`, which reads a **missing**
+  `proxmox_endpoint_ids` as "use every endpoint I hold" — so an unscoped
+  selected-object sync is the *widest* request the backend accepts, not a
+  narrower one, and the scope must also travel as an explicit argument through
+  the recursive dependency syncs, whose `_CONTEXT_KEYS` rebuild would otherwise
+  drop it. That job-wide scope is still not narrow enough on its own: a
+  selected-object request names only a cluster/node/VMID, which are unique **per
+  endpoint** and not across the estate, so each object is additionally pinned to
+  the single backend id its own `ProxmoxCluster → ProxmoxEndpoint` chain names,
+  an object whose owner was skipped from the scope is refused with HTTP 424
+  rather than asked of the remaining endpoints, and so is an object whose cluster
+  is claimed by **two or more** endpoints — that is proof the duplicated
+  namespace exists here, so widening would ask both and keep whichever answered.
+  An owner that cannot be determined **at all** — nothing has reflected this
+  cluster yet — falls back to the job-wide scope only while that scope names a
+  **single** endpoint, where falling back and pinning are the same request, so a
+  first-ever sync can still discover it; a run spanning two or more endpoints
+  refuses the object with 424 instead, because "we cannot tell who owns this" is
+  not a licence to ask everybody in exactly the estate where a duplicated
+  identifier is possible. *Unknown* and *ambiguous* remain deliberately different
+  states — ambiguous never widens at all.
+  Whatever those per-object refusals amount to, they also **fail the enclosing
+  job**: every object in a selected-object run was named by an operator, so a
+  non-zero `failed` count raises rather than finishing **completed** with the
+  errors buried in `job.data` — after `job.data` is persisted, and before the
+  branch merge, so a partial result is never promoted into main.
+  Details in [`netbox_proxbox/CLAUDE.md`](./netbox_proxbox/CLAUDE.md) →
+  `jobs.py`.
 - **Disabled Proxmox status badges are static inventory state:** Proxmox endpoint list/detail/dashboard status elements must render a gray `Disabled` badge without `data-service-status-url` when `enabled=False`. Direct keepalive calls still return `status="disabled"` defensively, but the UI must not schedule status polling for disabled Proxmox rows.
 - **RQ timeout vs HTTP stream:** NetBox’s default **`RQ_DEFAULT_TIMEOUT`** (often **300s** via `configuration.py`) applies to RQ jobs unless overridden. Long syncs were previously killed by RQ while `requests` was still reading the SSE body. The plugin sets a default **`job_timeout`** of **`PROXBOX_SYNC_JOB_TIMEOUT`** (7200s) in [`ProxboxSyncJob.enqueue`](./netbox_proxbox/jobs.py); pass a larger `job_timeout=` to `enqueue()` if needed. That is separate from the HTTP **between-chunk read** timeout (3600s) inside [`run_sync_stream`](./netbox_proxbox/services/backend_proxy.py).
 - **HTTP timeouts for large syncs:** VM sync operations and full-update runs use a 3600-second (1-hour) read timeout instead of the default 5 seconds. VMs with 50+ interfaces require extended time because each interface needs multiple sequential API calls to NetBox (VLAN, bridge, MAC, IPs). See [`http_timeout_for_sync_path`](./netbox_proxbox/services/backend_auth.py) for timeout configuration per sync path.

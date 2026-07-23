@@ -17,6 +17,7 @@ the test run without booting NetBox.
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 
 import pytest
@@ -144,6 +145,220 @@ def test_response_with_python_exception_field_appended(error_utils_module):
     assert "RuntimeError: x" in detail
 
 
+# ── credential redaction ─────────────────────────────────────────────────────
+#
+# The sync-job preflight pushes the NetBox endpoint (carrying an API `token`)
+# and every Proxmox endpoint (carrying `password` / `token_value`) into
+# proxbox-api. FastAPI answers a schema mismatch with a 422 whose `input` echoes
+# the submitted body verbatim, and the extracted detail is written to job logs
+# and `Job.error` — long-lived rows readable by anyone who can view jobs. So the
+# secret has to be stripped here, on the way out.
+
+
+def test_validation_error_does_not_leak_the_echoed_token(error_utils_module):
+    """A 422 echoing the pushed NetBoxEndpoint payload must not print its token."""
+    resp = _response(
+        422,
+        '{"detail": [{"loc": ["body", "verify_ssl"], "msg": "field required",'
+        ' "input": {"name": "nb", "token": "nbt_SUPERSECRET",'
+        ' "token_key": "abcdef"}}]}',
+    )
+    exc = requests.exceptions.HTTPError(response=resp)
+
+    detail, status = error_utils_module.extract_backend_error_detail(exc)
+
+    assert status == 422
+    assert "nbt_SUPERSECRET" not in detail
+    assert "abcdef" not in detail
+    # Still diagnosable: the operator learns which field the backend rejected.
+    assert "field required" in detail
+    assert "verify_ssl" in detail
+    assert "[redacted]" in detail
+
+
+def test_validation_error_does_not_leak_proxmox_credentials(error_utils_module):
+    """The Proxmox push payload carries `password` and `token_value` too."""
+    resp = _response(
+        422,
+        '{"detail": [{"msg": "bad payload", "input": {"user": "root@pam",'
+        ' "password": "hunter2", "token_value": "uuid-secret",'
+        ' "nested": {"api_key": "k-123"}}}]}',
+    )
+    exc = requests.exceptions.HTTPError(response=resp)
+
+    detail, _status = error_utils_module.extract_backend_error_detail(exc)
+
+    for secret in ("hunter2", "uuid-secret", "k-123"):
+        assert secret not in detail
+    assert "root@pam" in detail, "non-secret context must survive redaction"
+
+
+def test_redaction_keeps_a_plain_string_detail_intact(error_utils_module):
+    """Redaction must not mangle the ordinary case it does not apply to."""
+    resp = _response(400, '{"detail": "VMID 100 already exists"}')
+    exc = requests.exceptions.HTTPError(response=resp)
+
+    detail, status = error_utils_module.extract_backend_error_detail(exc)
+
+    assert status == 400
+    assert detail == "VMID 100 already exists"
+
+
+def test_redact_sensitive_matches_keys_not_values(error_utils_module):
+    """Keys are matched, so the payload keeps its shape and stays readable."""
+    redacted = error_utils_module.redact_sensitive(
+        {
+            "Authorization": "Bearer x",
+            "note": "the password is wrong",
+            "rows": [{"private_key": "-----BEGIN", "id": 4}],
+        }
+    )
+
+    assert redacted["Authorization"] == "[redacted]"
+    assert redacted["rows"][0]["private_key"] == "[redacted]"
+    assert redacted["rows"][0]["id"] == 4
+    # A *value* that merely mentions a secret is not a secret; blanking it would
+    # destroy the error message without protecting anything.
+    assert redacted["note"] == "the password is wrong"
+
+
+def test_redact_sensitive_survives_a_self_referential_payload(error_utils_module):
+    """A cyclic structure must hit the depth limit, not recurse forever."""
+    payload: dict[str, object] = {"detail": "x"}
+    payload["self"] = payload
+
+    redacted = error_utils_module.redact_sensitive(payload)
+
+    assert redacted["detail"] == "x"
+
+
+def test_scalar_input_is_redacted_when_loc_names_a_credential_field(
+    error_utils_module,
+):
+    """Key matching cannot see a secret whose own key is the neutral `input`.
+
+    FastAPI echoes the rejected *value* under `input` and names the field it
+    belongs to in the sibling `loc`.  When that field is a credential, the secret
+    arrives as a bare scalar with nothing sensitive about its key — so the `loc`
+    is what has to be read.
+    """
+    resp = _response(
+        422,
+        '{"detail": [{"loc": ["body", "token"], "msg": "string too short",'
+        ' "input": "nbt_SUPERSECRET"}]}',
+    )
+    exc = requests.exceptions.HTTPError(response=resp)
+
+    detail, status = error_utils_module.extract_backend_error_detail(exc)
+
+    assert status == 422
+    assert "nbt_SUPERSECRET" not in detail
+    assert "[redacted]" in detail
+    # The rejection itself still reaches the operator.
+    assert "string too short" in detail
+    assert "token" in detail
+
+
+def test_header_style_keys_are_redacted(error_utils_module):
+    """`api_key`, `X-Proxbox-API-Key`, and `ApiKey` are one field in three spellings.
+
+    The markers are separator-free, so only the folded form matches them all;
+    matching the raw key let the HTTP-header spelling through unredacted.
+    """
+    redacted = error_utils_module.redact_sensitive(
+        {
+            "X-Proxbox-API-Key": "k-123",
+            "Private-Key": "-----BEGIN",
+            "SSH Keys": "ssh-ed25519 AAAA",
+            "keyring-id": 7,
+        }
+    )
+
+    assert redacted["X-Proxbox-API-Key"] == "[redacted]"
+    assert redacted["Private-Key"] == "[redacted]"
+    assert redacted["SSH Keys"] == "[redacted]"
+    # Folding must not turn an unrelated key into a match.
+    assert redacted["keyring-id"] == 7
+
+
+def test_payload_nested_past_the_depth_limit_is_redacted_not_returned_raw(
+    error_utils_module,
+):
+    """Past the depth limit the value is dropped, not passed through.
+
+    Returning the original object there was the hole: a body nested deeper than
+    the limit skipped redaction entirely and reached the job log verbatim.
+    """
+    payload: object = {"token": "SUPERSECRET"}
+    for _ in range(error_utils_module._REDACTION_DEPTH_LIMIT + 1):
+        payload = {"wrap": payload}
+
+    redacted = error_utils_module.redact_sensitive(payload)
+
+    assert "SUPERSECRET" not in json.dumps(redacted)
+    assert error_utils_module._REDACTED_DEEP in json.dumps(redacted)
+
+
+def test_credentials_rendered_into_prose_are_swept(error_utils_module):
+    """Structural redaction cannot reach a secret already rendered to a string.
+
+    Pydantic prints the rejected object into `msg`/`python_exception` text, and
+    proxbox-api quotes request headers — by then there is no mapping left to key
+    match against.
+    """
+    resp = _response(
+        400,
+        json.dumps(
+            {
+                "detail": "rejected input_value={'token': 'nbt_SUPERSECRET'}",
+                "python_exception": (
+                    "AuthError: header Authorization: Bearer "
+                    "eyJhbGciOiJIUzI1NiJ9.payload.sig"
+                ),
+            }
+        ),
+    )
+    exc = requests.exceptions.HTTPError(response=resp)
+
+    detail, status = error_utils_module.extract_backend_error_detail(exc)
+
+    assert status == 400
+    assert "nbt_SUPERSECRET" not in detail
+    assert "eyJhbGciOiJIUzI1NiJ9.payload.sig" not in detail
+    # Shape survives, so the operator still sees what failed and why.
+    assert "input_value" in detail
+    assert "AuthError" in detail
+    assert "Authorization: [redacted]" in detail
+
+
+def test_bare_bearer_token_without_a_credential_key_is_swept(error_utils_module):
+    """A scheme quoted with no credential-named key in front of it still leaks."""
+    swept = error_utils_module.redact_sensitive_text(
+        "upstream replied 401 to header [Bearer eyJhbGciOiJIUzI1NiJ9.payload.sig]"
+    )
+
+    assert "eyJhbGciOiJIUzI1NiJ9.payload.sig" not in swept
+    assert "Bearer [redacted]" in swept
+    assert "upstream replied 401" in swept
+
+
+def test_transport_error_text_is_swept_before_it_is_returned(error_utils_module):
+    """The no-response branch has no body to key match — only the rendered text.
+
+    That text can still quote the request that failed, credentials included.
+    """
+    exc = requests.exceptions.RequestException(
+        "Rejected by upstream while sending token='nbt_SUPERSECRET' to /netbox/"
+    )
+
+    detail, status = error_utils_module.extract_backend_error_detail(exc)
+
+    assert status is None
+    assert "nbt_SUPERSECRET" not in detail
+    assert "[redacted]" in detail
+    assert "/netbox/" in detail
+
+
 # ── extract_proxmox_backend_error_detail (host fallback) ─────────────────────
 
 
@@ -160,6 +375,61 @@ def test_proxmox_error_falls_back_to_target_message_when_no_response(
     assert status is None
     assert "pve.local:8006" in detail
     assert "http://backend/proxmox/sync" in detail
+
+
+def test_proxmox_error_upstream_tail_is_class_only(error_utils_module):
+    """The ``Upstream error:`` tail carries the exception class, never its text.
+
+    A transport exception can echo request content, and the pattern-based text
+    sweep is defeatable — an unquoted value with spaces or an escaped quote
+    leaves credential *fragments* behind. Class-only is the fail-closed shape:
+    it cannot carry a secret, and the class name is the discriminator that
+    matters (SSLError vs ConnectTimeout vs ConnectionError). The awkward inputs
+    below are exactly the ones the sweep alone mishandled.
+    """
+    secret = "0123456789abcdef0123456789abcdef01234567"
+    for rendered in (
+        f"connection failed while sending token_value='{secret}'",
+        f'{{"password":"{secret[:4]}\\"{secret[4:]}"}}',
+        f"password={secret[:4]} {secret[4:8]} {secret[8:]}",
+        f"password={secret[:4]},{secret[4:]}",
+    ):
+        exc = requests.exceptions.ConnectionError(rendered)
+        detail, status = error_utils_module.extract_proxmox_backend_error_detail(
+            exc,
+            proxmox_host="pve.local",
+            proxmox_port=8006,
+            backend_url="http://backend/proxmox/sync",
+        )
+        assert status is None
+        assert secret[4:] not in detail, f"credential fragment leaked from {rendered!r}"
+        assert "ConnectionError" in detail, "the class name is the kept diagnostic"
+        assert "pve.local:8006" in detail, "the target must survive"
+
+
+def test_tls_and_timeout_errors_are_not_reported_as_connection_refused(
+    error_utils_module,
+):
+    """SSLError and ConnectTimeout subclass ConnectionError — order matters.
+
+    Classified generically, a TLS handshake failure told the operator to check
+    whether proxbox-api was *running*, when the actual problem was the
+    certificate (or the Verify SSL setting) — the most common fresh-install
+    misconfiguration this branch exists to make diagnosable.
+    """
+    tls_detail, tls_status = error_utils_module.extract_backend_error_detail(
+        requests.exceptions.SSLError("certificate verify failed")
+    )
+    assert tls_status is None
+    assert "TLS" in tls_detail
+    assert "refused" not in tls_detail.lower()
+
+    timeout_detail, timeout_status = error_utils_module.extract_backend_error_detail(
+        requests.exceptions.ConnectTimeout("connection to host timed out")
+    )
+    assert timeout_status is None
+    assert "Timed out" in timeout_detail
+    assert "refused" not in timeout_detail.lower()
 
 
 def test_proxmox_error_delegates_when_response_is_present(error_utils_module):

@@ -245,10 +245,9 @@ def test_get_proxmox_card_normalizes_backend_connection_refused(
         response.payload["detail"]
         == "ProxBox backend could not connect to the configured Proxmox endpoint "
         "(pve.local:8006). Backend route: https://proxbox.local:8800/proxmox/version. "
-        "Upstream error: HTTPConnectionPool(host='10.0.30.207', port=8000): Max "
-        "retries exceeded with url: /proxmox/version?source=database&proxmox_endpoint_ids=1 "
-        '(Caused by NewConnectionError("Failed to establish a new connection: '
-        '[Errno 111] Connection refused"))'
+        # Class-only tail: the rendered exception can echo request content and
+        # the text sweep is pattern-based, so only the class name may leave.
+        "Upstream error: ConnectionError"
     )
 
 
@@ -289,10 +288,23 @@ def test_get_proxmox_card_scopes_duplicate_domain_by_backend_id(
 
     def fake_get(url, timeout=None, params=None, headers=None, verify=None):
         if url.endswith("/proxmox/endpoints"):
+            # Same domain on both rows is the point of this test; `port` is
+            # present because the resolver confirms the located row still dials
+            # `(host, port)` and refuses a row it cannot resolve one from.
             return ResponseStub(
                 [
-                    {"id": 1, "name": "PVE (nb:1)", "domain": "pve.local"},
-                    {"id": 2, "name": "PVE (nb:2)", "domain": "pve.local"},
+                    {
+                        "id": 1,
+                        "name": "PVE (nb:1)",
+                        "domain": "pve.local",
+                        "port": 8006,
+                    },
+                    {
+                        "id": 2,
+                        "name": "PVE (nb:2)",
+                        "domain": "pve.local",
+                        "port": 8006,
+                    },
                 ]
             )
         if "/proxmox/version" in url:

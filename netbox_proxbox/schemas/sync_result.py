@@ -14,6 +14,13 @@ class SyncJobParams(ProxboxBaseModel):
     netbox_vm_ids: list[str] = Field(default_factory=list)
     batch_object_type: str | None = None
     batch_object_ids: list[str] = Field(default_factory=list)
+    # The ``FastAPIEndpoint`` pk the run was pinned to.  ``_serialize_sync_params()``
+    # has always written it, but nothing read it back, so a replayed job (Run now,
+    # or a recurring schedule re-enqueueing itself) silently fell back to "first
+    # enabled backend".  On a multi-backend install that switches which proxbox-api
+    # the preflight, key registration, wire-id lookup, and the four pre-SSE passes
+    # talk to — the exact split this branch exists to prevent.
+    fastapi_endpoint_id: int | None = None
     run_id: str | None = None
 
 
