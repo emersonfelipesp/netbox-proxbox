@@ -339,8 +339,11 @@ def extract_proxmox_backend_error_detail(
     if proxmox_port:
         target = f"{target}:{proxmox_port}"
 
+    # Sweep the rendered exception text: a transport error can echo request
+    # content, and this string flows into job logs and flash messages.
     detail = (
         "ProxBox backend could not connect to the configured Proxmox endpoint"
-        f" ({target}). Backend route: {backend_url}. Upstream error: {exc}"
+        f" ({target}). Backend route: {backend_url}."
+        f" Upstream error: {redact_sensitive_text(str(exc))}"
     )
     return detail, None

@@ -330,6 +330,9 @@ def proxbox_sync_job_module(monkeypatch):
     views_backend_sync_mod.proxmox_push_credentials_unchanged = (
         _real_backend_sync.proxmox_push_credentials_unchanged
     )
+    views_backend_sync_mod.proxmox_endpoint_credentials_rotated_since_last_push = (
+        _real_backend_sync.proxmox_endpoint_credentials_rotated_since_last_push
+    )
     monkeypatch.setitem(
         sys.modules, "netbox_proxbox.views.backend_sync", views_backend_sync_mod
     )
@@ -5146,6 +5149,86 @@ def test_preflight_budget_never_skips_an_endpoint_whose_credentials_rotated(
     )
     assert result.blocking_error is None
     assert all(phase["status"] == "success" for phase in result.phases)
+
+
+def test_preflight_names_a_credential_rotation_behind_a_failed_proxmox_push(
+    monkeypatch, proxbox_sync_job_module
+):
+    """A failed push over rotated credentials must say what it means.
+
+    A failed Proxmox push is non-fatal by design — but when the endpoint's
+    credentials changed since the last successful push, the failure has a
+    sharper consequence: proxbox-api is still holding the previous secret, so
+    this endpoint's Proxmox reads will fail to authenticate until a push
+    succeeds. The warning and the carried-forward hint must attribute that,
+    instead of leaving the operator to correlate a later stage's auth failure
+    with a generic push warning. Attribution only: the run still continues.
+    """
+    module = proxbox_sync_job_module
+    backend_sync = sys.modules["netbox_proxbox.views.backend_sync"]
+    rows = [_preflight_proxmox_endpoint(1)]
+
+    _arrange_preflight(monkeypatch)
+    monkeypatch.setattr(
+        sys.modules["netbox_proxbox.models"].ProxmoxEndpoint.objects, "rows", rows
+    )
+    # The last successful push recorded the old secret; it rotates afterwards.
+    _real_backend_sync = load_real_backend_sync()
+    rows[
+        0
+    ].pushed_credential_fingerprint = (
+        _real_backend_sync.proxmox_endpoint_credential_fingerprint(rows[0])
+    )
+    rows[0].password = "rotated-in-place"
+    monkeypatch.setattr(
+        backend_sync,
+        "sync_proxmox_endpoint_to_backend",
+        lambda endpoint, **kwargs: (False, "Read timed out. (read timeout=30)", None),
+    )
+    job, records = _preflight_job()
+
+    result = module._ensure_backend_endpoints(job)
+
+    assert result.blocking_error is None, "a failed Proxmox push stays non-fatal"
+    assert any(
+        "credentials changed since the last successful push" in entry
+        for entry in records["warning"]
+    ), "the warning must attribute the rotation, not just report a timeout"
+    assert result.hint and "in-place credential change" in result.hint
+
+
+def test_preflight_does_not_claim_rotation_for_a_never_vouched_endpoint(
+    monkeypatch, proxbox_sync_job_module
+):
+    """No recorded fingerprint is the normal fresh state, not a rotation.
+
+    Claiming "credentials changed" on every fresh install's first failed push
+    would train operators to ignore the message that matters on the runs where
+    a rotation really happened.
+    """
+    module = proxbox_sync_job_module
+    backend_sync = sys.modules["netbox_proxbox.views.backend_sync"]
+    rows = [_preflight_proxmox_endpoint(1)]
+
+    _arrange_preflight(monkeypatch)
+    monkeypatch.setattr(
+        sys.modules["netbox_proxbox.models"].ProxmoxEndpoint.objects, "rows", rows
+    )
+    monkeypatch.setattr(
+        backend_sync,
+        "sync_proxmox_endpoint_to_backend",
+        lambda endpoint, **kwargs: (False, "Read timed out. (read timeout=30)", None),
+    )
+    job, records = _preflight_job()
+
+    result = module._ensure_backend_endpoints(job)
+
+    assert result.blocking_error is None
+    assert not any(
+        "credentials changed since the last successful push" in entry
+        for entry in records["warning"]
+    )
+    assert not (result.hint and "in-place credential change" in result.hint)
 
 
 def test_run_passes_the_selected_backend_to_the_preflight(

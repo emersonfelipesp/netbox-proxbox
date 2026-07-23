@@ -377,6 +377,28 @@ def test_proxmox_error_falls_back_to_target_message_when_no_response(
     assert "http://backend/proxmox/sync" in detail
 
 
+def test_proxmox_error_sweeps_the_rendered_upstream_exception(error_utils_module):
+    """The ``Upstream error:`` tail must be swept, not rendered raw.
+
+    A transport exception can echo request content — here a credential-bearing
+    assignment — and this string flows into job logs and flash messages, so it
+    gets the same text sweep as every other exception-rendered detail.
+    """
+    secret = "0123456789abcdef0123456789abcdef01234567"
+    exc = requests.exceptions.ConnectionError(
+        f"connection failed while sending token_value='{secret}'"
+    )
+    detail, status = error_utils_module.extract_proxmox_backend_error_detail(
+        exc,
+        proxmox_host="pve.local",
+        proxmox_port=8006,
+        backend_url="http://backend/proxmox/sync",
+    )
+    assert status is None
+    assert secret not in detail
+    assert "pve.local:8006" in detail, "the diagnostic target must survive the sweep"
+
+
 def test_proxmox_error_delegates_when_response_is_present(error_utils_module):
     resp = _response(503, '{"detail": "Service Unavailable"}')
     exc = requests.exceptions.HTTPError(response=resp)

@@ -655,7 +655,14 @@ def _try_sync_stream_url(
         return response
     except requests.exceptions.RequestException as exc:
         last_detail, http_st = extract_backend_error_detail(exc)
-        logger.exception("Sync stream request failed for %s via %s", path, url)
+        # Log the *redacted* detail, never the raw exception: `logger.exception`
+        # renders `str(exc)`, and a transport error can echo request text that
+        # carries pushed credentials — sanitizing the user-facing detail while
+        # leaking the same secret to the application log would be no redaction
+        # at all.
+        logger.error(
+            "Sync stream request failed for %s via %s: %s", path, url, last_detail
+        )
         if getattr(exc, "response", None) is not None:
             return last_detail, False, None, http_st
         return (
@@ -718,7 +725,11 @@ def iter_backend_sse_lines(
             except requests.exceptions.RequestException as exc:
                 detail, _ = extract_backend_error_detail(exc)
                 last_error = detail
-                logger.exception("Sync stream request failed for %s via %s", path, url)
+                # Redacted detail only — see `_try_sync_stream_url` for why the
+                # raw exception must not reach the application log.
+                logger.error(
+                    "Sync stream request failed for %s via %s: %s", path, url, detail
+                )
                 if getattr(exc, "response", None) is not None:
                     break
             except (KeyboardInterrupt, SystemExit, GeneratorExit):

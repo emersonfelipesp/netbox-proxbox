@@ -540,6 +540,14 @@ def sync_firewall(
         logger.info("No enabled Proxmox endpoints configured; skipping firewall sync")
         return result
 
+    # The scope travels twice: once to the backend as `proxmox_endpoint_ids`,
+    # and once here as the set of plugin pks whose response entries may be
+    # written. The second leg is not redundant — a backend that ignores the
+    # query filter (older release, or a bug) would otherwise hand back every
+    # endpoint's clusters, and the by-cluster-name resolution below would
+    # happily write firewall rows for endpoints outside this run's selection.
+    allowed_endpoint_pks = set(backend_id_by_pk)
+
     # -----------------------------------------------------------------------
     # HTTP phase — fetch the summary before touching the DB.
     # -----------------------------------------------------------------------
@@ -580,6 +588,15 @@ def sync_firewall(
             logger.warning(
                 "Cannot resolve ProxmoxEndpoint for cluster_name=%r — skipping firewall sync for this entry",
                 cluster_name,
+            )
+            continue
+
+        if endpoint.pk not in allowed_endpoint_pks:
+            logger.warning(
+                "Skipping firewall summary entry for cluster_name=%r: "
+                "endpoint %s is outside this run's endpoint scope",
+                cluster_name,
+                endpoint.pk,
             )
             continue
 

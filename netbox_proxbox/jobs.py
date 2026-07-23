@@ -528,6 +528,7 @@ def _ensure_backend_endpoints(
         list_backend_netbox_endpoints,
         list_backend_proxmox_endpoints,
         netbox_push_credentials_unchanged,
+        proxmox_endpoint_credentials_rotated_since_last_push,
         sync_netbox_endpoint_to_backend,
         sync_proxmox_endpoint_to_backend,
     )
@@ -836,9 +837,25 @@ def _ensure_backend_endpoints(
                 f"Preflight: synced Proxmox endpoint '{px_label}' to proxbox-api backend"
             )
         else:
+            rotated_note = ""
+            try:
+                if proxmox_endpoint_credentials_rotated_since_last_push(px_ep):
+                    rotated_note = (
+                        " This endpoint's credentials changed since the last "
+                        "successful push, so proxbox-api is still holding the "
+                        "previous secret — Proxmox reads for this endpoint will "
+                        "fail to authenticate until a push succeeds."
+                    )
+                    notes.append(
+                        f"Proxmox endpoint '{px_label}' push failed after an "
+                        "in-place credential change; proxbox-api still holds "
+                        "the previous secret."
+                    )
+            except Exception:  # noqa: BLE001 - attribution must never fail the push loop
+                rotated_note = ""
             job.logger.warning(
                 f"Preflight: could not sync Proxmox endpoint "
-                f"'{px_label}' to proxbox-api: {err}"
+                f"'{px_label}' to proxbox-api: {err}{rotated_note}"
             )
         phases.append(
             _endpoint_runtime_phase(

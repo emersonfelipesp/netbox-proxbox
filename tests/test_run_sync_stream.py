@@ -461,3 +461,47 @@ def test_redacted_mapping_is_fail_closed(backend_proxy_module, monkeypatch):
 
     assert result == {"detail": "[redacted: collapsed]"}
     _assert_absent(_SECRET, result)
+
+
+def test_stream_transport_failure_never_logs_the_raw_exception(
+    backend_proxy_module, monkeypatch, caplog
+):
+    """The application log must get the redacted detail, not ``str(exc)``.
+
+    ``extract_backend_error_detail()`` sweeps the exception's rendered text
+    before it reaches the user — but a ``logger.exception`` beside it would
+    still write the raw message (and traceback) to the application log,
+    leaking the same credential the user-facing path just redacted. Both the
+    return value *and* every log record must be free of the secret.
+    """
+    import logging
+
+    import requests as _req
+
+    bp = backend_proxy_module
+
+    def _raise(*_a, **_kw):
+        raise _req.exceptions.ConnectionError(
+            f"connection failed while sending token='{_SECRET}'"
+        )
+
+    monkeypatch.setattr(bp.requests, "get", _raise)
+
+    with caplog.at_level(logging.DEBUG, logger=bp.logger.name):
+        result = bp._try_sync_stream_url(
+            url="http://backend:8000/dcim/devices/create/stream",
+            verify=True,
+            path="dcim/devices/create/stream",
+            query_params=None,
+            headers={},
+            on_frame=None,
+        )
+
+    assert isinstance(result, tuple), "a transport failure returns the error tuple"
+    _assert_absent(_SECRET, result[0])
+    for record in caplog.records:
+        rendered = record.getMessage()
+        assert _SECRET not in rendered, f"secret leaked to the log: {rendered}"
+        assert record.exc_info is None, (
+            "a transport failure must not be logged with its raw traceback"
+        )

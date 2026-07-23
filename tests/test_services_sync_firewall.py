@@ -410,6 +410,57 @@ def test_unresolvable_cluster_name_is_skipped(sync_fw_module, monkeypatch):
     assert result.endpoints_processed == 0
 
 
+def test_out_of_scope_summary_entries_are_refused(sync_fw_module, monkeypatch):
+    """A response row outside the run's endpoint scope must never be written.
+
+    Forwarding ``endpoint_ids`` to the backend is only half the scope: a
+    backend that ignores ``proxmox_endpoint_ids`` (older release, or a bug)
+    returns every endpoint's clusters anyway, and the by-cluster-name
+    resolution would then write firewall rows for an endpoint the caller
+    explicitly excluded — silently widening the run. The allowed set from the
+    resolved scope is what refuses those rows.
+    """
+    in_scope = SimpleNamespace(pk=1)
+    out_of_scope = SimpleNamespace(pk=2)
+    monkeypatch.setattr(
+        sync_fw_module,
+        "_resolve_endpoint_by_cluster_name",
+        lambda name: {"cluster-in": in_scope, "cluster-out": out_of_scope}.get(name),
+    )
+    # The resolved scope names only endpoint pk 1.
+    sync_fw_module.enabled_backend_endpoint_scope = lambda **_kw: (
+        {"source": "database", "proxmox_endpoint_ids": "11"},
+        {1: 11},
+        None,
+    )
+
+    entry = {
+        "rules": [],
+        "security_groups": [],
+        "ip_sets": [],
+        "aliases": [],
+        "options": None,
+    }
+    summary = [
+        {"cluster_name": "cluster-in", **entry},
+        {"cluster_name": "cluster-out", **entry},
+    ]
+    mock_resp = MagicMock()
+    mock_resp.raise_for_status.return_value = None
+    mock_resp.json.return_value = summary
+
+    with patch("requests.get", return_value=mock_resp):
+        result = sync_fw_module.sync_firewall(
+            fastapi_url="http://backend:8000", endpoint_ids=[1]
+        )
+
+    assert result.success is True
+    assert result.endpoints_processed == 1
+    assert [row["endpoint_id"] for row in result.per_endpoint] == [1], (
+        "the out-of-scope endpoint's entry must be refused, not synced"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Happy-path tests
 # ---------------------------------------------------------------------------

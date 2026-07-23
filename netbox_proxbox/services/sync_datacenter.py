@@ -129,7 +129,7 @@ def sync_datacenter(
     if auth_headers is None:
         auth_headers = {}
 
-    scope_params, _, scope_error = enabled_backend_endpoint_scope(
+    scope_params, backend_id_by_pk, scope_error = enabled_backend_endpoint_scope(
         base_url=fastapi_url,
         auth_headers=auth_headers,
         backend_verify_ssl=verify_ssl,
@@ -146,6 +146,13 @@ def sync_datacenter(
             "No enabled Proxmox endpoints configured; skipping datacenter CPU sync"
         )
         return result
+
+    # Same double-leg scope as sync_firewall: the query param asks the backend
+    # to filter, and this set refuses response entries the backend returned
+    # anyway (older release ignoring `proxmox_endpoint_ids`, or a bug). Without
+    # it the by-cluster-name resolution below writes CPU models — and marks
+    # rows stale — for endpoints outside this run's selection.
+    allowed_endpoint_pks = set(backend_id_by_pk)
 
     try:
         resp = requests.get(
@@ -192,6 +199,14 @@ def sync_datacenter(
                 logger.warning(
                     "Cannot resolve endpoint for cluster_name=%r, skipping CPU model",
                     cluster_name,
+                )
+                continue
+            if endpoint.pk not in allowed_endpoint_pks:
+                logger.warning(
+                    "Skipping CPU model for cluster_name=%r: endpoint %s is "
+                    "outside this run's endpoint scope",
+                    cluster_name,
+                    endpoint.pk,
                 )
                 continue
             upsert_started = time.monotonic()

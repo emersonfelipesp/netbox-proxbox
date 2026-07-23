@@ -858,10 +858,18 @@ def backend_holds_netbox_endpoint(
 # ``AbstractBaseUser.get_session_auth_hash()``.
 _NETBOX_CREDENTIAL_FINGERPRINT_SALT = "netbox_proxbox.netbox_endpoint.pushed_credential"
 
-# Field separator for the fingerprint material. ``\x1f`` (ASCII unit separator)
-# cannot occur in a token or a version string, so no two distinct credential
-# triples can be concatenated into the same input.
-_FINGERPRINT_FIELD_SEPARATOR = "\x1f"
+
+def _fingerprint_material(values: tuple[str, ...]) -> str:
+    """Encode credential fields so no two distinct tuples share one input.
+
+    Each field is length-prefixed rather than separator-joined: a separator can
+    be defeated by a field that *contains* it (nothing structurally stops a
+    pasted secret from carrying any byte), letting two different tuples
+    concatenate into the same material and a rotation to a colliding tuple
+    compare as "unchanged". ``len()`` counts code points and the prefix ends at
+    the first ``:``, so the encoding is injective for any field content.
+    """
+    return "".join(f"{len(value)}:{value}" for value in values)
 
 
 def netbox_credential_fingerprint(payload: dict[str, object]) -> str:
@@ -873,8 +881,11 @@ def netbox_credential_fingerprint(payload: dict[str, object]) -> str:
     reasoning as ``backend_holds_proxmox_endpoint()`` locating its row by
     ``proxmox_backend_name()`` — the name the push itself matches on.)
     """
-    material = _FINGERPRINT_FIELD_SEPARATOR.join(
-        str(payload.get(key) or "") for key in ("token_version", "token_key", "token")
+    material = _fingerprint_material(
+        tuple(
+            str(payload.get(key) or "")
+            for key in ("token_version", "token_key", "token")
+        )
     )
     return salted_hmac(
         _NETBOX_CREDENTIAL_FINGERPRINT_SALT, material, algorithm="sha256"
@@ -966,8 +977,11 @@ def proxmox_credential_fingerprint(payload: dict[str, object]) -> str:
     reason — it is literally what proxbox-api was handed, so the recorded
     fingerprint cannot drift from what the backend stored.
     """
-    material = _FINGERPRINT_FIELD_SEPARATOR.join(
-        str(payload.get(key) or "") for key in ("password", "token_name", "token_value")
+    material = _fingerprint_material(
+        tuple(
+            str(payload.get(key) or "")
+            for key in ("password", "token_name", "token_value")
+        )
     )
     return salted_hmac(
         _PROXMOX_CREDENTIAL_FINGERPRINT_SALT, material, algorithm="sha256"
@@ -1001,6 +1015,31 @@ def proxmox_push_credentials_unchanged(
     if not stored:
         return False
     return hmac.compare_digest(stored, proxmox_credential_fingerprint(payload))
+
+
+def proxmox_endpoint_credentials_rotated_since_last_push(
+    endpoint: ProxmoxEndpoint,
+) -> bool:
+    """Return ``True`` when a recorded fingerprint no longer matches the endpoint.
+
+    Attribution only — this never gates anything. A *failed* Proxmox push is
+    non-fatal by design, but when the endpoint's credentials changed since the
+    last successful push, that failure has a sharper meaning: proxbox-api is
+    still holding the previous secret, so Proxmox reads for this endpoint will
+    fail with an authentication error until a push succeeds. The preflight uses
+    this to say so in the warning instead of leaving the operator to correlate
+    a later stage's auth failure with a push warning themselves.
+
+    Deliberately ``False`` when no fingerprint was ever recorded: that is the
+    normal fresh state (or the pre-0074 upgrade window), not evidence of
+    rotation.
+    """
+    stored = str(getattr(endpoint, "pushed_credential_fingerprint", "") or "").strip()
+    if not stored:
+        return False
+    return not hmac.compare_digest(
+        stored, proxmox_endpoint_credential_fingerprint(endpoint)
+    )
 
 
 def _record_pushed_proxmox_credential_fingerprint(
