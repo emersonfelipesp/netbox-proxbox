@@ -1,5 +1,6 @@
 """Register plugin UI routes for pages, models, sync actions, and status checks."""
 
+from django.apps import apps
 from django.urls import include, path
 from django.views.generic import RedirectView
 from utilities.urls import get_model_urls
@@ -503,7 +504,7 @@ urlpatterns = [
 # get_action_url() generates "plugins:netbox_proxbox:pdmendpoint_edit" etc.
 # The CRUD views live in netbox_pdm, but they must also be reachable under this
 # namespace — otherwise ActionsColumn crashes the list page with NoReverseMatch.
-try:
+if apps.is_installed("netbox_pdm"):
     import netbox_pdm.views as _netbox_pdm_views  # noqa: F401 — triggers @register_model_view
     from netbox_proxbox.views.endpoints import pdm as _pdm_endpoint_views  # noqa: F401 — registers PDMEndpointView + PDMEndpointSyncNowView
 
@@ -525,5 +526,3 @@ try:
             include(get_model_urls("netbox_proxbox", "pdmremote")),
         ),
     ]
-except ImportError:
-    pass

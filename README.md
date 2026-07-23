@@ -45,6 +45,13 @@ collecting systemd service status for an endpoint) through the netbox-rpc engine
 instead of handling SSH itself. The integration is a soft dependency — see
 `netbox_proxbox/integrations/rpc.py`.
 
+A companion package being present in the virtual environment does not enable
+its Django app. Proxbox registers branching signals and PDM URL overrides only
+when `netbox_branching` or `netbox_pdm`, respectively, is listed in `PLUGINS`;
+installed-but-disabled companions therefore remain inert. Once a companion is
+enabled, its imports are mandatory and startup fails if the installation is
+broken; Proxbox never silently runs with only part of the configured integration.
+
 | Package | NetBox plugin | What it adds |
 |---------|---------------|--------------|
 | [`netbox-pdm`](https://github.com/emersonfelipesp/netbox-pdm) | `netbox_pdm` | Inventories Proxmox Datacenter Manager endpoints and the PVE/PBS remotes managed by PDM. It links PDM remotes back to Proxbox Proxmox endpoints and, when installed, `netbox-pbs` backup servers. |

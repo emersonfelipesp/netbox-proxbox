@@ -941,6 +941,11 @@ the read side first and the write side as a separate sub-PR.
 
 ### Invariants for the intent side
 
+- Optional companion modules must be imported only when their Django app is
+  enabled. A package present in the virtual environment but absent from
+  `PLUGINS` is disabled: do not register its signals, models, views, or URLs.
+  Conversely, never suppress an import failure for an enabled companion: fail
+  startup instead of running a partially configured integration.
 - The **single source of truth** for intent is the merged `ChangeDiff`
   list on a branch flagged `apply_to_proxmox=True`.
 - The **single trigger** for Proxmox-side mutation is the `post_merge`

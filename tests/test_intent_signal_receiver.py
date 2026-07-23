@@ -54,8 +54,16 @@ def test_handle_branch_merged_body_has_top_level_try_except():
 
 def test_netbox_branching_post_merge_import_is_guarded():
     module = _parse(RECEIVER_PATH)
-    for node in ast.iter_child_nodes(module):
-        if not isinstance(node, ast.Try):
+    for node in ast.walk(module):
+        if not (
+            isinstance(node, ast.If)
+            and isinstance(node.test, ast.Call)
+            and isinstance(node.test.func, ast.Attribute)
+            and node.test.func.attr == "is_installed"
+            and node.test.args
+            and isinstance(node.test.args[0], ast.Constant)
+            and node.test.args[0].value == "netbox_branching"
+        ):
             continue
         imports_post_merge = any(
             isinstance(stmt, ast.ImportFrom)
@@ -63,15 +71,11 @@ def test_netbox_branching_post_merge_import_is_guarded():
             and any(alias.name == "post_merge" for alias in stmt.names)
             for stmt in node.body
         )
-        catches_import_error = any(
-            isinstance(handler.type, ast.Name) and handler.type.id == "ImportError"
-            for handler in node.handlers
-        )
-        if imports_post_merge and catches_import_error:
+        if imports_post_merge:
             return
     raise AssertionError(
         "from netbox_branching.signals import post_merge must be inside "
-        "try/except ImportError"
+        "an apps.is_installed('netbox_branching') guard"
     )
 
 
@@ -91,3 +95,28 @@ def test_plugin_ready_imports_signal_receivers():
         assert imports_receiver, "ProxboxConfig.ready() must import signal_receivers"
         return
     raise AssertionError("ProxboxConfig class not found")
+
+
+def test_optional_branching_models_are_imported_only_when_app_is_installed():
+    source = RECEIVER_PATH.read_text(encoding="utf-8")
+
+    assert 'apps.is_installed("netbox_branching")' in source
+    assert "from django.apps import apps" in source
+
+
+def test_enabled_branching_import_failure_is_not_suppressed():
+    module = ast.parse(RECEIVER_PATH.read_text(encoding="utf-8"))
+
+    branching_guard = next(
+        node
+        for node in ast.walk(module)
+        if isinstance(node, ast.If)
+        and isinstance(node.test, ast.Call)
+        and isinstance(node.test.func, ast.Attribute)
+        and node.test.func.attr == "is_installed"
+        and node.test.args
+        and isinstance(node.test.args[0], ast.Constant)
+        and node.test.args[0].value == "netbox_branching"
+    )
+
+    assert not any(isinstance(node, ast.Try) for node in branching_guard.body)
