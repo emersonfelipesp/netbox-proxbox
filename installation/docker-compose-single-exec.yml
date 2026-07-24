@@ -1,0 +1,43 @@
+# docker-compose-single-exec.yml — one-shot scheduled sync container.
+#
+# Drop this file next to your existing netbox-docker stack and invoke it from a
+# host crontab or systemd timer. It runs `manage.py proxbox_sync --wait` once
+# and exits. See `docs/operations/single-exec.md` for end-to-end examples.
+#
+# Quick start (defaults assume the upstream netbox-docker compose project):
+#
+#   docker compose -f docs/installation/docker-compose-single-exec.yml run --rm netbox
+#
+# All NetBox-side config (DB_HOST, REDIS_HOST, REDIS_TASK_HOST, SECRET_KEY,
+# ALLOWED_HOSTS, ...) is read from the env_file you point this at — by default
+# the same `./env/netbox.env` that netbox-docker ships. Only the sync-specific
+# overrides live in the `environment:` block below. The boot script lives next
+# to this file as `proxbox-single-exec.sh` and is bind-mounted in read-only.
+
+name: netbox-proxbox-single-exec
+
+services:
+  netbox:
+    image: ${NETBOX_IMAGE:-netboxcommunity/netbox:v4.6.5}
+    restart: "no"
+    pull_policy: missing
+    env_file:
+      - path: ${NETBOX_ENV_FILE:-./env/netbox.env}
+        required: false
+    environment:
+      NETBOX_PROXBOX_PIP_SPEC: ${NETBOX_PROXBOX_PIP_SPEC:-netbox-proxbox}
+      PROXBOX_SYNC_TIMEOUT: ${PROXBOX_SYNC_TIMEOUT:-7200}
+      PROXBOX_SYNC_USER: ${PROXBOX_SYNC_USER:-}
+    entrypoint: ["/usr/local/bin/proxbox-single-exec.sh"]
+    volumes:
+      - type: bind
+        source: ${PROXBOX_SINGLE_EXEC_SCRIPT:-./proxbox-single-exec.sh}
+        target: /usr/local/bin/proxbox-single-exec.sh
+        read_only: true
+    networks:
+      - default
+
+networks:
+  default:
+    name: ${NETBOX_NETWORK:-netbox-docker_default}
+    external: true

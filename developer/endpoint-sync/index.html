@@ -1,0 +1,6246 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+  
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://emersonfelipesp.github.io/netbox-proxbox/developer/endpoint-sync/">
+      
+      
+        <link rel="prev" href="../backend-integration/">
+      
+      
+        <link rel="next" href="../browser-frontend/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+  
+  
+    <meta name="robots" content="noindex">
+  
+
+    
+      
+        <title>Endpoint Data Exchange - Proxbox Docs</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="https://cdn.materialdesignicons.com/5.4.55/css/materialdesignicons.min.css">
+    
+      <link rel="stylesheet" href="../../extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="deep-orange">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#endpoint-data-exchange" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="https://netboxlabs.com" title="Proxbox Docs" class="md-header__button md-logo" aria-label="Proxbox Docs" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Proxbox Docs
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Endpoint Data Exchange
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="deep-orange"  aria-label="Switch to Dark Mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to Dark Mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7M9 21v-1h6v1a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1m3-17a5 5 0 0 0-5 5c0 2.05 1.23 3.81 3 4.58V16h4v-2.42c1.77-.77 3-2.53 3-4.58a5 5 0 0 0-5-5"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to Light Mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to Light Mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7M9 21a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-1H9z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/emersonfelipesp/netbox-proxbox" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    emersonfelipesp/netbox-proxbox
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="https://netboxlabs.com" title="Proxbox Docs" class="md-nav__button md-logo" aria-label="Proxbox Docs" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Proxbox Docs
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/emersonfelipesp/netbox-proxbox" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    emersonfelipesp/netbox-proxbox
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Proxbox
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../certification/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Certification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../application-packet/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Application Packet
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Installation
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../installation/pre-installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pre-Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_3" id="__nav_4_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installing the Plugin
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Installing the Plugin
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../installation/1-installing-plugin/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using pip
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../installation/2-installing-plugin-git/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using git (recommended)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../installation/3-installing-plugin-docker/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using Docker
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../installation/backend-setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backend Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../installation/upgrading/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Upgrading
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Companion Plugins
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Companion Plugins
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../companion-plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../companion-plugins/netbox-pbs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    netbox-pbs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../companion-plugins/netbox-pdm/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    netbox-pdm
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../companion-plugins/netbox-ceph/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    netbox-ceph
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../companion-plugins/netbox-packer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    netbox-packer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backend
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Backend
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backend/using-pip/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using pip
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backend/using-git/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using git
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backend/using-docker/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using Docker
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Configuration
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/required-parameters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Required Parameters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/plugin-settings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugin Settings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/sync-overwrite-flags/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sync Overwrite Flags
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/sync-modes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sync Mode Controls
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/reusing-existing-objects/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reusing Existing Objects
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/hardware-discovery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware Discovery
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    CLI
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/sync/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sync Command
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/proxbox-cli/command-catalog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Command Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_8_4" id="__nav_8_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Command Examples
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Command Examples
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/proxbox-cli/command-examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/proxbox-cli/command-examples/core-commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Core Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/proxbox-cli/command-examples/netbox-commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NetBox Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/proxbox-cli/command-examples/proxmox-commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Proxmox Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/proxbox-cli/command-examples/infrastructure-commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Infrastructure Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Developer
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture-overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../component-deep-dive/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Component Deep Dive
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../data-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data Model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sync-pipeline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sync Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../data-flow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data Flow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../streaming-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Streaming Protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../authentication/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Authentication
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backend-integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backend Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Endpoint Data Exchange
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Endpoint Data Exchange
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-problem" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Problem
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#system-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        System Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#delivery-mechanism-1-post_save-signals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Delivery Mechanism 1 — post_save Signals
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Delivery Mechanism 1 — post_save Signals">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#fastapiendpoint-api-key-registration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FastAPIEndpoint → API key registration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#netboxendpoint-backend-sqlite-sync" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NetBoxEndpoint → backend SQLite sync
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#proxmoxendpoint-backend-sqlite-sync" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ProxmoxEndpoint → backend SQLite sync
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#delivery-mechanism-2-sync-job-preflight" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Delivery Mechanism 2 — Sync Job Preflight
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Delivery Mechanism 2 — Sync Job Preflight">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#failure-attribution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Failure attribution
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#full-sync-job-sequence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Full Sync Job Sequence
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#delivery-mechanism-3-dashboard-view-push" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Delivery Mechanism 3 — Dashboard View Push
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#shared-push-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Shared Push Functions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#bootstrap-sequence-first-time-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bootstrap Sequence (First-Time Setup)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#http-status-code-propagation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HTTP Status Code Propagation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Model
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Security Model">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#authentication-between-plugin-and-backend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Authentication between plugin and backend
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#credential-encryption-on-the-backend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Credential encryption on the backend
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#token-version-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Token version support
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#code-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Code Reference
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../browser-frontend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Browser Frontend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../extending-the-plugin/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Extending the Plugin
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_12" id="__nav_9_12_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Design
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/operational-verbs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operational Verbs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/netbox-to-proxmox-intent/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NetBox to Proxmox Intent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_13" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_13" id="__nav_9_13_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tooling
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_13_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_13">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tooling
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release-publishing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Publishing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ci-e2e-workflows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CI and E2E Workflows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../proxbox-cli-docgen/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Proxbox CLI Docgen
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../proxmox-mock-local/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Local Proxmox Mock
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../generated/proxbox-cli-command-capture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Raw CLI Capture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/cluster-nodes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cluster and Node Tracking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/headless-sync/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Headless Sync
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/single-exec/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Single-Exec Compose
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../scheduler/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scheduler Container
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/tenant-mapping/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tenant Mapping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/netbox-to-proxmox/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NetBox to Proxmox
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/deletion-requests/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deletion Requests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/recovering-proxbox-data/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Recovering Proxbox Data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_12" id="__nav_12_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/endpoints/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Endpoints
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/infrastructure/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Infrastructure
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/firecracker/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Firecracker
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/vm-data/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    VM Data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/operations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/settings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Settings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/ha/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cluster HA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13" >
+        
+          
+          <label class="md-nav__link" for="__nav_13" id="__nav_13_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_13_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_13">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Features
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/screenshots/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Screenshots
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/e2e-docker-testing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    E2E Docker Testing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/synchronized-data/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Synchronized Data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/scheduled-sync/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scheduled Sync
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/background-jobs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Background Jobs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/virtual-machine/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Virtual Machine
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/firecracker/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Firecracker Cloud
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/proxmox-config-tab/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Proxmox Config Tab
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/containers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Containers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/network/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Network
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/vlan-management/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    VLAN Management
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Storage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/backup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/backup-routines/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backup Routines
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/replications/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Replications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/ha/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HA Status
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/backend-logs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backend Logs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/monitoring/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Monitoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/api-integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/endpoint-import-export/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Endpoint Import / Export
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14" >
+        
+          
+          <label class="md-nav__link" for="__nav_14" id="__nav_14_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data Model
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_14_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Data Model
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../models/virtual-machine/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Virtual Machine
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../models/vm-cloudinit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    VM Cloud-Init
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../models/containers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Containers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../models/others/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Other Models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_15" >
+        
+          
+          <label class="md-nav__link" for="__nav_15" id="__nav_15_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_15_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_15">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Release Notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release-notes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Summary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release-notes/version-0.0.23.post1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Version 0.0.23.post1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release-notes/version-0.0.23/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Version 0.0.23
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release-notes/version-0.0.22/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Version 0.0.22
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release-notes/version-0.0.21/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Version 0.0.21
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release-notes/version-0.0.20.post3/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Version 0.0.20.post3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release-notes/version-0.0.20.post2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Version 0.0.20.post2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release-notes/version-0.0.20.post1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Version 0.0.20.post1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release-notes/version-0.0.20/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Version 0.0.20
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release-notes/version-0.0.19/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Version 0.0.19
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release-notes/version-0.0.18.post1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Version 0.0.18.post1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release-notes/version-0.0.18/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Version 0.0.18
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release-notes/version-0.0.17/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Version 0.0.17
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release-notes/version-0.0.16/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Version 0.0.16
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release-notes/version-0.0.15/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Version 0.0.15
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release-notes/version-0.0.15.post2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Version 0.0.15.post2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release-notes/version-0.0.15.post1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Version 0.0.15.post1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release-notes/version-0.0.14/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Version 0.0.14
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release-notes/version-0.0.13/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Version 0.0.13
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release-notes/version-0.0.12/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Version 0.0.12
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release-notes/version-0.0.11/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Version 0.0.11
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release-notes/version-0.0.10/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Version 0.0.10
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release-notes/version-0.0.9.post4/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Version 0.0.9.post4
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release-notes/version-0.0.9/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Version 0.0.9
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release-notes/version-0.0.8/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Version 0.0.8
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release-notes/version-0.0.7/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Version 0.0.7
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release-notes/version-0.0.6/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Version 0.0.6
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release-notes/version-0.0.5/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Version 0.0.5
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release-notes/version-0.0.4/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Version 0.0.4
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release-notes/version-0.0.3/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Version 0.0.3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release-notes/version-0.0.2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Version 0.0.2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release-notes/version-0.0.1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Version 0.0.1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-problem" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Problem
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#system-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        System Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#delivery-mechanism-1-post_save-signals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Delivery Mechanism 1 — post_save Signals
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Delivery Mechanism 1 — post_save Signals">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#fastapiendpoint-api-key-registration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FastAPIEndpoint → API key registration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#netboxendpoint-backend-sqlite-sync" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NetBoxEndpoint → backend SQLite sync
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#proxmoxendpoint-backend-sqlite-sync" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ProxmoxEndpoint → backend SQLite sync
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#delivery-mechanism-2-sync-job-preflight" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Delivery Mechanism 2 — Sync Job Preflight
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Delivery Mechanism 2 — Sync Job Preflight">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#failure-attribution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Failure attribution
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#full-sync-job-sequence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Full Sync Job Sequence
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#delivery-mechanism-3-dashboard-view-push" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Delivery Mechanism 3 — Dashboard View Push
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#shared-push-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Shared Push Functions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#bootstrap-sequence-first-time-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bootstrap Sequence (First-Time Setup)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#http-status-code-propagation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HTTP Status Code Propagation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Model
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Security Model">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#authentication-between-plugin-and-backend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Authentication between plugin and backend
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#credential-encryption-on-the-backend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Credential encryption on the backend
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#token-version-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Token version support
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#code-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Code Reference
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+                
+
+
+
+  
+
+
+  <nav class="md-path" aria-label="Navigation" >
+    <ol class="md-path__list">
+      
+        
+  
+  
+    <li class="md-path__item">
+      <a href="../.." class="md-path__link">
+        
+  <span class="md-ellipsis">
+    Proxbox
+  </span>
+
+      </a>
+    </li>
+  
+
+      
+      
+        
+  
+  
+    
+    
+      <li class="md-path__item">
+        <a href="../architecture-overview/" class="md-path__link">
+          
+  <span class="md-ellipsis">
+    Developer
+  </span>
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ol>
+  </nav>
+
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="endpoint-data-exchange">Endpoint Data Exchange<a class="headerlink" href="#endpoint-data-exchange" title="Permanent link">&para;</a></h1>
+<p>This page explains how the <code>netbox-proxbox</code> plugin automatically keeps its endpoint configuration
+in sync with the <code>proxbox-api</code> backend — covering the problem, the three delivery mechanisms,
+the complete data flow, and the security model.</p>
+<hr />
+<h2 id="the-problem">The Problem<a class="headerlink" href="#the-problem" title="Permanent link">&para;</a></h2>
+<p>The plugin and the backend are two <strong>separate processes with separate databases</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>System</th>
+<th>Database</th>
+<th>Endpoint Model</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>netbox-proxbox</code> (Django plugin)</td>
+<td>NetBox PostgreSQL</td>
+<td><code>NetBoxEndpoint</code>, <code>ProxmoxEndpoint</code>, <code>FastAPIEndpoint</code> (ORM models)</td>
+</tr>
+<tr>
+<td><code>proxbox-api</code> (FastAPI backend)</td>
+<td>Local SQLite (<code>database.db</code>)</td>
+<td><code>NetBoxEndpoint</code>, <code>ProxmoxEndpoint</code> (SQLModel tables)</td>
+</tr>
+</tbody>
+</table>
+<p>When an operator registers a <code>NetBoxEndpoint</code> in the plugin's UI, that record lives only in
+PostgreSQL. The backend needs its own copy in SQLite to open a NetBox API session — without it,
+every SSE sync stage fails immediately:</p>
+<div class="highlight"><pre><span></span><code>ProxboxException: No NetBox endpoint found
+detail: Please add a NetBox endpoint in the database
+</code></pre></div>
+<p>The same gap exists for <code>ProxmoxEndpoint</code>: the backend needs Proxmox credentials in its own
+SQLite table before it can open a Proxmox session for sync stages.</p>
+<hr />
+<h2 id="system-overview">System Overview<a class="headerlink" href="#system-overview" title="Permanent link">&para;</a></h2>
+<pre class="mermaid"><code>flowchart TB
+    subgraph Plugin["netbox-proxbox (Django / PostgreSQL)"]
+        NB_EP["NetBoxEndpoint\n(ORM model)"]
+        PX_EP["ProxmoxEndpoint\n(ORM model)"]
+        FA_EP["FastAPIEndpoint\n(ORM model)"]
+    end
+
+    subgraph Backend["proxbox-api (FastAPI / SQLite)"]
+        BE_NB["netboxendpoint table\n(SQLite)"]
+        BE_PX["proxmoxendpoint table\n(SQLite)"]
+        BE_KEY["apikey table\n(bcrypt hash)"]
+    end
+
+    subgraph SyncJob["ProxboxSyncJob (RQ worker)"]
+        Preflight["_ensure_backend_endpoints()\npreflight push"]
+        Stages["SSE sync stages\n(13 stages)"]
+    end
+
+    NB_EP -- "post_save signal\nsync_netbox_endpoint_to_backend()" --&gt; BE_NB
+    PX_EP -- "post_save signal\nsync_proxmox_endpoint_to_backend()" --&gt; BE_PX
+    FA_EP -- "post_save signal\nPOST /auth/register-key" --&gt; BE_KEY
+
+    Preflight -- "PUT/POST /netbox/endpoint" --&gt; BE_NB
+    Preflight -- "PUT/POST /proxmox/endpoints" --&gt; BE_PX
+
+    BE_NB --&gt; Stages
+    BE_PX --&gt; Stages
+    BE_KEY -. "X-Proxbox-API-Key\nvalidation" .-&gt; Stages</code></pre>
+<hr />
+<h2 id="delivery-mechanism-1-post_save-signals">Delivery Mechanism 1 — <code>post_save</code> Signals<a class="headerlink" href="#delivery-mechanism-1-post_save-signals" title="Permanent link">&para;</a></h2>
+<p>All three <code>post_save</code> signals fire whenever an operator saves an endpoint record through
+the plugin's UI or REST API. Each signal is <strong>best-effort</strong>: it logs on failure but never
+raises an exception, so a transient backend outage does not break the Django request.</p>
+<h3 id="fastapiendpoint-api-key-registration"><code>FastAPIEndpoint</code> → API key registration<a class="headerlink" href="#fastapiendpoint-api-key-registration" title="Permanent link">&para;</a></h3>
+<p><strong>File:</strong> <code>netbox_proxbox/signals.py</code> — <code>ensure_fastapi_endpoint_token</code></p>
+<pre class="mermaid"><code>sequenceDiagram
+    autonumber
+    actor Op as Operator
+    participant NB as NetBox UI
+    participant Sig as Django Signal
+    participant FA as FastAPIEndpoint (PostgreSQL)
+    participant API as proxbox-api
+
+    Op-&gt;&gt;NB: Save FastAPIEndpoint
+    NB-&gt;&gt;FA: ORM save()
+    FA--&gt;&gt;Sig: post_save fired
+    Sig-&gt;&gt;FA: Generate 48-byte token if missing
+    Sig-&gt;&gt;API: GET /auth/bootstrap-status
+    API--&gt;&gt;Sig: { "needs_bootstrap": true }
+    Sig-&gt;&gt;API: POST /auth/register-key { "api_key": token }
+    API--&gt;&gt;Sig: 201 Created
+    Note over Sig,API: Token stored as bcrypt hash in apikey table</code></pre>
+<p>The auto-generated token is stored on <code>FastAPIEndpoint.token</code> in PostgreSQL and used as the
+<code>X-Proxbox-API-Key</code> header on every subsequent backend request. If the backend already has a
+key (<code>needs_bootstrap: false</code>), the registration step is skipped.</p>
+<hr />
+<h3 id="netboxendpoint-backend-sqlite-sync"><code>NetBoxEndpoint</code> → backend SQLite sync<a class="headerlink" href="#netboxendpoint-backend-sqlite-sync" title="Permanent link">&para;</a></h3>
+<p><strong>File:</strong> <code>netbox_proxbox/signals.py</code> — <code>sync_netbox_endpoint_to_backend</code><br />
+<strong>Shared function:</strong> <code>netbox_proxbox/views/backend_sync.py</code> — <code>sync_netbox_endpoint_to_backend()</code></p>
+<pre class="mermaid"><code>sequenceDiagram
+    autonumber
+    actor Op as Operator
+    participant NB as NetBox UI
+    participant Sig as Django Signal
+    participant NB_EP as NetBoxEndpoint (PostgreSQL)
+    participant API as proxbox-api
+
+    Op-&gt;&gt;NB: Save NetBoxEndpoint
+    NB-&gt;&gt;NB_EP: ORM save()
+    NB_EP--&gt;&gt;Sig: post_save fired
+    Sig-&gt;&gt;Sig: Resolve FastAPIEndpoint (singleton)
+    Sig-&gt;&gt;Sig: Build base_url + X-Proxbox-API-Key header
+    Sig-&gt;&gt;API: GET /netbox/endpoint
+    API--&gt;&gt;Sig: [] (empty) or [{ id: 1, ... }]
+
+    alt No existing entry
+        Sig-&gt;&gt;API: POST /netbox/endpoint { name, ip, port, token, ... }
+        API--&gt;&gt;Sig: 201 Created
+    else Entry exists (singleton PUT)
+        Sig-&gt;&gt;API: PUT /netbox/endpoint/1 { name, ip, port, token, ... }
+        API--&gt;&gt;Sig: 200 OK
+    end
+    Note over API: Token encrypted at rest with Fernet (AES-128-CBC)</code></pre>
+<p>The payload contains the IP address, port, SSL flag, token version, and credential material.
+On the backend, tokens are encrypted with Fernet before storage — see
+<a href="#security-model">Security Model</a> below.</p>
+<hr />
+<h3 id="proxmoxendpoint-backend-sqlite-sync"><code>ProxmoxEndpoint</code> → backend SQLite sync<a class="headerlink" href="#proxmoxendpoint-backend-sqlite-sync" title="Permanent link">&para;</a></h3>
+<p><strong>File:</strong> <code>netbox_proxbox/signals.py</code> — <code>ensure_proxmox_endpoint_has_fastapi_token</code><br />
+<strong>Shared function:</strong> <code>netbox_proxbox/views/backend_sync.py</code> — <code>sync_proxmox_endpoint_to_backend()</code></p>
+<pre class="mermaid"><code>sequenceDiagram
+    autonumber
+    actor Op as Operator
+    participant NB as NetBox UI
+    participant Sig as Django Signal
+    participant PX_EP as ProxmoxEndpoint (PostgreSQL)
+    participant API as proxbox-api
+
+    Op-&gt;&gt;NB: Save ProxmoxEndpoint
+    NB-&gt;&gt;PX_EP: ORM save()
+    PX_EP--&gt;&gt;Sig: post_save fired
+    Sig-&gt;&gt;Sig: Resolve FastAPIEndpoint (singleton)
+    Sig-&gt;&gt;Sig: Ensure FastAPIEndpoint has a token
+    Sig-&gt;&gt;API: POST /auth/register-key (if needed)
+
+    Sig-&gt;&gt;Sig: Build base_url + auth headers
+    Sig-&gt;&gt;API: GET /proxmox/endpoints
+    API--&gt;&gt;Sig: list of existing entries
+
+    alt No entry with matching name
+        Sig-&gt;&gt;API: POST /proxmox/endpoints { name, ip, port, credentials }
+        API--&gt;&gt;Sig: 201 Created
+    else Matching entry found
+        Sig-&gt;&gt;API: PUT /proxmox/endpoints/{id} { name, ip, port, credentials }
+        API--&gt;&gt;Sig: 200 OK
+    end
+    Note over API: Password/token encrypted at rest with Fernet</code></pre>
+<p>The endpoint name uses the stable format <code>"{name} (nb:{pk})"</code> so that the same Proxmox cluster
+registered under different NetBox PKs is treated as a distinct backend entry.</p>
+<hr />
+<h2 id="delivery-mechanism-2-sync-job-preflight">Delivery Mechanism 2 — Sync Job Preflight<a class="headerlink" href="#delivery-mechanism-2-sync-job-preflight" title="Permanent link">&para;</a></h2>
+<p><code>post_save</code> signals are best-effort: if the backend was offline when an endpoint was first
+saved, the push is silently lost. The <strong>preflight step</strong> in <code>ProxboxSyncJob.run()</code> closes
+this gap by pushing all endpoint data immediately before any SSE stage starts — regardless
+of whether the signals previously succeeded — and then verifies that the backend actually
+holds a NetBox endpoint before letting the run continue.</p>
+<p><strong>File:</strong> <code>netbox_proxbox/jobs.py</code> — <code>_ensure_backend_endpoints()</code></p>
+<pre class="mermaid"><code>flowchart TD
+    A["ProxboxSyncJob.run() called"] --&gt; B["_ensure_backend_endpoints()"]
+
+    B --&gt; C["get_fastapi_request_context(endpoint_id=fastapi_endpoint_id)\n→ resolve backend URL + auth headers"]
+    C --&gt; D{Context found?}
+    D -- No --&gt; E["raise ProxboxPreflightError\n'no usable proxbox-api backend'"]
+
+    D -- Yes --&gt; R["wait_for_backend_ready()\nbounded cold-start wait"]
+    R --&gt; K["ensure_backend_key_registered(endpoint_id=…)"]
+    K --&gt; W{"Any enabled\nNetBoxEndpoint?"}
+    W -- "No — zero enabled rows" --&gt; XG["raise ProxboxPreflightError\nbackend list NOT consulted"]
+    W -- Yes --&gt; F["For each enabled NetBoxEndpoint:\nsync_netbox_endpoint_to_backend()"]
+    F --&gt; N{All pushes OK?}
+    N -- Yes --&gt; P["list_backend_proxmox_endpoints()\nonce — reused by every push"]
+    N -- No --&gt; L["list_backend_netbox_endpoints()"]
+    L --&gt; M{Backend rows?}
+    M -- "Unknown (listing failed)" --&gt; UN{"Did another enabled\nrow push OK?"}
+    UN -- "Yes — credentials provably ours" --&gt; P
+    UN -- "No — nothing pushed, nothing read" --&gt; X["raise ProxboxPreflightError\nsync stops here"]
+    M -- "No — confirmed empty" --&gt; X
+    M -- Yes --&gt; ID{"backend_holds_netbox_endpoint()\nsame resolved target — (domain or ip_address)\nand the same port?"}
+    ID -- "Yes — ours" --&gt; CUR{"_netbox_row_is_current()\nsame verify_ssl and token_version?"}
+    ID -- "No — another NetBox" --&gt; X
+    CUR -- "No — superseded posture" --&gt; X
+    CUR -- "Yes — ours and current" --&gt; FP{"netbox_push_credentials_unchanged()\nlocal fingerprint of the last successful\npush still matches this row's credentials?"}
+    FP -- "Yes — same credentials" --&gt; P
+    FP -- "No — rotated, or never pushed" --&gt; X
+    P --&gt; G["For each ProxmoxEndpoint:\nsync_proxmox_endpoint_to_backend()\n(filtered by proxmox_endpoint_ids if scoped)"]
+    G --&gt; BU{"Elapsed ≥\nPREFLIGHT_ENDPOINT_PUSH_BUDGET?"}
+    BU -- Yes --&gt; SK["Skip remaining endpoints\nwarning phase + hint"]
+    BU -- No --&gt; Z
+    SK --&gt; Z["Proceed with sync"]
+
+    Z --&gt; H["sync_cluster_and_nodes()\n(cluster/node sync — direct REST)"]
+    H --&gt; I["SSE stage loop\n(devices → ... → backup-routines)"]
+
+    style E fill:#c62828,color:#fff
+    style SK fill:#e65100,color:#fff
+    style Z fill:#1565c0,color:#fff
+    style I fill:#2e7d32,color:#fff
+    style X fill:#c62828,color:#fff
+    style XG fill:#c62828,color:#fff</code></pre>
+<div class="admonition note">
+<p class="admonition-title">Best-effort, with six blocking exceptions</p>
+<p>Most of what the preflight does is advisory: a failed readiness probe, a failed key
+registration, or a failed <strong>Proxmox</strong> endpoint push is logged as a warning and the sync
+continues, because the backend may already hold a usable record.</p>
+<p>Six conditions stop the run:</p>
+<ol>
+<li><strong>No usable backend.</strong> <code>get_fastapi_request_context()</code> returns nothing — there is no
+   enabled <code>FastAPIEndpoint</code>, or the one this job selected is unusable. Every stage is
+   an HTTP call to that backend, so there is nothing left to attempt. The error names
+   the selected endpoint id when the job pinned one, and points at
+   <strong>Proxbox → Endpoints → FastAPI</strong>.</li>
+<li><strong>No enabled <code>NetBoxEndpoint</code> in this NetBox.</strong> Zero enabled rows is not a failed
+   push — it is this NetBox declining to be written to at all, the documented
+   disabled-endpoint no-connection gate. It blocks <strong>unconditionally</strong>, and the
+   backend's stored rows are deliberately <em>not</em> consulted:
+   <code>list_backend_netbox_endpoints()</code> is never even called. proxbox-api may still hold
+   credentials issued before the row was disabled, so honouring them would let the sync
+   keep writing with exactly the authorization the operator revoked.</li>
+<li><strong>Confirmed-empty backend.</strong> The <strong>NetBox</strong> endpoint push is what installs the
+   credentials proxbox-api writes NetBox objects with, so if that push fails <strong>and</strong> a
+   follow-up <code>GET /netbox/endpoint</code> confirms the backend holds <em>no</em> NetBox endpoint at
+   all, no stage can succeed and the job raises <code>ProxboxPreflightError</code> immediately.</li>
+<li><strong>Stored rows that point at a different NetBox.</strong> The push failed, the backend <em>does</em>
+   hold rows, but none of them provably points at <em>this</em> NetBox. See the next note.</li>
+<li><strong>Nothing pushed and nothing readable.</strong> The push failed for <em>every</em> enabled row
+   <strong>and</strong> <code>list_backend_netbox_endpoints()</code> itself failed, so there is no evidence at
+   all that the backend's credentials belong to this NetBox — only that it may hold
+   somebody's. This is the one place "unknown" must not read as "ours": the branch is
+   reachable only <em>after</em> a failed push, and continuing would reintroduce exactly the
+   cross-instance write escalation 4 blocks, just through an ambiguous read instead of a
+   mismatched row. The exception is a run where <em>some</em> enabled row pushed successfully —
+   that push wrote this NetBox's credentials into the singleton, so the unreadable
+   listing has nothing left to add and the run continues with a warning.</li>
+<li><strong>A stored row that is ours, but was written with credentials we have since
+   replaced.</strong> The push failed, a stored row passes escalation 4's identity <em>and</em>
+   currency checks, and the API token behind it has been rotated in place since the last
+   successful push. <code>NetBoxEndpointResponse</code> withholds <code>token</code>/<code>token_key</code>, so the secret
+   cannot be compared against the wire at all — it is compared <strong>locally</strong>, against the
+   fingerprint the last successful push recorded. Continuing would let proxbox-api keep
+   writing with the credential the operator has just revoked, which is the one outcome
+   rotating a token is meant to prevent. See the fingerprint note below.</li>
+</ol>
+<p>Escalation 3 is deliberately narrow, and 5 does not widen it. A failed listing is still
+<em>unknown</em> rather than <em>empty</em>; what 5 says is that "unknown" is not enough <strong>on its own</strong>
+to license a sync, once the push that would have made it known has already failed. A
+listing that errors after a <em>successful</em> push stays non-fatal, and only a definitive
+empty list triggers 3.</p>
+</div>
+<div class="admonition danger">
+<p class="admonition-title">A stored row is not evidence until it is <em>identified</em></p>
+<p>The backend's NetBox endpoint is a <strong>singleton</strong> on proxbox-api:
+<code>sync_netbox_endpoint_to_backend()</code> updates the first (and only) stored entry by
+<em>position</em>, never by name. Unlike the Proxmox side — whose payload name embeds the
+plugin pk as <code>"&lt;name&gt; (nb:&lt;pk&gt;)"</code> — the NetBox payload's <code>name</code> is free text. So the
+mere <em>presence</em> of a row proves nothing about whose credentials it carries.</p>
+<p>When the push fails and rows exist, <code>backend_holds_netbox_endpoint()</code> decides whether
+any of them is ours. Identity is the <strong>resolved connection target</strong>, not the name and not
+a field-by-field comparison. proxbox-api's own <code>NetBoxEndpoint.url</code> property builds the
+address it dials as <code>host = domain if domain else ip_address</code> — so the target is
+<code>(domain or ip_address)</code> plus <code>port</code>, with <code>domain</code>/<code>ip_address</code> read from the <em>model</em> by
+<code>_netbox_endpoint_identity(endpoint)</code>. Both sides must resolve a target, and the two
+targets must be equal.</p>
+<p><strong>Compare the resolved target, not each field in turn.</strong> An earlier rule required that
+every host field both sides declare agree and that at least one positively match; it is
+wrong in <em>both</em> directions. It <strong>accepts</strong> rows it should not — a stored row blank on
+<code>domain</code> at our IP is a NetBox reached <em>by address</em>, a different service from ours
+reached by vhost name at that same address, and a blank stored field is data, not a gap.
+The mirror case is a stored row naming <em>another</em> domain at our IP while we are IP-only:
+that row dials their vhost. And it <strong>rejects</strong> rows it should not — once a domain is set
+the address is never dialled, so our own record whose stored IP has since changed is
+still ours.</p>
+<p><code>port</code> is <strong>required on both sides</strong>, not "checked when present". proxbox-api declares it
+non-optional on <code>NetBoxEndpointResponse</code> and <code>GET /endpoint</code> returns
+<code>list[NetBoxEndpointResponse]</code>, so every row this backend produces carries one. A row
+without it is not something this backend produced, and a port we cannot parse is a
+service we cannot identify. Same host, different port is a different service.</p>
+<p>A match means the failed push was a transient <em>refresh</em> failure and the stored credentials
+are still ours — warn and continue. No match means proxbox-api is holding another NetBox
+instance's credentials, and continuing would sync this estate's Proxmox data <strong>into
+someone else's NetBox</strong>. That blocks.</p>
+<p><strong>Identity selects a candidate row; currency is what accepts it.</strong> Proving a row describes
+<em>this</em> NetBox does not prove it still describes it <em>correctly</em>. The push body carries
+<code>verify_ssl</code> and <code>token_version</code> alongside the target, so an operator who hardens TLS
+verification or rotates the token scheme and then hits a transient push failure would
+otherwise continue the run with proxbox-api writing under the <strong>superseded</strong> posture.
+<code>_netbox_row_is_current()</code> therefore also requires both fields to match, read from the
+model for the same reason the target is — going through <code>_netbox_endpoint_backend_payload()</code>
+would warn and materialise the API token merely to answer a comparison. An <strong>absent</strong>
+<code>verify_ssl</code> or <code>token_version</code> reads as drifted: a <code>False</code> here blocks the whole run, so
+unknown must fail closed, unlike the Proxmox-side twin where an unknown merely costs one
+extra push.</p>
+<p>The comparable set is bounded by what the backend returns. <code>NetBoxEndpointResponse</code>
+carries <code>id, name, ip_address, domain, port, token_version, verify_ssl, enabled</code> and
+deliberately withholds <code>token</code>/<code>token_key</code> — so a rotated <strong>secret</strong> under an unchanged
+scheme is invisible to <em>every</em> comparison made against the stored row, and is checked
+locally instead (next paragraph). <code>name</code> <strong>is</strong> returned and is deliberately <strong>not</strong>
+compared: it is free text, and a rename must not hard-fail an otherwise safe run.</p>
+<p><strong>The secret is compared against a local fingerprint, not against the backend.</strong> Each
+successful push records <code>netbox_credential_fingerprint(payload)</code> — a keyed HMAC-SHA256
+over <code>token_version</code>, <code>token_key</code> and <code>token</code>, joined by <code>\x1f</code> so no two distinct
+credential triples can concatenate to the same input — on
+<code>NetBoxEndpoint.pushed_credential_fingerprint</code> (migration <code>0073</code>).
+<code>netbox_push_credentials_unchanged()</code> re-derives it from the endpoint as it stands <em>now</em>
+and compares with <code>hmac.compare_digest</code>. The stored value is <strong>not</strong> a credential:
+<code>salted_hmac</code> keys off NetBox's <code>SECRET_KEY</code>, so the digest is non-reversible and is not
+even comparable across installs. Three details are load-bearing: it fingerprints the
+<strong>payload</strong> rather than the model, so the record cannot drift from what proxbox-api was
+actually handed; it is written with <code>type(endpoint).objects.filter(pk=pk).update(...)</code>
+and never <code>save()</code>, because <code>NetBoxEndpoint</code>'s <code>post_save</code> handler re-pushes to the
+backend; and a <code>DatabaseError</code> is logged rather than raised, so an install that has not
+applied <code>0073</code> yet degrades to "fingerprint absent" instead of failing the push. An
+<strong>empty</strong> stored fingerprint reads as <em>changed</em> — never pushed, or a first run after
+upgrading into this check — which is the fail-closed reading, and one successful push
+clears it permanently.</p>
+<p>The row loop <strong>keeps scanning</strong> rather than returning the first identity-matched row's
+currency verdict, so a stale duplicate ordered ahead of a current row cannot decide the
+answer — and a current row belonging to a <em>different</em> NetBox never rescues our own drifted
+one.</p>
+<p><strong>Do not read identity off <code>_netbox_endpoint_backend_payload()</code>.</strong> That is the <em>push
+body</em>, and it substitutes <code>"127.0.0.1"</code> whenever the row has no linked IP so the backend
+still has something to dial. <em>Every</em> domain-only NetBox therefore pushes the same
+loopback string, and matching on it let one domain-only instance identify as another
+instance's stored record. <code>_netbox_endpoint_identity()</code> reads the model instead: only an
+explicitly configured IP is evidence here, and an absent one contributes nothing.</p>
+<p>The check is fail-closed throughout: an empty or <code>None</code> list, a local row that resolves
+no host, a stored row that resolves no host, a different resolved target, a missing or
+unparseable <code>port</code> on either side, or a missing currency field all return "not held". A
+run that cannot prove the backend is pointed at it — and still configured the way this
+NetBox declares — does not proceed.</p>
+</div>
+<div class="admonition warning">
+<p class="admonition-title">The selected-object batch path runs the same preflight</p>
+<p>A "sync selected objects" run reaches proxbox-api through <code>sync_individual()</code> rather
+than the SSE stage loop, but the <strong>writes land in NetBox exactly the same way</strong>. The
+batch branch of <code>run()</code> therefore calls <code>_ensure_backend_endpoints()</code> and raises on
+<code>blocking_error</code> before touching <code>_run_batch_selected_sync()</code> — otherwise a NetBox that
+had disabled its own endpoint could still be written to using whatever credentials the
+backend happened to still hold, which is the one thing the gate exists to prevent.</p>
+<p>The batch path also threads <code>fastapi_endpoint_id</code> down to every per-object call:
+<code>_run_batch_selected_sync(..., fastapi_endpoint_id=…)</code> →
+<code>sync_individual_with_dependencies(..., fastapi_endpoint_id=…)</code> → <code>sync_individual()</code> →
+<code>get_first_fastapi_context(endpoint_id=…)</code>, including the recursive dependency syncs.
+Each of those calls resolves its own backend, so without the pin a multi-backend install
+would validate one proxbox-api in the preflight and then sync against whichever row
+sorts first. The batch response carries <code>endpoint_runtimes</code> built from the preflight
+phases, same as a staged run.</p>
+<p><code>netbox_branch_schema_id</code> is threaded the same way, and for a sharper reason: it must
+travel as an <strong>argument</strong>, not only as a query param on the first call.
+<code>_sync_dependency()</code> rebuilds each dependent call's params from scratch out of
+<code>_CONTEXT_KEYS</code>, and that tuple does not contain <code>netbox_branch_schema_id</code> — so a schema
+id carried only in <code>query_params</code> reaches the selected object and is then dropped for
+everything resolved off it. The object lands on the branch schema while its dependencies
+are written to <strong>main</strong>. <code>_run_batch_selected_sync()</code> therefore sets both the query param
+and the keyword, and <code>sync_individual_with_dependencies()</code> re-injects the keyword on
+every recursive call.</p>
+</div>
+<div class="admonition danger">
+<p class="admonition-title">…and the batch path resolves the same Proxmox endpoint scope</p>
+<p>The preflight settles the <strong>NetBox</strong> side. It does not decide which <strong>Proxmox</strong>
+endpoints a run may touch — the staged path settles that separately, and the batch
+path has to as well. Every <code>sync/individual/*</code> route on proxbox-api resolves its
+Proxmox sessions through the <em>same</em> <code>ProxmoxSessionsDep</code> the stage routes use, and
+that dependency reads a <strong>missing</strong> <code>proxmox_endpoint_ids</code> as <em>"use every endpoint I
+hold"</em>.</p>
+<p>So an unscoped selected-object sync is <strong>not</strong> a narrower request than a staged one —
+it is the widest request the backend accepts, reaching endpoints this NetBox has
+disabled and endpoints left over from a previous deployment. <code>run()</code> therefore calls
+<code>_batch_wire_endpoint_scope()</code> immediately after the preflight and fails the job with
+<code>Selected-object sync did not run: …</code> when nothing resolves, reusing the staged path's
+<code>_no_endpoint_scope_reason()</code> so both refuse in the same words. No proxbox-api call is
+made in that case.</p>
+<p>The resolved comma-separated backend ids then travel as <code>proxmox_wire_endpoint_ids=</code>
+into <code>_run_batch_selected_sync()</code>, which — exactly like the branch schema, and for the
+same <code>_CONTEXT_KEYS</code> reason — sets <strong>both</strong> <code>query_params["proxmox_endpoint_ids"]</code> and
+the explicit <code>proxmox_endpoint_ids=</code> argument on
+<code>sync_individual_with_dependencies()</code> → <code>_sync_dependency()</code> → <code>sync_individual()</code>.
+Here the argument matters more, not less: a scope that reached the selected object but
+not its dependencies would resolve those dependencies against the <strong>whole</strong> backend
+estate.</p>
+<p>A <strong>partial</strong> resolution is deliberately not an error. <code>_batch_wire_endpoint_scope()</code>
+returns <code>(scope, skipped_plugin_pks, error, wire_id_by_plugin_pk)</code>; unresolved endpoints
+are logged as a warning naming them and the run continues on the narrowed scope. Failing
+outright because one unrelated endpoint drifted would be a regression, and the narrowed
+scope is still strictly safer than the unscoped request it replaces.</p>
+</div>
+<div class="admonition danger">
+<p class="admonition-title">The job-wide scope is not narrow enough on its own — pin each object</p>
+<p>An earlier version of this page claimed an object living on a skipped endpoint "fails
+loudly at the backend". <strong>That is only true when no <em>other</em> in-scope endpoint can answer
+it.</strong> Proxmox identifiers are unique per endpoint, not across the estate: a
+selected-object request names a cluster, a node and a VMID and carries nothing else, so
+two unrelated Proxmox installations each holding a <code>cluster01/pve1/100</code> <strong>both</strong> answer,
+and whichever the backend picked is written into this object's NetBox row with no error
+anywhere.</p>
+<p>The fourth return value closes that. It maps <strong>plugin <code>ProxmoxEndpoint</code> pk → backend wire
+id</strong>, and <code>_run_batch_selected_sync()</code> resolves each object's owner through
+<code>ProxmoxCluster.netbox_cluster</code> / <code>ProxmoxCluster.endpoint</code> — one grouped query for the
+whole batch, issued beside the object fetch rather than per object in front of a
+per-object HTTP call — then:</p>
+<table>
+<thead>
+<tr>
+<th>Owner</th>
+<th>Scope used</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Resolved, and present in the map</td>
+<td>that endpoint's wire id <strong>alone</strong></td>
+<td>only one estate can answer, so a duplicate identifier elsewhere cannot be matched</td>
+</tr>
+<tr>
+<td>Resolved, but <strong>absent</strong> from the map (its endpoint drifted and was skipped)</td>
+<td>none — the object fails with HTTP <strong>424</strong> naming the endpoint id</td>
+<td>asking the <em>remaining</em> endpoints is precisely the wrong-estate write; the rest of the batch still runs</td>
+</tr>
+<tr>
+<td><strong>Ambiguous</strong> — two or more endpoints claim the object's core cluster</td>
+<td>none — the object fails with HTTP <strong>424</strong> naming every claimant</td>
+<td>two endpoints reflecting one cluster is <em>proof</em> the duplicated namespace exists here, so widening would ask both and keep whichever answered; picking one would be a <em>guess</em> about where the object lives</td>
+</tr>
+<tr>
+<td>Not resolvable at all — no cluster, or nothing has reflected a <code>ProxmoxCluster</code> for it yet</td>
+<td>the job-wide scope</td>
+<td>a first-ever sync has nothing to resolve an owner from and must still be discoverable</td>
+</tr>
+</tbody>
+</table>
+<p>The fallback cannot be a regression: the job-wide scope is exactly what this path sent
+before pinning existed. But <strong>unknown and ambiguous are different states</strong> — collapsing
+the ambiguous row back into the fallback restores the widening this pinning removes.</p>
+<p>Whatever those per-object refusals amount to, they also <strong>fail the enclosing job</strong>. Every
+object in a selected-object run was named by an operator, so there is no "partial success"
+reading of a list somebody typed out: a non-zero <code>failed</code> count raises rather than
+finishing <strong>completed</strong> with the errors buried in <code>job.data</code>. <code>job.data</code> is persisted
+<em>before</em> the raise, so the failed row still carries the per-object status and error, and
+the raise happens <em>before</em> the branch merge, so a partial result is never promoted into
+main. The job-log line names the failed objects (up to <code>BATCH_FAILURE_DETAIL_LIMIT</code>) and
+summarises the rest.</p>
+<p>All five batch types converge on a core <code>virtualization.Cluster</code> id by different routes
+(<code>_batch_object_core_cluster_id()</code>). A VM and a <code>ProxmoxStorage</code> carry it directly —
+<code>ProxmoxStorage.cluster</code> FKs to <code>virtualization.Cluster</code>, <strong>not</strong> to <code>ProxmoxCluster</code> — a
+backup resolves through its <em>storage</em> (the cluster its own sync parameters are built
+from), and snapshots and task-history rows through their VM. This mirrors
+<code>views/vm_sync_now.py::_endpoint_ids_for_vm()</code>, which scopes the per-VM Sync Now button
+the same way.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Scoped to the backend the stages will use</p>
+<p><code>run()</code> threads its own <code>fastapi_endpoint_id</code> into the preflight, which passes it to
+both <code>get_fastapi_request_context()</code> and <code>ensure_backend_key_registered()</code>, and on into
+wire-id resolution. With two enabled backends, resolving without the id checks the
+<em>wrong</em> one — which would hard-fail a sync that works, or pass one that cannot. The
+plugin's <code>ProxmoxEndpoint</code> pk is also <strong>not</strong> proxbox-api's own endpoint id; wire ids
+are always resolved against the selected backend.</p>
+<p>The same id is threaded into the four service passes that run <em>before</em> the SSE stages —
+<code>sync_cluster_and_nodes()</code>, <code>sync_firewall()</code>, <code>sync_datacenter()</code>, and
+<code>sync_vm_templates()</code> — each of which takes <code>fastapi_endpoint_id</code> and forwards it as
+<code>get_fastapi_request_context(endpoint_id=…)</code>. Pass the <strong>id</strong>, never a <code>fastapi_url</code>:
+those functions only read the resolved context's <code>verify_ssl</code> on the branch where
+<code>fastapi_url</code> is falsy, so supplying a URL silently forces TLS verification on and breaks
+deployments that deliberately disabled it.</p>
+</div>
+<div class="admonition tip">
+<p class="admonition-title">Cold-start budgets</p>
+<p>A freshly started proxbox-api spends its first seconds opening SQLite and resolving the
+NetBox OpenAPI schema. The preflight therefore waits for <code>/health</code> first
+(<code>PREFLIGHT_READY_*</code> in <code>services/backend_auth.py</code> — a few short retries, not the
+minutes-long default), and gives the authenticated calls room to answer:
+<code>BOOTSTRAP_STATUS_TIMEOUT</code>, <code>REGISTER_KEY_TIMEOUT</code>, and
+<code>BACKEND_ENDPOINT_PUSH_TIMEOUT</code> (<code>views/backend_sync.py</code>). These are ceilings, not
+delays — a warm backend still answers in well under a second.</p>
+</div>
+<div class="admonition warning">
+<p class="admonition-title">The push loop is time-boxed — softly, then hard</p>
+<p>Those per-call ceilings are generous by design, which means an estate with many Proxmox
+endpoints and an unresponsive backend would serialize into (endpoints × timeout) seconds
+<em>before the first stage runs</em> — the preflight alone could consume the whole
+<code>PROXBOX_SYNC_JOB_TIMEOUT</code>. Two limits in <code>views/backend_sync.py</code> bound the loop:</p>
+<ul>
+<li><code>PREFLIGHT_ENDPOINT_PUSH_BUDGET</code> (600 s) is a <strong>soft</strong> budget. Past it the loop skips
+  only endpoints whose backend row is already <strong>current</strong> — decided by
+  <code>backend_holds_proxmox_endpoint()</code> against the Proxmox rows listed once at the top of
+  the loop. Those rows are safe to skip: the push would have been a no-op refresh, and
+  the stages can still resolve a wire id for them.</li>
+<li><code>PREFLIGHT_ENDPOINT_PUSH_HARD_CEILING</code> (1800 s, 25% of the default job timeout) is the
+  real stop. Past it every remaining endpoint is skipped, current or not.</li>
+</ul>
+<p>The distinction is load-bearing. An endpoint the backend has <em>never</em> seen has no wire id,
+and "an endpoint that never resolved to a wire id fails the job" (below) — so skipping a
+fresh endpoint to save time would convert a slow sync into a failed one. That is exactly
+what a first run on a new install looks like: a cold backend, and every endpoint
+unregistered. So an unregistered endpoint is pushed even past the soft budget, and the
+job log says why. A listing call that <em>failed</em> reads the same way — "unknown" must never
+be the reason an endpoint is skipped into a fatal error.</p>
+<p>"Held" is not sufficient on its own, either. <code>backend_holds_proxmox_endpoint()</code> locates
+the row by <code>proxmox_backend_name()</code> — the same name the push itself matches on, so the
+check cannot drift from <code>sync_proxmox_endpoint_to_backend()</code> — and then requires
+<code>_proxmox_row_is_current()</code>: the resolved connection target must match, and so must the
+three pushed fields the backend both stores and returns (<code>username</code>, <code>access_methods</code>,
+<code>verify_ssl</code>). Skipping a <strong>drifted</strong> row would preserve exactly the stale row the
+resolvers below then refuse to sync against, turning a merely slow backend into a
+blocked endpoint. The same check covers <code>timeout</code>, <code>max_retries</code>, and
+<code>retry_backoff</code>: proxbox-api's public list schema returns those as
+<code>int</code> / <code>int</code> / <code>float</code>, matching the plugin payload, and drift changes live
+Proxmox request behavior. A globally inherited timeout change therefore
+remains push-required even after the soft budget is exhausted. Site/tenant
+display metadata remains excluded. A false "not current" costs one extra
+push, bounded by the hard ceiling.</p>
+<p>Skipped endpoints are never silent — each gets a <code>warning</code> runtime phase, and they are
+named in a job-log warning and in the preflight hint, with wording that distinguishes a
+soft-budget skip from a hard-ceiling one.</p>
+<p>For the same reason the loop lists the backend's Proxmox rows <strong>once</strong> and reuses them
+for every push, instead of paying a fresh listing per endpoint.</p>
+</div>
+<div class="admonition danger">
+<p class="admonition-title">A located Proxmox row is not automatically a usable one</p>
+<p>The push loop above only <em>warns</em> when a push fails. So a <code>ProxmoxEndpoint</code> retargeted in
+NetBox whose push then failed leaves proxbox-api holding the <strong>previous</strong> host under this
+endpoint's name — and a sync scoped through that wire id reflects the old Proxmox host's
+inventory into NetBox under the new endpoint. Nothing about the name can see that: the
+name embeds the plugin pk, so it proves the row was <em>created for</em> this endpoint and says
+nothing about where the row now points.</p>
+<p><code>resolve_backend_endpoint_ids()</code> and <code>resolve_backend_endpoint_id()</code> therefore both route
+through <code>_resolve_backend_row_id()</code>, which locates the row by <code>proxmox_backend_name()</code>
+and then confirms it still dials the same service. Identity is the <strong>resolved connection
+target</strong> — <code>_proxmox_connection_target()</code> → <code>(domain or ip_address)</code> plus <code>port</code> — which
+mirrors proxbox-api's own <code>ProxmoxEndpoint.host</code> property (<code>return self.domain or
+self.ip_address</code>), exactly as on the NetBox side above. <code>port</code> is required on both sides:
+<code>ProxmoxEndpointPublic</code> declares it non-optional, and the same host on a different port
+is a different service.</p>
+<p>The singular resolver matters as much as the batch one. It backs the endpoint
+<strong>Templates</strong> tab and the create-instance wizard, so a stale row there would list one
+host's templates and provision onto another.</p>
+<p>Every failure mode fails closed and is <strong>named</strong> in the returned message — not
+registered, no resolvable host on either side, target mismatch (which reports the host
+the backend actually points at), or no usable id — so the operator sees a refusal to
+proceed instead of silently receiving the wrong estate's inventory. In the batch path the
+endpoint is omitted from the scope and the reason logged, which feeds the "endpoint that
+never resolved to a wire id fails the job" behaviour below.</p>
+<p>As on the NetBox side, the wanted values come from the <strong>model</strong>, never from
+<code>_proxmox_backend_payload()</code> — that payload's <code>get_ip_address_host()</code> fallback makes
+every domain-only endpoint push the identical <code>127.0.0.1</code> string, so comparing against it
+would make two unrelated endpoints look like the same host. An endpoint that resolves no
+target at all reads as <em>not current</em> everywhere, which costs nothing in practice:
+<code>EndpointBase.clean()</code> requires a domain or an IP address, so a validly saved row always
+resolves one.</p>
+</div>
+<h3 id="failure-attribution">Failure attribution<a class="headerlink" href="#failure-attribution" title="Permanent link">&para;</a></h3>
+<p>Non-fatal preflight warnings are carried forward as a <code>preflight_hint</code> string and appended
+to any later stage error. Without it, a preflight problem surfaces as whatever unrelated
+symptom the backend happens to report first — a sync that failed because the backend had no
+NetBox credentials would report <code>Error ensuring Proxbox tag</code> on the <code>devices</code> stage, several
+minutes and several wasted stages later, sending operators to debug tags instead of
+connectivity.</p>
+<p><strong>An endpoint that never resolved to a wire id fails the job.</strong> If a Proxmox endpoint cannot
+be mapped to a backend endpoint id, no stage runs for it. The job does not report success:
+it fails with <code>No sync stage ran</code> when <em>nothing</em> resolved, or names how many endpoints were
+skipped when only some did. <code>job.data</code> is persisted <strong>before</strong> the failure is raised, so the
+per-endpoint runtime breakdown stays readable on the failed row.</p>
+<p><strong>Unless every selected stage was disabled anyway.</strong> Wire-id resolution happens before the
+per-stage sync-mode checks, so an endpoint whose selected stages are <em>all</em> sync-mode-disabled
+used to hard-fail on a missing wire id it would never have used. That case is now recorded as
+a <code>skipped</code> stage with the mode-disabled reason, not an <code>endpoint-scope</code> error. A <code>skipped</code>
+stage does <strong>not</strong> count as "a stage ran": counting it would make <code>No sync stage ran</code>
+unreachable as soon as any endpoint contributed a mode skip.</p>
+<p><strong>Backend error details are redacted before they are logged.</strong> The preflight pushes the
+<code>NetBoxEndpoint</code> (carrying an API <code>token</code>) and each <code>ProxmoxEndpoint</code> (carrying <code>password</code> /
+<code>token_value</code>). FastAPI answers a schema mismatch with a <code>422</code> whose <code>input</code> echoes the
+submitted body verbatim, and that detail is written to job logs and <code>Job.error</code> — long-lived
+rows readable by anyone with permission to view jobs. <code>extract_backend_error_detail()</code>
+therefore runs every parsed body through <code>redact_sensitive()</code> first. It matches <strong>keys</strong>,
+not values, so the operator still sees which field the backend rejected and why; only the
+credential values become <code>[redacted]</code>.</p>
+<p>Key matching alone is not enough, so two more passes run alongside it:</p>
+<ul>
+<li>A FastAPI <code>422</code> puts the secret in a <strong>scalar</strong> <code>input</code> whose own key is innocuous
+  (<code>{"loc": ["body", "token"], "input": "&lt;the secret&gt;"}</code>). When the sibling <code>loc</code> names a
+  credential field, <code>input</code> / <code>input_value</code> are redacted too.</li>
+<li>Pydantic and proxbox-api render rejected objects into <code>msg</code> / <code>python_exception</code> <strong>prose</strong>
+  (<code>input_value={'token': 'nbt_…'}</code>, <code>Authorization: Bearer &lt;jwt&gt;</code>), where there is no
+  mapping left to match. <code>redact_sensitive_text()</code> sweeps every string for those, and it also
+  runs on transport errors that carry no response body at all — the exception text can still
+  quote the request that failed.</li>
+</ul>
+<p>Keys are normalized (case, <code>-</code>, <code>_</code>, spaces) before matching so the HTTP-header spellings
+(<code>X-Proxbox-API-Key</code>, <code>Private-Key</code>) match the same markers as <code>api_key</code>. Nesting deeper than
+the recursion limit yields <code>[redacted: nesting depth limit]</code> — never the raw object.</p>
+<h3 id="full-sync-job-sequence">Full Sync Job Sequence<a class="headerlink" href="#full-sync-job-sequence" title="Permanent link">&para;</a></h3>
+<pre class="mermaid"><code>sequenceDiagram
+    autonumber
+    participant Op as Operator
+    participant NB as NetBox UI / RQ
+    participant Job as ProxboxSyncJob (RQ worker)
+    participant API as proxbox-api
+
+    Op-&gt;&gt;NB: Trigger sync (UI button or schedule)
+    NB-&gt;&gt;Job: ProxboxSyncJob.enqueue(sync_types=["all"], proxmox_endpoint_ids=[1,2])
+    Job-&gt;&gt;Job: _claim_rq_sync_ownership() — prevent concurrent runs
+
+    Note over Job,API: Preflight push (new)
+    Job-&gt;&gt;API: GET /netbox/endpoint
+    API--&gt;&gt;Job: [] or [existing]
+    Job-&gt;&gt;API: POST/PUT /netbox/endpoint (NetBoxEndpoint data)
+    Job-&gt;&gt;API: GET /proxmox/endpoints
+    API--&gt;&gt;Job: existing list
+    Job-&gt;&gt;API: POST/PUT /proxmox/endpoints/... (for each ProxmoxEndpoint)
+
+    Note over Job,API: Cluster/node sync (direct REST)
+    loop for each Proxmox endpoint
+        Job-&gt;&gt;API: GET /proxmox/cluster/status
+        API--&gt;&gt;Job: cluster data
+        Job-&gt;&gt;API: GET /proxmox/nodes/
+        API--&gt;&gt;Job: node list
+        Job-&gt;&gt;Job: Write ProxmoxCluster + ProxmoxNode to NetBox ORM
+    end
+
+    Note over Job,API: SSE stage pipeline
+    loop for each stage in [devices, storage, vms, ...]
+        Job-&gt;&gt;API: GET /{stage}/stream (SSE)
+        API--&gt;&gt;Job: event: step (progress)
+        API--&gt;&gt;Job: event: complete ok=true
+        Job-&gt;&gt;Job: Write progress to NetBox Job log
+    end
+
+    Job-&gt;&gt;NB: Job status = completed</code></pre>
+<hr />
+<h2 id="delivery-mechanism-3-dashboard-view-push">Delivery Mechanism 3 — Dashboard View Push<a class="headerlink" href="#delivery-mechanism-3-dashboard-view-push" title="Permanent link">&para;</a></h2>
+<p>The existing <code>sync_proxmox_endpoint_to_backend()</code> call from dashboard card views acts as a
+third, opportunistic push — whenever an operator opens the Proxbox dashboard, the currently
+selected Proxmox endpoint is pushed to the backend. This was the only push mechanism before
+the preflight and <code>post_save</code> signal were added.</p>
+<p>It remains in place as a zero-cost "refresh on view" that keeps credentials current even
+when the operator edits a Proxmox endpoint and then immediately opens the dashboard without
+triggering a full sync.</p>
+<hr />
+<h2 id="shared-push-functions">Shared Push Functions<a class="headerlink" href="#shared-push-functions" title="Permanent link">&para;</a></h2>
+<p>Both signals and the preflight delegate to two shared functions in
+<code>netbox_proxbox/views/backend_sync.py</code>:</p>
+<div class="highlight"><span class="filename">netbox_proxbox/views/backend_sync.py</span><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">sync_netbox_endpoint_to_backend</span><span class="p">(</span>
+    <span class="n">endpoint</span><span class="p">:</span> <span class="n">NetBoxEndpoint</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">base_url</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">auth_headers</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">backend_verify_ssl</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">timeout</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;GET /netbox/endpoint, then PUT (update) or POST (create). Returns (ok, error, http_status).&quot;&quot;&quot;</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">sync_proxmox_endpoint_to_backend</span><span class="p">(</span>
+    <span class="n">endpoint</span><span class="p">:</span> <span class="n">ProxmoxEndpoint</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">base_url</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">auth_headers</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">backend_verify_ssl</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">timeout</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">15</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;GET /proxmox/endpoints, then PUT (update) or POST (create). Returns (ok, error, http_status).&quot;&quot;&quot;</span>
+</code></pre></div>
+<p>Both functions follow the same pattern:</p>
+<pre class="mermaid"><code>flowchart LR
+    A["Call push function"] --&gt; B["GET list endpoint\n(check existing)"]
+    B --&gt; C{Entry exists?}
+    C -- No --&gt; D["POST /endpoint\n(create)"]
+    C -- Yes --&gt; E["PUT /endpoint/{id}\n(update)"]
+    D --&gt; F["Return (True, None, None)"]
+    E --&gt; F
+    B -- "error" --&gt; G["Return (False, error_msg, http_status)"]
+    D -- "error" --&gt; G
+    E -- "error" --&gt; G</code></pre>
+<div class="admonition note">
+<p class="admonition-title">A successful NetBox push also leaves a receipt</p>
+<p>On the success path only, <code>sync_netbox_endpoint_to_backend()</code> calls
+<code>_record_pushed_credential_fingerprint(endpoint, payload)</code>, storing a keyed HMAC of the
+credentials it just handed the backend on <code>NetBoxEndpoint.pushed_credential_fingerprint</code>.
+That receipt is what escalation 6 of the preflight compares against later, and it is the
+only way an in-place token rotation is detectable at all — proxbox-api never gives the
+secret back. It is written with <code>type(endpoint).objects.filter(pk=pk).update(...)</code>, never
+<code>save()</code>: <code>NetBoxEndpoint</code>'s <code>post_save</code> handler pushes to the backend, so saving from
+inside a push would recurse. A <code>DatabaseError</code> (including the <code>ProgrammingError</code> from an
+install that has not applied migration <code>0073</code>) is logged and swallowed — the push itself
+already succeeded, and failing it over a bookkeeping write would be the tail wagging the
+dog.</p>
+</div>
+<hr />
+<h2 id="bootstrap-sequence-first-time-setup">Bootstrap Sequence (First-Time Setup)<a class="headerlink" href="#bootstrap-sequence-first-time-setup" title="Permanent link">&para;</a></h2>
+<p>When both systems start fresh (empty databases), the recommended setup order is:</p>
+<pre class="mermaid"><code>sequenceDiagram
+    autonumber
+    actor Op as Operator
+    participant NB as NetBox Plugin UI
+    participant NBPG as NetBox PostgreSQL
+    participant API as proxbox-api SQLite
+
+    Note over Op,API: Step 1 — FastAPIEndpoint (connection to backend)
+    Op-&gt;&gt;NB: Create FastAPIEndpoint (IP/port of proxbox-api)
+    NB-&gt;&gt;NBPG: Save FastAPIEndpoint
+    NBPG--&gt;&gt;NB: post_save signal
+    NB-&gt;&gt;API: POST /auth/register-key { api_key: &lt;48-byte token&gt; }
+    API--&gt;&gt;NB: 201 — key stored as bcrypt hash
+
+    Note over Op,API: Step 2 — NetBoxEndpoint (NetBox credentials for backend)
+    Op-&gt;&gt;NB: Create NetBoxEndpoint (this NetBox URL + token)
+    NB-&gt;&gt;NBPG: Save NetBoxEndpoint
+    NBPG--&gt;&gt;NB: post_save signal
+    NB-&gt;&gt;API: POST /netbox/endpoint { ip, port, token }
+    API--&gt;&gt;NB: 201 — token encrypted + stored in SQLite
+
+    Note over Op,API: Step 3 — ProxmoxEndpoint (Proxmox VE credentials)
+    Op-&gt;&gt;NB: Create ProxmoxEndpoint (Proxmox IP + credentials)
+    NB-&gt;&gt;NBPG: Save ProxmoxEndpoint
+    NBPG--&gt;&gt;NB: post_save signal (extended)
+    NB-&gt;&gt;API: POST /proxmox/endpoints { ip, port, username, password }
+    API--&gt;&gt;NB: 201 — credentials encrypted + stored in SQLite
+
+    Note over Op,API: Step 4 — Trigger sync
+    Op-&gt;&gt;NB: Click "Run Sync Now"
+    NB-&gt;&gt;API: Preflight: verify/update all endpoints
+    NB-&gt;&gt;API: GET /dcim/devices/create/stream (SSE)
+    API--&gt;&gt;NB: event: complete ok=true</code></pre>
+<div class="admonition tip">
+<p class="admonition-title">Order matters</p>
+<p>Create the <code>FastAPIEndpoint</code> <strong>first</strong> so that the <code>post_save</code> signals for
+<code>NetBoxEndpoint</code> and <code>ProxmoxEndpoint</code> have an active backend connection to push to.
+If you create endpoints in a different order, the preflight at sync time will still
+push everything correctly — but you will see warnings in the NetBox log for the missed
+signal pushes.</p>
+</div>
+<hr />
+<h2 id="http-status-code-propagation">HTTP Status Code Propagation<a class="headerlink" href="#http-status-code-propagation" title="Permanent link">&para;</a></h2>
+<p>Before this implementation, <code>run_sync_stream()</code> always returned HTTP <code>503</code> when a stage failed,
+even when the backend returned <code>400</code> (missing endpoint). This caused unnecessary retries — the
+plugin retries on <code>&gt;= 500</code> only.</p>
+<p>Now <code>_try_sync_stream_url()</code> returns the actual backend status code as a fourth tuple element,
+and <code>run_sync_stream()</code> propagates it:</p>
+<div class="highlight"><span class="filename">netbox_proxbox/services/backend_proxy.py (simplified)</span><pre><span></span><code><span class="c1"># Before: always fell through to 503</span>
+<span class="k">return</span> <span class="p">{</span> <span class="s2">&quot;detail&quot;</span><span class="p">:</span> <span class="n">last_detail</span> <span class="p">},</span> <span class="mi">503</span>
+
+<span class="c1"># After: propagates actual backend status</span>
+<span class="k">return</span> <span class="p">{</span> <span class="s2">&quot;detail&quot;</span><span class="p">:</span> <span class="n">last_detail</span> <span class="p">},</span> <span class="n">last_http_status</span> <span class="ow">or</span> <span class="mi">503</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Backend response</th>
+<th>Old plugin status</th>
+<th>New plugin status</th>
+<th>Retry triggered?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>400</code> missing endpoint</td>
+<td><code>503</code></td>
+<td><code>400</code></td>
+<td>Yes (wrong) → <strong>No (correct)</strong></td>
+</tr>
+<tr>
+<td><code>401</code> invalid API key</td>
+<td><code>503</code></td>
+<td><code>401</code> → auto-retry with new key</td>
+<td>Handled separately</td>
+</tr>
+<tr>
+<td><code>502</code> bad gateway</td>
+<td><code>503</code></td>
+<td><code>502</code></td>
+<td>Yes (unchanged)</td>
+</tr>
+<tr>
+<td><code>503</code> backend overloaded</td>
+<td><code>503</code></td>
+<td><code>503</code></td>
+<td>Yes (unchanged)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="security-model">Security Model<a class="headerlink" href="#security-model" title="Permanent link">&para;</a></h2>
+<h3 id="authentication-between-plugin-and-backend">Authentication between plugin and backend<a class="headerlink" href="#authentication-between-plugin-and-backend" title="Permanent link">&para;</a></h3>
+<p>All plugin → backend requests include:</p>
+<div class="highlight"><pre><span></span><code>X-Proxbox-API-Key: &lt;48-byte URL-safe random token&gt;
+</code></pre></div>
+<p>The token is auto-generated on <code>FastAPIEndpoint.save()</code> (via <code>secrets.token_urlsafe(48)</code>)
+and registered with the backend as a <strong>bcrypt hash</strong> stored in the <code>apikey</code> SQLite table.
+The plaintext token is never stored on the backend.</p>
+<p>The backend's <code>APIKeyAuthMiddleware</code> validates the header on every non-exempt request.
+Brute-force attempts are blocked by the <code>AuthLockout</code> table (5 attempts per IP in 300 s).</p>
+<h3 id="credential-encryption-on-the-backend">Credential encryption on the backend<a class="headerlink" href="#credential-encryption-on-the-backend" title="Permanent link">&para;</a></h3>
+<p>NetBox and Proxmox credentials stored in the backend's SQLite are encrypted at rest using
+<strong>Fernet (AES-128-CBC + HMAC-SHA256)</strong> via the <code>cryptography</code> library:</p>
+<pre class="mermaid"><code>flowchart LR
+    A["Plugin: token = 'abc123'"] --&gt;|"POST /netbox/endpoint"| B["Backend receives plaintext"]
+    B --&gt; C["set_encrypted_token(token)\n→ Fernet.encrypt()"]
+    C --&gt; D["Store as 'enc:...' in SQLite"]
+    D --&gt;|"Session open"| E["get_decrypted_token()\n→ Fernet.decrypt()"]
+    E --&gt; F["netbox-sdk session"]</code></pre>
+<p>The encryption key is resolved using the following priority chain:</p>
+<ol>
+<li><strong><code>PROXBOX_ENCRYPTION_KEY</code> environment variable</strong> — set on the proxbox-api host (highest priority).</li>
+<li><strong><code>ProxboxPluginSettings.encryption_key</code></strong> — fetched from the NetBox plugin API via <code>settings_client.get_settings()</code> and configurable on the plugin settings page under <strong>Encryption</strong>.</li>
+<li><strong>None</strong> — credentials stored in plaintext; a <code>CRITICAL</code> warning is logged.</li>
+</ol>
+<p>The raw key (from either source) is hashed with SHA-256 to derive exactly 32 bytes,
+then base64url-encoded to form a valid Fernet key. If neither source is set, credentials
+are stored in plaintext with a dev-mode warning logged.</p>
+<h3 id="token-version-support">Token version support<a class="headerlink" href="#token-version-support" title="Permanent link">&para;</a></h3>
+<p><code>NetBoxEndpoint</code> supports both NetBox token formats:</p>
+<table>
+<thead>
+<tr>
+<th>Version</th>
+<th>Field</th>
+<th>Backend payload</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>v1</code></td>
+<td><code>token.key</code> (FK to <code>users.Token</code>)</td>
+<td><code>token_version: "v1"</code>, <code>token: "&lt;key&gt;"</code></td>
+</tr>
+<tr>
+<td><code>v2</code></td>
+<td><code>token_key</code> + <code>token_secret</code> fields</td>
+<td><code>token_version: "v2"</code>, <code>token: "&lt;secret&gt;"</code>, <code>token_key: "&lt;key&gt;"</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="code-reference">Code Reference<a class="headerlink" href="#code-reference" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>netbox_proxbox/signals.py</code></td>
+<td><code>post_save</code> handlers for all three endpoint types</td>
+</tr>
+<tr>
+<td><code>netbox_proxbox/views/backend_sync.py</code></td>
+<td>Shared <code>sync_netbox_endpoint_to_backend()</code> and <code>sync_proxmox_endpoint_to_backend()</code>; <code>list_backend_netbox_endpoints()</code> (verification read); <code>backend_holds_netbox_endpoint()</code> + <code>_netbox_row_is_current()</code> (identity <strong>and</strong> currency) / <code>backend_holds_proxmox_endpoint()</code> (held <strong>and</strong> current); <code>netbox_credential_fingerprint()</code> / <code>netbox_push_credentials_unchanged()</code> / <code>_record_pushed_credential_fingerprint()</code> (local secret-rotation check, migration <code>0073</code>); <code>resolve_backend_endpoint_id()</code> / <code>resolve_backend_endpoint_ids()</code> (wire-id resolution, target-confirmed)</td>
+</tr>
+<tr>
+<td><code>netbox_proxbox/jobs.py</code></td>
+<td><code>_ensure_backend_endpoints()</code> preflight; <code>PreflightResult</code>; <code>ProxboxPreflightError</code>; <code>ProxboxSyncJob.run()</code> (staged <strong>and</strong> selected-object batch branches)</td>
+</tr>
+<tr>
+<td><code>netbox_proxbox/sync_stages.py</code></td>
+<td><code>_is_retryable_stage_failure()</code>; <code>preflight_hint</code> attribution on stage errors; <code>_no_endpoint_scope_reason()</code> / <code>_batch_wire_endpoint_scope()</code> (shared fail-loud endpoint-scope resolution, plus the plugin-pk → wire-id map); <code>_batch_object_core_cluster_id()</code> / <code>_batch_object_owner_endpoint_pks()</code> / <code>_owner_endpoint_pks_by_cluster_id()</code> (per-object owner resolution, tri-state: unknown / pinned / ambiguous); <code>_run_batch_selected_sync()</code> backend <strong>and</strong> per-object Proxmox-endpoint pinning</td>
+</tr>
+<tr>
+<td><code>netbox_proxbox/services/individual_sync.py</code></td>
+<td><code>sync_individual()</code> / <code>sync_individual_with_dependencies()</code> — <code>fastapi_endpoint_id</code> and <code>proxmox_endpoint_ids</code> pinned through recursive dependency syncs</td>
+</tr>
+<tr>
+<td><code>netbox_proxbox/services/backend_auth.py</code></td>
+<td><code>wait_for_backend_ready()</code>; cold-start timeout budgets</td>
+</tr>
+<tr>
+<td><code>netbox_proxbox/services/backend_proxy.py</code></td>
+<td><code>run_sync_stream()</code>, <code>_try_sync_stream_url()</code> (HTTP status propagation)</td>
+</tr>
+<tr>
+<td><code>netbox_proxbox/services/backend_context.py</code></td>
+<td><code>get_fastapi_request_context()</code> — URL + auth header resolution</td>
+</tr>
+<tr>
+<td><code>proxbox_api/routes/netbox/__init__.py</code></td>
+<td><code>POST/PUT /netbox/endpoint</code> (backend CRUD)</td>
+</tr>
+<tr>
+<td><code>proxbox_api/routes/proxmox/__init__.py</code></td>
+<td><code>POST/PUT /proxmox/endpoints</code> (backend CRUD)</td>
+</tr>
+<tr>
+<td><code>proxbox_api/session/netbox.py</code></td>
+<td><code>get_netbox_session()</code> — reads SQLite, raises on empty</td>
+</tr>
+<tr>
+<td><code>proxbox_api/database.py</code></td>
+<td><code>NetBoxEndpoint</code>, <code>ProxmoxEndpoint</code> SQLModel tables</td>
+</tr>
+<tr>
+<td><code>proxbox_api/credentials.py</code></td>
+<td>Fernet encryption helpers</td>
+</tr>
+<tr>
+<td><code>proxbox_api/routes/auth.py</code></td>
+<td><code>/auth/register-key</code>, <code>/auth/bootstrap-status</code></td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../backend-integration/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Backend Integration">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Backend Integration
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../browser-frontend/" class="md-footer__link md-footer__link--next" aria-label="Next: Browser Frontend">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Browser Frontend
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "search.suggest", "search.highlight", "navigation.footer", "navigation.path", "navigation.top", "toc.follow"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="https://cdn.jsdelivr.net/npm/@material-icons/iconfont/material-icons.min.js"></script>
+      
+    
+  </body>
+</html>
