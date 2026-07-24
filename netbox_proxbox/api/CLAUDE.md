@@ -7,6 +7,7 @@ This directory contains the NetBox plugin API surface for ProxBox. It exposes th
 - [`__init__.py`](./__init__.py): package marker.
 - [`urls.py`](./urls.py): API routing for the plugin root, endpoint namespace, non-model views, and model viewsets.
 - [`views.py`](./views.py): `APIRootView` subclasses, `NetBoxModelViewSet` classes, and non-model `APIView` classes (see table below).
+- [`jobs.py`](./jobs.py): `ProxboxJobCancelAPIView` — `POST jobs/<pk>/cancel/`, the JSON mirror of the UI `proxbox-cancel` action so a stuck/zombie Proxbox sync `core.Job` can be cleared through the nms-backend proxy without the UI (today `nms virt raw POST jobs/<pk>/cancel/`; a first-class `nms virt cancel-job` wrapper is the paired nms-cli follow-up). Reuses `views/job_cancel.py::cancel_rq_job_for_netbox_job()` + `jobs.is_proxbox_sync_job()` + `Job.terminate()`; gated on `core.delete_job`.
 - [`filters.py`](./filters.py): additional filter utilities used by the API router if needed.
 - [`serializers/`](./serializers): package of API serializers for endpoints, clusters, storage, backups, snapshots, task history, backup routines, replications, and the non-model resource/schedule serializers in `resource_views.py`. The `pbs_pdm.py` module provides serializers for `PBSEndpoint`, `PDMEndpoint`, and `PDMRemote`; `intent.py` provides read-only serializers for `DeletionRequest` and `ProxmoxApplyJob`.
 
@@ -98,10 +99,11 @@ phase.
 
 ## Non-Model API Views
 
-These `APIView` subclasses mirror every data-bearing UI page and expose the same aggregated data as JSON. All are GET-only except `ScheduleSyncAPIView` which also accepts POST.
+These `APIView` subclasses mirror every data-bearing UI page and expose the same aggregated data as JSON. All are GET-only except `ScheduleSyncAPIView` (also POST) and `ProxboxJobCancelAPIView` (POST-only).
 
 | View class | Route | Mirrors UI page | Permission |
 |---|---|---|---|
+| `ProxboxJobCancelAPIView` | `jobs/<pk>/cancel/` | `proxbox-cancel` (Job detail **Cancel job**) | `_ProxboxJobCancelPermission` (`core.delete_job`) |
 | `HomeAPIView` | `home/` | `/plugins/proxbox/` | `_ProxboxDashboardPermission` |
 | `DashboardAPIView` | `dashboard/` | `/plugins/proxbox/dashboard/` | `_ProxboxDashboardPermission` |
 | `NodesAPIView` | `resources/nodes/` | `/plugins/proxbox/nodes/` | `IsAuthenticatedOrLoginNotRequired` |

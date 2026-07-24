@@ -5,6 +5,7 @@ from netbox.api.routers import NetBoxRouter
 
 from . import views
 from .ha import HAClusterSummaryAPIView, HAVMResourceAPIView
+from .jobs import ProxboxJobCancelAPIView
 from .ssh_credentials import (
     NodeHostKeyFingerprintAPIView,
     NodeSSHCredentialByNodeAPIView,
@@ -295,6 +296,11 @@ urlpatterns = [
         include((endpoints_router.urls, "endpoints"), namespace="endpoints"),
     ),
     # Non-model API views mirroring UI pages
+    path(
+        "jobs/<int:pk>/cancel/",
+        ProxboxJobCancelAPIView.as_view(),
+        name="api-job-cancel",
+    ),
     path("home/", HomeAPIView.as_view(), name="home"),
     path("dashboard/", DashboardAPIView.as_view(), name="dashboard"),
     path("resources/clusters/", ClustersAPIView.as_view(), name="api-clusters"),
