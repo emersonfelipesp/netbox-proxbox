@@ -155,6 +155,26 @@ The `iter_backend_sse_lines()` function in `netbox_proxbox/services/backend_prox
 
 For background jobs, `run_sync_stream()` consumes the SSE stream to completion using an `on_frame` callback that writes progress data to the NetBox Job record.
 
+### Background job observer lifetime
+
+`JobStreamSSEView` observes the persisted NetBox Job row for browser job-detail
+pages. It sends an SSE comment heartbeat at least every 15 seconds while no job
+event is available and sets `X-Accel-Buffering: no`, ensuring Nginx flushes the
+comment to the client. A disconnected browser therefore causes the WSGI write
+to fail promptly instead of leaving a Gunicorn request thread blocked on an
+empty queue. Closing the response also signals the polling producer through a
+`threading.Event`; its poll waits are interruptible and the producer exits
+without emitting a synthetic terminal event. The producer also brackets its
+work with Django's `close_old_connections()` because it is a manually created
+thread, and a warning is logged if it survives the bounded shutdown join.
+
+This behavior is an availability invariant. Removing the heartbeat, enabling
+proxy buffering, or restoring an unbounded `queue.get()` can strand one gthread
+per disconnected browser and eventually make unrelated NetBox API requests
+time out. During incident diagnosis, a growing set of `CLOSE-WAIT` sockets on
+the NetBox WSGI port together with stacks in `_stream_job_events()` indicates
+that this invariant has regressed.
+
 ---
 
 ## WebSocketSSEBridge

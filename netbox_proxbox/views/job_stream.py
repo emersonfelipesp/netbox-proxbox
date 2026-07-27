@@ -23,6 +23,9 @@ SYNC_OWNER_RQ = "rq_job"
 
 SYNC_WAIT_TIMEOUT = 60
 SYNC_WAIT_POLL_INTERVAL = 0.5
+JOB_STREAM_HEARTBEAT_INTERVAL = 15.0
+JOB_STREAM_PRODUCER_JOIN_TIMEOUT = 1.0
+JOB_STREAM_HEARTBEAT = ": keep-alive\n\n"
 
 
 def _claim_sync_ownership(job: JobModel, owner: str) -> bool:
@@ -157,6 +160,7 @@ def _wait_for_job_status(
     target_status: str,
     timeout: float = SYNC_WAIT_TIMEOUT,
     poll_interval: float = SYNC_WAIT_POLL_INTERVAL,
+    stop_event: threading.Event | None = None,
 ) -> str:
     """Wait for job to reach target status, returning the final status."""
     start = time.monotonic()
@@ -173,7 +177,11 @@ def _wait_for_job_status(
                 elapsed,
             )
             return current
-        time.sleep(poll_interval)
+        if stop_event is not None:
+            if stop_event.wait(poll_interval):
+                return current
+        else:
+            time.sleep(poll_interval)
         job.refresh_from_db()
         current = getattr(job, "status", None)
     return current
@@ -194,6 +202,10 @@ class JobStreamSSEView(View):
         return StreamingHttpResponse(
             self._stream_job_events(job),
             content_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache, no-transform",
+                "X-Accel-Buffering": "no",
+            },
         )
 
     def _stream_job_events(self, job: JobModel) -> Generator[str, None, None]:
@@ -201,6 +213,7 @@ class JobStreamSSEView(View):
 
         event_queue: queue.Queue[object] = queue.Queue()
         queue_sentinel = object()
+        stop_event = threading.Event()
 
         def emit(event: str, payload: dict[str, object]) -> None:
             event_queue.put(self._serialize_sse(event, payload))
@@ -218,6 +231,9 @@ class JobStreamSSEView(View):
             emit("complete", payload)
 
         def worker() -> None:
+            from django.db import close_old_connections
+
+            close_old_connections()
             try:
                 is_apply_job = _is_proxbox_apply_job(job)
                 if not (is_proxbox_sync_job(job) or is_apply_job):
@@ -255,7 +271,13 @@ class JobStreamSSEView(View):
                             "message": f"Job is {status}, waiting for worker to start...",
                         },
                     )
-                    status = _wait_for_job_status(job, JobStatusChoices.STATUS_RUNNING)
+                    status = _wait_for_job_status(
+                        job,
+                        JobStatusChoices.STATUS_RUNNING,
+                        stop_event=stop_event,
+                    )
+                    if stop_event.is_set():
+                        return
                     if status != JobStatusChoices.STATUS_RUNNING:
                         queued_status = str(status or "unknown")
                         emit(
@@ -293,7 +315,7 @@ class JobStreamSSEView(View):
                 emitted_terminal = False
                 seen_log_entries = 0
 
-                while True:
+                while not stop_event.is_set():
                     job.refresh_from_db()
                     current_status = getattr(job, "status", None)
 
@@ -338,9 +360,10 @@ class JobStreamSSEView(View):
                         emitted_terminal = True
                         break
 
-                    time.sleep(SYNC_WAIT_POLL_INTERVAL)
+                    if stop_event.wait(SYNC_WAIT_POLL_INTERVAL):
+                        break
 
-                if not emitted_terminal:
+                if not emitted_terminal and not stop_event.is_set():
                     emit_complete(False, "Job stream ended unexpectedly")
             except Exception as exc:  # pragma: no cover - defensive stream guard
                 logger.exception(
@@ -349,6 +372,7 @@ class JobStreamSSEView(View):
                 emit_error(f"Job stream failed unexpectedly: {exc}")
                 emit_complete(False, "Job stream failed unexpectedly.")
             finally:
+                close_old_connections()
                 event_queue.put(queue_sentinel)
 
         stream_thread = threading.Thread(target=worker, daemon=True)
@@ -356,12 +380,23 @@ class JobStreamSSEView(View):
 
         try:
             while True:
-                item = event_queue.get()
+                try:
+                    item = event_queue.get(timeout=JOB_STREAM_HEARTBEAT_INTERVAL)
+                except queue.Empty:
+                    yield JOB_STREAM_HEARTBEAT
+                    continue
                 if item is queue_sentinel:
                     break
                 yield str(item)
         finally:
-            stream_thread.join(timeout=1)
+            stop_event.set()
+            stream_thread.join(timeout=JOB_STREAM_PRODUCER_JOIN_TIMEOUT)
+            if stream_thread.is_alive():
+                logger.warning(
+                    "Job stream producer for job %s did not stop within %.1fs",
+                    getattr(job, "pk", "?"),
+                    JOB_STREAM_PRODUCER_JOIN_TIMEOUT,
+                )
 
     def _serialize_sse(self, event: str, payload: dict[str, object]) -> str:
         return f"event: {event}\ndata: {json.dumps(payload)}\n\n"

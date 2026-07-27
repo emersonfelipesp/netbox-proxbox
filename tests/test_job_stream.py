@@ -27,11 +27,16 @@ def job_stream_module(monkeypatch):
 
     class StreamingHttpResponse:
         def __init__(
-            self, streaming_content=None, status: int = 200, content_type=None
+            self,
+            streaming_content=None,
+            status: int = 200,
+            content_type=None,
+            headers=None,
         ):
             self.streaming_content = streaming_content
             self.status_code = status
             self.content_type = content_type
+            self.headers = headers or {}
 
     class View:
         pass
@@ -49,6 +54,8 @@ def job_stream_module(monkeypatch):
     django_utils_decorators.method_decorator = lambda decorator, name=None: (
         lambda obj: obj
     )
+    django_db = types.ModuleType("django.db")
+    django_db.close_old_connections = lambda: None
 
     netbox_module = types.ModuleType("netbox")
     netbox_jobs = types.ModuleType("netbox.jobs")
@@ -130,6 +137,7 @@ def job_stream_module(monkeypatch):
     )
     monkeypatch.setitem(sys.modules, "django.utils", django_utils)
     monkeypatch.setitem(sys.modules, "django.utils.decorators", django_utils_decorators)
+    monkeypatch.setitem(sys.modules, "django.db", django_db)
     monkeypatch.setitem(sys.modules, "netbox", netbox_module)
     monkeypatch.setitem(sys.modules, "netbox.jobs", netbox_jobs)
     monkeypatch.setitem(sys.modules, "core", core_module)
@@ -305,3 +313,89 @@ def test_job_stream_reports_queued_waiting_state_instead_of_failure(
     assert any(
         "event: complete" in chunk and '"ok": false' in chunk for chunk in chunks
     )
+
+
+def test_job_stream_response_disables_proxy_buffering(job_stream_module, monkeypatch):
+    """The reverse proxy must flush heartbeats so disconnects reach Gunicorn."""
+    module = job_stream_module
+    job = SimpleNamespace(pk=58)
+    queryset = SimpleNamespace(first=lambda: job)
+    monkeypatch.setattr(
+        module.JobModel,
+        "objects",
+        SimpleNamespace(filter=lambda **kwargs: queryset),
+    )
+
+    response = module.JobStreamSSEView().get(module.HttpRequest(), job.pk)
+
+    assert response.content_type == "text/event-stream"
+    assert response.headers["Cache-Control"] == "no-cache, no-transform"
+    assert response.headers["X-Accel-Buffering"] == "no"
+
+
+def test_idle_job_stream_heartbeat_releases_producer_on_close(
+    job_stream_module, monkeypatch
+):
+    """An idle disconnected stream must release its request and producer threads."""
+    module = job_stream_module
+    monkeypatch.setattr(module, "JOB_STREAM_HEARTBEAT_INTERVAL", 0.01)
+    created_threads = []
+    real_thread = module.threading.Thread
+
+    def recording_thread(*args, **kwargs):
+        thread = real_thread(*args, **kwargs)
+        created_threads.append(thread)
+        return thread
+
+    monkeypatch.setattr(module.threading, "Thread", recording_thread)
+
+    job = SimpleNamespace(
+        pk=59,
+        status="running",
+        data={"proxbox_sync": {"params": {}}},
+        save=lambda **kwargs: None,
+        refresh_from_db=lambda: None,
+        log_entries=[],
+    )
+    stream = module.JobStreamSSEView()._stream_job_events(job)
+
+    assert "event: step" in next(stream)
+    assert next(stream) == module.JOB_STREAM_HEARTBEAT
+    stream.close()
+
+    assert len(created_threads) == 1
+    created_threads[0].join(timeout=0.5)
+    assert not created_threads[0].is_alive()
+
+
+def test_queued_job_status_wait_is_interruptible(job_stream_module):
+    """Closing a queued-job stream must not leave its producer asleep for 60s."""
+    module = job_stream_module
+    stop_event = module.threading.Event()
+    refresh_started = module.threading.Event()
+    result = []
+
+    job = SimpleNamespace(
+        pk=60,
+        status="scheduled",
+        refresh_from_db=refresh_started.set,
+    )
+    waiter = module.threading.Thread(
+        target=lambda: result.append(
+            module._wait_for_job_status(
+                job,
+                "running",
+                timeout=60,
+                poll_interval=60,
+                stop_event=stop_event,
+            )
+        )
+    )
+    waiter.start()
+
+    assert refresh_started.wait(timeout=0.5)
+    stop_event.set()
+    waiter.join(timeout=0.5)
+
+    assert not waiter.is_alive()
+    assert result == ["scheduled"]
