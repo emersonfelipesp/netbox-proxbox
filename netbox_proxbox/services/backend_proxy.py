@@ -49,6 +49,26 @@ logger = logging.getLogger(__name__)
 
 _SYNC_STREAM_READ_TIMEOUT = (5, 3600)
 _BACKEND_JSON_METHODS = Literal["GET", "POST"]
+_REDIRECT_TRANSPORT_DETAIL = "ProxBox backend redirects are not permitted."
+_REDIRECT_TRANSPORT_STATUS = 502
+
+
+def _refuse_redirect(
+    response: requests.Response,
+    *,
+    path: str,
+    url: str,
+) -> tuple[str, int]:
+    """Close and classify a redirect without inspecting its untrusted target."""
+    actual_status = int(response.status_code)
+    response.close()
+    logger.error(
+        "Backend redirect refused for %s via %s (HTTP %s)",
+        path,
+        url,
+        actual_status,
+    )
+    return _REDIRECT_TRANSPORT_DETAIL, _REDIRECT_TRANSPORT_STATUS
 
 
 def sse_error_frames(
@@ -196,7 +216,8 @@ def request_backend_resource(
     timeout: float | tuple[int, int] = 5,
 ) -> tuple[dict[str, object], int]:
     """GET a JSON resource from the backend, trying primary URL then IP fallback."""
-    http_url = context.http_url
+    active_context = context
+    http_url = active_context.http_url
     if not http_url:
         return {
             "queued": False,
@@ -205,102 +226,130 @@ def request_backend_resource(
             "detail": "No FastAPI URL found.",
         }, 503
 
-    verify_ssl = bool(context.verify_ssl)
-    backend_headers = context.headers or {}
     requested_urls: list[str] = []
-
-    request_candidates = _build_request_candidates(
-        http_url, context.ip_address_url, path, verify_ssl
-    )
-
-    last_detail = None
+    last_detail: str | None = None
+    last_status: int | None = None
     auth_register_attempted = False
 
-    for url, verify in request_candidates:
-        requested_urls.append(url)
+    while True:
+        http_url = active_context.http_url
+        if not http_url:
+            last_detail = "No FastAPI URL found after authentication retry."
+            break
+        verify_ssl = bool(active_context.verify_ssl)
+        backend_headers = active_context.headers or {}
+        request_candidates = _build_request_candidates(
+            http_url,
+            active_context.ip_address_url,
+            path,
+            verify_ssl,
+        )
+        restart_candidate_selection = False
 
-        try:
-            response = requests.get(
-                url,
-                params=query_params,
-                headers=backend_headers,
-                verify=verify,
-                timeout=timeout,
-            )
-        except requests.exceptions.RequestException as exc:
-            last_detail, _ = extract_backend_error_detail(exc)
-            logger.error(
-                "Sync request failed for %s via %s: %s", path, url, last_detail
-            )
-            if getattr(exc, "response", None) is not None:
+        for url, verify in request_candidates:
+            requested_urls.append(url)
+
+            try:
+                response = requests.get(
+                    url,
+                    params=query_params,
+                    headers=backend_headers,
+                    verify=verify,
+                    timeout=timeout,
+                    allow_redirects=False,
+                )
+            except requests.exceptions.RequestException as exc:
+                last_detail, _ = extract_backend_error_detail(exc)
+                logger.error(
+                    "Sync request failed for %s via %s: %s", path, url, last_detail
+                )
+                if getattr(exc, "response", None) is not None:
+                    break
+                continue
+            except (KeyboardInterrupt, SystemExit, GeneratorExit):
+                raise
+            except OSError as exc:
+                last_detail = _safe_exception_text(exc)
+                logger.error(
+                    "Unexpected sync error for %s via %s: %s",
+                    path,
+                    url,
+                    last_detail,
+                )
+                continue
+
+            if 300 <= response.status_code < 400:
+                last_detail, last_status = _refuse_redirect(
+                    response,
+                    path=path,
+                    url=url,
+                )
                 break
-            continue
-        except (KeyboardInterrupt, SystemExit, GeneratorExit):
-            raise
-        except OSError as exc:
-            last_detail = _safe_exception_text(exc)
-            logger.error(
-                "Unexpected sync error for %s via %s: %s", path, url, last_detail
-            )
-            continue
 
-        if response.status_code >= 400:
-            last_detail = f"HTTP {response.status_code}"
+            if response.status_code >= 400:
+                last_detail = f"HTTP {response.status_code}"
+                payload, json_err = parse_requests_response_json(
+                    response, log_label=f"sync:{path}"
+                )
+                if not json_err and isinstance(payload, dict):
+                    d = payload.get("detail") or payload.get("message")
+                    if d:
+                        last_detail = redact_backend_detail(d)
+                    if (
+                        not auth_register_attempted
+                        and response.status_code == 401
+                        and "API key" in str(d)
+                    ):
+                        auth_register_attempted = True
+                        response.close()
+                        fresh_context = _handle_auth_registration_and_retry(
+                            active_context,
+                            endpoint_id=active_context.endpoint_id,
+                        )
+                        if fresh_context is not None:
+                            active_context = fresh_context
+                            restart_candidate_selection = True
+                            break
+                logger.error(
+                    "Sync request failed for %s via %s: %s",
+                    path,
+                    url,
+                    last_detail,
+                )
+                if response.status_code < 500:
+                    break
+                continue
+
             payload, json_err = parse_requests_response_json(
                 response, log_label=f"sync:{path}"
             )
-            if not json_err and isinstance(payload, dict):
-                d = payload.get("detail") or payload.get("message")
-                if d:
-                    last_detail = redact_backend_detail(d)
-                if (
-                    not auth_register_attempted
-                    and response.status_code == 401
-                    and "API key" in str(d)
-                ):
-                    auth_register_attempted = True
-                    new_headers, should_retry = _handle_auth_registration_and_retry(
-                        backend_headers
-                    )
-                    if should_retry:
-                        backend_headers = new_headers
-                        continue
-            logger.error(
-                "Sync request failed for %s via %s: %s",
-                path,
-                url,
-                last_detail,
-            )
-            if response.status_code < 500:
-                break
-            continue
+            if json_err:
+                last_detail = json_err
+                logger.error(
+                    "Sync request returned non-JSON for %s via %s: %s",
+                    path,
+                    url,
+                    json_err,
+                )
+                continue
 
-        payload, json_err = parse_requests_response_json(
-            response, log_label=f"sync:{path}"
-        )
-        if json_err:
-            last_detail = json_err
-            logger.error(
-                "Sync request returned non-JSON for %s via %s: %s",
-                path,
-                url,
-                json_err,
-            )
-            continue
+            return {
+                "queued": True,
+                "path": path,
+                "requested_urls": requested_urls,
+                "response": payload,
+            }, 202
 
-        return {
-            "queued": True,
-            "path": path,
-            "requested_urls": requested_urls,
-            "response": payload,
-        }, 202
+        if restart_candidate_selection:
+            continue
+        break
 
     return {
         "queued": False,
         "path": path,
         "requested_urls": requested_urls,
         "detail": last_detail or "Unable to reach the ProxBox backend.",
-    }, 503
+    }, last_status or 503
 
 
 def _send_backend_json_request(
@@ -320,6 +369,7 @@ def _send_backend_json_request(
             headers=headers,
             verify=verify,
             timeout=timeout,
+            allow_redirects=False,
         )
     if method == "POST":
         return requests.post(
@@ -328,6 +378,7 @@ def _send_backend_json_request(
             headers=headers,
             verify=verify,
             timeout=timeout,
+            allow_redirects=False,
         )
     raise ValueError(f"Unsupported backend JSON method: {method}")
 
@@ -354,7 +405,8 @@ def request_backend_json(
     endpoint_id: int | None = None,
 ) -> tuple[dict[str, object], int]:
     """Call a proxbox-api JSON endpoint with URL fallback and auth retry."""
-    http_url = context.http_url
+    active_context = context
+    http_url = active_context.http_url
     if not http_url:
         return {
             "ok": False,
@@ -363,23 +415,28 @@ def request_backend_json(
             "detail": "No FastAPI URL found.",
         }, 503
 
-    verify_ssl = bool(context.verify_ssl)
-    backend_headers = context.headers or {}
     requested_urls: list[str] = []
-    request_candidates = _build_request_candidates(
-        http_url, context.ip_address_url, path, verify_ssl
-    )
-
     last_detail: str | None = None
     last_status: int | None = None
     auth_register_attempted = False
 
-    for url, verify in request_candidates:
-        requested_urls.append(url)
-        retry_current_url = True
+    while True:
+        http_url = active_context.http_url
+        if not http_url:
+            last_detail = "No FastAPI URL found after authentication retry."
+            break
+        verify_ssl = bool(active_context.verify_ssl)
+        backend_headers = active_context.headers or {}
+        request_candidates = _build_request_candidates(
+            http_url,
+            active_context.ip_address_url,
+            path,
+            verify_ssl,
+        )
+        restart_candidate_selection = False
 
-        while retry_current_url:
-            retry_current_url = False
+        for url, verify in request_candidates:
+            requested_urls.append(url)
             try:
                 response = _send_backend_json_request(
                     method,
@@ -413,7 +470,21 @@ def request_backend_json(
                     url,
                     last_detail,
                 )
-                break
+                continue
+
+            if 300 <= response.status_code < 400:
+                last_detail, last_status = _refuse_redirect(
+                    response,
+                    path=path,
+                    url=url,
+                )
+                return {
+                    "ok": False,
+                    "path": path,
+                    "requested_urls": requested_urls,
+                    "status_code": last_status,
+                    "detail": last_detail,
+                }, last_status
 
             last_status = response.status_code
             if response.status_code >= 400:
@@ -433,17 +504,15 @@ def request_backend_json(
                         and "API key" in str(detail)
                     ):
                         auth_register_attempted = True
-                        new_headers, should_retry = _handle_auth_registration_and_retry(
-                            backend_headers,
+                        response.close()
+                        fresh_context = _handle_auth_registration_and_retry(
+                            active_context,
                             endpoint_id=endpoint_id,
                         )
-                        if should_retry:
-                            backend_headers = {
-                                str(key): str(value)
-                                for key, value in new_headers.items()
-                            }
-                            retry_current_url = True
-                            continue
+                        if fresh_context is not None:
+                            active_context = fresh_context
+                            restart_candidate_selection = True
+                            break
 
                 logger.error(
                     "Backend %s request failed for %s via %s: %s",
@@ -460,7 +529,7 @@ def request_backend_json(
                         "status_code": response.status_code,
                         "detail": last_detail,
                     }, response.status_code
-                break
+                continue
 
             payload, json_err = _parse_json_or_empty(
                 response, log_label=f"backend-json:{path}"
@@ -483,6 +552,10 @@ def request_backend_json(
                 "status_code": response.status_code,
                 "response": payload if payload is not None else {},
             }, response.status_code
+
+        if restart_candidate_selection:
+            continue
+        break
 
     return {
         "ok": False,
@@ -549,59 +622,77 @@ def run_sync_stream(
         logger.error("Backend not ready: %s", ready_msg)
         return {"stream": False, "detail": f"Backend not ready: {ready_msg}"}, 503
 
-    verify_ssl = bool(context.verify_ssl)
-    request_candidates = _build_request_candidates(
-        context.http_url, context.ip_address_url, path, verify_ssl
-    )
-
-    backend_headers = context.headers or {}
+    active_context = context
     requested_urls: list[str] = []
     last_detail: str | None = None
     last_http_status: int | None = None
+    auth_register_attempted = False
 
-    for url, verify in request_candidates:
-        requested_urls.append(url)
-
-        result = _try_sync_stream_url(
-            url=url,
-            verify=verify,
-            path=path,
-            query_params=query_params,
-            headers=backend_headers,
-            on_frame=on_frame,
-            endpoint_id=endpoint_id,
-        )
-        if not isinstance(result, tuple):
-            # Success: consume SSE from the already-open connection
-            try:
-                payload, status = _consume_sse_until_complete(result, on_frame=on_frame)
-            finally:
-                result.close()
-            payload = {
-                **payload,
-                "path": path,
-                "requested_urls": requested_urls,
-            }
-            if status >= 400:
-                # A failed stream payload is consumed by ``sync_stages.py``,
-                # which logs it and folds it into the ``RuntimeError`` that
-                # becomes ``Job.error``. Redact the whole mapping here, at the
-                # producer, so every downstream reader — including the
-                # ``str(payload)`` fallbacks and ``_format_stage_sync_error()``
-                # — is working from already-redacted data. The success payload
-                # is deliberately left alone: it carries the sync counters
-                # callers depend on, not error text.
-                payload = _redacted_mapping(payload)
-            return payload, status
-
-        # Error path: result is (last_detail, should_retry, new_headers, http_status)
-        last_detail, should_retry, new_headers, last_http_status = result
-        if should_retry and new_headers:
-            backend_headers = new_headers
-            continue
-        if not should_retry:
+    while True:
+        http_url = active_context.http_url
+        if not http_url:
+            last_detail = "No FastAPI URL found after authentication retry."
             break
-        continue
+        request_candidates = _build_request_candidates(
+            http_url,
+            active_context.ip_address_url,
+            path,
+            bool(active_context.verify_ssl),
+        )
+        restart_candidate_selection = False
+
+        for url, verify in request_candidates:
+            requested_urls.append(url)
+
+            result = _try_sync_stream_url(
+                url=url,
+                verify=verify,
+                path=path,
+                query_params=query_params,
+                context=active_context,
+                on_frame=on_frame,
+                endpoint_id=endpoint_id,
+                auth_register_attempted=auth_register_attempted,
+            )
+            if not isinstance(result, tuple):
+                # Success: consume SSE from the already-open connection
+                try:
+                    payload, status = _consume_sse_until_complete(
+                        result,
+                        on_frame=on_frame,
+                    )
+                finally:
+                    result.close()
+                payload = {
+                    **payload,
+                    "path": path,
+                    "requested_urls": requested_urls,
+                }
+                if status >= 400:
+                    # A failed stream payload is consumed by ``sync_stages.py``,
+                    # which logs it and folds it into the ``RuntimeError`` that
+                    # becomes ``Job.error``. Redact the whole mapping here, at the
+                    # producer, so every downstream reader — including the
+                    # ``str(payload)`` fallbacks and ``_format_stage_sync_error()``
+                    # — is working from already-redacted data. The success payload
+                    # is deliberately left alone: it carries the sync counters
+                    # callers depend on, not error text.
+                    payload = _redacted_mapping(payload)
+                return payload, status
+
+            # Error tuple: detail, candidate-fallback flag, rebound context, status.
+            last_detail, should_retry, fresh_context, last_http_status = result
+            if fresh_context is not None:
+                auth_register_attempted = True
+                active_context = fresh_context
+                restart_candidate_selection = True
+                break
+            if not should_retry:
+                break
+
+        if restart_candidate_selection:
+            continue
+        break
 
     return {
         "stream": True,
@@ -616,26 +707,39 @@ def _try_sync_stream_url(
     verify: bool,
     path: str,
     query_params: dict[str, str] | None,
-    headers: dict[str, str],
+    context: BackendRequestContext,
     on_frame: Callable[[str, dict[str, object]], None] | None,
     endpoint_id: int | None = None,
-) -> tuple[str | None, bool, dict[str, object] | None, int | None] | requests.Response:
+    auth_register_attempted: bool = False,
+) -> (
+    tuple[str | None, bool, BackendRequestContext | None, int | None]
+    | requests.Response
+):
     """Try a single URL for sync stream request.
 
     Returns:
         - An open ``requests.Response`` on success -- caller MUST close it.
-        - (error_detail, should_retry, new_headers, http_status) on HTTP error >= 400.
+        - (error_detail, should_retry, fresh_context, http_status) on HTTP error.
         - (error_detail, False, None, http_status) on connection error.
     """
     try:
         response = requests.get(
             url,
             params=query_params,
-            headers=headers,
+            headers=context.headers or {},
             verify=verify,
             timeout=_SYNC_STREAM_READ_TIMEOUT,
             stream=True,
+            allow_redirects=False,
         )
+        if 300 <= response.status_code < 400:
+            last_detail, redirect_status = _refuse_redirect(
+                response,
+                path=path,
+                url=url,
+            )
+            return last_detail, False, None, redirect_status
+
         if response.status_code >= 400:
             actual_status = response.status_code
             last_detail = f"HTTP {actual_status}"
@@ -647,14 +751,21 @@ def _try_sync_stream_url(
                     d = payload.get("detail") or payload.get("message")
                     if d:
                         last_detail = redact_backend_detail(d)
-                    if actual_status == 401 and "API key" in str(d):
-                        new_headers, should_retry = _handle_auth_registration_and_retry(
-                            headers,
+                    if (
+                        not auth_register_attempted
+                        and actual_status == 401
+                        and "API key" in str(d)
+                    ):
+                        response.close()
+                        fresh_context = _handle_auth_registration_and_retry(
+                            context,
                             endpoint_id=endpoint_id,
                         )
-                        if should_retry:
-                            response.close()
-                            return last_detail, True, new_headers, 401
+                        if fresh_context is not None:
+                            return last_detail, True, fresh_context, 401
+                        return last_detail, False, None, 401
+            except (KeyboardInterrupt, SystemExit, GeneratorExit):
+                raise
             except Exception:
                 logger.debug("Could not parse error JSON for %s", path)
             logger.error(
@@ -712,16 +823,14 @@ def iter_backend_sse_lines(
             return
 
         verify_ssl = bool(context.verify_ssl)
-        request_candidates = [
-            (f"{http_url}/{path}", verify_ssl),
-        ]
-        fallback_url = context.ip_address_url
-        if fallback_url:
-            fallback_path = f"{fallback_url}/{path}"
-            if fallback_path != request_candidates[0][0]:
-                request_candidates.append((fallback_path, verify_ssl))
+        request_candidates = _build_request_candidates(
+            http_url,
+            context.ip_address_url,
+            path,
+            verify_ssl,
+        )
 
-        last_error = None
+        last_error: str | None = None
         for url, verify in request_candidates:
             try:
                 with requests.get(
@@ -731,7 +840,15 @@ def iter_backend_sse_lines(
                     verify=verify,
                     timeout=_SYNC_STREAM_READ_TIMEOUT,
                     stream=True,
+                    allow_redirects=False,
                 ) as response:
+                    if 300 <= response.status_code < 400:
+                        last_error, _ = _refuse_redirect(
+                            response,
+                            path=path,
+                            url=url,
+                        )
+                        break
                     response.raise_for_status()
                     for raw_line in response.iter_lines(decode_unicode=True):
                         if raw_line is None:

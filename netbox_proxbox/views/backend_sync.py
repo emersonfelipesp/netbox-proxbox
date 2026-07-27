@@ -183,6 +183,7 @@ def sync_proxmox_endpoint_to_backend(
                 headers=headers,
                 verify=backend_verify_ssl,
                 timeout=timeout,
+                allow_redirects=False,
             )
             list_response.raise_for_status()
             endpoints, json_err = parse_requests_response_json(
@@ -218,6 +219,7 @@ def sync_proxmox_endpoint_to_backend(
                 headers=headers,
                 verify=backend_verify_ssl,
                 timeout=timeout,
+                allow_redirects=False,
             )
         else:
             response = requests.post(
@@ -226,6 +228,7 @@ def sync_proxmox_endpoint_to_backend(
                 headers=headers,
                 verify=backend_verify_ssl,
                 timeout=timeout,
+                allow_redirects=False,
             )
 
         response.raise_for_status()
@@ -257,6 +260,7 @@ def _list_backend_proxmox_endpoints(
             headers=headers,
             verify=backend_verify_ssl,
             timeout=timeout,
+            allow_redirects=False,
         )
         list_response.raise_for_status()
     except requests.exceptions.RequestException as exc:
@@ -664,6 +668,7 @@ def list_backend_netbox_endpoints(
             headers=headers,
             verify=backend_verify_ssl,
             timeout=timeout,
+            allow_redirects=False,
         )
         list_response.raise_for_status()
     except requests.exceptions.RequestException as exc:
@@ -1101,6 +1106,7 @@ def sync_netbox_endpoint_to_backend(
             headers=headers,
             verify=backend_verify_ssl,
             timeout=timeout,
+            allow_redirects=False,
         )
         if list_resp.status_code != 200:
             return (
@@ -1142,6 +1148,7 @@ def sync_netbox_endpoint_to_backend(
                 headers=headers,
                 verify=backend_verify_ssl,
                 timeout=timeout,
+                allow_redirects=False,
             )
         else:
             response = requests.post(
@@ -1150,6 +1157,7 @@ def sync_netbox_endpoint_to_backend(
                 headers=headers,
                 verify=backend_verify_ssl,
                 timeout=timeout,
+                allow_redirects=False,
             )
 
         if response.status_code in (200, 201):

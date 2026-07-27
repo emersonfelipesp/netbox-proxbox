@@ -156,6 +156,7 @@ def _sync_pdm_remotes(endpoint: PDMEndpoint) -> tuple[int, list[str]]:
             headers={"Authorization": auth_header},
             verify=verify_ssl,
             timeout=timeout,
+            allow_redirects=False,
         )
         response.raise_for_status()
     except requests.exceptions.SSLError as exc:

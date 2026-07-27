@@ -529,8 +529,11 @@ This package contains the NetBox plugin itself. It defines the plugin config, UR
 - [`bug_report.py`](./bug_report.py): pure, read-only helper that assembles the failed-job **Bug report** modal context — plugin/NetBox versions, job metadata, formatted `log_entries`, a copy-to-clipboard `report_text`, and a prefilled netbox-proxbox GitHub *new issue* URL. Gated by `is_reportable_status(status)` (errored/failed or any unknown status).
 - [`type_defs.py`](./type_defs.py): shared type aliases and lightweight protocol helpers used across the package.
 - [`utils.py`](./utils.py): URL and host helpers, especially for the FastAPI backend and mkcert-aware local TLS handling.
-- [`websocket_client.py`](./websocket_client.py): long-lived WebSocket client, message queue, and HTTP view used to stream backend messages into NetBox pages.
-- [`signals.py`](./signals.py): Django signal handlers for automatic token generation and backend registration when enabled FastAPIEndpoint objects are created or updated.
+- [`websocket_client.py`](./websocket_client.py): long-lived WebSocket client, message queue, and HTTP view used to stream backend messages into NetBox pages. The view resolves only enabled FastAPI rows and returns before URL/header construction for disabled inventory.
+- [`signals.py`](./signals.py): Django signal handlers that authenticate an
+  already-persisted FastAPIEndpoint key before downstream endpoint delivery.
+  Candidate adoption belongs to `FastAPIEndpoint.save()`; signals never invent,
+  bootstrap, rotate, or persist credentials.
 - [`schemas/`](./schemas): Pydantic models and formatters for backend payloads, normalized sync context, and OpenAPI helpers.
 - [`services/`](./services): backend proxy, schema caching, service status, and sync coordination helpers.
 - [`management/`](./management): Django management commands package.
@@ -599,6 +602,21 @@ All three endpoint types support CSV, JSON, and YAML export via dedicated `Expor
 Import uses NetBox's `BulkImportView`. All import forms auto-create missing `IPAddress` objects via `get_or_create` so data can move between NetBox instances without manual IPAM pre-population. Exported `id` columns are stripped before processing to prevent PK collisions.
 
 **NetBoxEndpoint and FastAPIEndpoint are singleton-shaped.** If a record already exists when a bulk import is submitted, the import view intercepts the request and renders a confirmation page (`singleton_import_confirm.html`) before deleting the existing record and creating the replacement. Operational helpers use the first enabled FastAPI endpoint; disabled endpoints are inventory-only and must not trigger backend registration or HTTP probes. ProxmoxEndpoint allows multiple rows and has no singleton constraint.
+
+FastAPI target construction is a security boundary. Adoption accepts only a
+validated DNS name or IP address, canonicalizes case/address text, brackets IPv6
+literals, and rejects URL userinfo, paths, queries, fragments, or malformed
+authorities before a candidate key can enter any request.
+
+Successful adoption persists a credential-free
+`backend_key_target_fingerprint` covering the canonical primary HTTP target,
+fallback IP, port, TLS flags, and WebSocket target flags. Runtime HTTP and
+WebSocket callers recompute it with a fresh IP FK before exposing the key and
+fail closed on drift. The long-lived WebSocket client also checks trust after
+the handshake, on a time-based cadence during busy streams, and before queued
+sends; it disables ambient proxies, refuses redirects before sending the key,
+and is cancelled on endpoint saves so stale credentials cannot outlive a
+configuration change.
 
 For detailed implementation notes see [`views/endpoints/CLAUDE.md`](./views/endpoints/CLAUDE.md) and [`forms/CLAUDE.md`](./forms/CLAUDE.md).
 

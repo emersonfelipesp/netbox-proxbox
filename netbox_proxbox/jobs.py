@@ -904,6 +904,26 @@ def _ensure_backend_endpoints(
     return PreflightResult(phases=phases, hint=_preflight_hint(notes))
 
 
+class BackendKeyPreflightError(RuntimeError):
+    """Raised when a sync job cannot prove its stored backend key."""
+
+
+def _require_backend_key(
+    job: "ProxboxSyncJob",
+    endpoint_id: int | None = None,
+) -> None:
+    """Abort the entire job unless one stored key authenticates read-only."""
+    from netbox_proxbox.services.backend_auth import ensure_backend_key_registered  # noqa: PLC0415
+
+    key_ok, key_msg = ensure_backend_key_registered(endpoint_id=endpoint_id)
+    if not key_ok:
+        job.logger.error(f"Preflight: API key verification failed — {key_msg}")
+        raise BackendKeyPreflightError(
+            "Backend API-key preflight failed; no sync stage was started."
+        )
+    job.logger.info(f"Preflight: API key verified — {key_msg}")
+
+
 def _coerce_endpoint_ids(
     raw_ids: list[str] | None,
     *,
@@ -1214,6 +1234,11 @@ class ProxboxSyncJob(JobRunner):
             run_started = time.monotonic()
             sync_run_id = str(uuid.uuid4())
             _sync_stage_settings()
+
+            # Authenticate before branch creation, batch execution, endpoint
+            # pushes, cluster sync, and every SSE stage. Rejection aborts the
+            # whole job instead of creating repeated authentication failures.
+            _require_backend_key(self, fastapi_endpoint_id)
 
             try:
                 from netbox_proxbox.services.branch_lifecycle import (  # noqa: PLC0415

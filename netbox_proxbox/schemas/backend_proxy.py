@@ -191,6 +191,8 @@ class BackendRequestContext(ProxboxBaseModel):
     """
 
     detail: dict[str, object] = Field(default_factory=dict)
+    endpoint_id: int | None = None
+    target_fingerprint: str = ""
     http_url: str | None = None
     ip_address_url: str | None = None
     verify_ssl: bool = True

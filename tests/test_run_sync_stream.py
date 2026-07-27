@@ -493,7 +493,7 @@ def test_stream_transport_failure_never_logs_the_raw_exception(
             verify=True,
             path="dcim/devices/create/stream",
             query_params=None,
-            headers={},
+            context=_stream_context(bp),
             on_frame=None,
         )
 

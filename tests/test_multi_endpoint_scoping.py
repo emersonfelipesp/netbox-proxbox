@@ -108,7 +108,7 @@ def _load_backend_sync_module(monkeypatch, *, endpoints_payload):
     monkeypatch.setitem(sys.modules, "netbox_proxbox.views.backend_sync", module)
     spec.loader.exec_module(module)
 
-    def _fake_get(url, headers=None, verify=True, timeout=15):
+    def _fake_get(url, headers=None, verify=True, timeout=15, allow_redirects=True):
         assert url.endswith("/proxmox/endpoints")
         return _FakeResponse(endpoints_payload)
 

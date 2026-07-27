@@ -258,6 +258,7 @@ def _forward_verb(
             headers=headers,
             timeout=_BACKEND_TIMEOUT_S,
             verify=ctx.verify_ssl,
+            allow_redirects=False,
         )
     except requests.exceptions.RequestException as exc:
         messages.error(

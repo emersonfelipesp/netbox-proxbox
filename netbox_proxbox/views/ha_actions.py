@@ -58,6 +58,7 @@ class _HaActionBaseView(ContentTypePermissionRequiredMixin, View):
                     params={"proxmox_endpoint_ids": str(backend_endpoint_id)},
                     timeout=30,
                     verify=ctx.verify_ssl,
+                    allow_redirects=False,
                 )
                 try:
                     body = resp.json()

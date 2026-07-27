@@ -12,7 +12,8 @@ All backend communication is isolated inside `netbox_proxbox/services/`:
 |---|---|
 | `backend_context.py` | Resolves the active `FastAPIEndpoint` and builds the `BackendRequestContext` dataclass (URL, headers, SSL flag) |
 | `backend_proxy.py` | HTTP client helpers: SSE streaming (`run_sync_stream`, `iter_backend_sse_lines`), JSON requests (`sync_resource`, `sync_full_update_resource`) |
-| `backend_auth.py` | Token registration bootstrap, backend readiness check (`wait_for_backend_ready()`), per-path HTTP timeout lookup |
+| `backend_key_adoption.py` | Fail-closed first-key bootstrap and candidate authentication; strict response schemas and redirect rejection |
+| `backend_auth.py` | Read-only stored-key authentication, backend readiness check (`wait_for_backend_ready()`), per-path HTTP timeout lookup |
 | `http_client.py` | Low-level session management and retry helpers |
 | `individual_sync.py` | Per-object sync handlers for "Sync Now" buttons on cluster, node, storage, and VM detail pages |
 | `openapi_schema.py` | Caches the proxbox-api OpenAPI schema for UI features |
@@ -27,15 +28,15 @@ Every backend call starts with resolving the `FastAPIEndpoint`:
 ```python title="netbox_proxbox/services/backend_context.py (simplified)"
 def get_fastapi_request_context(endpoint_id: int | None = None) -> BackendRequestContext | None:
     if endpoint_id:
-        ep = FastAPIEndpoint.objects.filter(id=endpoint_id).first()
+        ep = FastAPIEndpoint.objects.filter(id=endpoint_id, enabled=True).first()
     else:
-        ep = FastAPIEndpoint.objects.first()   # always uses first row
+        ep = FastAPIEndpoint.objects.filter(enabled=True).order_by("pk").first()
     if ep is None:
         return None
     return BackendRequestContext(
         http_url=ep.http_url,
         ip_address_url=ep.ip_url,   # fallback URL if domain unreachable
-        headers={"X-Proxbox-API-Key": ep.backend_token},
+        headers={"X-Proxbox-API-Key": ep.token},
         verify_ssl=ep.verify_ssl,
     )
 ```
@@ -56,7 +57,7 @@ flowchart TD
     E --> F["Try primary URL\n(requests.get / stream=True)"]
     F --> G{Response ok?}
     G -- Yes --> H["Parse SSE frames / JSON"]
-    G -- "HTTP 401 + 'API key'" --> I["_handle_auth_registration_and_retry()\nRegister new key, retry once"]
+    G -- "HTTP 401 + 'API key'" --> I["_handle_auth_registration_and_retry()\nRe-check same stored key, retry only if accepted"]
     G -- "HTTP 5xx" --> J["Try IP fallback URL"]
     G -- "Network error" --> J
     J --> K{Fallback ok?}
@@ -64,6 +65,11 @@ flowchart TD
     K -- No --> L["Return actual HTTP status\n(e.g. 400, 502, 503)"]
     I --> F
 ```
+
+The auth-retry helper retains its historical name for compatibility. It never
+registers, bootstraps, generates, or substitutes a credential. First-key
+bootstrap and rotation adoption occur only at the `FastAPIEndpoint.save()`
+persistence boundary with an explicitly supplied candidate.
 
 ---
 
@@ -129,7 +135,7 @@ def _build_request_candidates(http_url, ip_address_url, path, verify_ssl):
     return candidates
 ```
 
-5xx errors and network errors cause the fallback to be tried. 4xx client errors do **not** trigger the fallback (except 401 which triggers key re-registration). The actual backend HTTP status code is propagated back to the caller — a `400` from the backend is returned as `400`, not `503`, so the retry logic (`>= 500`) does not misfire.
+5xx errors and network errors cause the fallback to be tried. 4xx client errors do **not** trigger the fallback (except 401, which triggers a read-only re-verification of the same stored key). The actual backend HTTP status code is propagated back to the caller — a `400` from the backend is returned as `400`, not `503`, so the retry logic (`>= 500`) does not misfire.
 
 ---
 

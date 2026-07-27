@@ -40,7 +40,10 @@ erDiagram
         string  name
         string  domain
         int     port
-        string  backend_token
+        string  token_enc
+        string  backend_key_target_fingerprint
+        bool    enabled
+        bool    use_https
         bool    verify_ssl
         string  websocket_url
     }
@@ -343,7 +346,7 @@ erDiagram
 |---|---|---|
 | `ProxmoxEndpoint` | domain, port (8006), username, token_name, token_value, mode, version | Credentials and address for one Proxmox VE instance or cluster |
 | `NetBoxEndpoint` | domain, port (8000), token_version (v1/v2), token_name, token_secret, token_key | Address and credentials for a remote NetBox instance |
-| `FastAPIEndpoint` | domain, port (8000), backend_token, verify_ssl, websocket_url | Address and auth token for the `proxbox-api` backend |
+| `FastAPIEndpoint` | domain/IP, port (8800), use_https, verify_ssl, WebSocket flags/URL, enabled, encrypted token_enc, backend_key_target_fingerprint | Address, durable target trust boundary, and write-only auth key for the `proxbox-api` backend |
 | `PBSEndpoint` | domain, port, token, verify_ssl | Proxmox Backup Server connection record |
 | `PDMEndpoint` | domain, port, token, verify_ssl | Proxmox Datacenter Manager connection record |
 | `PDMRemote` | name, pdm_endpoint, remote_type | PDM-managed remote (links to PBS or PVE remotes managed by PDM) |
@@ -364,7 +367,17 @@ endpoint, global/default endpoints are hidden for that tenant; otherwise the
 tenant continues to see only the default/global rows.
 
 !!! warning "Single FastAPIEndpoint constraint"
-    The plugin's HTTP and WebSocket helpers resolve the backend via `FastAPIEndpoint.objects.first()`. If multiple `FastAPIEndpoint` rows exist, whichever sorts first in the queryset is used for all backend communication. Keep exactly one row in production.
+    The plugin's HTTP and WebSocket helpers resolve the first enabled row. If
+    multiple enabled `FastAPIEndpoint` rows exist, whichever sorts first is the
+    operational backend. Keep exactly one enabled row in production.
+
+`backend_key_target_fingerprint` is a SHA-256 digest of the canonical primary
+HTTP target, fallback IP, port, HTTP/TLS flags, and WebSocket authority flags.
+It contains no credential. Runtime HTTP and WebSocket paths recompute and
+compare it before exposing the stored key; a mutable IP relation or any target
+drift therefore fails closed until the operator explicitly resubmits the key.
+Migration `0075_fastapi_backend_key_target_fingerprint` intentionally leaves
+legacy rows blank for reviewed adoption with `proxbox_fix_tokens --fix`.
 
 ### Infrastructure Models
 
@@ -478,7 +491,13 @@ Firecracker inventory is separate from NetBox core `VirtualMachine` rows. The NM
 | `FirecrackerMicroVM` | `FirecrackerHost`, `FirecrackerImageTemplate`, optional `Tenant` | Provisioned Firecracker instance tracked with `instance_ref="firecracker:<id>"` |
 
 !!! info "Two NetBoxEndpoint concepts"
-    The `NetBoxEndpoint` in the NetBox plugin (PostgreSQL) stores the remote NetBox address from the plugin's perspective. The `NetBoxEndpoint` in proxbox-api's SQLite stores the same information from the backend's perspective. They are kept in sync via Django signals and the `FastAPIEndpoint.signals` auto-registration flow.
+    The `NetBoxEndpoint` in the NetBox plugin (PostgreSQL) stores the remote
+    NetBox address from the plugin's perspective. The `NetBoxEndpoint` in
+    proxbox-api's SQLite stores the same information from the backend's
+    perspective. Django signals and job preflight keep those endpoint records
+    in sync after authenticating the already-persisted FastAPI key. Key adoption
+    itself is the fail-closed `FastAPIEndpoint.save()` model boundary, not a
+    signal auto-registration flow.
 
 ### SQLite Model Purpose
 

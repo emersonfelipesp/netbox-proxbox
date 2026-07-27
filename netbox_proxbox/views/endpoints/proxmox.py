@@ -791,6 +791,7 @@ class ProxmoxEndpointSSHTerminalSessionView(View):
                     headers=headers,
                     verify=verify_ssl,
                     timeout=10,
+                    allow_redirects=False,
                 )
             except requests.RequestException as exc:
                 last_error = str(exc)

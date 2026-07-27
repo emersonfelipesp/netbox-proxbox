@@ -72,11 +72,15 @@ def wait_http_ok(url: str, *, timeout_seconds: int = 300, verify: bool = True) -
     raise RuntimeError(f"Timed out waiting for {url}: {last_error}")
 
 
-def assert_ok(response: requests.Response, *, context: str) -> dict:
+def assert_ok(
+    response: requests.Response,
+    *,
+    context: str,
+    include_response_body: bool = True,
+) -> dict:
     if response.status_code >= 400:
-        raise AssertionError(
-            f"{context} failed: HTTP {response.status_code} - {response.text}"
-        )
+        detail = f" - {response.text}" if include_response_body else ""
+        raise AssertionError(f"{context} failed: HTTP {response.status_code}{detail}")
     try:
         return response.json()
     except Exception as exc:  # noqa: BLE001

@@ -206,6 +206,7 @@ class ProxboxProxmoxCardView(
                 headers=backend_headers,
                 verify=backend_verify_ssl,
                 timeout=5,
+                allow_redirects=False,
             )
             cluster_response = requests.get(
                 cluster_endpoint,
@@ -213,6 +214,7 @@ class ProxboxProxmoxCardView(
                 headers=backend_headers,
                 verify=backend_verify_ssl,
                 timeout=5,
+                allow_redirects=False,
             )
             version_response.raise_for_status()
             cluster_response.raise_for_status()

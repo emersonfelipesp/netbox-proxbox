@@ -365,7 +365,41 @@ class NetBoxEndpointSerializer(NetBoxModelSerializer):
         return attrs
 
 
-class FastAPIEndpointSerializer(NetBoxModelSerializer):
+class BackendKeyAdoptionValidationMixin:
+    """Translate the model's fail-closed key gate into DRF validation errors."""
+
+    @staticmethod
+    def _backend_key_error(exc: object) -> serializers.ValidationError:
+        messages = getattr(exc, "messages", [str(exc)])
+        detail = getattr(exc, "message_dict", {"token": messages})
+        return serializers.ValidationError(detail)
+
+    def create(self, validated_data: dict[str, object]) -> FastAPIEndpoint:
+        from django.core.exceptions import ValidationError as DjangoValidationError
+
+        try:
+            return super().create(validated_data)  # type: ignore[misc,no-any-return]
+        except DjangoValidationError as exc:
+            raise self._backend_key_error(exc) from None
+
+    def update(
+        self,
+        instance: FastAPIEndpoint,
+        validated_data: dict[str, object],
+    ) -> FastAPIEndpoint:
+        from django.core.exceptions import ValidationError as DjangoValidationError
+
+        try:
+            return super().update(  # type: ignore[misc,no-any-return]
+                instance, validated_data
+            )
+        except DjangoValidationError as exc:
+            raise self._backend_key_error(exc) from None
+
+
+class FastAPIEndpointSerializer(
+    BackendKeyAdoptionValidationMixin, NetBoxModelSerializer
+):
     """ProxBox backend HTTP/WebSocket endpoint."""
 
     url = serializers.HyperlinkedIdentityField(
@@ -406,7 +440,11 @@ class FastAPIEndpointSerializer(NetBoxModelSerializer):
         brief_fields = ("id", "url", "display", "name", "domain", "port")
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
-        """Require at least one of domain or IP address for the backend URL."""
+        """Normalize partial secrets and require a backend host."""
+        if self.instance is not None and "token" in attrs:
+            token = attrs.get("token")
+            if token is None or not str(token).strip():
+                attrs.pop("token", None)
         attrs = super().validate(attrs)
         domain = (
             attrs.get("domain", getattr(self.instance, "domain", "")) or ""

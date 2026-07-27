@@ -70,14 +70,14 @@ def _deferred_startup_push() -> None:
             )
             return
 
-        # Ensure the API key is registered with the backend before pushing
-        # endpoints.  Without this, authenticated requests would be rejected
-        # with 401 if the backend restarted with an empty database.
+        # Verify the already-adopted key before any downstream request. Runtime
+        # startup never bootstraps a key or continues after failed validation.
         key_ok, key_msg = ensure_backend_key_registered()
         if key_ok:
             logger.info("Startup push: API key verified — %s", key_msg)
         else:
-            logger.warning("Startup push: API key registration failed — %s", key_msg)
+            logger.warning("Startup push: API key verification failed — %s", key_msg)
+            return
 
         context = get_fastapi_request_context()
         if context is None or not context.http_url:
@@ -172,7 +172,7 @@ class ProxboxConfig(PluginConfig):
             return
         from . import jobs  # noqa: F401 — registers ProxboxSyncJob with the NetBox job system
         from .views import job_cancel, job_run  # noqa: F401 — core Job: proxbox-run / proxbox-cancel
-        from . import signals  # noqa: F401 — ensures token auto-generation and backend registration
+        from . import signals  # noqa: F401 — enforces read-only key checks before backend sync
         from . import signal_receivers  # noqa: F401 — owns the post_merge receiver chain
         from . import widgets  # noqa: F401 — registers dashboard widgets for the NetBox home page
 

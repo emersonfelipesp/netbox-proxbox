@@ -1,15 +1,13 @@
-"""Django signal handlers for automatic token generation and backend registration.
+"""Django signal handlers for backend-key checks and endpoint synchronization.
 
-These signals ensure FastAPIEndpoint tokens are generated and registered with
-the proxbox-api backend automatically when endpoints are created or updated.
-They also push NetBoxEndpoint configuration to the proxbox-api internal database
-so the backend can bootstrap a NetBox session on startup.
+FastAPIEndpoint persistence owns candidate validation. These signals only check
+already stored keys before downstream synchronization; they never invent or
+persist a credential.
 """
 
 from __future__ import annotations
 
 import logging
-import secrets
 from typing import TYPE_CHECKING
 
 from django.db.models.signals import post_save
@@ -22,109 +20,61 @@ logger = logging.getLogger(__name__)
 
 
 def _get_backend_url(endpoint: FastAPIEndpoint) -> str | None:
-    """Build the base URL for the proxbox-api backend from a FastAPIEndpoint."""
-    if not endpoint:
+    """Return the trusted canonical backend URL, or fail closed."""
+    from netbox_proxbox.utils import get_fastapi_url
+
+    detail = get_fastapi_url(endpoint) or {}
+    if not isinstance(detail, dict):
         return None
-
-    host = None
-    if endpoint.domain:
-        host = endpoint.domain
-    elif endpoint.ip_address:
-        host = str(endpoint.ip_address.address).split("/")[0]
-
-    if not host:
-        return None
-
-    scheme = "https" if endpoint.use_https else "http"
-    return f"{scheme}://{host}:{endpoint.port}"
+    value = detail.get("http_url")
+    return str(value).rstrip("/") if value else None
 
 
-def _register_token_with_backend(endpoint: FastAPIEndpoint) -> bool | None:
-    """Attempt to register the endpoint's token with the proxbox-api backend.
-
-    This is a best-effort operation that logs failures but never raises exceptions.
-    """
-    import requests
+def _register_token_with_backend(endpoint: FastAPIEndpoint) -> bool:
+    """Authenticate the stored key without bootstrapping or persisting it."""
+    from netbox_proxbox.services.backend_key_adoption import (
+        BackendKeyAdoptionError,
+        adopt_rotated_backend_key,
+        backend_key_runtime_is_trusted,
+    )
     from netbox_proxbox.services.endpoint_enabled import endpoint_is_enabled
 
     if not endpoint_is_enabled(endpoint):
         logger.info(
-            "FastAPIEndpoint %s is disabled, skipping backend token registration",
+            "FastAPIEndpoint %s is disabled, skipping backend key verification",
             getattr(endpoint, "pk", None),
         )
         return False
 
-    base_url = _get_backend_url(endpoint)
-    if not base_url:
-        logger.debug(
-            "Cannot register token: no backend URL configured for endpoint %s",
-            endpoint.pk,
+    if not backend_key_runtime_is_trusted(endpoint):
+        logger.warning(
+            "FastAPIEndpoint %s target is not covered by its stored key adoption; "
+            "backend use is blocked",
+            getattr(endpoint, "pk", None),
         )
         return False
 
     token = (getattr(endpoint, "token", "") or "").strip()
     if not token:
-        logger.debug("Cannot register token: endpoint %s has no token", endpoint.pk)
+        logger.warning("FastAPIEndpoint %s has no stored API key", endpoint.pk)
         return False
 
     try:
-        status_resp = requests.get(
-            f"{base_url}/auth/bootstrap-status",
-            verify=endpoint.verify_ssl,
-            timeout=5,
-        )
-        if status_resp.status_code != 200:
-            logger.warning(
-                "Bootstrap status check failed for endpoint %s: HTTP %s",
-                endpoint.pk,
-                status_resp.status_code,
-            )
-            return False
-
-        status_data = status_resp.json()
-        if not status_data.get("needs_bootstrap", False):
-            logger.debug(
-                "Endpoint %s: backend already has API key registered", endpoint.pk
-            )
-            return True
-
-    except requests.exceptions.RequestException as exc:
+        proof = adopt_rotated_backend_key(endpoint, token)
+    except BackendKeyAdoptionError as exc:
         logger.warning(
-            "Could not check bootstrap status for endpoint %s: %s", endpoint.pk, exc
-        )
-        return False
-
-    try:
-        register_resp = requests.post(
-            f"{base_url}/auth/register-key",
-            json={"api_key": token, "label": f"netbox-fastapi-{endpoint.pk}"},
-            verify=endpoint.verify_ssl,
-            timeout=10,
-        )
-        if register_resp.status_code == 201:
-            logger.info(
-                "Successfully registered API key for endpoint %s with backend",
-                endpoint.pk,
-            )
-            return True
-        if register_resp.status_code == 409:
-            logger.debug(
-                "Endpoint %s: backend already has API key registered", endpoint.pk
-            )
-            return True
-        logger.warning(
-            "Failed to register API key for endpoint %s: HTTP %s - %s",
+            "Backend API key check failed for endpoint %s (%s)",
             endpoint.pk,
-            register_resp.status_code,
-            register_resp.text[:200],
+            exc.code,
         )
         return False
 
-    except requests.exceptions.RequestException as exc:
-        logger.warning(
-            "Could not register API key for endpoint %s: %s", endpoint.pk, exc
-        )
-        return False
+    logger.info(
+        "Backend API key %s for FastAPIEndpoint %s",
+        proof.action,
+        endpoint.pk,
+    )
+    return True
 
 
 @receiver(post_save, sender="netbox_proxbox.FastAPIEndpoint")
@@ -134,22 +84,27 @@ def ensure_fastapi_endpoint_token(
     created: bool,
     **kwargs: object,
 ) -> None:
-    """Ensure FastAPIEndpoint has a token and register it with the backend.
-
-    This signal:
-    1. Generates a token if none exists
-    2. Registers the token with the proxbox-api backend (best-effort)
-    """
-    from netbox_proxbox.models import FastAPIEndpoint
+    """Confirm the model-level gate supplied a key before post-save consumers run."""
+    from netbox_proxbox.websocket_client import stop_websocket  # noqa: PLC0415
 
     endpoint = instance
-
+    stop_websocket(int(endpoint.pk))
     if not endpoint.token:
-        logger.info("FastAPIEndpoint %s has no token, generating one", endpoint.pk)
-        endpoint.token = secrets.token_urlsafe(48)
-        FastAPIEndpoint.objects.filter(pk=endpoint.pk).update(token=endpoint.token)
-
-    _register_token_with_backend(endpoint)
+        if bool(getattr(endpoint, "enabled", True)):
+            logger.error(
+                "FastAPIEndpoint %s was saved without an API key; backend use is blocked",
+                endpoint.pk,
+            )
+        else:
+            logger.debug(
+                "FastAPIEndpoint %s is disabled and has no staged API key",
+                endpoint.pk,
+            )
+        return
+    logger.debug(
+        "FastAPIEndpoint %s key transition was handled before persistence",
+        endpoint.pk,
+    )
 
 
 @receiver(post_save, sender="netbox_proxbox.ProxmoxEndpoint")
@@ -159,32 +114,28 @@ def ensure_proxmox_endpoint_has_fastapi_token(
     created: bool,
     **kwargs: object,
 ) -> None:
-    """Ensure there's a FastAPIEndpoint with a token when ProxmoxEndpoint is saved.
+    """Require an adopted FastAPI key before a ProxmoxEndpoint push.
 
-    This catches the upgrade scenario where migration ran but backend was offline.
-    When user saves ProxmoxEndpoint to configure sync, we ensure the FastAPIEndpoint
-    has a token and it's registered.
+    This receiver never creates, bootstraps, or persists a credential.
     """
     from netbox_proxbox.models import FastAPIEndpoint
 
     if not bool(getattr(instance, "enabled", True)):
         logger.info(
-            "ProxmoxEndpoint %s is disabled, skipping backend token registration and endpoint sync",
+            "ProxmoxEndpoint %s is disabled, skipping backend key verification and endpoint sync",
             getattr(instance, "pk", None),
         )
         return
 
     count = FastAPIEndpoint.objects.filter(enabled=True).count()
     if count == 0:
-        logger.debug(
-            "No enabled FastAPIEndpoint configured, skipping token registration"
-        )
+        logger.debug("No enabled FastAPIEndpoint configured, skipping key verification")
         return
 
     order = FastAPIEndpoint.objects.filter(enabled=True).order_by("pk")
     fastapi_ep = order.first()
     if not fastapi_ep:
-        logger.debug("No FastAPIEndpoint found, skipping token registration")
+        logger.debug("No FastAPIEndpoint found, skipping key verification")
         return
 
     if count > 1:
@@ -196,20 +147,33 @@ def ensure_proxmox_endpoint_has_fastapi_token(
         )
 
     if not fastapi_ep.token:
-        logger.info(
-            "FastAPIEndpoint %s has no token (detected during ProxmoxEndpoint save), generating one",
+        logger.warning(
+            "FastAPIEndpoint %s has no API key; Proxmox endpoint sync is blocked",
             fastapi_ep.pk,
         )
-        fastapi_ep.token = secrets.token_urlsafe(48)
-        FastAPIEndpoint.objects.filter(pk=fastapi_ep.pk).update(token=fastapi_ep.token)
+        return
 
-    _register_token_with_backend(fastapi_ep)
+    if not _register_token_with_backend(fastapi_ep):
+        logger.warning(
+            "FastAPIEndpoint %s key is not accepted; Proxmox endpoint sync is blocked",
+            fastapi_ep.pk,
+        )
+        return
 
     # Also push the Proxmox endpoint data to the backend DB so sync stages can
     # find it without requiring a dashboard visit first.
     base_url = _get_backend_url(fastapi_ep)
     if base_url:
-        auth_headers = {"X-Proxbox-API-Key": (fastapi_ep.token or "").strip()}
+        from netbox_proxbox.utils import get_backend_auth_headers  # noqa: PLC0415
+
+        auth_headers = get_backend_auth_headers(fastapi_ep)
+        if not auth_headers:
+            logger.warning(
+                "FastAPIEndpoint %s has no trusted authentication context; "
+                "Proxmox endpoint sync is blocked",
+                fastapi_ep.pk,
+            )
+            return
         from netbox_proxbox.views.backend_sync import sync_proxmox_endpoint_to_backend  # noqa: PLC0415
 
         ok, err, _ = sync_proxmox_endpoint_to_backend(
@@ -271,7 +235,23 @@ def sync_netbox_endpoint_to_backend(
         )
         return
 
-    auth_headers = {"X-Proxbox-API-Key": (fastapi_ep.token or "").strip()}
+    if not _register_token_with_backend(fastapi_ep):
+        logger.warning(
+            "FastAPIEndpoint %s key is not accepted; NetBox endpoint sync is blocked",
+            fastapi_ep.pk,
+        )
+        return
+
+    from netbox_proxbox.utils import get_backend_auth_headers  # noqa: PLC0415
+
+    auth_headers = get_backend_auth_headers(fastapi_ep)
+    if not auth_headers:
+        logger.warning(
+            "FastAPIEndpoint %s has no trusted authentication context; "
+            "NetBox endpoint sync is blocked",
+            fastapi_ep.pk,
+        )
+        return
     ok, err, _ = _push(
         instance,
         base_url=base_url,

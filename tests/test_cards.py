@@ -32,7 +32,9 @@ def test_get_proxmox_card_merges_cluster_and_version_payloads(
 
     calls = []
 
-    def fake_get(url, timeout=None, params=None, headers=None, verify=None):
+    def fake_get(
+        url, timeout=None, params=None, headers=None, verify=None, allow_redirects=True
+    ):
         calls.append((url, params, headers, verify))
         if "/proxmox/version" in url:
             return ResponseStub([{"CLUSTER-A": {"version": "8.3.0", "release": "8.3"}}])
@@ -151,7 +153,9 @@ def test_get_proxmox_card_uses_backend_endpoint_id_when_domain_is_empty(
 
     calls = []
 
-    def fake_get(url, timeout=None, params=None, headers=None, verify=None):
+    def fake_get(
+        url, timeout=None, params=None, headers=None, verify=None, allow_redirects=True
+    ):
         calls.append((url, params, headers, verify))
         return ResponseStub([])
 
@@ -197,7 +201,9 @@ def test_get_proxmox_card_returns_error_detail_on_backend_failure(
             err.response = self
             raise err
 
-    def fake_get(url, timeout=None, params=None, headers=None, verify=None):
+    def fake_get(
+        url, timeout=None, params=None, headers=None, verify=None, allow_redirects=True
+    ):
         return FailingResponse()
 
     monkeypatch.setattr(module.requests, "get", fake_get)
@@ -229,7 +235,9 @@ def test_get_proxmox_card_normalizes_backend_connection_refused(
         lambda *args, **kwargs: (1, None),
     )
 
-    def fake_get(url, timeout=None, params=None, headers=None, verify=None):
+    def fake_get(
+        url, timeout=None, params=None, headers=None, verify=None, allow_redirects=True
+    ):
         raise requests.exceptions.ConnectionError(
             "HTTPConnectionPool(host='10.0.30.207', port=8000): Max retries exceeded "
             "with url: /proxmox/version?source=database&proxmox_endpoint_ids=1 "
@@ -286,7 +294,9 @@ def test_get_proxmox_card_scopes_duplicate_domain_by_backend_id(
 
     scoped_calls = []
 
-    def fake_get(url, timeout=None, params=None, headers=None, verify=None):
+    def fake_get(
+        url, timeout=None, params=None, headers=None, verify=None, allow_redirects=True
+    ):
         if url.endswith("/proxmox/endpoints"):
             # Same domain on both rows is the point of this test; `port` is
             # present because the resolver confirms the located row still dials
@@ -354,7 +364,9 @@ def test_get_proxmox_card_returns_sync_error_without_requesting_backend(
 
     calls = []
 
-    def fake_get(url, timeout=None, params=None, headers=None, verify=None):
+    def fake_get(
+        url, timeout=None, params=None, headers=None, verify=None, allow_redirects=True
+    ):
         calls.append(url)
         return ResponseStub([])
 

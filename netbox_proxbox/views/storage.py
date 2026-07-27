@@ -88,6 +88,7 @@ class ProxmoxStorageView(generic.ObjectView):
             headers=auth_headers,
             verify=verify_ssl,
             timeout=self.request_timeout,
+            allow_redirects=False,
         )
         response.raise_for_status()
         payload, json_err = parse_requests_response_json(response, log_label=route)
@@ -124,10 +125,12 @@ class ProxmoxStorageView(generic.ObjectView):
         usage_detail = None
         content_records: list[dict[str, object]] = []
 
-        fastapi_endpoint = FastAPIEndpoint.objects.restrict(
-            request.user, "view"
-        ).first()
-        if fastapi_endpoint:
+        fastapi_endpoint = (
+            FastAPIEndpoint.objects.restrict(request.user, "view")
+            .filter(enabled=True)
+            .first()
+        )
+        if fastapi_endpoint and bool(getattr(fastapi_endpoint, "enabled", False)):
             fastapi_info = get_fastapi_url(fastapi_endpoint) or {}
             fastapi_url = fastapi_info.get("http_url")
             verify_ssl = bool(fastapi_info.get("verify_ssl", True))
@@ -196,7 +199,7 @@ class ProxmoxStorageView(generic.ObjectView):
                     )
                     usage_detail = detail
         else:
-            usage_detail = "No FastAPI endpoint is visible to your account."
+            usage_detail = "No enabled FastAPI endpoint is visible to your account."
 
         return {
             "storage_summary": storage_summary,

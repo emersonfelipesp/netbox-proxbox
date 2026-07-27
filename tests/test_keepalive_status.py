@@ -86,7 +86,9 @@ def _pbs_server(*, enabled=True):
 
 
 def _patch_backend_and_pbs_status(monkeypatch, ss, status_payload):
-    def fake_get(url, verify=True, timeout=None, params=None, headers=None):
+    def fake_get(
+        url, verify=True, timeout=None, params=None, headers=None, allow_redirects=True
+    ):
         if url == "https://proxbox.local:8800":
             return ResponseStub({"ok": True})
         if url.endswith("/version"):
@@ -117,7 +119,7 @@ def test_fastapi_status_falls_back_to_ip_after_ssl_error(
     ss = _service_status_module()
     calls = []
 
-    def fake_get(url, verify=True, timeout=None, headers=None):
+    def fake_get(url, verify=True, timeout=None, headers=None, allow_redirects=True):
         calls.append((url, verify, headers))
         if "proxbox.local" in url:
             raise requests.exceptions.SSLError("bad cert")
@@ -154,7 +156,7 @@ def test_fastapi_status_does_not_retry_insecurely_when_verify_ssl_enabled(
     ss = _service_status_module()
     calls = []
 
-    def fake_get(url, verify=True, timeout=None, headers=None):
+    def fake_get(url, verify=True, timeout=None, headers=None, allow_redirects=True):
         calls.append((url, verify, headers))
         if "proxbox.local" in url:
             raise requests.exceptions.SSLError("bad cert")
@@ -167,6 +169,45 @@ def test_fastapi_status_does_not_retry_insecurely_when_verify_ssl_enabled(
     assert status["api_access"] == "error"
     assert "FastAPI URL check failed" in status["detail"]
     assert calls == [("https://proxbox.local:8800", True, None)]
+
+
+def test_fastapi_status_rejected_selected_key_stops_all_authenticated_requests(
+    monkeypatch,
+    fastapi_endpoint,
+):
+    load_plugin_module(
+        "netbox_proxbox.views.keepalive_status",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+    )
+    ss = _service_status_module()
+    auth = sys.modules["netbox_proxbox.services.backend_auth"]
+    key_checks: list[int | None] = []
+
+    def reject_key(*, endpoint_id=None):
+        key_checks.append(endpoint_id)
+        return False, "candidate rejected"
+
+    monkeypatch.setattr(auth, "ensure_backend_key_registered", reject_key)
+    calls = []
+
+    def fake_get(url, verify=True, timeout=None, headers=None, allow_redirects=True):
+        calls.append((url, headers))
+        if url.endswith("/version"):
+            raise AssertionError("version probe ran after key rejection")
+        return ResponseStub({"ok": True})
+
+    monkeypatch.setattr(ss.requests, "get", fake_get)
+
+    status = ss.ServiceStatus().fastapi_status(1)
+
+    assert key_checks == [1]
+    assert calls == [("https://proxbox.local:8800", None)]
+    assert status["connected"] is True
+    assert status["authentication"] == "error"
+    assert status["api_access"] == "error"
+    assert status["backend_version"] is None
+    assert "preflight failed" in status["detail"]
 
 
 def test_fastapi_status_disabled_endpoint_does_not_connect(
@@ -204,7 +245,7 @@ def test_fastapi_status_warns_for_agent_kv_affected_backend(
     )
     ss = _service_status_module()
 
-    def fake_get(url, verify=True, timeout=None, headers=None):
+    def fake_get(url, verify=True, timeout=None, headers=None, allow_redirects=True):
         if url.endswith("/version"):
             return ResponseStub({"version": "0.0.14"})
         return ResponseStub({"ok": True})
@@ -231,7 +272,7 @@ def test_fastapi_status_errors_for_backend_before_vm_ip_config_fix(
     )
     ss = _service_status_module()
 
-    def fake_get(url, verify=True, timeout=None, headers=None):
+    def fake_get(url, verify=True, timeout=None, headers=None, allow_redirects=True):
         if url.endswith("/version"):
             return ResponseStub({"version": "0.0.12"})
         return ResponseStub({"ok": True})
@@ -257,7 +298,7 @@ def test_fastapi_keepalive_payload_exposes_backend_version_warning(
     )
     ss = _service_status_module()
 
-    def fake_get(url, verify=True, timeout=None, headers=None):
+    def fake_get(url, verify=True, timeout=None, headers=None, allow_redirects=True):
         if url.endswith("/version"):
             return ResponseStub({"version": "0.0.14"})
         return ResponseStub({"ok": True})
@@ -560,7 +601,9 @@ def test_proxmox_status_uses_backend_endpoint_id_query_when_domain_available(
     monkeypatch.setattr(ss, "_last_proxmox_mode_check", {})
     requested = []
 
-    def fake_get(url, verify=True, timeout=None, params=None, headers=None):
+    def fake_get(
+        url, verify=True, timeout=None, params=None, headers=None, allow_redirects=True
+    ):
         requested.append((url, params, headers, verify))
         if url.endswith("/proxmox/cluster/status"):
             return ResponseStub([{"type": "node", "name": "pve01"}])
@@ -673,7 +716,9 @@ def test_proxmox_status_uses_backend_endpoint_id_query_when_domain_missing(
     monkeypatch.setattr(ss, "_last_proxmox_mode_check", {})
     requested = []
 
-    def fake_get(url, verify=True, timeout=None, params=None, headers=None):
+    def fake_get(
+        url, verify=True, timeout=None, params=None, headers=None, allow_redirects=True
+    ):
         requested.append((url, params, headers, verify))
         if url.endswith("/proxmox/cluster/status"):
             return ResponseStub([{"type": "node", "name": "pve01"}])
@@ -740,7 +785,9 @@ def test_proxmox_status_scopes_duplicate_domain_by_backend_id(
     monkeypatch.setattr(ss, "_last_proxmox_mode_check", {})
     scoped_calls = []
 
-    def fake_get(url, verify=True, timeout=None, params=None, headers=None):
+    def fake_get(
+        url, verify=True, timeout=None, params=None, headers=None, allow_redirects=True
+    ):
         if url.endswith("/proxmox/endpoints"):
             # Same domain on both rows is the point of this test; `port` is
             # present because the resolver confirms the located row still dials
@@ -819,7 +866,9 @@ def test_proxmox_status_normalizes_backend_connection_refused(
         lambda *args, **kwargs: (1, None),
     )
 
-    def fake_get(url, verify=True, timeout=None, params=None, headers=None):
+    def fake_get(
+        url, verify=True, timeout=None, params=None, headers=None, allow_redirects=True
+    ):
         raise requests.exceptions.ConnectionError(
             "HTTPConnectionPool(host='10.0.30.207', port=8000): Max retries exceeded "
             "with url: /proxmox/version?source=database&proxmox_endpoint_ids=1 "
@@ -871,7 +920,9 @@ def test_proxmox_status_returns_sync_error_before_backend_version_call(
 
     calls = []
 
-    def fake_get(url, verify=True, timeout=None, params=None, headers=None):
+    def fake_get(
+        url, verify=True, timeout=None, params=None, headers=None, allow_redirects=True
+    ):
         calls.append(url)
         return ResponseStub([{"pve01": {"version": "8.3.0"}}])
 
@@ -1208,7 +1259,9 @@ def test_proxmox_mode_detected_on_successful_keepalive(
     )
     monkeypatch.setattr(ss, "_last_proxmox_mode_check", {})
 
-    def fake_get(url, verify=True, timeout=None, params=None, headers=None):
+    def fake_get(
+        url, verify=True, timeout=None, params=None, headers=None, allow_redirects=True
+    ):
         if url.endswith("/proxmox/cluster/status"):
             return ResponseStub(
                 [
@@ -1271,7 +1324,9 @@ def test_proxmox_mode_detects_named_single_node_cluster_as_standalone(
     )
     monkeypatch.setattr(ss, "_last_proxmox_mode_check", {})
 
-    def fake_get(url, verify=True, timeout=None, params=None, headers=None):
+    def fake_get(
+        url, verify=True, timeout=None, params=None, headers=None, allow_redirects=True
+    ):
         assert url.endswith("/proxmox/version")
         return ResponseStub([{"pve01": {"version": "8.3.0"}}])
 
