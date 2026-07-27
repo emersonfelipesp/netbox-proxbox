@@ -58,9 +58,7 @@ def test_mocked_suite_disables_pytest_django():
 def test_release_mocked_suites_disable_pytest_django():
     """Every release-time full mocked run needs the same collection guard."""
     workflow = RELEASE_WORKFLOW.read_text()
-    run_lines = [
-        line for line in workflow.splitlines() if "uv run pytest" in line
-    ]
+    run_lines = [line for line in workflow.splitlines() if "uv run pytest" in line]
 
     assert len(run_lines) == 2, (
         "expected TestPyPI and PyPI candidate full-suite pytest invocations"

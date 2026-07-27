@@ -131,9 +131,15 @@ class TestEndpointAutoconfigurationHelpers:
         assert auto_module._normalized_origin("backend.example.test") == (
             "https://backend.example.test"
         )
-        assert auto_module._normalized_origin("https://backend.example.test:bad") is None
-        assert auto_module._normalized_origin("https://backend.example.test/path") is None
-        assert auto_module._normalized_origin("https://user@backend.example.test") is None
+        assert (
+            auto_module._normalized_origin("https://backend.example.test:bad") is None
+        )
+        assert (
+            auto_module._normalized_origin("https://backend.example.test/path") is None
+        )
+        assert (
+            auto_module._normalized_origin("https://user@backend.example.test") is None
+        )
         assert auto_module._normalized_origin("https://localhost") is None
         assert auto_module._configured_hostname("") == ""
         assert auto_module._configured_hostname("https://[broken") == ""
