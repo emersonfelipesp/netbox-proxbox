@@ -195,6 +195,18 @@ other tenants.
   for troubleshooting. See
   [Recovering / Regenerating Proxbox Data](docs/operations/recovering-proxbox-data.md).
 
+## What's New in v0.0.23.post2
+
+Current pairing: netbox-proxbox 0.0.23.post2 <-> proxbox-api (guest-VM-interface writer build / next release) <-> proxmox-sdk 0.0.12 <-> netbox-sdk 0.0.10.
+
+Paired with backend: guest-VM-interface writer build / next release.
+
+- **Bounded backend auto-configuration.** Saving or enabling a backend can establish its key automatically, but only against the exact persisted URL/IP, port, and TLS policy. Startup discovery without a row is limited to configured and trusted same-site candidates.
+- **Fail-closed target binding.** Credentials are fingerprint-bound to their canonical HTTP, fallback-IP, TLS, and WebSocket targets. Unlisted hosts, redirects, disabled endpoints, target drift, and initialized backends whose key is not held locally are rejected.
+- **Automatic NetBox configuration.** The local NetBox public origin and its backend credential can be established through the trusted boundary without requiring operators to paste endpoint secrets into Proxbox forms.
+
+Full notes: [Release Notes - v0.0.23.post2](docs/release-notes/version-0.0.23.post2.md).
+
 ## What's New in v0.0.23.post1
 
 Current pairing: netbox-proxbox 0.0.23.post1 <-> proxbox-api (guest-VM-interface writer build / next release) <-> proxmox-sdk 0.0.12 <-> netbox-sdk 0.0.10.
@@ -298,6 +310,7 @@ Full notes: [Release Notes — v0.0.18](https://emersonfelipesp.github.io/netbox
 
 | NetBox | netbox-proxbox | proxbox-api | netbox-sdk | proxmox-sdk |
 |--------|----------------|-------------|------------|-------------|
+| >=4.5.8 | v0.0.23.post2 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
 | >=4.5.8 | v0.0.23.post1 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
 | >=4.5.8 | v0.0.23 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
 | >=4.5.8 | v0.0.22 | v0.0.19.post5 | v0.0.10 | v0.0.12 |
