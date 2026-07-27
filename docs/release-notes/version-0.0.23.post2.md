@@ -51,3 +51,7 @@ On startup, a successfully configured installation logs backend key
 verification and the NetBox endpoint push. A configuration that cannot be
 proved safe logs a `pending` result and continues serving NetBox without
 attempting an untrusted connection.
+
+The complete state machine, operator outcomes, requirements-to-tests matrix,
+and real-Django branch-coverage gate are maintained in
+[Endpoint Auto-Configuration](../developer/endpoint-autoconfiguration.md).

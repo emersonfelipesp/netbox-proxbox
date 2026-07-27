@@ -105,6 +105,7 @@ nav:
     - Data Flow: 'developer/data-flow.md'
     - Streaming Protocol: 'developer/streaming-protocol.md'
     - Authentication: 'developer/authentication.md'
+    - Endpoint Auto-Configuration: 'developer/endpoint-autoconfiguration.md'
     - Backend Integration: 'developer/backend-integration.md'
     - Endpoint Data Exchange: 'developer/endpoint-sync.md'
     - Browser Frontend: 'developer/browser-frontend.md'

@@ -9,7 +9,7 @@ the staged TestPyPI/PyPI release pipeline.
 | Workflow | Trigger | Purpose |
 |---|---|---|
 | `.github/workflows/ci.yml` | Push and pull request | Runs lint, type checks, compile checks, and the mocked pytest suite. NetBox-dependent Django tests skip here. |
-| `.github/workflows/django-tests.yml` | Push and pull request | Provisions a real NetBox source tree (matrixed over the supported 4.5.x and 4.6.x lines) plus PostgreSQL and Redis, installs the plugin `test` extra (`pytest-django` included), and runs the NetBox-backed Django TestCase suite for the sync-state sidecar models, migrations, backfill, and APIs. Sets `NETBOX_PROXBOX_REQUIRE_DJANGO=1` so a missing or broken harness fails the job instead of skipping. |
+| `.github/workflows/django-tests.yml` | Push and pull request | Provisions a real NetBox source tree (matrixed over the supported 4.5.x and 4.6.x lines) plus PostgreSQL and Redis, installs the plugin `test` extra (`pytest-django` included), and runs the NetBox-backed Django TestCase suite for sync-state and endpoint auto-configuration. It hard-fails a missing harness and enforces at least 85% branch coverage for `services.endpoint_autoconfiguration`. |
 | `.github/workflows/e2e-docker.yml` | Manual, scheduled, reusable workflow call | Builds a real NetBox stack with the plugin, rqworker, `proxbox-api`, PostgreSQL, Redis, and a mocked Proxmox API. |
 | `.github/workflows/publish-testpypi.yml` | `v*rc*` tag push (TestPyPI), GitHub release published (PyPI), manual dispatch | Publishes immutable package versions through TestPyPI, PyPI release candidates, final PyPI releases, and post-release fixes. Official PyPI releases are cut from `develop` via `gh release create`; plain non-rc tag pushes do not trigger publishing. |
 | `.github/workflows/docs.yml` | Docs changes on main / PR | Builds and publishes the MkDocs site. |
@@ -30,6 +30,18 @@ does not use `--no-migrations` because the sync-state TestCases exercise real
 tables and migration reversals. `NETBOX_PROXBOX_REQUIRE_DJANGO=1` converts a
 missing dependency, failed `django.setup()`, or broken DB harness into a hard
 failure instead of a module-level skip.
+
+The ordinary CI and both release candidate-validation jobs run the mocked suite
+with `-p no:django`. This is deliberately per invocation: setting it globally
+would disable the plugin needed by this real-NetBox job. Local disposable
+services can set `NETBOX_TEST_DB_HOST`, `NETBOX_TEST_DB_PORT`,
+`NETBOX_TEST_REDIS_HOST`, and `NETBOX_TEST_REDIS_PORT`; hosted CI retains the
+stock service host and ports.
+
+The Gitea package workflow subscribes to tag `push` only (plus manual
+dispatch), not the overlapping `create` event. Gitea emits both events for one
+tag, and accepting both would race two immutable uploads of the same version.
+`tests/test_pytest_django_scope.py` pins both workflow contracts.
 
 ## Docker E2E Stack
 

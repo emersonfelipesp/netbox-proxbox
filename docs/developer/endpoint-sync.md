@@ -4,6 +4,10 @@ This page explains how the `netbox-proxbox` plugin automatically keeps its endpo
 in sync with the `proxbox-api` backend — covering the problem, the three delivery mechanisms,
 the complete data flow, and the security model.
 
+For the bounded discovery allowlist, credential state machine, and automated
+evidence map, see
+[Endpoint Auto-Configuration](endpoint-autoconfiguration.md).
+
 ---
 
 ## The Problem

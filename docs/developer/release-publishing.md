@@ -78,6 +78,10 @@ sequenceDiagram
   dispatch with `publish_target=pypi` also publishes to PyPI.
 - Package uploads intentionally omit `twine --skip-existing`; a consumed version
   must move forward to the next `.postN` or `rcN`.
+- The Gitea package workflow listens for tag `push`, not the overlapping
+  `create` event, so a tag can start only one immutable registry upload.
+- TestPyPI and PyPI candidate validation run the mocked suite with
+  `-p no:django`; the separate real-NetBox matrix keeps pytest-django enabled.
 - Release E2E runs with `proxbox_api_runtime: both`. The Python backend and the
   PyO3/Rust backend must both pass before PyPI publication can proceed.
 - In package-index E2E, Rust mode tries `proxbox-api[pyo3-rust]` first and

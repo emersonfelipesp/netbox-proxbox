@@ -344,6 +344,9 @@ curl -H "Authorization: Token <token>" \
     Disabled rows are also excluded from the legacy WebSocket and storage-detail
     consumers before URL or authentication-header construction.
 
+    See [Endpoint Auto-Configuration](../developer/endpoint-autoconfiguration.md)
+    for the full state machine and requirements-to-tests matrix.
+
 ### Data Model
 
 | Field | Type | Description |

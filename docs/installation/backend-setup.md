@@ -201,6 +201,10 @@ callers and is never logged or rendered. If the backend becomes initialized by
 another actor during bootstrap, the conflict remains pending rather than being
 treated as proof of authentication.
 
+See [Endpoint Auto-Configuration](../developer/endpoint-autoconfiguration.md)
+for the complete state machine, operator outcomes, requirements-to-tests
+matrix, and branch-coverage gate.
+
 ### Manual Token Management
 
 The diagnostic command never prints token fragments. Disabled endpoints are
