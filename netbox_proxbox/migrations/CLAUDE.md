@@ -121,11 +121,12 @@ contract and issue #454 for the bug history.
 - **0075_fastapi_backend_key_target_fingerprint**: adds the internal SHA-256
   target fingerprint used to bind an encrypted FastAPI key to its primary and
   fallback HTTP authorities, TLS policy, and WebSocket policy. Existing rows
-  intentionally remain blank and fail closed until an operator reviews the
-  target and runs `proxbox_fix_tokens --fix` (or explicitly resubmits the key
-  through the form/API). Never add a data migration that silently fingerprints
-  legacy rows; a mutable related `IPAddress` cannot be trusted without explicit
-  operator adoption.
+  intentionally remain blank and fail closed until the retained key is
+  authenticated against the exact persisted target by commit-safe startup
+  auto-configuration or an operator runs `proxbox_fix_tokens --fix`. Never add
+  a data migration that silently fingerprints legacy rows; a mutable related
+  `IPAddress` must be probed and authenticated under the same frozen target
+  snapshot before trust is recorded.
 
 ## Notes
 

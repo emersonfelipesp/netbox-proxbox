@@ -27,6 +27,17 @@ This directory contains service-layer modules for backend HTTP proxy, keepalive 
   emitted only as bracketed authorities. Its bootstrap/auth/register HTTP
   ceilings are named constants sized for a cold backend opening SQLite and
   resolving the NetBox OpenAPI schema; warm calls still return immediately.
+- [`endpoint_autoconfiguration.py`](./endpoint_autoconfiguration.py): bounded,
+  idempotent discovery for the local NetBox and proxbox-api endpoints. An
+  existing FastAPI row makes its exact persisted URL/IP, port, and TLS policy
+  the complete allowlist. With no row, candidates come only from plugin config
+  or same-site DNS names derived from NetBox's trusted public origin. Identity
+  and readiness probes are credential-free and redirect-free; stored keys are
+  authenticated before their target fingerprint is written, and a generated
+  key is encrypted before the commit callback may bootstrap it. No-row creation
+  uses a PostgreSQL transaction advisory lock so concurrent web/RQ startup
+  processes cannot create competing singleton rows. Never add caller-supplied
+  candidates or host/subnet scanning to this module.
 - [`backend_context.py`](./backend_context.py): defines `get_fastapi_request_context()` — resolves the active FastAPIEndpoint and builds the URL/header context used by all backend HTTP helpers.
 - [`backend_proxy.py`](./backend_proxy.py): HTTP client helpers for proxbox-api,
   including SSE streaming (`run_sync_stream`, `iter_backend_sse_lines`), JSON

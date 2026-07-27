@@ -95,15 +95,18 @@ This directory defines the plugin's persisted data model.
 - `FastAPIEndpoint.save()` is the backend-key persistence boundary. New enabled
   endpoints, disabled-to-enabled transitions, connection/TLS target changes,
   and token changes must pass `prepare_backend_key_transition()` before
-  `token_enc` is written. Each such transition requires an explicitly
-  resubmitted candidate; no key is generated implicitly. A disabled existing
-  row cannot accept a replacement token because the hard no-connection gate
-  prevents authenticating it. Security-sensitive saves lock and compare the
-  loaded ciphertext/target snapshot, while explicitly non-security
+  `token_enc` is written. An explicitly submitted candidate is authenticated
+  synchronously. When the field is blank, an existing encrypted key is reused
+  or a new candidate is encrypted, and bounded authentication is scheduled
+  only after commit. A disabled existing row cannot accept a replacement token
+  because the hard no-connection gate prevents authenticating it.
+  Security-sensitive saves lock and compare the loaded ciphertext/target
+  snapshot, while explicitly non-security
   `update_fields` saves cannot widen their field set or restore stale trust
   state. Runtime HTTP and WebSocket paths recompute
   `backend_key_target_fingerprint` (including a fresh IP FK lookup) before
-  exposing the key; target drift remains blocked until explicit re-adoption.
+  exposing the key; target drift remains blocked until the exact persisted
+  target has been re-authenticated.
 - `NetBoxEndpoint.has_configured_token` and serializer/form validation together define the remote NetBox credential behavior.
 - Primary endpoint secrets are exposed as compatibility properties and stored in
   encrypted backing fields: `ProxmoxEndpoint.password_enc`,

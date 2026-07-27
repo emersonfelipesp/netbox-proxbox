@@ -375,9 +375,11 @@ tenant continues to see only the default/global rows.
 HTTP target, fallback IP, port, HTTP/TLS flags, and WebSocket authority flags.
 It contains no credential. Runtime HTTP and WebSocket paths recompute and
 compare it before exposing the stored key; a mutable IP relation or any target
-drift therefore fails closed until the operator explicitly resubmits the key.
-Migration `0075_fastapi_backend_key_target_fingerprint` intentionally leaves
-legacy rows blank for reviewed adoption with `proxbox_fix_tokens --fix`.
+drift therefore fails closed while the exact saved target is re-authenticated.
+The encrypted retained key is reused automatically; unrelated domains or IPs
+are never considered. Migration `0075_fastapi_backend_key_target_fingerprint`
+intentionally leaves legacy rows blank so startup can perform this bounded
+adoption (with `proxbox_fix_tokens --fix` retained as an operator repair path).
 
 ### Infrastructure Models
 

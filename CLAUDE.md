@@ -50,7 +50,7 @@ This repository packages the `netbox_proxbox` NetBox plugin. The plugin adds end
 - Docker-based plugin installation docs are maintained at [`docs/installation/3-installing-plugin-docker.md`](./docs/installation/3-installing-plugin-docker.md), including `plugin_requirements.txt` and `configuration/plugins.py` usage.
 - Backend Docker examples map host `8800` to container `8000` (`-p 8800:8000`) because the published `proxbox-api` image serves through nginx on container port `8000`.
 
-The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxbox/__init__.py). It declares plugin version `0.0.23.post1` and NetBox compatibility `4.5.8` through `4.6.99` (validated against `4.5.8` through `4.5.10` and `4.6.0` through `4.6.5`). Current pairing: netbox-proxbox 0.0.23.post1 <-> proxbox-api (guest-VM-interface writer build / next release) <-> proxmox-sdk 0.0.12 <-> netbox-sdk 0.0.10. The `0.0.23.post1` release makes `guest_os_model` the universal VM interface sync default, including existing installs: Proxmox NICs remain core `VMInterface` rows while guest-agent OS interfaces are stored in `GuestVMInterface` / `GuestVMInterfaceAddress`. Operators who want the old renaming behavior can re-select `vm_interface_sync_strategy=legacy_rename` in plugin settings. The previous stable `0.0.22` release pairs with backend `0.0.19.post5`. `proxbox-api` is not a Python dependency of this plugin; the services communicate over HTTP.
+The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxbox/__init__.py). It declares plugin version `0.0.23.post2` and NetBox compatibility `4.5.8` through `4.6.99` (validated against `4.5.8` through `4.5.10` and `4.6.0` through `4.6.5`). Current pairing: netbox-proxbox 0.0.23.post2 <-> proxbox-api (guest-VM-interface writer build / next release) <-> proxmox-sdk 0.0.12 <-> netbox-sdk 0.0.10. The `0.0.23.post2` release adds bounded endpoint auto-configuration and credential establishment while retaining the `0.0.23.post1` universal `guest_os_model` behavior. Existing backend rows authorize only their exact persisted target; rowless discovery is restricted to configured or same-site targets derived from NetBox's trusted public origin, and any unproved target remains pending. The previous stable `0.0.22` release pairs with backend `0.0.19.post5`. `proxbox-api` is not a Python dependency of this plugin; the services communicate over HTTP.
 
 **Companion repos (cross-link map):**
 
@@ -168,12 +168,18 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
 - **Backend API-key adoption is fail-closed.** `FastAPIEndpoint.save()` and
   every UI/import/API persistence path share
   `services.backend_key_adoption.adopt_rotated_backend_key()`. Keys are never
-  generated implicitly. A new disabled row stays keyless; creating/enabling an
-  endpoint or changing its URL/TLS trust boundary requires the operator to
-  resubmit a retained candidate explicitly. The bootstrap POST is allowed only
-  for that explicit candidate and only when proxbox-api reports no keys; an
-  initialized backend must authenticate it with one read-only keys request
-  before `token_enc` changes. A credential-free
+  exposed or recovered from the backend. A new disabled row stays keyless and
+  performs no discovery. An enabled save without an explicit candidate commits
+  a pending row with a blank fingerprint and encrypted candidate, then invokes
+  `services.endpoint_autoconfiguration` through `transaction.on_commit`. The
+  service treats the exact UI-persisted URL/IP, port, and TLS policy as its entire
+  allowlist, probes identity/readiness without credentials, and authenticates
+  the existing encrypted key. It generates and retains a key only for a
+  confirmed empty backend's one-time bootstrap. If no row exists, startup
+  discovery is bounded to plugin configuration and same-site names derived
+  from NetBox's trusted origin; it never scans or follows redirects. An
+  initialized backend with no locally held key stays pending. Explicit token
+  submission remains the manual rotation/recovery path. A credential-free
   `backend_key_target_fingerprint` durably binds the ciphertext to the
   canonical primary HTTP target, fallback IP, TLS flags, and WebSocket target
   flags; every runtime credential lookup recomputes it using a fresh IP FK and

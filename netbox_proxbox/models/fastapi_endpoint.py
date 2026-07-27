@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
+import logging
+import secrets
 from typing import cast
 
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
@@ -17,6 +19,8 @@ from netbox_proxbox.models.primary_secrets import (
     decrypt_primary_secret,
     encrypt_primary_secret,
 )
+
+logger = logging.getLogger(__name__)
 
 _BACKEND_KEY_PERSISTED_FIELDS = frozenset(
     {
@@ -277,6 +281,32 @@ class FastAPIEndpoint(EndpointBase):
         if saved:
             self.__dict__.pop("_backend_key_token_explicitly_assigned", None)
             self._backend_key_loaded_signature = next_signature
+            if self.enabled and not self.backend_key_target_fingerprint:
+                endpoint_pk = self.pk
+
+                def configure_pending_endpoint() -> None:
+                    from netbox_proxbox.services.endpoint_autoconfiguration import (
+                        autoconfigure_fastapi_endpoint,
+                    )
+
+                    try:
+                        result = autoconfigure_fastapi_endpoint()
+                    except Exception as exc:  # noqa: BLE001 - committed save must stand
+                        logger.error(
+                            "Automatic backend configuration failed after endpoint commit (%s)",
+                            type(exc).__name__,
+                        )
+                        return
+                    if (
+                        result.state == "configured"
+                        and result.endpoint_id == endpoint_pk
+                    ):
+                        try:
+                            self.refresh_from_db(using=using)
+                        except ObjectDoesNotExist:
+                            return
+
+                transaction.on_commit(configure_pending_endpoint, using=using)
 
     def _save_nonsecurity_only(
         self,
@@ -635,14 +665,20 @@ class FastAPIEndpoint(EndpointBase):
             return
 
         if not candidate_was_supplied or not explicit_candidate:
-            raise ValidationError(
-                {
-                    "token": (
-                        "Explicitly resubmit a non-empty backend API key when "
-                        "creating or enabling an endpoint, or changing its target."
-                    )
-                }
-            )
+            # Persist a fail-closed pending state and let the bounded discovery
+            # service authenticate the already encrypted key (or perform the
+            # backend's one-time empty-key bootstrap).  Runtime traffic remains
+            # blocked while this fingerprint is blank.  In particular, the
+            # stored key is never replayed here to an arbitrary edited target.
+            if previous is not None and previous_token:
+                self.token_enc = previous.token_enc
+                pending_candidate = previous_token
+            else:
+                pending_candidate = secrets.token_urlsafe(48)
+                self.token_enc = encrypt_primary_secret(pending_candidate)
+            self.backend_key_target_fingerprint = ""
+            self._pending_backend_key = pending_candidate
+            return
 
         proof = getattr(self, "_backend_key_adoption_proof", None)
         if not backend_key_proof_matches(proof, effective, current_candidate):
