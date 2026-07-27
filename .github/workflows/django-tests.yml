@@ -1,11 +1,8 @@
 name: Django Tests
 
-# Runs the NetBox-backed Django TestCase suite for the sync-state sidecar
-# models. The regular "CI" workflow installs only the project plus pytest, so
-# the Django-dependent tests (models, migrations, backfill, API, ETag) skip
-# there and do not gate merges. This workflow provisions a real NetBox source
-# tree plus PostgreSQL and Redis and runs those tests as a required check,
-# across the supported NetBox minor versions.
+# Runs the NetBox-backed Django TestCase suites for sync-state models and the
+# fail-closed backend-key persistence boundary. The regular mocked suite cannot
+# prove ORM transactions, forms, imports, serializers, or signal behavior.
 
 on:
   push:
@@ -89,4 +86,5 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}/netbox/netbox:${{ github.workspace }}/netbox-proxbox
         run: |
           pytest tests/test_sync_state_models.py tests/test_sync_state_contracts.py \
+            tests/test_backend_key_adoption_django.py \
             --ds=netbox.settings --reuse-db --create-db -v --no-header

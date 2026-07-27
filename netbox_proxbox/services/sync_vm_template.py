@@ -187,6 +187,7 @@ def _fetch_template_config(
             headers=auth_headers,
             verify=verify_ssl,
             timeout=SYNC_TIMEOUT,
+            allow_redirects=False,
         )
         response.raise_for_status()
         payload = response.json()
@@ -373,6 +374,7 @@ def sync_vm_templates(
             headers=auth_headers,
             verify=verify_ssl,
             timeout=SYNC_TIMEOUT,
+            allow_redirects=False,
         )
         response.raise_for_status()
         resources_payload = response.json()

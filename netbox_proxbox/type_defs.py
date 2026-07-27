@@ -8,15 +8,21 @@ from typing import Protocol
 class FastAPIUrlSource(Protocol):
     """Structural type for models/objects passed to URL-building helpers."""
 
+    pk: object | None
+    enabled: bool
     ip_address: object | None
     domain: str | None
-    websocket_domain: str | None
-    verify_ssl: bool
     port: int
+    use_https: bool
+    verify_ssl: bool
+    use_websocket: bool
+    websocket_domain: str | None
     websocket_port: int | None
+    server_side_websocket: bool
+    backend_key_target_fingerprint: str
 
 
-class FastAPIAuthSource(Protocol):
+class FastAPIAuthSource(FastAPIUrlSource, Protocol):
     """Structural type for backend Bearer token resolution."""
 
     token: str

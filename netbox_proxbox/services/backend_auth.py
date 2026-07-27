@@ -20,16 +20,6 @@ _LONG_RUNNING_VM_SYNC_MARKER = "virtualization/virtual-machines"
 _LONG_RUNNING_FULL_UPDATE_MARKER = "full-update"
 _LONG_HTTP_READ_TIMEOUT = (5, 3600)
 
-# Preflight HTTP budgets.  A freshly started proxbox-api answers its first few
-# requests slowly (container start, SQLite open, NetBox OpenAPI resolution), and
-# the old 5s/10s bounds failed the preflight on that start-up latency alone —
-# the first sync of a new install saw bootstrap-status give up at 5.03s and the
-# endpoint push at 10.02s, while a later call to the very same host answered in
-# 3.78s.  These bounds leave a cold backend room to answer.  They are ceilings,
-# not delays: a healthy backend still returns in well under a second.
-BOOTSTRAP_STATUS_TIMEOUT = 15
-REGISTER_KEY_TIMEOUT = 20
-
 # Bounded readiness wait used by the sync preflight.  Deliberately much shorter
 # than the ``wait_for_backend_ready`` defaults (30 retries, up to 30s apart):
 # the preflight only needs to absorb a cold start, and a backend that is truly
@@ -57,11 +47,14 @@ def http_timeout_for_sync_path(path: str) -> float | tuple[int, int]:
 
 
 def _try_register_key(context: BackendRequestContext, token: str) -> tuple[bool, str]:
-    """Attempt to register the API key with the backend if not already registered.
+    """Authenticate a stored API key without changing backend state.
 
     Returns (success, message) tuple.
     """
-    import requests
+    from netbox_proxbox.services.backend_key_adoption import (
+        BackendKeyAdoptionError,
+        adopt_backend_key_at_url,
+    )
 
     if not context or not context.http_url:
         return False, "No FastAPI URL configured"
@@ -70,55 +63,19 @@ def _try_register_key(context: BackendRequestContext, token: str) -> tuple[bool,
     verify_ssl = bool(context.verify_ssl)
 
     try:
-        status_response = requests.get(
-            f"{base_url}/auth/bootstrap-status",
-            verify=verify_ssl,
-            timeout=BOOTSTRAP_STATUS_TIMEOUT,
+        adopt_backend_key_at_url(
+            base_url,
+            verify_ssl,
+            token,
+            label="netbox-proxbox-plugin",
         )
-        if status_response.status_code != 200:
-            return (
-                False,
-                f"Bootstrap status check failed: HTTP {status_response.status_code}",
-            )
-
-        status_data = status_response.json()
-        if not status_data.get("needs_bootstrap", False):
-            return True, "Key already registered"
-
-    except requests.exceptions.RequestException as exc:
-        # Class name + swept text only: this message is returned to the caller,
-        # persisted into job logs and preflight notes, and the register call
-        # below sends the API key in its request body — a raw exception render
-        # must never carry that request into the log.
-        return False, (
-            "Could not check bootstrap status: "
-            f"{type(exc).__name__}: {redact_sensitive_text(str(exc))}"
-        )
-
-    try:
-        register_response = requests.post(
-            f"{base_url}/auth/register-key",
-            json={"api_key": token, "label": "netbox-proxbox-plugin"},
-            verify=verify_ssl,
-            timeout=REGISTER_KEY_TIMEOUT,
-        )
-        if register_response.status_code == 201:
-            return True, "Key registered successfully"
-        if register_response.status_code == 409:
-            return True, "Key already exists"
-        return False, f"Registration failed: HTTP {register_response.status_code}"
-
-    except requests.exceptions.RequestException as exc:
-        # Same rule as the bootstrap-status branch: the failed POST carried the
-        # API key in its body, so only the class name and swept text may leave.
-        return False, (
-            "Could not register key: "
-            f"{type(exc).__name__}: {redact_sensitive_text(str(exc))}"
-        )
+    except BackendKeyAdoptionError as exc:
+        return False, f"Backend key check failed ({exc.code})"
+    return True, "Key authenticated successfully"
 
 
 def _try_register_key_fallback() -> tuple[bool, str]:
-    """Try registering keys from all FastAPIEndpoints with fallback.
+    """Try authenticating keys from enabled FastAPIEndpoints with fallback.
 
     Iterates through all endpoints and attempts to register each token.
     Returns (success, message) tuple showing the last attempt result.
@@ -146,6 +103,8 @@ def _try_register_key_fallback() -> tuple[bool, str]:
         success, message = _try_register_key(
             BackendRequestContext(
                 detail=context,
+                endpoint_id=context.get("endpoint_id"),
+                target_fingerprint=str(context.get("target_fingerprint", "")),
                 http_url=context.get("http_url"),
                 ip_address_url=context.get("ip_address_url"),
                 verify_ssl=context.get("verify_ssl", True),
@@ -154,10 +113,10 @@ def _try_register_key_fallback() -> tuple[bool, str]:
             token,
         )
         if success:
-            return True, f"Registered endpoint {endpoint.pk}: {message}"
+            return True, f"Authenticated endpoint {endpoint.pk}: {message}"
         last_message = f"Endpoint {endpoint.pk} failed: {message}"
         logger.warning(
-            "Token registration failed for endpoint %s: %s", endpoint.pk, message
+            "Token authentication failed for endpoint %s: %s", endpoint.pk, message
         )
 
     return False, last_message
@@ -190,7 +149,14 @@ def wait_for_backend_ready(
                 headers=headers,
                 verify=verify_ssl,
                 timeout=5,
+                allow_redirects=False,
             )
+            if 300 <= response.status_code < 400:
+                # A redirecting backend is an untrustworthy target, not a
+                # slow one — retrying would spin against an origin that will
+                # never stop redirecting, so fail terminally like every other
+                # credentialed path.
+                return False, "Backend redirects are not permitted."
             if response.status_code == 200:
                 # Backend is reachable — that is enough.  Whether its
                 # bootstrap completed (``init_ok``) is not our concern;
@@ -238,7 +204,10 @@ def wait_for_backend_ready(
 
 
 def ensure_backend_key_registered(endpoint_id: int | None = None) -> tuple[bool, str]:
-    """Check if the API key is registered with the backend, register if needed.
+    """Check whether the stored API key authenticates with the backend.
+
+    The historical public name is retained for compatibility. This helper is
+    deliberately read-only and never calls the unauthenticated bootstrap POST.
 
     Returns (success, message) tuple.
     """
@@ -251,8 +220,14 @@ def ensure_backend_key_registered(endpoint_id: int | None = None) -> tuple[bool,
     if context is None or not context.http_url:
         return False, "No FastAPI URL configured"
 
-    token = (getattr(endpoint, "token", "") or "").strip()
+    return authenticate_backend_request_context(context)
+
+
+def authenticate_backend_request_context(
+    context: BackendRequestContext,
+) -> tuple[bool, str]:
+    """Authenticate the exact URL/key pair captured in one request context."""
+    token = (context.headers or {}).get("X-Proxbox-API-Key", "").strip()
     if not token:
         return False, "No API token configured on FastAPI endpoint"
-
     return _try_register_key(context, token)

@@ -1,0 +1,104 @@
+---
+name: CI
+
+# Authoritative lightweight Gitea pre-merge gate. Pull-request code runs only
+# on the unprivileged Python runner. Real NetBox/PostgreSQL/Redis compatibility
+# remains in GitHub's django-tests matrix because this runner has no services.
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+concurrency:
+  group: netbox-proxbox-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Static checks and mocked regressions
+    runs-on: ci-untrusted-python312
+    timeout-minutes: 35
+    env:
+      HOME: ${{ github.workspace }}
+      UV_CACHE_DIR: ${{ github.workspace }}/.uv-cache
+      UV_PYTHON_DOWNLOADS: never
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Install locked quality and test environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v uv
+          uv venv --python 3.12 .venv
+          uv sync --extra test --extra dev --extra cli --group dev --locked
+
+      - name: Ruff lint and format
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv/bin/ruff check .
+          .venv/bin/ruff format --check .
+
+      - name: Type-check the standalone CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv/bin/ty check proxbox_cli
+
+      - name: Compile Python sources and tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv/bin/python -m compileall -q netbox_proxbox proxbox_cli tests
+
+      - name: Run mocked suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv/bin/python -m pytest -p no:django -q -rs tests
+
+  docs-and-package:
+    name: Strict docs and package validation
+    runs-on: ci-untrusted-python312
+    timeout-minutes: 30
+    env:
+      HOME: ${{ github.workspace }}
+      UV_CACHE_DIR: ${{ github.workspace }}/.uv-cache
+      UV_PYTHON_DOWNLOADS: never
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Install documentation and packaging environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v uv
+          uv venv --python 3.12 .venv
+          uv sync --group dev --locked
+          uv pip install --python .venv/bin/python "build>=1.3,<2" "twine>=6.2,<7"
+
+      - name: Build strict documentation
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv/bin/mkdocs build --strict --site-dir /tmp/netbox-proxbox-site
+
+      - name: Build and check distribution
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv/bin/python -m build
+          .venv/bin/twine check dist/*

@@ -5,17 +5,21 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from django.apps import apps
 from django.dispatch import receiver
 
 logger = logging.getLogger(__name__)
 
-try:
-    from netbox_branching.signals import post_merge
+if apps.is_installed("netbox_branching"):
+    # An explicitly enabled companion is part of the configured application.
+    # Let import failures abort startup instead of silently disabling the merge
+    # receiver and creating a partially configured write path.
     from netbox_branching.models import Branch
-except ImportError:
+    from netbox_branching.signals import post_merge
+else:
     post_merge = None
     Branch = None
-    logger.info("netbox_branching not available; post_merge receiver disabled.")
+    logger.info("netbox_branching is not enabled; post_merge receiver disabled.")
 
 
 _VM_MODEL = "virtualmachine"

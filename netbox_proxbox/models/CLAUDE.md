@@ -28,7 +28,11 @@ This directory defines the plugin's persisted data model.
 - `EndpointBase`: shared endpoint identity and URL-building fields.
 - `ProxmoxEndpoint`: stores Proxmox API connection settings, credentials, mode, and version metadata. `effective_connection_tuning()` owns the nullable endpoint timeout/retry/back-off contract: endpoint values win when not `None` (including zero retries/back-off), otherwise the matching `ProxboxPluginSettings` value is returned, and all three outputs are concrete typed values. The model also carries `pushed_credential_fingerprint` (migration 0074) — the Proxmox twin of the `NetBoxEndpoint` field below, under a distinct HMAC salt so the two namespaces can never compare equal. It lets the preflight's soft push budget detect a secret rotated *in place* (invisible on the wire: `ProxmoxEndpointPublic` withholds `password`/`token_name`/`token_value`) and re-push instead of skipping. Unlike the NetBox twin it fails **toward pushing**: an empty or stale fingerprint costs one extra push, never a blocked run. Written by the push itself with `queryset.update()`, never `save()`, because the model's `post_save` handler re-pushes to the backend.
 - `NetBoxEndpoint`: stores the remote NetBox API target and either v1 token or v2 key/secret credentials. Also carries `pushed_credential_fingerprint` (migration 0073) — a keyed HMAC-SHA256 digest of the credentials the last **successful** push handed proxbox-api. It is **not** a credential and must never be treated as one: `salted_hmac` keys the digest off NetBox's `SECRET_KEY`, so it is non-reversible and meaningless outside this install. It exists because `NetBoxEndpointResponse` withholds `token`/`token_key`, leaving an in-place token rotation invisible to any comparison against what the backend returns; the sync-job preflight reads it through `views/backend_sync.py::netbox_push_credentials_unchanged()`. Written by the push itself with `queryset.update()`, never `save()`, because the model's `post_save` handler re-pushes to the backend. An **empty** value means "credentials changed" (fail-closed), so nothing should back-fill it.
-- `FastAPIEndpoint`: stores the ProxBox backend HTTP/WebSocket target and optional backend token.
+- `FastAPIEndpoint`: stores the ProxBox backend HTTP/WebSocket target and its
+  encrypted backend token plus the credential-free
+  `backend_key_target_fingerprint` that durably binds the token to the exact
+  canonical HTTP/fallback-IP/WebSocket/TLS target. Disabled new rows may remain
+  intentionally keyless.
 - `PBSEndpoint`: stores Proxmox Backup Server connection settings and credentials for companion inventory/status paths.
 - `PDMEndpoint`: stores Proxmox Datacenter Manager connection settings plus declared PVE/PBS federation links.
 - `ProxmoxCluster`: stores synchronized cluster metadata and relationships to the source endpoint and NetBox cluster.
@@ -88,6 +92,18 @@ This directory defines the plugin's persisted data model.
 - `CommonProperties` and `EndpointBase` centralize endpoint URL semantics.
 - `EndpointBase.enabled` is operational: `False` means inventory-only. Service, signal, startup, OpenAPI, and sync code must return before any backend or remote-service connection attempt for disabled endpoint-like rows.
 - `FastAPIEndpoint.websocket_url` is distinct from the backend HTTP URL and is used by `websocket_client.py`.
+- `FastAPIEndpoint.save()` is the backend-key persistence boundary. New enabled
+  endpoints, disabled-to-enabled transitions, connection/TLS target changes,
+  and token changes must pass `prepare_backend_key_transition()` before
+  `token_enc` is written. Each such transition requires an explicitly
+  resubmitted candidate; no key is generated implicitly. A disabled existing
+  row cannot accept a replacement token because the hard no-connection gate
+  prevents authenticating it. Security-sensitive saves lock and compare the
+  loaded ciphertext/target snapshot, while explicitly non-security
+  `update_fields` saves cannot widen their field set or restore stale trust
+  state. Runtime HTTP and WebSocket paths recompute
+  `backend_key_target_fingerprint` (including a fresh IP FK lookup) before
+  exposing the key; target drift remains blocked until explicit re-adoption.
 - `NetBoxEndpoint.has_configured_token` and serializer/form validation together define the remote NetBox credential behavior.
 - Primary endpoint secrets are exposed as compatibility properties and stored in
   encrypted backing fields: `ProxmoxEndpoint.password_enc`,

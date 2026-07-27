@@ -108,6 +108,7 @@ def sync_individual(
                 headers=headers,
                 verify=verify,
                 timeout=_INDIVIDUAL_SYNC_TIMEOUT,
+                allow_redirects=False,
             )
             response.raise_for_status()
             payload, json_err = parse_requests_response_json(

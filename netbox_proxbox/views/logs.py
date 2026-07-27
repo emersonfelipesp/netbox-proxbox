@@ -48,7 +48,11 @@ class BackendLogsView(ConditionalLoginRequiredMixin, View):
 
     def get(self, request: HttpRequest) -> HttpResponse:
         """Render the logs page with FastAPI URL for JavaScript."""
-        endpoint = FastAPIEndpoint.objects.restrict(request.user, "view").first()
+        endpoint = (
+            FastAPIEndpoint.objects.restrict(request.user, "view")
+            .filter(enabled=True)
+            .first()
+        )
         fastapi_info = get_fastapi_url(endpoint) if endpoint is not None else {}
         settings_obj = ProxboxPluginSettings.get_solo()
 

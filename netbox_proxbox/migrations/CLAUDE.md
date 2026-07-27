@@ -4,8 +4,8 @@ This directory contains Django schema migrations for the plugin models.
 
 ## Idempotent additive operations (post-0036)
 
-Every additive schema operation in the post-``0036_add_overwrite_vm_type``
-chain (``0037`` through ``0048``) is wrapped through the helpers in
+Additive schema operations in the post-``0036_add_overwrite_vm_type`` chain,
+including current migration ``0073``, are wrapped through the helpers in
 [`_idempotent_ops.py`](./_idempotent_ops.py) — ``add_field_idempotent()``
 for ``AddField`` and ``create_model_idempotent()`` for ``CreateModel``.
 Each helper returns a ``SeparateDatabaseAndState`` whose ``database_operations``
@@ -118,6 +118,14 @@ contract and issue #454 for the bug history.
   push that delivers a new secret. Empty reads as "push again" (one bounded
   extra request), never as a blocked run; the writer catches `DatabaseError`, so
   an unapplied migration degrades to the previous always-push behavior.
+- **0075_fastapi_backend_key_target_fingerprint**: adds the internal SHA-256
+  target fingerprint used to bind an encrypted FastAPI key to its primary and
+  fallback HTTP authorities, TLS policy, and WebSocket policy. Existing rows
+  intentionally remain blank and fail closed until an operator reviews the
+  target and runs `proxbox_fix_tokens --fix` (or explicitly resubmits the key
+  through the form/API). Never add a data migration that silently fingerprints
+  legacy rows; a mutable related `IPAddress` cannot be trusted without explicit
+  operator adoption.
 
 ## Notes
 

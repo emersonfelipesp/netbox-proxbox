@@ -57,6 +57,7 @@ class HAClusterView(
                 headers=ctx.headers or {},
                 timeout=15,
                 verify=ctx.verify_ssl,
+                allow_redirects=False,
             )
             if response.status_code == 404:
                 context["detail"] = (

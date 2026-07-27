@@ -21,6 +21,44 @@ pip install -e /opt/netbox/netbox/netbox-proxbox
 
 ## Important Notes
 
+### FastAPI key target adoption (migration 0075)
+
+Migration `0075_fastapi_backend_key_target_fingerprint` adds a durable binding
+between each encrypted FastAPI key and every authority that may receive it: the
+primary HTTP URL, fallback IP URL, TLS verification policy, and WebSocket
+host/port flags. Existing rows intentionally receive a blank fingerprint. New
+plugin code therefore blocks authenticated HTTP and server-side WebSocket
+traffic until an operator reviews and adopts the current target.
+
+Before upgrading, retain the currently valid proxbox-api key in your approved
+secret store and record the intended domain, fallback IP, ports, HTTPS/TLS, and
+WebSocket settings. For the strongest cutover, stop NetBox web and RQ processes,
+install the package, and run the migration before restarting them.
+
+After migration:
+
+```bash
+# Blank legacy fingerprints are reported without sending the stored key.
+python manage.py proxbox_fix_tokens
+
+# After reviewing the configured target, explicitly adopt the retained key.
+python manage.py proxbox_fix_tokens --fix
+```
+
+`--fix` is the operator's consent to contact the reviewed target. It records the
+fingerprint when the stored key already authenticates and performs the one-time
+bootstrap POST only when proxbox-api proves that it has no keys. A nonblank
+fingerprint that no longer matches its target is refused without network access;
+edit the FastAPI endpoint and explicitly resubmit the retained key instead.
+
+Verify that the diagnostic reports the key as registered, that the FastAPI
+status card can complete an authenticated version check, and that one scoped
+sync succeeds. If adoption fails, the local ciphertext/fingerprint remains
+unchanged. Correct the target and retry with the same retained key. If the remote
+bootstrap succeeded but the local transaction rolled back, retrying that same
+key is recoverable because the backend can now authenticate it. Do not create a
+replacement hidden key or delete the accepted remote key as a rollback tactic.
+
 - Proxbox `0.0.23.post1` is the current release candidate for NetBox `4.5.8` through `4.5.10` and `4.6.x` (validated against `v4.5.8` through `v4.5.10` and `v4.6.0` through `v4.6.5`; declared compatibility range `4.5.8` through `4.6.99`). It pairs with a `proxbox-api` guest-VM-interface writer build / next release. Plugin version `0.0.23.post1` on the `0.0.23` release line. The previous stable `0.0.22` release pairs with backend `0.0.19.post5`.
 - Upgrading to `0.0.23.post1` switches existing installs from `vm_interface_sync_strategy=legacy_rename` to `vm_interface_sync_strategy=guest_os_model`. Proxmox `netX` interfaces stay named `netX` as core `VMInterface` rows, and guest OS names such as `ens18` are stored in `GuestVMInterface` rows. Operators who want the old core-interface renaming behavior can re-select `vm_interface_sync_strategy=legacy_rename` in plugin settings after the upgrade.
 - Disabled endpoint-like rows with `enabled=False` are inventory-only in `0.0.20.post3`: they remain visible in UI/API output, but status, keepalive, backend registration, OpenAPI, startup/signal, sync, PBS, PDM, and companion endpoint paths return before any backend or remote-service connection attempt.

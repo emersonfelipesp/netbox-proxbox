@@ -35,6 +35,14 @@ Each endpoint type has an `ImportForm` (e.g. `ProxmoxEndpointImportForm`, `NetBo
 
 - `NetBoxEndpointForm.clean()` mirrors the API serializer's credential validation and clears unused token fields depending on token version.
 - Endpoint forms use `DynamicModelChoiceField` for NetBox-managed related objects.
+- Both FastAPI create/edit and import forms use
+  `BackendKeyAdoptionFormMixin`. It forwards the virtual token property to the
+  model's shared backend-key gate only when the form is actually saved, then
+  converts a secret-safe model validation failure to NetBox's clean
+  `AbortRequest` path. Merely validating or previewing an import never performs
+  remote bootstrap side effects, and `save(commit=False)` remains network-free.
+  The token field is an explicit candidate input: blank preserves an existing
+  key, but create/enable/target-change transitions must resubmit it.
 - These forms define how plugin fields are presented in the NetBox UI; model constraints and the API serializers still remain the source of truth for persistence and credential rules.
 - Password and token_value fields on `ProxmoxEndpointForm` use `PasswordInput(render_value=False)` and are preserved from the stored instance when the user submits a blank value (edit-without-change UX).
 - `ProxmoxEndpointForm` exposes `allow_writes` in a dedicated **Write permission**

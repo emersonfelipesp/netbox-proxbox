@@ -44,6 +44,7 @@ def tag_pending_deletion(endpoint: Any, vmid: Any, node: Any, kind: Any) -> bool
             headers=dict(_endpoint_value(endpoint, "headers", {}) or {}),
             timeout=TAG_REQUEST_TIMEOUT_SECONDS,
             verify=bool(_endpoint_value(endpoint, "verify_ssl", True)),
+            allow_redirects=False,
         )
         response.raise_for_status()
         body = response.json()
@@ -92,6 +93,7 @@ def untag_pending_deletion(endpoint: Any, vmid: Any, node: Any, kind: Any) -> bo
             headers=dict(_endpoint_value(endpoint, "headers", {}) or {}),
             timeout=TAG_REQUEST_TIMEOUT_SECONDS,
             verify=bool(_endpoint_value(endpoint, "verify_ssl", True)),
+            allow_redirects=False,
         )
         response.raise_for_status()
         body = response.json()

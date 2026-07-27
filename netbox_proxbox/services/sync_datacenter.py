@@ -180,6 +180,7 @@ def sync_datacenter(
             headers=auth_headers,
             verify=verify_ssl,
             timeout=SYNC_TIMEOUT,
+            allow_redirects=False,
         )
         resp.raise_for_status()
         cpu_models_list = resp.json()

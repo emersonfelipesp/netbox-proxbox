@@ -149,6 +149,7 @@ def sync_cluster_and_nodes(
             params=scope_params,
             verify=verify_ssl,
             timeout=30,
+            allow_redirects=False,
         )
         cluster_resp.raise_for_status()
         cluster_data = ProxmoxClusterStatusResponse.model_validate(cluster_resp.json())
@@ -165,6 +166,7 @@ def sync_cluster_and_nodes(
             params=scope_params,
             verify=verify_ssl,
             timeout=30,
+            allow_redirects=False,
         )
         if node_detail_resp.ok:
             for record in iter_node_records(node_detail_resp.json()):

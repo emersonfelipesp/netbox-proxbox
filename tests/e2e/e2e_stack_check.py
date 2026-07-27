@@ -10,6 +10,7 @@ from stack_common import (
     wait_http_ok,
 )
 from stack_setup import (
+    assert_backend_key_rotation_contract,
     assert_plugin_internal_contracts,
     assert_plugin_routes,
     assert_proxmox_mock_contract,
@@ -47,6 +48,13 @@ def main() -> None:
         stack.netbox_token_id,
         netbox_public_url=stack.netbox_public_url,
         proxbox_api_key=proxbox_api_key,
+    )
+    proxbox_api_key = assert_backend_key_rotation_contract(
+        stack.proxbox_base_url,
+        stack.netbox_base_url,
+        stack.netbox_token,
+        endpoint_ids["fastapi_pk"],
+        proxbox_api_key,
     )
     assert_plugin_routes(
         stack.netbox_base_url,

@@ -152,19 +152,49 @@ That is convenient, but you should review the security impact for your environme
 
 The NetBox plugin and `proxbox-api` backend use database-backed API key authentication:
 
-### Automatic Token Setup (v0.0.11+)
+### Fail-closed token setup
 
-When you create or update endpoints, the plugin automatically:
+When an enabled `FastAPIEndpoint` is created, activated, moved to a different
+backend URL/TLS target, or given a replacement token, the backend must be
+reachable and the operator must explicitly submit a non-empty candidate. The
+plugin never generates one implicitly. It then performs one of two mutually
+exclusive flows:
 
-1. **FastAPIEndpoint creation** → Generates a secure 64-character token → Registers with backend
-2. **ProxmoxEndpoint creation** → Ensures FastAPIEndpoint has a token → Registers with backend
-3. **Migration from v0.0.10** → Generates tokens for existing endpoints → Attempts backend registration
+1. **Uninitialized backend** (`needs_bootstrap=true`) — use the explicitly
+   retained candidate and require one successful `POST /auth/register-key`
+   (`201`).
+2. **Initialized backend** — never call the bootstrap route. Authenticate the
+   candidate with one read-only `GET /auth/keys` request and persist it only on
+   `200`.
 
-This happens without manual intervention in most cases.
+Authentication rejection, conflict, throttling, timeout, TLS failure, or a
+connection error leaves the previous encrypted token unchanged. A disabled
+endpoint never makes a connection and a new disabled row remains keyless. To
+activate a disabled row, enable it and explicitly resubmit the key in the same
+save. The bootstrap-status, key-list, and registration checks do not follow
+redirects, so credentials cannot be forwarded to another origin.
+
+After adoption, the plugin stores a credential-free SHA-256 target fingerprint
+covering the canonical primary HTTP authority, fallback IP, port, HTTP/TLS
+flags, and WebSocket authority flags. Runtime callers recompute it before using
+the stored key and fail closed on target drift. The WebSocket client also
+disables ambient proxies, refuses a server-selected redirect before sending the
+key, rechecks trust after its handshake and periodically while connected, and
+is cancelled when the endpoint changes.
+
+Keep the first candidate until the NetBox save commits. If proxbox-api accepts
+the bootstrap but the local database transaction later rolls back, retry with
+that same candidate. The backend is now initialized, so the retry proves the
+candidate with `GET /auth/keys` and can safely commit it locally.
 
 ### Manual Token Management
 
-If automatic registration fails (e.g., backend was offline during setup), you can fix tokens:
+The diagnostic command never prints token fragments. Disabled endpoints are
+always skipped, including under `--fix`. Without `--fix` the command is
+read-only and does not contact an unadopted legacy target. After the operator
+reviews the target, `--fix` authenticates the durably stored key and records its
+target fingerprint; it performs a one-time bootstrap only when the backend
+confirms that no key exists:
 
 ```bash
 # Check token status
@@ -174,21 +204,27 @@ python manage.py proxbox_fix_tokens
 python manage.py proxbox_fix_tokens --fix
 ```
 
-### Manual Key Registration (Legacy)
+### Safe key rotation
 
-If the plugin cannot register the key automatically (e.g., backend not running during setup), you can register keys manually:
+Keep the current key active until the replacement has been adopted and verified:
 
 ```bash
-# Check if bootstrap is needed
-curl http://localhost:8800/auth/bootstrap-status
-
-# Register a key (only works when no keys exist)
-curl -X POST http://localhost:8800/auth/register-key \
-  -H "Content-Type: application/json" \
-  -d '{"api_key": "your-secure-api-key-at-least-32-characters", "label": "netbox-plugin"}'
+# 1. Authenticate with the current key and create a replacement.
+curl -X POST http://localhost:8800/auth/keys \
+  -H "X-Proxbox-API-Key: current-key"
 ```
 
-Then set the `token` field on your `FastAPIEndpoint` in NetBox to match.
+The response exposes `raw_key` exactly once. Copy it directly into the existing
+NetBox `FastAPIEndpoint` token field. Saving performs a protected read with the
+candidate before changing the encrypted database value. Verify another
+protected backend request from the plugin, then deactivate or delete the old
+key. If any step fails, keep the old key active and retry only after resolving
+the reported condition; the plugin never substitutes or bootstraps a different
+credential automatically.
+
+The unauthenticated `POST /auth/register-key` route is only for a backend whose
+bootstrap status explicitly reports that it has no keys. It is never a rotation
+mechanism, and HTTP `409` is a failure rather than proof that a candidate works.
 
 ### Key Management
 

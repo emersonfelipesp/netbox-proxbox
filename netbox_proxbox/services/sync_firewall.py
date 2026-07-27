@@ -571,6 +571,7 @@ def sync_firewall(
             headers=auth_headers,
             verify=verify_ssl,
             timeout=SYNC_TIMEOUT,
+            allow_redirects=False,
         )
         resp.raise_for_status()
         summary_list = resp.json()
@@ -755,6 +756,7 @@ def sync_node_firewall(
             headers=auth_headers,
             verify=verify_ssl,
             timeout=SYNC_TIMEOUT,
+            allow_redirects=False,
         )
         resp.raise_for_status()
         data = resp.json()
@@ -899,6 +901,7 @@ def sync_vm_firewall(
                     else {}
                 ),
             },
+            allow_redirects=False,
         )
         resp.raise_for_status()
         data = resp.json()

@@ -30,6 +30,7 @@ def _request_json(
             headers=headers,
             verify=verify_ssl,
             timeout=timeout,
+            allow_redirects=False,
         )
         response.raise_for_status()
     except requests.exceptions.RequestException as exc:

@@ -244,7 +244,7 @@ class FastAPIEndpointAPITest(APIViewTestCases.APIViewTestCase):
     model = FastAPIEndpoint
     brief_fields = ["display", "domain", "id", "name", "port", "url"]
     bulk_update_data = {"use_websocket": True}
-    validation_excluded_fields = ["ip_address"]
+    validation_excluded_fields = ["ip_address", "token"]
 
     @classmethod
     def setUpTestData(cls):
@@ -264,7 +264,7 @@ class FastAPIEndpointAPITest(APIViewTestCases.APIViewTestCase):
                 domain=f"proxbox-{idx}.example.test",
                 port=8800 + idx,
                 verify_ssl=True,
-                token=f"token-{idx}",
+                enabled=False,
                 use_websocket=False,
                 websocket_domain=f"ws-{idx}.example.test",
                 websocket_port=9800 + idx,
@@ -278,7 +278,7 @@ class FastAPIEndpointAPITest(APIViewTestCases.APIViewTestCase):
                 "domain": "proxbox-3.example.test",
                 "port": 8810,
                 "verify_ssl": True,
-                "token": "token-3",
+                "enabled": False,
                 "use_websocket": True,
                 "websocket_domain": "ws-3.example.test",
                 "websocket_port": 9810,
@@ -290,7 +290,7 @@ class FastAPIEndpointAPITest(APIViewTestCases.APIViewTestCase):
                 "domain": "proxbox-4.example.test",
                 "port": 8811,
                 "verify_ssl": False,
-                "token": "token-4",
+                "enabled": False,
                 "use_websocket": True,
                 "websocket_domain": "ws-4.example.test",
                 "websocket_port": 9811,
@@ -302,7 +302,7 @@ class FastAPIEndpointAPITest(APIViewTestCases.APIViewTestCase):
                 "domain": "proxbox-5.example.test",
                 "port": 8812,
                 "verify_ssl": True,
-                "token": "token-5",
+                "enabled": False,
                 "use_websocket": False,
                 "websocket_domain": "ws-5.example.test",
                 "websocket_port": 9812,

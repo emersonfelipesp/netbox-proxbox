@@ -314,20 +314,24 @@ def _module_constants(relative: str) -> dict[str, object]:
 
 def test_preflight_auth_timeouts_absorb_a_cold_start() -> None:
     """The old 5s/10s bounds failed on start-up latency alone."""
-    path = "netbox_proxbox/services/backend_auth.py"
-    source = (REPO_ROOT / path).read_text()
-    constants = _module_constants(path)
+    auth_path = "netbox_proxbox/services/backend_auth.py"
+    adoption_path = "netbox_proxbox/services/backend_key_adoption.py"
+    adoption_source = (REPO_ROOT / adoption_path).read_text()
+    auth_constants = _module_constants(auth_path)
+    adoption_constants = _module_constants(adoption_path)
 
-    assert constants["BOOTSTRAP_STATUS_TIMEOUT"] >= 15
-    assert constants["REGISTER_KEY_TIMEOUT"] >= 20
+    assert adoption_constants["BOOTSTRAP_STATUS_TIMEOUT"] >= 15
+    assert adoption_constants["AUTHENTICATED_KEY_LIST_TIMEOUT"] >= 15
+    assert adoption_constants["REGISTER_KEY_TIMEOUT"] >= 20
     # The preflight wait must stay far below wait_for_backend_ready's own
     # defaults (30 retries / 30s apart) — a backend that is truly down should
     # fail the job quickly, not stall it for minutes.
-    assert constants["PREFLIGHT_READY_MAX_RETRIES"] <= 10
-    assert constants["PREFLIGHT_READY_MAX_DELAY"] <= 15
+    assert auth_constants["PREFLIGHT_READY_MAX_RETRIES"] <= 10
+    assert auth_constants["PREFLIGHT_READY_MAX_DELAY"] <= 15
 
-    assert "timeout=BOOTSTRAP_STATUS_TIMEOUT" in source
-    assert "timeout=REGISTER_KEY_TIMEOUT" in source
+    assert "timeout=BOOTSTRAP_STATUS_TIMEOUT" in adoption_source
+    assert "timeout=AUTHENTICATED_KEY_LIST_TIMEOUT" in adoption_source
+    assert "timeout=REGISTER_KEY_TIMEOUT" in adoption_source
 
 
 def test_key_registration_uses_named_budgets_not_literals() -> None:
@@ -335,27 +339,36 @@ def test_key_registration_uses_named_budgets_not_literals() -> None:
 
     The ``/health`` probe in ``wait_for_backend_ready`` keeps its short literal
     timeout on purpose — it is a *retried* readiness poll, so a slow answer just
-    costs one cheap attempt. The two calls below get one shot each, which is why
-    they must stay on the named budgets.
+    costs one cheap attempt. Adoption's three call sites get one shot on their
+    respective state-machine branches, so they must stay on named budgets.
     """
     tree = ast.parse(
-        (REPO_ROOT / "netbox_proxbox/services/backend_auth.py").read_text()
+        (REPO_ROOT / "netbox_proxbox/services/backend_key_adoption.py").read_text()
     )
-    register = next(
-        node
+    functions = {
+        node.name: node
         for node in ast.walk(tree)
-        if isinstance(node, ast.FunctionDef) and node.name == "_try_register_key"
-    )
+        if isinstance(node, ast.FunctionDef)
+        and node.name in {"inspect_backend_key_at_url", "_register_backend_key_at_url"}
+    }
+    assert set(functions) == {
+        "inspect_backend_key_at_url",
+        "_register_backend_key_at_url",
+    }
 
     budgets = [
         keyword.value
-        for call in ast.walk(register)
+        for function in functions.values()
+        for call in ast.walk(function)
         if isinstance(call, ast.Call)
         for keyword in call.keywords
         if keyword.arg == "timeout"
     ]
-    assert len(budgets) == 2, "expected the bootstrap-status and register-key calls"
+    assert len(budgets) == 3, (
+        "expected bootstrap-status, authenticated-key-list, and register-key calls"
+    )
     assert sorted(node.id for node in budgets if isinstance(node, ast.Name)) == [
+        "AUTHENTICATED_KEY_LIST_TIMEOUT",
         "BOOTSTRAP_STATUS_TIMEOUT",
         "REGISTER_KEY_TIMEOUT",
     ]

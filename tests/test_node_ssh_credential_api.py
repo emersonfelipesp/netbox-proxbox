@@ -754,7 +754,9 @@ def test_node_scan_success_forwards_host_and_port(monkeypatch):
     module, _ = _load_node_scan(monkeypatch)
     captured = {}
 
-    def fake_get(url, params=None, headers=None, verify=None, timeout=None):
+    def fake_get(
+        url, params=None, headers=None, verify=None, timeout=None, allow_redirects=True
+    ):
         captured["url"] = url
         captured["params"] = params
         return SimpleNamespace(
@@ -776,7 +778,9 @@ def test_node_scan_invalid_port_defaults_to_22(monkeypatch):
     module, _ = _load_node_scan(monkeypatch)
     captured = {}
 
-    def fake_get(url, params=None, headers=None, verify=None, timeout=None):
+    def fake_get(
+        url, params=None, headers=None, verify=None, timeout=None, allow_redirects=True
+    ):
         captured["params"] = params
         return SimpleNamespace(
             status_code=200, ok=True, json=lambda: {"fingerprint": "SHA256:z"}
@@ -793,7 +797,9 @@ def test_node_scan_invalid_port_defaults_to_22(monkeypatch):
 def test_node_scan_503_when_backend_lacks_route(monkeypatch):
     module, _ = _load_node_scan(monkeypatch)
 
-    def fake_get(url, params=None, headers=None, verify=None, timeout=None):
+    def fake_get(
+        url, params=None, headers=None, verify=None, timeout=None, allow_redirects=True
+    ):
         return SimpleNamespace(status_code=404, ok=False, json=lambda: {})
 
     monkeypatch.setattr(module.requests, "get", fake_get)

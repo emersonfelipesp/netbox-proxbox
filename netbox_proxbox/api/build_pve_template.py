@@ -58,6 +58,7 @@ def build_cloud_image_pipeline_via_backend(
             headers=headers,
             verify=verify_ssl,
             timeout=(10, 600),
+            allow_redirects=False,
         )
     except requests.exceptions.RequestException as exc:
         logger.error("cloud image build pipeline request to %s failed: %s", url, exc)

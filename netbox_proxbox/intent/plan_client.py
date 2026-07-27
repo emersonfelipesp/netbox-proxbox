@@ -93,6 +93,7 @@ def call_plan_endpoint(
             headers=headers,
             timeout=timeout,
             verify=bool(context.verify_ssl),
+            allow_redirects=False,
         )
     except requests.exceptions.SSLError as exc:
         raise PlanClientError(f"TLS error reaching {url}: {exc}") from exc

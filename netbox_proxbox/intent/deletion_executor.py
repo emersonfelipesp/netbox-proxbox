@@ -153,6 +153,7 @@ class DeletionExecutorJob(JobRunner):
                 headers=headers,
                 timeout=DELETION_EXECUTOR_JOB_TIMEOUT,
                 verify=bool(context.verify_ssl),
+                allow_redirects=False,
             )
             body = _response_body(response)
             uuid_changed = _stamp_executor_run_uuid(dr, body)
