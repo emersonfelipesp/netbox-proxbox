@@ -1,9 +1,9 @@
-"""Topology contract for the plugin's read-only Django signal handlers.
+"""Topology contract for the plugin's Django signal handlers.
 
-FastAPIEndpoint persistence owns candidate-key adoption. Signals never generate,
-bootstrap, or persist keys; downstream endpoint receivers may authenticate the
-already stored key once before pushing configuration. This file pins only signal
-registration topology; real NetBox behavior lives in
+FastAPIEndpoint persistence owns explicit-candidate adoption and schedules
+pending automatic discovery after transaction commit. Its receiver stops stale
+clients; downstream endpoint receivers authenticate an already stored key
+before pushing configuration. This file pins only signal registration topology; real NetBox behavior lives in
 ``test_backend_key_adoption_django.py``.
 
 The contract is verified statically against ``netbox_proxbox/signals.py`` so

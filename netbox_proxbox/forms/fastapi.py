@@ -62,7 +62,10 @@ class FastAPIEndpointForm(BackendKeyAdoptionFormMixin, NetBoxModelForm):
         widget=forms.PasswordInput(
             render_value=False, attrs={"autocomplete": "new-password"}
         ),
-        help_text="Backend token for proxbox-api. Leave blank to keep the current value.",
+        help_text=(
+            "Optional manual override. Leave blank to trust this exact configured "
+            "target and reuse or bootstrap its credential automatically."
+        ),
         label="[BETA] Proxbox Backend Token",
     )
     use_websocket = forms.BooleanField(

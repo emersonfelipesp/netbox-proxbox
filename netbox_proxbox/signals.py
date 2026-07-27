@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from django.db import transaction
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
@@ -84,25 +85,29 @@ def ensure_fastapi_endpoint_token(
     created: bool,
     **kwargs: object,
 ) -> None:
-    """Confirm the model-level gate supplied a key before post-save consumers run."""
+    """Stop stale clients; model persistence schedules pending discovery on commit."""
+    from netbox_proxbox.services.backend_key_adoption import (
+        backend_key_runtime_is_trusted,
+    )
     from netbox_proxbox.websocket_client import stop_websocket  # noqa: PLC0415
 
     endpoint = instance
     stop_websocket(int(endpoint.pk))
-    if not endpoint.token:
-        if bool(getattr(endpoint, "enabled", True)):
-            logger.error(
-                "FastAPIEndpoint %s was saved without an API key; backend use is blocked",
-                endpoint.pk,
-            )
-        else:
-            logger.debug(
-                "FastAPIEndpoint %s is disabled and has no staged API key",
-                endpoint.pk,
-            )
+    if not bool(getattr(endpoint, "enabled", True)):
+        logger.debug(
+            "FastAPIEndpoint %s is disabled; automatic configuration is skipped",
+            endpoint.pk,
+        )
         return
+    if endpoint.token and backend_key_runtime_is_trusted(endpoint):
+        logger.debug(
+            "FastAPIEndpoint %s key transition was handled before persistence",
+            endpoint.pk,
+        )
+        return
+
     logger.debug(
-        "FastAPIEndpoint %s key transition was handled before persistence",
+        "FastAPIEndpoint %s automatic configuration is pending until commit",
         endpoint.pk,
     )
 
@@ -208,17 +213,40 @@ def sync_netbox_endpoint_to_backend(
     bootstrap a NetBox session.  This signal ensures the record is created or
     updated automatically whenever the plugin's NetBoxEndpoint is saved.
     """
-    from netbox_proxbox.models import FastAPIEndpoint
-    from netbox_proxbox.views.backend_sync import (
-        sync_netbox_endpoint_to_backend as _push,
-    )  # noqa: PLC0415
-
     if not bool(getattr(instance, "enabled", True)):
         logger.info(
             "NetBoxEndpoint %s is disabled, skipping backend endpoint sync",
             getattr(instance, "pk", None),
         )
         return
+
+    after_commit = bool(kwargs.pop("_after_commit", False))
+    if not after_commit:
+        endpoint_pk = getattr(instance, "pk", None)
+        using = kwargs.get("using")
+
+        def sync_committed_endpoint() -> None:
+            committed = instance
+            manager = getattr(sender, "objects", None)
+            if manager is not None and endpoint_pk is not None:
+                committed = manager.filter(pk=endpoint_pk).first()
+                if committed is None:
+                    return
+            sync_netbox_endpoint_to_backend(
+                sender=sender,
+                instance=committed,
+                created=created,
+                using=using,
+                _after_commit=True,
+            )
+
+        transaction.on_commit(sync_committed_endpoint, using=using)
+        return
+
+    from netbox_proxbox.models import FastAPIEndpoint
+    from netbox_proxbox.views.backend_sync import (
+        sync_netbox_endpoint_to_backend as _push,
+    )  # noqa: PLC0415
 
     fastapi_ep = FastAPIEndpoint.objects.filter(enabled=True).order_by("pk").first()
     if not fastapi_ep:

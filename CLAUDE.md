@@ -168,12 +168,18 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
 - **Backend API-key adoption is fail-closed.** `FastAPIEndpoint.save()` and
   every UI/import/API persistence path share
   `services.backend_key_adoption.adopt_rotated_backend_key()`. Keys are never
-  generated implicitly. A new disabled row stays keyless; creating/enabling an
-  endpoint or changing its URL/TLS trust boundary requires the operator to
-  resubmit a retained candidate explicitly. The bootstrap POST is allowed only
-  for that explicit candidate and only when proxbox-api reports no keys; an
-  initialized backend must authenticate it with one read-only keys request
-  before `token_enc` changes. A credential-free
+  exposed or recovered from the backend. A new disabled row stays keyless and
+  performs no discovery. An enabled save without an explicit candidate commits
+  a pending row with a blank fingerprint and encrypted candidate, then invokes
+  `services.endpoint_autoconfiguration` through `transaction.on_commit`. The
+  service treats the exact UI-persisted URL/IP, port, and TLS policy as its entire
+  allowlist, probes identity/readiness without credentials, and authenticates
+  the existing encrypted key. It generates and retains a key only for a
+  confirmed empty backend's one-time bootstrap. If no row exists, startup
+  discovery is bounded to plugin configuration and same-site names derived
+  from NetBox's trusted origin; it never scans or follows redirects. An
+  initialized backend with no locally held key stays pending. Explicit token
+  submission remains the manual rotation/recovery path. A credential-free
   `backend_key_target_fingerprint` durably binds the ciphertext to the
   canonical primary HTTP target, fallback IP, TLS flags, and WebSocket target
   flags; every runtime credential lookup recomputes it using a fresh IP FK and
