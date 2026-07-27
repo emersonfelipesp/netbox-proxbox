@@ -87,4 +87,5 @@ jobs:
         run: |
           pytest tests/test_sync_state_models.py tests/test_sync_state_contracts.py \
             tests/test_backend_key_adoption_django.py \
+            tests/test_job_stream_django.py \
             --ds=netbox.settings --reuse-db --create-db -v --no-header
