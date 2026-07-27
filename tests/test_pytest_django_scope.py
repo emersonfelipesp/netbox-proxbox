@@ -32,6 +32,12 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 PYPROJECT = REPO_ROOT / "pyproject.toml"
 CI_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "ci.yml"
 DJANGO_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "django-tests.yml"
+RELEASE_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "publish-testpypi.yml"
+GITEA_PUBLISH_WORKFLOW = REPO_ROOT / ".gitea" / "workflows" / "publish-gitea.yml"
+TRACEABILITY_DOC = REPO_ROOT / "docs" / "developer" / "endpoint-autoconfiguration.md"
+MKDOCS = REPO_ROOT / "mkdocs.yml"
+README = REPO_ROOT / "README.md"
+NETBOX_TEST_CONFIG = REPO_ROOT / "tests" / "netbox_test_configuration.py"
 
 
 def test_mocked_suite_disables_pytest_django():
@@ -47,6 +53,70 @@ def test_mocked_suite_disables_pytest_django():
         "pytest-django's collection hook imports django.test against the "
         "conftest stub and aborts with an INTERNALERROR before any test runs"
     )
+
+
+def test_release_mocked_suites_disable_pytest_django():
+    """Every release-time full mocked run needs the same collection guard."""
+    workflow = RELEASE_WORKFLOW.read_text()
+    run_lines = [
+        line for line in workflow.splitlines() if "uv run pytest" in line
+    ]
+
+    assert len(run_lines) == 2, (
+        "expected TestPyPI and PyPI candidate full-suite pytest invocations"
+    )
+    assert all("-p no:django" in line for line in run_lines), (
+        "publish-testpypi.yml must disable pytest-django for every mocked "
+        "full-suite run, or its release validation aborts during collection"
+    )
+
+
+def test_gitea_package_publish_has_one_automatic_tag_trigger():
+    """A tag must create one immutable package upload, never push+create twins."""
+    workflow = GITEA_PUBLISH_WORKFLOW.read_text()
+    trigger_block = workflow.split("jobs:", 1)[0]
+
+    assert "push:" in trigger_block
+    assert "tags:" in trigger_block
+    assert "create:" not in trigger_block, (
+        "Gitea emits both create and push for a tag; subscribing to both starts "
+        "duplicate immutable package uploads for the same version"
+    )
+
+
+def test_real_django_workflow_enforces_autoconfiguration_branch_coverage():
+    """The code that mocked Django cannot import needs its own coverage gate."""
+    workflow = DJANGO_WORKFLOW.read_text()
+
+    assert "--cov=netbox_proxbox.services.endpoint_autoconfiguration" in workflow
+    assert "--cov-branch" in workflow
+    assert "--cov-fail-under=85" in workflow
+
+
+def test_endpoint_autoconfiguration_traceability_is_published():
+    """The security state machine and evidence must stay in the docs surface."""
+    document = TRACEABILITY_DOC.read_text()
+
+    for heading in (
+        "## Trust Boundary",
+        "## Credential State Machine",
+        "## Operator Outcomes",
+        "## Requirements-to-Tests Matrix",
+        "## Coverage Gates",
+    ):
+        assert heading in document
+    assert "test_ui_endpoint_is_the_exact_discovery_allowlist" in document
+    assert "test_websocket_redirect_never_receives_the_backend_key" in document
+    assert "developer/endpoint-autoconfiguration.md" in MKDOCS.read_text()
+    assert "/developer/endpoint-autoconfiguration/" in README.read_text()
+
+
+def test_local_django_harness_accepts_isolated_service_hosts():
+    """Parallel/local runs must not be forced through localhost's IPv6 result."""
+    configuration = NETBOX_TEST_CONFIG.read_text()
+
+    assert 'os.environ.get("NETBOX_TEST_DB_HOST")' in configuration
+    assert 'os.environ.get("NETBOX_TEST_REDIS_HOST")' in configuration
 
 
 def test_disable_is_not_global():

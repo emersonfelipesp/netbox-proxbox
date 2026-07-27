@@ -42,7 +42,9 @@ Each endpoint type has an `ImportForm` (e.g. `ProxmoxEndpointImportForm`, `NetBo
   `AbortRequest` path. Merely validating or previewing an import never performs
   remote bootstrap side effects, and `save(commit=False)` remains network-free.
   The token field is an explicit candidate input: blank preserves an existing
-  key, but create/enable/target-change transitions must resubmit it.
+  key. Creation, enablement, and configured target changes may leave it blank
+  and enter bounded auto-configuration; a non-empty candidate remains required
+  when the operator is deliberately rotating the key.
 - These forms define how plugin fields are presented in the NetBox UI; model constraints and the API serializers still remain the source of truth for persistence and credential rules.
 - Password and token_value fields on `ProxmoxEndpointForm` use `PasswordInput(render_value=False)` and are preserved from the stored instance when the user submits a blank value (edit-without-change UX).
 - `ProxmoxEndpointForm` exposes `allow_writes` in a dedicated **Write permission**

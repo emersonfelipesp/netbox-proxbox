@@ -139,6 +139,9 @@ refuses a server-selected redirect before adding the API-key header. Saving the
 endpoint cancels the old client so a stale task cannot continue with the prior
 target or key.
 
+The complete allowlist/state-machine contract and its automated evidence are
+maintained in [Endpoint Auto-Configuration](endpoint-autoconfiguration.md).
+
 ### APIKeyAuthMiddleware
 
 Every request to proxbox-api (except bootstrap routes) passes through `APIKeyAuthMiddleware`:

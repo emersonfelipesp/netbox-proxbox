@@ -16,7 +16,7 @@ python -m compileall netbox_proxbox tests
 rtk ruff check .
 
 # 3. Tests
-rtk pytest tests/
+rtk pytest -p no:django tests/
 
 # 4. Type checker (CLI only)
 rtk ty check proxbox_cli
@@ -202,13 +202,13 @@ Plugin-side environment controls (in NetBox's `configuration.py`):
 
 ```bash
 # Run full suite
-uv run pytest tests/
+uv run pytest -p no:django tests/
 
 # Run with coverage
-uv run pytest tests/ --cov=netbox_proxbox --cov-report=term-missing
+uv run pytest -p no:django tests/ --cov=netbox_proxbox --cov-report=term-missing
 
 # Run a specific test file
-uv run pytest tests/test_jobs.py -v
+uv run pytest -p no:django tests/test_jobs.py -v
 ```
 
 Tests live in `tests/` and use pytest. The test stubs in `tests/` provide lightweight NetBox model mocks so you do not need a running NetBox instance.

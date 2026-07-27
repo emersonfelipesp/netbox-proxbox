@@ -4,7 +4,6 @@ on:
   push:
     tags:
       - 'v*'
-  create:
   workflow_dispatch:
     inputs:
       tag_name:
@@ -13,7 +12,6 @@ on:
 
 jobs:
   validate-version:
-    if: ${{ github.event_name != 'create' || startsWith(github.ref, 'refs/tags/') }}
     runs-on: mirror-host
     outputs:
       version: ${{ steps.extract.outputs.version }}
@@ -30,12 +28,6 @@ jobs:
           TAG_PATTERN='^v[0-9]+\.[0-9]+\.[0-9]+(rc[0-9]+|\.post[0-9]+)?$'
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             TAG="$INPUT_TAG"
-          elif [ "$EVENT_NAME" = "create" ]; then
-            if [[ "${GITHUB_REF}" != refs/tags/* ]]; then
-              echo "Skipping create event for non-tag ref: ${GITHUB_REF}"
-              exit 0
-            fi
-            TAG="${GITHUB_REF_NAME}"
           else
             TAG="${GITHUB_REF_NAME}"
           fi

@@ -15,7 +15,7 @@
 
 1. Run syntax check: `python -m compileall netbox_proxbox tests`
 2. Run linter: `rtk ruff check .`
-3. Run tests: `rtk pytest tests/`
+3. Run mocked tests: `rtk pytest -p no:django tests/`
 4. Run type checker: `rtk ty check proxbox_cli`
 
 ---
@@ -195,7 +195,8 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
   from one freshly re-authenticated, identity-bound request context or fails
   closed (see `services/CLAUDE.md`). Never treat HTTP 409 as
   success, expose token previews, or include response or transport text in key
-  errors.
+  errors. Keep the state machine and automated evidence aligned with
+  [`docs/developer/endpoint-autoconfiguration.md`](./docs/developer/endpoint-autoconfiguration.md).
 - NetBox UI routes live in [`netbox_proxbox/urls.py`](./netbox_proxbox/urls.py) and are implemented primarily in `netbox_proxbox/views/`.
 - The plugin also exposes a NetBox plugin API under `netbox_proxbox/api/`, using serializers, filtersets, and standard `NetBoxModelViewSet` classes.
 - Sync actions enqueue NetBox background jobs (`ProxboxSyncJob`) on NetBox's default RQ queue and call the external ProxBox FastAPI SSE endpoints to record progress/result on the Job row.
@@ -458,12 +459,12 @@ credentials with `gh auth setup-git`, and pushes only
 
 ### Gitea Package Registry publish (`.gitea/workflows/publish-gitea.yml`)
 
-Added to `develop` in v0.0.19. Handles `push: tags:`, `create`, and `workflow_dispatch`.
-Due to Gitea 1.26.2 limitations, packages are published via direct upload until the
-trigger issues are resolved. See `proxbox-api/CLAUDE.md` for the exact upload command.
-Secret name: `PKG_TOKEN` (GITEA_ prefix is reserved by Gitea, cannot be used).
-Branch creation events must skip this workflow at the job level; only tag
-creation or tag push events should reach the version validation job.
+Added to `develop` in v0.0.19. Handles `push: tags:` and
+`workflow_dispatch`. It deliberately does not subscribe to Gitea's overlapping
+`create` event: Gitea emits both `create` and `push` for one tag, which races
+two immutable package uploads. Packages are published via direct upload. See
+`proxbox-api/CLAUDE.md` for the exact upload command. Secret name: `PKG_TOKEN`
+(GITEA_ prefix is reserved by Gitea, cannot be used).
 
 ### Branch-tier deployment (`.gitea/workflows/deploy-production.yml`)
 
@@ -551,7 +552,7 @@ directly on GitHub.
    ```bash
    python -m compileall netbox_proxbox tests
    rtk ruff check .
-   rtk pytest tests/
+   rtk pytest -p no:django tests/
    ```
 2. Annotated tag, push:
    ```bash
@@ -675,8 +676,10 @@ What was done for v0.0.19:
   `FastAPIEndpoint` token-drift fix (re-register on explicit token change),
   `PBSEndpoint`/`PDMEndpoint` `host` and `timeout_seconds` bridging properties.
 - **Gitea-first publish pipeline**: added `.gitea/workflows/publish-gitea.yml` to
-  `develop`. The workflow handles `push: tags:`, `create`, and `workflow_dispatch`
-  events but Gitea 1.26.2's dispatch API returns 500 and tag triggers don't fire on
+  `develop`. The original workflow handled `push: tags:`, `create`, and
+  `workflow_dispatch`; it now uses tag `push` plus manual dispatch only so one
+  tag cannot start duplicate immutable uploads. Gitea 1.26.2's dispatch API
+  returns 500 and tag triggers don't fire on
   this instance. Until resolved, packages are published via direct `uv build` +
   `twine upload` to `https://git.nmulti.cloud/api/packages/emersonfelipesp/pypi`
   using the `PKG_TOKEN` secret (GITEA_ prefix is reserved by Gitea, cannot be used).
@@ -779,11 +782,16 @@ Changes to plugin models, service APIs, or backend contracts MUST include an upd
 
 ### Code Coverage and Quality Metrics
 
-**Coverage Target:** Maintain ≥85% code coverage for the `netbox_proxbox/` package. Coverage is measured by `pytest-cov` and reported in CI.
+**Coverage Target:** Maintain ≥85% coverage for changed production logic in the
+harness that can execute it. Coverage is measured by `pytest-cov` and reported
+in CI. Endpoint auto-configuration is real-Django-only and has an explicit 85%
+branch-coverage floor in `.github/workflows/django-tests.yml`.
 
 **Coverage Reporting:** 
-- `rtk pytest tests/ --cov=netbox_proxbox --cov-report=term-missing` runs locally
-- GitHub Actions CI enforces coverage thresholds on every push
+- `rtk pytest -p no:django tests/ --cov=netbox_proxbox --cov-report=term-missing`
+  runs the broad mocked suite locally.
+- The real-NetBox matrix enforces the endpoint auto-configuration threshold on
+  every push; do not disable pytest-django in that job.
 - Uncovered code MUST be documented with a rationale (e.g., "except: pass for legacy API compatibility")
 
 **Exclusions:** The following are exempt from coverage requirements:
@@ -800,8 +808,8 @@ Changes to plugin models, service APIs, or backend contracts MUST include an upd
 
 **Regression Testing:** Before release, run:
 ```bash
-rtk pytest tests/integration/ -v --timeout=30
-rtk pytest tests/ -v --cov=netbox_proxbox --cov-report=term-missing
+rtk pytest -p no:django tests/integration/ -v --timeout=30
+rtk pytest -p no:django tests/ -v --cov=netbox_proxbox --cov-report=term-missing
 ```
 This verifies that no previously passing test was broken by the change.
 
@@ -836,7 +844,7 @@ rtk ty check proxbox_cli
 ```bash
 python -m compileall netbox_proxbox tests
 rtk ruff check .
-rtk pytest tests/
+rtk pytest -p no:django tests/
 rtk ty check proxbox_cli
 ```
 

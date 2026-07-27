@@ -7,7 +7,13 @@ Before committing any change:
 1. Run syntax check: `python -m compileall netbox_proxbox tests`
 2. Run linter: `rtk ruff check .`
 3. Run type checker: `rtk ty check proxbox_cli`
-4. Run tests: `rtk pytest tests/`
+4. Run mocked tests: `rtk pytest -p no:django tests/`
+
+The mocked suite must disable pytest-django per invocation. Real model,
+transaction, form, serializer, and signal behavior runs through
+`.github/workflows/django-tests.yml` with pytest-django enabled. Endpoint
+auto-configuration additionally has an 85% branch-coverage floor there; see
+[`docs/developer/endpoint-autoconfiguration.md`](./docs/developer/endpoint-autoconfiguration.md).
 
 ## Framework Stack
 
@@ -162,9 +168,10 @@ The `publish-pypi` job in `.github/workflows/publish-testpypi.yml` checks the Py
 ### Gitea Package Registry
 
 Use `PKG_TOKEN` (not `GITEA_TOKEN` — GITEA_ prefix is reserved and will fail). The registry URL is `https://git.nmulti.cloud/api/packages/emersonfelipesp/pypi`.
-The publish workflow may receive Gitea `create` events, but branch creation must
-be job-gated out; only tag creation/tag push events should run release version
-validation.
+The publish workflow deliberately accepts tag `push` events, not Gitea's
+overlapping `create` event. Gitea emits both for a tag; subscribing to both
+starts duplicate immutable uploads of one version. Manual dispatch remains the
+operator retry path.
 
 ### Security
 
@@ -222,7 +229,9 @@ Key architectural invariants to keep in mind:
   drift. HTTP and WebSocket adoption rejects redirects, the WebSocket client
   disables ambient proxies and rechecks trust throughout its lifetime, and
   endpoint saves cancel stale clients. Never treat HTTP 409 as success, expose
-  token previews, or include response or transport text in key errors.
+  token previews, or include response or transport text in key errors. Keep the
+  state machine and automated evidence aligned with
+  [`docs/developer/endpoint-autoconfiguration.md`](./docs/developer/endpoint-autoconfiguration.md).
 - **`enabled=False` is a hard no-connection gate for endpoint-like rows.** Disabled `ProxmoxEndpoint`, `NetBoxEndpoint`, `FastAPIEndpoint`, `PBSEndpoint`, `PDMEndpoint`, and companion endpoint rows remain visible inventory records, but operational paths must return before pushing to proxbox-api, registering keys, fetching OpenAPI/status, resolving backend ids, hydrating dashboard/status cards, scheduling jobs, or calling live HA/storage/firewall/SDN/datacenter routes.
 - **Disabled Proxmox status badges stay static.** List, detail, and dashboard Proxmox status elements must show a gray `Disabled` badge without `data-service-status-url` when `enabled=False`; the direct keepalive endpoint may return `status="disabled"` only as a defensive fallback.
 - **Proxmox connection tuning is model-resolved.** Nullable endpoint timeout/retry/back-off values inherit `ProxboxPluginSettings` through `ProxmoxEndpoint.effective_connection_tuning()`; explicit values win when they are not `None`, including zero retries/back-off. Push only the resulting concrete values to proxbox-api — never JSON `null` inheritance markers. Treat a backend row whose public timeout/retry/back-off differs or is missing as stale and push-required even after the soft preflight budget expires.
@@ -243,14 +252,15 @@ Key architectural invariants to keep in mind:
 All changes to netbox-proxbox MUST conform to these quality gates before PR review:
 
 ### Code Coverage
-- Maintain ≥85% coverage: `rtk pytest tests/ --cov=netbox_proxbox --cov-report=term-missing`
-- Coverage is enforced in CI; failing coverage blocks merge
+- Measure mocked-suite coverage: `rtk pytest -p no:django tests/ --cov=netbox_proxbox --cov-report=term-missing`
+- Enforce coverage in the harness that executes the changed production logic;
+  endpoint auto-configuration has an 85% real-Django branch floor.
 - Document uncovered code with a rationale comment (e.g., "except: pass for legacy compat")
 
 ### Regression Testing
 - Add a test that fails on pre-fix code before implementing any fix
-- Run the full test suite: `rtk pytest tests/ --timeout=30 -v`
-- Run integration tests: `rtk pytest tests/integration/ -v --timeout=30`
+- Run the full mocked suite: `rtk pytest -p no:django tests/ --timeout=30 -v`
+- Run mocked integration tests: `rtk pytest -p no:django tests/integration/ -v --timeout=30`
 - Validate against E2E Docker stack before release
 
 ### Static Analysis

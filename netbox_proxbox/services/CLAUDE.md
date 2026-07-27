@@ -37,7 +37,9 @@ This directory contains service-layer modules for backend HTTP proxy, keepalive 
   key is encrypted before the commit callback may bootstrap it. No-row creation
   uses a PostgreSQL transaction advisory lock so concurrent web/RQ startup
   processes cannot create competing singleton rows. Never add caller-supplied
-  candidates or host/subnet scanning to this module.
+  candidates or host/subnet scanning to this module. Its requirements matrix
+  and 85% real-Django branch-coverage gate are documented in
+  [`docs/developer/endpoint-autoconfiguration.md`](../../docs/developer/endpoint-autoconfiguration.md).
 - [`backend_context.py`](./backend_context.py): defines `get_fastapi_request_context()` — resolves the active FastAPIEndpoint and builds the URL/header context used by all backend HTTP helpers.
 - [`backend_proxy.py`](./backend_proxy.py): HTTP client helpers for proxbox-api,
   including SSE streaming (`run_sync_stream`, `iter_backend_sse_lines`), JSON

@@ -276,7 +276,9 @@ jobs:
         run: uv run ty check proxbox_cli
 
       - name: Run full test suite
-        run: uv run pytest --cov=netbox_proxbox --cov-report=term-missing --cov-report=xml tests
+        run: >-
+          uv run pytest -p no:django --cov=netbox_proxbox
+          --cov-report=term-missing --cov-report=xml tests
 
   e2e-docker-testpypi:
     name: E2E Docker / TestPyPI packages
@@ -322,7 +324,9 @@ jobs:
         run: uv run ty check proxbox_cli
 
       - name: Run full test suite
-        run: uv run pytest --cov=netbox_proxbox --cov-report=term-missing --cov-report=xml tests
+        run: >-
+          uv run pytest -p no:django --cov=netbox_proxbox
+          --cov-report=term-missing --cov-report=xml tests
 
   e2e-docker-pypi-candidate:
     name: E2E Docker / PyPI candidate

@@ -524,6 +524,7 @@ Key pages:
 
 - [Installation Guide](https://emersonfelipesp.github.io/netbox-proxbox/installation/2-installing-plugin-git/)
 - [Backend Setup](https://emersonfelipesp.github.io/netbox-proxbox/installation/backend-setup/)
+- [Endpoint Auto-Configuration](https://emersonfelipesp.github.io/netbox-proxbox/developer/endpoint-autoconfiguration/)
 - [Scheduled Sync](https://emersonfelipesp.github.io/netbox-proxbox/features/scheduled-sync/)
 - [Certification Evidence](https://emersonfelipesp.github.io/netbox-proxbox/certification/)
 - [Application Packet](https://emersonfelipesp.github.io/netbox-proxbox/application-packet/)

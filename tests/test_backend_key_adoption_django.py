@@ -88,11 +88,13 @@ from netbox_proxbox.services.backend_key_adoption import (  # noqa: E402
     backend_key_runtime_is_trusted,
 )
 from netbox_proxbox.services.endpoint_autoconfiguration import (  # noqa: E402
+    EndpointAutoConfigurationResult,
     autoconfigure_fastapi_endpoint,
     autoconfigure_netbox_endpoint,
     configured_backend_url_is_allowed,
     discover_backend_urls,
 )
+import netbox_proxbox.services.endpoint_autoconfiguration as auto_module  # noqa: E402
 from users.models import Token  # noqa: E402
 from netbox_proxbox.signals import (  # noqa: E402
     _register_token_with_backend,
@@ -112,6 +114,86 @@ from netbox_proxbox.websocket_client import (  # noqa: E402
 OLD_KEY = "old-backend-key-0123456789abcdef0123456789"
 NEW_KEY = "new-backend-key-0123456789abcdef0123456789"
 OTHER_KEY = "other-backend-key-0123456789abcdef01234567"
+
+
+class TestEndpointAutoconfigurationHelpers:
+    """Cover fail-closed parsing/orchestration branches without database I/O."""
+
+    @override_settings(PLUGINS_CONFIG=[])
+    def test_non_mapping_plugin_configuration_is_ignored(self) -> None:
+        assert auto_module._plugin_config() == {}
+
+    @override_settings(PLUGINS_CONFIG={"netbox_proxbox": []})
+    def test_non_mapping_plugin_entry_is_ignored(self) -> None:
+        assert auto_module._plugin_config() == {}
+
+    def test_trusted_origin_parser_rejects_unsafe_or_malformed_values(self) -> None:
+        assert auto_module._normalized_origin("backend.example.test") == (
+            "https://backend.example.test"
+        )
+        assert auto_module._normalized_origin("https://backend.example.test:bad") is None
+        assert auto_module._normalized_origin("https://backend.example.test/path") is None
+        assert auto_module._normalized_origin("https://user@backend.example.test") is None
+        assert auto_module._normalized_origin("https://localhost") is None
+        assert auto_module._configured_hostname("") == ""
+        assert auto_module._configured_hostname("https://[broken") == ""
+
+    @override_settings(
+        PLUGINS_CONFIG={
+            "netbox_proxbox": {"netbox_url": "https://inventory.example.test"}
+        },
+        CSRF_TRUSTED_ORIGINS=(),
+        ALLOWED_HOSTS=(),
+    )
+    def test_non_netbox_public_name_does_not_expand_backend_candidates(self) -> None:
+        assert discover_backend_urls() == ()
+
+    def test_backend_identity_probe_treats_parse_failure_as_not_live(self) -> None:
+        class _InvalidJsonClient:
+            def get(self, _url: str, **_kwargs: object) -> _Response:
+                raise ValueError("invalid JSON")
+
+        assert not auto_module._is_proxbox_backend(
+            "https://backend.example.test", True, _InvalidJsonClient()
+        )
+
+    def test_invalid_explicit_discovery_target_is_rejected(self) -> None:
+        with patch.object(
+            auto_module,
+            "backend_key_target",
+            side_effect=auto_module.BackendKeyAdoptionError(
+                "invalid_target", "invalid target"
+            ),
+        ):
+            assert (
+                auto_module.discover_live_backend_url(
+                    configured_endpoint=SimpleNamespace()
+                )
+                is None
+            )
+            assert not configured_backend_url_is_allowed(
+                "https://backend.example.test",
+                configured_endpoint=SimpleNamespace(),
+            )
+
+        assert not configured_backend_url_is_allowed("https://bad.example:invalid")
+
+    def test_combined_autoconfiguration_returns_both_results(self) -> None:
+        backend = EndpointAutoConfigurationResult("configured", "backend ready", 1)
+        netbox = EndpointAutoConfigurationResult("configured", "netbox ready", 2)
+        with (
+            patch.object(
+                auto_module,
+                "autoconfigure_fastapi_endpoint",
+                return_value=backend,
+            ),
+            patch.object(
+                auto_module,
+                "autoconfigure_netbox_endpoint",
+                return_value=netbox,
+            ),
+        ):
+            assert auto_module.autoconfigure_endpoints() == (backend, netbox)
 
 
 class _Response:
