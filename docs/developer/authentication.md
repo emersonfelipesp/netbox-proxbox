@@ -58,9 +58,21 @@ The plugin authenticates to proxbox-api using a **bcrypt-hashed API key** sent i
 ### API Key Adoption and Bootstrap
 
 `FastAPIEndpoint.save()` is the credential persistence boundary. UI, import,
-REST, and direct-model writes converge there; Django signals only authenticate
-an already-persisted key before downstream endpoint delivery. The plugin never
-generates a hidden key.
+REST, and direct-model writes converge there. An explicit candidate still runs
+the synchronous adoption gate. A save without one persists a pending blank
+fingerprint and encrypted candidate, then schedules
+`services.endpoint_autoconfiguration` with `transaction.on_commit`; deferred
+startup retries pending legacy rows. This ordering retains a generated key
+before the backend can accept it, so an outer rollback cannot lose its only
+copy.
+
+Automatic discovery has an explicit allowlist. For an existing row it may
+probe only the exact URL/IP, port, and TLS policy persisted through endpoint
+configuration. With no row it may probe only `PLUGINS_CONFIG` candidates and
+same-site names derived from NetBox's trusted public origin. It performs no
+host/subnet scan and follows no redirect. A stored key is replayed only to the
+configured target. A generated key is retained locally and used only after the
+backend reports a consistent empty-key state.
 
 Successful adoption persists a credential-free SHA-256
 `backend_key_target_fingerprint` alongside the ciphertext. The fingerprint
@@ -68,8 +80,9 @@ binds the candidate to the canonical primary HTTP authority, fallback IP,
 port, HTTP/TLS flags, and WebSocket authority flags. Every runtime HTTP and
 WebSocket credential lookup recomputes it, using a fresh IP foreign-key value,
 and refuses to return the key if any bound value drifted. Legacy rows created
-before migration `0075_fastapi_backend_key_target_fingerprint` remain blank
-until an operator reviews the target and runs `proxbox_fix_tokens --fix`.
+before migration `0075_fastapi_backend_key_target_fingerprint` remain blocked
+until automatic discovery authenticates their stored key, or an operator uses
+the manual `proxbox_fix_tokens --fix` recovery path.
 
 Before any bootstrap-status request, the adoption service validates and
 canonicalizes the target authority. DNS names follow the model hostname
@@ -84,11 +97,13 @@ sequenceDiagram
     participant NB as NetBox Plugin
     participant API as proxbox-api /auth/
 
-    Operator->>NB: Save enabled endpoint with explicit retained candidate
-    NB->>NB: Lock row; compare trust-boundary snapshot
+    Operator->>NB: Save enabled endpoint (token optional)
+    NB->>NB: Persist pending fingerprint when no candidate was supplied
+    NB->>NB: Resolve exact configured target from discovery allowlist
     NB->>API: GET /auth/bootstrap-status (redirects disabled)
     alt no backend keys
         API-->>NB: needs_bootstrap=true, has_db_keys=false
+        NB->>NB: Generate and retain a strong local candidate
         NB->>API: POST /auth/register-key once (redirects disabled)
         API->>API: bcrypt.hash(candidate) → store in ApiKey table
         API-->>NB: 201 Created
@@ -103,7 +118,7 @@ sequenceDiagram
 !!! info "First key only"
     `POST /auth/register-key` is **exempt from authentication** but accepts only
     the **first** API key. It is used only after a consistent empty-state
-    response and only for the candidate the operator explicitly supplied.
+    response and only for a candidate already retained locally.
     HTTP `409` is failure, never proof of adoption. Subsequent key management
     requires authentication via `POST /auth/keys` and
     `DELETE /auth/keys/{id}`.
@@ -112,9 +127,10 @@ sequenceDiagram
     A new disabled FastAPI endpoint stays keyless. Disabled rows are skipped by
     signals, jobs, status checks, WebSocket/storage views, and
     `proxbox_fix_tokens`, including `--fix`.
-    Enabling a row, moving it to a different URL/TLS target, or rotating its key
-    requires explicitly resubmitting the candidate. Rejections and transport
-    failures preserve the prior ciphertext.
+    Enabling or moving a row can enter pending auto-configuration without a
+    pasted key. Explicit candidate submission remains required for manual key
+    rotation. Rejections and transport failures preserve prior ciphertext and
+    keep runtime access blocked.
 
 The WebSocket bridge applies the same durable trust check before opening a
 connection, again after the handshake, periodically while a busy stream is

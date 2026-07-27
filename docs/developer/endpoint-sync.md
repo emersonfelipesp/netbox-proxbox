@@ -69,9 +69,11 @@ flowchart TB
 `FastAPIEndpoint.save()` is the persistence boundary for backend keys. UI,
 import, REST, and direct-model writes all converge there; form validation and
 `save(commit=False)` remain network-free. REST serializers translate its Django
-error to a DRF validation response. The three `post_save` signals still
-coordinate endpoint delivery, but they never invent, bootstrap, rotate, or
-persist a credential.
+error to a DRF validation response. Explicit candidates are verified before
+persistence. Without one, the model saves a blank-fingerprint pending state and
+encrypted candidate, then schedules bounded auto-configuration with
+`transaction.on_commit`. The FastAPI `post_save` receiver stops stale WebSocket
+clients but never bootstraps before the database commit.
 
 ### `FastAPIEndpoint` → fail-closed API key adoption
 
@@ -86,12 +88,15 @@ sequenceDiagram
     participant FA as FastAPIEndpoint (PostgreSQL)
     participant API as proxbox-api
 
-    Op->>NB: Save with an explicit retained candidate
+    Op->>NB: Save configured URL/IP (token optional)
     NB->>FA: save() / prepare_backend_key_transition()
-    FA->>FA: Lock row and compare loaded trust-boundary snapshot
+    FA->>FA: Lock row; persist pending fingerprint when token omitted
+    FA->>FA: Allowlist exact persisted URL/IP, port, and TLS policy
+    FA->>API: GET / and /health without credentials (redirects disabled)
     FA->>API: GET /auth/bootstrap-status (redirects disabled)
     alt backend has no keys
         API-->>FA: { "needs_bootstrap": true }
+        FA->>FA: Generate and retain a strong candidate if none exists
         FA->>API: POST /auth/register-key { "api_key": candidate } (once; redirects disabled)
         API-->>FA: 201 Created
     else backend is initialized
@@ -109,14 +114,14 @@ encrypted `token_enc` model field and exposes it through the compatibility
 `409` is failure, not adoption. The in-memory validation proof is bound to the
 candidate, URL, scheme, port, and TLS-verification setting so changing the
 target before persistence forces a fresh check. A new disabled row is stored
-without a key and performs no HTTP request. Enabling it, changing the target, or
-rotating the key requires the candidate to be explicitly resubmitted. A
-same-key target change reuses the exact ciphertext after authenticating against
-the new target. Security-sensitive saves use a row lock plus an optimistic
+without a key and performs no HTTP request. Enabling it or changing the target
+can be authenticated automatically against the exact newly persisted
+configuration; manual rotation still uses an explicit candidate. A same-key
+target change reuses the exact ciphertext only after the configured target
+accepts it. Security-sensitive saves use a row lock plus an optimistic
 snapshot so a stale model instance cannot overwrite a newer key or target.
 Blank or null `token` values on an existing REST partial update are treated as
-omitted, preserving the exact ciphertext; they do not satisfy the explicit-key
-requirement for enable or target transitions.
+omitted, preserving the exact ciphertext; they do not request manual rotation.
 
 The adoption service canonicalizes the target before its first request. It
 rejects authority injection and URL userinfo/path/query/fragment syntax,
@@ -858,14 +863,16 @@ return { "detail": last_detail }, last_http_status or 503
 All plugin → backend requests include:
 
 ```
-X-Proxbox-API-Key: <operator-retained backend key>
+X-Proxbox-API-Key: <NetBox-encrypted backend key>
 ```
 
-The plugin never generates a hidden key. The operator explicitly supplies and
-retains the first candidate; bootstrap registers only its **bcrypt hash** in the
-backend `apikey` table. Later rotations are created through the authenticated
-key-management route and are accepted by the plugin only after a read-only
-protected request succeeds. Every bootstrap-status, authenticated-key-list, and
+The plugin can generate the first candidate only after configuration-bound
+discovery confirms an empty backend, and retains it encrypted in NetBox before
+runtime use; an operator may instead submit a retained candidate explicitly.
+Bootstrap registers only its **bcrypt hash** in the backend `apikey` table.
+Later rotations are created through the authenticated key-management route and
+are accepted by the plugin only after a read-only protected request succeeds.
+Every identity, readiness, bootstrap-status, authenticated-key-list, and
 registration request rejects redirects. The plaintext token is never stored on
 the backend, included in diagnostic output, copied into validation errors, or
 shown by `proxbox_fix_tokens`.

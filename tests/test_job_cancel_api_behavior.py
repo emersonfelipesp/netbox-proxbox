@@ -111,7 +111,10 @@ def _request(*, authenticated=True, perms=("core.delete_job",), user=True):
 
 def test_permission_allows_authenticated_user_with_delete_job(monkeypatch):
     module = _load(monkeypatch)
-    assert module._ProxboxJobCancelPermission().has_permission(_request(), object()) is True
+    assert (
+        module._ProxboxJobCancelPermission().has_permission(_request(), object())
+        is True
+    )
 
 
 def test_permission_denies_without_delete_job(monkeypatch):

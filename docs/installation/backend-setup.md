@@ -152,27 +152,41 @@ That is convenient, but you should review the security impact for your environme
 
 The NetBox plugin and `proxbox-api` backend use database-backed API key authentication:
 
-### Fail-closed token setup
+### Fail-closed automatic token setup
 
-When an enabled `FastAPIEndpoint` is created, activated, moved to a different
-backend URL/TLS target, or given a replacement token, the backend must be
-reachable and the operator must explicitly submit a non-empty candidate. The
-plugin never generates one implicitly. It then performs one of two mutually
-exclusive flows:
+The backend token field is optional. Saving an enabled `FastAPIEndpoint`
+without a token first records a fail-closed pending state. Automatic discovery
+then uses the exact URL/IP, port, and TLS-verification policy saved through the
+NetBox UI as its allowlist. It performs credential-free `/` and `/health`
+checks, with redirects disabled, before either of these flows:
 
-1. **Uninitialized backend** (`needs_bootstrap=true`) — use the explicitly
-   retained candidate and require one successful `POST /auth/register-key`
-   (`201`).
-2. **Initialized backend** — never call the bootstrap route. Authenticate the
-   candidate with one read-only `GET /auth/keys` request and persist it only on
-   `200`.
+1. **Locally held key** — authenticate the already encrypted key with one
+   read-only `GET /auth/keys` request. This repairs legacy blank fingerprints,
+   activation, and configured target changes without asking the operator to
+   paste the same secret again.
+2. **Uninitialized backend** (`needs_bootstrap=true`) — generate a strong key,
+   retain it encrypted in NetBox, and require one successful
+   `POST /auth/register-key` (`201`).
+
+An initialized backend never receives the bootstrap POST. If it rejects the
+locally held key, or NetBox has no recoverable key, the row remains pending and
+runtime traffic stays blocked. The backend never exposes existing raw keys.
+
+When no `FastAPIEndpoint` row exists, startup discovery is bounded to an
+explicit `PLUGINS_CONFIG["netbox_proxbox"]["backend_url"]` value (with optional
+boolean `backend_verify_ssl`, default `true`) and same-site
+`backend.proxbox.<domain>` / legacy `proxbox.backend.<domain>` names derived
+from NetBox's configured public origin. There is no network or subnet scan.
+After an endpoint is saved in the UI, that exact persisted target becomes the
+complete discovery allowlist; another IP or domain is rejected unless the
+operator first saves it as the endpoint configuration.
 
 Authentication rejection, conflict, throttling, timeout, TLS failure, or a
-connection error leaves the previous encrypted token unchanged. A disabled
-endpoint never makes a connection and a new disabled row remains keyless. To
-activate a disabled row, enable it and explicitly resubmit the key in the same
-save. The bootstrap-status, key-list, and registration checks do not follow
-redirects, so credentials cannot be forwarded to another origin.
+connection error leaves the previous encrypted token unchanged and the target
+untrusted. A disabled endpoint never makes a connection and a new disabled row
+remains keyless. The identity, bootstrap-status, key-list, and registration
+checks do not follow redirects, so credentials cannot be forwarded to another
+origin.
 
 After adoption, the plugin stores a credential-free SHA-256 target fingerprint
 covering the canonical primary HTTP authority, fallback IP, port, HTTP/TLS
@@ -182,10 +196,10 @@ disables ambient proxies, refuses a server-selected redirect before sending the
 key, rechecks trust after its handshake and periodically while connected, and
 is cancelled when the endpoint changes.
 
-Keep the first candidate until the NetBox save commits. If proxbox-api accepts
-the bootstrap but the local database transaction later rolls back, retry with
-that same candidate. The backend is now initialized, so the retry proves the
-candidate with `GET /auth/keys` and can safely commit it locally.
+The generated first key is encrypted before it becomes available to runtime
+callers and is never logged or rendered. If the backend becomes initialized by
+another actor during bootstrap, the conflict remains pending rather than being
+treated as proof of authentication.
 
 ### Manual Token Management
 
@@ -219,8 +233,8 @@ NetBox `FastAPIEndpoint` token field. Saving performs a protected read with the
 candidate before changing the encrypted database value. Verify another
 protected backend request from the plugin, then deactivate or delete the old
 key. If any step fails, keep the old key active and retry only after resolving
-the reported condition; the plugin never substitutes or bootstraps a different
-credential automatically.
+the reported condition. Automatic generation is limited to first-key bootstrap;
+it is never used as a rotation mechanism.
 
 The unauthenticated `POST /auth/register-key` route is only for a backend whose
 bootstrap status explicitly reports that it has no keys. It is never a rotation

@@ -26,7 +26,7 @@ This page documents the internal architecture of each of the four Proxbox reposi
 | `netbox_proxbox/navigation.py` | Plugin menu groups and buttons |
 | `netbox_proxbox/urls.py` | URL map for all plugin views |
 | `netbox_proxbox/template_content.py` | Template extensions that inject buttons/panels into NetBox's Job and VirtualMachine detail pages |
-| `netbox_proxbox/signals.py` | Read-only post-save checks for stored FastAPI keys plus downstream endpoint delivery; never generates or persists credentials |
+| `netbox_proxbox/signals.py` | Post-save runtime gating and downstream endpoint delivery; commit-safe backend auto-configuration is scheduled by the model/service boundary |
 | `netbox_proxbox/sync_stages.py` | Runs a single named sync stage against the backend SSE stream |
 | `netbox_proxbox/websocket_client.py` | Long-lived WebSocket client and message queue for backend broadcast messages |
 

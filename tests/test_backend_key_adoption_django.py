@@ -67,9 +67,10 @@ except Exception as exc:  # pragma: no cover - external test harness availabilit
 
 from django.core.exceptions import ValidationError  # noqa: E402
 from django.core.management import call_command  # noqa: E402
+from django.contrib.auth import get_user_model  # noqa: E402
 from django.db import IntegrityError, transaction  # noqa: E402
 from django.db.models.signals import post_save  # noqa: E402
-from django.test import TransactionTestCase  # noqa: E402
+from django.test import TransactionTestCase, override_settings  # noqa: E402
 from ipam.models import IPAddress  # noqa: E402
 
 from netbox_proxbox.api.serializers.endpoints import (  # noqa: E402
@@ -79,13 +80,20 @@ from netbox_proxbox.forms.fastapi import (  # noqa: E402
     FastAPIEndpointForm,
     FastAPIEndpointImportForm,
 )
-from netbox_proxbox.models import FastAPIEndpoint  # noqa: E402
+from netbox_proxbox.models import FastAPIEndpoint, NetBoxEndpoint  # noqa: E402
 from netbox_proxbox.services.backend_auth import (  # noqa: E402
     ensure_backend_key_registered,
 )
 from netbox_proxbox.services.backend_key_adoption import (  # noqa: E402
     backend_key_runtime_is_trusted,
 )
+from netbox_proxbox.services.endpoint_autoconfiguration import (  # noqa: E402
+    autoconfigure_fastapi_endpoint,
+    autoconfigure_netbox_endpoint,
+    configured_backend_url_is_allowed,
+    discover_backend_urls,
+)
+from users.models import Token  # noqa: E402
 from netbox_proxbox.signals import (  # noqa: E402
     _register_token_with_backend,
     ensure_fastapi_endpoint_token,
@@ -127,6 +135,12 @@ class _StatefulBackend:
 
     def get(self, url: str, **kwargs: object) -> _Response:
         self.calls.append(("GET", url, kwargs))
+        if url.endswith("/health"):
+            return _Response(200, {"status": "ready", "init_ok": True})
+        if url.endswith("/"):
+            return _Response(
+                200, {"message": "Proxbox Backend made in FastAPI framework"}
+            )
         if url.endswith("/auth/bootstrap-status"):
             has_keys = bool(self.accepted_keys)
             return _Response(
@@ -178,6 +192,7 @@ class BackendKeyPersistenceTests(TransactionTestCase):
     reset_sequences = True
     backend: _StatefulBackend
     _client_patch: ClassVar[object]
+    _discovery_client_patch: ClassVar[object]
 
     def setUp(self) -> None:
         self.backend = _StatefulBackend()
@@ -185,9 +200,15 @@ class BackendKeyPersistenceTests(TransactionTestCase):
             "netbox_proxbox.services.backend_key_adoption.get_default_http_client",
             return_value=self.backend,
         )
+        self._discovery_client_patch = patch(
+            "netbox_proxbox.services.endpoint_autoconfiguration.get_default_http_client",
+            return_value=self.backend,
+        )
         self._client_patch.start()
+        self._discovery_client_patch.start()
 
     def tearDown(self) -> None:
+        self._discovery_client_patch.stop()
         self._client_patch.stop()
 
     @staticmethod
@@ -215,9 +236,11 @@ class BackendKeyPersistenceTests(TransactionTestCase):
     def test_new_disabled_blank_is_local_only(self) -> None:
         endpoint = self._new_endpoint("disabled-new", enabled=False)
         endpoint.save()
+        result = autoconfigure_fastapi_endpoint(http_client=self.backend)
 
         endpoint.refresh_from_db()
         self.assertEqual(endpoint.token_enc, "")
+        self.assertEqual(result.state, "skipped")
         self.assertEqual(self.backend.calls, [])
 
     def test_new_disabled_explicit_candidate_is_rejected_without_http(self) -> None:
@@ -232,14 +255,419 @@ class BackendKeyPersistenceTests(TransactionTestCase):
         )
         self.assertEqual(self.backend.calls, [])
 
-    def test_new_enabled_blank_is_rejected_without_http_or_row(self) -> None:
+    def test_new_enabled_blank_is_saved_pending_without_http(self) -> None:
         endpoint = self._new_endpoint("enabled-blank")
-
-        with self.assertRaises(ValidationError):
+        with patch(
+            "netbox_proxbox.services.endpoint_autoconfiguration.discover_live_backend_url",
+            return_value=None,
+        ):
             endpoint.save()
 
-        self.assertFalse(FastAPIEndpoint.objects.filter(name="enabled-blank").exists())
+        persisted = FastAPIEndpoint.objects.get(name="enabled-blank")
+        self.assertTrue(persisted.token)
+        self.assertNotEqual(persisted.token_enc, persisted.token)
+        self.assertEqual(persisted.backend_key_target_fingerprint, "")
+        self.assertFalse(backend_key_runtime_is_trusted(persisted))
         self.assertEqual(self.backend.calls, [])
+
+    def test_generated_candidate_is_retained_before_commit_bootstrap(self) -> None:
+        endpoint = self._new_endpoint("commit-safe-bootstrap")
+
+        with transaction.atomic():
+            endpoint.save()
+            pending = FastAPIEndpoint.objects.get(pk=endpoint.pk)
+            self.assertTrue(pending.token)
+            self.assertEqual(pending.backend_key_target_fingerprint, "")
+            self.assertEqual(self.backend.calls, [])
+
+        endpoint.refresh_from_db()
+        self.assertTrue(backend_key_runtime_is_trusted(endpoint))
+        self.assertIn(endpoint.token, self.backend.accepted_keys)
+
+    def test_outer_rollback_never_bootstraps_generated_candidate(self) -> None:
+        endpoint = self._new_endpoint("rollback-generated-bootstrap")
+
+        with self.assertRaises(RuntimeError), transaction.atomic():
+            endpoint.save()
+            raise RuntimeError("force rollback")
+
+        self.assertFalse(
+            FastAPIEndpoint.objects.filter(name="rollback-generated-bootstrap").exists()
+        )
+        self.assertEqual(self.backend.calls, [])
+
+    def test_service_generated_candidate_is_not_sent_before_outer_commit(
+        self,
+    ) -> None:
+        endpoint = self._new_endpoint("service-rollback-generated", enabled=False)
+        endpoint.save()
+        FastAPIEndpoint.objects.filter(pk=endpoint.pk).update(enabled=True)
+        self.backend.clear()
+
+        with self.assertRaises(RuntimeError), transaction.atomic():
+            result = autoconfigure_fastapi_endpoint(http_client=self.backend)
+
+            self.assertEqual(result.state, "pending")
+            self.assertEqual(
+                [method for method, _url, _kwargs in self.backend.calls],
+                ["GET", "GET"],
+            )
+            self.assertEqual(self.backend.accepted_keys, set())
+            raise RuntimeError("force rollback")
+
+        endpoint.refresh_from_db()
+        self.assertEqual(endpoint.token_enc, "")
+        self.assertEqual(self.backend.accepted_keys, set())
+
+    @override_settings(
+        CSRF_TRUSTED_ORIGINS=["https://netbox.example.test"],
+        ALLOWED_HOSTS=["netbox.example.test"],
+        PLUGINS_CONFIG={},
+    )
+    def test_new_enabled_blank_discovers_and_bootstraps_automatically(self) -> None:
+        endpoint = FastAPIEndpoint(
+            name="auto-bootstrap",
+            domain="backend.proxbox.example.test",
+            port=443,
+            use_https=True,
+            verify_ssl=True,
+            enabled=True,
+        )
+        endpoint.save()
+
+        endpoint.refresh_from_db()
+        self.assertTrue(endpoint.token)
+        self.assertTrue(backend_key_runtime_is_trusted(endpoint))
+        self.assertIn(endpoint.token, self.backend.accepted_keys)
+        self.assertEqual(endpoint.domain, "backend.proxbox.example.test")
+        self.assertEqual(
+            [method for method, _url, _kwargs in self.backend.calls],
+            ["GET", "GET", "GET", "POST"],
+        )
+
+    @override_settings(
+        CSRF_TRUSTED_ORIGINS=["https://netbox.example.test"],
+        ALLOWED_HOSTS=["*"],
+        PLUGINS_CONFIG={},
+    )
+    def test_missing_backend_row_uses_same_site_allowlist(self) -> None:
+        result = autoconfigure_fastapi_endpoint(http_client=self.backend)
+
+        endpoint = FastAPIEndpoint.objects.get(pk=result.endpoint_id)
+        self.assertEqual(result.state, "configured")
+        self.assertEqual(endpoint.domain, "backend.proxbox.example.test")
+        self.assertEqual(endpoint.port, 443)
+        self.assertTrue(endpoint.token)
+        self.assertTrue(backend_key_runtime_is_trusted(endpoint))
+        self.assertIn(endpoint.token, self.backend.accepted_keys)
+
+    @override_settings(
+        CSRF_TRUSTED_ORIGINS=["https://netbox.example.test"],
+        ALLOWED_HOSTS=["*"],
+        PLUGINS_CONFIG={},
+    )
+    def test_missing_backend_row_outer_rollback_never_sends_generated_key(
+        self,
+    ) -> None:
+        with self.assertRaises(RuntimeError), transaction.atomic():
+            result = autoconfigure_fastapi_endpoint(http_client=self.backend)
+
+            self.assertEqual(result.state, "pending")
+            self.assertEqual(
+                [method for method, _url, _kwargs in self.backend.calls],
+                ["GET", "GET"],
+            )
+            self.assertEqual(self.backend.accepted_keys, set())
+            raise RuntimeError("force rollback")
+
+        self.assertFalse(FastAPIEndpoint.objects.exists())
+        self.assertEqual(
+            [method for method, _url, _kwargs in self.backend.calls],
+            ["GET", "GET"],
+        )
+        self.assertEqual(self.backend.accepted_keys, set())
+
+    @override_settings(
+        CSRF_TRUSTED_ORIGINS=[],
+        ALLOWED_HOSTS=["*"],
+        PLUGINS_CONFIG={
+            "netbox_proxbox": {
+                "backend_url": "https://192.0.2.55:8800",
+                "backend_verify_ssl": False,
+            }
+        },
+    )
+    def test_missing_backend_row_accepts_only_explicitly_configured_ip(self) -> None:
+        result = autoconfigure_fastapi_endpoint(http_client=self.backend)
+
+        endpoint = FastAPIEndpoint.objects.get(pk=result.endpoint_id)
+        self.assertEqual(result.state, "configured")
+        self.assertIsNone(endpoint.domain)
+        self.assertEqual(str(endpoint.ip_address.address), "192.0.2.55/32")
+        self.assertEqual(endpoint.port, 8800)
+        self.assertTrue(endpoint.use_https)
+        self.assertFalse(endpoint.verify_ssl)
+        self.assertTrue(backend_key_runtime_is_trusted(endpoint))
+        self.assertTrue(
+            all(
+                kwargs.get("verify") is False
+                for _method, _url, kwargs in self.backend.calls
+            )
+        )
+
+    @override_settings(
+        CSRF_TRUSTED_ORIGINS=["https://netbox.example.test"],
+        ALLOWED_HOSTS=["*"],
+        PLUGINS_CONFIG={},
+    )
+    def test_existing_encrypted_key_repairs_blank_target_fingerprint(self) -> None:
+        endpoint = self._create_enabled("legacy-binding")
+        FastAPIEndpoint.objects.filter(pk=endpoint.pk).update(
+            domain="proxbox.backend.example.test",
+            backend_key_target_fingerprint="",
+        )
+        self.backend.clear()
+
+        result = autoconfigure_fastapi_endpoint(http_client=self.backend)
+
+        endpoint.refresh_from_db()
+        self.assertEqual(result.state, "configured")
+        self.assertEqual(endpoint.domain, "proxbox.backend.example.test")
+        self.assertEqual(endpoint.token, OLD_KEY)
+        self.assertTrue(backend_key_runtime_is_trusted(endpoint))
+        self.assertFalse(any(method == "POST" for method, *_rest in self.backend.calls))
+
+    def test_ui_endpoint_is_the_exact_discovery_allowlist(self) -> None:
+        endpoint = self._new_endpoint("configured-ui-target")
+
+        self.assertTrue(
+            configured_backend_url_is_allowed(
+                "https://configured-ui-target.example.test:8800",
+                configured_endpoint=endpoint,
+            )
+        )
+        self.assertFalse(
+            configured_backend_url_is_allowed(
+                "https://unlisted.example.test:8800",
+                configured_endpoint=endpoint,
+            )
+        )
+
+    def test_ui_ip_endpoint_is_the_exact_discovery_allowlist(self) -> None:
+        ip_object = IPAddress.objects.create(address="192.0.2.44/32")
+        endpoint = self._new_endpoint("configured-ui-ip")
+        endpoint.domain = None
+        endpoint.ip_address = ip_object
+
+        self.assertTrue(
+            configured_backend_url_is_allowed(
+                "https://192.0.2.44:8800",
+                configured_endpoint=endpoint,
+            )
+        )
+        self.assertFalse(
+            configured_backend_url_is_allowed(
+                "https://192.0.2.45:8800",
+                configured_endpoint=endpoint,
+            )
+        )
+
+    @override_settings(
+        CSRF_TRUSTED_ORIGINS=["https://netbox.example.test"],
+        ALLOWED_HOSTS=["*"],
+        PLUGINS_CONFIG={},
+    )
+    def test_initialized_backend_without_local_key_remains_pending(self) -> None:
+        self.backend.accepted_keys.add(OTHER_KEY)
+        endpoint = FastAPIEndpoint(
+            name="missing-local-key",
+            domain="backend.proxbox.example.test",
+            port=443,
+            use_https=True,
+            verify_ssl=True,
+            enabled=True,
+        )
+        endpoint.save()
+
+        endpoint.refresh_from_db()
+        self.assertTrue(endpoint.token)
+        self.assertNotIn(endpoint.token, self.backend.accepted_keys)
+        self.assertEqual(endpoint.backend_key_target_fingerprint, "")
+        self.assertFalse(backend_key_runtime_is_trusted(endpoint))
+        self.assertFalse(any(method == "POST" for method, *_rest in self.backend.calls))
+
+    @override_settings(
+        CSRF_TRUSTED_ORIGINS=["https://netbox.example.test"],
+        ALLOWED_HOSTS=["*"],
+        PLUGINS_CONFIG={},
+    )
+    def test_discovery_candidates_are_bounded_and_canonical_first(self) -> None:
+        self.assertEqual(
+            discover_backend_urls(),
+            (
+                "https://backend.proxbox.example.test",
+                "https://proxbox.backend.example.test",
+            ),
+        )
+
+    @override_settings(
+        CSRF_TRUSTED_ORIGINS=["https://netbox.example.test"],
+        ALLOWED_HOSTS=["*"],
+        PLUGINS_CONFIG={},
+    )
+    def test_local_netbox_and_unique_service_token_are_discovered(self) -> None:
+        user = get_user_model().objects.create_user(username="proxbox-service")
+        Token.objects.create(
+            user=user,
+            version=1,
+            token="z" * 40,
+            description="proxbox disabled service token",
+            enabled=False,
+            write_enabled=True,
+        )
+        token = Token.objects.create(
+            user=user,
+            version=1,
+            token="a" * 40,
+            description="proxbox backend service token",
+            write_enabled=True,
+        )
+
+        result = autoconfigure_netbox_endpoint()
+
+        endpoint = NetBoxEndpoint.objects.get(pk=result.endpoint_id)
+        self.assertEqual(result.state, "configured")
+        self.assertEqual(endpoint.domain, "netbox.example.test")
+        self.assertEqual(endpoint.port, 443)
+        self.assertEqual(endpoint.token_id, token.pk)
+        self.assertTrue(endpoint.verify_ssl)
+
+    @override_settings(
+        CSRF_TRUSTED_ORIGINS=[],
+        ALLOWED_HOSTS=["*"],
+        PLUGINS_CONFIG={"netbox_proxbox": {"netbox_url": "http://192.0.2.60:8080"}},
+    )
+    def test_explicit_netbox_ip_and_service_token_are_discovered(self) -> None:
+        user = get_user_model().objects.create_user(username="proxbox-ip-service")
+        token = Token.objects.create(
+            user=user,
+            version=1,
+            token="i" * 40,
+            description="proxbox IP service token",
+            write_enabled=True,
+        )
+
+        result = autoconfigure_netbox_endpoint()
+
+        endpoint = NetBoxEndpoint.objects.get(pk=result.endpoint_id)
+        self.assertEqual(result.state, "configured")
+        self.assertIsNone(endpoint.domain)
+        self.assertEqual(str(endpoint.ip_address.address), "192.0.2.60/32")
+        self.assertEqual(endpoint.port, 8080)
+        self.assertEqual(endpoint.token_id, token.pk)
+        self.assertFalse(endpoint.verify_ssl)
+
+    @override_settings(
+        CSRF_TRUSTED_ORIGINS=["https://netbox.example.test"],
+        ALLOWED_HOSTS=["*"],
+        PLUGINS_CONFIG={},
+    )
+    def test_existing_netbox_endpoint_discovers_unique_service_token(self) -> None:
+        user = get_user_model().objects.create_user(username="proxbox-existing")
+        disabled_token = Token.objects.create(
+            user=user,
+            version=1,
+            token="d" * 40,
+            description="proxbox disabled existing token",
+            enabled=False,
+            write_enabled=True,
+        )
+        endpoint = NetBoxEndpoint.objects.create(
+            name="configured-netbox",
+            domain="netbox.example.test",
+            port=443,
+            token=disabled_token,
+            verify_ssl=True,
+            enabled=True,
+        )
+        token = Token.objects.create(
+            user=user,
+            version=1,
+            token="e" * 40,
+            description="proxbox existing service token",
+            write_enabled=True,
+        )
+
+        result = autoconfigure_netbox_endpoint()
+
+        endpoint.refresh_from_db()
+        self.assertEqual(result.state, "configured")
+        self.assertEqual(endpoint.token_id, token.pk)
+
+    def test_netbox_endpoint_signal_never_sends_token_before_outer_commit(
+        self,
+    ) -> None:
+        self._create_enabled("netbox-signal-rollback")
+        user = get_user_model().objects.create_user(username="proxbox-signal")
+        token = Token.objects.create(
+            user=user,
+            version=1,
+            token="s" * 40,
+            description="proxbox signal service token",
+            write_enabled=True,
+        )
+        self.backend.clear()
+
+        with self.assertRaises(RuntimeError), transaction.atomic():
+            NetBoxEndpoint.objects.create(
+                name="rollback-netbox",
+                domain="netbox.example.test",
+                port=443,
+                token=token,
+                verify_ssl=True,
+                enabled=True,
+            )
+            self.assertEqual(self.backend.calls, [])
+            raise RuntimeError("force rollback")
+
+        self.assertFalse(NetBoxEndpoint.objects.exists())
+        self.assertEqual(self.backend.calls, [])
+
+    def test_multiple_netbox_endpoints_block_automatic_selection(self) -> None:
+        for index in range(2):
+            NetBoxEndpoint.objects.create(
+                name=f"netbox-{index}",
+                domain=f"netbox-{index}.example.test",
+                port=443,
+                verify_ssl=True,
+                enabled=True,
+            )
+
+        result = autoconfigure_netbox_endpoint()
+
+        self.assertEqual(result.state, "pending")
+        self.assertIn("Multiple NetBox endpoints", result.detail)
+
+    @override_settings(
+        CSRF_TRUSTED_ORIGINS=["https://netbox.example.test"],
+        ALLOWED_HOSTS=["*"],
+        PLUGINS_CONFIG={},
+    )
+    def test_ambiguous_netbox_service_tokens_remain_pending(self) -> None:
+        user = get_user_model().objects.create_user(username="proxbox-ambiguous")
+        for index in range(2):
+            Token.objects.create(
+                user=user,
+                version=1,
+                token=str(index) * 40,
+                description=f"proxbox service token {index}",
+                write_enabled=True,
+            )
+
+        result = autoconfigure_netbox_endpoint()
+
+        self.assertEqual(result.state, "pending")
+        self.assertFalse(NetBoxEndpoint.objects.exists())
 
     def test_new_enabled_explicit_candidate_bootstraps_once(self) -> None:
         endpoint = self._new_endpoint("initial-bootstrap")
@@ -315,7 +743,7 @@ class BackendKeyPersistenceTests(TransactionTestCase):
         )
         self.assertEqual(self.backend.calls, [])
 
-    def test_activation_requires_explicit_resubmission(self) -> None:
+    def test_activation_without_resubmission_reuses_configured_key(self) -> None:
         endpoint = self._create_enabled("explicit-activation")
         endpoint.enabled = False
         endpoint.save(update_fields={"enabled"})
@@ -323,34 +751,23 @@ class BackendKeyPersistenceTests(TransactionTestCase):
         self.backend.clear()
 
         endpoint.enabled = True
-        with self.assertRaises(ValidationError):
-            endpoint.save(update_fields={"enabled"})
-
-        self.assertFalse(FastAPIEndpoint.objects.get(pk=endpoint.pk).enabled)
-        self.assertEqual(self.backend.calls, [])
-
-        endpoint.refresh_from_db()
-        endpoint.enabled = True
-        endpoint.token = OLD_KEY
         endpoint.save(update_fields={"enabled"})
-        self.assertTrue(FastAPIEndpoint.objects.get(pk=endpoint.pk).enabled)
+
+        persisted = FastAPIEndpoint.objects.get(pk=endpoint.pk)
+        self.assertTrue(persisted.enabled)
+        self.assertTrue(backend_key_runtime_is_trusted(persisted))
         self.assertEqual(
             [method for method, _url, _kwargs in self.backend.calls],
-            ["GET", "GET"],
+            ["GET", "GET", "GET", "GET"],
         )
 
-    def test_target_change_requires_key_and_validates_exact_next_target(self) -> None:
+    def test_target_change_without_key_authenticates_exact_ui_target(self) -> None:
         endpoint = self._create_enabled("target-change")
         endpoint.refresh_from_db()
         original_ciphertext = endpoint.token_enc
         endpoint.domain = "changed.example.test"
         self.backend.clear()
 
-        with self.assertRaises(ValidationError):
-            endpoint.save(update_fields={"domain"})
-        self.assertEqual(self.backend.calls, [])
-
-        endpoint.token = OLD_KEY
         endpoint.save(update_fields={"domain"})
         self.assertTrue(
             all(
@@ -359,8 +776,15 @@ class BackendKeyPersistenceTests(TransactionTestCase):
             )
         )
         self.assertEqual(
+            [method for method, _url, _kwargs in self.backend.calls],
+            ["GET", "GET", "GET", "GET"],
+        )
+        self.assertEqual(
             FastAPIEndpoint.objects.get(pk=endpoint.pk).token_enc,
             original_ciphertext,
+        )
+        self.assertTrue(
+            backend_key_runtime_is_trusted(FastAPIEndpoint.objects.get(pk=endpoint.pk))
         )
 
     def test_mutated_related_ip_blocks_every_runtime_credential_path(self) -> None:
@@ -388,9 +812,7 @@ class BackendKeyPersistenceTests(TransactionTestCase):
         self.assertFalse(_register_token_with_backend(endpoint))
         self.assertEqual(self.backend.calls, [])
 
-    def test_websocket_authority_change_requires_explicit_key_and_uses_primary_server_url(
-        self,
-    ) -> None:
+    def test_websocket_authority_change_is_automatically_verified(self) -> None:
         self.backend.accepted_keys.add(OLD_KEY)
         endpoint = self._new_endpoint("websocket-target")
         endpoint.use_websocket = True
@@ -416,15 +838,13 @@ class BackendKeyPersistenceTests(TransactionTestCase):
 
         endpoint.websocket_domain = "changed-stream.example.test"
         self.backend.clear()
-        with self.assertRaises(ValidationError):
-            endpoint.save(update_fields={"websocket_domain"})
-        self.assertEqual(self.backend.calls, [])
-
-        endpoint.token = OLD_KEY
         endpoint.save(update_fields={"websocket_domain"})
+        self.assertTrue(
+            backend_key_runtime_is_trusted(FastAPIEndpoint.objects.get(pk=endpoint.pk))
+        )
         self.assertEqual(
             [method for method, _url, _kwargs in self.backend.calls],
-            ["GET", "GET"],
+            ["GET", "GET", "GET", "GET"],
         )
 
     def test_direct_model_rejects_authority_injection_before_http(self) -> None:

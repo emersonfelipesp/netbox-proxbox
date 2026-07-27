@@ -532,8 +532,11 @@ This package contains the NetBox plugin itself. It defines the plugin config, UR
 - [`websocket_client.py`](./websocket_client.py): long-lived WebSocket client, message queue, and HTTP view used to stream backend messages into NetBox pages. The view resolves only enabled FastAPI rows and returns before URL/header construction for disabled inventory.
 - [`signals.py`](./signals.py): Django signal handlers that authenticate an
   already-persisted FastAPIEndpoint key before downstream endpoint delivery.
-  Candidate adoption belongs to `FastAPIEndpoint.save()`; signals never invent,
-  bootstrap, rotate, or persist credentials.
+  Explicit-candidate adoption belongs to `FastAPIEndpoint.save()`; that model
+  schedules pending rows through `transaction.on_commit` into bounded
+  `services.endpoint_autoconfiguration`, which treats the exact
+  UI-persisted target as its allowlist and may generate/persist a key only for a
+  confirmed first-key bootstrap.
 - [`schemas/`](./schemas): Pydantic models and formatters for backend payloads, normalized sync context, and OpenAPI helpers.
 - [`services/`](./services): backend proxy, schema caching, service status, and sync coordination helpers.
 - [`management/`](./management): Django management commands package.
@@ -602,6 +605,12 @@ All three endpoint types support CSV, JSON, and YAML export via dedicated `Expor
 Import uses NetBox's `BulkImportView`. All import forms auto-create missing `IPAddress` objects via `get_or_create` so data can move between NetBox instances without manual IPAM pre-population. Exported `id` columns are stripped before processing to prevent PK collisions.
 
 **NetBoxEndpoint and FastAPIEndpoint are singleton-shaped.** If a record already exists when a bulk import is submitted, the import view intercepts the request and renders a confirmation page (`singleton_import_confirm.html`) before deleting the existing record and creating the replacement. Operational helpers use the first enabled FastAPI endpoint; disabled endpoints are inventory-only and must not trigger backend registration or HTTP probes. ProxmoxEndpoint allows multiple rows and has no singleton constraint.
+
+Automatic endpoint discovery is configuration-bound. Once a FastAPI endpoint
+row exists, only its exact persisted URL/IP, port, and TLS policy may be probed
+or receive a stored key. Without a row, candidates come only from
+`PLUGINS_CONFIG` or same-site names derived from NetBox's trusted public origin.
+Never add network scans, redirect following, or a caller-supplied discovery URL.
 
 FastAPI target construction is a security boundary. Adoption accepts only a
 validated DNS name or IP address, canonicalizes case/address text, brackets IPv6

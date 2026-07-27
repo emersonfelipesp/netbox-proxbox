@@ -48,8 +48,10 @@ python manage.py proxbox_fix_tokens --fix
 `--fix` is the operator's consent to contact the reviewed target. It records the
 fingerprint when the stored key already authenticates and performs the one-time
 bootstrap POST only when proxbox-api proves that it has no keys. A nonblank
-fingerprint that no longer matches its target is refused without network access;
-edit the FastAPI endpoint and explicitly resubmit the retained key instead.
+fingerprint that no longer matches its target remains runtime-blocked. Restart
+NetBox to let bounded auto-configuration re-authenticate the retained key
+against that exact saved target, or run `proxbox_fix_tokens --fix` as an
+operator-controlled repair.
 
 Verify that the diagnostic reports the key as registered, that the FastAPI
 status card can complete an authenticated version check, and that one scoped

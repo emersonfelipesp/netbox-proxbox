@@ -276,12 +276,17 @@ curl -X POST \
        "use_https": true,
        "verify_ssl": false,
        "enabled": true,
-       "token": "<explicit retained backend key>",
        "use_websocket": true,
        "websocket_port": 8800
      }' \
      http://netbox.example.com/api/plugins/proxbox/endpoints/fastapi/
 ```
+
+`token` is optional. When omitted, the saved URL/IP, port, and TLS policy become
+the exact automatic-discovery allowlist. NetBox reuses an encrypted local key
+after authentication or generates one only for a confirmed empty backend. An
+unlisted discovery target is rejected before credentials are sent. Supply
+`token` explicitly only for manual rotation or recovery.
 
 **Example — list all FastAPI endpoints:**
 
@@ -319,13 +324,19 @@ curl -H "Authorization: Token <token>" \
 }
 ```
 
-!!! warning "Explicit, write-only key"
+!!! warning "Write-only key and controlled auto-configuration"
     `token` is write-only and is never returned by list or detail responses.
-    Creating an enabled endpoint requires an explicit, retained candidate. The
-    plugin does not generate one. A new disabled endpoint may omit it and stays
-    keyless; enabling that row later requires resubmitting the key in the same
-    request. Candidate adoption fails closed if proxbox-api cannot prove the
-    key or complete the first-key bootstrap.
+    An operator may submit an explicit candidate, or leave it blank and let the
+    plugin generate, encrypt, and authenticate a candidate after the database
+    commit. Existing ciphertext is reused when an endpoint is enabled or its
+    target changes. Until proxbox-api proves the candidate or completes its
+    one-time empty-key bootstrap, the endpoint remains runtime-blocked.
+
+    A saved FastAPI endpoint is the complete auto-discovery allowlist: only its
+    exact scheme, domain or IP, port, and TLS-verification policy may be
+    contacted. Same-site or `PLUGINS_CONFIG` candidates are considered only
+    when no row exists. Discovery never scans the network and never follows
+    redirects.
 
     The target authority is validated before the first request. Embedded
     credentials, paths, queries, fragments, malformed hosts, and authority

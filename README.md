@@ -24,12 +24,16 @@ Proxbox discovers and syncs the following from Proxmox into NetBox:
 
 Sync runs on-demand from the NetBox UI or scheduled automatically via NetBox's job system.
 
-Backend API keys are adopted fail-closed. Creating or enabling a
-`FastAPIEndpoint`, changing its URL/TLS target, or rotating its key requires an
-explicit candidate that the operator retains. The plugin never generates a
-hidden key, never follows redirects during key checks, and never persists a
-candidate until an initialized backend authenticates it or an empty backend
-accepts the one-time bootstrap. Disabled endpoint rows make no network calls.
+Backend API keys are adopted fail-closed without making the token field
+mandatory. The exact URL/IP, port, and TLS policy saved in the NetBox UI is the
+automatic-discovery allowlist: the plugin probes only that configured target,
+never follows redirects, reuses an encrypted key only after the target accepts
+it, and generates a key only for an empty backend's one-time bootstrap. With no
+endpoint row, discovery is bounded to `PLUGINS_CONFIG` and same-site names
+derived from NetBox's trusted public origin; it never scans the network. An
+initialized backend whose key is not locally recoverable remains fail-closed
+and pending. Disabled endpoint rows make no network calls. Operators can still
+submit a key explicitly for manual rotation or recovery.
 
 ## Additional Optional Plugins
 

@@ -53,6 +53,9 @@ def _deferred_startup_push() -> None:
 
     try:
         from netbox_proxbox.models import NetBoxEndpoint  # noqa: PLC0415
+        from netbox_proxbox.services.endpoint_autoconfiguration import (  # noqa: PLC0415
+            autoconfigure_endpoints,
+        )
         from netbox_proxbox.services.backend_auth import (  # noqa: PLC0415
             ensure_backend_key_registered,
         )
@@ -62,6 +65,18 @@ def _deferred_startup_push() -> None:
         from netbox_proxbox.views.backend_sync import (  # noqa: PLC0415
             sync_netbox_endpoint_to_backend as _push,
         )
+
+        backend_result, netbox_result = autoconfigure_endpoints()
+        if backend_result.state == "pending":
+            logger.warning(
+                "Startup discovery: backend configuration is pending — %s",
+                backend_result.detail,
+            )
+        if netbox_result.state == "pending":
+            logger.warning(
+                "Startup discovery: NetBox configuration is pending — %s",
+                netbox_result.detail,
+            )
 
         netbox_endpoints = list(NetBoxEndpoint.objects.filter(enabled=True))
         if not netbox_endpoints:
