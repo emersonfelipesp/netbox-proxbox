@@ -131,6 +131,31 @@ always receives concrete values rather than JSON `null`.
 
 ---
 
+## Ceph control-plane timing
+
+These bounded settings govern proxbox-api's durable Ceph write workflow. They
+resolve for each request in the order **environment override → this plugin
+setting → built-in default**. proxbox-api captures one immutable timing
+snapshot before constructing the provider adapter, and each operation run
+persists its lease duration so a later settings change cannot alter heartbeat
+or recovery semantics for work already in flight.
+
+| Field | Default | Range | Env override | Description |
+|---|---:|---:|---|---|
+| `ceph_task_timeout` | `300.00` | `1.00–3600.00` | `PROXBOX_CEPH_TASK_TIMEOUT` | Maximum total wait for a submitted Proxmox Ceph task to reach a terminal state. |
+| `ceph_task_poll_interval` | `1.00` | `0.10–60.00` | `PROXBOX_CEPH_TASK_POLL_INTERVAL` | Delay between provider status checks while a Ceph task is active. The configured value must not exceed the task timeout. |
+| `ceph_run_lease_seconds` | `360.00` | `1.00–3600.00` | `PROXBOX_CEPH_RUN_LEASE_SECONDS` | Renewable durable lease captured on the operation run. proxbox-api renews it independently from provider gates, calls, and polling. |
+
+Malformed or non-finite environment values fall through to the validated plugin
+value and then the built-in default. Finite out-of-range environment values are
+clamped to the documented field range. proxbox-api also normalizes an
+environment-derived polling interval to at most the resolved task timeout, so
+environment overrides cannot bypass the cross-field safety rule. NetBox renders
+these Django decimal fields as JSON numbers because
+`COERCE_DECIMAL_TO_STRING=False`.
+
+---
+
 ## Logging
 
 | Field | Default | Env override | Description |

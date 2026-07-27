@@ -5,6 +5,7 @@ from rest_framework import serializers
 
 from netbox_proxbox.constants import OVERWRITE_FIELDS, SYNC_MODE_FIELDS
 from netbox_proxbox.models import ProxboxPluginSettings
+from netbox_proxbox.models.plugin_settings import CEPH_POLL_INTERVAL_TIMEOUT_ERROR
 
 
 class ProxboxPluginSettingsSerializer(NetBoxModelSerializer):
@@ -12,6 +13,36 @@ class ProxboxPluginSettingsSerializer(NetBoxModelSerializer):
 
     Provides full CRUD via API for settings that proxbox-api reads.
     """
+
+    def validate(self, attrs: dict[str, object]) -> dict[str, object]:
+        """Validate timing relationships for full and partial API updates."""
+
+        validated = super().validate(attrs)
+        timeout = validated.get(
+            "ceph_task_timeout",
+            getattr(
+                self.instance,
+                "ceph_task_timeout",
+                ProxboxPluginSettings._meta.get_field(
+                    "ceph_task_timeout"
+                ).get_default(),
+            ),
+        )
+        poll_interval = validated.get(
+            "ceph_task_poll_interval",
+            getattr(
+                self.instance,
+                "ceph_task_poll_interval",
+                ProxboxPluginSettings._meta.get_field(
+                    "ceph_task_poll_interval"
+                ).get_default(),
+            ),
+        )
+        if poll_interval > timeout:
+            raise serializers.ValidationError(
+                {"ceph_task_poll_interval": CEPH_POLL_INTERVAL_TIMEOUT_ERROR}
+            )
+        return validated
 
     class Meta:
         model = ProxboxPluginSettings
@@ -71,6 +102,9 @@ class ProxboxPluginSettingsSerializer(NetBoxModelSerializer):
             "proxmox_timeout",
             "proxmox_max_retries",
             "proxmox_retry_backoff",
+            "ceph_task_timeout",
+            "ceph_task_poll_interval",
+            "ceph_run_lease_seconds",
             "default_role_qemu",
             "default_role_lxc",
             "branching_enabled",

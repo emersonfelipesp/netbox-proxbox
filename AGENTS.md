@@ -56,6 +56,14 @@ template — and existing fields plus migration
 show the pattern. See [`CLAUDE.md → Plugin settings and configuration`](./CLAUDE.md)
 for the full keep-list.
 
+The Ceph control-plane timing contract is persisted by migration `0076` as
+`ceph_task_timeout`, `ceph_task_poll_interval`, and
+`ceph_run_lease_seconds`. Preserve the model/form/API bounds and proxbox-api's
+environment override → plugin value → default precedence. The polling
+interval must not exceed the timeout at plugin boundaries, while proxbox-api
+also normalizes environment-derived values. A run's independently renewed
+lease is an immutable persisted snapshot, not a live mutable setting.
+
 ## Sync Mode Controls
 
 Per-resource sync modes control how each Proxmox resource type is reflected into NetBox.

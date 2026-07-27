@@ -132,6 +132,13 @@ contract and issue #454 for the bug history.
   gate. It uses `add_field_idempotent()` and deliberately has no data migration,
   so installations that already enabled hardware discovery do not begin native
   physical-NIC MAC writes during upgrade.
+- **0077_ceph_runtime_timing_settings**: additive, idempotent DecimalFields on
+  `ProxboxPluginSettings` for Ceph task timeout, polling interval, and durable
+  operation lease. Existing rows receive safe defaults (`300.00`, `1.00`, and
+  `360.00`); model and migration validators preserve the backend's bounded
+  timing contract without an estate-specific data migration. The real-Django
+  migration test applies 0076 → 0077 against an existing settings row and
+  verifies all three defaults before restoring the latest state.
 
 ## Notes
 

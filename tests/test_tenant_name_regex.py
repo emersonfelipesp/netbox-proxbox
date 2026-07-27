@@ -852,6 +852,9 @@ def parser_module(monkeypatch):
         ("compare", "Compare Python and Rust"),
         ("rust", "Rust + PyO3"),
     ]
+    plugin_settings_mod.CEPH_POLL_INTERVAL_TIMEOUT_ERROR = (
+        "Ceph task polling interval must not exceed the Ceph task timeout."
+    )
     plugin_settings_mod.NETBOX_TO_PROXMOX_TYPED_PHRASE = "allow-edit-and-add-actions"
     monkeypatch.setitem(
         sys.modules,
