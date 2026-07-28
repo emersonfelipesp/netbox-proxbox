@@ -82,6 +82,12 @@ In **Plugins → Proxbox → Settings**, tick
 **off by default**; until you flip it, no SSH sockets are opened
 during a sync.
 
+Physical-NIC MAC reflection has a second, independent checkbox on the same
+card: **Sync physical NIC MAC addresses**. It is also off by default. Enable it
+only when you want discovery to create native `dcim.MACAddress` rows and assign
+them as each physical interface's `primary_mac_address`. Both checkboxes must
+be on; enabling the MAC checkbox alone never opens SSH or writes MAC data.
+
 ### 3. Node-side setup
 
 For each Proxmox node you want to discover, create a dedicated
@@ -223,6 +229,10 @@ sync opens **zero** SSH sockets — the discovery orchestrator returns
 early when the flag is False. Stored credentials remain encrypted at
 rest; nothing is deleted.
 
+To keep chassis and link facts enabled while stopping only physical-NIC MAC
+writes, untick **Sync physical NIC MAC addresses**. Existing MAC rows are left
+untouched; subsequent discovery runs simply stop reconciling them.
+
 ## Troubleshooting
 
 ### `host_key_mismatch` warning frame
@@ -281,3 +291,7 @@ credential-view permission. This endpoint does not use
 - `hardware_discovery_enabled=False` (default) results in zero SSH
   sockets opened — pinned by `tests/test_hardware_discovery_flag_off.py`
   in proxbox-api.
+- `hardware_discovery_sync_nic_macs=False` (default) prevents native physical
+  NIC MAC writes even when the discovery pass itself is enabled. The backend
+  requires both opt-ins and treats a missing field from an older plugin as
+  `False`.

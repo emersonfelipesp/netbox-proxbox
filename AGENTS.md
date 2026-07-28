@@ -69,6 +69,13 @@ objects plus Proxbox plugin SDN metadata. `sync_mode_sdn_bgp` is a child mode
 for optional `netbox_bgp` projection inside the SDN stage; it is forced disabled
 whenever `sync_mode_sdn` is disabled.
 
+Physical-NIC MAC reflection through SSH hardware discovery has an additional
+plugin-only opt-in: `hardware_discovery_sync_nic_macs` defaults to `False` and
+is effective only while `hardware_discovery_enabled=True`. Keep both fields on
+the Hardware Discovery settings card and in the settings API. Disabling only
+the MAC flag stops future native `dcim.MACAddress`/`primary_mac_address`
+reconciliation without disabling chassis or NIC-link fact discovery.
+
 VM interface sync now has a separate strategy setting:
 `ProxboxPluginSettings.vm_interface_sync_strategy` defaults to
 `guest_os_model`. In that mode Proxmox NICs remain core
