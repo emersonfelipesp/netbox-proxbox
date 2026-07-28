@@ -23,11 +23,12 @@ This directory contains the plugin's pytest test suite.
 - `test_version.py`: AST-based exact identity pin across `CURRENT_RELEASE_VERSION`, `pyproject.toml`, and `ProxboxConfig.version`, plus pins on `min_version` / `max_version` and docs-contract checks for current release metadata, backend pairing, and compatibility-table rows. Fails loudly when one drifts so docs and release notes stay aligned.
 - `test_signals.py`: AST topology contract for the three `@receiver(post_save)` handlers in `netbox_proxbox/signals.py`; real-NetBox behavioral coverage lives in `test_backend_key_adoption_django.py` and proves the model defers configuration-bound discovery until transaction commit, while disabled rows and already trusted rows remain network-free. It also covers commit-safe generated first-key bootstrap, outer rollback, encrypted-key trust repair, exact UI-target allowlisting, unlisted-target rejection, and pending initialized-backend behavior.
 - `test_pytest_django_scope.py`: workflow contracts for the mocked/real-Django
-  split. It requires `-p no:django` in ordinary CI and both public-release
-  mocked-suite invocations, keeps pytest-django enabled for the NetBox matrix,
-  and forbids the overlapping Gitea `create` trigger so one tag produces one
-  immutable package upload. The real-Django workflow separately enforces 85%
-  branch coverage for `services.endpoint_autoconfiguration`.
+  split. It requires `-p no:django` in the local pre-commit all-files hook,
+  ordinary CI, and both public-release mocked-suite invocations, keeps
+  pytest-django enabled for the NetBox matrix, and forbids the overlapping
+  Gitea `create` trigger so one tag produces one immutable package upload. The
+  real-Django workflow separately enforces 85% branch coverage for
+  `services.endpoint_autoconfiguration`.
 - `test_services_http_client.py`: behavior tests for `RequestsHttpClient` exception translation (`HttpConnectionError`, `HttpTimeoutError`, `HttpSslError`) and the singleton accessor; uses `unittest.mock` against `requests.get/post/put/delete`.
 - `test_backend_key_adoption.py`: pure behavior and source-contract coverage for
   fail-closed backend key bootstrap/adoption, transition planning, exact auth
