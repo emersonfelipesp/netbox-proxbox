@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from django.core.validators import MinValueValidator
+from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
@@ -32,6 +33,9 @@ RECONCILIATION_ENGINE_CHOICES = (
 )
 
 NETBOX_TO_PROXMOX_TYPED_PHRASE = "allow-edit-and-add-actions"
+CEPH_POLL_INTERVAL_TIMEOUT_ERROR = _(
+    "Ceph task polling interval must not exceed the Ceph task timeout."
+)
 
 
 def parse_cidr_list(text: str) -> list[str]:
@@ -489,6 +493,48 @@ class ProxboxPluginSettings(NetBoxModel):
             "Individual endpoints can override this value."
         ),
     )
+    ceph_task_timeout = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        default=Decimal("300.00"),
+        validators=[
+            MinValueValidator(Decimal("1.00")),
+            MaxValueValidator(Decimal("3600.00")),
+        ],
+        verbose_name=_("Ceph task timeout (seconds)"),
+        help_text=_(
+            "Maximum time proxbox-api waits for a submitted Proxmox Ceph task "
+            "to reach a terminal state."
+        ),
+    )
+    ceph_task_poll_interval = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        default=Decimal("1.00"),
+        validators=[
+            MinValueValidator(Decimal("0.10")),
+            MaxValueValidator(Decimal("60.00")),
+        ],
+        verbose_name=_("Ceph task polling interval (seconds)"),
+        help_text=_(
+            "Delay between proxbox-api status checks for an active Proxmox Ceph task. "
+            "This interval must not exceed the task timeout."
+        ),
+    )
+    ceph_run_lease_seconds = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        default=Decimal("360.00"),
+        validators=[
+            MinValueValidator(Decimal("1.00")),
+            MaxValueValidator(Decimal("3600.00")),
+        ],
+        verbose_name=_("Ceph operation lease (seconds)"),
+        help_text=_(
+            "Durable lease duration captured when a Ceph operation run starts. "
+            "proxbox-api renews it independently from provider task polling."
+        ),
+    )
     overwrite_device_role = models.BooleanField(
         default=True,
         verbose_name=_("Overwrite device role"),
@@ -905,6 +951,19 @@ class ProxboxPluginSettings(NetBoxModel):
 
     def __str__(self) -> str:
         return "Proxbox plugin settings"
+
+    def clean(self) -> None:
+        """Reject timing combinations that cannot perform another status poll."""
+
+        super().clean()
+        timeout = self.ceph_task_timeout
+        poll_interval = self.ceph_task_poll_interval
+        if timeout is None or poll_interval is None:
+            return
+        if poll_interval > timeout:
+            raise ValidationError(
+                {"ceph_task_poll_interval": CEPH_POLL_INTERVAL_TIMEOUT_ERROR}
+            )
 
     def save(self, *args: object, **kwargs: object) -> None:
         """Handle save."""

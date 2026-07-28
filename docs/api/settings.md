@@ -79,6 +79,9 @@ curl -X PATCH \
   "vm_sync_max_concurrency": 4,
   "reconciliation_engine": "python",
   "reconciliation_compare_strict": false,
+  "ceph_task_timeout": 300.0,
+  "ceph_task_poll_interval": 1.0,
+  "ceph_run_lease_seconds": 360.0,
   "custom_fields_request_delay": "0.00",
   "backend_log_file_path": "/var/log/proxbox.log",
   "ssrf_protection_enabled": true,
@@ -136,6 +139,23 @@ These fields are set by the system and cannot be modified via PATCH:
 | `netbox_retry_delay` | decimal | Delay in seconds between retry attempts |
 | `netbox_get_cache_ttl` | decimal | TTL in seconds for cached NetBox GET responses |
 | `netbox_openapi_persist` | boolean | When `true` (default), proxbox-api caches the resolved NetBox OpenAPI schema on disk. When `false`, schema resolution runs fully in-memory and never reads/writes the filesystem (read-only filesystems, no-disk-write deployments). Overridable by the `PROXBOX_NETBOX_OPENAPI_PERSIST` backend environment variable. |
+
+### Ceph Control Plane
+
+| Field | Type | Description |
+|---|---|---|
+| `ceph_task_timeout` | number | Maximum total wait for a submitted Proxmox Ceph task. Default `300.00`, accepted range `1.00–3600.00`; overridden by `PROXBOX_CEPH_TASK_TIMEOUT`. |
+| `ceph_task_poll_interval` | number | Delay between provider task-status checks. Default `1.00`, accepted range `0.10–60.00`, and must not exceed `ceph_task_timeout`; overridden by `PROXBOX_CEPH_TASK_POLL_INTERVAL`. |
+| `ceph_run_lease_seconds` | number | Renewable durable run lease. Default `360.00`, accepted range `1.00–3600.00`; overridden by `PROXBOX_CEPH_RUN_LEASE_SECONDS` and renewed independently from provider polling. |
+
+proxbox-api resolves each value as **environment override → plugin setting →
+built-in default**, captures one immutable request timing snapshot, and persists
+the run lease duration. A settings change therefore applies only to later runs
+and cannot change the lease or recovery rules for an operation already in
+flight. Malformed or non-finite environment values fall through, finite
+out-of-range values are clamped, and the resolved polling interval is normalized
+to at most the task timeout. Invalid plugin values and polling intervals greater
+than the task timeout are rejected by the model, form, and API serializer.
 
 ### Network Behavior
 

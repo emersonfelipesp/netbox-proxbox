@@ -55,6 +55,9 @@ _BASE_CLEANED_DATA = {
     "proxmox_timeout": 5,
     "proxmox_max_retries": 0,
     "proxmox_retry_backoff": "0.50",
+    "ceph_task_timeout": "300.00",
+    "ceph_task_poll_interval": "1.00",
+    "ceph_run_lease_seconds": "360.00",
 }
 
 
@@ -104,6 +107,9 @@ def _fake_settings_obj(encryption_key: str = "") -> SimpleNamespace:
         proxmox_timeout=5,
         proxmox_max_retries=0,
         proxmox_retry_backoff="0.50",
+        ceph_task_timeout="300.00",
+        ceph_task_poll_interval="1.00",
+        ceph_run_lease_seconds="360.00",
         default_role_qemu_id=None,
         default_role_lxc_id=None,
         overwrite_device_role=True,

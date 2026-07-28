@@ -37,4 +37,4 @@ repos:
         entry: pytest
         language: system
         pass_filenames: false
-        args: ["tests/"]
+        args: ["-p", "no:django", "tests/"]

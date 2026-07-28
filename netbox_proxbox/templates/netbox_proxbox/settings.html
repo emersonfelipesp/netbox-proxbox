@@ -186,6 +186,24 @@
                     {% render_field form.proxmox_retry_backoff %}
                 </div>
             </div>
+            {# Ceph Control Plane Card #}
+            <div class="card mb-3">
+                <h5 class="card-header">
+                    <i class="mdi mdi-database-clock"></i>
+                    {% trans "Ceph Control Plane" %}
+                </h5>
+                <div class="card-body">
+                    <p class="text-muted">
+                        {% blocktrans trimmed %}
+                        Configure the bounded task polling and durable operation lease timings
+                        used by the proxbox-api Ceph write control plane.
+                        {% endblocktrans %}
+                    </p>
+                    {% render_field form.ceph_task_timeout %}
+                    {% render_field form.ceph_task_poll_interval %}
+                    {% render_field form.ceph_run_lease_seconds %}
+                </div>
+            </div>
             {# SSRF Protection Card #}
             <div class="card mb-3">
                 <h5 class="card-header">

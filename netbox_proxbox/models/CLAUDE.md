@@ -144,6 +144,13 @@ This directory defines the plugin's persisted data model.
 - Proxmox connection defaults are `proxmox_timeout=5`,
   `proxmox_max_retries=0`, and `proxmox_retry_backoff=0.50`. Keep operator docs,
   model defaults, and backend registration payloads aligned with those values.
+- Ceph control-plane defaults are `ceph_task_timeout=300.00`,
+  `ceph_task_poll_interval=1.00`, and `ceph_run_lease_seconds=360.00`.
+  All three are bounded DecimalFields exposed to proxbox-api through the
+  singleton settings API; model/form/serializer validation also requires the
+  polling interval not to exceed the task timeout. The backend snapshots and
+  normalizes them once, independently renews and persists the run lease, so do
+  not replace them with mutable process-local constants.
 - `ProxboxPluginSettings.vm_interface_sync_strategy` defaults to `guest_os_model`.
   This strategy keeps Proxmox config NICs as core `virtualization.VMInterface`
   rows named `net0`/`net1` and stores guest-agent names in `GuestVMInterface`.

@@ -2,6 +2,7 @@
 
 import json
 import re
+from decimal import Decimal
 from pathlib import PurePosixPath
 
 from django import forms
@@ -13,6 +14,7 @@ from netbox_proxbox.choices import SyncModeChoices, VMInterfaceSyncStrategyChoic
 from netbox_proxbox.constants import OVERWRITE_FIELDS, SYNC_MODE_FIELDS
 from netbox_proxbox.models.plugin_settings import (
     BRANCH_ON_CONFLICT_CHOICES,
+    CEPH_POLL_INTERVAL_TIMEOUT_ERROR,
     DEFAULT_BACKEND_LOG_FILE_PATH,
     NETBOX_TO_PROXMOX_TYPED_PHRASE,
     RECONCILIATION_ENGINE_CHOICES,
@@ -490,6 +492,45 @@ class ProxboxPluginSettingsForm(forms.Form):
         label="Proxmox retry back-off (seconds)",
         help_text="Default exponential back-off base delay in seconds between Proxmox retries. Individual endpoints can override this.",
     )
+    ceph_task_timeout = forms.DecimalField(
+        required=True,
+        min_value=Decimal("1.00"),
+        max_value=Decimal("3600.00"),
+        initial="300.00",
+        decimal_places=2,
+        max_digits=6,
+        label="Ceph task timeout (seconds)",
+        help_text=(
+            "Maximum time proxbox-api waits for a submitted Proxmox Ceph task "
+            "to reach a terminal state."
+        ),
+    )
+    ceph_task_poll_interval = forms.DecimalField(
+        required=True,
+        min_value=Decimal("0.10"),
+        max_value=Decimal("60.00"),
+        initial="1.00",
+        decimal_places=2,
+        max_digits=6,
+        label="Ceph task polling interval (seconds)",
+        help_text=(
+            "Delay between proxbox-api status checks for an active Proxmox Ceph task. "
+            "This interval must not exceed the task timeout."
+        ),
+    )
+    ceph_run_lease_seconds = forms.DecimalField(
+        required=True,
+        min_value=Decimal("1.00"),
+        max_value=Decimal("3600.00"),
+        initial="360.00",
+        decimal_places=2,
+        max_digits=6,
+        label="Ceph operation lease (seconds)",
+        help_text=(
+            "Durable lease duration captured when a Ceph operation run starts. "
+            "proxbox-api renews it independently from provider task polling."
+        ),
+    )
     default_role_qemu = DynamicModelChoiceField(
         queryset=DeviceRole.objects.all(),
         required=False,
@@ -776,8 +817,19 @@ class ProxboxPluginSettingsForm(forms.Form):
         return path
 
     def clean(self) -> dict:
-        """Cross-field validation for branching and intent-direction fields."""
+        """Cross-field validation for timing and intent-direction fields."""
         super().clean()
+        timeout = self.cleaned_data.get("ceph_task_timeout")
+        poll_interval = self.cleaned_data.get("ceph_task_poll_interval")
+        if (
+            timeout is not None
+            and poll_interval is not None
+            and poll_interval > timeout
+        ):
+            self.add_error(
+                "ceph_task_poll_interval",
+                forms.ValidationError(CEPH_POLL_INTERVAL_TIMEOUT_ERROR),
+            )
         enabled = self.cleaned_data.get("netbox_to_proxmox_enabled")
         phrase = (
             self.cleaned_data.get("netbox_to_proxmox_typed_confirmation") or ""

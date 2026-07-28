@@ -106,6 +106,9 @@ class SettingsView(
             "proxmox_timeout": settings_obj.proxmox_timeout,
             "proxmox_max_retries": settings_obj.proxmox_max_retries,
             "proxmox_retry_backoff": settings_obj.proxmox_retry_backoff,
+            "ceph_task_timeout": settings_obj.ceph_task_timeout,
+            "ceph_task_poll_interval": settings_obj.ceph_task_poll_interval,
+            "ceph_run_lease_seconds": settings_obj.ceph_run_lease_seconds,
             "default_role_qemu": settings_obj.default_role_qemu_id,
             "default_role_lxc": settings_obj.default_role_lxc_id,
             "enable_tenant_name_regex": settings_obj.enable_tenant_name_regex,
@@ -296,6 +299,13 @@ class SettingsView(
             settings_obj.proxmox_retry_backoff = form.cleaned_data[
                 "proxmox_retry_backoff"
             ]
+            settings_obj.ceph_task_timeout = form.cleaned_data["ceph_task_timeout"]
+            settings_obj.ceph_task_poll_interval = form.cleaned_data[
+                "ceph_task_poll_interval"
+            ]
+            settings_obj.ceph_run_lease_seconds = form.cleaned_data[
+                "ceph_run_lease_seconds"
+            ]
             settings_obj.default_role_qemu = form.cleaned_data.get("default_role_qemu")
             settings_obj.default_role_lxc = form.cleaned_data.get("default_role_lxc")
             settings_obj.enable_tenant_name_regex = form.cleaned_data.get(
@@ -425,6 +435,9 @@ class SettingsView(
                     "proxmox_timeout",
                     "proxmox_max_retries",
                     "proxmox_retry_backoff",
+                    "ceph_task_timeout",
+                    "ceph_task_poll_interval",
+                    "ceph_run_lease_seconds",
                     "default_role_qemu",
                     "default_role_lxc",
                     "enable_tenant_name_regex",

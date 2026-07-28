@@ -23,11 +23,12 @@ This directory contains the plugin's pytest test suite.
 - `test_version.py`: AST-based exact identity pin across `CURRENT_RELEASE_VERSION`, `pyproject.toml`, and `ProxboxConfig.version`, plus pins on `min_version` / `max_version` and docs-contract checks for current release metadata, backend pairing, and compatibility-table rows. Fails loudly when one drifts so docs and release notes stay aligned.
 - `test_signals.py`: AST topology contract for the three `@receiver(post_save)` handlers in `netbox_proxbox/signals.py`; real-NetBox behavioral coverage lives in `test_backend_key_adoption_django.py` and proves the model defers configuration-bound discovery until transaction commit, while disabled rows and already trusted rows remain network-free. It also covers commit-safe generated first-key bootstrap, outer rollback, encrypted-key trust repair, exact UI-target allowlisting, unlisted-target rejection, and pending initialized-backend behavior.
 - `test_pytest_django_scope.py`: workflow contracts for the mocked/real-Django
-  split. It requires `-p no:django` in ordinary CI and both public-release
-  mocked-suite invocations, keeps pytest-django enabled for the NetBox matrix,
-  and forbids the overlapping Gitea `create` trigger so one tag produces one
-  immutable package upload. The real-Django workflow separately enforces 85%
-  branch coverage for `services.endpoint_autoconfiguration`.
+  split. It requires `-p no:django` in the local pre-commit all-files hook,
+  ordinary CI, and both public-release mocked-suite invocations, keeps
+  pytest-django enabled for the NetBox matrix, and forbids the overlapping
+  Gitea `create` trigger so one tag produces one immutable package upload. The
+  real-Django workflow separately enforces 85% branch coverage for
+  `services.endpoint_autoconfiguration`.
 - `test_services_http_client.py`: behavior tests for `RequestsHttpClient` exception translation (`HttpConnectionError`, `HttpTimeoutError`, `HttpSslError`) and the singleton accessor; uses `unittest.mock` against `requests.get/post/put/delete`.
 - `test_backend_key_adoption.py`: pure behavior and source-contract coverage for
   fail-closed backend key bootstrap/adoption, transition planning, exact auth
@@ -67,6 +68,9 @@ This directory contains the plugin's pytest test suite.
   `hardware_discovery_sync_nic_macs` opt-in — initial population, save paths,
   missing-field fallback, and `update_fields` membership.
 - `test_cloud_customer_network_settings.py`: source contracts for the five `ProxboxPluginSettings` cloud-customer network fields, migration 0059, form/API/template/view/docs wiring, and estate-agnostic migration defaults.
+- `test_ceph_runtime_settings.py`: source contracts for migration 0077, bounded model/form fields, serializer/view/template wiring, documentation, environment override names, and the immutable cross-service timing contract.
+- `test_ceph_runtime_settings_django.py`: real Django/DRF validation checks proving the model, form, and settings serializer accept the documented bounds, reject polling greater than timeout (including partial API updates), and apply migration 0077 to an existing row with the documented defaults.
+- `test_settings_view_ceph_runtime.py`: stubbed SettingsView GET/POST behavior proving all three Ceph timing values populate the form, persist on the singleton, and are included in `update_fields`.
 - `test_node_ssh_credential_model.py`: `normalize_fingerprint` accept/reject behavior, Fernet-backed `set_password` / `get_password` and `set_private_key` / `get_private_key` round-trips, `EncryptionKeyMissing` and `DecryptionFailed` exits, and AST contract on `models/ssh_credential.py` (NetBoxModel base, required fields, `OneToOneField(ProxmoxNode)`, auth-method choices, `clean()` calling `normalize_fingerprint`).
 - `test_node_ssh_credential_api.py`: `_NetBoxTokenCanViewNodeSSHCredential.has_permission()` NetBox-token permission checks, `_credential_for_node_identifier()` ProxmoxNode/NetBox-device lookup compatibility, `_metadata_payload()` redaction, AST contract on the by-node viewset (`_ProxboxDashboardPermission` for metadata, NetBox-token permission for secrets, HTTPS-required guard in non-DEBUG, 503 on missing encryption key), and `api/urls.py` route registration. Also **behavioral** coverage of `NodeHostKeyFingerprintAPIView.get` (the Terminal-tab node host-key scan) via the stub loader: `ssh_access_enabled` 403 gate, no-IP 422, no-backend 503, success forwards `host`/`port` to proxbox-api and returns the fingerprint, invalid `?port=` defaults to 22, and old-backend 404→503 downgrade.
 - `test_ssh_terminal_credential.py`: **behavioral** unit tests for the extracted Terminal-tab credential validators (`netbox_proxbox/views/endpoints/ssh_terminal_credential.py`), loaded by file path against a stubbed `ssh_credential` module (no NetBox bootstrap). Covers `validate_terminal_credential` (valid password/key, auth-method inference + mismatch errors, missing username/fingerprint, non-dict, port range + non-numeric + falsy-defaults-to-22) and `one_shot_payload` (password vs private_key shape).

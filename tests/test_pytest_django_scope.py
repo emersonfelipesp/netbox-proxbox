@@ -32,6 +32,7 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 PYPROJECT = REPO_ROOT / "pyproject.toml"
 CI_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "ci.yml"
 DJANGO_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "django-tests.yml"
+PRE_COMMIT_CONFIG = REPO_ROOT / ".pre-commit-config.yaml"
 RELEASE_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "publish-testpypi.yml"
 GITEA_PUBLISH_WORKFLOW = REPO_ROOT / ".gitea" / "workflows" / "publish-gitea.yml"
 TRACEABILITY_DOC = REPO_ROOT / "docs" / "developer" / "endpoint-autoconfiguration.md"
@@ -52,6 +53,17 @@ def test_mocked_suite_disables_pytest_django():
         "ci.yml must run the mocked suite with `-p no:django`; without it "
         "pytest-django's collection hook imports django.test against the "
         "conftest stub and aborts with an INTERNALERROR before any test runs"
+    )
+
+
+def test_pre_commit_mocked_suite_disables_pytest_django():
+    """The local all-files gate must follow the mocked-suite invocation contract."""
+    configuration = PRE_COMMIT_CONFIG.read_text()
+    pytest_hook = configuration.split("- id: pytest", 1)[1]
+
+    assert 'args: ["-p", "no:django", "tests/"]' in pytest_hook, (
+        "the pre-commit pytest hook must disable pytest-django per invocation; "
+        "otherwise collection imports django.test against the conftest stub"
     )
 
 
