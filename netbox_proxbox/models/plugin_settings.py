@@ -888,6 +888,16 @@ class ProxboxPluginSettings(NetBoxModel):
             "results in zero SSH sockets opened during sync."
         ),
     )
+    hardware_discovery_sync_nic_macs = models.BooleanField(
+        default=False,
+        verbose_name=_("Sync physical NIC MAC addresses"),
+        help_text=_(
+            "Opt in to creating native dcim.MACAddress rows and setting "
+            "primary_mac_address for physical node interfaces from SSH-discovered "
+            "hardware facts. Requires SSH-based hardware discovery to be enabled. "
+            "Off by default so upgrades do not introduce new MAC writes."
+        ),
+    )
 
     class Meta:
         verbose_name = _("Proxbox plugin settings")

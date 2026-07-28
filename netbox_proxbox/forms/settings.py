@@ -636,6 +636,15 @@ class ProxboxPluginSettingsForm(forms.Form):
             "the matching dcim.Device and dcim.Interface custom fields."
         ),
     )
+    hardware_discovery_sync_nic_macs = forms.BooleanField(
+        required=False,
+        label="Sync physical NIC MAC addresses",
+        help_text=(
+            "Separate opt-in for native dcim.MACAddress and primary_mac_address "
+            "writes on physical node interfaces. Requires hardware discovery above. "
+            "Off by default, including after upgrades."
+        ),
+    )
     netbox_to_proxmox_typed_confirmation = forms.CharField(
         required=False,
         max_length=64,

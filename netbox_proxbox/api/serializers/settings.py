@@ -83,6 +83,7 @@ class ProxboxPluginSettingsSerializer(NetBoxModelSerializer):
             "intent_apply_authorization_self_approve_allowed",
             "intent_deletion_request_ttl_days",
             "hardware_discovery_enabled",
+            "hardware_discovery_sync_nic_macs",
             *OVERWRITE_FIELDS,
             "tags",
             "custom_fields",

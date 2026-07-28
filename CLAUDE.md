@@ -362,6 +362,13 @@ template — and the existing fields plus migration
 show the pattern (`SeparateDatabaseAndState` + `IF NOT EXISTS` for production-safe
 additive schema changes).
 
+SSH-discovered physical-NIC MAC writes use the dedicated
+`hardware_discovery_sync_nic_macs` plugin setting. It defaults to `False` and
+is effective only when the existing `hardware_discovery_enabled` master flag is
+also `True`. This separate opt-in prevents an upgrade from creating native
+`dcim.MACAddress` rows for operators who previously enabled discovery only for
+chassis and NIC link facts.
+
 ## Sync Mode Controls
 
 Per-resource sync modes let operators control how each Proxmox resource type is

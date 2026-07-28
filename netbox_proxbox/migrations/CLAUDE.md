@@ -5,7 +5,7 @@ This directory contains Django schema migrations for the plugin models.
 ## Idempotent additive operations (post-0036)
 
 Additive schema operations in the post-``0036_add_overwrite_vm_type`` chain,
-including current migration ``0073``, are wrapped through the helpers in
+including current migration ``0076``, are wrapped through the helpers in
 [`_idempotent_ops.py`](./_idempotent_ops.py) — ``add_field_idempotent()``
 for ``AddField`` and ``create_model_idempotent()`` for ``CreateModel``.
 Each helper returns a ``SeparateDatabaseAndState`` whose ``database_operations``
@@ -127,6 +127,11 @@ contract and issue #454 for the bug history.
   a data migration that silently fingerprints legacy rows; a mutable related
   `IPAddress` must be probed and authenticated under the same frozen target
   snapshot before trust is recorded.
+- **0076_pluginsettings_hardware_discovery_sync_nic_macs**: additive,
+  default-off `ProxboxPluginSettings.hardware_discovery_sync_nic_macs` feature
+  gate. It uses `add_field_idempotent()` and deliberately has no data migration,
+  so installations that already enabled hardware discovery do not begin native
+  physical-NIC MAC writes during upgrade.
 
 ## Notes
 

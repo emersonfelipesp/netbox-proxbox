@@ -81,6 +81,10 @@ This directory defines the plugin's persisted data model.
   for opt-in Proxmox endpoint service monitoring. The systemd `id` property is
   stored as `service_id` to avoid colliding with the NetBox row primary key.
 - `ProxboxPluginSettings`: singleton settings for plugin runtime behavior.
+  Physical-NIC MAC reflection is controlled by
+  `hardware_discovery_sync_nic_macs=False` in addition to the
+  `hardware_discovery_enabled` master flag, so upgrades remain write-neutral
+  until an operator explicitly enables the MAC behavior in the UI.
 
 ## Dependencies
 

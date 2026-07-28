@@ -172,6 +172,11 @@ class SettingsView(
                 7,
             ),
             "hardware_discovery_enabled": settings_obj.hardware_discovery_enabled,
+            "hardware_discovery_sync_nic_macs": getattr(
+                settings_obj,
+                "hardware_discovery_sync_nic_macs",
+                False,
+            ),
         }
         for name in SYNC_MODE_FIELDS:
             initial[name] = getattr(settings_obj, name, "always")
@@ -355,6 +360,9 @@ class SettingsView(
             settings_obj.hardware_discovery_enabled = form.cleaned_data.get(
                 "hardware_discovery_enabled", False
             )
+            settings_obj.hardware_discovery_sync_nic_macs = form.cleaned_data.get(
+                "hardware_discovery_sync_nic_macs", False
+            )
             for _sync_mode_field in SYNC_MODE_FIELDS:
                 setattr(
                     settings_obj,
@@ -438,6 +446,7 @@ class SettingsView(
                     "intent_apply_authorization_self_approve_allowed",
                     "intent_deletion_request_ttl_days",
                     "hardware_discovery_enabled",
+                    "hardware_discovery_sync_nic_macs",
                     *SYNC_MODE_FIELDS,
                     *OVERWRITE_FIELDS,
                 ]
