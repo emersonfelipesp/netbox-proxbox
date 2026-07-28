@@ -689,7 +689,7 @@ policy and the short list of `.env`-only operator infrastructure variables.
 
 Ceph write timing uses the same cross-service contract through
 `ceph_task_timeout`, `ceph_task_poll_interval`, and
-`ceph_run_lease_seconds` (migration 0076). The model, form, settings serializer,
+`ceph_run_lease_seconds` (migration 0077). The model, form, settings serializer,
 settings view/template, and operator docs must retain identical defaults and
 bounds, including polling interval <= task timeout. proxbox-api snapshots the
 three values once per adapter request, normalizes environment-derived polling,

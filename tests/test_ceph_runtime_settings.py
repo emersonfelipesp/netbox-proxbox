@@ -22,9 +22,7 @@ def test_ceph_runtime_settings_have_idempotent_schema_and_bounded_models() -> No
     model = _read("netbox_proxbox/models/plugin_settings.py")
     migration = _read(MIGRATION)
 
-    assert (
-        '"0076_pluginsettings_hardware_discovery_sync_nic_macs"' in migration
-    )
+    assert '"0076_pluginsettings_hardware_discovery_sync_nic_macs"' in migration
     assert migration.count("add_field_idempotent(") == 3
     for field_name in FIELDS:
         assert f"{field_name} = models.DecimalField(" in model

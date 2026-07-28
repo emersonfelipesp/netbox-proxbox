@@ -56,7 +56,7 @@ template — and existing fields plus migration
 show the pattern. See [`CLAUDE.md → Plugin settings and configuration`](./CLAUDE.md)
 for the full keep-list.
 
-The Ceph control-plane timing contract is persisted by migration `0076` as
+The Ceph control-plane timing contract is persisted by migration `0077` as
 `ceph_task_timeout`, `ceph_task_poll_interval`, and
 `ceph_run_lease_seconds`. Preserve the model/form/API bounds and proxbox-api's
 environment override → plugin value → default precedence. The polling
