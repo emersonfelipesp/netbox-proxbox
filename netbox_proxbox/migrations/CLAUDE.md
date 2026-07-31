@@ -5,7 +5,7 @@ This directory contains Django schema migrations for the plugin models.
 ## Idempotent additive operations (post-0036)
 
 Additive schema operations in the post-``0036_add_overwrite_vm_type`` chain,
-including current migration ``0076``, are wrapped through the helpers in
+including current migration ``0078``, are wrapped through the helpers in
 [`_idempotent_ops.py`](./_idempotent_ops.py) — ``add_field_idempotent()``
 for ``AddField`` and ``create_model_idempotent()`` for ``CreateModel``.
 Each helper returns a ``SeparateDatabaseAndState`` whose ``database_operations``
@@ -139,6 +139,13 @@ contract and issue #454 for the bug history.
   timing contract without an estate-specific data migration. The real-Django
   migration test applies 0076 → 0077 against an existing settings row and
   verifies all three defaults before restoring the latest state.
+- **0078_sync_state_last_synced_role**: adds the nullable, scalar
+  `ProxboxVirtualMachineSyncState.proxmox_last_synced_role_id` ownership
+  snapshot with `add_field_idempotent()`. Its retry-safe data migration copies
+  only positive signed-bigint IDs from the deprecated same-named VM custom
+  field, uses the migration connection alias plus bounded 500-row bulk batches,
+  creates a sidecar when needed, never overwrites an existing typed value, and
+  leaves legacy data intact for rollback compatibility.
 
 ## Notes
 

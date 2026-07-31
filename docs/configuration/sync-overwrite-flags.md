@@ -77,6 +77,25 @@ The detail page of each endpoint shows the **resolved** value plus an
 5. Reconcile drops any keys outside the allowlist from the PATCH body, so
    pre-existing NetBox values survive when the corresponding flag is `False`.
 
+### VM role ownership is snapshot-aware
+
+`overwrite_vm_role=False` uses stronger evidence than a blanket allowlist drop.
+The typed `ProxboxVirtualMachineSyncState.proxmox_last_synced_role_id` value
+records the DeviceRole last written by synchronization:
+
+- If the current role differs from the snapshot, NetBox has been edited by an
+  operator and sync preserves both the current role and the old snapshot.
+- If the current role still equals the snapshot, it remains sync-managed and
+  may roll forward when the configured default role changes.
+- If an existing VM has no snapshot yet, the first sync records its current
+  role without changing it. This makes upgrades fail safe.
+- `overwrite_vm_role=True` releases a proven operator lock and writes the
+  current configured role together with a new snapshot.
+
+The snapshot is written only after successful VM reconciliation. Full/bulk,
+individual, and sidecar-adoption paths all use the same decision matrix, and
+the policy runs after the optional Python/Rust queue engine boundary.
+
 ## VM sync also enforces device flags
 
 The `overwrite_device_role`, `overwrite_device_type`, and

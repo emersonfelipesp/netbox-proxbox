@@ -94,6 +94,18 @@ class ProxboxVirtualMachineSyncState(ProxboxSyncStateBase):
     # Blank means "not yet recorded" (every row on first upgrade), and callers
     # must fall back to the previous behaviour so nothing regresses mid-rollout.
     proxmox_vm_name = models.CharField(max_length=255, blank=True)
+    # DeviceRole primary key last written by Proxbox. Keeping this as a scalar
+    # snapshot rather than a foreign key preserves the ownership evidence even
+    # if the referenced role is later deleted. A null value means that no
+    # successful role-bearing synchronization has established ownership yet.
+    proxmox_last_synced_role_id = models.PositiveBigIntegerField(
+        null=True,
+        blank=True,
+        help_text=_(
+            "DeviceRole ID last written by Proxbox. Used to preserve operator "
+            "role edits while allowing sync-managed roles to roll forward."
+        ),
+    )
     proxmox_start_at_boot = models.BooleanField(null=True, blank=True)
     proxmox_unprivileged_container = models.BooleanField(null=True, blank=True)
     proxmox_qemu_agent = models.BooleanField(null=True, blank=True)

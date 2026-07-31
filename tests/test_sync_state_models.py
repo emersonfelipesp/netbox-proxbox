@@ -576,6 +576,7 @@ class ProxboxSyncStateAPITest(_SyncStateFixturesMixin, TestCase):
                     "proxmox_endpoint_raw_id": self.endpoint.pk,
                     "proxmox_vm_id": 9001,
                     "proxmox_vm_type": "qemu",
+                    "proxmox_last_synced_role_id": 11,
                     "proxmox_start_at_boot": True,
                     "proxmox_status": "running",
                     "last_run_id": "run-api",
@@ -589,6 +590,7 @@ class ProxboxSyncStateAPITest(_SyncStateFixturesMixin, TestCase):
             virtual_machine=self.vm_for_api
         )
         self.assertEqual(row.proxmox_vm_id, 9001)
+        self.assertEqual(row.proxmox_last_synced_role_id, 11)
         self.assertEqual(row.endpoint, self.endpoint)
         self.assertEqual(row.proxmox_node, self.proxmox_node)
         detail_url = reverse(
@@ -1574,6 +1576,60 @@ class ProxboxSyncStateAPITest(_SyncStateFixturesMixin, TestCase):
 
 class ProxboxSyncStateBackfillTest(_SyncStateFixturesMixin, TestCase):
     """Validate zero-loss custom_field_data backfill behavior."""
+
+    def test_last_synced_role_backfill_is_idempotent_and_preserves_typed_value(
+        self,
+    ) -> None:
+        _set_custom_field_data(
+            self.vm,
+            {"proxmox_last_synced_role_id": str(self.device_role.pk)},
+        )
+        _set_custom_field_data(
+            self.vm_for_api,
+            {"proxmox_last_synced_role_id": self.device_role.pk},
+        )
+        existing = ProxboxVirtualMachineSyncState.objects.create(
+            virtual_machine=self.vm_for_api,
+            proxmox_last_synced_role_id=self.device_role.pk + 100,
+        )
+        _set_custom_field_data(
+            self.vm_nomatch,
+            {"proxmox_last_synced_role_id": "not-a-role-id"},
+        )
+        overflow_vm = create_test_virtualmachine("sync-state-overflow-role-vm")
+        _set_custom_field_data(
+            overflow_vm,
+            {"proxmox_last_synced_role_id": str(2**63)},
+        )
+
+        migration = importlib.import_module(
+            "netbox_proxbox.migrations.0078_sync_state_last_synced_role"
+        )
+        with CaptureQueriesContext(connection) as first_pass_queries:
+            migration.backfill_last_synced_role(django_apps, None)
+        with CaptureQueriesContext(connection) as second_pass_queries:
+            migration.backfill_last_synced_role(django_apps, None)
+
+        self.assertLessEqual(len(first_pass_queries), 8)
+        self.assertLessEqual(len(second_pass_queries), 8)
+
+        row = ProxboxVirtualMachineSyncState.objects.get(virtual_machine=self.vm)
+        self.assertEqual(row.proxmox_last_synced_role_id, self.device_role.pk)
+        existing.refresh_from_db()
+        self.assertEqual(
+            existing.proxmox_last_synced_role_id,
+            self.device_role.pk + 100,
+        )
+        self.assertFalse(
+            ProxboxVirtualMachineSyncState.objects.filter(
+                virtual_machine=self.vm_nomatch,
+            ).exists()
+        )
+        self.assertFalse(
+            ProxboxVirtualMachineSyncState.objects.filter(
+                virtual_machine=overflow_vm,
+            ).exists()
+        )
 
     def test_backfill_resolves_references_and_preserves_fallbacks(self) -> None:
         self.vm.custom_field_data = {

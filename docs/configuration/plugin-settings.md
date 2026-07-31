@@ -46,7 +46,7 @@ shadows the field.
 | **Default QEMU VM role** | `virtual-machine-qemu` (seeded by migration) | _(plugin only)_ | DeviceRole assigned to QEMU VMs synced from Proxmox when no per-Endpoint or per-Node override applies. Operator edits on a specific VM are preserved by the `proxmox_last_synced_role_id` snapshot lock. |
 | **Default LXC container role** | `container-lxc` (seeded by migration) | _(plugin only)_ | DeviceRole assigned to LXC containers synced from Proxmox when no per-Endpoint or per-Node override applies. Operator edits on a specific VM are preserved by the same snapshot lock. |
 
-The lookup order applied during sync is **VM-level (operator pin) → per-Node → per-Endpoint → Plugin Settings default → built-in fallback**. The `proxmox_last_synced_role_id` custom field on `virtualization.VirtualMachine` stores the role that sync last wrote; subsequent runs only update the role when it still matches that snapshot, so manual edits in NetBox are not clobbered.
+The lookup order applied during sync is **VM-level (operator pin) → per-Node → per-Endpoint → Plugin Settings default → built-in fallback**. `ProxboxVirtualMachineSyncState.proxmox_last_synced_role_id` stores the role that sync last wrote. Subsequent runs update the role only while its current value still matches that snapshot, so manual edits in NetBox are not clobbered. Migration `0078_sync_state_last_synced_role` copies valid values from the deprecated same-named VM custom field without deleting the legacy data.
 
 ---
 

@@ -134,6 +134,13 @@ JSON columns are removed. `virtualization.Cluster` uses a sidecar
 `ProxmoxCluster` is endpoint-scoped and links to NetBox clusters through a
 nullable FK rather than a one-to-one relationship.
 
+The VM sidecar also stores `proxmox_last_synced_role_id`, a nullable scalar
+DeviceRole ID representing the role last written by sync. It deliberately is
+not a foreign key, so deleting a DeviceRole does not erase the ownership
+evidence used to preserve operator edits. Migration 0078 copies valid legacy
+custom-field values without deleting them; the backend writes the typed
+snapshot only after successful VM reconciliation.
+
 These sidecars are now the standard source of truth: the proxbox-api
 writer/reader switch has landed (commit `51866764`), so a normal sync writes
 and reads the sidecars, rebuilt from live Proxmox data. The legacy reflection
