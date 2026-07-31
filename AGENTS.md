@@ -1,5 +1,27 @@
 # Agent Entry Points
 
+## Repository Destination Policy (Hard Rule)
+
+This project is owned and changed only through the Emerson repositories:
+
+- Development, issues, branches, commits, and pull requests:
+  `https://git.nmulti.cloud/emersonfelipesp/netbox-proxbox.git`
+- Approved public promotion, mirroring, and releases through
+  `deploy-workflow` only:
+  `https://github.com/emersonfelipesp/netbox-proxbox.git`
+
+The EdgeUno fork and `/root/personal-context/edgeuno/netbox-proxbox/` vendor
+submodule are read-only reference sources. Never mutate EdgeUno issues, PRs,
+comments, branches, commits, tags, releases, packages, mirrors, deployments,
+remotes, upstreams, fallbacks, or PR bases, and never edit the vendor
+submodule. Before every external write, inspect the exact owner/repository and
+remote URL and abort unless it matches the allowlist above.
+
+A stale cross-repository PR can display new source-branch commits without a
+write to its base. Never rewrite or delete an Emerson branch to change an
+EdgeUno PR. Do not attempt to close it from Emerson workflows; closure requires
+the PR author or an actor authorized on the EdgeUno base repository.
+
 ## Pre-commit Checklist
 
 Before committing any change:
