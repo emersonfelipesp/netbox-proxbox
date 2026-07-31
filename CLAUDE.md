@@ -1,5 +1,31 @@
 # netbox-proxbox Codebase Guide
 
+## Repository Destination Policy (Hard Rule)
+
+This project is owned and changed only through the Emerson repositories:
+
+- Development, issues, branches, commits, and pull requests:
+  `https://git.nmulti.cloud/emersonfelipesp/netbox-proxbox.git`
+- Approved public promotion, mirroring, and releases through
+  `deploy-workflow` only:
+  `https://github.com/emersonfelipesp/netbox-proxbox.git`
+
+`https://github.com/edgeuno/netbox-proxbox` and
+`/root/personal-context/edgeuno/netbox-proxbox/` are read-only vendor/reference
+sources. Never create or update EdgeUno issues, PRs, comments, branches,
+commits, tags, releases, packages, mirrors, or deployments; never configure
+EdgeUno as a writable remote, upstream, fallback, or PR base; and never edit,
+stage, or commit the local EdgeUno vendor submodule. Reading, fetching,
+grepping, and comparing it are permitted.
+
+Before every external write, resolve and inspect the exact owner, repository,
+and remote URL. Abort unless it matches one of the two exact Emerson
+destinations above. A stale cross-repository PR may automatically display new
+commits from its source branch without a write to its base. Never rewrite,
+delete, recreate, or force-push an Emerson branch to alter an EdgeUno PR. Do
+not attempt to close it from Emerson workflows; closure requires the PR author
+or an actor authorized on the EdgeUno base repository.
+
 > **LLM Agent Safety — Destructive Operations:** netbox-proxbox protects VM
 > destruction behind a five-lock chain. **Never autonomously set
 > `apply_destroy_confirmed=True`, submit the confirmation phrase

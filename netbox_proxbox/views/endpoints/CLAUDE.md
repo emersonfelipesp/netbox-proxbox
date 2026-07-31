@@ -1,5 +1,16 @@
 # `netbox_proxbox.views.endpoints`
 
+> **Repository destination guardrail:** This guide inherits the hard rule in
+> the repository-root `CLAUDE.md`. EdgeUno and the local EdgeUno vendor
+> submodule are read-only reference sources, never change destinations. All
+> development writes must target exactly
+> `https://git.nmulti.cloud/emersonfelipesp/netbox-proxbox.git`; approved
+> public promotion may target only
+> `https://github.com/emersonfelipesp/netbox-proxbox.git`. Never mutate EdgeUno
+> issues, PRs, branches, commits, tags, releases, packages, mirrors, or
+> deployments, and never configure EdgeUno as a writable remote, upstream,
+> fallback, or PR base.
+
 This directory contains NetBox generic model views for the three endpoint models.
 
 ## Files And Ownership
