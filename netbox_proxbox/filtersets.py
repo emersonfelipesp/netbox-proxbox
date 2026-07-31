@@ -817,6 +817,7 @@ class ProxboxVirtualMachineSyncStateFilterSet(ProxboxSyncStateFilterSet):
             "proxmox_cluster_id",
             "proxmox_vm_id",
             "proxmox_vm_type",
+            "proxmox_last_synced_role_id",
             "proxmox_status",
             "proxmox_endpoint_raw_id",
             "proxmox_last_updated",

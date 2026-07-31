@@ -252,3 +252,28 @@ def test_vm_sync_state_proxmox_name_is_optional() -> None:
     assert "blank=True" in field_line, (
         "proxmox_vm_name must be optional; existing rows have no recorded name"
     )
+
+
+def test_vm_sync_state_records_last_synced_role_id() -> None:
+    """Role ownership must survive with legacy custom fields disabled."""
+    model_source = _read("netbox_proxbox/models/sync_state.py")
+    assert (
+        "proxmox_last_synced_role_id = models.PositiveBigIntegerField" in model_source
+    )
+
+    migration = _read_migration("sync_state_last_synced_role")
+    assert 'field_name="proxmox_last_synced_role_id"' in migration
+    assert "add_field_idempotent" in migration
+    assert "backfill_last_synced_role" in migration
+    assert 'LEGACY_CUSTOM_FIELD = "proxmox_last_synced_role_id"' in migration
+    assert "row.proxmox_last_synced_role_id is not None" in migration
+    assert "MAX_SIGNED_BIGINT" in migration
+    assert "manager.bulk_create" in migration
+    assert "manager.bulk_update" in migration
+    assert "migrations.RunPython.noop" in migration
+
+    serializer_source = _read("netbox_proxbox/api/serializers/sync_state.py")
+    assert '"proxmox_last_synced_role_id"' in serializer_source
+
+    filterset_source = _read("netbox_proxbox/filtersets.py")
+    assert '"proxmox_last_synced_role_id"' in filterset_source

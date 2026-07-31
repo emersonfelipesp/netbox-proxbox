@@ -79,8 +79,14 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
   in `*_raw_value` text fallbacks. This runs through the retry-safe
   `0067`/`0068`/`0069` split: additive staging schema, non-atomic idempotent
   data conversion with a data-preserving reverse, then guarded atomic
-  cleanup/promotion to final field names. The NetBox
-  `virtualization.Cluster` payload lives in
+  cleanup/promotion to final field names. The VM sidecar additionally stores
+  `proxmox_last_synced_role_id` as a nullable
+  scalar snapshot of the DeviceRole last written by sync. It is not a foreign
+  key so role deletion cannot erase ownership evidence. Migration 0078
+  backfills valid values from the deprecated VM custom field without deleting
+  legacy data; proxbox-api uses the typed value to preserve operator-edited
+  roles and writes a new snapshot only after successful reconciliation. The
+  core NetBox `virtualization.Cluster` payload lives in
   `ProxboxClusterSyncState`, not on `ProxmoxCluster`, because `ProxmoxCluster`
   is endpoint-scoped (`endpoint`, `name`) and only optionally links to a
   NetBox cluster. Sync-state API duplicate/occupied-parent preflight returns an
@@ -88,7 +94,7 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
   remain `400`. Device/node and cluster/proxmox-cluster relations must point
   back to the same NetBox parent. Writable storage and bridge relations resolve
   through request-restricted querysets, and hidden nested endpoint/node/cluster,
-  storage, and bridge relations are masked or filtered from API responses. This
+  storage, and bridge relations are masked or filtered from API responses. These
   sidecars are now the standard source of truth: the proxbox-api writer/reader
   switch has landed, so a normal sync writes and reads the sidecars (rebuilt from
   live Proxmox data). The legacy reflection custom fields are deprecated and

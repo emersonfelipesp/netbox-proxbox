@@ -69,7 +69,12 @@ This directory defines the plugin's persisted data model.
   and VM-interface bridge JSON values preserve unresolved numeric IDs in
   `proxbox_storage_raw_id` / `proxbox_bridge_raw_id` and malformed or
   non-numeric payloads in `proxbox_storage_raw_value` /
-  `proxbox_bridge_raw_value`.
+  `proxbox_bridge_raw_value`. The VM sidecar also owns
+  `proxmox_last_synced_role_id`, a nullable scalar DeviceRole primary-key
+  snapshot. It intentionally is not a foreign key: deleting a role must not
+  erase the evidence used to distinguish a sync-managed value from an operator
+  edit. proxbox-api reads this typed value first and persists it only after a
+  successful VM reconcile.
 - `BackupRoutine`: stores backup routine inventory for NetBox-backed ProxBox sync.
 - `Replication`: stores replication job inventory for NetBox-backed ProxBox sync.
 - `VMBackup`: stores backup inventory for NetBox virtual machines.
