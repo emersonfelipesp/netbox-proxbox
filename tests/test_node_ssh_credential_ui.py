@@ -67,8 +67,39 @@ def test_ssh_credential_form_uses_write_only_secret_fields():
     src = FORMS_PATH.read_text()
     assert "forms.PasswordInput(render_value=False)" in src
     assert "private_key = forms.CharField" in src
+    assert "widget=_WriteOnlyTextarea" in src
     assert "Leave blank on edit to keep the stored value" in src
+    assert "submitted keys are never redisplayed after" in src
     assert "_apply_secret_inputs" in src
+
+
+def test_private_key_textarea_suppresses_values_without_changing_input_type():
+    src = _class_source(FORMS_PATH, "_WriteOnlyTextarea")
+    tree = ast.parse(src)
+    cls = tree.body[0]
+    assert isinstance(cls, ast.ClassDef)
+    assert any(
+        isinstance(base, ast.Attribute)
+        and isinstance(base.value, ast.Name)
+        and base.value.id == "forms"
+        and base.attr == "Textarea"
+        for base in cls.bases
+    )
+    formatter = next(
+        node
+        for node in cls.body
+        if isinstance(node, ast.FunctionDef) and node.name == "format_value"
+    )
+    assert not any(
+        isinstance(node, ast.FunctionDef) and node.name == "value_from_datadict"
+        for node in cls.body
+    )
+    assert any(
+        isinstance(node, ast.Return)
+        and isinstance(node.value, ast.Constant)
+        and node.value.value is None
+        for node in ast.walk(formatter)
+    )
 
 
 def test_ssh_credential_table_default_columns_stay_on_credential_fields():

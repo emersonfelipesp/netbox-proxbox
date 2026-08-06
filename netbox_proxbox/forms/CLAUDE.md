@@ -23,6 +23,9 @@ This directory contains Django/NetBox forms for plugin models, plugin settings, 
 - [`replication.py`](./replication.py): create/edit and filter forms for `Replication`.
 - [`schedule_sync.py`](./schedule_sync.py): scheduling form for `ProxboxSyncJob` and quick-schedule defaults.
 - [`settings.py`](./settings.py): plugin settings form (`ProxboxPluginSettings` singleton).
+- [`ssh_credential.py`](./ssh_credential.py): per-node SSH credential create/edit
+  and filter forms, including write-only password/private-key inputs and
+  encryption-before-model-validation handling.
 - [`storage.py`](./storage.py): create/edit and filter forms for `ProxmoxStorage`.
 - [`vm_backup.py`](./vm_backup.py): create/edit and filter forms for `VMBackup`.
 - [`vm_snapshot.py`](./vm_snapshot.py): create/edit and filter forms for `VMSnapshot`.
@@ -68,6 +71,17 @@ Each endpoint type has an `ImportForm` (e.g. `ProxmoxEndpointImportForm`, `NetBo
   reuse of the endpoint username/password. Reuse mode requires an endpoint
   password plus a pinned SSH host-key fingerprint and ignores the dedicated
   SSH secret fields.
+- `NodeSSHCredentialForm._post_clean()` encrypts submitted write-only secrets
+  before model validation, then always delegates to
+  `NetBoxModelForm._post_clean()`. That delegation is required even when no tags
+  are selected: NetBox populates `instance._m2m_values` there and reads it
+  unconditionally while saving M2M fields. Never copy Django's hook body into
+  this form or any future form override.
+- The private-key field uses `_WriteOnlyTextarea`: it inherits Textarea's normal
+  multiline POST extraction and field cleaning, but its render formatter always
+  returns `None`. Neither an initial key nor a submitted key is placed back into
+  HTML after a validation error; the operator must re-enter it. Keep this paired
+  with `PasswordInput(render_value=False)` for the password field.
 
 ## Links
 
