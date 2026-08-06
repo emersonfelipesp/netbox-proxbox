@@ -3,14 +3,20 @@
 from __future__ import annotations
 
 from django import forms
-from django.core.exceptions import ValidationError
-from django.forms.models import construct_instance
 from utilities.forms.fields import DynamicModelChoiceField
 
 from netbox.forms import NetBoxModelFilterSetForm, NetBoxModelForm
 from netbox_proxbox.models import NodeSSHCredential, ProxmoxNode, ProxboxPluginSettings
 from netbox_proxbox.models.ssh_credential import normalize_fingerprint
 from netbox_proxbox.utils import encryption as enc_helpers
+
+
+class _WriteOnlyTextarea(forms.Textarea):
+    """Accept multiline input without ever redisplaying its secret value."""
+
+    def format_value(self, value: object) -> None:
+        """Suppress submitted and initial values during widget rendering."""
+        return None
 
 
 class NodeSSHCredentialForm(NetBoxModelForm):
@@ -29,9 +35,13 @@ class NodeSSHCredentialForm(NetBoxModelForm):
     )
     private_key = forms.CharField(
         required=False,
-        widget=forms.Textarea(attrs={"rows": 8}),
+        widget=_WriteOnlyTextarea(attrs={"rows": 8, "autocomplete": "off"}),
         label="SSH private key",
-        help_text="Recommended authentication secret. Leave blank on edit to keep the stored value.",
+        help_text=(
+            "Recommended authentication secret. Leave blank on edit to keep the "
+            "stored value. For safety, submitted keys are never redisplayed after "
+            "a validation error."
+        ),
     )
 
     class Meta:
@@ -77,30 +87,28 @@ class NodeSSHCredentialForm(NetBoxModelForm):
             raise forms.ValidationError(str(exc)) from exc
 
     def _post_clean(self) -> None:
-        """Encrypt write-only secret fields before model validation runs."""
-        opts = self._meta
-        exclude = self._get_validation_exclusions()
+        """Encrypt write-only secret fields, then delegate to the NetBox chain.
 
-        try:
-            self.instance = construct_instance(
-                self, self.instance, opts.fields, opts.exclude
-            )
-        except ValidationError as exc:
-            self._update_errors(exc)
+        The encryption runs first because ``NodeSSHCredential.clean()`` requires
+        the matching ``*_enc`` field to already be populated for the selected
+        ``auth_method``, and ``super()._post_clean()`` is what triggers
+        ``full_clean()``. Writing the secrets here is safe: ``construct_instance``
+        only assigns fields listed in ``Meta.fields``, and ``password_enc`` /
+        ``private_key_enc`` are deliberately excluded from it, so the delegated
+        call cannot clobber what was just encrypted.
 
+        Never reimplement this hook's body. ``NetBoxModelForm._post_clean()``
+        populates ``instance._m2m_values``, which ``NetBoxModelForm._save_m2m()``
+        reads unconditionally; skipping the ``super()`` call raises
+        ``AttributeError`` on every save of a form that declares ``tags``.
+        """
         if not self.errors:
             try:
                 self._apply_secret_inputs()
             except forms.ValidationError as exc:
                 self.add_error(None, exc)
 
-        try:
-            self.instance.full_clean(exclude=exclude, validate_unique=False)
-        except ValidationError as exc:
-            self._update_errors(exc)
-
-        if self._validate_unique:
-            self.validate_unique()
+        super()._post_clean()
 
 
 class NodeSSHCredentialFilterForm(NetBoxModelFilterSetForm):

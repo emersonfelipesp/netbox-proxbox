@@ -87,6 +87,15 @@ This directory contains the plugin's pytest test suite.
 - `test_ssh_terminal_credential.py`: **behavioral** unit tests for the extracted Terminal-tab credential validators (`netbox_proxbox/views/endpoints/ssh_terminal_credential.py`), loaded by file path against a stubbed `ssh_credential` module (no NetBox bootstrap). Covers `validate_terminal_credential` (valid password/key, auth-method inference + mismatch errors, missing username/fingerprint, non-dict, port range + non-numeric + falsy-defaults-to-22) and `one_shot_payload` (password vs private_key shape).
 - `test_ssh_terminal_ui.py`: source-contract coverage of the Terminal-tab SSH credential surface — model fields, `open_ssh_terminal` permission, terminal + session view registration, per-node `ssh_ready`/`can_store_credentials` context, session-view store/one-shot handling (delegating to the extracted validator module), security gates, the credential modal template (fields, Fetch host key, Use once/Store, data-API trigger/dismiss, no `innerHTML`), and the browser JS modal logic.
 - `test_node_ssh_credential_ui.py`: source contracts for the SSH credential UI CRUD routes, registered generic views, navigation entry, Settings hardware-discovery flag rendering, write-only secret form fields, and credential-specific table defaults.
+- `test_node_ssh_credential_form_django.py`: real NetBox form persistence for
+  password and private-key credentials, with and without tags. Pins ciphertext
+  storage, auth-method/secret validation, the configured-encryption-key gate,
+  the `instance._m2m_values` contract used by NetBox's M2M save chain, and
+  invalid-bound/unbound HTML rendering that never echoes password or private-key
+  values while retaining multiline private-key cleaning.
+- `test_form_super_delegation.py`: package-wide AST guard requiring every
+  `_post_clean()` form override to call `super()._post_clean()`, preserving
+  NetBox's model construction, validation, and M2M preparation behavior.
 - `test_hardware_discovery_custom_fields_migration.py`: migration `0049_register_hardware_discovery_cfs` registers all six custom fields with correct types, content-type bindings (`dcim.device` / `dcim.interface`), `ui_editable="hidden"`, `filter_logic="disabled"`, idempotency, unregister path, and dependency chain.
 - `test_backup_replication_views.py`: view coverage for backup routine and replication list/detail pages.
 - `test_home_context.py`: tests for home page context assembly.

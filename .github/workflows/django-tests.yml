@@ -1,8 +1,8 @@
 name: Django Tests
 
-# Runs the NetBox-backed Django TestCase suites for sync-state models and the
-# fail-closed backend-key persistence boundary. The regular mocked suite cannot
-# prove ORM transactions, forms, imports, serializers, or signal behavior.
+# Runs the NetBox-backed Django TestCase suites for sync-state models, form/M2M
+# persistence, and the fail-closed backend-key boundary. The regular mocked
+# suite cannot prove ORM transactions, forms, imports, serializers, or signals.
 
 on:
   push:
@@ -71,7 +71,7 @@ jobs:
           pip install -r netbox/requirements.txt
           pip install -e "netbox-proxbox[test]"
 
-      - name: Run NetBox-backed sync-state tests
+      - name: Run NetBox-backed Django tests
         working-directory: netbox-proxbox
         env:
           # pytest-django and tests/test_sync_state_models.py both use these.
@@ -89,6 +89,7 @@ jobs:
             tests/test_backend_key_adoption_django.py \
             tests/test_job_stream_django.py \
             tests/test_ceph_runtime_settings_django.py \
+            tests/test_node_ssh_credential_form_django.py \
             --ds=netbox.settings --reuse-db --create-db -v --no-header \
             --cov=netbox_proxbox.services.endpoint_autoconfiguration \
             --cov-branch --cov-report=term-missing --cov-fail-under=85
