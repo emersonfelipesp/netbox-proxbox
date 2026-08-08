@@ -1,0 +1,93 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load i18n %}
+
+{% block content %}
+<div class="row mb-3">
+  <div class="col col-md-6">
+    <div class="card mb-3">
+      <h5 class="card-header">{% trans "SDN Zone" %}</h5>
+      <div class="card-body">
+        <table class="table table-hover attr-table">
+          <tr>
+            <th scope="row">{% trans "Proxmox Endpoint" %}</th>
+            <td>{{ object.endpoint|linkify|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Cluster" %}</th>
+            <td>{{ object.cluster_name }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Zone" %}</th>
+            <td>{{ object.zone_name }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Type" %}</th>
+            <td>{{ object.zone_type|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Controller" %}</th>
+            <td>{{ object.controller|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "State" %}</th>
+            <td>{{ object.state|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Status" %}</th>
+            <td>{{ object.get_status_display }}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <h5 class="card-header">{% trans "Network" %}</h5>
+      <div class="card-body">
+        <table class="table table-hover attr-table">
+          <tr>
+            <th scope="row">{% trans "VRF VXLAN ID" %}</th>
+            <td>{{ object.vrf_vxlan|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Tag" %}</th>
+            <td>{{ object.tag|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "MTU" %}</th>
+            <td>{{ object.mtu|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "DNS" %}</th>
+            <td>{{ object.dns|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "IPAM" %}</th>
+            <td>{{ object.ipam|placeholder }}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col col-md-6">
+    <div class="card mb-3">
+      <h5 class="card-header">{% trans "Imported Route Targets" %}</h5>
+      <div class="card-body">
+        <pre class="mb-0"><code>{{ object.rt_import }}</code></pre>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <h5 class="card-header">{% trans "Raw Configuration" %}</h5>
+      <div class="card-body">
+        <pre class="mb-0"><code>{{ object.raw_config }}</code></pre>
+      </div>
+    </div>
+
+    {% include 'inc/panels/tags.html' %}
+    {% include 'inc/panels/custom_fields.html' %}
+    {% include 'inc/panels/comments.html' %}
+  </div>
+</div>
+{% endblock %}

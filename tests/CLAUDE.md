@@ -68,6 +68,19 @@ This directory contains the plugin's pytest test suite.
 - `test_services_backend_context.py`: AST contract for `get_fastapi_request_context` / `get_fastapi_endpoint_with_token` signatures and the three endpoint-resolution branches in `services/backend_context.py`.
 - `test_views_vm_config.py`: AST contract for `ProxmoxVMConfigTabView` — `register_model_view` path/name, `ObjectView` base, `ViewTab` label/permission, and the helper extractors.
 - `test_views_storage.py`: AST contract for the eight `ProxmoxStorage*` view classes — `__all__` membership, list-view `path=""` registration, child-tab paths/labels/permissions, and the detail view's short `request_timeout`.
+- `test_detail_view_templates.py`: fast AST/filesystem contract for every
+  plugin `ObjectView` registered with `register_model_view`; validates explicit
+  and default template paths without bootstrapping Django.
+- `test_detail_view_templates_django.py`: real-NetBox complement in the
+  supported-version matrix. It imports the complete plugin URL surface, walks
+  NetBox's populated runtime view registry, requires exact registry identifier
+  and qualified-class identity for all 53 mandatory views (plus the optional
+  netbox-pdm endpoint view), proves the pinned companion first registers its
+  own PDM detail view and the Proxbox integration deliberately replaces it,
+  resolves every plugin `ObjectView`'s actual
+  template through Django's loader, and uses an authenticated Client to
+  GET/render all 17 detail routes repaired by the missing-template bug. The SSH
+  credential smoke also proves stored ciphertext never reaches the response.
 - `test_proxmox_endpoint_settings_view.py`: AST contract for the Proxmox endpoint Settings tab registration, permissions, form usage, and context wiring.
 - `test_endpoint_templates_tab.py`: AST/source + behavior contracts for the endpoint **Templates** tab. Covers `ProxmoxEndpointTemplatesTabView` structure (`ObjectView` base, `__all__`, `template_name`, `ViewTab` label/permission/weight, `path="templates"`, `get_extra_context` + classification helpers, wiring into `views/__init__.py`), the live-fetch source contract (`/cloud/vm/templates` with `cloud_init_only=false` + `/cloud/lxc/templates`, `get_fastapi_request_context`/`resolve_backend_endpoint_id`, cloud-init derived from `cloud_init_drives`/`cicustom`, graceful `backend_error` degradation), the `integrations/packer.py` detection + guarded add-URL helpers, template contracts (three `data-category` groups, category filter, packer create button disabled **with a working tooltip** when netbox-packer is absent), and mirrored behavior tests for cloud-init classification / byte→GiB / LXC name derivation. Pure AST/source based — no NetBox bootstrap.
 - `test_endpoint_create_instance.py`: AST/source + local-stub behavior contracts for the Templates-tab **Create new instance** wizard. Covers the registered `create-instance` view, POST-only permission gate, `allow_writes` early exit, direct proxbox-api QEMU/LXC payload builders, cloud-init validation, VMID collision retry, actor/idempotency headers, verbatim backend 403 surfacing, template Actions columns, disabled-button tooltip, wizard steps, CSRF/fetch contract, and unsafe-JS exclusions. No real provisioning is performed.

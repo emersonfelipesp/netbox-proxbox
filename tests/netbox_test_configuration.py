@@ -6,6 +6,8 @@ from netbox.configuration_testing import *  # noqa: F403
 from netbox.configuration_testing import PLUGINS as BASE_PLUGINS
 
 PLUGINS = [*BASE_PLUGINS, "netbox_proxbox"]
+if os.environ.get("NETBOX_PROXBOX_TEST_PDM") == "1":
+    PLUGINS.append("netbox_pdm")
 
 # Local isolated harnesses may bind their disposable services away from the
 # standard ports. CI leaves these unset and retains NetBox's stock test values.

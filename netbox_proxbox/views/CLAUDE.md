@@ -168,6 +168,16 @@ This directory implements the plugin's NetBox UI behavior, including dashboard p
 - `HomeView` is the main dashboard entrypoint and assembles endpoint lists plus derived backend URLs for the templates.
 - Most changes to user-visible behavior land here first, then cascade into templates, static assets, and tests.
 - When adding or changing sync actions, update `urls.py`, `sync.py`, scheduling forms/views, template extensions, and relevant frontend/tests that assert button routes and job flow.
+- **Registered detail views must resolve a real template.** Every
+  `register_model_view`-registered `ObjectView` must either declare an explicit
+  `template_name` pointing to an existing file or provide the fallback
+  `netbox_proxbox/<model_name>.html` in the plugin template namespace.
+  `tests/test_detail_view_templates.py` supplies the fast AST/filesystem
+  contract. The merge gate is the complementary real-NetBox test in
+  `tests/test_detail_view_templates_django.py`: it walks the populated runtime
+  registry, asks each actual `ObjectView` for its template, compiles that name
+  through Django's loader, and authenticated-GET smokes the 17 routes repaired
+  by this bug across the supported NetBox matrix.
 - **URL namespace for tabs registered on core models.** When `register_model_view`
   attaches a tab/view to a NetBox **core** model (e.g. `virtualization.Cluster`,
   `virtualization.VirtualMachine`, `core.Job`), NetBox names that URL under the

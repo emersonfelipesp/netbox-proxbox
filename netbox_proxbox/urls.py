@@ -3,6 +3,7 @@
 from django.apps import apps
 from django.urls import include, path
 from django.views.generic import RedirectView
+from netbox.registry import registry
 from utilities.urls import get_model_urls
 
 from netbox_proxbox import views
@@ -33,6 +34,27 @@ from netbox_proxbox.views.sync_now import (  # noqa: F401
 from netbox_proxbox.websocket_client import WebSocketView
 
 app_name = "netbox_proxbox"
+
+
+def _drop_registered_pdm_endpoint_detail_view() -> None:
+    """Remove the one base detail slot before installing the Proxbox override.
+
+    NetBox's ``register_model_view`` appends registrations; it does not replace
+    an existing view with the same name/path.  ``netbox_pdm`` therefore has to
+    register first so its complete CRUD surface exists, after which this exact
+    base-detail slot is cleared and replaced by the Proxbox view that adds the
+    discovered-remotes context.  Other PDM actions remain untouched.
+    """
+    model_views = registry["views"].get("netbox_proxbox", {}).get("pdmendpoint", [])
+    registry["views"]["netbox_proxbox"]["pdmendpoint"] = [
+        config
+        for config in model_views
+        if not (
+            config.get("detail", True)
+            and (config.get("name") or "pdmendpoint") == "pdmendpoint"
+        )
+    ]
+
 
 urlpatterns = [
     # Home lives at ``home/`` (not the bare plugin root) so its menu-item URL is
@@ -506,6 +528,8 @@ urlpatterns = [
 # namespace — otherwise ActionsColumn crashes the list page with NoReverseMatch.
 if apps.is_installed("netbox_pdm"):
     import netbox_pdm.views as _netbox_pdm_views  # noqa: F401 — triggers @register_model_view
+
+    _drop_registered_pdm_endpoint_detail_view()
     from netbox_proxbox.views.endpoints import pdm as _pdm_endpoint_views  # noqa: F401 — registers PDMEndpointView + PDMEndpointSyncNowView
 
     urlpatterns += [
