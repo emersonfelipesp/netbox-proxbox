@@ -1,0 +1,75 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load i18n %}
+
+{% block content %}
+<div class="row mb-3">
+  <div class="col col-md-6">
+    <div class="card mb-3">
+      <h5 class="card-header">{% trans "InfluxDB Metrics Endpoint" %}</h5>
+      <div class="card-body">
+        <table class="table table-hover attr-table">
+          <tr>
+            <th scope="row">{% trans "Name" %}</th>
+            <td>{{ object.name }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Proxmox Endpoint" %}</th>
+            <td>{{ object.endpoint|linkify }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Proxmox Cluster" %}</th>
+            <td>{{ object.proxmox_cluster|linkify }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "InfluxDB URL" %}</th>
+            <td>{{ object.influx_url_display }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Organization" %}</th>
+            <td>{{ object.org }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Bucket" %}</th>
+            <td>{{ object.bucket }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Measurement Prefix" %}</th>
+            <td>{{ object.measurement_prefix|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Verify TLS" %}</th>
+            <td>{{ object.verify_tls|yesno:"Yes,No" }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Enabled" %}</th>
+            <td>{{ object.enabled|yesno:"Yes,No" }}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col col-md-6">
+    <div class="card mb-3">
+      <h5 class="card-header">{% trans "Secret References" %}</h5>
+      <div class="card-body">
+        <table class="table table-hover attr-table">
+          <tr>
+            <th scope="row">{% trans "Query Token Reference" %}</th>
+            <td>{{ object.query_token_secret_ref_display }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Writer Token Reference" %}</th>
+            <td>{{ object.writer_token_secret_ref_display|placeholder }}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    {% include 'inc/panels/tags.html' %}
+    {% include 'inc/panels/custom_fields.html' %}
+    {% include 'inc/panels/comments.html' %}
+  </div>
+</div>
+{% endblock %}

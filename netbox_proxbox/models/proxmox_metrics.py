@@ -6,7 +6,7 @@ import re
 from urllib.parse import urlsplit
 
 from django.core.exceptions import ValidationError
-from django.core.validators import RegexValidator
+from django.core.validators import RegexValidator, URLValidator
 from django.db import models
 from django.urls import NoReverseMatch, reverse
 from django.utils.translation import gettext_lazy as _
@@ -17,6 +17,70 @@ NMS_SECRET_REF_RE = (
     r"^nms-secret:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
     r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
+
+# Database-enforceable subset of URLValidator plus the credential boundary in
+# ``clean()``: an HTTP(S) authority is required, while userinfo, query strings,
+# fragments, and whitespace are forbidden. The path remains optional.
+CREDENTIAL_FREE_HTTP_URL_RE = r"^[Hh][Tt][Tt][Pp][Ss]?://[^/?#@\s]+(?:/[^?#\s]*)?$"
+
+#: Rendered in place of a token field whose stored value is not an exact
+#: ``nms-secret:<uuid>`` reference.  Deliberately not the empty string: a blank
+#: renders as NetBox's "not set" placeholder, which would read as *no token
+#: configured* rather than *a value is stored and is being withheld*.
+MASKED_SECRET_REF = "********"
+
+#: Rendered in place of an InfluxDB URL that is not a valid HTTP(S) base URL.
+#: Reuse the secret-reference placeholder because a malformed legacy URL may
+#: contain a credential in userinfo, a query string, or a fragment.
+MASKED_INFLUX_URL = MASKED_SECRET_REF
+
+_INFLUX_URL_VALIDATOR = URLValidator(schemes=("http", "https"))
+
+
+def masked_secret_ref(value: str | None) -> str:
+    """Return ``value`` only when it is an exact ``nms-secret:<uuid>`` reference.
+
+    This is the fail-closed rendering path for the token columns. Anything the
+    reference grammar does not match -- a plaintext InfluxDB token, a partially
+    typed reference, a value carrying stray whitespace -- is replaced with
+    :data:`MASKED_SECRET_REF` rather than reaching a template.
+
+    ``clean()`` and the ``CheckConstraint``\\ s on
+    :class:`ProxmoxMetricsInfluxDB` already reject those values on every
+    validated write and at the database, so this only matters for a row written
+    past both: a raw SQL insert, a loaded fixture, an unvalidated
+    ``objects.create()``, or a row that predates the constraints. Masking is
+    what keeps such a row from turning the detail page into a credential
+    viewer; it is the last barrier, not the only one.
+    """
+    if value is None or value == "":
+        return ""
+    if re.fullmatch(NMS_SECRET_REF_RE, value):
+        return value
+    return MASKED_SECRET_REF
+
+
+def masked_influx_url(value: str | None) -> str:
+    """Return only a valid credential-free HTTP(S) InfluxDB base URL.
+
+    Invalid, blank, or otherwise non-conforming stored values are masked so a
+    row written around model validation cannot disclose embedded credentials
+    through a UI or API representation.
+    """
+    if (
+        not isinstance(value, str)
+        or not value
+        or not re.fullmatch(CREDENTIAL_FREE_HTTP_URL_RE, value)
+    ):
+        return MASKED_INFLUX_URL
+    try:
+        _INFLUX_URL_VALIDATOR(value)
+        parsed_url = urlsplit(value)
+    except (ValidationError, ValueError):
+        return MASKED_INFLUX_URL
+    if "@" in parsed_url.netloc or parsed_url.query or parsed_url.fragment:
+        return MASKED_INFLUX_URL
+    return value
 
 
 class ProxmoxMetricsInfluxDB(NetBoxModel):
@@ -100,11 +164,67 @@ class ProxmoxMetricsInfluxDB(NetBoxModel):
             models.UniqueConstraint(
                 fields=["proxmox_cluster", "name"],
                 name="netbox_proxbox_metrics_influxdb_unique_cluster_name",
-            )
+            ),
+            # Enabled mappings must remain queryable after every write bypass:
+            # the URL is a credential-free HTTP(S) URL and the required query
+            # token is an exact secret reference. Disabled inventory rows may
+            # retain blanks for operator remediation. The optional writer token
+            # remains either blank or an exact reference in every state.
+            models.CheckConstraint(
+                condition=models.Q(query_token_secret_ref__regex=NMS_SECRET_REF_RE)
+                | models.Q(enabled=False, query_token_secret_ref=""),
+                name="netbox_proxbox_metrics_influxdb_query_token_is_ref",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(writer_token_secret_ref__regex=NMS_SECRET_REF_RE)
+                | models.Q(writer_token_secret_ref=""),
+                name="netbox_proxbox_metrics_influxdb_writer_token_is_ref",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(enabled=False)
+                | models.Q(influx_url__regex=CREDENTIAL_FREE_HTTP_URL_RE),
+                name="netbox_proxbox_metrics_influxdb_url_is_safe",
+            ),
         ]
 
     def __str__(self) -> str:
         return f"{self.name} -> {self.proxmox_cluster}"
+
+    def serialize_object(self, exclude=None):
+        """Mask non-conforming metadata in NetBox change-log snapshots.
+
+        NetBox's change logger, event queue, ObjectChange REST serializer, and
+        GraphQL changelog field all ultimately consume this model hook. Keep it
+        aligned with the fail-closed UI/API display properties so a legacy or
+        bypass-written credential can never be copied into a new audit snapshot.
+        """
+        data = super().serialize_object(exclude=exclude)
+        if "influx_url" in data:
+            data["influx_url"] = masked_influx_url(data["influx_url"])
+        if "query_token_secret_ref" in data:
+            data["query_token_secret_ref"] = masked_secret_ref(
+                data["query_token_secret_ref"]
+            )
+        if "writer_token_secret_ref" in data:
+            data["writer_token_secret_ref"] = masked_secret_ref(
+                data["writer_token_secret_ref"]
+            )
+        return data
+
+    @property
+    def influx_url_display(self) -> str:
+        """Fail-closed rendering value for :attr:`influx_url`."""
+        return masked_influx_url(self.influx_url)
+
+    @property
+    def query_token_secret_ref_display(self) -> str:
+        """Fail-closed rendering value for :attr:`query_token_secret_ref`."""
+        return masked_secret_ref(self.query_token_secret_ref)
+
+    @property
+    def writer_token_secret_ref_display(self) -> str:
+        """Fail-closed rendering value for :attr:`writer_token_secret_ref`."""
+        return masked_secret_ref(self.writer_token_secret_ref)
 
     def get_absolute_url(self) -> str:
         try:
@@ -121,8 +241,12 @@ class ProxmoxMetricsInfluxDB(NetBoxModel):
                 parsed_url = urlsplit(self.influx_url)
             except ValueError:
                 parsed_url = None
-            if parsed_url and (
-                "@" in parsed_url.netloc or parsed_url.query or parsed_url.fragment
+            if (
+                not re.fullmatch(CREDENTIAL_FREE_HTTP_URL_RE, self.influx_url)
+                or parsed_url is None
+                or "@" in parsed_url.netloc
+                or parsed_url.query
+                or parsed_url.fragment
             ):
                 raise ValidationError(
                     {

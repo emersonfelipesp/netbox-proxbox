@@ -1,0 +1,66 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load i18n %}
+
+{% block content %}
+<div class="row mb-3">
+  <div class="col col-md-6">
+    <div class="card mb-3">
+      <h5 class="card-header">{% trans "Datacenter CPU Model" %}</h5>
+      <div class="card-body">
+        <table class="table table-hover attr-table">
+          <tr>
+            <th scope="row">{% trans "Proxmox Endpoint" %}</th>
+            <td>{{ object.endpoint|linkify|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Cluster" %}</th>
+            <td>{{ object.cluster_name }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "CPU Type" %}</th>
+            <td>{{ object.cputype }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Base CPU Type" %}</th>
+            <td>{{ object.base_cputype|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Vendor ID" %}</th>
+            <td>{{ object.vendor_id|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "CPUID Level" %}</th>
+            <td>{{ object.level|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Flags" %}</th>
+            <td>{{ object.flags|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Description" %}</th>
+            <td>{{ object.description|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Status" %}</th>
+            <td>{{ object.get_status_display }}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col col-md-6">
+    <div class="card mb-3">
+      <h5 class="card-header">{% trans "Raw Configuration" %}</h5>
+      <div class="card-body">
+        <pre class="mb-0"><code>{{ object.raw_config }}</code></pre>
+      </div>
+    </div>
+
+    {% include 'inc/panels/tags.html' %}
+    {% include 'inc/panels/custom_fields.html' %}
+    {% include 'inc/panels/comments.html' %}
+  </div>
+</div>
+{% endblock %}
