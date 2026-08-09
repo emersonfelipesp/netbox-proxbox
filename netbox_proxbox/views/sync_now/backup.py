@@ -18,6 +18,9 @@ from netbox_proxbox.services.individual_sync import sync_individual_with_depende
 from netbox_proxbox.sync_params import _resolve_vm_backup_batch_params
 from netbox_proxbox.views.proxbox_access import permission_enqueue_proxbox_sync
 from netbox_proxbox.views.sync_now import _handle_sync_response
+from netbox_proxbox.views.sync_now.endpoint_scope import (
+    resolve_target_proxmox_endpoint_scope,
+)
 
 
 @register_model_view(VMBackup, "proxbox_sync_now", path="proxbox-sync-now")
@@ -48,10 +51,22 @@ class VMBackupSyncNowView(
             )
             return HttpResponseRedirect(backup.get_absolute_url())
 
+        scope_kwargs, scope_error = resolve_target_proxmox_endpoint_scope(
+            backup,
+            prefer_storage=True,
+        )
+        if scope_kwargs is None:
+            messages.error(
+                request,
+                scope_error or _("Backup ownership could not be resolved for sync."),
+            )
+            return HttpResponseRedirect(backup.get_absolute_url())
+
         response, status, dependencies = sync_individual_with_dependencies(
             params["path"],
             params["query_params"],
             netbox_branch_schema_id=get_active_branch_schema_id(),
+            **scope_kwargs,
         )
 
         return _handle_sync_response(

@@ -621,7 +621,7 @@ def _resolve_task_history_batch_params(
 
     query_params: dict[str, object] = {
         "node": node,
-        "vm_type": vm_type,
+        "type": vm_type,
         "vmid": vmid,
     }
     if upid:

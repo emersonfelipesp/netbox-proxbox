@@ -59,7 +59,10 @@ def _handle_sync_response(
     redirect_url,
 ) -> HttpResponseRedirect:
     """Translate a sync API response into user-facing messages and redirect."""
-    if status == 200:
+    error = response.get("error") if isinstance(response, dict) else None
+    if error:
+        messages.error(request, _(f"Failed to sync {object_label.lower()}: {error}"))
+    elif status == 200:
         action = response.get("action", "synced")
         messages.success(
             request,
@@ -76,6 +79,8 @@ def _handle_sync_response(
             _(f"Proxbox backend is unavailable for {object_label.lower()} sync."),
         )
     else:
-        error = response.get("error", "Unknown error")
-        messages.error(request, _(f"Failed to sync {object_label.lower()}: {error}"))
+        messages.error(
+            request,
+            _(f"Failed to sync {object_label.lower()}: Unknown error"),
+        )
     return HttpResponseRedirect(redirect_url)
