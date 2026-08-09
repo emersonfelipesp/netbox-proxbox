@@ -21,12 +21,13 @@ This directory contains the plugin's pytest test suite.
 - `test_backend_integration.py`, `test_backend_logs_view.py`, `test_job_stream.py`, `test_job_stream_django.py`, `test_run_sync_stream.py`, `test_sse_contracts.py`: backend proxy, log view, stream, and SSE behavior. `test_job_stream.py` pins the job observer's resource-lifetime contract: Nginx buffering stays disabled, idle streams emit bounded comment heartbeats, and closing the iterator stops the producer instead of leaving a Gunicorn gthread blocked indefinitely. `test_job_stream_django.py` runs in the real NetBox matrix and proves Django `StreamingHttpResponse.close()` propagates to the raw generator and releases the producer—the same resource-closer path Gunicorn invokes after a failed client write. `test_run_sync_stream.py`'s **redaction** section pins that credentials cannot reach the NetBox job log through the stream error path: a failed `complete` frame echoing the pushed endpoint body is redacted **including its raw `response` mirror** (the `ok is False` branch returns `last_complete.model_dump()` verbatim, so redacting `detail` alone is not enough), `on_frame` receives redacted frame data, and `_redacted_mapping()` stays fail-closed when redaction returns a non-mapping. Three counter-tests keep redaction from becoming lossy: the **success** payload's sync counters are untouched, the rejected field's *name* and `msg` survive so the error stays diagnosable, and the two substring markers downstream code branches on (`"init_ok"` in `sync_stages.py`, the Postgres `remaining connection slots …` phrase in `sync_types.py`) still match end-to-end. The fixture `sys.modules.pop`s `netbox_proxbox.views.error_utils` so the **real** redactor loads rather than a stub. `test_stream_transport_failure_never_logs_the_raw_exception` extends the same guarantee to the *application log*: a transport exception echoing a credential produces log records free of the secret and free of `exc_info` — redacting the user-facing detail while `logger.exception` writes the raw message beside it would be no redaction at all.
 - `test_github_django_matrix_waiter.py`: pure unit and source contracts for
   issue #300's reviewed, authenticated exact-commit waiter. Covers mandatory
-  environment-only GitHub App user authentication and removal, exact owner/app
-  permissions/exactly-one-installation/single-repository selection (including
-  paginated over-scope rejection), branch/SHA/workflow/run identity (including
-  GitHub's bare workflow path, other-branch and tag rejection), workflow
-  Git-blob pinning, expected-run-ID and not-before discovery, current-run ID
-  pinning over older successes, ambiguous-newest rejection, terminal failures,
+  private-file-preferred GitHub App user authentication with an explicitly
+  weaker environment fallback, exact owner/app permissions/exactly-one-
+  installation/single-repository selection (including paginated over-scope
+  rejection), branch/SHA/workflow/run identity (including GitHub's bare
+  workflow path, other-branch and tag rejection), workflow Git-blob pinning,
+  mandatory expected-run-ID/attempt discovery, exact-attempt polling,
+  optional not-before bounds, stale-run and prior-attempt rejection, terminal failures,
   response byte ceilings, one shared connection/read/parse/retry/poll deadline,
   403 rate-limit evidence, the hard request cap, four-gate hourly budget, and
   the documented non-security trust boundary. It uses fake urllib openers only

@@ -23,6 +23,10 @@ BRANCH = "300-ci-gate-bootstrap"
 SHA = "a" * 40
 NOT_BEFORE = "2026-08-09T20:00:00Z"
 RUN_CREATED_AT = "2026-08-09T20:01:00Z"
+DEFAULT_RUN_SELECTOR = {
+    "expected_run_id": "99",
+    "expected_run_attempt": "1",
+}
 RATE_HEADERS = {
     "X-RateLimit-Limit": "5000",
     "X-RateLimit-Remaining": "4999",
@@ -236,7 +240,7 @@ def build_waiter(client: StubClient, clock: FakeClock | None = None):
     return waiter.MatrixWaiter(client=client, deadline=deadline), clock
 
 
-def test_token_is_required_only_in_environment_and_removed_immediately():
+def test_environment_token_fallback_is_removed_from_the_live_mapping():
     environment = {waiter.TOKEN_ENV: TOKEN, "CANDIDATE_VALUE": "still-present"}
 
     assert waiter.take_token_from_environment(environment) == TOKEN
@@ -244,15 +248,62 @@ def test_token_is_required_only_in_environment_and_removed_immediately():
     assert environment["CANDIDATE_VALUE"] == "still-present"
 
 
-def test_cli_requires_python_isolation_before_candidate_argument_handling():
+def test_private_token_file_is_the_preferred_ingress(tmp_path):
+    token_file = tmp_path / "matrix-token"
+    token_file.write_text(f"{TOKEN}\n")
+    token_file.chmod(0o600)
+    environment = {waiter.TOKEN_FILE_ENV: str(token_file)}
+
+    assert waiter.take_token_from_environment(environment) == TOKEN
+    assert waiter.TOKEN_FILE_ENV not in environment
+
+
+def test_over_permissive_token_file_is_rejected(tmp_path):
+    token_file = tmp_path / "matrix-token"
+    token_file.write_text(f"{TOKEN}\n")
+    token_file.chmod(0o640)
+
+    with pytest.raises(waiter.AuthenticationError, match="permissions"):
+        waiter.take_token_from_environment({waiter.TOKEN_FILE_ENV: str(token_file)})
+
+
+def test_token_file_takes_precedence_over_environment_fallback(tmp_path):
+    token_file = tmp_path / "matrix-token"
+    token_file.write_text(f"{TOKEN}\n")
+    token_file.chmod(0o600)
+    environment = {
+        waiter.TOKEN_FILE_ENV: str(token_file),
+        waiter.TOKEN_ENV: "invalid-environment-fallback",
+    }
+
+    assert waiter.take_token_from_environment(environment) == TOKEN
+    assert waiter.TOKEN_FILE_ENV not in environment
+    assert waiter.TOKEN_ENV not in environment
+
+
+def test_missing_file_and_environment_ingress_is_clear():
+    with pytest.raises(
+        waiter.AuthenticationError,
+        match="GH_MATRIX_READ_TOKEN_FILE or GH_MATRIX_READ_TOKEN",
+    ):
+        waiter.take_token_from_environment({})
+
+
+def test_module_docstring_states_the_environment_fallback_boundary():
+    assert waiter.TOKEN_FILE_ENV in waiter.__doc__
+    assert "/proc/<pid>/environ" in waiter.__doc__
+    assert "cannot enforce" in waiter.__doc__
+
+
+def test_cli_requires_python_isolation_before_token_or_candidate_handling():
     source = (waiter.REPO_ROOT / "scripts/wait_for_github_django_matrix.py").read_text()
 
     assert source.startswith("#!/usr/bin/env -S python3 -I\n")
     main_source = source.split("def main(", 1)[1]
-    assert main_source.index("take_token_from_environment") < main_source.index(
-        "parse_args"
-    )
-    assert "sys.flags.isolated" in main_source
+    isolation_check = main_source.index("sys.flags.isolated")
+    token_ingress = main_source.index("take_token_from_environment")
+    candidate_parsing = main_source.index("parse_args")
+    assert isolation_check < token_ingress < candidate_parsing
 
 
 @pytest.mark.parametrize(
@@ -446,29 +497,42 @@ def test_candidate_branch_and_full_sha_are_strictly_validated(branch, sha):
         waiter.validate_candidate(branch, sha)
 
 
-def test_current_run_selector_requires_expected_id_or_not_before_api_use():
+def test_current_run_selector_requires_expected_id_and_attempt_before_api_use():
     client = StubClient()
     matrix_waiter, _clock = build_waiter(client)
 
-    with pytest.raises(waiter.InputError, match="expected run ID or not-before"):
+    with pytest.raises(waiter.InputError, match="run ID and expected run attempt"):
         matrix_waiter.wait_for_success(BRANCH, SHA)
 
     assert client.calls == []
 
 
 @pytest.mark.parametrize(
-    ("expected_run_id", "not_before"),
+    ("expected_run_id", "expected_run_attempt", "not_before"),
     [
-        (0, None),
-        (True, None),
-        ("01", None),
-        (None, "2026-08-09 20:00:00Z"),
-        (None, "2026-02-30T20:00:00Z"),
+        (None, 1, NOT_BEFORE),
+        (99, None, NOT_BEFORE),
+        (0, 1, None),
+        (True, 1, None),
+        ("01", 1, None),
+        (99, 0, None),
+        (99, True, None),
+        (99, "01", None),
+        (99, 1, "2026-08-09 20:00:00Z"),
+        (99, 1, "2026-02-30T20:00:00Z"),
     ],
 )
-def test_current_run_selector_is_strictly_validated(expected_run_id, not_before):
+def test_current_run_selector_is_strictly_validated(
+    expected_run_id,
+    expected_run_attempt,
+    not_before,
+):
     with pytest.raises(waiter.InputError):
-        waiter.validate_run_selector(expected_run_id, not_before)
+        waiter.validate_run_selector(
+            expected_run_id,
+            expected_run_attempt,
+            not_before,
+        )
 
 
 def test_reviewed_workflow_pin_matches_the_committed_git_blob():
@@ -486,14 +550,20 @@ def test_reviewed_workflow_pin_matches_the_committed_git_blob():
 
 def test_success_requires_auth_blob_pin_and_exact_push_run_identity():
     client = ready_client(
-        api_response({"total_count": 1, "workflow_runs": [run_payload()]})
+        api_response({"total_count": 1, "workflow_runs": [run_payload()]}),
+        api_response(run_payload()),
     )
     matrix_waiter, _clock = build_waiter(client)
 
-    run = matrix_waiter.wait_for_success(BRANCH, SHA, not_before=NOT_BEFORE)
+    run = matrix_waiter.wait_for_success(
+        BRANCH,
+        SHA,
+        not_before=NOT_BEFORE,
+        **DEFAULT_RUN_SELECTOR,
+    )
 
     assert run["id"] == 99
-    assert client.calls[-1] == (
+    assert client.calls[-2] == (
         waiter.WORKFLOW_RUNS_PATH,
         {
             "branch": BRANCH,
@@ -501,6 +571,10 @@ def test_success_requires_auth_blob_pin_and_exact_push_run_identity():
             "head_sha": SHA,
             "per_page": waiter.RUNS_PER_PAGE,
         },
+    )
+    assert client.calls[-1] == (
+        f"{waiter.REPOSITORY_PREFIX}/actions/runs/99/attempts/1",
+        None,
     )
 
 
@@ -539,11 +613,17 @@ def test_recorded_github_run_shape_with_bare_workflow_path_is_accepted():
         path=waiter.WORKFLOW_PATH,
     )
     client = ready_client(
-        api_response({"total_count": 1, "workflow_runs": [recorded_run]})
+        api_response({"total_count": 1, "workflow_runs": [recorded_run]}),
+        api_response(recorded_run),
     )
     matrix_waiter, _clock = build_waiter(client)
 
-    run = matrix_waiter.wait_for_success(BRANCH, SHA, not_before=NOT_BEFORE)
+    run = matrix_waiter.wait_for_success(
+        BRANCH,
+        SHA,
+        not_before=NOT_BEFORE,
+        **DEFAULT_RUN_SELECTOR,
+    )
 
     assert run["id"] == 99
     assert run["path"] == waiter.WORKFLOW_PATH
@@ -560,7 +640,12 @@ def test_candidate_workflow_blob_mismatch_fails_before_polling():
     matrix_waiter, _clock = build_waiter(client)
 
     with pytest.raises(waiter.WorkflowIdentityError, match="blob"):
-        matrix_waiter.wait_for_success(BRANCH, SHA, not_before=NOT_BEFORE)
+        matrix_waiter.wait_for_success(
+            BRANCH,
+            SHA,
+            not_before=NOT_BEFORE,
+            **DEFAULT_RUN_SELECTOR,
+        )
 
     assert all(path != waiter.WORKFLOW_RUNS_PATH for path, _query in client.calls)
 
@@ -595,7 +680,12 @@ def test_same_sha_or_similar_run_with_wrong_identity_is_rejected(overrides, mess
     matrix_waiter, _clock = build_waiter(client)
 
     with pytest.raises(waiter.RunIdentityError, match=message):
-        matrix_waiter.wait_for_success(BRANCH, SHA, not_before=NOT_BEFORE)
+        matrix_waiter.wait_for_success(
+            BRANCH,
+            SHA,
+            not_before=NOT_BEFORE,
+            **DEFAULT_RUN_SELECTOR,
+        )
 
 
 @pytest.mark.parametrize("conclusion", ["failure", "cancelled", "timed_out", "skipped"])
@@ -606,12 +696,18 @@ def test_terminal_non_success_conclusion_fails_immediately(conclusion):
                 "total_count": 1,
                 "workflow_runs": [run_payload(conclusion=conclusion)],
             }
-        )
+        ),
+        api_response(run_payload(conclusion=conclusion)),
     )
     matrix_waiter, clock = build_waiter(client)
 
     with pytest.raises(waiter.WorkflowRunFailed, match=conclusion):
-        matrix_waiter.wait_for_success(BRANCH, SHA, not_before=NOT_BEFORE)
+        matrix_waiter.wait_for_success(
+            BRANCH,
+            SHA,
+            not_before=NOT_BEFORE,
+            **DEFAULT_RUN_SELECTOR,
+        )
 
     assert clock.sleeps == []
 
@@ -624,17 +720,24 @@ def test_queued_run_polls_then_accepts_completed_success():
                 "workflow_runs": [run_payload(status="queued", conclusion=None)],
             }
         ),
-        api_response({"total_count": 1, "workflow_runs": [run_payload()]}),
+        api_response(run_payload(status="queued", conclusion=None)),
+        api_response(run_payload()),
     )
     matrix_waiter, clock = build_waiter(client)
 
     assert (
-        matrix_waiter.wait_for_success(BRANCH, SHA, not_before=NOT_BEFORE)["id"] == 99
+        matrix_waiter.wait_for_success(
+            BRANCH,
+            SHA,
+            not_before=NOT_BEFORE,
+            **DEFAULT_RUN_SELECTOR,
+        )["id"]
+        == 99
     )
     assert clock.sleeps == [waiter.DEFAULT_POLL_INTERVAL_SECONDS]
 
 
-def test_newer_queued_run_is_pinned_and_older_success_is_never_accepted():
+def test_expected_run_is_pinned_and_other_successes_are_never_accepted():
     newer_created_at = "2026-08-09T20:02:00Z"
     newer_queued = run_payload(
         id=100,
@@ -653,11 +756,6 @@ def test_newer_queued_run_is_pinned_and_older_success_is_never_accepted():
         "status": "completed",
         "conclusion": "success",
     }
-    later_success = run_payload(
-        id=101,
-        url=f"{waiter.API_ROOT}{waiter.REPOSITORY_PREFIX}/actions/runs/101",
-        created_at="2026-08-09T20:03:00Z",
-    )
     client = ready_client(
         api_response(
             {
@@ -665,30 +763,21 @@ def test_newer_queued_run_is_pinned_and_older_success_is_never_accepted():
                 "workflow_runs": [newer_queued, older_success],
             }
         ),
-        api_response(
-            {
-                "total_count": 3,
-                "workflow_runs": [
-                    later_success,
-                    newer_in_progress,
-                    older_success,
-                ],
-            }
-        ),
-        api_response(
-            {
-                "total_count": 3,
-                "workflow_runs": [later_success, newer_success, older_success],
-            }
-        ),
+        api_response(newer_in_progress),
+        api_response(newer_success),
     )
     matrix_waiter, clock = build_waiter(client)
 
-    run = matrix_waiter.wait_for_success(BRANCH, SHA, not_before=NOT_BEFORE)
+    run = matrix_waiter.wait_for_success(
+        BRANCH,
+        SHA,
+        expected_run_id="100",
+        expected_run_attempt="1",
+        not_before=NOT_BEFORE,
+    )
 
     assert run["id"] == 100
     assert clock.sleeps == [
-        waiter.DEFAULT_POLL_INTERVAL_SECONDS,
         waiter.DEFAULT_POLL_INTERVAL_SECONDS,
     ]
 
@@ -712,33 +801,29 @@ def test_not_before_ignores_an_old_success_until_a_fresh_run_exists():
                 "workflow_runs": [run_payload(), old_success],
             }
         ),
+        api_response(run_payload()),
     )
     matrix_waiter, clock = build_waiter(client)
 
-    run = matrix_waiter.wait_for_success(BRANCH, SHA, not_before=NOT_BEFORE)
+    run = matrix_waiter.wait_for_success(
+        BRANCH,
+        SHA,
+        not_before=NOT_BEFORE,
+        **DEFAULT_RUN_SELECTOR,
+    )
 
     assert run["id"] == 99
     assert clock.sleeps == [waiter.DEFAULT_POLL_INTERVAL_SECONDS]
 
 
-def test_discovery_rejects_ambiguous_newest_creation_time():
-    same_time_run = run_payload(
-        id=100,
-        url=f"{waiter.API_ROOT}{waiter.REPOSITORY_PREFIX}/actions/runs/100",
-    )
-    client = ready_client(
-        api_response(
-            {
-                "total_count": 2,
-                "workflow_runs": [same_time_run, run_payload()],
-            }
-        )
-    )
+def test_not_before_is_never_a_standalone_run_selector():
+    client = StubClient()
     matrix_waiter, clock = build_waiter(client)
 
-    with pytest.raises(waiter.RunIdentityError, match="newest creation time"):
+    with pytest.raises(waiter.InputError, match="run ID and expected run attempt"):
         matrix_waiter.wait_for_success(BRANCH, SHA, not_before=NOT_BEFORE)
 
+    assert client.calls == []
     assert clock.sleeps == []
 
 
@@ -761,19 +846,117 @@ def test_expected_run_id_waits_for_only_the_supervisor_selected_run():
                 "workflow_runs": [expected_queued, run_payload()],
             }
         ),
-        api_response(
-            {
-                "total_count": 2,
-                "workflow_runs": [expected_success, run_payload()],
-            }
-        ),
+        api_response(expected_queued),
+        api_response(expected_success),
     )
     matrix_waiter, clock = build_waiter(client)
 
-    run = matrix_waiter.wait_for_success(BRANCH, SHA, expected_run_id="100")
+    run = matrix_waiter.wait_for_success(
+        BRANCH,
+        SHA,
+        expected_run_id="100",
+        expected_run_attempt="1",
+    )
 
     assert run["id"] == 100
     assert clock.sleeps == [waiter.DEFAULT_POLL_INTERVAL_SECONDS]
+
+
+def test_stale_post_floor_success_never_attests_before_pinned_pair_appears():
+    stale_success = run_payload(
+        id=98,
+        url=f"{waiter.API_ROOT}{waiter.REPOSITORY_PREFIX}/actions/runs/98",
+        created_at="2026-08-09T20:00:30Z",
+    )
+    pinned_running = run_payload(
+        id=100,
+        url=f"{waiter.API_ROOT}{waiter.REPOSITORY_PREFIX}/actions/runs/100",
+        run_attempt=2,
+        status="in_progress",
+        conclusion=None,
+    )
+    pinned_success = {
+        **pinned_running,
+        "status": "completed",
+        "conclusion": "success",
+    }
+    client = ready_client(
+        api_response({"total_count": 1, "workflow_runs": [stale_success]}),
+        api_response(
+            {
+                "total_count": 2,
+                "workflow_runs": [pinned_running, stale_success],
+            }
+        ),
+        api_response(pinned_running),
+        api_response(pinned_success),
+    )
+    matrix_waiter, clock = build_waiter(client)
+
+    run = matrix_waiter.wait_for_success(
+        BRANCH,
+        SHA,
+        expected_run_id="100",
+        expected_run_attempt="2",
+        not_before=NOT_BEFORE,
+    )
+
+    assert (run["id"], run["run_attempt"]) == (100, 2)
+    assert clock.sleeps == [
+        waiter.DEFAULT_POLL_INTERVAL_SECONDS,
+        waiter.DEFAULT_POLL_INTERVAL_SECONDS,
+    ]
+
+
+def test_prior_success_for_same_run_id_cannot_satisfy_newer_pinned_attempt():
+    prior_success = run_payload(run_attempt=1)
+    pinned_running = run_payload(
+        run_attempt=2,
+        status="in_progress",
+        conclusion=None,
+    )
+    pinned_success = {
+        **pinned_running,
+        "status": "completed",
+        "conclusion": "success",
+    }
+    client = ready_client(
+        api_response({"total_count": 1, "workflow_runs": [prior_success]}),
+        api_response({"total_count": 1, "workflow_runs": [pinned_running]}),
+        api_response(pinned_running),
+        api_response(pinned_success),
+    )
+    matrix_waiter, clock = build_waiter(client)
+
+    run = matrix_waiter.wait_for_success(
+        BRANCH,
+        SHA,
+        expected_run_id="99",
+        expected_run_attempt="2",
+    )
+
+    assert (run["id"], run["run_attempt"]) == (99, 2)
+    assert clock.sleeps == [
+        waiter.DEFAULT_POLL_INTERVAL_SECONDS,
+        waiter.DEFAULT_POLL_INTERVAL_SECONDS,
+    ]
+
+
+def test_exact_attempt_endpoint_rejects_a_mismatched_attempt():
+    pinned_attempt = run_payload(run_attempt=2)
+    client = ready_client(
+        api_response({"total_count": 1, "workflow_runs": [pinned_attempt]}),
+        api_response(run_payload(run_attempt=1)),
+    )
+    matrix_waiter, _clock = build_waiter(client)
+
+    with pytest.raises(waiter.RunIdentityError, match="attempt"):
+        matrix_waiter.wait_for_success(
+            BRANCH,
+            SHA,
+            expected_run_id="99",
+            expected_run_attempt="2",
+        )
 
 
 def make_http_error(status: int, headers: dict[str, str] | None = None) -> HTTPError:
@@ -815,15 +998,19 @@ def build_api(
 
 
 def test_api_client_uses_only_fixed_github_origin_and_bearer_header():
-    opener = FakeOpener(FakeResponse({"ok": True}))
+    opener = FakeOpener(FakeResponse({"ok": True}), FakeResponse({"ok": True}))
     api, _clock = build_api(opener)
 
     api.get_json("/user", query={"candidate": "a/b & tag"})
+    attempt_path = f"{waiter.REPOSITORY_PREFIX}/actions/runs/99/attempts/2"
+    api.get_json(attempt_path)
 
     request, timeout = opener.calls[0]
     assert request.full_url == ("https://api.github.com/user?candidate=a%2Fb+%26+tag")
     assert request.get_header("Authorization") == f"Bearer {TOKEN}"
     assert 0 < timeout <= waiter.MAX_IO_SLICE_SECONDS
+    attempt_request, _attempt_timeout = opener.calls[1]
+    assert attempt_request.full_url == f"{waiter.API_ROOT}{attempt_path}"
     with pytest.raises(waiter.ApiProtocolError, match="allowlisted"):
         api.get_json("https://attacker.invalid/collect")
 
@@ -974,12 +1161,18 @@ def test_one_deadline_also_bounds_retry_rate_limit_and_poll_sleeps():
                         run_payload(status="in_progress", conclusion=None)
                     ],
                 }
-            )
+            ),
+            api_response(run_payload(status="in_progress", conclusion=None)),
         ),
         deadline=deadline,
     )
     with pytest.raises(waiter.DeadlineExceeded, match="polling"):
-        matrix_waiter.wait_for_success(BRANCH, SHA, not_before=NOT_BEFORE)
+        matrix_waiter.wait_for_success(
+            BRANCH,
+            SHA,
+            not_before=NOT_BEFORE,
+            **DEFAULT_RUN_SELECTOR,
+        )
 
 
 def test_request_cap_is_independent_of_deadline():
@@ -1023,13 +1216,18 @@ def test_documentation_keeps_bootstrap_non_consuming_and_non_security_critical()
 
     for document in (developer_doc, agent_doc, claude_doc):
         assert "GH_MATRIX_READ_TOKEN" in document
+        assert "GH_MATRIX_READ_TOKEN_FILE" in document
+        assert "/proc/<pid>/environ" in document
+        assert "cannot enforce" in document
         assert "non-security evidence" in document
         assert "base-pinned external supervisor" in document
         assert "path@branch" not in document
         assert waiter.WORKFLOW_PATH in document
     assert "must not enable a Gitea consumer" in developer_doc
     assert "--expected-run-id" in developer_doc
+    assert "--expected-run-attempt" in developer_doc
     assert "--not-before" in developer_doc
+    assert "never a standalone selector" in developer_doc
     assert "exactly one accessible" in developer_doc
 
 

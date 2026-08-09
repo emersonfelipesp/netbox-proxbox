@@ -35,10 +35,11 @@ from an immutable reviewed target-branch checkout, never from the candidate
 checkout.
 
 The supervisor supplies the expected short candidate branch, full lowercase
-40-character SHA, and at least one current-run selector as data: the expected
-positive GitHub run ID via `--expected-run-id`, a UTC
-`YYYY-MM-DDTHH:MM:SSZ` creation-time floor via `--not-before`, or both. The
-waiter accepts only a completed successful `push` run whose
+40-character SHA, positive GitHub run ID via `--expected-run-id`, and positive
+run-attempt number via `--expected-run-attempt`. Both members of that trusted
+pair are mandatory. A UTC `YYYY-MM-DDTHH:MM:SSZ` creation-time floor via
+`--not-before` is an optional additional bound, never a standalone selector.
+The waiter accepts only a completed successful `push` attempt whose
 repository, head repository, branch, SHA, head-commit ID, workflow ID, workflow
 API URL, and exact bare workflow path `.github/workflows/django-tests.yml` all
 match. GitHub's workflow-runs API returns that path without a branch suffix, so
@@ -51,37 +52,48 @@ Before polling, the waiter reads
 `.github/workflows/django-tests.yml` at that exact SHA and requires GitHub's Git
 blob identity to equal the reviewed `PINNED_WORKFLOW_BLOB_SHA` constant.
 
-When the supervisor provides a run ID, the waiter polls only that run. With a
-not-before selector, discovery chooses exactly one newest matching run at or
-after the trusted timestamp, then pins its run ID for all later polls. If a
-newer queued or in-progress run and an older successful run share the same
-branch and SHA, only the newer selected run can decide the verdict. An absent
-selector or an ambiguous newest creation time fails closed instead of allowing
-an older success to race the current run.
+Discovery ignores every entry whose run ID or `run_attempt` differs from the
+trusted pair, even if it is a post-floor success. Once the exact pair is
+visible, the waiter polls only
+`/repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt}` and validates
+the returned ID and attempt on every response. A prior successful attempt of
+the same run cannot satisfy a newer pinned attempt, and status from the
+workflow-run list is never accepted as the attestation verdict.
 
 ### Credential and network boundary
 
-`GH_MATRIX_READ_TOKEN` is mandatory and must be a short-lived, base-owned
-GitHub App user access token (`ghu_…`). The authenticated user must be the
-repository owner, and the token must expose exactly one accessible app
-installation. The waiter exhausts installation pagination before accepting it;
-any second installation, including one for an unrelated private owner, is
-over-scope and is rejected. The sole installation must belong to the repository
-owner and select only `emersonfelipesp/netbox-proxbox` with exact repository
-`Actions: read`, `Contents: read`, and the implicit `Metadata: read`
-permission. This token form is deliberate: its authenticated-user installation
-response exposes the app's permissions, allowing the waiter to reject an
-under- or over-scoped token instead of treating public anonymous API access as
-proof of authorization.
+The credential must be a short-lived, base-owned GitHub App user access token
+(`ghu_…`). Preferred ingress is `GH_MATRIX_READ_TOKEN_FILE`, set to a regular
+file that denies all group and other permissions (for example mode `0600` or
+`0400`) and is readable only by the waiter. The waiter reads and strips that
+file without placing the token value into `os.environ`. `GH_MATRIX_READ_TOKEN`
+remains a fallback and the file wins when both variables are set. The
+authenticated user must be the repository owner, and the token must expose
+exactly one accessible app installation. The waiter exhausts installation
+pagination before accepting it; any second installation, including one for an
+unrelated private owner, is over-scope and is rejected. The sole installation
+must belong to the repository owner and select only
+`emersonfelipesp/netbox-proxbox` with exact repository `Actions: read`,
+`Contents: read`, and the implicit `Metadata: read` permission. This token form
+is deliberate: its authenticated-user installation response exposes the app's
+permissions, allowing the waiter to reject an under- or over-scoped token
+instead of treating public anonymous API access as proof of authorization.
 
-The waiter removes the token from its environment immediately, does not spawn
-or shell out to another process, disables ambient proxies and redirects, and
-sends requests only to its fixed `https://api.github.com` endpoint allowlist.
-The executable shebang enables Python isolated mode, and `main()` refuses a
-non-isolated interpreter; an explicit caller must likewise invoke a reviewed
-interpreter with `python -I`. This keeps candidate-controlled `PYTHONPATH`, user
-site-packages, and Python startup customization out of the token-bearing
-process.
+Environment fallback has a narrower guarantee. Removing
+`GH_MATRIX_READ_TOKEN` from `os.environ` cannot erase the process's original
+environment block: same-runner processes with proc access may still read the
+token from `/proc/<pid>/environ`, and Python startup hooks run before the waiter
+can remove it. File ingress avoids those environment exposures because only the
+file path enters the initial environment and `main()` verifies isolated mode
+before reading the file. The executable shebang enables Python isolated mode;
+an explicit caller must likewise invoke a reviewed interpreter with `python
+-I`.
+
+The waiter does not spawn or shell out to another process, disables ambient
+proxies and redirects, and sends requests only to its fixed
+`https://api.github.com` endpoint allowlist. The waiter cannot enforce
+UID/PID-namespace, same-runner process, or core-dump isolation. Those remain
+external-supervisor obligations.
 Its authentication preflight verifies the authenticated owner, exactly one
 accessible unsuspended app installation, exact read permissions, single exact
 repository selection, and authenticated rate-limit headers. Missing,
@@ -89,10 +101,11 @@ malformed, invalid, suspended, under-scoped, over-scoped, or wrong-repository
 credentials fail before candidate verification begins.
 
 The secret-injection boundary—not candidate convention—is what protects the
-credential. The future supervisor must keep `GH_MATRIX_READ_TOKEN` outside
-every candidate checkout, container, environment, hook, subprocess, and log.
-Candidate code must never run in the waiter's process, and the waiter must
-never run with a candidate-controlled Python path or startup customization.
+credential. The future supervisor must keep the token file and either ingress
+variable outside every candidate checkout, container, environment, hook,
+subprocess, and log. Candidate code must never run in the waiter's process, and
+the waiter must never run with a candidate-controlled Python path or startup
+customization.
 
 Connection attempts, response reads, JSON parsing, transient retries,
 rate-limit waits, and workflow polling all consume one 45-minute monotonic
@@ -110,10 +123,10 @@ most 800 requests plus a 200-request safety margin, below the authenticated
    trust-boundary documentation on the target branch. This is the only step in
    issue #300.
 2. Build a base-pinned external supervisor that obtains branch/SHA provenance
-   plus the expected GitHub run ID and/or a not-before creation time from the
-   trusted control plane, then invokes the waiter from reviewed base code.
-   Provision the GitHub App token only into that supervisor's waiter process
-   and keep it outside every candidate process.
+   plus the expected GitHub run-ID/attempt pair and any optional not-before
+   creation time from the trusted control plane, then invokes the waiter from
+   reviewed base code. Prefer provisioning the GitHub App token through a
+   waiter-only private file and keep it outside every candidate process.
 3. Validate the supervisor and secret boundary independently. Until this is
    complete, public matrix results remain non-security evidence.
 4. Only then enable a Gitea pre-merge or deployment consumer in a separate,

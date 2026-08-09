@@ -1,9 +1,18 @@
 #!/usr/bin/env -S python3 -I
-"""Wait for one exact, reviewed GitHub Django-matrix workflow run.
+"""Wait for one exact, reviewed GitHub Django-matrix workflow run attempt.
 
 This module is a bootstrap artifact for a future base-pinned supervisor.  It
 does not make candidate-controlled package code or tests trusted evidence, and
 it must never be imported or executed from a candidate checkout.
+
+Prefer ``GH_MATRIX_READ_TOKEN_FILE`` so the token itself never enters the
+process environment.  The ``GH_MATRIX_READ_TOKEN`` fallback cannot be erased
+from the process's original environment block: same-runner processes with
+permission to read ``/proc/<pid>/environ`` may still recover it, and Python
+startup hooks run before this module can remove it.  File ingress avoids those
+two environment exposures.  This stdlib waiter cannot enforce process,
+UID/PID-namespace, or core-dump isolation; those remain obligations of the
+base-pinned supervisor.
 """
 
 from __future__ import annotations
@@ -14,6 +23,7 @@ import math
 import os
 import re
 import socket
+import stat
 import sys
 import time
 from collections.abc import Callable, Mapping, MutableMapping, Sequence
@@ -42,6 +52,7 @@ WORKFLOW_RUNS_PATH = f"{WORKFLOW_API_PATH}/runs"
 PINNED_WORKFLOW_BLOB_SHA = "54118c16afe255ae18d4aaf8325ea7dc68cebfd4"
 
 TOKEN_ENV = "GH_MATRIX_READ_TOKEN"
+TOKEN_FILE_ENV = "GH_MATRIX_READ_TOKEN_FILE"
 DEFAULT_DEADLINE_SECONDS = 45 * 60
 DEFAULT_POLL_INTERVAL_SECONDS = 20
 DEFAULT_MAX_REQUESTS = 200
@@ -82,6 +93,10 @@ _ALLOWED_API_PATHS = frozenset(
 )
 _INSTALLATION_REPOSITORIES_PATH = re.compile(
     r"/user/installations/[1-9][0-9]*/repositories\Z"
+)
+_RUN_ATTEMPT_PATH = re.compile(
+    rf"{re.escape(REPOSITORY_PREFIX)}/actions/runs/"
+    r"[1-9][0-9]*/attempts/[1-9][0-9]*\Z"
 )
 _REQUIRED_INSTALLATION_PERMISSIONS = {
     "actions": "read",
@@ -205,16 +220,47 @@ class _NoRedirectHandler(HTTPRedirectHandler):
         return None
 
 
-def _validate_user_access_token(token: str) -> str:
+def _validate_user_access_token(token: str, *, source: str = TOKEN_ENV) -> str:
     if not _TOKEN_PATTERN.fullmatch(token):
-        raise AuthenticationError(f"{TOKEN_ENV} must be a GitHub App user access token")
+        raise AuthenticationError(f"{source} must be a GitHub App user access token")
     return token
 
 
+def _read_token_file(path_value: str) -> str:
+    """Read a bounded token from a regular file with no group/other access."""
+    try:
+        with Path(path_value).open("rb") as token_stream:
+            metadata = os.fstat(token_stream.fileno())
+            if not stat.S_ISREG(metadata.st_mode):
+                raise AuthenticationError(f"{TOKEN_FILE_ENV} must name a regular file")
+            if stat.S_IMODE(metadata.st_mode) & (stat.S_IRWXG | stat.S_IRWXO):
+                raise AuthenticationError(
+                    f"{TOKEN_FILE_ENV} file permissions must deny group and other access"
+                )
+            encoded_token = token_stream.read(512)
+            if token_stream.read(1):
+                raise AuthenticationError(f"{TOKEN_FILE_ENV} is unexpectedly large")
+    except AuthenticationError:
+        raise
+    except OSError as exc:
+        raise AuthenticationError(f"cannot read {TOKEN_FILE_ENV}") from exc
+
+    try:
+        token = encoded_token.decode("utf-8").strip()
+    except UnicodeDecodeError as exc:
+        raise AuthenticationError(f"{TOKEN_FILE_ENV} must contain UTF-8 text") from exc
+    return _validate_user_access_token(token, source=TOKEN_FILE_ENV)
+
+
 def take_token_from_environment(environment: MutableMapping[str, str]) -> str:
-    """Remove and return the base-owned token before any other work begins."""
+    """Take the preferred token-file path or the legacy token fallback."""
+    token_file = environment.pop(TOKEN_FILE_ENV, "")
     token = environment.pop(TOKEN_ENV, "")
-    return _validate_user_access_token(token)
+    if token_file:
+        return _read_token_file(token_file)
+    if token:
+        return _validate_user_access_token(token)
+    raise AuthenticationError(f"{TOKEN_FILE_ENV} or {TOKEN_ENV} is required")
 
 
 def validate_candidate(branch: str, sha: str) -> tuple[str, str]:
@@ -251,24 +297,28 @@ def _parse_utc_timestamp(
 
 def validate_run_selector(
     expected_run_id: object,
+    expected_run_attempt: object,
     not_before: object,
-) -> tuple[int | None, datetime | None]:
-    """Validate the trusted current-run selector supplied by the supervisor."""
-    normalized_run_id: int | None
-    if expected_run_id is None:
-        normalized_run_id = None
-    elif isinstance(expected_run_id, bool):
-        raise InputError("expected run ID must be a positive integer")
-    elif isinstance(expected_run_id, int):
-        normalized_run_id = _positive_int(expected_run_id)
-        if normalized_run_id is None:
-            raise InputError("expected run ID must be a positive integer")
-    elif isinstance(expected_run_id, str) and _RUN_ID_PATTERN.fullmatch(
-        expected_run_id
-    ):
-        normalized_run_id = int(expected_run_id)
-    else:
-        raise InputError("expected run ID must be a positive integer")
+) -> tuple[int, int, datetime | None]:
+    """Validate the trusted exact run/attempt pair and optional time bound."""
+
+    def normalize_positive_integer(value: object, description: str) -> int:
+        if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+            return value
+        if isinstance(value, str) and _RUN_ID_PATTERN.fullmatch(value):
+            return int(value)
+        raise InputError(f"{description} must be a positive integer")
+
+    if expected_run_id is None or expected_run_attempt is None:
+        raise InputError("expected run ID and expected run attempt are required")
+    normalized_run_id = normalize_positive_integer(
+        expected_run_id,
+        "expected run ID",
+    )
+    normalized_run_attempt = normalize_positive_integer(
+        expected_run_attempt,
+        "expected run attempt",
+    )
 
     normalized_not_before = None
     if not_before is not None:
@@ -277,9 +327,7 @@ def validate_run_selector(
             description="not-before creation time",
             error_type=InputError,
         )
-    if normalized_run_id is None and normalized_not_before is None:
-        raise InputError("an expected run ID or not-before creation time is required")
-    return normalized_run_id, normalized_not_before
+    return normalized_run_id, normalized_run_attempt, normalized_not_before
 
 
 def _header(headers: Mapping[str, str], name: str) -> str | None:
@@ -341,6 +389,7 @@ class GitHubApiClient:
         if (
             path not in _ALLOWED_API_PATHS
             and not _INSTALLATION_REPOSITORIES_PATH.fullmatch(path)
+            and not _RUN_ATTEMPT_PATH.fullmatch(path)
         ):
             raise ApiProtocolError("GitHub API path is not allowlisted")
         url = f"{API_ROOT}{path}"
@@ -740,11 +789,12 @@ class MatrixWaiter:
             error_type=RunIdentityError,
         )
 
-    def _select_current_run(
+    def _select_expected_run_attempt(
         self,
         runs: Sequence[Mapping[str, object]],
         *,
-        pinned_run_id: int | None,
+        expected_run_id: int,
+        expected_run_attempt: int,
         not_before: datetime | None,
     ) -> Mapping[str, object] | None:
         eligible: list[Mapping[str, object]] = []
@@ -752,29 +802,23 @@ class MatrixWaiter:
             run_id = _positive_int(run.get("id"))
             if run_id is None:
                 raise RunIdentityError("workflow run has an invalid id")
-            if pinned_run_id is not None and run_id != pinned_run_id:
-                continue
-            if not_before is not None and self._run_created_at(run) < not_before:
+            run_attempt = _positive_int(run.get("run_attempt"))
+            if run_attempt is None:
+                raise RunIdentityError("workflow run has an invalid attempt")
+            if run_id != expected_run_id or run_attempt != expected_run_attempt:
                 continue
             eligible.append(run)
 
-        if pinned_run_id is not None:
-            if len(eligible) > 1:
-                raise ApiProtocolError("GitHub returned a duplicate workflow run id")
-            return eligible[0] if eligible else None
+        if len(eligible) > 1:
+            raise ApiProtocolError("GitHub returned a duplicate workflow run attempt")
         if not eligible:
             return None
-
-        newest_created_at = max(self._run_created_at(run) for run in eligible)
-        newest_runs = [
-            run for run in eligible if self._run_created_at(run) == newest_created_at
-        ]
-        if len(newest_runs) != 1:
+        selected = eligible[0]
+        if not_before is not None and self._run_created_at(selected) < not_before:
             raise RunIdentityError(
-                "multiple workflow runs share the newest creation time; "
-                "an expected run ID is required"
+                "expected workflow run predates the not-before bound"
             )
-        return newest_runs[0]
+        return selected
 
     def _matching_runs(
         self,
@@ -807,55 +851,104 @@ class MatrixWaiter:
             for run in runs
         ]
 
+    def _exact_run_attempt(
+        self,
+        *,
+        expected_run_id: int,
+        expected_run_attempt: int,
+        branch: str,
+        sha: str,
+        workflow: WorkflowIdentity,
+        not_before: datetime | None,
+    ) -> Mapping[str, object]:
+        path = (
+            f"{REPOSITORY_PREFIX}/actions/runs/{expected_run_id}/"
+            f"attempts/{expected_run_attempt}"
+        )
+        response = self.client.get_json(path)
+        run = self._validate_run(
+            response.payload,
+            branch=branch,
+            sha=sha,
+            workflow=workflow,
+        )
+        if run.get("id") != expected_run_id:
+            raise RunIdentityError("workflow run does not match the expected run ID")
+        if run.get("run_attempt") != expected_run_attempt:
+            raise RunIdentityError(
+                "workflow run does not match the expected run attempt"
+            )
+        if not_before is not None and self._run_created_at(run) < not_before:
+            raise RunIdentityError(
+                "expected workflow run predates the not-before bound"
+            )
+        return run
+
     def wait_for_success(
         self,
         branch: str,
         sha: str,
         *,
         expected_run_id: object = None,
+        expected_run_attempt: object = None,
         not_before: object = None,
     ) -> Mapping[str, object]:
-        """Return only a successful exact-identity push run before the deadline."""
+        """Return only a successful exact-identity run attempt before deadline."""
         branch, sha = validate_candidate(branch, sha)
-        pinned_run_id, normalized_not_before = validate_run_selector(
-            expected_run_id,
-            not_before,
+        pinned_run_id, pinned_run_attempt, normalized_not_before = (
+            validate_run_selector(
+                expected_run_id,
+                expected_run_attempt,
+                not_before,
+            )
         )
         self.authenticate()
         workflow = self._workflow_identity()
         self._verify_workflow_blob(sha)
 
+        pinned_pair_visible = False
         while True:
-            runs = self._matching_runs(branch, sha, workflow)
-            run = self._select_current_run(
-                runs,
-                pinned_run_id=pinned_run_id,
+            if not pinned_pair_visible:
+                runs = self._matching_runs(branch, sha, workflow)
+                selected = self._select_expected_run_attempt(
+                    runs,
+                    expected_run_id=pinned_run_id,
+                    expected_run_attempt=pinned_run_attempt,
+                    not_before=normalized_not_before,
+                )
+                if selected is None:
+                    self.deadline.sleep_for(
+                        self.poll_interval,
+                        "workflow polling",
+                    )
+                    continue
+                pinned_pair_visible = True
+
+            run = self._exact_run_attempt(
+                expected_run_id=pinned_run_id,
+                expected_run_attempt=pinned_run_attempt,
+                branch=branch,
+                sha=sha,
+                workflow=workflow,
                 not_before=normalized_not_before,
             )
-            if run is not None:
-                if pinned_run_id is None:
-                    pinned_run_id = _positive_int(run.get("id"))
-                    if pinned_run_id is None:  # pragma: no cover - validated above
-                        raise RunIdentityError("workflow run has an invalid id")
-                status = run.get("status")
-                conclusion = run.get("conclusion")
-                if status == "completed":
-                    if conclusion == "success":
-                        return run
-                    rendered = conclusion if isinstance(conclusion, str) else "missing"
-                    raise WorkflowRunFailed(
-                        f"exact Django workflow run concluded with {rendered}"
-                    )
-                if status not in {
-                    "requested",
-                    "waiting",
-                    "pending",
-                    "queued",
-                    "in_progress",
-                }:
-                    raise ApiProtocolError(
-                        "GitHub returned invalid workflow run status"
-                    )
+            status = run.get("status")
+            conclusion = run.get("conclusion")
+            if status == "completed":
+                if conclusion == "success":
+                    return run
+                rendered = conclusion if isinstance(conclusion, str) else "missing"
+                raise WorkflowRunFailed(
+                    f"exact Django workflow run attempt concluded with {rendered}"
+                )
+            if status not in {
+                "requested",
+                "waiting",
+                "pending",
+                "queued",
+                "in_progress",
+            }:
+                raise ApiProtocolError("GitHub returned invalid workflow run status")
             self.deadline.sleep_for(self.poll_interval, "workflow polling")
 
 
@@ -865,7 +958,8 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--candidate-branch", required=True)
     parser.add_argument("--candidate-sha", required=True)
-    parser.add_argument("--expected-run-id")
+    parser.add_argument("--expected-run-id", required=True)
+    parser.add_argument("--expected-run-attempt", required=True)
     parser.add_argument(
         "--not-before",
         metavar="YYYY-MM-DDTHH:MM:SSZ",
@@ -877,9 +971,9 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     """CLI entry point for a future base-pinned external supervisor."""
     try:
-        token = take_token_from_environment(os.environ)
         if not sys.flags.isolated:
             raise AuthenticationError("waiter must run with Python isolated mode (-I)")
+        token = take_token_from_environment(os.environ)
         arguments = _parser().parse_args(argv)
         branch, sha = validate_candidate(
             arguments.candidate_branch,
@@ -892,13 +986,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             branch,
             sha,
             expected_run_id=arguments.expected_run_id,
+            expected_run_attempt=arguments.expected_run_attempt,
             not_before=arguments.not_before,
         )
     except WaiterError as exc:
         print(f"Django matrix verification failed: {exc}", file=sys.stderr)
         return 1
 
-    print(f"Verified reviewed Django matrix push run {run['id']} for {branch}@{sha}")
+    print(
+        "Verified reviewed Django matrix push run "
+        f"{run['id']} attempt {run['run_attempt']} for {branch}@{sha}"
+    )
     return 0
 
 
