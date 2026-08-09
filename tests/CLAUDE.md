@@ -68,6 +68,13 @@ This directory contains the plugin's pytest test suite.
 - `test_services_backend_context.py`: AST contract for `get_fastapi_request_context` / `get_fastapi_endpoint_with_token` signatures and the three endpoint-resolution branches in `services/backend_context.py`.
 - `test_views_vm_config.py`: AST contract for `ProxmoxVMConfigTabView` — `register_model_view` path/name, `ObjectView` base, `ViewTab` label/permission, and the helper extractors.
 - `test_views_storage.py`: AST contract for the eight `ProxmoxStorage*` view classes — `__all__` membership, list-view `path=""` registration, child-tab paths/labels/permissions, the detail view's short `request_timeout`, and the explicit `MultiValueCharFilter` preserving `nodes` query/OpenAPI behavior after its `TextField` migration.
+- `test_storage_content_fetch.py`: pure adversarial coverage for the storage
+  content process-wide pool and streamed fetcher. Repeated page-deadline calls
+  whose fake HTTP work keeps trickling prove that live workers and occupied
+  slots never exceed four; separate cases pin graceful partial notices when all
+  slots are occupied, active wall-clock abort of a trickling response, and the
+  decoded response-size ceiling. It path-loads `views/storage_content.py` so the
+  mocked suite exercises these resource-lifetime rules without NetBox/Django.
 - `test_storage_nodes_capacity_django.py`: real NetBox/Django coverage proving
   storage node membership longer than 255 characters passes the model, form,
   serializer, filterset, REST list/bulk, and database boundaries unchanged. Its
@@ -77,8 +84,8 @@ This directory contains the plugin's pytest test suite.
   live-content fan-out stays at four workers, issues no more than 64
   authenticated calls for a 5,000-node membership, respects one absolute
   deadline even when a call ignores its socket timeout, bounds late-refill HTTP
-  timeouts to the remaining budget, uses non-blocking executor shutdown,
-  rejects real malformed/error envelopes without mocked validation, and
+  timeouts to the remaining budget, rejects real malformed/error envelopes
+  without mocked validation, and
   reports partial/truncated results explicitly in every usage-data template
   branch.
 - `test_proxmox_endpoint_settings_view.py`: AST contract for the Proxmox endpoint Settings tab registration, permissions, form usage, and context wiring.

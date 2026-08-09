@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 import time
 
 import requests
@@ -34,6 +33,13 @@ from netbox_proxbox.utils import get_backend_auth_headers, get_fastapi_url
 from netbox_proxbox.views.error_utils import (
     extract_proxmox_backend_error_detail,
     parse_requests_response_json,
+)
+from netbox_proxbox.views.storage_content import (
+    CONTENT_FETCH_WORKERS,
+    CONTENT_RESPONSE_MAX_BYTES,
+    collect_completed_before_deadline,
+    fetch_json_with_limits,
+    format_content_detail,
 )
 
 __all__ = (
@@ -72,8 +78,9 @@ class ProxmoxStorageView(generic.ObjectView):
     queryset = ProxmoxStorage.objects.all()
 
     request_timeout = 8
-    content_request_workers = 4
+    content_request_workers = CONTENT_FETCH_WORKERS
     content_request_deadline = 8.0
+    content_response_max_bytes = CONTENT_RESPONSE_MAX_BYTES
     max_content_nodes = MAX_CONTENT_NODES
 
     @staticmethod
@@ -106,6 +113,28 @@ class ProxmoxStorageView(generic.ObjectView):
         payload, json_err = parse_requests_response_json(response, log_label=route)
         return payload, json_err
 
+    def _fetch_storage_content_json(
+        self,
+        *,
+        base_url: str,
+        auth_headers: dict[str, str],
+        verify_ssl: bool,
+        route: str,
+        query_params: dict[str, str],
+        request_timeout: float,
+        deadline_at: float,
+    ) -> object:
+        """Fetch one node's content without unbounded time or response growth."""
+        return fetch_json_with_limits(
+            url=f"{base_url}{route}",
+            query_params=query_params,
+            auth_headers=auth_headers,
+            verify_ssl=verify_ssl,
+            request_timeout=request_timeout,
+            deadline_at=deadline_at,
+            max_response_bytes=self.content_response_max_bytes,
+        )
+
     def _fetch_storage_content(
         self,
         *,
@@ -116,36 +145,20 @@ class ProxmoxStorageView(generic.ObjectView):
         verify_ssl: bool,
         query_params: dict[str, str],
     ) -> tuple[list[dict[str, object]], str | None]:
-        """Fetch node content with bounded concurrency and one overall deadline."""
+        """Fetch node content through the process-wide bounded worker pool."""
         if not nodes:
             return [], None
 
-        total_node_count = len(nodes)
         request_limit = max(1, int(self.max_content_nodes))
-        selected_nodes = nodes[:request_limit]
-        worker_count = max(
-            1,
-            min(self.content_request_workers, len(selected_nodes)),
-        )
-        deadline_at = time.monotonic() + self.content_request_deadline
-        executor = ThreadPoolExecutor(
-            max_workers=worker_count,
-            thread_name_prefix="proxbox-storage-content",
-        )
-        futures: dict[Future[tuple[object | None, str | None]], str] = {}
-        records: list[dict[str, object]] = []
-        successful_nodes = 0
-        next_node_index = 0
+        deadline_seconds = max(0.0, float(self.content_request_deadline))
 
-        def submit_one() -> bool:
-            nonlocal next_node_index
+        def fetch_node(node: object, deadline_at: float) -> list[dict[str, object]]:
             remaining_budget = deadline_at - time.monotonic()
-            if next_node_index >= len(selected_nodes) or remaining_budget <= 0:
-                return False
-            node = selected_nodes[next_node_index]
-            next_node_index += 1
-            future = executor.submit(
-                self._fetch_backend_json,
+            if remaining_budget <= 0:
+                raise requests.exceptions.Timeout(
+                    "storage content wall-clock deadline expired"
+                )
+            content_payload = self._fetch_storage_content_json(
                 base_url=base_url,
                 auth_headers=auth_headers,
                 verify_ssl=verify_ssl,
@@ -155,78 +168,51 @@ class ProxmoxStorageView(generic.ObjectView):
                     0.001,
                     min(float(self.request_timeout), remaining_budget),
                 ),
+                deadline_at=deadline_at,
             )
-            futures[future] = node
-            return True
+            if not isinstance(content_payload, (dict, list)):
+                raise ValueError("storage content must be a list or object")
+            node_records: list[dict[str, object]] = []
+            for record in iter_scalar_records(content_payload):
+                parsed = StorageContentRecord.model_validate(record)
+                if not parsed.volid or not parsed.volid.strip():
+                    raise ValueError("storage content record is missing its volume id")
+                node_records.append(parsed.model_dump())
+            return node_records
 
-        try:
-            while len(futures) < worker_count and submit_one():
-                pass
-
-            while futures:
-                remaining = deadline_at - time.monotonic()
-                if remaining <= 0:
-                    break
-                completed, _pending = wait(
-                    tuple(futures),
-                    timeout=remaining,
-                    return_when=FIRST_COMPLETED,
-                )
-                if not completed:
-                    break
-
-                for future in completed:
-                    futures.pop(future)
-                    try:
-                        content_payload, content_error = future.result()
-                        if content_error:
-                            continue
-                        if not isinstance(content_payload, (dict, list)):
-                            raise ValueError("storage content must be a list or object")
-                        node_records: list[dict[str, object]] = []
-                        for record in iter_scalar_records(content_payload):
-                            parsed = StorageContentRecord.model_validate(record)
-                            if not parsed.volid or not parsed.volid.strip():
-                                raise ValueError(
-                                    "storage content record is missing its volume id"
-                                )
-                            node_records.append(parsed.model_dump())
-                    except (
-                        requests.exceptions.RequestException,
-                        ValidationError,
-                        TypeError,
-                        ValueError,
-                    ):
-                        continue
-                    records.extend(node_records)
-                    successful_nodes += 1
-
-                while len(futures) < worker_count and submit_one():
-                    pass
-        finally:
-            for future in futures:
-                future.cancel()
-            # A socket timeout only measures inactivity, so a slow-trickling
-            # response may outlive the absolute page deadline. Do not join
-            # those running calls; they finish in the background without
-            # holding the NetBox request open.
-            executor.shutdown(wait=False, cancel_futures=True)
-
-        details = []
-        if successful_nodes != len(selected_nodes):
-            details.append(
-                "Storage content is partial: "
-                f"{successful_nodes} of {len(selected_nodes)} node requests "
-                f"completed within the {self.content_request_deadline:g}-second "
-                "deadline."
+        completed, total_node_count, selected_node_count = (
+            collect_completed_before_deadline(
+                nodes,
+                fetch_node,
+                deadline_seconds=deadline_seconds,
+                max_items=request_limit,
+                per_request_workers=self.content_request_workers,
             )
-        if total_node_count > len(selected_nodes):
-            details.append(
-                "Storage content is truncated to the first "
-                f"{len(selected_nodes)} of {total_node_count} nodes (per-page "
-                f"request limit {request_limit})."
-            )
-        return records, " ".join(details) or None
+        )
+        records: list[dict[str, object]] = []
+        successful_nodes = 0
+        for future in completed:
+            try:
+                node_records = future.result()
+            except (
+                requests.exceptions.RequestException,
+                ValidationError,
+                TypeError,
+                ValueError,
+            ):
+                continue
+            if not isinstance(node_records, list):
+                continue
+            records.extend(node_records)
+            successful_nodes += 1
+
+        return records, format_content_detail(
+            successful_nodes=successful_nodes,
+            selected_node_count=selected_node_count,
+            total_node_count=total_node_count,
+            deadline_seconds=deadline_seconds,
+            request_limit=request_limit,
+        )
 
     def get_extra_context(
         self, request: HttpRequest, instance: ProxmoxStorage

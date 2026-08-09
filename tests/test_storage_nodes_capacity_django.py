@@ -5,12 +5,10 @@ from __future__ import annotations
 import json
 import os
 import sys
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from threading import Barrier, Event, Lock
 import time
 from types import MethodType
-from unittest.mock import patch
 
 import pytest
 
@@ -104,9 +102,9 @@ class ProxmoxStorageContentBudgetTest(SimpleTestCase):
             with lock:
                 active -= 1
             node = kwargs["route"].split("/")[3]
-            return [{"volid": f"local:iso/{node}.iso"}], None
+            return [{"volid": f"local:iso/{node}.iso"}]
 
-        view._fetch_backend_json = MethodType(fake_fetch, view)
+        view._fetch_storage_content_json = MethodType(fake_fetch, view)
         records, detail = self._content_call(view, nodes)
 
         self.assertIsNone(detail)
@@ -121,14 +119,14 @@ class ProxmoxStorageContentBudgetTest(SimpleTestCase):
 
         def fake_fetch(self, **kwargs):
             if "/pve-000/" in kwargs["route"]:
-                return [{"volid": "local:iso/first.iso"}], None
+                return [{"volid": "local:iso/first.iso"}]
             # Model a response that keeps producing bytes often enough that the
             # requests read timeout never fires. The view's absolute deadline,
             # not the socket inactivity timeout, must release the caller.
             release_slow_calls.wait(timeout=0.5)
-            return [{"volid": "local:iso/late.iso"}], None
+            return [{"volid": "local:iso/late.iso"}]
 
-        view._fetch_backend_json = MethodType(fake_fetch, view)
+        view._fetch_storage_content_json = MethodType(fake_fetch, view)
         started = time.monotonic()
         records, detail = self._content_call(view, nodes)
         elapsed = time.monotonic() - started
@@ -153,9 +151,9 @@ class ProxmoxStorageContentBudgetTest(SimpleTestCase):
             with lock:
                 started_calls += 1
             node = kwargs["route"].split("/")[3]
-            return [{"volid": f"local:iso/{node}.iso"}], None
+            return [{"volid": f"local:iso/{node}.iso"}]
 
-        view._fetch_backend_json = MethodType(fake_fetch, view)
+        view._fetch_storage_content_json = MethodType(fake_fetch, view)
         records, detail = self._content_call(view, nodes)
         with lock:
             call_count = started_calls
@@ -168,42 +166,6 @@ class ProxmoxStorageContentBudgetTest(SimpleTestCase):
             detail,
         )
 
-    def test_deadline_uses_non_blocking_executor_shutdown(self) -> None:
-        view = ProxmoxStorageView()
-        view.content_request_deadline = 0.02
-        release_calls = Event()
-        shutdown_calls: list[tuple[bool, bool]] = []
-
-        class TrackingExecutor(ThreadPoolExecutor):
-            def shutdown(
-                self,
-                wait: bool = True,
-                *,
-                cancel_futures: bool = False,
-            ) -> None:
-                shutdown_calls.append((wait, cancel_futures))
-                super().shutdown(wait=wait, cancel_futures=cancel_futures)
-
-        def fake_fetch(self, **kwargs):
-            release_calls.wait(timeout=0.5)
-            return [], None
-
-        view._fetch_backend_json = MethodType(fake_fetch, view)
-        with patch.object(storage_views, "ThreadPoolExecutor", TrackingExecutor):
-            records, detail = self._content_call(
-                view,
-                [f"pve-{index:03d}" for index in range(80)],
-            )
-        release_calls.set()
-
-        self.assertEqual(records, [])
-        self.assertIsNotNone(detail)
-        self.assertIn(
-            f"0 of {view.max_content_nodes} node requests completed",
-            detail,
-        )
-        self.assertEqual(shutdown_calls, [(False, True)])
-
     def test_real_malformed_records_never_count_as_a_successful_node(self) -> None:
         for payload in (
             {"detail": "backend failed"},
@@ -214,9 +176,9 @@ class ProxmoxStorageContentBudgetTest(SimpleTestCase):
                 view = ProxmoxStorageView()
 
                 def fake_fetch(self, **kwargs):
-                    return payload, None
+                    return payload
 
-                view._fetch_backend_json = MethodType(fake_fetch, view)
+                view._fetch_storage_content_json = MethodType(fake_fetch, view)
                 records, detail = self._content_call(view, ["pve-000"])
 
                 self.assertEqual(records, [])
@@ -235,9 +197,9 @@ class ProxmoxStorageContentBudgetTest(SimpleTestCase):
                 time.sleep(timeout)
                 raise storage_views.requests.exceptions.Timeout("deadline")
             time.sleep(0.035)
-            return [{"volid": f"local:iso/{kwargs['route'].split('/')[3]}.iso"}], None
+            return [{"volid": f"local:iso/{kwargs['route'].split('/')[3]}.iso"}]
 
-        view._fetch_backend_json = MethodType(fake_fetch, view)
+        view._fetch_storage_content_json = MethodType(fake_fetch, view)
         started = time.monotonic()
         _records, detail = self._content_call(
             view,

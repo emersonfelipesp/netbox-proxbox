@@ -13,20 +13,22 @@
 
 This directory implements the plugin's NetBox UI behavior, including dashboard pages, endpoint CRUD views, sync actions, job integration, and status utilities.
 
-The storage detail page bounds live per-node content discovery to four worker
-threads, at most four queued/in-flight futures, and one absolute eight-second
-fan-out deadline that starts before submission. It fetches at most 64 membership
-nodes per page load, refills the sliding window only as calls finish, and caps
-each HTTP timeout to the absolute budget remaining at submission. At the
-deadline it cancels queued work and shuts the executor down with
-`wait=False, cancel_futures=True`; a running slow-trickle response may finish in
-the background but can never hold the NetBox request past the deadline. A node
-counts as successful only when the outer payload is a list/object and every
-flattened content record has a non-empty `volid`; error envelopes and
-permissive-schema dictionaries are partial failures. Large storage memberships
-must produce explicit partial/truncation context rather than serially occupying
-a web worker for `node_count * request_timeout` seconds, allocating one future
-per node, or issuing an authenticated request for every membership entry.
+The storage detail page routes live per-node content discovery through one
+process-wide four-thread/four-slot pool in `storage_content.py`. A slot is
+reserved before submission and is released only by the worker after the HTTP
+call actually exits, so page deadlines never turn abandoned requests into an
+unbounded collection of authenticated sockets or threads. A page waits only
+until its absolute eight-second deadline; if the shared pool remains full, the
+unstarted nodes use the existing partial-result notice. Each node response is
+streamed under the same absolute deadline, actively closed by one process-wide
+deadline-watchdog thread, and capped at 1 MiB of decoded bytes before JSON
+parsing. The page still fetches at most 64 membership nodes, and a node counts as
+successful only when the outer payload is a list/object and every flattened
+content record has a non-empty `volid`; error envelopes and permissive-schema
+dictionaries are partial failures. Large storage memberships must produce
+explicit partial/truncation context rather than serially occupying a web worker
+for `node_count * request_timeout` seconds, allocating one future per node, or
+issuing an authenticated request for every membership entry.
 
 ## Files And Ownership
 
@@ -165,6 +167,9 @@ per node, or issuing an authenticated request for every membership entry.
   so they keep the repair affordance — see `partials/bootstrap_status_card.html`.
 - [`proxmox_cluster_node.py`](./proxmox_cluster_node.py): detail (`ObjectView`) views for `ProxmoxCluster` and `ProxmoxNode`, registered under the bare model names so `get_absolute_url()` resolves.
 - [`storage.py`](./storage.py): CRUD list/detail/delete views for `ProxmoxStorage`.
+- [`storage_content.py`](./storage_content.py): process-wide bounded worker pool,
+  deadline-aware streamed JSON fetch, response-size ceiling, and shared
+  partial/truncation notice formatter for storage-node content fan-out.
 - [`sync.py`](./sync.py): POST endpoints that enqueue `ProxboxSyncJob` runs for devices, storage, virtual machines, virtual disks, backups, snapshots, network interfaces, IP addresses, backup routines, replications, and full update.
 - [`sync_now/`](./sync_now/): targeted per-object sync handlers for cluster, node, storage, and VM actions.
 - [`vm_backup.py`](./vm_backup.py): CRUD list/detail/delete views and the VirtualMachine tab for `VMBackup`.

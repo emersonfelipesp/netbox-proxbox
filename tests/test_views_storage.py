@@ -31,6 +31,12 @@ STORAGE_PATH = (
 FILTERSETS_PATH = (
     Path(__file__).resolve().parents[1] / "netbox_proxbox" / "filtersets.py"
 )
+STORAGE_CONTENT_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "netbox_proxbox"
+    / "views"
+    / "storage_content.py"
+)
 
 
 def _module() -> ast.Module:
@@ -182,6 +188,47 @@ def test_detail_view_request_timeout_is_short_enough():
         "ProxmoxStorageView.request_timeout must stay short — the storage detail "
         "page renders inline and a slow backend should not block the request"
     )
+
+
+def test_storage_content_uses_the_process_wide_bounded_fetcher():
+    module = _module()
+    source = STORAGE_PATH.read_text(encoding="utf-8")
+    helper_source = STORAGE_CONTENT_PATH.read_text(encoding="utf-8")
+    cls = _find_class(module, "ProxmoxStorageView")
+    method_calls = {
+        node.func.id
+        for method_name in ("_fetch_storage_content_json", "_fetch_storage_content")
+        for method in cls.body
+        if isinstance(method, ast.FunctionDef) and method.name == method_name
+        for node in ast.walk(method)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+    }
+
+    assert "ThreadPoolExecutor" not in source
+    assert "collect_completed_before_deadline" in method_calls
+    assert "fetch_json_with_limits" in method_calls
+    assert "format_content_detail" in method_calls
+    assert "_CONTENT_FETCH_POOL = _BoundedContentFetchPool(" in helper_source
+    assert "CONTENT_RESPONSE_MAX_BYTES = 1024 * 1024" in helper_source
+
+
+def test_storage_content_keeps_the_64_node_page_cap():
+    module = _module()
+    max_nodes = next(
+        (
+            node.value
+            for node in module.body
+            if isinstance(node, ast.Assign)
+            and any(
+                isinstance(target, ast.Name) and target.id == "MAX_CONTENT_NODES"
+                for target in node.targets
+            )
+        ),
+        None,
+    )
+
+    assert isinstance(max_nodes, ast.Constant)
+    assert max_nodes.value == 64
 
 
 def test_storage_nodes_filter_explicitly_preserves_multi_value_semantics():
