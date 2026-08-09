@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
+import time
+
 import requests
 from django.db import ProgrammingError
 from django.http import HttpRequest
 from netbox.views import generic
+from pydantic import ValidationError
 from utilities.views import ViewTab, register_model_view
 from virtualization.models import VirtualDisk
 from virtualization.tables import VirtualDiskTable
@@ -66,6 +70,8 @@ class ProxmoxStorageView(generic.ObjectView):
     queryset = ProxmoxStorage.objects.all()
 
     request_timeout = 8
+    content_request_workers = 4
+    content_request_deadline = 8.0
 
     @staticmethod
     def _parse_nodes(value: str | None) -> list[str]:
@@ -81,18 +87,129 @@ class ProxmoxStorageView(generic.ObjectView):
         verify_ssl: bool,
         route: str,
         query_params: dict[str, str] | None = None,
+        request_timeout: float | None = None,
     ) -> tuple[object | None, str | None]:
         response = requests.get(
             f"{base_url}{route}",
             params=query_params or None,
             headers=auth_headers,
             verify=verify_ssl,
-            timeout=self.request_timeout,
+            timeout=(
+                self.request_timeout if request_timeout is None else request_timeout
+            ),
             allow_redirects=False,
         )
         response.raise_for_status()
         payload, json_err = parse_requests_response_json(response, log_label=route)
         return payload, json_err
+
+    def _fetch_storage_content(
+        self,
+        *,
+        nodes: list[str],
+        storage_name: str,
+        base_url: str,
+        auth_headers: dict[str, str],
+        verify_ssl: bool,
+        query_params: dict[str, str],
+    ) -> tuple[list[dict[str, object]], str | None]:
+        """Fetch node content with bounded concurrency and one overall deadline."""
+        if not nodes:
+            return [], None
+
+        worker_count = max(1, min(self.content_request_workers, len(nodes)))
+        deadline_at = time.monotonic() + self.content_request_deadline
+        executor = ThreadPoolExecutor(
+            max_workers=worker_count,
+            thread_name_prefix="proxbox-storage-content",
+        )
+        futures: dict[Future[tuple[object | None, str | None]], str] = {}
+        records: list[dict[str, object]] = []
+        successful_nodes = 0
+        next_node_index = 0
+
+        def submit_one() -> bool:
+            nonlocal next_node_index
+            remaining_budget = deadline_at - time.monotonic()
+            if next_node_index >= len(nodes) or remaining_budget <= 0:
+                return False
+            node = nodes[next_node_index]
+            next_node_index += 1
+            future = executor.submit(
+                self._fetch_backend_json,
+                base_url=base_url,
+                auth_headers=auth_headers,
+                verify_ssl=verify_ssl,
+                route=f"/proxmox/nodes/{node}/storage/{storage_name}/content",
+                query_params=query_params,
+                request_timeout=max(
+                    0.001,
+                    min(float(self.request_timeout), remaining_budget),
+                ),
+            )
+            futures[future] = node
+            return True
+
+        try:
+            while len(futures) < worker_count and submit_one():
+                pass
+
+            while futures:
+                remaining = deadline_at - time.monotonic()
+                if remaining <= 0:
+                    break
+                completed, _pending = wait(
+                    tuple(futures),
+                    timeout=remaining,
+                    return_when=FIRST_COMPLETED,
+                )
+                if not completed:
+                    break
+
+                for future in completed:
+                    futures.pop(future)
+                    try:
+                        content_payload, content_error = future.result()
+                        if content_error:
+                            continue
+                        if not isinstance(content_payload, (dict, list)):
+                            raise ValueError("storage content must be a list or object")
+                        node_records: list[dict[str, object]] = []
+                        for record in iter_scalar_records(content_payload):
+                            parsed = StorageContentRecord.model_validate(record)
+                            if not parsed.volid or not parsed.volid.strip():
+                                raise ValueError(
+                                    "storage content record is missing its volume id"
+                                )
+                            node_records.append(parsed.model_dump())
+                    except (
+                        requests.exceptions.RequestException,
+                        ValidationError,
+                        TypeError,
+                        ValueError,
+                    ):
+                        continue
+                    records.extend(node_records)
+                    successful_nodes += 1
+
+                while len(futures) < worker_count and submit_one():
+                    pass
+        finally:
+            for future in futures:
+                future.cancel()
+            # Running futures cannot be cancelled. Each request is submitted
+            # with no more than the absolute deadline's remaining budget, then
+            # joined here so degraded backends cannot leave per-request worker
+            # threads accumulating after the response has returned.
+            executor.shutdown(wait=True, cancel_futures=True)
+
+        if successful_nodes == len(nodes):
+            return records, None
+        return records, (
+            "Storage content is partial: "
+            f"{successful_nodes} of {len(nodes)} node requests completed within "
+            f"the {self.content_request_deadline:g}-second deadline."
+        )
 
     def get_extra_context(
         self, request: HttpRequest, instance: ProxmoxStorage
@@ -124,6 +241,7 @@ class ProxmoxStorageView(generic.ObjectView):
         usage = None
         usage_detail = None
         content_records: list[dict[str, object]] = []
+        content_detail = None
 
         fastapi_endpoint = (
             FastAPIEndpoint.objects.restrict(request.user, "view")
@@ -173,22 +291,14 @@ class ProxmoxStorageView(generic.ObjectView):
                                 usage = typed_record.to_usage_dict().model_dump()
                                 break
 
-                        for node in self._parse_nodes(instance.nodes):
-                            content_payload, content_err = self._fetch_backend_json(
-                                base_url=fastapi_url,
-                                auth_headers=auth_headers,
-                                verify_ssl=verify_ssl,
-                                route=f"/proxmox/nodes/{node}/storage/{instance.name}/content",
-                                query_params=scope_params,
-                            )
-                            if content_err:
-                                continue
-                            for record in iter_scalar_records(content_payload):
-                                content_records.append(
-                                    StorageContentRecord.model_validate(
-                                        record
-                                    ).model_dump()
-                                )
+                        content_records, content_detail = self._fetch_storage_content(
+                            nodes=self._parse_nodes(instance.nodes),
+                            storage_name=instance.name,
+                            base_url=fastapi_url,
+                            auth_headers=auth_headers,
+                            verify_ssl=verify_ssl,
+                            query_params=scope_params,
+                        )
 
                 except requests.exceptions.RequestException as exc:
                     detail, _ = extract_proxmox_backend_error_detail(
@@ -206,6 +316,7 @@ class ProxmoxStorageView(generic.ObjectView):
             "storage_usage": usage,
             "storage_usage_detail": usage_detail,
             "storage_content_count": len(content_records),
+            "storage_content_detail": content_detail,
         }
 
 

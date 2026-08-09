@@ -187,6 +187,10 @@ class CephRuntimeSettingsMigrationTest(TransactionTestCase):
         return executor.loader.project_state([target]).apps
 
     def test_existing_settings_row_receives_runtime_timing_defaults(self) -> None:
+        executor = MigrationExecutor(connection)
+        leaf_targets = executor.loader.graph.leaf_nodes("netbox_proxbox")
+        self.assertEqual(len(leaf_targets), 1)
+        restore_target = leaf_targets[0]
         try:
             apps_0076 = self._migrate_to(self.migrate_from)
             Settings0076 = apps_0076.get_model(
@@ -206,4 +210,4 @@ class CephRuntimeSettingsMigrationTest(TransactionTestCase):
             self.assertEqual(migrated.ceph_task_poll_interval, Decimal("1.00"))
             self.assertEqual(migrated.ceph_run_lease_seconds, Decimal("360.00"))
         finally:
-            self._migrate_to(self.migrate_to)
+            self._migrate_to(restore_target)

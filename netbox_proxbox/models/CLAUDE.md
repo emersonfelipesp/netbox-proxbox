@@ -53,7 +53,10 @@ This directory defines the plugin's persisted data model.
   cluster. Token fields are `nms-secret:<uuid>` references to netbox-nms
   `ObservabilitySecret` objects, never plaintext credentials or encrypted token
   blobs in this plugin.
-- `ProxmoxStorage`: stores Proxmox storage inventory synchronized from the backend.
+- `ProxmoxStorage`: stores Proxmox storage inventory synchronized from the
+  backend. Its comma-separated `nodes` membership is a `TextField`; Proxmox
+  estates with many or long node names must never be truncated to 255
+  characters at the model, form, serializer, or database boundary.
 - `ProxmoxStorageVirtualDisk`: links storage rows to virtual disks.
 - `GuestVMInterface`: stores guest-agent OS interface names (for example `ens18`) for a NetBox `VirtualMachine`, mapped **one-to-one** (`OneToOneField`, `SET_NULL`) to the canonical core `VMInterface` (for example `net0`) by MAC. `SET_NULL` (not `CASCADE`) so deleting/recreating the core interface during churn preserves the guest OS inventory row and only clears the link; `vm_interface` is nullable for agent-only interfaces with no matching Proxmox NIC.
 - `GuestVMInterfaceAddress`: links a guest OS interface to an existing core `ipam.IPAddress`; it never duplicates IP rows and protects referenced IPs from deletion. `clean()` enforces that the linked IP is the **same object** assigned to the mapped core `VMInterface` (or, for agent-only guests, at least on the same VM) so a bad ID/privileged user can never cross-link a foreign VM's IP.
