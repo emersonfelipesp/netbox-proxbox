@@ -18,6 +18,11 @@ NMS_SECRET_REF_RE = (
     r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 
+# Database-enforceable subset of URLValidator plus the credential boundary in
+# ``clean()``: an HTTP(S) authority is required, while userinfo, query strings,
+# fragments, and whitespace are forbidden. The path remains optional.
+CREDENTIAL_FREE_HTTP_URL_RE = r"^[Hh][Tt][Tt][Pp][Ss]?://[^/?#@\s]+(?:/[^?#\s]*)?$"
+
 #: Rendered in place of a token field whose stored value is not an exact
 #: ``nms-secret:<uuid>`` reference.  Deliberately not the empty string: a blank
 #: renders as NetBox's "not set" placeholder, which would read as *no token
@@ -62,7 +67,11 @@ def masked_influx_url(value: str | None) -> str:
     row written around model validation cannot disclose embedded credentials
     through a UI or API representation.
     """
-    if not isinstance(value, str) or not value:
+    if (
+        not isinstance(value, str)
+        or not value
+        or not re.fullmatch(CREDENTIAL_FREE_HTTP_URL_RE, value)
+    ):
         return MASKED_INFLUX_URL
     try:
         _INFLUX_URL_VALIDATOR(value)
@@ -156,22 +165,25 @@ class ProxmoxMetricsInfluxDB(NetBoxModel):
                 fields=["proxmox_cluster", "name"],
                 name="netbox_proxbox_metrics_influxdb_unique_cluster_name",
             ),
-            # "Empty, or an exact nms-secret reference" -- never free text. The
-            # empty branch keeps required-ness a form/`clean()` concern (a blank
-            # query reference is invalid input, not a corrupt row) while the
-            # database still guarantees that anything actually stored in these
-            # columns is a reference and not a credential. `RegexValidator`
-            # alone cannot: model validators do not run on `objects.create()`,
-            # `bulk_create()`, or `queryset.update()`.
+            # Enabled mappings must remain queryable after every write bypass:
+            # the URL is a credential-free HTTP(S) URL and the required query
+            # token is an exact secret reference. Disabled inventory rows may
+            # retain blanks for operator remediation. The optional writer token
+            # remains either blank or an exact reference in every state.
             models.CheckConstraint(
                 condition=models.Q(query_token_secret_ref__regex=NMS_SECRET_REF_RE)
-                | models.Q(query_token_secret_ref=""),
+                | models.Q(enabled=False, query_token_secret_ref=""),
                 name="netbox_proxbox_metrics_influxdb_query_token_is_ref",
             ),
             models.CheckConstraint(
                 condition=models.Q(writer_token_secret_ref__regex=NMS_SECRET_REF_RE)
                 | models.Q(writer_token_secret_ref=""),
                 name="netbox_proxbox_metrics_influxdb_writer_token_is_ref",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(enabled=False)
+                | models.Q(influx_url__regex=CREDENTIAL_FREE_HTTP_URL_RE),
+                name="netbox_proxbox_metrics_influxdb_url_is_safe",
             ),
         ]
 
@@ -229,8 +241,12 @@ class ProxmoxMetricsInfluxDB(NetBoxModel):
                 parsed_url = urlsplit(self.influx_url)
             except ValueError:
                 parsed_url = None
-            if parsed_url and (
-                "@" in parsed_url.netloc or parsed_url.query or parsed_url.fragment
+            if (
+                not re.fullmatch(CREDENTIAL_FREE_HTTP_URL_RE, self.influx_url)
+                or parsed_url is None
+                or "@" in parsed_url.netloc
+                or parsed_url.query
+                or parsed_url.fragment
             ):
                 raise ValidationError(
                     {

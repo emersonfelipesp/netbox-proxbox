@@ -82,6 +82,7 @@ from netbox_proxbox.models.proxmox_metrics import MASKED_SECRET_REF  # noqa: E40
 VALID_SECRET_REF = "nms-secret:123e4567-e89b-12d3-a456-426614174000"
 QUERY_CONSTRAINT = "netbox_proxbox_metrics_influxdb_query_token_is_ref"
 WRITER_CONSTRAINT = "netbox_proxbox_metrics_influxdb_writer_token_is_ref"
+URL_CONSTRAINT = "netbox_proxbox_metrics_influxdb_url_is_safe"
 
 
 class ProxmoxMetricsInfluxDBMigrationTest(TransactionTestCase):
@@ -257,16 +258,40 @@ class ProxmoxMetricsInfluxDBMigrationTest(TransactionTestCase):
             constraint_names = self._check_constraint_names(table_name)
             self.assertIn(QUERY_CONSTRAINT, constraint_names)
             self.assertIn(WRITER_CONSTRAINT, constraint_names)
+            self.assertIn(URL_CONSTRAINT, constraint_names)
 
-            for field_name in (
-                "query_token_secret_ref",
-                "writer_token_secret_ref",
-            ):
-                with self.subTest(field=field_name):
+            invalid_creates = (
+                {
+                    "name": "create-empty-query",
+                    "influx_url": "https://create-empty-query.example.test:8086",
+                    "query_token_secret_ref": "",
+                },
+                {
+                    "name": "create-credentialed-url",
+                    "influx_url": "https://user:secret@create.example.test:8086",
+                    "query_token_secret_ref": VALID_SECRET_REF,
+                },
+            )
+            for values in invalid_creates:
+                with self.subTest(create=values["name"]):
                     with self.assertRaises(IntegrityError), transaction.atomic():
-                        MetricsAfter.objects.filter(pk=preserved.pk).update(
-                            **{field_name: "plaintext-token"}
+                        MetricsAfter.objects.create(
+                            endpoint_id=endpoint.pk,
+                            proxmox_cluster_id=cluster.pk,
+                            enabled=True,
+                            **values,
                         )
+
+            invalid_updates = (
+                {"query_token_secret_ref": ""},
+                {"query_token_secret_ref": "plaintext-token"},
+                {"writer_token_secret_ref": "plaintext-token"},
+                {"influx_url": "https://user:secret@update.example.test:8086"},
+            )
+            for values in invalid_updates:
+                with self.subTest(update=values):
+                    with self.assertRaises(IntegrityError), transaction.atomic():
+                        MetricsAfter.objects.filter(pk=preserved.pk).update(**values)
 
             apps_reversed = self._migrate_to(migrate_from)
             MetricsReversed = apps_reversed.get_model(
@@ -290,6 +315,7 @@ class ProxmoxMetricsInfluxDBMigrationTest(TransactionTestCase):
             reversed_constraints = self._check_constraint_names(table_name)
             self.assertNotIn(QUERY_CONSTRAINT, reversed_constraints)
             self.assertNotIn(WRITER_CONSTRAINT, reversed_constraints)
+            self.assertNotIn(URL_CONSTRAINT, reversed_constraints)
 
             MetricsReversed.objects.filter(pk=scrubbed.pk).update(
                 query_token_secret_ref="accepted-only-after-reverse",
@@ -434,7 +460,8 @@ class ProxmoxMetricsInfluxDBSecuritySurfaceTest(TestCase):
     def test_list_q_cannot_match_a_bypass_written_raw_url(self) -> None:
         oracle_marker = "raw-url-substring-oracle-marker"
         ProxmoxMetricsInfluxDB.objects.filter(pk=self.metrics.pk).update(
-            influx_url=f"not-a-url-{oracle_marker}"
+            enabled=False,
+            influx_url=f"not-a-url-{oracle_marker}",
         )
 
         response = self.client.get(
@@ -449,7 +476,8 @@ class ProxmoxMetricsInfluxDBSecuritySurfaceTest(TestCase):
     def test_edit_get_hides_a_bypass_written_raw_url_and_warns(self) -> None:
         edit_marker = "raw-edit-url-must-not-render"
         ProxmoxMetricsInfluxDB.objects.filter(pk=self.metrics.pk).update(
-            influx_url=edit_marker
+            enabled=False,
+            influx_url=edit_marker,
         )
 
         response = self.client.get(

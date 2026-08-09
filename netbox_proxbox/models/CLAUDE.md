@@ -57,6 +57,9 @@ This directory defines the plugin's persisted data model.
   masked instead of rendered. Its `serialize_object()` override applies those
   same rules before NetBox stores pre/post `ObjectChange` snapshots; never remove
   that hook or expose the raw fields through a parallel audit/event serializer.
+  Database checks require every enabled row to retain both a credential-free
+  HTTP(S) URL and a nonempty exact query-token reference across validation-bypass
+  writes; the writer reference remains optional.
 - `ProxmoxStorage`: stores Proxmox storage inventory synchronized from the backend.
 - `ProxmoxStorageVirtualDisk`: links storage rows to virtual disks.
 - `GuestVMInterface`: stores guest-agent OS interface names (for example `ens18`) for a NetBox `VirtualMachine`, mapped **one-to-one** (`OneToOneField`, `SET_NULL`) to the canonical core `VMInterface` (for example `net0`) by MAC. `SET_NULL` (not `CASCADE`) so deleting/recreating the core interface during churn preserves the guest OS inventory row and only clears the link; `vm_interface` is nullable for agent-only interfaces with no matching Proxmox NIC.

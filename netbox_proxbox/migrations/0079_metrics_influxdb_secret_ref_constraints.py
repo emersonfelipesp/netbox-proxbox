@@ -17,9 +17,10 @@ Forwards runs in three steps:
    its comments.
 2. **Sanitize audit history.** Matching fields in existing ``ObjectChange``
    pre/post snapshots are replaced through the same fail-closed masking rules.
-3. **Constrain.** Two ``CheckConstraint``\\ s pin both columns to
-   ``'' OR <reference>``. The empty branch keeps required-ness a form concern
-   while the database guarantees that whatever *is* stored is a reference.
+3. **Constrain.** Three database checks require enabled mappings to retain a
+   credential-free HTTP(S) URL and an exact query-token reference, while
+   keeping the writer reference optional. Disabled inventory rows may retain
+   blank URL/query metadata until an operator repairs them.
 
 The scrub, quarantine, marker, and audit sanitization are deliberately **not**
 reversed -- the discarded text was, by definition, a value that should never
@@ -48,6 +49,12 @@ _NMS_SECRET_REF_RE = (
     r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 
+# Frozen copy of the database-safe URL grammar in
+# ``netbox_proxbox.models.proxmox_metrics``. This is intentionally narrower
+# than a generic URL: credentials, query strings, fragments, and whitespace are
+# never valid metrics endpoint metadata.
+_CREDENTIAL_FREE_HTTP_URL_RE = r"^[Hh][Tt][Tt][Pp][Ss]?://[^/?#@\s]+(?:/[^?#\s]*)?$"
+
 _TOKEN_FIELDS = ("query_token_secret_ref", "writer_token_secret_ref")
 _INFLUX_URL_VALIDATOR = URLValidator(schemes=("http", "https"))
 _MASKED_VALUE = "********"
@@ -62,7 +69,11 @@ _CHANGELOG_BATCH_SIZE = 500
 
 def _is_safe_influx_url(value: str | None) -> bool:
     """Return whether ``value`` is a credential-free HTTP(S) base URL."""
-    if not isinstance(value, str) or not value:
+    if (
+        not isinstance(value, str)
+        or not value
+        or not re.fullmatch(_CREDENTIAL_FREE_HTTP_URL_RE, value)
+    ):
         return False
     try:
         _INFLUX_URL_VALIDATOR(value)
@@ -227,7 +238,7 @@ class Migration(migrations.Migration):
             model_name="proxmoxmetricsinfluxdb",
             constraint=models.CheckConstraint(
                 condition=models.Q(query_token_secret_ref__regex=_NMS_SECRET_REF_RE)
-                | models.Q(query_token_secret_ref=""),
+                | models.Q(enabled=False, query_token_secret_ref=""),
                 name="netbox_proxbox_metrics_influxdb_query_token_is_ref",
             ),
         ),
@@ -237,6 +248,14 @@ class Migration(migrations.Migration):
                 condition=models.Q(writer_token_secret_ref__regex=_NMS_SECRET_REF_RE)
                 | models.Q(writer_token_secret_ref=""),
                 name="netbox_proxbox_metrics_influxdb_writer_token_is_ref",
+            ),
+        ),
+        migrations.AddConstraint(
+            model_name="proxmoxmetricsinfluxdb",
+            constraint=models.CheckConstraint(
+                condition=models.Q(enabled=False)
+                | models.Q(influx_url__regex=_CREDENTIAL_FREE_HTTP_URL_RE),
+                name="netbox_proxbox_metrics_influxdb_url_is_safe",
             ),
         ),
     ]

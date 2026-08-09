@@ -91,8 +91,10 @@ This directory contains the plugin's pytest test suite.
 - `test_influxdb_metrics_django.py`: real-NetBox migration and security-surface
   coverage for metrics metadata. It discovers the plugin migration leaf and its
   parent dynamically, verifies row quarantine plus irreversible historical
-  `ObjectChange` masking, and exercises the changelog page, core ObjectChange
-  REST representation, bypass-written list search, and edit GET behavior.
+  `ObjectChange` masking, proves post-migration `objects.create()` and
+  `queryset.update()` cannot persist an invalid enabled URL/query-token state,
+  and exercises the changelog page, core ObjectChange REST representation,
+  bypass-written list search, and edit GET behavior.
 - `test_pdm_endpoint_permissions_django.py`: real-NetBox permission coverage for
   the PDM detail override's discovered-remotes table, including a parent-only
   viewer and an object-constrained `PDMRemote` grant.

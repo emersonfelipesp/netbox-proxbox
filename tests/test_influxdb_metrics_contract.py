@@ -383,6 +383,8 @@ def test_metrics_serializer_uses_fail_closed_secret_ref_displays(
         ("https://influxdb.example.test:8086", "https://influxdb.example.test:8086"),
         ("http://192.0.2.10:8086/metrics", "http://192.0.2.10:8086/metrics"),
         ("not-an-influxdb-url", "********"),
+        ("https://influxdb.example.test:8086?", "********"),
+        ("https://influxdb.example.test:8086#", "********"),
         ("", "********"),
     ],
 )
@@ -461,6 +463,25 @@ def test_influxdb_metrics_secret_ref_regex_uses_strict_uuid_shape() -> None:
         assert "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-" in source
         assert "[0-9a-fA-F]{12}" in source
         assert "[0-9a-fA-F-]{36}" not in source
+
+
+def test_influxdb_metrics_enabled_state_is_database_constrained_after_scrub() -> None:
+    model = _read("netbox_proxbox/models/proxmox_metrics.py")
+    migration = _read(
+        "netbox_proxbox/migrations/0079_metrics_influxdb_secret_ref_constraints.py"
+    )
+
+    for source in (model, migration):
+        assert 'models.Q(enabled=False, query_token_secret_ref="")' in source
+        assert 'name="netbox_proxbox_metrics_influxdb_query_token_is_ref"' in source
+        assert 'name="netbox_proxbox_metrics_influxdb_writer_token_is_ref"' in source
+        assert 'name="netbox_proxbox_metrics_influxdb_url_is_safe"' in source
+        assert "CREDENTIAL_FREE_HTTP_URL_RE" in source
+
+    operations = migration.split("operations = [", 1)[1]
+    scrub_position = operations.index("_scrub_non_conforming_values")
+    first_constraint_position = operations.index("migrations.AddConstraint")
+    assert scrub_position < first_constraint_position
 
 
 def test_influxdb_metrics_api_route_and_serializer_are_registered() -> None:
@@ -622,6 +643,8 @@ class TestProxmoxMetricsInfluxDBModel(TestCase):
             "https://user:token@influxdb.example.test:8086",
             "https://influxdb.example.test:8086?token=secret",
             "https://influxdb.example.test:8086/#secret",
+            "https://influxdb.example.test:8086?",
+            "https://influxdb.example.test:8086#",
         ):
             with self.subTest(url=url):
                 row = self._row(influx_url=url)

@@ -160,11 +160,13 @@ contract and issue #454 for the bug history.
 - The current metrics-security leaf blanks non-conforming InfluxDB URL/token
   metadata, disables rows missing a safe URL or required query-token reference,
   appends a persistent remediation marker to comments, and masks matching fields
-  in historical `core.ObjectChange` snapshots. The destructive scrub,
-  quarantine, marker, and audit masking are intentionally not reversed; rollback
-  removes only the database token-reference constraints. Its real-Django test
-  discovers the plugin leaf and its sole in-app parent from the migration graph,
-  so a merge-time renumber changes only the migration file.
+  in historical `core.ObjectChange` snapshots before installing database checks.
+  Those checks durably require every enabled row to retain a credential-free
+  HTTP(S) URL and nonempty exact query-token reference while leaving the writer
+  reference optional. The destructive scrub, quarantine, marker, and audit
+  masking are intentionally not reversed; rollback removes only the checks. Its
+  real-Django test discovers the plugin leaf and its sole in-app parent from the
+  migration graph, so a merge-time renumber changes only the migration file.
 
 ## Notes
 
