@@ -60,6 +60,10 @@ Each endpoint type has an `ImportForm` (e.g. `ProxmoxEndpointImportForm`, `NetBo
   and enter bounded auto-configuration; a non-empty candidate remains required
   when the operator is deliberately rotating the key.
 - These forms define how plugin fields are presented in the NetBox UI; model constraints and the API serializers still remain the source of truth for persistence and credential rules.
+- `ProxmoxMetricsInfluxDBForm` clears the edit-page initial value whenever a
+  persisted InfluxDB URL fails the model's credential-free HTTP(S) display check.
+  Its warning asks the operator to replace the hidden value or delete the mapping;
+  never repopulate the input from the raw stored value.
 - Password and token_value fields on `ProxmoxEndpointForm` use `PasswordInput(render_value=False)` and are preserved from the stored instance when the user submits a blank value (edit-without-change UX).
 - `ProxmoxEndpointForm` exposes `allow_writes` in a dedicated **Write permission**
   fieldset so operators can opt a Proxmox endpoint into backend write verbs from

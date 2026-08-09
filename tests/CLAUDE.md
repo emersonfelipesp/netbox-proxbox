@@ -67,6 +67,36 @@ This directory contains the plugin's pytest test suite.
 - `test_services_sync_datacenter.py`: behavior tests for `sync_datacenter` scoping against a stubbed module loader (mirroring the `sync_firewall` harness): a CPU-model response row for an endpoint outside the run's resolved scope is refused — neither upserted nor included in stale marking — pinning the local half of the endpoint scope that query-param forwarding cannot enforce against a backend that ignores `proxmox_endpoint_ids`. Also pins that a cluster name claimed by two endpoints resolves to nobody (`_resolve_endpoint_by_cluster_name` returns `None` instead of `.first()`-guessing), the same rule the firewall harness pins on its side together with the single-claimant case still resolving.
 - `test_services_backend_context.py`: AST contract for `get_fastapi_request_context` / `get_fastapi_endpoint_with_token` signatures and the three endpoint-resolution branches in `services/backend_context.py`.
 - `test_views_vm_config.py`: AST contract for `ProxmoxVMConfigTabView` — `register_model_view` path/name, `ObjectView` base, `ViewTab` label/permission, and the helper extractors.
+- `test_detail_view_templates.py`: fast AST/filesystem contract for every
+  plugin `ObjectView` registered with `register_model_view`; validates explicit
+  and default template paths without bootstrapping Django. It also pins that
+  the InfluxDB detail page uses only fail-closed URL/token display properties.
+- `test_detail_view_templates_django.py`: real-NetBox complement in the
+  supported-version matrix. It imports the complete plugin URL surface, walks
+  NetBox's populated runtime view registry, requires exact registry identifier
+  and qualified-class identity for all 53 mandatory views (plus the optional
+  netbox-pdm endpoint view), proves the pinned companion first registers its
+  own PDM detail view and the Proxbox integration deliberately replaces it,
+  resolves every plugin `ObjectView`'s actual
+  template through Django's loader, and uses an authenticated Client to
+  GET/render all 17 detail routes repaired by the missing-template bug. The SSH
+  credential smoke also proves stored ciphertext never reaches the response.
+- `test_influxdb_metrics_contract.py`: fast model/serializer/table contracts
+  for InfluxDB URL and token-reference validation and fail-closed output. Its
+  table harness pins both list rendering and CSV/export value extraction to
+  `influx_url_display`, so malformed legacy URLs cannot bypass masking through
+  the list surface. It also pins model-level change-log serialization and the
+  exclusion of raw URLs from free-text search.
+- `test_influxdb_metrics_django.py`: real-NetBox migration and security-surface
+  coverage for metrics metadata. It discovers the plugin migration leaf and its
+  parent dynamically, verifies row quarantine plus irreversible historical
+  `ObjectChange` masking, proves post-migration `objects.create()` and
+  `queryset.update()` cannot persist an invalid enabled URL/query-token state,
+  and exercises the changelog page, core ObjectChange REST representation,
+  bypass-written list search, and edit GET behavior.
+- `test_pdm_endpoint_permissions_django.py`: real-NetBox permission coverage for
+  the PDM detail override's discovered-remotes table, including a parent-only
+  viewer and an object-constrained `PDMRemote` grant.
 - `test_views_storage.py`: AST contract for the eight `ProxmoxStorage*` view classes — `__all__` membership, list-view `path=""` registration, child-tab paths/labels/permissions, the detail view's short `request_timeout`, and the explicit `MultiValueCharFilter` preserving `nodes` query/OpenAPI behavior after its `TextField` migration.
 - `test_storage_content_fetch.py`: pure adversarial coverage for the storage
   content process-wide pool and streamed fetcher. Repeated page-deadline calls

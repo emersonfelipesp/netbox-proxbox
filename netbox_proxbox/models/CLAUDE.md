@@ -52,7 +52,14 @@ This directory defines the plugin's persisted data model.
   flag, enabled state, and query/writer token secret references for a Proxmox
   cluster. Token fields are `nms-secret:<uuid>` references to netbox-nms
   `ObservabilitySecret` objects, never plaintext credentials or encrypted token
-  blobs in this plugin.
+  blobs in this plugin. Its UI/API display properties return only exact secret
+  references and credential-free HTTP(S) URLs; malformed legacy values are
+  masked instead of rendered. Its `serialize_object()` override applies those
+  same rules before NetBox stores pre/post `ObjectChange` snapshots; never remove
+  that hook or expose the raw fields through a parallel audit/event serializer.
+  Database checks require every enabled row to retain both a credential-free
+  HTTP(S) URL and a nonempty exact query-token reference across validation-bypass
+  writes; the writer reference remains optional.
 - `ProxmoxStorage`: stores Proxmox storage inventory synchronized from the
   backend. Its comma-separated `nodes` membership is a `TextField`; Proxmox
   estates with many or long node names must never be truncated to 255

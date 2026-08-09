@@ -1,8 +1,10 @@
 """Register plugin UI routes for pages, models, sync actions, and status checks."""
 
 from django.apps import apps
+from django.core.exceptions import ImproperlyConfigured
 from django.urls import include, path
 from django.views.generic import RedirectView
+from netbox.registry import registry
 from utilities.urls import get_model_urls
 
 from netbox_proxbox import views
@@ -33,6 +35,82 @@ from netbox_proxbox.views.sync_now import (  # noqa: F401
 from netbox_proxbox.websocket_client import WebSocketView
 
 app_name = "netbox_proxbox"
+
+
+_PDM_ENDPOINT_MODEL_NAME = "pdmendpoint"
+
+
+def _is_pdm_endpoint_base_detail(config: dict) -> bool:
+    """Return True for the unnamed per-object detail slot of ``PDMEndpoint``.
+
+    ``register_model_view`` stores the empty string for a model's base detail
+    view, so an unnamed ``detail`` registration is the slot that backs
+    ``/pdm/endpoints/<pk>/``. Named registrations (``sync_now``, ``edit``, …)
+    are separate routes and are never touched.
+    """
+    return bool(config.get("detail", True)) and not config.get("name")
+
+
+def _install_pdm_endpoint_detail_override() -> None:
+    """Make the Proxbox ``PDMEndpoint`` detail view the only base detail slot.
+
+    NetBox's ``register_model_view`` appends registrations; it does not replace
+    an existing view with the same name/path.  ``netbox_pdm`` registers its own
+    base detail view for this model, so the Proxbox view — which adds the
+    discovered-remotes context — has to displace it explicitly.
+
+    The replacement is **class-aware and idempotent**, which the earlier
+    unconditional "drop every base detail registration" was not.  The registry
+    is process-global while module imports are cached: a second import or
+    reload of this module does *not* re-run the already-imported view modules'
+    decorators, so blindly dropping the base detail slot removed the Proxbox
+    override itself and left the model with no detail route at all — after
+    which ``get_model_urls()`` snapshots a registry that cannot resolve
+    ``/pdm/endpoints/<pk>/``.  This helper therefore keeps an override that is
+    already installed, removes only *foreign* base detail registrations, and
+    refuses to guess when the registry holds a shape it does not recognise.
+    """
+    # Importing the module runs its ``@register_model_view`` decorators. On a
+    # repeat import Python serves the cached module and registers nothing --
+    # exactly why the pruning below must never remove an override it finds
+    # already in place.
+    from netbox_proxbox.views.endpoints.pdm import PDMEndpointView
+
+    model_views = (
+        registry["views"]
+        .setdefault("netbox_proxbox", {})
+        .setdefault(_PDM_ENDPOINT_MODEL_NAME, [])
+    )
+    base_detail = [
+        config for config in model_views if _is_pdm_endpoint_base_detail(config)
+    ]
+    override = [
+        config for config in base_detail if config.get("view") is PDMEndpointView
+    ]
+    foreign = [
+        config for config in base_detail if config.get("view") is not PDMEndpointView
+    ]
+
+    if len(override) != 1:
+        raise ImproperlyConfigured(
+            "netbox-proxbox expected exactly one of its own PDMEndpoint detail "
+            f"registrations in the view registry, found {len(override)}."
+        )
+    if len(foreign) > 1:
+        raise ImproperlyConfigured(
+            "netbox-proxbox refuses to replace an unrecognised PDMEndpoint "
+            f"detail registry shape: {len(foreign)} companion base detail views "
+            "are registered."
+        )
+    if not foreign:
+        return
+
+    # Identity, not equality: two registrations can compare equal by value.
+    foreign_ids = {id(config) for config in foreign}
+    registry["views"]["netbox_proxbox"][_PDM_ENDPOINT_MODEL_NAME] = [
+        config for config in model_views if id(config) not in foreign_ids
+    ]
+
 
 urlpatterns = [
     # Home lives at ``home/`` (not the bare plugin root) so its menu-item URL is
@@ -506,7 +584,8 @@ urlpatterns = [
 # namespace — otherwise ActionsColumn crashes the list page with NoReverseMatch.
 if apps.is_installed("netbox_pdm"):
     import netbox_pdm.views as _netbox_pdm_views  # noqa: F401 — triggers @register_model_view
-    from netbox_proxbox.views.endpoints import pdm as _pdm_endpoint_views  # noqa: F401 — registers PDMEndpointView + PDMEndpointSyncNowView
+
+    _install_pdm_endpoint_detail_override()
 
     urlpatterns += [
         path(
