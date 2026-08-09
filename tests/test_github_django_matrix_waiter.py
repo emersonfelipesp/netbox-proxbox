@@ -21,6 +21,8 @@ from scripts import wait_for_github_django_matrix as waiter
 TOKEN = "ghu_" + "A" * 36
 BRANCH = "300-ci-gate-bootstrap"
 SHA = "a" * 40
+NOT_BEFORE = "2026-08-09T20:00:00Z"
+RUN_CREATED_AT = "2026-08-09T20:01:00Z"
 RATE_HEADERS = {
     "X-RateLimit-Limit": "5000",
     "X-RateLimit-Remaining": "4999",
@@ -125,6 +127,8 @@ def api_response(payload: object, headers: dict[str, str] | None = None):
 
 def installation_payload(
     *,
+    installation_id: int = 17,
+    owner: str = waiter.REPOSITORY_OWNER,
     actions: str = "read",
     contents: str = "read",
     extra_permissions: dict[str, str] | None = None,
@@ -136,8 +140,8 @@ def installation_payload(
     }
     permissions.update(extra_permissions or {})
     return {
-        "id": 17,
-        "account": {"login": waiter.REPOSITORY_OWNER},
+        "id": installation_id,
+        "account": {"login": owner},
         "permissions": permissions,
         "repository_selection": "selected",
         "suspended_at": None,
@@ -201,10 +205,11 @@ def run_payload(**overrides: object) -> dict[str, object]:
         "head_commit": {"id": SHA},
         "event": "push",
         "display_title": f"Django Tests (push refs/heads/{BRANCH} @ {SHA})",
-        "path": f"{waiter.WORKFLOW_PATH}@{BRANCH}",
+        "path": waiter.WORKFLOW_PATH,
         "status": "completed",
         "conclusion": "success",
         "run_attempt": 1,
+        "created_at": RUN_CREATED_AT,
     }
     payload.update(overrides)
     return payload
@@ -371,6 +376,60 @@ def test_installation_must_select_only_the_exact_repository():
         matrix_waiter.authenticate()
 
 
+def test_token_with_multiple_accessible_installations_is_rejected():
+    client = StubClient(
+        api_response(user_payload()),
+        api_response(
+            installations_payload(
+                installation_payload(),
+                installation_payload(
+                    installation_id=18,
+                    owner="unrelated-private-owner",
+                ),
+            )
+        ),
+    )
+    matrix_waiter, _clock = build_waiter(client)
+
+    with pytest.raises(waiter.AuthenticationError, match="exactly one accessible"):
+        matrix_waiter.authenticate()
+
+    assert len(client.calls) == 2
+
+
+def test_installation_discovery_exhausts_pagination_before_accepting(monkeypatch):
+    monkeypatch.setattr(waiter, "REPOSITORIES_PER_PAGE", 1)
+    client = StubClient(
+        api_response(user_payload()),
+        api_response(
+            {
+                "total_count": 2,
+                "installations": [installation_payload()],
+            }
+        ),
+        api_response(
+            {
+                "total_count": 2,
+                "installations": [
+                    installation_payload(
+                        installation_id=18,
+                        owner="unrelated-private-owner",
+                    )
+                ],
+            }
+        ),
+    )
+    matrix_waiter, _clock = build_waiter(client)
+
+    with pytest.raises(waiter.AuthenticationError, match="exactly one accessible"):
+        matrix_waiter.authenticate()
+
+    assert client.calls[1:] == [
+        ("/user/installations", {"page": 1, "per_page": 1}),
+        ("/user/installations", {"page": 2, "per_page": 1}),
+    ]
+
+
 @pytest.mark.parametrize(
     ("branch", "sha"),
     [
@@ -385,6 +444,31 @@ def test_installation_must_select_only_the_exact_repository():
 def test_candidate_branch_and_full_sha_are_strictly_validated(branch, sha):
     with pytest.raises(waiter.InputError):
         waiter.validate_candidate(branch, sha)
+
+
+def test_current_run_selector_requires_expected_id_or_not_before_api_use():
+    client = StubClient()
+    matrix_waiter, _clock = build_waiter(client)
+
+    with pytest.raises(waiter.InputError, match="expected run ID or not-before"):
+        matrix_waiter.wait_for_success(BRANCH, SHA)
+
+    assert client.calls == []
+
+
+@pytest.mark.parametrize(
+    ("expected_run_id", "not_before"),
+    [
+        (0, None),
+        (True, None),
+        ("01", None),
+        (None, "2026-08-09 20:00:00Z"),
+        (None, "2026-02-30T20:00:00Z"),
+    ],
+)
+def test_current_run_selector_is_strictly_validated(expected_run_id, not_before):
+    with pytest.raises(waiter.InputError):
+        waiter.validate_run_selector(expected_run_id, not_before)
 
 
 def test_reviewed_workflow_pin_matches_the_committed_git_blob():
@@ -406,7 +490,7 @@ def test_success_requires_auth_blob_pin_and_exact_push_run_identity():
     )
     matrix_waiter, _clock = build_waiter(client)
 
-    run = matrix_waiter.wait_for_success(BRANCH, SHA)
+    run = matrix_waiter.wait_for_success(BRANCH, SHA, not_before=NOT_BEFORE)
 
     assert run["id"] == 99
     assert client.calls[-1] == (
@@ -420,6 +504,51 @@ def test_success_requires_auth_blob_pin_and_exact_push_run_identity():
     )
 
 
+def test_recorded_github_run_shape_with_bare_workflow_path_is_accepted():
+    # Sanitized from the live repository response captured during review.  The
+    # identity values use this hermetic test's constants, while the field set
+    # and the bare ``path`` preserve GitHub's actual workflow-runs payload.
+    recorded_run = run_payload(
+        name="Django Tests",
+        node_id="WFR_kwLORecordedPayload",
+        run_number=884,
+        check_suite_id=52345678901,
+        check_suite_node_id="CS_kwDORecordedPayload",
+        html_url=(f"https://github.com/{waiter.REPOSITORY}/actions/runs/99"),
+        pull_requests=[],
+        created_at=RUN_CREATED_AT,
+        updated_at="2026-08-09T20:14:37Z",
+        actor={
+            "login": waiter.REPOSITORY_OWNER,
+            "id": 123456,
+            "type": "User",
+        },
+        triggering_actor={
+            "login": waiter.REPOSITORY_OWNER,
+            "id": 123456,
+            "type": "User",
+        },
+        jobs_url=f"{waiter.API_ROOT}{waiter.REPOSITORY_PREFIX}/actions/runs/99/jobs",
+        logs_url=f"{waiter.API_ROOT}{waiter.REPOSITORY_PREFIX}/actions/runs/99/logs",
+        artifacts_url=(
+            f"{waiter.API_ROOT}{waiter.REPOSITORY_PREFIX}/actions/runs/99/artifacts"
+        ),
+        cancel_url=f"{waiter.API_ROOT}{waiter.REPOSITORY_PREFIX}/actions/runs/99/cancel",
+        rerun_url=f"{waiter.API_ROOT}{waiter.REPOSITORY_PREFIX}/actions/runs/99/rerun",
+        previous_attempt_url=None,
+        path=waiter.WORKFLOW_PATH,
+    )
+    client = ready_client(
+        api_response({"total_count": 1, "workflow_runs": [recorded_run]})
+    )
+    matrix_waiter, _clock = build_waiter(client)
+
+    run = matrix_waiter.wait_for_success(BRANCH, SHA, not_before=NOT_BEFORE)
+
+    assert run["id"] == 99
+    assert run["path"] == waiter.WORKFLOW_PATH
+
+
 def test_candidate_workflow_blob_mismatch_fails_before_polling():
     client = StubClient(
         api_response(user_payload()),
@@ -431,7 +560,7 @@ def test_candidate_workflow_blob_mismatch_fails_before_polling():
     matrix_waiter, _clock = build_waiter(client)
 
     with pytest.raises(waiter.WorkflowIdentityError, match="blob"):
-        matrix_waiter.wait_for_success(BRANCH, SHA)
+        matrix_waiter.wait_for_success(BRANCH, SHA, not_before=NOT_BEFORE)
 
     assert all(path != waiter.WORKFLOW_RUNS_PATH for path, _query in client.calls)
 
@@ -441,7 +570,7 @@ def test_candidate_workflow_blob_mismatch_fails_before_polling():
     [
         ({"head_branch": "develop"}, "branch"),
         (
-            {"head_branch": "v0.0.24", "path": f"{waiter.WORKFLOW_PATH}@v0.0.24"},
+            {"head_branch": "v0.0.24"},
             "branch",
         ),
         ({"head_sha": "b" * 40}, "SHA"),
@@ -451,8 +580,9 @@ def test_candidate_workflow_blob_mismatch_fails_before_polling():
             {"display_title": f"Django Tests (push refs/tags/{BRANCH} @ {SHA})"},
             "branch-ref",
         ),
-        ({"path": waiter.WORKFLOW_PATH}, "path/ref"),
-        ({"path": f"{waiter.WORKFLOW_PATH}@develop"}, "path/ref"),
+        ({"path": f"{waiter.WORKFLOW_PATH}@{BRANCH}"}, "workflow path"),
+        ({"path": f"{waiter.WORKFLOW_PATH}@develop"}, "workflow path"),
+        ({"created_at": None}, "creation time"),
         ({"workflow_id": 41}, "workflow"),
         ({"repository": {"full_name": "edgeuno/netbox-proxbox"}}, "repository"),
         ({"head_repository": {"full_name": "edgeuno/netbox-proxbox"}}, "repository"),
@@ -465,7 +595,7 @@ def test_same_sha_or_similar_run_with_wrong_identity_is_rejected(overrides, mess
     matrix_waiter, _clock = build_waiter(client)
 
     with pytest.raises(waiter.RunIdentityError, match=message):
-        matrix_waiter.wait_for_success(BRANCH, SHA)
+        matrix_waiter.wait_for_success(BRANCH, SHA, not_before=NOT_BEFORE)
 
 
 @pytest.mark.parametrize("conclusion", ["failure", "cancelled", "timed_out", "skipped"])
@@ -481,7 +611,7 @@ def test_terminal_non_success_conclusion_fails_immediately(conclusion):
     matrix_waiter, clock = build_waiter(client)
 
     with pytest.raises(waiter.WorkflowRunFailed, match=conclusion):
-        matrix_waiter.wait_for_success(BRANCH, SHA)
+        matrix_waiter.wait_for_success(BRANCH, SHA, not_before=NOT_BEFORE)
 
     assert clock.sleeps == []
 
@@ -498,7 +628,151 @@ def test_queued_run_polls_then_accepts_completed_success():
     )
     matrix_waiter, clock = build_waiter(client)
 
-    assert matrix_waiter.wait_for_success(BRANCH, SHA)["id"] == 99
+    assert (
+        matrix_waiter.wait_for_success(BRANCH, SHA, not_before=NOT_BEFORE)["id"] == 99
+    )
+    assert clock.sleeps == [waiter.DEFAULT_POLL_INTERVAL_SECONDS]
+
+
+def test_newer_queued_run_is_pinned_and_older_success_is_never_accepted():
+    newer_created_at = "2026-08-09T20:02:00Z"
+    newer_queued = run_payload(
+        id=100,
+        url=f"{waiter.API_ROOT}{waiter.REPOSITORY_PREFIX}/actions/runs/100",
+        status="queued",
+        conclusion=None,
+        created_at=newer_created_at,
+    )
+    older_success = run_payload(created_at=RUN_CREATED_AT)
+    newer_in_progress = {
+        **newer_queued,
+        "status": "in_progress",
+    }
+    newer_success = {
+        **newer_queued,
+        "status": "completed",
+        "conclusion": "success",
+    }
+    later_success = run_payload(
+        id=101,
+        url=f"{waiter.API_ROOT}{waiter.REPOSITORY_PREFIX}/actions/runs/101",
+        created_at="2026-08-09T20:03:00Z",
+    )
+    client = ready_client(
+        api_response(
+            {
+                "total_count": 2,
+                "workflow_runs": [newer_queued, older_success],
+            }
+        ),
+        api_response(
+            {
+                "total_count": 3,
+                "workflow_runs": [
+                    later_success,
+                    newer_in_progress,
+                    older_success,
+                ],
+            }
+        ),
+        api_response(
+            {
+                "total_count": 3,
+                "workflow_runs": [later_success, newer_success, older_success],
+            }
+        ),
+    )
+    matrix_waiter, clock = build_waiter(client)
+
+    run = matrix_waiter.wait_for_success(BRANCH, SHA, not_before=NOT_BEFORE)
+
+    assert run["id"] == 100
+    assert clock.sleeps == [
+        waiter.DEFAULT_POLL_INTERVAL_SECONDS,
+        waiter.DEFAULT_POLL_INTERVAL_SECONDS,
+    ]
+
+
+def test_not_before_ignores_an_old_success_until_a_fresh_run_exists():
+    old_success = run_payload(
+        id=98,
+        url=f"{waiter.API_ROOT}{waiter.REPOSITORY_PREFIX}/actions/runs/98",
+        created_at="2026-08-09T19:59:59Z",
+    )
+    client = ready_client(
+        api_response(
+            {
+                "total_count": 1,
+                "workflow_runs": [old_success],
+            }
+        ),
+        api_response(
+            {
+                "total_count": 2,
+                "workflow_runs": [run_payload(), old_success],
+            }
+        ),
+    )
+    matrix_waiter, clock = build_waiter(client)
+
+    run = matrix_waiter.wait_for_success(BRANCH, SHA, not_before=NOT_BEFORE)
+
+    assert run["id"] == 99
+    assert clock.sleeps == [waiter.DEFAULT_POLL_INTERVAL_SECONDS]
+
+
+def test_discovery_rejects_ambiguous_newest_creation_time():
+    same_time_run = run_payload(
+        id=100,
+        url=f"{waiter.API_ROOT}{waiter.REPOSITORY_PREFIX}/actions/runs/100",
+    )
+    client = ready_client(
+        api_response(
+            {
+                "total_count": 2,
+                "workflow_runs": [same_time_run, run_payload()],
+            }
+        )
+    )
+    matrix_waiter, clock = build_waiter(client)
+
+    with pytest.raises(waiter.RunIdentityError, match="newest creation time"):
+        matrix_waiter.wait_for_success(BRANCH, SHA, not_before=NOT_BEFORE)
+
+    assert clock.sleeps == []
+
+
+def test_expected_run_id_waits_for_only_the_supervisor_selected_run():
+    expected_queued = run_payload(
+        id=100,
+        url=f"{waiter.API_ROOT}{waiter.REPOSITORY_PREFIX}/actions/runs/100",
+        status="queued",
+        conclusion=None,
+    )
+    expected_success = {
+        **expected_queued,
+        "status": "completed",
+        "conclusion": "success",
+    }
+    client = ready_client(
+        api_response(
+            {
+                "total_count": 2,
+                "workflow_runs": [expected_queued, run_payload()],
+            }
+        ),
+        api_response(
+            {
+                "total_count": 2,
+                "workflow_runs": [expected_success, run_payload()],
+            }
+        ),
+    )
+    matrix_waiter, clock = build_waiter(client)
+
+    run = matrix_waiter.wait_for_success(BRANCH, SHA, expected_run_id="100")
+
+    assert run["id"] == 100
     assert clock.sleeps == [waiter.DEFAULT_POLL_INTERVAL_SECONDS]
 
 
@@ -705,7 +979,7 @@ def test_one_deadline_also_bounds_retry_rate_limit_and_poll_sleeps():
         deadline=deadline,
     )
     with pytest.raises(waiter.DeadlineExceeded, match="polling"):
-        matrix_waiter.wait_for_success(BRANCH, SHA)
+        matrix_waiter.wait_for_success(BRANCH, SHA, not_before=NOT_BEFORE)
 
 
 def test_request_cap_is_independent_of_deadline():
@@ -751,7 +1025,12 @@ def test_documentation_keeps_bootstrap_non_consuming_and_non_security_critical()
         assert "GH_MATRIX_READ_TOKEN" in document
         assert "non-security evidence" in document
         assert "base-pinned external supervisor" in document
+        assert "path@branch" not in document
+        assert waiter.WORKFLOW_PATH in document
     assert "must not enable a Gitea consumer" in developer_doc
+    assert "--expected-run-id" in developer_doc
+    assert "--not-before" in developer_doc
+    assert "exactly one accessible" in developer_doc
 
 
 def test_bootstrap_does_not_enable_a_gitea_consumer():

@@ -22,12 +22,15 @@ This directory contains the plugin's pytest test suite.
 - `test_github_django_matrix_waiter.py`: pure unit and source contracts for
   issue #300's reviewed, authenticated exact-commit waiter. Covers mandatory
   environment-only GitHub App user authentication and removal, exact owner/app
-  permissions/single-repository selection, branch/SHA/workflow/run identity
-  (including other-branch and tag rejection), workflow Git-blob pinning,
-  terminal failures, response byte ceilings, one shared
-  connection/read/parse/retry/poll deadline, 403 rate-limit evidence, the hard
-  request cap, four-gate hourly budget, and the documented non-security trust
-  boundary. It uses fake urllib openers only and never contacts GitHub.
+  permissions/exactly-one-installation/single-repository selection (including
+  paginated over-scope rejection), branch/SHA/workflow/run identity (including
+  GitHub's bare workflow path, other-branch and tag rejection), workflow
+  Git-blob pinning, expected-run-ID and not-before discovery, current-run ID
+  pinning over older successes, ambiguous-newest rejection, terminal failures,
+  response byte ceilings, one shared connection/read/parse/retry/poll deadline,
+  403 rate-limit evidence, the hard request cap, four-gate hourly budget, and
+  the documented non-security trust boundary. It uses fake urllib openers only
+  and never contacts GitHub.
 - `test_outbound_redirect_policy.py`: structural (AST-scan) guard that **every** `requests.<verb>()` call in the plugin passes the literal `allow_redirects=False` — the library default follows redirects and replays credentialed headers, so one new default-following call site silently reopens the exfiltration class. Allowlist: `github.py` (unauthenticated public content). `services/http_client.py` only needs the keyword present (it forwards its own default-`False` parameter). A companion test pins that the scan still detects ≥40 call sites so the guard cannot pass vacuously.
 - `test_backend_proxy_credential_binding.py`: adversarial credential-binding coverage for `backend_proxy.py` and `backend_context.py`. Pins that every credentialed JSON/SSE/stream request sends `allow_redirects=False` and treats any 3xx as a terminal 502 — closing the response unread, never dialling the `Location` target (cross-origin or HTTPS→HTTP downgrade), and never replaying the key against the IP fallback; that the 401 retry proceeds only from one freshly authenticated `BackendRequestContext` (fresh URLs **and** fresh headers together — never fresh headers on a stale URL), fails closed on `None`, and is bounded to one attempt; that `_handle_auth_registration_and_retry` refuses an endpoint-identity mismatch before resolving anything and refuses a binding that changed while the key was being authenticated; and that `utils.get_fastapi_context()` returns `None` on target-fingerprint drift — including a stale `select_related` IP row masking a changed live FK address, exercised through the **real** `backend_key_target_fingerprint()`.
 - `test_cards.py`, `test_dashboard.py`, `test_keepalive_status.py`: dashboard/card hydration and service status checks.

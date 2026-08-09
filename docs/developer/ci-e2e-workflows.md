@@ -34,27 +34,45 @@ can become security-critical evidence. That supervisor must execute the waiter
 from an immutable reviewed target-branch checkout, never from the candidate
 checkout.
 
-The supervisor supplies the expected short candidate branch and full lowercase
-40-character SHA as data. The waiter accepts only a completed successful
-`push` run whose repository, head repository, branch, SHA, head-commit ID,
-workflow ID, workflow API URL, and workflow `path@branch` all match. The pinned
-workflow's GitHub-generated run name must also contain the exact
-`refs/heads/<branch>` and SHA, removing the ambiguity when a tag shares a branch
-name and commit. A tag push, pull-request run, same-SHA run from another branch,
-or run of another workflow is rejected. Before polling, the waiter reads
+The supervisor supplies the expected short candidate branch, full lowercase
+40-character SHA, and at least one current-run selector as data: the expected
+positive GitHub run ID via `--expected-run-id`, a UTC
+`YYYY-MM-DDTHH:MM:SSZ` creation-time floor via `--not-before`, or both. The
+waiter accepts only a completed successful `push` run whose
+repository, head repository, branch, SHA, head-commit ID, workflow ID, workflow
+API URL, and exact bare workflow path `.github/workflows/django-tests.yml` all
+match. GitHub's workflow-runs API returns that path without a branch suffix, so
+branch provenance is deliberately bound through the separately checked
+`head_branch` and run name. The pinned workflow's GitHub-generated run name
+must contain the exact `refs/heads/<branch>` and SHA, removing the ambiguity
+when a tag shares a branch name and commit. A tag push, pull-request run,
+same-SHA run from another branch, or run of another workflow is rejected.
+Before polling, the waiter reads
 `.github/workflows/django-tests.yml` at that exact SHA and requires GitHub's Git
 blob identity to equal the reviewed `PINNED_WORKFLOW_BLOB_SHA` constant.
+
+When the supervisor provides a run ID, the waiter polls only that run. With a
+not-before selector, discovery chooses exactly one newest matching run at or
+after the trusted timestamp, then pins its run ID for all later polls. If a
+newer queued or in-progress run and an older successful run share the same
+branch and SHA, only the newer selected run can decide the verdict. An absent
+selector or an ambiguous newest creation time fails closed instead of allowing
+an older success to race the current run.
 
 ### Credential and network boundary
 
 `GH_MATRIX_READ_TOKEN` is mandatory and must be a short-lived, base-owned
 GitHub App user access token (`ghu_…`). The authenticated user must be the
-repository owner, and the app installation must select only
-`emersonfelipesp/netbox-proxbox` with exact repository `Actions: read`,
-`Contents: read`, and the implicit `Metadata: read` permission. This token form
-is deliberate: its authenticated-user installation response exposes the app's
-permissions, allowing the waiter to reject an under- or over-scoped token
-instead of treating public anonymous API access as proof of authorization.
+repository owner, and the token must expose exactly one accessible app
+installation. The waiter exhausts installation pagination before accepting it;
+any second installation, including one for an unrelated private owner, is
+over-scope and is rejected. The sole installation must belong to the repository
+owner and select only `emersonfelipesp/netbox-proxbox` with exact repository
+`Actions: read`, `Contents: read`, and the implicit `Metadata: read`
+permission. This token form is deliberate: its authenticated-user installation
+response exposes the app's permissions, allowing the waiter to reject an
+under- or over-scoped token instead of treating public anonymous API access as
+proof of authorization.
 
 The waiter removes the token from its environment immediately, does not spawn
 or shell out to another process, disables ambient proxies and redirects, and
@@ -64,11 +82,11 @@ non-isolated interpreter; an explicit caller must likewise invoke a reviewed
 interpreter with `python -I`. This keeps candidate-controlled `PYTHONPATH`, user
 site-packages, and Python startup customization out of the token-bearing
 process.
-Its authentication preflight verifies the authenticated owner, unsuspended app
-installation, exact read permissions, single exact repository selection, and
-authenticated rate-limit headers. Missing, malformed, invalid, suspended,
-under-scoped, over-scoped, or wrong-repository credentials fail before
-candidate verification begins.
+Its authentication preflight verifies the authenticated owner, exactly one
+accessible unsuspended app installation, exact read permissions, single exact
+repository selection, and authenticated rate-limit headers. Missing,
+malformed, invalid, suspended, under-scoped, over-scoped, or wrong-repository
+credentials fail before candidate verification begins.
 
 The secret-injection boundary—not candidate convention—is what protects the
 credential. The future supervisor must keep `GH_MATRIX_READ_TOKEN` outside
@@ -92,9 +110,10 @@ most 800 requests plus a 200-request safety margin, below the authenticated
    trust-boundary documentation on the target branch. This is the only step in
    issue #300.
 2. Build a base-pinned external supervisor that obtains branch/SHA provenance
-   from the trusted Gitea control plane and invokes the waiter from reviewed
-   base code. Provision the GitHub App token only into that supervisor's waiter
-   process and keep it outside every candidate process.
+   plus the expected GitHub run ID and/or a not-before creation time from the
+   trusted control plane, then invokes the waiter from reviewed base code.
+   Provision the GitHub App token only into that supervisor's waiter process
+   and keep it outside every candidate process.
 3. Validate the supervisor and secret boundary independently. Until this is
    complete, public matrix results remain non-security evidence.
 4. Only then enable a Gitea pre-merge or deployment consumer in a separate,

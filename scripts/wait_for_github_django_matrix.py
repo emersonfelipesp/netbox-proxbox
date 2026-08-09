@@ -18,6 +18,7 @@ import sys
 import time
 from collections.abc import Callable, Mapping, MutableMapping, Sequence
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Protocol
 from urllib.error import HTTPError, URLError
@@ -66,6 +67,10 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 _TOKEN_PATTERN = re.compile(r"ghu_[A-Za-z0-9]{20,255}\Z")
 _SHA_PATTERN = re.compile(r"[0-9a-f]{40}\Z")
 _BRANCH_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,254}\Z")
+_RUN_ID_PATTERN = re.compile(r"[1-9][0-9]*\Z")
+_UTC_TIMESTAMP_PATTERN = re.compile(
+    r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\Z"
+)
 _ALLOWED_API_PATHS = frozenset(
     {
         "/user",
@@ -227,6 +232,54 @@ def validate_candidate(branch: str, sha: str) -> tuple[str, str]:
     if not _SHA_PATTERN.fullmatch(sha):
         raise InputError("candidate SHA must be 40 lowercase hexadecimal characters")
     return branch, sha
+
+
+def _parse_utc_timestamp(
+    value: object,
+    *,
+    description: str,
+    error_type: type[WaiterError],
+) -> datetime:
+    if not isinstance(value, str) or not _UTC_TIMESTAMP_PATTERN.fullmatch(value):
+        raise error_type(f"{description} must be a UTC timestamp ending in Z")
+    try:
+        parsed = datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ")
+    except ValueError as exc:
+        raise error_type(f"{description} must be a valid UTC timestamp") from exc
+    return parsed.replace(tzinfo=timezone.utc)
+
+
+def validate_run_selector(
+    expected_run_id: object,
+    not_before: object,
+) -> tuple[int | None, datetime | None]:
+    """Validate the trusted current-run selector supplied by the supervisor."""
+    normalized_run_id: int | None
+    if expected_run_id is None:
+        normalized_run_id = None
+    elif isinstance(expected_run_id, bool):
+        raise InputError("expected run ID must be a positive integer")
+    elif isinstance(expected_run_id, int):
+        normalized_run_id = _positive_int(expected_run_id)
+        if normalized_run_id is None:
+            raise InputError("expected run ID must be a positive integer")
+    elif isinstance(expected_run_id, str) and _RUN_ID_PATTERN.fullmatch(
+        expected_run_id
+    ):
+        normalized_run_id = int(expected_run_id)
+    else:
+        raise InputError("expected run ID must be a positive integer")
+
+    normalized_not_before = None
+    if not_before is not None:
+        normalized_not_before = _parse_utc_timestamp(
+            not_before,
+            description="not-before creation time",
+            error_type=InputError,
+        )
+    if normalized_run_id is None and normalized_not_before is None:
+        raise InputError("an expected run ID or not-before creation time is required")
+    return normalized_run_id, normalized_not_before
 
 
 def _header(headers: Mapping[str, str], name: str) -> str | None:
@@ -510,6 +563,9 @@ class MatrixWaiter:
         return installation_id
 
     def _find_installation(self) -> int:
+        accessible_installations: list[object] = []
+        expected_total: int | None = None
+        pagination_complete = False
         for page in range(1, MAX_INSTALLATION_PAGES + 1):
             response = self.client.get_json(
                 "/user/installations",
@@ -519,10 +575,6 @@ class MatrixWaiter:
             installations = payload.get("installations")
             if not isinstance(installations, list):
                 raise ApiProtocolError("GitHub returned invalid installation list")
-            for installation in installations:
-                match = self._installation_from_response(installation)
-                if match is not None:
-                    return match
             total_count = payload.get("total_count")
             if (
                 isinstance(total_count, bool)
@@ -530,8 +582,32 @@ class MatrixWaiter:
                 or total_count < len(installations)
             ):
                 raise ApiProtocolError("GitHub returned invalid installation count")
+            if expected_total is None:
+                expected_total = total_count
+            elif total_count != expected_total:
+                raise ApiProtocolError("GitHub changed the installation count")
+            accessible_installations.extend(installations)
+            if len(accessible_installations) > total_count:
+                raise ApiProtocolError("GitHub returned invalid installation count")
             if page * REPOSITORIES_PER_PAGE >= total_count:
+                if len(accessible_installations) != total_count:
+                    raise ApiProtocolError(
+                        "GitHub returned an incomplete installation list"
+                    )
+                pagination_complete = True
                 break
+
+        if not pagination_complete:
+            raise AuthenticationError(
+                "matrix token exposes installations beyond the bounded scope"
+            )
+        if len(accessible_installations) != 1:
+            raise AuthenticationError(
+                "matrix token must expose exactly one accessible installation"
+            )
+        match = self._installation_from_response(accessible_installations[0])
+        if match is not None:
+            return match
         raise AuthenticationError(
             "matrix token has no correctly scoped repository-owner installation"
         )
@@ -649,11 +725,56 @@ class MatrixWaiter:
         expected_title = f"Django Tests (push refs/heads/{branch} @ {sha})"
         if run.get("display_title") != expected_title:
             raise RunIdentityError("workflow run is not exact branch-ref provenance")
-        if run.get("path") != f"{WORKFLOW_PATH}@{branch}":
-            raise RunIdentityError("workflow run has the wrong workflow path/ref")
+        if run.get("path") != WORKFLOW_PATH:
+            raise RunIdentityError("workflow run has the wrong workflow path")
         if _positive_int(run.get("run_attempt")) is None:
             raise RunIdentityError("workflow run has an invalid attempt")
+        self._run_created_at(run)
         return run
+
+    @staticmethod
+    def _run_created_at(run: Mapping[str, object]) -> datetime:
+        return _parse_utc_timestamp(
+            run.get("created_at"),
+            description="workflow run creation time",
+            error_type=RunIdentityError,
+        )
+
+    def _select_current_run(
+        self,
+        runs: Sequence[Mapping[str, object]],
+        *,
+        pinned_run_id: int | None,
+        not_before: datetime | None,
+    ) -> Mapping[str, object] | None:
+        eligible: list[Mapping[str, object]] = []
+        for run in runs:
+            run_id = _positive_int(run.get("id"))
+            if run_id is None:
+                raise RunIdentityError("workflow run has an invalid id")
+            if pinned_run_id is not None and run_id != pinned_run_id:
+                continue
+            if not_before is not None and self._run_created_at(run) < not_before:
+                continue
+            eligible.append(run)
+
+        if pinned_run_id is not None:
+            if len(eligible) > 1:
+                raise ApiProtocolError("GitHub returned a duplicate workflow run id")
+            return eligible[0] if eligible else None
+        if not eligible:
+            return None
+
+        newest_created_at = max(self._run_created_at(run) for run in eligible)
+        newest_runs = [
+            run for run in eligible if self._run_created_at(run) == newest_created_at
+        ]
+        if len(newest_runs) != 1:
+            raise RunIdentityError(
+                "multiple workflow runs share the newest creation time; "
+                "an expected run ID is required"
+            )
+        return newest_runs[0]
 
     def _matching_runs(
         self,
@@ -686,16 +807,36 @@ class MatrixWaiter:
             for run in runs
         ]
 
-    def wait_for_success(self, branch: str, sha: str) -> Mapping[str, object]:
+    def wait_for_success(
+        self,
+        branch: str,
+        sha: str,
+        *,
+        expected_run_id: object = None,
+        not_before: object = None,
+    ) -> Mapping[str, object]:
         """Return only a successful exact-identity push run before the deadline."""
         branch, sha = validate_candidate(branch, sha)
+        pinned_run_id, normalized_not_before = validate_run_selector(
+            expected_run_id,
+            not_before,
+        )
         self.authenticate()
         workflow = self._workflow_identity()
         self._verify_workflow_blob(sha)
 
         while True:
             runs = self._matching_runs(branch, sha, workflow)
-            for run in runs:
+            run = self._select_current_run(
+                runs,
+                pinned_run_id=pinned_run_id,
+                not_before=normalized_not_before,
+            )
+            if run is not None:
+                if pinned_run_id is None:
+                    pinned_run_id = _positive_int(run.get("id"))
+                    if pinned_run_id is None:  # pragma: no cover - validated above
+                        raise RunIdentityError("workflow run has an invalid id")
                 status = run.get("status")
                 conclusion = run.get("conclusion")
                 if status == "completed":
@@ -724,6 +865,12 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--candidate-branch", required=True)
     parser.add_argument("--candidate-sha", required=True)
+    parser.add_argument("--expected-run-id")
+    parser.add_argument(
+        "--not-before",
+        metavar="YYYY-MM-DDTHH:MM:SSZ",
+        help="accept only runs created at or after this trusted UTC timestamp",
+    )
     return parser
 
 
@@ -741,7 +888,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         deadline = Deadline(DEFAULT_DEADLINE_SECONDS)
         client = GitHubApiClient(token=token, deadline=deadline)
         matrix_waiter = MatrixWaiter(client=client, deadline=deadline)
-        run = matrix_waiter.wait_for_success(branch, sha)
+        run = matrix_waiter.wait_for_success(
+            branch,
+            sha,
+            expected_run_id=arguments.expected_run_id,
+            not_before=arguments.not_before,
+        )
     except WaiterError as exc:
         print(f"Django matrix verification failed: {exc}", file=sys.stderr)
         return 1

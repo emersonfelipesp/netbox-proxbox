@@ -202,14 +202,20 @@ bootstrap and do not describe its result as trusted evidence.
 
 A future **base-pinned external supervisor** must execute the waiter from an
 immutable reviewed base checkout, bind the trusted candidate branch to its full
-SHA and `push` workflow `path@branch`, and reject other-branch and tag runs.
+SHA, and provide either the expected GitHub run ID or a UTC not-before creation
+time. The waiter requires GitHub's bare workflow path
+`.github/workflows/django-tests.yml`, validates branch provenance separately
+through `head_branch` and the exact run-name ref, selects one current run, and
+pins that run ID across every poll so an older success cannot satisfy the gate.
 Only after that supervisor and its isolation are reviewed may a separate change
 enable a consumer. Its base-owned `GH_MATRIX_READ_TOKEN` must remain outside
 every candidate checkout, environment, process, hook, and log. The waiter
-accepts only a base-owner GitHub App user access token (`ghu_…`) whose app
-installation selects only the exact Emerson repository with `Actions: read`
-and `Contents: read`; never weaken its fixed GitHub API allowlist, ambient-proxy
-and redirect refusal, shared deadline, response cap, or request budget. See
+accepts only a base-owner GitHub App user access token (`ghu_…`) that exposes
+exactly one accessible app installation; that installation must belong to the
+base owner and select only the exact Emerson repository with `Actions: read`
+and `Contents: read`. Never weaken its fixed GitHub API allowlist,
+ambient-proxy and redirect refusal, shared deadline, response cap, or request
+budget. See
 `docs/developer/ci-e2e-workflows.md` for the bootstrap order and full trust
 boundary.
 
