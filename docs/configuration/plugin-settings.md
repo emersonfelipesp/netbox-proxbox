@@ -355,8 +355,11 @@ plugin key rotation** instead:
    which prepared old-key ciphertext before rotation or reset is rejected or
    updates zero rows after waiting; it cannot commit stale ciphertext or restore
    operational state. Direct
-   `QuerySet.update()`/bulk writes to encrypted fields are forbidden outside the
-   recovery service's locked updates.
+   `QuerySet.update()`/`bulk_update()` writes to encrypted fields and non-empty
+   encrypted `bulk_create()` rows are rejected before SQL. Rotation, reset, and
+   backend-key adoption share one private one-call raw-update helper; it holds the
+   settings-row lock and validates every outgoing non-empty ciphertext against
+   the key currently stored there. There is no bulk-write bypass.
    Before changing the key, every enabled, adopted, operational proxbox-api
    target must also return
    a successful authenticated, versioned `GET /admin/encryption/status`
@@ -371,7 +374,9 @@ plugin key rotation** instead:
    plugin key. Current source-only proxbox-api responses deliberately remain
    blocked.
 3. Only after all values verify does it re-encrypt all values and store the new
-   key in one transaction.
+   key in one transaction. Inside that uncommitted transaction the new key is
+   made current before each replacement ciphertext passes the locked raw-update
+   validation; any failure rolls back both key and ciphertext changes.
 4. A wrong current key or one corrupt row aborts the transaction without
    changing any ciphertext or setting.
 5. The POST body is marked sensitive for Django exception reporting, and the
@@ -393,7 +398,10 @@ PBS, or PDM endpoint or marks the affected Firecracker host offline. Affected
 per-node SSH, cloud-init, and optional netbox-pbs fallback rows become
 unconfigured only for the failed fields. Re-enter those credentials and
 explicitly re-enable or restore the affected service before running sync.
-The reset takes the settings-row lock before table locks, and the writer guard
+The reset takes the settings-row lock before table locks, and its complete
+routine is marked redact-all for Django exception reports so keys, raw
+ciphertexts, legacy plaintext values, and nested row containers cannot appear in
+a technical 500 response. The writer guard
 rejects any stale instance whose expected ciphertext no longer matches the
 cleared row. Partial saves and conditional bulk updates use the same snapshot,
 so queued writers cannot resurrect credentials, trust, `enabled`, or online

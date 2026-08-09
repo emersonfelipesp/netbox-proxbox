@@ -105,10 +105,10 @@ from netbox_proxbox.services.encryption_recovery import (  # noqa: E402
     CiphertextVerificationFailed,
     EncryptionRecoveryConfigurationError,
     OldEncryptionKeyRejected,
+    _locked_encrypted_queryset_update,
     available_encrypted_field_families,
     encrypted_family_statuses,
     install_encrypted_writer_guards,
-    lock_encrypted_field_tables,
     reset_encrypted_families,
     rotate_encryption_key,
 )
@@ -124,6 +124,23 @@ from netbox_proxbox.views.endpoints.proxmox import (  # noqa: E402
     ProxmoxEndpointSSHTerminalSessionView,
 )
 from netbox_proxbox.views.settings import SettingsView  # noqa: E402
+
+
+def _raw_update_fields(model: type, pk: object, **updates: object) -> None:
+    """Inject legacy/corrupt storage state without exercising guarded write APIs."""
+
+    quote_name = connection.ops.quote_name
+    table_name = quote_name(model._meta.db_table)
+    assignments = ", ".join(
+        f"{quote_name(model._meta.get_field(field_name).column)} = %s"
+        for field_name in updates
+    )
+    pk_column = quote_name(model._meta.pk.column)
+    with connection.cursor() as cursor:
+        cursor.execute(
+            f"UPDATE {table_name} SET {assignments} WHERE {pk_column} = %s",
+            [*updates.values(), pk],
+        )
 
 
 class EncryptionKeyRecoveryTest(TestCase):
@@ -159,14 +176,19 @@ class EncryptionKeyRecoveryTest(TestCase):
         self.proxmox = ProxmoxEndpoint(
             name="recovery-pve",
             domain="recovery-pve.example.test",
-            password_enc=secret(self.plaintexts["password_enc"]),
-            token_value_enc=secret(self.plaintexts["token_value_enc"]),
-            ssh_password_enc=secret(self.plaintexts["ssh_password_enc"]),
-            ssh_private_key_enc=secret(self.plaintexts["ssh_private_key_enc"]),
             pushed_credential_fingerprint="pve-push-receipt",
             ssh_known_host_fingerprint="SHA256:" + "A" * 43,
         )
         ProxmoxEndpoint.objects.bulk_create([self.proxmox])
+        _raw_update_fields(
+            ProxmoxEndpoint,
+            self.proxmox.pk,
+            password_enc=secret(self.plaintexts["password_enc"]),
+            token_value_enc=secret(self.plaintexts["token_value_enc"]),
+            ssh_password_enc=secret(self.plaintexts["ssh_password_enc"]),
+            ssh_private_key_enc=secret(self.plaintexts["ssh_private_key_enc"]),
+        )
+        self.proxmox.refresh_from_db()
         self.node = ProxmoxNode.objects.create(
             endpoint=self.proxmox,
             name="recovery-node",
@@ -176,21 +198,31 @@ class EncryptionKeyRecoveryTest(TestCase):
             node=self.node,
             username="proxbox-discovery",
             known_host_fingerprint="SHA256:" + "B" * 43,
+        )
+        NodeSSHCredential.objects.bulk_create([self.node_credential])
+        _raw_update_fields(
+            NodeSSHCredential,
+            self.node_credential.pk,
             password_enc=secret(self.plaintexts["node_password_enc"]),
             private_key_enc=secret(self.plaintexts["node_private_key_enc"]),
         )
-        NodeSSHCredential.objects.bulk_create([self.node_credential])
+        self.node_credential.refresh_from_db()
 
         self.fastapi = FastAPIEndpoint(
             name="recovery-backend",
             domain="recovery-backend.example.test",
             enabled=True,
-            token_enc=secret(self.plaintexts["token_enc"]),
         )
         self.fastapi.backend_key_target_fingerprint = backend_key_target_fingerprint(
             self.fastapi
         )
         FastAPIEndpoint.objects.bulk_create([self.fastapi])
+        _raw_update_fields(
+            FastAPIEndpoint,
+            self.fastapi.pk,
+            token_enc=secret(self.plaintexts["token_enc"]),
+        )
+        self.fastapi.refresh_from_db()
         independent_attestation = SimpleNamespace(
             status_code=200,
             json=lambda: {
@@ -210,18 +242,28 @@ class EncryptionKeyRecoveryTest(TestCase):
             name="recovery-pbs",
             domain="recovery-pbs.example.test",
             token_id="root@pam!recovery",
-            token_secret_enc=secret(self.plaintexts["pbs_token_secret_enc"]),
             fingerprint="pbs-trust-receipt",
         )
         PBSEndpoint.objects.bulk_create([self.pbs])
+        _raw_update_fields(
+            PBSEndpoint,
+            self.pbs.pk,
+            token_secret_enc=secret(self.plaintexts["pbs_token_secret_enc"]),
+        )
+        self.pbs.refresh_from_db()
         self.pdm = PDMEndpoint(
             name="recovery-pdm",
             domain="recovery-pdm.example.test",
             token_id="root@pam!recovery",
-            token_secret_enc=secret(self.plaintexts["pdm_token_secret_enc"]),
             fingerprint="pdm-trust-receipt",
         )
         PDMEndpoint.objects.bulk_create([self.pdm])
+        _raw_update_fields(
+            PDMEndpoint,
+            self.pdm.pk,
+            token_secret_enc=secret(self.plaintexts["pdm_token_secret_enc"]),
+        )
+        self.pdm.refresh_from_db()
 
         self.vm = create_test_virtualmachine("recovery-cloud-init-vm")
         self.cloud_init = ProxmoxVMCloudInit.objects.create(
@@ -235,9 +277,14 @@ class EncryptionKeyRecoveryTest(TestCase):
             pool=self.pool,
             name="recovery-firecracker-host",
             agent_base_url="https://firecracker-agent.example.test",
-            agent_token_enc=secret(self.plaintexts["agent_token_enc"]),
         )
         FirecrackerHost.objects.bulk_create([self.firecracker])
+        _raw_update_fields(
+            FirecrackerHost,
+            self.firecracker.pk,
+            agent_token_enc=secret(self.plaintexts["agent_token_enc"]),
+        )
+        self.firecracker.refresh_from_db()
 
     def _ciphertext_snapshot(self) -> dict[tuple[str, object], tuple[object, ...]]:
         snapshot: dict[tuple[str, object], tuple[object, ...]] = {}
@@ -285,6 +332,56 @@ class EncryptionKeyRecoveryTest(TestCase):
         self.assertNotIn(self.new_key, audit_text)
         for plaintext in self.plaintexts.values():
             self.assertNotIn(plaintext, audit_text)
+
+    def test_queryset_update_rejects_encrypted_fields(self) -> None:
+        original = self.proxmox.password_enc
+
+        with self.assertRaises(ValidationError):
+            ProxmoxEndpoint.objects.filter(pk=self.proxmox.pk).update(
+                password_enc=enc_helpers.encrypt("queryset-write", key=self.old_key)
+            )
+
+        self.proxmox.refresh_from_db()
+        self.assertEqual(self.proxmox.password_enc, original)
+
+    def test_bulk_update_rejects_encrypted_fields(self) -> None:
+        original = self.proxmox.password_enc
+        self.proxmox.password_enc = enc_helpers.encrypt(
+            "bulk-update-write", key=self.old_key
+        )
+
+        with self.assertRaises(ValidationError):
+            ProxmoxEndpoint.objects.bulk_update([self.proxmox], fields=["password_enc"])
+
+        self.proxmox.refresh_from_db()
+        self.assertEqual(self.proxmox.password_enc, original)
+
+    def test_bulk_create_rejects_nonempty_encrypted_fields(self) -> None:
+        endpoint = ProxmoxEndpoint(
+            name="forbidden-bulk-create-pve",
+            domain="forbidden-bulk-create-pve.example.test",
+            password_enc=enc_helpers.encrypt("bulk-create-write", key=self.old_key),
+        )
+
+        with self.assertRaises(ValidationError):
+            ProxmoxEndpoint.objects.bulk_create([endpoint])
+
+        self.assertFalse(ProxmoxEndpoint.objects.filter(name=endpoint.name).exists())
+
+    def test_internal_queryset_bypass_validates_the_locked_current_key(self) -> None:
+        original = self.proxmox.password_enc
+        wrong_key_ciphertext = enc_helpers.encrypt(
+            "wrong-key-internal-write", key=self.new_key
+        )
+
+        with self.assertRaises(EncryptionRecoveryConfigurationError):
+            _locked_encrypted_queryset_update(
+                ProxmoxEndpoint.objects.filter(pk=self.proxmox.pk),
+                password_enc=wrong_key_ciphertext,
+            )
+
+        self.proxmox.refresh_from_db()
+        self.assertEqual(self.proxmox.password_enc, original)
 
     def test_rotation_repairs_a_drifted_stored_key_when_ciphertext_proves_old_key(
         self,
@@ -637,6 +734,10 @@ class EncryptionKeyRecoveryTest(TestCase):
 
         class CompanionQuery:
             fields: tuple[str, ...] = ()
+            model: type | None = None
+
+            def __init__(self, model: type | None = None) -> None:
+                self.model = model
 
             def values_list(self, *fields: str) -> CompanionQuery:
                 self.fields = fields
@@ -645,12 +746,28 @@ class EncryptionKeyRecoveryTest(TestCase):
             def first(self) -> tuple[str, ...]:
                 return tuple(persisted["ciphertext"] for _field in self.fields)
 
+            def update(self, **_updates: object) -> int:
+                return 0
+
+            def bulk_update(
+                self, _objs: object, _fields: object, **_kwargs: object
+            ) -> int:
+                return 0
+
+            def bulk_create(self, objs: object, **_kwargs: object) -> object:
+                return objs
+
         class CompanionManager:
+            model: type | None = None
+
             def using(self, _using: str) -> CompanionManager:
                 return self
 
             def filter(self, **_kwargs: object) -> CompanionQuery:
                 return CompanionQuery()
+
+            def all(self) -> CompanionQuery:
+                return CompanionQuery(self.model)
 
         class CompanionMeta:
             db_table = "netbox_pbs_pbspluginsettings"
@@ -661,6 +778,7 @@ class EncryptionKeyRecoveryTest(TestCase):
 
         class InstalledPBSSettings:
             objects = CompanionManager()
+            _default_manager = objects
             _meta = CompanionMeta()
 
             def __init__(self, *, pk: int | None = None) -> None:
@@ -674,6 +792,8 @@ class EncryptionKeyRecoveryTest(TestCase):
 
             def save(self, *_args: object, **_kwargs: object) -> None:
                 persisted["ciphertext"] = str(self.proxbox_api_key_enc)
+
+        InstalledPBSSettings.objects.model = InstalledPBSSettings
 
         real_get_app_config = apps.get_app_config
         real_get_model = apps.get_model
@@ -730,8 +850,10 @@ class EncryptionKeyRecoveryTest(TestCase):
         self.assertEqual(self.settings_obj.encryption_key, self.old_key)
 
     def test_one_corrupt_value_rolls_back_the_entire_rotation(self) -> None:
-        FirecrackerHost.objects.filter(pk=self.firecracker.pk).update(
-            agent_token_enc="corrupt-ciphertext-recovery-test"
+        _raw_update_fields(
+            FirecrackerHost,
+            self.firecracker.pk,
+            agent_token_enc="corrupt-ciphertext-recovery-test",
         )
         before = self._ciphertext_snapshot()
 
@@ -788,6 +910,52 @@ class EncryptionKeyRecoveryTest(TestCase):
         self.assertNotIn(self.new_key, report)
         for plaintext in self.plaintexts.values():
             self.assertNotIn(plaintext, report)
+
+    def test_unexpected_reset_failure_masks_key_and_collected_credential_material(
+        self,
+    ) -> None:
+        stored_material = "legacy-plaintext-reset-reporter-marker"
+        healthy_ciphertext = self.proxmox.token_value_enc
+        _raw_update_fields(
+            ProxmoxEndpoint,
+            self.proxmox.pk,
+            password_enc=stored_material,
+        )
+        request = RequestFactory().post(
+            "/plugins/proxbox/settings/encrypted-secrets/reset/",
+            {
+                "families": ["proxmox_api"],
+                "confirmation": RESET_CONFIRMATION_PHRASE,
+            },
+        )
+
+        with patch(
+            "netbox_proxbox.services.encryption_recovery."
+            "record_encryption_recovery_event",
+            side_effect=RuntimeError("simulated post-collection reset failure"),
+        ):
+            try:
+                reset_encrypted_families(
+                    family_keys=["proxmox_api"],
+                    confirmation=RESET_CONFIRMATION_PHRASE,
+                    audit_actor=self.operator,
+                    audit_request_id=uuid.uuid4(),
+                )
+            except RuntimeError as exc:
+                report = ExceptionReporter(
+                    request,
+                    type(exc),
+                    exc,
+                    exc.__traceback__,
+                ).get_traceback_html()
+            else:  # pragma: no cover - test must exercise the unexpected path
+                self.fail("The injected reset failure did not escape.")
+
+        self.assertNotIn(self.old_key, report)
+        self.assertNotIn(stored_material, report)
+        self.assertNotIn(healthy_ciphertext, report)
+        self.proxmox.refresh_from_db()
+        self.assertEqual(self.proxmox.password_enc, stored_material)
 
     def test_ordinary_model_and_api_key_replacement_are_rejected(self) -> None:
         self.settings_obj.encryption_key = self.new_key
@@ -890,11 +1058,13 @@ class EncryptionKeyRecoveryTest(TestCase):
     def test_selective_reset_clears_trust_state_without_save_signals(self) -> None:
         calls: list[object] = []
         stale_proxmox = ProxmoxEndpoint.objects.get(pk=self.proxmox.pk)
-        ProxmoxEndpoint.objects.filter(pk=self.proxmox.pk).update(
-            password_enc="corrupt-proxmox-password"
+        _raw_update_fields(
+            ProxmoxEndpoint, self.proxmox.pk, password_enc="corrupt-proxmox-password"
         )
-        PBSEndpoint.objects.filter(pk=self.pbs.pk).update(
-            token_secret_enc="corrupt-pbs-token"
+        _raw_update_fields(
+            PBSEndpoint,
+            self.pbs.pk,
+            token_secret_enc="corrupt-pbs-token",
         )
 
         def record_save(*, instance: object, **_kwargs: object) -> None:
@@ -959,14 +1129,19 @@ class EncryptionKeyRecoveryTest(TestCase):
             name="healthy-recovery-pve",
             domain="healthy-recovery-pve.example.test",
             enabled=True,
-            password_enc=healthy_password,
-            token_value_enc=healthy_token,
             pushed_credential_fingerprint="healthy-push-receipt",
         )
         ProxmoxEndpoint.objects.bulk_create([healthy])
+        _raw_update_fields(
+            ProxmoxEndpoint,
+            healthy.pk,
+            password_enc=healthy_password,
+            token_value_enc=healthy_token,
+        )
+        healthy.refresh_from_db()
         original_token = self.proxmox.token_value_enc
-        ProxmoxEndpoint.objects.filter(pk=self.proxmox.pk).update(
-            password_enc="corrupt-selected-password"
+        _raw_update_fields(
+            ProxmoxEndpoint, self.proxmox.pk, password_enc="corrupt-selected-password"
         )
 
         result = reset_encrypted_families(
@@ -989,8 +1164,10 @@ class EncryptionKeyRecoveryTest(TestCase):
         self.assertEqual(healthy.pushed_credential_fingerprint, "healthy-push-receipt")
 
     def test_explicit_credential_reentry_after_reset_is_allowed(self) -> None:
-        ProxmoxEndpoint.objects.filter(pk=self.proxmox.pk).update(
-            password_enc="corrupt-password-for-reentry"
+        _raw_update_fields(
+            ProxmoxEndpoint,
+            self.proxmox.pk,
+            password_enc="corrupt-password-for-reentry",
         )
         reset_encrypted_families(
             family_keys=["proxmox_api"],
@@ -1008,8 +1185,10 @@ class EncryptionKeyRecoveryTest(TestCase):
         self.assertFalse(endpoint.enabled)
 
     def test_cloud_init_api_reentry_after_reset_uses_guarded_setter(self) -> None:
-        ProxmoxVMCloudInit.objects.filter(pk=self.cloud_init.pk).update(
-            sshkeys_enc="corrupt-cloud-init-key-bundle"
+        _raw_update_fields(
+            ProxmoxVMCloudInit,
+            self.cloud_init.pk,
+            sshkeys_enc="corrupt-cloud-init-key-bundle",
         )
         reset_encrypted_families(
             family_keys=["cloud_init_ssh_keys"],
@@ -1180,8 +1359,10 @@ class EncryptionKeyRecoveryTest(TestCase):
         self.proxmox.refresh_from_db()
         self.assertNotEqual(self.proxmox.password_enc, "")
 
-        ProxmoxEndpoint.objects.filter(pk=self.proxmox.pk).update(
-            password_enc="corrupt-password-for-permissioned-reset"
+        _raw_update_fields(
+            ProxmoxEndpoint,
+            self.proxmox.pk,
+            password_enc="corrupt-password-for-permissioned-reset",
         )
 
         permission = Permission.objects.get(
@@ -1200,8 +1381,10 @@ class EncryptionKeyRecoveryTest(TestCase):
         self,
     ) -> None:
         corrupt_marker = "corrupt-ciphertext-must-not-render"
-        ProxmoxEndpoint.objects.filter(pk=self.proxmox.pk).update(
-            password_enc=corrupt_marker
+        _raw_update_fields(
+            ProxmoxEndpoint,
+            self.proxmox.pk,
+            password_enc=corrupt_marker,
         )
         user = get_user_model().objects.create_superuser(
             username="recovery-admin", password="not-a-secret"
@@ -1220,7 +1403,9 @@ class EncryptionKeyRecoveryTest(TestCase):
         self.assertContains(response, "Recovery required")
 
     def test_signal_boundaries_skip_undecryptable_backend_ciphertext(self) -> None:
-        FastAPIEndpoint.objects.filter(pk=self.fastapi.pk).update(
+        _raw_update_fields(
+            FastAPIEndpoint,
+            self.fastapi.pk,
             enabled=True,
             token_enc="corrupt-backend-ciphertext",
         )
@@ -1243,6 +1428,7 @@ class EncryptionKeyRecoveryTest(TestCase):
         register.assert_not_called()
 
 
+@pytest.mark.django_db(transaction=True)
 class EncryptionRecoveryTableLockTest(TransactionTestCase):
     """Prove the PostgreSQL recovery lock excludes a concurrent secret write."""
 
@@ -1298,9 +1484,13 @@ class EncryptionRecoveryTableLockTest(TransactionTestCase):
             name="partial-save-reset-pve",
             domain="partial-save-reset-pve.example.test",
             enabled=True,
-            password_enc="corrupt-partial-save-ciphertext",
         )
         ProxmoxEndpoint.objects.bulk_create([endpoint])
+        _raw_update_fields(
+            ProxmoxEndpoint,
+            endpoint.pk,
+            password_enc="corrupt-partial-save-ciphertext",
+        )
         stale_endpoint = ProxmoxEndpoint.objects.get(pk=endpoint.pk)
         actor = get_user_model().objects.create_user(username="partial-save-reset")
         reset_paused = threading.Event()
@@ -1366,10 +1556,14 @@ class EncryptionRecoveryTableLockTest(TransactionTestCase):
             pool=pool,
             name="concurrent-recovery-host",
             agent_base_url="https://concurrent-firecracker.example.test",
-            agent_token_enc="corrupt-concurrent-firecracker-token",
             status="ready",
         )
         FirecrackerHost.objects.bulk_create([host])
+        _raw_update_fields(
+            FirecrackerHost,
+            host.pk,
+            agent_token_enc="corrupt-concurrent-firecracker-token",
+        )
         actor = get_user_model().objects.create_user(username="bulk-status-reset")
         reset_paused = threading.Event()
         allow_commit = threading.Event()
@@ -1418,19 +1612,58 @@ class EncryptionRecoveryTableLockTest(TransactionTestCase):
         self.assertEqual(host.agent_token_enc, "")
         self.assertEqual(host.status, "offline")
 
-    def test_table_lock_blocks_concurrent_ciphertext_writer(self) -> None:
+    def test_old_key_queryset_update_started_during_rotation_is_rejected(self) -> None:
         if connection.vendor != "postgresql":
             self.skipTest("The production recovery lock is PostgreSQL-specific.")
 
+        old_key = Fernet.generate_key().decode("ascii")
+        new_key = Fernet.generate_key().decode("ascii")
+        settings_obj = ProxboxPluginSettings.get_solo()
+        ProxboxPluginSettings.objects.filter(pk=settings_obj.pk).update(
+            encryption_key=old_key
+        )
         endpoint = ProxmoxEndpoint(
             name="recovery-lock-pve",
             domain="recovery-lock-pve.example.test",
-            password_enc="initial-ciphertext",
         )
         ProxmoxEndpoint.objects.bulk_create([endpoint])
+        _raw_update_fields(
+            ProxmoxEndpoint,
+            endpoint.pk,
+            password_enc=enc_helpers.encrypt("current-secret", key=old_key),
+        )
+        late_ciphertext = enc_helpers.encrypt("late-secret", key=old_key)
+        operator = get_user_model().objects.create_user(username="queryset-race")
+        rotation_paused = threading.Event()
+        allow_commit = threading.Event()
+        rotation_errors: list[BaseException] = []
         writer_started = threading.Event()
         writer_finished = threading.Event()
         writer_errors: list[BaseException] = []
+
+        def pause_rotation(**_kwargs: object) -> None:
+            rotation_paused.set()
+            if not allow_commit.wait(timeout=5):
+                raise RuntimeError("timed out waiting to finish key rotation")
+
+        def run_rotation() -> None:
+            try:
+                connections["default"].close()
+                with patch(
+                    "netbox_proxbox.services.encryption_recovery."
+                    "record_encryption_recovery_event",
+                    side_effect=pause_rotation,
+                ):
+                    rotate_encryption_key(
+                        old_key=old_key,
+                        new_key=new_key,
+                        audit_actor=operator,
+                        audit_request_id=uuid.uuid4(),
+                    )
+            except BaseException as exc:  # pragma: no cover - asserted below
+                rotation_errors.append(exc)
+            finally:
+                connections["default"].close()
 
         def write_ciphertext() -> None:
             try:
@@ -1438,26 +1671,39 @@ class EncryptionRecoveryTableLockTest(TransactionTestCase):
                 writer_started.set()
                 with transaction.atomic():
                     ProxmoxEndpoint.objects.filter(pk=endpoint.pk).update(
-                        password_enc="concurrent-ciphertext"
+                        password_enc=late_ciphertext
                     )
-            except BaseException as exc:  # pragma: no cover - reported in main thread
+            except BaseException as exc:  # pragma: no cover - asserted below
                 writer_errors.append(exc)
             finally:
                 writer_finished.set()
                 connections["default"].close()
 
-        writer = threading.Thread(target=write_ciphertext, daemon=True)
-        with transaction.atomic():
-            lock_encrypted_field_tables()
-            writer.start()
-            self.assertTrue(writer_started.wait(timeout=2))
-            self.assertFalse(writer_finished.wait(timeout=0.25))
+        rotation = threading.Thread(target=run_rotation, daemon=True)
+        rotation.start()
+        self.assertTrue(rotation_paused.wait(timeout=5))
 
-        self.assertTrue(writer_finished.wait(timeout=5))
-        writer.join(timeout=1)
-        self.assertEqual(writer_errors, [])
+        writer = threading.Thread(target=write_ciphertext, daemon=True)
+        writer.start()
+        self.assertTrue(writer_started.wait(timeout=2))
+        writer_finished_before_commit = writer_finished.wait(timeout=0.5)
+        allow_commit.set()
+        rotation.join(timeout=5)
+        writer.join(timeout=5)
+
+        self.assertTrue(writer_finished_before_commit)
+        self.assertFalse(rotation.is_alive())
+        self.assertFalse(writer.is_alive())
+        self.assertEqual(rotation_errors, [])
+        self.assertEqual(len(writer_errors), 1)
+        self.assertIsInstance(writer_errors[0], ValidationError)
         endpoint.refresh_from_db()
-        self.assertEqual(endpoint.password_enc, "concurrent-ciphertext")
+        self.assertEqual(
+            enc_helpers.decrypt(endpoint.password_enc, key=new_key),
+            "current-secret",
+        )
+        with self.assertRaises(enc_helpers.DecryptionFailed):
+            enc_helpers.decrypt(endpoint.password_enc, key=old_key)
 
     def test_writer_that_captured_old_key_cannot_commit_after_rotation(self) -> None:
         if connection.vendor != "postgresql":
@@ -1472,9 +1718,13 @@ class EncryptionRecoveryTableLockTest(TransactionTestCase):
         endpoint = ProxmoxEndpoint(
             name="stale-writer-pve",
             domain="stale-writer-pve.example.test",
-            password_enc=enc_helpers.encrypt("current-secret", key=old_key),
         )
         ProxmoxEndpoint.objects.bulk_create([endpoint])
+        _raw_update_fields(
+            ProxmoxEndpoint,
+            endpoint.pk,
+            password_enc=enc_helpers.encrypt("current-secret", key=old_key),
+        )
         stale_writer = ProxmoxEndpoint.objects.get(pk=endpoint.pk)
         stale_writer.password_enc = enc_helpers.encrypt("late-secret", key=old_key)
         operator = get_user_model().objects.create_user(username="stale-writer")

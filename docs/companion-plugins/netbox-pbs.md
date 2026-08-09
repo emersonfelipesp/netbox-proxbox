@@ -120,7 +120,10 @@ resolved likewise blocks recovery. netbox-proxbox installs the same settings-row
 guard on the companion settings model at app startup; a fallback ciphertext
 prepared under the old key is rejected if rotation wins the lock. Recovery also
 takes the companion PostgreSQL table lock. Direct queryset/bulk writes to
-`proxbox_api_key_enc` are unsupported. A destructive fallback-key reset leaves the setting
+`proxbox_api_key_enc` are rejected before SQL; only the private one-call
+rotation/reset update may write it after taking the shared settings lock and
+validating a non-empty outgoing value under the current key. Bulk writes have no
+bypass. A destructive fallback-key reset leaves the setting
 explicitly unconfigured; re-enter the key before relying on the standalone
 fallback URL again.
 

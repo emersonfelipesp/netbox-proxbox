@@ -33,7 +33,11 @@ This directory contains service-layer modules for backend HTTP proxy, keepalive 
   The optional companion's public setter
   may transfer its one-use tagged ciphertext from a validation probe into the
   persisted instance; the tag is stripped after save. Direct queryset/bulk
-  encrypted-field writes are forbidden. Recovery locks all registered and
+  encrypted-field writes are rejected before SQL. A private context-local permit
+  exists only for one exact rotation/reset/adoption `QuerySet.update()`: its helper
+  holds the settings-row lock and decrypt-validates each outgoing non-empty value
+  under the key currently stored there. `bulk_create()` and `bulk_update()` have
+  no internal bypass. Recovery locks all registered and
   dormant-known PostgreSQL tables in deterministic order. Rotation authenticates
   every enabled, adopted, operational proxbox-api target's versioned
   `/admin/encryption/status` response and proceeds only when the active cached

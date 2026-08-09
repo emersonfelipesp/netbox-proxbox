@@ -68,7 +68,7 @@ except Exception as exc:  # pragma: no cover - external test harness availabilit
 from django.core.exceptions import ValidationError  # noqa: E402
 from django.core.management import call_command  # noqa: E402
 from django.contrib.auth import get_user_model  # noqa: E402
-from django.db import IntegrityError, transaction  # noqa: E402
+from django.db import IntegrityError, connection, transaction  # noqa: E402
 from django.db.models.signals import post_save  # noqa: E402
 from django.test import TransactionTestCase, override_settings  # noqa: E402
 from ipam.models import IPAddress  # noqa: E402
@@ -114,6 +114,23 @@ from netbox_proxbox.websocket_client import (  # noqa: E402
 OLD_KEY = "old-backend-key-0123456789abcdef0123456789"
 NEW_KEY = "new-backend-key-0123456789abcdef0123456789"
 OTHER_KEY = "other-backend-key-0123456789abcdef01234567"
+
+
+def _raw_update_fields(model: type, pk: object, **updates: object) -> None:
+    """Inject legacy/corrupt storage state without guarded queryset writes."""
+
+    quote_name = connection.ops.quote_name
+    table_name = quote_name(model._meta.db_table)
+    assignments = ", ".join(
+        f"{quote_name(model._meta.get_field(field_name).column)} = %s"
+        for field_name in updates
+    )
+    pk_column = quote_name(model._meta.pk.column)
+    with connection.cursor() as cursor:
+        cursor.execute(
+            f"UPDATE {table_name} SET {assignments} WHERE {pk_column} = %s",
+            [*updates.values(), pk],
+        )
 
 
 class TestEndpointAutoconfigurationHelpers:
@@ -797,8 +814,10 @@ class BackendKeyPersistenceTests(TransactionTestCase):
 
     def test_explicit_replacement_recovers_corrupt_stored_ciphertext(self) -> None:
         endpoint = self._create_enabled("corrupt-replacement")
-        FastAPIEndpoint.objects.filter(pk=endpoint.pk).update(
-            token_enc="corrupt-backend-key-ciphertext"
+        _raw_update_fields(
+            FastAPIEndpoint,
+            endpoint.pk,
+            token_enc="corrupt-backend-key-ciphertext",
         )
         endpoint = FastAPIEndpoint.objects.get(pk=endpoint.pk)
         self.backend.accepted_keys.add(NEW_KEY)
@@ -820,8 +839,10 @@ class BackendKeyPersistenceTests(TransactionTestCase):
 
     def test_corrupt_stored_ciphertext_requires_explicit_replacement(self) -> None:
         endpoint = self._create_enabled("corrupt-no-replacement")
-        FastAPIEndpoint.objects.filter(pk=endpoint.pk).update(
-            token_enc="corrupt-backend-key-ciphertext"
+        _raw_update_fields(
+            FastAPIEndpoint,
+            endpoint.pk,
+            token_enc="corrupt-backend-key-ciphertext",
         )
         endpoint = FastAPIEndpoint.objects.get(pk=endpoint.pk)
         self.backend.clear()

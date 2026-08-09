@@ -9,6 +9,7 @@ send incomplete credentials to proxbox-api.
 
 from __future__ import annotations
 
+from contextvars import ContextVar
 from dataclasses import dataclass
 from functools import wraps
 from hmac import compare_digest
@@ -189,12 +190,28 @@ _FAMILY_BY_KEY: Final = {family.key: family for family in ENCRYPTED_FIELD_FAMILI
 _EXPLICIT_WRITE_MARKER: Final = "_proxbox_encryption_expected_ciphertexts"
 _RECOVERY_FIELDS_BY_MODEL: dict[type, tuple[str, ...]] = {}
 _PROTECTED_RECOVERY_FIELDS_BY_MODEL: dict[type, frozenset[str]] = {}
+_ENCRYPTED_FIELDS_BY_MODEL: dict[type, frozenset[str]] = {}
+
+
+@dataclass(frozen=True, slots=True)
+class _EncryptedQuerySetWritePermit:
+    """One exact encrypted ``QuerySet.update()`` authorized under the key lock."""
+
+    model: type
+    using: str
+    encrypted_updates: tuple[tuple[str, str], ...]
+
+
+_ENCRYPTED_QUERYSET_WRITE_PERMIT: ContextVar[_EncryptedQuerySetWritePermit | None] = (
+    ContextVar("proxbox_encrypted_queryset_write_permit", default=None)
+)
 
 
 class _SetterProducedCiphertext(str):
     """Tag ciphertext produced by a registered companion model's public setter."""
 
 
+@sensitive_variables()
 def mark_encrypted_fields_for_write(instance: object, *field_names: str) -> None:
     """Remember the persisted values an explicit secret assignment is replacing."""
 
@@ -383,8 +400,8 @@ def install_encrypted_writer_guards() -> None:
         )
         _RECOVERY_FIELDS_BY_MODEL[model] = recovery_fields
         _PROTECTED_RECOVERY_FIELDS_BY_MODEL[model] = protected_recovery_fields
-        if protected_recovery_fields:
-            _install_recovery_queryset_update_guard(model)
+        _ENCRYPTED_FIELDS_BY_MODEL[model] = frozenset(encrypted_fields)
+        _install_recovery_queryset_write_guards(model)
 
         if getattr(model, "_proxbox_encryption_writer_guard_installed", False):
             continue
@@ -396,6 +413,7 @@ def install_encrypted_writer_guards() -> None:
         ):
 
             @wraps(optional_secret_setter)
+            @sensitive_variables()
             def guarded_secret_setter(
                 instance: object,
                 *args: object,
@@ -524,24 +542,61 @@ def install_encrypted_writer_guards() -> None:
         model._proxbox_encryption_writer_guard_installed = True
 
 
-def _install_recovery_queryset_update_guard(model: type) -> None:
-    """Make bulk operational/trust writes conditional on one row snapshot.
+def _install_recovery_queryset_write_guards(model: type) -> None:
+    """Reject raw ciphertext writes and guard bulk operational/trust updates.
 
     A plain ``QuerySet.update()`` does not call ``save()``. Capture the recovery
     fields before waiting for the settings-row lock, then add that snapshot to
     every eventual update. If a reset wins the lock and clears a credential,
     trust receipt, or operational flag, PostgreSQL rechecks these predicates
     after the wait and the delayed writer updates zero rows.
+
+    Encrypted fields are stricter: ordinary queryset and bulk APIs cannot prove
+    setter provenance or validate a stale prepared value under the settings-row
+    lock, so they are rejected before SQL. The private locked helper below grants
+    one exact ``update()`` only to recovery/adoption internals after validating
+    every outgoing ciphertext against the currently locked key.
     """
 
     queryset_type = type(model._default_manager.all())
-    if getattr(queryset_type, "_proxbox_recovery_update_guard_installed", False):
+    if getattr(queryset_type, "_proxbox_recovery_write_guards_installed", False):
         return
     original_update = queryset_type.update
+    original_bulk_update = queryset_type.bulk_update
+    original_bulk_create = queryset_type.bulk_create
 
     @wraps(original_update)
+    @sensitive_variables()
     def guarded_update(queryset: object, **updates: object) -> int:
         queryset_model = getattr(queryset, "model", None)
+        encrypted_fields = _ENCRYPTED_FIELDS_BY_MODEL.get(queryset_model, frozenset())
+        encrypted_updates = {
+            field_name: value
+            for field_name, value in updates.items()
+            if field_name in encrypted_fields
+        }
+        if encrypted_updates:
+            queryset._for_write = True  # type: ignore[attr-defined]
+            using = str(getattr(queryset, "db", "default") or "default")
+            permit = _ENCRYPTED_QUERYSET_WRITE_PERMIT.get()
+            exact_updates = tuple(
+                sorted(
+                    (field_name, str(value))
+                    for field_name, value in encrypted_updates.items()
+                )
+            )
+            if permit != _EncryptedQuerySetWritePermit(
+                model=queryset_model,
+                using=using,
+                encrypted_updates=exact_updates,
+            ):
+                raise ValidationError(
+                    "Encrypted fields cannot be written with QuerySet.update(), "
+                    "bulk_update(), or bulk_create(). Use the registered secret "
+                    "setter and model save path."
+                )
+            return original_update(queryset, **updates)
+
         protected_fields = _PROTECTED_RECOVERY_FIELDS_BY_MODEL.get(queryset_model)
         if not protected_fields or protected_fields.isdisjoint(updates):
             return original_update(queryset, **updates)
@@ -575,8 +630,125 @@ def _install_recovery_queryset_update_guard(model: type) -> None:
                 updated += original_update(conditional_queryset, **updates)
         return updated
 
+    @wraps(original_bulk_update)
+    @sensitive_variables()
+    def guarded_bulk_update(
+        queryset: object,
+        objs: object,
+        fields: object,
+        *args: object,
+        **kwargs: object,
+    ) -> int:
+        queryset_model = getattr(queryset, "model", None)
+        encrypted_fields = _ENCRYPTED_FIELDS_BY_MODEL.get(queryset_model, frozenset())
+        normalized_fields = tuple(str(field_name) for field_name in fields)  # type: ignore[union-attr]
+        if not encrypted_fields.isdisjoint(normalized_fields):
+            raise ValidationError(
+                "Encrypted fields cannot be written with QuerySet.update(), "
+                "bulk_update(), or bulk_create(). Use the registered secret "
+                "setter and model save path."
+            )
+        return original_bulk_update(queryset, objs, normalized_fields, *args, **kwargs)
+
+    @wraps(original_bulk_create)
+    @sensitive_variables()
+    def guarded_bulk_create(
+        queryset: object,
+        objs: object,
+        *args: object,
+        **kwargs: object,
+    ) -> object:
+        queryset_model = getattr(queryset, "model", None)
+        encrypted_fields = _ENCRYPTED_FIELDS_BY_MODEL.get(queryset_model, frozenset())
+        materialized_objs = list(objs)  # type: ignore[arg-type]
+        conflict_update_fields = tuple(
+            str(field_name) for field_name in (kwargs.get("update_fields") or ())
+        )
+        contains_ciphertext = any(
+            str(getattr(instance, field_name, "") or "")
+            for instance in materialized_objs
+            for field_name in encrypted_fields
+        )
+        if contains_ciphertext or not encrypted_fields.isdisjoint(
+            conflict_update_fields
+        ):
+            raise ValidationError(
+                "Encrypted fields cannot be written with QuerySet.update(), "
+                "bulk_update(), or bulk_create(). Use the registered secret "
+                "setter and model save path."
+            )
+        return original_bulk_create(queryset, materialized_objs, *args, **kwargs)
+
     queryset_type.update = guarded_update
-    queryset_type._proxbox_recovery_update_guard_installed = True
+    queryset_type.bulk_update = guarded_bulk_update
+    queryset_type.bulk_create = guarded_bulk_create
+    queryset_type._proxbox_recovery_write_guards_installed = True
+
+
+@sensitive_variables()
+def _locked_encrypted_queryset_update(queryset: object, **updates: object) -> int:
+    """Perform one internal raw ciphertext update under the current settings key.
+
+    This is intentionally private and supports only the non-signaling updates
+    required by rotation, destructive reset, and backend-key adoption. It opens
+    or joins a transaction, locks the singleton settings row, validates every
+    outgoing non-empty ciphertext under the key stored in that locked row, and
+    grants the exact queryset update a one-use context-local permit.
+    """
+
+    from netbox_proxbox.models import ProxboxPluginSettings
+
+    queryset_model = getattr(queryset, "model", None)
+    encrypted_fields = _ENCRYPTED_FIELDS_BY_MODEL.get(queryset_model, frozenset())
+    encrypted_updates = {
+        field_name: value
+        for field_name, value in updates.items()
+        if field_name in encrypted_fields
+    }
+    if not encrypted_updates:
+        raise EncryptionRecoveryConfigurationError(
+            "The internal encrypted-field update was called without a registered "
+            "encrypted field."
+        )
+    if any(not isinstance(value, str) for value in encrypted_updates.values()):
+        raise EncryptionRecoveryConfigurationError(
+            "Internal encrypted-field updates require concrete ciphertext values."
+        )
+
+    queryset._for_write = True  # type: ignore[attr-defined]
+    using = str(getattr(queryset, "db", "default") or "default")
+    with transaction.atomic(using=using):
+        locked_settings = (
+            ProxboxPluginSettings.objects.using(using)
+            .select_for_update()
+            .get(singleton_key="default")
+        )
+        current_key = str(locked_settings.encryption_key or "").strip()
+        try:
+            for ciphertext in encrypted_updates.values():
+                if ciphertext:
+                    enc_helpers.decrypt(ciphertext, key=current_key)
+        except enc_helpers.EncryptionError:
+            raise EncryptionRecoveryConfigurationError(
+                "The internal encrypted-field update was blocked because its "
+                "ciphertext does not match the locked settings key."
+            ) from None
+
+        permit = _EncryptedQuerySetWritePermit(
+            model=queryset_model,
+            using=using,
+            encrypted_updates=tuple(
+                sorted(
+                    (field_name, str(value))
+                    for field_name, value in encrypted_updates.items()
+                )
+            ),
+        )
+        permit_token = _ENCRYPTED_QUERYSET_WRITE_PERMIT.set(permit)
+        try:
+            return queryset.update(**updates)  # type: ignore[attr-defined]
+        finally:
+            _ENCRYPTED_QUERYSET_WRITE_PERMIT.reset(permit_token)
 
 
 def lock_encrypted_field_tables(
@@ -976,6 +1148,14 @@ def rotate_encryption_key(
 
             # Second pass: every relevant row is still locked by this transaction,
             # so the verified ciphertext cannot change before it is re-encrypted.
+            # Make the replacement key current inside this still-uncommitted
+            # transaction before the private raw-update helper validates each new
+            # ciphertext against it. Any later failure rolls this setting write and
+            # every ciphertext replacement back together.
+            ProxboxPluginSettings.objects.filter(pk=locked_settings.pk).update(
+                encryption_key=new_value
+            )
+            locked_settings.encryption_key = new_value
             for family, model in family_models:
                 rows = (
                     model.objects.filter(_ciphertext_query(family))
@@ -1005,11 +1185,9 @@ def rotate_encryption_key(
                                 "or settings were changed."
                             ) from exc
                     if replacements:
-                        model.objects.filter(pk=pk).update(**replacements)
-
-            ProxboxPluginSettings.objects.filter(pk=locked_settings.pk).update(
-                encryption_key=new_value
-            )
+                        _locked_encrypted_queryset_update(
+                            model.objects.filter(pk=pk), **replacements
+                        )
             record_encryption_recovery_event(
                 settings_obj=locked_settings,
                 actor=audit_actor,
@@ -1032,7 +1210,7 @@ def rotate_encryption_key(
     )
 
 
-@sensitive_variables("configured_key")
+@sensitive_variables()
 def reset_encrypted_families(
     *,
     family_keys: list[str] | tuple[str, ...],
@@ -1105,7 +1283,9 @@ def reset_encrypted_families(
                         model_field = model._meta.get_field(field_name)
                         clear_values[field_name] = None if model_field.null else ""
                     clear_values.update(dict(family.operational_reset_values))
-                    model.objects.filter(pk=pk).update(**clear_values)
+                    _locked_encrypted_queryset_update(
+                        model.objects.filter(pk=pk), **clear_values
+                    )
                 reset_families.append(key)
             record_encryption_recovery_event(
                 settings_obj=locked_settings,

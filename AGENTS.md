@@ -262,7 +262,10 @@ Key architectural invariants to keep in mind:
   Ordinary key mutation is blocked while ciphertext exists. Registered model
   saves (including optional netbox-pbs) lock the settings row, validate their
   ciphertext under that key, and persist within that transaction; direct
-  queryset/bulk encrypted-field writes are forbidden. Rotation uses the same
+  queryset/bulk encrypted-field writes are rejected before SQL. Only the private
+  one-call rotation/reset/adoption update may write raw ciphertext, and it must
+  hold the settings-row lock and validate every outgoing non-empty value against
+  the key currently stored there; bulk create/update has no bypass. Rotation uses the same
   settings-row order followed by deterministic PostgreSQL table locks before
   verifying all ciphertext and performing one transactional rewrite. Complete
   ciphertext verification may recover a drifted stored setting; when no

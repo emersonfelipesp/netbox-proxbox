@@ -174,10 +174,9 @@ def test_rotation_verifies_all_ciphertext_before_any_reencryption_write() -> Non
     first_pass = rotation.index("for family, model in family_models:")
     second_pass = rotation.index("for family, model in family_models:", first_pass + 1)
     assert first_pass < second_pass
+    setting_write = rotation.index("encryption_key=new_value")
+    assert first_pass < setting_write < second_pass
     assert second_pass < rotation.index("enc_helpers.encrypt(")
-    assert rotation.index("enc_helpers.encrypt(") < rotation.index(
-        "encryption_key=new_value"
-    )
     assert "accumulating in memory" in rotation
     assert "No encrypted values or settings were changed." in rotation
 
@@ -198,9 +197,14 @@ def test_key_mutations_use_one_postgresql_table_lock_protocol() -> None:
     assert ".select_for_update()" in settings_model
     assert "install_encrypted_writer_guards()" in app_config
     assert "Encrypted values were prepared with a stale" in source
-    assert "_install_recovery_queryset_update_guard(model)" in source
+    assert "_install_recovery_queryset_write_guards(model)" in source
     assert "conditional_queryset" in source
     assert "snapshot = dict(zip(recovery_fields" in source
+    assert "def guarded_bulk_update(" in source
+    assert "def guarded_bulk_create(" in source
+    assert "def _locked_encrypted_queryset_update(" in source
+    assert "_ENCRYPTED_QUERYSET_WRITE_PERMIT" in source
+    assert "ciphertext does not match the locked settings key" in source
     reset = source[source.index("def reset_encrypted_families") :]
     assert reset.index("select_for_update()") < reset.index(
         "lock_encrypted_field_tables()"
@@ -236,7 +240,7 @@ def test_destructive_reset_is_confirmed_atomic_and_non_signaling() -> None:
     )
     assert "confirmation != RESET_CONFIRMATION_PHRASE" in reset
     assert "with transaction.atomic():" in reset
-    assert ".update(**clear_values)" in reset
+    assert "model.objects.filter(pk=pk), **clear_values" in reset
     assert "enc_helpers.decrypt(" in reset
     assert "operational_reset_values" in reset
     assert ".save(" not in reset
@@ -263,6 +267,9 @@ def test_recovery_surfaces_never_render_keys_and_runtime_stays_permissioned() ->
     assert 'sensitive_post_parameters("encryption_key")' in settings_view
     assert "@sensitive_variables()\n    def post" in settings_view
     assert "@sensitive_variables()\ndef rotate_encryption_key" in RECOVERY.read_text()
+    assert (
+        "@sensitive_variables()\ndef reset_encrypted_families" in RECOVERY.read_text()
+    )
     assert (
         "@sensitive_variables()\ndef encrypted_family_statuses" in RECOVERY.read_text()
     )

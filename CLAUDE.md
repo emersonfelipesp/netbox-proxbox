@@ -209,7 +209,11 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
   `ProxboxPluginSettings.encryption_key` while registry ciphertext exists.
   Registered model saves (including optional netbox-pbs) lock the settings row,
   validate their ciphertext under that key, and persist within that transaction;
-  direct queryset/bulk encrypted-field writes are forbidden. Rotation uses the
+  direct queryset/bulk encrypted-field writes are rejected before SQL. The only
+  raw-ciphertext exception is a private, one-call recovery/adoption update that
+  holds the settings-row lock and validates every outgoing non-empty ciphertext
+  against the key currently stored there; bulk create/update has no bypass.
+  Rotation uses the
   same settings-row order followed by deterministic PostgreSQL table locks, then verifies every value with the old key before any
   write and updates all values plus the key in one transaction. When the stored
   setting drifted, successful verification of every registered ciphertext proves
