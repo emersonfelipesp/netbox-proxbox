@@ -296,9 +296,9 @@ def test_sync_individual_with_dependencies_threads_schema_id_through_recursion(
 def test_sync_individual_with_dependencies_threads_endpoint_scope_through_recursion(
     monkeypatch,
 ):
-    """The direct action's endpoint scope must reach every dependency call."""
+    """Both endpoint pins must reach the top-level and every dependency call."""
     module = _load_individual_sync_module(monkeypatch)
-    calls: list[tuple[str, str | None]] = []
+    calls: list[tuple[str, int | None, str | None]] = []
 
     def fake_sync(
         path,
@@ -307,7 +307,7 @@ def test_sync_individual_with_dependencies_threads_endpoint_scope_through_recurs
         fastapi_endpoint_id=None,
         proxmox_endpoint_ids=None,
     ):
-        calls.append((path, proxmox_endpoint_ids))
+        calls.append((path, fastapi_endpoint_id, proxmox_endpoint_ids))
         if path == "sync/individual/vm":
             return (
                 {
@@ -329,11 +329,12 @@ def test_sync_individual_with_dependencies_threads_endpoint_scope_through_recurs
     _, status, _ = module.sync_individual_with_dependencies(
         "sync/individual/vm",
         {"cluster_name": "lab", "node": "pve01", "type": "qemu", "vmid": 101},
+        fastapi_endpoint_id=7,
         proxmox_endpoint_ids="71",
     )
 
     assert status == 200
     assert calls == [
-        ("sync/individual/vm", "71"),
-        ("sync/individual/node", "71"),
+        ("sync/individual/vm", 7, "71"),
+        ("sync/individual/node", 7, "71"),
     ]

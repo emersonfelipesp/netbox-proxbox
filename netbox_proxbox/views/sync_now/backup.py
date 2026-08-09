@@ -51,9 +51,11 @@ class VMBackupSyncNowView(
             )
             return HttpResponseRedirect(backup.get_absolute_url())
 
-        scope_kwargs, scope_error = resolve_target_proxmox_endpoint_scope(
-            backup,
-            prefer_storage=True,
+        scope_kwargs, owner_cluster_name, scope_error = (
+            resolve_target_proxmox_endpoint_scope(
+                backup,
+                prefer_storage=True,
+            )
         )
         if scope_kwargs is None:
             messages.error(
@@ -61,10 +63,13 @@ class VMBackupSyncNowView(
                 scope_error or _("Backup ownership could not be resolved for sync."),
             )
             return HttpResponseRedirect(backup.get_absolute_url())
+        query_params = dict(params["query_params"])
+        if owner_cluster_name:
+            query_params["cluster_name"] = owner_cluster_name
 
         response, status, dependencies = sync_individual_with_dependencies(
             params["path"],
-            params["query_params"],
+            query_params,
             netbox_branch_schema_id=get_active_branch_schema_id(),
             **scope_kwargs,
         )

@@ -47,11 +47,18 @@ class VMTaskHistorySyncNowView(
         if "error" in params:
             messages.error(
                 request,
-                _("Task history is missing the Proxmox context required for sync."),
+                str(
+                    params.get("error")
+                    or _(
+                        "Task history is missing the Proxmox context required for sync."
+                    )
+                ),
             )
             return HttpResponseRedirect(task_history.get_absolute_url())
 
-        scope_kwargs, scope_error = resolve_target_proxmox_endpoint_scope(task_history)
+        scope_kwargs, owner_cluster_name, scope_error = (
+            resolve_target_proxmox_endpoint_scope(task_history)
+        )
         if scope_kwargs is None:
             messages.error(
                 request,
@@ -59,10 +66,13 @@ class VMTaskHistorySyncNowView(
                 or _("Task-history ownership could not be resolved for sync."),
             )
             return HttpResponseRedirect(task_history.get_absolute_url())
+        query_params = dict(params["query_params"])
+        if owner_cluster_name:
+            query_params["cluster_name"] = owner_cluster_name
 
         response, status, dependencies = sync_individual_with_dependencies(
             params["path"],
-            params["query_params"],
+            query_params,
             netbox_branch_schema_id=get_active_branch_schema_id(),
             **scope_kwargs,
         )
