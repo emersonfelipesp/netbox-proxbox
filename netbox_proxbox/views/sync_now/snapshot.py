@@ -1,4 +1,4 @@
-"""Individual sync for ProxmoxNode."""
+"""Individual sync for VMSnapshot."""
 
 from django.contrib import messages
 from django.http import HttpRequest
@@ -12,9 +12,10 @@ from utilities.views import (
     register_model_view,
 )
 
-from netbox_proxbox.models import ProxmoxNode
+from netbox_proxbox.models import VMSnapshot
 from netbox_proxbox.services.branch_lifecycle import get_active_branch_schema_id
 from netbox_proxbox.services.individual_sync import sync_individual_with_dependencies
+from netbox_proxbox.sync_params import _resolve_vm_snapshot_batch_params
 from netbox_proxbox.views.proxbox_access import permission_enqueue_proxbox_sync
 from netbox_proxbox.views.sync_now import _handle_sync_response
 from netbox_proxbox.views.sync_now.endpoint_scope import (
@@ -22,13 +23,13 @@ from netbox_proxbox.views.sync_now.endpoint_scope import (
 )
 
 
-@register_model_view(ProxmoxNode, "proxbox_sync_now", path="proxbox-sync-now")
-class ProxmoxNodeSyncNowView(
+@register_model_view(VMSnapshot, "proxbox_sync_now", path="proxbox-sync-now")
+class VMSnapshotSyncNowView(
     TokenConditionalLoginRequiredMixin,
     ContentTypePermissionRequiredMixin,
     View,
 ):
-    """POST: sync a single ProxmoxNode from proxbox-api."""
+    """POST: sync a single VMSnapshot from proxbox-api."""
 
     http_method_names = ["post"]
 
@@ -38,36 +39,34 @@ class ProxmoxNodeSyncNowView(
 
     def post(self, request: HttpRequest, pk: int | str) -> HttpResponseRedirect:
         """Handle post."""
-        node = get_object_or_404(
-            ProxmoxNode.objects.restrict(request.user, "view"), pk=pk
+        snapshot = get_object_or_404(
+            VMSnapshot.objects.restrict(request.user, "view"), pk=pk
         )
-        node_name = node.name
 
-        cluster_name = ""
-        if node.proxmox_cluster:
-            cluster_name = node.proxmox_cluster.name
-        elif node.netbox_device and node.netbox_device.cluster:
-            cluster_name = node.netbox_device.cluster.name
-
-        if not cluster_name:
-            messages.error(request, _("Node is not linked to a Proxmox cluster."))
-            return HttpResponseRedirect(node.get_absolute_url())
+        params = _resolve_vm_snapshot_batch_params(snapshot)
+        if "error" in params:
+            messages.error(
+                request,
+                _("Snapshot is missing the Proxmox context required for sync."),
+            )
+            return HttpResponseRedirect(snapshot.get_absolute_url())
 
         scope_kwargs, owner_cluster_name, scope_error = (
-            resolve_target_proxmox_endpoint_scope(node)
+            resolve_target_proxmox_endpoint_scope(snapshot)
         )
         if scope_kwargs is None:
             messages.error(
                 request,
-                scope_error or _("Node ownership could not be resolved for sync."),
+                scope_error or _("Snapshot ownership could not be resolved for sync."),
             )
-            return HttpResponseRedirect(node.get_absolute_url())
+            return HttpResponseRedirect(snapshot.get_absolute_url())
+        query_params = dict(params["query_params"])
         if owner_cluster_name:
-            cluster_name = owner_cluster_name
+            query_params["cluster_name"] = owner_cluster_name
 
         response, status, dependencies = sync_individual_with_dependencies(
-            "sync/individual/node",
-            {"cluster_name": cluster_name, "node_name": node_name},
+            params["path"],
+            query_params,
             netbox_branch_schema_id=get_active_branch_schema_id(),
             **scope_kwargs,
         )
@@ -77,6 +76,6 @@ class ProxmoxNodeSyncNowView(
             response,
             status,
             dependencies,
-            f"Node '{node_name}'",
-            node.get_absolute_url(),
+            f"Snapshot '{snapshot.name}'",
+            snapshot.get_absolute_url(),
         )

@@ -23,14 +23,17 @@ from netbox_proxbox.views.plan_summary import IntentPlanSummaryView
 
 # The ``sync_now`` package only exposes its views through a lazy ``__getattr__``
 # (to dodge circular imports at app-init time), so nothing ever executed their
-# ``@register_model_view`` decorators and the cluster/node/storage "Sync Now"
-# actions registered no URL at all. Importing them here -- before the
+# ``@register_model_view`` decorators and the plugin-model "Sync Now" actions
+# registered no URL at all. Importing them here -- before the
 # ``get_model_urls()`` calls below are evaluated -- is what actually registers
 # them. Imported for the decorator side effect only.
 from netbox_proxbox.views.sync_now import (  # noqa: F401
+    backup as _sync_now_backup,
     cluster as _sync_now_cluster,
     node as _sync_now_node,
+    snapshot as _sync_now_snapshot,
     storage as _sync_now_storage,
+    task_history as _sync_now_task_history,
 )
 from netbox_proxbox.websocket_client import WebSocketView
 

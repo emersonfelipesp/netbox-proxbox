@@ -6,10 +6,11 @@ from urllib.parse import quote
 
 from core.choices import JobStatusChoices
 from core.models import Job
-from django.urls import reverse
+from django.urls import NoReverseMatch, reverse
 from django.utils.safestring import mark_safe
 from netbox.plugins import PluginTemplateExtension
 from utilities.permissions import get_permission_for_model
+from utilities.views import get_viewname
 from virtualization.models import VirtualMachine
 
 from netbox_proxbox.bug_report import build_bug_report_context, is_reportable_status
@@ -50,6 +51,22 @@ __all__ = (
 )
 
 
+def _sync_now_action_url(target) -> str | None:
+    """Reverse the registered ``proxbox_sync_now`` action URL for *target*.
+
+    Returns ``None`` when the action is not registered for the target's model,
+    so callers can hide the button instead of rendering a POST that 404s
+    (issue #294: the old approach concatenated ``get_absolute_url()`` with a
+    hard-coded action suffix, silently assuming a route that
+    ``register_model_view`` may never have mounted).
+    """
+    viewname = get_viewname(target, "proxbox_sync_now")
+    try:
+        return reverse(viewname, kwargs={"pk": target.pk})
+    except NoReverseMatch:
+        return None
+
+
 class _SyncNowButtonExtension(PluginTemplateExtension):
     """Base that renders a sync-now button on a model detail page.
 
@@ -79,9 +96,11 @@ class _SyncNowButtonExtension(PluginTemplateExtension):
             tracking = getattr(obj, self.tracking_attr).first()
             if not tracking:
                 return ""
-            action_url = f"{tracking.get_absolute_url()}proxbox-sync-now/"
+            action_url = _sync_now_action_url(tracking)
         else:
-            action_url = f"{obj.get_absolute_url()}proxbox-sync-now/"
+            action_url = _sync_now_action_url(obj)
+        if action_url is None:
+            return ""
         return self.render(
             self.button_template,
             {self.context_key: obj, "action_url": action_url},
@@ -184,15 +203,17 @@ class ProxboxVirtualMachineTemplateExtension(PluginTemplateExtension):
         user = self.context["request"].user
         parts: list[str] = []
         if user.has_perm(permission_enqueue_proxbox_sync()):
-            parts.append(
-                self.render(
-                    "netbox_proxbox/inc/vm_sync_now_button.html",
-                    {
-                        "vm": obj,
-                        "action_url": f"{obj.get_absolute_url()}proxbox-sync-now/",
-                    },
+            action_url = _sync_now_action_url(obj)
+            if action_url is not None:
+                parts.append(
+                    self.render(
+                        "netbox_proxbox/inc/vm_sync_now_button.html",
+                        {
+                            "vm": obj,
+                            "action_url": action_url,
+                        },
+                    )
                 )
-            )
         if user.has_perm(permission_run_proxmox_action()):
             resolved = resolve_vm_endpoint_context(obj)
             if resolved is not None:

@@ -9,10 +9,11 @@ ever registered under those names and ``urls.py`` never mounted
 
 The models now guard the reverse and return ``""`` instead of raising, so the
 page no longer 500s -- but that only converted a crash into three dead UI
-surfaces: the Sync Now button on core Cluster/Device pages (whose action URL is
-built as ``f"{obj.get_absolute_url()}proxbox-sync-now/"``), the ``linkify``
-columns in ``ProxmoxClusterTable``/``ProxmoxNodeTable``, and the already
-registered ``proxbox_sync_now`` action views, which nothing could route to.
+surfaces: the Sync Now button on core Cluster/Device pages, the ``linkify``
+columns in ``ProxmoxClusterTable``/``ProxmoxNodeTable``, and the registered
+``proxbox_sync_now`` action views, which nothing could route to. Sync Now URLs
+are now reversed from the tracking row's registered model action rather than
+derived from its detail URL (issue #294).
 
 Registering a real detail view under the bare model name -- and mounting it in
 ``urls.py`` -- is what makes all three work again.
