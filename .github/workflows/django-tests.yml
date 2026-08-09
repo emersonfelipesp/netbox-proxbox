@@ -109,6 +109,7 @@ jobs:
             tests/test_backend_key_adoption_django.py \
             tests/test_job_stream_django.py \
             tests/test_ceph_runtime_settings_django.py \
+            tests/test_influxdb_metrics_django.py \
             tests/test_node_ssh_credential_form_django.py \
             tests/test_detail_view_templates_django.py \
             --ds=netbox.settings --reuse-db --create-db -v --no-header \

@@ -18,6 +18,35 @@ NMS_SECRET_REF_RE = (
     r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 
+#: Rendered in place of a token field whose stored value is not an exact
+#: ``nms-secret:<uuid>`` reference.  Deliberately not the empty string: a blank
+#: renders as NetBox's "not set" placeholder, which would read as *no token
+#: configured* rather than *a value is stored and is being withheld*.
+MASKED_SECRET_REF = "********"
+
+
+def masked_secret_ref(value: str | None) -> str:
+    """Return ``value`` only when it is an exact ``nms-secret:<uuid>`` reference.
+
+    This is the fail-closed rendering path for the token columns. Anything the
+    reference grammar does not match -- a plaintext InfluxDB token, a partially
+    typed reference, a value carrying stray whitespace -- is replaced with
+    :data:`MASKED_SECRET_REF` rather than reaching a template.
+
+    ``clean()`` and the ``CheckConstraint``\\ s on
+    :class:`ProxmoxMetricsInfluxDB` already reject those values on every
+    validated write and at the database, so this only matters for a row written
+    past both: a raw SQL insert, a loaded fixture, an unvalidated
+    ``objects.create()``, or a row that predates the constraints. Masking is
+    what keeps such a row from turning the detail page into a credential
+    viewer; it is the last barrier, not the only one.
+    """
+    if value is None or value == "":
+        return ""
+    if re.fullmatch(NMS_SECRET_REF_RE, value):
+        return value
+    return MASKED_SECRET_REF
+
 
 class ProxmoxMetricsInfluxDB(NetBoxModel):
     """InfluxDB query endpoint metadata for a Proxmox cluster."""
@@ -100,11 +129,38 @@ class ProxmoxMetricsInfluxDB(NetBoxModel):
             models.UniqueConstraint(
                 fields=["proxmox_cluster", "name"],
                 name="netbox_proxbox_metrics_influxdb_unique_cluster_name",
-            )
+            ),
+            # "Empty, or an exact nms-secret reference" -- never free text. The
+            # empty branch keeps required-ness a form/`clean()` concern (a blank
+            # query reference is invalid input, not a corrupt row) while the
+            # database still guarantees that anything actually stored in these
+            # columns is a reference and not a credential. `RegexValidator`
+            # alone cannot: model validators do not run on `objects.create()`,
+            # `bulk_create()`, or `queryset.update()`.
+            models.CheckConstraint(
+                condition=models.Q(query_token_secret_ref__regex=NMS_SECRET_REF_RE)
+                | models.Q(query_token_secret_ref=""),
+                name="netbox_proxbox_metrics_influxdb_query_token_is_ref",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(writer_token_secret_ref__regex=NMS_SECRET_REF_RE)
+                | models.Q(writer_token_secret_ref=""),
+                name="netbox_proxbox_metrics_influxdb_writer_token_is_ref",
+            ),
         ]
 
     def __str__(self) -> str:
         return f"{self.name} -> {self.proxmox_cluster}"
+
+    @property
+    def query_token_secret_ref_display(self) -> str:
+        """Fail-closed rendering value for :attr:`query_token_secret_ref`."""
+        return masked_secret_ref(self.query_token_secret_ref)
+
+    @property
+    def writer_token_secret_ref_display(self) -> str:
+        """Fail-closed rendering value for :attr:`writer_token_secret_ref`."""
+        return masked_secret_ref(self.writer_token_secret_ref)
 
     def get_absolute_url(self) -> str:
         try:

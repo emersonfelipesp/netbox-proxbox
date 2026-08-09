@@ -57,11 +57,11 @@
         <table class="table table-hover attr-table">
           <tr>
             <th scope="row">{% trans "Query Token Reference" %}</th>
-            <td>{{ object.query_token_secret_ref }}</td>
+            <td>{{ object.query_token_secret_ref_display }}</td>
           </tr>
           <tr>
             <th scope="row">{% trans "Writer Token Reference" %}</th>
-            <td>{{ object.writer_token_secret_ref|placeholder }}</td>
+            <td>{{ object.writer_token_secret_ref_display|placeholder }}</td>
           </tr>
         </table>
       </div>

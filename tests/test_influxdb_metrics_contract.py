@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import os
+import importlib.util
 import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -57,6 +59,127 @@ INVALID_SECRET_REF = "nms-secret:------------------------------------"
 
 def _read(rel: str) -> str:
     return (ROOT / rel).read_text(encoding="utf-8")
+
+
+def _load_proxmox_metrics_model(monkeypatch: pytest.MonkeyPatch):
+    """Load the real model module against the fast suite's minimal stubs."""
+    exceptions = types.ModuleType("django.core.exceptions")
+    exceptions.ValidationError = type("ValidationError", (Exception,), {})
+
+    validators = types.ModuleType("django.core.validators")
+
+    class RegexValidator:
+        def __init__(self, *args, **kwargs):
+            pass
+
+    validators.RegexValidator = RegexValidator
+
+    models = types.ModuleType("django.db.models")
+
+    class Field:
+        def __init__(self, *args, **kwargs):
+            self.args = args
+            self.kwargs = kwargs
+
+    class Q:
+        def __init__(self, *args, **kwargs):
+            self.args = args
+            self.kwargs = kwargs
+
+        def __or__(self, other):
+            return (self, "OR", other)
+
+    for field_name in (
+        "BooleanField",
+        "CharField",
+        "ForeignKey",
+        "TextField",
+        "URLField",
+        "UniqueConstraint",
+        "CheckConstraint",
+    ):
+        setattr(models, field_name, Field)
+    models.Q = Q
+    models.CASCADE = object()
+
+    db = types.ModuleType("django.db")
+    db.models = models
+
+    urls = types.ModuleType("django.urls")
+    urls.NoReverseMatch = type("NoReverseMatch", (Exception,), {})
+    urls.reverse = lambda *args, **kwargs: "/dummy/"
+
+    translation = types.ModuleType("django.utils.translation")
+    translation.gettext_lazy = lambda value: value
+
+    netbox_models = types.ModuleType("netbox.models")
+
+    class NetBoxModel:
+        def clean(self) -> None:
+            pass
+
+    netbox_models.NetBoxModel = NetBoxModel
+
+    for name, module in {
+        "django.core.exceptions": exceptions,
+        "django.core.validators": validators,
+        "django.db": db,
+        "django.db.models": models,
+        "django.urls": urls,
+        "django.utils.translation": translation,
+        "netbox.models": netbox_models,
+    }.items():
+        monkeypatch.setitem(sys.modules, name, module)
+
+    module_name = "_test_proxmox_metrics_model"
+    spec = importlib.util.spec_from_file_location(
+        module_name,
+        ROOT / "netbox_proxbox/models/proxmox_metrics.py",
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, module_name, module)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.mark.parametrize(
+    ("stored_value", "expected"),
+    [
+        (None, ""),
+        ("", ""),
+        ("influx-token-plaintext", "********"),
+        (" \t ", "********"),
+        ("nms-secret:123e4567", "********"),
+        ("nms-secret:123e4567-e89b-12d3-a456-42661417400g", "********"),
+        (f" {VALID_SECRET_REF} ", "********"),
+        (VALID_SECRET_REF, VALID_SECRET_REF),
+    ],
+)
+def test_masked_secret_ref_enforces_exact_reference_grammar(
+    monkeypatch: pytest.MonkeyPatch,
+    stored_value: str | None,
+    expected: str,
+) -> None:
+    model_module = _load_proxmox_metrics_model(monkeypatch)
+
+    rendered = model_module.masked_secret_ref(stored_value)
+
+    assert rendered == expected
+    if expected == model_module.MASKED_SECRET_REF:
+        assert rendered != stored_value
+
+
+def test_metrics_display_properties_never_return_plaintext_tokens(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model_module = _load_proxmox_metrics_model(monkeypatch)
+    row = model_module.ProxmoxMetricsInfluxDB()
+    row.query_token_secret_ref = "query-token-must-not-render"
+    row.writer_token_secret_ref = "writer-token-must-not-render"
+
+    assert row.query_token_secret_ref_display == model_module.MASKED_SECRET_REF
+    assert row.writer_token_secret_ref_display == model_module.MASKED_SECRET_REF
 
 
 def test_influxdb_metrics_model_uses_secret_references_not_plaintext_tokens() -> None:

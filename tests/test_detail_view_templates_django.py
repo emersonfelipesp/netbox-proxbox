@@ -6,6 +6,7 @@ import importlib
 import os
 from pathlib import Path
 import sys
+from unittest.mock import patch
 
 import pytest
 
@@ -64,6 +65,7 @@ except Exception as exc:  # pragma: no cover - external test harness availabilit
 
 from django.apps import apps  # noqa: E402
 from django.contrib.auth import get_user_model  # noqa: E402
+from django.core.exceptions import ImproperlyConfigured  # noqa: E402
 from django.template.loader import get_template  # noqa: E402
 from django.test import Client, SimpleTestCase, TestCase  # noqa: E402
 from django.urls import reverse  # noqa: E402
@@ -102,6 +104,7 @@ from netbox_proxbox.models import (  # noqa: E402
 from netbox_proxbox.models.ssh_credential import (  # noqa: E402
     AUTH_METHOD_PASSWORD,
 )
+from netbox_proxbox.models.proxmox_metrics import MASKED_SECRET_REF  # noqa: E402
 
 
 _PLUGIN_VIEW_MODULE_PREFIX = "netbox_proxbox.views"
@@ -165,6 +168,8 @@ _OPTIONAL_PDM_OBJECT_VIEW_REGISTRY = {
 }
 _SSH_PASSWORD_MARKER = "detail-view-password-must-not-render"
 _SSH_PRIVATE_KEY_MARKER = "detail-view-private-key-must-not-render"
+_METRICS_QUERY_TOKEN_MARKER = "detail-view-query-token-must-not-render"
+_METRICS_WRITER_TOKEN_MARKER = "detail-view-writer-token-must-not-render"
 
 
 def _registered_plugin_object_views() -> tuple[tuple[str, type[ObjectView]], ...]:
@@ -217,32 +222,72 @@ def _registered_detail_view(
 class RegisteredObjectViewTemplateRuntimeTest(SimpleTestCase):
     """Validate actual runtime template resolution for every plugin ObjectView."""
 
-    def test_optional_pdm_companion_override_is_real(self) -> None:
-        if not apps.is_installed("netbox_pdm"):
-            self.skipTest("optional netbox-pdm registry contract is not enabled")
-
+    def test_pdm_detail_override_is_class_aware_idempotent_and_strict(self) -> None:
         proxbox_urls = importlib.import_module("netbox_proxbox.urls")
-        proxbox_urls._drop_registered_pdm_endpoint_detail_view()
-        importlib.reload(importlib.import_module("netbox_pdm.views"))
-        companion = _registered_detail_view(
-            "netbox_proxbox", "pdmendpoint", "pdmendpoint"
-        )
-        self.assertIsNotNone(companion)
-        self.assertEqual(
-            f"{companion.__module__}.{companion.__qualname__}",
-            "netbox_pdm.views.PDMEndpointView",
-        )
+        model_registry = registry["views"].setdefault("netbox_proxbox", {})
+        model_name = proxbox_urls._PDM_ENDPOINT_MODEL_NAME
+        had_registration = model_name in model_registry
+        original_registration = list(model_registry.get(model_name, ()))
+        PDMEndpointView = importlib.import_module(
+            "netbox_proxbox.views.endpoints.pdm"
+        ).PDMEndpointView
 
-        proxbox_urls._drop_registered_pdm_endpoint_detail_view()
-        importlib.reload(importlib.import_module("netbox_proxbox.views.endpoints.pdm"))
-        overridden = _registered_detail_view(
-            "netbox_proxbox", "pdmendpoint", "pdmendpoint"
-        )
-        self.assertIsNotNone(overridden)
-        self.assertEqual(
-            f"{overridden.__module__}.{overridden.__qualname__}",
-            "netbox_proxbox.views.endpoints.pdm.PDMEndpointView",
-        )
+        CompanionDetailView = type("CompanionDetailView", (), {})
+        OtherCompanionDetailView = type("OtherCompanionDetailView", (), {})
+        own = {"view": PDMEndpointView, "detail": True, "name": ""}
+        foreign = {"view": CompanionDetailView, "detail": True, "name": ""}
+        named = {
+            "view": OtherCompanionDetailView,
+            "detail": True,
+            "name": "sync_now",
+        }
+        non_detail = {
+            "view": OtherCompanionDetailView,
+            "detail": False,
+            "name": "",
+        }
+
+        try:
+            model_registry[model_name] = [foreign, named, own, non_detail]
+
+            proxbox_urls._install_pdm_endpoint_detail_override()
+
+            installed = model_registry[model_name]
+            self.assertTrue(any(config is own for config in installed))
+            self.assertFalse(any(config is foreign for config in installed))
+            self.assertTrue(any(config is named for config in installed))
+            self.assertTrue(any(config is non_detail for config in installed))
+            self.assertEqual(len(installed), 3)
+
+            proxbox_urls._install_pdm_endpoint_detail_override()
+            self.assertIs(model_registry[model_name], installed)
+
+            invalid_shapes = (
+                ([], "found 0"),
+                ([own, dict(own)], "found 2"),
+                (
+                    [
+                        own,
+                        foreign,
+                        {
+                            "view": OtherCompanionDetailView,
+                            "detail": True,
+                            "name": "",
+                        },
+                    ],
+                    "2 companion base detail views",
+                ),
+            )
+            for registrations, expected_message in invalid_shapes:
+                with self.subTest(registrations=registrations):
+                    model_registry[model_name] = registrations
+                    with self.assertRaisesRegex(ImproperlyConfigured, expected_message):
+                        proxbox_urls._install_pdm_endpoint_detail_override()
+        finally:
+            if had_registration:
+                model_registry[model_name] = original_registration
+            else:
+                model_registry.pop(model_name, None)
 
     def test_runtime_registry_object_views_resolve_through_django_loader(self) -> None:
         registrations = _registered_plugin_object_views()
@@ -436,3 +481,29 @@ class MissingDetailTemplateRenderTest(TestCase):
         self.assertEqual(response.status_code, 200, response.content)
         self.assertNotContains(response, _SSH_PASSWORD_MARKER)
         self.assertNotContains(response, _SSH_PRIVATE_KEY_MARKER)
+
+    def test_metrics_render_uses_fail_closed_display_properties(self) -> None:
+        self.metrics.query_token_secret_ref = _METRICS_QUERY_TOKEN_MARKER
+        self.metrics.writer_token_secret_ref = _METRICS_WRITER_TOKEN_MARKER
+        url = reverse(
+            "plugins:netbox_proxbox:proxmoxmetricsinfluxdb",
+            args=[self.metrics.pk],
+        )
+
+        with patch(
+            "netbox.views.generic.get_object_or_404",
+            return_value=self.metrics,
+        ):
+            response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertNotContains(response, _METRICS_QUERY_TOKEN_MARKER)
+        self.assertNotContains(response, _METRICS_WRITER_TOKEN_MARKER)
+        self.assertContains(response, MASKED_SECRET_REF, count=2)
+        rendered_object = response.context["object"]
+        self.assertEqual(
+            rendered_object.query_token_secret_ref_display, MASKED_SECRET_REF
+        )
+        self.assertEqual(
+            rendered_object.writer_token_secret_ref_display, MASKED_SECRET_REF
+        )
