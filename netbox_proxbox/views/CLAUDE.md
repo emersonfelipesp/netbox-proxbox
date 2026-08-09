@@ -151,7 +151,7 @@ This directory implements the plugin's NetBox UI behavior, including dashboard p
 - [`proxmox_cluster_node.py`](./proxmox_cluster_node.py): detail (`ObjectView`) views for `ProxmoxCluster` and `ProxmoxNode`, registered under the bare model names so `get_absolute_url()` resolves.
 - [`storage.py`](./storage.py): CRUD list/detail/delete views for `ProxmoxStorage`.
 - [`sync.py`](./sync.py): POST endpoints that enqueue `ProxboxSyncJob` runs for devices, storage, virtual machines, virtual disks, backups, snapshots, network interfaces, IP addresses, backup routines, replications, and full update.
-- [`sync_now/`](./sync_now/): targeted per-object sync handlers for cluster, node, storage, and VM actions.
+- [`sync_now/`](./sync_now/): targeted per-object sync handlers for plugin cluster, node, storage, backup, snapshot, and task-history actions. The core VM action remains in `vm_sync_now.py`.
 - [`vm_backup.py`](./vm_backup.py): CRUD list/detail/delete views and the VirtualMachine tab for `VMBackup`.
 - [`vm_config.py`](./vm_config.py): live Proxmox config tab for `VirtualMachine` records.
 - [`vm_snapshot.py`](./vm_snapshot.py): CRUD list/detail/delete views and the VirtualMachine tab for `VMSnapshot`.
@@ -185,7 +185,7 @@ This directory implements the plugin's NetBox UI behavior, including dashboard p
   `ProxmoxCluster` and `ProxmoxNode` reversed
   `plugins:netbox_proxbox:proxmoxcluster` / `:proxmoxnode`, but `urls.py` never
   mounted `get_model_urls()` for either, so the name did not exist. The Sync-Now
-  template extension calls `get_absolute_url()` on **every core
+  template extension previously called `get_absolute_url()` on **every core
   `virtualization.Cluster` and `dcim.Device` detail page**, which raised
   `NoReverseMatch` and rendered "An error occurred when loading content from
   plugin netbox_proxbox". The models later gained a `try/except NoReverseMatch →
@@ -199,11 +199,11 @@ This directory implements the plugin's NetBox UI behavior, including dashboard p
   have no UI surface).
 - **`views/sync_now/` only registers if something imports it.** That package
   exposes its views through a lazy `__getattr__`, so nothing ever executed the
-  `@register_model_view` decorators in `sync_now/cluster.py`, `node.py`, and
-  `storage.py` — those three Sync Now actions registered **no URL at all**.
-  `urls.py` now imports the three modules for their decorator side effect,
-  before the `get_model_urls()` calls are evaluated. If you add a module there,
-  import it in `urls.py` too, and keep the contract test green.
+  `@register_model_view` decorators in the individual modules. `urls.py` now
+  imports cluster, node, storage, backup, snapshot, and task-history modules for
+  their decorator side effect before the `get_model_urls()` calls are evaluated.
+  If you add a module there, import it in `urls.py` too, and keep the contract
+  test green.
 
 ## Links
 

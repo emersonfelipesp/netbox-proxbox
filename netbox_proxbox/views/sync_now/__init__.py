@@ -10,6 +10,9 @@ __all__ = (
     "ProxmoxClusterSyncNowView",
     "ProxmoxNodeSyncNowView",
     "ProxmoxStorageSyncNowView",
+    "VMBackupSyncNowView",
+    "VMSnapshotSyncNowView",
+    "VMTaskHistorySyncNowView",
     "VirtualMachineSyncNowView",
 )
 
@@ -28,6 +31,18 @@ def __getattr__(name: str) -> type:
         from netbox_proxbox.views.sync_now.storage import ProxmoxStorageSyncNowView
 
         return ProxmoxStorageSyncNowView
+    if name == "VMBackupSyncNowView":
+        from netbox_proxbox.views.sync_now.backup import VMBackupSyncNowView
+
+        return VMBackupSyncNowView
+    if name == "VMSnapshotSyncNowView":
+        from netbox_proxbox.views.sync_now.snapshot import VMSnapshotSyncNowView
+
+        return VMSnapshotSyncNowView
+    if name == "VMTaskHistorySyncNowView":
+        from netbox_proxbox.views.sync_now.task_history import VMTaskHistorySyncNowView
+
+        return VMTaskHistorySyncNowView
     if name == "VirtualMachineSyncNowView":
         from netbox_proxbox.views.sync_now.vm import VirtualMachineSyncNowView
 
