@@ -184,6 +184,9 @@ def test_rotation_verifies_all_ciphertext_before_any_reencryption_write() -> Non
 def test_key_mutations_use_one_postgresql_table_lock_protocol() -> None:
     source = RECOVERY.read_text()
     settings_model = (MODELS / "plugin_settings.py").read_text()
+    settings_serializer = (
+        ROOT / "netbox_proxbox" / "api" / "serializers" / "settings.py"
+    ).read_text()
     app_config = (ROOT / "netbox_proxbox" / "__init__.py").read_text()
     auto_configuration = (
         ROOT / "netbox_proxbox" / "services" / "endpoint_autoconfiguration.py"
@@ -198,6 +201,8 @@ def test_key_mutations_use_one_postgresql_table_lock_protocol() -> None:
     assert "install_encrypted_writer_guards()" in app_config
     assert "Encrypted values were prepared with a stale" in source
     assert "_install_recovery_queryset_write_guards(model)" in source
+    assert "type(model._default_manager.all())" in source
+    assert "type(model._base_manager.all())" in source
     assert "conditional_queryset" in source
     assert "snapshot = dict(zip(recovery_fields" in source
     assert "def guarded_bulk_update(" in source
@@ -205,6 +210,15 @@ def test_key_mutations_use_one_postgresql_table_lock_protocol() -> None:
     assert "def _locked_encrypted_queryset_update(" in source
     assert "_ENCRYPTED_QUERYSET_WRITE_PERMIT" in source
     assert "ciphertext does not match the locked settings key" in source
+    assert "_SETTINGS_KEY_FIELDS_BY_MODEL[ProxboxPluginSettings]" in source
+    assert source.count("_SETTINGS_KEY_QUERYSET_WRITE_PERMIT.set(") == 1
+    assert "The plugin encryption key cannot be written with" in source
+    assert "protected_fields.intersection(conflict_update_fields)" in source
+    assert "Conflict upserts cannot update encryption-recovery-protected" in source
+    assert "def _locked_recovery_conflict_bulk_create(" in source
+    assert "_PROTECTED_CONFLICT_UPSERT_PERMIT" in source
+    assert "@sensitive_variables()\n    def save" in settings_model
+    assert settings_serializer.count("@sensitive_variables()") == 5
     reset = source[source.index("def reset_encrypted_families") :]
     assert reset.index("select_for_update()") < reset.index(
         "lock_encrypted_field_tables()"
@@ -274,6 +288,16 @@ def test_recovery_surfaces_never_render_keys_and_runtime_stays_permissioned() ->
         "@sensitive_variables()\ndef encrypted_family_statuses" in RECOVERY.read_text()
     )
     assert "@sensitive_variables()\ndef ciphertext_state" in RECOVERY.read_text()
+    settings_model = (MODELS / "plugin_settings.py").read_text()
+    settings_serializer = (
+        ROOT / "netbox_proxbox" / "api" / "serializers" / "settings.py"
+    ).read_text()
+    assert "@sensitive_variables()\n    def save" in settings_model
+    assert "@sensitive_variables()\n    def run_validation" in settings_serializer
+    assert "@sensitive_variables()\n    def validate" in settings_serializer
+    assert "@sensitive_variables()\n    def create" in settings_serializer
+    assert "@sensitive_variables()\n    def update" in settings_serializer
+    assert "@sensitive_variables()\n    def save" in settings_serializer
     terminal_view = (
         ROOT / "netbox_proxbox" / "views" / "endpoints" / "proxmox.py"
     ).read_text()

@@ -9,6 +9,7 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models, router, transaction
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
+from django.views.decorators.debug import sensitive_variables
 
 from netbox.models import NetBoxModel
 
@@ -971,6 +972,7 @@ class ProxboxPluginSettings(NetBoxModel):
                 {"ceph_task_poll_interval": CEPH_POLL_INTERVAL_TIMEOUT_ERROR}
             )
 
+    @sensitive_variables()
     def save(self, *args: object, **kwargs: object) -> None:
         """Preserve the singleton and block ordinary key changes over ciphertext."""
 

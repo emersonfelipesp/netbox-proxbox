@@ -92,11 +92,15 @@ This directory contains the plugin's pytest test suite.
   zero-network rotation, and immutable target capture, model/API/form mutation
   guards, exact reset confirmation, separate permission enforcement, selective
   trust-state clearing with no save signals, usable secret-free UI, and
-  encryption-error signal boundaries. A PostgreSQL `TransactionTestCase` proves
-  the table lock excludes a concurrent ciphertext writer and that a writer which
-  captured old-key ciphertext cannot save after rotation; stale full/partial
+  encryption-error signal boundaries. It covers both default and base managers,
+  direct key update/bulk-update rejection, protected conflict-upsert rejection,
+  and the real key-bearing settings save frame's exception redaction. A
+  PostgreSQL `TransactionTestCase` proves the table lock excludes a concurrent
+  ciphertext writer and that a writer which captured old-key ciphertext cannot
+  save after rotation; stale full/partial
   saves and conditional `QuerySet.update()` writers cannot resurrect reset
-  credentials, trust, enabled state, or Firecracker online status, while explicit
+  credentials, trust, enabled state, or Firecracker online status; a concurrent
+  conflict upsert likewise cannot undo reset quarantine, while explicit
   post-reset credential re-entry remains allowed.
   It also proves the optional netbox-pbs family is omitted only when the app and
   table are genuinely absent, dormant ciphertext blocks rotation, an installed

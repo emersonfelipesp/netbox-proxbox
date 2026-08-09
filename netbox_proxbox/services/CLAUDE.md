@@ -27,17 +27,24 @@ This directory contains service-layer modules for backend HTTP proxy, keepalive 
   (including optional netbox-pbs) so key selection/validation and persistence
   serialize on the settings row and an expected-ciphertext snapshot rejects
   instances made stale by rotation/reset, including partial saves of trust and
-  operational-reset fields. Its guarded `QuerySet.update()` path snapshots all
-  recovery fields before taking that lock and makes each delayed trust/operational
-  write conditional on the snapshot, so a reset-winning row updates zero times.
+  operational-reset fields. Guards are installed on every distinct queryset
+  class reachable from both `_default_manager` and `_base_manager`, not merely
+  the NetBox restricted default manager. Its guarded `QuerySet.update()` path
+  snapshots all recovery fields before taking that lock and makes each delayed
+  trust/operational write conditional on the snapshot, so a reset-winning row
+  updates zero times.
   The optional companion's public setter
   may transfer its one-use tagged ciphertext from a validation probe into the
   persisted instance; the tag is stripped after save. Direct queryset/bulk
-  encrypted-field writes are rejected before SQL. A private context-local permit
+  encrypted-field writes and direct queryset/bulk settings-key changes are
+  rejected before SQL. Verified rotation alone holds the exact-value
+  settings-key permit. Conflict-upsert `update_fields` may not include reset
+  trust/operational fields unless the exact call uses the private
+  settings-locked internal permit. A private context-local permit
   exists only for one exact rotation/reset/adoption `QuerySet.update()`: its helper
   holds the settings-row lock and decrypt-validates each outgoing non-empty value
-  under the key currently stored there. `bulk_create()` and `bulk_update()` have
-  no internal bypass. Recovery locks all registered and
+  under the key currently stored there. Encrypted-field `bulk_create()` and
+  `bulk_update()` have no internal bypass. Recovery locks all registered and
   dormant-known PostgreSQL tables in deterministic order. Rotation authenticates
   every enabled, adopted, operational proxbox-api target's versioned
   `/admin/encryption/status` response and proceeds only when the active cached

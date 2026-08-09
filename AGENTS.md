@@ -259,10 +259,16 @@ Key architectural invariants to keep in mind:
   invalidated by a destructive reset. An optional app is omitted only when both
   its Django registration and known table are absent; dormant ciphertext and
   installed owners with unresolved models/tables fail closed.
-  Ordinary key mutation is blocked while ciphertext exists. Registered model
+  Ordinary key mutation is blocked while ciphertext exists, and both the
+  default and base-manager queryset/bulk APIs reject direct
+  `ProxboxPluginSettings.encryption_key` writes. Verified rotation owns the one
+  exact settings-locked key-update permit. Registered model
   saves (including optional netbox-pbs) lock the settings row, validate their
   ciphertext under that key, and persist within that transaction; direct
-  queryset/bulk encrypted-field writes are rejected before SQL. Only the private
+  queryset/bulk encrypted-field writes are rejected before SQL through both
+  reachable manager classes. Conflict upserts may not name reset-protected
+  trust or operational fields unless a private settings-locked internal permit
+  authorizes that exact call. Only the private
   one-call rotation/reset/adoption update may write raw ciphertext, and it must
   hold the settings-row lock and validate every outgoing non-empty value against
   the key currently stored there; bulk create/update has no bypass. Rotation uses the same
@@ -278,8 +284,10 @@ Key architectural invariants to keep in mind:
   Lost-key reset is separately permissioned, explicitly confirmed, selective,
   disables
   affected endpoints (or marks Firecracker hosts offline), and uses
-  non-signaling queryset updates. Recovery POST values are exception-reporter
-  sensitive and each attempt emits a secret-free NetBox changelog event. Keep
+  non-signaling queryset updates. Recovery POST values, settings serializer
+  mutations, and the key-bearing settings-model save frame are
+  exception-reporter sensitive, and each attempt emits a secret-free NetBox
+  changelog event. Keep
   the plugin-at-rest key separate from
   proxbox-api database encryption and FastAPI request authentication. Ordinary
   settings serializers withhold it; the backend-only runtime route retains its

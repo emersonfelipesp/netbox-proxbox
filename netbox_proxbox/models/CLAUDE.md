@@ -48,13 +48,15 @@ This directory defines the plugin's persisted data model.
   exact enabled target through the normal adoption flow before persistence.
 - `PBSEndpoint`: stores Proxmox Backup Server connection settings and credentials for companion inventory/status paths.
 - `PDMEndpoint`: stores Proxmox Datacenter Manager connection settings plus declared PVE/PBS federation links.
-- `ProxboxPluginSettings`: owns the plugin-at-rest Fernet key. Its `save()`
-  rejects ordinary key clearing/replacement while any encrypted family contains
-  ciphertext using the same settings-row and deterministic PostgreSQL table-lock
-  protocol as verified rotation, and its custom `reset_encrypted_secrets`
-  permission gates the
-  separately destructive recovery view. Verified rotation bypasses this guard
-  only through the atomic recovery service's locked `QuerySet.update()`.
+- `ProxboxPluginSettings`: owns the plugin-at-rest Fernet key. Its redact-all
+  `save()` rejects ordinary key clearing/replacement while any encrypted family
+  contains ciphertext using the same settings-row and deterministic PostgreSQL
+  table-lock protocol as verified rotation. Startup-installed guards also reject
+  key writes through both default/base-manager `QuerySet.update()`,
+  `bulk_update()`, and conflict-upsert paths. Its custom
+  `reset_encrypted_secrets` permission gates the separately destructive recovery
+  view. Verified rotation bypasses the queryset guard only through one exact
+  settings-locked internal permit.
 - `ProxmoxCluster`: stores synchronized cluster metadata and relationships to the source endpoint and NetBox cluster.
 - `ProxmoxNode`: stores synchronized hypervisor nodes and their relationships to the source endpoint and NetBox device.
 - `ProxmoxMetricsInfluxDB`: stores the InfluxDB URL, organization, bucket, TLS

@@ -116,8 +116,9 @@ If the app is unloaded but its known settings table survives, netbox-proxbox
 locks and inspects the table and blocks key mutation while any fallback-key
 ciphertext remains. Re-enable and migrate netbox-pbs before rotating or resetting
 that family. An installed app whose expected model or database table cannot be
-resolved likewise blocks recovery. netbox-proxbox installs the same settings-row writer
-guard on the companion settings model at app startup; a fallback ciphertext
+resolved likewise blocks recovery. netbox-proxbox installs the same settings-row
+writer guard on both companion default/base-manager queryset classes at app
+startup; a fallback ciphertext
 prepared under the old key is rejected if rotation wins the lock. Recovery also
 takes the companion PostgreSQL table lock. Direct queryset/bulk writes to
 `proxbox_api_key_enc` are rejected before SQL; only the private one-call

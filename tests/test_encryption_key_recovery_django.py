@@ -106,6 +106,7 @@ from netbox_proxbox.services.encryption_recovery import (  # noqa: E402
     EncryptionRecoveryConfigurationError,
     OldEncryptionKeyRejected,
     _locked_encrypted_queryset_update,
+    _locked_recovery_conflict_bulk_create,
     available_encrypted_field_families,
     encrypted_family_statuses,
     install_encrypted_writer_guards,
@@ -150,8 +151,10 @@ class EncryptionKeyRecoveryTest(TestCase):
         self.old_key = Fernet.generate_key().decode("ascii")
         self.new_key = Fernet.generate_key().decode("ascii")
         settings_obj = ProxboxPluginSettings.get_solo()
-        ProxboxPluginSettings.objects.filter(pk=settings_obj.pk).update(
-            encryption_key=self.old_key
+        _raw_update_fields(
+            ProxboxPluginSettings,
+            settings_obj.pk,
+            encryption_key=self.old_key,
         )
         self.settings_obj = ProxboxPluginSettings.objects.get(pk=settings_obj.pk)
         self.operator = get_user_model().objects.create_user(
@@ -344,6 +347,19 @@ class EncryptionKeyRecoveryTest(TestCase):
         self.proxmox.refresh_from_db()
         self.assertEqual(self.proxmox.password_enc, original)
 
+    def test_base_manager_queryset_update_rejects_encrypted_fields(self) -> None:
+        original = self.proxmox.password_enc
+
+        with self.assertRaises(ValidationError):
+            ProxmoxEndpoint._base_manager.filter(pk=self.proxmox.pk).update(
+                password_enc=enc_helpers.encrypt(
+                    "base-manager-queryset-write", key=self.old_key
+                )
+            )
+
+        self.proxmox.refresh_from_db()
+        self.assertEqual(self.proxmox.password_enc, original)
+
     def test_bulk_update_rejects_encrypted_fields(self) -> None:
         original = self.proxmox.password_enc
         self.proxmox.password_enc = enc_helpers.encrypt(
@@ -352,6 +368,20 @@ class EncryptionKeyRecoveryTest(TestCase):
 
         with self.assertRaises(ValidationError):
             ProxmoxEndpoint.objects.bulk_update([self.proxmox], fields=["password_enc"])
+
+        self.proxmox.refresh_from_db()
+        self.assertEqual(self.proxmox.password_enc, original)
+
+    def test_base_manager_bulk_update_rejects_encrypted_fields(self) -> None:
+        original = self.proxmox.password_enc
+        self.proxmox.password_enc = enc_helpers.encrypt(
+            "base-manager-bulk-update", key=self.old_key
+        )
+
+        with self.assertRaises(ValidationError):
+            ProxmoxEndpoint._base_manager.bulk_update(
+                [self.proxmox], fields=["password_enc"]
+            )
 
         self.proxmox.refresh_from_db()
         self.assertEqual(self.proxmox.password_enc, original)
@@ -368,6 +398,50 @@ class EncryptionKeyRecoveryTest(TestCase):
 
         self.assertFalse(ProxmoxEndpoint.objects.filter(name=endpoint.name).exists())
 
+    def test_base_manager_bulk_create_rejects_nonempty_encrypted_fields(self) -> None:
+        endpoint = ProxmoxEndpoint(
+            name="forbidden-base-manager-bulk-create-pve",
+            domain="forbidden-base-manager-bulk-create-pve.example.test",
+            password_enc=enc_helpers.encrypt(
+                "base-manager-bulk-create", key=self.old_key
+            ),
+        )
+
+        with self.assertRaises(ValidationError):
+            ProxmoxEndpoint._base_manager.bulk_create([endpoint])
+
+        self.assertFalse(ProxmoxEndpoint.objects.filter(name=endpoint.name).exists())
+
+    def test_queryset_update_rejects_settings_key_mutation(self) -> None:
+        with self.assertRaises(ValidationError):
+            ProxboxPluginSettings.objects.filter(pk=self.settings_obj.pk).update(
+                encryption_key=self.new_key
+            )
+
+        self.settings_obj.refresh_from_db()
+        self.assertEqual(self.settings_obj.encryption_key, self.old_key)
+
+    def test_base_manager_queryset_update_rejects_settings_key_mutation(self) -> None:
+        with self.assertRaises(ValidationError):
+            ProxboxPluginSettings._base_manager.filter(pk=self.settings_obj.pk).update(
+                encryption_key=self.new_key
+            )
+
+        self.settings_obj.refresh_from_db()
+        self.assertEqual(self.settings_obj.encryption_key, self.old_key)
+
+    def test_bulk_update_rejects_settings_key_mutation(self) -> None:
+        candidate = ProxboxPluginSettings.objects.get(pk=self.settings_obj.pk)
+        candidate.encryption_key = self.new_key
+
+        with self.assertRaises(ValidationError):
+            ProxboxPluginSettings._base_manager.bulk_update(
+                [candidate], fields=["encryption_key"]
+            )
+
+        self.settings_obj.refresh_from_db()
+        self.assertEqual(self.settings_obj.encryption_key, self.old_key)
+
     def test_internal_queryset_bypass_validates_the_locked_current_key(self) -> None:
         original = self.proxmox.password_enc
         wrong_key_ciphertext = enc_helpers.encrypt(
@@ -383,12 +457,33 @@ class EncryptionKeyRecoveryTest(TestCase):
         self.proxmox.refresh_from_db()
         self.assertEqual(self.proxmox.password_enc, original)
 
+    def test_internal_conflict_upsert_permit_updates_protected_field(self) -> None:
+        conflict = FirecrackerHost(
+            pool=self.pool,
+            name=self.firecracker.name,
+            agent_base_url=self.firecracker.agent_base_url,
+            status="ready",
+        )
+
+        _locked_recovery_conflict_bulk_create(
+            FirecrackerHost._base_manager.all(),
+            [conflict],
+            update_conflicts=True,
+            update_fields=["status"],
+            unique_fields=["pool", "name"],
+        )
+
+        self.firecracker.refresh_from_db()
+        self.assertEqual(self.firecracker.status, "ready")
+
     def test_rotation_repairs_a_drifted_stored_key_when_ciphertext_proves_old_key(
         self,
     ) -> None:
         drifted_stored_key = Fernet.generate_key().decode("ascii")
-        ProxboxPluginSettings.objects.filter(pk=self.settings_obj.pk).update(
-            encryption_key=drifted_stored_key
+        _raw_update_fields(
+            ProxboxPluginSettings,
+            self.settings_obj.pk,
+            encryption_key=drifted_stored_key,
         )
 
         result = rotate_encryption_key(
@@ -779,6 +874,7 @@ class EncryptionKeyRecoveryTest(TestCase):
         class InstalledPBSSettings:
             objects = CompanionManager()
             _default_manager = objects
+            _base_manager = objects
             _meta = CompanionMeta()
 
             def __init__(self, *, pk: int | None = None) -> None:
@@ -980,9 +1076,7 @@ class EncryptionKeyRecoveryTest(TestCase):
     def test_initial_settings_key_failure_masks_post_and_frame_locals(self) -> None:
         submitted_key = Fernet.generate_key().decode("ascii")
         settings_obj = ProxboxPluginSettings.objects.get(pk=self.settings_obj.pk)
-        ProxboxPluginSettings.objects.filter(pk=settings_obj.pk).update(
-            encryption_key=""
-        )
+        _raw_update_fields(ProxboxPluginSettings, settings_obj.pk, encryption_key="")
         cleaned_data = {
             "use_guest_agent_interface_name": False,
             "proxbox_fetch_max_concurrency": 8,
@@ -1054,6 +1148,61 @@ class EncryptionKeyRecoveryTest(TestCase):
                 self.fail("The injected settings failure did not escape.")
 
         self.assertNotIn(submitted_key, report)
+
+    def test_real_settings_save_failure_masks_loaded_previous_key(self) -> None:
+        settings_obj = ProxboxPluginSettings.objects.get(pk=self.settings_obj.pk)
+        request = RequestFactory().get("/plugins/proxbox/settings/")
+        parent_model = ProxboxPluginSettings.__mro__[1]
+
+        with patch.object(
+            parent_model,
+            "save",
+            side_effect=DatabaseError("simulated database settings-save failure"),
+        ):
+            try:
+                settings_obj.save(update_fields=["encryption_key"])
+            except DatabaseError as exc:
+                report = ExceptionReporter(
+                    request,
+                    type(exc),
+                    exc,
+                    exc.__traceback__,
+                ).get_traceback_text()
+            else:  # pragma: no cover - test must exercise the real save frame
+                self.fail("The injected parent-model save failure did not escape.")
+
+        self.assertIn("simulated database settings-save failure", report)
+        self.assertNotIn(self.old_key, report)
+
+    def test_settings_serializer_save_failure_masks_validated_key(self) -> None:
+        serializer = ProxboxPluginSettingsSerializer(
+            instance=ProxboxPluginSettings.objects.get(pk=self.settings_obj.pk),
+            data={"encryption_key": self.old_key},
+            partial=True,
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        request = RequestFactory().patch("/api/plugins/proxbox/settings/1/")
+        parent_model = ProxboxPluginSettings.__mro__[1]
+
+        with patch.object(
+            parent_model,
+            "save",
+            side_effect=DatabaseError("simulated serializer settings-save failure"),
+        ):
+            try:
+                serializer.save()
+            except DatabaseError as exc:
+                report = ExceptionReporter(
+                    request,
+                    type(exc),
+                    exc,
+                    exc.__traceback__,
+                ).get_traceback_text()
+            else:  # pragma: no cover - test must exercise serializer mutation frames
+                self.fail("The injected serializer save failure did not escape.")
+
+        self.assertIn("simulated serializer settings-save failure", report)
+        self.assertNotIn(self.old_key, report)
 
     def test_selective_reset_clears_trust_state_without_save_signals(self) -> None:
         calls: list[object] = []
@@ -1477,8 +1626,10 @@ class EncryptionRecoveryTableLockTest(TransactionTestCase):
 
         old_key = Fernet.generate_key().decode("ascii")
         settings_obj = ProxboxPluginSettings.get_solo()
-        ProxboxPluginSettings.objects.filter(pk=settings_obj.pk).update(
-            encryption_key=old_key
+        _raw_update_fields(
+            ProxboxPluginSettings,
+            settings_obj.pk,
+            encryption_key=old_key,
         )
         endpoint = ProxmoxEndpoint(
             name="partial-save-reset-pve",
@@ -1538,7 +1689,7 @@ class EncryptionRecoveryTableLockTest(TransactionTestCase):
         self.assertEqual(endpoint.password_enc, "")
         self.assertFalse(endpoint.enabled)
 
-    def test_queryset_update_started_during_reset_cannot_restore_host_online(
+    def test_base_manager_update_started_during_reset_cannot_restore_host_online(
         self,
     ) -> None:
         if connection.vendor != "postgresql":
@@ -1546,8 +1697,10 @@ class EncryptionRecoveryTableLockTest(TransactionTestCase):
 
         old_key = Fernet.generate_key().decode("ascii")
         settings_obj = ProxboxPluginSettings.get_solo()
-        ProxboxPluginSettings.objects.filter(pk=settings_obj.pk).update(
-            encryption_key=old_key
+        _raw_update_fields(
+            ProxboxPluginSettings,
+            settings_obj.pk,
+            encryption_key=old_key,
         )
         pool = FirecrackerHostPool.objects.create(
             name="Concurrent recovery pool", slug="concurrent-recovery-pool"
@@ -1587,7 +1740,9 @@ class EncryptionRecoveryTableLockTest(TransactionTestCase):
                 connections["default"].close()
                 writer_started.set()
                 updated_counts.append(
-                    FirecrackerHost.objects.filter(pk=host.pk).update(status="ready")
+                    FirecrackerHost._base_manager.filter(pk=host.pk).update(
+                        status="ready"
+                    )
                 )
             except BaseException as exc:  # pragma: no cover - asserted below
                 writer_errors.append(exc)
@@ -1612,6 +1767,89 @@ class EncryptionRecoveryTableLockTest(TransactionTestCase):
         self.assertEqual(host.agent_token_enc, "")
         self.assertEqual(host.status, "offline")
 
+    def test_conflict_upsert_started_during_reset_cannot_restore_host_online(
+        self,
+    ) -> None:
+        if connection.vendor != "postgresql":
+            self.skipTest("The production recovery lock is PostgreSQL-specific.")
+
+        old_key = Fernet.generate_key().decode("ascii")
+        settings_obj = ProxboxPluginSettings.get_solo()
+        _raw_update_fields(
+            ProxboxPluginSettings,
+            settings_obj.pk,
+            encryption_key=old_key,
+        )
+        pool = FirecrackerHostPool.objects.create(
+            name="Conflict upsert recovery pool",
+            slug="conflict-upsert-recovery-pool",
+        )
+        host = FirecrackerHost(
+            pool=pool,
+            name="conflict-upsert-recovery-host",
+            agent_base_url="https://conflict-upsert-firecracker.example.test",
+            status="ready",
+        )
+        FirecrackerHost.objects.bulk_create([host])
+        _raw_update_fields(
+            FirecrackerHost,
+            host.pk,
+            agent_token_enc="corrupt-conflict-upsert-firecracker-token",
+        )
+        actor = get_user_model().objects.create_user(username="conflict-upsert-reset")
+        reset_paused = threading.Event()
+        allow_commit = threading.Event()
+        reset_errors: list[BaseException] = []
+        writer_finished = threading.Event()
+        writer_errors: list[BaseException] = []
+
+        reset_thread = self._pause_reset_before_commit(
+            family_key="firecracker_agent",
+            actor=actor,
+            reset_paused=reset_paused,
+            allow_commit=allow_commit,
+            errors=reset_errors,
+        )
+        self.assertTrue(reset_paused.wait(timeout=5))
+
+        def upsert_ready() -> None:
+            try:
+                connections["default"].close()
+                conflict = FirecrackerHost(
+                    pool=pool,
+                    name=host.name,
+                    agent_base_url=host.agent_base_url,
+                    status="ready",
+                )
+                FirecrackerHost._base_manager.bulk_create(
+                    [conflict],
+                    update_conflicts=True,
+                    update_fields=["status"],
+                    unique_fields=["pool", "name"],
+                )
+            except BaseException as exc:  # pragma: no cover - asserted below
+                writer_errors.append(exc)
+            finally:
+                writer_finished.set()
+                connections["default"].close()
+
+        writer = threading.Thread(target=upsert_ready, daemon=True)
+        writer.start()
+        self.assertTrue(writer_finished.wait(timeout=2))
+        allow_commit.set()
+        reset_thread.join(timeout=5)
+        writer.join(timeout=5)
+
+        self.assertFalse(reset_thread.is_alive())
+        self.assertFalse(writer.is_alive())
+        self.assertEqual(reset_errors, [])
+        self.assertEqual(len(writer_errors), 1)
+        self.assertIsInstance(writer_errors[0], ValidationError)
+        self.assertIn("status", str(writer_errors[0]))
+        host.refresh_from_db()
+        self.assertEqual(host.agent_token_enc, "")
+        self.assertEqual(host.status, "offline")
+
     def test_old_key_queryset_update_started_during_rotation_is_rejected(self) -> None:
         if connection.vendor != "postgresql":
             self.skipTest("The production recovery lock is PostgreSQL-specific.")
@@ -1619,8 +1857,10 @@ class EncryptionRecoveryTableLockTest(TransactionTestCase):
         old_key = Fernet.generate_key().decode("ascii")
         new_key = Fernet.generate_key().decode("ascii")
         settings_obj = ProxboxPluginSettings.get_solo()
-        ProxboxPluginSettings.objects.filter(pk=settings_obj.pk).update(
-            encryption_key=old_key
+        _raw_update_fields(
+            ProxboxPluginSettings,
+            settings_obj.pk,
+            encryption_key=old_key,
         )
         endpoint = ProxmoxEndpoint(
             name="recovery-lock-pve",
@@ -1670,7 +1910,7 @@ class EncryptionRecoveryTableLockTest(TransactionTestCase):
                 connections["default"].close()
                 writer_started.set()
                 with transaction.atomic():
-                    ProxmoxEndpoint.objects.filter(pk=endpoint.pk).update(
+                    ProxmoxEndpoint._base_manager.filter(pk=endpoint.pk).update(
                         password_enc=late_ciphertext
                     )
             except BaseException as exc:  # pragma: no cover - asserted below
@@ -1712,8 +1952,10 @@ class EncryptionRecoveryTableLockTest(TransactionTestCase):
         old_key = Fernet.generate_key().decode("ascii")
         new_key = Fernet.generate_key().decode("ascii")
         settings_obj = ProxboxPluginSettings.get_solo()
-        ProxboxPluginSettings.objects.filter(pk=settings_obj.pk).update(
-            encryption_key=old_key
+        _raw_update_fields(
+            ProxboxPluginSettings,
+            settings_obj.pk,
+            encryption_key=old_key,
         )
         endpoint = ProxmoxEndpoint(
             name="stale-writer-pve",

@@ -191,6 +191,7 @@ _EXPLICIT_WRITE_MARKER: Final = "_proxbox_encryption_expected_ciphertexts"
 _RECOVERY_FIELDS_BY_MODEL: dict[type, tuple[str, ...]] = {}
 _PROTECTED_RECOVERY_FIELDS_BY_MODEL: dict[type, frozenset[str]] = {}
 _ENCRYPTED_FIELDS_BY_MODEL: dict[type, frozenset[str]] = {}
+_SETTINGS_KEY_FIELDS_BY_MODEL: dict[type, frozenset[str]] = {}
 
 
 @dataclass(frozen=True, slots=True)
@@ -204,6 +205,34 @@ class _EncryptedQuerySetWritePermit:
 
 _ENCRYPTED_QUERYSET_WRITE_PERMIT: ContextVar[_EncryptedQuerySetWritePermit | None] = (
     ContextVar("proxbox_encrypted_queryset_write_permit", default=None)
+)
+
+
+@dataclass(frozen=True, slots=True)
+class _SettingsKeyQuerySetWritePermit:
+    """One exact settings-key update authorized by verified rotation."""
+
+    model: type
+    using: str
+    encryption_key: str
+
+
+_SETTINGS_KEY_QUERYSET_WRITE_PERMIT: ContextVar[
+    _SettingsKeyQuerySetWritePermit | None
+] = ContextVar("proxbox_settings_key_queryset_write_permit", default=None)
+
+
+@dataclass(frozen=True, slots=True)
+class _ProtectedConflictUpsertPermit:
+    """One exact protected conflict upsert authorized under the settings lock."""
+
+    model: type
+    using: str
+    update_fields: tuple[str, ...]
+
+
+_PROTECTED_CONFLICT_UPSERT_PERMIT: ContextVar[_ProtectedConflictUpsertPermit | None] = (
+    ContextVar("proxbox_protected_conflict_upsert_permit", default=None)
 )
 
 
@@ -352,6 +381,9 @@ def install_encrypted_writer_guards() -> None:
     """Serialize registered recovery-sensitive writes with key recovery."""
 
     from netbox_proxbox.models import ProxboxPluginSettings
+
+    _SETTINGS_KEY_FIELDS_BY_MODEL[ProxboxPluginSettings] = frozenset({"encryption_key"})
+    _install_recovery_queryset_write_guards(ProxboxPluginSettings)
 
     families_by_model: dict[type, list[EncryptedFieldFamily]] = {}
     for family in ENCRYPTED_FIELD_FAMILIES:
@@ -558,17 +590,65 @@ def _install_recovery_queryset_write_guards(model: type) -> None:
     every outgoing ciphertext against the currently locked key.
     """
 
-    queryset_type = type(model._default_manager.all())
-    if getattr(queryset_type, "_proxbox_recovery_write_guards_installed", False):
+    queryset_types = {
+        type(model._default_manager.all()),
+        type(model._base_manager.all()),
+    }
+    for queryset_type in sorted(
+        queryset_types,
+        key=lambda candidate: len(candidate.__mro__),
+        reverse=True,
+    ):
+        _install_recovery_queryset_type_write_guards(queryset_type)
+
+
+def _install_recovery_queryset_type_write_guards(queryset_type: type) -> None:
+    """Install recovery guards on one concrete reachable queryset class."""
+
+    if vars(queryset_type).get("_proxbox_recovery_write_guards_installed", False):
         return
-    original_update = queryset_type.update
-    original_bulk_update = queryset_type.bulk_update
-    original_bulk_create = queryset_type.bulk_create
+    original_update = getattr(
+        queryset_type.update,
+        "_proxbox_recovery_unguarded_method",
+        queryset_type.update,
+    )
+    original_bulk_update = getattr(
+        queryset_type.bulk_update,
+        "_proxbox_recovery_unguarded_method",
+        queryset_type.bulk_update,
+    )
+    original_bulk_create = getattr(
+        queryset_type.bulk_create,
+        "_proxbox_recovery_unguarded_method",
+        queryset_type.bulk_create,
+    )
 
     @wraps(original_update)
     @sensitive_variables()
     def guarded_update(queryset: object, **updates: object) -> int:
         queryset_model = getattr(queryset, "model", None)
+        settings_key_fields = _SETTINGS_KEY_FIELDS_BY_MODEL.get(
+            queryset_model, frozenset()
+        )
+        settings_key_updates = settings_key_fields.intersection(updates)
+        if settings_key_updates:
+            queryset._for_write = True  # type: ignore[attr-defined]
+            using = str(getattr(queryset, "db", "default") or "default")
+            proposed_key = str(updates["encryption_key"] or "")
+            permit = _SETTINGS_KEY_QUERYSET_WRITE_PERMIT.get()
+            if permit != _SettingsKeyQuerySetWritePermit(
+                model=queryset_model,
+                using=using,
+                encryption_key=proposed_key,
+            ):
+                raise ValidationError(
+                    "The plugin encryption key cannot be written with "
+                    "QuerySet.update(), bulk_update(), or bulk_create(). Use "
+                    "the verified rotation workflow or an ordinary model save "
+                    "when no ciphertext exists."
+                )
+            return original_update(queryset, **updates)
+
         encrypted_fields = _ENCRYPTED_FIELDS_BY_MODEL.get(queryset_model, frozenset())
         encrypted_updates = {
             field_name: value
@@ -640,8 +720,18 @@ def _install_recovery_queryset_write_guards(model: type) -> None:
         **kwargs: object,
     ) -> int:
         queryset_model = getattr(queryset, "model", None)
+        settings_key_fields = _SETTINGS_KEY_FIELDS_BY_MODEL.get(
+            queryset_model, frozenset()
+        )
         encrypted_fields = _ENCRYPTED_FIELDS_BY_MODEL.get(queryset_model, frozenset())
         normalized_fields = tuple(str(field_name) for field_name in fields)  # type: ignore[union-attr]
+        if not settings_key_fields.isdisjoint(normalized_fields):
+            raise ValidationError(
+                "The plugin encryption key cannot be written with "
+                "QuerySet.update(), bulk_update(), or bulk_create(). Use "
+                "the verified rotation workflow or an ordinary model save "
+                "when no ciphertext exists."
+            )
         if not encrypted_fields.isdisjoint(normalized_fields):
             raise ValidationError(
                 "Encrypted fields cannot be written with QuerySet.update(), "
@@ -659,11 +749,31 @@ def _install_recovery_queryset_write_guards(model: type) -> None:
         **kwargs: object,
     ) -> object:
         queryset_model = getattr(queryset, "model", None)
+        settings_key_fields = _SETTINGS_KEY_FIELDS_BY_MODEL.get(
+            queryset_model, frozenset()
+        )
         encrypted_fields = _ENCRYPTED_FIELDS_BY_MODEL.get(queryset_model, frozenset())
+        protected_fields = _PROTECTED_RECOVERY_FIELDS_BY_MODEL.get(
+            queryset_model, frozenset()
+        )
         materialized_objs = list(objs)  # type: ignore[arg-type]
         conflict_update_fields = tuple(
             str(field_name) for field_name in (kwargs.get("update_fields") or ())
         )
+        contains_settings_key = any(
+            str(getattr(instance, field_name, "") or "")
+            for instance in materialized_objs
+            for field_name in settings_key_fields
+        )
+        if contains_settings_key or not settings_key_fields.isdisjoint(
+            conflict_update_fields
+        ):
+            raise ValidationError(
+                "The plugin encryption key cannot be written with "
+                "QuerySet.update(), bulk_update(), or bulk_create(). Use "
+                "the verified rotation workflow or an ordinary model save "
+                "when no ciphertext exists."
+            )
         contains_ciphertext = any(
             str(getattr(instance, field_name, "") or "")
             for instance in materialized_objs
@@ -677,12 +787,77 @@ def _install_recovery_queryset_write_guards(model: type) -> None:
                 "bulk_update(), or bulk_create(). Use the registered secret "
                 "setter and model save path."
             )
+        protected_conflict_fields = tuple(
+            sorted(protected_fields.intersection(conflict_update_fields))
+        )
+        if protected_conflict_fields:
+            queryset._for_write = True  # type: ignore[attr-defined]
+            using = str(getattr(queryset, "db", "default") or "default")
+            permit = _PROTECTED_CONFLICT_UPSERT_PERMIT.get()
+            if permit != _ProtectedConflictUpsertPermit(
+                model=queryset_model,
+                using=using,
+                update_fields=protected_conflict_fields,
+            ):
+                field_list = ", ".join(protected_conflict_fields)
+                raise ValidationError(
+                    "Conflict upserts cannot update encryption-recovery-protected "
+                    f"fields: {field_list}. Use the settings-locked internal "
+                    "recovery path."
+                )
         return original_bulk_create(queryset, materialized_objs, *args, **kwargs)
 
+    guarded_update._proxbox_recovery_unguarded_method = original_update
+    guarded_bulk_update._proxbox_recovery_unguarded_method = original_bulk_update
+    guarded_bulk_create._proxbox_recovery_unguarded_method = original_bulk_create
     queryset_type.update = guarded_update
     queryset_type.bulk_update = guarded_bulk_update
     queryset_type.bulk_create = guarded_bulk_create
     queryset_type._proxbox_recovery_write_guards_installed = True
+
+
+@sensitive_variables()
+def _locked_recovery_conflict_bulk_create(
+    queryset: object,
+    objs: object,
+    *args: object,
+    **kwargs: object,
+) -> object:
+    """Authorize one protected conflict upsert while holding the settings lock."""
+
+    from netbox_proxbox.models import ProxboxPluginSettings
+
+    queryset_model = getattr(queryset, "model", None)
+    protected_fields = _PROTECTED_RECOVERY_FIELDS_BY_MODEL.get(
+        queryset_model, frozenset()
+    )
+    update_fields = tuple(
+        str(field_name) for field_name in (kwargs.get("update_fields") or ())
+    )
+    protected_update_fields = tuple(
+        sorted(protected_fields.intersection(update_fields))
+    )
+    if not kwargs.get("update_conflicts") or not protected_update_fields:
+        raise EncryptionRecoveryConfigurationError(
+            "The internal conflict-upsert helper requires protected recovery fields."
+        )
+
+    queryset._for_write = True  # type: ignore[attr-defined]
+    using = str(getattr(queryset, "db", "default") or "default")
+    with transaction.atomic(using=using):
+        ProxboxPluginSettings.objects.using(using).select_for_update().get(
+            singleton_key="default"
+        )
+        permit = _ProtectedConflictUpsertPermit(
+            model=queryset_model,
+            using=using,
+            update_fields=protected_update_fields,
+        )
+        permit_token = _PROTECTED_CONFLICT_UPSERT_PERMIT.set(permit)
+        try:
+            return queryset.bulk_create(objs, *args, **kwargs)  # type: ignore[attr-defined]
+        finally:
+            _PROTECTED_CONFLICT_UPSERT_PERMIT.reset(permit_token)
 
 
 @sensitive_variables()
@@ -1152,9 +1327,23 @@ def rotate_encryption_key(
             # transaction before the private raw-update helper validates each new
             # ciphertext against it. Any later failure rolls this setting write and
             # every ciphertext replacement back together.
-            ProxboxPluginSettings.objects.filter(pk=locked_settings.pk).update(
-                encryption_key=new_value
+            settings_queryset = ProxboxPluginSettings.objects.filter(
+                pk=locked_settings.pk
             )
+            settings_queryset._for_write = True
+            settings_using = str(settings_queryset.db or "default")
+            settings_permit = _SettingsKeyQuerySetWritePermit(
+                model=ProxboxPluginSettings,
+                using=settings_using,
+                encryption_key=new_value,
+            )
+            settings_permit_token = _SETTINGS_KEY_QUERYSET_WRITE_PERMIT.set(
+                settings_permit
+            )
+            try:
+                settings_queryset.update(encryption_key=new_value)
+            finally:
+                _SETTINGS_KEY_QUERYSET_WRITE_PERMIT.reset(settings_permit_token)
             locked_settings.encryption_key = new_value
             for family, model in family_models:
                 rows = (

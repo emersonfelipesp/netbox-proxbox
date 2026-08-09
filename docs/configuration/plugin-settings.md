@@ -339,8 +339,11 @@ until its installation is repaired.
 ### Verified rotation
 
 Ordinary form saves, model saves, and API PATCH requests cannot clear or
-replace the plugin key while any registered ciphertext exists. Use **Verified
-plugin key rotation** instead:
+replace the plugin key while any registered ciphertext exists. Direct key
+writes through either the default or base manager's `QuerySet.update()`,
+`bulk_update()`, or conflict-upsert path are always rejected; verified rotation
+has the sole exact-value settings-locked permit. Use **Verified plugin key
+rotation** instead:
 
 1. Enter the current key and the replacement key twice.
 2. The plugin locks the settings plus every registered ciphertext table in a
@@ -354,9 +357,12 @@ plugin key rotation** instead:
    update on it still matching after the settings lock is acquired. A writer
    which prepared old-key ciphertext before rotation or reset is rejected or
    updates zero rows after waiting; it cannot commit stale ciphertext or restore
-   operational state. Direct
+   operational state. Direct default- or base-manager
    `QuerySet.update()`/`bulk_update()` writes to encrypted fields and non-empty
-   encrypted `bulk_create()` rows are rejected before SQL. Rotation, reset, and
+   encrypted `bulk_create()` rows are rejected before SQL. Conflict-upsert
+   `update_fields` cannot contain the trust receipts, endpoint enablement flags,
+   or Firecracker status quarantined by reset unless the exact call uses the
+   private settings-locked internal permit. Rotation, reset, and
    backend-key adoption share one private one-call raw-update helper; it holds the
    settings-row lock and validates every outgoing non-empty ciphertext against
    the key currently stored there. There is no bulk-write bypass.
@@ -398,14 +404,15 @@ PBS, or PDM endpoint or marks the affected Firecracker host offline. Affected
 per-node SSH, cloud-init, and optional netbox-pbs fallback rows become
 unconfigured only for the failed fields. Re-enter those credentials and
 explicitly re-enable or restore the affected service before running sync.
-The reset takes the settings-row lock before table locks, and its complete
-routine is marked redact-all for Django exception reports so keys, raw
-ciphertexts, legacy plaintext values, and nested row containers cannot appear in
-a technical 500 response. The writer guard
+The reset takes the settings-row lock before table locks. Its complete routine,
+the settings serializer mutation frames, and the settings-model save frame that
+loads the active key are marked redact-all for Django exception reports so keys,
+raw ciphertexts, legacy plaintext values, and nested row containers cannot
+appear in a technical 500 response. The writer guard
 rejects any stale instance whose expected ciphertext no longer matches the
 cleared row. Partial saves and conditional bulk updates use the same snapshot,
-so queued writers cannot resurrect credentials, trust, `enabled`, or online
-host status.
+so queued writers and conflict upserts cannot resurrect credentials, trust,
+`enabled`, or online host status.
 
 This path is destructive: it cannot recover plaintext and does not change
 unselected families.

@@ -206,10 +206,16 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
   its Django registration and known database table are absent; dormant table
   ciphertext and installed owners with unresolved models/tables fail closed.
   Ordinary settings/model/API saves may not clear or replace
-  `ProxboxPluginSettings.encryption_key` while registry ciphertext exists.
+  `ProxboxPluginSettings.encryption_key` while registry ciphertext exists, and
+  its default/base-manager `QuerySet.update()`, `bulk_update()`, and conflict
+  upsert paths reject direct key mutation. Verified rotation owns the sole
+  exact-value, settings-locked queryset permit for changing the key.
   Registered model saves (including optional netbox-pbs) lock the settings row,
   validate their ciphertext under that key, and persist within that transaction;
-  direct queryset/bulk encrypted-field writes are rejected before SQL. The only
+  direct queryset/bulk encrypted-field writes are rejected before SQL through
+  both the default and base manager. Conflict upserts cannot update registered
+  reset trust/operational fields unless the exact call holds the private
+  settings-locked internal permit. The only
   raw-ciphertext exception is a private, one-call recovery/adoption update that
   holds the settings-row lock and validates every outgoing non-empty ciphertext
   against the key currently stored there; bulk create/update has no bypass.
@@ -232,9 +238,10 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
   response blocks it. Disabled, pending, retired, and trust-drifted backend rows
   rotate locally with zero network access. The target URL and trust fingerprint
   come from one immutable capture so a related-IP update cannot rebind the
-  credentialed request. Recovery
-  POST values are exception-reporter-sensitive and each attempt emits a
-  secret-free NetBox changelog event.
+  credentialed request. Recovery POST values, settings serializer mutation
+  frames, and the settings model save frame that loads the active key are
+  exception-reporter-sensitive; each attempt emits a secret-free NetBox
+  changelog event.
   Keep this plugin-at-rest key separate from proxbox-api's own database
   encryption key and the FastAPI endpoint authentication key. Ordinary settings
   serializers withhold it; the backend-only runtime route retains its existing
