@@ -13,6 +13,30 @@
 
 This directory implements the plugin's NetBox UI behavior, including dashboard pages, endpoint CRUD views, sync actions, job integration, and status utilities.
 
+The storage detail page routes live per-node content discovery through one
+process-wide four-thread/four-slot pool in `storage_content.py`. A slot is
+reserved before submission and is released only by the worker after the HTTP
+call actually exits, so page deadlines never turn abandoned requests into an
+unbounded collection of authenticated sockets or threads. A page waits only
+until its absolute eight-second deadline; if the shared pool remains full, the
+unstarted nodes use the existing partial-result notice. Each node response is
+streamed under the same absolute deadline and capped at 1 MiB of decoded bytes
+before JSON parsing. The deadline watchdog never closes a Requests/urllib3
+response object: buffered response closure can wait behind the read it is meant
+to cancel. Each request instead owns a dedicated urllib3 pool whose connection
+hook duplicates the TCP socket immediately after connect, before TLS and
+response-header reads. At the deadline the watchdog performs only raw
+`socket.shutdown(SHUT_RDWR)` plus `socket.close()` on that duplicate, which
+interrupts header and body reads without letting one cancellation block later
+deadlines. The worker closes the response and pool only after the interrupted
+read returns. The page still fetches at most 64 membership nodes, and a node
+counts as successful only when the outer payload is a list/object and every
+flattened content record has a non-empty `volid`; error envelopes and
+permissive-schema dictionaries are partial failures. Large storage memberships
+must produce explicit partial/truncation context rather than serially occupying
+a web worker for `node_count * request_timeout` seconds, allocating one future
+per node, or issuing an authenticated request for every membership entry.
+
 ## Files And Ownership
 
 - [`__init__.py`](./__init__.py): top-level page views and re-exports for endpoint views, cluster views, dashboard pages, sync enqueue actions, status checks, settings/storage views, backup/replication views, snapshot/task views, and job integration helpers.
@@ -150,6 +174,9 @@ This directory implements the plugin's NetBox UI behavior, including dashboard p
   so they keep the repair affordance — see `partials/bootstrap_status_card.html`.
 - [`proxmox_cluster_node.py`](./proxmox_cluster_node.py): detail (`ObjectView`) views for `ProxmoxCluster` and `ProxmoxNode`, registered under the bare model names so `get_absolute_url()` resolves.
 - [`storage.py`](./storage.py): CRUD list/detail/delete views for `ProxmoxStorage`.
+- [`storage_content.py`](./storage_content.py): process-wide bounded worker pool,
+  deadline-aware streamed JSON fetch, response-size ceiling, and shared
+  partial/truncation notice formatter for storage-node content fan-out.
 - [`sync.py`](./sync.py): POST endpoints that enqueue `ProxboxSyncJob` runs for devices, storage, virtual machines, virtual disks, backups, snapshots, network interfaces, IP addresses, backup routines, replications, and full update.
 - [`sync_now/`](./sync_now/): targeted per-object sync handlers for cluster, node, storage, and VM actions.
 - [`vm_backup.py`](./vm_backup.py): CRUD list/detail/delete views and the VirtualMachine tab for `VMBackup`.

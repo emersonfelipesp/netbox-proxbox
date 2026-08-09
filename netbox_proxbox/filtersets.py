@@ -9,7 +9,7 @@ from ipam.models import IPAddress, VLAN
 from netbox.filtersets import NetBoxModelFilterSet
 from tenancy.models import Tenant
 from utilities.filtersets import register_filterset
-from utilities.filters import MultiValueNumberFilter
+from utilities.filters import MultiValueCharFilter, MultiValueNumberFilter
 from virtualization.models import (
     Cluster,
     ClusterGroup,
@@ -624,6 +624,8 @@ class ProxmoxVMCloudInitFilterSet(ProxboxModelFilterSet):
 @register_filterset
 class ProxmoxStorageFilterSet(ProxboxModelFilterSet):
     """Filter Proxmox storage rows synced by the plugin."""
+
+    nodes = MultiValueCharFilter()
 
     class Meta:
         model = ProxmoxStorage
